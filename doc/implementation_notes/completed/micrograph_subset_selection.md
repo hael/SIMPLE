@@ -62,12 +62,13 @@ implementation task; earlier synthetic-test authorization is not a build request
 
 ## Current status
 
-The subsequent user build reached UI JSON generation, then aborted in
-`bind_input` while registering this command. The shared `pgrp` descriptor is
-required, which conflicts with Advanced visibility. The command now declares
-its own optional symmetry input with the intended `c1` default. Backtrace
-addresses were resolved with `addr2line`; rebuilding and runtime validation
-remain with the user.
+Implemented (commit `86bf97213`): the `select_micrographs` command, its UI
+entry and router entries, `simple_mic_subset`, and the tester
+`simple_mic_subset_tester`. An early build aborted in `bind_input` while
+registering the command, because the shared `pgrp` descriptor is required and
+conflicts with Advanced visibility. The command now declares its own optional
+symmetry input with the default `c1`. Rebuilding and runtime validation of the
+latest tree remain with the maintainer.
 
 The user's first build exposed `trim(prg)` on a derived `string`. Both the
 parameter-validation guard and commander guard now use the existing overloaded

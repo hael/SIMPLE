@@ -1304,7 +1304,7 @@ contains
         endif
     end subroutine contact_scores
 
-    ! Residual recovery and species call on the level-1 atoms (doc/implementation_notes/planned/species_discovery.md,
+    ! Residual recovery and species call on the level-1 atoms (doc/implementation_notes/completed/species_discovery_completed.md,
     ! sections 3.2 to 3.9). Reads the map and the level-1 atoms, fills recovered(:) and the discovery fields of
     ! atominfo(:), and writes the three _species files; the present products are not touched.
     subroutine discover_species( self )

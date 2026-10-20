@@ -52,7 +52,7 @@ source files.
 The strategy owns roles, partitions and rounds; each producing module owns its
 part I/O; the commander owns the defaults. The refactorings that shaped it are
 recorded under `doc/refactoring_notes/`: `completed/flex_refactoring_plan_2026_10_06.md`,
-the earlier audit beside it, and `completed/flex_on_simple_machinery.md` with its report
+the earlier audit beside it, and `completed/flex_on_simple_machinery_completed.md` with its report
 `completed/flex_on_simple_machinery_report.md` (FLEX on SIMPLE's reconstruction, weight set and
 clustering). There is no `doc/policies/flex_pca_policy.md`.
 

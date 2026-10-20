@@ -65,10 +65,6 @@ type, extends(commander_base) :: commander_test_flex_pca_blobs
     procedure :: execute      => exec_test_flex_pca_blobs
 end type commander_test_flex_pca_blobs
 
-type, extends(commander_base) :: commander_test_solve3D_pyramid_blobs
-  contains
-    procedure :: execute      => exec_test_solve3D_pyramid_blobs
-end type commander_test_solve3D_pyramid_blobs
 !> test tools: publish a state weight set from the project's hard labels (0/1, equal to the labels;
 !! or mixed, 0.7 on the labelled state and 0.3 spread over the others), for weighted reconstruct3D runs
 type, extends(commander_base) :: commander_test_write_state_weights_labels
@@ -198,11 +194,6 @@ interface
         class(commander_test_flex_pca_blobs), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_flex_pca_blobs
-
-    module subroutine exec_test_solve3D_pyramid_blobs( self, cline )
-        class(commander_test_solve3D_pyramid_blobs), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-    end subroutine exec_test_solve3D_pyramid_blobs
 
     module subroutine exec_test_write_state_weights_labels( self, cline )
         class(commander_test_write_state_weights_labels), intent(inout) :: self

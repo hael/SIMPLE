@@ -1,7 +1,7 @@
 # Atomic B factors in SINGLE model building and refinement
 
 Implementation note, 2026-10-09. Design for review; nothing here is implemented. It builds on
-the species-discovery work (`species_discovery.md`), whose second run adds the pieces this note
+the species-discovery work (`species_discovery_completed.md`), whose second run adds the pieces this note
 uses, and it is meant to start after that run is merged.
 
 **Status, after the checks of section 1a: the fitting method is open.** Per-atom B factors

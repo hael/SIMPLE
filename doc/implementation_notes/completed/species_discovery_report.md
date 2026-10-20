@@ -2,7 +2,7 @@
 
 Run of 2026-10-08 on dell, carried out unattended under delegation, against
 base revision `92d684c6f`. The plan is
-`doc/implementation_notes/planned/species_discovery.md` (the note);
+`doc/implementation_notes/completed/species_discovery_completed.md` (the note);
 its section 16 (Progress) holds the detail, the logs and every number. This
 report is the summary for review. All four phases ended with their exit
 criteria met. No maintainer ruling was issued during the run.

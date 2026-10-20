@@ -53,6 +53,15 @@ Done, all byte-identical at one thread unless said otherwise:
   particle buffer keeps those cropped particles, so `cache=no` equals
   `cache=yes` byte for byte.
 
+Measured by the maintainer, 2026-10-19: `solve2D` on msp1 (141,838
+particles, 150 classes) is twice as fast overall on the merged code. PfCRT
+ran well on the code before `f078cf683`.
+
+Ruled 2026-10-19: the 2D code structure aligned with 3D moves from the next
+release to before this one (section 1.5). The states' parallel assembly
+(with the NU filter as an object, which existed for it) is left alone for
+now (Part 2).
+
 Two corrections to section 1.3, found by reading the code at `af13bc828`:
 
 - The master's dense 3D table was already particle-major (each particle's
@@ -233,6 +242,18 @@ quick alternative, if the pattern should not reach master even briefly, is
 to revert the three hand-offs (about 4 s per iteration at 750,000 particles
 given up).
 
+### 1.5 Moved before the release (ruling of 2026-10-19)
+
+**The 2D code structure aligned with 3D.** Class-average restoration and
+the convergence decision move out of the 2D matcher (`refine2D_exec`) into
+the 2D strategy, as 3D keeps reconstruction and convergence outside its
+matcher; `refine2D` becomes a public program, as `refine3D` is. Results
+unchanged; wide. It meets "one project owner on the master" in class-average
+assembly, so the two are planned together: the 2D structure first, then the
+project owner for 3D and 2D. The stream pool runs `refine2D` through its
+commander and must behave as before (no edit of stream code expected; to be
+checked).
+
 ## Part 2. The next release
 
 | item | what | why later |
@@ -240,11 +261,10 @@ given up).
 | batched, GPU-ready kernels | pure kernels over explicit arrays (references, particle times CTF, shifts, rotations) scoring many references per call, first batched per particle on the CPU | the GPU release; FFT plans and precision change results |
 | the worker fold (if not done) | as in section 1.3 | size and risk |
 | persistent workers | worker processes that live for the run and exchange only model, sample and assignment; perhaps 5-15% per iteration on queued clusters | large; after the project owner and the worker fold |
-| the NU filter as an object | filter state in an object, so that states can be filtered concurrently | results change (thread-count-dependent sums); needs a ruling on the multi-state memory policy; 1-2 weeks |
+| the NU filter as an object, the states assembled in parallel | filter state in an object, one per state, so that volume assembly can run states concurrently | left alone for now (ruling 2026-10-19); open when it returns: holding several states' volumes (the multi-state memory policy forbids it today) and the sums that depend on the thread count (radial FSC, ML noise term, label smoothing weight, per-thread random streams, threaded FFTW plans) |
 | streaming assignment | keep only the best candidates per reference from each part; master table memory down by orders of magnitude on large multi-state runs | results change; needs a ruling; large |
 | particle read-ahead in its own thread | read the next batch while the current one computes (today the read-ahead runs in the same thread) | medium; gain depends on the storage |
 | table pre-step folded into the 2D search | in shared memory keep the table's prepared references and particle transforms for the search | medium to large; the one-read item of section 1.2 b takes most of the gain first |
-| 2D structure aligned with 3D | class-average restoration and convergence moved out of the 2D matcher into the strategy, as 3D does; `refine2D` a public program | large; behaviour-neutral but wide |
 
 ## Part 3. Measurements that settle the order
 
@@ -265,8 +285,10 @@ given up).
 3. The identical 2D speedups and the look-and-feel items of 1.2 b, d and f,
    as one unattended run with one-thread identity tests (the 2D simulated
    workflow steps of the existing suites cover `solve2D`).
-4. "One project owner on the master" for 3D and 2D (settles section 1.4),
-   then the NU label optimisation and the smaller 3D items of section 1.3.
+4. The 2D code structure aligned with 3D (section 1.5), then "one project
+   owner on the master" for 3D and 2D (settles section 1.4).
 5. The master-drawn sample of 1.2 c and the renamings of 1.2 e, checked
    with the truth suite.
 6. The worker fold if time remains; everything in Part 2 after the release.
+
+Items 1-3 and the NU label optimisation are done (Status).

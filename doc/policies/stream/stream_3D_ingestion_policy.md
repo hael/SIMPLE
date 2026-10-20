@@ -32,7 +32,7 @@ preserve.
   `map_refine_result`) and the `set_*_cline` builders. A change there changes both programs.
 
 Since 13 October 2026 p07 runs no `solve3D`, `solve3D_addon` or final `refine3D`
-(`doc/refactoring_notes/planned/stream_p07_state_assignment_plan_2026-10-13.md`); the inputs
+(`doc/refactoring_notes/completed/stream_p07_state_assignment_plan_2026-10-13.md`); the inputs
 `nptcls3D_max`, `nptcls_addon_max`, `nstages` and `ini3D_cavgs` went with them.
 
 ## 2. What the pool publishes
@@ -348,7 +348,7 @@ October 2026 as the initial volumes of the first `solve3D` (`ini3D_cavgs`), and 
 2026 the references every publication is assigned to (section 10); it replaced the route of 8
 October, on which p06 marked the first publication (`sieve_ini3D=yes`) and p07 ran
 `solve3D_cavgs` on the sieve's combined classes
-(`doc/refactoring_notes/completed/stream_sieve_ini3D_plan_2026-10-08.md`). The marker, the master's
+(`doc/refactoring_notes/rejected/stream_sieve_ini3D_plan_2026-10-08.md`). The marker, the master's
 input and its forwarding are gone.
 
 1. **p06 collects the sieve's 2D.** While it has published nothing, each set the sieve hands off
@@ -472,7 +472,7 @@ publication merged once the references exist is assigned to them: its classes ar
 sub-classes, whose averages are matched against the references, each particle takes the
 state and pose of its sub-class, and the poses are refined locally with the states fixed.
 Decided 13 October 2026
-(`doc/refactoring_notes/planned/stream_p07_state_assignment_plan_2026-10-13.md`, decisions 1 to
+(`doc/refactoring_notes/completed/stream_p07_state_assignment_plan_2026-10-13.md`, decisions 1 to
 12); the local refinement replaced the reconstruction from the class poses (reconstruct3D) on
 14 October 2026.
 

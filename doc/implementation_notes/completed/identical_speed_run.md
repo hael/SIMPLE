@@ -5,8 +5,8 @@ below; report in `identical_speed_run_report.md`). The
 execution plan of the unattended run `speed_mac` on the maintainer's Mac,
 made while the Oracle Linux test machine runs `test_truth`. It carries out
 the parts of the speed week that leave every result byte-identical: item 3
-of `multistate_speed_run.md` (the table reads), days 3 and 4 of
-`single_state_speed_week.md`, and the identical items of that plan's section
+of `multistate_speed_run_completed.md` (the table reads), days 3 and 4 of
+`single_state_speed_week_completed.md`, and the identical items of that plan's section
 "Multi-state". The design is in those two notes; this note holds what the
 code check of 2026-10-17 changed, the identity test, the phases and the
 progress.
@@ -462,9 +462,9 @@ goes on.
   the new benchmark lines; `doc/policies/NU/nonuniform_filtering_policy.md`:
   the filter without its disk cache, if item 11 is kept; the policy that
   describes volume assembly's report, if one does.
-- `single_state_speed_week.md`: the status of every item this run carried
+- `single_state_speed_week_completed.md`: the status of every item this run carried
   out, and the parallel state assembly reclassified as not identical, with
-  the reasons above. `multistate_speed_run.md`: one line that its item 3 was
+  the reasons above. `multistate_speed_run_completed.md`: one line that its item 3 was
   carried out here.
 - The progress section of this note, then the report beside it,
   `identical_speed_run_report.md`: per item what changed, the identity
@@ -493,7 +493,7 @@ three-state table at 1,000 directions), and E (`solve2D`).
 
 | file | why | phase |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/identical_speed_run.md` | this plan and its progress | each |
+| `doc/implementation_notes/completed/identical_speed_run.md` | this plan and its progress | each |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | the compact record, the parallel read, the initialisation | 1 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90` | the one-pass read | 1 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | the dense entry type, `append_or_replace`; the sampler's buffer | 1 2 |
@@ -512,7 +512,7 @@ three-state table at 1,000 directions), and E (`solve2D`).
 | `src/main/strategies/parallelization/simple_refine3D_strategy.f90` | the persistent builder, the read order, the one-record read | 4 |
 | `src/main/commanders/simple/simple_commanders_euclid.f90` | `commit_sigma2` on a copy | 4 |
 | `doc/policies/3D/refine3D_policy.md`, `doc/policies/NU/nonuniform_filtering_policy.md` | the living documents | 5 |
-| `doc/implementation_notes/planned/single_state_speed_week.md`, `multistate_speed_run.md` | status | 5 |
+| `doc/implementation_notes/completed/single_state_speed_week_completed.md`, `multistate_speed_run_completed.md` | status | 5 |
 | `src/main/commanders/simple/simple_commanders_rec_distr.f90`, `simple_commanders_euclid.f90` | the project handed on; the label fix | 6 |
 | `src/main/strategies/parallelization/simple_refine3D_strategy.f90` | the hand-offs in the distributed master | 6 |
 
@@ -724,9 +724,9 @@ base on SW1, MSI, CCI, PCI and NU3D, and SW6 is identical after the phase.
   `SPLIT TIMINGS` section of the volume-assembly report.
 - `doc/policies/NU/nonuniform_filtering_policy.md`: the filter without its
   scratch files (section 8).
-- `single_state_speed_week.md`: the status of every item, and the parallel
+- `single_state_speed_week_completed.md`: the status of every item, and the parallel
   state assembly marked as not identical with the reasons;
-  `multistate_speed_run.md`: its item 3 carried out here.
+  `multistate_speed_run_completed.md`: its item 3 carried out here.
 - The report: `identical_speed_run_report.md`.
 
 

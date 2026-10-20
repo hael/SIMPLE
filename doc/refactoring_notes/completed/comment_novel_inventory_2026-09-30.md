@@ -28,10 +28,13 @@ Results:
 - dated comment lines fell from 174 to 5 (4 author attributions and a seed literal);
 - C1 and C2 are both empty.
 
-Still open:
-- the flex_pca default ruling (B.2);
-- the refine3D UI offering `snhc`/`shc_neigh` modes that the matcher rejects;
-- blocks under 100 words (not in scope).
+Nothing is open (checked 2026-10-20):
+- the flex_pca default ruling (B.2) is settled: the `maxits_pcg` default of 4 and the `rtol` default
+  of 0 in `simple_commanders_flex_pca.f90` now match the UI declaration in
+  `simple_ui_heterogeneity.f90`;
+- the refine3D UI no longer offers `refine=snhc` or `refine=shc_neigh` (removed in the release 4
+  cleanup, see `release4_legacy_cleanup_report.md`);
+- blocks under 100 words were never in scope, so they are not open work.
 
 ## Verdict
 
@@ -179,7 +182,7 @@ changes the code. Each fix also makes the comment shorter.
 | `main/interp/simple_gridding.f90:71` | `doc/implementation_notes/drop_legacy_box_division.md` | moved to `doc/implementation_notes/completed/drop_legacy_box_division.md` |
 | `main/cavg_quality/simple_cavg_quality_feats.f90:52` | `doc/microchunk_and_rejection/model_cavgs_rejection.md` | moved to `doc/policies/sieving_and_rejection/model_cavgs_rejection.md` |
 | `main/image/simple_projector.f90:47` | `doc/implementation_notes/drop_legacy_box_division.md` | moved to `doc/implementation_notes/completed/drop_legacy_box_division.md` |
-| `main/image/simple_image_tester.f90:7` | `doc/refactoring_notes/planned/image_rmat_padding_encapsulation.md` | moved to `doc/refactoring_notes/completed/image_rmat_padding_encapsulation.md` |
+| `main/image/simple_image_tester.f90:7` | `doc/refactoring_notes/completed/image_rmat_padding_encapsulation.md` | moved to `doc/refactoring_notes/completed/image_rmat_padding_encapsulation.md` |
 | `main/pftc/simple_polarft_corr.f90:1900` | `doc/implementation_notes/drop_legacy_box_division.md` | moved to `doc/implementation_notes/completed/drop_legacy_box_division.md` |
 | `main/sigma2/simple_euclid_sigma2.f90:21` | `doc/implementation_notes/drop_legacy_box_division.md` | moved to `doc/implementation_notes/completed/drop_legacy_box_division.md` |
 | `main/flex/simple_flex_pca_crossfsc.f90:2` | `doc/for_developers/ideas/flex_pca_crossfsc_shrinkage_marching_spec.md` | not in repo |

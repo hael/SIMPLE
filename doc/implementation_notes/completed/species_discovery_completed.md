@@ -1,13 +1,30 @@
 # SINGLE without a species input: atom detection, Gaussian density model, species discovery and map simulation
 
 Implementation note, 2026-10-07, revised 2026-10-08 after review. Written
-against master `108c8c9d`. Companion page: `single_pcg_integration.md`
-(section 11 says how the two fit together).
+against master `108c8c9d`.
 
-Where the work stands and what comes next, in short:
-`species_discovery_status.md` (2026-10-12).
+**Status (2026-10-20): the design, the method and phases 0 to 8 are done and
+recorded here.** The prototype is in the tree: opt-in species discovery in
+`detect_atoms` (`element` optional, `discover_species`, `nspecies`, `min_nbrs`),
+B factors in the simulator's element kernels, the species list, compound
+lattices and the coordination term of 3.6. The code was built and tested by the
+maintainer (fast gate, `species_discovery`, `single_atoms_stats`). Phases 0 to 3
+ran on 2026-10-08, phases 4 and 5 on 2026-10-08 and 09, phase 6 was withdrawn on
+2026-10-09, phases 7 and 8 (validation on the 66 real Pt maps) ran on
+2026-10-11, and the coordination term was built and tested on 2026-10-12. The
+design as a replacement of the present detection was never approved; what was
+approved is the opt-in prototype, which changes none of the existing products.
 
-Status. The design is for review and is not approved as a replacement of the
+**Open work is in [`../planned/species_discovery_unfinished.md`](../planned/species_discovery_unfinished.md):**
+phase 9 (the coordination term measured on the 66 real maps, section 10.11
+here, not yet run), the validation of 10.8, promotion of anything beyond
+diagnostics, the open questions of section 13 and the smaller open items. The
+living entry point for picking the work up is
+[`../planned/species_discovery_status.md`](../planned/species_discovery_status.md).
+Sections 10.8, 10.11 and 13 below keep their original text as the record of
+what was planned; the unfinished note supersedes them.
+
+Status as written on 2026-10-08 (kept as history). The design is for review and is not approved as a replacement of the
 present detection. What is approved is a small, opt-in prototype: the
 foundations and the species-free level 1 of section 10 (phases 0 to 2, which
 change nothing for an existing run) and the residual recovery and species
@@ -24,14 +41,21 @@ run, phases 7 and 8 (10.9), runs `detect_atoms` in all its modes on the 66
 real Pt maps and changes no code. Section 15 records the reviews and what
 they changed.
 
-Nothing in SIMPLE was compiled or run. The numbers in section 8 come from a
-numpy emulation of the proposed pipeline on synthetic particles
-(`emul_species.py`, which needs `emul_detect.py`; both are kept out of the
-tree, like the other reference scripts), checked in section 8.8 by a second,
-independent implementation (`codex_checks.py`). They show how the algorithm
-behaves on idealised input and are not a measurement on data: the generator
-produces the Gaussian atoms the detector assumes, so agreement between the two
-says the design is coherent, not that it works on a reconstruction.
+Companion pages: `single_pcg_integration_completed.md` and
+`single_pcg_integration_unfinished.md` (section 11 says how they fit together),
+and the report [`species_discovery_report.md`](species_discovery_report.md) of
+the unattended runs.
+
+Where this note says "nothing in SIMPLE was compiled or run", that referred to
+the design stage of 2026-10-07: the numbers of section 8 come from a numpy
+emulation of the proposed pipeline on synthetic particles (`emul_species.py`,
+which needs `emul_detect.py`; both are kept out of the tree, like the other
+reference scripts), checked in section 8.8 by a second, independent
+implementation (`codex_checks.py`). They show how the algorithm behaves on
+idealised input and are not a measurement on data: the generator produces the
+Gaussian atoms the detector assumes, so agreement between the two says the
+design is coherent, not that it works on a reconstruction. The measurements on
+SIMPLE itself are in section 16.
 
 ## 0. What is asked, and what constrains the design
 
@@ -2034,7 +2058,7 @@ and tested it before the run.
   run's section of `species_discovery_report.md`.
 
 
-## 11. Relation to `single_pcg_integration.md`
+## 11. Relation to `single_pcg_integration_completed.md` / `_unfinished.md`
 
 With pseudo-atoms the columns of `G` are the Gaussians of section 1, `Z`
 drops out, and the least-squares amplitudes `c = (G^T G)^-1 G^T x` are the
@@ -2122,8 +2146,8 @@ note. Phases 0 to 3 are the first run (done); 4 and 5 the second (done);
 | `production/CMakeLists.txt` | its CTest entry; `SIMPLE_CTEST_BUDGET` raised by one (phase 3); the `single_atoms_stats` entries with `element=CdSeW`, `CdSeZ` and `CdSeR`, budget raised by one each (phase 4); the `species_discovery` timeout only if Debug needs it, and its comment, which described the pseudo-atom fixtures (phase 5) | 3, 4, 5 |
 | `src/utils/text/simple_string_utils.f90` | the string form of `list_of_ints2arr`, which splits the species list (section 5) | 4 |
 | `src/fileio/simple_fileio.f90` | `files_identical` returned false for a file compared with itself, because gfortran will not open one file on two units; this failed the fast gate at the start of phase 4, before any change | 4 |
-| `doc/implementation_notes/planned/species_discovery_report.md` | the review report: the second run's section for phases 4 to 6 (sixth ruling of 2026-10-09); the third run's section, the validation on real maps (10.9); the fourth run's, the environment term on the real maps (10.11) | 6, 8, 9 |
-| `doc/implementation_notes/planned/species_discovery.md` | this note: Progress, file-table rows, rulings | each |
+| `doc/implementation_notes/completed/species_discovery_report.md` | the review report: the second run's section for phases 4 to 6 (sixth ruling of 2026-10-09); the third run's section, the validation on real maps (10.9); the fourth run's, the environment term on the real maps (10.11) | 6, 8, 9 |
+| `doc/implementation_notes/completed/species_discovery_completed.md` | this note: Progress, file-table rows, rulings | each |
 
 ## 15. Review of 2026-10-07 and what it changed
 
@@ -3291,7 +3315,7 @@ Files changed, at the end of the phase: this note (section 7's intensity
 bias, the phase 6 section 10.7 recording the withdrawal, the later work
 renumbered 10.8, the ruling paragraphs of 10.6, a section 15 entry, a
 file-table row for the report, this entry) and
-`doc/implementation_notes/planned/species_discovery_report.md` (this run's
+`doc/implementation_notes/completed/species_discovery_report.md` (this run's
 section). No source file differs from the end of phase 5. Every path below
 is under the run directory `/home/elmlundho/agent_runs/species_element_model`.
 
@@ -3653,7 +3677,7 @@ Exit items of phase 7 and how they were met:
 ### Phase 8, weaker classes planted into the real maps, and the comparison across maps (2026-10-11)
 
 Files changed: this note (this entry) and
-`doc/implementation_notes/planned/species_discovery_report.md` (this run's
+`doc/implementation_notes/completed/species_discovery_report.md` (this run's
 section). No source file was touched; the build is phase 7's. Every path
 below is under the run directory
 `/home/elmlundho/agent_runs/species_validation_r2`; tables, scripts and

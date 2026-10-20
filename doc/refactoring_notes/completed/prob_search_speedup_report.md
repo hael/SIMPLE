@@ -145,7 +145,10 @@ parts of the `nspace` 5000 iterations; expected about 10 s per such iteration.
   `sym_dists` pair by pair in nine point groups, and the same nearest
   neighbours; not yet run.
 
-## Open
+## Open (state of 14 October 2026; superseded)
+
+`prob_fast` was retired on 15 October 2026 (`e2673a5d7`) and its changes are the default path; the
+measurements are in `../../implementation_notes/completed/single_state_speed_week_report.md`. The list below is kept as written.
 
 - **Not yet built or run:** the merge into `prob_fast`, `sym_dist_table` and
   its test, the neighbourhood-table instrumentation, and the crash fix. The

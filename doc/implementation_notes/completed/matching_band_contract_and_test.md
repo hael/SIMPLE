@@ -1,7 +1,13 @@
 # The matching band: its contract, a broken clamp, and the test that was missing
 
-Implementation note, 2026-10-18. **Proposal. Only the revert (section 2) is
-implemented; sections 3 and 4 are not.** Written after a PfCRT regression at
+Implementation note, 2026-10-18; status updated 2026-10-20: **done.** The
+revert (section 2) is implemented (`fb4e653ac`). The FSC=0.5 promotion change
+(section 3: `res05` gates the advance, the ladder sets its size, stage
+omission, mid-stage exit) is implemented (`cd13708eb`). The test (section 4)
+was dropped by ruling 1 of `planned/testing_and_benchmarking_plan.md` ("no
+matching-band test"); the stage shift is judged on real datasets. Two small
+optional extras are listed under "Not folded in" in section 3; nobody has
+committed to them, so no unfinished note exists. Written after a PfCRT regression at
 commit `25d25688` that was caused by a change made two days earlier to the
 matching low-pass limit, and found, as the two before it, by a maintainer
 looking at density rather than by a test.
@@ -11,8 +17,8 @@ made the diagnosis take three attempts:
 
 1. who owns the matching band, and the contract that ownership implies;
 2. the clamp that violated it (closed: reverted);
-3. the FSC=0.5 promotion (open: needs a decision, not a patch);
-4. the test that would have caught (2), and would bound (3).
+3. the FSC=0.5 promotion (closed: implemented as the `res05` gate);
+4. the test that would have caught (2), and would bound (3) (dropped by ruling).
 
 ## 1. Who owns the matching band in solve3D
 
@@ -96,7 +102,7 @@ reintroduce it in `set_bp_range3D`.
 The separate change in the same commit -- restoring the density window on the
 Guinier B-factor fit -- stands, and is unrelated.
 
-## 3. The FSC=0.5 promotion (open; a decision, not a patch)
+## 3. The FSC=0.5 promotion (implemented 2026-10-18; the analysis below led to it)
 
 This is independent of section 2 and predates it.
 
@@ -265,9 +271,9 @@ existed, in writing, in the policy file that owns the band. That is the case
 for section 4: the mechanism has to be one that does not depend on someone
 having read 900 lines of policy before touching `set_bp_range3D`.
 
-## 4. The test (proposal)
+## 4. The test (dropped by ruling)
 
-**Not pursued** (maintainer, 2026-10-18): the stage shift is judged on real
+**Dropped by ruling** (maintainer, 2026-10-18; ruling 1 of `testing_and_benchmarking_plan.md`): the stage shift is judged on real
 datasets. The stage rules it relies on are listed for fast unit tests in
 `testing_and_benchmarking_plan.md` section 3.
 
@@ -324,7 +330,8 @@ independent of which option in section 3 is chosen.
 
 ## 5. Not proposed here
 
-- No change to the band logic, the controller, or `set_bp_range3D`. Section 3
-  is a decision to be taken on evidence; section 4 does not depend on it.
+- No change to the band logic, the controller, or `set_bp_range3D` beyond the
+  two implemented commits. (When written, section 3 was still a decision to
+  be taken; it has since been taken.)
 - The real-data manifest layer, cFAR and B-factor gates, and the rest of the
   dataset tier belong to the broader suite proposal, not to this note.

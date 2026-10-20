@@ -1,13 +1,14 @@
 # `pose_cont` refactoring aftermath
 
-Status: active, reviewed against the source at `108c8c9da` (2026-10-07). This is the single living
-record of what the completed [`pose_cont` refactoring](../completed/pose_cont_refactoring.md) and its
+Status (2026-10-20): all work items are implemented except the validation runs (V1), which are
+tracked in [pose_cont_refactor_aftermath_issues_unfinished.md](../planned/pose_cont_refactor_aftermath_issues_unfinished.md).
+This file is the record of the implemented items. Reviewed against the source at `108c8c9da` (2026-10-07). This is the record of what the completed [`pose_cont` refactoring](../completed/pose_cont_refactoring.md) and its
 [review report](../completed/pose_cont_refactoring_report.md) left to do. Line numbers are at
 `108c8c9da` and will drift; the routine names are the stable reference.
 
 ## Work list
 
-State on 2026-10-07: everything below except V1 is implemented in the working tree on top of
+State on 2026-10-07 (unchanged on 2026-10-20): everything below except V1 is implemented in the working tree on top of
 `108c8c9da`, uncommitted and not yet compiled or run.
 
 | # | Change | Kind | State |
@@ -20,7 +21,7 @@ State on 2026-10-07: everything below except V1 is implemented in the working tr
 | T2 | Pin the `inpl_cont` phase derivation and the polar in-plane route before a polish | Test | Implemented |
 | D1 | Correct the route sentence; add the publication invariant and the C4 rule | Policy | Implemented |
 | D2 | Add `refine=cont` and the publication invariant to three skills | Skills | Implemented |
-| V1 | Compile, run the gates, record the results | Validation | Open |
+| V1 | Compile, run the gates, record the results | Validation | Open (see the unfinished note) |
 
 The sigma2 fallback and the LM route are closed (end of this note).
 
@@ -281,7 +282,7 @@ None of these mention `refine=cont`, `pose_cont`, `athres_cont` or `cont_route` 
   as its own rotation bound, and `cont_route` as a test-only seam.
 - `.github/skills/simple-frac-update-trailing/SKILL.md`: the C1 invariant.
 
-## V1. Runs to record
+## V1. Runs to record (open; carried on in the unfinished note)
 
 For each, record the command, the commit and the result in this note. First compile the working
 tree (`./compile_debug.sh`) and run the fast gate.
@@ -303,4 +304,4 @@ tree (`./compile_debug.sh`) and run the fast gate.
   for the testers only. They have no production caller at `108c8c9da`; do not add one. Narrow
   them when the testers move to a deliberate test interface.
 
-The note moves to `completed/` when V1 is recorded.
+The remaining validation (V1) is in the unfinished note; this note stays as the record of the implemented items.

@@ -158,7 +158,7 @@ and route changes have not been run yet: `unit_cart_align3D`, `unit_ui`, `lib_ca
 ## Open for your review
 
 Carried forward, with the maintainer's comments and the code facts, in
-[pose_cont_refactor_aftermath_issues.md](../planned/pose_cont_refactor_aftermath_issues.md).
+[pose_cont_refactor_aftermath_issues_completed.md](../completed/pose_cont_refactor_aftermath_issues_completed.md).
 
 
 - O2: the convergence rule under `refine=cont` (interim: none, runs to `maxits`).

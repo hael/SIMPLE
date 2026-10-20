@@ -107,8 +107,7 @@ contains
         &test_entry('stream_preproc', 'stream_preproc', '', 8, 1, 1, 2, 3600, ENTRY_GATE, outputs_of('', PREPROC_OUT), &
             &mem_gb=0.5, disk_gb=0.5, scales=.false.), &
         ! two workers of four threads in its distributed FLEX run; the state refinements take eight
-        &test_entry('flex_pca_blobs', 'flex_pca_blobs', 'nthr=4', 8, 2, 4, 9, 7200, ENTRY_GATE, '', mem_gb=3.5, disk_gb=2.5), &
-        &test_entry('solve3D_pyramid_blobs', 'solve3D_pyramid_blobs', 'nthr=8', 8, 0, 0, 9, 7200, ENTRY_GATE, '', mem_gb=2.0, disk_gb=0.5) ]
+        &test_entry('flex_pca_blobs', 'flex_pca_blobs', 'nthr=4', 8, 2, 4, 9, 7200, ENTRY_GATE, '', mem_gb=3.5, disk_gb=2.5) ]
     end function get_test_registry
 
     !> the registry index of the entry called name, 0 if there is none

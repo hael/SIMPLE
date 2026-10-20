@@ -3,9 +3,19 @@
 Implementation note, 2026-10-14. Revised 2026-10-15 for the unattended run
 `prob_speed` on the Oracle Linux test machine, which carried out days 1 and 2
 and the same changes in the 2D table (section "Execution"; the record is in
-"Progress" and the summary in `single_state_speed_week_report.md`). Days 3 to
-5 are still planned. Multi-state runs added 2026-10-15 (section
-"Multi-state").
+"Progress" and the summary in `single_state_speed_week_report.md`). Multi-state
+runs added 2026-10-15 (section "Multi-state").
+
+**Status, 2026-10-20: split.** Done: days 1 and 2, the 2D table and the
+retirement of `prob_fast` (run `prob_speed`); the identical parts of days 3
+and 4 and the multi-state items 2 to 4 (runs `ms_speed` and `speed_mac`, see
+"Status after the run `speed_mac`" at the end); the multi-state schedule
+(multi-state item 1, run `ms_speed`). The open work (day 3 items 5 and 6, the
+rest of day 4, day 5's one worker process per iteration, the states' parallel
+assembly, and the measurements on PfCRT and msp1) is in
+[`../planned/single_state_speed_week_unfinished.md`](../planned/single_state_speed_week_unfinished.md).
+Where this text below says days 3 to 5 are "planned" or "still to follow", read
+it with that status. Its report is `single_state_speed_week_report.md`.
 
 ## Goal and baseline
 
@@ -324,7 +334,7 @@ Common to every phase:
   whenever tests or their registration change.
 - **Not in this run.** Days 3 to 5; the generated indexes under
   `doc/code_overview/`; skill files (proposed text goes into the report). The
-  plan stays in `planned/`, since days 3 to 5 follow.
+  plan stayed in `planned/` while days 3 to 5 followed; the open part is now the `_unfinished` note.
 
 ### Phase 0: baseline and the distributed simulated step
 
@@ -420,7 +430,7 @@ Exit criteria: the gates pass; the report is written.
 
 | file | why | phases |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/single_state_speed_week.md` | this plan and its progress | each |
+| `doc/implementation_notes/completed/single_state_speed_week_completed.md` | this plan and its progress | each |
 | `scripts/plot_refine3d_bench.py` | the summary script; fixes, and the 2D reports | each |
 | `src/main/commanders/test/simple_commanders_test_highlevel_workflow.f90` | the distributed `solve3D` step of `simulated_workflow_1jxy`; a root seed per suite, 20261003 for 6vxx (ruling of 2026-10-15, after the Phase 3 stop) | 0 3 |
 | `production/CMakeLists.txt` | the timeout and comment of `simulated_workflow_1jxy` | 0 |
@@ -530,7 +540,7 @@ These rulings change `solve3D`'s multi-state schedule and `refine3D_states`.
 `solve3D`'s particle route and its class-average route share the mode policy,
 so both switch at stage 5. The stage-2 exit concerns the particle route, the
 only one with `shc` stages. The run `ms_speed` carries them out
-(`multistate_speed_run.md`, beside this plan).
+(`multistate_speed_run_completed.md`, beside this plan).
 
 ### Testing multi-state
 
@@ -542,7 +552,7 @@ The simulated tests are single-state and do not reach these paths.
   synthetic dense tables of several states with a fixed seed.
 - **Timing on the test machine**, beta-galactosidase, run like the
   single-state cases (before and after, twice each way, read with the summary
-  script). The cases are defined in `multistate_speed_run.md`:
+  script). The cases are defined in `multistate_speed_run_completed.md`:
   - a three-state `solve3D` from the common three-state `solve3D_cavgs`
     start (`solve3D_cavgs nstates=3` gives the three-state particle
     assignment that `cavg_ini_ext=yes` needs);

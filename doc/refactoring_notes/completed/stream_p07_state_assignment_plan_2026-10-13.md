@@ -1,6 +1,6 @@
 # Stream multistate 3D by class-average assignment, plan, 13 October 2026
 
-**Status:** implemented on 13 October 2026, not yet built or run; the living description is
+**Status:** implemented on 13 October 2026 (`simple_state_assignment.f90` and its tester, commit `c878daae4`); the living description is
 `doc/policies/stream/stream_3D_ingestion_policy.md`, sections 4, 9 and 10. Where the code differs
 from this plan:
 - the matching brings the class averages and the references to one pixel size and box (the

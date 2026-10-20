@@ -96,7 +96,7 @@ function.
 | `production/CMakeLists.txt` (~190-191) | the comment on `SIMPLE_TEST_ENV` that says `simple_test_exec` fixes `SIMPLE_SEED` |
 | `doc/policies/test_environment_policy.md` (lines ~154, 484, 485, 548) | the seed described as above: `fix_test_seed`, the `propagate` row of `set_fixed_seed`, the `fix_test_seed` row, and the sentence that `SIMPLE_SEED` fixes every draw |
 | `doc/refactoring_notes/planned/stream_area_tests_handover.md` (~62-64), `single_area_tests_handover.md` (~60), `phase5_workflow_gates_and_nightly_runner_handover.md` (~31) | the seed described as above |
-| `doc/implementation_notes/planned/species_discovery_status.md` (~216-218), `species_discovery_report.md` (~381), `species_discovery.md` (~2294, 2313, 2338, 2543) | the status note says that production `seed_rnd` still honours `SIMPLE_SEED` and that this plan awaits review: reword when this lands; the report and the note quote `SIMPLE_SEED=20260923` as the setting of their runs, which stays true as a record of those runs unless the maintainer prefers otherwise |
+| `doc/implementation_notes/planned/species_discovery_status.md` (~216-218), `species_discovery_report.md` (~381), `species_discovery_completed.md` (~2294, 2313, 2338, 2543) | the status note says that production `seed_rnd` still honours `SIMPLE_SEED` and that this plan awaits review: reword when this lands; the report and the note quote `SIMPLE_SEED=20260923` as the setting of their runs, which stays true as a record of those runs unless the maintainer prefers otherwise |
 
 Not touched: the completed notes
 `doc/refactoring_notes/completed/view_balanced_fractional_sampling_refactoring.md`

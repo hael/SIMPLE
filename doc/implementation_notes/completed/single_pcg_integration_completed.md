@@ -1,11 +1,23 @@
 # The atomicity prior on the PCG backend, for SINGLE and atomic electron tomography
 
 Implementation note. First version 2026-09-15; revised 2026-10-15 at master
-`e2673a5d7`. Design for review; nothing here is implemented. Companions:
+`e2673a5d7`.
+
+**Status (2026-10-20): the core is implemented; the integrations are open.**
+Done: the prior as a module (`simple_pcg_atomic_prior`, with unit tests), its hook in the PCG
+reconstructor, and `reconstruct3D atm_prior=yes pdbfile=` with the plumbing in
+`simple_rec3D_pcg_strategy` (section 11 records the choices and the FePt result). Open, and
+described in [`../planned/single_pcg_integration_unfinished.md`](../planned/single_pcg_integration_unfinished.md):
+the `refine_tomo` and `refine3D_nano` / `autorefine3D_nano` integration, the held-out scan inside
+the program (`atm_cv`), the TEM five-Gaussian kernel with the `atoms%convolve` kernel builder,
+per-atom amplitudes into species discovery, and the acceptance runs of section 9 that have not been
+recorded. Sections 0 to 10 below are the original design text (written when nothing was
+implemented) and are kept as history. Companions:
 `pcg_backend_overview.md` (the solver), `reconstruct3D_pcg_policy.md`,
 `pcg_decision_log.md`, `pcg_priors_history.md` (the priors tried before),
 `aet_codes_and_simple.md` (the FePt work) and
-`doc/refactoring_notes/planned/refine_tomo.md`.
+`doc/refactoring_notes/planned/refine_tomo.md`. The species work this feeds is
+`species_discovery_completed.md` and `species_discovery_unfinished.md`.
 
 ## 0. What the revision changes
 

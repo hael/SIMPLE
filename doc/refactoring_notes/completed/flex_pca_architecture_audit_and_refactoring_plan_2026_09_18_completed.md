@@ -2,10 +2,11 @@
 
 Date: 2026-09-18. Revised 2026-09-30.
 
-Status: implementation completed through phases 0b--11. Phase 0a's cluster
-baseline/replay remains an outstanding validation activity; it does not leave the
-architectural refactor itself unimplemented. The phase table in section 11 is the
-implementation ledger.
+Status (2026-10-20): the architectural refactor is implemented (phases 0b to 11, ledger in
+section 11). Two items were never done and are tracked in
+[flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md](../planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md):
+phase 0a (capture of the fixtures F1--F8 on `master` and replay on the refactored code, so the
+"identical" gates are unverified) and the optional late physical splits of section 8.1.
 
 Scope: the 3-D `flex_pca` implementation on `master` only. Feature branches that
 carry their own FLEX changes are out of scope and are not reconciled here.

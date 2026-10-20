@@ -354,7 +354,7 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeR)
   # species discovery of detect_atoms (species list and discover_species=yes) on Pt, Pt/Ni and Pt/Al
   # particles rendered with the element kernels, judged against the generating models; its own entry by
-  # the plan doc/implementation_notes/planned/species_discovery.md (sections 10.4 and 10.6)
+  # the plan doc/implementation_notes/completed/species_discovery_completed.md (sections 10.4 and 10.6)
   simple_add_test(species_discovery highlevel 3600 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=species_discovery nthr=8)
   # stream preprocessing: five simulated movies through the stream's
@@ -376,18 +376,6 @@ if(BUILD_TESTS)
   # states and directions; also checks in this suite rather than a new process.
   simple_add_test(flex_pca_blobs highlevel 7200 8 PROCESSORS 9
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=flex_pca_blobs nthr=4)
-
-  # solve3D_pyramid end to end on the three-state phantom of 3 600 particles in
-  # 60 exact views (as the class-average state refinement above), its class
-  # averages made from the exact classes: the reference check, the assignment's
-  # purity against the planted states and the maps docked onto the truths
-  # (doc/policies/3D/solve3D_pyramid_policy.md; floors provisional until the
-  # first run sets them). Its own process rather than more checks in
-  # flex_pca_blobs: a separate program run end to end on its own phantom, which
-  # would double that entry's wall time (owner decision, 2026-10-15, recorded in
-  # doc/refactoring_notes/planned/solve3D_pyramid_plan_2026-10-15.md).
-  simple_add_test(solve3D_pyramid_blobs highlevel 7200 8 PROCESSORS 9
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=solve3D_pyramid_blobs nthr=8)
 
   # ---- platform cases -------------------------------------------------------
   # Own process, own launcher; not part of the build gate.

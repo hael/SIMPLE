@@ -1,6 +1,15 @@
 # SIMPLE hardware resource planning
 
-**Status:** DRAFT for user and system-administrator review, 2026-09-29
+**Status (2026-10-20):** design record, written as a draft on 2026-09-29, then partly implemented.
+Done: the memory estimator (`scripts/memory_estimator.py`), and the Python calibration and planning
+tool (`scripts/hardware_resource_planner.py` with the package `scripts/resource_planner/`: hardware
+discovery, standard calibration of motion correction, CTF estimation, picking, solve2D and solve3D
+on synthetic fixtures, Slurm submission, JSON profile export), recorded in sections 15 to 23.
+Sections 1 to 14 are the original design text; where they say "future" or "proposed" for these
+parts, read "implemented in Python". Not done, and described in
+[`../planned/hardware_resource_planning_unfinished.md`](../planned/hardware_resource_planning_unfinished.md):
+native SIMPLE consumption of the profiles (explicitly not implemented), streaming planning,
+real-data qualification, the solve2D and solve3D accuracy gates, and the gaps of section 13.
 
 ## 1. Purpose
 
@@ -13,8 +22,9 @@ SIMPLE workload into batch and streaming execution settings:
 - `job_memory_per_task`: scheduler memory request for one concurrent worker;
 - stage-specific persistent-worker counts and threads for streaming.
 
-The immediate goal is guidance and a future planning tool. This draft does not
-change SIMPLE defaults or automatically submit jobs.
+The immediate goal was guidance and a planning tool (the Python tool of section 15 onward now
+exists). Neither the tool nor this document changes SIMPLE defaults, and the tool submits jobs only
+when an administrator explicitly asks it to.
 
 Memory alone cannot determine `nparts`. CPU capacity limits concurrency, the
 dataset determines useful partition granularity, and the scheduler determines

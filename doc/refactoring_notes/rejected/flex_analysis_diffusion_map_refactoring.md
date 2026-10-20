@@ -1,3 +1,8 @@
+> **Retired (2026-10-20 filing).** The `flex_analysis` diffusion-map pipeline was removed (see
+> `src/main/flex/README.md`; its embedding never produced usable states). The text below, including
+> "implemented and tested" and the policy it cites (`doc/policies/flex_analysis_policy.md`, also
+> gone), describes the removed pipeline and is kept as history.
+
 # `flex_analysis` implementation plan
 
 This is the forward-looking companion to

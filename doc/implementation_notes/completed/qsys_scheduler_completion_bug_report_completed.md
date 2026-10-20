@@ -2,12 +2,22 @@
 
 **Component:** `src/utils/qsys/simple_qsys_ctrl.f90` (with one supporting note in `src/utils/qsys/simple_qsys_funs.f90`)
 **Found while:** investigating a distributed `calc_pspec` run that appeared to hang with idle CPUs
-**Status:** planned follow-up after source re-audit on 2026-10-05. Issue 1's
-specific `tee` exit-status defect no longer applies to `generate_script_2`,
-which now redirects directly and writes `$?`. Issue 2 remains for batch jobs:
-`generate_script_1` does not emit an exit-code file and batch `update_queue`
-still treats the success sentinel as the only completion signal. The original
-report is retained below to preserve the reproduction and design discussion.
+**Status (2026-10-20):** done, except for one open item. Issue 1 (the `tee`
+exit status) no longer applies: `generate_script_2` redirects directly and
+writes `$?`. Issue 2 (batch jobs) is fixed in `src/utils/qsys`:
+`generate_script_1` writes `EXIT_CODE_JOB_<part>` and a job record; batch
+`update_queue` sets `jobs_failed` on a non-zero or unreadable exit status;
+`check_job_lost` (`simple_qsys_job_record.f90`) marks a part that vanished
+without an exit status (it writes `JOB_LOST_EXIT_CODE`); `clear_job_status`
+removes stale status before a part is submitted; and `schedule_jobs` and
+`schedule_array_jobs` call `stop_on_failed_parts`, which cancels the other
+parts and names the failed ones. Suggested-direction steps 1 to 3 below are
+therefore implemented. Step 4 (periodic report of outstanding parts, and a
+wall-clock backstop for a part that hangs without exiting) is not; it is in
+[qsys_scheduler_completion_bug_report_unfinished.md](../planned/qsys_scheduler_completion_bug_report_unfinished.md).
+The original report is retained below to preserve the reproduction and design
+discussion; its "Where" and "Failure mode" text describes the code before the
+fix.
 **Baseline:** `master` @ `ec5527df0`
 
 There are two independent issues. Issue 1 is a concrete defect with a confirmed

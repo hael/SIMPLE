@@ -3,7 +3,10 @@
 Status (2026-10-14): `emulate_solve3D_stream` is removed from the code base
 (its commander, UI entry, the parameters `nptcls_addon` and `rollback`, the
 explicit split `partition_selected` and its report). `solve3D_chunks`
-remains; this note stays as its design record. Its leaf module
+remains; this note stays as its design record. The implementation is
+done. The open work is four validation runs, listed in
+[emulate_solve3D_stream_unfinished.md](../planned/emulate_solve3D_stream_unfinished.md).
+Its leaf module
 `simple_solve3D_stream_emulation` is now `simple_solve3D_chunks_plan`, with
 `chunks_step`, `chunks_report`, `prepare_chunks_source` and
 `select_chunks_step` for the `emulation_*` names below.
@@ -12,7 +15,7 @@ Implementation note. `emulate_solve3D_stream` was committed on 2026-10-10
 (`77fb358a0`, `9be7dd841`), `solve3D_chunks` on 2026-10-11 (`da5a17e89`). The
 whole-stack run cuts, the `solve3D_chunks` defaults and UI, and
 `SOLVE3D_BENCH.txt` followed in `76c37002b`. Validation is still open
-(section 9), so the note stays under `planned`.
+(section 9); it moved to the unfinished note above.
 
 Policies: `doc/policies/3D/solve3D_chunks_policy.md` is the contract of
 `solve3D_chunks`. `doc/policies/3D/solve3D_policy.md` and
@@ -321,8 +324,10 @@ What the runs show:
 - An `emulate_solve3D_stream` rollback case.
 - The published project: its solution and its manifest registration.
 
-When these pass, record the evidence here and move the note out of
-`planned`.
+These four checks are now tracked in
+[emulate_solve3D_stream_unfinished.md](../planned/emulate_solve3D_stream_unfinished.md).
+Note that `emulate_solve3D_stream` has since been removed, so its rollback
+case (third item) no longer applies.
 
 ## 10. Known limits
 

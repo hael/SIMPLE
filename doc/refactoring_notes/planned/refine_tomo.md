@@ -1,6 +1,6 @@
 # refine_tomo: tilt-series refinement for atomic electron tomography in SINGLE
 
-Plan agreed with Hans on 2026-10-15. It turns the hand-run FePt kit
+Status: written 2026-10-15, not compiled; the ground-truth test is still to do (see "Status" at the end). Plan agreed with Hans on 2026-10-15. It turns the hand-run FePt kit
 (`for_simple/run_fept_refine_cont.sh`) into a SINGLE workflow. On the FePt tilt
 series that kit raised level-1 atom recall from 0.35 to 0.39 (their GENFIRE
 map: 0.41) by refining the projection poses with `refine3D refine=cont`.

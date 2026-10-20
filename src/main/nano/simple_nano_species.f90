@@ -1,5 +1,5 @@
 !@descr: species discovery numerics for SINGLE: intensity mixture and class choice, enclosed Gaussian fraction, detection-threshold calibration, Gaussian width fit, filters
-! Array numerics with no image dependence; the design is doc/implementation_notes/planned/species_discovery.md
+! Array numerics with no image dependence; the design is doc/implementation_notes/completed/species_discovery_completed.md
 ! (sections 3.2 to 3.7).
 module simple_nano_species
 use simple_defs,          only: dp, DPI, DTINY

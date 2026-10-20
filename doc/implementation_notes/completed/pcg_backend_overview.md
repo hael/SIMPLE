@@ -184,7 +184,7 @@ residual `x_b - G c` (amplitudes fitted to the data through the half's
 operator) under `_res`; the sidecar `_atmprior.txt` holds the model, width,
 strength moments and CG statistics. It requires `ml_reg=no` and excludes
 `pcg_solvent` and NU filtering. Design and FePt results:
-`doc/implementation_notes/planned/single_pcg_integration.md`.
+`doc/implementation_notes/completed/single_pcg_integration_completed.md`.
 
 ## 4. The FSC and the envelope
 

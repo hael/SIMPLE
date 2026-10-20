@@ -1,7 +1,7 @@
 !@descr: atomicity prior of the PCG reconstruction, lambda_A x^T (I - P_G) x with P_G the projector onto atom kernels
 ! The map is modelled as x = G c + e and only e is penalized. The columns of G are Gaussian atom kernels clipped
 ! to the solve support; G^T G is sparse (only overlapping footprints couple) and solved by Jacobi-preconditioned CG
-! in double precision. Design: doc/implementation_notes/planned/single_pcg_integration.md.
+! in double precision. Design: doc/implementation_notes/completed/single_pcg_integration_completed.md.
 module simple_pcg_atomic_prior
 use simple_core_module_api, only: dp, PI, simple_exception
 use simple_pcg_solver,      only: pcg_operator

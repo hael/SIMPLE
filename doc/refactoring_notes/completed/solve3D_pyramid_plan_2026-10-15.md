@@ -6,7 +6,7 @@ assigns every particle to a state by matching sub-class averages against those r
 refines the poses locally with the states fixed. It has none of p07's stream machinery (watching,
 publications, retries, fallbacks, GUI): every failed step is a hard exit.
 
-Status (15 October 2026): implemented, not yet compiled or run. The contract is
+Status (20 October 2026): implemented (commands and commits `aab965b5e`, `cd2229e1b`, `2557e2d34`); the section 9 questions are decisions for the maintainer, not unbuilt work. The contract is
 `doc/policies/3D/solve3D_pyramid_policy.md`. Where the implementation departs from this plan:
 - The result is written over the execution directory's project, which keeps the input's name
   (`mkdir=yes` copies it), as `solve3D_chunks` publishes. There is no separate

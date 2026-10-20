@@ -248,7 +248,7 @@ write a self-contained report beside it.
 
 | File | Change | Phases |
 |---|---|---|
-| `doc/refactoring_notes/planned/prob_state_retirement_flex_split.md` | plan and progress | each |
+| `doc/refactoring_notes/completed/prob_state_retirement_flex_split.md` | plan and progress | each |
 | `doc/refactoring_notes/completed/prob_state_retirement_flex_split.md` | plan moved, report beside it | 2 |
 | `src/main/commanders/simple/simple_commanders_refine3D.f90` | `refine3D_states`: flex only, no fixed policy, no init phase | 1 |
 | `src/main/commanders/simple/simple_commanders_solve3D.f90`, `src/main/solve/simple_solve3D_split_checkpoint.f90`, `src/main/solve/simple_solve3D_utils.f90`, `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_manifest.f90` | flex split, cavgs balanced split, `nstates` floor | 1 |
@@ -632,7 +632,7 @@ All paths are under `/home/elmlundho/agent_runs/prob_state_flex/scratch`.
 - `doc/policies/NU/nonuniform_filtering_policy.md`
 - `doc/policies/heterogeneity/refine3D_states_policy.md`
 - `doc/policies/importance_sampling_fractional_update_policy.md`
-- `doc/refactoring_notes/planned/prob_state_retirement_flex_split.md`
+- `doc/refactoring_notes/completed/prob_state_retirement_flex_split.md`
 - `scripts/memory/benchmark_solve3d.py`
 - `src/main/commanders/simple/simple_commanders_prob.f90`
 - `src/main/commanders/simple/simple_commanders_refine3D.f90`

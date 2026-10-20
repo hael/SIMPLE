@@ -6,7 +6,7 @@ the first chunk, then one `solve3D_addon` run per later chunk, each frozen on
 the result before it. The contracts of the two runs are in
 [solve3D_policy.md](solve3D_policy.md) and
 [solve3D_addon_policy.md](solve3D_addon_policy.md). The design record is
-[emulate_solve3D_stream.md](../../implementation_notes/completed/emulate_solve3D_stream.md);
+[emulate_solve3D_stream_completed.md](../../implementation_notes/completed/emulate_solve3D_stream_completed.md);
 the explicit-size emulator it also describes, `emulate_solve3D_stream`, was
 removed on 2026-10-14.
 

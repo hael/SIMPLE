@@ -57,7 +57,7 @@ style pass. Every count below is over the scoped set.
 This note is the single living design record for this round: contract, measurements,
 contracts, test net, phases, ledger. Update it as phases land; do not create companion
 documents. It supersedes the architectural plan of 2026-09-18
-(`completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18.md`), whose
+(`completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_completed.md`), whose
 byte-identity contract is dropped here.
 
 Validation level: static source inspection (`rg`/`awk`/python over the tree and the extracted

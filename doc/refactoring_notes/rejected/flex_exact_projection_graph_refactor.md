@@ -1,6 +1,6 @@
 # Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
 
-**Status:** Proposal for review only  
+**Status:** Retired with `flex_analysis` (filed 2026-10-20); never implemented. Original status: proposal for review only  
 **Implementation status:** No implementation changes authorized or made  
 **Date:** July 28, 2026  
 **Scope:** FLEX graph construction, component-aware diffusion embedding, output contracts, distributed execution, and downstream safeguards

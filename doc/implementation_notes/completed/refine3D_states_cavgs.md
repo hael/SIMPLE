@@ -1,14 +1,16 @@
 # refine3D_states_cavgs: design note
 
 **Date:** October 8, 2026
-**Status:** Design agreed on October 9, 2026; implementation starts with the
-controller extraction. Revised on October 8 after an independent
+**Status:** Implemented (commit `f83f12687`, 2026-10-10): the commander
+`commander_refine3D_states_cavgs` is dispatched from `simple_exec_refine3D.f90`; the
+algorithm page is `doc/algorithms/heterogeneity_analysis/refine3d_states_cavgs.md`. The text below
+is the design as agreed on October 9, 2026, with the controller extraction first. Revised on October 8 after an independent
 review (Codex), and on October 9 after Hans's rulings on flex initialization,
 the PCG backend, the flex settings (flex keeps its own cross-validation and its
 code is not changed) and the handling of the even and odd class averages,
 which follows `solve3D_cavgs` exactly. Written from a read of GitHub
 master at commit `89bbc49` and of the `refine3D_states_cavgs` worktree.
-Nothing was compiled or run.
+Nothing was compiled or run when this design was written.
 
 ## Summary
 

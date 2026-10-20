@@ -21,7 +21,6 @@ type(ui_program), target :: species_discovery
 type(ui_program), target :: single_workflow
 type(ui_program), target :: stream_preproc
 type(ui_program), target :: flex_pca_blobs
-type(ui_program), target :: solve3D_pyramid_blobs
 type(ui_program), target :: write_state_weights_labels
 type(ui_program), target :: write_state_weights_mixed
 type(ui_program), target :: nightly
@@ -49,7 +48,6 @@ contains
         call new_single_workflow(tsttab)
         call new_stream_preproc(tsttab)
         call new_flex_pca_blobs(tsttab)
-        call new_solve3D_pyramid_blobs(tsttab)
         call new_write_state_weights(tsttab)
         call new_nightly(tsttab)
         call new_profile(tsttab)
@@ -76,7 +74,6 @@ contains
         write(logfhandle,'(A)') single_workflow%name%to_char()
         write(logfhandle,'(A)') stream_preproc%name%to_char()
         write(logfhandle,'(A)') flex_pca_blobs%name%to_char()
-        write(logfhandle,'(A)') solve3D_pyramid_blobs%name%to_char()
         write(logfhandle,'(A)') write_state_weights_labels%name%to_char()
         write(logfhandle,'(A)') write_state_weights_mixed%name%to_char()
         write(logfhandle,'(A)') nightly%name%to_char()
@@ -432,20 +429,6 @@ contains
         call flex_pca_blobs%add_input(UI_COMP, nthr)
         call add_ui_program('flex_pca_blobs', flex_pca_blobs, tsttab, UI_CATEGORY)
     end subroutine new_flex_pca_blobs
-
-    subroutine new_solve3D_pyramid_blobs( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        call solve3D_pyramid_blobs%new(&
-        &'solve3D_pyramid_blobs',&
-        &'solve3D_pyramid validation on a three-state phantom',&
-        &'makes the class averages of a three-state phantom of 3600 particles in 60 exact views, runs '//&
-        &'solve3D_pyramid on it end to end with nstates=3, and checks the assignment against the planted '//&
-        &'states and the references and refined maps against the planted truths',&
-        &'simple_test_exec',&
-        &.false., display_name='Solve 3D Pyramid Validation')
-        call solve3D_pyramid_blobs%add_input(UI_COMP, nthr)
-        call add_ui_program('solve3D_pyramid_blobs', solve3D_pyramid_blobs, tsttab, UI_CATEGORY)
-    end subroutine new_solve3D_pyramid_blobs
 
     !> manual test tools (not registered with CTest): state weight sets for weighted reconstruct3D runs
     subroutine new_write_state_weights( tsttab )

@@ -6,7 +6,7 @@ the class-average counterpart of particle-level `refine3D_states`
 ([refine3D_states_policy.md](refine3D_states_policy.md)) and builds its work
 project as `solve3D_cavgs` does
 ([solve3D_cavgs_policy.md](../3D/solve3D_cavgs_policy.md)). The design record
-is `doc/implementation_notes/planned/refine3D_states_cavgs.md`.
+is `doc/implementation_notes/completed/refine3D_states_cavgs.md`.
 
 Primary implementation:
 

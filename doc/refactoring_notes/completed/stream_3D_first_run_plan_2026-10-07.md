@@ -1,3 +1,8 @@
+> **Status (2026-10-20): implemented, and partly superseded.** The first-`solve3D` cap `nptcls3D_max`
+> this plan keeps no longer exists (removed in `c878daae4`), and decisions 2 and 3 were replaced or
+> reversed. The living description is `doc/policies/stream/stream_3D_ingestion_policy.md`. What is
+> left open is a stream run that exercises the first run, which is a validation, not a refactor.
+
 # Stream 3D first run plan, 7 October 2026
 
 p07 (stream multistate 3D) stops re-classifying its first publication with `solve2D`. The first

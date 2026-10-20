@@ -4,7 +4,8 @@ Companion to `comment_novel_inventory_2026-09-30.md`. It gives one draft for eac
 (the 78 blocks of 150 words or more, plus 7 procedure-level records). Line numbers refer to
 commit 714a15a99.
 
-The audit checked each draft against the code. No maintainer has reviewed them yet. The drafts
+The audit checked each draft against the code. The drafts were applied to the source in two passes
+(2026-10-01; see the status section of the companion note), so they are now history. The drafts
 keep the local comment style. Where a file has a `!@descr:` line, it stays as line 1; "(keep)"
 means the existing line is unchanged.
 

@@ -399,5 +399,5 @@ assembly and the NU filter: `simple_nu_filter.f90`, `_vars`, `_state`, `_bank`,
 `scripts/plot_refine3d_bench.py`. The master: `simple_refine3D_strategy.f90`,
 `simple_builder.f90`, `simple_commanders_euclid.f90`. Documents:
 `refine3D_policy.md`, `nonuniform_filtering_policy.md`,
-`single_state_speed_week.md`, `multistate_speed_run.md`, and the run's plan
+`single_state_speed_week_completed.md`, `multistate_speed_run_completed.md`, and the run's plan
 and report.

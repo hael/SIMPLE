@@ -1,7 +1,7 @@
 # Continuous SO(3) Probability Model for PFTC Assignment
 
 **Date:** May 10, 2026  
-**Status:** Design note / first-draft implementation plan
+**Status:** Rejected (filed 2026-10-20). Never implemented; no continuous SO(3) candidate generator was adopted, and the continuous pose route is `refine=cont` (see `../completed/continuous_3D_refinement_on_pcg_operator.md`). Kept as the record of the idea. Original status: design note / first-draft implementation plan.
 
 ## Purpose
 

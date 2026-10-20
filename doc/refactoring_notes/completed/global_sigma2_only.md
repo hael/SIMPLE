@@ -670,7 +670,7 @@ gates.
   - The refusal of `sigma_est` in `refine3D_states_cavgs_policy.md` goes.
   - The `sigma_est=global` entry in
     `doc/policies/stream/reference_generation_policy.md` goes.
-  - So do the mentions in the planned notes `single_pcg_integration.md` and
+  - So do the mentions in the planned notes `single_pcg_integration_completed.md` and
     `refine3D_states_cavgs.md`.
   - Stale comments about grouping go from `simple_flex_pca_strategy.f90`,
     `simple_final_rec.f90`, `simple_sigma2_bootstrap.f90` and
@@ -984,7 +984,7 @@ Exit criteria:
 | `scripts/memory/benchmark_solve2d.py` | `sigma_est` out. | 1 |
 | `doc/policies/3D/solve3D_policy.md`, `refine3D_auto_policy.md`, `solve3D_cavgs_policy.md`, `refine3D_policy.md`, `reconstruct3D_pcg_policy.md` | Section 9; their `sigma_est` lines already in Phase 1, and the old names of section 5 in Phase 2, whose exits require the tree to hold neither outside history documents. | 1 2 4 |
 | `doc/policies/heterogeneity/refine3D_states_cavgs_policy.md`, `doc/policies/stream/reference_generation_policy.md`, `doc/how2s/memory_estimator.md` | Section 9; their `sigma_est` lines already in Phase 1, whose exit requires the tree to hold no `sigma_est` outside history documents. | 1 4 |
-| `doc/implementation_notes/planned/single_pcg_integration.md`, `refine3D_states_cavgs.md` | Section 9; their `sigma_est` lines already in Phase 1, whose exit requires the tree to hold no `sigma_est` outside history documents. | 1 4 |
+| `doc/implementation_notes/completed/single_pcg_integration_completed.md`, `refine3D_states_cavgs.md` | Section 9; their `sigma_est` lines already in Phase 1, whose exit requires the tree to hold no `sigma_est` outside history documents. | 1 4 |
 | `doc/refactoring_notes/completed/global_sigma2_only.md`, `global_sigma2_only_report.md` | The plan moved on completion, and the report. | 4 |
 
 ## 13. Progress

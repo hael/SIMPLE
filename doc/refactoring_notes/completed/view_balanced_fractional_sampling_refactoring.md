@@ -210,7 +210,7 @@ report beside it.
 
 | File | Change | Phases |
 |---|---|---|
-| `doc/refactoring_notes/planned/view_balanced_fractional_sampling_refactoring.md` | plan and progress | each |
+| `doc/refactoring_notes/completed/view_balanced_fractional_sampling_refactoring.md` | plan and progress | each |
 | `doc/refactoring_notes/completed/view_balanced_fractional_sampling_refactoring.md` | plan moved, report beside it `view_balanced_fractional_sampling_refactoring_report.md` | 2 |
 | `src/defs/simple_type_defs.f90` | `class_sample%group` | 1 |
 | `src/fileio/simple_class_sample_io.f90` | serialize `group` | 1 |

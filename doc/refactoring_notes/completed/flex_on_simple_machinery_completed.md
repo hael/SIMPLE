@@ -3,10 +3,18 @@
 Date: 2026-10-07. Revision 4: the maintainer's review of revision 1 added the foundations of
 section 4 and the contracts of sections 5 and 6; revision 4 makes the refinement a per-state
 M-estimation in `refine3D_auto` with frozen FLEX weights (rulings 7 to 9) and adds the clustering
-extraction (section 7.1). Every decision of section 3 is ruled. Status: planned. Owner: the
-maintainer.
+extraction (section 7.1). Every decision of section 3 is ruled. Owner: the maintainer.
 
-This note is the maintainer's target. Implementing agents record progress in section 12, and add
+**Status (2026-10-20): all seven phases (0 to 6) are written and recorded in section 12.**
+Phases 0 to 4 ran on the test machine and passed their exits. Phases 5 and 6 were written by hand
+and are implemented; the maintainer's first builds ran on 2026-10-08. What is still open is the
+maintainer's tier runs and FLEX A/B of section 8.2 on the Phase 5 diffs, plus a short list of
+follow-ups (the polar-bank symmetry fix, the UMAP default, a reader for the registered embedding).
+That open work is in
+[`../planned/flex_on_simple_machinery_unfinished.md`](../planned/flex_on_simple_machinery_unfinished.md).
+This file is the full record; read it for background.
+
+This note was the maintainer's target. Implementing agents record progress in section 12, and add
 a row to the file table of section 11 (with a one-line reason) before editing a file it does not
 list; nothing else. The goal, rulings, contracts, tolerances and exits change only by a maintainer
 ruling. The plan is carried out by an autonomous run, phases 0 to 6.
@@ -492,8 +500,8 @@ a row with the phase and a one-line reason.
 
 | File | Change | Phases |
 |---|---|---|
-| `doc/refactoring_notes/planned/flex_on_simple_machinery.md` | this plan: progress, added rows | each |
-| `doc/refactoring_notes/completed/flex_on_simple_machinery.md` | the plan, moved when done, with its report beside it | 6 |
+| `doc/refactoring_notes/completed/flex_on_simple_machinery_completed.md` | this plan: progress, added rows | each |
+| `doc/refactoring_notes/planned/flex_on_simple_machinery_unfinished.md` | the open work, split off on 2026-10-20 | after 6 |
 | `doc/code_overview/` | indexes and maps the build regenerates | each |
 | `production/CMakeLists.txt` | CTest registration of new tests | 1 2 3 4 5 |
 | `src/main/commanders/test/`, `src/main/ui/simple_test/`, `src/main/exec/simple_test_exec_highlevel.f90`, `src/main/apis/simple_test_exec_api.f90` | test commanders, gates, registration and test UI | 1 2 3 4 5 |
@@ -800,7 +808,7 @@ Bulky outputs were deleted after their numbers were recorded: the recreated run 
 the evidence build and the test outputs in the build tree. `scratch/keep/` holds S, single, B and
 the references.
 
-Files changed in Phase 0: `doc/refactoring_notes/planned/flex_on_simple_machinery.md` only.
+Files changed in Phase 0: `doc/refactoring_notes/completed/flex_on_simple_machinery_completed.md` only.
 
 ### Phase 1: foundations (2026-10-07, done)
 
@@ -1791,4 +1799,4 @@ The report for the FLEX developer is `flex_on_simple_machinery_report.md`, besid
   until `scripts/gen_fortran_indexes.pl` is run.
 - Skills: not edited. `simple-main-nu-filt` still lists `flex_pca` as a caller of the nonuniform
   filter, which it no longer is; a proposed update is with the maintainer.
-- This plan moves to `completed/` with its report once the maintainer's builds, tiers and A/B pass.
+- This record moved to `completed/` on 2026-10-20 with its report. The remaining open work (tiers, A/B, follow-ups) is in `../planned/flex_on_simple_machinery_unfinished.md`.

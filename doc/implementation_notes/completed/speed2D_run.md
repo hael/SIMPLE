@@ -5,7 +5,7 @@ below; report in `speed2D_run_report.md`). The
 execution plan of the unattended night run `speed2d_mac` on the maintainer's
 Mac. The design is in `speed_architecture_proposals.md` (section 1.1, the
 finishing fixes, and section 1.2, the 2D workflow) and in
-`identical_speed_run_review.md`, both under `doc/implementation_notes/planned/`
+`identical_speed_run_review.md`, the proposals note under `doc/implementation_notes/planned/`, the review under `doc/implementation_notes/completed/`
 in `~/src/SIMPLE` (read them there; the proposals note there may be newer than
 the copy in the worktree). This note holds the run's items, tests, phases and
 progress.
@@ -229,7 +229,7 @@ skill text, and a commit message. Then `full.diff` in the run directory.
 
 | file | why | phase |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/speed2D_run.md` | this plan, its progress, the report beside it | each |
+| `doc/implementation_notes/completed/speed2D_run.md` | this plan, its progress, the report beside it | each |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`, `_neigh.f90`, `_utils.f90`, `_tester.f90` | items 1-3, 7 | 1 |
 | `src/main/strategies/parallelization/simple_refine3D_strategy.f90`, `src/main/commanders/simple/simple_commanders_rec_distr.f90` | items 4, 5 | 1 |
 | `src/main/pftc/simple_polarft_calc.f90`, `_core.f90`, `_corr.f90`, `simple_pftc_shsrch_grad.f90`, `simple_pftc_inplane_tester.f90` | items 5, 6, 19 | 1 3 |

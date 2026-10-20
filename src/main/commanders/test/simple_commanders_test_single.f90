@@ -507,7 +507,7 @@ subroutine exec_test_species_discovery( self, cline )
     use simple_nanoparticle_utils, only: find_rMax
     class(commander_test_species_discovery), intent(inout) :: self
     class(cmdline),                          intent(inout) :: cline
-    ! floors of section 10.6 of doc/implementation_notes/planned/species_discovery.md, set before the first run
+    ! floors of section 10.6 of doc/implementation_notes/completed/species_discovery_completed.md, set before the first run
     real,    parameter :: MIN_PT_RECALL    = 0.98   ! Pt over its eligible atoms: runs with discovery and the pure case
     real,    parameter :: MIN_ALL_RECALL   = 0.95   ! all eligible atoms of all species, runs with discovery
     integer, parameter :: MAX_FALSE        = 1      ! false atoms per run

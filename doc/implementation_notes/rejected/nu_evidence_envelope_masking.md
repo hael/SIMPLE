@@ -447,7 +447,10 @@ is unsuitable. This is now reported as a diagnostic only; it no longer blocks
 regeneration, so a persistently high signal percentage is a signal to revisit
 `mskdiam` or the null model rather than an automatic stop.
 
-## 9. Current state
+## 9. Current state (as of the 2026-09-02 supersession; historical)
+
+The banner at the top is authoritative where it disagrees with this section: `envfsc=yes` is live and references are never masked.
+
 
 Implemented and reachable through `nu_filt3D`:
 

@@ -2,7 +2,7 @@
 
 Implementation note, 2026-10-16. **Phases 0 to 9 done (see Progress; the
 run `test_truth` carried out Phases 0 to 6, `test_truth_sync` Phases 7 to 9
-on the merged code), report in `test_suite_truth_and_robustness_report.md`;
+on the merged code), the report file has not been written yet;
 the dataset layer follows.** Written
 after the run `ms_speed`, which could not tell whether its multi-state
 schedule change was correct: no test knows the state labels, and the checks it
@@ -889,14 +889,14 @@ Exit criteria: the gates pass; the report is written.
 | `src/main/flex/run/simple_flex_pca_application_tester.f90` | the flex tests moved onto the new fixture; in Phase 2 it exports `write_phantom_truths`, the blob truths the fixture reuses; in Phase 5 that writes the A-B difference only when there is a B (a one-state fixture crashed it) | 2 5 |
 | `production/CMakeLists.txt` | registrations, labels, processor counts, the budget | 0 3 4 5 |
 | `doc/policies/test_environment_policy.md` | the tools, the cards, the rules | 0 5 6 |
-| `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md` | the review report of the run, beside this note | 6 |
+| `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md` (not written yet) | the review report of the run, beside this note | 6 |
 | `src/main/commanders/test/simple_commanders_test_highlevel_msworkflows.f90` | its header comment still described the class-average route before the rulings of 2026-10-18 (300 images); comment only | 6 |
 | `src/main/commanders/test/`, `src/main/ui/simple_test/`, `src/main/exec/simple_test_exec_highlevel.f90`, `production/CMakeLists.txt`, `scripts/check_test_registry.py` | the tests, their registration and their floors on the merged code | 7 8 9 |
 | `doc/policies/test_environment_policy.md` | `test=identity`: the entries that run no `solve3D` or `refine3D` declare their outputs, and an entry that works in a directory named by its process id is compared through that directory | 7 |
 | `doc/policies/test_environment_policy.md`, `doc/user_guide/simulate_particles.md` | the cards, floors and tools after the merge | 8 9 |
 | `scripts/simple_args_generator.pl` | the test front door accepts `keep_outputs=`, with which `test=profile` deletes each execution's outputs as it ends and counts only running executions against the disk budget | 8 |
-| `doc/implementation_notes/planned/identical_speed_run_report.md` | the speed week's identity on x86 and its timing | 7 9 |
-| `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md` | the review report of the run, beside this note | 9 |
+| `doc/implementation_notes/completed/identical_speed_run_report.md` | the speed week's identity on x86 and its timing | 7 9 |
+| `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md` (not written yet) | the review report of the run, beside this note | 9 |
 
 ## Appendix: the high-level suite on 2026-10-16
 
@@ -2402,7 +2402,7 @@ library entries `pcg_recon` and `pcg_frac_update` pass on the merged build.
 - The list of entries to profile: above.
 
 Files changed in this phase: `src/main/commanders/test/simple_test_registry.f90`,
-`doc/policies/test_environment_policy.md`, `doc/implementation_notes/planned/identical_speed_run_report.md`
+`doc/policies/test_environment_policy.md`, `doc/implementation_notes/completed/identical_speed_run_report.md`
 and this note (its file table and this entry).
 
 ### Phase 8, 2026-10-19: profiles and floors on the merged code
@@ -2573,5 +2573,5 @@ candidates again instead of reading them back, which the Mac's timing had chosen
 - The report is written.
 
 Files changed in this phase: `doc/policies/test_environment_policy.md`, `production/CMakeLists.txt`,
-`doc/implementation_notes/planned/identical_speed_run_report.md`, this note, and the new
+`doc/implementation_notes/completed/identical_speed_run_report.md`, this note, and the new
 `doc/implementation_notes/planned/test_suite_truth_and_robustness_report.md`.

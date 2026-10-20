@@ -4,7 +4,7 @@
 !
 ! PURPOSE:
 !   The body of stream p07 as a type (doc/policies/stream/stream_3D_ingestion_policy.md;
-!   doc/refactoring_notes/planned/stream_p07_state_assignment_plan_2026-10-13.md). Pool 2D
+!   doc/refactoring_notes/completed/stream_p07_state_assignment_plan_2026-10-13.md). Pool 2D
 !   publishes its classified state; each pass in which no job runs takes the newest publication.
 !   The first (in a fresh pool, the sieve's own 2D of the sets handed off) is taken as published,
 !   without the pool model: its rows are the first set, whose selection stays for the session.

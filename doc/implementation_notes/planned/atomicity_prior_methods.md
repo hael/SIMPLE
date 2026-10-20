@@ -3,7 +3,7 @@
 Methods note, 2026-10-16. It describes the prior as implemented in `simple_pcg_atomic_prior.f90` and the PCG
 reconstructor (commit `c59611ed1`, "atom prior for PCG"), relates it to Sayre's equation and to the GENFIRE
 family of AET reconstructions, gives the FePt evidence, and looks ahead to biological specimens. The design and
-its history are in `single_pcg_integration.md`; the solver is described in `pcg_backend_overview.md`.
+its history are in `single_pcg_integration_completed.md`; the solver is described in `pcg_backend_overview.md`.
 
 ## Summary
 

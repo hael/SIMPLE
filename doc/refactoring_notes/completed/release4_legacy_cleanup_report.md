@@ -467,7 +467,7 @@ An independent review of the change set found seven issues. All are resolved.
   `simple_commanders_solve2D`, and its chunk type is `solve2D_chunk` in
   `src/main/solve/simple_solve2D_chunk.f90`. The program name, its UI and its
   behaviour are unchanged. Plan:
-  `doc/refactoring_notes/planned/solve2D_chunks_move_plan_2026-10-06.md`.
+  `doc/refactoring_notes/completed/solve2D_chunks_move_plan_2026-10-06.md`.
 - **`simple_nice` and `simple_guistats`: retired (2026-10-06)**, formerly items
   A1 and C13 of the inventory, about 2,300 lines.
   - `simple_nice_comm` sent messages without a `version`, which NICE's API

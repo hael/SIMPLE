@@ -2,7 +2,7 @@
 
 Report, 2026-10-15, of the unattended run `prob_speed` on the test machine
 `dell` (Intel Core Ultra 9 285, 24 cores, Oracle Linux 8.10). It carried out
-days 1 and 2 of `single_state_speed_week.md` (beside this report) and the
+days 1 and 2 of `single_state_speed_week_completed.md` (beside this report) and the
 same changes in the 2D probability table, in five phases. Nothing is
 committed: the change is the working tree against `1bbbdcc24`. The plan's
 section "Progress" holds the detail (command lines, logs, per-run numbers);

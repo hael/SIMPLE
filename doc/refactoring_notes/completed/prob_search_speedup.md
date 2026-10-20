@@ -5,8 +5,10 @@ unattended run); the report is `prob_search_speedup_report.md` beside this
 file. Phases 0-3 landed behind one key, `prob_fast` (ruling 7, which
 supersedes the three keys of the plan below); Phase 4 was skipped on its
 measurements; the subspace-map table of the neighbourhood search was added on
-the default path (ruling 8). The last batch is written but not yet built or
-run (report, "Open"). Section 11 is the record. Written 2026-10-13; revised
+the default path (ruling 8). `prob_fast` was retired on 15 October 2026
+(commit `e2673a5d7`): its changes are the default path now, and the later
+measurements are in `../../implementation_notes/completed/single_state_speed_week_report.md`.
+The "not yet built or run" statements below are the state of 14 October. Section 11 is the record. Written 2026-10-13; revised
 14 October 2026 after review (section 13).
 
 The probabilistic pre-step (`prob_align` and its `prob_tab` parts) was 46% of

@@ -2,11 +2,12 @@
 
 ## Status
 
-Approved and under implementation as of July 2026. The common candidate model,
-batch-streamed workers, compact neighborhood merge, and probabilistic matcher
-allocation gate are implemented. Scientific equivalence and representative
-multi-state peak-RSS validation remain required before this note is marked
-complete.
+Implemented as of 2026-10-20 (all phases below are in the code). Only validation
+remains: scientific equivalence on representative datasets, the multi-state peak-RSS
+measurement, and the final decision on the partly done workspace cleanup. They are tracked in
+[probabilistic_alignment_table_peak_memory_refactoring_unfinished.md](../planned/probabilistic_alignment_table_peak_memory_refactoring_unfinished.md).
+Sections written in the future tense ("the future refactor should introduce") describe the
+design that was then built.
 
 The target is probability-table memory in `abinitio3D`,
 `abinitio3D_cavgs`, `refine3D_auto`, `refine3D_multi`, and direct
@@ -17,7 +18,7 @@ storage classes for each probability mode.
 
 ## Decision summary
 
-The future refactor should introduce only two persistent concepts:
+The refactor introduced only two persistent concepts:
 
 1. one compact record describing an evaluated 3D probability candidate;
 2. one particle-oriented candidate store used by all probability modes.
@@ -414,7 +415,7 @@ mode-specific workspace types.
 
 ## Staged implementation
 
-### Phase 0: measurement — implemented separately, validation pending
+### Phase 0: measurement — implemented separately; the measurement on real data is open
 
 Add allocation accounting for `R`, `P`, `Ppart`, `T`, `Q`, candidate-count
 distribution, and major live byte totals. Include process peak RSS in existing

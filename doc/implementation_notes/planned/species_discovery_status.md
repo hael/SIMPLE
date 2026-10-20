@@ -1,13 +1,16 @@
 # Species discovery: where it stands and where to go next
 
-Status note, 2026-10-12, at master `618d709ec`. It is the entry point for
+Status note, 2026-10-12 (links updated 2026-10-20 after the note was split into
+completed and unfinished parts), at master `618d709ec`. It is the entry point for
 picking the work up again after a break and does not repeat the design.
 Three other documents hold the detail:
 
-- `species_discovery.md` (the note): the design, every ruling, and the
-  record of each phase.
-- `species_discovery_report.md` (the report): the reports of the
-  unattended runs.
+- `../completed/species_discovery_completed.md` (the note): the design,
+  every ruling, and the record of phases 0 to 8.
+- `species_discovery_unfinished.md`: the open work (phase 9, validation,
+  promotion, open questions), self-contained.
+- `../completed/species_discovery_report.md` (the report): the reports of
+  the unattended runs.
 - `atom_bfactor_model.md`: the follow-on work on per-atom B factors and
   occupancy.
 

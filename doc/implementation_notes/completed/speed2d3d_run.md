@@ -441,7 +441,7 @@ directory.
 
 | file | why | phase |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/speed2d3d_run.md` | this plan, its progress, the report beside it | each |
+| `doc/implementation_notes/completed/speed2d3d_run.md` | this plan, its progress, the report beside it | each |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90`, `simple_eul_prob_tab_utils.f90`, `simple_eul_prob_tab2D_tester.f90` | items 2-6, 7 | 1 2 |
 | `src/main/commanders/simple/simple_commanders_prob.f90` | items 1, 3, 7, 15 | 1 2 4 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`, `simple_eul_prob_tab_tester.f90` | item 12 | 3 |

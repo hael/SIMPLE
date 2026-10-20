@@ -99,4 +99,4 @@ must pass before recommendations are exported. Current observed limitations
 include CTF profile export losing a temporary input, picking accuracy, and
 solve2D/solve3D scientific qualification. Reorganization does not fix these.
 See the living design record in
-[`hardware_resource_planning.md`](../../doc/implementation_notes/planned/hardware_resource_planning.md).
+[`hardware_resource_planning_completed.md`](../../doc/implementation_notes/completed/hardware_resource_planning_completed.md).

@@ -1,7 +1,7 @@
 # Continuous Projection-Direction Exploration in PFTC
 
 **Date:** May 10, 2026  
-**Status:** Design note / first-draft implementation plan
+**Status:** Rejected (filed 2026-10-20). Never implemented; the continuous refinement of the projection direction landed as `refine=cont` (see `../completed/continuous_3D_refinement_on_pcg_operator.md` and `../../refactoring_notes/completed/pose_cont_refactoring.md`). Kept as the record of the idea. Original status: design note / first-draft implementation plan.
 
 > In-plane policy update (August 7, 2026): the callback mentioned in this
 > proposal is now explicitly the `inpl_cont=no` legacy route. Any implementation

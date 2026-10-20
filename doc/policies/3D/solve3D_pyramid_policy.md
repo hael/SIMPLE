@@ -6,7 +6,7 @@ session-long, with p07's rules and none of its stream machinery. The rationale o
 (why sub-class averages, why the check, why the rejection by fit) is in
 [stream_3D_ingestion_policy.md](../stream/stream_3D_ingestion_policy.md), sections 9 and 10. The
 design record is
-[solve3D_pyramid_plan_2026-10-15.md](../../refactoring_notes/planned/solve3D_pyramid_plan_2026-10-15.md).
+[solve3D_pyramid_plan_2026-10-15.md](../../refactoring_notes/completed/solve3D_pyramid_plan_2026-10-15.md).
 
 Status (2026-10-15): implemented, not yet compiled or run.
 

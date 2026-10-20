@@ -4,7 +4,7 @@ Date: 2026-10-08. Written for Afan, who developed FLEX, and for anyone who works
 `flex_pca` next. It describes what changed between master `92d684c6f` and the working tree of
 2026-10-08, why, where every piece of FLEX now lives, what SIMPLE gained, what was measured and
 what is still to be tested. It reads on its own; the plan it implements is
-`doc/refactoring_notes/completed/flex_on_simple_machinery.md` (the plan), for anyone who wants the
+`doc/refactoring_notes/completed/flex_on_simple_machinery_completed.md` (the plan), for anyone who wants the
 day-by-day record.
 
 ## 1. Summary

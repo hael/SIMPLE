@@ -1,11 +1,21 @@
 # Multi-state speed: the run `ms_speed`
 
-Implementation note, 2026-10-15. **Plan; nothing implemented.** The
-execution plan of the unattended run `ms_speed` on the Oracle Linux test
-machine. The design is in `single_state_speed_week.md` (beside this note):
-its section "Multi-state" (the rulings and items 1 to 3) and items 3 and 4 of
-its section "Day 3". This note holds the run's work, cases, rules, phases and
-progress.
+Implementation note, 2026-10-15. The execution plan of the unattended run
+`ms_speed` on the Oracle Linux test machine. The design is in
+`single_state_speed_week_completed.md` (beside this note): its section
+"Multi-state" (the rulings and items 1 to 3) and items 3 and 4 of its section
+"Day 3". This note holds the run's work, cases, rules, phases and progress.
+
+**Status, 2026-10-20: split.** Done: Phase 0 (baseline), Phase 1 (the
+multi-state schedule, accepted by the maintainer's ruling of 2026-10-16),
+Phase 2 (`ref_assign` without rescans: implemented and identical on the tester
+and on one-thread runs; it stopped at two noisy multi-threaded checks, and the
+code is applied in the tree), and Phase 3 (table reads, carried out by the run
+`speed_mac`, see `identical_speed_run.md`). Open: the ruling on the Phase 2
+stop, and Phase 4 (documents, final runs, the report). They are in
+[`../planned/multistate_speed_run_unfinished.md`](../planned/multistate_speed_run_unfinished.md).
+Where the text below says "plan" or "nothing implemented", read it with this
+status.
 
 ## Goal
 
@@ -163,7 +173,7 @@ unchanged.
 - Skill files: proposed text goes into the report.
 - The generated indexes under `doc/code_overview/`.
 
-The plans stay in `planned/`.
+The plans stayed in `planned/` while work remained; the open part is now the `_unfinished` note.
 
 ## Phases
 
@@ -258,7 +268,7 @@ Exit criteria: the gates pass; the report is written.
 
 | file | why | phases |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/single_state_speed_week.md` | the status of the multi-state items | 4 |
+| `doc/implementation_notes/completed/single_state_speed_week_completed.md` | the status of the multi-state items | 4 |
 | `scripts/plot_refine3d_bench.py` | the summary script: the scan percentage, fixes | each |
 | `src/main/solve/simple_solve3D_controller.f90` | the multi-state schedule: the switch to the neighbourhood table, the cap, the stage-2 key | 1 |
 | `src/main/simple_refine3D_states_controller.f90` | the direction cap of `refine3D_states` | 1 |

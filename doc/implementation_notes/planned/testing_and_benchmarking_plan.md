@@ -1,6 +1,6 @@
 # Testing and benchmarking: what is left, and in what order
 
-Joint plan, 2026-10-18. **Plan; nothing in it is implemented.** Rulings of 2026-10-18 in section 2. It gathers the
+Joint plan, 2026-10-18. **Partly done.** Of the order in section 8, the `speed2d_mac` run (step 1) and `test_truth_sync` Phases 7 to 9 (step 2, commit `34f314fe5`) have landed; `scripts/plot_refine3d_bench.py` exists; the matching-band test is dropped (ruling 1). The rest is open. Rulings of 2026-10-18 in section 2. It gathers the
 open testing and benchmarking items of the planned notes into one order of
 work. The notes it draws on are listed at the end; each item names where its
 detail lives.
@@ -62,7 +62,7 @@ specified and waits for that commit. Its work:
 - **The hardware resource planner:** Python under `scripts/`, with its own
   manifest, fixtures and a NumPy re-implementation of the simulated workflows.
   It runs on the Xeon desktop and the CSB cluster
-  (`hardware_resource_planning.md`).
+  (`hardware_resource_planning_completed.md`).
 - **The native dataset layer:** planned for the Dell (test policy section 6.6),
   not built.
 
@@ -460,20 +460,31 @@ FePt with two species, the nonuniform evidence-mask diagnostic.
 
 ## Sources
 
-All under `doc/implementation_notes/planned/` unless stated:
+Under `doc/implementation_notes/planned/`:
 
 - `test_suite_truth_and_robustness.md`
-- `matching_band_contract_and_test.md`
-- `single_state_speed_week.md` and its report
-- `multistate_speed_run.md`
-- `identical_speed_run.md`, its report and review
+- `single_state_speed_week_unfinished.md`
+- `multistate_speed_run_unfinished.md`
 - `speed_architecture_proposals.md` (the maintainer's tree holds the newer copy)
-- `hardware_resource_planning.md`
+- `hardware_resource_planning_unfinished.md`
 - `species_discovery_status.md`
 - `atom_bfactor_model.md`
-- `single_pcg_integration.md`
+- `single_pcg_integration_unfinished.md`
 - `nu_evidence_mask_cross_validated_threshold.md`
 - `next_release/calpha_nu_evidence_mask.md`
+
+Under `doc/implementation_notes/completed/`:
+
+- `matching_band_contract_and_test.md`
+- `single_state_speed_week_completed.md` and its report
+- `multistate_speed_run_completed.md`
+- `identical_speed_run.md`, its report and review
+- `hardware_resource_planning_completed.md`
+- `single_pcg_integration_completed.md`
+
+Under `doc/refactoring_notes/completed/`:
+
+- `solve3D_pyramid_plan_2026-10-15.md`
 
 Under `doc/refactoring_notes/planned/`:
 
@@ -481,7 +492,6 @@ Under `doc/refactoring_notes/planned/`:
 - `single_area_tests_handover.md`
 - `stream_area_tests_handover.md`
 - `rnd_seed_parameter.md`
-- `solve3D_pyramid_plan_2026-10-15.md`
 - `refine_tomo.md`
 - `next_release/staged_domain_driven_design_refactor.md`
 
