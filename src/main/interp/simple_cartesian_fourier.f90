@@ -1,13 +1,14 @@
-!@descr: neutral Cartesian Fourier lattice embedding, extraction, and packed KB gathers
+!@descr: neutral Cartesian Fourier lattice embedding, extraction, and packed gathers
 module simple_cartesian_fourier
+use simple_defs,  only: PI
 use simple_image, only: image
-use simple_kbinterpol, only: kbinterpol
 implicit none
 private
 
 public :: center_embed_real3d, center_crop_real3d
 public :: extract_native_fourier_plane
-public :: gather_packed_window, gather_packed_window_grad, gather_packed_kb3_window_grad
+public :: gather_packed_window, gather_packed_window_grad, gather_packed_bspline3_window_grad
+public :: bspline3_stencil_envelope_1d
 
 contains
 
@@ -136,48 +137,35 @@ contains
         end do
     end subroutine gather_packed_window_grad
 
-    !> Gather the standard three-tap KB value and fixed-cell derivatives without
-    !! materialising three-dimensional weight arrays.
-    pure subroutine gather_packed_kb3_window_grad( cmat, wrap_lower, wrap, kbwin, loc, value, dvalue_dloc, inside )
-        complex,            intent(in)  :: cmat(:,:,:)
-        integer,            intent(in)  :: wrap_lower
-        integer,            intent(in)  :: wrap(wrap_lower:)
-        type(kbinterpol),   intent(in)  :: kbwin
-        real,               intent(in)  :: loc(3)
-        complex,            intent(out) :: value, dvalue_dloc(3)
-        logical,            intent(out) :: inside
+    !> Gather one value and its three derivatives with the separable quadratic B-spline on the
+    !! three taps around the nearest grid point. Its weights and slopes vanish at the taps that
+    !! enter or leave as the nearest point changes, so value and derivatives are continuous.
+    pure subroutine gather_packed_bspline3_window_grad( cmat, wrap_lower, wrap, loc, value, dvalue_dloc, inside )
+        complex, intent(in)  :: cmat(:,:,:)
+        integer, intent(in)  :: wrap_lower
+        integer, intent(in)  :: wrap(wrap_lower:)
+        real,    intent(in)  :: loc(3)
+        complex, intent(out) :: value, dvalue_dloc(3)
+        logical, intent(out) :: inside
         complex :: fcomp
-        real    :: base(3), draw(3), raw(3)
-        real    :: dx(3), dy(3), dz(3), wx(3), wy(3), wz(3)
-        real    :: sx, sy, sz, dsx, dsy, dsz, wyz, dyz, wydz
-        real    :: weight, dweight(3)
+        real    :: t(3), wx(3), wy(3), wz(3), dx(3), dy(3), dz(3)
+        real    :: wyz, dyz, wydz, weight, dweight(3)
         integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz, i0(3)
-
-        ! The nearest grid point owns this fixed three-tap cell; derivatives do
-        ! not include the discontinuous change to a neighbouring cell.
         i0     = nint(loc) - 1
         inside = .not.(any(i0 < lbound(wrap,1)) .or. any(i0 + 2 > ubound(wrap,1)))
         value       = cmplx(0.,0.)
         dvalue_dloc = cmplx(0.,0.)
         if( .not. inside ) return
-
-        base = real(i0) - loc
-        do di = 1, 3
-            call kbwin%apod_fast_value_deriv(base + real(di-1), raw, draw)
-            wx(di) = raw(1); wy(di) = raw(2); wz(di) = raw(3)
-            dx(di) = -draw(1); dy(di) = -draw(2); dz(di) = -draw(3)
-        enddo
-        ! Normalize each axis separately. The quotient-rule derivatives keep
-        ! every 1-D weight sum at one and every derivative sum at zero.
-        sx  = sum(wx); sy  = sum(wy); sz  = sum(wz)
-        dsx = sum(dx); dsy = sum(dy); dsz = sum(dz)
-        wx  = wx / sx; wy = wy / sy; wz = wz / sz
-        dx  = (dx - wx * dsx) / sx
-        dy  = (dy - wy * dsy) / sy
-        dz  = (dz - wz * dsz) / sz
-
-        ! Match the generic oracle's packed/Friedel traversal and accumulation
-        ! order while forming separable weights only when they are consumed.
+        ! offset t in [-1/2,1/2] from the nearest point; taps at distances -1-t, -t and 1-t, whose
+        ! weights sum to one and whose derivatives in loc sum to zero for every t
+        t  = loc - real(i0 + 1)
+        wx = [0.5*(t(1)-0.5)**2, 0.75-t(1)**2, 0.5*(t(1)+0.5)**2]
+        wy = [0.5*(t(2)-0.5)**2, 0.75-t(2)**2, 0.5*(t(2)+0.5)**2]
+        wz = [0.5*(t(3)-0.5)**2, 0.75-t(3)**2, 0.5*(t(3)+0.5)**2]
+        dx = [t(1)-0.5, -2.*t(1), t(1)+0.5]
+        dy = [t(2)-0.5, -2.*t(2), t(2)+0.5]
+        dz = [t(3)-0.5, -2.*t(3), t(3)+0.5]
+        ! the generic gather's packed/Friedel traversal and accumulation order
         ny = size(cmat,2)
         nz = size(cmat,3)
         do dk = 1, 3
@@ -209,6 +197,18 @@ contains
                 enddo
             enddo
         enddo
-    end subroutine gather_packed_kb3_window_grad
+    end subroutine gather_packed_bspline3_window_grad
+
+    !> Real-space response along one axis of a box of n of the quadratic B-spline stencil at
+    !! on-grid samples, weights 1/8, 3/4, 1/8: 3/4 + cos(2 pi (x-c)/n)/4, centre c = n/2+1.
+    subroutine bspline3_stencil_envelope_1d( n, env1d )
+        integer,           intent(in)  :: n
+        real, allocatable, intent(out) :: env1d(:)
+        integer :: x
+        allocate(env1d(n))
+        do x = 1, n
+            env1d(x) = 0.75 + 0.25*cos(2.*PI*real(x - (n/2 + 1))/real(n))
+        end do
+    end subroutine bspline3_stencil_envelope_1d
 
 end module simple_cartesian_fourier

@@ -75,7 +75,11 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     (Phase 8 finding); stages f, g and h measure the error up to them: the smallest over the
 !     operators of D2, declared from the model's chain arrangement (betagal_frame), never learnt
 !     from the poses, in the truth map's frame, which the refinements share
-!  Every metric goes to metrics.tsv.
+!  i  stage a on the production route (the joint stage alone; a-c take the shift-then-joint seam)
+!  j  stage b on the production route
+!  The negative control of every E25 stage (a, b, c, i, j): its rotation error and basin fraction
+!  against the truth shuffled among the particles fail the floors. The simulation has no shift,
+!  which shuffling keeps, so the shift error has no such control. Every metric goes to metrics.tsv.
 subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple_atoms,              only: atoms
@@ -115,7 +119,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     integer, parameter :: POLISH_MAXITS = 2
     real,    parameter :: POLISH_UPDATE_FRAC = 0.3
     ! Floors, declared before the first run (section 10.1; ruling R5: no map or FSC floor).
-    ! Stages a-c run E25 through the production path: E25's floors at 8 A apply, F1 a tenth of
+    ! Stages a-c, i and j run E25 through the production path: E25's floors at 8 A apply, F1 a tenth of
     ! the injected error (median rotation <= 1.5 deg, median shift <= 0.2 px) and F2 the
     ! fraction inside the basin width lp/(mskdiam/2) = 7.64 deg >= 0.95.
     real,    parameter :: MAX_MED_ROT = 0.1*ROT_ERR, MAX_MED_SH = 0.1*SH_ERR, MIN_BASIN = 0.95
@@ -141,7 +145,12 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     ! 0.080, basin 0.983 to 0.978 (both); stage b rotation 0.248 from 0.254; stage c against a: 0 deg and
     ! no particle differing by 0.1 deg; stage e rotation 2.22 from 2.39 and 2.38, shift 0.137 from 0.150
     ! and 0.149; the polar stage h 1.49 and 1.50 deg against its seed; the relative stages f, g and h
-    ! never lost more than their 0.1 deg
+    ! never lost more than their 0.1 deg. Stages i and j and the controls (cont_lm_acceleration.md stage 5,
+    ! 2026-10-20, 20 seed offsets at 8 threads, every run passing): i rotation worst 1.009 deg from 1.04,
+    ! shift 0.072 px from 0.074, basin 1.000 (both bounds 1.000); j rotation 0.237 deg from 0.239, shift
+    ! 0.060 px from 0.061, basin 1.000; the shuffled controls at 128.8-135.2 deg and basin at most 0.001.
+    ! Re-profiled with the continuous gather (same day, 20 of 20): every floor admissible, stage a
+    ! rotation worst 1.016 deg, stage i 0.991 deg
     type(commander_simulate_particles) :: xsim
     type(commander_new_project)        :: xnew_project
     type(commander_refine3D)           :: xrefine3D
@@ -151,7 +160,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     type(molecule_data) :: mol
     type(image)         :: vol
     type(sp_project)    :: seeded, out_a, out_c, run_proj
-    type(oris)          :: truth, stats
+    type(oris)          :: truth, shuffled, stats
+    type(ori)           :: o_shuffled
     type(ctfparams)     :: ctfvars
     type(test_gate)     :: gate
     type(string)        :: root, gate_root, stk_abs, truth_abs, proj_dir
@@ -214,6 +224,13 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     stk_abs = simple_abspath(string(PTCL_STK))
     call truth%new(NPTCLS, is_ptcl=.true.)
     call truth%read(string(TRUTH_ORIS), [1,NPTCLS])
+    ! the negative control's truth: every particle's pose is its successor's
+    call shuffled%new(NPTCLS, is_ptcl=.true.)
+    do i = 1, NPTCLS
+        call truth%get_ori(mod(i, NPTCLS) + 1, o_shuffled)
+        call shuffled%set_ori(i, o_shuffled)
+    enddo
+    call o_shuffled%kill
     ! ---- the seeded project: truth CTF, perturbed poses, the fields of a discrete workflow ----
     call cl%set('projname',  PROJNAME)
     call cl%set('qsys_name', 'local')
@@ -406,6 +423,11 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     call gate%metric('g_sym_pose_error_deg', sym_polish, sym_before + MAX_PAIR_GAIN_LOSS, &
         &sym_polish <= sym_before + MAX_PAIR_GAIN_LOSS, upper=.true.)
     call simple_chdir(gate_root, status)
+    ! ---- i, j: stages a and b on the production route (run last: the earlier stages' draws stay) ----
+    call run_refine3D_cont('i_joint_euclid', 'euclid', 0, run_proj, l_production_route=.true.)
+    call gate_e25('i', run_proj)
+    call run_refine3D_cont('j_joint_cc', 'cc', 0, run_proj, l_production_route=.true.)
+    call gate_e25('j', run_proj)
     all_ok = all_ok .and. gate%passed()
     call gate%kill
     call seeded%kill
@@ -414,6 +436,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     call out_c%kill
     call run_proj%kill
     call truth%kill
+    call shuffled%kill
     call simple_chdir(root, status)
 
   contains
@@ -445,16 +468,22 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
         geodesic_angle = acos(max(-1., min(1., (sum(m1*m2) - 1.)/2.)))
     end function geodesic_angle
 
-    !> median rotation (deg) and shift (pixels) errors against the truth, and the fraction of
-    !! particles inside the basin width at LP
-    subroutine pose_errors( os, med_rot_out, med_sh_out, basin_out )
-        class(oris), intent(in)  :: os
-        real,        intent(out) :: med_rot_out, med_sh_out, basin_out
+    !> median rotation (deg) and shift (pixels) errors against the truth (or against ref), and the
+    !! fraction of particles inside the basin width at LP
+    subroutine pose_errors( os, med_rot_out, med_sh_out, basin_out, ref )
+        class(oris),           intent(in)  :: os
+        real,                  intent(out) :: med_rot_out, med_sh_out, basin_out
+        class(oris), optional, intent(in)  :: ref
         real :: rot(NPTCLS), sh(NPTCLS)
         integer :: j
         do j = 1, NPTCLS
-            rot(j) = geodesic_angle(os, truth, j)
-            sh(j)  = norm2(os%get_2Dshift(j) - truth%get_2Dshift(j))
+            if( present(ref) )then
+                rot(j) = geodesic_angle(os, ref, j)
+                sh(j)  = norm2(os%get_2Dshift(j) - ref%get_2Dshift(j))
+            else
+                rot(j) = geodesic_angle(os, truth, j)
+                sh(j)  = norm2(os%get_2Dshift(j) - truth%get_2Dshift(j))
+            endif
         enddo
         basin_out   = real(count(rot <= LP/(MSKDIAM/2.)))/real(NPTCLS)
         med_rot_out = rad2deg(median_nocopy(rot))
@@ -489,13 +518,16 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     end subroutine enter_stage
 
     !> one refine3D refine=cont pass against the truth reference on the shift-then-joint route of
-    !! the E25 floors (production runs the joint stage alone); nparts > 0 distributes it
-    subroutine run_refine3D_cont( dir, objfun, nparts, out )
+    !! the E25 floors, or on the production route (the joint stage alone) with l_production_route;
+    !! nparts > 0 distributes it
+    subroutine run_refine3D_cont( dir, objfun, nparts, out, l_production_route )
         use simple_syslib, only: simple_list_files
-        character(len=*), intent(in)    :: dir, objfun
-        integer,          intent(in)    :: nparts
-        type(sp_project), intent(inout) :: out
+        character(len=*),  intent(in)    :: dir, objfun
+        integer,           intent(in)    :: nparts
+        type(sp_project),  intent(inout) :: out
+        logical, optional, intent(in)    :: l_production_route
         type(string), allocatable :: bench_parts(:)
+        logical :: l_seam
         call enter_stage(dir)
         call cl%set('prg',      'refine3D')
         call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
@@ -508,7 +540,9 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
         call cl%set('lp',       LP)
         call cl%set('trs',      TRS)
         call cl%set('athres_cont', ATHRES_CONT)
-        call cl%set('cont_route',  'shift_then_joint')
+        l_seam = .true.
+        if( present(l_production_route) ) l_seam = .not. l_production_route
+        if( l_seam ) call cl%set('cont_route', 'shift_then_joint')
         call cl%set('maxits',   1)
         if( nparts > 0 )then
             call cl%set('nparts', nparts)
@@ -565,7 +599,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
         call simple_chdir(gate_root, status)
     end subroutine run_refine3D_discrete
 
-    !> the floors of E25 at 8 A on the poses of a refine3D refine=cont pass
+    !> the floors of E25 at 8 A on the poses of a refine3D refine=cont pass, and its negative
+    !! control: the same poses against the shuffled truth fail the rotation and basin floors
     subroutine gate_e25( tag, out )
         character(len=*), intent(in)    :: tag
         type(sp_project), intent(inout) :: out
@@ -574,6 +609,11 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
         call gate%metric(tag//'_median_shift_error_px',     med_sh,  MAX_MED_SH,  med_sh  <= MAX_MED_SH, upper=.true.)
         call gate%metric(tag//'_fraction_in_basin_8A',      basin,   MIN_BASIN,   basin   >= MIN_BASIN)
         call gate%report(tag//'_mean_corr_cart', out%os_ptcl3D%get_avg('corr_cart'))
+        call pose_errors(out%os_ptcl3D, med_rot, med_sh, basin, ref=shuffled)
+        call gate%report(tag//'_control_shuffled_median_rotation_error_deg', med_rot)
+        call gate%report(tag//'_control_shuffled_fraction_in_basin_8A', basin)
+        call gate%check(tag//'_control_shuffled_fails_the_rotation_ceiling', .not. (med_rot <= MAX_MED_ROT))
+        call gate%check(tag//'_control_shuffled_fails_the_basin_floor', .not. (basin >= MIN_BASIN))
     end subroutine gate_e25
 
     !> stage d: no polar reprojection model, no probability table, and the seed's projection

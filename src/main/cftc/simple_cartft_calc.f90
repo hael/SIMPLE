@@ -13,7 +13,7 @@ use simple_core_module_api,   only: dp, sp, PI, KBWINSZ, KBALPHA, OSMPL_PAD_FAC,
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_gridding,          only: kb_stencil_envelope_1d
-use simple_cartesian_fourier, only: center_embed_real3d, gather_packed_kb3_window_grad
+use simple_cartesian_fourier, only: center_embed_real3d, gather_packed_bspline3_window_grad, bspline3_stencil_envelope_1d
 implicit none
 private
 public :: cartft_calc, CART_REFVOLS_FORMAT_VERSION
@@ -26,8 +26,9 @@ real(dp), parameter :: CURVATURE_SCALE_MIN = 0.05_dp, CURVATURE_SCALE_MAX = 20._
 integer,  parameter :: CART_REFVOLS_FORMAT_VERSION = 1 !< format_version of the reference-volume files (6.6)
 integer,  parameter :: CART_REFVOLS_NHEADER = 5        !< [format_version, box_crop, nstates, kfrom, kto]
 
-!> One reference: the padded Fourier transform of a prepared physical volume times padf**3
-!! (matcher side), or the staged prepared volume itself (materializer side, written by write).
+!> One reference: the padded Fourier transform of a prepared physical volume, weighted by
+!! ref_weight, times padf**3 (matcher side), or the staged prepared volume itself (materializer
+!! side, written by write).
 type :: cartft_ref
     complex, allocatable :: cmat(:,:,:)
     real,    allocatable :: vol(:,:,:)
@@ -53,10 +54,11 @@ type :: cartft_calc
     integer :: box     = 0                  !< (cropped) box of particles and references
     integer :: boxpd   = 0                  !< padded box of the references
     integer :: padf    = 1                  !< padding factor
-    integer :: iwinsz  = 0                  !< integer half-width of the KB window
+    integer :: iwinsz  = 0                  !< integer half-width of the gather stencil
     integer :: lims2(2,2) = 0               !< full-disk 2D Fourier limits
     real    :: padsc   = 1.                 !< padf**3, the native Fourier scale folded into the references
-    type(kbinterpol)               :: kbwin !< KB window of the gather
+    type(kbinterpol)               :: kbwin !< KB window of the polar branch (particle taper, ref_weight)
+    real,              allocatable :: ref_weight(:)  !< (boxpd) per-axis weight of the padded reference (set_ref)
     integer,           allocatable :: wrap(:)     !< periodic wrap table of the padded grid
     type(cartft_ref),  allocatable :: refs(:,:)   !< (2,nstates): 1 even, 2 odd
     type(cartft_ptcl), allocatable :: ptcls(:)    !< (nptcls) prepared particles
@@ -118,6 +120,7 @@ contains
     subroutine new( self, nstates, box, nptcls )
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: nstates, box, nptcls
+        real, allocatable :: kb_env(:), bspline_env(:)
         integer :: h, k
         call self%kill
         if( nstates < 1 ) THROW_HARD('cartft_calc requires at least one state')
@@ -131,6 +134,10 @@ contains
         self%padsc   = real(self%padf)**3
         self%kbwin   = kbinterpol(KBWINSZ, KBALPHA)
         self%iwinsz  = ceiling(self%kbwin%get_winsz() - 0.5)
+        ! the KB stencil's real-space response over the B-spline gather's (on-grid samples, padded period)
+        call kb_stencil_envelope_1d(self%kbwin, self%boxpd, kb_env)
+        call bspline3_stencil_envelope_1d(self%boxpd, bspline_env)
+        self%ref_weight = kb_env/bspline_env
         self%lims2(1,:) = [-box/2, box/2]
         self%lims2(2,:) = [-box/2, box/2]
         allocate(self%refs(2,nstates), self%ptcls(nptcls))
@@ -155,6 +162,7 @@ contains
         if( allocated(self%wrap)  ) deallocate(self%wrap)
         if( allocated(self%slots) ) deallocate(self%slots)
         if( allocated(self%shells)) deallocate(self%shells)
+        if( allocated(self%ref_weight)   ) deallocate(self%ref_weight)
         if( allocated(self%sigma2)       ) deallocate(self%sigma2)
         if( allocated(self%rsqrt_sigma2) ) deallocate(self%rsqrt_sigma2)
         if( allocated(self%sigma2_ok)    ) deallocate(self%sigma2_ok)
@@ -171,23 +179,32 @@ contains
 
     ! REFERENCES
 
-    !> Build the reference of one state and half from a prepared physical volume
-    !! (box**3, the volume the polar branch pads and reprojects): pad by OSMPL_PAD_FAC in
-    !! real space and Fourier transform once. No inverse KB envelope is applied (C10).
-    !! THROW_HARD for a state outside 1..nstates or a volume that is not box**3.
+    !> Build the reference of one state and half from a prepared physical volume (box**3, the
+    !! volume the polar branch pads and reprojects): pad by OSMPL_PAD_FAC, weight by ref_weight
+    !! and Fourier transform once. THROW_HARD for a state outside 1..nstates or not box**3.
     subroutine set_ref( self, state, iseven, volume )
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: state
         logical,            intent(in)    :: iseven
         real,               intent(in)    :: volume(:,:,:)
-        type(image) :: padded_image
-        integer     :: lims3(3,2), wlims(2), lo, hi, i, ihalf
+        type(image)       :: padded_image
+        real, allocatable :: padded(:,:,:)
+        integer :: lims3(3,2), wlims(2), lo, hi, i, j, k, ihalf
         if( .not. self%exists ) THROW_HARD('cartft_calc reference set before new')
         if( state < 1 .or. state > self%nstates ) THROW_HARD('cartft_calc reference state out of range')
         if( any(shape(volume) /= self%box) ) THROW_HARD('cartft_calc reference volume does not match the box')
         ihalf = self%ref_index(iseven)
         call padded_image%new([self%boxpd, self%boxpd, self%boxpd], 1.0)
-        call padded_image%set_rmat(center_embed_real3d(volume, self%boxpd), .false.)
+        ! on grid, the B-spline gather of this transform equals the KB gather of the unweighted one:
+        ! the reference carries the polar branch's stencil response, as the particle taper does (C10, O5)
+        padded = center_embed_real3d(volume, self%boxpd)
+        do k = 1, self%boxpd
+            do j = 1, self%boxpd
+                padded(:,j,k) = padded(:,j,k)*self%ref_weight*(self%ref_weight(j)*self%ref_weight(k))
+            end do
+        end do
+        call padded_image%set_rmat(padded, .false.)
+        deallocate(padded)
         call padded_image%fft()
         if( .not. allocated(self%wrap) )then
             ! the periodic wrap table depends on the padded box only
@@ -950,17 +967,16 @@ contains
         end associate
     end subroutine fill_ptcl
 
-    !> KB gather of one reference and its three spatial derivatives at one oversampled
-    !! lattice location, in native Fourier scale (folded into the reference). Pure: a location
-    !! outside the wrap table returns inside = .false. and zeros, and the non-pure caller stops.
+    !> Continuous (B-spline) gather of one reference and its three spatial derivatives at one
+    !! oversampled lattice location, in native Fourier scale (folded into the reference). Pure: a
+    !! location outside the wrap table returns inside = .false. and zeros; the non-pure caller stops.
     pure subroutine gather( self, cmat, loc, val, dval, inside )
         class(cartft_calc), intent(in)  :: self
         complex,            intent(in)  :: cmat(:,:,:)
         real(sp),           intent(in)  :: loc(3)
         complex,            intent(out) :: val, dval(3)
         logical,            intent(out) :: inside
-        call gather_packed_kb3_window_grad(cmat, lbound(self%wrap,1), self%wrap, &
-            &self%kbwin, loc, val, dval, inside)
+        call gather_packed_bspline3_window_grad(cmat, lbound(self%wrap,1), self%wrap, loc, val, dval, inside)
     end subroutine gather
 
     pure integer function ref_index( self, iseven )

@@ -1028,12 +1028,19 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Claim: continuous Cartesian refinement recovers the poses of 1 000 simulated 1JYX particles from
   perturbed starts, in every route that uses it.
 - Checks: median rotation error at most 1.5°, shift at most 0.2 px, at least 95 % inside the basin
-  (a tenth of the injected error); the distributed run equal to the shared-memory one within the
-  rounding of threaded evaluation; the polish and the continuation no worse than without them.
+  (a tenth of the injected error), on the shift-then-joint seam (stages a-c) and on the production
+  route (stages i, j); the distributed run equal to the shared-memory one within the rounding of
+  threaded evaluation; the polish and the continuation no worse than without them.
 - Path: no polar in-plane route where none is expected; the distributed stage ran two parts.
+- Control: every E25 stage's rotation error and basin fraction against the truth shuffled among
+  the particles must fail the floors (the simulation has no shift, so the shift error has none).
 - Profile (2026-10-19, eight threads and one thread): passes 40 of 40, every floor far from its
-  bound (stage a rotation worst 1.00°, stage e worst 2.22° against 7.5°).
-- Cost: 437 s at 8 threads (reserving 10 cores), up to 11 GiB; about 37 minutes at one thread.
+  bound (stage a rotation worst 1.00°, stage e worst 2.22° against 7.5°). Stages i, j and the
+  controls (2026-10-20, eight threads): passes 20 of 20, stage i rotation worst 1.01°, stage j
+  0.24°, basin 1.000 in every run; the shuffled controls at 128.8-135.2° and basin at most 0.001.
+  With the continuous gather (same day): 20 of 20, every floor admissible (stage a worst 1.02°).
+- Cost: a median of 390 s at 8 threads with stages i and j (the 2026-10-20 profile; reserving 10
+  cores), up to 11 GiB; about 37 minutes at one thread (2026-10-19, before stages i and j).
 
 **`multistate_assignment`**
 - Claim: `refine3D nstates=3` (`refine=prob` and `prob_neigh`) recovers the known states of three

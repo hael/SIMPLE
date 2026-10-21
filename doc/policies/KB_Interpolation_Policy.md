@@ -83,6 +83,25 @@ Splat update: F_native(window) += comp · w_pd
 
 Class averaging follows the same oversampled-grid policy. Padded FFT samples are interpolated using padded-grid kernel weights and accumulated onto native class-average grids.
 
+## 6a\. Continuous Cartesian Pose Refinement (refine=cont)
+
+The Cartesian pose refiner (`cartft_calc`) is the one gather that does not
+use the KB kernel. It optimizes a continuous pose with analytic derivatives,
+and the three-tap KB stencil jumps where a sample's nearest grid point changes
+(the window is not zero at its edge, `test_stencil_switch`). Its gather is the
+separable quadratic B-spline on the same three taps
+(`gather_packed_bspline3_window_grad`): weights and slopes vanish at the taps
+that enter or leave, so the value and its derivatives are continuous, and the
+weights sum to one at every offset.
+
+So that the model is the polar branch's on grid, the padded reference is
+weighted per axis by the KB stencil's real-space response over the B-spline
+stencil's (`ref_weight`, applied in `set_ref`). On grid, the B-spline gather of
+the weighted transform then equals the KB gather of the unweighted one, and the
+particle keeps the KB taper (O5 of the pose_cont refactoring), so the sigma2 of
+the two representations agree. Off grid the two kernels differ by their
+interpolation errors (E10).
+
 ## 7\. Scaling Summary
 
 - Padded 2D FFT → multiply by pf²

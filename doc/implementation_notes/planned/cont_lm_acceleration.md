@@ -1,7 +1,7 @@
 # Accelerating refine=cont: fewer evaluations, a cheaper kernel, and a benchmark
 
-Implementation note, 2026-10-19, updated 2026-10-20. **Stages 1 to 4 are done:
-built, checked, and measured against the baseline (section 2). Stages 5 to 7
+Implementation note, 2026-10-19, updated 2026-10-20. **Stages 1 to 5 are done:
+built, checked, and measured against the baseline (section 2). Stages 6 and 7
 are proposals.** The maintainer's rulings are in section 8. The findings come from a static review of `master` at
 `4da5cb9c0`. The savings below are work counts read from the code. The rule of
 the local-workflow plan applies: do not infer a speedup percentage from removed
@@ -40,7 +40,7 @@ One particle runs one transaction:
 strategy3D_cont%srch_cont
   -> cartft_pose_opt%refine -> refine_pose -> refine_joint            (LM loop)
        -> cartft_calc%pose_normal_terms     objective, 5-gradient, 5x5 Gauss-Newton matrix
-            -> gather_packed_kb3_window_grad 27-sample KB gather and 3 derivatives, per pixel
+            -> gather_packed_bspline3_window_grad 27-sample B-spline gather and 3 derivatives, per pixel
   -> euclid_sigma2%calc_sigma2 -> cartft_calc%sigma_contribution     (euclid only)
 ```
 
@@ -58,6 +58,8 @@ Done for this route so far:
   (`doc/refactoring_notes/completed/pose_cont_refactoring.md:1615-1618`).
 - **Dynamic scheduling of the matcher's particle loop.** Commit `aea5b1846`,
   `simple_strategy3D_matcher.f90:235`.
+- **A continuous gather (2026-10-20, after stage 5).** The quadratic B-spline
+  replaced the KB stencil in the gather (record after stage 5).
 
 None of the speed-week kernel changes reached `src/main/cftc`. The speed-run
 documents name `refine=cont` only as the identity case CR1. These polar items
@@ -797,6 +799,8 @@ snapshots; the S4e and T worktrees are kept for reference only.
 
 ### Stage 5: kernel oracle and test gaps
 
+**Status (2026-10-20): done on the working tree, tests only (record below).**
+
 - **What:**
   - the independent checks of section 7 that stage 6 needs: an independent
     `J^H J`, the current `pose_normal_terms` kept as the reference, half-plane
@@ -808,6 +812,213 @@ snapshots; the S4e and T worktrees are kept for reference only.
 - **Done when:** the new tests pass on the current kernel. They define the
   target stage 6 must meet.
 
+#### Stage 5 record (2026-10-20)
+
+**What was built:**
+
+- **The Gauss-Newton oracle** (`test_gauss_newton_oracle`, calculator tester).
+  At a pose where the data equal the model, the residual term of the Hessian
+  vanishes and the curvature scale of stage 4 is exactly one. Both kernels'
+  matrices are then the normal matrix of the model's Jacobian:
+  - the 5x5 matrix of `pose_normal_terms` is compared with one built from
+    per-sample finite differences of predicted planes (`predict`), finalized
+    as the kernel finalizes cc and euclid;
+  - the 2x2 matrix of `shift_normal_terms` is compared with second differences
+    of objective values alone;
+  - for cc and euclid, without CTF, with CTF and phase-flipped.
+
+  Agreement: 8.3e-5 (5x5) and 3.4e-6 (2x2) of the diagonal scale, against a
+  tolerance of 2e-3 derived from the single-precision samples and the step
+  sizes.
+- **The thread rule.** N26 (the calculator: objective, gradient, residual,
+  both normal-term blocks and the pose transaction of 24 particles) and N27
+  (the strategy's batch through `srch`) run once at one thread and then 20
+  times at `omp_get_num_procs()` threads (24 on the M2 Ultra), compared bit for
+  bit. Both pass. They replace a fixed 3-thread team run once.
+- **Large tester objects.** The calculator, strategy and 1JYX testers hold
+  their `parameters`, `builder`, `cmdline` and `sp_project` objects as
+  `class(T), allocatable` locals (15 procedures) and take `class(T)` dummies
+  (6 helpers), as `compile_time_policy.md` asks.
+- **The gate** (`cont_refine3D_1jxy`):
+  - **a negative control for every E25 stage** (a, b, c, i, j): the same
+    rotation error and basin fraction against the truth shuffled among the
+    particles (each particle against its successor's pose) must fail the
+    floors. They come out at 130 degrees and 0. The simulation has no shift,
+    which shuffling keeps, so the shift error has no such control;
+  - **stages i and j:** stages a and b on the production route, the joint
+    stage alone, with the same floors. They run last, so the earlier stages'
+    random draws, and with them their results, stay as they were.
+
+**Finding: the gather jumps where a sample changes stencil.** The first form
+of the oracle took second differences of the objective in rotation as well.
+At a step of 1e-3 radians they came out up to 26% above the kernel's matrix
+(2% with CTF); at 5e-4 they agree with it to 1e-5. Between the two steps a few
+samples cross a half-integer offset, where the 3x3x3 stencil moves to the next
+grid cell and the interpolated value jumps (`test_stencil_switch` measures the
+jump; the KB window is not zero at its edge). Each crossing adds its jump
+squared over the step squared. So:
+
+- the kernel's matrix is right, and the oracle now uses per-sample
+  differences: where the forward and backward differences of a sample
+  disagree, the side that crossed carries the jump over the step, and the
+  other is the derivative of the sample's piece at the pose. At the
+  oracle's step 14 samples of each plane take a one-sided difference, and the
+  test asserts that some do;
+- the objective is piecewise smooth in rotation, with jumps large enough to
+  change a curvature estimate over 0.06 degrees by a quarter. This is a likely
+  cause of what stage 4 found near the optimum: the objective is not
+  quadratic at about `1e-6` of itself, and steps of 0.015 degrees lost what
+  they were predicted to gain (stage 4 record, finding 4);
+- a gather without the jump would make the objective smooth and the last LM
+  steps reliable: a window that vanishes at its edge, or a stencil that does
+  not switch. That changes results, so it went to the maintainer, who ruled
+  it in (the continuous gather, below).
+
+**Moved to stage 6:** the kept reference (today's `pose_normal_terms`, kept to
+compare the rewrite against) and the half-plane against full-disk check. Both
+compare against code that exists only once the rewrite begins; a copy of the
+code under test, made now, would check nothing.
+
+**Not changed:** E25's 15-against-15 bound (the gate holds floors, and the
+benchmark makes the comparisons, with its 20-degree capture regime), the
+euclid reference scale and the small-angle metric (section 7).
+
+**Checks:** the incremental build; the fast gate (15 of 15);
+`unit_cart_align3D` (780 checks); `lib_cart_align3D` (55 checks, 27 s); the gate
+once (371 s at 8 threads, every row passing); and the gate's profile over 20
+seed offsets at 8 threads:
+
+- 20 of 20 pass;
+- 48 of the 60 metrics it shares with the stage 4 profile are identical (stages
+  a-d and f). The other 12 come from stages e, g and h, the `refine3D_auto`
+  and polar runs, which are not reproducible at 8 threads; each stays inside
+  its spread (stage e's median rotation error 0.976 to 0.981 degrees, spread
+  0.33);
+- the floors of stages i and j are admissible by the floor rule, far from their
+  bounds: stage i rotation median 0.932 degrees, spread 0.029, worst 1.009;
+  shift worst 0.072 px; stage j rotation worst 0.237 degrees; basin 1.000 in
+  every run of both;
+- the shuffled controls come out at 128.8-135.2 degrees, with a basin fraction
+  of at most 0.001.
+
+### The continuous gather (ruled 2026-10-20)
+
+**Status (2026-10-20): done on the working tree (record below).** Stage 5
+found that the gather jumps where a sample's nearest grid point changes; the
+maintainer ruled to make it continuous.
+
+**The cause.** The gather takes three taps per axis around the nearest grid
+point, with KB weights normalized per axis. At a half-integer offset the
+stencil moves to the next cell: one tap at distance 1.5 leaves and another
+enters. The KB window is 1/3 at its edge, about 1% of its centre, so the
+leaving tap carries about 0.7% of the weight, and the value jumps by that much
+of the difference between the two outer coefficients. The derivative jumps
+too.
+
+**The choice.** A window whose value and slope vanish at 1.5 makes the value
+and the derivative carry across every switch, on the same three taps. Two such
+windows were compared in a one-dimensional model of the gather: the padf=2
+transform of an object in the central half of the padded box, sampled off grid
+and compared with the exact transform of the tapered object, the taper being
+the stencil's own on-grid response, as `get_ptcl_taper` makes it.
+
+| Window | Value error | Derivative error | Jump at a switch |
+| --- | --- | --- | --- |
+| KB (before) | 4.1e-3 | 6.4e-2 | 1.1e-2 |
+| KB less its edge value and slope | 1.1e-2 | 1.4e-1 | 0 |
+| Quadratic B-spline | 3.2e-3 | 3.2e-2 | 0 |
+
+The quadratic B-spline fits the three taps exactly (support [-1.5, 1.5]), is
+continuous with its first derivative, and its weights sum to one at every
+offset, so the per-axis normalization goes. It is also more accurate than the
+KB stencil in this model, and its derivative twice as accurate. Its weights
+are three quadratics per axis instead of nine degree-14 polynomials.
+
+**Keeping the polar link.** The particle carries the stencil's taper (O5 of the
+pose_cont refactoring), and the polar and Cartesian representations share one
+sigma2 store, which the taper's noise-power factor scales. A B-spline taper on
+the particle would shift that factor by about 8% at a typical mask, which the
+sigma agreement tests (N14, N33) bound at 4-9%. So the particle keeps the KB
+taper, and the reference is weighted instead: `set_ref` multiplies the padded
+volume, per axis, by the KB stencil's response over the B-spline stencil's
+(`ref_weight`, 0.92 at the native box edge). On grid, the B-spline gather of
+the weighted transform equals the KB gather of the unweighted one exactly
+(circular convolution), so the model is the polar branch's there. The model
+puts this at the same accuracy against the KB-tapered target as the plain
+B-spline (3.1e-3, derivative 3.2e-2).
+
+**Changes:** `gather_packed_bspline3_window_grad` and
+`bspline3_stencil_envelope_1d` (`simple_cartesian_fourier.f90`) replace
+`gather_packed_kb3_window_grad`; `cartft_calc` gathers with it and weights its
+references by `ref_weight`. The KB machinery of PCG and the polar branch is
+unchanged. The KB interpolation policy has a section on it (section 6a).
+
+**Tests:**
+
+- `test_fused_bspline3_gather_oracle` (Cartesian Fourier tester): the fused
+  gather against the generic gather given the B-spline stencil built from the
+  spline's piecewise form (3.2e-8 and 3.9e-8 of the largest coefficient), and
+  across half-grid switches, where the value moves by its derivative times the
+  step (ratio 1.06) and the derivative by at most 1% of its smoothness bound;
+- E10: the gather equals the projector's KB stencil on grid (1.7e-7 and 2.7e-7
+  relative), and off grid within the two kernels' interpolation errors (1.3e-2
+  against a bound of 2e-2);
+- the Gauss-Newton oracle takes second differences of the objective in
+  rotation as well; they agree with the kernel's matrix to 4.1e-5, where the
+  KB gather gave 26%;
+- the sigma agreement tests N14, N31 and N33 pass unchanged (N33's worst shell
+  at 0.98 of its bound of 3).
+
+#### Record (2026-10-20)
+
+G is the stage 5 working tree with the continuous gather, against S4c, whose
+cont code stage 5 left unchanged. Timed alone, 16 threads.
+
+| Case | Search (s) | Passes per solve | Rejected trials | ns per pixel-evaluation | Truth |
+| --- | --- | --- | --- | --- | --- |
+| beta-gal | 9.42 to 5.36 (-43%) | 6.68 to 5.70 | 0.31 to 0.05 | 215 to 143 | FSC 3.752 A, cFAR 0.558, unchanged |
+| polish cc | 10.29 to 5.45 (-47%) | 6.04 to 4.68 | 0.27 to 0 | 219 to 150 | 0.0864 to 0.0860 deg, 0.0296 to 0.0295 A |
+| polish euclid | 11.60 to 6.13 (-47%) | 7.11 to 5.72 | 0.27 to 0 | 210 to 138 | 0.0849 to 0.0849 deg, 0.0288 to 0.0288 A |
+| capture cc | 2.74 to 1.24 (-55%) | 10.91 to 7.30 | 0.34 to 0 | 228 to 155 | 0.348 to 0.344 deg |
+| capture euclid | 2.68 to 1.29 (-52%) | 10.96 to 7.96 | 0.31 to 0 | 221 to 148 | 0.273 to 0.271 deg |
+
+Beta-gal times are the means of two order-balanced runs, whose work counts are
+identical; the simulated cases are one run each at seed offset 0.
+
+What it says:
+
+- **The jumps caused every rejected trial on simulated data.** With a
+  continuous gather no trial is rejected, and 73-89% of accepted steps land in
+  the 0.75-1.25 bin. On beta-gal 5% remain, with 52% of accepted steps short of
+  their prediction: real data still over-steps a little.
+- **Each evaluation is a third cheaper,** from the weights alone.
+- **Against stage 2's baseline,** the beta-gal orientation search went from
+  19.3 s to 5.4 s (-72%), and the polish cases from about 24 s to 5.5-6.1 s.
+
+**After-profile** (G, against the stage 5 profile and the polish runs of S4c):
+
+- **The gate over 20 seed offsets** at 8 threads: 20 of 20 pass, every
+  metric of stages a-j stays inside the stage 5 profile's spread, and every
+  floor stays admissible (stage a rotation worst 1.016 degrees, stage i 0.991,
+  against 1.5). Stage a's median moved from 0.937 to 0.950 degrees, a third of
+  its spread; the controls are unchanged.
+- **Polish over six seed offsets** (0 to 5), paired against the same offsets
+  with the KB gather:
+
+  | Metric | KB: median (min-max) | B-spline: median (min-max) | Paired difference: median (min..max) |
+  | --- | --- | --- | --- |
+  | euclid median rotation error (deg) | 0.0844 (0.0834-0.0853) | 0.0843 (0.0831-0.0849) | -0.0002 (-0.0005..-0.0000) |
+  | euclid median shift error (A) | 0.0291 (0.0288-0.0294) | 0.0291 (0.0288-0.0294) | -0.0000 (-0.0001..+0.0000) |
+  | cc median rotation error (deg) | 0.0861 (0.0851-0.0871) | 0.0859 (0.0846-0.0867) | -0.0003 (-0.0005..-0.0001) |
+  | cc median shift error (A) | 0.0298 (0.0296-0.0300) | 0.0298 (0.0295-0.0300) | -0.0000 (-0.0001..+0.0001) |
+  | euclid mean `corr_cart` | 0.6722 | 0.6732 | +0.0010 in every seed |
+  | cc mean `corr_cart` | 0.7789 | 0.7791 | +0.0003 in every seed |
+
+  The rotation error falls in every seed, by 0.2-0.3%, and the model fits the
+  data a little better (higher `corr_cart` in every seed).
+- **Checks of the working tree:** the build, the fast gate (15 of 15),
+  `unit_cart_align3D` (788 checks), `lib_cart_align3D` (55 checks).
+
 ### Stage 6: cheaper evaluations
 
 - **6a. One rewrite of `pose_normal_terms` and its siblings.** It covers the
@@ -817,10 +1028,14 @@ snapshots; the S4e and T worktrees are kept for reference only.
   (sections 4.4 and 4.5), moved here from stage 3. Measure it on top of the
   half-plane, with and without the cube, since the stage 3 record shows the
   cube loses on its own. Its stage 3 patch is the starting point.
-- **6b. The KB weights** (section 4.4), plus any SIMD across taps that
-  reorders sums.
+- **6b. SIMD across taps** that reorders sums. The KB weights of section 4.4
+  are gone: the continuous gather's B-spline weights are three quadratics per
+  axis.
 - **6c. sigma2 from the accepted evaluation** (section 3.2, row 3).
 - **Results:** rounding changes.
+- **First step, from stage 5:** keep today's `pose_normal_terms` as the
+  reference (test-local or as the slow path) and compare the rewrite with it,
+  and compare half-plane sums with full-disk sums at the same pose.
 - **Check:**
   - the stage 5 oracles within tolerance;
   - `unit_cart_align3D`;
@@ -1054,7 +1269,8 @@ finalize both objectives from it. The set is: `sum |m|^2`, `sum Re conj(x) m`,
 
 The gather is `simple_cartesian_fourier.f90:141-212`.
 
-**KB weights (stage 6b).**
+**KB weights (stage 6b; superseded on 2026-10-20 by the continuous gather,
+whose B-spline weights are three quadratics per axis).**
 
 - Per pixel there are three elemental calls of `apod_fast_value_deriv` on
   3-vectors (`:166`). That is nine scalar degree-14 Horner evaluations, each with
@@ -1304,14 +1520,14 @@ them would understate the iteration count.
 | --- | --- | --- |
 | Work counters | Prob tables write thread-seconds and evaluation counts | Orientation-search time only; the stage counts never leave the optimizer (stage 1) |
 | Kept harness | Developer benchmark, `BENCH/`, plot script | The gate deletes its fixture, `BENCH/` included, on pass (`simple_commanders_test_highlevel_cont.f90:26`); the fused-gather evidence stayed local to one checkout; the joint-route timing is "not measured yet" (stage 2) |
-| Route under test | Production defaults | Stages a-c and the library suite force `shift_then_joint` (`simple_commanders_test_highlevel_cont.f90:495`, `simple_strategy3D_cont_1jyx_tester.f90:464`); production uses `joint` |
-| Fast-path oracle | Replaced routine kept and compared | Only the gradient is checked, against finite differences; the 5x5 matrix and `shift_normal_terms` have no independent check |
-| Threads | 1 against `omp_get_num_procs()` threads, 20 repeats, bit for bit (speed2D rule) | A fixed 3-thread team, run once |
-| Negative control | Required for every gate | None in `cont_refine3D_1jxy` |
+| Route under test | Production defaults | Stages a-c and the library suite force `shift_then_joint` (`simple_commanders_test_highlevel_cont.f90:495`, `simple_strategy3D_cont_1jyx_tester.f90:464`); production uses `joint`. **Stage 5:** stages i and j run a and b on the production route |
+| Fast-path oracle | Replaced routine kept and compared | Only the gradient is checked, against finite differences; the 5x5 matrix and `shift_normal_terms` have no independent check. **Stage 5:** `test_gauss_newton_oracle` checks both; the kept routine comes with the rewrite (stage 6) |
+| Threads | 1 against `omp_get_num_procs()` threads, 20 repeats, bit for bit (speed2D rule) | A fixed 3-thread team, run once. **Stage 5:** N26 and N27 follow the rule |
+| Negative control | Required for every gate | None in `cont_refine3D_1jxy`. **Stage 5:** every E25 stage against the shuffled truth |
 | Reference scale | The objective's assumptions met | The gate's euclid stages (a, c) run against the pdb2mrc truth map, whose amplitude scale does not match the noise-normalized particles. Their median rotation error is 0.94 degrees, against 0.23 degrees for cc (stage b) on the same data (before-profile, stage 2). The benchmark reconstructs its reference for this reason. |
 | Small-angle metric | Resolves the tested differences | The gate's `acos` of a single-precision trace resolves about 0.002 degrees near zero; enough for its floors near 1 degree, not for comparing stages |
 | Bounds clear of the truth | A bound under test does not sit on the answer | E25 seeds the poses exactly 15 degrees from the truth with `athres_cont` 15, so the truth lies on the cumulative bound and about half of the particles end against it. The benchmark's capture regime had the same design and measured the bound rather than the solver (stage 4 record, finding 3); it now uses 20 degrees |
-| Large tester objects | `class(T), allocatable` | Plain `type(parameters)`/`type(builder)` locals (`simple_strategy3D_cont_tester.f90:75-76`) |
+| Large tester objects | `class(T), allocatable` | Plain `type(parameters)`/`type(builder)` locals (`simple_strategy3D_cont_tester.f90:75-76`). **Stage 5:** allocatable in the three cont testers |
 | Comments | Current | `production/CMakeLists.txt:243-245` says 5,000 particles and kept TSVs; the code uses 1,000 and removes its files (stage 7) |
 
 The oracle checks stage 6 needs:
@@ -1346,4 +1562,9 @@ confirm:
   on the model (finding 1);
 - **the benchmark's capture regime bounds the rotation at 20 degrees,** so the
   bound no longer sits on the truth (finding 3). The gate's E25 keeps its
-  15-against-15 design until stage 5 looks at it.
+  15-against-15 design: it holds floors, and the comparisons are the
+  benchmark's (stage 5).
+
+- **2026-10-20: the gather is continuous.** The quadratic B-spline replaces
+  the KB stencil on the same three taps, with the reference weighted so that
+  on grid it is the polar branch's model (record after stage 5).

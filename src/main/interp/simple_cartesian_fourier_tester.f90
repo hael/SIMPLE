@@ -1,17 +1,14 @@
 !@descr: unit tests for the neutral Cartesian Fourier layer (simple_cartesian_fourier, simple_kbinterpol)
-! The Kaiser-Bessel machinery under the Cartesian pose refiner and the PCG operator:
-! the fast KB polynomial and its derivative against the ideal Bessel window, the
-! normalised 3-D stencil derivatives and partition of unity, the stencil-switch
-! discontinuity, the packed/Friedel gather derivative against finite differences on a
-! Gaussian-blob phantom, and the parity of the extracted neutral operations (centred
-! embed/crop, crop envelope, packed gathers, native plane extraction) with the
-! pre-extraction implementations retained here as oracles.
+! The KB machinery of the PCG operator and the polar branch (the fast polynomial against the ideal
+! window, the normalised stencil, its switch discontinuity, the packed/Friedel gather derivative),
+! the continuous B-spline gather of the Cartesian pose refiner (against the generic gather, across
+! stencil switches), and the extracted neutral operations against retained oracles.
 module simple_cartesian_fourier_tester
 use ieee_arithmetic,          only: ieee_is_finite
 use simple_defs,              only: dp, sp, KBALPHA, KBWINSZ, KB_BETA_KB15_A2
 use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
     &extract_native_fourier_plane, gather_packed_window, gather_packed_window_grad, &
-    &gather_packed_kb3_window_grad
+    &gather_packed_bspline3_window_grad
 use simple_core_module_api,   only: cyci_1d
 use simple_gridding,          only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
 use simple_image,             only: image
@@ -58,8 +55,8 @@ contains
         call run_kb_derivative()
         write(*,'(A)') 'test_packed_gather_derivative'
         call run_packed_gather_derivative()
-        write(*,'(A)') 'test_fused_kb3_gather_oracle'
-        call test_fused_kb3_gather_oracle()
+        write(*,'(A)') 'test_fused_bspline3_gather_oracle'
+        call test_fused_bspline3_gather_oracle()
         write(*,'(A)') 'test_neutral_extract'
         call run_neutral_extract()
     end subroutine run_all_cartesian_fourier_tests
@@ -184,9 +181,11 @@ subroutine run_packed_gather_derivative()
     deallocate(plane,phantom,cmat,wrap)
 end subroutine run_packed_gather_derivative
 
-!> Compare the fused production gather with the retained stencil-plus-gather path.
-subroutine test_fused_kb3_gather_oracle()
-    integer, parameter :: NCASES = 9
+!> The fused B-spline gather against the generic gather given the B-spline stencil, built here
+!! from the spline's piecewise form; then its value and derivatives across half-grid stencil
+!! switches, which the KB stencil jumps at (test_stencil_switch)
+subroutine test_fused_bspline3_gather_oracle()
+    integer, parameter :: NCASES = 9, NSWITCH = 4
     real(sp), parameter :: OFFSET = 1.e-4_sp
     ! Exercise ordinary signs, periodic edges, both sides of half-grid cell
     ! switches, an integer location, and one point outside wrap support.
@@ -200,13 +199,24 @@ subroutine test_fused_kb3_gather_oracle()
         &-0.5_sp+OFFSET, -1.20_sp,  2.10_sp, &
         & 0.00_sp,        1.00_sp, -2.00_sp, &
         &20.00_sp,        0.00_sp,  0.00_sp], [3,NCASES])
-    type(kbinterpol) :: kbwin
+    ! switch points: one coordinate at a half-integer, the others off grid
+    real(sp), parameter :: SWITCHES(3,NSWITCH) = reshape([&
+        & 2.5_sp,  -1.23_sp,  0.31_sp, &
+        &-3.37_sp,  1.5_sp,  -0.29_sp, &
+        & 0.21_sp,  1.34_sp, -2.5_sp,  &
+        &-1.5_sp,   0.5_sp,   3.5_sp], [3,NSWITCH])
+    ! over 2*OFFSET a continuous gather moves by 2*OFFSET times its derivative, and its derivative by at
+    ! most 2*OFFSET times the spline's second differences (1, -2, 1 per axis) of the field: ratios to
+    ! these bounds stay near one or below it; the KB stencil's jump is a hundred times the first
+    real(dp), parameter :: VALUE_RATIO_TOL = 2._dp, GRADIENT_RATIO_TOL = 1._dp
     complex :: cmat(BOXPD/2+1,BOXPD,BOXPD)
     complex :: fused_gradient(3), fused_value, oracle_gradient(3), oracle_value
-    real(sp) :: derivatives(WDIM,WDIM,WDIM,3), margin(3), weights(WDIM,WDIM,WDIM)
-    real(dp) :: max_gradient_error, max_value_error, tolerance
-    integer :: i, j, k, icase, i0(3), wrap(-BOXPD-2:BOXPD+2)
-    logical :: fused_inside, oracle_inside
+    complex :: below_value, above_value, below_gradient(3), above_gradient(3)
+    real(sp) :: derivatives(WDIM,WDIM,WDIM,3), weights(WDIM,WDIM,WDIM), loc(3)
+    real(sp) :: w1(WDIM,3), dw1(WDIM,3), d
+    real(dp) :: max_gradient_error, max_value_error, max_value_ratio, max_gradient_ratio, tolerance, scale
+    integer :: i, j, k, icase, axis, i0(3), wrap(-BOXPD-2:BOXPD+2)
+    logical :: fused_inside, oracle_inside, inside_below, inside_above
 
     ! An asymmetric complex field exposes axis-order, wrapping, and Friedel
     ! conjugation errors that a symmetric fixture could hide.
@@ -220,41 +230,78 @@ subroutine test_fused_kb3_gather_oracle()
     do i = lbound(wrap,1), ubound(wrap,1)
         wrap(i) = modulo(i+BOXPD/2,BOXPD)-BOXPD/2
     enddo
-    kbwin = kbinterpol(KBWINSZ,KBALPHA)
-    ! Both paths use single-precision kernel arithmetic; allow only a small
-    ! accumulation-roundoff margin rather than a fitted empirical tolerance.
+    ! The two paths form the same single-precision weights by different formulas, a few ulp each, over
+    ! 27 taps of coefficients up to the field's largest: errors in units of that coefficient
+    scale     = maxval(abs(cmplx(cmat, kind=dp)))
     tolerance = 32._dp*real(epsilon(1._sp),dp)
     max_value_error = 0._dp
     max_gradient_error = 0._dp
-
     do icase = 1, NCASES
-        ! The oracle deliberately materializes the established 3-D stencil,
-        ! then gives it to the generic gather as a separate second stage.
-        call kbwin%apod_mat_3d_fast_grad(LOCS(:,icase),1,WDIM,i0,margin,weights,derivatives)
+        loc = LOCS(:,icase)
+        i0  = nint(loc) - 1
+        ! the quadratic B-spline at each tap's distance d: 3/4 - d^2 inside 1/2, (|d| - 3/2)^2/2 to 3/2
+        do axis = 1, 3
+            do i = 1, WDIM
+                d = real(i0(axis) + i - 1) - loc(axis)
+                if( abs(d) <= 0.5_sp )then
+                    w1(i,axis)  = 0.75_sp - d*d
+                    dw1(i,axis) = 2._sp*d
+                else
+                    w1(i,axis)  = 0.5_sp*(abs(d) - 1.5_sp)**2
+                    dw1(i,axis) = -sign(1._sp, d)*(abs(d) - 1.5_sp)
+                endif
+            enddo
+        enddo
+        do k = 1, WDIM
+            do j = 1, WDIM
+                do i = 1, WDIM
+                    weights(i,j,k)       = w1(i,1)*w1(j,2)*w1(k,3)
+                    derivatives(i,j,k,1) = dw1(i,1)*w1(j,2)*w1(k,3)
+                    derivatives(i,j,k,2) = w1(i,1)*dw1(j,2)*w1(k,3)
+                    derivatives(i,j,k,3) = w1(i,1)*w1(j,2)*dw1(k,3)
+                enddo
+            enddo
+        enddo
         oracle_inside = .not.(any(i0 < lbound(wrap,1)) .or. any(i0+WDIM-1 > ubound(wrap,1)))
         oracle_value = cmplx(0.,0.)
         oracle_gradient = cmplx(0.,0.)
         if( oracle_inside ) call gather_packed_window_grad(cmat,lbound(wrap,1),wrap,i0, &
             &weights,derivatives,oracle_value,oracle_gradient)
-        call gather_packed_kb3_window_grad(cmat,lbound(wrap,1),wrap,kbwin,LOCS(:,icase), &
-            &fused_value,fused_gradient,fused_inside)
-        ! Check the support decision for every case, then retain the worst
-        ! finite value and derivative errors across all supported cases.
+        call gather_packed_bspline3_window_grad(cmat,lbound(wrap,1),wrap,loc,fused_value,fused_gradient,fused_inside)
         call assert_true(fused_inside .eqv. oracle_inside, &
-            &'fused KB3 gather changed the wrap-table support decision')
+            &'fused B-spline gather changed the wrap-table support decision')
         call assert_true(complex_is_finite(fused_value) .and. complex_vector_is_finite(fused_gradient), &
-            &'fused KB3 gather returned a non-finite value or derivative')
-        max_value_error = max(max_value_error, relative_complex_error(fused_value,oracle_value))
-        do i = 1, 3
-            max_gradient_error = max(max_gradient_error, &
-                &relative_complex_error(fused_gradient(i),oracle_gradient(i)))
-        enddo
+            &'fused B-spline gather returned a non-finite value or derivative')
+        max_value_error    = max(max_value_error, real(abs(fused_value - oracle_value),dp)/scale)
+        max_gradient_error = max(max_gradient_error, real(maxval(abs(fused_gradient - oracle_gradient)),dp)/scale)
     enddo
     call assert_true(max_value_error <= tolerance, &
-        &'fused KB3 gather value differs from the retained production path')
+        &'fused B-spline gather value differs from the generic gather with the B-spline stencil')
     call assert_true(max_gradient_error <= tolerance, &
-        &'fused KB3 gather derivative differs from the retained production path')
-end subroutine test_fused_kb3_gather_oracle
+        &'fused B-spline gather derivative differs from the generic gather with the B-spline stencil')
+    ! continuity across stencil switches
+    max_value_ratio    = 0._dp
+    max_gradient_ratio = 0._dp
+    do icase = 1, NSWITCH
+        do axis = 1, 3
+            if( abs(SWITCHES(axis,icase) - real(nint(SWITCHES(axis,icase)),sp)) /= 0.5_sp ) cycle
+            loc = SWITCHES(:,icase)
+            loc(axis) = loc(axis) - OFFSET
+            call gather_packed_bspline3_window_grad(cmat,lbound(wrap,1),wrap,loc,below_value,below_gradient,inside_below)
+            loc(axis) = loc(axis) + 2._sp*OFFSET
+            call gather_packed_bspline3_window_grad(cmat,lbound(wrap,1),wrap,loc,above_value,above_gradient,inside_above)
+            call assert_true(inside_below .and. inside_above, 'B-spline switch probe left the wrap table')
+            max_value_ratio = max(max_value_ratio, real(abs(above_value - below_value),dp)/&
+                &(2._dp*real(OFFSET,dp)*real(max(abs(below_gradient(axis)), abs(above_gradient(axis))),dp)))
+            max_gradient_ratio = max(max_gradient_ratio, real(maxval(abs(above_gradient - below_gradient)),dp)/&
+                &(2._dp*real(OFFSET,dp)*4._dp*scale))
+        enddo
+    enddo
+    write(*,'(a,4(es14.6,1x))') 'CARTESIAN_FOURIER_BSPLINE fused value/derivative error, switch value/derivative ratio: ', &
+        &max_value_error, max_gradient_error, max_value_ratio, max_gradient_ratio
+    call assert_true(max_value_ratio <= VALUE_RATIO_TOL .and. max_gradient_ratio <= GRADIENT_RATIO_TOL, &
+        &'the B-spline gather is discontinuous across a stencil switch')
+end subroutine test_fused_bspline3_gather_oracle
 
 subroutine sample_neutral(cmat,wrap_lower,wrap,kbwin,loc,value,gradient,switch_margin)
     complex, intent(in) :: cmat(:,:,:)

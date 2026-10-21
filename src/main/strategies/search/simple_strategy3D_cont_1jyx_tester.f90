@@ -90,10 +90,10 @@ contains
         type(molecule_data) :: molecule_record
         type(ori) :: truth_orientation
         type(oris) :: truth_orientations
-        type(builder), target :: b
-        type(parameters), target :: p
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
         type(cartft_calc), pointer :: calc
-        type(cmdline) :: simulation_command
+        class(cmdline), allocatable :: simulation_command
         type(ctfparams), allocatable :: ctf_parameters(:)
         real, allocatable :: particles(:, :, :), sigma2(:), truth_volume(:, :, :), taper(:)
         real(dp), allocatable :: truth_rotations(:, :, :), initial_rotations(:, :, :), terminal_rotations(:, :, :, :)
@@ -106,6 +106,7 @@ contains
         integer, allocatable :: statuses(:)
         logical, allocatable :: noise_mask(:, :, :)
         integer :: i, iband, iobj, ldim(3), nsections, nworkers, upper_shell
+        allocate(b, p, simulation_command)
 
         call make_ui
         call cleanup_1jyx_fixture()
@@ -293,6 +294,7 @@ contains
         call truth_orientations%kill
         call truth_image%kill
         call cleanup_1jyx_fixture()
+        deallocate(b, p, simulation_command)
     end subroutine run_pose_cont_1jyx_reconstruction
 
     subroutine make_perturbed_pose(truth_rotation, truth_shift, rotation, shift)
@@ -438,8 +440,8 @@ contains
     subroutine refine_all_particles(b, p, particles, ctf_parameters, noise_mask, taper, objfun, sigma2, &
         &upper_shell, nworkers, truth_rotations, truth_shifts, initial_rotations, initial_shifts, terminal_rotations, &
         &terminal_shifts, objectives_before, objectives_after, objectives_truth, statuses)
-        type(builder), target, intent(inout) :: b
-        type(parameters), target, intent(inout) :: p
+        class(builder), target, intent(inout) :: b
+        class(parameters), target, intent(inout) :: p
         real, intent(in) :: particles(:, :, :), taper(:), sigma2(0:)
         type(ctfparams), intent(in) :: ctf_parameters(:)
         logical, intent(in) :: noise_mask(:, :, :)
@@ -590,9 +592,9 @@ contains
         type(fplane_grid) :: grid
         type(image) :: particle, padded_particle, maps(NMAPS), truth_metric, metric
         type(ori) :: orientation
-        type(parameters), target :: reconstruction_parameters
+        class(parameters), allocatable, target :: reconstruction_parameters
         type(reconstructor) :: reconstructors(NMAPS)
-        type(sp_project) :: empty_project
+        class(sp_project), allocatable :: empty_project
         type(sym) :: c1
         real, allocatable :: map_array(:, :, :), truth_array(:, :, :), fsc(:), resolutions(:)
         real(dp) :: correlations(NMAPS)
@@ -600,6 +602,7 @@ contains
         integer :: i, imap
         logical :: finite_fsc(NMAPS)
         character(len=16) :: map_names(NMAPS)
+        allocate(reconstruction_parameters, empty_project)
 
         map_names(1) = 'exact'
         map_names(2) = 'perturbed'
@@ -695,6 +698,7 @@ contains
         call grid%kill
         call particle%kill
         call empty_project%kill
+        deallocate(reconstruction_parameters, empty_project)
 
     contains
 

@@ -6,6 +6,7 @@
 ! equal to serial, particles outside the sample untouched, polish fields, the athres_cont bound.
 module simple_strategy3D_cont_tester
 use simple_core_module_api, only: dp, euler2m, string, rad2deg, del_file
+!$ use omp_lib,             only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 use simple_defs_ori,        only: N_PTCL_ORIPARAMS
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
@@ -72,8 +73,8 @@ contains
     !! Cartesian calculator with every particle's slot: particle i in slot NPTCLS+1-i, holding
     !! the truth prediction centred on the stored shift. Particle 2 has state zero.
     subroutine build_fixture( b, p, objfun )
-        type(builder),    target, intent(inout) :: b
-        type(parameters), target, intent(inout) :: p
+        class(builder),    target, intent(inout) :: b
+        class(parameters), target, intent(inout) :: p
         integer,                  intent(in)    :: objfun
         type(ctfparams)      :: no_ctf
         real, allocatable    :: volume(:,:,:)
@@ -132,7 +133,7 @@ contains
     end subroutine build_fixture
 
     subroutine kill_fixture( b )
-        type(builder), intent(inout) :: b
+        class(builder), intent(inout) :: b
         call b%cftc%kill
         call b%esig%kill
         call del_file('tmp_strategy3D_cont_tester_sigma2.bin')
@@ -143,8 +144,8 @@ contains
 
     !> One particle through a class(strategy3D) pointer, as the matcher runs it.
     subroutine run_particle( b, p, iptcl )
-        type(builder),    target, intent(inout) :: b
-        type(parameters), target, intent(inout) :: p
+        class(builder),    target, intent(inout) :: b
+        class(parameters), target, intent(inout) :: p
         integer,                  intent(in)    :: iptcl
         class(strategy3D), pointer :: strat
         type(strategy3D_spec) :: spec
@@ -187,9 +188,10 @@ contains
     ! constructed; an identity seed is accepted as a seed; a state-zero particle is rejected
     ! and keeps state zero without a score
     subroutine test_lifecycle_and_rejection()
-        type(builder),    target :: b
-        type(parameters), target :: p
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
         integer :: icycle
+        allocate(b, p)
         do icycle = 1, 2
             call build_fixture(b, p, OBJFUN_CC)
             call assert_false(b%pftc%exists(), 'the fixture constructed a polar calculator')
@@ -202,6 +204,7 @@ contains
             call assert_false(b%pftc%exists(), 'the Cartesian strategy constructed a polar calculator')
             call kill_fixture(b)
         end do
+        deallocate(b, p)
     end subroutine test_lifecycle_and_rejection
 
     ! N16: an accepted solve commits the pose, corr_cart = cc at the result (the calculator's
@@ -211,8 +214,8 @@ contains
     ! bit-identical and writes corr_cart at the seed; corr is unchanged in both. Under euclid
     ! the sigma owner receives the residual at the committed pose.
     subroutine test_commit_contract()
-        type(builder),    target :: b
-        type(parameters), target :: p
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
         type(ori) :: before, after
         real(dp)  :: objective, gradient(5), truth(3,3), expected_score
         real      :: native_before(2), sigma_shells_sum
@@ -221,6 +224,7 @@ contains
         type(ctfparams) :: no_ctf
         integer   :: islot, iobj
         integer, parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID]
+        allocate(b, p)
         do iobj = 1, 2
             call build_fixture(b, p, objfuns(iobj))
             ! accepted
@@ -276,32 +280,49 @@ contains
         end do
         call before%kill
         call after%kill
+        deallocate(b, p)
     end subroutine test_commit_contract
 
-    ! N27: the batch run through srch by a team of three threads gives the poses, scores and
-    ! flags of the serial run bit for bit. Expected value: the serial run.
+    ! N27: the batch run through srch at every processor, 20 times, gives the poses, scores and
+    ! flags of the run at one thread bit for bit. Expected value: the one-thread run.
     subroutine test_threaded_batch()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        real    :: serial(9,NPTCLS), team(9,NPTCLS)
-        integer :: i
-        call build_fixture(b, p, OBJFUN_CC)
-        do i = 1, NPTCLS
-            call run_particle(b, p, i)
+        integer, parameter :: NREPS = 20
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
+        real    :: single(9,NPTCLS), team(9,NPTCLS)
+        integer :: irep, ndiff, nthr_prev, nthr_full
+        allocate(b, p)
+        nthr_prev = 1
+        nthr_full = 1
+        !$ nthr_prev = omp_get_max_threads()
+        !$ nthr_full = omp_get_num_procs()
+        !$ call omp_set_num_threads(1)
+        call run_batch(single)
+        !$ call omp_set_num_threads(nthr_full)
+        ndiff = 0
+        do irep = 1, NREPS
+            call run_batch(team)
+            ndiff = ndiff + count(transfer(team, 0, size(team)) /= transfer(single, 0, size(single)))
         end do
-        call record(serial)
-        call kill_fixture(b)
-        call build_fixture(b, p, OBJFUN_CC)
-        !$omp parallel do num_threads(3) default(shared) private(i) schedule(static,1)
-        do i = 1, NPTCLS
-            call run_particle(b, p, i)
-        end do
-        !$omp end parallel do
-        call record(team)
-        call assert_true(all(team == serial), 'a threaded batch differs from the serial run')
-        call kill_fixture(b)
+        !$ call omp_set_num_threads(nthr_prev)
+        call assert_int(0, ndiff, 'a batch at every processor differs from the run at one thread')
+        deallocate(b, p)
 
       contains
+
+        !> a fresh fixture's batch through srch, then its record
+        subroutine run_batch( values )
+            real, intent(out) :: values(9,NPTCLS)
+            integer :: i
+            call build_fixture(b, p, OBJFUN_CC)
+            !$omp parallel do default(shared) private(i) schedule(static,1)
+            do i = 1, NPTCLS
+                call run_particle(b, p, i)
+            end do
+            !$omp end parallel do
+            call record(values)
+            call kill_fixture(b)
+        end subroutine run_batch
 
         subroutine record( values )
             real, intent(out) :: values(9,NPTCLS)
@@ -321,10 +342,11 @@ contains
     ! N22: a pass over a sample (particles 3 and 5) leaves a particle outside it (4) bit for
     ! bit: pose, corr, corr_cart and flags, the whole record. Expected value: the input record.
     subroutine test_outside_sample_untouched()
-        type(builder),    target :: b
-        type(parameters), target :: p
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
         type(ori) :: o
         real      :: before(N_PTCL_ORIPARAMS), after(N_PTCL_ORIPARAMS)
+        allocate(b, p)
         call build_fixture(b, p, OBJFUN_CC)
         call b%spproj_field%set(4, 'corr_cart', 0.123)
         call b%spproj_field%set(4, 'pose_cont_improved', 1.)
@@ -338,6 +360,7 @@ contains
         call assert_true(b%spproj_field%get(3, 'pose_cont_improved') == 1., 'the sampled particle was not refined')
         call o%kill
         call kill_fixture(b)
+        deallocate(b, p)
     end subroutine test_outside_sample_untouched
 
     ! N23: with the convergence fields of a discrete search in the record, a polish pass
@@ -348,10 +371,11 @@ contains
         character(len=9), parameter :: KEYS(6) = [character(len=9) :: 'dist', 'dist_inpl', 'shincarg', &
             &'mi_proj', 'mi_state', 'frac']
         real,             parameter :: DISCRETE(6) = [7.5, 3.25, 1.5, 0., 0., 55.]
-        type(builder),    target :: b
-        type(parameters), target :: p
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
         type(ori) :: before, after
         integer   :: i, k
+        allocate(b, p)
         call build_fixture(b, p, OBJFUN_CC)
         do i = 3, 5, 2
             do k = 1, size(KEYS)
@@ -385,6 +409,7 @@ contains
         call before%kill
         call after%kill
         call kill_fixture(b)
+        deallocate(b, p)
     end subroutine test_polish_keeps_convergence_fields
 
     ! The rotation bound of a Cartesian pass is athres_cont, not the polar athres (the fixture sets
@@ -392,10 +417,11 @@ contains
     ! of the seed and the truth 1.8 degrees away is not reached.
     subroutine test_rotation_bound()
         real(dp), parameter :: BOUND = 0.5_dp*acos(-1._dp)/180._dp
-        type(builder),    target :: b
-        type(parameters), target :: p
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
         type(ori) :: before, after
         real(dp)  :: truth(3,3)
+        allocate(b, p)
         call build_fixture(b, p, OBJFUN_CC)
         p%athres_cont = 0.5
         call b%spproj_field%get_ori(3, before)
@@ -409,6 +435,7 @@ contains
         call kill_fixture(b)
         call before%kill
         call after%kill
+        deallocate(b, p)
     end subroutine test_rotation_bound
 
 end module simple_strategy3D_cont_tester
