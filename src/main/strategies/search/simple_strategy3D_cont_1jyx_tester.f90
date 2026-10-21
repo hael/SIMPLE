@@ -1,7 +1,7 @@
 !@descr: library test of Cartesian pose refinement on simulated 1JYX particles (simple_strategy3D_cont)
 ! Nightly gate (lib_cart_align3D): 1 000 simulated 1JYX particles at box 144 with varying CTF and
 ! noise, every pose perturbed by 15 deg and 2 px, refined through strategy3D_cont as the matcher
-! runs it (shift_then_joint, trs 5 px, athres_cont 15 deg) under objfun=cc and euclid at lp 8 A,
+! runs it (default joint and shift_then_joint, trs 5 px, athres_cont 15 deg) under cc and euclid at lp 8 A,
 ! then at 4 A from the 8 A poses. Pinned: objective, rotation and shift errors fall, the refined
 ! map beats the perturbed one, and the floors declared below. Fixture files are removed.
 module simple_strategy3D_cont_1jyx_tester
@@ -64,6 +64,8 @@ character(len=*), parameter :: SIMULATION_ORIENTATION_FILE = '1JYX_simulation_or
 character(len=*), parameter :: TRUTH_ORIENTATION_FILE = '1JYX_truth_orientations.txt'
 ! bounds of the Phase 0 baseline: trs (pixels, box_crop == box) and athres_cont (degrees)
 real, parameter :: TEST_TRS = 5., TEST_ATHRES_CONT = 15.
+integer, parameter :: NROUTES = 2
+character(len=16), parameter :: ROUTE_NAMES(NROUTES) = [character(len=16) :: 'joint', 'shift_then_joint']
 integer, parameter :: NOBJFUNS = 2
 integer, parameter :: TEST_OBJFUNS(NOBJFUNS) = [OBJFUN_CC, OBJFUN_EUCLID]
 character(len=6), parameter :: OBJFUN_NAMES(NOBJFUNS) = ['cc    ', 'euclid']
@@ -105,7 +107,8 @@ contains
         real(dp) :: median_rotation(NOBJFUNS, size(TEST_LPS)), gain, basin_width
         integer, allocatable :: statuses(:)
         logical, allocatable :: noise_mask(:, :, :)
-        integer :: i, iband, iobj, ldim(3), nsections, nworkers, upper_shell
+        integer :: i, iband, iobj, iroute, ldim(3), nsections, nworkers, upper_shell
+        integer :: route_checks_before, route_failures_before
         allocate(b, p, simulation_command)
 
         call make_ui
@@ -231,60 +234,79 @@ contains
             &truth_shifts, initial_shifts, active_upper_shell(minval(TEST_LPS)), nworkers, gain, sigma2)
         write (logfhandle, '(a,1x,es12.4)') 'POSE_CONT_1JYX euclid reference gain:', gain
 
-        ! Stage 5: refine all particles under each objective at each band, then reconstruct the
-        ! exact, perturbed and refined pose sets of the band and score them.
-        median_rotation = 0._dp
-        do iband = 1, size(TEST_LPS)
-            upper_shell = active_upper_shell(TEST_LPS(iband))
-            do iobj = 1, NOBJFUNS
-                ! coarse to fine (R1): the 8 A case starts from the injected perturbation, the 4 A
-                ! case from the poses the same objective refined at 8 A
-                if (iband == 1) then
-                    start_rotations = initial_rotations
-                    start_shifts = initial_shifts
-                else
-                    start_rotations = terminal_rotations(:, :, :, iobj)
-                    start_shifts = terminal_shifts(:, :, iobj)
-                end if
-                if (TEST_OBJFUNS(iobj) == OBJFUN_EUCLID) then
-                    call calc%set_ref(1, .true., real(gain)*truth_volume)
-                    call calc%set_ref(1, .false., real(gain)*truth_volume)
-                else
-                    call calc%set_ref(1, .true., truth_volume)
-                    call calc%set_ref(1, .false., truth_volume)
-                end if
-                call refine_all_particles(b, p, particles, ctf_parameters, noise_mask, taper, TEST_OBJFUNS(iobj), &
-                    &sigma2, upper_shell, nworkers, truth_rotations, truth_shifts, start_rotations, start_shifts, &
-                    &terminal_rotations(:, :, :, iobj), terminal_shifts(:, :, iobj), objectives_before, &
-                    &objectives_after, objectives_truth, statuses)
-                do i = 1, TEST_PARTICLES
-                    initial_rotation_errors(i) = rotation_distance(start_rotations(:, :, i), truth_rotations(:, :, i))
-                    terminal_rotation_errors(i) = rotation_distance(terminal_rotations(:, :, i, iobj), truth_rotations(:, :, i))
-                    initial_shift_errors(i) = norm2(start_shifts(:, i) - truth_shifts(:, i))
-                    terminal_shift_errors(i) = norm2(terminal_shifts(:, i, iobj) - truth_shifts(:, i))
+        ! Stage 5: both routes reuse the one frozen fixture. Test joint first without overriding
+        ! the parameter defaults; the staged route is selected only for its own arm. Each route
+        ! restarts at the injected 8 A poses and continues its own result at 4 A.
+        do iroute = 1, NROUTES
+            route_checks_before = tests_run
+            route_failures_before = tests_failed
+            if (iroute == 1) then
+                call assert_true(trim(p%cont_route) == 'joint', '1JYX default route is joint')
+                call assert_false(p%l_cont_shift_first, '1JYX default route has no shift-only prepass')
+            end if
+            if (iroute == 2) then
+                p%cont_route = 'shift_then_joint'
+                p%l_cont_shift_first = .true.
+            end if
+            write (logfhandle, '(a,1x,a)') 'POSE_CONT_1JYX ROUTE:', trim(ROUTE_NAMES(iroute))
+            median_rotation = 0._dp
+            do iband = 1, size(TEST_LPS)
+                upper_shell = active_upper_shell(TEST_LPS(iband))
+                do iobj = 1, NOBJFUNS
+                    ! coarse to fine (R1): the 8 A case starts from the injected perturbation, the 4 A
+                    ! case from the poses the same objective refined at 8 A
+                    if (iband == 1) then
+                        start_rotations = initial_rotations
+                        start_shifts = initial_shifts
+                    else
+                        start_rotations = terminal_rotations(:, :, :, iobj)
+                        start_shifts = terminal_shifts(:, :, iobj)
+                    end if
+                    if (TEST_OBJFUNS(iobj) == OBJFUN_EUCLID) then
+                        call calc%set_ref(1, .true., real(gain)*truth_volume)
+                        call calc%set_ref(1, .false., real(gain)*truth_volume)
+                    else
+                        call calc%set_ref(1, .true., truth_volume)
+                        call calc%set_ref(1, .false., truth_volume)
+                    end if
+                    call refine_all_particles(b, p, particles, ctf_parameters, noise_mask, taper, TEST_OBJFUNS(iobj), &
+                        &sigma2, upper_shell, nworkers, truth_rotations, truth_shifts, start_rotations, start_shifts, &
+                        &terminal_rotations(:, :, :, iobj), terminal_shifts(:, :, iobj), objectives_before, &
+                        &objectives_after, objectives_truth, statuses)
+                    do i = 1, TEST_PARTICLES
+                        initial_rotation_errors(i) = rotation_distance(start_rotations(:, :, i), truth_rotations(:, :, i))
+                        terminal_rotation_errors(i) = rotation_distance(terminal_rotations(:, :, i, iobj), truth_rotations(:, :, i))
+                        initial_shift_errors(i) = norm2(start_shifts(:, i) - truth_shifts(:, i))
+                        terminal_shift_errors(i) = norm2(terminal_shifts(:, i, iobj) - truth_shifts(:, i))
+                    end do
+                    ! diagnostic only: are the particles that end outside the basin width in a local
+                    ! minimum (objective above its truth value) or below the truth objective?
+                    basin_width = real(TEST_LPS(iband), dp)/(0.5_dp*real(TEST_MSKDIAM, dp))
+                    write (logfhandle, '(a,1x,a,a,i0,a,i0,a,f8.4)') &
+                        &'POSE_CONT_1JYX', '['//trim(case_label(iroute, iobj, iband))//']', &
+                        &' outside the basin: ', count(terminal_rotation_errors > basin_width), &
+                        &'; of these with objective below the truth objective: ', &
+                        &count(terminal_rotation_errors > basin_width .and. objectives_after < objectives_truth), &
+                        &'; mean truth objective: ', sum(objectives_truth)/real(TEST_PARTICLES, dp)
+                    call assert_pose_improvement(case_label(iroute, iobj, iband), iband, TEST_OBJFUNS(iobj), statuses, &
+                        &objectives_before, objectives_after, initial_rotation_errors, terminal_rotation_errors, &
+                        &initial_shift_errors, terminal_shift_errors, median_rotation(iobj, iband))
                 end do
-                ! diagnostic only: are the particles that end outside the basin width in a local
-                ! minimum (objective above its truth value) or below the truth objective?
-                basin_width = real(TEST_LPS(iband), dp)/(0.5_dp*real(TEST_MSKDIAM, dp))
-                write (logfhandle, '(a,1x,a,a,i0,a,i0,a,f8.4)') 'POSE_CONT_1JYX', '['//trim(case_label(iobj, iband))//']', &
-                    &' outside the basin: ', count(terminal_rotation_errors > basin_width), &
-                    &'; of these with objective below the truth objective: ', &
-                    &count(terminal_rotation_errors > basin_width .and. objectives_after < objectives_truth), &
-                    &'; mean truth objective: ', sum(objectives_truth)/real(TEST_PARTICLES, dp)
-                call assert_pose_improvement(case_label(iobj, iband), iband, TEST_OBJFUNS(iobj), statuses, &
-                    &objectives_before, objectives_after, initial_rotation_errors, terminal_rotation_errors, &
-                    &initial_shift_errors, terminal_shift_errors, median_rotation(iobj, iband))
+                call reconstruct_and_score(iroute, iband, particles, ctf_parameters, truth_image, noise_mask, &
+                    &truth_rotations, truth_shifts, initial_rotations, initial_shifts, terminal_rotations, terminal_shifts)
             end do
-            call reconstruct_and_score(iband, particles, ctf_parameters, truth_image, noise_mask, &
-                &truth_rotations, truth_shifts, initial_rotations, initial_shifts, terminal_rotations, terminal_shifts)
-        end do
-        ! F5: a finer band refines the rotation more precisely, which needs the high-resolution
-        ! signal that the centring and phase flip before the mask keep (O4)
-        do iobj = 1, NOBJFUNS
-            write (logfhandle, '(a,1x,a,2(1x,f8.3))') 'POSE_CONT_1JYX median rotation error lp 8 / 4 A (deg):', &
-                &trim(OBJFUN_NAMES(iobj)), median_rotation(iobj, :)*180._dp/real(PI, dp)
-            call assert_true(median_rotation(iobj, 2) < median_rotation(iobj, 1), &
-                &trim(OBJFUN_NAMES(iobj))//': the 4 A median rotation error is below the 8 A one')
+            ! F5: a finer band refines the rotation more precisely, which needs the high-resolution
+            ! signal that the centring and phase flip before the mask keep (O4)
+            do iobj = 1, NOBJFUNS
+                write (logfhandle, '(a,1x,a,1x,a,2(1x,f8.3))') 'POSE_CONT_1JYX median rotation error lp 8 / 4 A (deg):', &
+                    &trim(ROUTE_NAMES(iroute)), trim(OBJFUN_NAMES(iobj)), median_rotation(iobj, :)*180._dp/real(PI, dp)
+                call assert_true(median_rotation(iobj, 2) < median_rotation(iobj, 1), &
+                    &trim(ROUTE_NAMES(iroute))//' '//trim(OBJFUN_NAMES(iobj))// &
+                    &': the 4 A median rotation error is below the 8 A one')
+            end do
+            write (logfhandle, '(a,1x,a,a,i0,a,i0)') 'POSE_CONT_1JYX ROUTE RESULT:', &
+                &trim(ROUTE_NAMES(iroute)), ' checks=', tests_run - route_checks_before, &
+                &' failures=', tests_failed - route_failures_before
         end do
 
         deallocate (truth_volume)
@@ -317,10 +339,11 @@ contains
         shell = min(TEST_BOX/2 - 1, int(real(TEST_BOX)*TEST_SMPD/lp))
     end function active_upper_shell
 
-    pure function case_label(iobj, iband) result(label)
-        integer, intent(in) :: iobj, iband
-        character(len=24) :: label
-        write (label, '(a,a,i0,a)') trim(OBJFUN_NAMES(iobj)), ' lp ', nint(TEST_LPS(iband)), ' A'
+    pure function case_label(iroute, iobj, iband) result(label)
+        integer, intent(in) :: iroute, iobj, iband
+        character(len=48) :: label
+        write (label, '(a,1x,a,a,i0,a)') trim(ROUTE_NAMES(iroute)), trim(OBJFUN_NAMES(iobj)), &
+            &' lp ', nint(TEST_LPS(iband)), ' A'
     end function case_label
 
     !> Prepare particle iparticle into the calculator slot islot as production prepares it: the
@@ -454,7 +477,7 @@ contains
         type(image), allocatable :: raw_work(:), fourier_work(:)
         integer :: i
 
-        ! the pass's policy: the Phase 0 bounds (O6), shift before joint
+        ! The route is owned by the test arm; the remaining policy is identical in both arms.
         p%oritype = 'ptcl3D'
         p%cc_objfun = objfun
         p%inpl_cont = 'no'
@@ -462,9 +485,6 @@ contains
         p%box_crop = TEST_BOX
         p%trs = TEST_TRS
         p%athres_cont = TEST_ATHRES_CONT
-        ! the route of the Phase 0 floors; production runs the joint stage alone
-        p%cont_route = 'shift_then_joint'
-        p%l_cont_shift_first = .true.
         p%kfromto = [2, upper_shell]
         p%fromp = 1
         p%top = size(particles, 3)
@@ -577,9 +597,9 @@ contains
     !! correlation and FSC, and apply the map gates: the exact-pose control is valid, each
     !! refined map beats the perturbed one and lies within MAP_CORR_MARGIN of the exact-pose map
     !! (F4), and for cc at 8 A it meets the Phase 0 correlation with its margin (F3).
-    subroutine reconstruct_and_score(iband, particles, ctf_parameters, truth_image, noise_mask, &
+    subroutine reconstruct_and_score(iroute, iband, particles, ctf_parameters, truth_image, noise_mask, &
         &truth_rotations, truth_shifts, initial_rotations, initial_shifts, terminal_rotations, terminal_shifts)
-        integer, intent(in) :: iband
+        integer, intent(in) :: iroute, iband
         real, intent(in) :: particles(:, :, :)
         type(ctfparams), intent(in) :: ctf_parameters(:)
         class(image), intent(in) :: truth_image
@@ -664,23 +684,25 @@ contains
             finite_fsc(imap) = all(ieee_is_finite(fsc))
             call get_resolution(fsc, resolutions, fsc05(imap), fsc0143(imap))
             call metric%kill
-            write (logfhandle, '(a,i0,a,a16,a,es12.4,a,2(1x,f8.3))') 'POSE_CONT_1JYX [lp ', nint(TEST_LPS(iband)), &
+            write (logfhandle, '(a,a,a,i0,a,a16,a,es12.4,a,2(1x,f8.3))') &
+                &'POSE_CONT_1JYX [', trim(ROUTE_NAMES(iroute)), ' lp ', nint(TEST_LPS(iband)), &
                 &' A] map ', map_names(imap), ' correlation', correlations(imap), '  FSC=0.5/0.143 (A)', &
                 &fsc05(imap), fsc0143(imap)
         end do
 
         ! Step 4: the gates, after every diagnostic is written.
         call assert_true(ieee_is_finite(correlations(1)) .and. correlations(1) > 0._dp .and. finite_fsc(1) .and. &
-            &fsc0143(1) > 0., 'the exact-pose reconstruction control is valid')
+            &fsc0143(1) > 0., trim(ROUTE_NAMES(iroute))//': the exact-pose reconstruction control is valid')
         do imap = 1, NOBJFUNS
             call assert_true(ieee_is_finite(correlations(2 + imap)) .and. finite_fsc(2) .and. finite_fsc(2 + imap) .and. &
                 &correlations(2 + imap) > correlations(2), &
-                &trim(case_label(imap, iband))//': the refined map correlates better with the truth than the perturbed one')
+                &trim(case_label(iroute, imap, iband))// &
+                &': the refined map correlates better with the truth than the perturbed one')
             call assert_true(correlations(2 + imap) >= correlations(1) - MAP_CORR_MARGIN, &
-                &trim(case_label(imap, iband))//': the refined map is within the margin of the exact-pose map (F4)')
+                &trim(case_label(iroute, imap, iband))//': the refined map is within the margin of the exact-pose map (F4)')
             if (TEST_OBJFUNS(imap) == OBJFUN_CC .and. iband == 1) &
                 &call assert_true(correlations(2 + imap) >= PHASE0_MAP_CORR - 0.005_dp, &
-                &trim(case_label(imap, iband))//': the refined map meets the Phase 0 correlation with its margin (F3)')
+                &trim(case_label(iroute, imap, iband))//': the refined map meets the Phase 0 correlation with its margin (F3)')
         end do
 
         if (allocated(plane%cmplx_plane)) deallocate (plane%cmplx_plane)
@@ -737,7 +759,7 @@ contains
         real(dp) :: rotation_before_rms, rotation_after_rms, shift_before_rms, shift_after_rms
         real(dp) :: basin_width, shift_median, basin_fraction
         integer :: accepted, status_code
-        character(len=40) :: tag
+        character(len=80) :: tag
 
         tag = 'POSE_CONT_1JYX ['//trim(label)//']'
         finite_objective = ieee_is_finite(objectives_before) .and. ieee_is_finite(objectives_after) .and. &
