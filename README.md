@@ -38,10 +38,18 @@ distributed HPC environments.
 
 ------------------------------------------------------------------------
 
+## 🔄 Restart Comparisons 
+[![Streptavidin 100-restart CI](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/streptavidin_test.yml/badge.svg)](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/streptavidin_test.yml)
+
+https://rmeanapa.github.io/SIMPLE_data_testing/streptavidin/
+
+------------------------------------------------------------------------
+
 ## 🦠  Benchmark Datasets
 [![Run & Display SIMPLE Data Sets](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/data_testing_frce.yml/badge.svg)](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/data_testing_frce.yml)
 
 https://rmeanapa.github.io/SIMPLE_data_testing/
+
 
 ------------------------------------------------------------------------
 
