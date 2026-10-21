@@ -100,7 +100,7 @@ The batch side is called classic in the Django code.
 10. Job views read `workspace.simple` using:
 
    ```text
-   simple_exec prg=print_project_info json=yes
+   simple_exec prg=print_project_info projfile=workspace.simple json=yes
    simple_exec prg=print_project_field json=yes
    ```
 

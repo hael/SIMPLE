@@ -137,6 +137,7 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        if( .not.cline%defined('projfile') ) THROW_HARD('print_project_info requires projfile on the command line')
         call cline%set('mkdir', 'no')
         call params%new(cline, silent=.true.)
         if(trim(params%json) .eq. 'yes') then

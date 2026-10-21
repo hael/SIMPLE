@@ -570,7 +570,7 @@ subroutine new_export_relion( prgtab )
         &display_name='Print Project Information')                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call print_project_info%add_input(UI_FILE, projfile, required_override=.true., visibility=UI_VIS_STANDARD)
         ! parameter input/output
         ! <empty>
         ! <no additional inputs>

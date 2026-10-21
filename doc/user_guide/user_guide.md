@@ -35,13 +35,13 @@ Note that the path to the dictory must exist, otherwise SIMPLE with raise an err
 
 ## Print the Project Information
 ```
-simple_exec prg=print_project_info
+simple_exec prg=print_project_info projfile=my_proj.simple
 ```
-When run from within the project directory SIMPLE will automatically figure out the most recent project files to show.
+`projfile` is required; this command does not automatically select a project.
+To inspect a project in a numbered execution directory, provide its path:
 
-If there are multiple project files in a directory, then provide the specific project file to print the info for:
-```
-
+```shell
+simple_exec prg=print_project_info projfile=1_import_particles/my_proj.simple
 ```
 
 ## Create a list of absolute paths to EM movies in movies.txt from the directory ../movies/
