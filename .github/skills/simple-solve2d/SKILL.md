@@ -158,8 +158,10 @@ If fractional update or probabilistic sampling is involved, also read
 
 - `refine2D` logic is spread across many `simple_strategy2D_*` modules.
 - Streaming `refine2D` code is related but not identical to batch execution.
-- Shared-memory restoration reads the previous iteration's class FRCs from
-  file for the even/odd low-resolution averaging; distributed assembly starts
-  from zero FRCs, so the two modes differ there.
+- Restoration takes the cut-off of the even/odd low-resolution averaging from
+  the previous iteration's class FRCs (`params%frcs`): the shared-memory matcher
+  reads them, and the distributed master passes `prev_frcs=.true.` to
+  `cavgassemble_exec`. Keep the two modes equivalent; `make_cavgs` starts from
+  none in both.
 - Class averaging, selection, rejection, and project updates often live in
   different files than the search loop itself.

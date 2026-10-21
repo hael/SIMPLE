@@ -17,7 +17,7 @@ This folder owns STAR and Relion interoperability.
 
 ## Connections
 
-- Reached from `commanders/simple/simple_commanders_starproject.f90`, `simple_commanders_relion.f90` and project export (`simple_sp_project`), from the refine2D class-average output (`cls2D` star file), and from the stream stages
+- Reached from `commanders/simple/simple_commanders_starproject.f90`, `simple_commanders_relion.f90` and project export (`simple_sp_project`), from the refine2D class-average output (`cls2D` star file), from the stream stages and 2D pool, and through the wrappers from `motion/simple_motion_model` and `ctf/simple_ctf_estimate_fit`
 - Tests: `unit_project` ("STAR file", "STAR project", "STAR stream export")
 
 ## Working Rule

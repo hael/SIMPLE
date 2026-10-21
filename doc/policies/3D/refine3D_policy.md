@@ -137,9 +137,11 @@ use them. A routine that runs on the caller's parameters does not run
 own afterwards, and it draws from the random generator without a reseed
 (ruling of 2026-10-20).
 
-`simple_vol_pproc_policy.f90` owns NU-envelope cadence, artifact compatibility,
-and legacy-density-mask compatibility. The NU setup API owns its spherical
-`mskdiam` support invariant.
+`simple_vol_pproc_policy.f90` owns one check: whether a state's density-mask
+file exists and matches the box and sampling of the volumes it would mask
+(`state_mask_is_compatible`, shared by volume assembly, postprocessing and the
+solve3D final reconstruction). The NU setup API owns its spherical `mskdiam`
+support invariant.
 
 ## 4. Project and Builder State
 
@@ -620,15 +622,17 @@ disabled. The matcher and probability-table paths may still refine shifts after
 candidate/state selection, but they must not use a shift seed estimated from a
 particle's previous state to score candidates in other states.
 
-The matcher must preserve a single particle-stack read per batch *within each
-phase*: batch construction reads each particle once for search, and the
-reconstruction phase reads each selected particle once after the search-phase
-teardown (the PFTC memory phase boundary makes retaining the raw images across
-phases prohibitive). Do not add further reads to either phase unless the
+A matcher pass reads each selected particle from the stacks once
+(`doc/policies/particle_read_path_policy.md`, "The particle buffer"). The
+reconstruction after the search-phase teardown takes its images from the
+pass's particle buffer: the raw images, or, when it reconstructs at a cropped
+box from a polar search, the cropped observations the search kept as records.
+Only when the buffer does not fit its memory budget does the reconstruction
+read the stacks again, once per particle. Do not add further reads unless the
 performance contract is explicitly changed.
 
 The downscaled particle cache is a 2D-only feature: `refine3D` rejects
-`cache=yes` and both phases always read the original full-size stacks (see
+`cache=yes` and always reads the original full-size stacks (see
 `doc/policies/2D/particle_cache_policy.md`).
 
 ### Continuous Cartesian pose policy

@@ -50,19 +50,29 @@ Branch-context files are local development memory and may describe work that is 
   programs and no scratch programs in a test area: scratch work lives in a local git worktree.
 - Expected values come from outside the code under test (closed forms, brute force, an emulation);
   seeds are fixed; tests leave no files behind.
-- `./compile_debug.sh` builds and runs the fast gate (under 30 s); every `compile_*.sh` builds the
-  tests and runs the gate unless given `--exclude-tests`. Running it
+- `./compile_debug.sh` builds and runs the fast gate (a 60 s budget whose overruns only warn;
+  failed entries fail it); every `compile_*.sh` builds the tests and runs the gate unless given
+  `--exclude-tests`. Running it
   before a push to master is strongly recommended, not enforced: a push that only moves code to
   another machine may skip it (policy, section 3.4). `python3 scripts/check_test_registry.py . --verbose`,
   `python3 scripts/check_flex_dag.py . --verbose`, and `python3 scripts/check_descr.py .` check the
   registrations, FLEX dependency DAG, and Fortran file headers/source-unit boundaries without compiling.
+- The number of CTest entries is fixed by `SIMPLE_CTEST_BUDGET` in `production/CMakeLists.txt`;
+  configuration fails on a mismatch. Adding or removing an entry changes the budget and the counts
+  in the policy's "process budget" paragraph in the same change. High-level entries are also rows of
+  `src/main/commanders/test/simple_test_registry.f90`, which `simple_test_exec test=nightly`,
+  `test=profile` and `test=identity` run.
 
 ## Git and Validation
 
 - Preserve unrelated user changes.
-- Do not compile, link, run CMake builds, or execute test binaries unless the user explicitly requests it. The user performs compilation to avoid spending agent credits on builds.
-- Validate edits with editor or language-server syntax diagnostics and other lightweight checks that do not compile code. Report that compilation and runtime tests were left to the user.
-- For this project, pushing a focused, validated commit to `origin/master` is the normal XP workflow unless the user gives a different direction. Never force-push.
-- Create commits only when the user asks, using focused messages.
+- Compile and run tests as part of the development cycle. Build incrementally in the existing
+  `build/` (`make -C build -j<n>`, then `scripts/run_fast_gate.sh build` and
+  `make -C build install`); `./compile_clean.sh` and `./compile_debug.sh` rebuild from scratch.
+  Run the touched area's `build/bin/simple_test_exec test=unit_<area>` and the high-level entries
+  a change affects; start long runs in the background. Report what was built and run, and the
+  results.
+- Never commit or push. The maintainer decides what is committed and pushed: leave changes in the
+  working tree and say which are ready.
 - Do not claim Linux/BOX tests passed unless their output was actually observed.
 - Record verified branch milestones and outstanding tests in the matching `.codex/branch-context/` note.

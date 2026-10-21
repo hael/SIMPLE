@@ -25,7 +25,8 @@ matcher reuses it again for the hard particle update.
 ## 2. Ownership
 
 `simple_commanders_solve2D.f90` owns `solve2D` orchestration: defaults,
-stage execution, final fill-in, and final class-average generation.
+stage execution and final class-average generation; fill-in is requested on
+the staged `refine2D` calls (`fillin=yes`, set by the controller).
 
 `simple_solve2D_controller.f90` owns the 2D stage policy: `NSAMPLE_DEFAULT_2D`,
 `nsample` override handling, stage-local `update_frac`, search-mode transitions,
@@ -53,8 +54,11 @@ coverage report printed before the first stage.
 cohort rescoring, global realized update fraction, and class-local realized
 update fractions.
 
-`simple_commanders_prob.f90` owns probabilistic pre-alignment orchestration:
-sampling the outer subset once, writing it to the project, running table
+`simple_prob_align_strategy.f90` owns probabilistic pre-alignment
+orchestration (`prob_align_exec`, `prob_align_neigh_exec`, `prob_align2D_exec`
+on the caller's `(params, build)`; the distributed masters call them on their
+own project, the commanders in `simple_commanders_prob.f90` wrap them for
+command-line callers): sampling the outer subset once, running table
 generation, aggregating probability-table outputs, and writing the assignment
 artifact.
 
@@ -68,9 +72,13 @@ particle-domain search on the active subset, assignment consumption, pose or
 class updates, sigma updates during search, and writing partition-local
 reconstruction or class-average inputs.
 
-The classaverager modules own 2D class-average restoration and assembly.
-`commander_volassemble` owns 3D volume assembly and trailing reconstruction.
-These layers consume sampled-update state; they do not own particle selection.
+The classaverager modules own the 2D class-average sums and restoration;
+the 2D strategy restores in shared memory and `cavgassemble_exec`
+(`simple_cavgassemble_strategy.f90`) assembles distributed parts.
+`volassemble_exec` (`simple_volassemble_strategy.f90`) owns 3D volume
+assembly and trailing reconstruction; `commander_volassemble` is its
+command-line wrapper. These layers consume sampled-update state; they do not
+own particle selection.
 
 ## 3. Bookkeeping Contracts
 

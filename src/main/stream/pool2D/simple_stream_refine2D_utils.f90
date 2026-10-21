@@ -5,6 +5,7 @@ use simple_sp_project,           only: sp_project
 use simple_optics_maps,          only: import_latest_optics_map
 use simple_class_frcs,           only: class_frcs
 use simple_image,                only: image
+use simple_refine2D_fnames,      only: refine2D_cavgs_fbody
 implicit none
 
 public :: cleanup_root_folder
@@ -61,7 +62,7 @@ contains
         integer, intent(in) :: iter
         type(string) :: prefix
         if( iter < 1 ) return
-        prefix = POOL_DIR//CAVGS_ITER_FBODY//int2str_pad(iter,3)
+        prefix = string(POOL_DIR)//refine2D_cavgs_fbody(iter)
         call del_file(prefix//JPG_EXT)
         call del_file(prefix//'_even'//MRC_EXT)
         call del_file(prefix//'_odd'//MRC_EXT)

@@ -347,11 +347,11 @@ modules and the `make_cavgs`/`cavgassemble` commanders of
 `simple_commanders_mkcavgs.f90` (command-line wrappers; theirs is a full project
 write) own:
 
-- explicit class-average assembly from partial sums (the class FRCs start
-  afresh at every assembly, as on a new toolbox, because restoration reads them
-  for the even/odd low-resolution averaging before storing the new ones;
-  shared-memory restoration reads the previous iteration's FRCs from the file
-  instead, so the two modes differ there)
+- explicit class-average assembly from partial sums (restoration reads the
+  class FRCs for the even/odd low-resolution averaging before storing the new
+  ones: in `refine2D` the previous iteration's, from the file, as the
+  shared-memory matcher reads them, so the two modes restore alike;
+  `make_cavgs` starts from none in both modes)
 - merged/even/odd class-average output
 - class-document generation
 - class FRC output and project output metadata

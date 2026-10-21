@@ -11,12 +11,12 @@ Select the narrowest applicable skill before editing code:
 
 - `simple-architecture`: broad repository orientation and cross-cutting workflows.
 - `simple-modern-fortran`: Fortran style, lifecycle, generated-source, and module guidance.
-- `simple-solve2d`, `simple-refine3d`, `simple-cluster-cavgs-quality`: workflow-specific behavior.
-- `simple-solve2d`: solve2D orchestration, refine2D stages, 2D probabilistic sampling, online class-average restoration, and even/odd conventions.
-- `simple-refine3d`: probabilistic 3D refinement, matcher I/O, assembly handoffs, automasking, nonuniform filtering, and multi-state 3D behavior.
-- `simple-solve3d-importance-sampling`: solve3D `update_frac`/`nsample*`, `sampled`/`updatecnt`, `prob_align` reuse, and trailing-reconstruction coupling.
-- `simple-frac-update-trailing`: reference contract for fractional updates, online reconstruction I/O, previous halfmap/rho handoffs, and obsfield mirrors.
-- `simple-nonuniform-regularization`: `filt_mode=nonuniform|nonuniform_lpset`, `nu_refine`, `_nu_filt`/`_nu_locres` products, spherical NU support, independent automask consumers, and `simple_nu_filter` lifecycle.
+- `simple-solve2d`: solve2D orchestration, refine2D stages (the public program and its private worker), 2D probabilistic tables, class sums in the 2D matcher, class-average restoration and convergence in the 2D strategy, distributed class-average assembly, and even/odd conventions.
+- `simple-refine3d`: probabilistic 3D refinement, the thin commanders and the strategy routines they wrap (volume assembly, `prob_align`, the sigma2 commit), the distributed master as project owner, matcher I/O and the particle buffer, automasking, nonuniform filtering, and multi-state 3D behavior.
+- `simple-solve3d-importance-sampling`: solve3D `nsample`/`update_frac` and the full-sampling switch, stage-wise sampling, `prob_align` sampling reuse and the master's draw, `sampled`/`updatecnt`, and the realized update fraction trailing reconstruction consumes.
+- `simple-frac-update-trailing`: reference contract for fractional updates, the particle buffer and cropped records feeding partial reconstruction, and the per-state trailing accumulator chain with its population blend.
+- `simple-nonuniform-regularization`: `filt_mode=nonuniform|nonuniform_lpset`, `_nu_filt`/`_nu_locres` products, spherical NU support, the NU matching low-pass handoff, ML-regularized auxiliary coupling, and the `simple_nu_filter` lifecycle.
+- `simple-cluster-cavgs-quality`: `model_cavgs_rejection` and the class-average quality backend.
 - `simple-main-*`: subsystem guidance for `src/main` areas such as `ui`, `root`,
   `commanders`, `strategies`, `project`, `ori`, `pftc`, `image`, `params`,
   `nu_filt`, `volume`, and related modules.
@@ -54,12 +54,13 @@ living docs and leave the old ones in dated history docs.
 - Use direct, local Fortran APIs and structured project/parameter/orientation helpers
   instead of ad hoc parsing or parallel configuration paths.
 - Avoid broad refactors while fixing a narrow behavior.
-- Do not compile, link, run CMake builds, or execute test binaries unless the user
-  explicitly requests it. The user performs compilation to avoid spending agent credits
-  on builds.
-- Validate edits with editor or language-server syntax diagnostics and other lightweight
-  checks that do not compile code. Tell the user that compilation and runtime tests were
-  left for them.
+- Compile and run tests as part of the development cycle. Build incrementally in the
+  existing `build/` (`make -C build -j<n>`, then `scripts/run_fast_gate.sh build` and
+  `make -C build install`); `./compile_clean.sh` and `./compile_debug.sh` rebuild from
+  scratch. Run the touched area's `build/bin/simple_test_exec test=unit_<area>` and the
+  high-level entries a change affects. Report what was built and run, and the results.
+- Never commit or push. The maintainer decides what is committed and pushed: leave changes
+  in the working tree and say which are ready.
 
 - Tests follow `doc/policies/test_environment_policy.md`: a test can fail, lives in a
   `simple_<thing>_tester.f90` next to the code it tests, and runs through `simple_test_exec`;
@@ -87,7 +88,11 @@ living docs and leave the old ones in dated history docs.
   `src/main/stream/stages` (the master's parts are in `src/main/stream/master`, the modules
   the stages share in `src/main/stream/shared`, the 2D pool in
   `src/main/stream/pool2D`).
-- `src/main/strategies`: algorithm and execution-policy layers.
+- `src/main/strategies`: algorithm and execution-policy layers. In `parallelization/` the
+  refine2D/refine3D strategies and the distributed master's steps (volume and class-average
+  assembly, probability alignment, the sigma2 commit) are routines on the master's
+  `(params, build)`; their commanders are thin `execute(cline)` wrappers.
+- `src/main/solve`: the solve2D/solve3D stage controllers.
 - `src/main/nu_filt`: nonuniform filtering implementation used by volume assembly.
 - `doc/`: architecture, policy, and refactoring notes that may be more current than comments.
 

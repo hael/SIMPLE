@@ -64,7 +64,12 @@ living docs and leave the old ones in dated history docs.
   `src/main/stream/stages` (the master's parts are in `src/main/stream/master`, the modules
   the stages share in `src/main/stream/shared`, the 2D pool in
   `src/main/stream/pool2D`).
-- `src/main/strategies`: algorithm and execution-policy layers.
+- `src/main/strategies`: algorithm and execution-policy layers. In `parallelization/` the
+  refine2D/refine3D strategies and the distributed master's steps (volume and class-average
+  assembly, probability alignment, the sigma2 commit) are routines on the master's
+  `(params, build)`; their commanders are thin `execute(cline)` wrappers. Keep new master
+  work there, not in commanders.
+- `src/main/solve`: the solve2D/solve3D stage controllers.
 - `src/main/nu_filt`: nonuniform filtering used by volume assembly.
 - `doc/`: architecture, policy, and refactoring notes — often more current than
   code comments. Check `doc/policies/*.md` and `doc/refactoring_notes/*.md`

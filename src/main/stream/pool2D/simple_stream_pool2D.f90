@@ -39,6 +39,7 @@ use simple_stream_refine2D_utils, only: tidy_2Dstream_iter, build_pool_publicati
                                        &snapshot_cavgs_meta, draw_new_classes, append_project_sets,&
                                        &pool_publication_nselected
 use simple_stream_utils,          only: log_rss
+use simple_refine2D_fnames,       only: refine2D_cavgs_fname
 implicit none
 
 public :: stream_pool2D, stream_pool2D_stats
@@ -713,7 +714,7 @@ contains
                 ! new
                 self%last_complete_iter = it
                 call simple_getcwd(cwd)
-                self%jpeg = cwd//'/'//CAVGS_ITER_FBODY//int2str_pad(it, 3)//'.jpg'
+                self%jpeg = cwd//'/'//refine2D_cavgs_fname(it, JPG_EXT)
                 ! its grid follows the classes, transferred below
                 ! end new
                 write(logfhandle,'(A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> POOL         ITERATION ',it,&
@@ -915,7 +916,7 @@ contains
         if( self%l_available .or. self%l_failed ) return
         self%l_available = file_exists(POOL_DIR//REFINE2D_FINISHED)
         if( self%l_available )then
-            if( self%iter >= 1 ) self%refs = CAVGS_ITER_FBODY//int2str_pad(self%iter,3)//MRC_EXT
+            if( self%iter >= 1 ) self%refs = refine2D_cavgs_fname(self%iter, MRC_EXT)
         else if( self%job_failed() )then
             failed_log = POOL_DIR//POOL_LOGFILE//'_failed_iter'//int2str_pad(self%iter,3)//'_attempt'//int2str(self%nattempts)
             if( file_exists(POOL_DIR//POOL_LOGFILE) ) call simple_rename(string(POOL_DIR//POOL_LOGFILE), failed_log)
@@ -1020,7 +1021,7 @@ contains
         else if(file_exists(cwd//'/'//CLS2D_STARFBODY//'_iter'//int2str_pad(self%iter - 1,3)//STAR_EXT)) then
             self%stats_iter = self%iter - 1
         endif
-        if(.not. file_exists(cwd//'/'//CAVGS_ITER_FBODY//int2str_pad(self%stats_iter, 3)//'.jpg')) then
+        if(.not. file_exists(cwd//'/'//refine2D_cavgs_fname(self%stats_iter, JPG_EXT))) then
             self%last_complete_iter = self%stats_iter
             call self%write_jpeg(params)
         endif
@@ -1153,7 +1154,7 @@ contains
                     ! no 2D yet
                     call write_raw_project
                 else
-                    self%refs = CAVGS_ITER_FBODY//int2str_pad(self%iter,3)//MRC_EXT
+                    self%refs = refine2D_cavgs_fname(self%iter, MRC_EXT)
                     ! tricking the asynchronous master process to come to a hard stop
                     call simple_touch(POOL_DIR//TERM_STREAM)
                     do ipart = 1,params%nparts_pool

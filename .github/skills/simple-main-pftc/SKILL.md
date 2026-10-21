@@ -20,7 +20,7 @@ This folder is central to polar-Fourier search workflows.
 ## Structure
 
 - The type and its interfaces are declared in `simple_polarft_calc.f90`; the bodies live in its submodules
-- Mutable work arrays are per OpenMP thread, indexed by `omp_get_thread_num() + 1` and sized by `params%nthr` in `new`: `heap_vars(ithr)` (shift matrices, double-precision reference copies, rotation scores, distances and cdf) and the FFTW buffers (`cmat2_many`, `cmat_joint_many`, `crmat_many`, `crmat1_many`, `crvec1`, `drvec`). Keep the thread index local to the call; never share these buffers across threads
+- Mutable work arrays are per OpenMP thread, indexed by `omp_get_thread_num() + 1`: `heap_vars(ithr)` (shift matrices, double-precision reference copies, rotation scores, distances and cdf; `params%nthr` of them, from `new`) and the FFTW buffers (`cmat2_many`, `cmat_joint_many`, `crmat_many`, `crmat1_many`, `crvec1`, `drvec`; `nthr_glob` of them, from the memo workspace). Keep the thread index local to the call; never share these buffers across threads
 - References are stored per half (`pfts_refs(:,:,iref,ieo)`), picked by the particle's `iseven`; sigma2 is two global spectra, one per half (`assign_sigma2_noise`, `memoize_sigma2_weights`)
 - The rotation samplers (`sample_bounded_dists`, `sample_likelihood_dists`, `sample_power_dists` in `strategies/search/probabilistic/simple_eul_prob_tab_utils.f90`) take arrays of distances filled in the thread's buffers; do not reintroduce internal procedures (heap trampolines) or per-call allocations in the score loop
 - The alignment shift matrix (`gen_shmat4aln_8`) spans only the searched shells `kfromto(1):kfromto(2)`; the single-precision one (`gen_shmat4aln`) is converted from it on those shells only

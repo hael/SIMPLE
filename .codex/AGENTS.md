@@ -10,12 +10,11 @@ When `.codex/AGENTS-local.md` exists, read it after this file. It is ignored by
 the main repository and can contain checkout-specific guidance. Do not assume
 that it exists in another clone.
 
-## Feature safety rule
+## New features
 
-Every new feature must be protected by an explicit opt-in key, with the default
-set to disabled. Existing behavior must remain unchanged unless the user
-enables the feature deliberately. Add validation for the key and test both the
-default-off and opt-in paths before release.
+Whether a new feature sits behind an opt-in key, and what its default is, is
+decided case by case with the maintainer. When it does have a key, validate the
+key and test both of its paths.
 
 ## Generated repository navigation
 

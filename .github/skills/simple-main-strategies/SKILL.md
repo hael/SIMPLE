@@ -24,8 +24,8 @@ This folder is the execution-policy and search-engine layer.
 
 ## Master-Owned Project (distributed refine3D/refine2D)
 
-- The distributed master owns its project. Steps that were commanders are
-  strategy routines on the master's `(params, build)`:
+- The distributed master owns its project. Its steps are strategy routines on
+  the master's `(params, build)`:
   `simple_volassemble_strategy.f90` (`volassemble_exec`),
   `simple_prob_align_strategy.f90` (`prob_align_exec`,
   `prob_align_neigh_exec`, `prob_align2D_exec`),
@@ -35,10 +35,12 @@ This folder is the execution-policy and search-engine layer.
   are thin wrappers of it.
 - A `<x>_exec` routine runs at the `nthr` it is given; the caller saves its
   thread count (`omp_get_max_threads()`, `nthr_glob`) and restores it after.
-- Strategy modules never import the commander that wraps them (circular); a
-  body that needs an in-process commander takes it as a `commander_base` dummy.
+- These strategy modules never import the commander module that wraps them
+  (circular); a body that needs an in-process commander takes it as a
+  `commander_base` dummy (`run_prob_align(cline, xprob_tab)`).
 - The master writes its particle field once before the workers and once per
-  iteration: `merge_algndocs(..., write=.false.)` merges in memory, assembly
+  iteration (once more after the merge when a polish pass follows):
+  `merge_algndocs(..., write=.false.)` merges in memory, assembly
   passes `write=.false.`, 2D assembly updates only the segments it changes.
   Keep `update_projinfo` when the refine3D master builds its toolbox
   (`materialize_reprojection_model_master`), so writes go to the run's own

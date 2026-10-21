@@ -760,7 +760,8 @@ contains
         nthr_here      = nthr_master
         !$ nthr_here   = omp_get_max_threads()
         nthr_glob_here = nthr_glob
-        call cavgassemble_exec(params, build, cline_cavgassemble, 0._timer_int_kind, nthr_master)
+        ! the previous iteration's class FRCs for the even/odd low-resolution averaging, as in shared memory
+        call cavgassemble_exec(params, build, cline_cavgassemble, 0._timer_int_kind, nthr_master, prev_frcs=.true.)
         !$ call omp_set_num_threads(nthr_here)
         nthr_glob = nthr_glob_here
         ! the segments assembly changed: the class documents, the outputs and the particles' res
