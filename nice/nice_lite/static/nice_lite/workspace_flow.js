@@ -147,10 +147,11 @@
     return false;
   };
 
+  const nodeSep = 36;
   const layout = cy.layout({
     name: "dagre",
     rankDir: "TB",
-    nodeSep: 36,
+    nodeSep,
     edgeSep: 18,
     rankSep: 40,
     padding: 64,
@@ -194,7 +195,12 @@
         const xPositions = nodes.map((node) => node.position("x")).sort((a, b) => a - b);
         nodes.sort((first, second) => first.data("order") - second.data("order"));
         nodes.forEach((node, index) => {
-          const offset = xPositions[index] - node.position("x");
+          // Branch shifts can bring cards in later rows into the same x slot.
+          const previous = nodes[index - 1];
+          const minX = previous
+            ? previous.position("x") + (previous.outerWidth() + node.outerWidth()) / 2 + nodeSep
+            : -Infinity;
+          const offset = Math.max(xPositions[index], minX) - node.position("x");
           if (offset) node.union(node.successors().nodes()).shift({ x: offset, y: 0 });
         });
       });
