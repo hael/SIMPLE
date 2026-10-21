@@ -131,7 +131,11 @@ threshold: the raw header mass, the trailing populations `N(s)` and `M(s)`, and
 the sampled mass behind `f`. Under hard labels they are row counts. The project
 handoff of the nonuniform-filter matching low-pass counts a weighted state as
 populated by the effective sample size (ESS, `(sum w)^2 / sum w^2`) of its
-members' weights. `state=X` reconstructs state X
+members' weights. The handoff (`filter_pcg_nonuniform_maps`) sets the
+particles' `lp` and `lp_est` and writes the particle field to the project,
+except on the distributed `refine3D` master's path, where the master owns its
+project and writes the field once at the end of the iteration. `state=X`
+reconstructs state X
 alone: under hard labels the rows labelled X, under a weight set every row whose
 weight for X exceeds the threshold.
 

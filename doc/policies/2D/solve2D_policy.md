@@ -177,6 +177,14 @@ the project instead of a random start. It is a `solve2D`-only mode
 
 ## 3. Ownership Policy
 
+`refine2D` is a public `simple_exec` program, as `refine3D` is: it runs in
+shared memory, or as the distributed master when `nparts` is given (the
+private `simple_private_exec prg=refine2D_distr` is the same commander). The
+private `simple_private_exec prg=refine2D` is the worker of one partition,
+which the master schedules; the memory estimator keys on that name. 2D has
+the 3D structure: the matcher searches and accumulates, the strategy restores
+the class averages and decides convergence.
+
 `simple_commanders_solve2D.f90` owns:
 
 - the `solve2D` entry point
@@ -210,8 +218,23 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - scheduler interaction
 - probabilistic pre-alignment dispatch
 - distributed worker scheduling
-- distributed class-average assembly dispatch
-- convergence and run-finalization bookkeeping
+- the distributed master's own project: it runs `prob_align2D`
+  (`prob_align2D_exec`), class-average assembly (`cavgassemble_exec`) and the
+  sigma2 commit (`commit_sigma2_exec`) on its own `(params, build)`, each at
+  the thread count it needs, the master's own restored after; a full-update
+  iteration sets the master's `update_frac` to 1 for the alignment and restores
+  it. Assembly updates the master's `cls2D`, `cls3D`, `out` and the particles'
+  `res` in memory and the master writes only those segments; it does not reread
+  the particle segment
+- shared-memory restoration of the class averages from the sums the matcher
+  accumulated (`restore_cavgs_inmem`: the carried sums committed, the averages
+  restored and written, the class document, the `cls2D` and `cls3D` segments)
+- the convergence decision of both modes (`check_refine2D_convergence`:
+  `check_conv2D`, `minits`, `maxits`, the full-assignment coverage, the
+  verdict and the progress file); it runs after the restoration, whose class
+  document writes the particles' `res` that `check_conv2D` averages, and,
+  in shared memory, before a full-update iteration restores `update_frac`
+- run-finalization bookkeeping
 
 `simple_strategy2D_matcher.f90` owns:
 
@@ -219,8 +242,11 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - reproduction of the probabilistic sampled subset when `prob_align2D` is active
 - strategy-object selection
 - sigma updates during Euclidean search
+- accumulating the class sums from the batch images
 - writing orientation updates
-- writing distributed partial class-average sums when running as a worker
+- writing distributed partial class-average sums when running as a worker;
+  in shared memory it returns with the sums in the class averager and tells
+  the strategy whether the iteration blends carried sums
 
 The 2D matcher must preserve a single particle-stack read per batch in the
 online alignment/restoration path. Batch construction should keep the
@@ -316,9 +342,16 @@ their records, the cropped particles, so the matcher neither reads nor
 prepares them at the full box; otherwise it holds raw images and the
 preparation runs twice.
 
-`simple_commanders_mkcavgs.f90` and the classaverager modules own:
+`simple_cavgassemble_strategy.f90` (`cavgassemble_exec`), the classaverager
+modules and the `make_cavgs`/`cavgassemble` commanders of
+`simple_commanders_mkcavgs.f90` (command-line wrappers; theirs is a full project
+write) own:
 
-- explicit class-average assembly from partial sums
+- explicit class-average assembly from partial sums (the class FRCs start
+  afresh at every assembly, as on a new toolbox, because restoration reads them
+  for the even/odd low-resolution averaging before storing the new ones;
+  shared-memory restoration reads the previous iteration's FRCs from the file
+  instead, so the two modes differ there)
 - merged/even/odd class-average output
 - class-document generation
 - class FRC output and project output metadata
@@ -392,7 +425,9 @@ Stage policy:
   current behavior rather than a full soft-assignment EM update
 - staged `fillin=yes` currently acts as a full-assignment coverage guard: it
   keeps iterating until active particles have assignments, while particle
-  selection still follows the normal sampled-update path
+  selection still follows the normal sampled-update path; on a fresh start
+  (`startit=1`) it selects the update-count sampler instead of the sticky
+  subset of `solve2D`'s first stage, which could never cover every particle
 - if any staged update used `update_frac`, `solve2D` runs a terminal
   dense `refine=greedy` all-particle `refine2D` pass with `update_frac` and
   `fillin` disabled, refreshing class, in-plane, and shift parameters before
@@ -475,7 +510,7 @@ Stable 2D workflow artifacts include:
   candidate, and `commit_sigma2` publishes it as the next generation
 - `ptcl2D`, `cls2D`, `cls3D`, and `out` project segments
 
-Partition-local probabilistic assignment/dist files and the class-sum contributions are per-iteration artifacts: the master removes them before the next distributed iteration writes new ones, and the assembly owner deletes the contributions after the blend. Workers never read carried state. The carried set `cavg_state.bin` is the only durable source of class-average carry-over: the owner (the `cavgassemble` step in distributed runs, the matcher's restoration finalisation in shared memory) reads it, applies the class-centering shifts the workers report once, blends, and publishes the new set through a temporary name and a rename. When an iteration would blend but the carried set is missing, unreadable, or disagrees with the run on class count, `box_crop` or `smpd_crop`, the master runs that iteration as a full update (every particle, no carry-over). Legacy `cavgs_*_partN.mrc` / `ctfsqsums_*_partN.mrc` files are never read; a run continued from such a directory starts with one full update. Changing `nparts` or the execution mode across `continue=yes` needs nothing else.
+Partition-local probabilistic assignment/dist files and the class-sum contributions are per-iteration artifacts: the master removes them before the next distributed iteration writes new ones, and the assembly owner deletes the contributions after the blend. Workers never read carried state. The carried set `cavg_state.bin` is the only durable source of class-average carry-over: the owner (class-average assembly on the distributed master, the strategy's shared-memory restoration) reads it, applies the class-centering shifts the workers report once, blends, and publishes the new set through a temporary name and a rename. When an iteration would blend but the carried set is missing, unreadable, or disagrees with the run on class count, `box_crop` or `smpd_crop`, the master runs that iteration as a full update (every particle, no carry-over). Legacy `cavgs_*_partN.mrc` / `ctfsqsums_*_partN.mrc` files are never read; a run continued from such a directory starts with one full update. Changing `nparts` or the execution mode across `continue=yes` needs nothing else.
 
 ## 7. Review Checklist
 

@@ -1,6 +1,6 @@
 ---
 name: simple-modern-fortran
-description: Use when editing SIMPLE's Fortran code and you need repo-specific guidance on the modern Fortran style used here, including modules, submodules, type-bound procedures, abstract command interfaces, generated sources, OpenMP-aware code, compile-time rules (allocatable heavy components, lean imports, no per-file flags), and common patterns for extending the code safely.
+description: Use when editing SIMPLE's Fortran code and you need repo-specific guidance on the modern Fortran style used here, including modules, submodules, type-bound procedures, abstract command interfaces, generated sources, THROW macro and no-short-circuit traps, OpenMP parallel-region rules, compile-time rules (allocatable heavy components, lean imports, no per-file flags), comment rules, and common patterns for extending the code safely.
 ---
 
 # Modern Fortran In SIMPLE
@@ -55,7 +55,30 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
   Do not model it as a public record passed to free procedures, even where an
   older module does (`simple_sigma2_state`); free-procedure modules are for
   stateless utilities.
-- Watch for generated sources from `scripts/simple_args_generator.pl` and git-hash insertion during builds.
+- Generated at build time, never edited by hand: `simple_args.f90` (the accepted
+  keys, from the declarations in `simple_parameters.f90`, by
+  `scripts/simple_args_generator.pl`), `simple_ui_default_values.f90`
+  (`scripts/default_audit.py`) and the git hash (`scripts/insert_git_commit_hash.pl`).
+- Layout: in a run of `use mod, only:` lines align `only:`; continue a long list
+  on the next line at statement indent + 4 with `&`; align a procedure's dummy
+  declarations so `::` lines up.
+- Fortran does not short-circuit `.and.`/`.or.`. Never put a guard and the
+  access it protects in one expression (`flag .and. arr(i)`,
+  `allocated(a) .and. a(i) > 0`); nest the `if`s. The bounds-checked Debug
+  build (`./compile_debug.sh`) catches many of these; Release does not.
+- No `goto` or numbered-label control flow; restructure instead of copying
+  legacy routines that use it (`simple_opt_lbfgsb.f90`).
+- Do not rely on integer overflow (wrap-around hashes or random generators): it
+  is undefined and the Release build is `-O3`. Use 64-bit integers and explicit
+  `modulo`.
+- Delete dead code and state nothing reads; do not keep it for safety.
+- Release 4 keeps no backwards compatibility: no aliases, shims or old-format
+  readers. The one exception is reading `.simple` project files of earlier
+  releases.
+- Do not pass the pointer result of a polymorphic type-bound function straight
+  as an actual argument (`call json%add(p, item%jsonise())` with `item` a
+  `class(...)` dummy): assign it to a local pointer first. gfortran 15.2
+  corrupted the json-fortran tree when the result was passed straight on.
 - Keep new function-like preprocessor macro invocations on one physical line.
   `THROW_HARD(...)` and `THROW_WARN(...)` are expanded before Fortran parses the
   source, so a Fortran continuation inside their argument is flattened. The
@@ -122,14 +145,29 @@ See `doc/refactoring_notes/completed/comment_novel_inventory_2026-09-30.md`.
   routine lists, field lists); point to the doc instead.
 - When code changes, fix or delete the comments it falsifies. A comment that
   names a switch or path must name one that exists.
-- Do not pass the pointer result of a polymorphic type-bound function straight
-  as an actual argument (`call json%add(p, item%jsonise())` with `item` a
-  `class(...)` dummy): assign it to a local pointer first. gfortran 15.2
-  corrupted the json-fortran tree when the result was passed straight on.
+
+## OpenMP
+
+One thread runs a parallel loop serially, so one-thread identity never shows
+thread safety. For every parallel region you add or change:
+
+- No string or allocatable-character temporaries and no calls into routines
+  with module-level buffers inside the region; build file names and messages
+  before it.
+- Size per-thread work arrays by the team the region actually runs
+  (`omp_get_max_threads()` read just before it), not by `nthr_glob` or
+  `params%nthr`.
+- An error inside the region sets a per-task status; raise it after the region.
+- Add a tester check that forces a team and compares with the serial result
+  (the fast gate runs at one thread, teams capped at 4). Stress new parallel
+  code by hand at the machine's full thread count, repeated, bit for bit where
+  the result is deterministic.
 
 ## Debugging And Build Notes
 
-- Debug build: `cmake .. -DCMAKE_BUILD_TYPE=Debug`
+- Debug build: `./compile_debug.sh` (runtime checks including bounds; `--traps`
+  for floating-point traps); `./compile_clean.sh` for Release. Both run the
+  fast gate unless `--exclude-tests`.
 - Helpful notes: `doc/how2s/how2debug_fortran.md`
 - Many objects expose derived-type state through type-bound methods; prefer following those paths before adding temporary print code.
 

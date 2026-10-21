@@ -113,12 +113,29 @@ driver-generated reprojection model, selecting and running the search strategy,
 updating orientations/states/shifts, updating Euclidean sigma estimates during
 search, and writing partition-local Cartesian partial reconstructions.
 
-`simple_commanders_prob.f90` plus `simple_eul_prob_tab*.f90` own
-probabilistic pre-alignment and assignment artifacts consumed by the matcher.
+`simple_prob_align_strategy.f90` (`prob_align_exec`, `prob_align_neigh_exec`)
+plus `simple_eul_prob_tab*.f90` own probabilistic pre-alignment and the
+assignment artifacts consumed by the matcher.
 
-`simple_commanders_rec_distr.f90` owns `commander_volassemble`: reducing
-partials, restoring even/odd volumes, calculating FSCs, running volume
-postprocessing, writing state volumes, and updating resolution metadata.
+`simple_volassemble_strategy.f90` owns volume assembly (`volassemble_exec`):
+reducing partials, restoring even/odd volumes, calculating FSCs, running
+volume postprocessing, writing state volumes, and updating the particles'
+resolution fields. It returns the names of the volumes each state ends with
+and leaves `params%vols` alone.
+
+`simple_strategy_sigma2.f90` owns the canonical sigma2 commit
+(`commit_sigma2_exec`).
+
+These are strategy routines on a caller's `(params, build)` with explicit
+arguments for what differs from the caller's own settings (the thread count,
+`which_iter`, a write flag). The commanders `prob_align`, `prob_align_neigh`,
+`volassemble` and `commit_sigma2` are thin wrappers: their `execute(cline)`
+builds parameters and a builder from the command line and calls the routine;
+shared-memory `refine3D`, `reconstruct3D` and the other command-line callers
+use them. A routine that runs on the caller's parameters does not run
+`params%new`: it sets the thread count it needs and the caller restores its
+own afterwards, and it draws from the random generator without a reseed
+(ruling of 2026-10-20).
 
 `simple_vol_pproc_policy.f90` owns NU-envelope cadence, artifact compatibility,
 and legacy-density-mask compatibility. The NU setup API owns its spherical
@@ -139,25 +156,30 @@ Distributed `refine3D` keeps prototype command lines for worker, probability,
 sigma, assembly, and postprocess steps. These command lines are execution
 templates, not independent workflow policies.
 
-The distributed master also keeps the builder of the reprojection model for
-the run (`materialize_reprojection_model_kept`, released in `distr_cleanup`):
-crop, directions and masks are fixed for one `refine3D` run. The first
-iteration builds it from the full project as any builder; later iterations
-read only the segments the model uses (the non-data segments, `out`,
-`optics` and the particle field, then `update_projinfo`, so that the field
-is written to the run's own project), make the strategy toolbox and the
-three volumes the model's clean-up released again, and release the project
-after writing the field. The master then reads the full project, and
-`prob_align` gets a copy of that read (`execute_from_project`) instead of
-reading the file once more.
+The distributed master is the one owner of its project. It materialises the
+reprojection model on its own builder
+(`materialize_reprojection_model_master`): the general toolbox once, at the
+first iteration, which also reads the segments the model uses (the
+non-data segments, `out`, `optics` and the particle field, then
+`update_projinfo`, so that writes go to the run's own project and not to a
+project the run was copied from), because the start reconstruction may
+have written them; on later iterations the builder's volumes again
+(`new_vols`), the search toolbox, the band and the model. `prob_align` (or
+`prob_align_neigh`), volume assembly (gridding) and the sigma commit run on
+the master's `(params, build)`; the PCG master already did. The particle
+field therefore holds this iteration's resolution fields (`cfar`,
+`lp_est`) in memory, and the matching low-pass refresh reads the master's
+own project.
 
-Volume assembly (gridding, not `refine=sigma`) also takes a copy of the
-master's project (`execute_hand_on`): the master read it at the start of
-the iteration, and `merge_algndocs` wrote the field from it, so it equals
-the file. Assembly hands its project on as it ends; the low-pass refresh
-(`refresh_matching_lp_from_project`) and `commit_sigma2`
-(`execute_from_project`) read that instead of the file. Every write of the
-project stays as it was.
+The master writes the particle field once before the workers start (with
+the alignment's sample, or as the model left it), once more after the
+merge only when a polish pass follows (its workers read the merged field),
+and once at the end of the iteration; `merge_algndocs(..., write=.false.)`
+merges the workers' documents in memory, and assembly and the PCG master do
+not write the project on this path. The `out` segment is written once,
+before postprocessing, which reads it from the file. The final full write
+is unchanged. Workers read only the file; the master reads only what the
+workers write.
 
 Fresh-start checks that decide whether to consume project-carried matching
 metadata must use the stage interval: `which_iter <= startit` with

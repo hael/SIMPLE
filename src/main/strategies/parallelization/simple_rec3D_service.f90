@@ -10,7 +10,7 @@ use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec
-use simple_commanders_rec_distr, only: commander_volassemble, filter_pcg_nonuniform_maps
+use simple_volassemble_strategy, only: run_volassemble, filter_pcg_nonuniform_maps
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, refine3D_pcg_raw_accum_fname
 use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 use simple_sigma2_files,         only: load_sigma2
@@ -245,7 +245,6 @@ contains
         type(parameters), intent(in)    :: params
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: nthr
-        type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
         integer                     :: state
@@ -261,7 +260,7 @@ contains
                 endif
             endif
         end do
-        call xvolassemble%execute(cline_volassemble)
+        call run_volassemble(cline_volassemble)
         call cline_volassemble%kill
         call volname%kill
         call vol_in%kill

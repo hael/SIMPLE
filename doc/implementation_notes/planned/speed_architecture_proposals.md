@@ -21,6 +21,31 @@ Each proposal says what it is, why, whether results stay byte-identical
 named. Items that change results need a ruling and a check with the truth
 suite of the run `test_truth`.
 
+## Status, 2026-10-20
+
+Done in the run `structure2D_owner` (on the Oracle Linux test machine; plan
+and report in `doc/refactoring_notes/completed/structure2D_and_project_owner*.md`):
+
+- **The x86 check of the speed changes**: `aea5b1846`, `af13bc828` and
+  `f078cf683` are byte-identical to their parents on the x86 build as on the
+  Mac.
+- **Section 1.5, the 2D structure aligned with 3D**: the 2D matcher searches
+  and accumulates; the 2D strategy restores the class averages in shared memory
+  and decides convergence in both modes; `refine2D` is a public `simple_exec`
+  program. Byte-identical.
+- **Section 1.3, one project owner on the master, and section 1.4**: the
+  bodies of `prob_align`, `prob_align_neigh`, volume assembly, the sigma2
+  commit, `prob_align2D` and class-average assembly are strategy routines on
+  `(params, build)`; the commanders are thin wrappers; the typed entry points
+  (`execute_from_project`, `execute_hand_on`) and the builder's `spproj_src`
+  option are gone. The distributed `refine3D` master makes its reprojection
+  model on its own builder and writes its particle field once before the
+  workers and once per iteration; the distributed `refine2D` master writes
+  only the segments class-average assembly changes. The moved steps no longer
+  reseed the random generator (ruling): their check builds with the reseeds put
+  back are byte-identical; `cfar` and `lp_est` reach the master one iteration
+  earlier (ruling).
+
 ## Status, 2026-10-19
 
 Done, all byte-identical at one thread unless said otherwise:
@@ -46,7 +71,8 @@ Done, all byte-identical at one thread unless said otherwise:
 - **Section 1.3**: the NU label optimisation and the master's dense 3D
   table stored by reference (`speed2d3d_mac`). The shift matrix fused into
   the alignment kernels was tried and is not identical (below). Open: one
-  project owner on the master, single-precision weights.
+  project owner on the master (done 2026-10-20, above), single-precision
+  weights.
 - **Also done** (`speed2d3d_mac`, Phase 4, changes uncached results by
   rounding, accepted): the 2D table prepares its particles from the same
   in-memory cropped image as the 2D matcher, and in shared memory the

@@ -10,21 +10,25 @@ SIMPLE's probabilistic 3D refinement implementation.
 SIMPLE's 3D refinement is a fixed-point workflow that alternates between:
 
 - updating particle orientations, in-plane angles, shifts, and sometimes states
-- writing particle-derived Cartesian partial reconstructions or polar partial sums from those assignments
-- assembling and postprocessing Cartesian state volumes or state-major polar references through explicit assembly pathways
+- writing particle-derived Cartesian partial reconstructions from those assignments
+- assembling and postprocessing Cartesian state volumes in volume assembly
+- projecting the next iteration's reprojection model from those volumes
 
 The implementation uses probability-like candidate generation, thresholded
 sampling, regularization, even/odd cross-validation, and likelihood-related
 objectives. In the main `refine3D` path, however, the update that finally lands
 in the orientation table is a hard assignment, not a full soft responsibility
-vector.
+vector. The one exception is reconstruction under `m_estimator=flex`, which
+weighs particles by frozen `flex_pca` state weights that alignment never reads.
 
 ## Probabilistic Alignment Split
 
 The probabilistic path is split into two phases:
 
-1. `prob_align` or `prob_align_neigh`
-   Sample particles for update, distribute probability-table work, aggregate all partitions, and write `ASSIGNMENT.dat`.
+1. `prob_align_exec` or `prob_align_neigh_exec` (`simple_prob_align_strategy.f90`)
+   Sample particles for update once, run the table workers (`prob_tab`,
+   `prob_tab_neigh`) on that sample, read all partitions, assign, and write
+   `assignment_part.dat`.
 2. `strategy3D_prob`
    Consume the precomputed assignment map and stamp the chosen `(state, projection, in-plane angle, shift)` back into the orientation model.
 
@@ -32,13 +36,13 @@ This split matters. If a task changes how candidates are scored, sampled,
 normalized, or selected, inspect both the table-building phase and the consumer
 phase.
 
-The probabilistic phase is particle-domain work. It may depend on prepared
-`POLAR_REFS*` central-section files, but it should not take over
-assembled-volume or polar-reference postprocessing.
+The probabilistic phase is particle-domain work. It reads the strategy's
+reprojection model and must not take over assembled-volume postprocessing.
 
 ## Probability Tables
 
-`simple_eul_prob_tab.f90` is the core 3D probability-table implementation.
+`src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` is the
+core 3D probability-table implementation.
 
 Its job is to build candidate tables over:
 
@@ -49,21 +53,29 @@ Its job is to build candidate tables over:
 
 Important details:
 
-- `fill_tab` evaluates per-reference candidates and can refine shifts with BFGS
-  after identifying a probabilistic neighborhood.
+- `fill_tab_range` evaluates per-reference candidates for a batch of the
+  sample and can refine shifts (L-BFGS-B, or a quadratic fit to the coarse
+  lattice in multi-state tables) after identifying a probabilistic
+  neighborhood. Shifts are held in the particle frame.
 - `ref_assign` converts the aggregated table into a single assignment map; the
   state label is the deterministic argmin over states, and only the projection
-  within the state is drawn.
-- `prob_athres` governs thresholded probabilistic sampling rather than exact posterior integration.
+  within the state is drawn (likelihood weights `exp(-dist)` over a top-K
+  support, `sample_likelihood_dist`).
+- `prob_athres` bounds the angular range of the thresholded candidate draws
+  (`angle_sampling`, `sample_bounded_dists`); it is not exact posterior
+  integration.
 
 ## Search Modes
 
-The main refine modes relevant here are:
+The `refine` modes of the 3D matcher:
 
-- `prob`
-- `prob_neigh`
-- greedy and SHC variants with probabilistic in-plane sampling
-- tree-based variants that use probabilistic descent without the same exhaustive table shape
+- `prob` (dense table) and `prob_neigh` (neighbourhood table;
+  `prob_neigh_mode=state|geom|shc|snhc`), both consumed by `strategy3D_prob`
+- `shc` (greedy for unsearched particles and at `GREEDY_FREQ`), `greedy`,
+  `greedy_inpl`, `neigh` (`strategy3D_greedy_sub`, which can sample in-plane
+  angles under `prob_inpl`)
+- `eval` and `sigma` (no pose search)
+- `cont` (Cartesian continuous pose refinement)
 
 Do not assume all "probabilistic" modes share the same control flow. Some go
 through `prob_align`; some perform probabilistic decisions inside search strategies.
@@ -73,9 +85,9 @@ through `prob_align`; some perform probabilistic decisions inside search strateg
 Common controls that matter to the model:
 
 - `objfun=euclid`
-  Noise-normalized Euclidean objective with sigma estimation.
-- `sigma_est`
-  Controls sigma calculation policy.
+  Noise-normalized Euclidean objective with a canonical sigma2 store; each
+  iteration scores with the committed sigmas and commits new residual sigmas
+  after assembly (`commit_sigma2_exec`).
 - `ml_reg`
   Enables ML-style regularization in reconstruction-related phases.
 - `lam_anneal`
@@ -85,26 +97,19 @@ Common controls that matter to the model:
 - even/odd partitioning
   Supports FSC- and SSNR-style estimates and guards against overfitting.
 
-## Polar Reference Model
+## Reprojection Model
 
-Non-probabilistic current-volume 3D matching can derive central sections
-directly from the supplied `vol1..volN` source. `prob_tab` / `prob_tab_neigh`
-and polar matcher preparation without a fresh complete volume source consume
-`POLAR_REFS*` handoff files. Cartesian assembly refreshes
-`POLAR_REFS_even.bin` / `POLAR_REFS_odd.bin` after volume assembly; polar
-assembly writes the merged/even/odd `POLAR_REFS*` triplet after reducing polar
-partial sums.
+The iteration strategy materializes one reprojection model per iteration from
+the current Cartesian volumes (`materialize_reprojection_model_from_volumes`,
+`simple_matcher_refvol_utils.f90`): reference read, masking/filtering/centering
+policy, band selection (`set_bp_range3D`), and even/odd polar sections written
+to `reprojection_model_{even,odd}.bin`. The matcher and the table workers read
+it (`read_reprojection_model`) and adopt its band from the header. Volume
+assembly produces Cartesian volumes only; it does not generate or refresh
+matcher references.
 
-For multi-state runs, polar references are state-major. State 1 occupies
+For multi-state runs, references are state-major. State 1 occupies
 projections `1:nspace`, state 2 occupies `nspace+1:2*nspace`, and so on.
-Common-line and obsfield restoration are intra-state operations; cross-state
-common lines are not physical.
-
-There is one bootstrap/materialization exception: when `POLAR_REFS*` are
-missing or stale but all state volumes are present, `ensure_polar_refs_on_disk`
-materializes them from volumes before probabilistic alignment or matching.
-Callers must settle the PFTC k-range with `set_bp_range3D` before invoking the
-materialization path.
 
 ## Relation To The Papers
 
@@ -115,4 +120,5 @@ The recent SIMPLE manuscripts describe two closely related but distinct ideas:
 
 For code work, treat the newer manuscript as conceptually adjacent rather than
 identical to `refine3D`. It shares the fixed-point spirit and probabilistic
-search philosophy, but its reprojection model is different.
+search philosophy, but its reprojection model is different: `refine3D` always
+projects its references from Cartesian volumes.

@@ -3,8 +3,9 @@ module simple_commanders_prob
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_eo_partition, only: ensure_field_halves
+use simple_prob_align_strategy, only: run_prob_align, run_prob_align_neigh, run_prob_align2D, write_prob_align_bench
 implicit none
-private :: write_empty_prob_tab, write_prob_tab_bench, write_prob_align_bench, run_prob_align, run_prob_align_neigh
+private :: write_empty_prob_tab, write_prob_tab_bench, run_prob_align, run_prob_align_neigh, run_prob_align2D, write_prob_align_bench
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_prob_tab
@@ -19,14 +20,12 @@ end type commander_prob_tab_neigh
 
 type, extends(commander_base) :: commander_prob_align
   contains
-    procedure :: execute              => exec_prob_align
-    procedure :: execute_from_project => exec_prob_align_from_project
+    procedure :: execute      => exec_prob_align
 end type commander_prob_align
 
 type, extends(commander_base) :: commander_prob_align_neigh
     contains
-        procedure :: execute              => exec_prob_align_neigh
-        procedure :: execute_from_project => exec_prob_align_neigh_from_project
+        procedure :: execute      => exec_prob_align_neigh
 end type commander_prob_align_neigh
 
 type, extends(commander_base) :: commander_prob_tab2D
@@ -260,209 +259,16 @@ contains
     subroutine exec_prob_align( self, cline )
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        call run_prob_align(cline)
-    end subroutine exec_prob_align
-
-    !> prob_align with the caller's project of projfile in memory, read and unchanged since: copied, not read again
-    subroutine exec_prob_align_from_project( self, cline, spproj )
-        class(commander_prob_align), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        class(sp_project),           intent(in)    :: spproj
-        call run_prob_align(cline, spproj)
-    end subroutine exec_prob_align_from_project
-
-    subroutine run_prob_align( cline, spproj_src )
-        use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
-        use simple_builder,                 only: builder
-        class(cmdline),              intent(inout) :: cline
-        class(sp_project), optional, intent(in)    :: spproj_src
-        integer,     allocatable :: pinds(:)
-        type(string)             :: fname
-        type(builder)            :: build
-        type(parameters)         :: params
         type(commander_prob_tab) :: xprob_tab
-        type(eul_prob_tab)       :: eulprob_obj_glob
-        type(cmdline)            :: cline_prob_tab
-        type(qsys_env)           :: qenv
-        type(chash)              :: job_descr
-        integer :: nptcls
-        integer(timer_int_kind) :: t_tot, t
-        real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
-        if( L_BENCH_GLOB ) t_tot = tic()
-        call cline%set('mkdir',  'no')
-        call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false., spproj_src=spproj_src)
-        if( L_BENCH_GLOB )then
-            rt_setup = toc(t_tot)
-            t        = tic()
-        endif
-        ! Reset sampling history only on the very first iteration of the run.
-        ! Guarding on startit alone re-cleans every iteration when startit==1,
-        ! which prevents updatecnt/sampled from accumulating and makes the
-        ! fractional-update subset non-progressing (see exec_prob_align2D).
-        if( params%startit == 1 .and. params%which_iter == params%startit )then
-            call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        endif
-        ! sampled incremented
-        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
-        else
-            call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
-        endif
-        ! communicate to project file
-        call build%spproj%write_segment_inside(params%oritype)
-        call cleanup_prob_align_outputs(params, .false.)
-        if( L_BENCH_GLOB )then
-            rt_sample = toc(t)
-            t         = tic()
-        endif
-        ! generating all corrs on all parts
-        cline_prob_tab = cline
-        call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
-        ! execution
-        if( .not.cline_prob_tab%defined('nparts') )then
-            call xprob_tab%execute(cline_prob_tab)
-        else
-            ! setup the environment for distributed execution: partitions balance the particles with state > 0
-            call qenv%new(params, params%nparts, nptcls=params%nptcls, l_active=build%spproj_field%included())
-            call cline_prob_tab%gen_job_descr(job_descr)
-            ! schedule
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        endif
-        if( L_BENCH_GLOB )then
-            rt_sched = toc(t)
-            t        = tic()
-        endif
-        ! Build the global table only after worker tables are complete.  Keeping it
-        ! live while workers build dense partition tables roughly doubles peak RSS.
-        call eulprob_obj_glob%new(params,build,pinds)
-        call eulprob_obj_glob%read_tabs_to_glob(string(DIST_FBODY), params%nparts, params%numlen)
-        if( L_BENCH_GLOB )then
-            rt_read = toc(t)
-            t       = tic()
-        endif
-        call eulprob_obj_glob%ref_assign
-        if( L_BENCH_GLOB )then
-            rt_assign = toc(t)
-            t         = tic()
-        endif
-        ! write the iptcl->(iref,istate) assignment
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob%write_assignment(fname)
-        if( L_BENCH_GLOB ) rt_write = toc(t)
-        call eulprob_obj_glob%kill
-        ! cleanup
-        call cline_prob_tab%kill
-        call qenv%kill
-        call job_descr%kill
-        if( L_BENCH_GLOB ) call write_prob_align_bench(params, 'PROB_ALIGN', nptcls, rt_setup, rt_sample, rt_sched, &
-            &rt_read, rt_assign, rt_write, toc(t_tot))
-        call build%kill_general_tbox
-        call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align'))
-        call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_PROB_ALIGN NORMAL STOP ****', print_simple=.false.)
-    end subroutine run_prob_align
+        call run_prob_align(cline, xprob_tab)
+    end subroutine exec_prob_align
 
     subroutine exec_prob_align_neigh( self, cline )
         class(commander_prob_align_neigh), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        call run_prob_align_neigh(cline)
-    end subroutine exec_prob_align_neigh
-
-    !> prob_align_neigh with the caller's project of projfile in memory, read and unchanged since: copied
-    subroutine exec_prob_align_neigh_from_project( self, cline, spproj )
-        class(commander_prob_align_neigh), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        class(sp_project),                 intent(in)    :: spproj
-        call run_prob_align_neigh(cline, spproj)
-    end subroutine exec_prob_align_neigh_from_project
-
-    subroutine run_prob_align_neigh( cline, spproj_src )
-        use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
-        use simple_builder,                 only: builder
-        class(cmdline),              intent(inout) :: cline
-        class(sp_project), optional, intent(in)    :: spproj_src
-        integer,           allocatable :: pinds(:)
-        type(string)                   :: fname
-        type(builder)                  :: build
-        type(parameters)               :: params
         type(commander_prob_tab_neigh) :: xprob_tab_neigh
-        type(eul_prob_tab_neigh)       :: eulprob_obj_glob_neigh
-        type(cmdline)                  :: cline_prob_tab
-        type(qsys_env)                 :: qenv
-        type(chash)                    :: job_descr
-        integer :: nptcls
-        integer(timer_int_kind) :: t_tot, t
-        real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
-        if( L_BENCH_GLOB ) t_tot = tic()
-        call cline%set('mkdir',  'no')
-        call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.true., spproj_src=spproj_src)
-        if( L_BENCH_GLOB )then
-            rt_setup = toc(t_tot)
-            t        = tic()
-        endif
-        ! Reset sampling history only on the very first iteration of the run.
-        ! Guarding on startit alone re-cleans every iteration when startit==1,
-        ! which prevents updatecnt/sampled from accumulating and makes the
-        ! fractional-update subset non-progressing (see exec_prob_align2D).
-        if( params%startit == 1 .and. params%which_iter == params%startit )then
-            call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        endif
-        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
-        else
-            call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
-        endif
-        call build%spproj%write_segment_inside(params%oritype)
-        call cleanup_prob_align_outputs(params, .true.)
-        if( L_BENCH_GLOB )then
-            rt_sample = toc(t)
-            t         = tic()
-        endif
-        cline_prob_tab = cline
-        call cline_prob_tab%set('prg', 'prob_tab_neigh')
-        if( .not. cline_prob_tab%defined('nparts') )then
-            call xprob_tab_neigh%execute(cline_prob_tab)
-        else
-            call qenv%new(params, params%nparts, nptcls=params%nptcls, l_active=build%spproj_field%included())
-            call cline_prob_tab%gen_job_descr(job_descr)
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        endif
-        if( L_BENCH_GLOB )then
-            rt_sched = toc(t)
-            t        = tic()
-        endif
-        ! Construct global storage only after worker scoring has released its table.
-        call eulprob_obj_glob_neigh%new_neigh_global(params,build,pinds)
-        call eulprob_obj_glob_neigh%read_tabs_to_glob(string(DIST_FBODY)//'_neigh_', params%nparts, params%numlen)
-        if( L_BENCH_GLOB )then
-            rt_read = toc(t)
-            t       = tic()
-        endif
-        call eulprob_obj_glob_neigh%ref_assign
-        if( L_BENCH_GLOB )then
-            rt_assign = toc(t)
-            t         = tic()
-        endif
-        ! write the iptcl->(iref,istate) assignment
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob_neigh%write_assignment(fname)
-        if( L_BENCH_GLOB ) rt_write = toc(t)
-        call eulprob_obj_glob_neigh%kill
-        ! cleanup
-        call cline_prob_tab%kill
-        call qenv%kill
-        call job_descr%kill
-        if( L_BENCH_GLOB ) call write_prob_align_bench(params, 'PROB_ALIGN_NEIGH', nptcls, rt_setup, rt_sample, &
-            &rt_sched, rt_read, rt_assign, rt_write, toc(t_tot))
-        call build%kill_general_tbox
-        call qsys_declare_part_finished(params, string('simple_commanders_refine3D :: exec_prob_align_neigh'))
-        call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_PROB_ALIGN_NEIGH NORMAL STOP ****', print_simple=.false.)
-    end subroutine run_prob_align_neigh
+        call run_prob_align_neigh(cline, xprob_tab_neigh)
+    end subroutine exec_prob_align_neigh
 
     subroutine exec_prob_tab2D( self, cline )
         use simple_matcher_smpl_and_lplims, only: set_bp_range2D
@@ -603,120 +409,11 @@ contains
     end subroutine exec_prob_tab2D
 
     subroutine exec_prob_align2D( self, cline )
-        use simple_eul_prob_tab2D,          only: eul_prob_tab2D, prob_assign_profile2D
-        use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
-        use simple_ptcl_cache,              only: ptcl_cache_ensure
-        use simple_builder,                 only: builder
         class(commander_prob_align2D), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        integer,       allocatable :: pinds(:)
-        type(string)               :: fname
-        type(builder)              :: build
-        type(parameters)           :: params
         type(commander_prob_tab2D) :: xprob_tab2D
-        type(eul_prob_tab2D)       :: eulprob_obj_glob
-        type(cmdline)              :: cline_prob_tab
-        type(qsys_env)             :: qenv
-        type(chash)                :: job_descr
-        type(prob_assign_profile2D) :: assign_profile
-        integer :: nptcls
-        integer(timer_int_kind) :: t_tot, t
-        real(timer_int_kind)    :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write
-        if( L_BENCH_GLOB ) t_tot = tic()
-        call cline%set('mkdir',  'no')
-        call cline%set('stream', 'no')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        call set_b_p_ptrs2D(params, build)
-        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
-        if( L_BENCH_GLOB )then
-            rt_setup = toc(t_tot)
-            t        = tic()
-        endif
-        if( params%startit == 1 .and. params%which_iter == params%startit )then
-            call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        endif
-        ! Mirror the 3D workflow: sampled-update is active from the first stage onward.
-        ! In probabilistic mode the sampled subset is reused within the current iteration
-        ! by prob_tab2D/refine2D_exec, but it is redrawn on later iterations.
-        call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
-        ! write sampling to project
-        call build%spproj%write_segment_inside(params%oritype)
-        ! Build the downscaled particle cache before the workers start, so they all
-        ! find it ready. A no-op once it exists, so the per-iteration cost is a file
-        ! and key check; this is also the first point in the workflow where the same
-        ! particles get read twice per iteration, once here and once in refine2D.
-        ! Must precede the cline copy below so a fallback to cache=no reaches the
-        ! prob_tab2D worker command lines.
-        call ptcl_cache_ensure(params, build, cline)
-        if( L_BENCH_GLOB )then
-            rt_sample = toc(t)
-            t         = tic()
-        endif
-        ! generate partition-wise dist tables
-        cline_prob_tab = cline
-        call cline_prob_tab%set('prg', 'prob_tab2D')
-        if( .not. cline_prob_tab%defined('nparts') )then
-            call xprob_tab2D%execute(cline_prob_tab)
-        else
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
-            call cline_prob_tab%gen_job_descr(job_descr)
-            call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        endif
-        if( L_BENCH_GLOB )then
-            rt_sched = toc(t)
-            t        = tic()
-        endif
-        ! Allocate the global table only after worker scoring has released its batch-local storage.
-        call eulprob_obj_glob%new(params, build, pinds)
-        call eulprob_obj_glob%read_tabs_to_glob(string(DIST_FBODY),params%nparts,params%numlen)
-        if( L_BENCH_GLOB )then
-            rt_read = toc(t)
-            t       = tic()
-        endif
-        ! global probabilistic class assignment
-        call eulprob_obj_glob%ref_assign
-        if( L_BENCH_GLOB )then
-            rt_assign = toc(t)
-            t         = tic()
-        endif
-        ! write assignment to file
-        fname = string(ASSIGNMENT_FBODY)//'.dat'
-        call eulprob_obj_glob%write_assignment(fname)
-        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_ALIGN2D: ', nptcls, ' particles over ', params%nparts,&
-            &' part(s) assigned'
-        call flush(logfhandle)
-        if( L_BENCH_GLOB ) rt_write = toc(t)
-        assign_profile = eulprob_obj_glob%get_assign_profile()
-        ! cleanup
-        call eulprob_obj_glob%kill
-        call cline_prob_tab%kill
-        call qenv%kill
-        call job_descr%kill
-        if( L_BENCH_GLOB ) call write_prob_align_bench(params, 'PROB_ALIGN2D', nptcls, rt_setup, rt_sample, rt_sched, &
-            &rt_read, rt_assign, rt_write, toc(t_tot), assign2D=assign_profile)
-        call build%kill_general_tbox
-        call qsys_declare_part_finished(params, string('simple_commanders_prob :: exec_prob_align2D'))
-        call qsys_cleanup(params)
-        call simple_end('**** SIMPLE_PROB_ALIGN2D NORMAL STOP ****', print_simple=.false.)
+        call run_prob_align2D(cline, xprob_tab2D)
     end subroutine exec_prob_align2D
-
-    subroutine cleanup_prob_align_outputs( params, neigh )
-        class(parameters), intent(in) :: params
-        logical,           intent(in) :: neigh
-        type(string) :: fname
-        integer :: ipart
-        if( neigh )then
-            do ipart = 1, params%nparts
-                fname = string(DIST_FBODY)//'_neigh_'//int2str_pad(ipart,params%numlen)//'.dat'
-                call del_file(fname)
-            end do
-        else
-            call del_files(DIST_FBODY, params%nparts, ext='.dat', numlen=params%numlen)
-        endif
-        call del_file(string(ASSIGNMENT_FBODY)//'.dat')
-        call fname%kill
-    end subroutine cleanup_prob_align_outputs
 
     !> The bench record of a probability-table part, in its partition's file of the prob_tab, prob_tab_neigh
     !! or prob_tab2D family; rt_batch is the batch builds, particle reading included, which is reported apart
@@ -814,60 +511,6 @@ contains
         endif
         call fclose(fnr)
     end subroutine write_prob_tab_bench
-
-    !> The bench record of the prob_align driver, all wall time, in family PROB_ALIGN (prob), PROB_ALIGN_NEIGH
-    !! (prob_neigh) or PROB_ALIGN2D; rt_sched runs from the launch of the parts to the last part finished (the
-    !! in-process table fill in shared memory); assign2D splits the 2D reads and assignment.
-    subroutine write_prob_align_bench( params, family, nptcls, rt_setup, rt_sample, rt_sched, rt_read, rt_assign, &
-            &rt_write, rt_tot, assign2D )
-        use simple_bench_io,       only: open_bench_report
-        use simple_eul_prob_tab2D, only: prob_assign_profile2D
-        class(parameters),                     intent(in) :: params
-        character(len=*),                      intent(in) :: family
-        integer,                               intent(in) :: nptcls
-        real(timer_int_kind),                  intent(in) :: rt_setup, rt_sample, rt_sched, rt_read, rt_assign, rt_write, rt_tot
-        type(prob_assign_profile2D), optional, intent(in) :: assign2D
-        integer :: fnr
-        call open_bench_report(fnr, family, iter=params%which_iter)
-        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
-        write(fnr,'(a,i0)') 'prob_align iteration                : ', params%which_iter
-        write(fnr,'(a,i0)') 'prob_align nparts                   : ', params%nparts
-        write(fnr,'(a,i0)') 'prob_align worker threads           : ', params%nthr
-        if( family == 'PROB_ALIGN2D' )then
-            write(fnr,'(a,i0)') 'prob_align classes                  : ', params%ncls
-        else
-            write(fnr,'(a,i0)') 'prob_align states                   : ', params%nstates
-            write(fnr,'(a,i0)') 'prob_align projection directions    : ', params%nspace
-        endif
-        write(fnr,'(a,i0)') 'prob_align box_crop                 : ', params%box_crop
-        write(fnr,'(a,i0)') 'prob_align sampled particles        : ', nptcls
-        write(fnr,'(a)') ''
-        write(fnr,'(a)') '*** TIMINGS (s) ***'
-        write(fnr,'(a,1x,f0.2)') 'prob_align startup/setup            :', rt_setup
-        write(fnr,'(a,1x,f0.2)') 'prob_align sampling, project write  :', rt_sample
-        write(fnr,'(a,1x,f0.2)') 'prob_align scheduling (parts)       :', rt_sched
-        write(fnr,'(a,1x,f0.2)') 'prob_align table reads              :', rt_read
-        write(fnr,'(a,1x,f0.2)') 'prob_align ref_assign               :', rt_assign
-        write(fnr,'(a,1x,f0.2)') 'prob_align assignment write         :', rt_write
-        write(fnr,'(a,1x,f0.2)') 'prob_align total time               :', rt_tot
-        if( rt_tot > 0. )then
-            write(fnr,'(a,1x,f0.2)') 'prob_align % accounted for          :', &
-                &((rt_setup + rt_sample + rt_sched + rt_read + rt_assign + rt_write) / rt_tot) * 100.
-        endif
-        if( present(assign2D) )then
-            ! parts of the table reads and of ref_assign, not added to '% accounted for'
-            write(fnr,'(a)') ''
-            write(fnr,'(a)') '*** READ AND ASSIGNMENT DETAIL TIMINGS (s) ***'
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D read, candidate counts  :', assign2D%read_count
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D read, candidates        :', assign2D%read_fill
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, counts     :', assign2D%lists_count
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, fill       :', assign2D%lists_fill
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, sort       :', assign2D%lists_sort
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D frontier loop           :', assign2D%frontier
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D leftover particles      :', assign2D%leftover
-        endif
-        call fclose(fnr)
-    end subroutine write_prob_align_bench
 
     !> The table of a partition without sampled particles: the header, no
     !! candidates, so prob_align reads one table per partition. Written by the

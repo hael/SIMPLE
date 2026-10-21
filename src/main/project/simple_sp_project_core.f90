@@ -553,17 +553,21 @@ contains
 
     !> for merging alignment documents from SIMPLE runs in distributed mode: each document carries
     !! its own particle range, whatever the partitioning, and together they must cover 1..nptcls once
-    module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in )
+    module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in, write )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: nptcls, ndocs
         character(len=*),  intent(in)    :: oritype, fbody
         integer, optional, intent(in)    :: numlen_in
+        logical, optional, intent(in)    :: write     !< write the merged segment to the project file{.true.}
         type(string)              :: fname, projfile
         type(string), allocatable :: os_strings(:)
         logical,      allocatable :: covered(:)
         class(oris),      pointer :: os => null()
         type(binoris) :: bos_doc
         integer       :: i, numlen, isegment, strlen_max
+        logical       :: l_write
+        l_write = .true.
+        if( present(write) ) l_write = write
         numlen = len(int2str(ndocs))
         if( present(numlen_in) ) numlen = numlen_in
         allocate(covered(nptcls), source=.false.)
@@ -580,10 +584,12 @@ contains
                 call bos_doc%close
             end do
             if( .not. all(covered) ) THROW_HARD('partial alignment documents do not cover every record; merge_algndocs')
-            ! write
-            call self%projinfo%getter(1, 'projfile', projfile)
-            call self%bos%open(projfile)
-            call self%bos%write_segment_inside(isegment, os)
+            if( l_write )then
+                call self%projinfo%getter(1, 'projfile', projfile)
+                call self%bos%open(projfile)
+                call self%bos%write_segment_inside(isegment, os)
+                call self%bos%close
+            endif
         else
             ! allocate merged string representation
             allocate(os_strings(nptcls))
@@ -600,10 +606,12 @@ contains
                 call bos_doc%close
             end do
             if( .not. all(covered) ) THROW_HARD('partial alignment documents do not cover every record; merge_algndocs')
-            ! write
-            call self%projinfo%getter(1, 'projfile', projfile)
-            call self%bos%open(projfile)
-            call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
+            if( l_write )then
+                call self%projinfo%getter(1, 'projfile', projfile)
+                call self%bos%open(projfile)
+                call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
+                call self%bos%close
+            endif
             ! transfer to memory & destruct
             call self%ptr2oritype(oritype, os)
             do i=1,nptcls
@@ -613,8 +621,6 @@ contains
         endif
         deallocate(covered)
         nullify(os)
-        ! no need to update header (taken care of in binoris object)
-        call self%bos%close
 
     contains
 

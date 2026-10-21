@@ -91,7 +91,7 @@ contains
         class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        logical          :: converged
+        logical          :: l_frac
         call set_refine2D_defaults(cline)
         ! Flags required for worker execution
         if( .not. cline%defined('part')    ) THROW_HARD('PART must be defined for distributed worker execution')
@@ -106,7 +106,7 @@ contains
         endif
         if( .not. cline%defined('extr_iter') ) params%extr_iter = params%which_iter
         call cline%set('which_iter', int2str(params%which_iter))
-        call refine2D_exec(params, build, cline, params%which_iter, converged)
+        call refine2D_exec(params, build, cline, params%which_iter, l_frac)
         call build%kill_strategy2D_tbox
         call build%kill_general_tbox
     end subroutine exec_refine2D_distr_worker

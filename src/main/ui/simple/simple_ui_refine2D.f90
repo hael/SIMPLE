@@ -5,6 +5,7 @@ implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine2d', 'Refine 2D Workflows', 30)
 type(ui_program), target :: solve2D
+type(ui_program), target :: refine2D
 type(ui_program), target :: solve2D_chunks
 type(ui_program), target :: make_cavgs
 type(ui_program), target :: bootstrap_cavgs
@@ -19,6 +20,7 @@ contains
     subroutine construct_refine2D_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call new_solve2D(prgtab)
+        call new_refine2D(prgtab)
         call new_solve2D_chunks(prgtab)
         call new_make_cavgs(prgtab)
         call new_bootstrap_cavgs(prgtab)
@@ -38,6 +40,62 @@ contains
             &UI_VIS_STANDARD, 'De Novo 2D Class Averages')
         call add_ui_program('solve2D', solve2D, prgtab, UI_CATEGORY)
     end subroutine new_solve2D
+
+    !> refine2D, the 2D counterpart of refine3D: shared memory, or the distributed master with nparts (its private
+    !! worker of the same name, simple_private_exec prg=refine2D, is checked against these required keys)
+    subroutine new_refine2D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call refine2D%new(&
+        &'refine2D',&                                                                       ! name
+        &'Refine 2D class averages from particle images',&                                 ! summary
+        &'is a distributed workflow for 2D alignment and clustering of particle images into class averages, '//&
+        &'the 2D counterpart of refine3D and the program solve2D runs its stages with',&    ! help
+        &'simple_exec',&                                                                    ! executable
+        &.true.,&                                                                           ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, display_name='Refine 2D Class Averages')
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call refine2D%add_input(UI_FILE, projfile, required_override=.true., visibility=UI_VIS_STANDARD)
+        ! parameter input/output
+        call refine2D%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once and read those instead of the originals on every iteration, &
+         &trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        ! search controls
+        call refine2D%add_input(UI_SRCH, ncls, required_override=.false., group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
+        &'Refinement mode: snhc_smpl and snhc search stochastically, prob assigns from the dense probabilistic table, &
+        &prob_snhc from a sparse one(snhc_smpl|snhc|prob|prob_snhc){snhc_smpl}', '', &
+        &.false., 'snhc_smpl', group="search", &
+        &choices=ui_choices([character(len=9) :: 'snhc_smpl', 'snhc', 'prob', 'prob_snhc']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, trs, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, objfun, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, cls_init, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        ! filter controls
+        call refine2D%add_input(UI_FILT, hp, group="filter", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_FILT, lp, group="filter", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_FILT, ml_reg, group="filter", visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call refine2D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call refine2D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call refine2D%add_input(UI_COMP, nthr, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call add_ui_program('refine2D', refine2D, prgtab, UI_CATEGORY)
+    end subroutine new_refine2D
 
     subroutine new_solve2D_descriptor( program, name, summary, help, visibility, display_name )
         type(ui_program), intent(inout) :: program

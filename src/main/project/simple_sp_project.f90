@@ -263,11 +263,12 @@ interface
     end subroutine replace_project
 
     !> for merging alignment documents from SIMPLE runs in distributed mode
-    module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in )
+    module subroutine merge_algndocs( self, nptcls, ndocs, oritype, fbody, numlen_in, write )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: nptcls, ndocs
         character(len=*),  intent(in)    :: oritype, fbody
         integer, optional, intent(in)    :: numlen_in
+        logical, optional, intent(in)    :: write     !< write the merged segment to the project file{.true.}
     end subroutine merge_algndocs
 
     module subroutine projrecords2proj( spproj, project_list )

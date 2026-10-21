@@ -486,7 +486,7 @@ adopted, and the final union is published over the workflow's project copy. The 
 | `src/main/solve/simple_solve3D_manifest.f90` | the run manifest: writing, reading, `validate_frozen`, `replay`, the recorded inputs (`manifest_records_input`) |
 | `src/main/project/simple_project_superset.f90` | identity, membership, masking and restoration |
 | `src/main/volume/simple_frozen_accum.f90` | the frozen sets and their run context; the carried sets, their bundle manifest and membership |
-| `src/main/commanders/simple/simple_commanders_rec_distr.f90` | the frozen add (gridding only) |
+| `src/main/strategies/parallelization/simple_volassemble_strategy.f90` | the frozen add (gridding only) |
 | `src/main/solve/simple_solve3D_controller.f90`, `src/main/solve/simple_solve3D_utils.f90` | the add-on context (the registration pass, stage-3 early stopping, the `frozen_rec` handshake), `calc_frozen_rec`, the ladder from the manifest |
 | `src/main/solve/simple_solve3D_addon_report.f90`, `src/main/volume/simple_volpair_metrics.f90` | the validation report |
 | `src/main/commanders/simple/simple_commanders_solve3D_chunks.f90`, `src/main/solve/simple_solve3D_chunks_plan.f90` | `solve3D_chunks`: the automatic orchestration with its source preparation, cumulative step projects, statistics and report leaf utilities |

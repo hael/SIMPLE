@@ -323,7 +323,9 @@ contains
             ! solve2D controller policy:
             ! startit==1  -> sticky sampled subset stage
             ! startit>1   -> stochastic resampling biased toward low updatecnt
-            if( params%startit == 1 )then
+            ! fillin waits for every particle to be assigned, which a sticky subset never reaches,
+            ! so a fresh start with fillin resamples by update count as well
+            if( params%startit == 1 .and. .not. params%l_fillin )then
                 if( l_has_been_sampled )then
                     call build%spproj_field%sample4update_reprod(pfromto, nptcls, pinds)
                 else

@@ -109,7 +109,9 @@ parameter has been removed.
 `simple_vol_pproc_policy.f90` owns per-state automask regeneration/reuse
 decisions. NU support is fixed by the `simple_nu_filter` API.
 
-`commander_volassemble` in `simple_commanders_rec_distr.f90` owns execution:
+Volume assembly (`volassemble_exec` in `simple_volassemble_strategy.f90`, run
+by the distributed `refine3D` master on its own builder and by the
+`commander_volassemble` wrapper for command-line callers) owns execution:
 restoring half maps, planning postprocessing, running automask generation,
 running NU filtering, writing derived products, and recording NU matching
 bandwidth metadata.

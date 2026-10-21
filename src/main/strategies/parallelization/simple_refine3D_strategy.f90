@@ -13,7 +13,7 @@ use simple_qsys_env,            only: qsys_env
 use simple_convergence,         only: convergence
 use simple_decay_funs,          only: inv_cos_decay, cos_decay
 use simple_cluster_seed,        only: gen_labelling
-use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, read_sigma2_bench_counts
+use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, read_sigma2_bench_counts, commit_sigma2_exec
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr, &
     &pcg_assemble_bench, write_pcg_assemble_bench
 use simple_halfmap_diagnostics, only: rename_support_provenance
@@ -102,9 +102,8 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     type(cmdline) :: cline_volassemble
     type(cmdline) :: cline_postprocess
     type(convergence) :: conv
-    ! the reprojection model's builder, kept for the run: toolboxes made once, project segments read per iteration
-    type(builder), allocatable :: refbuild
-    logical                    :: l_refbuild_tbox = .false.
+    ! the master's general toolbox, made on its builder at the first iteration's reprojection model
+    logical :: l_master_tbox = .false.
 contains
     procedure :: initialize         => distr_initialize
     procedure :: execute_iteration  => distr_execute_iteration
@@ -231,11 +230,13 @@ contains
         call vol_in%kill
     end subroutine prepare_assembly_cline
 
-    subroutine assemble_refine3D_pcg( cline, params, build )
-        use simple_commanders_rec_distr, only: filter_pcg_nonuniform_maps
-        type(cmdline),    intent(inout) :: cline
-        type(parameters), intent(inout) :: params
-        type(builder),    intent(inout) :: build
+    !> write: the NU matching low-pass handoff goes to the project file as well{.true.}
+    subroutine assemble_refine3D_pcg( cline, params, build, write )
+        use simple_volassemble_strategy, only: filter_pcg_nonuniform_maps
+        type(cmdline),     intent(inout) :: cline
+        type(parameters),  intent(inout) :: params
+        type(builder),     intent(inout) :: build
+        logical, optional, intent(in)    :: write
         type(pcg_assemble_bench) :: bench
         integer(timer_int_kind)  :: t_tot, t_handoff
         real             :: nu_align_lps(params%nstates)
@@ -244,7 +245,7 @@ contains
         ! gridding volassemble and hands off the matching low-pass
         call execute_rec3D_pcg_distributed_master(params, build, cline, nu_align_lps=nu_align_lps, bench=bench)
         if( L_BENCH_GLOB ) t_handoff = tic()
-        call filter_pcg_nonuniform_maps(params, build, nu_align_lps)
+        call filter_pcg_nonuniform_maps(params, build, nu_align_lps, write=write)
         if( L_BENCH_GLOB )then
             bench%rt_nu_handoff = toc(t_handoff)
             bench%rt_tot        = toc(t_tot)
@@ -328,33 +329,35 @@ contains
         if( allocated(has_fsc)  ) deallocate(has_fsc)
     end subroutine refresh_resolution_fields_from_fsc
 
-    !> spproj_src: the project as the file holds it (volume assembly's, handed on), read instead of the file
-    subroutine refresh_matching_lp_from_project( params, build, cline, spproj_src )
-        type(parameters),            intent(inout) :: params
-        type(builder),               intent(inout) :: build
-        type(cmdline),               intent(inout) :: cline
-        class(sp_project), optional, intent(in)    :: spproj_src
+    !> l_memory: the builder's project holds what volume assembly wrote (its own), read instead of the file
+    subroutine refresh_matching_lp_from_project( params, build, cline, l_memory )
+        type(parameters),  intent(inout) :: params
+        type(builder),     intent(inout) :: build
+        type(cmdline),     intent(inout) :: cline
+        logical, optional, intent(in)    :: l_memory
         type(sp_project) :: lp_project
         type(binoris)    :: bos
         type(oris)       :: os_rec
         real    :: project_lp, promoted_lp
         integer :: project_find, lpstop_find
-        logical :: l_has_lp, l_log_promotion
+        logical :: l_has_lp, l_log_promotion, l_mem
         if( .not. params%l_nonuniform ) return
         if( .not. file_exists(params%projfile) ) return
         project_lp = 0.
         l_has_lp   = .false.
-        if( present(spproj_src) )then
+        l_mem      = .false.
+        if( present(l_memory) ) l_mem = l_memory
+        if( l_mem )then
             select case(trim(params%oritype))
                 case('cls3D')
-                    if( spproj_src%os_cls3D%get_noris() >= params%fromp )then
-                        l_has_lp = spproj_src%os_cls3D%isthere(params%fromp, 'lp')
-                        if( l_has_lp ) project_lp = spproj_src%os_cls3D%get(params%fromp, 'lp')
+                    if( build%spproj%os_cls3D%get_noris() >= params%fromp )then
+                        l_has_lp = build%spproj%os_cls3D%isthere(params%fromp, 'lp')
+                        if( l_has_lp ) project_lp = build%spproj%os_cls3D%get(params%fromp, 'lp')
                     endif
                 case DEFAULT
-                    if( spproj_src%os_ptcl3D%get_noris() >= params%fromp )then
-                        l_has_lp = spproj_src%os_ptcl3D%isthere(params%fromp, 'lp')
-                        if( l_has_lp ) project_lp = spproj_src%os_ptcl3D%get(params%fromp, 'lp')
+                    if( build%spproj%os_ptcl3D%get_noris() >= params%fromp )then
+                        l_has_lp = build%spproj%os_ptcl3D%isthere(params%fromp, 'lp')
+                        if( l_has_lp ) project_lp = build%spproj%os_ptcl3D%get(params%fromp, 'lp')
                     endif
             end select
         else
@@ -575,50 +578,42 @@ contains
         call build%spproj%write_segment_inside(params%oritype)
     end subroutine materialize_reprojection_model
 
-    !> The distributed master's reprojection model from the builder it keeps for the run: the toolboxes are made on
-    !! the first iteration (crop, directions and masks are fixed for one refine3D run); later iterations read only
-    !! the segments the model uses (the non-data segments and the field), and the project is released after.
-    subroutine materialize_reprojection_model_kept( self, params, cline )
+    !> The distributed master's reprojection model on its own builder: the general toolbox is made at the first
+    !! iteration (crop, directions and masks are fixed for one refine3D run), its volumes made again on later ones;
+    !! the search toolbox, the band and the model every iteration. The first iteration reads the segments the model uses
+    !! as the file holds them (the start reconstruction may have written them); the master then holds its project and
+    !! writes the particle field before the workers start and at the end of every iteration.
+    subroutine materialize_reprojection_model_master( self, params, cline, build )
         use simple_matcher_smpl_and_lplims, only: set_bp_range3D
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(cmdline),                  intent(inout) :: cline
+        type(builder),                  intent(inout) :: build
         type(cmdline) :: cline_ref
-        type(string)  :: projdir
         cline_ref = cline
         call cline_ref%set('nthr', self%nthr_master)
-        if( .not. allocated(self%refbuild) ) allocate(self%refbuild)
-        if( self%l_refbuild_tbox )then
-            ! what the full read gives the model: every segment but the micrograph, stack and 2D ones
-            call self%refbuild%spproj%read_non_data_segments(params%projfile)
-            call self%refbuild%spproj%read_segment('out',    params%projfile)
-            call self%refbuild%spproj%read_segment('optics', params%projfile)
-            call self%refbuild%spproj%read_segment(params%oritype, params%projfile)
-            ! projinfo names this file, as read and build_spproj leave it: write_segment_inside writes to it
-            call self%refbuild%spproj%update_projinfo(params%projfile)
-            projdir = stemname(simple_abspath(params%projfile, check_exists=.false.))
-            call self%refbuild%spproj%projinfo%set(1, 'cwd', projdir)
-            ! the model's clean-up released the volumes the general toolbox makes
-            call self%refbuild%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            call self%refbuild%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            call self%refbuild%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        if( self%l_master_tbox )then
+            ! the previous model's clean-up released the volumes the general toolbox makes
+            call build%new_vols(params)
         else
-            call self%refbuild%build_spproj(params, cline_ref)
-            call self%refbuild%build_general_tbox(params, cline_ref, do3d=.true.)
-            self%l_refbuild_tbox = .true.
+            call build%spproj%read_non_data_segments(params%projfile)
+            call build%spproj%read_segment('out',    params%projfile)
+            call build%spproj%read_segment('optics', params%projfile)
+            call build%spproj%read_segment(params%oritype, params%projfile)
+            ! projinfo names this file, as a full read leaves it (a project copied from another directory names its
+            ! source)
+            call build%spproj%update_projinfo(params%projfile)
+            call build%build_general_tbox(params, cline_ref, do3d=.true.)
+            self%l_master_tbox = .true.
         endif
-        call self%refbuild%build_strategy3D_tbox(params)
-        call set_bp_range3D(params, self%refbuild, cline_ref)
+        call build%build_strategy3D_tbox(params)
+        call set_bp_range3D(params, build, cline_ref)
         if( params%l_nonuniform_lpset .and. params%l_lpset .and. cline_ref%defined('lp') )then
             call cline%set('lp', params%lp)
         endif
-        call materialize_reprojection_model_from_volumes(params, self%refbuild, cline_ref, cleanup_pftc=.true.)
-        call self%refbuild%spproj%write_segment_inside(params%oritype)
-        ! the master reads the project next: no second project between iterations
-        call self%refbuild%spproj%kill
+        call materialize_reprojection_model_from_volumes(params, build, cline_ref, cleanup_pftc=.true.)
         call cline_ref%kill
-        call projdir%kill
-    end subroutine materialize_reprojection_model_kept
+    end subroutine materialize_reprojection_model_master
 
     subroutine reset_refine3D_bench( bench )
         type(refine3D_bench_state), intent(inout) :: bench
@@ -788,7 +783,7 @@ contains
         use simple_strategy3D_matcher,   only: refine3D_exec
         use simple_commanders_euclid,    only: commander_commit_sigma2
         use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
-        use simple_commanders_rec_distr, only: commander_volassemble
+        use simple_volassemble_strategy, only: run_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -797,7 +792,6 @@ contains
         type(commander_commit_sigma2) :: xcommit_sigma2
         type(commander_prob_align)        :: xprob_align
         type(commander_prob_align_neigh)  :: xprob_align_neigh
-        type(commander_volassemble) :: xvolassemble
         type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_build, cline_polish
@@ -930,7 +924,7 @@ contains
                 call assemble_refine3D_pcg(cline, params, build)
             else
                 call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
-                call xvolassemble%execute(cline_volassemble)
+                call run_volassemble(cline_volassemble)
             endif
             call report_rec_master_phase(params, t_recphase, params%nthr)
             if( trim(params%volrec) .eq. 'yes' )then
@@ -1282,10 +1276,10 @@ contains
 
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
-        use simple_commanders_rec_distr, only: commander_volassemble
+        use simple_volassemble_strategy, only: volassemble_exec
         use simple_commanders_volops,    only: commander_postprocess
-        use simple_commanders_euclid,    only: commander_commit_sigma2
-        use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
+        use simple_prob_align_strategy,  only: prob_align_exec, prob_align_neigh_exec
+        !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
         use simple_fsc,                  only: plot_fsc
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D
         class(refine3D_distr_strategy), intent(inout) :: self
@@ -1294,12 +1288,7 @@ contains
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
         type(commander_postprocess)       :: xpostprocess
-        type(commander_commit_sigma2) :: xcommit_sigma2
-        type(commander_prob_align)        :: xprob_align_distr
-        type(commander_prob_align_neigh)  :: xprob_align_neigh_distr
-        type(commander_volassemble) :: xvolassemble
         type(cmdline) :: cline_prob_align, cline_volassemble
-        type(sp_project), allocatable :: vol_proj !< volume assembly's project as it ends, handed on
         type(string)  :: str
         integer(timer_int_kind) :: t_recphase
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
@@ -1308,7 +1297,7 @@ contains
         integer, allocatable :: state_pops(:), pinds_smpl(:)
         logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
-        integer :: state, iter, nptcls_smpl
+        integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
         logical :: l_prob_neigh_mode, l_polish
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
@@ -1328,10 +1317,8 @@ contains
             write(logfhandle,601) '>>> LAMBDA, MAP CONNECTIVITY ANNEALING        ', params%lambda
         endif
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
-        call materialize_reprojection_model_kept(self, params, cline)
+        call materialize_reprojection_model_master(self, params, cline, build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        ! ensure spproj is current (initialize leaves every run with orientations on file)
-        call build%spproj%read(params%projfile)
         l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
         ! prob refinement
         if( L_BENCH_GLOB )then
@@ -1346,17 +1333,28 @@ contains
                 call cline_prob_align%set('prg', 'prob_align')
             endif
             call cline_prob_align%set('which_iter', iter)
-            ! the project just read is the file: prob_align takes a copy instead of reading it again
+            call cline_prob_align%set('mkdir',      'no')
+            call cline_prob_align%set('stream',     'no')
+            ! on the master's parameters and builder: the sample is drawn in its particle field; the alignment runs on
+            ! the workers' thread count and the master's own is restored after
+            nthr_here      = params%nthr
+            !$ nthr_here   = omp_get_max_threads()
+            nthr_glob_here = nthr_glob
             if( l_prob_neigh_mode )then
-                call xprob_align_neigh_distr%execute_from_project( cline_prob_align, build%spproj )
+                call prob_align_neigh_exec(params, build, cline_prob_align, params%nthr)
             else
-                call xprob_align_distr%execute_from_project( cline_prob_align, build%spproj )
+                call prob_align_exec(params, build, cline_prob_align, params%nthr)
             endif
+            !$ call omp_set_num_threads(nthr_here)
+            nthr_glob = nthr_glob_here
         else if( master_draws_sample3D(params) )then
             ! one fractional-update sample over the whole project; the workers reproduce it
             call sample_ptcls4iter3D(params, build, iter, [1,params%nptcls], nptcls_smpl, pinds_smpl)
             call build%spproj%write_segment_inside(params%oritype)
             if( allocated(pinds_smpl) ) deallocate(pinds_smpl)
+        else
+            ! the particle field the workers read, as the model left it
+            call build%spproj%write_segment_inside(params%oritype)
         endif
         if( L_BENCH_GLOB )then
             self%bench%rt_prob = toc(self%bench%t_prob)
@@ -1388,8 +1386,8 @@ contains
         call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs (a residual-only sigma pass, refine=sigma,
         ! searches nothing and writes none)
-        if( trim(params%refine) /= 'sigma' ) &
-            &call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+        if( trim(params%refine) /= 'sigma' ) call build%spproj%merge_algndocs(params%nptcls, params%nparts, &
+            &params%oritype, ALGN_FBODY, write=l_polish)
         if( l_polish )then
             ! the polish pass (C8, C19): refine=cont over the discrete pass's particle sample (the
             ! workers reproduce it from the merged project), from the poses it committed, against
@@ -1401,7 +1399,7 @@ contains
             call job_descr_pass%set('pose_cont', 'yes')
             call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), &
                 &array=L_USE_SLURM_ARR, extra_params=params)
-            call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+            call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY, write=.false.)
         endif
         call write_iteration_states(params, build)
         call job_descr_pass%kill
@@ -1422,19 +1420,21 @@ contains
                     ! thread budget (rec3D_master_nthr) for both backends, so their costs compare in the log
                     t_recphase = tic()
                     if( trim(params%rec_backend) == 'pcg' )then
-                        call assemble_refine3D_pcg(cline, params, build)
+                        call assemble_refine3D_pcg(cline, params, build, write=.false.)
                     else
                         call prepare_assembly_cline(cline, params, rec3D_master_nthr(params, self%nthr_master), &
                             &cline_volassemble)
-                        if( trim(params%refine) == 'sigma' )then
-                            call xvolassemble%execute(cline_volassemble)
-                        else
-                            ! the master's project is the file: read at the start of the iteration, its field as
-                            ! merge_algndocs wrote it. Assembly takes a copy and hands its own on (for the matching
-                            ! low-pass refresh and the sigma2 commit, which read what it has written)
-                            allocate(vol_proj)
-                            call xvolassemble%execute_hand_on(cline_volassemble, build%spproj, vol_proj)
-                        endif
+                        ! on the master's parameters and builder: its particle field gets this iteration's resolution
+                        ! fields (cfar, lp_est) in memory, for the matching low-pass refresh, the convergence report
+                        ! and the sigma2 commit; the assembly runs on its own thread count, the master's is restored
+                        nthr_here      = params%nthr
+                        !$ nthr_here   = omp_get_max_threads()
+                        nthr_glob_here = nthr_glob
+                        call build%new_vols(params)
+                        call volassemble_exec(params, build, cline_volassemble, &
+                            &rec3D_master_nthr(params, self%nthr_master), write=.false.)
+                        !$ call omp_set_num_threads(nthr_here)
+                        nthr_glob = nthr_glob_here
                     endif
                     call report_rec_master_phase(params, t_recphase, rec3D_master_nthr(params, self%nthr_master))
                     if( trim(params%volrec).eq.'yes' )then
@@ -1505,11 +1505,7 @@ contains
             end select
         endif
         if( trim(params%volrec).eq.'yes' )then
-            if( allocated(vol_proj) )then
-                call refresh_matching_lp_from_project(params, build, cline, vol_proj)
-            else
-                call refresh_matching_lp_from_project(params, build, cline)
-            endif
+            call refresh_matching_lp_from_project(params, build, cline, l_memory=.true.)
             if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         endif
         ! convergence
@@ -1558,22 +1554,21 @@ contains
             else
                 call self%cline_commit_sigma2%set('which_iter', params%which_iter)
                 if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-                ! the commit reads the particles' states and halves and the sigma2 path, which no write since
-                ! volume assembly has changed (the master writes only the out segment)
-                if( allocated(vol_proj) )then
-                    call xcommit_sigma2%execute_from_project(self%cline_commit_sigma2, vol_proj)
-                else
-                    call xcommit_sigma2%execute(self%cline_commit_sigma2)
-                endif
+                ! on the master's parameters and builder: the commit reads the particles' states and halves and the
+                ! sigma2 path, which volume assembly leaves as they are; it runs on the thread count its command line
+                ! gives and the master's own is restored after
+                nthr_here      = params%nthr
+                !$ nthr_here   = omp_get_max_threads()
+                nthr_glob_here = nthr_glob
+                nthr_commit    = nthr_here
+                if( self%cline_commit_sigma2%defined('nthr') ) nthr_commit = self%cline_commit_sigma2%get_iarg('nthr')
+                call commit_sigma2_exec(params, build, params%which_iter, nthr_commit)
+                !$ call omp_set_num_threads(nthr_here)
+                nthr_glob = nthr_glob_here
                 if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
             if( L_BENCH_GLOB ) call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
                 &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
-        endif
-        ! the sigma2 commit was the handed-on project's last use
-        if( allocated(vol_proj) )then
-            call vol_proj%kill
-            deallocate(vol_proj)
         endif
         ! iteration-dependent updates
         if( params%l_doshift .and. .not.self%job_descr%isthere('trs') )then
@@ -1593,6 +1588,8 @@ contains
         if( allocated(fsc) ) deallocate(fsc)
         if( allocated(state_pops) ) deallocate(state_pops)
         if( allocated(l_no_new_map) ) deallocate(l_no_new_map)
+        ! the iteration's particle field, once (its out segment went to the file before postprocessing)
+        call build%spproj%write_segment_inside(params%oritype)
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
 
@@ -1642,18 +1639,8 @@ contains
         type(parameters),               intent(in)    :: params
         call qsys_cleanup(params)
         call self%job_descr%kill
-        call release_refbuild(self)
+        self%l_master_tbox = .false.
     end subroutine distr_cleanup
-
-    subroutine release_refbuild( self )
-        class(refine3D_distr_strategy), intent(inout) :: self
-        if( allocated(self%refbuild) )then
-            call self%refbuild%kill_strategy3D_tbox
-            call self%refbuild%kill_general_tbox
-            deallocate(self%refbuild)
-        endif
-        self%l_refbuild_tbox = .false.
-    end subroutine release_refbuild
 
     !> one line per iteration with the master reconstruction wall time, its
     !! thread budget, the thread-seconds product and the master's peak RSS, so

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize model_cavgs_rejection quality_mode=analyze outputs."""
+"""Summarize model_cavgs_rejection quality_mode=analyze outputs (cavgs_quality_training.txt)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,7 @@ from pathlib import Path
 from typing import Any
 
 
-FEATURES = "cavgs_quality_features.txt"
-SUMMARY = "cavgs_quality_reference_summary.txt"
-THRESHOLDS = "cavgs_quality_reference_threshold_scan.txt"
+TRAINING = "cavgs_quality_training.txt"
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--recursive",
         action="store_true",
-        help="Find run directories below each input path by searching for cavgs_quality_features.txt.",
+        help="Find run directories below each input path by searching for cavgs_quality_training.txt.",
     )
     parser.add_argument(
         "--top-classes",
@@ -83,34 +81,50 @@ def clean_row(row: dict[str, Any]) -> dict[str, str]:
     return {str(key).strip(): str(value).strip() for key, value in row.items() if key is not None}
 
 
-def read_csv(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
+def comment_rows(header: str, rows: list[str]) -> list[dict[str, str]]:
+    if not header:
         return []
-    with path.open(newline="") as handle:
-        return [clean_row(row) for row in csv.DictReader(handle)]
+    names = [name.strip() for name in header.split(",")]
+    out = []
+    for row in rows:
+        values = [value.strip() for value in row.split(",")]
+        out.append(dict(zip(names, values)))
+    return out
 
 
-def read_summary(path: Path) -> tuple[dict[str, str], list[dict[str, str]]]:
+def read_training(
+    path: Path,
+) -> tuple[dict[str, str], list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
+    """The analyze-mode training table: '# key=value' metadata, '# feature_summary,' and
+    '# threshold_scan,' rows under their '_header=' lines, then one CSV row per class."""
     if not path.exists():
-        return {}, []
-    lines = path.read_text().splitlines()
-    table_start = None
+        return {}, [], [], []
     values: dict[str, str] = {}
-    for index, line in enumerate(lines):
+    headers: dict[str, str] = {}
+    comment_data: dict[str, list[str]] = {"feature_summary": [], "threshold_scan": []}
+    table: list[str] = []
+    for line in path.read_text().splitlines():
         stripped = line.strip()
-        if stripped.startswith("feature,"):
-            table_start = index
-            break
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
             continue
-        if "=" in stripped:
-            key, value = stripped.split("=", 1)
-            values[key.strip()] = value.strip()
-    feature_rows: list[dict[str, str]] = []
-    if table_start is not None:
-        text = "\n".join(lines[table_start:])
-        feature_rows = [clean_row(row) for row in csv.DictReader(io.StringIO(text))]
-    return values, feature_rows
+        if stripped.startswith("#"):
+            body = stripped[1:].strip()
+            prefix = body.split(",", 1)[0]
+            if prefix in comment_data and "," in body:
+                comment_data[prefix].append(body.split(",", 1)[1])
+            elif "=" in body:
+                key, value = body.split("=", 1)
+                key = key.strip()
+                if key.endswith("_header"):
+                    headers[key[: -len("_header")]] = value.strip()
+                else:
+                    values[key] = value.strip()
+            continue
+        table.append(stripped)
+    feature_rows = comment_rows(headers.get("feature_summary", ""), comment_data["feature_summary"])
+    threshold_rows = comment_rows(headers.get("threshold_scan", ""), comment_data["threshold_scan"])
+    rows = [clean_row(row) for row in csv.DictReader(io.StringIO("\n".join(table)))] if table else []
+    return values, feature_rows, threshold_rows, rows
 
 
 def expand_run_dirs(paths: list[str], recursive: bool) -> list[Path]:
@@ -120,7 +134,7 @@ def expand_run_dirs(paths: list[str], recursive: bool) -> list[Path]:
         if path.is_file():
             run_dirs.add(path.parent.resolve())
         elif recursive:
-            for found in path.rglob(FEATURES):
+            for found in path.rglob(TRAINING):
                 run_dirs.add(found.parent.resolve())
         else:
             run_dirs.add(path.resolve())
@@ -294,19 +308,13 @@ def summarize_thresholds(
 
 
 def summarize_run(run_dir: Path, top_classes: int, top_features: int) -> tuple[str, dict[str, Any]]:
-    feature_path = run_dir / FEATURES
-    summary_path = run_dir / SUMMARY
-    threshold_path = run_dir / THRESHOLDS
-
-    rows = read_csv(feature_path)
-    summary, feature_rows = read_summary(summary_path)
-    threshold_rows = read_csv(threshold_path)
+    summary, feature_rows, threshold_rows, rows = read_training(run_dir / TRAINING)
     weights = weights_from_features(feature_rows)
     z_names = z_feature_names(rows)
 
     lines = [f"## {run_dir}"]
     if not rows:
-        lines.append(f"- Missing `{FEATURES}`.")
+        lines.append(f"- Missing or empty `{TRAINING}`.")
         return "\n".join(lines), {"run": str(run_dir), "ok": False}
 
     counts = {
@@ -334,6 +342,12 @@ def summarize_run(run_dir: Path, top_classes: int, top_features: int) -> tuple[s
     )
 
     lines.append(
+        "- Model: "
+        + f"{summary.get('model_name', '?')} (context {summary.get('model_context', '?')}), "
+        + f"hard gates {summary.get('quality_context', '?')}, "
+        + f"soft_decision={summary.get('soft_decision', '?')} ({summary.get('soft_reason', '?')})"
+    )
+    lines.append(
         "- Overall: "
         + f"n={n_classes}, manual_selected={manual_selected}, auto_selected={auto_selected}, "
         + f"TP/FP/TN/FN={counts['tp']}/{counts['fp']}/{counts['tn']}/{counts['fn']}"
@@ -350,7 +364,7 @@ def summarize_run(run_dir: Path, top_classes: int, top_features: int) -> tuple[s
     lines.append(
         "- Thresholds: "
         + f"raw={fmt(summary.get('raw_score_threshold'))}, "
-        + f"margin={fmt(summary.get('threshold_boundary_margin'))}, "
+        + f"offset={fmt(summary.get('threshold_offset'))}, "
         + f"effective={fmt(summary.get('current_score_threshold'))}, "
         + f"hard_rejected_manual_good={hard_manual_good}"
     )

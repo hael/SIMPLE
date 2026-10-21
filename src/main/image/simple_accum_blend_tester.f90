@@ -1,6 +1,6 @@
 !@descr: unit test routines for the accumulator-domain trailing-reconstruction blend
 ! Covers the image primitives scale_mats and sum_reduce_mats and the weighting contracts of
-! blend_trailing_accumulators (simple_commanders_rec_distr), on tiny synthetic accumulators with known answers.
+! blend_trailing_accumulators (simple_volassemble_strategy), on tiny synthetic accumulators with known answers.
 module simple_accum_blend_tester
 use simple_test_utils, only: assert_real, assert_true
 use simple_image,      only: image
@@ -14,7 +14,7 @@ contains
     !> Deterministic test of the accumulator-domain trailing-reconstruction
     !! recurrence on tiny synthetic arrays. Exercises the image-level primitives
     !! the blend is built from (scale_mats, sum_reduce_mats) and verifies the
-    !! weighting contracts of simple_commanders_rec_distr::blend_trailing_accumulators:
+    !! weighting contracts of simple_volassemble_strategy::blend_trailing_accumulators:
     !!   - a full-mass chain + fractional partials scaled by u/f restores with
     !!     current-map coefficient exactly u (ufrac_trec contract)
     !!   - a chain start (no chain yet) seeds the chain with the current partials

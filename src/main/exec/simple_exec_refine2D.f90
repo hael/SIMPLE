@@ -4,7 +4,7 @@ use simple_cmdline,                         only: cmdline
 use simple_string,                          only: string
 use simple_exec_helpers,                    only: restarted_exec
 use simple_commanders_project_cls,          only: commander_sample_classes
-use simple_commanders_refine2D,             only: commander_ppca_denoise_classes
+use simple_commanders_refine2D,             only: commander_refine2D
 use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr, commander_bootstrap_cavgs, &
                                                   commander_unbootstrap_cavgs, commander_write_classes
 use simple_commanders_solve2D,              only: commander_solve2D, commander_solve2D_chunks
@@ -16,6 +16,7 @@ public :: exec_refine2D_commander
 private
 
 type(commander_solve2D)                     :: xsolve2D
+type(commander_refine2D)                    :: xrefine2D
 type(commander_solve2D_chunks)              :: xsolve2D_chunks
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_bootstrap_cavgs)             :: xbootstrap_cavgs
@@ -41,6 +42,8 @@ contains
                 else
                     call xsolve2D%execute(cline)
                 endif
+            case( 'refine2D' )
+                call xrefine2D%execute(cline)
             case( 'solve2D_chunks' )
                 call xsolve2D_chunks%execute(cline)       
             case( 'make_cavgs' )

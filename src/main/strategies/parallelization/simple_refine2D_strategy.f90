@@ -11,11 +11,13 @@ use simple_convergence, only: convergence
 use simple_matcher_smpl_and_lplims, only: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, &
     &refine2D_blends_carryover
 use simple_cavg_sums,   only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CAVG_SUMS_OK
+use simple_classaverager, only: cavger_commit_carryover, cavger_restore_cavgs, cavger_gen2Dclassdoc, &
+    &cavger_write_merged, cavger_write_eo, cavger_kill
 use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_commit_iter
-use simple_strategy_sigma2, only: prepare_canonical_sigma_update, read_sigma2_bench_counts
+use simple_strategy_sigma2, only: prepare_canonical_sigma_update, read_sigma2_bench_counts, commit_sigma2_exec
 use simple_refine2D_fnames, only: refine2D_cavgs_fname, refine2D_cavgs_half_fname
 implicit none
 
@@ -182,8 +184,9 @@ contains
         type(commander_commit_sigma2) :: xcommit_sigma2
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
+        type(convergence) :: conv     !< a fresh convergence object every iteration
         real              :: update_frac_req
-        logical           :: l_full_update, l_update_frac_req
+        logical           :: l_full_update, l_update_frac_req, l_frac
         if( L_BENCH_GLOB )then
             self%bench    = refine2D_bench_state()
             self%bench%t_tot = tic()
@@ -216,8 +219,19 @@ contains
             if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
         if( L_BENCH_GLOB ) self%bench%t = tic()
-        call refine2D_exec(params, build, cline, params%which_iter, converged)
-        if( L_BENCH_GLOB ) self%bench%rt_search = toc(self%bench%t)
+        call refine2D_exec(params, build, cline, params%which_iter, l_frac)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_search = toc(self%bench%t)
+            self%bench%t         = tic()
+        endif
+        call restore_cavgs_inmem(params, build, cline, l_frac)
+        if( L_BENCH_GLOB )then
+            self%bench%rt_cavg = toc(self%bench%t)
+            self%bench%t       = tic()
+        endif
+        ! before update_frac is restored: check_conv2D reads params%l_update_frac
+        call check_refine2D_convergence(params, build, cline, conv, converged)
+        if( L_BENCH_GLOB ) self%bench%rt_conv = toc(self%bench%t)
         if( l_full_update )then
             params%update_frac   = update_frac_req
             params%l_update_frac = l_update_frac_req
@@ -316,18 +330,17 @@ contains
 
     subroutine distr_execute_iteration( self, params, build, cline, converged )
         use simple_stream_utils,         only: terminate_stream
-        use simple_commanders_euclid,    only: commander_commit_sigma2
+        !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
         class(refine2D_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
-        type(commander_commit_sigma2) :: xcommit_sigma2
-        type(cmdline)                     :: cline_calc_sigma, cline_prob_align
+        type(cmdline)                     :: cline_prob_align
+        integer                           :: nthr_here, nthr_glob_here
         type(string)                      :: update_frac_req
         real                              :: frac_srch_space
-        integer                           :: n_unassigned
-        logical                           :: l_full_assignment, l_full_update, l_update_frac_key
+        logical                           :: l_full_update, l_update_frac_key
         if( L_BENCH_GLOB )then
             self%bench    = refine2D_bench_state()
             self%bench%t_tot = tic()
@@ -359,7 +372,7 @@ contains
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
-            call run_prob_align2D(params, build, cline_prob_align, self%bench)
+            call prob_align2D_master(params, build, cline_prob_align, l_full_update, self%bench)
         endif
         ! The master creates one generation-scoped candidate after every
         ! project-state update and before workers read the committed state.
@@ -393,22 +406,21 @@ contains
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
             if( L_BENCH_GLOB ) self%bench%t = tic()
-            call run_distributed_cavg_assembly(params, cline, self%nthr_master)
-            if( L_BENCH_GLOB )then
-                self%bench%rt_cavg = toc(self%bench%t)
-                self%bench%t       = tic()
-            endif
-            call build%spproj%read_segment(params%oritype, params%projfile)
-            if( L_BENCH_GLOB ) self%bench%rt_proj_io = self%bench%rt_proj_io + toc(self%bench%t)
+            call run_distributed_cavg_assembly(params, build, cline, self%nthr_master)
+            if( L_BENCH_GLOB ) self%bench%rt_cavg = toc(self%bench%t)
         endif
         ! Sigma2 consolidation
         if( params%cc_objfun==OBJFUN_EUCLID )then
-            cline_calc_sigma = cline
-            call cline_calc_sigma%set('prg',        'commit_sigma2')
-            call cline_calc_sigma%set('which_iter', sigma2_commit_iter(params%which_iter, matcher_completed=.true.))
-            call cline_calc_sigma%set('nthr',       self%nthr_master)
             if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-            call xcommit_sigma2%execute(cline_calc_sigma)
+            ! on the master's parameters and builder, at the master's thread count; which_iter is the iteration the
+            ! committed store feeds
+            nthr_here      = self%nthr_master
+            !$ nthr_here   = omp_get_max_threads()
+            nthr_glob_here = nthr_glob
+            call commit_sigma2_exec(params, build, sigma2_commit_iter(params%which_iter, matcher_completed=.true.), &
+                &self%nthr_master)
+            !$ call omp_set_num_threads(nthr_here)
+            nthr_glob = nthr_glob_here
             if( L_BENCH_GLOB )then
                 self%bench%rt_sigma = toc(self%bench%t_sigma)
                 call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
@@ -417,9 +429,7 @@ contains
         endif
         ! Check convergence
         if( L_BENCH_GLOB ) self%bench%t = tic()
-        converged = self%conv%check_conv2D(params, cline, build%spproj_field, &
-                                           build%spproj_field%get_n('class'), params%msk)
-        if( trim(params%stream2d).eq.'no' ) call progressfile_update(self%conv%get('progress'))
+        call check_refine2D_convergence(params, build, cline, self%conv, converged)
         frac_srch_space = 0.
         if( params%which_iter > 1 ) frac_srch_space = self%conv%get('frac_srch')
         ! Activate shift search if needed
@@ -428,17 +438,6 @@ contains
                 call self%job_descr%set('trs', real2str(params%trs))
             endif
         endif
-        converged = (params%which_iter >= params%minits) .and. converged
-        converged = converged .or. (params%which_iter >= params%maxits)
-        if( refine2D_requires_full_assignment(params) )then
-            l_full_assignment = all_active_ptcls_2D_assigned(build%spproj_field, [params%fromp,params%top], n_unassigned)
-            if( .not. l_full_assignment )then
-                write(logfhandle,'(A,I8)') &
-                    '>>> REFINE2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
-            endif
-            converged = converged .and. l_full_assignment
-        endif
-        call self%conv%print_verdict(converged)
         if( L_BENCH_GLOB ) self%bench%rt_conv = toc(self%bench%t)
     end subroutine distr_execute_iteration
 
@@ -503,8 +502,63 @@ contains
         if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
     end subroutine ensure_canonical_sigma2
 
-    !> Context of the sigma2 transaction: the committed store's dimensions and the active rows
-    !! carrying the current sampling marker (updated this iteration)
+    !> Shared-memory restoration of the class averages from the sums the matcher accumulated: the carried sums
+    !! committed (l_frac: the iteration blends them), the averages restored and written, the class document, and the
+    !! cls2D and cls3D segments written to the project
+    subroutine restore_cavgs_inmem( params, build, cline, l_frac )
+        type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
+        type(cmdline),    intent(inout) :: cline
+        logical,          intent(in)    :: l_frac
+        real, allocatable :: states(:)
+        if( trim(params%restore_cavgs) /= 'yes' ) return
+        if( cline%defined('which_iter') )then
+            params%refs      = refine2D_cavgs_fname(params%which_iter, MRC_EXT)
+            params%refs_even = refine2D_cavgs_half_fname(params%which_iter, 'even', MRC_EXT)
+            params%refs_odd  = refine2D_cavgs_half_fname(params%which_iter, 'odd', MRC_EXT)
+        else
+            THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
+        endif
+        call cavger_commit_carryover(l_frac)
+        call cavger_restore_cavgs( params%frcs )
+        call cavger_gen2Dclassdoc
+        call cavger_write_merged( params%refs )
+        call cavger_write_eo( params%refs_even, params%refs_odd )
+        call cavger_kill
+        call cline%set('refs', params%refs)
+        call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
+        states = build%spproj%os_cls2D%get_all('state')
+        call build%spproj%os_cls3D%set_all('state',states)
+        call build%spproj%write_segment_inside('cls2D', params%projfile)
+        call build%spproj%write_segment_inside('cls3D', params%projfile)
+        deallocate(states)
+    end subroutine restore_cavgs_inmem
+
+    !> The convergence decision of a refine2D iteration in both modes, after the class averages are restored
+    !! (cavger_gen2Dclassdoc writes the particles' res that check_conv2D averages): check_conv2D's criteria, minits,
+    !! maxits and the full-assignment coverage; prints the verdict and updates the progress file
+    subroutine check_refine2D_convergence( params, build, cline, conv, converged )
+        type(parameters),  intent(inout) :: params
+        type(builder),     intent(inout) :: build
+        type(cmdline),     intent(inout) :: cline
+        type(convergence), intent(inout) :: conv
+        logical,           intent(out)   :: converged
+        integer :: n_unassigned
+        logical :: l_full_assignment
+        converged = conv%check_conv2D(params, cline, build%spproj_field, build%spproj_field%get_n('class'), params%msk)
+        converged = converged .and. (params%which_iter >= params%minits)
+        converged = converged .or.  (params%which_iter >= params%maxits)
+        if( refine2D_requires_full_assignment(params) )then
+            l_full_assignment = all_active_ptcls_2D_assigned(build%spproj_field, [params%fromp,params%top], n_unassigned)
+            if( .not. l_full_assignment )then
+                write(logfhandle,'(A,I8)') &
+                    '>>> REFINE2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
+            endif
+            converged = converged .and. l_full_assignment
+        endif
+        call conv%print_verdict(converged)
+        if( trim(params%stream2d) .eq. 'no' ) call progressfile_update(conv%get('progress'))
+    end subroutine check_refine2D_convergence
 
     subroutine write_strategy_bench_report( params, bench, execution_mode )
         use simple_matcher_ptcl_io, only: write_mem_bench_context
@@ -568,6 +622,40 @@ contains
         call build%spproj%read_segment(params%oritype, params%projfile)
         if( L_BENCH_GLOB ) bench%rt_proj_io = bench%rt_proj_io + toc(bench%t)
     end subroutine run_prob_align2D
+
+    !> prob_align2D on the distributed master's parameters and builder: the sample is drawn in its particle field (a
+    !! full update draws every particle; the master's own update_frac is restored after), at the workers' thread count
+    !! (the master's own is restored after)
+    subroutine prob_align2D_master( params, build, cline_prob_align, l_full_update, bench )
+        use simple_prob_align_strategy, only: prob_align2D_exec
+        !$ use omp_lib,                 only: omp_get_max_threads, omp_set_num_threads
+        type(parameters),           intent(inout) :: params
+        type(builder),              intent(inout) :: build
+        type(cmdline),              intent(inout) :: cline_prob_align
+        logical,                    intent(in)    :: l_full_update
+        type(refine2D_bench_state), intent(inout) :: bench
+        real    :: update_frac_req
+        integer :: nthr_here, nthr_glob_here
+        logical :: l_update_frac_req
+        if( L_BENCH_GLOB ) bench%t = tic()
+        call cline_prob_align%set('mkdir',  'no')
+        call cline_prob_align%set('stream', 'no')
+        update_frac_req   = params%update_frac
+        l_update_frac_req = params%l_update_frac
+        if( l_full_update )then
+            params%update_frac   = 1.0
+            params%l_update_frac = .false.
+        endif
+        nthr_here      = params%nthr
+        !$ nthr_here   = omp_get_max_threads()
+        nthr_glob_here = nthr_glob
+        call prob_align2D_exec(params, build, cline_prob_align, params%nthr)
+        !$ call omp_set_num_threads(nthr_here)
+        nthr_glob            = nthr_glob_here
+        params%update_frac   = update_frac_req
+        params%l_update_frac = l_update_frac_req
+        if( L_BENCH_GLOB ) bench%rt_prestep = toc(bench%t)
+    end subroutine prob_align2D_master
 
     !> Initialize references for refine2D (used by inmem and distr modes).
     subroutine init_refine2D_refs( cline, params, build )
@@ -646,14 +734,18 @@ contains
         if( l_full ) write(logfhandle,'(A)') '>>> REFINE2D: NO USABLE CARRIED CLASS SUMS; THIS ITERATION IS A FULL UPDATE'
     end function carryover_needs_full_update
 
-    subroutine run_distributed_cavg_assembly( params, cline, nthr_master )
-        use simple_commanders_mkcavgs, only: commander_cavgassemble
-        use simple_stream_utils,       only: terminate_stream
+    !> class-average assembly on the distributed master's parameters and builder: the master's cls2D, cls3D, out and
+    !! particle field are updated in memory and those segments written; the master's thread count
+    subroutine run_distributed_cavg_assembly( params, build, cline, nthr_master )
+        use simple_cavgassemble_strategy, only: cavgassemble_exec
+        use simple_stream_utils,          only: terminate_stream
+        !$ use omp_lib,                   only: omp_get_max_threads, omp_set_num_threads
         type(parameters), intent(inout) :: params
+        type(builder),    intent(inout) :: build
         type(cmdline),    intent(inout) :: cline
         integer,          intent(in)    :: nthr_master
-        type(commander_cavgassemble) :: xcavgassemble
         type(cmdline)                :: cline_cavgassemble
+        integer                      :: nthr_here, nthr_glob_here
         params%refs      = refine2D_cavgs_fname(params%which_iter, MRC_EXT)
         params%refs_even = refine2D_cavgs_half_fname(params%which_iter, 'even', MRC_EXT)
         params%refs_odd  = refine2D_cavgs_half_fname(params%which_iter, 'odd', MRC_EXT)
@@ -664,7 +756,18 @@ contains
         call cline_cavgassemble%set('refs', params%refs)
         call cline_cavgassemble%set('nthr', nthr_master)
         call terminate_stream(params, 'SIMPLE_DISTR_REFINE2D HARD STOP 2')
-        call xcavgassemble%execute(cline_cavgassemble)
+        call cline_cavgassemble%set('oritype', 'ptcl2D')
+        nthr_here      = nthr_master
+        !$ nthr_here   = omp_get_max_threads()
+        nthr_glob_here = nthr_glob
+        call cavgassemble_exec(params, build, cline_cavgassemble, 0._timer_int_kind, nthr_master)
+        !$ call omp_set_num_threads(nthr_here)
+        nthr_glob = nthr_glob_here
+        ! the segments assembly changed: the class documents, the outputs and the particles' res
+        call build%spproj%write_segment_inside('cls2D',        params%projfile)
+        call build%spproj%write_segment_inside('cls3D',        params%projfile)
+        call build%spproj%write_segment_inside('out',          params%projfile)
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call cline_cavgassemble%kill
     end subroutine run_distributed_cavg_assembly
 

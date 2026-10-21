@@ -1,21 +1,25 @@
 ---
 name: simple-solve3d-importance-sampling
-description: Use when working on SIMPLE solve3D sampling policy, update_frac or nsample behavior, prob_align/prob_tab sampling reuse, sampled/updatecnt bookkeeping, online matcher reconstruction I/O, or volassemble trailing-update weighting.
+description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, greedy/stochastic, frac_best, fillin), prob_align/prob_tab sampling reuse and the distributed master's sample draw, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
 ---
 
 # SIMPLE Solve3D Importance Sampling
 
-`solve3D` (named `abinitio3D` before 2026-10-03) is de novo map determination: it couples ab initio 3D reconstruction
+`solve3D` is de novo map determination: it couples ab initio 3D reconstruction
 with initial 3D refinement in one stage schedule.
 
 Use this skill to reason about the full contract between solve3D stage policy
 and per-iteration particle sampling. Treat the implementation as a pipeline:
 
-1. `exec_solve3D` decides the initial and stage-wise fractional-update policy.
+1. `exec_solve3D` sets the run's fixed `update_frac` from `nsample` (or forces
+   full sampling), writes the sampling units, and the stage controller emits
+   the per-stage sampling controls.
 2. `simple_oris` stores the chosen subset through `sampled` and `updatecnt`.
-3. `prob_align` or `refine3D_exec` reuses that exact subset instead of resampling independently.
-4. `simple_eul_prob_tab` performs importance-style reference and in-plane selection only inside the sampled subset.
-5. `volassemble` does not resample particles, but it does consume the realized update fraction to mix trailing reconstructions.
+3. `prob_align_exec` (probabilistic passes) or the distributed master
+   (non-probabilistic fractional passes) draws once; table workers and
+   `refine3D_exec` reproduce that exact subset instead of resampling.
+4. `simple_eul_prob_tab*` performs importance-style reference and in-plane selection only inside the sampled subset.
+5. Volume assembly does not resample particles, but it consumes the realized per-state update fraction to blend the trailing chain.
 
 ## Quick Start
 
@@ -30,14 +34,14 @@ Then answer the user request in this order:
 3. State whether the subset is being newly sampled, reproduced from prior
    sampling, or inferred from `updatecnt`.
 4. Separate particle-domain search decisions from volume-domain trailing-reconstruction effects.
-5. Use exact field names such as `update_frac`, `sampled`, `updatecnt`,
-   `frac_best`, `fillin`, `balance` (`none|class|cavg`), `nclust`,
-   `cohort_sampling`, and `ufrac_trec`.
+5. Use exact field names such as `nsample`, `update_frac`, `sampled`,
+   `updatecnt`, `frac_best`, `greedy_sampling`, `fillin`, `balance`
+   (`none|class|cavg`), `nclust`, `cohort_sampling`, and `ufrac_trec`.
 
 ## Working Rules
 
-- Do not describe `volassemble` as the module that decides which particles get
-  updated. It only consumes the result later for trailing reconstruction
+- Do not describe volume assembly as the module that decides which particles
+  get updated. It only consumes the result later for trailing reconstruction
   weighting.
 - Do not describe `prob_align` as introducing a second independent sampling
   policy. It samples once, writes the subset to `ptcl3D`, and downstream
@@ -48,15 +52,19 @@ Then answer the user request in this order:
   angles are sampled for those particles.
 - Treat `sampled` as the marker for the current sampling round and `updatecnt`
   as persistent history across rounds.
+- `solve3D` takes `nsample` only: `nsample_start`/`nsample_stop` are refused
+  and the update fraction does not change between stages.
 - There is no docked solve3D split, sticky class sampling or `sampled_only`
-  cohort restriction any more; multi-state solve3D is independent from the
-  start, and the only cohort rule is `refine3D_states` `cohort_sampling`.
+  cohort restriction; multi-state solve3D is independent from the start, and
+  the only cohort rule is `refine3D_states` `cohort_sampling`.
+- The sampler never uses 3D maps, poses or projection directions; sampling
+  units come from 2D classes only.
 - When explaining behavior, call out whether the code path is initial solve3D
-  seeding, normal iteration, final-stage fill-in, or trailing reconstruction.
-- Preserve the online matcher single-read contract. If reconstruction or
-  restoration is active, the matcher should reuse the already-read batch images
-  after assignment. Do not add a second particle-stack pass to reconstruct the
-  sampled subset unless the repository policy explicitly changes.
+  seeding, normal iteration, last-stage fill-in, or trailing reconstruction.
+- Preserve the reconstruction read contract: the reconstruction of the sampled
+  subset copies the images (or cropped records) the search pass already read
+  into the pass buffer. Do not add a second particle-stack pass unless the
+  repository policy explicitly changes.
 
 ## File-Driven Workflow
 
@@ -68,9 +76,10 @@ Inspect:
 - `src/main/solve/simple_solve3D_utils.f90`
 - `src/main/solve/simple_solve3D_controller.f90`
 
-Focus on `update_frac`, `nsample*`, `UPDATE_FRAC_MAX`, `sample4update_class`,
-`prob_neigh` (and `prob_neigh_mode`), `prob`, `frac_best`, `fillin`, and
-`trail_rec`.
+Focus on `nsample` (`NSAMPLE_SOLVE3D_DEFAULT`), `UPDATE_FRAC_MAX`,
+`FULL_SAMPLE_SWITCH_FRAC`, `force_full_sampling_mode`, `sample4update_class`,
+`prob_neigh` (and `prob_neigh_mode`), `prob`, `NSPACE_MULTI_MAX`,
+`greedy_sampling`, `frac_best`, `fillin`, and `trail_rec`.
 
 ### Particle-subset bookkeeping
 
@@ -81,35 +90,40 @@ Inspect:
 - `src/main/ori/simple_oris.f90`
 
 Focus on `sample4update_class`, `sample4update_cnt`,
-`sample4update_fillin`, `sample4update_reprod`, `sample4update_rescore`,
-`sample4update_updated`, `incr_sampled_updatecnt`, `get_update_frac`, and the
+`sample4update_fillin`, `sample4update_missing`, `sample4update_reprod`,
+`sample4update_rescore`, `sample4update_updated`, `incr_sampled_updatecnt`,
+`get_update_frac`, `get_state_update_fracs`, `get_group_update_counts`, and the
 unit-table helpers `class_sample_quotas` and `class_sample_sweep`. The sampling
 units (`balance=none|class|cavg`) are produced by
-`src/main/strategies/search/simple_view_partition_sampling.f90`; the sampler
-never uses 3D maps, poses or projection directions.
+`src/main/strategies/search/simple_view_partition_sampling.f90`.
 
 ### Probabilistic sampling reuse
 
 Inspect:
 
-- `src/main/commanders/simple/simple_commanders_prob.f90`
-- `src/main/simple_eul_prob_tab.f90`
-- `src/main/simple_eul_prob_tab_neigh.f90`
+- `src/main/strategies/parallelization/simple_prob_align_strategy.f90`
+- `src/main/commanders/simple/simple_commanders_prob.f90` (table workers)
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`
+- `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90`
+- `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`
 - `src/main/strategies/search/simple_strategy3D_matcher.f90`
 
 Preserve the sample-once-and-reproduce contract between `prob_align`,
-`prob_tab`, and `refine3D_exec`.
+`prob_tab`, and `refine3D_exec`, and between the distributed master's draw
+(`master_draws_sample3D`) and its workers.
 
 ### Trailing reconstruction
 
 Inspect:
 
-- `src/main/commanders/simple/simple_commanders_rec_distr.f90` (gridding pair
-  I/O and restoration are contained in `restore_state_from_parts`)
+- `src/main/strategies/parallelization/simple_volassemble_strategy.f90`
+  (`volassemble_exec`; trailing blend, chain and gridding pair I/O inside
+  `restore_state_from_parts`)
 - `src/main/volume/simple_halfmap_diagnostics.f90`
 
-Remember that `volassemble` blends current and previous even/odd reconstructions
-using the realized update fraction. It should not choose a new particle subset.
+Remember that volume assembly blends the current partial accumulators with the
+per-state trailing chain using the realized update fraction (population rule).
+It should not choose a new particle subset.
 
 ## Language To Prefer
 

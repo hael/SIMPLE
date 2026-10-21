@@ -54,7 +54,7 @@ CLINE_HELPER_CALL = re.compile(r"^\s*call\s+([a-z_][a-z0-9_]*)\s*\(.*\bcline\b",
 
 # These helpers are deliberately small command-default bundles.  Their direct
 # missing-key assignments are part of the caller's display-default evidence.
-TRACED_DEFAULT_HELPERS = {"set_automask2d_defaults"}
+TRACED_DEFAULT_HELPERS = {"set_automask2d_defaults", "set_refine2d_defaults"}
 
 # Commander execute methods that only forward the command line to one workflow
 # procedure: the workflow's missing-key assignments are the program's evidence.

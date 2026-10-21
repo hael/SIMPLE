@@ -1,15 +1,16 @@
 ---
 name: simple-nonuniform-regularization
-description: Use when working on SIMPLE's nonuniform filtering and volume-domain regularization path, including filt_mode=nonuniform or nonuniform_lpset, simple_nu_filter, spherical NU support, _nu_filt/_nu_locres outputs, ML-regularized auxiliary member coupling, or volassemble postprocessing.
+description: Use when working on SIMPLE's nonuniform filtering and volume-domain regularization path, including filt_mode=nonuniform or nonuniform_lpset, simple_nu_filter and simple_nu_state_filter, spherical NU support, _nu_filt/_nu_locres outputs, the NU matching low-pass handoff, ML-regularized auxiliary member coupling, or NU postprocessing in volume assembly (volassemble_exec) and the PCG master.
 ---
 
 # SIMPLE Nonuniform Regularization
 
 Use this skill for SIMPLE's nonuniform volume regularization/filtering path.
 Treat it as a volume-domain postprocessing feature: particle search and matchers
-consume filtered references, but volume assembly (gridding `volassemble` and the
-PCG master, through `simple_nu_state_filter`) owns generation of the
-nonuniform even/odd and merged reference volumes.
+consume filtered references, but volume assembly (gridding `volassemble_exec`
+and the PCG master, through `nonuniform_filter_state` in
+`simple_nu_state_filter`) owns generation of the nonuniform even/odd and merged
+reference volumes.
 
 ## Quick Start
 
@@ -18,10 +19,12 @@ nonuniform even/odd and merged reference volumes.
 2. Identify which layer the task touches:
    - User option and staging policy: `filt_mode`,
      `src/main/params`, `simple_solve3D_controller`.
-   - Assembly orchestration: `commander_volassemble` in
-     `simple_commanders_rec_distr.f90`, the PCG master in
-     `simple_rec3D_pcg_strategy.f90`, and the shared per-state
-     `simple_nu_state_filter.f90`.
+   - Assembly orchestration: `volassemble_exec` in
+     `simple_volassemble_strategy.f90` (run by the distributed `refine3D`
+     master on its own builder; `commander_volassemble` is a thin wrapper for
+     command-line callers), the PCG master in `simple_rec3D_pcg_strategy.f90`
+     (project handoff `filter_pcg_nonuniform_maps`), and the shared per-state
+     `nonuniform_filter_state` in `src/main/volume/simple_nu_state_filter.f90`.
    - Mask artifact compatibility: `simple_vol_pproc_policy.f90`.
    - Spherical NU support: `src/main/nu_filt/simple_nu_filter_bank.f90`.
    - Numerical filter implementation: `src/main/nu_filt/simple_nu_filter.f90`.
@@ -44,14 +47,18 @@ nonuniform even/odd and merged reference volumes.
 - Keep the density automask independent of NU support: assembly generates it
   for `envfsc` and, under active `automsk`, for the filter-field background and
   reference mask; `state_mask_is_compatible` checks reused artifacts.
-- Preserve shared-memory and distributed parity by changing the Cartesian
-  assembly path, not only a single execution mode.
+- Preserve parity across execution modes and both reconstruction backends by
+  changing the shared `nonuniform_filter_state` (or `volassemble_exec`), not
+  one caller.
 - Treat `simple_nu_filter` as stateful during a call sequence. The required
   lifecycle is `setup_nu_dmats`, `optimize_nu_cutoff_finds`,
-  `nu_filter_vols`, and `cleanup_nu_filter`.
-- Always clean up cache/state on normal and error-prone paths. The module uses
-  disk cache files named `nu_filter_cache_even_k_*.mrc` and
-  `nu_filter_cache_odd_k_*.mrc` plus module-level allocatables.
+  `nu_filter_vols(vol_even_nu, vol_odd_nu, vol_src_even, vol_src_odd)`, and
+  `cleanup_nu_filter`, which releases the module-level allocatables. The
+  filter writes no scratch files.
+- Keep the source pair alive and unchanged from `setup_nu_dmats` to
+  `nu_filter_vols`: the composition filters it again per label. With
+  `pcg_solvent=yes` the label field of the base pair is applied to the
+  solvent-prior pair instead.
 - When `ml_reg=yes`, use the `_unfil` even/odd pair as the base nonuniform
   input and offer the ML-regularized pair as the auxiliary member. It is
   appended as the last label, sharing the finest retained rung's Potts
@@ -72,14 +79,16 @@ Describe it as local selection among candidate filtered even/odd pairs:
 - build a low-pass candidate bank from the unfiltered even/odd pair
 - construct spherical objective support from `mskdiam`
 - optionally append the auxiliary pair as the last (finest) bank member
-- compute mask-packed voxelwise objective costs: the squared cross-half
-  prediction error at one global noise level (no local noise estimate; the
-  level never changes a voxel's winner)
+- filter each candidate pair and score it at once with mask-packed voxelwise
+  objective costs: the squared cross-half prediction error at one global
+  noise level (no local noise estimate; the level never changes a voxel's
+  winner)
 - smooth each candidate objective inside spherical support
-- choose the best candidate per voxel
-- apply ordered-label Potts smoothing
-- synthesize filtered even/odd outputs, the merged `_nu_filt` volume, and the
-  `_nu_locres` diagnostic map
+- choose the label per voxel coarse to fine, like for like (both costs
+  smoothed at the finer candidate's radius)
+- apply ordered-label Potts smoothing, which only coarsens
+- synthesize filtered even/odd outputs by filtering the source pair again per
+  label, then the merged `_nu_filt` volume and the `_nu_locres` diagnostic map
 
 ### Modify support or automask behavior
 
@@ -87,8 +96,9 @@ Read:
 
 - `doc/policies/NU/nonuniform_filtering_policy.md`
 - `doc/policies/3D/automasking_policy.md`
-- `src/main/volume/simple_vol_pproc_policy.f90`
-- `src/main/commanders/simple/simple_commanders_rec_distr.f90`
+- `src/main/volume/simple_vol_pproc_policy.f90` (`state_mask_is_compatible`)
+- `src/main/volume/simple_nu_state_filter.f90`
+- `src/main/strategies/parallelization/simple_volassemble_strategy.f90`
 
 For NU support changes, preserve the spherical-only `setup_nu_dmats` API unless
 an explicit policy change includes a statistically valid null estimator and a
@@ -107,9 +117,14 @@ Read:
   refined map
 - the implementation notes in [references/nonuniform-regularization-map.md](./references/nonuniform-regularization-map.md)
 
-Watch for mask-packed arrays, temporary full-volume buffers, disk-backed cache
-traffic, and OpenMP loop shape. If replacing cache files with in-memory buffers,
-preserve behavior for the auxiliary member, stats, local-resolution maps, and cleanup.
+Watch for mask-packed arrays, temporary full-volume buffers, and OpenMP loop
+shape. Candidate pairs are never stored: the setup scores each right after
+filtering it and the composition filters the source pair again. The level loop
+reuses the setup's `dmats_mask` and `norms_mask`, the Potts sweeps walk packed
+per-colour voxel lists, and the tent smoothing skips zero lines and is held bit
+for bit to a reference by its unit test. Read the filter's split in the
+`VOLASSEMBLE` bench report (filtering, objective, optimisation with level
+smoothings and Potts sweeps, composition) before and after.
 
 ### Modify matcher consumption of filtered references
 

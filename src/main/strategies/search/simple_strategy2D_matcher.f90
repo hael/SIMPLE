@@ -3,7 +3,6 @@ module simple_strategy2D_matcher
 use simple_pftc_srch_api
 use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
-use simple_progress,                 only: progressfile_update
 use simple_eo_partition,             only: ensure_field_halves
 use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, &
                                            s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
@@ -15,7 +14,7 @@ use simple_matcher_ptcl_io,          only: ptcl_read_counts, ptcl_read_counts_no
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
-                                           all_active_ptcls_2D_assigned, refine2D_blends_carryover
+                                           refine2D_blends_carryover
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
     &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D
 use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
@@ -31,7 +30,6 @@ use simple_strategy2D_prob,          only: strategy2D_prob
 use simple_strategy2D_srch,          only: strategy2D_spec
 use simple_strategy2D_tseries,       only: strategy2D_tseries
 use simple_eul_prob_tab2D,           only: eul_prob_tab2D
-use simple_refine2D_fnames,          only: refine2D_cavgs_fname, refine2D_cavgs_half_fname
 implicit none
 
 public :: refine2D_exec
@@ -65,8 +63,6 @@ type :: refine2D_ctrl
     logical :: l_cached
     logical :: l_crop_sums
     logical :: do_bench
-  contains
-    procedure :: display
 end type refine2D_ctrl
 
 contains
@@ -78,22 +74,22 @@ contains
         b_ptr => build
     end subroutine set_b_p_ptrs2D
 
-    !>  \brief  is the prime2D algorithm
-    subroutine refine2D_exec( params, build, cline, which_iter, converged )
-        use simple_convergence, only: convergence
+    !>  \brief  is the prime2D algorithm: samples, searches, accumulates the class sums and writes the orientations
+    !!  and sigma2 rows; a distributed worker writes its class-sum contribution, shared memory returns with the sums in
+    !!  the class averager for the strategy to restore. l_frac: whether this iteration blends carried class sums
+    subroutine refine2D_exec( params, build, cline, which_iter, l_frac )
         use simple_decay_funs,  only: extremal_decay2D
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         class(cmdline),            intent(inout) :: cline
         integer,                   intent(in)    :: which_iter
-        logical,                   intent(inout) :: converged
+        logical,                   intent(out)   :: l_frac
         type(strategy2D_per_ptcl), allocatable   :: strategy2Dsrch(:)
-        real,                      allocatable   :: states(:), incr_shifts(:,:)
+        real,                      allocatable   :: incr_shifts(:,:)
         integer,                   allocatable   :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),      target        :: eulprob_obj_part
         type(refine2D_ctrl)                      :: ctrl
         type(ori)             :: orientation
-        type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
         logical :: attempted, improved, no_improvement, invalid
         real    :: frac_srch_space, neigh_frac
@@ -232,7 +228,11 @@ contains
             if( ctrl%do_bench ) rt_sigma2_write = toc(t_sigma2_write)
         endif
         call write_orientations()
-        call finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
+        if( l_distr_worker_glob )then
+            if( ctrl%l_restore_cavgs ) call cavger_write_contribution(ctrl%l_frac_restore)
+            call cavger_kill
+        endif
+        l_frac = ctrl%l_frac_restore
         call b_ptr%esig%kill
         call b_ptr%pftc%kill
         call qsys_declare_part_finished(p_ptr, string('simple_strategy2D_matcher :: refine2D_exec'))
@@ -453,58 +453,6 @@ contains
             p_ptr%oritab = p_ptr%outfile
         end subroutine write_orientations
 
-        subroutine finalize_restoration_and_convergence(states, cline, conv, which_iter, converged)
-            real, allocatable, intent(inout) :: states(:)
-            class(cmdline),    intent(inout) :: cline
-            type(convergence), intent(inout) :: conv
-            integer,           intent(in)    :: which_iter
-            logical,           intent(inout) :: converged
-            integer :: n_unassigned
-            logical :: l_full_assignment
-            if( l_distr_worker_glob )then
-                if( ctrl%l_restore_cavgs )then
-                    call cavger_write_contribution(ctrl%l_frac_restore)
-                endif
-                call cavger_kill
-            else
-                if( ctrl%l_restore_cavgs )then
-                    if( cline%defined('which_iter') )then
-                        p_ptr%refs      = refine2D_cavgs_fname(p_ptr%which_iter, MRC_EXT)
-                        p_ptr%refs_even = refine2D_cavgs_half_fname(p_ptr%which_iter, 'even', MRC_EXT)
-                        p_ptr%refs_odd  = refine2D_cavgs_half_fname(p_ptr%which_iter, 'odd', MRC_EXT)
-                    else
-                        THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
-                    endif
-                    call cavger_commit_carryover(ctrl%l_frac_restore)
-                    call cavger_restore_cavgs( p_ptr%frcs )
-                    call cavger_gen2Dclassdoc
-                    call cavger_write_merged( p_ptr%refs )
-                    call cavger_write_eo( p_ptr%refs_even, p_ptr%refs_odd )
-                    call cavger_kill
-                    call cline%set('refs', p_ptr%refs)
-                    call b_ptr%spproj%os_cls3D%new(p_ptr%ncls, is_ptcl=.false.)
-                    states = b_ptr%spproj%os_cls2D%get_all('state')
-                    call b_ptr%spproj%os_cls3D%set_all('state',states)
-                    call b_ptr%spproj%write_segment_inside('cls2D', p_ptr%projfile)
-                    call b_ptr%spproj%write_segment_inside('cls3D', p_ptr%projfile)
-                    deallocate(states)
-                endif
-                converged = conv%check_conv2D(p_ptr, cline, b_ptr%spproj_field, b_ptr%spproj_field%get_n('class'), p_ptr%msk)
-                converged = converged .and. (p_ptr%which_iter >= p_ptr%minits)
-                converged = converged .or.  (p_ptr%which_iter >= p_ptr%maxits)
-                if( ctrl%l_require_full_assignment )then
-                    l_full_assignment = all_active_ptcls_2D_assigned(b_ptr%spproj_field, [p_ptr%fromp,p_ptr%top], n_unassigned)
-                    if( .not. l_full_assignment )then
-                        write(logfhandle,'(A,I8)') &
-                            '>>> REFINE2D FULL-ASSIGNMENT COVERAGE: UNASSIGNED ACTIVE PARTICLES =', n_unassigned
-                    endif
-                    converged = converged .and. l_full_assignment
-                endif
-                call conv%print_verdict(converged)
-                if(.not. ctrl%l_stream) call progressfile_update(conv%get('progress'))
-            endif
-        end subroutine finalize_restoration_and_convergence
-
         subroutine maybe_write_bench(which_iter)
             use, intrinsic :: iso_fortran_env, only: int64, real64
             use simple_bench_io, only: open_bench_report
@@ -566,24 +514,5 @@ contains
         end subroutine maybe_write_bench
 
     end subroutine refine2D_exec
-
-    subroutine display( self )
-        class(refine2D_ctrl), intent(in) :: self
-        write(logfhandle,'(a)') '>>> REFINE2D CONTROL FLAGS:'
-        write(logfhandle,'(a,a)') 'refine_flag           : ', trim(self%refine_flag)
-        write(logfhandle,'(a,l1)') 'l_sample_updates     : ', self%l_sample_updates
-        write(logfhandle,'(a,l1)') 'l_frac_restore       : ', self%l_frac_restore
-        write(logfhandle,'(a,l1)') 'l_ctf                : ', self%l_ctf
-        write(logfhandle,'(a,l1)') 'l_snhc               : ', self%l_snhc
-        write(logfhandle,'(a,l1)') 'l_stream             : ', self%l_stream
-        write(logfhandle,'(a,l1)') 'l_greedy             : ', self%l_greedy
-        write(logfhandle,'(a,l1)') 'l_np_cls_defined     : ', self%l_np_cls_defined
-        write(logfhandle,'(a,l1)') 'l_prob_align         : ', self%l_prob_align
-        write(logfhandle,'(a,l1)') 'l_restore_cavgs      : ', self%l_restore_cavgs
-        write(logfhandle,'(a,l1)') 'l_require_full_assignment : ', self%l_require_full_assignment
-        write(logfhandle,'(a,l1)') 'l_cached             : ', self%l_cached
-        write(logfhandle,'(a,l1)') 'l_crop_sums          : ', self%l_crop_sums
-        write(logfhandle,'(a,l1)') 'do_bench             : ', self%do_bench
-    end subroutine display
 
 end module simple_strategy2D_matcher

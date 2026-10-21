@@ -125,5 +125,7 @@ barrier that PFTC and alignment image/search objects are absent before the
 first half-map reconstructor is created.
 
 Implementation anchors: `simple_strategy3D_matcher`, `simple_matcher_3Drec`,
-`simple_state_weight_set`, `simple_reconstructor_openmpoffload`, and
-`commander_volassemble`.
+`simple_state_weight_set`, `simple_reconstructor_openmpoffload`, and volume
+assembly (`volassemble_exec` in `simple_volassemble_strategy.f90`, which the
+distributed `refine3D` master runs on its own builder and the
+`commander_volassemble` wrapper runs for the command-line callers).

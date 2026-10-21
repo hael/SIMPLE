@@ -62,6 +62,7 @@ type :: builder
     ! LOW-LEVEL BUILDERS
     procedure                           :: build_spproj
     procedure                           :: build_general_tbox
+    procedure                           :: new_vols
     procedure                           :: kill_general_tbox
     procedure                           :: build_strategy3D_tbox
     procedure                           :: kill_strategy3D_tbox
@@ -127,14 +128,13 @@ contains
         call self%build_spproj(params, cline)
     end subroutine init_params_and_build_spproj
 
-    subroutine init_params_and_build_general_tbox( self, cline, params, do3d, spproj_src )
+    subroutine init_params_and_build_general_tbox( self, cline, params, do3d )
         class(builder),    target,   intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         class(parameters),           intent(inout) :: params
         logical,           optional, intent(in)    :: do3d
-        class(sp_project), optional, intent(in)    :: spproj_src !< the project of projfile in memory (see build_spproj)
         call params%new(cline)
-        call self%build_spproj(params, cline, spproj_src=spproj_src)
+        call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=do3d)
     end subroutine init_params_and_build_general_tbox
 
@@ -161,15 +161,12 @@ contains
 
     ! LOW-LEVEL BUILDERS
 
-    !> spproj_src: the caller's project as read from params%projfile and unchanged since; it is copied instead of
-    !! read again (a copy is several times faster than the read of a large project)
-    subroutine build_spproj( self, params, cline, wthreads, spproj_src )
+    subroutine build_spproj( self, params, cline, wthreads )
         use simple_ui, only: get_prg_ptr
         class(builder),    target,   intent(inout) :: self
         class(parameters),           intent(inout) :: params
         class(cmdline),              intent(inout) :: cline
         logical,           optional, intent(in)    :: wthreads
-        class(sp_project), optional, intent(in)    :: spproj_src
         type(string) :: projdir
         logical      :: read_spproj
         ! create object for orientations
@@ -198,11 +195,7 @@ contains
             if( cline%defined('projfile') ) read_spproj = .true.
         endif
         if( read_spproj )then
-            if( present(spproj_src) )then
-                call self%spproj%copy(spproj_src)
-            else
-                call self%spproj%read(params%projfile, wthreads=wthreads)
-            endif
+            call self%spproj%read(params%projfile, wthreads=wthreads)
             ! the project file's directory, as update_projinfo stashes it: a registered sigma2 state
             ! resolves against it also when the project is addressed from another directory
             projdir = stemname(simple_abspath(params%projfile, check_exists=.false.))
@@ -303,11 +296,7 @@ contains
         if( params%box_crop > 0 )then
             ! build image objects
             call self%img_crop%new([params%box_crop,params%box_crop,1],params%smpd, wthreads=.false.)
-            if( ddo3d )then
-                call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-                call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            endif
+            if( ddo3d ) call self%new_vols(params)
             call mskimg%disc([params%box_crop,params%box_crop,1], params%smpd_crop, params%msk_crop, self%lmsk_crop)
             call mskimg%kill
             ! build arrays
@@ -323,6 +312,15 @@ contains
         self%general_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
+
+    !> the general toolbox's volumes at box_crop, made again after a reprojection model's clean-up released them
+    subroutine new_vols( self, params )
+        class(builder),    intent(inout) :: self
+        class(parameters), intent(in)    :: params
+        call self%vol%new(    [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call self%vol_odd%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call self%vol2%new(   [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+    end subroutine new_vols
 
     subroutine kill_general_tbox( self )
         class(builder), intent(inout)  :: self

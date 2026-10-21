@@ -219,6 +219,8 @@ contains
         call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
         call assert_registered_category('pool2D', 'stream', 'Stream Workflows', 10)
         call assert_registered_category('solve2D', 'refine2d', 'Refine 2D Workflows', 30)
+        call assert_registered_category('refine2D', 'refine2d', 'Refine 2D Workflows', 30)
+        call assert_registered_required_keys('refine2D', [character(len=8) :: 'projfile', 'mskdiam'])
         call assert_registered_cli_summary('model_cavgs_rejection', 'quality_mode', &
             &'Class-average quality mode (apply|analyze|learn|evaluate|promote){apply}')
         call assert_registered_cli_summary('import_movies', 'cs', 'Spherical aberration; e.g. 2.7 mm')
@@ -426,6 +428,32 @@ contains
             endif
         endif
     end subroutine assert_registered_test_category
+
+    !> a public program's executable and its required keys, in any order (the private worker of the same
+    !! name is checked against them)
+    subroutine assert_registered_required_keys( name, expected_keys )
+        character(len=*), intent(in) :: name
+        character(len=*), intent(in) :: expected_keys(:)
+        type(string), allocatable :: required_keys(:)
+        integer :: i, j, nrequired
+        logical :: found
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( .not. associated(registered_prg) ) return
+        call assert_char('simple_exec', registered_prg%executable%to_char(), trim(name)//' executable')
+        nrequired = registered_prg%get_nrequired_keys()
+        call assert_int(size(expected_keys), nrequired, trim(name)//' required input count')
+        if( nrequired < 1 ) return
+        required_keys = registered_prg%get_required_keys()
+        do i = 1, size(expected_keys)
+            found = .false.
+            do j = 1, size(required_keys)
+                if( required_keys(j)%to_char() == trim(expected_keys(i)) ) found = .true.
+            enddo
+            call assert_true(found, trim(name)//' requires '//trim(expected_keys(i)))
+        enddo
+    end subroutine assert_registered_required_keys
 
     subroutine assert_registered_requirement(name, expected_id, expected_minimum, expected_maximum)
         character(len=*), intent(in) :: name, expected_id
