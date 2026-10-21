@@ -1345,7 +1345,8 @@ contains
             endif
             ! Omit the stage when the halves already agree past its planned
             ! limit: its crop cannot represent that resolution, so the iterations
-            ! buy nothing. Never the first or last stage, nor the axis-search stage.
+            ! buy nothing. Never the first or last stage, nor the axis-search stage,
+            ! nor any stage of a multi-state run (solve3D_stage_behind_fsc05).
             ! Without an axis search symmetrize is a no-op (l_symran implies
             ! l_srch4symaxis), so that stage can be omitted.
             if( istage > start_stage .and. istage < nstages_refine3D .and. &

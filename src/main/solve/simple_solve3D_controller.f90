@@ -165,6 +165,15 @@ contains
         l_delayed = l_vol_supplied .and. nstates == 1
     end function solve3D_uses_delayed_input_lp
 
+    !> Stage omission and the mid-stage resolution exit apply to single-state runs only. The states
+    !! of a multi-state run split during the prob stages, which these rules would skip or cut short
+    !! (doc/policies/3D/solve3D_policy.md sec. 6)
+    module pure function solve3D_stage_skipping( nstates ) result( l_skip )
+        integer, intent(in) :: nstates
+        logical :: l_skip
+        l_skip = nstates <= 1
+    end function solve3D_stage_skipping
+
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
         istage = ML_REG_START_STAGE
@@ -664,7 +673,9 @@ contains
         ! Never against the band in use: a band-limited map's crossing sits at its band,
         ! so that test fires on nothing (reverted 2026-10-18). Same eligibility as the
         ! shift: never the entry stage, the first two stages, the last stage or the axis-search stage.
-        if( .not. l_cavgs .and. istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
+        ! Single-state only: a multi-state stage runs until its own convergence (solve3D_stage_skipping).
+        if( solve3D_stage_skipping(params%nstates) .and. &
+            &.not. l_cavgs .and. istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
             &istage < active_refine3D_nstages() .and. allocated(lpinfo) .and. &
             &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
             call cline_refine3D%set('lpexit',             lpinfo(istage+1)%lp)
@@ -752,7 +763,7 @@ contains
 
     !> Is the stage's planned matching limit already behind the measured FSC=0.5
     !! resolution? Such a stage would iterate at a crop that cannot represent
-    !! what the halves already agree on. Particle route, past
+    !! what the halves already agree on. Particle route of a single-state run, past
     !! FSC05_PROMOTE_MIN_STAGE; .false. without a res05 field.
     module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
         class(parameters), intent(in) :: params
@@ -760,6 +771,7 @@ contains
         logical :: l_behind
         real :: res05
         l_behind = .false.
+        if( .not. solve3D_stage_skipping(params%nstates) ) return
         if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
         if( .not. allocated(lpinfo) )           return
         if( istage > size(lpinfo) )             return

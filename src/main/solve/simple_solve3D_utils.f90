@@ -132,6 +132,11 @@ interface
         logical :: l_delayed
     end function solve3D_uses_delayed_input_lp
 
+    module pure function solve3D_stage_skipping( nstates ) result( l_skip )
+        integer, intent(in) :: nstates
+        logical :: l_skip
+    end function solve3D_stage_skipping
+
     module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage

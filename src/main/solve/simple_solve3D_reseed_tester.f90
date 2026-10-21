@@ -1,8 +1,8 @@
-!@descr: unit tests of solve3D_cavgs' stage rule of state reseeding (reseed_state_labels)
+!@descr: unit tests of solve3D's stage rules: the axis-search stage, stage skipping, and solve3D_cavgs' state reseeding
 ! In-memory labels and scores of the even (1..ncavgs) and odd (ncavgs+1..2*ncavgs) halves of the
 ! class averages; no project, volume or job.
 module simple_solve3D_reseed_tester
-use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage
+use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage, solve3D_stage_skipping
 use simple_test_utils
 implicit none
 private
@@ -13,6 +13,7 @@ contains
     subroutine run_all_solve3D_reseed_tests()
         write(*,'(A)') '**** running all solve3D_cavgs stage rule tests ****'
         call test_symsrch_stage()
+        call test_stage_skipping()
         call test_no_weak_state()
         call test_one_empty_state()
         call test_all_in_one_state()
@@ -26,6 +27,14 @@ contains
         call assert_int(3, solve3D_symsrch_stage(.false.), 'no axis search: stage 3')
         call assert_int(4, solve3D_symsrch_stage(.true.),  'axis search after stage 4')
     end subroutine test_symsrch_stage
+
+    !> stage omission and the mid-stage resolution exit: single-state runs only
+    subroutine test_stage_skipping()
+        write(*,'(A)') 'test_stage_skipping'
+        call assert_true(solve3D_stage_skipping(1),        'single state: stages may be skipped')
+        call assert_false(solve3D_stage_skipping(2),       'two states: no stage skipped')
+        call assert_false(solve3D_stage_skipping(4),       'four states: no stage skipped')
+    end subroutine test_stage_skipping
 
     !> populated states, and a single state, are left as they are
     subroutine test_no_weak_state()

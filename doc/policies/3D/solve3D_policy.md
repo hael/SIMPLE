@@ -253,7 +253,8 @@ searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` can be omitted: with
 therefore implies `l_srch4symaxis`. Omitted
 stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
 the add-on manifest already treat as "not run". The one-rung advance above
-therefore applies only to the three stages that cannot be omitted.
+therefore applies only to the three stages that cannot be omitted. Single-state
+runs only since 2026-10-21: a multi-state run omits no stage (section 6).
 
 **Stage iteration budget (`MAXITS`): measured slack, not yet reallocated.**
 The budget stands at `[20,20,17,15,12,12,12,25]`. A reallocation of stage 3's
@@ -307,7 +308,8 @@ the two that left coarsest at 8.171 A gave the two worst maps, 4.140 and the
 run's only failure at 5.353. A stage still gaining resolution is productive
 whatever the next rung's limit says. Emitted for the same
 stages the shift is allowed for, and it only ever adds convergence, so
-`minits` and the Cartesian rule still hold.
+`minits` and the Cartesian rule still hold. Single-state runs only since
+2026-10-21: the controller emits no `lpexit` for a multi-state run (section 6).
 
 A first version tested against `params%lp`, the band in use, and was
 reverted the same day: PfCRT `latest8` converged in 2 of 6 restarts. **Do not
@@ -489,9 +491,23 @@ until the overlap converged spent most of its time scanning nearly the whole
 space. A `solve3D_addon` pass keeps its own early stopping and does not set
 the key.
 
+No stage of a multi-state run is skipped or cut short by a resolution rule
+(ruling of 2026-10-21): the stage omission and the mid-stage resolution exit of
+section 4 apply to single-state runs only (`solve3D_stage_skipping` in the stage
+controller), so every multi-state stage runs until its own convergence rule or
+its `MAXITS`. Both rules read the best state's FSC=0.5 resolution. At the start
+of a multi-state run every state holds a mixture of nearly the same structure,
+so the best state resolves early, and the rules removed exactly the `prob`
+stages in which the states split. On a simulated two-state set (30,000
+particles, two RNA polymerase conformations) the build of 2026-10-20 omitted
+stage 3, ended stage 4 after 3 of its 15 iterations and lost the second state
+in stage 5 (accuracy 0.57), while the build of 2026-10-15, which ran stages 3
+and 4 in full, separated the states during stage 4 (accuracy 0.97). The
+stage-boundary FSC=0.5 advance of a stage's limit still applies.
+
 Unless the user overrides them, the commander sets `nstages=5` and
-`lpstop=6.0 A`. Stage 5 does not enter static NU filtering, multi-state
-trailing reconstruction, or staged automasking. After
+`lpstop=6.0 A`. Stage 5 is NU-filtered (since 2026-10-18, section 8) but runs
+no multi-state trailing reconstruction or staged automasking. After
 stage 5, the workflow still runs the final original-sampling reconstruction
 so the run produces inspectable `rec_final_stateNN` volumes. To improve
 particle coverage before that early exit, the multi-state run starts
