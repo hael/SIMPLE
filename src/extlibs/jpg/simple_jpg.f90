@@ -125,6 +125,10 @@ contains
         hi = maxval(in_buffer)
         allocate(img_buffer(w*h*3))
         do j=0,h-1
+            if( hi == lo )then
+                img_buffer = -128 ! unsigned gray 128 in the signed byte buffer
+                exit
+            endif
             do i=0,w-1
                 if  (self%colorspace == 3) then
                     c=3

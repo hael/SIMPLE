@@ -29,7 +29,11 @@ contains
         call padded%new(ldim_pad, smpd_thumb)
         padded = BACKGR
         call mic%fft()
-        call mic%clip(thumb)
+        if( any(ldim_thumb > ldim) )then
+            call mic%pad(thumb, antialiasing=.false.)
+        else
+            call mic%clip(thumb)
+        endif
         if( ll_neg ) call thumb%neg
         call thumb%ifft()
         call mic%ifft()
