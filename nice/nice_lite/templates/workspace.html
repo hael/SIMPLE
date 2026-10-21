@@ -41,7 +41,7 @@
     <!-- Scrollable stream grid (flex-1 so it fills space between sub-bar and footer) -->
     <div class="flex-1 min-h-0 flex flex-row">
         <div class="relative flex-1 min-h-0">
-            <iframe id="jobs_iframe" name="jobs_iframe" src="{% url 'nice_lite:workspace_jobs' %}" class="w-full h-full border-0" onload="toggleJobsIframeLoading(false)"></iframe>
+            <iframe id="jobs_iframe" name="jobs_iframe" src="{% url 'nice_lite:workspace_jobs' %}" class="w-full h-full border-0" onload="jobsIframeLoaded(this)"></iframe>
             <div id="jobs_iframe_loading" class="hidden absolute inset-0 z-40 bg-streambg/70 backdrop-blur-[1px] flex items-center justify-center">
                 <span class="text-xs text-streamtext bg-streambar border border-streamline rounded-lg px-3 py-1.5">loading...</span>
             </div>
@@ -264,6 +264,18 @@
     const VIEW_MODE_STORAGE_KEY = "workspaceViewMode";
     const JOBS_IFRAME_URL = "{% url 'nice_lite:workspace_jobs' %}";
 
+    function jobsIframeLoaded(iframe) {
+        toggleJobsIframeLoading(false);
+        const back = iframe.contentDocument?.querySelector('a[href="{% url 'nice_lite:workspace' %}"]');
+        if (back) {
+            const mode = sessionStorage.getItem(VIEW_MODE_STORAGE_KEY) || "card";
+            back.href = `${JOBS_IFRAME_URL}?view=${mode}&force=1`;
+        }
+    }
+
+    const isJobsOverviewVisible = () =>
+        document.getElementById("jobs_iframe")?.contentWindow?.location.pathname === JOBS_IFRAME_URL;
+
     const applyViewMode = (mode) => {
         document.querySelectorAll("[data-view-mode]").forEach((button) => {
             button.setAttribute("aria-pressed", button.dataset.viewMode === mode ? "true" : "false");
@@ -295,11 +307,11 @@
     initViewModeToggle();
 
     window.addEventListener("visibilitychange", () => {
-        if (document.visibilityState !== "hidden" && !isJobBuilderVisible()) location.reload();
+        if (document.visibilityState !== "hidden" && !isJobBuilderVisible() && isJobsOverviewVisible()) location.reload();
     });
 
     setInterval(() => {
-        if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden" && !isJobBuilderVisible()) {
+        if ((Date.now() - lastinteraction) > 10000 && document.visibilityState !== "hidden" && !isJobBuilderVisible() && isJobsOverviewVisible()) {
             lastinteraction = Date.now();
             
             location.reload();

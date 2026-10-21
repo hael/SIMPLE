@@ -37,7 +37,7 @@
                             </span>
                         </td>
                         <td class="py-2 pr-3 text-streamtext font-medium">
-                            <a href="{% if job.prog == 'manualpick' %}{% url 'nice_lite:view_batch_manual_picker' job.id %}{% else %}{% url 'nice_lite:view_batch' job.id %}{% if job.status != 'queued' and job.prog == 'solve3D' %}?volume_viewer=1{% elif job.status != 'queued' and job.prog == 'solve3D_cavgs' %}?volume_viewer=1{% elif job.status != 'queued' and job.prog == 'refine3D_auto' %}?volume_viewer=1{% elif job.status != 'queued' and job.prog == 'refine3D_states' %}?volume_viewer=1{% endif %}{% endif %}" target="_parent" class="hover:text-streamring transition-colors">
+                            <a href="{% if job.prog == 'manualpick' %}{% url 'nice_lite:view_batch_manual_picker' job.id %}{% else %}{% url 'nice_lite:view_batch' job.id %}{% if job.status != 'queued' and job.prog == 'solve3D' %}?volume_viewer=1{% elif job.status != 'queued' and job.prog == 'solve3D_cavgs' %}?volume_viewer=1{% elif job.status != 'queued' and job.prog == 'refine3D_auto' %}?volume_viewer=1{% elif job.status != 'queued' and job.prog == 'refine3D_states' %}?volume_viewer=1{% endif %}{% endif %}" target="_parent" onclick="openJobView(this)" class="hover:text-streamring transition-colors">
                                 {{ job.disp }} {{ job.name }}
                             </a>
                         </td>
@@ -92,7 +92,7 @@
                     </tr>
                 {% else %}
                     {% with ms=job.preprocessing_stats cs=job.classification_2D_stats %}
-                    <tr class="border-b border-streamdivider hover:bg-streambar/60 cursor-pointer" onclick="this.querySelector('form.viewform').submit();">
+                    <tr class="border-b border-streamdivider hover:bg-streambar/60 cursor-pointer" onclick="openJobView(this.querySelector('form.viewform'));">
                         <td class="py-2 pr-3">
                             <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}bg-streamaction/10 text-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}bg-streamerrorsurface text-streamerror{% elif job.status == 'finished' %}bg-streamring/10 text-streamaccent{% else %}bg-streamrejected/10 text-streamrejected{% endif %}">
                                 {{ job.status }}

@@ -85,7 +85,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         flow_card = self._read_template("includes/_job_flow_card.html")
         self.assertIn("{% include 'includes/_panel_header.html'", flow_card)
         self.assertIn("{% include 'includes/_job_card_footer.html'", flow_card)
-        self.assertIn("this.querySelector('form.viewform').submit()", flow_card)
+        self.assertIn("openJobView(this.querySelector('form.viewform'))", flow_card)
         self.assertNotIn("read_only", flow_card)
         self.assertEqual(flow_card.count("show_description_editor=True"), 2)
         self.assertEqual(flow_card.count("compact=True"), 2)

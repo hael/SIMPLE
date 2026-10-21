@@ -92,6 +92,11 @@
     }
   };
 
+  window.openJobView = (element) => {
+    element.target = isJobBuilderActive() ? "jobs_iframe" : "_parent";
+    if (element instanceof HTMLFormElement) element.submit();
+  };
+
   const artifactRows = document.querySelectorAll(".artifact-drag-row");
   const batchProjectCards = document.querySelectorAll("[data-batch-project-path]");
   if (artifactRows.length === 0 && batchProjectCards.length === 0) return;

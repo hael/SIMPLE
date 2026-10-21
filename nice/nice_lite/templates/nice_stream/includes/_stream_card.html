@@ -6,7 +6,7 @@
 {% endcomment %}
 {% with ms=job.preprocessing_stats cs=job.classification_2D_stats ss=job.particle_sieving_stats %}
 <div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-pointer"
-    onclick="this.querySelector('form.viewform').submit();">
+    onclick="openJobView(this.querySelector('form.viewform'));">
 
     <!-- Header: status dot · stream name · open-detail button -->
     {% include 'includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id active_persistent_workers=job.master_stats.master.active_persistent_workers %}

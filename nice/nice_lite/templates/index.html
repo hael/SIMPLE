@@ -204,8 +204,9 @@
             const workspaceIframe = document.getElementById("workspace_iframe");
             if (workspaceIframe?.dataset.src) {
                 const savedJob = window.history.state?.jobView;
-                workspaceIframe.addEventListener("load", () => {
-                    const frameLocation = workspaceIframe.contentDocument?.location;
+                const rememberJobView = () => {
+                    const jobsIframe = workspaceIframe.contentDocument?.getElementById("jobs_iframe");
+                    const frameLocation = (jobsIframe || workspaceIframe).contentDocument?.location;
                     if (!frameLocation || frameLocation.href === "about:blank") return;
                     const isJobView = currentWorkspaceId
                         && /\/(?:viewbatch|viewbatchmanualpicker|viewstream)\/\d+$/.test(frameLocation.pathname);
@@ -217,6 +218,10 @@
                             url: frameLocation.pathname + frameLocation.search + frameLocation.hash,
                         } : null,
                     }, "");
+                };
+                workspaceIframe.addEventListener("load", () => {
+                    workspaceIframe.contentDocument?.getElementById("jobs_iframe")?.addEventListener("load", rememberJobView);
+                    rememberJobView();
                 });
                 workspaceIframe.src = savedJob?.projectId === currentProjectId
                     && savedJob.workspaceId === currentWorkspaceId

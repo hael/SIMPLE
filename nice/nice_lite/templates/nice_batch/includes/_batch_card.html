@@ -4,7 +4,7 @@
 {% endcomment %}
 <div class="bg-streambar rounded-xl border {% if job.status == 'running' or job.status == 'queued' or job.status == 'terminating' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-pointer"
     {% if job.batch_project_drag_path %}data-batch-project-path="{{ job.batch_project_drag_path }}" ondragstart="dragBatchProject(event)"{% endif %}
-    onclick="this.querySelector('form.viewform').submit();">
+    onclick="openJobView(this.querySelector('form.viewform'));">
 
     <!-- Header: status dot · stream name · open-detail button -->
     {% include 'includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" "|add:job.pckg|add:" "|add:job.prog status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id active_persistent_workers=job.master_stats.master.active_persistent_workers %}
