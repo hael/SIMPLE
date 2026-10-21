@@ -256,8 +256,8 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
             call fix%build
             projfile = fix%project_fname()
             call run_solve3D(fix, projfile, nstates_run, nthr, .false.)
-            ! stages 1-2 shc over 500 and 1 000 directions, 3-4 prob, 5 prob_neigh at the cap
-            call check_path(tag, ['shc       ', 'shc       ', 'prob      ', 'prob_neigh'], [500, 1000, 1000, 2500], &
+            ! stages 1-2 shc over 500 and 1 000 directions, 3-4 prob over 1 000, 5 prob at the cap
+            call check_path(tag, ['shc       ', 'shc       ', 'prob      ', 'prob      '], [500, 1000, 1000, 2500], &
                 &nstates_run, gate)
             call evaluate(fix, projfile, tag, l_control, gate, gated=kind == 'compositional', de_novo=.true., &
                 &resolved_floor=SHC_RESOLVED_FLOOR)
@@ -380,11 +380,12 @@ subroutine run_cavgs_route( fix, projfile, nstates_run, nthr, tag, l_control, ga
     call xcavgs%execute(cl)
     call cl%kill
     deallocate(xcavgs, cl)
-    ! stages 1-2 shc and 3 prob over 500 directions, 4 prob over 1 000, 5-7 prob_neigh at the cap
-    ! (multi-state stages 1-2 run shc as particle solve3D does: ruling of 2026-10-18); the
-    ! single-state start is a measurement, its path not asserted
-    if( nstates_run > 1 ) call check_path(tag, ['shc       ', 'prob      ', 'prob      ', 'prob_neigh'], &
-        &[500, 500, 1000, 2500], nstates_run, gate)
+    ! stages 1-2 shc and 3 prob over 500 directions, 4 prob over 1 000, 5 prob and 6-7 prob_neigh
+    ! at the cap (multi-state stages 1-2 run shc as particle solve3D does: ruling of 2026-10-18;
+    ! prob_neigh from stage 6 as in single state: 2026-10-21); the single-state start is a
+    ! measurement, its path not asserted
+    if( nstates_run > 1 ) call check_path(tag, ['shc       ', 'prob      ', 'prob      ', 'prob      ', &
+        &'prob_neigh'], [500, 500, 1000, 2500, 2500], nstates_run, gate)
     call evaluate(fix, projfile, tag, l_control, gate, gated=.not. l_control .and. nstates_run > 1, de_novo=.true., &
         &images_truth=TRUTH_DOC, nimages=NCAVGS, max_rot_err=CAVGS_MAX_ROT_ERR, max_sh_err=CAVGS_MAX_SH_ERR, &
         &resolved_floor=CAVGS_RESOLVED_FLOOR)

@@ -17,7 +17,7 @@ integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve
 integer,          parameter :: NSPACE_REGISTER         = 1000 ! nspace of the solve3D_addon registration pass
 integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: NSPACE_SUB_BASE         = 2500
-integer,          parameter :: NSPACE_MULTI_MAX        = 2500 ! multi-state cap on nspace; the stage reaching it starts prob_neigh
+integer,          parameter :: NSPACE_MULTI_MAX        = 2500 ! multi-state cap on nspace
 
 ! Stage transition policy
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
@@ -32,7 +32,7 @@ integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch fr
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
-integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! single-state prob_neigh refinement stages 6-8
+integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
 real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
@@ -342,12 +342,12 @@ contains
             endif
         else if( params%nstates > 1 )then
             ! independent multi-state, from particles and from class averages alike: shc before the
-            ! prob stages; prob_neigh takes over at the first stage whose directions reach the
-            ! multi-state cap (stage 5)
+            ! prob stages; prob_neigh from the same stage as single state, so the default five-stage
+            ! run assigns its states in prob stages 3-5 (prob_neigh at stage 5 lost states, 2026-10-21)
             if( istage < PROB_REFINE_STAGE )then
                 cfg%refine           = 'shc'
                 cfg%prob_neigh_mode  = ''
-            else if( istage < multistate_prob_neigh_stage() )then
+            else if( istage < PROB_NEIGH_REFINE_STAGE )then
                 cfg%refine = 'prob'
             else
                 cfg%refine           = 'prob_neigh'
@@ -704,15 +704,6 @@ contains
         istage = solve3D_symsrch_stage(l_srch4symaxis)
         if( l_cavg_ini .and. .not. l_cavgs ) istage = max(istage, solve3D_nstages_ini3D())
     end function full_budget_last_stage
-
-    !> First stage of the ladder whose directions reach the multi-state cap NSPACE_MULTI_MAX: where
-    !! independent multi-state refinement switches from prob to prob_neigh (stage 5 of the default ladder)
-    integer function multistate_prob_neigh_stage() result( istage )
-        do istage = 1, size(NSPACE)
-            if( NSPACE(istage) >= NSPACE_MULTI_MAX ) return
-        end do
-        THROW_HARD('no stage of the nspace ladder reaches the multi-state cap')
-    end function multistate_prob_neigh_stage
 
     logical function force_full_sampling_mode( params ) result( l_force_full )
         class(parameters), intent(in) :: params

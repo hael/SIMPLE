@@ -228,9 +228,9 @@ Current high-level solve3D stage policy:
 For multi-state `solve3D` (`nstates > 1`, which refines independent states;
 there is no docked mode), the default policy is an inspection-first run:
 `nstages=5` and `lpstop=6.0 A` unless the user overrides them. This stops
-after the `prob` phase and before
-`prob_neigh`, staged NU filtering, multi-state trailing reconstruction,
-and staged automasking. The workflow still runs the final reconstruction step
+after the `prob` phase (stages 3-5) and before `prob_neigh` (stage 6),
+multi-state trailing reconstruction and staged automasking; its last stage
+is NU-filtered (since 2026-10-18). The workflow still runs the final reconstruction step
 at the configured last stage so it writes inspectable final state volumes. To
 increase the chance that all active particles receive assignments before that
 exit, the multi-state run starts stochastic balanced sampling at stage 4: the child

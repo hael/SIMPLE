@@ -75,10 +75,10 @@ Stage policy includes:
   - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
     in stages 1-2, middle `prob`, and late `prob_neigh`
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
-    stages 3-4, and `prob_neigh` with `prob_neigh_mode=state` from stage 5:
-    the switch is the first stage whose `nspace` reaches the multi-state cap
-    of 2,500 directions (`NSPACE_MULTI_MAX`), read from the stage table, and
-    the class-average route switches at the same stage
+    stages 3-5, and `prob_neigh` with `prob_neigh_mode=state` from stage 6
+    (`PROB_NEIGH_REFINE_STAGE`, the single-state switch), so the default
+    five-stage multi-state run uses no `prob_neigh`; the class-average route
+    switches at the same stage (section 6)
 - the multi-state direction cap: with `nstates > 1` no stage exceeds 2,500
   directions, so stages 7 and 8 (5,000 in single state) run at 2,500
 - the multi-state stage-2 exit: stage 2 of a multi-state particle run (`shc`)
@@ -462,15 +462,20 @@ the parent particle workflow resumes. The multi-state run is intended for
 severe heterogeneity where early inspection is more valuable than committing
 to a longer refinement immediately. Its particle stages 1 and 2 use direct
 `refine=shc` rather than the probabilistic-neighborhood startup of the
-single-state run; stages 3 and 4 use `refine=prob`, and stage 5 (rulings of
-2026-10-15) uses `refine=prob_neigh` with `prob_neigh_mode=state`. The switch
-is the first stage whose directions reach the multi-state cap of 2,500
-(`NSPACE_MULTI_MAX` in the stage controller), derived from the stage table
-of directions rather than from a stage number; the dense `prob` table over
-2,500 directions of every state was the most expensive stage of a
-multi-state run. The class-average route (`solve3D_cavgs` with `nstates > 1`)
-shares this mode policy and switches at the same stage; its early stages
-keep their own class-average search schedule. The cap also limits every
+single-state run; stages 3 to 5 use `refine=prob`, and `refine=prob_neigh`
+with `prob_neigh_mode=state` starts at stage 6, the stage single-state runs
+switch at (`PROB_NEIGH_REFINE_STAGE`), so the default five-stage run never
+reaches it. From 2026-10-16 to 2026-10-21 stage 5 ran `prob_neigh`, because
+the dense `prob` table over 2,500 directions of every state was the most
+expensive stage of a multi-state run. That was a mistake (ruling of
+2026-10-21): stage 5 is where a multi-state run makes its final labels, and
+there the neighbourhood search lost states. On a simulated two-state set the
+builds with `prob_neigh` at stage 5 drained a state during it or split the
+states too slowly, while the build of 2026-10-15 with `prob` at stage 5
+completed the separation there (accuracy 0.86 to 0.97). The class-average
+route (`solve3D_cavgs` with `nstates > 1`) shares this mode policy and
+switches at the same stage; its early stages keep their own class-average
+search schedule. The cap of 2,500 directions (`NSPACE_MULTI_MAX`) also limits every
 multi-state stage to 2,500 directions: stages 7 and 8, which run 5,000
 directions in single state, run 2,500 when a user extends a multi-state run
 to them.
