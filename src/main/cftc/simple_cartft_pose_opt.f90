@@ -302,7 +302,8 @@ contains
             return
         endif
         if( .not.(self%objective_after < self%objective_before) )then
-            self%status = CARTFT_NO_IMPROVEMENT
+            self%status          = CARTFT_NO_IMPROVEMENT
+            self%objective_after = self%objective_before
             return
         endif
         self%status = CARTFT_ACCEPTED

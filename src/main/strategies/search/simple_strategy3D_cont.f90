@@ -147,10 +147,11 @@ contains
         self%status = self%opt%get_status()
         self%npix   = self%b_ptr%cftc%get_ptcl_npix(islot)
         call self%opt%get_objectives(objective_before, objective_after)
-        ! the score at the committed pose: the result, or the seed after a rejection
+        ! the score at the committed pose: the result, or the seed after a rejection; the cc
+        ! objective of an exact match may round below zero
         self%score = 0.
-        if( self%status /= CARTFT_INVALID_PREPARATION .and. objective_before >= 0._dp ) &
-            &self%score = real(self%b_ptr%cftc%score(islot, objective_after))
+        if( self%status /= CARTFT_INVALID_PREPARATION .and. ieee_is_finite(objective_before) .and. &
+            &ieee_is_finite(objective_after) ) self%score = real(self%b_ptr%cftc%score(islot, objective_after))
         ! sigma2 belongs to the Euclidean objective only (C5): the residual of the evaluation that
         ! chose the committed pose, which the optimizer keeps, so no pass of its own
         if( self%p_ptr%cc_objfun == OBJFUN_EUCLID .and. self%status /= CARTFT_INVALID_PREPARATION )then
