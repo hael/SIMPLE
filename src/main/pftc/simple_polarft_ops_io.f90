@@ -54,28 +54,42 @@ contains
         call fclose(funit)
     end subroutine write_ref_pfts
 
-    module subroutine read_ref_pfts( self, fname, iseven )
+    !> Reads one half's sections of a reprojection model file into the slot. Without iref_from the
+    !! file must hold exactly this object's references; with it the file's references land at
+    !! iref_from onwards, inside this object's range (a model loaded beside another one, as the
+    !! pose-posterior diagnostic loads the real halves beside the matcher's references).
+    module subroutine read_ref_pfts( self, fname, iseven, iref_from )
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: fname
         logical,             intent(in)    :: iseven
-        integer :: funit, io_stat, ieo
+        integer, optional,   intent(in)    :: iref_from
+        integer :: funit, io_stat, ieo, ifrom, ito
         integer :: header(4)
         integer(kind=8) :: payload_pos
+        logical :: l_range_ok
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; read_ref_pfts')
         if( .not. file_exists(fname) ) THROW_HARD(fname%to_char()//' does not exist; read_ref_pfts')
         call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
         call fileiochk('read_ref_pfts: '//fname%to_char(), io_stat)
         read(unit=funit,pos=1) header
+        ifrom = 1
+        if( present(iref_from) ) ifrom = iref_from
+        ito = ifrom + header(4) - 1
+        if( present(iref_from) )then
+            l_range_ok = ifrom >= 1 .and. header(4) >= 1 .and. ito <= self%nrefs
+        else
+            l_range_ok = header(4) == self%nrefs
+        endif
         if( header(1) /= self%pftsz .or. header(2) /= self%kfromto(1) .or. &
-            &header(3) /= self%kfromto(2) .or. header(4) /= self%nrefs )then
+            &header(3) /= self%kfromto(2) .or. .not. l_range_ok )then
             write(logfhandle,*) 'reprojection model header mismatch in: ', fname%to_char()
             write(logfhandle,*) 'expected: ', self%pftsz, self%kfromto(1), self%kfromto(2), self%nrefs
-            write(logfhandle,*) 'found:    ', header
+            write(logfhandle,*) 'found:    ', header, ' loading from reference: ', ifrom
             THROW_HARD('incompatible reprojection model header; read_ref_pfts')
         endif
         payload_pos = int(sizeof(header), kind=8) + 1_int8
         ieo = merge(REF_EVEN, REF_ODD, iseven)
-        read(unit=funit,pos=payload_pos) self%pfts_refs(:,self%kfromto(1):self%kfromto(2),:,ieo)
+        read(unit=funit,pos=payload_pos) self%pfts_refs(:,self%kfromto(1):self%kfromto(2),ifrom:ito,ieo)
         call fclose(funit)
     end subroutine read_ref_pfts
 

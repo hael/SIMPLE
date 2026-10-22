@@ -397,6 +397,37 @@ contains
         enddo
     end subroutine gen_best_euclid_val_cross
 
+    !> The Euclidean loss at one grid rotation irot and shift (the kernel's own frame: the reference is
+    !! shifted, then rotated), own slot or, with cross, the other half's; huge outside 1..nrots
+    module subroutine gen_euclid_val_at( self, iref, iptcl, shift, irot, dist, cross )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        logical, optional,           intent(in)    :: cross
+        real(dp) :: norm
+        integer  :: ithr
+        logical  :: l_cross
+        l_cross = .false.
+        if( present(cross) ) l_cross = cross
+        dist = huge(dist)
+        if( irot < 1 .or. irot > self%nrots ) return
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr, cross=l_cross)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
+        dist = self%heap_vars(ithr)%rot_dists(irot)
+    end subroutine gen_euclid_val_at
+
+    !> whether the two half slots of reference iref hold the same section (solve3D's LP-set stages put one
+    !! merged map in both, so a cross-slot score is then the same reference; prob_post_diag records it)
+    module logical function ref_slots_identical( self, iref )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iref
+        ref_slots_identical = .false.
+        if( .not. allocated(self%pfts_refs) ) return
+        if( iref < 1 .or. iref > self%nrefs ) return
+        ref_slots_identical = all(self%pfts_refs(:,:,iref,REF_EVEN) == self%pfts_refs(:,:,iref,REF_ODD))
+    end function ref_slots_identical
+
     module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl

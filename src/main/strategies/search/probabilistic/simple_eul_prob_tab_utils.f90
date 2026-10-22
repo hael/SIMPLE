@@ -50,14 +50,36 @@ end type prob_refined_entry
 !! references exp(entropy), the number holding 99% of the mass and their posterior-weighted mean angular
 !! distance from the mode in degrees (the mode's state only, symmetry-aware)
 type :: prob_posterior_stat
+    ! the production row (likelihood-sampled in-plane, the best projs_ns shift-refined): mode, loss,
+    ! temperature, mass, breadth and spread
     integer :: iptcl = 0, istate = 0, iproj = 0, k99 = 0, nvalid = 0
     real    :: lmin = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
-    ! the same row scored against the other half's reference (the particle's own noise weights), at the
-    ! seed shift: its mode, mass, breadth and spread; the own mode's rank in it (1: the halves agree), the
-    ! angular distance between the two modes, and the self-reinforcement bonus in nats: T times the loss at
-    ! the own mode (its refined shift) against the other half minus against its own
+    ! the identical-pose null test, in nats: the kernel re-scored at the production mode's exact (reference,
+    ! shift, grid rotation) minus the stored loss, with the stored shift rotated back into the kernel's frame
+    ! (null_a, expected zero) and taken as it is (null_b, the alternative convention)
+    real    :: null_a = 0., null_b = 0.
+    ! the deterministic row on the own slot (best grid rotation at the seed shift, no sampling, no
+    ! refinement): the search test against the production row; rank_d the production mode's rank in it,
+    ! dist_d the angle between the two modes
+    integer :: iproj_d = 0, k99_d = 0, rank_d = 0
+    real    :: lmin_d = 0., pmax_d = 0., neff_d = 0., spread_d = 0., dist_d = 0.
+    ! the deterministic row on the particle's own real half (the diagnostic model of the independent
+    ! even/odd maps, loaded beside the matcher's references): rank_h the matcher deterministic mode's rank
+    ! in it, dist_h the angle between the two modes
+    integer :: iproj_h = 0, k99_h = 0, rank_h = 0
+    real    :: lmin_h = 0., pmax_h = 0., neff_h = 0., spread_h = 0., dist_h = 0.
+    ! the same deterministic row on the other real half: the reference test against the own-half row;
+    ! rank_x the own-half mode's rank in it, dist_x the angle between the two modes
     integer :: iproj_x = 0, k99_x = 0, rank_x = 0
-    real    :: lmin_x = 0., pmax_x = 0., neff_x = 0., spread_x = 0., dist_x = 0., bonus = 0.
+    real    :: lmin_x = 0., pmax_x = 0., neff_x = 0., spread_x = 0., dist_x = 0.
+    ! the self-reinforcement test, in nats, at the pose the particle went into its half with (its previous
+    ! direction on the current grid, iproj_p, its previous in-plane rotation, zero residual shift): the
+    ! other half's loss minus the own half's, T (L_other - L_own); positive when the own half, which holds
+    ! the particle, favours that pose. ctrl_nats the same difference a half turn away in-plane, where the
+    ! particle's own contribution does not correlate with it: the noise scale of self_nats. iproj_p 0: no
+    ! previous pose (a virgin field, an invalid state)
+    integer :: iproj_p = 0
+    real    :: self_nats = 0., ctrl_nats = 0.
 end type prob_posterior_stat
 
 ! Cost record of a partition's table fill for the bench file: wall time outside the parallel region,

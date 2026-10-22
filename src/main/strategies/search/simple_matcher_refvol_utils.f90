@@ -6,7 +6,8 @@ use simple_parameters,      only: parameters
 use simple_cmdline,         only: cmdline
 use simple_image,           only: image
 !$ use omp_lib, only: omp_get_max_threads
-use simple_refine3D_fnames, only: refine3D_reproj_model_fname, refine3D_cart_refvols_fname
+use simple_refine3D_fnames, only: refine3D_reproj_model_fname, refine3D_cart_refvols_fname, &
+    &refine3D_reproj_model_diag_fname
 implicit none
 
 public :: read_mask_filter_reproject_refvols
@@ -82,9 +83,31 @@ contains
         refs_odd  = refine3D_cart_refvols_fname('odd')
         if( file_exists(refs_even) ) call del_file(refs_even)
         if( file_exists(refs_odd)  ) call del_file(refs_odd)
+        refs_even = refine3D_reproj_model_diag_fname('even')
+        refs_odd  = refine3D_reproj_model_diag_fname('odd')
+        if( file_exists(refs_even) ) call del_file(refs_even)
+        if( file_exists(refs_odd)  ) call del_file(refs_odd)
         call refs_even%kill
         call refs_odd%kill
     end subroutine remove_ref_section_files
+
+    !> The pose-posterior diagnostic's model of the real halves is there and matches the matcher's
+    !! model (both files, the same header: a stale pair of another stage is refused, not loaded)
+    logical function reprojection_model_diag_available( header ) result( l_available )
+        integer, intent(in) :: header(4) !< the matcher's model header
+        integer :: even_header(4), odd_header(4)
+        type(string) :: refs_even, refs_odd
+        l_available = .false.
+        refs_even = refine3D_reproj_model_diag_fname('even')
+        refs_odd  = refine3D_reproj_model_diag_fname('odd')
+        if( file_exists(refs_even) .and. file_exists(refs_odd) )then
+            call read_reprojection_model_file_header(refs_even, even_header)
+            call read_reprojection_model_file_header(refs_odd,  odd_header)
+            l_available = all(even_header == header) .and. all(odd_header == header)
+        endif
+        call refs_even%kill
+        call refs_odd%kill
+    end function reprojection_model_diag_available
 
     subroutine adopt_reprojection_model_range( params, build )
         class(parameters), intent(inout) :: params
@@ -103,16 +126,31 @@ contains
 
     !> The matcher's reader of the references of its pass: the prepared Cartesian reference
     !! volumes for a Cartesian pass (l_cart_refine; read_cart_refvols), the polar reprojection
-    !! model otherwise.
-    subroutine read_reprojection_model( params, build, batchsz )
+    !! model otherwise. With diag_halves (the dense table workers under prob_post_diag=yes) and
+    !! the diagnostic's model of the real halves on disk, the polar object holds twice the
+    !! references: the matcher's in 1..nrefs, the real even/odd sections of the same directions
+    !! in nrefs+1..2*nrefs (doc/implementation_notes/planned/pose_marginalization.md section 5).
+    subroutine read_reprojection_model( params, build, batchsz, diag_halves )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: batchsz
-        integer :: nrefs
+        logical, optional, intent(in)    :: diag_halves
+        integer :: nrefs, header(4)
+        logical :: l_diag_halves
         type(string) :: refs_even, refs_odd
         if( params%l_cart_refine )then
             call read_cart_refvols(params, build)
             return
+        endif
+        l_diag_halves = .false.
+        if( present(diag_halves) ) l_diag_halves = diag_halves
+        ! the mirrored memoization assumes nrefs/2 references: no second model under mirr_proj
+        if( l_diag_halves ) l_diag_halves = trim(params%mirr_proj) == 'no'
+        if( l_diag_halves )then
+            call read_reprojection_model_header(header)
+            l_diag_halves = reprojection_model_diag_available(header)
+            if( .not. l_diag_halves ) write(logfhandle,'(A)') &
+                &'>>> POSE-POSTERIOR DIAGNOSTIC: no model of the real halves beside the references; own/other-half columns left zero'
         endif
         call adopt_reprojection_model_range(params, build)
         if( build%eulspace%get_noris() /= params%nspace )then
@@ -121,11 +159,24 @@ contains
             call build%pgrpsyms%build_refspiral(build%eulspace)
         endif
         nrefs = params%nspace * params%nstates
-        call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        if( l_diag_halves )then
+            call build%pftc%new(params, 2*nrefs, [1,batchsz], params%kfromto)
+        else
+            call build%pftc%new(params, nrefs, [1,batchsz], params%kfromto)
+        endif
         refs_even = refine3D_reproj_model_fname('even')
         refs_odd  = refine3D_reproj_model_fname('odd')
-        call build%pftc%read_ref_pfts(refs_even, .true.)
-        call build%pftc%read_ref_pfts(refs_odd,  .false.)
+        if( l_diag_halves )then
+            call build%pftc%read_ref_pfts(refs_even, .true.,  iref_from=1)
+            call build%pftc%read_ref_pfts(refs_odd,  .false., iref_from=1)
+            refs_even = refine3D_reproj_model_diag_fname('even')
+            refs_odd  = refine3D_reproj_model_diag_fname('odd')
+            call build%pftc%read_ref_pfts(refs_even, .true.,  iref_from=nrefs+1)
+            call build%pftc%read_ref_pfts(refs_odd,  .false., iref_from=nrefs+1)
+        else
+            call build%pftc%read_ref_pfts(refs_even, .true.)
+            call build%pftc%read_ref_pfts(refs_odd,  .false.)
+        endif
         call refs_even%kill
         call refs_odd%kill
     end subroutine read_reprojection_model
@@ -178,6 +229,15 @@ contains
             refs_odd  = refine3D_reproj_model_fname('odd')
             call build%pftc%write_ref_pfts(refs_even, .true.)
             call build%pftc%write_ref_pfts(refs_odd,  .false.)
+            if( params%l_prob_post_diag .and. trim(params%mirr_proj) == 'no' )then
+                ! the pose-posterior diagnostic's model of the real halves, prepared like the
+                ! matcher's but from the independent even/odd maps, never the merged one
+                call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.false., diag_halves=.true.)
+                refs_even = refine3D_reproj_model_diag_fname('even')
+                refs_odd  = refine3D_reproj_model_diag_fname('odd')
+                call build%pftc%write_ref_pfts(refs_even, .true.)
+                call build%pftc%write_ref_pfts(refs_odd,  .false.)
+            endif
         endif
         if( cart_refs_needed(params) )then
             refs_even = refine3D_cart_refvols_fname('even')
@@ -280,17 +340,25 @@ contains
         endif
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine read_mask_filter_refvols( params, build, s )
+    !> The matching references of state s in build%vol (even) and build%vol_odd (odd), read,
+    !! regularized, masked and filtered. With diag_halves the independent even/odd maps are
+    !! read whatever the mode (the LP-set and merged-NU branches that put one merged map in
+    !! both are bypassed, the ICM pair is not averaged), for the pose-posterior diagnostic's
+    !! model of the real halves; the filtering of each half is otherwise that of the mode.
+    subroutine read_mask_filter_refvols( params, build, s, diag_halves )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: s
+        logical, optional, intent(in)    :: diag_halves
         type(string)      :: vol_even, vol_odd, vol_avg
         real, allocatable :: opt_filter(:)
         integer :: filtsz
         logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
-        logical :: l_nu_refs_missing
+        logical :: l_nu_refs_missing, l_diag_halves
+        l_diag_halves = .false.
+        if( present(diag_halves) ) l_diag_halves = diag_halves
         l_nonuniform_mode    = params%l_nonuniform
-        l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset
+        l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset .and. .not. l_diag_halves
         ! both backends assemble the same _nu_filt products (doc/policies/NU/nonuniform_filtering_policy.md)
         vol_avg = params%vols(s)
         ! READ: try nonuniform refs first if requested, then regular refs, then average
@@ -333,6 +401,9 @@ contains
             call build%vol%read_and_crop(   vol_even, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol_odd%read_and_crop(vol_odd,  params%smpd, params%box_crop, params%smpd_crop)
         else
+            if( l_diag_halves )then
+                THROW_HARD('No even/odd reference volumes for state='//int2str(s)//'; the pose-posterior diagnostic needs the real halves')
+            endif
             vol_avg = params%vols(s)
             if( .not. file_exists(vol_avg) )then
                 THROW_HARD('No usable reference volume inputs for state='//int2str(s)//'; need volN or vol_even/vol_odd')
@@ -350,7 +421,7 @@ contains
         ! FILTER
         if( params%l_icm )then
             call build%vol%ICM3D_eo(build%vol_odd, params%lambda)
-            if( params%l_lpset .or. trim(params%combine_eo).eq.'yes' )then ! no independent volume registration, so average eo pairs
+            if( (params%l_lpset .or. trim(params%combine_eo).eq.'yes') .and. .not. l_diag_halves )then ! no independent volume registration, so average eo pairs
                 call build%vol%add(build%vol_odd)
                 call build%vol%mul(0.5)
                 call build%vol_odd%copy_fast(build%vol)
@@ -358,7 +429,7 @@ contains
             ! FT
             call build%vol%fft
             call build%vol_odd%fft
-        else if( params%l_lpset .and. .not. l_nonuniform_mode )then
+        else if( params%l_lpset .and. .not. l_nonuniform_mode .and. .not. l_diag_halves )then
             ! read average volume that will occupy both even and odd
             if( .not. file_exists(vol_avg) )then
                 THROW_HARD('Missing average reference for state='//int2str(s)//' : '//vol_avg%to_char())
@@ -546,19 +617,29 @@ contains
     !> Prepare the references of every state from the volume sources: the polar reprojection
     !! model in build%pftc unless the pass is Cartesian (l_cart_refine), and the prepared
     !! real-space volumes staged in build%cftc when a Cartesian pass reads them.
-    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift )
+    !! With diag_halves (after the matcher's model of the iteration has been prepared) the polar
+    !! object is made again from the independent even/odd maps (read_mask_filter_refvols) for the
+    !! pose-posterior diagnostic: no band-limit estimation, no shift mapping, no Cartesian volumes.
+    subroutine read_mask_filter_reproject_refvols( params, build, cline, map_shift, diag_halves )
         use simple_polarft_calc, only: vol_pad2ref_pfts_opt
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(in)    :: cline
         logical, optional, intent(in)    :: map_shift
+        logical, optional, intent(in)    :: diag_halves
         real      :: xyz(3)
         integer   :: s, nrefs, state
-        logical   :: do_center, l_map_shift, l_cartesian_only, l_cart_refs
+        logical   :: do_center, l_map_shift, l_cartesian_only, l_cart_refs, l_diag_halves
         l_map_shift = .true.
         if( present(map_shift) ) l_map_shift = map_shift
+        l_diag_halves = .false.
+        if( present(diag_halves) ) l_diag_halves = diag_halves
+        if( l_diag_halves )then
+            if( params%l_cart_refine ) THROW_HARD('the pose-posterior diagnostic model is polar; read_mask_filter_reproject_refvols')
+            l_map_shift = .false.
+        endif
         l_cartesian_only = params%l_cart_refine
-        l_cart_refs      = cart_refs_needed(params)
+        l_cart_refs      = cart_refs_needed(params) .and. .not. l_diag_halves
         if( any_volume_source_defined(cline, params%nstates) &
             &.and. (.not. complete_volume_source_defined(cline, params%nstates)) )then
             THROW_HARD('incomplete multi-state volume source; provide vol1..volN')
@@ -566,10 +647,12 @@ contains
         if( .not. complete_volume_source_available(params) )then
             THROW_HARD('cannot prepare reference sections without complete volume source files')
         endif
-        call pick_lp_est_state(params, build, state)
-        if( trim(params%filt_mode).eq.'uniform' .and. &
-            &cline%defined('lpstart') .and. cline%defined('lpstop') )then
-            call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
+        if( .not. l_diag_halves )then
+            call pick_lp_est_state(params, build, state)
+            if( trim(params%filt_mode).eq.'uniform' .and. &
+                &cline%defined('lpstart') .and. cline%defined('lpstop') )then
+                call estimate_lp_from_refs(params, build, cline, params%lpstart, params%lpstop, state)
+            endif
         endif
         if( .not. l_cartesian_only )then
             if( build%eulspace%get_noris() /= params%nspace )then
@@ -584,7 +667,7 @@ contains
         do s = 1, params%nstates
             call calcrefvolshift_and_mapshifts2ptcls(params, build, s, params%vols(s), &
                 & do_center, xyz, map_shift=l_map_shift)
-            call read_mask_filter_refvols(params, build, s)
+            call read_mask_filter_refvols(params, build, s, diag_halves=l_diag_halves)
             call blend_lowres_eo_for_registration()
             if( do_center )then
                 call build%vol%fft()

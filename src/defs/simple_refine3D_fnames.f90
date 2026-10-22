@@ -16,6 +16,7 @@ public :: refine3D_startvol_fname
 public :: refine3D_startvol_half_fname
 public :: refine3D_fsc_fbody
 public :: refine3D_fsc_fname
+public :: refine3D_reproj_model_diag_fname
 public :: refine3D_fsc_plot_fbody
 public :: refine3D_resolution_txt_fbody
 public :: refine3D_iter_vol_fname
@@ -268,6 +269,14 @@ contains
         character(len=*), intent(in) :: half
         fname = string('reprojection_model')//half_suffix(half)//BIN_EXT
     end function refine3D_reproj_model_fname
+
+    !> The pose-posterior diagnostic's reprojection model of the real half maps (prob_post_diag=yes;
+    !! reprojection_model_diag_even.bin, reprojection_model_diag_odd.bin), beside the matcher's
+    !! model, which solve3D's LP-set stages make from the merged map.
+    type(string) function refine3D_reproj_model_diag_fname( half ) result(fname)
+        character(len=*), intent(in) :: half
+        fname = string('reprojection_model_diag')//half_suffix(half)//BIN_EXT
+    end function refine3D_reproj_model_diag_fname
 
     !> The prepared Cartesian reference volumes of every state for one half-set
     !! (cart_refvols_even.bin, cart_refvols_odd.bin; plan section 6.6).

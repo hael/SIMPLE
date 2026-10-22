@@ -57,6 +57,8 @@ type :: eul_prob_tab
     integer                     :: table_nfilled  = 0       !< particles whose rows are written
     integer                     :: post_unit      = -1      !< the pose-posterior diagnostic file (prob_post_diag=yes)
     logical                     :: post_is_open   = .false.
+    logical                     :: post_slots_identical = .false. !< the two reference slots hold the same sections (header)
+    logical                     :: post_has_halves = .false. !< the real halves are loaded beside the references (header)
     integer                     :: nptcls          !< size of pinds array
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
@@ -227,7 +229,13 @@ contains
         type(prob_posterior_stat), allocatable :: post_batch(:)      !< pose-posterior statistics per particle (prob_post_diag=yes)
         real,                      allocatable :: post_w(:,:)        !< per thread: the posterior over the row, sorted
         integer,                   allocatable :: post_inds(:,:)     !< per thread: its reference order
-        real,                      allocatable :: post_x(:,:)        !< per thread: the row against the other half's reference
+        real,                      allocatable :: post_d(:,:)        !< per thread: the deterministic row, own slot
+        real,                      allocatable :: post_wd(:,:)       !< per thread: its posterior, sorted
+        integer,                   allocatable :: post_indsd(:,:)    !< per thread: its reference order
+        real,                      allocatable :: post_h(:,:)        !< per thread: the deterministic row, own real half
+        real,                      allocatable :: post_wh(:,:)       !< per thread: its posterior, sorted
+        integer,                   allocatable :: post_indsh(:,:)    !< per thread: its reference order
+        real,                      allocatable :: post_x(:,:)        !< per thread: the deterministic row, other real half
         real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
         integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
         logical :: l_post
@@ -269,8 +277,16 @@ contains
         allocate(nrefined_batch(i_first:i_last), source=0)
         ! the pose posterior is defined by the Euclidean objective only
         l_post = self%p_ptr%l_prob_post_diag .and. self%p_ptr%cc_objfun == OBJFUN_EUCLID
-        if( l_post ) allocate(post_batch(i_first:i_last), post_w(self%nrefs,nthr_glob), post_inds(self%nrefs,nthr_glob), &
-            &post_x(self%nrefs,nthr_glob), post_wx(self%nrefs,nthr_glob), post_indsx(self%nrefs,nthr_glob))
+        if( l_post )then
+            allocate(post_batch(i_first:i_last), post_w(self%nrefs,nthr_glob), post_inds(self%nrefs,nthr_glob), &
+                &post_d(self%nrefs,nthr_glob), post_wd(self%nrefs,nthr_glob), post_indsd(self%nrefs,nthr_glob), &
+                &post_h(self%nrefs,nthr_glob), post_wh(self%nrefs,nthr_glob), post_indsh(self%nrefs,nthr_glob), &
+                &post_x(self%nrefs,nthr_glob), post_wx(self%nrefs,nthr_glob), post_indsx(self%nrefs,nthr_glob))
+            ! solve3D's LP-set stages put one merged map in both of the matcher's slots (recorded in the header);
+            ! the real halves are the diagnostic model loaded after the matcher's references, when there is one
+            self%post_slots_identical = self%b_ptr%pftc%ref_slots_identical(self%ref_full(1))
+            self%post_has_halves      = self%b_ptr%pftc%get_nrefs() >= 2 * self%nrefs
+        endif
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -341,7 +357,8 @@ contains
         call self%write_rows(i_first, rows_batch, pack_refined())
         if( l_post )then
             call self%write_posterior_diag(i_first, i_last, post_batch)
-            deallocate(post_batch, post_w, post_inds, post_x, post_wx, post_indsx)
+            deallocate(post_batch, post_w, post_inds, post_d, post_wd, post_indsd, post_h, post_wh, post_indsh, &
+                &post_x, post_wx, post_indsx)
         endif
 
     contains
@@ -413,20 +430,25 @@ contains
             if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.])
         end subroutine process_particle_without_shift
 
-        !> The pose posterior over the particle's finished row (the refined distances included) at the
-        !! temperature of its weighted power, and the angular spread of the references holding 99% of
-        !! the mass about the mode, in the mode's state, across the symmetry operations. Then the same
-        !! row scored against the OTHER half's reference at the seed shift (best in-plane rotation, no
-        !! refinement): its posterior, the own mode's rank in it, the distance between the two modes,
-        !! and the self-reinforcement bonus, T times the loss at the own mode (its refined shift)
-        !! against the other half minus against its own, in nats.
+        !> The pose posterior over the particle's finished production row (likelihood-sampled in-plane,
+        !! the best projs_ns shift-refined) at the temperature of its weighted power, with the angular
+        !! spread of the references holding 99% of the mass about the mode (the mode's state, across the
+        !! symmetry operations). Then the controls (doc/implementation_notes/planned/pose_marginalization.md
+        !! sections 5 and 11): the identical-pose null test, the kernel re-scored at the production mode's
+        !! exact (reference, shift, grid rotation) against the stored loss; the deterministic row on the
+        !! matcher's references (best grid rotation at the seed shift, no sampling, no refinement), the
+        !! search test; and, when the real halves are loaded beside the references, the same deterministic
+        !! row on the particle's own real half and on the other one, the reference test, with the
+        !! self-reinforcement test at the pose the particle went into its half with.
         subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc, shift_xy )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_xy(2)
-            real     :: temp, pmax, neff, euls_min(3), euls_x(3), euls_sym(3), euldist, inpldist
-            real     :: sh_mode(2), dist_x_mode, dist_loc
-            integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, j_loc
-            integer  :: imin_x, k99_x, nvalid_x, nbelow
+            type(ori) :: o_prev_loc
+            real     :: temp, pmax, neff, euls_min(3), euls_d(3), euls_h(3), euls_x(3), euls_sym(3), euldist, inpldist
+            real     :: sh_mode(2), sh_kernel(2), dist_loc, dist_at, dist_own, dist_other
+            integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, irot_min, j_loc
+            integer  :: imin_d, k99_d, nvalid_d, imin_h, k99_h, nvalid_h, imin_x, k99_x, nvalid_x
+            integer  :: prev_state, prev_proj, irot_prev, irot_ctrl, iref_prev, nrots_loc
             temp = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             call posterior_row_stats(self%nrefs, rows_batch(:,i_loc)%dist, temp, post_w(:,ithr_loc), &
                 &post_inds(:,ithr_loc), imin, pmax, neff, k99, nvalid)
@@ -439,14 +461,70 @@ contains
             if( nvalid == 0 ) return
             istate_min = self%ref_state(imin)
             iproj_min  = self%ref_proj(imin)
+            irot_min   = rows_batch(imin,i_loc)%inpl
             post_batch(i_loc)%istate = istate_min
             post_batch(i_loc)%iproj  = iproj_min
             post_batch(i_loc)%lmin   = rows_batch(imin,i_loc)%dist
             euls_min = self%b_ptr%eulspace%get_euler(iproj_min)
             post_batch(i_loc)%spread = spread_about(istate_min, euls_min, k99, post_w(:,ithr_loc), post_inds(:,ithr_loc))
-            ! the row against the other half's reference, at the seed shift
+            ! the null test: the production mode's shift as stored (the refined shift when it was refined,
+            ! rotated to the frame of reference by the search; the seed shift otherwise)
+            sh_mode = shift_xy
+            do j_loc = 1,nrefined_batch(i_loc)
+                if( refined_batch(j_loc,i_loc)%ri == imin )then
+                    sh_mode = [refined_batch(j_loc,i_loc)%x, refined_batch(j_loc,i_loc)%y]
+                    exit
+                endif
+            end do
+            if( irot_min >= 1 )then
+                sh_kernel = shift_ref2ptcl(sh_mode, self%b_ptr%pftc%get_rot(irot_min))
+                call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_kernel, irot_min, dist_at)
+                post_batch(i_loc)%null_a = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_mode, irot_min, dist_at)
+                post_batch(i_loc)%null_b = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+            endif
+            ! the deterministic row on the own slot: the search test
             do ri_loc = 1,self%nrefs
-                call self%b_ptr%pftc%gen_best_euclid_val_cross(self%ref_full(ri_loc), iptcl_loc, shift_xy, dist_loc, irot_loc)
+                call self%b_ptr%pftc%gen_best_objfun_val(self%ref_full(ri_loc), iptcl_loc, shift_xy, dist_loc, irot_loc)
+                post_d(ri_loc,ithr_loc) = dist_loc
+            end do
+            call posterior_row_stats(self%nrefs, post_d(:,ithr_loc), temp, post_wd(:,ithr_loc), &
+                &post_indsd(:,ithr_loc), imin_d, pmax, neff, k99_d, nvalid_d)
+            if( nvalid_d == 0 ) return
+            post_batch(i_loc)%iproj_d = self%ref_proj(imin_d)
+            post_batch(i_loc)%lmin_d  = post_d(imin_d,ithr_loc)
+            post_batch(i_loc)%pmax_d  = pmax
+            post_batch(i_loc)%neff_d  = neff
+            post_batch(i_loc)%k99_d   = k99_d
+            euls_d = self%b_ptr%eulspace%get_euler(self%ref_proj(imin_d))
+            post_batch(i_loc)%spread_d = spread_about(self%ref_state(imin_d), euls_d, k99_d, post_wd(:,ithr_loc), post_indsd(:,ithr_loc))
+            ! sym_dists returns degrees
+            call self%b_ptr%pgrpsyms%sym_dists(euls_min, euls_d, euls_sym, euldist, inpldist)
+            post_batch(i_loc)%dist_d = euldist
+            post_batch(i_loc)%rank_d = rank_in_row(post_d(:,ithr_loc), imin)
+            if( .not. self%post_has_halves ) return
+            ! the deterministic row on the particle's own real half: the references of the diagnostic model
+            ! follow the matcher's, direction for direction
+            do ri_loc = 1,self%nrefs
+                call self%b_ptr%pftc%gen_best_objfun_val(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, shift_xy, dist_loc, irot_loc)
+                post_h(ri_loc,ithr_loc) = dist_loc
+            end do
+            call posterior_row_stats(self%nrefs, post_h(:,ithr_loc), temp, post_wh(:,ithr_loc), &
+                &post_indsh(:,ithr_loc), imin_h, pmax, neff, k99_h, nvalid_h)
+            if( nvalid_h == 0 ) return
+            post_batch(i_loc)%iproj_h = self%ref_proj(imin_h)
+            post_batch(i_loc)%lmin_h  = post_h(imin_h,ithr_loc)
+            post_batch(i_loc)%pmax_h  = pmax
+            post_batch(i_loc)%neff_h  = neff
+            post_batch(i_loc)%k99_h   = k99_h
+            euls_h = self%b_ptr%eulspace%get_euler(self%ref_proj(imin_h))
+            post_batch(i_loc)%spread_h = spread_about(self%ref_state(imin_h), euls_h, k99_h, post_wh(:,ithr_loc), post_indsh(:,ithr_loc))
+            call self%b_ptr%pgrpsyms%sym_dists(euls_d, euls_h, euls_sym, euldist, inpldist)
+            post_batch(i_loc)%dist_h = euldist
+            post_batch(i_loc)%rank_h = rank_in_row(post_h(:,ithr_loc), imin_d)
+            ! the same row on the other real half: the reference test
+            do ri_loc = 1,self%nrefs
+                call self%b_ptr%pftc%gen_best_euclid_val_cross(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, shift_xy, dist_loc, irot_loc)
                 post_x(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_x(:,ithr_loc), temp, post_wx(:,ithr_loc), &
@@ -459,26 +537,45 @@ contains
             post_batch(i_loc)%k99_x   = k99_x
             euls_x = self%b_ptr%eulspace%get_euler(self%ref_proj(imin_x))
             post_batch(i_loc)%spread_x = spread_about(self%ref_state(imin_x), euls_x, k99_x, post_wx(:,ithr_loc), post_indsx(:,ithr_loc))
-            ! sym_dists returns degrees
-            call self%b_ptr%pgrpsyms%sym_dists(euls_min, euls_x, euls_sym, euldist, inpldist)
+            call self%b_ptr%pgrpsyms%sym_dists(euls_h, euls_x, euls_sym, euldist, inpldist)
             post_batch(i_loc)%dist_x = euldist
-            ! the own mode's rank in the cross row
-            nbelow = 0
-            do ri_loc = 1,self%nrefs
-                if( post_x(ri_loc,ithr_loc) < post_x(imin,ithr_loc) ) nbelow = nbelow + 1
-            end do
-            post_batch(i_loc)%rank_x = nbelow + 1
-            ! the bonus: the own mode at its refined shift (the seed shift when it was not refined)
-            sh_mode = shift_xy
-            do j_loc = 1,nrefined_batch(i_loc)
-                if( refined_batch(j_loc,i_loc)%ri == imin )then
-                    sh_mode = [refined_batch(j_loc,i_loc)%x, refined_batch(j_loc,i_loc)%y]
-                    exit
+            post_batch(i_loc)%rank_x = rank_in_row(post_x(:,ithr_loc), imin_h)
+            ! the self-reinforcement test at the pose the particle went into its half with: its previous
+            ! direction on the current grid, its previous in-plane rotation, no residual shift (the image is
+            ! shifted by its stored shift when it is prepared); the control a half turn away in-plane
+            call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
+            if( prev_state >= 1 .and. prev_state <= self%p_ptr%nstates .and. &
+                &prev_proj >= 1 .and. prev_proj <= self%p_ptr%nspace )then
+                if( self%state_exists(prev_state) )then
+                    nrots_loc = self%b_ptr%pftc%get_nrots()
+                    iref_prev = (prev_state-1)*self%p_ptr%nspace + prev_proj + self%nrefs
+                    irot_prev = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
+                    if( irot_prev >= 1 .and. irot_prev <= nrots_loc )then
+                        irot_ctrl = irot_prev + nrots_loc/2
+                        if( irot_ctrl > nrots_loc ) irot_ctrl = irot_ctrl - nrots_loc
+                        call self%b_ptr%pftc%gen_euclid_val_at(iref_prev, iptcl_loc, [0.,0.], irot_prev, dist_own)
+                        call self%b_ptr%pftc%gen_euclid_val_at(iref_prev, iptcl_loc, [0.,0.], irot_prev, dist_other, cross=.true.)
+                        post_batch(i_loc)%iproj_p   = prev_proj
+                        post_batch(i_loc)%self_nats = temp * (dist_other - dist_own)
+                        call self%b_ptr%pftc%gen_euclid_val_at(iref_prev, iptcl_loc, [0.,0.], irot_ctrl, dist_own)
+                        call self%b_ptr%pftc%gen_euclid_val_at(iref_prev, iptcl_loc, [0.,0.], irot_ctrl, dist_other, cross=.true.)
+                        post_batch(i_loc)%ctrl_nats = temp * (dist_other - dist_own)
+                    endif
                 endif
-            end do
-            call self%b_ptr%pftc%gen_best_euclid_val_cross(self%ref_full(imin), iptcl_loc, sh_mode, dist_x_mode, irot_loc)
-            post_batch(i_loc)%bonus = temp * (dist_x_mode - rows_batch(imin,i_loc)%dist)
+            endif
+            call o_prev_loc%kill
         end subroutine posterior_diag
+
+        !> the rank of reference iref in a row of losses (1: the lowest)
+        integer function rank_in_row( row, iref ) result( rank )
+            real,    intent(in) :: row(:)
+            integer, intent(in) :: iref
+            integer :: ri_loc
+            rank = 1
+            do ri_loc = 1,size(row)
+                if( row(ri_loc) < row(iref) ) rank = rank + 1
+            end do
+        end function rank_in_row
 
         !> the posterior-weighted mean angular distance (degrees) of the k99 references holding 99% of
         !! the mass from the mode's direction, in the mode's state, across the symmetry operations;
@@ -602,7 +699,9 @@ contains
 
     !> One line per particle of the batch to the part's pose-posterior file, prob_posterior_iterNNN_partNN.txt
     !! (no iteration tag when which_iter is unset), opened at the first batch and closed by kill. The
-    !! columns are the fields of prob_posterior_stat; nvalid 0 marks a particle without a valid distance.
+    !! columns are the fields of prob_posterior_stat, after header lines saying whether the matcher's two
+    !! reference slots hold the same sections and whether the real halves are loaded beside them (the
+    !! _h, _x and self-test columns are zero otherwise); nvalid 0 marks a particle without a valid distance.
     subroutine write_posterior_diag( self, i_first, i_last, post_batch )
         class(eul_prob_tab),       intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
@@ -616,18 +715,42 @@ contains
             call fopen(self%post_unit, fname, status='replace', action='write', iostat=io_stat)
             call fileiochk('eul_prob_tab%write_posterior_diag; open '//fname%to_char(), io_stat)
             write(self%post_unit,'(A)') '# iptcl istate iproj nvalid lmin temp pmax neff k99 spread_deg '//&
-                &'iproj_x lmin_x pmax_x neff_x k99_x spread_x_deg dist_x_deg rank_x bonus_nats'
+                &'null_a_nats null_b_nats '//&
+                &'iproj_d lmin_d pmax_d neff_d k99_d spread_d_deg dist_d_deg rank_d '//&
+                &'iproj_h lmin_h pmax_h neff_h k99_h spread_h_deg dist_h_deg rank_h '//&
+                &'iproj_x lmin_x pmax_x neff_x k99_x spread_x_deg dist_x_deg rank_x '//&
+                &'iproj_p self_nats ctrl_nats'
+            if( self%post_slots_identical )then
+                write(self%post_unit,'(A)') '# slots_identical yes'
+            else
+                write(self%post_unit,'(A)') '# slots_identical no'
+            endif
+            if( self%post_has_halves )then
+                write(self%post_unit,'(A)') '# halves yes'
+            else
+                write(self%post_unit,'(A)') '# halves no'
+            endif
             self%post_is_open = .true.
             call fname%kill
         endif
         do i = i_first,i_last
             write(self%post_unit,'(I0,1X,I0,1X,I0,1X,I0,1X,ES13.6,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,'//&
-                &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,ES13.6)') &
+                &'1X,ES13.6,1X,ES13.6,'//&
+                &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,'//&
+                &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,'//&
+                &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,'//&
+                &'1X,I0,1X,ES13.6,1X,ES13.6)') &
                 &post_batch(i)%iptcl, post_batch(i)%istate, post_batch(i)%iproj, post_batch(i)%nvalid, &
                 &post_batch(i)%lmin, post_batch(i)%temp, post_batch(i)%pmax, post_batch(i)%neff, &
                 &post_batch(i)%k99, post_batch(i)%spread, &
+                &post_batch(i)%null_a, post_batch(i)%null_b, &
+                &post_batch(i)%iproj_d, post_batch(i)%lmin_d, post_batch(i)%pmax_d, post_batch(i)%neff_d, &
+                &post_batch(i)%k99_d, post_batch(i)%spread_d, post_batch(i)%dist_d, post_batch(i)%rank_d, &
+                &post_batch(i)%iproj_h, post_batch(i)%lmin_h, post_batch(i)%pmax_h, post_batch(i)%neff_h, &
+                &post_batch(i)%k99_h, post_batch(i)%spread_h, post_batch(i)%dist_h, post_batch(i)%rank_h, &
                 &post_batch(i)%iproj_x, post_batch(i)%lmin_x, post_batch(i)%pmax_x, post_batch(i)%neff_x, &
-                &post_batch(i)%k99_x, post_batch(i)%spread_x, post_batch(i)%dist_x, post_batch(i)%rank_x, post_batch(i)%bonus
+                &post_batch(i)%k99_x, post_batch(i)%spread_x, post_batch(i)%dist_x, post_batch(i)%rank_x, &
+                &post_batch(i)%iproj_p, post_batch(i)%self_nats, post_batch(i)%ctrl_nats
         end do
     end subroutine write_posterior_diag
 
@@ -1373,6 +1496,8 @@ contains
         if( self%post_is_open ) call fclose(self%post_unit)
         self%post_unit      = -1
         self%post_is_open   = .false.
+        self%post_slots_identical = .false.
+        self%post_has_halves = .false.
         self%table_addr     = 1
         self%rows_addr      = 1
         self%table_nrefined = 0

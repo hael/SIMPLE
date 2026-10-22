@@ -196,6 +196,8 @@ type :: polarft_calc
     procedure, private :: gen_prob_likelihood_cc_val
     procedure, private :: gen_best_euclid_val
     procedure          :: gen_best_euclid_val_cross
+    procedure          :: gen_euclid_val_at
+    procedure          :: ref_slots_identical
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_likelihood_euclid_val
     procedure, private :: gen_prob_power_euclid_val
@@ -730,6 +732,21 @@ interface
         integer,                     intent(out)   :: irot
     end subroutine gen_best_euclid_val_cross
 
+    !> the Euclidean loss at one grid rotation and shift (the kernel's frame), own or other slot
+    module subroutine gen_euclid_val_at(self, iref, iptcl, shift, irot, dist, cross)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        logical, optional,           intent(in)    :: cross
+    end subroutine gen_euclid_val_at
+
+    !> whether the two half slots of reference iref hold the same section
+    module logical function ref_slots_identical(self, iref)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iref
+    end function ref_slots_identical
+
     module subroutine gen_prob_euclid_val(self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -908,10 +925,11 @@ interface
         logical,             intent(in) :: iseven
     end subroutine write_ref_pfts
 
-    module subroutine read_ref_pfts( self, fname, iseven )
+    module subroutine read_ref_pfts( self, fname, iseven, iref_from )
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: fname
         logical,             intent(in)    :: iseven
+        integer, optional,   intent(in)    :: iref_from
     end subroutine read_ref_pfts
 
 end interface

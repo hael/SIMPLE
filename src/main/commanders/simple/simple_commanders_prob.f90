@@ -97,7 +97,7 @@ contains
             t        = tic()
         endif
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
-        call read_reprojection_model(params, build, batchsz_max)
+        call read_reprojection_model(params, build, batchsz_max, diag_halves=params%l_prob_post_diag)
         call prep_sigmas_objfun(params, build)
         call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
@@ -194,7 +194,7 @@ contains
 
         subroutine prepare_prob_neigh_workspace(batchsz_here)
             integer, intent(in) :: batchsz_here
-            call read_reprojection_model(params, build, batchsz_here)
+            call read_reprojection_model(params, build, batchsz_here, diag_halves=params%l_prob_post_diag)
             call prep_sigmas_objfun(params, build)
             call alloc_ptcl_imgs(params, build, tmp_imgs, tmp_imgs_pad, batchsz_here)
             call build%pftc%memoize_refs(eulspace=build%eulspace)

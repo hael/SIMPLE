@@ -1,4 +1,4 @@
-!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half Euclidean loss) on generated images
+!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half and at-pose Euclidean losses, the slot detector, the reference model loaded at an offset) on generated images
 ! Three smooth zero-mean images (so the shared mask envelope carries no correlation) are references
 ! and, rotated or unrelated, particles. gen_objfun_vals (objfun=cc) must peak at rotation 1 with cc ~1
 ! for an image against itself, at the applied sixth of a turn for a rotated copy, and stay low for an
@@ -21,13 +21,102 @@ contains
         write(*,'(A)') '**** running all polar correlation tests ****'
         call test_generated_images()
         call test_cross_half_euclid()
+        call test_ref_pfts_offset_io()
     end subroutine run_all_polarft_corr_tests
+
+    !> A reprojection model written by a two-reference object (write_ref_pfts) and read back by a
+    !! four-reference one at iref_from 1 and 3 (read_ref_pfts): the sections of both halves land at
+    !! the offset unchanged, as the pose-posterior diagnostic loads the real halves after the matcher's
+    !! references; the plain read of a matching object is the iref_from 1 case.
+    subroutine test_ref_pfts_offset_io()
+        integer, parameter :: BOX = 64, NREFS = 2, NPTCLS = 1
+        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        type(parameters), target :: p
+        type(cmdline)       :: cline
+        type(polarft_calc)  :: pftc_src, pftc_dst, pftc_same
+        type(image)         :: imgs(2*NREFS)
+        type(string)        :: fname_even, fname_odd
+        complex, allocatable :: pft_src(:,:), pft_dst(:,:)
+        integer :: pdim(3), kfromto(2), i, iref, ioff
+        logical :: iseven
+        write(*,'(A)') 'test_ref_pfts_offset_io'
+        call cline%set('box',     real(BOX))
+        call cline%set('smpd',    SMPD)
+        call cline%set('mskdiam', MSKDIAM)
+        call cline%set('nptcls',  real(NPTCLS))
+        call cline%set('nthr',    1.0)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'euclid')
+        call p%new(cline)
+        call set_fixed_seed(20261023)
+        kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
+        call pftc_src%new(p, NREFS, [1,NPTCLS], kfromto)
+        pdim = pftc_src%get_pdim_srch()
+        do i = 1,2*NREFS
+            call imgs(i)%new([BOX,BOX,1], SMPD)
+            call imgs(i)%gauran(0.0, 1.0)
+            call imgs(i)%fft
+            call imgs(i)%bpgau2D(0.0, LP)
+            call imgs(i)%ifft
+            call imgs(i)%memoize_mask_coords
+            call imgs(i)%mask2D_soft(MSKRAD, backgr=0.0)
+        end do
+        call imgs(1)%memoize4polarize(pdim)
+        ! four distinct sections: reference 1 even/odd from images 1/2, reference 2 from images 3/4
+        do i = 1,2*NREFS
+            call imgs(i)%fft
+            iref   = (i + 1) / 2
+            iseven = mod(i, 2) == 1
+            call pftc_src%polarize_ref_pft(imgs(i), iref, iseven=iseven, pdim=pdim, oversamp=.false.)
+        end do
+        fname_even = string('test_reproj_model_offset_even.bin')
+        fname_odd  = string('test_reproj_model_offset_odd.bin')
+        call pftc_src%write_ref_pfts(fname_even, .true.)
+        call pftc_src%write_ref_pfts(fname_odd,  .false.)
+        call assert_true(file_exists(fname_even) .and. file_exists(fname_odd), 'both halves of the model are written')
+        ! the same model twice in a four-reference object: at 1 and at NREFS+1
+        call pftc_dst%new(p, 2*NREFS, [1,NPTCLS], kfromto)
+        call pftc_dst%read_ref_pfts(fname_even, .true.,  iref_from=1)
+        call pftc_dst%read_ref_pfts(fname_odd,  .false., iref_from=1)
+        call pftc_dst%read_ref_pfts(fname_even, .true.,  iref_from=NREFS+1)
+        call pftc_dst%read_ref_pfts(fname_odd,  .false., iref_from=NREFS+1)
+        allocate(pft_src(pftc_src%get_pftsz(),kfromto(1):kfromto(2)), pft_dst(pftc_src%get_pftsz(),kfromto(1):kfromto(2)))
+        do ioff = 0,NREFS,NREFS
+            do iref = 1,NREFS
+                call pftc_src%get_ref_pft(iref, .true., pft_src)
+                call pftc_dst%get_ref_pft(iref+ioff, .true., pft_dst)
+                call assert_true(all(pft_src == pft_dst), 'even section '//int2str(iref)//' lands at offset '//int2str(ioff)//' unchanged')
+                call pftc_src%get_ref_pft(iref, .false., pft_src)
+                call pftc_dst%get_ref_pft(iref+ioff, .false., pft_dst)
+                call assert_true(all(pft_src == pft_dst), 'odd section '//int2str(iref)//' lands at offset '//int2str(ioff)//' unchanged')
+            end do
+        end do
+        call assert_false(pftc_dst%ref_slots_identical(NREFS+1), 'the loaded halves keep their distinct slots')
+        ! the plain read of an object of the model's size
+        call pftc_same%new(p, NREFS, [1,NPTCLS], kfromto)
+        call pftc_same%read_ref_pfts(fname_even, .true.)
+        call pftc_same%read_ref_pfts(fname_odd,  .false.)
+        call pftc_src%get_ref_pft(NREFS, .false., pft_src)
+        call pftc_same%get_ref_pft(NREFS, .false., pft_dst)
+        call assert_true(all(pft_src == pft_dst), 'the plain read of a matching object reproduces the sections')
+        call del_file(fname_even)
+        call del_file(fname_odd)
+        do i = 1,2*NREFS
+            call imgs(i)%kill
+        end do
+        call pftc_src%kill
+        call pftc_dst%kill
+        call pftc_same%kill
+        deallocate(pft_src, pft_dst)
+    end subroutine test_ref_pfts_offset_io
 
     !> The Euclidean loss against the other half's reference (gen_best_euclid_val_cross): with image 1 as
     !! the even reference and an unrelated image 3 as the odd one, an even particle that is image 1 has
     !! loss 0 at rotation 1 against its own half (no CTF, unit sigma2: L = |X - R|^2 / |X|^2) and a loss
     !! near 2 (two uncorrelated images of equal power) against the other; flipping the particle's half
-    !! swaps the two, so the switch flips the reference half alone.
+    !! swaps the two, so the switch flips the reference half alone. gen_euclid_val_at reproduces the best
+    !! value at its rotation and is huge off the grid; ref_slots_identical tells the fixture's distinct
+    !! slots from a copy of one section into both.
     subroutine test_cross_half_euclid()
         use simple_eul_prob_tab_utils, only: posterior_temperature
         integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
@@ -37,7 +126,7 @@ contains
         type(polarft_calc)  :: pftc
         type(image)         :: img_even, img_odd
         real, allocatable, target :: sigma2(:,:)
-        real    :: dist_own, dist_cross, temp
+        real    :: dist_own, dist_cross, dist_at, temp
         integer :: pdim(3), kfromto(2), irot_own, irot_cross
         write(*,'(A)') 'test_cross_half_euclid'
         call cline%set('box',     real(BOX))
@@ -84,6 +173,17 @@ contains
         call assert_true(dist_own < 1.e-3, 'own half: the image against itself has loss 0')
         call assert_true(dist_cross > 0.5, 'other half: an unrelated reference has a loss of order 1')
         call assert_true(dist_cross > dist_own + 0.5, 'the cross-half loss is the other reference, not the own one')
+        ! the loss at a given pose: the best value at its rotation, the other slot with cross, huge off the grid
+        call pftc%gen_euclid_val_at(1, 1, [0.0,0.0], irot_own, dist_at)
+        call assert_real(dist_own, dist_at, 1.e-5, 'at-pose loss reproduces the best value at its rotation')
+        call pftc%gen_euclid_val_at(1, 1, [0.0,0.0], irot_cross, dist_at, cross=.true.)
+        call assert_real(dist_cross, dist_at, 1.e-5, 'at-pose loss on the other slot reproduces the cross best value')
+        call pftc%gen_euclid_val_at(1, 1, [0.0,0.0], 0, dist_at)
+        call assert_true(dist_at > 1.e30, 'at-pose loss is huge off the rotation grid')
+        call pftc%gen_euclid_val_at(1, 1, [0.0,0.0], pftc%get_pftsz()+1, dist_at)
+        call assert_true(dist_at > 0.5, 'at-pose loss a half turn away is large')
+        call assert_false(pftc%ref_slots_identical(1), 'distinct even and odd sections: the slots differ')
+        call assert_false(pftc%ref_slots_identical(0), 'slot detector: an invalid reference is not identical')
         ! the same particle declared odd: own and cross swap
         call pftc%set_eo(1, .false.)
         call pftc%memoize_sigma2_weights
@@ -96,6 +196,16 @@ contains
         ! unit sigma2 is the self-term the calculator memoized, so the temperature is positive and finite
         temp = posterior_temperature(pftc%wsqsum_ptcl_now(1), pftc%get_pftsz())
         call assert_true(temp > 0. .and. temp < huge(temp), 'posterior temperature from the memoized self-term is positive and finite')
+        ! one section in both slots, as solve3D's LP-set stages leave them: identical, and cross equals own
+        call pftc%polarize_ref_pft(img_even, 1, iseven=.false., pdim=pdim, oversamp=.false.)
+        call pftc%memoize_refs
+        call assert_true(pftc%ref_slots_identical(1), 'one section in both slots: the slots are identical')
+        call pftc%set_eo(1, .true.)
+        call pftc%memoize_sigma2_weights
+        call pftc%gen_best_objfun_val(1, 1, [0.0,0.0], dist_own, irot_own)
+        call pftc%gen_best_euclid_val_cross(1, 1, [0.0,0.0], dist_cross, irot_cross)
+        call assert_real(dist_own, dist_cross, 1.e-6, 'identical slots: the cross-half loss is the own loss')
+        call assert_int(irot_own, irot_cross, 'identical slots: at the same rotation')
         call img_even%kill
         call img_odd%kill
         call pftc%kill
