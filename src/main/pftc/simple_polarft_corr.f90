@@ -384,16 +384,15 @@ contains
         real(sp),                    intent(out)   :: dist
         integer,                     intent(out)   :: irot
         real(dp) :: norm
-        real(sp) :: dist_tmp
         integer  :: ithr, p
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr, cross=.true.)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
         irot = 1
-        dist = euclid_dist_from_crvec(self, ithr, 1, norm)
+        dist = self%heap_vars(ithr)%rot_dists(1)
         do p = 2,self%nrots
-            dist_tmp = euclid_dist_from_crvec(self, ithr, p, norm)
-            if( dist_tmp < dist )then
+            if( self%heap_vars(ithr)%rot_dists(p) < dist )then
                 irot = p
-                dist = dist_tmp
+                dist = self%heap_vars(ithr)%rot_dists(p)
             endif
         enddo
     end subroutine gen_best_euclid_val_cross
