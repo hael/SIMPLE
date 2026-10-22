@@ -1,7 +1,8 @@
 !@descr: shared utility routines for probabilistic alignment tables
 module simple_eul_prob_tab_utils
 use, intrinsic :: iso_fortran_env, only: int64
-use simple_defs,      only: TINY, dp
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+use simple_defs,      only: TINY, dp, DPI
 use simple_error,     only: simple_exception
 use simple_math,      only: hpsort
 use simple_oris,      only: oris
@@ -15,6 +16,7 @@ public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists, sample_power_dists, sample_likelihood_index
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
+public :: prob_posterior_stat, posterior_temperature, posterior_row_stats
 private
 #include "simple_local_flags.inc"
 
@@ -42,6 +44,15 @@ type :: prob_refined_entry
     real    :: x
     real    :: y
 end type prob_refined_entry
+
+!> Per-particle statistics of the pose posterior over a dense table row (prob_post_diag=yes): the mode
+!! (state, direction, loss), the temperature, the mode's posterior mass, the effective number of
+!! references exp(entropy), the number holding 99% of the mass and their posterior-weighted mean angular
+!! distance from the mode in degrees (the mode's state only, symmetry-aware)
+type :: prob_posterior_stat
+    integer :: iptcl = 0, istate = 0, iproj = 0, k99 = 0, nvalid = 0
+    real    :: lmin = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
+end type prob_posterior_stat
 
 ! Cost record of a partition's table fill for the bench file: wall time outside the parallel region,
 ! thread-seconds summed over threads.
@@ -296,6 +307,81 @@ contains
         athres     = prob_athres
         if( dist_thres > TINY ) athres = min(athres, dist_thres)
     end function calc_athres
+
+    !> The temperature of the pose posterior over a particle's table row. The row holds the normalized
+    !! Euclidean loss L_r = sum_k (k/sigma2_k) sum_p |X_kp - CTF R_kp|^2 / wsqsum(X), summed over the pftsz
+    !! polar samples of each ring (gen_raw_euclid_vals). The Gaussian negative log-likelihood runs over the
+    !! Cartesian half-plane components, pi*k of them in ring k, so each polar sample stands for pi*k/pftsz
+    !! of them, and sigma2 is the variance per real or imaginary part (gen_sigma_contrib):
+    !!   NLL_r = sum_k (pi k/pftsz) sum_p |r_kp|^2 / (2 sigma2_k) = pi wsqsum(X) L_r / (2 pftsz).
+    !! The posterior is p_r proportional to exp(-T (L_r - L_min)) with T = pi wsqsum(X) / (2 pftsz).
+    !! wsqsum is the calculator's memoized weighted power of the particle (wsqsum_ptcl_now).
+    pure real function posterior_temperature( wsqsum, pftsz ) result( temp )
+        real(dp), intent(in) :: wsqsum
+        integer,  intent(in) :: pftsz
+        temp = real(DPI * wsqsum / (2.d0 * real(pftsz,dp)))
+    end function posterior_temperature
+
+    !> The posterior over one table row at temperature temp: p_r proportional to exp(-temp (dist_r - dist_min))
+    !! over the valid distances (finite and below the invalid marker, as ref_assign counts them), zero
+    !! elsewhere. On return w holds the posterior sorted ascending with the references in inds (both of
+    !! size >= n; the mass sits at the top), imin the mode, pmax its mass, neff the effective number of
+    !! references exp(entropy), k99 the number of references holding 99% of the mass, nvalid the number of
+    !! valid distances. No valid distance: every output zero. temp = 0 gives the uniform posterior.
+    subroutine posterior_row_stats( n, dists, temp, w, inds, imin, pmax, neff, k99, nvalid )
+        integer, intent(in)    :: n
+        real,    intent(in)    :: dists(n), temp
+        real,    intent(inout) :: w(:)
+        integer, intent(inout) :: inds(:)
+        integer, intent(out)   :: imin, k99, nvalid
+        real,    intent(out)   :: pmax, neff
+        real(dp) :: z, h, csum
+        real     :: dmin, invalid_dist, arg
+        integer  :: i
+        imin   = 0
+        nvalid = 0
+        pmax   = 0.
+        neff   = 0.
+        k99    = 0
+        w(1:n) = 0.
+        do i = 1,n
+            inds(i) = i
+        end do
+        invalid_dist = 0.1 * huge(invalid_dist)
+        dmin = huge(dmin)
+        do i = 1,n
+            if( ieee_is_finite(dists(i)) .and. dists(i) < invalid_dist )then
+                nvalid = nvalid + 1
+                if( dists(i) < dmin )then
+                    dmin = dists(i)
+                    imin = i
+                endif
+            endif
+        end do
+        if( nvalid == 0 ) return
+        z = 0.d0
+        do i = 1,n
+            if( ieee_is_finite(dists(i)) .and. dists(i) < invalid_dist )then
+                arg = temp * (dists(i) - dmin)
+                if( arg < 80. ) w(i) = exp(-arg)
+                z = z + real(w(i),dp)
+            endif
+        end do
+        w(1:n) = real(w(1:n) / z)
+        h = 0.d0
+        do i = 1,n
+            if( w(i) > 0. ) h = h - real(w(i),dp) * log(real(w(i),dp))
+        end do
+        neff = real(exp(h))
+        pmax = w(imin)
+        call hpsort(w(1:n), inds(1:n))
+        csum = 0.d0
+        do i = n,1,-1
+            csum = csum + real(w(i),dp)
+            k99  = k99 + 1
+            if( csum >= 0.99d0 ) exit
+        end do
+    end subroutine posterior_row_stats
 
     elemental function eulprob_dist_switch( corr, cc_objfun ) result(dist)
         real,    intent(in) :: corr

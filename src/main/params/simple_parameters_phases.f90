@@ -707,6 +707,14 @@ contains
             case DEFAULT
                 THROW_HARD('scan_exit must be yes or no')
         end select
+        select case(trim(self%prob_post_diag))
+            case('yes')
+                self%l_prob_post_diag = .true.
+            case('no')
+                self%l_prob_post_diag = .false.
+            case DEFAULT
+                THROW_HARD('prob_post_diag must be yes or no')
+        end select
         select case(trim(self%freq_march_aggressive))
             case('yes')
                 self%l_freq_march_aggressive = .true.

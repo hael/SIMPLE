@@ -11,7 +11,8 @@ use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
-    &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry
+    &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
+    &posterior_temperature, posterior_row_stats
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -43,7 +44,49 @@ contains
         call test_bounded_and_power_samplers()
         write(*,'(A)') 'test_ref_assign_against_reference'
         call test_ref_assign_against_reference()
+        write(*,'(A)') 'test_posterior_row_stats'
+        call test_posterior_row_stats()
     end subroutine run_all_eul_prob_tab_tests
+
+    !> The pose posterior over a table row: T = pi wsqsum / (2 pftsz) (15.707963 for 1000 and 100); at T = 1000
+    !! the row [0, 0.001, 0.002, 0.5, invalid, 0.4] gives p = [e^0, e^-1, e^-2, ~0, 0, ~0]/Z = [0.665241,
+    !! 0.244728, 0.090031, 0, 0, 0] (numpy), so the mode is reference 1 with that mass, exp(H) = 2.298819
+    !! and three references hold 99% of the mass; at T = 0 the posterior is uniform over the five valid
+    !! distances (exp(H) = 5, k99 = 5); a row of invalid distances gives nvalid 0 and zeros
+    subroutine test_posterior_row_stats()
+        real,    parameter :: ROW(6) = [0.0, 0.001, 0.002, 0.5, huge(1.), 0.4]
+        real    :: w(6), pmax, neff, temp
+        integer :: inds(6), imin, k99, nvalid, i
+        logical :: l_sorted
+        temp = posterior_temperature(1000.d0, 100)
+        call assert_real(15.707963, temp, 1.e-4, 'posterior temperature pi wsqsum / (2 pftsz)')
+        call posterior_row_stats(6, ROW, 1000., w, inds, imin, pmax, neff, k99, nvalid)
+        call assert_int(5, nvalid, 'posterior: five valid distances')
+        call assert_int(1, imin,   'posterior: the mode is the lowest distance')
+        call assert_real(0.665241, pmax, 1.e-5, 'posterior: the mass of the mode')
+        call assert_real(2.298819, neff, 1.e-4, 'posterior: exp(entropy)')
+        call assert_int(3, k99, 'posterior: three references hold 99% of the mass')
+        call assert_real(0.665241, w(6), 1.e-5, 'posterior: sorted ascending, the mode on top')
+        call assert_int(1, inds(6), 'posterior: the mode''s reference on top')
+        call assert_real(0.244728, w(5), 1.e-5, 'posterior: the second reference next')
+        call assert_int(2, inds(5), 'posterior: its index')
+        call assert_real(0., w(1), 1.e-7, 'posterior: the invalid distance carries no mass')
+        l_sorted = .true.
+        do i = 2,6
+            if( w(i) < w(i-1) ) l_sorted = .false.
+        end do
+        call assert_true(l_sorted, 'posterior: the weights come back sorted ascending')
+        call assert_real(1., sum(w), 1.e-5, 'posterior: the weights sum to one')
+        call posterior_row_stats(6, ROW, 0., w, inds, imin, pmax, neff, k99, nvalid)
+        call assert_real(0.2, pmax, 1.e-6, 'uniform posterior: the mode has 1/5')
+        call assert_real(5.,  neff, 1.e-4, 'uniform posterior: exp(entropy) = 5')
+        call assert_int(5, k99, 'uniform posterior: all five hold 99% of the mass')
+        call posterior_row_stats(3, [huge(1.), huge(1.), huge(1.)], 1000., w, inds, imin, pmax, neff, k99, nvalid)
+        call assert_int(0, nvalid, 'no valid distance: nvalid 0')
+        call assert_int(0, imin,   'no valid distance: no mode')
+        call assert_real(0., neff, 1.e-7, 'no valid distance: exp(entropy) 0')
+        call assert_int(0, k99,    'no valid distance: k99 0')
+    end subroutine test_posterior_row_stats
 
     !> One state of 200 directions, three states of 200, and two states of one direction (each state's draw
     !! has a single reference). A different draw seed changes the reference assignment of the first two

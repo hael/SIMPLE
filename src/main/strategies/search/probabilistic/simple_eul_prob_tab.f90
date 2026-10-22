@@ -6,7 +6,10 @@ use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
-    &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile
+    &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats
+use simple_linalg,             only: rad2deg
+use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
 implicit none
@@ -53,6 +56,8 @@ type :: eul_prob_tab
     integer(int64)              :: rows_addr     = 1_int64  !< first row of a dense part file
     integer(int64)              :: table_nrefined = 0_int64 !< refined entries written to a dense part file
     integer                     :: table_nfilled  = 0       !< particles whose rows are written
+    integer                     :: post_unit      = -1      !< the pose-posterior diagnostic file (prob_post_diag=yes)
+    logical                     :: post_is_open   = .false.
     integer                     :: nptcls          !< size of pinds array
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
@@ -71,6 +76,7 @@ type :: eul_prob_tab
     procedure :: begin_write
     procedure :: write_rows
     procedure, private :: write_dense_head
+    procedure, private :: write_posterior_diag
     procedure :: get_fill_profile
     procedure :: read_assignment
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
@@ -219,6 +225,10 @@ contains
         type(prob_dense_entry),   allocatable :: rows_batch(:,:)     !< the batch's rows (nrefs,i_first:i_last)
         type(prob_refined_entry), allocatable :: refined_batch(:,:)  !< refined entries per particle (projs_ns,i_first:i_last)
         integer,                  allocatable :: nrefined_batch(:)
+        type(prob_posterior_stat), allocatable :: post_batch(:)      !< pose-posterior statistics per particle (prob_post_diag=yes)
+        real,                      allocatable :: post_w(:,:)        !< per thread: the posterior over the row, sorted
+        integer,                   allocatable :: post_inds(:,:)     !< per thread: its reference order
+        logical :: l_post
         integer :: i, si, iptcl, n, projs_ns, ithr, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), istate
         integer :: inpl_refs(self%nrefs,nthr_glob)
         real    :: lims(2,2), lims_init(2,2), inpl_athres(self%p_ptr%nstates)
@@ -255,6 +265,9 @@ contains
         allocate(locn(projs_ns,nthr_glob), source=0)
         allocate(rows_batch(self%nrefs,i_first:i_last), refined_batch(max(1,projs_ns),i_first:i_last))
         allocate(nrefined_batch(i_first:i_last), source=0)
+        ! the pose posterior is defined by the Euclidean objective only
+        l_post = self%p_ptr%l_prob_post_diag .and. self%p_ptr%cc_objfun == OBJFUN_EUCLID
+        if( l_post ) allocate(post_batch(i_first:i_last), post_w(self%nrefs,nthr_glob), post_inds(self%nrefs,nthr_glob))
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -323,6 +336,10 @@ contains
         end do
         if( allocated(seed_bank) ) deallocate(seed_bank)
         call self%write_rows(i_first, rows_batch, pack_refined())
+        if( l_post )then
+            call self%write_posterior_diag(i_first, i_last, post_batch)
+            deallocate(post_batch, post_w, post_inds)
+        endif
 
     contains
 
@@ -375,6 +392,7 @@ contains
             t0 = omp_get_wtime()
             call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
+            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc)
             call o_prev_loc%kill
         end subroutine process_particle_with_shift
 
@@ -389,7 +407,45 @@ contains
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
             enddo
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc)
         end subroutine process_particle_without_shift
+
+        !> The pose posterior over the particle's finished row (the refined distances included) at the
+        !! temperature of its weighted power, and the angular spread of the references holding 99% of
+        !! the mass about the mode, in the mode's state, across the symmetry operations
+        subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc )
+            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
+            real(dp) :: wsum, dsum
+            real     :: temp, pmax, neff, euls_min(3), euls(3), euls_sym(3), euldist, inpldist
+            integer  :: imin, k99, nvalid, j_loc, ri_loc, istate_min, iproj_min
+            temp = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+            call posterior_row_stats(self%nrefs, rows_batch(:,i_loc)%dist, temp, post_w(:,ithr_loc), &
+                &post_inds(:,ithr_loc), imin, pmax, neff, k99, nvalid)
+            post_batch(i_loc)%iptcl  = iptcl_loc
+            post_batch(i_loc)%nvalid = nvalid
+            post_batch(i_loc)%temp   = temp
+            post_batch(i_loc)%pmax   = pmax
+            post_batch(i_loc)%neff   = neff
+            post_batch(i_loc)%k99    = k99
+            if( nvalid == 0 ) return
+            istate_min = self%ref_state(imin)
+            iproj_min  = self%ref_proj(imin)
+            post_batch(i_loc)%istate = istate_min
+            post_batch(i_loc)%iproj  = iproj_min
+            post_batch(i_loc)%lmin   = rows_batch(imin,i_loc)%dist
+            euls_min = self%b_ptr%eulspace%get_euler(iproj_min)
+            wsum = 0.d0
+            dsum = 0.d0
+            do j_loc = self%nrefs, self%nrefs - k99 + 1, -1
+                ri_loc = post_inds(j_loc,ithr_loc)
+                if( self%ref_state(ri_loc) /= istate_min ) cycle
+                euls = self%b_ptr%eulspace%get_euler(self%ref_proj(ri_loc))
+                call self%b_ptr%pgrpsyms%sym_dists(euls_min, euls, euls_sym, euldist, inpldist)
+                wsum = wsum + real(post_w(j_loc,ithr_loc),dp)
+                dsum = dsum + real(post_w(j_loc,ithr_loc),dp) * real(rad2deg(euldist),dp)
+            end do
+            if( wsum > 0.d0 ) post_batch(i_loc)%spread = real(dsum / wsum)
+        end subroutine posterior_diag
 
         subroutine get_particle_context( iptcl_loc, o_prev_loc, prev_state, prev_proj )
             integer,   intent(in)    :: iptcl_loc
@@ -485,6 +541,33 @@ contains
         end subroutine refine_best_refs
 
     end subroutine fill_tab_range
+
+    !> One line per particle of the batch to the part's pose-posterior file, prob_posterior_iterNNN_partNN.txt
+    !! (no iteration tag when which_iter is unset), opened at the first batch and closed by kill. The
+    !! columns are the fields of prob_posterior_stat; nvalid 0 marks a particle without a valid distance.
+    subroutine write_posterior_diag( self, i_first, i_last, post_batch )
+        class(eul_prob_tab),       intent(inout) :: self
+        integer,                   intent(in)    :: i_first, i_last
+        type(prob_posterior_stat), intent(in)    :: post_batch(i_first:i_last)
+        type(string) :: fname
+        integer :: i, io_stat
+        if( .not. self%post_is_open )then
+            fname = string('prob_posterior_')
+            if( self%p_ptr%which_iter > 0 ) fname = fname//'iter'//int2str_pad(self%p_ptr%which_iter,3)//'_'
+            fname = fname//'part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//'.txt'
+            call fopen(self%post_unit, fname, status='replace', action='write', iostat=io_stat)
+            call fileiochk('eul_prob_tab%write_posterior_diag; open '//fname%to_char(), io_stat)
+            write(self%post_unit,'(A)') '# iptcl istate iproj nvalid lmin temp pmax neff k99 spread_deg'
+            self%post_is_open = .true.
+            call fname%kill
+        endif
+        do i = i_first,i_last
+            write(self%post_unit,'(I0,1X,I0,1X,I0,1X,I0,1X,ES13.6,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3)') &
+                &post_batch(i)%iptcl, post_batch(i)%istate, post_batch(i)%iproj, post_batch(i)%nvalid, &
+                &post_batch(i)%lmin, post_batch(i)%temp, post_batch(i)%pmax, post_batch(i)%neff, &
+                &post_batch(i)%k99, post_batch(i)%spread
+        end do
+    end subroutine write_posterior_diag
 
     !> the cost record of fill_tab_range since new, read before kill
     function get_fill_profile( self ) result( profile )
@@ -1225,6 +1308,9 @@ contains
         if( self%table_is_open ) call fclose(self%table_unit)
         self%table_unit     = -1
         self%table_is_open  = .false.
+        if( self%post_is_open ) call fclose(self%post_unit)
+        self%post_unit      = -1
+        self%post_is_open   = .false.
         self%table_addr     = 1
         self%rows_addr      = 1
         self%table_nrefined = 0
