@@ -215,6 +215,38 @@ floor before generating the remaining low-pass and crop ladder, preserving
 gradual frequency marching. `force_lp_range=yes` and the routes planned by
 `lpstages_setlims` (input volumes, no 2D solution) take `lpstart` as given.
 
+**Aggressive frequency marching (`freq_march_aggressive=yes`, 2026-10-21;
+experimental, default `no`).** For a small membrane target the class FRCs
+measure micelle self-consistency at the low resolutions where the default
+ladder parks stages 1-3 (PfCRT: 20.0, 19.4, 18.3 A), and those bands do not
+discriminate orientations: on the `latest6` reference stage 3's overlap peaks
+at its fourth iteration and declines for the remaining thirteen (the
+iteration-budget note below). The signal that fixes a small particle's
+orientation sits in the 5-10 A band, which the default schedule withholds
+until stage 4. With the key on, the particle route builds its ladder with
+`lpstages_aggressive`: rungs linear in spatial frequency from `lpstart` (12 A
+when not given, `LPSTART_AGGRESSIVE`; no 20 A floor) to the standard final
+limit `lpfinal`, so every stage admits the same number of new Fourier shells
+and the steps are smallest in Angstrom at the fine end; each stage is cropped
+on its own at the particle-route target (smpd lp/3, at least 2 A). The class
+FRCs set neither the start nor the rungs (12.0, 10.5, 9.3, 8.4, 7.6, 7.0, 6.5,
+6.0 A for a 6 A final limit). The finer bands need finer angular sampling, so
+`nspace` follows `NSPACE_AGGRESSIVE` = [1000, 2500, 2500, 2500, 2500, 2500,
+5000, 5000] (a spiral of n directions resolves about 223/sqrt(n) degrees; a
+band lp on a particle of diameter D needs about lp/D radians, 5.7 degrees at
+12 A on 120 A). Everything else stands: `MAXITS`, the stage modes, the NU
+start stage (5; NU before that reinforces a bad alignment, see section 8),
+the non-NU matching ceiling at the rung, the FSC=0.5 promotion, stage
+omission and mid-stage exit, which now act on the closer rungs. The key
+applies to the particle route with a 2D solution only: the input-volume and
+no-2D routes and the add-on have explicit limits and refuse it, the
+class-average route keeps its own ladder and refuses it, and
+`force_lp_range=yes` is refused beside it. Test: the ten-restart PfCRT
+regression against the default schedule, scored on the stage-5 FSC, the
+iterations to the stage-6 Nyquist, overlap through stage 6 and above all the
+gold-standard bootstrap of the final poses, plus the same restarts on a
+target that fails under the default schedule.
+
 The single-state external-volume route (`vol1`, `nstates=1`) starts at
 `VOL_SUPPLIED_STAGE`, the stage after the no-axis-search block
 (`NOSYMSRCH_STAGE + 1`, stage 4 in the standard schedule). That first

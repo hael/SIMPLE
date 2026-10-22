@@ -97,6 +97,7 @@ contains
         call reg%add_char('flag', self%flag)
         call reg%add_char('flipgain', self%flipgain)
         call reg%add_char('force_lp_range', self%force_lp_range)
+        call reg%add_char('freq_march_aggressive', self%freq_march_aggressive)
         call reg%add_char('gauref', self%gauref)
         call reg%add_char('gen_model', self%gen_model)
         call reg%add_char('graph', self%graph)

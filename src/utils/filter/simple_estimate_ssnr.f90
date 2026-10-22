@@ -17,7 +17,7 @@ public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2cref, 
 public :: lowpass_from_klim, gaussian_filter, bfac_cap_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
-public :: lpstages, lpstages_fast, lpstages_setlims
+public :: lpstages, lpstages_fast, lpstages_setlims, lpstages_aggressive
 private
 #include "simple_local_flags.inc"
 real, parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
@@ -538,5 +538,50 @@ contains
             end do
         endif
     end subroutine lpstages_setlims
+
+    !> Aggressive frequency marching (solve3D freq_march_aggressive=yes): the rungs are linear in
+    !! spatial frequency from lpstart to lpfinal, with no first-stage floor and no class-FRC
+    !! shaping, so every stage admits the same number of new Fourier shells and the steps are
+    !! smallest in Angstrom at the fine end. Each stage is cropped on its own at the particle-route
+    !! target (smpd lp/3, at least 2 A, box at least 88), the same target as lpstages. A start
+    !! finer than the final limit is raised to it: the ladder never marches backwards.
+    subroutine lpstages_aggressive( box, nstages, smpd, lpstart, lpfinal, lpinfo, verbose )
+        use simple_magic_boxes
+        integer,           intent(in)  :: box, nstages
+        real,              intent(in)  :: smpd, lpstart, lpfinal
+        type(lp_crop_inf), intent(out) :: lpinfo(nstages)
+        logical, optional, intent(in)  :: verbose
+        real,    parameter :: LP2SMPD_TARGET   = 1./3.
+        real,    parameter :: SMPD_TARGET_MIN  = 2.0
+        integer :: i
+        real    :: lpstart_eff, freq, smpd_target
+        logical :: l_verbose
+        l_verbose = .true.
+        if( present(verbose) ) l_verbose = verbose
+        if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_aggressive')
+        if( lpstart < TINY .or. lpfinal < TINY ) THROW_HARD('lpstart and lpfinal must be positive in lpstages_aggressive')
+        lpstart_eff = max(lpstart, lpfinal)
+        lpinfo(:)%l_lpset  = .true.
+        lpinfo(:)%frc_crit = 0.
+        do i = 1,nstages
+            if( nstages == 1 )then
+                lpinfo(i)%lp = lpstart_eff
+            else
+                freq = 1./lpstart_eff + real(i-1)/real(nstages-1) * (1./lpfinal - 1./lpstart_eff)
+                lpinfo(i)%lp = 1./freq
+            endif
+            smpd_target = max(SMPD_TARGET_MIN, lpinfo(i)%lp * LP2SMPD_TARGET)
+            call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
+            lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
+            lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
+        end do
+        if( l_verbose )then
+            write(logfhandle,'(A)') '########## aggressive frequency marching: rungs linear in spatial frequency'
+            do i = 1,nstages
+                write(logfhandle,*) 'lp box_crop smpd_crop trslim ', lpinfo(i)%lp, lpinfo(i)%box_crop, &
+                    &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
+            end do
+        endif
+    end subroutine lpstages_aggressive
 
 end module simple_estimate_ssnr

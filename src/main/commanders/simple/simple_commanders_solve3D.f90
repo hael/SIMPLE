@@ -152,6 +152,7 @@ contains
         ! read project
         call spproj%read(params%projfile)
         ! set low-pass limits and downscaling info from FRCs
+        if( params%l_freq_march_aggressive ) THROW_HARD('freq_march_aggressive=yes plans the ladder of the particle route; the class-average route keeps its own')
         if( cline%defined('lpstart_ini3D').or.cline%defined('lpstop_ini3D') )then
             ! overrides resolution limits scheme based on frcs
             if( cline%defined('lpstart_ini3D').and.cline%defined('lpstop_ini3D') )then
@@ -1211,6 +1212,10 @@ contains
             endif
         endif
         ! set low-pass limits and downscaling info from FRCs
+        if( params%l_freq_march_aggressive .and. (l_addon .or. l_vol_ini_ext .or. l_no2D) )then
+            THROW_HARD('freq_march_aggressive=yes plans the ladder of the particle route with a 2D solution; not with an &
+                &input volume, without a 2D solution or in an add-on, whose limits are explicit')
+        endif
         if( l_addon )then
             ! the base run's ladder at the limits it emitted; never planned from class FRCs
             call set_lplims_from_manifest(man_addon)

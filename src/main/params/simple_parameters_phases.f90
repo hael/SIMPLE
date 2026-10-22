@@ -707,6 +707,16 @@ contains
             case DEFAULT
                 THROW_HARD('scan_exit must be yes or no')
         end select
+        select case(trim(self%freq_march_aggressive))
+            case('yes')
+                self%l_freq_march_aggressive = .true.
+            case('no')
+                self%l_freq_march_aggressive = .false.
+            case DEFAULT
+                THROW_HARD('freq_march_aggressive must be yes or no')
+        end select
+        if( self%l_freq_march_aggressive .and. trim(self%force_lp_range).eq.'yes' ) &
+            &THROW_HARD('freq_march_aggressive=yes and force_lp_range=yes plan the solve3D ladder two ways; give one of them')
         select case(trim(self%balance))
             case('none','class','cavg')
             case DEFAULT

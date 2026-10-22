@@ -11,6 +11,10 @@ integer,          parameter :: NSTAGES                 = 8
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
+! freq_march_aggressive=yes: the finer early bands need finer angular sampling. A spiral of n directions
+! resolves about 223/sqrt(n) degrees (oris%find_angres); the step a band lp needs on a particle of
+! diameter D is about lp/D radians: 12 A on 120 A is 5.7 degrees (n ~ 1500), 9 A is 4.3 degrees (n ~ 2700)
+integer,          parameter :: NSPACE_AGGRESSIVE(8)    = [1000,2500,2500,2500,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve3D_cavgs stages using NSPACE_CAVGS_EARLY
@@ -46,6 +50,7 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
 real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
+real,             parameter :: LPSTART_AGGRESSIVE      = 12.  ! freq_march_aggressive=yes: first-stage limit when lpstart is not given (no 20 A floor)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
 real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for solve3D_cavgs/cavgs_ini
@@ -82,6 +87,11 @@ contains
         real :: bounds(2)
         bounds = LPSTART_BOUNDS
     end function solve3D_lpstart_bounds
+
+    module function solve3D_lpstart_aggressive() result(lp)
+        real :: lp
+        lp = LPSTART_AGGRESSIVE
+    end function solve3D_lpstart_aggressive
 
     module function solve3D_cenlp_default() result(cenlp)
         real :: cenlp
@@ -466,6 +476,7 @@ contains
         integer :: stoch_stage
         stoch_stage = solve3D_stoch_sampl_stage(params)
         cfg%inspace = NSPACE(istage)
+        if( params%l_freq_march_aggressive .and. .not. l_cavgs ) cfg%inspace = NSPACE_AGGRESSIVE(istage)
         if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
         if( params%nstates > 1 ) cfg%inspace = min(cfg%inspace, NSPACE_MULTI_MAX)
         cfg%greedy_sampling = 'yes'

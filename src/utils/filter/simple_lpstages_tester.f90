@@ -1,13 +1,14 @@
 !@descr: unit tests for the low-pass/crop stage schedules, FSC weightings, B-factor cap, Butterworth filter and apply_filter Nyquist support
-! Expected stage values come from an out-of-tree double-precision emulation (lpstages_ref.py, not in the repo);
+! Expected stage values come from an out-of-tree double-precision emulation (lpstages_ref.py, not in the repo;
+! lpstages_aggressive_ref.py for the aggressive ladder, in the SIMPLE project docs);
 ! FSC weightings and the Butterworth kernel are closed forms.
 module simple_lpstages_tester
 use simple_test_utils        ! assertions etc.
 use simple_defs              ! sp
 use simple_type_defs,        only: lp_crop_inf
 use simple_string_utils,     only: int2str
-use simple_estimate_ssnr,    only: mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims, fsc2optlp, fsc2cref,&
-                             &bfac_cap_filter
+use simple_estimate_ssnr,    only: mskdiam2lplimits, lpstages, lpstages_fast, lpstages_setlims, lpstages_aggressive,&
+                             &fsc2optlp, fsc2cref, bfac_cap_filter
 use simple_butterworth,      only: butterworth_filter
 use simple_image,            only: image
 implicit none
@@ -29,6 +30,12 @@ real,    parameter :: CRIT_K20_CAVGS(4) = [0.80, 0.55, 0.30, 0.05]
 integer, parameter :: BOXCROP_K20(4) = [88, 112, 140, 168]
 ! the linear fallback for a flat FRC, 10 stages from the start default to the final limit
 integer, parameter :: BOXCROP_FLAT(10) = [88, 100, 108, 112, 128, 132, 140, 150, 160, 168]
+! the aggressive ladder, 8 stages 12 -> 6 A: 1/lp(i) = 1/12 + (i-1)/7 * (1/6 - 1/12), lp(i) = 84/(6+i); each stage cropped
+! on its own at smpd lp/3 (lpstages_aggressive_ref.py)
+real,    parameter :: LP_AGGR8(8)      = [12.0, 10.5, 9.333333, 8.4, 7.636364, 7.0, 6.461538, 6.0]
+integer, parameter :: BOXCROP_AGGR8(8) = [88, 100, 108, 120, 132, 144, 160, 168]
+real,    parameter :: LP_AGGR4(4)      = [12.0, 10.285714, 9.0, 8.0]      ! 4 stages 12 -> 8 A: lp(i) = 72/(5+i)
+integer, parameter :: BOXCROP_AGGR4(4) = [88, 100, 112, 128]
 
 contains
 
@@ -41,6 +48,7 @@ contains
         call test_lpstages_flat_frc_fallback()
         call test_lpstages_fast()
         call test_lpstages_setlims()
+        call test_lpstages_aggressive()
         call test_fsc_weightings()
         call test_bfac_cap_filter()
         call test_butterworth()
@@ -287,6 +295,52 @@ contains
             end subroutine count_setlims_diagnostics
 
     end subroutine test_lpstages_setlims
+
+    !---------------- lpstages_aggressive ----------------
+
+    ! rungs linear in spatial frequency from lpstart to lpfinal, no floor and no FRC: equal frequency steps
+    ! (1/84 per stage for 12 -> 6 A over 8), each stage cropped on its own at smpd lp/3 (at least 2 A, box at
+    ! least 88); a start finer than the final limit is raised to it; one stage sits at the start
+    subroutine test_lpstages_aggressive()
+        type(lp_crop_inf) :: info(8)
+        real    :: fstep
+        integer :: i
+        write(*,'(A)') 'test_lpstages_aggressive'
+        call lpstages_aggressive(BOX, 8, SMPD, 12., LPFINAL, info, verbose=.false.)
+        do i = 1,8
+            call assert_real(LP_AGGR8(i), info(i)%lp, 1.e-3, 'aggressive, stage '//int2str(i)//': rung linear in frequency')
+            call assert_int(BOXCROP_AGGR8(i), info(i)%box_crop, 'aggressive, stage '//int2str(i)//': crop box at smpd lp/3')
+            call assert_real(0., info(i)%frc_crit, 1.e-6, 'aggressive, stage '//int2str(i)//': no FRC criterion')
+            call assert_crop_consistent(info(i), 'aggressive, stage '//int2str(i))
+        end do
+        do i = 2,8
+            fstep = 1./info(i)%lp - 1./info(i-1)%lp
+            call assert_real(1./84., fstep, 1.e-5, 'aggressive: equal frequency step into stage '//int2str(i))
+            call assert_true(info(i)%box_crop >= info(i-1)%box_crop, 'aggressive: the crop box grows into stage '//int2str(i))
+        end do
+        call assert_real(3.781818, info(1)%smpd_crop, 1.e-4, 'aggressive, stage 1: 12 A targets smpd 4, the 88 minimum box')
+        call assert_real(1.980952, info(8)%smpd_crop, 1.e-4, 'aggressive, stage 8: the 2 A target, as the FRC ladder''s last stage')
+        call assert_real(6.057692, info(8)%trslim,    1.e-4, 'aggressive, stage 8: shift limit at 1.98 A per pixel')
+        call lpstages_aggressive(BOX, 4, SMPD, 12., 8., info(1:4), verbose=.false.)
+        do i = 1,4
+            call assert_real(LP_AGGR4(i), info(i)%lp, 1.e-3, 'aggressive 12 -> 8, stage '//int2str(i)//': rung')
+            call assert_int(BOXCROP_AGGR4(i), info(i)%box_crop, 'aggressive 12 -> 8, stage '//int2str(i)//': crop box')
+        end do
+        call lpstages_aggressive(BOX, 3, SMPD, 5., LPFINAL, info(1:3), verbose=.false.)
+        do i = 1,3
+            call assert_real(LPFINAL, info(i)%lp, TOL, 'aggressive: a start finer than the final limit is raised to it (stage '//int2str(i)//')')
+            call assert_int(168, info(i)%box_crop, 'aggressive: every stage then crops for the final limit (stage '//int2str(i)//')')
+        end do
+        call lpstages_aggressive(BOX, 1, SMPD, 12., LPFINAL, info(1:1), verbose=.false.)
+        call assert_real(12., info(1)%lp, TOL, 'aggressive, one stage: the start')
+        call assert_int(88, info(1)%box_crop, 'aggressive, one stage: cropped for the start')
+        ! coarse data: the last stage keeps the box, the first still crops to the 88 minimum
+        call lpstages_aggressive(100, 2, 3.0, 12., LPFINAL, info(1:2), verbose=.false.)
+        call assert_int(88,  info(1)%box_crop, 'aggressive, coarse data: 12 A at 3 A per pixel crops to the minimum box')
+        call assert_int(100, info(2)%box_crop, 'aggressive, coarse data: 6 A targets 2 A, coarser than the data, the box is kept')
+        call assert_real(1.,  info(2)%scale,     1.e-6, 'aggressive, coarse data: scale 1 at the last stage')
+        call assert_false(info(2)%l_autoscale, 'aggressive, coarse data: no autoscaling at the last stage')
+    end subroutine test_lpstages_aggressive
 
     !---------------- FSC weightings ----------------
 

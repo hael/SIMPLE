@@ -152,6 +152,13 @@ contains
         call prg%add_input(UI_FILT, 'force_lp_range', 'binary', 'Force low-pass range', &
             &'Use lpstart/lpstop directly for solve3D low-pass stages instead of class-FRC-derived limits(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        if( .not. l_stream_compatible )then
+            call prg%add_input(UI_FILT, 'freq_march_aggressive', 'binary', 'Aggressive frequency marching', &
+                &'Stage limits linear in spatial frequency from 12 A (or lpstart) to the final limit, no 20 A first-stage floor, &
+                &finer early angular sampling; for small targets whose low-resolution signal is the micelle, not the protein; &
+                &particle route with a 2D solution only(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        endif
         call prg%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
             &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}; nonuniform_lpset promotes the &
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
