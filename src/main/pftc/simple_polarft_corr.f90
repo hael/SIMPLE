@@ -129,52 +129,33 @@ contains
         complex(sp), pointer :: shmat(:,:)
         real(sp) :: shift_mag_sq
         integer  :: i, ithr, k, kk, k0, ieo
-        logical  :: needs_shift
         ithr    =  omp_get_thread_num() + 1
         i       =  self%pinds(iptcl)
         k0      =  self%kfromto(1)
         ieo     =  merge(REF_EVEN, REF_ODD, self%iseven(i))
         shmat   => self%heap_vars(ithr)%shmat
-        ! ========================================================================
-        ! Prepare FFT(S.REF) if needed
-        ! ========================================================================
+        ! IFFT( sum_k FT(CTF2) x FT(REF2) )
+        call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i), self%ft_ref2(:,:,iref,ieo), .false.,&
+            &self%crvec1(ithr)%c)
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        cc = self%crvec1(ithr)%r(1:self%nrots)
+        ! IFFT( sum_k FT(X.CTF) x FT(S.REF)* ), the memoized FT(REF) when there is no shift
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        needs_shift  = shift_mag_sq > SHERRSQ
-        if (needs_shift) then
-            ! Generate shift matrix
+        if( shift_mag_sq > SHERRSQ )then
             call self%gen_shmat4aln(ithr, shift, shmat)
-            ! Shift reference directly into cmat2_many
             do k = self%kfromto(1), self%kfromto(2)
                 kk = k - k0 + 1
                 self%cmat2_many(ithr)%c(1:self%pftsz,kk) = shmat(:,k) * self%pfts_refs(:,k,iref,ieo)
                 self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,kk) = &
                     conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
             enddo
-            ! Calculate FFT(S.REF)
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+            call cc_sums(self%pftsz+1, self%nrots, self%nk, self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, .true.,&
+                &self%crvec1(ithr)%c)
         else
-            ! no shift, memoized reference is used
-            self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = &
-                self%ft_ref(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+            call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), .true.,&
+                &self%crvec1(ithr)%c)
         endif
-        ! ========================================================================
-        ! Single IFFT #1: IFFT( sum_k FT(CTF2) x FT(REF2) )
-        ! ========================================================================
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
-        enddo
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        cc = self%crvec1(ithr)%r(1:self%nrots)
-        ! ========================================================================
-        ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.REF)* )
-        ! ========================================================================
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
-                self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk))
-        end do
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         ! Final correlation computation
         cc = self%crvec1(ithr)%r(1:self%nrots) / &
@@ -302,10 +283,8 @@ contains
         real(dp),                    intent(out)   :: norm
         integer,                     intent(out)   :: ithr
         complex(sp), pointer :: shmat(:,:)
-        complex(sp) :: c
-        real(dp)    :: wk
         real(sp)    :: shift_mag_sq
-        integer     :: k, i, kk, k0, p, ieo, ih
+        integer     :: k, i, kk, k0, ieo, ih
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
@@ -323,44 +302,54 @@ contains
                     conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
             enddo
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            do k = self%kfromto(1), self%kfromto(2)
-                kk = k - k0 + 1
-                wk = self%sigma2_wk8(k,ih)
-                do p = 1,self%pftsz
-                    c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
-                    c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
-                    self%crvec1(ithr)%c(p) = cmplx(self%crvec1(ithr)%c(p) + wk * c, &
-                        &kind=kind(self%crvec1(ithr)%c))
-                enddo
-            enddo
+            call euclid_sums(self%pftsz, self%pftsz+1, self%nrots, self%nk, self%ft_ctf2(:,:,i),&
+                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, self%sigma2_wk8(:,ih),&
+                &self%crvec1(ithr)%c)
         else
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            do k = self%kfromto(1), self%kfromto(2)
-                wk = self%sigma2_wk8(k,ih)
-                do p = 1,self%pftsz
-                    c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
-                    c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
-                    self%crvec1(ithr)%c(p) = cmplx(self%crvec1(ithr)%c(p) + wk * c, &
-                        &kind=kind(self%crvec1(ithr)%c))
-                enddo
-            enddo
+            call euclid_sums(self%pftsz, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
+                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), self%sigma2_wk8(:,ih),&
+                &self%crvec1(ithr)%c)
         endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
     end subroutine gen_euclid_crvec
 
-    real(sp) function euclid_dist_from_crvec( self, ithr, irot, norm ) result(dist)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: ithr, irot
-        real(dp),            intent(in) :: norm
-        real(dp) :: v
-        v = 1.d0 + real(self%crvec1(ithr)%r(irot), dp) / norm
-        if( v > -log(real(TINY,dp)) )then
-            dist = huge(dist)
-        else
-            dist = real(v,sp)
-        endif
-    end function euclid_dist_from_crvec
+    !> The euclid sums of one pair over angular bins 1..np, sum_k w_k (FT(CTF2) x FT(REF2) - 2 FT(X.CTF) x FT(REF)*),
+    !! into acc. Plain array dummies: the compiler then knows unit stride and no overlap and vectorizes the bins.
+    subroutine euclid_sums( np, n1, ldr, nk, ctf2, ref2, xctf, ref, wk, acc )
+        integer,     intent(in)    :: np, n1, ldr, nk
+        complex(sp), intent(in)    :: ctf2(n1,nk), ref2(n1,nk), xctf(n1,nk), ref(ldr,nk)
+        real(dp),    intent(in)    :: wk(nk)
+        complex(sp), intent(inout) :: acc(n1)
+        complex(sp) :: c
+        integer     :: kk, p
+        acc = cmplx(0.,0.,kind=sp)
+        do kk = 1,nk
+            do p = 1,np
+                c = ctf2(p,kk) * ref2(p,kk)
+                c = c - 2.0 * xctf(p,kk) * conjg(ref(p,kk))
+                acc(p) = cmplx(acc(p) + wk(kk) * c, kind=sp)
+            enddo
+        enddo
+    end subroutine euclid_sums
+
+    !> The euclid distances of the n rotations from the inverse FFT r of gen_euclid_crvec, huge above -log(TINY).
+    !! Converting every element (vc clamps a huge v) and overwriting those above, not if/else, lets the loop vectorize
+    subroutine euclid_dists_from_crvec( n, r, norm, dists )
+        integer,  intent(in)  :: n
+        real(sp), intent(in)  :: r(n)
+        real(dp), intent(in)  :: norm
+        real(sp), intent(out) :: dists(n)
+        real(dp) :: v, vmax, vc
+        integer  :: p
+        vmax = -log(real(TINY,dp))
+        do p = 1,n
+            v  = 1.d0 + real(r(p), dp) / norm
+            vc = v
+            if( v > vmax ) vc = vmax
+            dists(p) = real(vc, sp)
+            if( v > vmax ) dists(p) = huge(dists)
+        enddo
+    end subroutine euclid_dists_from_crvec
 
     module subroutine gen_best_euclid_val( self, iref, iptcl, shift, dist, irot )
         class(polarft_calc), target, intent(inout) :: self
@@ -369,16 +358,15 @@ contains
         real(sp),                    intent(out)   :: dist
         integer,                     intent(out)   :: irot
         real(dp) :: norm
-        real(sp) :: dist_tmp
         integer  :: ithr, p
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
         irot = 1
-        dist = euclid_dist_from_crvec(self, ithr, 1, norm)
+        dist = self%heap_vars(ithr)%rot_dists(1)
         do p = 2,self%nrots
-            dist_tmp = euclid_dist_from_crvec(self, ithr, p, norm)
-            if( dist_tmp < dist )then
+            if( self%heap_vars(ithr)%rot_dists(p) < dist )then
                 irot = p
-                dist = dist_tmp
+                dist = self%heap_vars(ithr)%rot_dists(p)
             endif
         enddo
     end subroutine gen_best_euclid_val
@@ -393,11 +381,9 @@ contains
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
         real(dp)    :: norm
-        integer     :: ithr, p
+        integer     :: ithr
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        do p = 1,self%nrots
-            self%heap_vars(ithr)%rot_dists(p) = euclid_dist_from_crvec(self, ithr, p, norm)
-        enddo
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
         call sample_bounded_dists(self%nrots, self%heap_vars(ithr)%rot_dists, athres_ub, prob_athres, dist, irot,&
             &pvec_sorted, sorted_inds)
     end subroutine gen_prob_euclid_val
@@ -443,10 +429,7 @@ contains
         integer,             intent(out)   :: irot
         real(sp),            intent(inout) :: pvec_sorted(self%nrots)
         integer,             intent(inout) :: sorted_inds(self%nrots)
-        integer :: p
-        do p = 1,self%nrots
-            self%heap_vars(ithr)%rot_dists(p) = euclid_dist_from_crvec(self, ithr, p, norm)
-        enddo
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
         call sample_likelihood_dists(self%nrots, self%heap_vars(ithr)%rot_dists, nsample, dist, corr, irot,&
             &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
     end subroutine sample_euclid_crvec
@@ -477,11 +460,9 @@ contains
         real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
         integer,                     intent(inout) :: sorted_inds(self%nrots)
         real(dp) :: norm
-        integer  :: ithr, p
+        integer  :: ithr
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        do p = 1,self%nrots
-            self%heap_vars(ithr)%rot_dists(p) = euclid_dist_from_crvec(self, ithr, p, norm)
-        enddo
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
         call sample_power_dists(self%nrots, self%heap_vars(ithr)%rot_dists, power, nsample, dist, corr, irot,&
             &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
     end subroutine gen_prob_power_euclid_val
@@ -497,26 +478,14 @@ contains
         complex(sp),         intent(in)    :: bank(:,:)
         real(dp),            intent(out)   :: norm
         integer,             intent(out)   :: ithr
-        complex(sp) :: c
-        real(dp)    :: wk
-        integer     :: k, i, kk, k0, p, ieo, ih
+        integer :: i, ieo, ih
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
         ih   = merge(1, 2, self%iseven(i))
-        k0   = self%kfromto(1)
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
         norm = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            wk = self%sigma2_wk8(k,ih)
-            do p = 1,self%pftsz+1
-                c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
-                c = c - 2.0 * bank(p,kk) * conjg(self%ft_ref(p,k,iref,ieo))
-                self%crvec1(ithr)%c(p) = cmplx(self%crvec1(ithr)%c(p) + wk * c, &
-                    &kind=kind(self%crvec1(ithr)%c))
-            enddo
-        enddo
+        call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
+            &self%ft_ref2(:,:,iref,ieo), bank, self%ft_ref(:,:,iref,ieo), self%sigma2_wk8(:,ih), self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
     end subroutine gen_euclid_crvec_bank
 
@@ -525,28 +494,40 @@ contains
         integer,             intent(in)    :: iref, iptcl
         complex(sp),         intent(in)    :: bank(:,:)
         real(sp),            intent(out)   :: cc(self%nrots)
-        integer :: i, ithr, k, kk, k0, ieo
+        integer :: i, ithr, ieo
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
-        k0   = self%kfromto(1)
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
         ! IFFT( sum_k FT(CTF2) x FT(REF2) )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
-        enddo
+        call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i), self%ft_ref2(:,:,iref,ieo), .false.,&
+            &self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         cc = self%crvec1(ithr)%r(1:self%nrots)
         ! IFFT( sum_k FT(S.X.CTF) x FT(REF)* )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + bank(:,kk) * conjg(self%ft_ref(:,k,iref,ieo))
-        end do
+        call cc_sums(self%pftsz+1, self%pftsz+1, self%nk, bank, self%ft_ref(:,:,iref,ieo), .true., self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         cc = self%crvec1(ithr)%r(1:self%nrots) / &
             &sqrt(cc * real(self%sqsums_ptcls(i), sp) * real(2*self%nrots, sp))
     end subroutine gen_corrs_bank
+
+    !> sum_k a_k x b_k (l_conj: a_k x b_k*) over the n1 angular bins into acc, plain array dummies as in euclid_sums
+    subroutine cc_sums( n1, ldb, nk, a, b, l_conj, acc )
+        integer,     intent(in)    :: n1, ldb, nk
+        complex(sp), intent(in)    :: a(n1,nk), b(ldb,nk)
+        logical,     intent(in)    :: l_conj
+        complex(sp), intent(inout) :: acc(n1)
+        integer :: kk
+        acc = cmplx(0.,0.,kind=sp)
+        if( l_conj )then
+            do kk = 1,nk
+                acc = acc + a(:,kk) * conjg(b(1:n1,kk))
+            enddo
+        else
+            do kk = 1,nk
+                acc = acc + a(:,kk) * b(1:n1,kk)
+            enddo
+        endif
+    end subroutine cc_sums
 
     !> The objective over all rotations (gen_objfun_vals' convention: exp(-loss) for Euclid, cc) of a bank entry.
     module subroutine gen_objfun_vals_bank( self, iref, iptcl, bank, vals )
@@ -1418,7 +1399,7 @@ contains
     !>   ptcl_pow(k) mean |ptcl|^2    per polar component in shell k
     !>   v           the euclid objective value at this orientation,
     !>               sum_k (k/sigma2_k) sum_p |ptcl - CTF*ref|^2 / sum_k (k/sigma2_k) sum_p |ptcl|^2,
-    !>               algebraically identical to 1 + crvec/norm in euclid_dist_from_crvec
+    !>               algebraically identical to 1 + crvec/norm in euclid_dists_from_crvec
     module subroutine gen_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl

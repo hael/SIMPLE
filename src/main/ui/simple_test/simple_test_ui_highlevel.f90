@@ -11,6 +11,7 @@ type(ui_program), target :: solve3D_addon
 type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: cont_refine3D_bench
+type(ui_program), target :: polar_matching_bench
 type(ui_program), target :: multistate_assignment
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
@@ -38,6 +39,7 @@ contains
         call new_solve3D_addon_snapshots(tsttab)
         call new_cont_refine3D_1jxy(tsttab)
         call new_cont_refine3D_bench(tsttab)
+        call new_polar_matching_bench(tsttab)
         call new_multistate_assignment(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
@@ -65,6 +67,7 @@ contains
         write(logfhandle,'(A)') solve3D_addon_snapshots%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_bench%name%to_char()
+        write(logfhandle,'(A)') polar_matching_bench%name%to_char()
         write(logfhandle,'(A)') multistate_assignment%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
@@ -205,6 +208,36 @@ contains
         ! add to ui_hash
         call add_ui_program('cont_refine3D_bench', cont_refine3D_bench, tsttab, UI_CATEGORY)
     end subroutine new_cont_refine3D_bench
+
+    subroutine new_polar_matching_bench( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call polar_matching_bench%new(&
+        &'polar_matching_bench',&                   ! name
+        &'benchmark the layouts of the dense probability table''s euclid scoring',&
+        &'Synthetic references and CTF-weighted particles at production polar sizes (box 180 at 2.055 A, '//&
+        &'crop 160, mask 270 A, lp 6 A), scored as the dense probability table scores them, per layout, '//&
+        &'case (1000 and 2500 directions; 1, 2 and 4 states) and team (1, 5 and nthr threads). '//&
+        &'A measurement with no thresholds and no CTest entry: rows are appended to ./polar_matching_bench.tsv '//&
+        &'(./polar_matching_check.tsv for suite=check); run with OPENBLAS_NUM_THREADS=1 '//&
+        &'(doc/implementation_notes/planned/polar_matching_layout_bench.md)',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Polar Matching Benchmark')                                       ! requires sp_project
+        call polar_matching_bench%add_input(UI_PARM, 'suite', 'str', 'Layout', &
+            &'Run one layout (per_pair, replica, blocked, states_inner, matrix, matrix_t, per_pair_cc), the identity '//&
+            &'checks of the layouts (check) or of the production kernels (identity, 32 particles unless nptcls is '//&
+            &'given, one-thread results written to ./polar_kernel_identity_*.bin); list prints them. '//&
+            &'Default times all euclid layouts', '', .false., '')
+        call polar_matching_bench%add_input(UI_PARM, 'nspace', 'num', 'Directions', &
+            &'Run one number of projection directions. Default runs 1000 and 2500', '', .false., 0.)
+        call polar_matching_bench%add_input(UI_PARM, 'nstates', 'num', 'States', &
+            &'Run one number of states. Default runs 1, 2 and 4', '', .false., 0.)
+        call polar_matching_bench%add_input(UI_PARM, 'nptcls', 'num', 'Particles', &
+            &'Particles per measurement (at most 200 at one thread)', '# particles{2000}', .false., 2000.)
+        call polar_matching_bench%add_input(UI_COMP, nthr, required_override=.false.)
+        ! add to ui_hash
+        call add_ui_program('polar_matching_bench', polar_matching_bench, tsttab, UI_CATEGORY)
+    end subroutine new_polar_matching_bench
 
     subroutine new_multistate_assignment( tsttab )
         class(ui_hash), intent(inout) :: tsttab

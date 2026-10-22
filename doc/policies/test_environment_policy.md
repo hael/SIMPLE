@@ -150,6 +150,11 @@ measurement without thresholds, a developer tool in the sense of section 3.4),
 `cont_refine3D_bench` (the `refine=cont` benchmark on simulated 1JYX particles:
 timings, work counts and pose errors, no thresholds; owner decision
 2026-10-19, `doc/implementation_notes/completed/cont_lm_acceleration.md`),
+`polar_matching_bench` (the layouts of the dense probability table's euclid
+scoring and production's cc scoring on synthetic polar data at production
+sizes: timings and identity checks, including a dump of the production kernels'
+distance vectors for comparing builds, no thresholds;
+`doc/implementation_notes/planned/polar_matching_layout_bench.md`),
 and the input generators `solve3D_addon_snapshots`, `write_state_weights_labels`
 and `write_state_weights_mixed` (tools for manual runs). `pcg_frac_update`,
 which needed a user's project, builds its own from the multi-state test fixture

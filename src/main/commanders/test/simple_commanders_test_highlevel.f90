@@ -65,6 +65,11 @@ type, extends(commander_base) :: commander_test_cont_refine3D_bench
     procedure :: execute      => exec_test_cont_refine3D_bench
 end type commander_test_cont_refine3D_bench
 
+type, extends(commander_base) :: commander_test_polar_matching_bench
+  contains
+    procedure :: execute      => exec_test_polar_matching_bench
+end type commander_test_polar_matching_bench
+
 type, extends(commander_base) :: commander_test_flex_pca_blobs
   contains
     procedure :: execute      => exec_test_flex_pca_blobs
@@ -199,6 +204,11 @@ interface
         class(commander_test_cont_refine3D_bench), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_cont_refine3D_bench
+
+    module subroutine exec_test_polar_matching_bench( self, cline )
+        class(commander_test_polar_matching_bench), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_polar_matching_bench
 
     module subroutine exec_test_flex_pca_blobs( self, cline )
         class(commander_test_flex_pca_blobs), intent(inout) :: self
