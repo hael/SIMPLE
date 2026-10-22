@@ -19,12 +19,12 @@ The implementation lives in `src/main/cavg_quality`. The command entry point is 
 
 ## Comparison with the Retired Microchunk Rejector
 
-The sieve and stream paths now call this backend directly: particle sieving evaluates it in the `sieve` context (`simple_ptcl_sieve`), stream initial analysis in the `chunk` context (`simple_stream_p03_initial_analysis`), and the multistate stream stage runs `model_cavgs_rejection`. The rule engine it replaced (`simple_cluster2D_rejector`, called from `simple_microchunked2D`; both removed) was deterministic and rule based. The comparison below is kept because its thresholds explain several of the hard gates the model retains.
+The sieve and stream paths call this backend directly, not through the program (the callers are listed under Hard-Reject Comparison). The rule engine it replaced (the microchunk rejector and its caller, both removed) was deterministic and rule based. The comparison below is kept because its thresholds explain several of the hard gates the model retains.
 
 | Aspect | Retired microchunk rejection | `model_cavgs_rejection` |
 | --- | --- | --- |
 | Decision type | Cumulative rule engine. | Learned feature-vector model with hard validity gates. |
-| Primary owner | `simple_cluster2D_rejector` called from `simple_microchunked2D` (both removed). | `src/main/cavg_quality`, called by `model_cavgs_rejection`, particle sieving and the stream. |
+| Primary owner | The microchunk rejector and its caller (both removed). | `src/main/cavg_quality`, called by `model_cavgs_rejection`, particle sieving and the stream. |
 | Unit of evidence | Individual scalar rules applied one after another. | Normalized feature vector scored by the pairwise-logistic model and its probability threshold. |
 | Rejection semantics | A class rejected by any rule remains rejected. | Hard rejects are final; remaining classes are scored and partitioned by the model. |
 | Threshold source | Fixed constants, with tier-specific population and local-variance overrides. | Built-in or learned model specification; learn mode chooses feature policy, weights, and threshold controls from analysis datasets. |
@@ -43,8 +43,8 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 | Foreground centering | Otsu foreground connected components; reject if any centroid lies outside the mask radius. | `centered` feature is negative normalized centroid displacement; centroid outside the mask is a hard reject. | Active feature and hard gate. |
 | Foreground outside mask | Reject when the largest valid foreground component has more than 10 pixels outside the mask disc. | `cc_area_frac` measures largest component area relative to the mask disc; outside-mask excess is a hard reject. | Active feature and hard gate. |
 | Full-image component cleanup | Connected components spanning the full image are removed before mask tests. | Same concept is applied during feature extraction before geometry features and hard mask rejection. | Hard-gate preprocessing. |
-| Foreground local variance | Robust-z rule on foreground/background local variance after 10 A low-pass and Otsu masking. | `log_locvar_fg` feature; only both variances non-positive is a hard reject. | Active feature. |
-| Background local variance | Robust-z rule paired with foreground local variance. | `log_locvar_bg` feature; only both variances non-positive is a hard reject. | Active feature. |
+| Foreground local variance | Robust-z rule on foreground/background local variance after 10 A low-pass and Otsu masking. | `log_locvar_fg` feature; a hard reject only when both variances are at most `EPS` (1e-6). | Active feature. |
+| Background local variance | Robust-z rule paired with foreground local variance. | `log_locvar_bg` feature; a hard reject only when both variances are at most `EPS` (1e-6). | Active feature. |
 | Stored score evidence | Not used by the rule engine. | `corr_frc_proxy` reads stored class correlation or FRC-like score when present. | Inactive in the current chunk preset. |
 | Center/edge signal | Not used by the rule engine. | `log_center_edge_snr` feature in the `signal` family. | Active feature. |
 | Presence | Not used by the rule engine. | `presence` feature in the `signal` family. | Active feature. |
@@ -57,17 +57,21 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 
 Hard rejects in `model_cavgs_rejection` are selected by the chunk, pool, or sieve context. Analyze mode requires an explicit `quality_context`; learned model artifacts store the consistent context inferred from their input tables, and application reads the context from the selected artifact.
 
-The contexts represent three workflow phases:
+The callers, with the preset and the context each applies:
 
-- `sieve`: very small 2D runs on small particle chunks. This phase uses conservative sieve gates before the selected logistic model.
-- `chunk`: the next 2D stage, where sieve-cleaned particles are processed in larger chunks, typically 10-30k particles. This phase uses hard gates plus the chunk logistic model.
-- `pool`: the final 2D phase before 3D analysis, where highly clean particle sets from chunk modeling have been merged. This phase uses its own pool model.
+| Caller | Preset | Context | Use |
+| --- | --- | --- | --- |
+| `model_cavgs_rejection` program | `chunk100mics`, or `quality_model` / `infile` | the model artifact's | selection, annotation, analysis, learning, evaluation |
+| particle sieve (`simple_ptcl_sieve`): both tiers in stream p05, the coarse tier in p03 | `sieve` | `sieve` | rejection of class averages with their particles; with `use_model=no` the `sieve` hard gates only |
+| stream initial analysis (p03, `simple_stream_stage_initial_analysis`) | `chunk100mics` | `chunk` | class selection of both cycles |
+| multistate stream stage (p07) and the batch `solve3D_pyramid`, through `score_cavgs_with_model` (`simple_state_assignment`) | `pool` | `pool` | the class selection of the route to the reference volumes (applied); each assignment's class averages are scored beside the fit's rejection, logged and not applied |
 
-The contexts follow the workflow, not the chunk size. Particle sieving applies the `sieve` preset and
-context in both its tiers: its fine tier merges coarse-cleaned particles into chunks as large as
-the `chunk` description, but it is the sieve's second pass, so it keeps the sieve's scoring
-(`ptcl_sieve_policy.md` §8; stream fix plan, decision 8). The `chunk` preset and context belong to
-stream initial analysis and are the `model_cavgs_rejection` command's default.
+Every caller but the program scores through `score_project_cavgs` (`simple_cavg_quality_selection`),
+which takes the class averages' pixel size so that the relational feature's mask radius is right.
+Particle sieving applies the `sieve` preset and context in both its tiers: its fine tier merges
+coarse-cleaned particles into chunks of 10,000 particles or more, but it is the sieve's second
+pass, so it keeps the sieve's scoring (`ptcl_sieve_policy.md` §8). The `chunk` preset and context
+belong to stream initial analysis and are the `model_cavgs_rejection` command's default.
 
 Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming cleanup gates for undersupported and fuzzy-ball-like class averages. Pool adds its own final pre-3D cleanup gates for low population, low band-pass localization, and poor nominal resolution. Sieve has its own pre-model gate policy and deliberately does not inherit the shared chunk/pool validity gates.
 
@@ -80,7 +84,7 @@ Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming c
 | No valid foreground component | Rejected after full-image connected components are pruned. | Hard rejected after the same style of foreground-component pruning. |
 | Foreground centroid outside mask | Rejected. | Hard rejected. |
 | Largest foreground component outside mask | Rejected when outside pixels exceed 10. | Hard rejected when outside pixels exceed 10. |
-| Local variance exactly degenerate | Rejected when both inside/outside scores are near zero. | Chunk/pool hard reject when both foreground/background local variances are non-positive. |
+| Local variance exactly degenerate | Rejected when both inside/outside scores are near zero. | Chunk/pool hard reject when both foreground/background local variances are at most `EPS` (1e-6). |
 | Local variance low but not degenerate | Rejected by fixed robust-z thresholds. | Chunk only: reject an extreme absolute foreground local-variance floor; otherwise encoded as learned evidence. Pool does not apply this extra gate. |
 | Band-pass center/edge variance extremely low | Not used by the rule engine. | Chunk hard rejects when raw `bp_center_edge_var < 1.5`; pool hard rejects when raw `bp_center_edge_var < 10.0`; sieve leaves this value as learned evidence. |
 
@@ -236,7 +240,9 @@ Features outside the selected policy are encoded by zero weights.
 - `LOCVAR_WINDOW = 10`
 - `MASK_HARD_OUTSIDE_PIXELS = 10`
 - `LOG_EPS = 1.0e-12`
+- `EPS = 1.0e-6`
 - `CLIP_Z = 4.0`
+- `ANALYSIS_BOXSIZE = 128` (the box a class average is resized to for the band-pass center/edge variance)
 
 ## Hard Rejects
 
@@ -250,7 +256,7 @@ A class average is hard rejected in `chunk` and `pool` when any shared validity 
 - foreground segmentation has no valid component after full-image connected components are pruned;
 - a segmented foreground component centroid lies outside the mask radius;
 - the largest foreground component has more than 10 pixels outside the mask disc;
-- foreground and background local variance are both non-positive.
+- foreground and background local variance are both at most `EPS` (1e-6).
 
 For `quality_context=chunk`, these additional early-streaming gates also apply:
 
@@ -396,6 +402,12 @@ metrics.
 ## Promotion
 
 `quality_mode=promote` writes a Fortran snippet for adding a learned model as a built-in preset in `simple_cavg_quality_model.f90`. The snippet also lists the UI/help files that need the model name added when a new built-in is introduced.
+
+## Tests
+
+`simple_test_exec test=unit_numerics` runs the backend's sub-suites "cavg quality relations"
+(`simple_cavg_quality_relations_tester`) and "cavg quality selection"
+(`simple_cavg_quality_selection_tester`); one runs alone with `suite=`.
 
 ## Example Commands
 

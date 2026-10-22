@@ -34,6 +34,9 @@ The common pattern is:
 
 `executable -> API aggregator -> UI/CLI lookup -> exec router -> commander -> strategy/domain objects -> file/project/image/reconstruction objects`
 
+Rules for the layers, for where each kind of step lives (program, master step, worker
+step) and for project reads and writes: `doc/policies/layering_and_project_ownership_policy.md`.
+
 Distributed `refine3D`/`refine2D`: the strategy's master owns its project. Volume
 assembly, `prob_align`(`_neigh`), `prob_align2D`, class-average assembly and the
 sigma2 commit are strategy routines in `src/main/strategies/parallelization/`

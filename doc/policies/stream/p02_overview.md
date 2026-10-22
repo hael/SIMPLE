@@ -3,7 +3,7 @@
 How the stream assigns optics groups, for readers who know the technique but not the code. p02
 groups micrographs recorded with similar beam-image shift (and, if asked, the same EPU tilt
 group), and publishes a map from micrograph to group that the downstream stages apply to their
-micrographs and particles. This page summarises the code as of 14 October 2026; the restart rules
+micrographs and particles. This page summarises the code; the restart rules
 are in `restart_policy.md`.
 
 ```mermaid

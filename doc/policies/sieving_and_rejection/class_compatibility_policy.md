@@ -22,6 +22,10 @@ It is not responsible for quality-feature extraction, class-average quality
 modeling, or queue/chunk orchestration. Those remain owned by sieve and
 quality modules.
 
+Callers: the particle sieve keeps one model per tier, trained chunk by chunk until it converges;
+the stream's initial analysis (p03) makes a fresh model for each class selection and trains and
+applies it on that selection.
+
 ## 2. Public Contract
 
 Public surface (type-bound methods on `class_compatibility`):
@@ -111,7 +115,7 @@ For each active class:
    bounds;
 4. apply edge-rescue slack when strict compatibility fails;
 5. incompatible class must be set to `state=0` and receive rejection reason
-   `class_compatibility: size_incompatible_subset`.
+   `class_compatibility:size_incompatible_subset`.
 
 After per-class decisions, selection must be propagated through
 `map_cavgs_selection`.

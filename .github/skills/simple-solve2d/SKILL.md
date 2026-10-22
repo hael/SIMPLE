@@ -109,7 +109,10 @@ If fractional update or probabilistic sampling is involved, also read
   accumulate from zero. Without a usable carried set the iteration is a full
   update (`carryover_needs_full_update`).
 - After distributed assembly the master writes only the `cls2D`, `cls3D`,
-  `out` and particle segments; do not reread the particle segment there.
+  `out` and particle segments; do not reread the particle segment there. It
+  writes `ptcl2D` more than once per iteration (in `merge_algndocs`, after
+  assembly and at the iteration's end; `doc/policies/2D/solve2D_policy.md`,
+  "Project segments"): do not add a write.
 - Treat explicit offline or terminal class-average assembly commands as
   separate workflow stages. They may perform their own reads, but that does not
   relax the matcher worker's online single-read contract.
@@ -130,7 +133,8 @@ If fractional update or probabilistic sampling is involved, also read
   availability must be uniform across ranks; never make it best-effort per rank.
 - The building (or adopting) process owns the cache files and removes them on
   exit — normal or hard exception — via the `cache_cleanup_glob` hook in
-  `simple_defs` (armed by `ptcl_cache_own`, fired from `simple_exception` and
+  `simple_defs` (armed by `ptcl_cache_own`, fired from `simple_exception`, module
+  `simple_error`, and
   the tails of `simple_exec`/`single_exec`). Workers never take ownership.
 - The cache basename hashes the execution directory so concurrent runs sharing
   a `cache_dir` cannot collide; all ranks recompute the name locally because

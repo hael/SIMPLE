@@ -28,9 +28,15 @@ This is the project-state backbone of SIMPLE.
 
 - Write only the segments you changed (`write_segment_inside(oritype)`); a full
   `write` is for command-line steps and run ends. A workflow that owns its
-  project in memory writes it once per iteration.
+  project in memory writes it once per iteration (the PCG master and the refine2D
+  master write more: `doc/policies/layering_and_project_ownership_policy.md`
+  section 8).
 - `merge_algndocs(..., write=.false.)` merges distributed workers' documents
   into memory without touching the file; the default also writes the segment.
+- There is no file locking: one process writes a project file at a time. Workers
+  read the file and write part files, not the project. State that must agree
+  across processes has one maker, the master, and verifying consumers
+  (`ensure_field_halves`). Rules: the layering policy, section 5.
 - `update_projinfo` names the run's own project file; writes go to the file in
   `projinfo`.
 - Register run artifacts in the `out` segment through its getters and adders

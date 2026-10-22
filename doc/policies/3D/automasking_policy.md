@@ -14,8 +14,9 @@ and `volassemble`. The public refinement modes are:
 `automsk=nu` requires `filt_mode=nonuniform|nonuniform_lpset` in public and
 internal commands. Final native reconstruction preserves the refinement's NU
 filter mode rather than pairing `automsk=nu` with `filt_mode=none`.
-`automsk=tight` remains available to standalone density-mask utilities but is
-rejected in 3D refinement. Active refinement automasking implies `envfsc=yes`.
+`automsk=tight` remains available to standalone density-mask utilities; the
+refinement programs do not offer it, and parameter validation rejects it
+together with NU filtering. Active refinement automasking implies `envfsc=yes`.
 
 The density envelope is made from the even/odd average low-pass filtered at
 `envmsklp`, followed by non-tight Otsu segmentation, largest-component

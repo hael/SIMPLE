@@ -72,7 +72,7 @@ Each pass of p06 runs, in this order:
 6. apply the pause rule (section 5);
 7. start the next iteration unless paused or below the starting threshold;
 8. from iteration `MSKDIAM_SWITCH_ITER` (10), switch once to the sieve's mask diameter, unless
-   one was given on the command line, which is kept (follow-up plan, decision 7);
+   one was given on the command line, which is kept;
 9. send the class averages to the GUI;
 10. apply the GUI's updates.
 
@@ -96,7 +96,10 @@ Each pass of p06 runs, in this order:
 - An import that brings the awaited particles resumes the pool, as does a new mask diameter from
   the GUI.
 - **Final run:** from the sieve's final set until `FINAL_ITER` (25), the pool runs without
-  pausing (`runs_to_final`).
+  pausing (`runs_to_final`). Past `FINAL_ITER`, with the final set in the pool, it runs until a
+  publication has carried `pool_final=yes` (`owes_final_run`): a pool that paused past iteration 25
+  and published before the final set came runs one more iteration, because the empty final set
+  brings no particles to wake it. A set after the final one takes the owed publication back.
 
 ## 6. An iteration
 
@@ -107,20 +110,23 @@ Each pass of p06 runs, in this order:
    and no copy is made beyond the one per iteration.
 2. **Sampling:** stacks are shuffled and taken until more than `STREAM_NPTCLS_MAX` (500,000)
    selected particles, or `nsample_max` when given. There is no memory of earlier iterations.
-3. **The sample is the update set** (decision 5): every particle of the sampled stacks is
+3. **The sample is the update set**: every particle of the sampled stacks is
    updated, and the particles outside the sample keep their parameters; the class averages come
    from the sample. Only the user's `update_frac` thins the sample again, and then the class
    averages are not centered (`center=no`); otherwise the pool's own `center` applies, so a
-   return to a full update centers again.
+   return to a full update centers again. The iteration's project carries `ptcl3D` as a copy of
+   `ptcl2D` with the 2D clustering removed, so that it holds the particles' halves (`eo`), which the
+   refine2D master checks (`ensure_field_halves`); `eo` returns to the pool with the 2D parameters.
 4. **New particles:** from iteration 2, particles never updated get a populated class before
    their first alignment, drawn in one thread from a generator seeded with the iteration
    (`draw_new_classes`), so a run is reproducible; the process's generator is left as it was.
 5. **Resolution:** `lpstart` and `lpstop` come from the mask diameter (`mskdiam2lplimits`), with
    `lpstop` at least twice the pool's pixel size, or the user's `lpstop`. A new mask diameter (the
    sieve's at iteration 10, or the GUI's) recomputes `lpstart`, the centering limit and the ramp. Until iteration 20 the
-   low-pass limit follows lp = lpstop + (lpstart - lpstop) * (20 - iter) / 20 with a Gaussian
-   filter at lp. The shift search is 0 until iteration 5, then `MINSHIFT`. After iteration 20 the
-   limit is free.
+   low-pass limit of the next iteration follows lp = lpstop + (lpstart - lpstop) * (20 - iter) / 20,
+   `iter` being the latest iteration dispatched (the limit is set just before the next is dispatched),
+   with a Gaussian filter at lp. The shift search is 0 until iteration 5, then `MINSHIFT`. After
+   iteration 20 the limit is free.
 6. **Tidying:** each iteration deletes the files of the iteration that has just left the history
    (`tidy_2Dstream_iter`): its class averages (and even and odd halves), JPEG, class STAR file and
    `frcs_iterNNN.bin`. History and files always hold the same iterations.
@@ -134,16 +140,68 @@ Each pass of p06 runs, in this order:
    killed before it writes a status (`restart_policy.md`, job lifecycle). On stop, the running
    iteration is cancelled.
 
+## 6a. The refine2D call
+
+The iteration runs `prg=refine2D_distr` through `simple_private_exec`: the batch refine2D master
+(`commander_refine2D`, distributed strategy), whose workers run `prg=refine2D`
+(`commander_refine2D_distr_worker`).
+
+1. **Command line** (`stream_pool2D`: `init_state`, `iterate`, `update_aln_params`, `set_dimensions`,
+   `set_resolution_limits`). Fixed: `projfile=refine2D.simple`, `oritype=ptcl2D`, `objfun=euclid`,
+   `ml_reg=no` and `refine=snhc_smpl` (set by p06's commander; the pool accepts `snhc` and
+   `snhc_smpl`), `cls_init=rand` (dropped from the second iteration), `center`, `center_type`,
+   `async=yes`, `stream2d=yes`, `mkdir=no`, `nparts`, `nthr` and the worker server's address.
+   Per iteration: `ncls`, `startit` and `maxits` set to the iteration, `frcs`, `refs` (the latest
+   class averages), `update_frac` only when the user gave one, `mskdiam`, the working `smpd_crop`,
+   `box_crop` and `msk_crop`, `lpstart`, `lpstop`, `cenlp`, and, until iteration 20, `lp`,
+   `gauref`, `gaufreq`, `extr_iter`, `extr_lim` and `trs`.
+2. **`stream2d=yes`** is set here and nowhere else. It changes the batch workflow in seven places:
+   - with no `lp` on the command line (the pool gives one until iteration 20), the search low-pass
+     limit is the class FRCs' estimate, or `lplims2D(3)` without FRCs, and not below `lpstop`
+     (`simple_matcher_smpl_and_lplims.f90`);
+   - carried class sums are blended from the second iteration on whenever `update_frac` is below
+     0.99 (`refine2D_blends_carryover`, same file);
+   - in the matcher a sampled update set is used only when the carried sums are blended (otherwise
+     `update_frac` is 1), `snhc` becomes `snhc_smpl`, and a particle that is new or not yet
+     searched is aligned greedily (`simple_strategy2D_matcher.f90`);
+   - the sampling power is `EXTR_POWER` (`simple_strategy2D_alloc.f90`);
+   - no cropped particles are made in memory for the class sums (`crop_particles2D`,
+     `simple_matcher_ptcl_batch.f90`);
+   - convergence uses the limits of a fractional update, `OVERLAP_2D_FRAC` and
+     `FRACSRCHSPACE_FRAC` (`simple_convergence.f90`);
+   - no progress file is written (`check_refine2D_convergence`).
+3. **The script.** The pool's objective is `euclid`, so the job is one queued script (`start_seq`):
+   `calc_pspec` on the command line without `stream2d` and `update_frac`, then `refine2D_distr`.
+   Pool membership changes between iterations, so the canonical sigma2 bootstrap is made again for
+   the exact pool layout in the script that clusters. The sigma2 state is the pool project's own:
+   `sigma2_state.bin` in the pool folder, registered in the project's `projinfo` at `init_state`,
+   and removed with the other `*.bin` files on a restart.
+4. **Project hand-over.**
+   1. Before dispatch the pool writes the sampled project (the stacks of the sample with their
+      `ptcl2D`, `ptcl3D` and `cls2D`) as `refine2D.simple`, and keeps a copy as
+      `refine2D_input.simple`.
+   2. The refine2D master owns `refine2D.simple` and `sigma2_state.bin` until it ends. It merges the
+      workers' documents and writes `ptcl2D`, `cls2D`, `cls3D` and `out` into the file
+      (`run_distributed_cavg_assembly`, `distr_finalize_iteration`, `distr_finalize_run`), and
+      touches `REFINE2D_FINISHED` as it ends. The pool does not write the file while an iteration
+      runs (`l_available` is false).
+   3. When `REFINE2D_FINISHED` exists (`update_status`), the pool takes the iteration back: it
+      reads `cls2D`, `stk` and `ptcl2D` of `refine2D.simple` and the iteration's statistics file,
+      and transfers the 2D parameters of the sampled particles that are still selected to its own
+      project (`update`).
+   4. A first attempt that failed is repeated once: the pool copies `refine2D_input.simple` over
+      `refine2D.simple` and submits again (`update_status`).
+
 ## 7. Dimensions
 
 The pool's native box and pixel size are those of its first import, and its mask diameter is
 the given one or the default (pool state, not parameters); its working dimensions are downscaled
 from them. The mask radius is clamped to (box - `COSMSKHALFWIDTH`)/2 pixels, and the clamp is
-logged, so a diameter beyond the box never reaches the workers (D40). The pool's command line
+logged, so a diameter beyond the box never reaches the workers. The pool's command line
 carries the working dimensions only.
 
 With `dynreslim=yes` (p06's default) and `autoscale=yes`, from iteration 10, the pool grows its
-box when the resolution has sat at Nyquist for `POOL_NPREV_RES` (5) iterations (decision 6):
+box when the resolution has sat at Nyquist for `POOL_NPREV_RES` (5) iterations:
 
 - the box goes to the next magic size, and the pixel size follows, when the new pixel size is
   more than 5/4 of the native one;
@@ -152,8 +210,6 @@ box when the resolution has sat at Nyquist for `POOL_NPREV_RES` (5) iterations (
   information: it only lets the next iterations reach a finer resolution with the new Nyquist;
 - the hard low-pass limit follows the new Nyquist (or the user's `lpstop`);
 - the pixel size never goes below `POOL_SMPD_HARD_LIMIT`.
-
-A guard on the class count that could never hold was removed on 5 October 2026.
 
 ## 8. Classes
 
@@ -210,10 +266,9 @@ segment (`publishes_final`); multistate 3D then runs its final refine3D.
 
 - The schedule constants are named in the stage (`EARLY_RATE_FACTOR`, `LATE_RATE_FACTOR`,
   `LATE_ITER`, `FINAL_ITER`, `MSKDIAM_SWITCH_ITER`, `FIRST_EXPORT_ITER`, `EXPORT_START_ITER`,
-  `NPUBLICATIONS_KEPT`,
-  `NPTCLS_PER_CLS_MIN`,
-  `OPTICS_ID_DELTA`) and in the pool module (`ITERLIM`, `ITERSHIFT`). A change of any of them
-  updates this policy.
+  `NMICS_FIRST3D`, `NPUBLICATIONS_KEPT`, `NPTCLS_PER_CLS_MIN`), in `simple_defs_stream`
+  (`NPTCLS_FIRST3D`, `OPTICS_ID_DELTA`) and in the pool module (`ITERLIM`, `ITERSHIFT`, locals of
+  `update_aln_params`). A change of any of them updates this policy.
 - The pool command line sets `msk_crop` explicitly; changing `mskdiam` recomputes `msk_crop`,
   clamped to the box (the pool's `set_mask`), and the low-pass ramp (`set_mskdiam`).
 - Anything written for downstream use is rescaled to the native sampling or labelled with the
@@ -231,9 +286,8 @@ segment (`publishes_final`); multistate 3D then runs its final refine3D.
 
 ## 12. Known gaps
 
-- **One pool per folder:** the pool is a type (review G1 closed by
-  `doc/refactoring_notes/completed/pool2D_encapsulation_plan_2026-10-06.md`), but its files have
-  fixed names (the pool folder, its exit status, its iteration files).
+- **One pool per folder:** the pool is a type, but its files have fixed names (the pool folder,
+  its exit status, its iteration files).
 - **The user's `update_frac`** thins the sample again inside refine2D (about frac of the sample).
 - **Late particles:** the low-pass ramp follows the global iteration, so particles arriving after
   iteration 20 never see the coarse limits.

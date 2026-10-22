@@ -74,7 +74,8 @@ Refinement automasking is independent of the filter mode (2026-09-14):
 `automsk=yes` multiplies the matching references by the conservative density
 envelope in every `filt_mode` -- at assembly on the `_nu_filt` products in NU
 modes, in the matcher after its own filter otherwise
-(`automasking_policy.md`). `automsk=tight` is rejected in 3D refinement.
+(`automasking_policy.md`). `automsk=tight` is rejected with nonuniform
+filtering and is not offered by the 3D refinement programs.
 `automsk=nu` requires NU filtering, applies a valid current evidence envelope
 to `_nu_filt` products, and uses its lagged artifact for early consumers;
 density is the fallback.
@@ -159,7 +160,7 @@ day after it degraded PfCRT). Do not reintroduce it there. Two reasons:
 
 - In solve3D the band is the controller's stage ladder, not an FSC estimate:
   `simple_solve3D_controller` sets `lp` on every refine3D command line
-  (`:636`), and `l_lpset` is `cline%defined('lp')`
+  (`emit_refine3D_stage_cfg`), and `l_lpset` is `cline%defined('lp')`
   (`simple_parameters_phases.f90:597`). Clamping in `set_bp_range3D` therefore
   clamps the ladder, whose purpose is to run ahead of achieved resolution so
   the map can climb into the band. `l_incrreslim` is switched off whenever
@@ -579,9 +580,8 @@ the raw finest label (2026-09-02 to 09-13) let 54 voxels of 412k set the
 band at 3.37 A against a 3.62 A map; the 1% floor landed on the regularized
 pair at its own FSC=0.143 and handed the band back to the FSC.
 
-Why the band leads the FSC by a bounded factor, from the PfCRT log sets
-(`claude/pfcrt_abinitio_band_lead_analysis.md`): with the band at the
-previous FSC=0.143 crossing (`current_broken` 2026-09-16, `latest5`
+Why the band leads the FSC by a bounded factor, from the PfCRT log sets:
+with the band at the previous FSC=0.143 crossing (`current_broken` 2026-09-16, `latest5`
 2026-09-18) the crossing sat at the band in 41-42% of stage-6 iterations,
 advanced at most about one shell per iteration, and the orientation
 assignment froze or crawled: 0/4 and 1/9 restarts converged. The alignment
@@ -630,7 +630,9 @@ That project `lp` is consumed as follows:
 
 - every nonuniform mode may use it in later non-fresh iterations
 - `nonuniform_lpset` also promotes it to command-line `lp`
-- fresh stage starts do not consume it unless the run is continuing
+- fresh stage starts do not consume it unless the run is continuing or the
+  `_nu_filt` references the handoff was derived from are on disk (the
+  `refine3D_auto` startup bootstrap)
 - explicit user `lp` remains a hard override
 - `lpstop` still caps promoted matching bandwidth
 

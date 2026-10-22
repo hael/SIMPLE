@@ -14,7 +14,8 @@ The samplers draw a fresh ~nsample subset of the particles every iteration and
 each selected particle is read at full box and Fourier-cropped to `box_crop`.
 In probabilistic mode the same particle is read twice per iteration:
 probabilistic scoring (`prob_tab2D`) and search, whose batch also feeds
-class-average restoration. The cache writes
+class-average restoration; in shared memory without the cache the particle
+buffer serves the second read (`particle_read_path_policy.md`). The cache writes
 the iteration-independent prefix of that preprocessing to disk once and serves
 all subsequent reads from it, trading disk space at `cache_dir` for a roughly
 `(box/box_crop)^2` reduction in read volume.
@@ -66,6 +67,16 @@ the validity fingerprint), and the flex / offload reconstruction paths.
 `flex_pca` keeps a cache of its own that shares this module's machinery
 (Section 9).
 
+The runs that set `cache=yes` themselves are the stream's initial-analysis
+`solve2D` job (`simple_stream_stage_initial_analysis.f90`) and the `solve2D` of
+the solve3D state-assignment route (`simple_state_assignment.f90`). `solve2D`
+exposes `cache` and `cache_dir`, `refine2D` only `cache`.
+
+A cache hit is read by the cache's own reader (`ptcl_cache_read_batch`: one
+handle, read serially along the sorted particle indices), not by the read
+session of `particle_read_path_policy.md`; its read time is kept apart. The
+build reads the originals through the session.
+
 ## 4. Validity Contract
 
 The key file is the commit record; no reader accepts cache files without a
@@ -76,9 +87,8 @@ matching key. It records:
   (so a name-hash collision from a different directory can never validate);
 - the source fingerprint: every stack in project order with its particle
   range, physical size and mtime, plus every particle's `stkind`/`indstk`
-  mapping (the range-derived fallback is covered by the per-stack
-  `fromp`/`top`). A reordered or remapped project over unchanged stacks
-  therefore cannot validate a stale cache.
+  mapping as the project holds it. A reordered or remapped project over
+  unchanged stacks therefore cannot validate a stale cache.
 
 The check is conservative: a touched file forces a rebuild. Only the rank
 that decides whether to rebuild pays the full fingerprint; consumers check
@@ -108,14 +118,13 @@ revalidation.
 Before building, the exact predicted size (`nsel * box_crop^2 * 4` bytes plus
 headers) is checked against the free space at the destination (statvfs); the
 cache may claim at most 25% of it. Over budget — or with no active
-particles, a denoised primary source, or a non-particle oritype — the whole
+particles, or a non-particle oritype — the whole
 run falls back to uncached execution *uniformly*: `disable_cache` flips
 `cache=no` on both params and the command line before any worker command
 line is generated.
 
-Uniformity is mandatory, not best-effort: restoring class averages from
-cropped particles is deliberately not the same preprocessing as from
-full-size ones, so ranks must never mix modes.
+Uniformity is mandatory, not best-effort: a rank that fell back would prepare
+its particles by another route than its peers, so ranks must never mix modes.
 `ptcl_cache_assert_ready` hard-stops a worker that expected a cache and
 cannot find one (the classic case: node-local `cache_dir` not visible to
 every rank).
@@ -143,9 +152,10 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   ownership fast path has skipped revalidation) fails loudly at read time
   rather than being served silently; this does not occur in the current
   workflows.
-- The cached class-average restoration path is accepted on statistical
-  parity with uncached execution, not bit equality; the alignment paths agree
-  with uncached execution to rounding (Section 2).
+- Cached and uncached runs outside the stream's 2D pool are byte-identical
+  (Section 3). Against the full-size preparation that the pool keeps, the
+  cached class-average restoration is accepted on statistical parity, not bit
+  equality, and the alignment paths agree to rounding (Section 2).
 
 ## 9. Shared Machinery
 

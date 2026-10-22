@@ -249,9 +249,10 @@ if(BUILD_TESTS)
   # section 9.7, reconstruction).
   simple_add_test(lib_reconstruction library 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_reconstruction)
-  # lib_cart_align3D: 5 000 simulated 1JYX particles at box 144 refined by
-  # the Cartesian pose refiner and reconstructed; the run directory keeps the
-  # volumes and TSVs. Review verdict 2026-09-23 (plan, section 9.7, pose).
+  # lib_cart_align3D: 1 000 simulated 1JYX particles at box 144 refined by
+  # the Cartesian pose refiner under both objectives at 8 and 4 A, and
+  # reconstructed; the fixture files are removed. Review verdict 2026-09-23
+  # (plan, section 9.7, pose).
   simple_add_test(lib_cart_align3D library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_cart_align3D)
   # lib_heterogeneity: project-backed two-state flex_pca application phantom,

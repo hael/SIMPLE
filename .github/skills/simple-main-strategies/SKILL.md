@@ -38,10 +38,15 @@ This folder is the execution-policy and search-engine layer.
 - These strategy modules never import the commander module that wraps them
   (circular); a body that needs an in-process commander takes it as a
   `commander_base` dummy (`run_prob_align(cline, xprob_tab)`).
-- The master writes its particle field once before the workers and once per
-  iteration (once more after the merge when a polish pass follows):
-  `merge_algndocs(..., write=.false.)` merges in memory, assembly
-  passes `write=.false.`, 2D assembly updates only the segments it changes.
+- The refine3D master writes its particle field once before the workers and once
+  per iteration (once more after the merge when a polish pass follows):
+  `merge_algndocs(..., write=.false.)` merges in memory and gridding assembly
+  passes `write=.false.`. The PCG master (`rec_backend=pcg`) writes the field once
+  more, at the end of its call (it has no `write` flag). The distributed refine2D
+  master writes `ptcl2D` in `merge_algndocs`, after assembly and at the end of the
+  iteration (three times, four in probabilistic mode); 2D assembly updates only the
+  segments it changes. These are deviations from one write per iteration, listed in
+  `doc/policies/layering_and_project_ownership_policy.md` section 8.
   Keep `update_projinfo` when the refine3D master builds its toolbox
   (`materialize_reprojection_model_master`), so writes go to the run's own
   project. Workers read only the file.

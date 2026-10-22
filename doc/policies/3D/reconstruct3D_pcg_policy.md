@@ -1,9 +1,12 @@
 # `reconstruct3D` PCG backend policy
 
 Contract of the code that runs today: the opt-in CTF- and sigma-weighted
-preconditioned-conjugate-gradient (PCG) reconstruction path. The PCG backend
-carries no regularization of its own beyond the ordinary FSC/SSNR `P_tau`
-replay; nonuniform filtering is the same assembly-owned competition as on the
+preconditioned-conjugate-gradient (PCG) reconstruction path. Unless asked, the
+PCG backend carries no regularization of its own beyond the ordinary FSC/SSNR
+`P_tau` replay. The two opt-in priors are the soft solvent prior (`pcg_solvent`,
+`simple_pcg_solvent_sidecar`; `pcg_decision_log.md`) and the atomicity prior
+(`atm_prior`, `simple_pcg_atomic_prior`; `single_pcg_integration_completed.md`).
+Nonuniform filtering is the same assembly-owned competition as on the
 gridding backend (`simple_nu_state_filter`, policy 2026-09-06). The record of
 the removed prior experiments -- the binary-envelope solvent prior (2026-08-27)
 and the direct NU-evidence replay precision `Q_NU` with its auto-lambda and
@@ -132,9 +135,13 @@ the sampled mass behind `f`. Under hard labels they are row counts. The project
 handoff of the nonuniform-filter matching low-pass counts a weighted state as
 populated by the effective sample size (ESS, `(sum w)^2 / sum w^2`) of its
 members' weights. The handoff (`filter_pcg_nonuniform_maps`) sets the
-particles' `lp` and `lp_est` and writes the particle field to the project,
-except on the distributed `refine3D` master's path, where the master owns its
-project and writes the field once at the end of the iteration. `state=X`
+particles' `lp` and `lp_est` and writes the particle field to the project
+unless the caller passes `write=.false.`, as the distributed `refine3D` master
+does: it owns its project and writes the field once at the end of the
+iteration. The PCG master (`execute_rec3D_pcg_distributed_master`) has no such
+switch: it writes the particle field, its resolution fields included, once at
+the end of its call; the gridding assembly (`volassemble_exec`) honours a
+`write` flag. `state=X`
 reconstructs state X
 alone: under hard labels the rows labelled X, under a weight set every row whose
 weight for X exceeds the threshold.
@@ -194,11 +201,11 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 | `src/main/volume/simple_trail_chain_manifest.f90` | trailing-chain manifest, shared with gridding |
 | `src/defs/simple_refine3D_fnames.f90` | raw `(state,half,part)` artifact, chain pair and chain manifest names |
 | `src/main/commanders/simple/simple_commanders_rec.f90` | `reconstruct3D` commander and backend default |
-| `src/main/ui/simple/simple_ui_refine3D.f90` | `reconstruct3D` UI and backend selector |
+| `src/main/ui/simple/simple_ui_reconstruct3D.f90` | `reconstruct3D` UI and backend selector |
 | `src/main/strategies/parallelization/simple_rec3D_strategy.f90` | backend dispatch |
 | `src/main/params/simple_parameters*.f90` | `rtol` and the other PCG parameters |
 | `src/fileio/simple_sigma2_files.f90` | shared, builder-free sigma2 discovery/loading |
-| `src/main/commanders/test/simple_commanders_test_highlevel.f90` | operator/solver tests |
+| `src/main/commanders/test/simple_commanders_test_highlevel_pcg.f90` | operator/solver tests (`test=pcg_recon`) |
 
 ## 3. Statistical model
 
@@ -260,12 +267,12 @@ had 6.4%). The fixed small budget from a state-free start is what the
 simulated-data calibration validated: two iterations beat gridding, and
 beyond five the residual moves but nothing interpretable in the map does.
 Every solve line reports `INIT=` (the relative residual of the start, 1.0
-from zero) next to `RESID=`. A solve from a nonzero start (the replay) that
+from zero) next to `RESID=`. A solve from a nonzero start that
 loses positive-definiteness returns `stop_reason=indefinite` from the solver
 and is restarted once from zero (`solve_with_cold_restart`) before the
-failure is fatal; a solve from zero that loses positive-definiteness fails
-immediately. Distributed recovery is compute-only inside the even/odd
-sections; restart reporting and fatal handling occur afterward at the serial
+failure is fatal; the production solves all start from zero, and a solve from
+zero that loses positive-definiteness fails immediately. Distributed recovery
+is compute-only inside the even/odd sections; restart reporting and fatal handling occur afterward at the serial
 finalization boundary. Solver callers that do not request an outcome retain
 the historical immediate hard failure. The
 regularized pair is the base pair's finalized operator with the FSC/SSNR
@@ -360,8 +367,9 @@ density source bootstraps on the sphere.
 Before any reconstruction-derived density source exists, the base necessarily
 bootstraps on the sphere and its completed pair supplies the conservative
 replay support. No PCG map is multiplied by either mask after reconstruction.
-`envfsc=yes` with `automsk=no` affects only the phase-randomized FSC
-evaluation, never a solve. An explicit `pcg_mskfile` remains the development
+`envfsc=yes` with `automsk=no` never affects a solve. On PCG, whose FSC is
+never phase-randomized, it only builds the density envelope and writes
+`automask3D_stateNN.mrc`. An explicit `pcg_mskfile` remains the development
 override and constrains every solve regardless of `automsk`; it is reported as
 the state support, so the FSC mode, the support-provenance sidecar and the NU
 evidence null regime all see a constrained pair.
@@ -519,8 +527,8 @@ prohibitive at experimental particle counts and under symmetry replication.
 The approximation is not reliably positive definite under late over-iteration:
 on the deterministic fixture the residual bottoms out and then curvature fails
 after the useful map has already saturated. Production therefore defaults to
-two iterations and rejects `maxits>8`. Low-level tests may use more iterations
-when diagnosing the approximation boundary.
+two iterations and warns above `maxits_pcg>8` (the hard limits are 1 to 100). Low-level tests may
+use more iterations when diagnosing the approximation boundary.
 
 The kernel operator is therefore the only candidate for production workflows. It
 must be validated against matrix-free on deterministic, small enough fixtures
@@ -621,7 +629,7 @@ orientations explicitly.
 
 ## 9. Tests
 
-`test=pcg_recon` in `simple_commanders_test_highlevel.f90` — one gate, 14
+`test=pcg_recon` in `simple_commanders_test_highlevel_pcg.f90` — one gate, 14
 fail-fast stages (plus stage 3b), in memory with no project I/O. Each stage gates the ones after
 it; a visually plausible map is not evidence that the CTF/sigma adjoint is
 correct.
@@ -655,7 +663,7 @@ they do not establish correctness by comparing kernel output with another
 kernel output.
 
 Weighted reconstruction is gated outside `test=pcg_recon` (2026-10-07). The
-`fractional_reconstruction` sub-suite of `lib_reconstruction`
+`fractional reconstruction` sub-suite of `lib_reconstruction`
 (`simple_rec3D_service_tester.f90`) runs both backends through `reconstruct3D`
 on a two-conformer phantom. Under fractional weights each state map must match
 the weight mixture of the truth maps at least as well as the hard map matches
@@ -663,12 +671,12 @@ its truth, minus 0.01 in correlation. 0/1 weights equal to the labels must
 reproduce the hard maps and half maps byte for byte. The PCG and gridding
 trailing seeds must represent the same applied mass. A chain of another
 weight-set generation must be re-seeded at generation one, and a chain of the
-same generation blended. The `trailing_chain_identity` sub-suite of
+same generation blended. The `trailing chain identity` sub-suite of
 `unit_reconstruction` (`simple_trail_chain_manifest_tester.f90`) covers the
 manifest round trip, the refusal of other manifest versions, and the raw
 header's mass and identity.
 
-Sparse and uneven view sampling is gated in the `pcg_sparse_sampling` sub-suite of
+Sparse and uneven view sampling is gated in the `PCG sparse sampling` sub-suite of
 `lib_reconstruction` (`simple_pcg_sparse_tester.f90`). An atomic phantom at box 32,
 whose atoms carry strong Nyquist content, is projected exactly (no inverse crime)
 for a single-axis tilt series, a preferred orientation and a dense control. Each
@@ -863,8 +871,9 @@ may depend on which path produced a map.
 Durable performance rules (from the retired production-readiness note):
 
 - one logical particle read per accumulation phase (direct source reads for
-  standalone `reconstruct3D`; the validated downscaled cache for cache-enabled
-  refinement); particle residency bounded by `MAXIMGBATCHSZ`; no particle
+  standalone `reconstruct3D`, through the pass's read session
+  (`particle_read_path_policy.md`); the downscaled particle cache is 2D-only);
+  particle residency bounded by `MAXIMGBATCHSZ`; no particle
   plane cache — kernel iterations are data-free after `(B,D)`;
 - the preconditioner uses the padded Toeplitz lattice; do not trade the
   pad/crop geometry for a native-grid FFT optimization;

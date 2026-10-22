@@ -3,7 +3,7 @@ submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_co
 implicit none
 #include "simple_local_flags.inc"
 
-! the benchmark workload (doc/implementation_notes/planned/cont_lm_acceleration.md, section 6.3):
+! the benchmark workload (doc/implementation_notes/completed/cont_lm_acceleration.md, section 6.3):
 ! E25's 1JYX extent on a 256 native grid, at a typical particle SNR (realistic data is 0.02 or better)
 character(len=*), parameter :: CONT_BENCH_DIR    = 'cont_refine3D_bench'
 integer,          parameter :: CONT_BENCH_BOX    = 256

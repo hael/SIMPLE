@@ -70,13 +70,14 @@ contains
 
     !> a completed eligible solve3D run of nstates over spproj, built the way
     !! exec_solve3D builds it; its artifacts are those spproj registers
-    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle )
+    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle, nu_stage )
         type(solve3D_manifest),     intent(inout) :: man
         type(sp_project),           intent(inout) :: spproj
         integer,                    intent(in)    :: nstates
         character(len=*), optional, intent(in)    :: vol1  !< the starting-volume input (a path)
         logical,          optional, intent(in)    :: rec_backend !< record rec_backend=pcg (default yes)
         character(len=*), optional, intent(in)    :: bundle      !< an add-on's carried bundle manifest
+        integer,          optional, intent(in)    :: nu_stage    !< the nu_stage given on the run's command line
         type(cmdline) :: cl
         logical :: l_backend
         call man%new(RUN_ID, 'solve3D', .true., spproj)
@@ -96,6 +97,7 @@ contains
         else
             call cl%set('vol1',    '/abs/refs/startvol_state01.mrc')
         endif
+        if( present(nu_stage) ) call cl%set('nu_stage', nu_stage)
         call cl%set('nthr',        8)    ! not a manifest input key
         call man%record_inputs(cl)
         if( present(bundle) )then
@@ -548,7 +550,7 @@ contains
     subroutine test_replay()
         type(solve3D_manifest) :: man
         type(sp_project) :: spproj
-        type(cmdline)    :: cl
+        type(cmdline)    :: cl, cl_nu
         write(*,'(A)') 'test_replay'
         call make_project(spproj)
         call make_manifest(man, spproj, 2)
@@ -567,6 +569,13 @@ contains
         call assert_int(5,     cl%get_iarg('nstages'), 'the ladder ends at the base run''s last stage')
         call assert_int(10000, cl%get_iarg('nsample'), 'the effective nsample')
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
+        call assert_false(cl%defined('nu_stage'), 'a nu_stage the base run did not give is not replayed')
+        call man%kill
+        call make_manifest(man, spproj, 2, nu_stage=7)
+        call man%replay(cl_nu)
+        call assert_true(manifest_records_input('nu_stage'), 'nu_stage is a recorded input')
+        call assert_int(7, cl_nu%get_iarg('nu_stage'), 'the NU start stage of the base run is replayed: the add-on filters as its base did')
+        call cl_nu%kill
         call man%kill
         call make_manifest(man, spproj, 2, rec_backend=.false.)
         call assert_string_eq('gridding', man%get_rec_backend(), 'no recorded backend is the gridding default')

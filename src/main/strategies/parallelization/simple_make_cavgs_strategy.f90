@@ -243,15 +243,12 @@ contains
         endif
     end subroutine setup_evenodd
 
-    subroutine write_oritype_segment_for_compute(build, params, l_shmem)
+    !> The class assignment and halves of the shared-memory run, for the sigma2 rebuild and the restoration that
+    !! read the project file. A distributed run makes them once, in the master, before the workers start.
+    subroutine write_oritype_segment_for_compute(build, params)
         type(builder),    intent(inout) :: build
-        type(parameters), intent(inout) :: params
-        logical,          intent(in)    :: l_shmem
-        if( l_shmem )then
-            call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        else
-            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype, params%projfile)
-        endif
+        type(parameters), intent(in)    :: params
+        call build%spproj%write_segment_inside(params%oritype, params%projfile)
     end subroutine write_oritype_segment_for_compute
 
     subroutine cavger_prepare_and_assemble(params, build)
@@ -320,10 +317,10 @@ contains
         class(make_cavgs_shmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         class(cmdline),                   intent(inout) :: cline
-        ! ---- SHARED BODY (overlap with worker) ----
+        ! ---- SHMEM BODY (the master makes the same assignment for a distributed run) ----
         call generate_cluster_centers(self%build, params, cline)
         call setup_evenodd(self%build, params)
-        call write_oritype_segment_for_compute(self%build, params, l_shmem=.true.)
+        call write_oritype_segment_for_compute(self%build, params)
         ! the rebuild reads the even/odd halves from the project file written above
         call ensure_canonical_sigma2(params, cline, self%build%spproj)
         call cavger_prepare_and_assemble(params, self%build)
@@ -379,12 +376,9 @@ contains
         class(make_cavgs_worker_strategy), intent(inout) :: self
         type(parameters),                  intent(inout) :: params
         class(cmdline),                    intent(inout) :: cline
-        ! ---- SHARED BODY (overlap with shmem) ----
-        call generate_cluster_centers(self%build, params, cline)
+        ! the master made the class assignment and the halves and wrote them; a worker reads and verifies
         call setup_evenodd(self%build, params)
-        call write_oritype_segment_for_compute(self%build, params, l_shmem=.false.)
         call cavger_prepare_and_assemble(params, self%build)
-        ! ------------------------------------------
         ! ---- WORKER TAIL (differs from shmem) ----
         call cavger_write_contribution(.false.)
         call cavger_kill
@@ -441,6 +435,10 @@ contains
         ! the halves are on disk before the workers and the sigma2 rebuild read them
         if( params%tseries .ne. 'yes' ) call ensure_field_halves(build_tmp%spproj, params%oritype, params%projfile)
         call ensure_canonical_sigma2(params, cline, build_tmp%spproj)
+        ! the class assignment is made once, here, and written before the workers read the project: a worker that
+        ! made it would differ (class expansion draws random splits) and could only hand it on through the file
+        call generate_cluster_centers(build_tmp, params, cline)
+        call build_tmp%spproj%write_segment_inside(params%oritype, params%projfile)
         call cline%set('mkdir', 'no')  ! avoid nested dirs in workers
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)

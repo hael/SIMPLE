@@ -17,7 +17,7 @@ holds its output. What each stage keeps, restores and redoes, and what a change 
    - sends it the next GUI answer whole, whatever it sent the previous process.
 2. **By starting the master again** in a run folder where the stages' folders exist. The master
    forks every stage as at a first start, and each stage finds its folder.
-3. **By starting one stage on its own**, in its folder or with `dir_exec=<folder>` (p04, p06).
+3. **By starting one stage on its own**, in its folder or with `dir_exec=<folder>` (p01, p04, p06, p07).
 
 The master never restarts a stage by itself, and `forked_process` never restarts a child, so a
 stage that fails stays failed until the GUI restarts it. A stage the master skipped (p01 with
@@ -70,7 +70,9 @@ Anything kept only in memory is lost:
 ## 5. Invariants a change must keep
 
 1. **Hand-offs are atomic.** Every file a stage hands on is written under a temporary name and
-   renamed, so a restart never takes in a partial file.
+   renamed, so a restart never takes in a partial file. An optics map is two files: its
+   `optics_map_<id>.simple` is written first and its `.txt` renamed in last, and readers find a map
+   by its `.txt`.
 2. **Numbering never goes back:** job sets, optics-map ids and publication ids continue after the
    highest one on disk.
 3. **Completed work is not repeated.** A stage that restores its completed inputs (p01, p04, p05)
@@ -106,7 +108,7 @@ Anything kept only in memory is lost:
 
 ## Job lifecycle
 
-Every queued job of the stream (follow-up plan, decisions 28-30):
+Every queued job of the stream:
 - runs through `qsys_async_job` (p03's and p07's jobs, p04's `make_pickrefs`, the sieve's chunks,
   the pool iteration) or, for p01's and p04's job sets, the queue controller's streaming
   scheduler; both write the job's record and exit status beside it;
@@ -125,7 +127,7 @@ Every queued job of the stream (follow-up plan, decisions 28-30):
 - **Job sets keep the controller's streaming scheduler.** p01's and p04's sets run through
   `qsys_ctrl`'s streaming scheduler, not `qsys_async_job`, since the stream programs they run
   rely on its per-part numbering and done markers; they share the record, exit status, liveness
-  check and cancel (follow-up plan, decision 28, done for every other job).
+  check and cancel.
 - **A liveness check needs the scheduler's answer.** A scheduler that cannot be reached, or a
   local job on another host than the stage's, cannot be checked; such a job is waited for.
 - **The master forks a restarted stage from a multithreaded process.**

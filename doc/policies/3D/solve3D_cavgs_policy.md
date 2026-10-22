@@ -25,13 +25,13 @@ The route sets:
 - `bfac=0`
 - `filt_mode=none`
 - `automsk=no`
+- `objfun=euclid`
 
 Canonical sigma persistence is used for single-state and multi-state runs.
 
 When unset, it supplies:
 
 - `mkdir=yes`
-- `objfun=euclid`
 - `overlap=0.95`
 - `prob_athres=10`, as particle `solve3D` (ruling of 18 October 2026; it was 90, with an optional
   per-stage taper that is deleted)

@@ -4,8 +4,7 @@ How the streaming pipeline turns 2D-classified particles into several 3D states,
 know the technique but not the code. Reference volumes are built once from class averages; after
 that, every new batch of particles is sorted into those states by matching class averages against
 the references, and the particles' poses are refined locally. The contract, with every rule and
-constant, is `stream_3D_ingestion_policy.md` (sections 4, 9 and 10); this page is a summary of it
-as of 14 October 2026.
+constant, is `stream_3D_ingestion_policy.md` (sections 4, 9 and 10); this page is a summary of it.
 
 ```mermaid
 flowchart TD

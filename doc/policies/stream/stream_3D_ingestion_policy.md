@@ -217,7 +217,7 @@ completed iteration left it.
   reorders its stacks changes nothing in p07.
 - **A row's 3D parameters, its state, CTF and optics group are changed only by an assignment**,
   never by a publication, which only deselects or selects (a deselected row loses its state).
-- **The references never change once accepted** (plan, decision 5): every publication is matched
+- **The references never change once accepted**: every publication is matched
   against the same volumes, and the refinements from the particles never feed back into them.
 - **One quality authority per row:** a first-set row's selection is the first publication's, as
   the sieve made it (the pool, when p06 published its own), less the route's model selection,

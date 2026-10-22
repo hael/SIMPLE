@@ -215,12 +215,17 @@ goes.
 
 Any code that reads particle images from a stack file must resolve the
 particle's `stkind` and use `indstk` as the physical image index
-(`map_ptcl_ind2stk_ind`). A missing `nptcls_stk`, or an `indstk` that is
-missing or outside `1..nptcls_stk`, is an error. Readers must never use a
-project particle row as the physical stack-file image index.
+(`map_ptcl_ind2stk_ind`; `get_stkname_and_ind` returns the stack path with it).
+A missing `nptcls_stk`, or an `indstk` that is missing or outside
+`1..nptcls_stk`, is an error. Readers must never use a project particle row as
+the physical stack-file image index.
 
-Every particle reader goes through the pass-scoped read session
-(`stack_read_session`, [particle_read_path_policy.md](particle_read_path_policy.md)).
+Every pass that reads particles (search, reconstruction, probability table,
+power spectra, class sums, FLEX) goes through the pass-scoped read session
+(`stack_read_session`, [particle_read_path_policy.md](particle_read_path_policy.md)),
+which also lists the readers outside it: the single-image utilities resolve a
+particle by the rule above, the 2D particle cache by its own particle-to-record
+map.
 The session opens each stack file once per pass and reads it on a plain
 descriptor. It groups a pass's requests by stack file in order of first
 appearance, so stack rows that share one file (section above) share one open

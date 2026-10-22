@@ -34,7 +34,6 @@ type, extends(strategy3D) :: strategy3D_cont
     integer               :: status = CARTFT_NOT_ATTEMPTED
     real                  :: score  = 0.            !< corr_cart: at the result, at the seed when rejected
     integer               :: npix   = 0             !< pixels per evaluation of the particle's slot
-    integer               :: nextra = 0             !< evaluations after the solve (the sigma2 residual)
     logical               :: searched = .false.
     logical               :: exists   = .false.
 contains
@@ -122,7 +121,8 @@ contains
         class(strategy3D_cont), intent(inout) :: self
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
-        real(dp) :: objective_before, objective_after, rotmat(3,3), shift(2)
+        real(dp) :: objective_before, objective_after
+        real(dp), allocatable :: shell_residual(:)
         integer  :: islot, state
         logical  :: iseven
         if( .not. self%exists ) THROW_HARD('strategy3D_cont used before new')
@@ -151,14 +151,11 @@ contains
         self%score = 0.
         if( self%status /= CARTFT_INVALID_PREPARATION .and. objective_before >= 0._dp ) &
             &self%score = real(self%b_ptr%cftc%score(islot, objective_after))
-        ! sigma2 belongs to the Euclidean objective only (C5); the committed pose relative to the
-        ! slot's observation, centred on the stored shift
+        ! sigma2 belongs to the Euclidean objective only (C5): the residual of the evaluation that
+        ! chose the committed pose, which the optimizer keeps, so no pass of its own
         if( self%p_ptr%cc_objfun == OBJFUN_EUCLID .and. self%status /= CARTFT_INVALID_PREPARATION )then
-            rotmat = real(self%result_ori%get_mat(), dp)
-            shift  = real((self%result_ori%get_2Dshift() - self%seed_ori%get_2Dshift()) * &
-                &real(self%p_ptr%box_crop)/real(self%p_ptr%box), dp)
-            call self%b_ptr%esig%calc_sigma2(self%b_ptr%cftc, islot, self%spec%iptcl, state, iseven, rotmat, shift)
-            self%nextra = 1
+            call self%opt%get_shell_residual(shell_residual)
+            call self%b_ptr%esig%calc_sigma2(self%b_ptr%cftc, islot, self%spec%iptcl, shell_residual)
         endif
         self%searched = .true.
         call self%oris_assign
@@ -199,7 +196,7 @@ contains
     subroutine add_work_cont( self, work )
         class(strategy3D_cont),  intent(in)    :: self
         class(cartft_pose_work), intent(inout) :: work
-        call work%add_solve(self%opt, self%npix, self%nextra)
+        call work%add_solve(self%opt, self%npix)
     end subroutine add_work_cont
 
     subroutine kill_cont( self )
@@ -211,7 +208,6 @@ contains
         self%status   = CARTFT_NOT_ATTEMPTED
         self%score    = 0.
         self%npix     = 0
-        self%nextra   = 0
         self%searched = .false.
         self%exists   = .false.
     end subroutine kill_cont

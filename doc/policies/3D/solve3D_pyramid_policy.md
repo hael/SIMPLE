@@ -8,8 +8,6 @@ session-long, with p07's rules and none of its stream machinery. The rationale o
 design record is
 [solve3D_pyramid_plan_2026-10-15.md](../../refactoring_notes/completed/solve3D_pyramid_plan_2026-10-15.md).
 
-Status (2026-10-15): implemented, not yet compiled or run.
-
 ## 1. Scope
 
 `simple_exec prg=solve3D_pyramid projfile=<project> nstates=<n> nthr=<n>` makes the states'

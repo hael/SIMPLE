@@ -4,7 +4,7 @@ How the stream picks and extracts particles, for readers who know the technique 
 p04 turns the picking references into templates once, picks every accepted micrograph by template
 matching, extracts the particles, and hands them batch by batch to particle sieving (p05).
 Contract and details: `reference_generation_policy.md` (p04's use of the references); this page
-summarises the code as of 14 October 2026.
+summarises the code.
 
 ```mermaid
 flowchart TD

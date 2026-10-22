@@ -18,8 +18,8 @@ completion, and change guardrails for `ptcl_sieve`.
 5. per-tier completion accounting and final chunk combination;
 6. exposing latest CAVG visualization metadata for stream UI.
 
-It is not responsible for stream file watching/import logic (owned by stream
-commanders) or low-level queue backend internals (owned by `qsys_env`).
+It is not responsible for stream file watching/import logic (owned by the stage types in
+`src/main/stream/stages`) or low-level queue backend internals (owned by `qsys_env`).
 
 ## 2. Public Contract
 
@@ -35,10 +35,10 @@ Public API surface (type-bound methods on `ptcl_sieve`):
 Constructor policy (`new`):
 
 - `new(params, settings, completedir, pre_chunked, optics_dir)`. `settings`
-  (`ptcl_sieve_settings`, decision 12) holds everything the sieve reads; `params` gives the
+  (`ptcl_sieve_settings`) holds everything the sieve reads; `params` gives the
   sieve's queue environment only. The streaming stages fill `settings` themselves (p05 with the
   mask diameter of `moldiam.txt`, p03 with the box default, coarse only, 4 chunks of 16 threads);
-  `sieve_settings(params)` fills it from a parameters object (the standalone `sieve` commander,
+  `sieve_settings(params)` fills it from a parameters object (the standalone `particle_sieving` program,
   the tests).
 - `optics_dir=<dir>` (optional) is where stream optics assignment publishes its optics maps;
   chunks handed to `completedir` then carry the newest map's groups (section 9).
@@ -55,8 +55,8 @@ Constructor policy (`new`):
   `nsample_coarse`, `nsample_fine`, `ncls_coarse` and `ncls_fine`.
 - `settings%nthr` is the chunk jobs' thread count, also given to the sieve's queue environment
   (`qsys_nthr`), and `settings%partition` their queue partition (empty: the environment's).
-- The chunks are classified and scored with `settings%mskdiam`, or the box's disc when it is 0
-  (decision 7). Before 5 October 2026 scoring always used the box's disc; the sieve preset's
+- The chunks are classified and scored with `settings%mskdiam`, or the box's disc when it is 0.
+  Before 5 October 2026 scoring always used the box's disc; the sieve preset's
   weights were fitted with it, so p05's selections change and need a validation run before
   release.
 
@@ -146,6 +146,7 @@ stops (p03 and p05). A cancelled chunk is resubmitted after a restart.
 2. `generate_chunks_coarse(project_list)`
 3. `generate_chunks_fine()` when not coarse-only
 4. `submit`
+5. `hand_off_final_set(project_list)`, when final ingestion is set (section 6.3)
 
 This order is policy-significant and must not be rearranged without explicit
 contract updates, because downstream tier eligibility and counters depend on it.
@@ -240,7 +241,8 @@ Queue partition override policy:
 
 - `SIMPLE_STREAM_CHUNK_PARTITION` (`simple_defs_environment`) overrides the queue
   partition of the coarse chunks and the merged fine chunks; it is the variable the
-  particle-sieving stage's queue reads. The former name `SIMPLE_CHUNK_PARTITION` is no
+  particle-sieving stage's queue reads. The initial analysis (p03) gives its sieve's chunks
+  `SIMPLE_STREAM_REFGEN_PARTITION` instead. The former name `SIMPLE_CHUNK_PARTITION` is no
   longer read.
 
 Worker server: the sieve's queue reuses the persistent-worker server of the process that drives
@@ -251,7 +253,7 @@ it on (`qsys_env`).
 
 `reject_cavgs` is tier-aware and applies two filters:
 
-1. hard quality rejection (`evaluate_cavg_quality_hard_reject`);
+1. hard quality rejection (the `sieve` context's gates, applied by `score_project_cavgs`);
 2. compatibility model filtering (`class_compatibility`) for the respective
    tier model (`coarse_compatibility_model` or `fine_compatibility_model`).
 
@@ -259,16 +261,15 @@ Quality model policy (both tiers):
 
 - both tiers load the same preset, `sieve` (`CAVG_QUALITY_MODEL_SIEVE_DEFAULT`), and apply the
   `sieve` hard-gate context. The fine tier does not switch to the `chunk` preset
-  (`chunk100mics`) or the `chunk` context, although its merged chunks are as large as the ones
-  `model_cavgs_rejection.md` describes for that context. The fine tier is the sieve's second
+  (`chunk100mics`) or the `chunk` context, although its merged chunks hold 10,000 particles or
+  more. The fine tier is the sieve's second
   pass, not the stream's chunk 2D: its class averages come from the sieve's own 2D runs, so the
-  sieve scores them as it scores the coarse tier. This is a decision (stream fix plan,
-  decision 8, confirmed 5 October 2026), not a gap.
+  sieve scores them as it scores the coarse tier. This is a decision, not a gap.
 - as a result, the fine tier applies none of the shared `chunk`/`pool` gates (the `res > 40 Å`
   gate included), nor the `chunk` local-variance and band-pass floors. Flush chunks of a few
   hundred particles are scored the same way.
 - when `use_model=yes`, rejection runs model-based quality scoring
-  (`evaluate_cavg_quality`) after hard rejection.
+  (`score_project_cavgs`, which calls `evaluate_cavg_quality`) after hard rejection.
 - when `use_model=no`, rejection uses hard rejection only.
 - giving a tier another preset or context is a policy change. It needs a validation run, and the
   preset's spec must record which tier's tables it was fitted on.
@@ -395,8 +396,7 @@ classes, or class rows that do not match) (`fail_chunk`):
 4. **A job that vanishes** before its script writes an exit status (walltime, a
    lost node) is found by its job's liveness check (`qsys_async_job`; the chunk's
    job runs through it): gone at two checks `JOB_LIVENESS_S` (5 minutes) apart, it
-   gets a lost status and the chunk takes the failure path above (follow-up plan,
-   decision 29).
+   gets a lost status and the chunk takes the failure path above.
 
 ## 13. Test Policy
 

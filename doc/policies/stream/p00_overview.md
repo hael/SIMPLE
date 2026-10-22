@@ -4,7 +4,7 @@ How the master runs a streaming session, for readers who know the technique but 
 master does no image processing: it starts the seven processing stages as separate processes,
 passes their progress to the GUI (NICE), and passes the user's actions back to them. The stages
 hand data to each other through folders, not through the master. Contract and details:
-`ipc_policy.md` and `restart_policy.md`; this page summarises the code as of 14 October 2026.
+`ipc_policy.md` and `restart_policy.md`; this page summarises the code.
 
 ## The pipeline the master starts
 

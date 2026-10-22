@@ -38,7 +38,8 @@ end type cartft_ref
 !! abs(C) over its shells, whitened by 1/sqrt(sigma2) of its half under OBJFUN_EUCLID,
 !! unweighted under OBJFUN_CC.
 type :: cartft_ptcl
-    complex, allocatable :: observed(:,:), transfer(:,:)
+    complex, allocatable :: observed(:,:)
+    real,    allocatable :: transfer(:,:)
     real(dp) :: power   = 0._dp                 !< sum |X|^2 (whitened under OBJFUN_EUCLID)
     integer  :: kfromto(2) = 0
     integer  :: npix    = 0                     !< pixels of its shells in the full disk
@@ -64,6 +65,7 @@ type :: cartft_calc
     type(cartft_ptcl), allocatable :: ptcls(:)    !< (nptcls) prepared particles
     integer,           allocatable :: slots(:)    !< particle index -> slot of the current batch (0 when absent)
     integer,           allocatable :: shells(:,:) !< (lims2) shell nint(sqrt(h*h+k*k)) of a pixel inside the Nyquist disk, -1 outside
+    integer,           allocatable :: shell_npix(:) !< (0:box/2) pixels of each shell in the full disk
     real,              allocatable :: sigma2(:,:)       !< (shell, half) the two global spectra (OBJFUN_EUCLID)
     real,              allocatable :: rsqrt_sigma2(:,:) !< 1/sqrt(sigma2) where valid
     logical,           allocatable :: sigma2_ok(:,:)    !< finite and positive
@@ -102,10 +104,14 @@ contains
     procedure          :: objective_gradient
     procedure          :: shift_normal_terms
     procedure          :: pose_normal_terms
+    procedure          :: shift_normal_terms_full_disk
+    procedure          :: pose_normal_terms_full_disk
     procedure          :: sigma_contribution
+    procedure          :: sigma_from_shell_residual
     procedure          :: score
     procedure, private :: fill_ptcl
     procedure, private :: gather
+    procedure, private :: shift_phase_tables
     procedure, private :: ref_index
     procedure, private :: check_eval_args
 end type cartft_calc
@@ -151,6 +157,12 @@ contains
                 if( h*h + k*k <= (box/2)**2 ) self%shells(h,k) = nint(sqrt(real(h*h + k*k)))
             end do
         end do
+        allocate(self%shell_npix(0:box/2), source=0)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( self%shells(h,k) >= 0 ) self%shell_npix(self%shells(h,k)) = self%shell_npix(self%shells(h,k)) + 1
+            end do
+        end do
         self%exists = .true.
     end subroutine new
 
@@ -162,6 +174,7 @@ contains
         if( allocated(self%wrap)  ) deallocate(self%wrap)
         if( allocated(self%slots) ) deallocate(self%slots)
         if( allocated(self%shells)) deallocate(self%shells)
+        if( allocated(self%shell_npix)   ) deallocate(self%shell_npix)
         if( allocated(self%ref_weight)   ) deallocate(self%ref_weight)
         if( allocated(self%sigma2)       ) deallocate(self%sigma2)
         if( allocated(self%rsqrt_sigma2) ) deallocate(self%rsqrt_sigma2)
@@ -621,10 +634,221 @@ contains
     end subroutine objective_gradient
 
     !> Objective, two-vector shift gradient and 2x2 Gauss-Newton block at a fixed rotation,
-    !! for the optimizer's shift stage; it avoids derivative planes and a masked five-by-five
-    !! solve when only the two image shifts are active. NaN objective when a correlation is
-    !! undefined.
+    !! for the optimizer's shift stage, over the half plane of the slot's band (every summand is
+    !! Hermitian between Friedel mates). NaN objective when a correlation is undefined.
     subroutine shift_normal_terms( self, state, iseven, iptcl, rotmat, shift, objective, gradient, hessian )
+        class(cartft_calc), intent(in)  :: self
+        integer,            intent(in)  :: state, iptcl
+        logical,            intent(in)  :: iseven
+        real(dp),           intent(in)  :: rotmat(3,3), shift(2)
+        real(dp),           intent(out) :: objective, gradient(2), hessian(2,2)
+        complex(dp) :: eh(0:self%ptcls(iptcl)%kfromto(2)), ek(-self%ptcls(iptcl)%kfromto(2):self%ptcls(iptcl)%kfromto(2))
+        complex     :: val, dval(3)
+        complex(dp) :: model, particle, residual, xm
+        real(sp)    :: loc(3)
+        real(dp)    :: row1(3), row2(3), fh, fk, fw, m2, q
+        real(dp)    :: prediction_power, cross_real, weighted_power, weighted_cross, model_gradient(2)
+        integer     :: h, k, kto, ihalf, shell
+        logical     :: inside, l_euclid
+        call self%check_eval_args(state, iseven, iptcl)
+        ihalf = self%ref_index(iseven)
+        associate( p => self%ptcls(iptcl), cmat => self%refs(ihalf,state)%cmat )
+            kto      = p%kfromto(2)
+            l_euclid = p%objfun == OBJFUN_EUCLID
+            call self%shift_phase_tables(shift, eh, ek)
+            row1 = real(self%padf, dp)*rotmat(1,:)
+            row2 = real(self%padf, dp)*rotmat(2,:)
+            objective        = 0._dp
+            gradient         = 0._dp
+            hessian          = 0._dp
+            prediction_power = 0._dp
+            cross_real       = 0._dp
+            weighted_power   = 0._dp
+            weighted_cross   = 0._dp
+            model_gradient   = 0._dp
+            do k = -kto, kto
+                fk = 2._dp*real(PI, dp)*real(k, dp)/real(self%box, dp)
+                ! the half plane: h > 0, and h = 0 for k > 0; the DC pixel is added once below
+                do h = merge(0, 1, k > 0), kto
+                    shell = self%shells(h,k)
+                    if( shell < p%kfromto(1) .or. shell > kto ) cycle
+                    loc = real(real(h, dp)*row1 + real(k, dp)*row2, sp)
+                    call self%gather(cmat, loc, val, dval, inside)
+                    if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
+                    model    = eh(h)*ek(k)*real(p%transfer(h,k), dp)*cmplx(val, kind=dp)
+                    particle = cmplx(p%observed(h,k), kind=dp)
+                    fh = 2._dp*real(PI, dp)*real(h, dp)/real(self%box, dp)
+                    fw = fh*fh + fk*fk
+                    m2 = real(conjg(model)*model, dp)
+                    xm = conjg(particle)*model
+                    q  = aimag(xm)
+                    weighted_power = weighted_power + fw*m2
+                    weighted_cross = weighted_cross + fw*real(xm, dp)
+                    ! a shift Jacobian is i f model: its gradient terms are -+ f Im(conj(X) M)
+                    if( l_euclid )then
+                        residual  = model - particle
+                        objective = objective + real(conjg(residual)*residual, dp)
+                        gradient  = gradient + [fh, fk]*q
+                    else
+                        prediction_power = prediction_power + m2
+                        cross_real       = cross_real + real(xm, dp)
+                        gradient         = gradient - [fh, fk]*q
+                    endif
+                    hessian(1,1) = hessian(1,1) + fh*fh*m2
+                    hessian(1,2) = hessian(1,2) + fh*fk*m2
+                    hessian(2,2) = hessian(2,2) + fk*fk*m2
+                end do
+            end do
+            ! each half-plane pixel stands for its Friedel mate as well
+            objective        = 2._dp*objective
+            gradient         = 2._dp*gradient
+            hessian          = 2._dp*hessian
+            prediction_power = 2._dp*prediction_power
+            cross_real       = 2._dp*cross_real
+            weighted_power   = 2._dp*weighted_power
+            weighted_cross   = 2._dp*weighted_cross
+            if( p%kfromto(1) == 0 ) call add_dc_pixel(self, p, cmat, l_euclid, objective, prediction_power, cross_real)
+            hessian(2,1) = hessian(1,2)
+            if( l_euclid )then
+                call finalize_euclid_normal_terms(p%power, weighted_power, weighted_cross, objective, gradient, hessian)
+            else
+                call finalize_cc_normal_terms(p%power, prediction_power, cross_real, weighted_power, &
+                    &weighted_cross, model_gradient, objective, gradient, hessian)
+            endif
+        end associate
+    end subroutine shift_normal_terms
+
+    !> Objective, five-vector gradient and 5x5 Gauss-Newton block (rotations 1:3, shifts 4:5), for
+    !! the optimizer's joint stage, over the half plane of the slot's band (every summand is
+    !! Hermitian between Friedel mates); with shell_residual the whitened |r|^2 per shell of a
+    !! euclid slot (zero for cc), for sigma_from_shell_residual. NaN objective when a correlation is undefined.
+    subroutine pose_normal_terms( self, state, iseven, iptcl, rotmat, shift, objective, gradient, hessian, shell_residual )
+        class(cartft_calc), intent(in)  :: self
+        integer,            intent(in)  :: state, iptcl
+        logical,            intent(in)  :: iseven
+        real(dp),           intent(in)  :: rotmat(3,3), shift(2)
+        real(dp),           intent(out) :: objective, gradient(5), hessian(5,5)
+        real(dp), optional, intent(out) :: shell_residual(self%ptcls(iptcl)%kfromto(1):self%ptcls(iptcl)%kfromto(2))
+        complex(dp) :: eh(0:self%ptcls(iptcl)%kfromto(2)), ek(-self%ptcls(iptcl)%kfromto(2):self%ptcls(iptcl)%kfromto(2))
+        complex     :: val, dval(3)
+        complex(dp) :: wp, model, particle, residual, xm, jacobian(3)
+        real(sp)    :: loc(3)
+        real(dp)    :: row1(3), row2(3), fh, fk, fw, m2, q, u(3), l(3), r2, dc_residual
+        real(dp)    :: prediction_power, cross_real, weighted_power, weighted_cross, model_gradient(5)
+        integer     :: a, b, h, k, kto, ihalf, shell
+        logical     :: inside, l_euclid, l_shells
+        call self%check_eval_args(state, iseven, iptcl)
+        ihalf = self%ref_index(iseven)
+        associate( p => self%ptcls(iptcl), cmat => self%refs(ihalf,state)%cmat )
+            kto      = p%kfromto(2)
+            l_euclid = p%objfun == OBJFUN_EUCLID
+            l_shells = present(shell_residual) .and. l_euclid
+            if( present(shell_residual) ) shell_residual = 0._dp
+            call self%shift_phase_tables(shift, eh, ek)
+            ! the padded rotation rows: pixel (h,k) samples h*row1 + k*row2
+            row1 = real(self%padf, dp)*rotmat(1,:)
+            row2 = real(self%padf, dp)*rotmat(2,:)
+            objective        = 0._dp
+            gradient         = 0._dp
+            hessian          = 0._dp
+            prediction_power = 0._dp
+            cross_real       = 0._dp
+            weighted_power   = 0._dp
+            weighted_cross   = 0._dp
+            model_gradient   = 0._dp
+            do k = -kto, kto
+                fk = 2._dp*real(PI, dp)*real(k, dp)/real(self%box, dp)
+                ! the half plane: h > 0, and h = 0 for k > 0; the DC pixel is added once below
+                do h = merge(0, 1, k > 0), kto
+                    shell = self%shells(h,k)
+                    if( shell < p%kfromto(1) .or. shell > kto ) cycle
+                    loc = real(real(h, dp)*row1 + real(k, dp)*row2, sp)
+                    call self%gather(cmat, loc, val, dval, inside)
+                    if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
+                    wp       = eh(h)*ek(k)*real(p%transfer(h,k), dp)
+                    model    = wp*cmplx(val, kind=dp)
+                    particle = cmplx(p%observed(h,k), kind=dp)
+                    ! the rotation Jacobians, the derivative along loc x e_a: wp (dV x loc)
+                    l = real(loc, dp)
+                    jacobian(1) = wp*(cmplx(dval(2), kind=dp)*l(3) - cmplx(dval(3), kind=dp)*l(2))
+                    jacobian(2) = wp*(cmplx(dval(3), kind=dp)*l(1) - cmplx(dval(1), kind=dp)*l(3))
+                    jacobian(3) = wp*(cmplx(dval(1), kind=dp)*l(2) - cmplx(dval(2), kind=dp)*l(1))
+                    fh = 2._dp*real(PI, dp)*real(h, dp)/real(self%box, dp)
+                    fw = fh*fh + fk*fk
+                    m2 = real(conjg(model)*model, dp)
+                    xm = conjg(particle)*model
+                    q  = aimag(xm)
+                    do a = 1, 3
+                        u(a) = aimag(conjg(jacobian(a))*model)
+                    end do
+                    weighted_power = weighted_power + fw*m2
+                    weighted_cross = weighted_cross + fw*real(xm, dp)
+                    ! a shift Jacobian is i f model: its gradient terms are -+ f Im(conj(X) M), and
+                    ! model_gradient has no shift component
+                    if( l_euclid )then
+                        residual  = model - particle
+                        r2        = real(conjg(residual)*residual, dp)
+                        objective = objective + r2
+                        if( l_shells ) shell_residual(shell) = shell_residual(shell) + r2
+                        do a = 1, 3
+                            gradient(a) = gradient(a) + real(conjg(jacobian(a))*residual, dp)
+                        end do
+                        gradient(4) = gradient(4) + fh*q
+                        gradient(5) = gradient(5) + fk*q
+                    else
+                        prediction_power = prediction_power + m2
+                        cross_real       = cross_real + real(xm, dp)
+                        do a = 1, 3
+                            gradient(a)       = gradient(a)       + real(conjg(particle)*jacobian(a), dp)
+                            model_gradient(a) = model_gradient(a) + real(conjg(model)*jacobian(a), dp)
+                        end do
+                        gradient(4) = gradient(4) - fh*q
+                        gradient(5) = gradient(5) - fk*q
+                    endif
+                    ! the 15 distinct entries; rotation-shift entries are -f Im(conj(J_a) M)
+                    do a = 1, 3
+                        do b = a, 3
+                            hessian(a,b) = hessian(a,b) + real(conjg(jacobian(a))*jacobian(b), dp)
+                        end do
+                        hessian(a,4) = hessian(a,4) - fh*u(a)
+                        hessian(a,5) = hessian(a,5) - fk*u(a)
+                    end do
+                    hessian(4,4) = hessian(4,4) + fh*fh*m2
+                    hessian(4,5) = hessian(4,5) + fh*fk*m2
+                    hessian(5,5) = hessian(5,5) + fk*fk*m2
+                end do
+            end do
+            ! each half-plane pixel stands for its Friedel mate as well
+            objective        = 2._dp*objective
+            gradient         = 2._dp*gradient
+            hessian          = 2._dp*hessian
+            prediction_power = 2._dp*prediction_power
+            cross_real       = 2._dp*cross_real
+            weighted_power   = 2._dp*weighted_power
+            weighted_cross   = 2._dp*weighted_cross
+            model_gradient   = 2._dp*model_gradient
+            if( l_shells ) shell_residual = 2._dp*shell_residual
+            if( p%kfromto(1) == 0 )then
+                call add_dc_pixel(self, p, cmat, l_euclid, objective, prediction_power, cross_real, dc_residual)
+                if( l_shells ) shell_residual(0) = shell_residual(0) + dc_residual
+            endif
+            do a = 2, 5
+                do b = 1, a - 1
+                    hessian(a,b) = hessian(b,a)
+                end do
+            end do
+            if( l_euclid )then
+                call finalize_euclid_normal_terms(p%power, weighted_power, weighted_cross, objective, gradient, hessian)
+            else
+                call finalize_cc_normal_terms(p%power, prediction_power, cross_real, weighted_power, &
+                    &weighted_cross, model_gradient, objective, gradient, hessian)
+            endif
+        end associate
+    end subroutine pose_normal_terms
+
+    !> shift_normal_terms as it was before the half-plane kernel (cont_lm_acceleration.md, stage 6):
+    !! the full disk, kept as the reference the tests compare the kernel with.
+    subroutine shift_normal_terms_full_disk( self, state, iseven, iptcl, rotmat, shift, objective, gradient, hessian )
         class(cartft_calc), intent(in)  :: self
         integer,            intent(in)  :: state, iptcl
         logical,            intent(in)  :: iseven
@@ -702,11 +926,11 @@ contains
                         &weighted_cross, model_gradient, objective, gradient, hessian)
             end select
         end associate
-    end subroutine shift_normal_terms
+    end subroutine shift_normal_terms_full_disk
 
-    !> Objective, five-vector gradient and 5x5 Gauss-Newton block (rotations 1:3, shifts
-    !! 4:5), for the optimizer's joint stage. NaN objective when a correlation is undefined.
-    subroutine pose_normal_terms( self, state, iseven, iptcl, rotmat, shift, objective, gradient, hessian )
+    !> pose_normal_terms as it was before the half-plane kernel (cont_lm_acceleration.md, stage 6):
+    !! the full disk, kept as the reference the tests compare the kernel with.
+    subroutine pose_normal_terms_full_disk( self, state, iseven, iptcl, rotmat, shift, objective, gradient, hessian )
         class(cartft_calc), intent(in)  :: self
         integer,            intent(in)  :: state, iptcl
         logical,            intent(in)  :: iseven
@@ -793,7 +1017,7 @@ contains
                         &weighted_cross, model_gradient, objective, gradient, hessian)
             end select
         end associate
-    end subroutine pose_normal_terms
+    end subroutine pose_normal_terms_full_disk
 
     !> Unwhitened per-shell accounting at one terminal pose of an OBJFUN_EUCLID particle slot:
     !! residual power over two per sample (the sigma2 contribution) over the particle's shells.
@@ -810,13 +1034,14 @@ contains
         real, allocatable,           intent(out) :: sigma_contrib(:)
         real, allocatable, optional, intent(out) :: ref_pow(:), ptcl_pow(:)
         real,              optional, intent(out) :: v
-        complex     :: val, dval(3), phase
+        complex(dp), allocatable :: eh(:), ek(:)
+        complex     :: val, dval(3)
         complex(dp) :: model, raw_observed, residual
         real(dp), allocatable :: sigma_sum(:), ref_sum(:), ptcl_sum(:), root_sigma2(:)
-        real(dp)    :: l_arg, root_sigma, vnum, vden
+        real(dp)    :: row1(3), row2(3), root_sigma, vnum, vden, weight
         real(sp)    :: loc(3)
         integer, allocatable :: counts(:)
-        integer     :: h, k, shell, lower_shell, upper_shell, ihalf
+        integer     :: h, k, shell, lower_shell, upper_shell, ihalf, multiplicity
         logical     :: inside, l_diag
         if( .not. self%ref_exists(state, iseven) ) THROW_HARD('cartft_calc sigma contribution from an absent reference')
         if( iptcl < 1 .or. iptcl > self%nptcls )   THROW_HARD('cartft_calc particle slot out of range')
@@ -838,26 +1063,32 @@ contains
             root_sigma2 = sqrt(real(self%sigma2(lower_shell:upper_shell,p%half), dp))
             vnum = 0._dp
             vden = 0._dp
-            do k = self%lims2(2,1), self%lims2(2,2)
-                do h = self%lims2(1,1), self%lims2(1,2)
+            allocate(eh(0:upper_shell), ek(-upper_shell:upper_shell))
+            call self%shift_phase_tables(shift, eh, ek)
+            row1 = real(self%padf, dp)*rotmat(1,:)
+            row2 = real(self%padf, dp)*rotmat(2,:)
+            ! the half plane, h > 0 and h = 0 for k >= 0: a pixel counts twice for its Friedel mate,
+            ! the DC pixel once
+            do k = -upper_shell, upper_shell
+                do h = merge(0, 1, k >= 0), upper_shell
                     shell = self%shells(h,k)
-                    if( shell < p%kfromto(1) .or. shell > p%kfromto(2) ) cycle
-                    loc   = real(self%padf, sp)*real(matmul(real([h, k, 0], dp), rotmat), sp)
+                    if( shell < lower_shell .or. shell > upper_shell ) cycle
+                    multiplicity = merge(1, 2, h == 0 .and. k == 0)
+                    weight       = real(multiplicity, dp)
+                    loc   = real(real(h, dp)*row1 + real(k, dp)*row2, sp)
                     call self%gather(cmat, loc, val, dval, inside)
                     if( .not. inside ) THROW_HARD('cartft_calc gather location outside the wrap table')
-                    l_arg = 2._dp*real(PI, dp)*(real(h, dp)*shift(1) + real(k, dp)*shift(2))/real(self%box, dp)
-                    phase = cmplx(cos(l_arg), sin(l_arg), kind=sp)
                     root_sigma   = root_sigma2(shell)
-                    model        = cmplx(phase, kind=dp)*cmplx(p%transfer(h,k), kind=dp)*cmplx(val, kind=dp)*root_sigma
+                    model        = eh(h)*ek(k)*real(p%transfer(h,k), dp)*cmplx(val, kind=dp)*root_sigma
                     raw_observed = cmplx(p%observed(h,k), kind=dp)*root_sigma
                     residual     = raw_observed - model
-                    sigma_sum(shell) = sigma_sum(shell) + real(conjg(residual)*residual, dp)
-                    counts(shell)    = counts(shell) + 1
+                    sigma_sum(shell) = sigma_sum(shell) + weight*real(conjg(residual)*residual, dp)
+                    counts(shell)    = counts(shell) + multiplicity
                     if( l_diag )then
-                        ref_sum(shell)  = ref_sum(shell)  + real(conjg(model)*model, dp)
-                        ptcl_sum(shell) = ptcl_sum(shell) + real(conjg(raw_observed)*raw_observed, dp)
-                        vnum = vnum + real(conjg(residual)*residual, dp)/real(self%sigma2(shell,p%half), dp)
-                        vden = vden + real(conjg(raw_observed)*raw_observed, dp)/real(self%sigma2(shell,p%half), dp)
+                        ref_sum(shell)  = ref_sum(shell)  + weight*real(conjg(model)*model, dp)
+                        ptcl_sum(shell) = ptcl_sum(shell) + weight*real(conjg(raw_observed)*raw_observed, dp)
+                        vnum = vnum + weight*real(conjg(residual)*residual, dp)/real(self%sigma2(shell,p%half), dp)
+                        vden = vden + weight*real(conjg(raw_observed)*raw_observed, dp)/real(self%sigma2(shell,p%half), dp)
                     endif
                 end do
             end do
@@ -881,6 +1112,29 @@ contains
             endif
         endif
     end subroutine sigma_contribution
+
+    !> The sigma2 contribution of euclid particle slot iptcl from the whitened |r|^2 per shell of an
+    !! evaluation (pose_normal_terms): residual power over two per sample, unwhitened by the half's
+    !! spectrum, as sigma_contribution sums it at that pose without a pass of its own.
+    subroutine sigma_from_shell_residual( self, iptcl, shell_residual, sigma_contrib )
+        class(cartft_calc), intent(in)  :: self
+        integer,            intent(in)  :: iptcl
+        real(dp),           intent(in)  :: shell_residual(:)
+        real, allocatable,  intent(out) :: sigma_contrib(:)
+        integer :: shell, lower_shell, upper_shell
+        if( iptcl < 1 .or. iptcl > self%nptcls ) THROW_HARD('cartft_calc particle slot out of range')
+        if( .not. self%ptcls(iptcl)%valid ) THROW_HARD('cartft_calc sigma contribution requires a valid particle slot')
+        if( self%ptcls(iptcl)%objfun /= OBJFUN_EUCLID ) THROW_HARD('cartft_calc sigma contribution requires a euclid particle slot')
+        lower_shell = self%ptcls(iptcl)%kfromto(1)
+        upper_shell = self%ptcls(iptcl)%kfromto(2)
+        if( size(shell_residual) /= upper_shell - lower_shell + 1 ) THROW_HARD('cartft_calc shell residual does not span the slot band')
+        if( any(self%shell_npix(lower_shell:upper_shell) == 0) ) THROW_HARD('cartft_calc sigma contribution found an empty active shell')
+        allocate(sigma_contrib(lower_shell:upper_shell))
+        do shell = lower_shell, upper_shell
+            sigma_contrib(shell) = real(real(self%sigma2(shell,self%ptcls(iptcl)%half), dp)*&
+                &shell_residual(shell - lower_shell + 1)/(2._dp*real(self%shell_npix(shell), dp)), sp)
+        end do
+    end subroutine sigma_from_shell_residual
 
     !> The stored score of an objective value of particle slot iptcl, as the polar branch stores
     !! it: cc = 1 - objective under OBJFUN_CC, exp(-L) under OBJFUN_EUCLID (C6). THROW_HARD for a
@@ -914,6 +1168,7 @@ contains
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
         real     :: cval, weight
+        real(dp) :: half_power, dc_power
         integer  :: h, k, shell
         logical  :: use_ctf
         select case(ctfparms%ctfflag)
@@ -938,13 +1193,15 @@ contains
             if( .not. allocated(p%observed) ) &
                 &allocate(p%observed(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=cmplx(0.,0.))
             if( .not. allocated(p%transfer) ) &
-                &allocate(p%transfer(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=cmplx(0.,0.))
+                &allocate(p%transfer(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)), source=0.)
             use_ctf = ctfparms%ctfflag /= CTFFLAG_NO
             if( use_ctf )then
                 tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
                 ctfvals = tfun%get_ctfvars(ctfparms%phshift)
             endif
+            half_power = 0._dp
+            dc_power   = 0._dp
             do k = self%lims2(2,1), self%lims2(2,2)
                 do h = self%lims2(1,1), self%lims2(1,2)
                     shell = self%shells(h,k)
@@ -957,10 +1214,16 @@ contains
                     if( use_ctf ) cval = abs(ctf_value(tfun, h, k, self%box, ctfvals%phshift))
                     p%transfer(h,k) = cval*weight
                     p%observed(h,k) = observed(h,k)*weight
-                    p%power = p%power + real(conjg(p%observed(h,k))*p%observed(h,k), dp)
-                    p%npix  = p%npix + 1
+                    p%npix = p%npix + 1
+                    ! the power the kernels see: the half plane twice, in their order, and DC once
+                    if( h == 0 .and. k == 0 )then
+                        dc_power = abs(cmplx(p%observed(h,k), kind=dp))**2
+                    else if( h > 0 .or. (h == 0 .and. k > 0) )then
+                        half_power = half_power + abs(cmplx(p%observed(h,k), kind=dp))**2
+                    endif
                 end do
             end do
+            p%power = 2._dp*half_power + dc_power
             ! both objectives normalize by the particle power: an observation without power
             ! has no defined objective
             p%valid = p%power > NUMERIC_FLOOR
@@ -998,6 +1261,50 @@ contains
                 &THROW_HARD('cartft_calc shell range lies outside the native Fourier disk')
         end associate
     end subroutine check_eval_args
+
+    !> The separable shift phase of one evaluation, exp(2 pi i (h s1 + k s2)/box) = eh(h) ek(k),
+    !! over h = 0..kto and k = -kto..kto
+    pure subroutine shift_phase_tables( self, shift, eh, ek )
+        class(cartft_calc), intent(in)  :: self
+        real(dp),           intent(in)  :: shift(2)
+        complex(dp),        intent(out) :: eh(0:), ek(-(size(eh)-1):)
+        real(dp) :: arg
+        integer  :: i
+        do i = 0, size(eh) - 1
+            arg   = 2._dp*real(PI, dp)*real(i, dp)*shift(1)/real(self%box, dp)
+            eh(i) = cmplx(cos(arg), sin(arg), kind=dp)
+        end do
+        do i = -(size(eh) - 1), size(eh) - 1
+            arg   = 2._dp*real(PI, dp)*real(i, dp)*shift(2)/real(self%box, dp)
+            ek(i) = cmplx(cos(arg), sin(arg), kind=dp)
+        end do
+    end subroutine shift_phase_tables
+
+    !> The DC pixel of a band from shell 0, its own Friedel mate: no Jacobian, its objective and
+    !! power terms once
+    subroutine add_dc_pixel( self, p, cmat, l_euclid, objective, prediction_power, cross_real, dc_residual )
+        class(cartft_calc), intent(in)    :: self
+        type(cartft_ptcl),  intent(in)    :: p
+        complex,            intent(in)    :: cmat(:,:,:)
+        logical,            intent(in)    :: l_euclid
+        real(dp),           intent(inout) :: objective, prediction_power, cross_real
+        real(dp), optional, intent(out)   :: dc_residual
+        complex     :: val, dval(3)
+        complex(dp) :: model, particle, residual
+        logical     :: inside
+        if( present(dc_residual) ) dc_residual = 0._dp
+        call self%gather(cmat, [0.,0.,0.], val, dval, inside)
+        model    = real(p%transfer(0,0), dp)*cmplx(val, kind=dp)
+        particle = cmplx(p%observed(0,0), kind=dp)
+        if( l_euclid )then
+            residual  = model - particle
+            objective = objective + real(conjg(residual)*residual, dp)
+            if( present(dc_residual) ) dc_residual = real(conjg(residual)*residual, dp)
+        else
+            prediction_power = prediction_power + real(conjg(model)*model, dp)
+            cross_real       = cross_real + real(conjg(particle)*model, dp)
+        endif
+    end subroutine add_dc_pixel
 
     !> Convert the whitened residual power sum |r|^2 and its Gauss-Newton sums into the
     !! normalized loss L = sum |r|^2/power, its gradient and Gauss-Newton block, the block scaled

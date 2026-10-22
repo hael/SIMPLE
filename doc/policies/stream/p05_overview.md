@@ -4,8 +4,7 @@ How the stream removes junk particles continuously, for readers who know the tec
 code. p05 groups the particles from reference picking into chunks, classifies each chunk in 2D,
 rejects bad class averages together with their particles, and does this twice (a coarse pass,
 then a fine pass on merged chunks) before handing clean sets to the 2D pool (p06). Contract and
-details: `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`; this page summarises the code
-as of 14 October 2026.
+details: `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`; this page summarises the code.
 
 ```mermaid
 flowchart TD

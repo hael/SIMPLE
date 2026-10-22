@@ -44,6 +44,8 @@ contains
         call test_joint_solver()
         write(*,'(A)') 'test_tiny_accepted_reduction_stop'
         call test_tiny_accepted_reduction_stop()
+        write(*,'(A)') 'test_committed_shell_residual'
+        call test_committed_shell_residual()
         write(*,'(A)') 'test_ncc_solver'
         call test_ncc_solver()
         write(*,'(A)') 'test_invalid_and_unobservable_inputs'
@@ -335,6 +337,39 @@ contains
     ! E12 (stopping): a material rotation residual with only a minuscule shift step permitted, so
     ! the first proposal predicts a reduction below the relative threshold: the stage ends without
     ! evaluating it, the pose unchanged and the stage bound-rejected (its step was capped)
+    ! the shell residual a transaction keeps (cont_lm_acceleration.md, stage 6c) is that of a new
+    ! evaluation at the pose it returns, bit for bit: an accepted joint solve, a rejected one (a
+    ! converged seed) and an accepted solve on the shift-then-joint route
+    subroutine test_committed_shell_residual()
+        type(cartft_calc)     :: calc
+        type(cartft_pose_opt) :: opt
+        type(fixture_record)  :: fix
+        real, allocatable     :: volume(:,:,:)
+        real(dp), allocatable :: kept(:)
+        real(dp) :: rotation(3,3), shift(2), objective, gradient(5), hessian(5,5)
+        real(dp) :: fresh(2:TEST_BOX/2)
+        integer  :: iroute
+        integer, parameter :: KFROMTO(2) = [2, TEST_BOX/2]
+        call build_test_volume(volume)
+        call new_fixture(calc, volume, KFROMTO, 2., OBJFUN_EUCLID, fix)
+        do iroute = 1, 3
+            call opt%new(TEST_BOX, TEST_BOX, 5., 15., shift_first=(iroute == 3))
+            rotation = fix%seed_rotation
+            shift    = fix%seed_shift
+            call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+            ! the second route starts from the first route's endpoint: no pose improves on it
+            if( iroute == 2 ) call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+            call assert_true(opt%get_status() == merge(CARTFT_NO_IMPROVEMENT, CARTFT_ACCEPTED, iroute == 2), &
+                &'committed-residual fixture did not reach the intended outcome')
+            call opt%get_shell_residual(kept)
+            call calc%pose_normal_terms(1, .true., 1, rotation, shift, objective, gradient, hessian, fresh)
+            call assert_true(allocated(kept), 'a transaction kept no shell residual')
+            call assert_true(all(kept == fresh), 'the kept shell residual is not the returned pose''s')
+            call opt%kill
+        end do
+        call calc%kill
+    end subroutine test_committed_shell_residual
+
     subroutine test_tiny_accepted_reduction_stop()
         type(cartft_calc)     :: calc
         type(cartft_pose_opt) :: opt

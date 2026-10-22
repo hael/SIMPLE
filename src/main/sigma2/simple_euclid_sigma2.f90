@@ -47,7 +47,8 @@ contains
     procedure          :: prep_fplane_grid
     procedure, private :: calc_sigma2_pftc
     procedure, private :: calc_sigma2_cart
-    generic            :: calc_sigma2 => calc_sigma2_pftc, calc_sigma2_cart
+    procedure, private :: calc_sigma2_cart_residual
+    generic            :: calc_sigma2 => calc_sigma2_pftc, calc_sigma2_cart, calc_sigma2_cart_residual
     procedure, private :: check_record
     procedure          :: get_sigma2_part
     procedure          :: write_sigma2
@@ -236,6 +237,25 @@ contains
         call self%check_record(iptcl)
         self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl) = sigma_contrib
     end subroutine calc_sigma2_cart
+
+    !> calc_sigma2_cart from the shell residual of the evaluation that chose the committed pose
+    !! (cartft_pose_opt%get_shell_residual), without a pass of its own
+    subroutine calc_sigma2_cart_residual( self, cftc, islot, iptcl, shell_residual )
+        class(euclid_sigma2), intent(inout) :: self
+        class(cartft_calc),   intent(in)    :: cftc
+        integer,              intent(in)    :: islot, iptcl
+        real(dp),             intent(in)    :: shell_residual(:)
+        real, allocatable :: sigma_contrib(:)
+        if( .not.associated(self%p_ptr) )then
+            THROW_HARD('euclid_sigma2: params pointer is not set')
+        endif
+        if( .not. cftc%ptcl_is_valid(islot) ) return
+        call cftc%sigma_from_shell_residual(islot, shell_residual, sigma_contrib)
+        if( lbound(sigma_contrib,1) /= self%p_ptr%kfromto(1) .or. ubound(sigma_contrib,1) /= self%p_ptr%kfromto(2) ) &
+            &THROW_HARD('Cartesian sigma contribution does not span the band of the pass')
+        call self%check_record(iptcl)
+        self%sigma2_part(self%p_ptr%kfromto(1):self%p_ptr%kfromto(2),iptcl) = sigma_contrib
+    end subroutine calc_sigma2_cart_residual
 
     !> The particle's sigma2 contribution of this part over the pass's band (as calc_sigma2 stored it).
     function get_sigma2_part( self, iptcl ) result( sigma2 )

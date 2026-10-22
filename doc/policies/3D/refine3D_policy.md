@@ -45,7 +45,11 @@ matching, and partial reconstruction writing. Volume-domain work stays in
 
 Shared-memory and distributed `refine3D` must preserve the same scientific
 workflow and artifact contracts. Only toolbox lifetime, process launch, and
-scheduling differ.
+scheduling differ. Three rules belong to one strategy: only the distributed
+strategy accepts convergence from the third iteration of the call on
+(`which_iter >= startit + 2`) and schedules the final `combine_eo` iteration
+(section 10); only the shared-memory run finalizer removes the `os_out`
+entries of empty states (section 11.2).
 
 ## 2. Entry Points and Execution Mode
 
@@ -92,7 +96,9 @@ partial, which is a zero contribution.
 ## 3. Ownership
 
 `simple_commanders_refine3D.f90` owns the base command entry point and the
-shared iteration loop. It should stay thin.
+shared iteration loop. It should stay thin. The module also hosts the commanders
+of `refine3D_auto`, `refine3D_states`, `refine3D_states_cavgs`,
+`classify3D_refs` and `bootstrap_rec3D`.
 
 `simple_refine3D_strategy.f90` owns:
 
@@ -130,11 +136,13 @@ These are strategy routines on a caller's `(params, build)` with explicit
 arguments for what differs from the caller's own settings (the thread count,
 `which_iter`, a write flag). The commanders `prob_align`, `prob_align_neigh`,
 `volassemble` and `commit_sigma2` are thin wrappers: their `execute(cline)`
-builds parameters and a builder from the command line and calls the routine;
-shared-memory `refine3D`, `reconstruct3D` and the other command-line callers
-use them. A routine that runs on the caller's parameters does not run
-`params%new`: it sets the thread count it needs and the caller restores its
-own afterwards, and it draws from the random generator without a reseed
+builds parameters and a builder from the command line and calls the routine.
+Shared-memory `refine3D` calls the `prob_align`, `prob_align_neigh` and
+`commit_sigma2` commanders; it and `reconstruct3D` call `run_volassemble`, the
+routine's own entry that builds from the command line. The other command-line
+callers use the commanders. A routine that runs on the caller's parameters does
+not run `params%new`: it sets the thread count it needs and the caller restores
+its own afterwards, and it draws from the random generator without a reseed
 (ruling of 2026-10-20).
 
 `simple_vol_pproc_policy.f90` owns one check: whether a state's density-mask
@@ -154,9 +162,11 @@ the iteration command line has settled. Persist any initial project mutations,
 such as random orientations, sampling-counter cleanup, or state initialization,
 before the next rebuild reads the project.
 
-Distributed `refine3D` keeps prototype command lines for worker, probability,
-sigma, assembly, and postprocess steps. These command lines are execution
-templates, not independent workflow policies.
+Distributed `refine3D` keeps prototype command lines for the workers, the start
+reconstruction, postprocessing and the thread count of the sigma commit; the
+probability and assembly command lines are made each iteration from the
+master's own. These command lines are execution templates, not independent
+workflow policies.
 
 The distributed master is the one owner of its project. It materialises the
 reprojection model on its own builder
@@ -177,15 +187,18 @@ The master writes the particle field once before the workers start (with
 the alignment's sample, or as the model left it), once more after the
 merge only when a polish pass follows (its workers read the merged field),
 and once at the end of the iteration; `merge_algndocs(..., write=.false.)`
-merges the workers' documents in memory, and assembly and the PCG master do
-not write the project on this path. The `out` segment is written once,
+merges the workers' documents in memory, and gridding assembly does not write
+the project on this path. The PCG master (`rec_backend=pcg`) writes the
+particle field once, at the end of its call. The `out` segment is written once,
 before postprocessing, which reads it from the file. The final full write
 is unchanged. Workers read only the file; the master reads only what the
 workers write.
 
 Fresh-start checks that decide whether to consume project-carried matching
 metadata must use the stage interval: `which_iter <= startit` with
-`continue != yes` is fresh, even when `startit` is greater than one.
+`continue != yes` is fresh, even when `startit` is greater than one. A fresh
+start still consumes the project's matching low-pass when the `_nu_filt`
+references it was derived from are on disk (the `refine3D_auto` startup).
 
 Before a matcher iteration writes partition-local Cartesian partials, stale
 partial reconstruction files for the active states and partitions must be
@@ -201,7 +214,8 @@ When orientations are absent, `refine3D` randomizes 3D orientations. When
 projection indices are absent, distributed initialization sets them from the
 Euler sampling.
 
-For multi-state distributed startup:
+For multi-state startup (the distributed master always, shared memory when the
+field holds at most one state bin):
 
 - existing state assignments must match the requested `nstates`
 - fresh state labels are randomized uniformly, whether complete starting
@@ -272,7 +286,8 @@ an empty directory, and every final reconstruction at a new sampling. Since
   `bootstrap_rec3D` (module `simple_commanders_refine3D`) owns this whole
   sequence: seed, bootstrap map, residual pass, commit, final map; the shared
   ending `calc_final_rec` (module `simple_final_rec`, 2026-09-12), which
-  closes solve3D, refine3D_auto, refine3D_states and classify3D_refs,
+  closes solve3D, refine3D_auto, refine3D_states, refine3D_states_cavgs and
+  classify3D_refs,
   calls it and carries no copy of the sequence. It runs standalone on any project with 3D orientations
   and is the test entry point for the final-reconstruction stage. The
   bootstrap map only serves as the residual reference, so it is always a
@@ -325,21 +340,22 @@ probabilistic pre-alignment or matcher work starts. Reference preparation:
 3. determines the active high-pass/low-pass shell range
 4. writes even/odd PFTC reference sections for the matcher
 
-When `automsk=yes`, matching references are NOT multiplied by any envelope
-(2026-09-02): the NU-evidence envelope acts only through the NU filter field,
-whose background (the envelope complement) takes the coarsest bank candidate,
-so the excluded density reaches the reference heavily low-pass filtered
-rather than removed. The matcher applies the spherical soft reference mask
-only; there is no separate `envref` control. `automsk=yes` also implies
-`envfsc=yes` (policy 2026-09-09), so FSC evaluation follows the density
+With `automsk=yes` or `nu`, the matching references carry the selected envelope
+after filtering (`automasking_policy.md`, "Reconstruction and reference use").
+NU assembly multiplies the `_nu_filt` references by it: the density envelope
+under `yes`; under `nu` the NU-evidence envelope when valid, otherwise the
+density envelope. Outside it the NU filter field takes the coarsest bank
+candidate. The matcher multiplies references that are not NU products by the
+density envelope under `yes`, and under `nu` while no `_nu_filt` references
+exist by the lagged NU envelope with density fallback. `automsk=yes` also
+implies `envfsc=yes` (policy 2026-09-09), so FSC evaluation follows the density
 envelope (post hoc with solvent correction on gridding; inside the estimator on
 PCG, reported as `>>> FSC MODE`). Particles and matching-bandwidth selection
 are unchanged.
 
-This path is valid only with `filt_mode=nonuniform|nonuniform_lpset`.
-`automsk=yes` with `none`, `uniform`, or `fsc` is rejected during parameter
-validation. `automsk=tight` is also rejected in NU refinement because the
-NU-evidence envelope has no Otsu tightness mode.
+`automsk=nu` requires `filt_mode=nonuniform|nonuniform_lpset`; `automsk=yes` is
+accepted with any `filt_mode`. `automsk=tight` is rejected together with NU
+filtering because the NU-evidence envelope has no Otsu tightness mode.
 
 The lifecycle is lag-by-one: volume assembly from iteration N writes the NU
 envelope used when iteration N+1 materializes its reprojection model. A missing
@@ -666,18 +682,35 @@ Ownership:
   record of the solves, per thread for its bench report (section 11.1).
 - The iteration strategy materializes the prepared real-space reference
   volumes once per iteration (`cart_refvols_{even,odd}.bin`, section 6 of this
-  policy applies unchanged up to the polar projection); every matcher reads
-  them, pads them by 2 and gathers central sections on the fly with the
-  normalized KB stencil of the polar branch.
+  policy applies unchanged up to the polar projection). Every matcher reads
+  them, pads them by 2 and keeps the packed padded transform per state and
+  half, scaled by `padf**3` and weighted per axis by the KB stencil's response
+  over the B-spline stencil's (`ref_weight`).
+- Central sections are gathered on the fly with the separable quadratic
+  B-spline on three taps per axis, continuous in value and derivative. On grid
+  it reproduces the polar branch's KB model (KB interpolation policy,
+  section 6a).
 - Particle preparation follows `prepimg4align` up to the soft mask (centred
   on the stored shift, phase-flipped for `CTFFLAG_YES`) and multiplies by the
-  stencil's taper (`prepimg4align_cart`); `build_batch_particles3D` fills the
-  Cartesian slots of the batch from the same read.
+  KB stencil's taper (`prepimg4align_cart`), so the two representations share
+  one sigma2. `build_batch_particles3D` fills the Cartesian slots of the batch
+  from the same read.
+
+Evaluation: one pass (`pose_normal_terms`) returns the objective, the
+five-vector gradient and the 5x5 Gauss-Newton matrix, and under `euclid` the
+whitened `|r|^2` per shell. It runs over the Friedel half plane of the
+particle's band: for a real image every summand is Hermitian between `(h,k)`
+and `(-h,-k)`, so the half-plane sums are doubled and DC is added once. The
+shift phase comes from two 1-D tables per pass. The full-disk kernels are
+kept (`*_full_disk`) as the tests' reference.
 
 Objectives follow `objfun`: `cc` is `1 - cc` with uniform per-pixel weight and
 no sigma2 (a Cartesian `cc` pass reads, requires and writes none); `euclid` is
 the polar loss normalized by the particle's whitened power, stored as
-`exp(-L)`, and the sigma owner records the residual at the committed pose.
+`exp(-L)`. Its sigma2 contribution is the per-shell residual of the evaluation
+that chose the committed pose (the seed, or the last accepted step), which the
+transaction keeps (`get_shell_residual`) and the sigma owner unwhitens
+(`calc_sigma2`); it costs no pass of its own.
 The bounds are `trs` (total shift from the stored shift) and `athres_cont`
 (default 10 degrees: the halfwidth of the total rotation from the stored pose,
 the capture range for wrongly assigned orientations); `athres` and
@@ -687,6 +720,29 @@ a shift-only stage before it, which the internal `cont_route=shift_then_joint`
 restores for the single-pass capture tests (E25, N20 a-c); repeated passes
 supply what one joint pass misses. `inpl_cont` is overridden to `no` (the
 in-plane angle is part of the solve).
+
+Steps and stopping (`cartft_pose_opt`):
+
+- **Curvature scale.** Both objectives' Gauss-Newton matrices are multiplied
+  by the regression slope of the data on the model, weighted by `|f|^2` as the
+  matrices are and clamped to [0.05, 20] (`curvature_scale`). For `cc` the
+  slope stands in for the correlation, by which the plain `J^T J` of a
+  normalized objective overstates the curvature. For `euclid` it corrects the
+  over-step of a model brighter than the data.
+- **Stopping.** A stage stops:
+  - when an accepted step reduces the objective by less than `1e-6` of it;
+  - when a proposal predicts less than that (it is not evaluated);
+  - after 8 consecutive rejections;
+  - at 40 iterations.
+- **Passes per solve.** The joint stage reuses the seed's evaluation and
+  returns the objective at its endpoint, so a solve with N trial evaluations
+  makes N+1 passes.
+
+The rationale and the measured gains are in
+`doc/implementation_notes/completed/cont_lm_acceleration.md`. The work
+counters are the `CONTINUOUS POSE WORK` section of the bench report (section
+11.1); `test=cont_refine3D_bench` times the solves on simulated 1JYX particles
+(test environment policy).
 
 Scores: a Cartesian pass writes `corr_cart` (slot 51 of the particle record),
 the improved flag (slot 52) and the transaction status (`pose_cont_status`,
@@ -897,8 +953,7 @@ the strategy dispatches `volassemble`.
   second spherical mask is applied anywhere in the FSC evaluation. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and is separate from
   the `amsklp` NU-evidence smoothing scale
 - writes `automask3D_stateNN.mrc` when `envfsc=yes`; the same density envelope
-  is available to compatible non-PCG final postprocessing, but is never
-  multiplied into a matching reference
+  is available to compatible non-PCG final postprocessing
 - restores merged state volumes
 - derives the NU-evidence envelope from the completed accepted NU bank before
   unary storage is released
@@ -911,10 +966,10 @@ the strategy dispatches `volassemble`.
   matcher before use) and, when NU filtering is active, the same NU-estimated
   limit in `lp_est`. The convergence readout reports `RESOLUTION @ FSC=0.143`,
   `RESOLUTION @ FSC=0.5`, the band this iteration actually matched at
-  (`MATCHING LOW-PASS LIMIT (THIS ITERATION)`, from `params%lp`/`kfromto(2)`
+  (`MATCHING  LOW-PASS LIMIT (THIS ITERATION)`, from `params%lp`/`kfromto(2)`
   as fixed by `set_bp_range3D` before the search -- an explicit `lp` or the
-  previous handoff) and the handoff for the next iteration (`NU HANDOFF
-  LOW-PASS (NEXT)`, the project `lp` field assembly writes after the search;
+  previous handoff) and the handoff for the next iteration (`NU HANDOFF LP
+  (NEXT)`, the project `lp` field assembly writes after the search;
   2026-09-14, after an explicit `lp=3.6` run reported the handoff as the
   matching band), per state when `nstates > 1`, and
   persists them as `RESOLUTION`, `RESOLUTION_FSC05`, `LP_MATCHING` (the
@@ -952,9 +1007,9 @@ diagnostics are owned by
 records only the refine3D-side integration contract:
 
 - **Solver controls are distinct from refinement controls.** `maxits` counts
-  refinement iterations; the PCG solve budget is `maxits_pcg` (default 2,
-  capped at 8 in production) and `rtol` is PCG-specific (`rtol <= 0` demands
-  exactly `maxits_pcg` iterations).
+  refinement iterations; the PCG solve budget is `maxits_pcg` (default 2;
+  more than 8 warns, more than 100 is refused) and `rtol` is PCG-specific
+  (`rtol <= 0` demands exactly `maxits_pcg` iterations).
 - **The backend seam is dense even/odd half maps.** `volassemble` dispatches
   to a backend-specific state restorer: gridding reduces `(cmat,rho)` and
   sampling-density-corrects; PCG reduces raw `(B,D)`, finalizes the kernel
@@ -999,13 +1054,16 @@ records only the refine3D-side integration contract:
 
 ## 10. Trailing and Combined Even/Odd
 
-Trailing reconstruction blends even with previous even and odd with previous
-odd. It runs before NU-evidence envelope generation and derived reference
-filtering.
+Trailing reconstruction blends the even accumulators (sums and sampling
+density) with the previous even chain and the odd with the previous odd chain,
+in the accumulator domain (importance-sampling policy, section 7); finished
+half maps are never blended. It runs before restoration, NU-evidence envelope
+generation and derived reference filtering.
 
-In LP-set mode, if trailing is active, assembly trails the even and odd
-half-volumes first and then merges the trailed halves. Assembly must not use
-low-resolution even/odd docking insertion for LP-set outputs.
+In LP-set mode, if trailing is active, assembly blends the even and odd
+accumulators first and restores the merged volume from the blended sums.
+Assembly must not use low-resolution even/odd docking insertion for LP-set
+outputs.
 
 When `combine_eo=yes`, distributed `refine3D` schedules one additional final
 iteration after convergence or run-length termination. That final iteration:
@@ -1055,7 +1113,8 @@ the load balance), and `RELATIVE TIMINGS (%)` where a
 writer reports them. A Cartesian pass (`refine=cont`, the polish) adds
 `CONTINUOUS POSE WORK` to its `REFINE3D` record: the solves by `CARTFT_*`
 status, LM iterations, trial evaluations, accepted steps, bound hits,
-calculator passes (the sigma2 residual included), pixel-evaluations (passes
+calculator passes (the sigma2 residual is the committed evaluation's, with no
+pass of its own), pixel-evaluations (passes
 times the pixels of the particle's shells in the full disk), the solves that
 reached the iteration cap, a histogram of actual over predicted reduction at
 accepted steps, and the search
@@ -1134,14 +1193,16 @@ On finalization:
 - `endit` is written to the command line
 - `startit` is removed from the command line
 - active state volumes and FSCs are registered in `os_out`
-- empty states are removed from `os_out`; under per-state M-estimation a state
-  is empty when its weights carry no applied mass
+- empty states are removed from `os_out` by the shared-memory finalizer; the
+  distributed run leaves the entries of such a state as its iterations
+  registered them. Under per-state M-estimation a state is empty when its
+  weights carry no applied mass
 - `cls3D` distributed runs map class-orientation output back to particles
 - `JOB_FINISHED` is touched by the shared-memory path
 
 The original-sampling final reconstruction is distinct from an ordinary
-refinement iteration. On the PCG backend, both solve3D and refine3D_auto
-apply the shared minimum five-iteration budget to this cold solve. An explicit
+refinement iteration. On the PCG backend, every `calc_final_rec` caller
+applies the shared minimum five-iteration budget to this cold solve. An explicit
 positive residual tolerance may still stop convergence earlier. Final
 automatic sharpening follows the isotropic postprocess protocol
 (2026-09-21, the postprocess_nu v2 recipe with one cutoff): the cutoff is

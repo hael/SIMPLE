@@ -3,8 +3,8 @@
 How the stream preprocesses movies as they arrive, for readers who know the technique but not the
 code. p01 watches the microscope's movie folder, motion-corrects and CTF-estimates every new movie
 in batches, picks the first ~1,000 micrographs by segmentation, rejects micrographs that fail the
-quality thresholds, and hands finished batches to the later stages. This page summarises the code
-as of 14 October 2026; the restart rules are in `restart_policy.md`.
+quality thresholds, and hands finished batches to the later stages. This page summarises the code;
+the restart rules are in `restart_policy.md`.
 
 ```mermaid
 flowchart TD

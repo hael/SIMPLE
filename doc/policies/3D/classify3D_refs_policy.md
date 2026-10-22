@@ -13,7 +13,7 @@ Related policies:
 
 Primary implementation:
 
-- `src/main/ui/simple/simple_ui_refine3D.f90`
+- `src/main/ui/simple/simple_ui_heterogeneity.f90`
 - `src/main/exec/simple_exec_refine3D.f90`
 - `src/main/commanders/simple/simple_commanders_refine3D.f90`
 - `src/main/simple_external_reference_pose_initialization.f90`
@@ -103,8 +103,9 @@ the capped cohort described above.
 ## 4. Euclidean Classification
 
 After the checkpoint, the wrapper switches to `objfun=euclid` and uses full
-state-pooled probabilistic matching. The effective internal policy is
-`refine=prob_neigh`, `prob_neigh_mode=state`: every state is evaluated over the
+state-pooled probabilistic matching. The default internal policy is
+`refine=prob_neigh`, `prob_neigh_mode=state` (`refine=prob|shc` and
+`prob_neigh_mode=geom` are accepted overrides): every state is evaluated over the
 same pooled candidate geometry and the committed update remains a hard state,
 pose, and shift assignment.
 
@@ -173,5 +174,6 @@ User-side validation must verify:
 - native-sampling maps, half maps, FSCs, and diagnostic products;
 - shared-memory and distributed parity.
 
-Compilation and runtime tests are performed by the user. No Linux or BOX
-result is recorded as passing without observed output.
+No registered test (`simple_test_registry.f90`) runs this workflow; only the UI
+visibility test names it. No Linux or BOX result is recorded as passing without
+observed output.

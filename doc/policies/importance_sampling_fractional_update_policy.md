@@ -19,8 +19,8 @@ Downstream restoration and reconstruction consume that recorded state. They must
 not infer participation from the nominal command-line `update_frac` alone.
 
 Probabilistic pre-alignment is a sample-once-and-reuse path: the pre-alignment
-commander chooses the outer subset, probability-table workers reuse it, and the
-matcher reuses it again for the hard particle update.
+routine (`prob_align_exec`) chooses the outer subset, probability-table workers
+reuse it, and the matcher reuses it again for the hard particle update.
 
 ## 2. Ownership
 
@@ -174,8 +174,9 @@ Current stage policy:
 
 - stage 1 uses the sampled-update machinery when needed, but fractional
   class-average carry-over is disabled
-- while `startit == 1`, `sample_ptcls4update2D` keeps the initial subset sticky
-  by reproducing it after the first random draw
+- while `startit == 1` and without `fillin`, `sample_ptcls4update2D` keeps the
+  initial subset sticky by reproducing it after the first random draw; a fresh
+  start with `fillin=yes` samples by update count
 - later non-probabilistic iterations use `sample4update_cnt`, which is
   stochastic but biased toward particles with lower `updatecnt`
 - probabilistic stages use `prob_align2D` to sample once, then `prob_tab2D` and
@@ -214,11 +215,12 @@ the master runs that iteration as a full update.
 The 3D controller derives the solve3D outer update policy from `nsample`.
 The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
 
-Current high-level solve3D stage policy:
+Current high-level solve3D stage policy (single state; the schedule is in
+`3D/solve3D_policy.md`):
 
 - stages 1 and 2 use `prob_neigh` with `prob_neigh_mode=shc`
 - stages 3-5 use `prob`
-- final neighborhood stages use `prob_neigh`
+- final neighborhood stages (6-8) use `prob_neigh`
 - stage 1 uses `nspace=500`; stages 2-4 use `nspace=1000`
 - every stage gets its low-pass and crop information independently from the
   normal schedule
@@ -408,9 +410,8 @@ particle set is already fixed before they run.
 
 ## 7. Restoration and Assembly
 
-Both the 2D and the 3D blends follow the population rule (class-average state
-note, Section 4.1). Each stored set records `M(g)`, the population its sums
-represent. With `N(g)` and `n(g)` from the merged project, `f = n/N`, and `u = f`
+Both the 2D and the 3D blends follow the population rule below. Each stored set records `M(g)`, the
+population its sums represent. With `N(g)` and `n(g)` from the merged project, `f = n/N`, and `u = f`
 or an applied override:
 
 - current contribution scaled by `s = u / f` (1 by default)

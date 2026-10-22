@@ -1,7 +1,7 @@
 # Reference-free Motion Correction Policy
 
-Status — 2026-10-09: updated. This is a working policy, not a declaration
-that the implementation and all integration checks are complete.
+This is a working policy, not a declaration that the implementation and all
+integration checks are complete.
 
 ## Purpose and scope
 
@@ -159,7 +159,8 @@ in one output path. Patch alignment receives the global frame weights.
 
 The working alignment reference is the central frame,
 `nint(0.5 * nframes)`. `mcconvention=first` or `relion` re-references the applied
-global shifts to frame one.
+global shifts to frame one; the other accepted values (`simple`, `unblur`,
+`motioncorr`, `central`, `cryosparc`, `cs`) keep the central frame.
 
 ### Residual local motion
 
@@ -278,7 +279,8 @@ the normalization or apply dose weighting twice.
 
 `image%apply_dose_weighing` uses frequency-dependent geometric weights with
 squared weights summing to one over the selected frames. At zero frequency,
-each dose weight is `1 / sqrt(nframes)` for a full-movie selection. These weights
+each dose weight is `1 / sqrt(nframes)` for a full-movie selection. The per-frame
+dose behind the weights is divided by 0.8 at 200 kV and by 0.64 at 100 kV. These weights
 do not replace the scalar alignment weights: apply both exactly once when
 forming `intg`. Do not add a frame-count multiplier to match the appearance or
 mean intensity of another output.
@@ -297,6 +299,8 @@ For the ordinary movie workflow, publish the integrated micrograph (`intg`),
 CTF micrograph (`forctf`), thumbnail (`thumb`), STAR document (`mc_starfile`), and
 binary motion model (`mcmodel`, `.mmodel`). Publish patch-fit diagnostics
 (`gofx`, `gofy` and the trajectory plot) when patch correction was attempted.
+`forctf` is transient: `ctf_estimate` and `preprocess` delete the file and its
+project entry once the CTF is fitted.
 Update sampling and dimensions to describe the output images, while preserving
 the source movie and model metadata needed to interpret them. Nano time-series
 output exceptions are outside this policy's ordinary movie contract.
@@ -402,6 +406,9 @@ new implementation pass.
 - [Patched alignment and deformation](../../src/main/motion/simple_motion_patched.f90)
 - [Shared motion utilities](../../src/main/motion/simple_motion_correct_utils.f90)
 - [Motion model persistence](../../src/main/motion/simple_motion_model.f90)
+- [Particle extraction from motion models](../../src/main/preprocess/simple_particle_extractor.f90)
+- [Motion model refinement execution](../../src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90)
+- [Streaming gain resolution](../../src/main/stream/stages/simple_stream_stage_preprocess.f90)
 - [Motion correction execution](../../src/main/strategies/parallelization/simple_motion_correct_strategy.f90)
 - [Preprocessing execution](../../src/main/strategies/parallelization/simple_preprocess_strategy.f90)
 - [Image dose weighting](../../src/main/image/simple_image_ops.f90)

@@ -59,9 +59,15 @@ When importing into a project that already contains movies or micrographs,
 the first existing micrograph and abort if `smpd`, `kv`, `cs`, `fraca`, CTF
 status differ.
 
-When importing integrated micrographs with `deftab`, per-micrograph defocus can
-come from the table, but `smpd`, `kv`, `cs`, and `fraca` still come from the
-single command-line CTF bundle and are written onto every micrograph row.
+When importing integrated micrographs with `deftab`, per-micrograph defocus,
+astigmatism angle, and phase shift can come from the table, but `smpd`, `kv`,
+`cs`, and `fraca` still come from the single command-line CTF bundle and are
+written onto every micrograph row.
+
+After `motion_correct`, the `smpd` of a micrograph row is the sampling of the
+integrated micrograph, which differs from the movie sampling when `scale_movies`
+or `eer_upsampling` changes it; the import check above compares against that
+value.
 
 Therefore direct mixed-microscope movie or micrograph import into one project is
 not currently supported by `import_movies`.
@@ -98,8 +104,10 @@ however, prevents creating such mixed rows in a single project.
 
 Particle extraction reads CTF values from each micrograph row and passes them to
 `sp_project%add_stk`, which writes `smpd`, `kv`, `cs`, `fraca`, CTF status, and
-the numerical phase onto the generated stack and particle rows. It also
-propagates `ogid` from micrographs to particles when present.
+the numerical phase onto the generated stack and particle rows. In a distributed
+run the workers do this in their part projects and the master builds the project's
+stack rows from theirs with `sp_project%add_stktab`. Extraction propagates `ogid`
+from micrographs to particles when present.
 
 The current extractor resets `ctfparms%smpd` to the run-level `params%smpd`
 before adding the stack. That is consistent with the current same-sampling
@@ -136,9 +144,10 @@ information, optional XML beam shifts, `maxpop`, and `optics_offset`. It then
 propagates `ogid` to micrographs, stacks, and particles and writes optics rows.
 
 Current optics-group assignment does not split groups by `kv`, `cs`, `fraca`,
-or `smpd`. The optics row inherits CTF-model values from a
-representative image in the group. This is adequate for same-microscope
-beam-tilt grouping, but it is not a safe policy for mixed microscopes or mixed
+or `smpd`. The batch `assign_optics_groups` program takes the CTF-model values of
+an optics row from the first image of the group; the stream's optics stage takes
+them from the first accepted micrograph of the project. This is adequate for
+same-microscope beam-tilt grouping, but it is not a safe policy for mixed microscopes or mixed
 CTF-model settings unless the input grouping already prevents those settings
 from being mixed.
 

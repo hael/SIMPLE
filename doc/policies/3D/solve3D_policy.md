@@ -62,7 +62,8 @@ for `solve3D`.
 The stage controller in `simple_solve3D_controller.f90` emits a concrete
 `refine3D` command line for each stage. The full particle workflow has eight
 stages. Independent multi-state startup defaults to five stages, so it stops
-after its first `prob_neigh` stage and before the NU-filtering stages.
+after its `prob` stages 3-5, before the first `prob_neigh` stage (6); stage 5 is
+also its first NU-filtered stage.
 
 Stage policy includes:
 
@@ -99,7 +100,7 @@ Stage policy includes:
 - staged automasking only from `AUTOMSK_STAGE`
 - an explicitly requested PCG solvent prior from `PCG_SOLVENT_START_STAGE`
   (stage 8, the final stage), so the NU label field the prior'd pair receives
-  has settled over stages 6-7 without the prior
+  has settled over stages 5-7 without the prior
 
 The downscaled particle cache is a 2D-only feature: `solve3D` rejects
 `cache=yes`, and each stage uses its own crop from the low-pass/downscaling
@@ -162,7 +163,8 @@ selection is unchanged: `ptcl3D%state` is reset from the `ptcl2D` state flags
 greedy draw and every stage sample the global lowest `updatecnt` tiers
 (`sample4update_cnt`), as every `balance=none` stage does. The ladder cannot
 be planned from class FRCs: `lpstart`/`lpstop` are taken from the command line
-and otherwise from `mskdiam` (`mskdiam2lplimits`), as on the input-volume
+and otherwise `lpstart` from `mskdiam` (`mskdiam2lplimits`) and `lpstop` is the
+ladder bound `LPSTOP_BOUNDS(1)`, 4.5 A, as on the input-volume
 route; an add-on takes its ladder from the frozen run's manifest regardless.
 Input volumes on such a project no longer need the random classes the
 `class` default fabricates.
@@ -179,11 +181,11 @@ the project owns a compatible committed state and otherwise seeds canonical
 particle spectra from image power with `calc_pspec`. The starting reconstruction
 then runs as planned, and the stage's first euclid iteration replaces the seed
 with residual spectra in the next canonical transaction.
-The final reconstruction at original sampling is one program call,
-`bootstrap_rec3D`, which owns the complete sequence: the same image-power
-seed, a euclid ML bootstrap map on it, one residual sigma pass
-(`refine=sigma`) against that map, canonical commit of the residual generation,
-and the shipped euclid ML reconstruction on it. Because the
+When the final reconstruction at original sampling must rebuild its sigmas
+(section 9) it is one program call, `bootstrap_rec3D`, which owns the complete
+sequence: the same image-power seed, a euclid ML bootstrap map on it, one
+residual sigma pass (`refine=sigma`) against that map, canonical commit of the
+residual generation, and the shipped euclid ML reconstruction on it. Because the
 program takes any project with 3D orientations, it is also the standalone
 test for this stage (`simple_exec prg=bootstrap_rec3D projfile=... pgrp=...
 mskdiam=... nparts=... nthr=... rec_backend=...`), so failures in the final
@@ -207,9 +209,11 @@ every run seeds and owns its sigmas in its own directory.
 are derived from class FRCs by default, with `lpstart`/`lpstop` overrides and a
 `force_lp_range=yes` path that uses the requested range directly.
 
-Stage 1 of `solve3D` never runs with a low-pass limit finer than 20 A.
-`lpstages` and `lpstages_fast` apply this floor before generating the remaining
-low-pass and crop ladder, preserving gradual frequency marching.
+Where the ladder is planned by `lpstages` or `lpstages_fast`, stage 1 of
+`solve3D` never runs with a low-pass limit finer than 20 A: both apply this
+floor before generating the remaining low-pass and crop ladder, preserving
+gradual frequency marching. `force_lp_range=yes` and the routes planned by
+`lpstages_setlims` (input volumes, no 2D solution) take `lpstart` as given.
 
 The single-state external-volume route (`vol1`, `nstates=1`) starts at
 `VOL_SUPPLIED_STAGE`, the stage after the no-axis-search block
@@ -253,7 +257,9 @@ searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` can be omitted: with
 therefore implies `l_srch4symaxis`. Omitted
 stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
 the add-on manifest already treat as "not run". The one-rung advance above
-therefore applies only to the three stages that cannot be omitted. Single-state
+therefore applies to the stages that cannot be omitted: the entry stage when it
+lies past stage 2 and, when an axis is searched, `SYMSRCH_STAGE`; the last stage
+has no next rung and is never advanced. Single-state
 runs only since 2026-10-21: a multi-state run omits no stage (section 6).
 
 **Stage iteration budget (`MAXITS`): measured slack, not yet reallocated.**
@@ -306,8 +312,9 @@ cut predicted the outcome. The six restarts that left stage 5 at 7.573 A
 finished at 4.03-4.14, the two that left at 7.762 A at 3.981 and 4.032, and
 the two that left coarsest at 8.171 A gave the two worst maps, 4.140 and the
 run's only failure at 5.353. A stage still gaining resolution is productive
-whatever the next rung's limit says. Emitted for the same
-stages the shift is allowed for, and it only ever adds convergence, so
+whatever the next rung's limit says. Emitted for the stages past stage 2 other
+than the entry stage, the last stage and, when an axis is searched,
+`SYMSRCH_STAGE`, and it only ever adds convergence, so
 `minits` and the Cartesian rule still hold. Single-state runs only since
 2026-10-21: the controller emits no `lpexit` for a multi-state run (section 6).
 
@@ -582,10 +589,11 @@ early FSC/PCG consumers use the previous iteration's evidence artifact.
 `ENVFSC_STAGE`, forces it off for the cavgs route, and forwards the requested
 or implied value at and after that boundary. With `envfsc=yes`, volume
 assembly generates a density envelope from the current merged half maps for
-phase-randomized FSC correction and cFAR on gridding, and the PCG backend uses
-the same envelope as the support of both solves, using `envmsklp` as its
-smoothing low-pass. The controller forwards `envmsklp` to staged and final
-reconstruction commands; its default is `ENVMSKLP_DEFAULT` (20 A). The
+phase-randomized FSC correction and cFAR on gridding (PCG applies no phase
+randomization), using `envmsklp` as its smoothing low-pass. With an active
+`automsk` the PCG backend uses the same envelope as the support of both solves;
+with `automsk=no` it stays on the `mskdiam` sphere whatever `envfsc` says. The
+controller forwards `envmsklp` to staged and final reconstruction commands; its default is `ENVMSKLP_DEFAULT` (20 A). The
 density-mask dilation is no longer injected as a layer count: every program
 applies the shared physical minimum `ENVMSKWIDTH_A_MIN` (7.5 A) at the
 sampling the envelope is built at, so the envelope keeps the same physical
@@ -652,9 +660,11 @@ Before a multi-state final reconstruction, a greedy missing-update pass
 The final reconstruction inherits only the scientific reconstruction policy it
 needs. It preserves the parent `envfsc` request so the original-sampling half
 maps use the same radial FSC/cFAR masking policy, but it does not inherit staged
-search, matching-reference automasking, or reference-filter controls such as
-`refine`, `lp`, `automsk`, or `gauref`. There is no backend exception: the
-final reconstruction runs with `filt_mode=none` on both backends.
+search or reference-filter controls such as `refine`, `lp` or `gauref`. It
+inherits `automsk` from the last stage, so the shipped map is estimated on the
+same density or NU support as the refinement iterations. There is no backend
+exception: the final reconstruction runs with `filt_mode=none` on both
+backends, except that `automsk=nu` keeps the caller's NU `filt_mode`.
 
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
 uses the committed sigma2 store of the workflow's particles: one noise spectrum
@@ -665,8 +675,8 @@ On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
 replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
 controllers were removed on 2026-09-06.
 When `pcg_solvent=yes`, the staged controller withholds the soft solvent prior
-from stages 3-7 and enables it only in stage 8. A workflow that stops before
-stage 8 does not use the prior.
+from every stage before stage 8 and enables it only in stage 8. A workflow
+that stops before stage 8 does not use the prior.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged
@@ -713,10 +723,12 @@ short:
   particles per inherited state (a warning below 5 % of the frozen population).
 - The execution-environment keys pass through, the stream's persistent-worker
   keys (`worker_server`, `worker_priority`) included.
-- The run enters at stage 3 of the base run's planned ladder with
-  `center=no` and `overlap` 0.95 by default; the stage limits follow the rule
-  above (FSC=0.5 promotion from the union FSC, the NU handoff in the NU
-  stages), and each stage boundary logs them next to the base run's.
+- The run searches the cohort in the last stage of the base run's planned
+  ladder (read from its manifest), after one registration pass, with
+  `center=no` and `overlap` 0.95 by default (it applies when that stage is
+  stage 3); the stage limits follow the rule above (FSC=0.5 promotion from the
+  union FSC, the NU handoff in the NU stages), and the stage logs them next to
+  the base run's.
 - The run ends with a validation report against the base solution
   (`solve3D_addon_report.txt` in the run directory, and the log): per state
   the FSC verdict (improved or regressed beyond one FSC=0.143 shell, else
@@ -724,11 +736,12 @@ short:
   resolution (docked below 0.9), the cohort-only map against the base map
   with `addon_diag=yes`, and both runs' stage limits. A regression is warned
   about; the result is published all the same.
-- The frozen rows are restored before the final reconstruction and the
-  cohort-only sigma2 registration is dropped, so the final reconstruction
-  bootstraps the union's sigma2 state over every particle exactly as
-  `bootstrap_rec3D` does, and ships the union map on it.
-- `mkdir=yes` by default; `mkdir=no` is for NICE and the stream. When the run
+- The final reconstruction is incremental (`calc_final_rec_addon`): it reads
+  the cohort's particles and the carried frozen sums, never the frozen
+  particles, seeds no sigma from image power, commits the cohort's new sigmas
+  in a residual pass and ships the union map with the frozen rows restored
+  (solve3D_addon_policy.md section 8).
+- `mkdir=yes` by default; `mkdir=no` is for NICE. When the run
   has completed, the finished project (every particle posed, the union's
   sigma2 state) replaces the current project file; the frozen project is never
   written. The add-on's own manifest is eligible: the output is the frozen

@@ -33,6 +33,11 @@ Keep commanders relatively thin: orchestration here, heavy algorithmic work in `
   entry, and the commander calls `run_<x>` (`commander_volassemble`,
   `commander_prob_align`(`_neigh`), `commander_prob_align2D`,
   `commander_cavgassemble`, `commander_commit_sigma2`).
+- A worker step's frame (params and builder set-up, reproduction of the master's
+  sample with `sample4update_reprod`, the empty-partition contribution, batching,
+  completion) is written once; a new variant supplies only what differs. The
+  three probability-table workers in `simple_commanders_prob.f90` each carry their
+  own copy today; do not add a fourth. See the layering policy, section 3.
 - `refine2D` and `refine3D` commanders drive a strategy object
   (`create_refine2D_strategy`, `create_refine3D_strategy`); the `*_distr_worker`
   types are the per-partition workers (`simple_private_exec prg=refine2D|refine3D`).

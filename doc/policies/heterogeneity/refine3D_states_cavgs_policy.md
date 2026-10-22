@@ -54,7 +54,8 @@ The input is a project after `cls_expansion` that also holds a consensus map
 - `mskdiam` is given: it is the support of the PCG solves;
 - at least 100 sub-averages are selected in `cls2D`;
 - for the `flex_pca` initialization (section 6): `nstates >= 3` and flex's
-  population floor fits, `nstates * max(1, nint(min_state_frac * 2N)) <= 2N`;
+  population floor fits, `nstates * max(1, nint(min_state_frac * R)) <= R`, `R`
+  the active rows (`2N` less the halves `cls2D` flags with state 0);
 - with populated `cls3D` labels (section 6), an explicit `nstates` equals
   their number.
 
@@ -228,10 +229,10 @@ User-side validation must cover:
 - particle `refine3D_states` starting on the output from the handed-back labels;
 - state recovery against the planted truth on the phantom, with both backends.
 
-The automated gate is a stage of the high-level `flex_pca_blobs` test:
+The automated gate is a stage of the registered high-level test `flex_pca_blobs`
+(`simple_test_exec test=flex_pca_blobs`):
 `cls_expansion` and this program on a three-state phantom of 3 600 particles
 in 60 exact views, checked against the planted states and directions
 (`simple_commanders_test_highlevel_flex.f90`).
 
-Compilation and runtime tests are performed by the user. No Linux or BOX
-result is recorded as passing without observed output.
+No Linux or BOX result is recorded as passing without observed output.

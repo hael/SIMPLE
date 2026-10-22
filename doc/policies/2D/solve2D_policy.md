@@ -110,8 +110,10 @@ Six stages, in two phases (stages 1-4 and 5-6):
   the sparse table in the last stage too. Stages 1 and 2 are always
   `snhc_smpl`.
 - Phase 1 stages end at fixed iterations (`minits = maxits`), spread over
-  `extr_lim`; phase 2 stages run `nits_per_stage` iterations, more when the
-  sample needs them to cover every particle.
+  `extr_lim`; phase 2 stages run up to `nits_per_stage` iterations and end on
+  convergence from the second on; a sample that needs more than
+  `nits_per_stage` iterations to cover every particle fixes the count
+  (`minits = maxits`).
 - When updates are sampled, stages 5 and 6 (and the last stage) take
   `fillin=yes`: they keep iterating until every active particle has a class.
   Stage 1 samples but does not carry previous class sums forward.
@@ -128,8 +130,9 @@ coverage, as 3D does.
 
 `cls_init=prev` re-enters the workflow from a previous 2D clustering held in
 the project instead of a random start. It is a `solve2D`-only mode
-(`refine2D` rejects it; `solve2D_chunks` and the stream keep
-`cls_init=rand`). Design record:
+(`refine2D` rejects it when it makes the starting references itself;
+`solve2D_chunks` and the stream pass `cls_init` on and default it to `rand`).
+Design record:
 `doc/implementation_notes/completed/abinitio2D_seeded_restart.md`.
 
 - The seed partition is built from metadata only (`ptcl2D` `class`, `state`,
@@ -224,8 +227,8 @@ This layer should stay thin enough that stage rules are readable elsewhere.
   the thread count it needs, the master's own restored after; a full-update
   iteration sets the master's `update_frac` to 1 for the alignment and restores
   it. Assembly updates the master's `cls2D`, `cls3D`, `out` and the particles'
-  `res` in memory and the master writes only those segments; it does not reread
-  the particle segment
+  `res` in memory; the master writes those segments and the particle segment
+  (Project segments, below) and does not reread the particle segment
 - shared-memory restoration of the class averages from the sums the matcher
   accumulated (`restore_cavgs_inmem`: the carried sums committed, the averages
   restored and written, the class document, the `cls2D` and `cls3D` segments)
@@ -282,7 +285,7 @@ rotation and clamped into the search box, and an assigned, unrefined
 candidate records the seed as it is (`record_seed_shift`). The particle loops
 run with dynamic OpenMP scheduling (a particle is processed whole by one
 thread, so only its random draws change). Each table part's bench record
-(`PROB_TAB2D_BENCH_PARTppp.txt`) carries the 3D tables' fill profile: the
+(`BENCH/PROB_TAB2D_BENCH_PARTppp.txt`) carries the 3D tables' fill profile: the
 thread-seconds of the seed, the score loop and the refinement, the fill
 regions' wall time, the load balance and the shifted particle memos built.
 
@@ -334,18 +337,18 @@ the references' centering offsets.
 
 The search loop of the matcher runs under a dynamic OpenMP schedule (a
 particle is searched whole by one thread, so only its random draws change).
-In shared memory the probability table fills the particle buffer
-(`doc/policies/particle_read_path_policy.md`) and the matcher of the same
-iteration copies its batches from it, so a table iteration reads each
-particle once. When the particles are cropped (below), the buffer holds
+In shared memory, without the particle cache, the probability table fills the
+particle buffer (`doc/policies/particle_read_path_policy.md`) and the matcher
+of the same iteration copies its batches from it, so a table iteration reads
+each particle once. When the particles are cropped (below), the buffer holds
 their records, the cropped particles, so the matcher neither reads nor
 prepares them at the full box; otherwise it holds raw images and the
 preparation runs twice.
 
 `simple_cavgassemble_strategy.f90` (`cavgassemble_exec`), the classaverager
 modules and the `make_cavgs`/`cavgassemble` commanders of
-`simple_commanders_mkcavgs.f90` (command-line wrappers; theirs is a full project
-write) own:
+`simple_commanders_mkcavgs.f90` (command-line wrappers; what each writes is in
+Project segments, below) own:
 
 - explicit class-average assembly from partial sums (restoration reads the
   class FRCs for the even/odd low-resolution averaging before storing the new
@@ -378,15 +381,36 @@ sums change as the cached restoration does (statistical parity, not bit
 equality). The final class averages of `solve2D` are restored at the full
 box by `make_cavgs`.
 
-Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files):
-`REFINE2D_BENCH_PARTppp.txt` for every partition, with the thread-seconds and
-load balance of the search loop and of the class sums; `REFINE2D_STRATEGY`
-for the whole iteration, setup to the class-average JPEG (pre-step,
-matcher or scheduler, merge, class-average assembly, the master's project
-writes and rereads, sigma2, convergence, star file); `PROB_ALIGN2D` for the
-pre-step driver; `CAVGSUMS` with the class sums' load balance.
+Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files; all in
+`BENCH/`): `REFINE2D_BENCH_PARTppp.txt` for every partition, with the
+thread-seconds and load balance of the search loop and of the class sums;
+`REFINE2D_STRATEGY_BENCH.txt` for the whole iteration, setup to the
+class-average JPEG (pre-step, matcher or scheduler, merge, class-average
+assembly, the master's project writes and rereads, sigma2, convergence, star
+file); `PROB_ALIGN2D_BENCH.txt` for the pre-step driver;
+`CAVGSUMS_BENCH_PARTppp.txt` with the class sums' load balance.
 `scripts/plot_refine3d_bench.py` turns them into the 2D critical path per
 iteration.
+
+### Project segments
+
+Every process builds its own project from the file. `solve2D` runs `refine2D`
+and `make_cavgs` as whole programs: it writes the segments they read before the
+call and rereads the segments they wrote after it. What writes what, as built:
+
+| Process | Writes |
+| --- | --- |
+| `solve2D` | `ptcl2D` at the start (fresh start: after the clustering is deleted; `cls_init=prev`: after the seed partition); `ptcl3D` at the end unless the project holds a valid 3D alignment; `out` after the final class averages. It rereads `cls2D` and `out` after every stage, and `ptcl2D` and `ptcl3D` before the end. |
+| `refine2D`, shared memory | `cls2D` and `cls3D` every iteration (`restore_cavgs_inmem`); `ptcl2D` and `out` at the end of the invocation. With `prob_align2D`, `ptcl2D` is written before the table commander and again once the sample is drawn, and reread after. |
+| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (probabilistic modes), by the merge of the workers' documents, after class-average assembly (with `cls2D`, `cls3D` and `out`), and in the iteration's finalization; `out` at the end of the run. |
+| `refine2D` worker | no project segment: its alignment document, sigma2 part, `cavg_contrib_part<N>.bin`, `dist_part*` and `assignment` files. |
+| `make_cavgs`, shared memory | `ptcl2D` (class remap, halves), then `cls2D` and `out`. |
+| `make_cavgs`, distributed | the master, before the workers start: `ptcl2D` (class remap, expansion, time-series split, halves); the workers: no project segment; the assembly (`run_cavgassemble`): the whole project. |
+| `cavgassemble` | the whole project. |
+| the sigma2 rebuild (`ensure_sigma2_for_iteration`) | `projinfo` (the registered sigma2 state); the caller rereads `projinfo`. |
+
+`ensure_field_halves` runs on the master only (a worker checks that the halves
+exist); when it labels the halves it writes `stk`, `ptcl2D` and `ptcl3D`.
 
 ## 4. Sampling and Fractional-Update Policy
 
@@ -499,8 +523,13 @@ Stable 2D workflow artifacts include:
 - `dist_part*.dat` and `dist.dat`
 - `cavg_contrib_part<N>.bin`: one worker's current-iteration class sums (four
   unregularized accumulators, centering offsets, populations), accumulated from zero
-- `cavg_state.bin`: the carried class sums of the run, written only by the
-  assembly owner, with `M(c)` per class; no part number
+- `cavg_state.bin`: the carried class sums of the run, with `M(c)` per class; no
+  part number. Written by an assembly owner (class-average assembly on the
+  distributed master, the strategy's shared-memory restoration); the
+  distributed `make_cavgs` assembly also publishes its sums there, at its own
+  box, and the stream pool pads the set to a larger box. Nothing removes it:
+  the queue cleanup (`qsys_cleanup`) deletes the 2D class sums only when asked
+  to, and no caller asks
 - `cavgs_iterNNN.mrc`, `cavgs_iterNNN_even.mrc`, `cavgs_iterNNN_odd.mrc`
 - `FRCS_FILE`
 - `sigma2_state.bin`: the project's one canonical sigma2 store. Before the
@@ -533,7 +562,7 @@ For any `solve2D` or `refine2D` change, check:
 - When staged updates are sampled, does terminal dense greedy assignment refresh all active
   particles before final class-average generation?
 - Does the change preserve Cartesian-only `solve2D`?
-- Does `inpl_cont=no` retain the callback route and `inpl_cont=yes` avoid it
+- Does `inpl_cont=yes`, the value every 2D run uses, avoid the callback route
   throughout deterministic and probabilistic search?
 - Does candidate profiling reselect its discrete seed at the supplied shift
   (no previous `inpl`, fractional restart coordinate, or 5-by-5 shift scan),

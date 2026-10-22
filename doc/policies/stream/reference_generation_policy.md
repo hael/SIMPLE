@@ -37,7 +37,7 @@ p03 runs a fixed plan of two cycles over the first preprocessed micrographs:
    (section 3.1). The selected class averages go to the GUI. A pick that accepts no diameter
    bin decides no box: nothing is extracted (the "all" set does not start either), a warning is
    logged, and cycle 1 picks again once `NMICS_PLAN(1)` more micrographs are in, or once
-   preprocessing hands on no more and new micrographs came since (follow-up plan, decision 4).
+   preprocessing hands on no more and new micrographs came since.
 2. **The "all" set**, as soon as the bins are known: every imported project up to
    `NMICS_PLAN(2)` (500) micrographs is picked and extracted with the same bins and box, and its
    particles are fed to a coarse-only particle sieve. The cap is checked before each project, so
@@ -59,7 +59,7 @@ session with fewer micrographs than the plan's therefore still reaches reference
 takes the trigger back, and the wait is logged once.
 
 The job settings are fixed in the stage, except the 3D route's and the jobs' resources, which
-are inputs (decision 20): `nstates_pickrefs`, `nstages_pickrefs`, `lpstop_pickrefs`,
+are inputs: `nstates_pickrefs`, `nstages_pickrefs`, `lpstop_pickrefs`,
 `nspace_pickrefs`, `nthr3D_pickrefs`, and `nrestarts_collapse`, `lpstart_ini3D`, `lpstop_ini3D`
 under their `solve3D_cavgs` names. The master offers them at developer visibility and forwards each
 only when given (`nthr3D_pickrefs` comes from its resources table otherwise); p03's commander gives
@@ -69,17 +69,17 @@ the defaults below and checks `nstates_pickrefs` ≥ 2, `lpstart_ini3D` > `lpsto
 
 | Job | Settings |
 |---|---|
-| `solve2D` (both cycles) | `ncls` = particles / `nptcls_per_cls`, clamped to 10..100; `nsample` = max(2000, particles/5 rounded up to 1000); `lpstop=8`; `mskdiam`: `mskdiam_box` in cycle 1, the estimate in cycle 2 (section 3.1); `center=yes`; `autoscale=yes`; `nthr2D` (16) threads, `nparts` (1) |
+| `solve2D` (both cycles) | `ncls` = particles / `nptcls_per_cls`, clamped to 10..100; `nsample` = max(2000, particles/5 rounded up to 1000); `lpstop=8`; `mskdiam`: `mskdiam_box` in cycle 1, the estimate in cycle 2 (section 3.1); `center=yes`; `autoscale=yes`; `cache=yes`; `nthr2D` (16) threads, `nparts` (1) |
 | sieve of the "all" set | coarse only (`single_pass=yes`); `nchunks` (4) chunks of `nthr2D` (16) threads, on `SIMPLE_STREAM_REFGEN_PARTITION`; `mskdiam_box`, also as the scoring mask; no starting low-pass (the chunks' `solve2D` derives it) |
 | class balancing | the selected class averages replicated in proportion to population up to `TARGET_NCLS` (501) rows, written to a project of its own (`balance_classes/all/all_balanced.simple`) on which `solve3D_cavgs` runs; the cycle 2 project keeps the class averages the GUI shows, so a selection of cycle 2 is read against them |
 | `solve3D_cavgs` | `nstates_pickrefs` (3), `nstages_pickrefs` (3), `nrestarts_collapse` (3), `lpstart_ini3D` (100), `lpstop_ini3D` (20), `lpstop_pickrefs` (8), `pgrp=c1`, `prune=no`, `mskdiam_box` (the box's default, not the estimate), `nthr3D_pickrefs` (16) threads, `nparts` only when above 1: `nparts` on the command line makes refine3D distributed even at 1, and a distributed iteration that empties a state stops the next one, while in shared memory `solve3D_cavgs` handles the collapse after the stage. Its restart driver names the run whose result stands in `SOLVE3D_CAVGS_FINAL_DIR`, which p03 reads |
-| state choice | among the populated states with a volume (`choose_state`, `state_vetoes`; follow-up plan, decisions 11-14). Each binarised volume (low-passed to 20 Å, Otsu twice with both thresholds from the voxels inside the mask, so the solvent outside does not drive them; `vol_shape_descr`) gives its largest component's share of the foreground inside the mask. A state passes the vetoes when it is one object (that share at least `STATE_DOMINANT_FRAC`, 0.8, so a speck or a small split does not fail it), holds at least `STATE_POP_FLOOR` (10%) of the candidates' population, and its FSC 0.143 resolution (its FSC file in the 3D result) is within `STATE_RES_FACTOR` (1.5) times the best candidate's; a state without an FSC file is not vetoed on resolution. Among those, the most distinct projection directions of its classes (`os_cls3D` `proj`), then the largest population, then the lowest state. When none passes, the same order over every candidate, with a warning to the log and the GUI (the 3 October order, fewest components first, preferred compact junk and is gone). When the directions cannot be counted, the population breaks the ties. Every key of every state is logged. The three constants are provisional until a validation run on datasets with a known answer sets them. Each state's binarised volume and components are written as `vol_binarized_stateNN.mrc` and `vol_cc_stateNN.mrc` |
+| state choice | among the populated states with a volume (`choose_state`, `state_vetoes`). Each binarised volume (low-passed to 20 Å, Otsu twice with both thresholds from the voxels inside the mask, so the solvent outside does not drive them; `vol_shape_descr`) gives its largest component's share of the foreground inside the mask. A state passes the vetoes when it is one object (that share at least `STATE_DOMINANT_FRAC`, 0.8, so a speck or a small split does not fail it), holds at least `STATE_POP_FLOOR` (10%) of the candidates' population, and its FSC 0.143 resolution (its FSC file in the 3D result) is within `STATE_RES_FACTOR` (1.5) times the best candidate's; a state without an FSC file is not vetoed on resolution. Among those, the most distinct projection directions of its classes (`os_cls3D` `proj`), then the largest population, then the lowest state. When none passes, the same order over every candidate, with a warning to the log and the GUI (the 3 October order, fewest components first, preferred compact junk and is gone). When the directions cannot be counted, the population breaks the ties. Every key of every state is logged. The three constants are provisional until a validation run on datasets with a known answer sets them. Each state's binarised volume and components are written as `vol_binarized_stateNN.mrc` and `vol_cc_stateNN.mrc` |
 | reprojection | `nspace_pickrefs` (50), `pgrp=c1`, `mskdiam_box` (capped at the volume's own box default when the volume is sampled more coarsely), `nthr3D_pickrefs` threads; a job on the local queue |
 
 Class-average selection in both cycles is the chunk quality model (`score_project_cavgs`)
 followed by the class compatibility filter, trained and applied on the same selection. Its mask
 diameter is the one of the cycle's `solve2D`. A selection is never left empty while a class is
-populated (decided 8 October 2026), so cycle 2 always reaches balancing and `solve3D_cavgs`:
+populated, so cycle 2 always reaches balancing and `solve3D_cavgs`:
 - **The filter rejects every class the model kept:** the model's selection stands. Its
   particles are selected again from their states before the selection
   (`restore_cavgs_selection`), since mapping a class selection only deselects.
@@ -193,22 +193,24 @@ populated (decided 8 October 2026), so cycle 2 always reaches balancing and `sol
 
 ## 7. Known gaps
 
-- **Class averages are duplicated** to weight `solve3D_cavgs` (review M1). Each copy carries
+- **Class averages are duplicated** to weight `solve3D_cavgs`. Each copy carries
   its class's full population, the cycle-2 project is rewritten with the 501-row table, and copies
   are aligned and assigned to states independently. The review proposes per-row weights in the
-  reconstruction instead (R2).
-- **The references are reprojections of a multistate model** (M2). The settings are inputs and
-  the result path is fixed (R4, done on 5 October 2026), but their defaults are those of
-  3 October and no validation has set them.
+  reconstruction instead.
+- **The references are reprojections of a multistate model.** The settings are inputs and
+  the result path is fixed, but their defaults are those of 3 October and no validation has set
+  them.
+- **`lp_pick` has no effect on p04.** The picking low-pass is the constant `LP_PICK` (15 Å) in
+  `simple_pickref`; `pick_extract` offers `lp_pick` and p04's commander defaults it, but no
+  picking code reads it.
 - **The mask estimate rests on cycle 1's micrographs** (about 100). A view that is rare there,
   or a larger particle that appears only later, can be cut by the mask of cycle 2 and 3D. The
   generous rule is the only margin, and nothing estimates again.
 - **The "all" sieve masks with the box default**, which is wider than the particle, because it
   starts before the estimate exists.
-- **The state choice's fractions are guesses.** `STATE_CC_MIN_FRAC` and `STATE_POP_FLOOR` (10%
-  each) wait for a validation run; a speck larger than 10% of the particle still makes a second
-  object.
-- **The quality selection is fitted and applied on the same classes** (M5).
+- **The state choice's fractions are guesses.** `STATE_DOMINANT_FRAC` (0.8), `STATE_POP_FLOOR`
+  (10%) and `STATE_RES_FACTOR` (1.5) wait for a validation run.
+- **The quality selection is fitted and applied on the same classes.**
 - **The empty-selection fallback trusts every class.** When the quality model keeps none,
   junk classes go to balancing and `solve3D_cavgs` with the rest, and the GUI does not say the
   fallback was taken; only the log does.

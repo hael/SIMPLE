@@ -57,9 +57,16 @@ The initializations remain where they are. They are already the source used by
 the parameter lifecycle and are available before any program runs. CMake runs
 `scripts/default_audit.py` to generate `simple_ui_default_values.f90` in the
 build tree. It extracts baseline values and only exact, statically verified
-missing-key commander overrides. `ui_program` consults the generated
-`get_ui_default` routine while constructing each input. Commanders and the
-parameter lifecycle never read this UI-only module.
+missing-key commander overrides. It reads `src/main/commanders`,
+`src/main/exec`, `src/main/stream`, `src/defs`, `src/main/params` and the
+`production` entry points; it does not read `src/main/strategies` or
+`src/main/solve`. A conditional assignment is seen when it is in one of the
+files read, or in a helper or workflow named in `TRACED_DEFAULT_HELPERS` or
+`DELEGATED_WORKFLOWS` in `scripts/default_audit.py`; a default assigned
+anywhere else is not exported, and the UI shows the baseline value.
+`ui_program` consults the generated `get_ui_default` routine while constructing
+each input. Commanders and the parameter lifecycle never read this UI-only
+module.
 
 The generator preserves the parameter parser's scalar meaning and natural CLI
 notation before it emits a display value. Integer defaults remain integers
@@ -133,8 +140,7 @@ directories. A list *of* stacks or volumes is still a table file and therefore
 uses `UI_FILE`. `UI_PARM` is for non-path scalar, choice, and Boolean settings.
 
 `ui_hash` extends the generic `vrefhash` and supplies typed access to
-`ui_program` and `ui_param`. `ui_program` and `ui_param` do not inherit from
-one another.
+`ui_program`. `ui_program` and `ui_param` do not inherit from one another.
 
 ### `ui_param`
 
@@ -149,6 +155,8 @@ one another.
 | `placeholder` | Short example or entry hint; empty for choice inputs. Numeric examples use the generated display default when available, with known units appended. |
 | `cval_default`, `rval_default`, `has_default` | Current internal storage and presence flag for a display default. |
 | `units` | Display units, empty when not applicable. |
+| `example_value` | The value a numeric placeholder shows: the generated display default, empty when there is none. |
+| `required` | Whether the input is required; a required input has no display default. |
 | `choices` | Structured values accepted by binary and multiple-choice inputs. |
 
 For visible numeric inputs, descriptor construction normalizes a unit only when
@@ -251,10 +259,22 @@ not against the program. A program that holds its command line to its own
 contract asks its `ui_program`: `has_input(key)` is true for a declared input
 in any of the seven lists, and `accepts(key)` also for the execution
 environment a launcher passes to any program, `UI_ENVIRONMENT_KEYS` (the queue
-system, NICE and the stream's persistent workers). `solve3D_addon` is the
-first such program: its UI entry is its allowlist, and adding an input there
-is all it takes to accept and forward it
-([solve3D_addon_policy.md](3D/solve3D_addon_policy.md), section 2).
+system, NICE and the stream's persistent workers). `solve3D_addon` and
+`solve3D_chunks` are such programs: the UI entry is the allowlist, and for
+`solve3D_addon` adding an input there is all it takes to accept and forward it
+([solve3D_addon_policy.md](3D/solve3D_addon_policy.md), section 2;
+[solve3D_chunks_policy.md](3D/solve3D_chunks_policy.md)).
+
+The vocabulary is generated at build time by `scripts/simple_args_generator.pl`
+(`simple_args.f90`, `simple_varlist.txt`). It holds the fields declared in
+`type(parameters)` in `simple_parameters.f90`, `vol1` to `vol20`, and a list
+written in the generator itself for keys that are not `parameters` fields:
+`job_memory_per_task`, `projname`, `simple_path`, `time_per_image`,
+`user_account`, `user_email`, `user_project`, `qsys_partition`, `qsys_qos`,
+`qsys_reservation`, `job_name`, and the keys of the `simple_test_exec` front
+door (`seed_offset`, `target`, `nseeds`, `dir1`, `dir2`, `keep_outputs`). A key
+in neither place is rejected when it is given on the command line, whatever a
+program declares.
 
 ### Construction and registration
 
@@ -292,6 +312,19 @@ The public `prg=list` paths traverse registered programs and group them by
 this metadata. JSON serializes the same identifier, heading, and order for
 each program. There are no handwritten program-list headings; changing a
 category descriptor changes CLI listings and JSON together.
+
+### Private programs
+
+`simple_private_exec` runs the worker programs of the distributed workflows. A
+program that exists only there has its required keys in
+`simple_private_prgs.f90`. A private program that has the name of a public
+program (`refine2D`, `refine3D`) has no entry there: `cmdline%parse_private`
+checks its command line against the public `ui_program` of that name, its
+required keys and its requirement groups. A required input or requirement group
+of such a public program therefore also constrains the command lines the master
+writes for its workers. The queue memory estimator selects on the job's program
+name (it has a `refine2D` case), so the worker keeps the name of its public
+program.
 
 ### Renamed programs
 
@@ -344,8 +377,9 @@ For production programs, `summary` is the one-line answer to “what does this
 program do?” It is shown where a user chooses a program; it is not a title and
 must therefore carry useful meaning without the reader knowing the CLI name.
 
-- Use one active phrase or sentence fragment of 30–100 characters. The
-  100-character ceiling is enforced by `ui_program%new`.
+- Use one active phrase or sentence fragment of 30–100 characters. Both
+  bounds are enforced for every registered program (`validate_ui_presentation`
+  in `simple_ui.f90`); `ui_program%new` also enforces the 100-character ceiling.
 - Start with the action and name the main object, result, or workflow. For
   example: `Estimate CTF parameters from micrographs`.
 - State the user-visible outcome, not only an algorithm name. Include scope
@@ -478,7 +512,7 @@ When the validator reports a stream-contract mismatch, the developer must:
    cmake --build <build-dir> --target update_stream_ui_contract
    ```
 
-4. Commit the descriptor changes and
+4. The maintainer commits the descriptor changes and
    `production/stream_ui_contract.json` in the same commit.
 5. Run `cmake --build <build-dir> --target validate_stream_ui_contract` again.
    A passing result confirms that the reviewed screen is the one generated by
@@ -527,9 +561,7 @@ The UI-layer refactor is complete for the current scope:
   program listings, and JSON. Obsolete module-local listings have been removed.
 - Alternative input requirements replace `alt_ios` and describe accepted
   inputs using the registered labels and placeholders.
-- Routed defaults have been audited against execution setup. The optional
-  `audit_ui_defaults` report currently contains no errors or warnings, and
-  numeric JSON defaults are rendered without binary floating-point residue.
+- Numeric JSON defaults are rendered without binary floating-point residue.
 - Every program has an explicit display name; Standard programs have concise
   display names and informative summaries.
 - Every registered file and directory input has a format-appropriate example.

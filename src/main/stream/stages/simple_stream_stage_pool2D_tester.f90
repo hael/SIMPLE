@@ -531,6 +531,7 @@ contains
         call stage%transfer_sets(nimported)
         call assert_false(stage%l_sieve_final, 'an ordinary set')
         call assert_false(stage%l_sieve_final_seen, 'no final set handed off yet')
+        call assert_false(stage%l_final_published, 'no final publication yet')
         set_file = write_sieved_set(2, [3], l_final=.true.)
         call stage%watch_sets()
         call assert_true(stage%l_sieve_final_seen, 'the final set is noted when handed off, before the pool takes it')
@@ -539,10 +540,12 @@ contains
         call stage%transfer_sets(nimported)
         call assert_true(stage%l_sieve_final, 'the sieve''s final set is noted')
         ! a later set with particles that is not final: the sieve had more after all
+        stage%l_final_published = .true.
         set_file = write_sieved_set(3, [3])
         call stage%watch_sets()
         call stage%transfer_sets(nimported)
         call assert_false(stage%l_sieve_final, 'a later ordinary set takes the final note back')
+        call assert_false(stage%l_final_published, 'and the owed final publication with it')
         ! the sieve's empty final set ends the intake and transfers nothing
         call write_empty_final_set(string(UPSTREAM//'/'//DIR_STREAM_COMPLETED//'sieve_final_c1_f1'//METADATA_EXT))
         nmics0 = stage%nmics
@@ -595,6 +598,11 @@ contains
         call assert_true(stage%publishes_final(31, .true.),  'as is one after a later iteration')
         call assert_false(stage%publishes_final(24, .true.), 'not before iteration 25')
         call assert_false(stage%publishes_final(30, .false.), 'nor without the final set')
+        call assert_true(stage%owes_final_run(27, .true., .false.),  'a pool past iteration 25 with the final set and no final publication runs once more')
+        call assert_false(stage%owes_final_run(27, .true., .true.),  'not after a publication carried the final flag')
+        call assert_false(stage%owes_final_run(27, .false., .false.), 'nor without the final set')
+        call assert_false(stage%owes_final_run(24, .true., .false.), 'nor before iteration 25: it runs uninterrupted to there')
+        call assert_true(stage%owes_final_run(25, .true., .false.),  'iteration 25 itself still owes the publication')
         call assert_true(stage%exports_after(10, .true., 0),   'a fresh pool publishes after iteration 10')
         call assert_false(stage%exports_after(10, .false., 0), 'a pool with publications on disk does not')
         call assert_false(stage%exports_after(9, .true., NPTCLS_FIRST3D - 1), 'nor before it, with fewer selected than the first 3D takes')

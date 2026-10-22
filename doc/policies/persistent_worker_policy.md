@@ -63,6 +63,8 @@ own final worker-server shutdown when they launched a persistent pool.
 A qsys name containing `_worker` activates the persistent-worker overlay. The
 local qsys name is stripped before constructing the base backend. The dispatch
 backend is then constructed with the internal factory name `persistent_worker`.
+With `script=yes` (a submission script is generated and the program does not
+run) the suffix is dropped and the base backend is used alone.
 
 Examples:
 
@@ -108,10 +110,12 @@ its normal `ncunits` bookkeeping and filesystem completion files.
 An existing worker server may be reused only when it is running and compatible:
 
 - same launch backend
-- existing `nthr_per_worker` is at least the requested value
-- existing worker count is at least the requested value
+- existing `nthr_per_worker` is at least the requested value (the threads a
+  queue's tasks claim must not exceed the server's threads per worker; a client
+  of a server whose size is not given, `worker_server_nthr=0`, is not checked)
 
-Otherwise the code throws rather than silently reusing the wrong pool.
+Otherwise the code throws rather than silently reusing the wrong pool. The
+worker count of the existing server is not compared with the requested one.
 
 ## 5. Worker Server
 
@@ -140,14 +144,55 @@ The listener thread must not perform blocking network replies while holding the
 mutex. It copies the selected task to local storage, releases the mutex, and
 then sends exactly one reply.
 
-Task selection order is high, normal, low. A task is dispatchable only when the
-worker heartbeat reports enough free thread capacity for `task%nthr`.
+Task selection is strict by priority: a normal task is considered only when the
+high queue is empty, and a low task only when the high and normal queues are
+empty. A high task that fits no heartbeating worker therefore holds back every
+normal task. Within a queue the first task that fits is taken. A task is
+dispatchable only when the worker heartbeat reports enough free thread capacity
+for `task%nthr`.
 
 `qsys_ctrl` sets `task%priority` from `worker_priority` (`high` selects the
 high queue, anything else the normal queue); several stream stages and their
 jobs set `worker_priority=high`.
 Nothing can enqueue into the low queue: the task message carries only a logical
 priority flag.
+
+### Server roles: owner and client
+
+A process without `worker_server` owns the server: it starts the listener and
+the workers, and its top-level executable shuts the server down (section 2). A
+process given `worker_server=<host:port>` is a client:
+`persistent_worker_server%new` runs with `client_only`, so it starts no
+listener and no workers, only the dispatch client connection `queue_task` uses,
+and it generates no warm-up request. The stream master gives its server address (`worker_server`) and the
+server's threads per worker (`worker_server_nthr`) to its stages and their jobs.
+
+A forked child calls `forget_inherited_persistent_worker` before it makes a
+queue environment: it closes its copies of the server's sockets and never
+touches the parent's mutex. A queue environment made afterwards connects as a
+client or starts its own server.
+
+### Warm-up and scale-down
+
+Autoscaling is off unless a streaming queue turns it on: `qsys_env` enables it
+when it makes the server for a streaming queue, a streaming queue that reuses a
+server enables it, and reuse never disables it. While it is on, the listener
+recomputes at every heartbeat the workers the load needs: the thread demand of
+the queued tasks plus the threads in use, over `nthr_per_worker`, rounded up.
+
+- Scale-down: once the need has stayed below the number of active workers for
+  `SCALE_DOWN_COOLDOWN_S` (300 s), the heartbeat of an idle worker (no task to
+  give, no threads in use) is answered with TERMINATE.
+- Warm-up: once the need has stayed above the active plus launch-pending workers
+  for `SCALE_UP_COOLDOWN_S` (15 s), the listener records the free worker slots,
+  up to the deficit, as a warm-up request.
+
+The process that owns the listener claims the requests
+(`claim_warmup_worker_ids`, in the `qsys_ctrl` scheduler loops and after each
+dispatch), marks the slots launch-pending and starts `simple_persistent_worker`
+for them through the base scheduler. A slot stays launch-pending until its
+worker's first heartbeat. Among the live `qsys_env` objects that started or
+reused the server, the oldest services the warm-up callback.
 
 ## 6. Message Protocol
 
@@ -185,10 +230,16 @@ If the worker server is missing or the queue is full, the current dispatch path
 logs the failure. It does not currently propagate enqueue failure back to the
 scheduler as a failed submission.
 
-The existing scheduler remains the source of truth for completion:
+The existing scheduler remains the source of truth for completion, from the
+files each generated script writes:
 
-- batch scheduling watches `JOB_FINISHED*`
+- batch scheduling watches `JOB_FINISHED*`; a non-zero `EXIT_CODE_JOB_*` status
+  of a submitted part without its sentinel marks the part failed and the stage
+  stops
 - streaming scheduling watches `EXIT_CODE_JOB_*` and done/fail stacks
+- a part without an exit status is checked for liveness every `JOB_LIVENESS_S`
+  (300 s); one found gone at two checks in a row gets `JOB_LOST_EXIT_CODE` (254)
+  written as its status, so the failure path runs
 
 The worker server is a dispatch transport. It is not currently a completion
 authority.
@@ -283,6 +334,11 @@ These are current implementation facts, not desired end-state contracts:
   currently bypasses it with `safe_path = .true.`
 - `qsys_env` strips `_worker` in the local backend-selection variable; code that
   reads `qdescr('qsys_name')` still needs to be checked for `_worker` names
+- liveness checks and cancellation use the job record the script writes
+  (`simple_qsys_job_record`); a record without a scheduler id is checked and
+  cancelled only from the host that wrote it, so a task lost with its worker on
+  another host is waited for, and a cancel on the same host signals the script
+  and its children
 
 Do not write future policy as though these limitations have already been
 removed.

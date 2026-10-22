@@ -24,6 +24,10 @@ work that is tracked separately under `planned`.
 Current guides and policies live outside these lifecycle folders because they
 describe the software as it is, rather than the history of one change:
 
+- [Policy index](../policies/README.md): every policy, with what to read before changing what
+- [Layering and project ownership policy](../policies/layering_and_project_ownership_policy.md):
+  read before adding or changing a commander, a strategy routine, a worker step, or any code that
+  reads or writes a project
 - [Fortran module index](../code_overview/fortran-indexes/module_index.md)
 - [Architecture design guide](guides/architecture_design_dev_guide.docx)
 - [Test environment policy](../policies/test_environment_policy.md)

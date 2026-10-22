@@ -17,7 +17,7 @@ the refinement iterations are delegated to `commander_refine3D`.
 
 `refine3D_auto` sets hard workflow defaults:
 
-- `balance=no`
+- `balance=none`
 - `greedy_sampling=no`
 - `trail_rec=yes`
 - `refine=prob_neigh` (derived from `pose_cont`, section 7; `refine` itself is
@@ -30,11 +30,10 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `incrreslim=no`
 
 NU volume filtering is independent of `incrreslim`. Since 2026-09-18 there
-is one NU competition for every workflow: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest rung, competing with it at zero prior cost once its FSC=0.143 is at or beyond that rung (`ml_reg=yes`; 2026-09-19), and the finest member of the bank as the matching handoff -- the ed36eb4c solve3D machinery, the only NU mechanism since 2026-09-18 (`nonuniform_filtering_policy.md` sections 8, 10, 12). The
+is one NU competition for every workflow: the static ladder `[20,15,12,10,8,6,5,4]` A capped at `fsc/1.5` of the base pair, with the ML-regularized pair as one more member beside the finest rung, competing with it at zero prior cost once its FSC=0.143 is at or beyond that rung (`ml_reg=yes`; 2026-09-19), and the finest member of the bank as the matching handoff -- the ed36eb4c solve3D machinery, the only NU mechanism since 2026-09-18 ([nonuniform filtering policy](../NU/nonuniform_filtering_policy.md) sections 8, 10, 12). The
 `nu_refine=yes` shell walk that refine3D_auto used until 2026-09-16, and
 the generated dense ladder that replaced it until 2026-09-18, are gone.
-The matching low-pass handoff is the finest selected label with at least 1%
-of the signal voxels at that label or finer. Bootstrap NU filtering never uses the generic parsed
+Bootstrap NU filtering never uses the generic parsed
 startup `lp` as a volume-filter ceiling because it is not evidence about
 the resolution of supplied half maps.
 
@@ -137,7 +136,8 @@ caps the run length, and enforces a minimum of three iterations unless the user
 explicitly supplied `maxits` (or a larger `minits`). The minimum was ten until
 2026-09-11; on PfCRT the forced iterations degraded an already converged map
 (cFAR 0.78 to 0.62, FSC=0.5 4.14 to 4.31 A over iterations 1-10). Once the
-overlap criterion (0.99) is met after the third iteration the run stops.
+overlap criterion (0.99) is met and the main run has completed three
+iterations, the run stops.
 
 ## 5. Registration Pass, Refinement and Final Reconstruction
 
@@ -217,8 +217,8 @@ resolution target.
 
 `refine3D_auto` remains single-state. Multi-state automated refinement belongs
 to [refine3D states policy](../heterogeneity/refine3D_states_policy.md), the in-development
-[classify3D_refs_policy.md](classify3D_refs_policy.md), base `refine3D`, or the ab
-initio workflows.
+[classify3D_refs_policy.md](classify3D_refs_policy.md), base `refine3D`, or `solve3D`
+with `nstates > 1`.
 
 ## 7. Continuous Pose Refinement
 

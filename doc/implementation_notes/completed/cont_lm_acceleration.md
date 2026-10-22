@@ -1,8 +1,8 @@
 # Accelerating refine=cont: fewer evaluations, a cheaper kernel, and a benchmark
 
-Implementation note, 2026-10-19, updated 2026-10-20. **Stages 1 to 5 are done:
-built, checked, and measured against the baseline (section 2). Stages 6 and 7
-are proposals.** The maintainer's rulings are in section 8. The findings come from a static review of `master` at
+Implementation note, 2026-10-19, completed 2026-10-21. **All seven stages are
+done: built, checked, and measured against the baseline. The measured gains
+are in section 2.** The maintainer's rulings are in section 8. The findings come from a static review of `master` at
 `4da5cb9c0`. The savings below are work counts read from the code. The rule of
 the local-workflow plan applies: do not infer a speedup percentage from removed
 calls (`doc/refactoring_notes/planned/refine3d_local_workflow.md:264-267`).
@@ -21,7 +21,7 @@ How to read this note:
 
 Companion notes:
 
-- `completed/cont_kb_gather_performance.md`: the fused gather and its list of
+- `cont_kb_gather_performance.md`: the fused gather and its list of
   future work.
 - `doc/refactoring_notes/planned/refine3d_local_workflow.md`: the
   workflow-level startup savings. This note covers the per-particle cost inside
@@ -52,7 +52,7 @@ Done for this route so far:
 
 - **Fused 3x3x3 KB gather.** Median worker orientation-search time -36.8 to
   -37.5%, wall time -20.5 to -21.9%, on beta-gal
-  (`completed/cont_kb_gather_performance.md:142-148`).
+  (`cont_kb_gather_performance.md:142-148`).
 - **Joint stage alone.** 37% fewer LM iterations and 38% less transaction time
   than `shift_then_joint`
   (`doc/refactoring_notes/completed/pose_cont_refactoring.md:1615-1618`).
@@ -107,6 +107,25 @@ that alter them. Every gain can then be attributed to one stage.
 | 5 | Kernel oracle and test gaps | Tests only | New tests pass on the current kernel |
 | 6 | Cheaper evaluations | Rounding changes | Stage 5 oracle; truth profile; benchmark |
 | 7 | Close-out | Documents only | - |
+
+**Measured gains** (orientation search at 16 threads, wall seconds; each row
+from the build its record names, so rows from different batches hold to about
+5%):
+
+| After | Beta-gal search | Passes per solve | ns per pixel-evaluation | Polish euclid search | Truth |
+| --- | --- | --- | --- | --- | --- |
+| Stage 2 baseline (B) | 19.3 | 13.75 | 215 | 24.1 | the before-profile |
+| Stage 3 (D): duplicate passes removed, `padsc` folded | 16.1 | 11.75 | 210 | 20.6 | identical |
+| Stage 4 (S4c): curvature scale, predicted-reduction stop | 9.4 | 6.68 | 215 | 11.7 | inside the before-profile's spread |
+| Continuous gather (G) | 5.4 | 5.70 | 143 | 6.1 | rotation error down in every polish seed |
+| Stage 6a (H): half plane and normal-term arithmetic | 2.40 | 5.70 | 64 | 2.68 | unchanged |
+| Stage 6c (K): sigma2 from the accepted evaluation | 2.01 | 4.70 | 65 | 2.28 | unchanged |
+| Stage 6b (L): separable gather | 1.90 | 4.70 | 62 | 2.08 | unchanged; gate 20 of 20 |
+
+Over the whole plan, the beta-gal search fell from 19.3 to 1.9 s (-90%) and
+the simulated polish from 24 to 2.1 s (-91%), with the same map and truth
+metrics inside the before-profile's spread. Stages 1, 2, 5 and 7 change no
+production result: counters, benchmark, tests and documents.
 
 ### Stage 1: count the work
 
@@ -1021,33 +1040,170 @@ What it says:
 
 ### Stage 6: cheaper evaluations
 
+**Status (2026-10-21): done on the working tree (record below).** 6a, 6b and
+6c are in. The centred cube was measured again, on the half plane, and
+dropped.
+
 - **6a. One rewrite of `pose_normal_terms` and its siblings.** It covers the
   Friedel half plane, loop bounds set by `kto`, the separable shift phase and
-  the normal-term arithmetic (sections 4.1, 4.2, 4.3 and 4.5). It also covers
-  the full centred band-limited reference with the branch-free gather
-  (sections 4.4 and 4.5), moved here from stage 3. Measure it on top of the
-  half-plane, with and without the cube, since the stage 3 record shows the
-  cube loses on its own. Its stage 3 patch is the starting point.
-- **6b. SIMD across taps** that reorders sums. The KB weights of section 4.4
-  are gone: the continuous gather's B-spline weights are three quadratics per
-  axis.
+  the normal-term arithmetic (sections 4.1, 4.2, 4.3 and 4.5).
+  `shift_normal_terms`, `sigma_contribution` and the particle power of
+  `fill_ptcl` follow the half plane. The particle power is summed in double
+  precision in the kernel's order, so the CC normalization matches the
+  kernel's sums. The slots store `transfer` as real.
+- **The centred cube** (sections 4.4 and 4.5) was measured on top of the half
+  plane. It is slower on beta-gal, so it was dropped again (record).
+- **6b. SIMD across taps.** The gather contracts its 27 taps one axis at a
+  time (x, then y, then z). It forms the packed/Friedel indices once per axis
+  instead of once per tap. The sums are reordered.
 - **6c. sigma2 from the accepted evaluation** (section 3.2, row 3).
+  - `pose_normal_terms` accumulates the whitened `|r|^2` per shell when asked.
+  - `cartft_pose_opt` keeps it for the evaluation that chose the committed
+    pose: the seed, the shift endpoint on the seam route, or the last
+    accepted joint step.
+  - `calc_sigma2` unwhitens it per shell (`sigma_from_shell_residual`:
+    `sigma2 res / (2 npix)`, with the shell's full-disk pixel count).
+  - The separate `sigma_contribution` pass goes.
 - **Results:** rounding changes.
-- **First step, from stage 5:** keep today's `pose_normal_terms` as the
-  reference (test-local or as the slow path) and compare the rewrite with it,
-  and compare half-plane sums with full-disk sums at the same pose.
-- **Check:**
-  - the stage 5 oracles within tolerance;
-  - `unit_cart_align3D`;
-  - the truth profile unchanged within its spread;
-  - the benchmark's ns per pixel-evaluation and passes per particle.
+- **Kept reference.** The full-disk kernels stay as
+  `pose_normal_terms_full_disk` and `shift_normal_terms_full_disk`, and the
+  tests compare the half-plane kernels with them.
+
+#### Stage 6 record (2026-10-21)
+
+Each build is a snapshot of the working tree (`patches/`):
+
+- **G:** the stage 5 tree with the continuous gather.
+- **H:** G with 6a.
+- **I:** H with the centred cube.
+- **J:** I with 6c.
+- **K:** H with 6c, the kept tree before 6b.
+- **L:** K with 6b, the working tree.
+
+All runs were timed alone at 16 threads. Beta-gal times are the means of
+order-balanced pairs. The simulated cases are one run each at seed offset 0.
+
+**6a (G to H).**
+
+| Case | Search (s) | ns per pixel-evaluation | Passes per solve | Truth |
+| --- | --- | --- | --- | --- |
+| beta-gal | 5.50 to 2.40 (-56%) | 146.7 to 64.0 | 5.70, unchanged | FSC 3.752 A, cFAR 0.558, unchanged |
+| polish cc | 5.39 to 2.23 (-59%) | 147.9 to 61.2 | 4.68, unchanged | 0.0860 deg, 0.0295 A, unchanged |
+| polish euclid | 6.12 to 2.68 (-56%) | 138.2 to 60.2 | 5.72, unchanged | 0.0849 deg, 0.0288 A, unchanged |
+| capture cc | 1.24 to 0.40 (-68%) | 154.8 to 49.6 | 7.30, unchanged | 0.344 deg, unchanged |
+| capture euclid | 1.30 to 0.44 (-66%) | 148.5 to 49.3 | 7.96, unchanged | 0.271 deg, unchanged |
+
+Work counts and truth metrics agree to the digits the bench prints. The half
+plane halves the pixels. The rest takes a further 13-36% off each pixel:
+
+- the phase tables;
+- the 15 distinct Hessian entries;
+- the cross-product Jacobians;
+- the `kto` bounds.
+
+**The centred cube (H to I).**
+
+| Case | Search (s) | ns per pixel-evaluation | Reference memory |
+| --- | --- | --- | --- |
+| beta-gal | 2.35 to 2.77 (+18%) | 62.7 to 74.0 | 1.08 to 0.73 GB (peak RSS 5.48 to 4.47 GiB) |
+| polish cc | 2.27 to 2.27 | 62.2 to 62.2 | - |
+| polish euclid | 2.61 to 2.59 | 58.9 to 58.3 | - |
+| capture cc | 0.41 to 0.39 | 50.3 to 48.2 | - |
+| capture euclid | 0.45 to 0.42 | 50.7 to 46.7 | - |
+
+At beta-gal's band (shell 88 of 128) the cube saves a third of the reference
+memory but costs 18% of the search time. On the small simulated box it breaks
+even. As in stage 3, the packed layout wins at a production band, so it stays.
+I's snapshot (`patches/tree_snapshot_20261021_1042_I.patch`) holds the cube.
+
+**6c (H to K).** One pass fewer per euclid solve; cc is unchanged.
+
+| Case | Search (s) | Passes per solve | Truth |
+| --- | --- | --- | --- |
+| beta-gal | 2.38 to 2.01 (-16%) | 5.70 to 4.70 | FSC 3.752 A, cFAR 0.558, unchanged |
+| polish euclid | 2.61 to 2.28 (-13%) | 5.72 to 4.72 | unchanged |
+| capture euclid | 0.45 to 0.41 | 7.96 to 6.96 | unchanged |
+| polish cc | 2.27 to 2.28 | 4.68 | unchanged |
+| capture cc | 0.41 to 0.41 | 7.30 | unchanged |
+
+- **The cube tree gave the same** (I to J): beta-gal 2.77 to 2.37 s.
+- **The sigma2 store** that beta-gal writes agrees with the separate pass's to
+  rounding. Of its 4199 x 128 entries, 44% differ, by at most 8.6e-6 relative
+  (99th percentile 9.7e-7).
+- **The ns per pixel-evaluation rises by 2%** (63.4 to 64.9). The per-shell
+  sum costs a little, and the per-solve costs are spread over fewer passes.
+
+**6b (K to L).**
+
+| Case | Search (s) | ns per pixel-evaluation | Truth |
+| --- | --- | --- | --- |
+| beta-gal | 2.10 to 1.90 (-9%) | 67.8 to 61.5 | FSC 3.752 A, cFAR 0.558, unchanged |
+| polish cc | 2.33 to 2.14 (-8%) | 64.0 to 58.8 | unchanged |
+| polish euclid | 2.34 to 2.08 (-11%) | 63.9 to 56.8 | unchanged |
+| capture cc | 0.42 to 0.38 (-10%) | 52.8 to 48.0 | unchanged |
+| capture euclid | 0.41 to 0.37 (-10%) | 52.4 to 48.2 | unchanged |
+
+- **The pairs.** Beta-gal is the mean of two batches of order-balanced pairs,
+  eight runs in all. The simulated cases come from one batch. In these
+  batches the machine ran K 5% slower than in the morning's (2.10 against
+  2.00 s), with a backup and another session's tests running. The pairs share
+  that load.
+- **A standalone model of the gather** (padded box 512, band 88, random
+  planes, 16 threads) chose the form:
+  - the contraction took the gather from 145 to 121 thread-ns per sample with
+    the reference out of cache, and from 76 to 62 in cache;
+  - collecting the 27 taps first and contracting after was slower (127 and
+    69).
+
+  In the pass, consecutive LM evaluations of a particle sample nearly the same
+  plane, so the reference is mostly in cache, and the pass gains 9-11%.
+
+**Against stage 2's baseline,** the beta-gal orientation search went from
+19.3 s to 1.9 s (-90%), and the polish cases from about 24 s to about 2.1 s.
+Against G, the tree stage 6 started from, beta-gal went from 5.50 s to 1.90 s
+(-65%). These comparisons span batches, so they hold to about 5%.
+
+**Checks of the working tree:**
+
+- the build and the fast gate (15 of 15);
+- `unit_cart_align3D` (801 checks) and `lib_cart_align3D` (55 checks);
+- `check_descr.py` and `check_test_registry.py`;
+- `test_half_plane_kernels`: the half-plane kernels against the full-disk
+  ones, on Hermitian noise. It covers cc and euclid, with and without CTF, and
+  bands [2,6] and [0,6]. The objective, the gradient and the Gauss-Newton
+  matrix agree within 6.3e-8, 1.1e-7 and 1.3e-7 relative (bound 1e-5).
+- `test_sigma_from_shell_residual`: the conversion against
+  `sigma_contribution` at the same pose, bands from shell 2 and from DC:
+  identical.
+- `test_committed_shell_residual`: for an accepted solve, a rejected one and
+  the seam route, the kept residual is bit-identical to a fresh evaluation at
+  the returned pose.
+- The stage 5 oracles:
+  - the gather oracle within 9.5e-8 and 1.3e-7 of the largest coefficient
+    (bound 3.8e-6), with switch ratios 1.005 and 0.009;
+  - the Gauss-Newton oracle within 4.5e-5 (rotation) and 3.1e-6 (shift);
+  - E10 within 1.6e-7 and 2.2e-7 on grid, and 1.3e-2 off grid.
+- **The gate over 20 seed offsets on L,** at 8 threads:
+  - 20 of 20 pass;
+  - every one of its 94 metrics has its median inside the min-max of G's
+    after-profile;
+  - every floor stays admissible: stage a rotation worst 1.016 degrees and
+    stage i 0.991, against 1.5; stage e 1.98 against 7.5; stage h continued
+    0.295 against 1.53;
+  - stages a-d and i-j agree with G's to four digits, and the
+    multi-iteration stages e-h move within their spread.
 
 ### Stage 7: close-out
 
-- Update the Cartesian section of `refine3D_policy.md` to cover the objective
-  scaling, the stopping rule, the counters and the reference layout.
-- Fix the stale `production/CMakeLists.txt:243-245` comment.
-- Record the measured gains of every stage in this note, and move the note to
+**Status (2026-10-21): done.**
+
+- The Cartesian section of `refine3D_policy.md` (continuous Cartesian pose
+  policy) covers the reference layout, the continuous gather, the half-plane
+  evaluation, the curvature scale, the stopping rule, the passes per solve,
+  sigma2 from the accepted evaluation and the counters.
+- The `production/CMakeLists.txt` comment of `lib_cart_align3D` says 1 000
+  particles and that the fixture files are removed.
+- The measured gains of every stage are in section 2, and the note moved to
   `completed/`.
 
 ## 3. Fewer passes per particle (the LM driver)
@@ -1301,6 +1457,8 @@ bit-identical, barring overflow.
 - Keeping today's accumulation order keeps the result bit-identical.
 - Vectorizing across the three taps reorders the sums, so it belongs to
   stage 6b.
+- **Outcome (stage 6 record):** the cube lost again on the half plane and
+  was dropped; 6b contracts the taps one axis at a time on the packed layout.
 
 ### 4.5 Loop bounds and the reference layout
 
@@ -1313,7 +1471,8 @@ test `shells` (`:677-680`). Bound them by `kto`, and by `h >= 0` under section
 alone in stage 3 it is slower at production bands. It doubles the working set
 of a full-disk pass, because the packed layout lets a pixel and its Friedel
 mate share memory (stage 3 record). So it is adopted only together with the
-half-plane, if the measurement there says so.
+half-plane, if the measurement there says so. On the half plane it was 18%
+slower on beta-gal (stage 6 record), so it was not adopted.
 
 - **Extent.** It is centred on the origin and covers the band of the reference
   file (`kto`, the header's band). Its half-side is `padf kto + 2` voxels per
@@ -1494,7 +1653,7 @@ simple_exec prg=refine3D mkdir=no vol1=recvol_state01.mrc mskdiam=180 pgrp=d2 ob
 ```
 
 The comparison standard, the one the fused gather was held to
-(`completed/cont_kb_gather_performance.md:101-106`):
+(`cont_kb_gather_performance.md:101-106`):
 
 - three order-balanced pairs from fresh copies;
 - judged on the median worker orientation-search time;

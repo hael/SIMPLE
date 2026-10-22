@@ -10,8 +10,6 @@ the result before it. The contracts of the two runs are in
 the explicit-size emulator it also describes, `emulate_solve3D_stream`, was
 removed on 2026-10-14.
 
-Status (2026-10-11): implemented, not yet compiled or run.
-
 ## 1. Scope
 
 `simple_exec prg=solve3D_chunks projfile=<project> <solve3D inputs>` takes a
@@ -24,10 +22,8 @@ The workflow orchestrates only. It does not change the sampling, staging,
 reconstruction or validation of `solve3D` and `solve3D_addon`. It runs both
 unchanged, in the same process, and reads what they publish.
 
-It is meant primarily for emulating the stream and finding stream
-parameters. Its runs are formed as the stream forms them, consecutive whole
-stacks in arrival order, with sizes chosen automatically within the limits
-below. It has no cadence gate and no rollback.
+Its runs are consecutive whole stacks in arrival order, with sizes chosen
+automatically within the limits below. It has no cadence gate and no rollback.
 
 ## 2. Command Line
 
@@ -37,7 +33,7 @@ below. It has no cadence gate and no rollback.
 | `addon_diag` | optional, default `yes`; goes to every add-on |
 | `balance` | optional, default as in `solve3D`: `cavg` with a usable 2D solution, `none` without |
 | `filt_mode` | optional, default `nonuniform_lpset` |
-| the other `solve3D` inputs a stream base run has (`nstates`, `nstages`, `pgrp`, `mskdiam`, `nclust`, `lpstart`, `lpstop`, ...) | as in `solve3D`; they go to the base run; `nstages` must be at least 3 (section 9) |
+| the other `solve3D` inputs a stream base run has (`nstates`, `nstages`, `pgrp`, `mskdiam`, `nclust`, `lpstart`, `lpstop`, ...) | as in `solve3D`; they go to the base run; `nstages` must reach the symmetry-search stage (section 9) |
 | compute keys (`nparts`, `nthr`) and the execution-environment keys | accepted; they go to the base run and every add-on |
 | `nsample` | not accepted; derived (section 3) |
 | `rec_backend`, `maxits_pcg`, `maxits_ml`, `pcg_solvent`, `pcg_solvent_lambda`, `pcg_solvent_check` | not accepted; reconstruction is always `rec_backend=gridding` |
@@ -110,8 +106,7 @@ The workflow uses the fewest runs the cap allows:
 `R = ceiling(N / 30000)`
 
 It cuts the selected particles, in row order, into `R` runs of consecutive
-whole stacks, the way the stream forms its runs (`cap_rows` in the stream's
-solve3D stage): the earliest-imported stacks first, no micrograph split.
+whole stacks: the earliest-imported stacks first, no micrograph split.
 
 1. The balanced targets: if `N = q*R + r`, the first `r` runs would hold
    `q+1` particles and the rest `q`.
@@ -120,7 +115,7 @@ solve3D stage): the earliest-imported stacks first, no micrograph split.
    within 10000 to 30000.
 3. When no such boundary exists (in practice only with stacks of thousands of
    particles), the cut goes inside a stack, at the target moved into the
-   limits. The stream also splits a stack only when it cannot fit.
+   limits.
 
 Run sizes therefore differ from the balanced share by at most about one stack,
 and every run holds 10000 to 30000 particles. The log and the report give the
@@ -130,16 +125,14 @@ neither class labels nor maps.
 Run 0 is the base run. Runs 1 to `R-1` are the add-on cohorts, in arrival
 order.
 
-This is deliberately the stream's condition, since the workflow is meant to
-emulate the stream:
+The runs keep the order of arrival:
 
 - **The base is the start of the session.** Session drift, and views or
-  classes that are rare early in the data, carry into the base map, as they
-  do into the stream's first run.
+  classes that are rare early in the data, carry into the base map.
 - **View imbalance within a run** is left to the sampler: `balance=cavg`
   evens out the views among the particles a run has. Views a cohort lacks come
   from the frozen term of its add-on.
-- **Each run reads its own block of stack files**, as a stream update does.
+- **Each run reads its own block of stack files.**
   The particles of a run sit together on disk.
 
 Unselected rows belong to no run and stay unselected in every run.
@@ -296,7 +289,7 @@ The child runs keep their own refusals.
 
 ## 10. Tests
 
-- Unit sub-suite `solve3D stream emulation` in `unit_project`: the sampling
+- Unit sub-suite `solve3D chunks plan` in `unit_project`: the sampling
   constants; `nsample` for 1 to 20 states (the total stays within
   `nstates - 1` of 5000); the run count at its bounds and over a sweep of
   particle counts (fewest runs, every run between 10000 and 30000); runs of
@@ -320,4 +313,4 @@ The child runs keep their own refusals.
 | `src/main/solve/simple_solve3D_chunks_plan_tester.f90` | the unit tests (suite `solve3d_chunks_plan`) |
 | `src/main/commanders/simple/simple_commanders_solve3D.f90` (`write_solve3D_benchmark`) | the child runs; their `BENCH/SOLVE3D_BENCH.txt` |
 | `src/main/solve/simple_solve3D_manifest.f90` (`replay`, `read_registered`, `register`) | `nsample`, `nstates` and the recorded inputs reaching the add-ons; the manifest registration of the published project |
-| `src/main/solve/simple_solve3D_utils.f90` (`solve3D_symsrch_stage`) | the lowest supported `nstages` |
+| `src/main/solve/simple_solve3D_controller.f90` (`solve3D_symsrch_stage`) | the lowest supported `nstages` |

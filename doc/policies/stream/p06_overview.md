@@ -5,7 +5,7 @@ code. p06 keeps one growing pool of every particle the sieve accepts and classif
 iteration at a time, shows the class averages in the GUI, writes snapshots of the classes the user
 selects, and publishes classified particles for multistate 3D (p07). Contract and details:
 `pool2D_policy.md` and `stream_3D_ingestion_policy.md` (sections 2, 3 and 9); this page
-summarises the code as of 14 October 2026.
+summarises the code.
 
 ```mermaid
 flowchart TD
@@ -67,9 +67,7 @@ flowchart TD
   classified.
 - **Iterations 11 to 24 publish nothing**, so 3D sees a settled classification.
 - **The pool pauses between imports**: it waits for more particles before the next iteration, and
-  the sieve's final set lifts the pause until iteration 25.
+  the sieve's final set lifts the pause until iteration 25, and past 25 until the final
+  publication has been made.
 - **Late particles never see the coarse low-pass limits**, which end at iteration 20.
 - **A failed iteration is retried once**; a second failure stops the stage.
-- **Possible gap, not yet tested:** a pool already paused past iteration 25 when the sieve's empty
-  final set arrives may never run the iteration that carries the final flag, so p07 would not see a
-  final publication.

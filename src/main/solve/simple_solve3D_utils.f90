@@ -605,6 +605,17 @@ contains
         call vol_lp_stage%kill
     end subroutine exec_refine3D
 
+    !> Replaces each ptcl3D pose by a random symmetry mate. The stage's refinement wrote the poses into projfile,
+    !! so they are read back first: spproj still holds the previous stage's.
+    subroutine symmetry_randomize_poses( symobj, spproj, projfile )
+        type(sym),         intent(inout) :: symobj
+        class(sp_project), intent(inout) :: spproj
+        class(string),     intent(in)    :: projfile
+        call spproj%read_segment('ptcl3D', projfile)
+        call symobj%symrandomize(spproj%os_ptcl3D)
+        call spproj%write_segment_inside('ptcl3D', projfile)
+    end subroutine symmetry_randomize_poses
+
     subroutine symmetrize( params, istage, spproj, projfile, xrec3D )
         class(parameters),               intent(inout) :: params
         integer,                         intent(in)    :: istage
@@ -617,10 +628,7 @@ contains
         integer :: state
         real :: lp_snapshot
         real :: lpsym, hpsym
-        if( l_symran )then
-            call se1%symrandomize(spproj%os_ptcl3D)
-            call spproj%write_segment_inside('ptcl3D', projfile)
-        endif
+        if( l_symran ) call symmetry_randomize_poses(se1, spproj, projfile)
         if( l_srch4symaxis )then
             lpsym = max(solve3D_lpsymsrch_lb(),lpinfo(solve3D_symsrch_stage(l_srch4symaxis))%lp)
             ! the axis search scores the Fourier shells between hp and lpsym; a stage limit coarser than hp (an early

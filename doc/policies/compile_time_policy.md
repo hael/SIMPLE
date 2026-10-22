@@ -3,9 +3,9 @@
 ## Purpose and scope
 
 SIMPLE is a large modern-Fortran code base built with GNU Fortran (gfortran)
-through CMake's Make generator. A clean build compiles about 840 sources. This
-policy says how to keep build time down in day-to-day development and how to
-reduce it when it has grown. It applies to every SIMPLE-owned source, to the
+through CMake's Make generator. A clean build runs about 900 compiles with the
+tests and about 740 without. This policy says how to keep build time down in
+day-to-day development and how to reduce it when it has grown. It applies to every SIMPLE-owned source, to the
 CMake files and to the build scripts. Every rule below comes from a measured
 experiment; the evidence is summarized at the end.
 
@@ -36,9 +36,12 @@ Three mechanisms explain nearly all of SIMPLE's compile time.
    pays that cost 14 times.
 2. **Module dependency chains.** A source cannot compile until every module it
    imports at module level has been compiled. One slow file in a chain delays
-   everything after it. Umbrella modules that re-export many others
-   (`simple_core_module_api`, `simple_commanders_api`) turn a few real
-   dependencies into dependencies on everything they re-export.
+   everything after it. Umbrella modules that re-export many others turn a few
+   real dependencies into dependencies on everything they re-export: in
+   `src/main/apis` `simple_core_module_api`, `simple_commanders_api`,
+   `simple_stream_api`, `simple_pftc_srch_api`, `simple_pftc_api`,
+   `simple_ori_api` and `simple_gui_metadata_api`, and `simple_ui_modules` in
+   `src/main/ui`.
 3. **Target boundaries.** With the Make generator, a target that depends on
    another target (for example by linking it) does not start compiling until
    the whole other target is built, even if only a few of its modules are
@@ -92,8 +95,9 @@ code; they cost nothing at run time.
   module. An import needed by one procedure goes inside that procedure, or into
   the submodule that holds it.
 - **Do not add new umbrella modules or re-exports.** New code imports the
-  modules it uses, not an umbrella. Existing umbrellas stay as they are (see
-  "What does not work").
+  modules it uses, not an umbrella. Do not add names to an existing umbrella;
+  a module it imports whole (`simple_defs`, for example) also widens it with
+  every public name that module gains.
 - **Import only the names a third-party module provides that you use.** A bare
   `use FoX_dom`, for example, brought in its own `len`, which caused a warning,
   and its `//` for joining text and integers, which code had come to rely on
@@ -104,7 +108,13 @@ code; they cost nothing at run time.
 - **One library target for SIMPLE.** Do not create additional targets for
   subsets of the sources (tests, vendored code, a subsystem) to give them
   different flags or to organize them; with the Make generator each new
-  dependent target waits for the whole target it depends on.
+  dependent target waits for the whole target it depends on. The one second
+  library is the coarray copy: with `USE_COARRAYS=ON`, `src/CMakeLists.txt`
+  compiles all sources again into `${SIMPLE_COARRAYLIB}`, which only
+  `simple_private_exec` links, because the module files of normal and coarray
+  compilation must not be mixed. The generators (`simple_args`,
+  `simple_ui_defaults`, `simple_git`) are custom targets the library depends
+  on; they hold no SIMPLE sources.
 - **No per-file compiler options for SIMPLE-owned sources.** Warnings are fixed
   in the code. The one exception is a single `-w` on the bundled third-party
   sources (`SIMPLE_VENDOR_SOURCES` in `src/CMakeLists.txt`), which stay in the
@@ -131,7 +141,13 @@ each compile's start, end and duration.
 ./scripts/profile_build.sh clean --label <name> --no-tests -j <N>
 ./scripts/profile_build.sh compare build_profile/<before> build_profile/<after>
 ./scripts/profile_build.sh touch <source.f90> --label <name> -j <N>   # rebuild after one edit
+./scripts/profile_build.sh probe <source.f90> --label <name> -j <N>   # rebuild after an interface change
+./scripts/profile_build.sh report build_profile/<name>                # recompute summary.txt
 ```
+
+`clean` also takes `--debug`. `touch` never changes a module file and so never
+cascades; `probe` adds a public constant to the module the file declares,
+rebuilds, reports which sources recompiled, and restores the file.
 
 Profiles are written to `build_profile/` (not tracked). Then run the fast gate:
 `ctest --test-dir build -L fast --output-on-failure`.

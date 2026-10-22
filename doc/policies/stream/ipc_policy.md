@@ -156,12 +156,16 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
      `LAST_HEARTBEAT_TRIES` (3) times `LAST_HEARTBEAT_WAIT_S` (1 s) apart, until NICE accepts it
      (`send_last_heartbeat`; once without a `niceserver`): NICE marks a stream it last saw
      running failed after a minute without a heartbeat, so a lost last one would show a stopped
-     stream as failed. Added 13 October 2026.
+     stream as failed.
 4. **A start-up failure** once stages are forked (a stage not running, the listener thread not
    made) stops them before the master stops: asked, then killed with their jobs cancelled after
    `STARTUP_STOP_TIMEOUT_S` (60 s). The persistent-worker server ends with the master's process;
    its workers leave when they lose it.
 5. `forked_process` never restarts a child by itself: a stage restarts only when the GUI asks.
+6. Every stage but p03 also ends its loop when a `SIMPLE_TERM_STREAM` file exists in its folder
+   (`TERM_STREAM`). With `async=yes`, a refine2D master and a class-average assembly run exit
+   when the file exists (`terminate_stream`). The master does not write the file; the only writer
+   is the 2D pool's final write, in its own folder, when it stops mid-iteration.
 
 ## 8. Change rules
 

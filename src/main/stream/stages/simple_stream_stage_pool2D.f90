@@ -152,6 +152,7 @@ type :: stream_stage_pool2D
     integer :: box                       = 0  ! the pool's native box (px), from the first set imported
     logical :: l_pause                   = .false.
     logical :: l_sieve_final             = .false. ! the sieve's final set is in the pool
+    logical :: l_final_published         = .false. ! a publication with the final flag has been attempted since the final set
     logical :: l_sieve_final_seen        = .false. ! the sieve has handed off its final set
     logical :: l_sieve_first_failed      = .false. ! the first publication could not be built from the sieve's 2D
     logical :: l_stepwise                = .false. ! import only enough sets to reach the threshold
@@ -207,6 +208,7 @@ contains
     procedure, nopass :: target_nptcls
     procedure, nopass :: runs_to_final
     procedure, nopass :: publishes_final
+    procedure, nopass :: owes_final_run
     procedure, nopass :: exports_after
     procedure, nopass :: first_set_due
     procedure, nopass :: default_mskdiam
@@ -426,6 +428,7 @@ contains
         self%box                      = 0
         self%l_pause                  = .false.
         self%l_sieve_final            = .false.
+        self%l_final_published        = .false.
         self%l_sieve_final_seen       = .false.
         self%l_sieve_first_failed     = .false.
         self%l_stepwise               = .false.
@@ -582,7 +585,8 @@ contains
                 self%l_sieve_final = .true.
                 write(logfhandle,'(A,I3)') '>>> FINAL SIEVE SET DETECTED - RUNNING UNINTERRUPTED TO ITERATION ', FINAL_ITER
             else if( self%l_sieve_final .and. sets(nsets)%os_ptcl2D%get_noris() > 0 )then
-                self%l_sieve_final = .false.
+                self%l_sieve_final     = .false.
+                self%l_final_published = .false.
                 write(logfhandle,'(A)') '>>> A SIEVE SET AFTER THE FINAL ONE: THE POOL IS NO LONGER FINAL'
             endif
             nmics_new  = nmics_new  + sets(nsets)%os_mic%get_noris()
@@ -727,13 +731,14 @@ contains
         self%l_pool_started = .true.
     end subroutine start_pool
 
-    ! From the sieve's final set to FINAL_ITER the pool runs uninterrupted; otherwise a running pool
+    ! From the sieve's final set to FINAL_ITER the pool runs uninterrupted, and past FINAL_ITER it runs
+    ! until a publication has carried the final flag (owes_final_run); otherwise a running pool
     ! pauses once imports stop (pause_rate_factor), until it has the particles target_nptcls gives.
     subroutine apply_pause_policy( self )
         class(stream_stage_pool2D), intent(inout) :: self
         integer :: iter, factor
         iter = self%pool%iteration()
-        if( runs_to_final(iter, self%l_sieve_final) )then
+        if( runs_to_final(iter, self%l_sieve_final) .or. owes_final_run(iter, self%l_sieve_final, self%l_final_published) )then
             call self%unpause()
             return
         endif
@@ -886,6 +891,7 @@ contains
             self%last_export_id = self%last_export_id + 1
         endif
         self%last_export_iteration = self%pool%iteration()
+        if( publishes_final(self%pool%iteration(), self%l_sieve_final) ) self%l_final_published = .true.
     end subroutine export_pool_state
 
     !> The first set, as soon as it is due (first_set_due: NPTCLS_FIRST3D accepted particles handed
@@ -1102,6 +1108,16 @@ contains
         logical, intent(in) :: l_sieve_final
         runs_to_final = l_sieve_final .and. iter < FINAL_ITER
     end function runs_to_final
+
+    !> Whether the pool owes the final publication a further iteration: the sieve's final set is in the
+    !! pool, the pool is past FINAL_ITER, and no publication since has carried the final flag (@p
+    !! l_published). A pool that paused past FINAL_ITER before the final set came, and published then,
+    !! is not woken by the final set (it brings no particles); this runs it once more.
+    pure logical function owes_final_run( iter, l_sieve_final, l_published )
+        integer, intent(in) :: iter
+        logical, intent(in) :: l_sieve_final, l_published
+        owes_final_run = l_sieve_final .and. iter >= FINAL_ITER .and. .not. l_published
+    end function owes_final_run
 
     !> Whether a publication after iteration @p iter is the pool's final one: the sieve's final set
     !! is in the pool and the final run has reached FINAL_ITER (multistate 3D then runs its final

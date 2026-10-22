@@ -130,8 +130,8 @@ RELION never wraps `rlnPhaseShift`. The value flows verbatim from the fitter
 into `K5 = DEG2RAD(phase_shift)` and then into the signed `-sin(gamma)`, and its
 even-Zernike aberration fit can move a constant gamma offset into that column,
 producing values outside `[0, 180)`. SIMPLE's modulo-`2*pi` storage matches this
-and preserves such values on import and export. cisTEM wraps modulo `pi` in
-`CTF::SetAdditionalPhaseShift` but not in `CTF::Init`, so the same numerical
+and preserves such values on import and export modulo 360 degrees. cisTEM wraps
+modulo `pi` in `CTF::SetAdditionalPhaseShift` but not in `CTF::Init`, so the same numerical
 phase can be stored two different ways within one program; SIMPLE does not
 reproduce that behavior.
 
@@ -174,7 +174,7 @@ astigmatism:
 | imported `os_stk` -> particles | Copy stack phase to each generated particle unless an authoritative per-particle value is present |
 | `os_ptcl2D` <-> `os_ptcl3D` | Preserve phase in full-record and manual mappings |
 | subset, merge, chunk, and distributed assembly | Preserve the source row's phase while remapping project indices |
-| project field -> `ctfparams` | Return canonical phase for mic, stack, particle-2D, and particle-3D queries |
+| project field -> `ctfparams` | Return canonical phase for mic (`get_micparams`), stack, particle-2D, and particle-3D queries |
 | SIMPLE -> RELION STAR | Emit `rlnPhaseShift` in degrees on every relevant row |
 | RELION STAR -> SIMPLE | Convert degrees to radians; materialize zero when the column is absent |
 
@@ -218,6 +218,7 @@ The active fitting surfaces are:
 - streaming `preproc`
 - `mini_stream`
 - `check_refpick`
+- the stream `master`, which hands the same controls on to `preproc`
 
 Programs that only consume stored CTF parameters do not need a fitting flag.
 They use the stored phase automatically.
@@ -347,11 +348,11 @@ Run file-producing tests from separate temporary directories. The expected
 executables are:
 
 ```text
-build/production/simple_test_exec test=unit_image    (CTF sub-suite)
-build/production/simple_test_exec test=unit_project  (project records sub-suite)
-build/production/simple_test_exec test=unit_project  suite=star_project
-build/production/simple_test_exec test=unit_ui       suite=ui_visibility
-build/production/simple_test_exec test=unit_project  suite=project_merge
+build/bin/simple_test_exec test=unit_image    suite=ctf
+build/bin/simple_test_exec test=unit_project  suite=project_records
+build/bin/simple_test_exec test=unit_project  suite=star_project
+build/bin/simple_test_exec test=unit_ui       suite=ui_visibility
+build/bin/simple_test_exec test=unit_project  suite=project_merge
 ```
 
 Before inspecting experimental results, record the quantitative tolerances to
@@ -617,7 +618,7 @@ translation, class restoration, or reconstruction must verify:
 - `ctfparams` and `ctfvars` remain consistent
 - all four project fields retain phase through write/read and mapping
 - RELION STAR conversion remains degrees <-> radians, without range clamping
-- all five fitting UI surfaces remain synchronized
+- all six fitting UI surfaces remain synchronized
 - raw and phase-flipped restoration retain their numerator/density contracts
 - no phase-plate-specific postprocessing branch has been introduced
 

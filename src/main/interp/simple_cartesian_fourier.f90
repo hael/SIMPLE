@@ -147,10 +147,10 @@ contains
         real,    intent(in)  :: loc(3)
         complex, intent(out) :: value, dvalue_dloc(3)
         logical, intent(out) :: inside
-        complex :: fcomp
+        complex :: f(3), fx, fdx, fy(3), fdy(3), fxdy(3)
         real    :: t(3), wx(3), wy(3), wz(3), dx(3), dy(3), dz(3)
-        real    :: wyz, dyz, wydz, weight, dweight(3)
-        integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz, i0(3)
+        integer :: di, dj, dk, hh(3), kk(3), mm(3), ph(3), pk(3), pm(3), pkc(3), pmc(3), ny, nz, i0(3)
+        logical :: l_direct(3), l_run
         i0     = nint(loc) - 1
         inside = .not.(any(i0 < lbound(wrap,1)) .or. any(i0 + 2 > ubound(wrap,1)))
         value       = cmplx(0.,0.)
@@ -165,38 +165,49 @@ contains
         dx = [t(1)-0.5, -2.*t(1), t(1)+0.5]
         dy = [t(2)-0.5, -2.*t(2), t(2)+0.5]
         dz = [t(3)-0.5, -2.*t(3), t(3)+0.5]
-        ! the generic gather's packed/Friedel traversal and accumulation order
+        ! packed/Friedel indices per axis: a tap with h < 0 reads the conjugate at (-h,-k,-m)
         ny = size(cmat,2)
         nz = size(cmat,3)
+        do di = 1, 3
+            hh(di) = wrap(i0(1)+di-1)
+            kk(di) = wrap(i0(2)+di-1)
+            mm(di) = wrap(i0(3)+di-1)
+        end do
+        l_direct = hh >= 0
+        l_run    = all(l_direct) .and. hh(3) == hh(1) + 2
+        ph  = abs(hh) + 1
+        pk  =  kk + 1; where(  kk < 0 ) pk  = pk  + ny
+        pm  =  mm + 1; where(  mm < 0 ) pm  = pm  + nz
+        pkc = -kk + 1; where( -kk < 0 ) pkc = pkc + ny
+        pmc = -mm + 1; where( -mm < 0 ) pmc = pmc + nz
+        ! separable contraction: x, then y, then z
         do dk = 1, 3
-            mm = wrap(i0(3)+dk-1)
+            fy(dk)   = cmplx(0.,0.)
+            fdy(dk)  = cmplx(0.,0.)
+            fxdy(dk) = cmplx(0.,0.)
             do dj = 1, 3
-                kk   = wrap(i0(2)+dj-1)
-                wyz  = wy(dj) * wz(dk)
-                dyz  = dy(dj) * wz(dk)
-                wydz = wy(dj) * dz(dk)
-                do di = 1, 3
-                    hh = wrap(i0(1)+di-1)
-                    if( hh >= 0 )then
-                        ph = hh+1
-                        pk = kk+1; if( kk < 0 ) pk = pk+ny
-                        pm = mm+1; if( mm < 0 ) pm = pm+nz
-                        fcomp = cmat(ph,pk,pm)
-                    else
-                        ph = -hh+1
-                        pk = -kk+1; if( -kk < 0 ) pk = pk+ny
-                        pm = -mm+1; if( -mm < 0 ) pm = pm+nz
-                        fcomp = conjg(cmat(ph,pk,pm))
-                    endif
-                    weight     = wx(di) * wyz
-                    dweight(1) = dx(di) * wyz
-                    dweight(2) = wx(di) * dyz
-                    dweight(3) = wx(di) * wydz
-                    value       = value + weight * fcomp
-                    dvalue_dloc = dvalue_dloc + dweight * fcomp
-                enddo
-            enddo
-        enddo
+                if( l_run )then
+                    f = cmat(ph(1):ph(3),pk(dj),pm(dk))
+                else
+                    do di = 1, 3
+                        if( l_direct(di) )then
+                            f(di) = cmat(ph(di),pk(dj),pm(dk))
+                        else
+                            f(di) = conjg(cmat(ph(di),pkc(dj),pmc(dk)))
+                        endif
+                    end do
+                endif
+                fx  = wx(1)*f(1) + wx(2)*f(2) + wx(3)*f(3)
+                fdx = dx(1)*f(1) + dx(2)*f(2) + dx(3)*f(3)
+                fy(dk)   = fy(dk)   + wy(dj)*fx
+                fdy(dk)  = fdy(dk)  + dy(dj)*fx
+                fxdy(dk) = fxdy(dk) + wy(dj)*fdx
+            end do
+        end do
+        value          = wz(1)*fy(1)   + wz(2)*fy(2)   + wz(3)*fy(3)
+        dvalue_dloc(1) = wz(1)*fxdy(1) + wz(2)*fxdy(2) + wz(3)*fxdy(3)
+        dvalue_dloc(2) = wz(1)*fdy(1)  + wz(2)*fdy(2)  + wz(3)*fdy(3)
+        dvalue_dloc(3) = dz(1)*fy(1)   + dz(2)*fy(2)   + dz(3)*fy(3)
     end subroutine gather_packed_bspline3_window_grad
 
     !> Real-space response along one axis of a box of n of the quadratic B-spline stencil at

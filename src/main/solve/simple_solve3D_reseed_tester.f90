@@ -1,8 +1,9 @@
-!@descr: unit tests of solve3D's stage rules: the axis-search stage, stage skipping, and solve3D_cavgs' state reseeding
+!@descr: unit tests of solve3D's stage rules: the axis-search stage, stage skipping, symmetry randomization, and solve3D_cavgs' state reseeding
 ! In-memory labels and scores of the even (1..ncavgs) and odd (ncavgs+1..2*ncavgs) halves of the
-! class averages; no project, volume or job.
+! class averages; no volume or job. The symmetry randomization test writes one small project file.
 module simple_solve3D_reseed_tester
-use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage, solve3D_stage_skipping
+use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage, solve3D_stage_skipping, &
+    &symmetry_randomize_poses
 use simple_test_utils
 implicit none
 private
@@ -14,6 +15,7 @@ contains
         write(*,'(A)') '**** running all solve3D_cavgs stage rule tests ****'
         call test_symsrch_stage()
         call test_stage_skipping()
+        call test_symmetry_randomize()
         call test_no_weak_state()
         call test_one_empty_state()
         call test_all_in_one_state()
@@ -35,6 +37,61 @@ contains
         call assert_false(solve3D_stage_skipping(2),       'two states: no stage skipped')
         call assert_false(solve3D_stage_skipping(4),       'four states: no stage skipped')
     end subroutine test_stage_skipping
+
+    !> the randomization acts on the poses the stage wrote into the project file, not on the in-memory
+    !! copy of the previous stage: every pose in the file ends as itself or its c2 mate
+    subroutine test_symmetry_randomize()
+        use simple_sp_project, only: sp_project
+        use simple_sym,        only: sym
+        use simple_ori,        only: ori
+        use simple_string,     only: string
+        integer,          parameter :: NPTCLS = 12
+        character(len=*), parameter :: PROJFILE = 'symrand.simple'
+        class(sp_project), allocatable :: proj_file, proj_stale, proj_back
+        type(sym)    :: symobj
+        type(ori)    :: o_ref, o_mate, o_back, o_stale
+        type(string) :: cwd, root
+        integer      :: i, nfail0, nkept, nmoved, nstale
+        real         :: mat_back(3,3), mat_stale(3,3,NPTCLS)
+        write(*,'(A)') 'test_symmetry_randomize'
+        nfail0 = tests_failed
+        call enter_fixture('symrand', cwd, root)
+        allocate(proj_file, proj_stale, proj_back)
+        call proj_file%os_ptcl3D%new(NPTCLS, is_ptcl=.true.)
+        do i = 1, NPTCLS
+            call proj_file%os_ptcl3D%set_euler(i, [real(mod(37*i,360)), 20.+6.*real(i), real(mod(53*i,360))])
+        enddo
+        call proj_file%update_projinfo(string(PROJFILE))
+        call proj_file%write(string(PROJFILE))
+        ! the in-memory project is the previous stage's: other poses than the file's
+        call proj_stale%read(string(PROJFILE))
+        do i = 1, NPTCLS
+            call proj_stale%os_ptcl3D%set_euler(i, [real(mod(91*i+7,360)), 100.-5.*real(i), real(mod(29*i+3,360))])
+        enddo
+        do i = 1, NPTCLS
+            call proj_stale%os_ptcl3D%get_ori(i, o_stale)
+            mat_stale(:,:,i) = o_stale%get_mat()
+        enddo
+        call symobj%new('c2')
+        call symmetry_randomize_poses(symobj, proj_stale, string(PROJFILE))
+        call proj_back%read(string(PROJFILE))
+        nkept = 0; nmoved = 0; nstale = 0
+        do i = 1, NPTCLS
+            call proj_file%os_ptcl3D%get_ori(i, o_ref)
+            call symobj%apply(o_ref, 2, o_mate)
+            call proj_back%os_ptcl3D%get_ori(i, o_back)
+            mat_back = o_back%get_mat()
+            if( maxval(abs(mat_back - o_ref%get_mat())) < 1.e-4 )  nkept  = nkept  + 1
+            if( maxval(abs(mat_back - o_mate%get_mat())) < 1.e-4 ) nmoved = nmoved + 1
+            if( maxval(abs(mat_back - mat_stale(:,:,i))) < 1.e-4 ) nstale = nstale + 1
+        enddo
+        call assert_int(NPTCLS, nkept + nmoved, 'each pose of the file ends as itself or its mate')
+        call assert_int(0, nstale, 'the in-memory poses of the previous stage do not reach the file')
+        call proj_file%kill; call proj_stale%kill; call proj_back%kill
+        deallocate(proj_file, proj_stale, proj_back)
+        call symobj%kill
+        call leave_fixture(cwd, root, nfail0)
+    end subroutine test_symmetry_randomize
 
     !> populated states, and a single state, are left as they are
     subroutine test_no_weak_state()

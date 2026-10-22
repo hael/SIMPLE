@@ -43,6 +43,9 @@ integer,  parameter :: TEST_BOX        = 24
 integer,  parameter :: SMALL_BOX       = 16
 integer(int64), parameter :: FIXTURE_DIGEST = 3301_int64
 real(dp), parameter :: GRADIENT_TOL    = 3.e-2_dp
+! half-plane against full-disk kernels: single-precision models (the mirrored stencil's summation
+! order, the shift phase) summed in double precision, a few hundred single-precision ulps
+real(dp), parameter :: HALF_PLANE_TOL  = 1.e-5_dp
 ! single-precision samples summed in double precision: a few single-precision ulps
 real(dp), parameter :: FORMULA_TOL     = 20._dp*real(epsilon(1.), dp)
 real,     parameter :: LINEARITY_TOL   = 1.e-5
@@ -67,6 +70,10 @@ contains
         call test_curvature_scale()
         write(*,'(A)') 'test_gauss_newton_oracle'
         call test_gauss_newton_oracle()
+        write(*,'(A)') 'test_half_plane_kernels'
+        call test_half_plane_kernels()
+        write(*,'(A)') 'test_sigma_from_shell_residual'
+        call test_sigma_from_shell_residual()
         write(*,'(A)') 'test_matched_projector_boundary'
         call test_matched_projector_boundary()
         write(*,'(A)') 'test_reference_lifecycle'
@@ -744,6 +751,159 @@ contains
         end function objective_at
 
     end subroutine test_gauss_newton_oracle
+
+    ! the half-plane kernels (cont_lm_acceleration.md, stage 6) against the full-disk kernels they
+    ! replaced: a noisy Hermitian observation off its pose, cc and euclid, no CTF, CTF and flipped,
+    ! bands from shell 2 and from the DC pixel; equal up to the rounding of single-precision models
+    subroutine test_half_plane_kernels()
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: ctfparms
+        type(ctf)         :: tfun
+        type(ctfvars)     :: ctfvals
+        real, allocatable :: volume(:,:,:)
+        integer, allocatable :: seed(:)
+        complex  :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex  :: noise(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real     :: sigma2(0:TEST_BOX/2), angle, uniform(2), rms
+        real(dp) :: truth(3,3), candidate(3,3), truth_shift(2), candidate_shift(2)
+        real(dp) :: objective, reference_objective, gradient(5), reference_gradient(5), hessian(5,5), reference_hessian(5,5)
+        real(dp) :: shift_objective, reference_shift_objective, shift_gradient(2), reference_shift_gradient(2)
+        real(dp) :: shift_hessian(2,2), reference_shift_hessian(2,2)
+        real(dp) :: objective_error, gradient_error, hessian_error
+        integer  :: iobj, ictf, iband, h, k, shell, nseed, a, b
+        integer,  parameter :: objfuns(2) = [OBJFUN_CC, OBJFUN_EUCLID], ctfflags(3) = [CTFFLAG_NO, CTFFLAG_YES, CTFFLAG_FLIP]
+        integer,  parameter :: BANDS(2,2) = reshape([2, 6, 0, 6], [2,2])
+        call build_test_volume(volume)
+        call new_test_calc(calc, volume)
+        truth           = real(euler2m([19., 37., 28.]), dp)
+        truth_shift     = [0.31_dp, -0.24_dp]
+        candidate       = real(euler2m([20., 36.2, 28.7]), dp)
+        candidate_shift = [-0.08_dp, 0.06_dp]
+        sigma2          = [(1. + 0.1*real(shell), shell = 0, TEST_BOX/2)]
+        call calc%predict(1, .true., truth, truth_shift, prediction)
+        ! Hermitian noise at half the signal's rms, drawn on the half plane and mirrored
+        call random_seed(size=nseed)
+        allocate(seed(nseed), source=20261021)
+        call random_seed(put=seed)
+        rms   = sqrt(sum(abs(prediction)**2)/real(size(prediction)))
+        noise = cmplx(0., 0.)
+        do k = -TEST_BOX/2, TEST_BOX/2
+            do h = 0, TEST_BOX/2
+                if( h == 0 .and. k < 0 ) cycle
+                call random_number(uniform)
+                if( h == 0 .and. k == 0 )then
+                    noise(0,0) = cmplx(0.5*rms*(uniform(1) - 0.5), 0.)
+                else
+                    noise(h,k)   = 0.5*rms*cmplx(uniform(1) - 0.5, uniform(2) - 0.5)
+                    noise(-h,-k) = conjg(noise(h,k))
+                endif
+            end do
+        end do
+        ctfparms%smpd    = 1.
+        ctfparms%kv      = 300.
+        ctfparms%cs      = 2.7
+        ctfparms%fraca   = 0.1
+        ctfparms%dfx     = 1.4
+        ctfparms%dfy     = 1.65
+        ctfparms%angast  = 23.
+        ctfparms%phshift = 0.
+        tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+        ctfvals = tfun%get_ctfvars(ctfparms%phshift)
+        objective_error = 0._dp
+        gradient_error  = 0._dp
+        hessian_error   = 0._dp
+        do ictf = 1, size(ctfflags)
+            ctfparms%ctfflag = ctfflags(ictf)
+            observed = prediction
+            if( ctfparms%ctfflag /= CTFFLAG_NO )then
+                do k = -TEST_BOX/2, TEST_BOX/2
+                    do h = -TEST_BOX/2, TEST_BOX/2
+                        angle = 0.
+                        if( h /= 0 .or. k /= 0 ) angle = atan2(real(k), real(h))
+                        observed(h,k) = abs(tfun%eval_canonical(real(h*h + k*k)/real(TEST_BOX*TEST_BOX), angle, &
+                            &ctfvals%phshift))*prediction(h,k)
+                    end do
+                end do
+            endif
+            observed = observed + noise
+            do iband = 1, size(BANDS,2)
+                do iobj = 1, size(objfuns)
+                    if( objfuns(iobj) == OBJFUN_CC )then
+                        call calc%set_ptcl(1, observed, ctfparms, BANDS(:,iband))
+                    else
+                        call set_euclid_slot(calc, 1, observed, ctfparms, sigma2, BANDS(:,iband))
+                    endif
+                    call calc%pose_normal_terms(1, .true., 1, candidate, candidate_shift, objective, gradient, hessian)
+                    call calc%pose_normal_terms_full_disk(1, .true., 1, candidate, candidate_shift, reference_objective, &
+                        &reference_gradient, reference_hessian)
+                    call calc%shift_normal_terms(1, .true., 1, candidate, candidate_shift, shift_objective, &
+                        &shift_gradient, shift_hessian)
+                    call calc%shift_normal_terms_full_disk(1, .true., 1, candidate, candidate_shift, &
+                        &reference_shift_objective, reference_shift_gradient, reference_shift_hessian)
+                    objective_error = max(objective_error, abs(objective - reference_objective)/abs(reference_objective), &
+                        &abs(shift_objective - reference_shift_objective)/abs(reference_shift_objective))
+                    gradient_error = max(gradient_error, &
+                        &maxval(abs(gradient - reference_gradient))/maxval(abs(reference_gradient)), &
+                        &maxval(abs(shift_gradient - reference_shift_gradient))/maxval(abs(reference_shift_gradient)))
+                    do a = 1, 5
+                        do b = 1, 5
+                            hessian_error = max(hessian_error, abs(hessian(a,b) - reference_hessian(a,b))/&
+                                &sqrt(reference_hessian(a,a)*reference_hessian(b,b)))
+                        end do
+                    end do
+                    do a = 1, 2
+                        do b = 1, 2
+                            hessian_error = max(hessian_error, abs(shift_hessian(a,b) - reference_shift_hessian(a,b))/&
+                                &sqrt(reference_shift_hessian(a,a)*reference_shift_hessian(b,b)))
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        write(*,'(a,3(1x,es12.4))') 'CARTFT_HALF_PLANE objective/gradient/hessian max relative difference', &
+            &objective_error, gradient_error, hessian_error
+        call assert_true(objective_error < HALF_PLANE_TOL .and. gradient_error < HALF_PLANE_TOL .and. &
+            &hessian_error < HALF_PLANE_TOL, 'the half-plane kernels differ from the full-disk kernels beyond rounding')
+        call calc%kill
+    end subroutine test_half_plane_kernels
+
+    ! the sigma2 contribution from an evaluation's shell residual (cont_lm_acceleration.md, stage
+    ! 6c) against the sigma pass at the same pose, for euclid slots with bands from shell 2 and
+    ! from the DC pixel: equal up to rounding, sp outputs of dp sums of the same residuals
+    subroutine test_sigma_from_shell_residual()
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: no_ctf
+        real, allocatable :: volume(:,:,:), from_pass(:), from_residual(:)
+        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real     :: sigma2(0:TEST_BOX/2)
+        real(dp) :: rotation(3,3), objective, gradient(5), hessian(5,5), worst
+        real(dp), allocatable :: residual(:)
+        integer  :: iband, shell
+        integer, parameter :: BANDS(2,2) = reshape([2, TEST_BOX/2 - 1, 0, TEST_BOX/2 - 1], [2,2])
+        call build_test_volume(volume)
+        call new_test_calc(calc, volume)
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2   = [(0.5 + 0.1*real(shell), shell = 0, TEST_BOX/2)]
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        call calc%predict(1, .true., real(euler2m([19., 37., 28.]), dp), [0.31_dp, -0.24_dp], observed)
+        worst = 0._dp
+        do iband = 1, size(BANDS,2)
+            call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, BANDS(:,iband))
+            allocate(residual(BANDS(1,iband):BANDS(2,iband)))
+            call calc%pose_normal_terms(1, .true., 1, rotation, [-0.08_dp, 0.06_dp], objective, gradient, hessian, residual)
+            call calc%sigma_from_shell_residual(1, residual, from_residual)
+            call calc%sigma_contribution(1, .true., 1, rotation, [-0.08_dp, 0.06_dp], from_pass)
+            call assert_true(lbound(from_residual,1) == BANDS(1,iband) .and. ubound(from_residual,1) == BANDS(2,iband), &
+                &'the sigma2 contribution from a shell residual does not span the slot band')
+            worst = max(worst, maxval(abs(real(from_residual, dp) - real(from_pass, dp))/real(from_pass, dp)))
+            deallocate(residual)
+        end do
+        write(*,'(a,es12.4)') 'CARTFT_SIGMA_FROM_RESIDUAL max relative difference to the sigma pass', worst
+        call assert_true(worst < 1.e-6_dp, 'the sigma2 contribution from a shell residual differs from the sigma pass')
+        call calc%kill
+    end subroutine test_sigma_from_shell_residual
 
     ! E10: the Cartesian gather against the projector's KB stencil at identical rotated coordinates of one
     ! physical reference (C10): equal on grid, where ref_weight makes the B-spline gather carry the KB

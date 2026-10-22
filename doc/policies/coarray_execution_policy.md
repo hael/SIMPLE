@@ -49,8 +49,11 @@ and screen-based execution helpers. It must not depend on private commander
 dispatch.
 
 `production/simple_private_exec.f90` owns only executable-level dispatch. It
-should remain thin: detect `--coarray`, delegate to `run_coarray_direct`, and
-otherwise continue through the normal private commander path.
+should remain thin: detect `--coarray`, delegate to `run_coarray_direct`, detect
+`--coarray-smoke` and delegate to `run_coarray_smoke`, and otherwise continue
+through the normal private commander path. `--coarray-smoke` starts exactly two
+images and synchronizes them; it is the command of the `coarrays` CTest entry
+and runs no partition.
 
 The private exec driver owns normal command-line parsing. CLI invocations use
 `cline%parse_private`; coarray in-process invocations use
@@ -63,6 +66,14 @@ cases, commanders still receive a normal `cmdline`, construct `params` through
 `qsys=coarray` requires a `USE_COARRAYS` build. Non-coarray builds must fail
 early during backend setup rather than reaching a later `--coarray` executable
 path.
+
+Only `simple_private_exec` is linked against the coarray-enabled copy of the
+library (`${SIMPLE_COARRAYLIB}`, with its own module directory); `simple_exec`,
+`simple_stream`, `single_exec` and the other executables use the normal
+library, so the controller that submits a coarray job runs in normal mode.
+Both copies compile the same sources, so every source compiles in both modes;
+`this_image()`, `num_images()` and `sync all` appear only in
+`production/simple_private_exec_driver.f90`, under `#ifdef USE_COARRAYS`.
 
 The coarray backend is selected through the normal qsys name mechanism. It is
 not a scientific command option and must not leak into strategy, commander, or
@@ -194,6 +205,11 @@ The coarray qsys submission is synchronous from the controller's perspective.
 `submit_coarray_jobs` marks all active jobs submitted, runs the multi-image
 coarray command, and marks all active jobs done only after the command exits
 successfully.
+
+Unlike the script backends, whose controller reads exit-code files and checks
+liveness, `qsys_ctrl%update_queue` does nothing for the coarray backend: a
+failed partition reaches the controller only as the failure of the multi-image
+command.
 
 If an in-process private command fails, the owning coarray image must raise a
 hard failure and the aggregate coarray submission must fail. The per-partition

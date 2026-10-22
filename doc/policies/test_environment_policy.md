@@ -4,8 +4,7 @@
 
 This policy says what a test is in SIMPLE, where each test goes, how to write
 one, and what runs when. It applies to every Fortran test in the repository
-and to everyone who adds, changes or removes one. It records the state after
-the test-environment refactoring of September 2026.
+and to everyone who adds, changes or removes one.
 
 The refactoring itself is documented in
 `doc/refactoring_notes/completed/uniform_test_environment_refactoring.md` (the plan and
@@ -48,8 +47,7 @@ runs `scripts/check_test_registry.py`, `scripts/check_descr.py` and
 fails the build when an entry fails and only warns when the gate takes more
 than 60 s of real time (`scripts/run_fast_gate.sh`, `scripts/ctest_budget.py`).
 A budget warning allows installation to continue. A failed gate installs nothing. The per-entry timings are kept in
-`build/test_runs/ctest_fast.log.timing.txt`; the gate takes about 5 s on the
-reference Mac in Debug. Tests are on by default in every compile script;
+`build/test_runs/ctest_fast.log.timing.txt`. Tests are on by default in every compile script;
 `--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only
 and skips the gate, for when only the executables are needed.
 
@@ -103,7 +101,7 @@ tester module (section 4.1).
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, cavg quality selection, diffusion-map graphs, optimisers, low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
-| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D chunks plan, state weight set, cavgs work project, eo partition |
+| `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, micrograph subset, particle subset, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D chunks plan, state weight set, cavgs work project, eo partition |
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
@@ -151,7 +149,7 @@ entries: `rec3D_backends` (gridding against PCG on a user's project; a
 measurement without thresholds, a developer tool in the sense of section 3.4),
 `cont_refine3D_bench` (the `refine=cont` benchmark on simulated 1JYX particles:
 timings, work counts and pose errors, no thresholds; owner decision
-2026-10-19, `doc/implementation_notes/planned/cont_lm_acceleration.md`),
+2026-10-19, `doc/implementation_notes/completed/cont_lm_acceleration.md`),
 and the input generators `solve3D_addon_snapshots`, `write_state_weights_labels`
 and `write_state_weights_mixed` (tools for manual runs). `pcg_frac_update`,
 which needed a user's project, builds its own from the multi-state test fixture
@@ -174,9 +172,22 @@ SIMPLE_UNIT_ORDER=reverse simple_test_exec test=units   # the sub-suites in reve
 cd build && ctest -L fast --output-on-failure           # the gate by hand
 cd build && ctest -L library                            # a nightly tier by hand
 cd build && ctest -L highlevel --output-on-failure      # long tests, explicit only
+./run_tests.sh [fast|library|highlevel|platform|all|list|<entry>]   # the same from an existing build
 simple_test_exec test=simulated_workflow suite=6vxx seed_offset=3   # the same test on other draws
 simple_test_exec test=nightly                           # the whole high-level suite (section 1.5)
 ```
+
+`./run_tests.sh` reruns tests from an existing build without configuring or
+compiling; it runs the fast gate when given no mode, and takes
+`--build-dir <dir>`. `make check` in the build directory runs the same fast gate
+as the compile scripts. The day-to-day loop in an existing `build/` is
+`make -C build -j<n>`, `scripts/run_fast_gate.sh build`, then
+`make -C build -j<n> install`; the compile scripts run that sequence from a
+fresh directory. `simple_test_exec` parses its command line against the
+generated argument vocabulary, so a key that only the front door reads
+(`seed_offset`, `target`, `nseeds`, `dir1`, `dir2`, `keep_outputs`) is also
+listed in `scripts/simple_args_generator.pl`; a new such key not listed there
+is rejected by the parser.
 
 The `suite=` selector is the sub-suite name in lower case, with blanks and
 hyphens written as underscores and commas and slashes dropped
@@ -187,7 +198,7 @@ run by hand draws what a CTest run draws: `simple_test_exec` sets
 `SIMPLE_SEED=20260923` for its own process first (`fix_test_seed`), whatever
 the environment holds. The seed is not a user setting yet: production programs
 read `SIMPLE_SEED` from the environment, and a seed key of `parameters` is
-planned (`rnd_seed_parameter.md`).
+planned (`doc/refactoring_notes/planned/rnd_seed_parameter.md`).
 
 `seed_offset=<n>` moves every fixed seed of the test by n times a large odd
 stride (2654435761, in 64-bit integers), so that the offsets of one test cannot
@@ -276,8 +287,8 @@ They run every test execution as a child process of the test dispatcher
   an hour on 2026-10-18 against 45 minutes of CTest packing); ordering by
   expected core-seconds would start them early. The disk budget counts every
   started execution's disk, since outputs stay; a profile that deletes
-  outputs as executions end therefore runs one execution at a time once the
-  budget is spent.
+  the outputs of passed executions as they end therefore runs one execution at
+  a time once the budget is spent.
 
 ```text
 simple_test_exec test=nightly [ncunits=24] [dir=<run>]
@@ -316,10 +327,11 @@ simple_test_exec test=identity target=<entry> dir1=<run directory> dir2=<run dir
   it does not fail on a metric, with one exception: a success metric (sense
   `success`, below) counts the executions that succeeded (the column
   `successes`), and the profile fails when that count is below its floor times
-  the executions. `keep_outputs=no` deletes the subdirectories of each
-  execution's run directory (its outputs) as soon as it ends, keeping `run.log`
-  and `metrics.tsv`, and returns its disk to the budget, so that a long profile
-  counts only the running executions' disk. With `dir1=` and
+  the executions. `keep_outputs=no` deletes the subdirectories of the run
+  directory of each passed execution (its outputs) as soon as it ends, keeping
+  `run.log` and `metrics.tsv`, and returns its disk to the budget, so that a
+  long profile counts only the running executions' disk; the outputs of a
+  failed or timed out execution stay. With `dir1=` and
   `dir2=` it compares two profiles instead: for each table both hold,
   `comparison_profile_<entry>_t<n>.tsv` gives both medians, the shift of the
   median in units of the larger spread (positive is better) and both failure
@@ -593,8 +605,13 @@ A unit test is a subroutine in a tester module next to the code it tests.
 - Seed every draw with `set_fixed_seed(<n>)`. Call it **after**
   `parameters%new`, which reseeds.
 - Keep them small and in memory. Write files only when file I/O is what the
-  test is about; name them `tmp_<tester>_*` and delete them at the end of the
-  test, also when a check failed.
+  test is about, in a directory made by `enter_fixture(tag, ...)` and left by
+  `leave_fixture(...)` (`simple_test_utils`): the directory is `<tag>_<pid>`
+  under the working directory; it is removed when no check failed since the
+  test entered it, and kept, with a message, when one did, so that a failing
+  run can be inspected. Files outside a fixture directory are named
+  `tmp_<tester>_*` and deleted at the end of the test, also when a check
+  failed.
 - A tester that loops over something printing through `logfhandle` diverts
   `logfhandle` to a scratch unit and restores it.
 
@@ -617,9 +634,13 @@ left in a production module.
 ### 4.4 A workflow or platform test
 
 A test that runs a pipeline is a commander: its type and `exec_test_<name>`
-routine in `src/main/commanders/test/simple_commanders_test_<area>.f90`, a
-case in the router `src/main/exec/simple_test_exec_<area>.f90`, a program in
-`src/main/ui/simple_test/simple_test_ui_<area>.f90`, a registration in
+routine in the file of its family in `src/main/commanders/test/`
+(`simple_commanders_test_highlevel.f90` and its `..._highlevel_<topic>.f90`
+submodules, `..._single.f90`, `..._stream.f90`; the suites and platform tests
+are in `..._class.f90`), a case in the router of the same family,
+`src/main/exec/simple_test_exec_{highlevel,single,stream,class}.f90`, a program
+in `src/main/ui/simple_test/simple_test_ui_highlevel.f90` (the suites and
+platform tests are in `simple_test_ui_class.f90`), a registration in
 `production/CMakeLists.txt` with `simple_add_test` (label, timeout, threads,
 and `RUN_SERIAL` for a library or platform entry, `PROCESSORS <reservation>`
 for a high-level one) and, for a high-level entry, its row in the test
@@ -680,8 +701,8 @@ Two kinds of code need a check that is easy to leave out:
   pointer to assumed-shape or pointer dummies (an explicit-shape dummy gets a
   copy), and an index past `ldim(1)` is now out of bounds. In real space the
   padding holds zeros; a test reads it through `max_abs_padding()`, never
-  through `get_rmat_ptr_padded`, which is for the one caller that hands
-  Fourier data on in the FFT layout.
+  through `get_rmat_ptr_padded`, which is for the callers that hand Fourier
+  data on in the FFT layout (`simple_image_slab`, `simple_stack_read_session`).
 
 ## 5. Library support for tests
 
@@ -699,7 +720,8 @@ The assertion and reporting layer. A tester uses the assertions and
 | `assert_char(expected, actual, msg)`, `assert_string_eq(char, string, msg)` | text, trimmed |
 | `set_fixed_seed(base[, propagate])` | seed the intrinsic generator with a fixed state, base plus the seed offset; `propagate=.true.` also sets `SIMPLE_SEED`, from which the commanders run in process reseed |
 | `fix_test_seed` | `SIMPLE_SEED` of the test process set to 20260923 plus the seed offset; called by `simple_test_exec` and the test dispatcher, not by testers |
-| `set_test_seed_offset(n)`, `get_test_seed_offset()` | the seed offset of the process (`seed_offset=` of `simple_test_exec`); for the front door and the dispatcher, and for a test that prints its effective seed |
+| `set_test_seed_offset(n)`, `offset_seed(base)` | the seed offset of the process (`seed_offset=` of `simple_test_exec`), and a base seed moved by it (a 64-bit integer); for the front door and the dispatcher, and for a test that prints its effective seed |
+| `enter_fixture(tag, cwd_saved, fixture_root)`, `leave_fixture(cwd_saved, fixture_root, nfail_before)` | the scratch directory of a test (section 4.2): made and entered, then left and removed unless a check failed since `nfail_before` |
 | `begin_test_suite`, `end_test_suite`, `reset_test_report`, `report_summary`, `tests_run`, `tests_failed` | the runner's bookkeeping; not for testers |
 
 A failed assertion records its message, with expected and actual values, and

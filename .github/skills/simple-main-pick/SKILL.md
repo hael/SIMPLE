@@ -9,7 +9,7 @@ This folder owns picking logic.
 
 ## Read First
 
-- `doc/algorithms/particle_picking.md`, `doc/policies/segdiampick_mics_policy.md`
+- `doc/algorithms/particle_picking.md`; the stream's picker is described in `doc/policies/stream/reference_generation_policy.md`, and `doc/policies/segdiampick_mics_policy.md` covers `segdiampick_mics`, the `mini_stream` validation program's estimate
 - `simple_picksegdiam.f90`: segmentation-based picking with diameter estimation (the stream's version)
 - `simple_segdiam_bin_picker.f90`: picks micrograph batches with one diameter-bin selection and box size, decided by the first batch
 - `simple_pickref.f90`, `simple_pickref_corr_batch.f90`: reference-based picking and its BLAS-backed correlation
@@ -18,7 +18,7 @@ This folder owns picking logic.
 
 ## Connections
 
-- Driven by `strategies/parallelization/simple_pick_strategy.f90` and `commanders/simple/simple_commanders_pick.f90`; in the stream, p03 picks in process (`simple_stream_stage_initial_analysis`, `segdiam_bin_picker`), p04 through `pick_extract` jobs, and `simple_mini_stream_utils` (`segdiampick_mics`) estimates the diameter
+- Driven by `strategies/parallelization/simple_pick_strategy.f90` and `commanders/simple/simple_commanders_pick.f90`; in the stream, p03 picks in process (`simple_stream_stage_initial_analysis`, `segdiam_bin_picker`), p04 through `pick_extract` jobs; the stream's diameter bins and box come from `segdiam_bin_picker`, and `simple_mini_stream_utils` (`segdiampick_mics`) serves only the `mini_stream` validation program
 - Works with `project/`, `image/` (`image_bin`), and preprocessing
 
 ## Working Rule

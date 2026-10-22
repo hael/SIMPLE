@@ -66,6 +66,24 @@ living docs and leave the old ones in dated history docs.
   `simple_<thing>_tester.f90` next to the code it tests, and runs through `simple_test_exec`;
   see the Tests section of `AGENTS.md`.
 
+## Layering And Project I/O
+
+`doc/policies/layering_and_project_ownership_policy.md` is the rule set; read it
+before adding or changing a commander, a strategy routine, a worker step or any
+code that reads or writes an `sp_project`. Its section 8 lists where the code does
+not follow it yet; do not add to that list.
+
+- Search for the step before writing it (`rg` the verb and the data it touches);
+  extend an existing routine, never copy its frame.
+- A part of a stage that another workflow or the master runs is a strategy routine on
+  the caller's `(params, build)` with a `run_<x>(cline)` entry; its commander is a thin
+  `execute(cline)` wrapper. A strategy never calls a commander for a part of a stage.
+- One project owner per run: workers read the file and write part files, never the
+  project; the master merges in memory and writes the changed segments once per
+  iteration. Do not read what `build` already holds.
+- Shared project state (even/odd halves, the sample, sigma2) has one maker and verifying
+  consumers (`ensure_field_halves`).
+
 ## Instruction And Skill Maintenance
 
 - Propose small, incremental updates to `.github/instructions/` and `.github/skills/`

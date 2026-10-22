@@ -83,6 +83,7 @@ type :: cartft_pose_opt
     real(dp) :: cumulative_rotation = 0._dp, cumulative_shift = 0._dp
     integer  :: npasses = 0                !< calculator evaluations since the last solve began
     type(cartft_stage) :: stages(2)
+    real(dp), allocatable :: shell_residual(:) !< whitened |r|^2 per shell at the returned pose (euclid)
     logical  :: exists = .false.
 contains
     ! lifecycle
@@ -98,6 +99,7 @@ contains
     procedure          :: get_objectives
     procedure          :: get_motion
     procedure          :: get_stage
+    procedure          :: get_shell_residual
     ! private helpers
     procedure, private :: reset_record
 end type cartft_pose_opt
@@ -222,6 +224,8 @@ contains
         real(dp),               intent(inout) :: rotmat(3,3), shift(2)
         real(dp) :: staged_rotmat(3,3), staged_shift(2), gradient(5), hessian(5,5)
         real(dp) :: shift_objective_after, joint_objective_after, sine_half
+        real(dp), allocatable :: staged_residual(:), joint_residual(:)
+        integer  :: kfromto(2)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
         ! every early exit leaves rotmat and shift at the seed (rollback)
         call self%reset_record
@@ -230,8 +234,12 @@ contains
             return
         endif
         ! the seed objective is the single acceptance baseline of the transaction; its terms also
-        ! seed the joint stage on the joint route
-        call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, self%objective_before, gradient, hessian)
+        ! seed the joint stage on the joint route, and its shell residual is the returned pose's
+        ! until a staged pose is committed
+        kfromto = calc%get_ptcl_kfromto(iptcl)
+        allocate(self%shell_residual(kfromto(2) - kfromto(1) + 1), joint_residual(kfromto(2) - kfromto(1) + 1))
+        call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, self%objective_before, gradient, hessian, &
+            &self%shell_residual)
         self%npasses = self%npasses + 1
         if( .not. ieee_is_finite(self%objective_before) )then
             self%status = CARTFT_INVALID_NUMERICS
@@ -240,11 +248,12 @@ contains
         staged_rotmat = rotmat
         staged_shift  = shift
         shift_objective_after = self%objective_before
+        staged_residual = self%shell_residual
         if( self%refine_shifts .and. self%shift_first )then
             ! stage 1 of the shift-then-joint route: translation only, the seed rotation fixed
             call self%refine_shift(calc, state, iseven, iptcl, staged_rotmat, staged_shift)
             call calc%pose_normal_terms(state, iseven, iptcl, staged_rotmat, staged_shift, &
-                &shift_objective_after, gradient, hessian)
+                &shift_objective_after, gradient, hessian, staged_residual)
             self%npasses = self%npasses + 1
             associate( st => self%stages(CARTFT_STAGE_SHIFT) )
                 st%objective_before = self%objective_before
@@ -268,12 +277,13 @@ contains
         if( self%refine_shifts )then
             call self%refine_joint(calc, state, iseven, iptcl, staged_rotmat, staged_shift, &
                 &anchor_rotmat=rotmat, anchor_shift=shift, seed_objective=shift_objective_after, &
-                &seed_gradient=gradient, seed_hessian=hessian, objective_out=joint_objective_after)
+                &seed_gradient=gradient, seed_hessian=hessian, objective_out=joint_objective_after, &
+                &seed_residual=staged_residual, residual_out=joint_residual)
         else
             call self%refine_joint(calc, state, iseven, iptcl, staged_rotmat, staged_shift, &
                 &active=[.true., .true., .true., .false., .false.], anchor_rotmat=rotmat, anchor_shift=shift, &
                 &seed_objective=shift_objective_after, seed_gradient=gradient, seed_hessian=hessian, &
-                &objective_out=joint_objective_after)
+                &objective_out=joint_objective_after, seed_residual=staged_residual, residual_out=joint_residual)
         endif
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
             st%objective_before = shift_objective_after
@@ -302,6 +312,7 @@ contains
         self%cumulative_shift    = sqrt(sum((staged_shift - shift)**2))
         rotmat = staged_rotmat
         shift  = staged_shift
+        self%shell_residual = joint_residual
     end subroutine refine_pose
 
     !> The shift-only LM stage alone, with the rotation fixed: damped 2x2 Gauss-Newton steps
@@ -455,11 +466,12 @@ contains
     !! neither) every trial pose must stay within max_total_rotation and max_total_shift of
     !! the anchor. rotmat and shift are updated through accepted steps only. The seed_* terms (all
     !! or none) are the caller's pose_normal_terms at the seed, which then is not evaluated again;
-    !! objective_out is the objective at the returned pose. Overwrites the CARTFT_STAGE_JOINT
+    !! objective_out is the objective at the returned pose, and residual_out its shell residual
+    !! (seed_residual, the seed's, with the seed terms). Overwrites the CARTFT_STAGE_JOINT
     !! record; an invalid particle slot gives CARTFT_INVALID_NUMERICS. THROW_HARD for no active
     !! parameter, one anchor without the other, a non-finite anchor or a partial seed.
     subroutine refine_joint( self, calc, state, iseven, iptcl, rotmat, shift, active, anchor_rotmat, anchor_shift, &
-        &seed_objective, seed_gradient, seed_hessian, objective_out )
+        &seed_objective, seed_gradient, seed_hessian, objective_out, seed_residual, residual_out )
         class(cartft_pose_opt), intent(inout) :: self
         class(cartft_calc),     intent(in)    :: calc
         integer,                intent(in)    :: state, iptcl
@@ -469,6 +481,9 @@ contains
         real(dp), optional,     intent(in)    :: anchor_rotmat(3,3), anchor_shift(2)
         real(dp), optional,     intent(in)    :: seed_objective, seed_gradient(5), seed_hessian(5,5)
         real(dp), optional,     intent(out)   :: objective_out
+        real(dp), optional,     intent(in)    :: seed_residual(:)
+        real(dp), optional,     intent(out)   :: residual_out(:)
+        real(dp), allocatable :: residual(:), trial_residual(:)
         real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
         real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
         real(dp) :: diagonal(5), scaled_direction(5), direction(5)
@@ -493,6 +508,12 @@ contains
         if( (present(seed_objective) .neqv. present(seed_gradient)) .or. (present(seed_objective) .neqv. present(seed_hessian)) ) &
             &THROW_HARD('cartft_pose_opt joint stage requires all seed terms or none')
         if( present(objective_out) ) objective_out = ieee_value(1._dp, ieee_quiet_nan)
+        if( present(residual_out) )then
+            if( present(seed_objective) .neqv. present(seed_residual) ) &
+                &THROW_HARD('cartft_pose_opt joint stage requires the seed residual with the seed terms')
+            residual_out = 0._dp
+            allocate(residual(size(residual_out)), trial_residual(size(residual_out)), source=0._dp)
+        endif
         self%stages(CARTFT_STAGE_JOINT) = cartft_stage(status=CARTFT_ITERATION_LIMIT)
         associate( st => self%stages(CARTFT_STAGE_JOINT) )
             if( .not. calc%ptcl_is_valid(iptcl) )then
@@ -506,11 +527,13 @@ contains
                 objective = seed_objective
                 gradient  = seed_gradient
                 hessian   = seed_hessian
+                if( allocated(residual) ) residual = seed_residual
             else
-                call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
+                call calc%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian, residual)
                 self%npasses = self%npasses + 1
             endif
             if( present(objective_out) ) objective_out = objective
+            if( present(residual_out) ) residual_out = residual
             bounded_trial = .false.
             if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
                 &any(.not. ieee_is_finite(hessian)) )then
@@ -595,7 +618,7 @@ contains
                 ! the trial objective, gradient and normal matrix over the full active disk:
                 ! the dominant cost of an LM iteration
                 call calc%pose_normal_terms(state, iseven, iptcl, trial_rotmat, trial_shift, &
-                    &trial_objective, trial_gradient, trial_hessian)
+                    &trial_objective, trial_gradient, trial_hessian, trial_residual)
                 st%ntrials   = st%ntrials + 1
                 self%npasses = self%npasses + 1
                 if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
@@ -618,6 +641,7 @@ contains
                     objective = trial_objective
                     gradient  = trial_gradient
                     hessian   = trial_hessian
+                    if( allocated(residual) ) residual = trial_residual
                     naccepted = naccepted + 1
                     consecutive_rejections = 0
                     st%naccepted = naccepted
@@ -640,6 +664,7 @@ contains
                 &st%status = CARTFT_BOUND_REJECTED
         end associate
         if( present(objective_out) ) objective_out = objective
+        if( present(residual_out) ) residual_out = residual
     end subroutine refine_joint
 
     ! RECORD OF THE LAST SOLVE
@@ -690,6 +715,15 @@ contains
         objective_after   = st%objective_after
     end subroutine get_stage
 
+    !> The whitened |r|^2 per shell of the slot's band at the pose the last transaction returned,
+    !! from the evaluation that chose it (calc%sigma_from_shell_residual turns it into the sigma2
+    !! contribution); unallocated when the transaction evaluated nothing.
+    subroutine get_shell_residual( self, shell_residual )
+        class(cartft_pose_opt), intent(in)  :: self
+        real(dp), allocatable,  intent(out) :: shell_residual(:)
+        if( allocated(self%shell_residual) ) shell_residual = self%shell_residual
+    end subroutine get_shell_residual
+
     subroutine reset_record( self )
         class(cartft_pose_opt), intent(inout) :: self
         self%status              = CARTFT_NOT_ATTEMPTED
@@ -699,22 +733,22 @@ contains
         self%cumulative_shift    = 0._dp
         self%npasses             = 0
         self%stages              = cartft_stage()
+        if( allocated(self%shell_residual) ) deallocate(self%shell_residual)
     end subroutine reset_record
 
     ! WORK RECORD
 
-    !> Add the last solve of opt: npix pixels per evaluation, nextra evaluations made outside the
-    !! solve at its committed pose (the sigma2 residual).
-    subroutine add_solve( self, opt, npix, nextra )
+    !> Add the last solve of opt: npix pixels per evaluation.
+    subroutine add_solve( self, opt, npix )
         class(cartft_pose_work), intent(inout) :: self
         class(cartft_pose_opt),  intent(in)    :: opt
-        integer,                 intent(in)    :: npix, nextra
+        integer,                 intent(in)    :: npix
         integer :: istage, npasses
         if( opt%status < lbound(self%nstatus,1) .or. opt%status > ubound(self%nstatus,1) ) &
             &THROW_HARD('cartft_pose_work received an unknown solve status')
         self%nstatus(opt%status) = self%nstatus(opt%status) + 1_int64
         if( opt%npasses > 0 ) self%nsolved = self%nsolved + 1_int64
-        npasses         = opt%npasses + nextra
+        npasses         = opt%npasses
         self%npasses    = self%npasses    + int(npasses, int64)
         self%npix_evals = self%npix_evals + int(npasses, int64)*int(npix, int64)
         do istage = CARTFT_STAGE_SHIFT, CARTFT_STAGE_JOINT

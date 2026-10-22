@@ -4,8 +4,7 @@ How the stream makes its picking references, for readers who know the technique 
 p03 picks the first preprocessed micrographs by segmentation, classifies the particles in 2D, by
 default builds a multistate ab initio 3D model, and publishes one stack of picking references for
 reference-based picking (p04). Then it stops. It is skipped when the user supplies picking
-references. Contract and details: `reference_generation_policy.md`; this page summarises the code
-as of 14 October 2026.
+references. Contract and details: `reference_generation_policy.md`; this page summarises the code.
 
 ```mermaid
 flowchart TD

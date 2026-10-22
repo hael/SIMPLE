@@ -14,7 +14,7 @@ Related policies:
 
 Primary implementation:
 
-- `src/main/ui/simple/simple_ui_refine3D.f90`
+- `src/main/ui/simple/simple_ui_heterogeneity.f90`
 - `src/main/exec/simple_exec_refine3D.f90`
 - `src/main/commanders/simple/simple_commanders_refine3D.f90`
 - `src/main/simple_refine3D_states_controller.f90` (the frequency march and
@@ -106,8 +106,8 @@ For `local`, angular, in-plane, and shift bounds are automatic. Advanced
 only the corresponding automatic bound and are rejected for other policies.
 
 The implementation-shaped `multivol_mode` and `prob_neigh_mode` controls are
-not public inputs to this workflow; the commander derives them from
-`pose_policy`.
+not public inputs to this workflow; the controller derives them from
+`pose_policy` (`normalize_inputs`).
 
 The `prob_neigh` frequency march searches 2,500 projection directions per
 state (`STAGE2_NSPACE`), the direction cap of multi-state runs (rulings of
@@ -205,5 +205,8 @@ User-side validation must cover:
 - shared-memory and distributed execution;
 - native-sampling final maps and expected artifacts.
 
-Compilation and runtime tests are performed by the user. No Linux or BOX
-result is recorded as passing without observed output.
+The registered test `multistate_workflows` (`simple_test_exec
+test=multistate_workflows`) runs this workflow on beta-galactosidase states
+against their known labels, from a single-state solution (routes `states` and
+`consensus`). No Linux or BOX result is recorded as passing without observed
+output.

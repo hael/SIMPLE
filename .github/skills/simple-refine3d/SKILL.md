@@ -61,8 +61,11 @@ For deeper navigation, read:
   particle field once before the workers, once after the merge only when a
   polish pass follows, and once at the end of the iteration;
   `merge_algndocs(..., write=.false.)` merges in memory; `out` is written once,
-  before postprocessing. Workers read only the file. Do not add project
-  rereads, a second kept builder, or project writes from assembly on this path.
+  before postprocessing. The PCG master (`rec_backend=pcg`) additionally writes
+  the particle field once at the end of its call (`execute_rec3D_pcg_distributed_master`
+  has no `write` flag). Workers read only the file. Do not add project
+  rereads, a second kept builder, or project writes from gridding assembly on
+  this path.
 - Shared-memory gridding assembly (`run_volassemble`) reads the project file,
   so the strategy writes the particle field before it
   (`publish_before_file_assembly`).

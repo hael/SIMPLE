@@ -70,6 +70,8 @@ sampled and masked, which depends on the particles being added: the frozen
 accumulators are mask-free raw sums, and the mask enters at restoration, in
 the solve support and in matching, on the union. The add-on's own manifest
 records the values it ran with, so a chained add-on inherits the override.
+`nu_stage` is a recorded and replayed input: the add-on starts NU filtering at
+the stage its base run did, so its last stage is filtered, or not, as in the base.
 Any other key the UI entry does not accept is refused as not an input.
 
 A superset project without a 2D solution (its `ptcl2D` never searched) runs
@@ -96,9 +98,10 @@ is refused by name.
 The run manifest is the only route into the add-on. `exec_solve3D` writes
 `solve3D_manifest.txt` at the end of every completed run (after the final
 reconstruction) and registers it in `projinfo`;
-a run stopped before stage 3 (stage 4 for a single-state run that searches a
-symmetry axis) writes none and is not a frozen input. A run stopped explicitly
-at that stage or later
+a single-state run stopped before stage 3 (stage 4 if it searches a symmetry
+axis) writes none and is not a frozen input; a multi-state run always writes
+one, and the add-on refuses it when its last stage is before stage 3. A run
+stopped explicitly at that stage or later
 (`nstages`, e.g. a single-state `nstages=5` base) does the final reconstruction
 and writes one; the add-on then runs that stage. The frozen project
 must be an eligible `solve3D` or `solve3D_addon` output whose manifest
@@ -383,7 +386,7 @@ The local queue checks no exit status: a worker that stops without
   the current project file (written beside it, then renamed over it) and
   registers the run manifest by absolute path; a failed run never touches the
   current project.
-- `mkdir=no` (NICE, the stream): the current project is the working project
+- `mkdir=no` (NICE): the current project is the working project
   and the run directory is the project's directory.
 - The run directory holds the union maps and final products as `solve3D`
   writes them, the union sigma2 state, `solve3D_manifest.txt` (the add-on's
@@ -446,8 +449,8 @@ rules:
 same base-then-add-on chain on all selected particles of a project, without
 caller-chosen chunk sizes. Every run samples 5000 particles per iteration in
 total and searches 10000 to 30000 new particles. Its runs are consecutive
-whole stacks in arrival order, as the stream forms them, every add-on is
-adopted, and the final union is published over the workflow's project copy. The policy is
+whole stacks in arrival order, every add-on is adopted, and the final union is
+published over the workflow's project copy. The policy is
 [solve3D_chunks_policy.md](solve3D_chunks_policy.md).
 
 ## 13. Tests
@@ -456,8 +459,8 @@ adopted, and the final union is published over the workflow's project copy. The 
   frozen project, every identity refusal, membership, masking and restoration),
   `solve3D manifest` and `solve3D addon report` in `unit_project`;
   `frozen accumulator` and `volume pair metrics` in `unit_reconstruction`;
-  `addon report docking` in `lib_reconstruction`; `solve3D stream emulation`
-  (legacy partitioning, automatic active-balanced chunk planning, source
+  `addon report docking` in `lib_reconstruction`; `solve3D chunks plan`
+  (the `nsample` rule, the run count, balanced whole-stack partitioning, source
   preparation, step projects and reports) in `unit_project`.
 - Unit cases of the carried sums: a two-add-on chain of frozen set, carried
   sums and adopted sums equal to the direct union (sums, densities and the

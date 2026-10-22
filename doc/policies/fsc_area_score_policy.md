@@ -49,14 +49,21 @@ The maps are Fourier transformed after masking. No explicit FFT normalization
 is applied because the scale cancels in the FSC ratio.
 
 When cFAR is calculated during refinement volume assembly, masking follows the
-active radial FSC policy rather than the standalone `automsk` switch:
+active radial FSC policy rather than the standalone `automsk` switch. With the
+gridding backend:
 
 - `envfsc=yes`: the on-the-fly density envelope generated from the merged
-  half-map is applied to both half-maps before conical FSC and cFAR calculation
+  half-map is applied to both half-maps before conical FSC and cFAR
+  calculation; under `automsk=nu` the state's lag-one NU envelope is applied
+  instead when it is valid, with the density envelope as the fallback
 - `envfsc=no`: both half-maps are evaluated as shipped; they already carry the
-  soft spherical support at `msk_crop` from the reconstruction (PCG solve
-  support, or the gridding restoration since 2026-09-09), and no second mask
-  is applied
+  soft spherical support at `msk_crop` from the gridding restoration, and no
+  second mask is applied
+
+With the PCG backend the half-maps are always evaluated as shipped, on the PCG
+solve support: under `envfsc=yes` (and `automsk` other than `nu`) the density
+envelope is generated and written but not applied, and there is no
+phase-randomized correction.
 
 The density envelope used for cFAR is the same mask used by the masked and
 randomized-masked radial FSC calculations. The raw radial FSC that determines
@@ -72,7 +79,8 @@ The half maps are independently phase-randomized beyond that shell, and the
 corrected curve begins two shells later. If there is no usable crossing, the
 radial FSC falls back to the genuinely unmasked curve; cFAR still reports the
 curve calculated from its selected mask. Refinement writes the density mask as
-`automask3D_stateNN.mrc` and writes `fscu_stateNN.bin`, `fsct_stateNN.bin`, and
+`automask3D_stateNN.mrc` whenever it generates one, and, with the gridding
+backend and a mask, writes `fscu_stateNN.bin`, `fsct_stateNN.bin`, and
 `fscn_stateNN.bin` for the unmasked, masked, and randomized-masked radial FSC
 diagnostics.
 

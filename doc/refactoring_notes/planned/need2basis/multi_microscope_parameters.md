@@ -87,8 +87,9 @@ design names and do not exist in the source.
 
 No `os_optics` backfill path was added. `sp_project%get_ctfparams`
 (`src/main/project/simple_sp_project_core.f90`) already reads `smpd`, `ctf`, `kv`,
-`cs`, `fraca`, and `phaseplate` from `os_stk` for particle analysis and
-particle-specific defocus from particle rows, and never reads `os_optics`. A
+`cs` and `fraca` from `os_stk` for particle analysis and the particle-specific
+defocus, astigmatism angle and `phshift` from particle rows, and never reads
+`os_optics`. A
 separate `src/main/project` CTF resolver is therefore probably unnecessary; the
 "Core Refactor" section below should be read as a possible audit of direct CTF
 construction rather than a required new module.
@@ -139,7 +140,7 @@ For CTF-aware rows, the merger must preserve:
 - `cs`
 - `fraca`
 - `ctf`
-- `phaseplate`
+- `phshift` (required on `os_mic` and `os_stk` rows by the merge validator)
 
 `fraca` is deliberately included. It is not a microscope hardware constant, but
 it changes the CTF and therefore must be merged and resolved with `kv`, `cs`,
@@ -408,7 +409,7 @@ The shared helper should:
 8. Remap only merge-local fields: stack `fromp` / `top` when particles are
    present, particle `stkind`, and row-level `ogid`.
 9. Preserve row-level CTF-model values by transferring complete `os_mic` and
-   `os_stk` rows. Do not overwrite `kv`, `cs`, `fraca`, `ctf`, `phaseplate`, or
+   `os_stk` rows. Do not overwrite `kv`, `cs`, `fraca`, `ctf`, `phshift`, or
    `smpd` from global parameters.
 10. Preserve particle-level CTF values and exact `os_ptcl2D%state` flags by
     transferring complete particle rows. Clear stale `ptcl2D` clustering fields

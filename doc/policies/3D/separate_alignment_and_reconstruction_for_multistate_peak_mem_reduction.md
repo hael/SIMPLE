@@ -4,7 +4,8 @@
 
 Active and implemented for normal CPU multi-state reconstruction in `refine3D`,
 `refine3D_auto`, `refine3D_states`, `solve3D`, and shared reconstruction
-entry points. The auto and multi commanders execute their refinement stages
+entry points. The commanders of `refine3D_auto`, `refine3D_states`,
+`refine3D_states_cavgs` and `classify3D_refs` execute their refinement stages
 through the common `refine3D` path.
 
 ## Policy
@@ -15,11 +16,12 @@ assignments are frozen and alignment-only memory is released.
 
 Distributed workers reconstruct one `(state, even_or_odd)` group at a time.
 They use one standalone half-map `reconstructor`, write its existing Cartesian
-partial, and destroy it before the next group. Workers must not construct the
-EO composite `build%eorecvol` during normal CPU reconstruction.
+partial, and destroy it before the next group. Workers must not hold both half
+maps at once during normal CPU reconstruction.
 
-`volassemble` owns `build%eorecvol`: it is the first stage that requires both
-half maps concurrently for reduction, FSC, restoration, and postprocessing.
+`volassemble_exec` is the first stage that holds both half maps concurrently
+(its even, odd, read and sum accumulators) for reduction, FSC, restoration, and
+postprocessing.
 
 ```text
 Phase A — alignment
@@ -61,8 +63,8 @@ membership threshold of 0.01 (`PCG_WEIGHT_THRESHOLD`).
 | --- | --- | --- |
 | Alignment | PFTC/reprojection model, matching images, search and probability workspaces | Partial reconstruction volumes and reconstruction image buffers |
 | Barrier | Final orientation/state/half metadata, selected particle indices, CTF/project metadata, symmetry, Euclidean sigma data | PFTC/reprojections, matching images, search strategies, particle PFTs, correlation caches, alignment batches |
-| Worker reconstruction | One half-map reconstructor, bounded reconstruction image/Fourier buffers, one `(state, half)` index range (with its weights under a weight set) | EO composite, another state/half reconstructor, alignment objects |
-| Assembly | EO composite and state-local postprocessing objects | Worker alignment state and arrays of state volumes |
+| Worker reconstruction | One half-map reconstructor, bounded reconstruction image/Fourier buffers, one `(state, half)` index range (with its weights under a weight set) | Another state/half reconstructor, alignment objects |
+| Assembly | Both half-map accumulators and state-local postprocessing objects | Worker alignment state and arrays of state volumes |
 | All three worker phases (alignment, barrier, reconstruction) | The particle buffer: the decoded raw images of the pass's share, one immutable slab filled before the search and read by copy into the bounded batches of the search and the reconstruction, released after the reconstruction. A cropped reconstruction instead keeps one record per particle, the untapered cropped observation the search's batches make from their own transforms, sealed after the search and read by copy into the reconstruction's batches | Anything else derived from those images (prepared, filtered or transformed particles) |
 
 The worker memory target is therefore:
@@ -107,9 +109,10 @@ model residency. It does not change the Cartesian worker-partial contract or
 the `volassemble` reduction and postprocessing path. Any alternative artifact
 or reconstruction-ownership model requires a separate design decision.
 
-The specialized OpenMP-offload kernel may use an EO composite for `nstates=1`.
-For `nstates>1`, it must dispatch and return before that object is constructed,
-using the normal state/half CPU path.
+The OpenMP-offload kernel (`calc_3Drec_gpu`, built only with
+`USE_OPENMP_OFFLOAD`; no caller routes to it) keeps one expanded even/odd
+accumulator pair for `nstates=1`. For `nstates>1`, it dispatches to the normal
+state/half CPU path before allocating that pair.
 
 ## Verification
 

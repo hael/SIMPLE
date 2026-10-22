@@ -230,8 +230,9 @@ subroutine test_fused_bspline3_gather_oracle()
     do i = lbound(wrap,1), ubound(wrap,1)
         wrap(i) = modulo(i+BOXPD/2,BOXPD)-BOXPD/2
     enddo
-    ! The two paths form the same single-precision weights by different formulas, a few ulp each, over
-    ! 27 taps of coefficients up to the field's largest: errors in units of that coefficient
+    ! The two paths form the single-precision weights by different formulas and sum in different orders
+    ! (per tap; per axis), a few ulp each, over 27 taps of coefficients up to the field's largest: errors
+    ! in units of that coefficient
     scale     = maxval(abs(cmplx(cmat, kind=dp)))
     tolerance = 32._dp*real(epsilon(1._sp),dp)
     max_value_error = 0._dp

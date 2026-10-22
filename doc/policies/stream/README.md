@@ -41,8 +41,7 @@ Paths in these documents are relative to the repository root.
 ## Resources
 
 The master gives every stage its threads and parts, and those of the jobs the stages run, from
-one table (`src/main/stream/master/simple_stream_master_resources.f90`, decision 14 of the
-5 October fix plan). Each value has a named default; a stage's environment variables override it,
+one table (`src/main/stream/master/simple_stream_master_resources.f90`). Each value has a named default; a stage's environment variables override it,
 read once by the master, which passes the values on the stage command lines and logs the table at
 start. The stages hold no resource literals of their own. A stage run on its own, without the
 master, takes its commander's defaults and reads none of these variables.
@@ -60,7 +59,7 @@ master, takes its commander's defaults and reads none of these variables.
 Each stage reads its own `SIMPLE_STREAM_<SET>_PARTITION` for its queue environment: `PREPROC`
 (p01), `REFGEN` (p03 and its sieve's chunks), `PICK` (p04), `CHUNK` (p05's sieve), `POOL` (p06),
 `SOLVE3D` (p07). A variable that is not a positive integer is ignored with a warning.
-`solve2D_chunks` keeps its own `CHUNK` reads (decision 10). p03's extractions run with 4 threads
+`solve2D_chunks` keeps its own `CHUNK` reads. p03's extractions run with 4 threads
 each (`EXTRACT_NTHR`), several at once.
 
 With a persistent-worker queue (a `*_worker` queue name), the master starts the one worker server
