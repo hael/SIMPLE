@@ -276,12 +276,15 @@ contains
         call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses)
     end subroutine gen_raw_euclid_vals
 
-    subroutine gen_euclid_crvec( self, iref, iptcl, shift, norm, ithr )
+    !> cross=.true. scores against the other half's reference; the particle's own noise weights (ih) and
+    !! self-term are unchanged (prob_post_diag: the posterior against a reference the particle did not enter)
+    subroutine gen_euclid_crvec( self, iref, iptcl, shift, norm, ithr, cross )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(dp),                    intent(out)   :: norm
         integer,                     intent(out)   :: ithr
+        logical, optional,           intent(in)    :: cross
         complex(sp), pointer :: shmat(:,:)
         real(sp)    :: shift_mag_sq
         integer     :: k, i, kk, k0, ieo, ih
@@ -290,6 +293,9 @@ contains
         ih = merge(1, 2, self%iseven(i))
         k0           = self%kfromto(1)
         ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        if( present(cross) )then
+            if( cross ) ieo = merge(REF_ODD, REF_EVEN, self%iseven(i))
+        endif
         norm         = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
         shmat        => self%heap_vars(ithr)%shmat
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
@@ -370,6 +376,27 @@ contains
             endif
         enddo
     end subroutine gen_best_euclid_val
+
+    module subroutine gen_best_euclid_val_cross( self, iref, iptcl, shift, dist, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(dp) :: norm
+        real(sp) :: dist_tmp
+        integer  :: ithr, p
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr, cross=.true.)
+        irot = 1
+        dist = euclid_dist_from_crvec(self, ithr, 1, norm)
+        do p = 2,self%nrots
+            dist_tmp = euclid_dist_from_crvec(self, ithr, p, norm)
+            if( dist_tmp < dist )then
+                irot = p
+                dist = dist_tmp
+            endif
+        enddo
+    end subroutine gen_best_euclid_val_cross
 
     module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
         class(polarft_calc), target, intent(inout) :: self

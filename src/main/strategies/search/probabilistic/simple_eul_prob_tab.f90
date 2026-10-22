@@ -8,7 +8,6 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sa
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats
-use simple_linalg,             only: rad2deg
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -228,6 +227,9 @@ contains
         type(prob_posterior_stat), allocatable :: post_batch(:)      !< pose-posterior statistics per particle (prob_post_diag=yes)
         real,                      allocatable :: post_w(:,:)        !< per thread: the posterior over the row, sorted
         integer,                   allocatable :: post_inds(:,:)     !< per thread: its reference order
+        real,                      allocatable :: post_x(:,:)        !< per thread: the row against the other half's reference
+        real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
+        integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
         logical :: l_post
         integer :: i, si, iptcl, n, projs_ns, ithr, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), istate
         integer :: inpl_refs(self%nrefs,nthr_glob)
@@ -267,7 +269,8 @@ contains
         allocate(nrefined_batch(i_first:i_last), source=0)
         ! the pose posterior is defined by the Euclidean objective only
         l_post = self%p_ptr%l_prob_post_diag .and. self%p_ptr%cc_objfun == OBJFUN_EUCLID
-        if( l_post ) allocate(post_batch(i_first:i_last), post_w(self%nrefs,nthr_glob), post_inds(self%nrefs,nthr_glob))
+        if( l_post ) allocate(post_batch(i_first:i_last), post_w(self%nrefs,nthr_glob), post_inds(self%nrefs,nthr_glob), &
+            &post_x(self%nrefs,nthr_glob), post_wx(self%nrefs,nthr_glob), post_indsx(self%nrefs,nthr_glob))
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
             lims(:,1)      = -self%p_ptr%trs
@@ -338,7 +341,7 @@ contains
         call self%write_rows(i_first, rows_batch, pack_refined())
         if( l_post )then
             call self%write_posterior_diag(i_first, i_last, post_batch)
-            deallocate(post_batch, post_w, post_inds)
+            deallocate(post_batch, post_w, post_inds, post_x, post_wx, post_indsx)
         endif
 
     contains
@@ -392,7 +395,7 @@ contains
             t0 = omp_get_wtime()
             call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
-            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc)
+            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3))
             call o_prev_loc%kill
         end subroutine process_particle_with_shift
 
@@ -407,17 +410,23 @@ contains
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
             enddo
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
-            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc)
+            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.])
         end subroutine process_particle_without_shift
 
         !> The pose posterior over the particle's finished row (the refined distances included) at the
         !! temperature of its weighted power, and the angular spread of the references holding 99% of
-        !! the mass about the mode, in the mode's state, across the symmetry operations
-        subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc )
+        !! the mass about the mode, in the mode's state, across the symmetry operations. Then the same
+        !! row scored against the OTHER half's reference at the seed shift (best in-plane rotation, no
+        !! refinement): its posterior, the own mode's rank in it, the distance between the two modes,
+        !! and the self-reinforcement bonus, T times the loss at the own mode (its refined shift)
+        !! against the other half minus against its own, in nats.
+        subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc, shift_xy )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
-            real(dp) :: wsum, dsum
-            real     :: temp, pmax, neff, euls_min(3), euls(3), euls_sym(3), euldist, inpldist
-            integer  :: imin, k99, nvalid, j_loc, ri_loc, istate_min, iproj_min
+            real,    intent(in) :: shift_xy(2)
+            real     :: temp, pmax, neff, euls_min(3), euls_x(3), euls_sym(3), euldist, inpldist
+            real     :: sh_mode(2), dist_x_mode, dist_loc
+            integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, j_loc
+            integer  :: imin_x, k99_x, nvalid_x, nbelow
             temp = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             call posterior_row_stats(self%nrefs, rows_batch(:,i_loc)%dist, temp, post_w(:,ithr_loc), &
                 &post_inds(:,ithr_loc), imin, pmax, neff, k99, nvalid)
@@ -434,18 +443,67 @@ contains
             post_batch(i_loc)%iproj  = iproj_min
             post_batch(i_loc)%lmin   = rows_batch(imin,i_loc)%dist
             euls_min = self%b_ptr%eulspace%get_euler(iproj_min)
-            wsum = 0.d0
-            dsum = 0.d0
-            do j_loc = self%nrefs, self%nrefs - k99 + 1, -1
-                ri_loc = post_inds(j_loc,ithr_loc)
-                if( self%ref_state(ri_loc) /= istate_min ) cycle
-                euls = self%b_ptr%eulspace%get_euler(self%ref_proj(ri_loc))
-                call self%b_ptr%pgrpsyms%sym_dists(euls_min, euls, euls_sym, euldist, inpldist)
-                wsum = wsum + real(post_w(j_loc,ithr_loc),dp)
-                dsum = dsum + real(post_w(j_loc,ithr_loc),dp) * real(rad2deg(euldist),dp)
+            post_batch(i_loc)%spread = spread_about(istate_min, euls_min, k99, post_w(:,ithr_loc), post_inds(:,ithr_loc))
+            ! the row against the other half's reference, at the seed shift
+            do ri_loc = 1,self%nrefs
+                call self%b_ptr%pftc%gen_best_euclid_val_cross(self%ref_full(ri_loc), iptcl_loc, shift_xy, dist_loc, irot_loc)
+                post_x(ri_loc,ithr_loc) = dist_loc
             end do
-            if( wsum > 0.d0 ) post_batch(i_loc)%spread = real(dsum / wsum)
+            call posterior_row_stats(self%nrefs, post_x(:,ithr_loc), temp, post_wx(:,ithr_loc), &
+                &post_indsx(:,ithr_loc), imin_x, pmax, neff, k99_x, nvalid_x)
+            if( nvalid_x == 0 ) return
+            post_batch(i_loc)%iproj_x = self%ref_proj(imin_x)
+            post_batch(i_loc)%lmin_x  = post_x(imin_x,ithr_loc)
+            post_batch(i_loc)%pmax_x  = pmax
+            post_batch(i_loc)%neff_x  = neff
+            post_batch(i_loc)%k99_x   = k99_x
+            euls_x = self%b_ptr%eulspace%get_euler(self%ref_proj(imin_x))
+            post_batch(i_loc)%spread_x = spread_about(self%ref_state(imin_x), euls_x, k99_x, post_wx(:,ithr_loc), post_indsx(:,ithr_loc))
+            ! sym_dists returns degrees
+            call self%b_ptr%pgrpsyms%sym_dists(euls_min, euls_x, euls_sym, euldist, inpldist)
+            post_batch(i_loc)%dist_x = euldist
+            ! the own mode's rank in the cross row
+            nbelow = 0
+            do ri_loc = 1,self%nrefs
+                if( post_x(ri_loc,ithr_loc) < post_x(imin,ithr_loc) ) nbelow = nbelow + 1
+            end do
+            post_batch(i_loc)%rank_x = nbelow + 1
+            ! the bonus: the own mode at its refined shift (the seed shift when it was not refined)
+            sh_mode = shift_xy
+            do j_loc = 1,nrefined_batch(i_loc)
+                if( refined_batch(j_loc,i_loc)%ri == imin )then
+                    sh_mode = [refined_batch(j_loc,i_loc)%x, refined_batch(j_loc,i_loc)%y]
+                    exit
+                endif
+            end do
+            call self%b_ptr%pftc%gen_best_euclid_val_cross(self%ref_full(imin), iptcl_loc, sh_mode, dist_x_mode, irot_loc)
+            post_batch(i_loc)%bonus = temp * (dist_x_mode - rows_batch(imin,i_loc)%dist)
         end subroutine posterior_diag
+
+        !> the posterior-weighted mean angular distance (degrees) of the k99 references holding 99% of
+        !! the mass from the mode's direction, in the mode's state, across the symmetry operations;
+        !! w ascending with its reference order inds, as posterior_row_stats leaves them
+        real function spread_about( istate_mode, euls_mode, k99_loc, w, inds ) result( spread )
+            integer, intent(in) :: istate_mode, k99_loc
+            real,    intent(in) :: euls_mode(3), w(:)
+            integer, intent(in) :: inds(:)
+            real(dp) :: wsum, dsum
+            real     :: euls(3), euls_sym(3), euldist, inpldist
+            integer  :: j_loc, ri_loc
+            spread = 0.
+            wsum   = 0.d0
+            dsum   = 0.d0
+            do j_loc = self%nrefs, self%nrefs - k99_loc + 1, -1
+                ri_loc = inds(j_loc)
+                if( self%ref_state(ri_loc) /= istate_mode ) cycle
+                euls = self%b_ptr%eulspace%get_euler(self%ref_proj(ri_loc))
+                ! sym_dists returns degrees
+                call self%b_ptr%pgrpsyms%sym_dists(euls_mode, euls, euls_sym, euldist, inpldist)
+                wsum = wsum + real(w(j_loc),dp)
+                dsum = dsum + real(w(j_loc),dp) * real(euldist,dp)
+            end do
+            if( wsum > 0.d0 ) spread = real(dsum / wsum)
+        end function spread_about
 
         subroutine get_particle_context( iptcl_loc, o_prev_loc, prev_state, prev_proj )
             integer,   intent(in)    :: iptcl_loc
@@ -557,15 +615,19 @@ contains
             fname = fname//'part'//int2str_pad(self%p_ptr%part,self%p_ptr%numlen)//'.txt'
             call fopen(self%post_unit, fname, status='replace', action='write', iostat=io_stat)
             call fileiochk('eul_prob_tab%write_posterior_diag; open '//fname%to_char(), io_stat)
-            write(self%post_unit,'(A)') '# iptcl istate iproj nvalid lmin temp pmax neff k99 spread_deg'
+            write(self%post_unit,'(A)') '# iptcl istate iproj nvalid lmin temp pmax neff k99 spread_deg '//&
+                &'iproj_x lmin_x pmax_x neff_x k99_x spread_x_deg dist_x_deg rank_x bonus_nats'
             self%post_is_open = .true.
             call fname%kill
         endif
         do i = i_first,i_last
-            write(self%post_unit,'(I0,1X,I0,1X,I0,1X,I0,1X,ES13.6,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3)') &
+            write(self%post_unit,'(I0,1X,I0,1X,I0,1X,I0,1X,ES13.6,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,'//&
+                &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,ES13.6)') &
                 &post_batch(i)%iptcl, post_batch(i)%istate, post_batch(i)%iproj, post_batch(i)%nvalid, &
                 &post_batch(i)%lmin, post_batch(i)%temp, post_batch(i)%pmax, post_batch(i)%neff, &
-                &post_batch(i)%k99, post_batch(i)%spread
+                &post_batch(i)%k99, post_batch(i)%spread, &
+                &post_batch(i)%iproj_x, post_batch(i)%lmin_x, post_batch(i)%pmax_x, post_batch(i)%neff_x, &
+                &post_batch(i)%k99_x, post_batch(i)%spread_x, post_batch(i)%dist_x, post_batch(i)%rank_x, post_batch(i)%bonus
         end do
     end subroutine write_posterior_diag
 

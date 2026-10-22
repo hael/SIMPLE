@@ -147,8 +147,24 @@ every dense table worker compute, per particle, once its row is complete:
 | `k99` | references holding 99% of the mass |
 | `spread_deg` | posterior-weighted mean angular distance of those references from the mode, in the mode's state, across the symmetry operations (`sym_dists`) |
 
+and, since 2026-10-22, the same row scored against the *other* half's
+reference (`gen_best_euclid_val_cross`: the other half's `pfts_refs`, the
+particle's own noise weights and self-term, the seed shift, best in-plane
+rotation, no refinement), which the particle did not enter:
+
+| column | meaning |
+| --- | --- |
+| `iproj_x`, `lmin_x` | the cross-half mode and its loss |
+| `pmax_x`, `neff_x`, `k99_x`, `spread_x_deg` | as above, for the cross-half row |
+| `dist_x_deg` | angular distance between the own and the cross-half modes (symmetry-aware) |
+| `rank_x` | the own mode's rank in the cross-half row (1: the halves agree) |
+| `bonus_nats` | T x (loss at the own mode, its refined shift, against the other half minus against its own): the self-reinforcement bonus |
+
 written as `prob_posterior_iterNNN_partNN.txt` in the run directory, one
 file per part and iteration, a header line first (`write_posterior_diag`).
+The cross-half row doubles the scoring cost of the table in diagnostic
+mode. `test_cross_half_euclid` (suite "polar correlations") pins that the
+switch flips the reference half alone.
 `posterior_temperature` and `posterior_row_stats` live in
 `simple_eul_prob_tab_utils.f90` and are pinned by `test_posterior_row_stats`
 (`unit_...` suite "3D probability table").
@@ -202,3 +218,74 @@ or does the alignment churn?).
    Nyquist, the gold-standard bootstrap of the final poses), and the
    per-iteration `neff` trajectory, which should sharpen as the map
    improves.
+
+## 8. Results: PfCRT, 2026-10-22
+
+Run `PfCRT_posterior/4_solve3D` (default schedule, 16,832 particles, full
+sampling, PCG, `prob_post_diag=yes`), the dense stages: iterations 41-57 are
+stage 3 (18.3 A, nspace 1000), 58-72 stage 4 (12.9 A, 1000), 73-78 stage 5
+(NU, 2500; early exit); stage 6 omitted, 7-8 `prob_neigh` (no table). The
+run's `spread_deg` is 57.2958x too large (a `rad2deg` applied to degrees;
+fixed in the code the same day) and was divided out in the analysis.
+
+**Calibration.** `temp * lmin / (pi k2^2 / 2)` = 0.99 through stages 3-4
+(k2 from the stage crop and limit). The constant pi/(2 pftsz) and the
+sigma2 convention of section 3 are right; the posterior is in nats. (Stage
+5 reads 1.8-3.4 only because the NU band is finer than the planned 11.1 A
+used for k2.)
+
+**Given the reference of the iteration, the posterior is sharp.** Median
+n_eff 2.9 at the first prob iteration, 1.3 by the fifth, 1.1 through stage
+4; median p_max 0.93-0.99; k99 median 2. Broad particles (n_eff > 2):
+22-30% in stage 3, 13-20% in stage 4, 18-38% in stage 5 (the band jump at
+the NU handoff re-broadens it for three iterations). Among the broad, the
+spread is mostly one grid step (median 4-9 A against 7.1 deg sampling);
+the far tail (> 20 deg) is 5-8% of all particles. Broadness is not a
+particle property: the overlap of the broad sets at a stage's first and
+last iteration is at chance, and the per-particle mean n_eff correlates
+0.2-0.3 between halves of a stage. It is weakly tied to signal (broad
+fraction 31% in the lowest wsqsum quartile, 26% in the highest).
+
+**But the mode is not stable across iterations.** Between consecutive
+iterations 25-36% of all particles move their mode by more than 20 deg,
+and 16-32% of the particles whose posterior put at least 90% of its mass
+on one direction do; the 90th percentile of their move is about 100 deg.
+Over stage 3, 76% of modes end more than 20 deg from where they started
+(median 68 deg); stage 4, 58%; stage 5, 43%. The far moves have the angle
+distribution of random direction pairs (no pseudo-symmetry flip), and the
+movers' best loss is worse after the move by 2-3 nats.
+
+**Reading.** A posterior that is sharp against the current reference and
+flips by 100 deg between iterations is not measuring the data's
+information about the pose; it is measuring the reference's memory of
+where the particle was last put. With about 8 particles per direction per
+half-map at nspace 1000, a particle's own noise in the reference at its
+assigned direction is a large part of that projection, worth tens of nats
+at T of order 1,000, against the few nats that separate the data's true
+alternatives. The balanced stochastic assignment (uniform over the top
+~140 frontier heads, section 2) then moves the particle, the reference
+follows, and the next posterior points at the new place. The stages behave
+as a very hot sampler over a very cold, self-reinforced likelihood; neither
+the hard assignment nor a marginalization with these weights measures what
+the data say.
+
+**Consequence for section 4.** Weights from the own-half row would
+entrench the previous assignment (p_max ~0.95 on the self-reinforced
+direction) and help nothing. The posterior has to be taken against a
+reference the particle did not enter. The decisive measurement is the
+cross-half row (section 5, implemented 2026-10-22, to be re-run): the
+cross-half n_eff, the own mode's rank in the cross row, the distance
+between the two modes, and the bonus. Expected readings:
+
+- `bonus_nats` large (tens) and `f(modes agree)` low, `neff_x` broad:
+  self-reinforcement confirmed and quantified; the cross-half posterior
+  is the honest one and the one to marginalize with (for the search it
+  breaks the half independence, so it is a solve3D-stage device, not a
+  gold-standard one), and the own-half posterior is not a measurement.
+- `bonus_nats` small (a few) and the halves' modes agree while the mode
+  still jumps between iterations: the posterior is honest and the jumps
+  come from the assignment alone (the frontier draw at T = 1); the remedy
+  is in `ref_assign`, and marginalization with these weights is
+  well-founded but will not change much (n_eff near 1).
+- `neff_x` broad with `dist_x_deg` far for a stable subset of particles:
+  real multimodality after all, section 4 as designed.

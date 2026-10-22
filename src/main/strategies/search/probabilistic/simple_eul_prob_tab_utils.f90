@@ -52,6 +52,12 @@ end type prob_refined_entry
 type :: prob_posterior_stat
     integer :: iptcl = 0, istate = 0, iproj = 0, k99 = 0, nvalid = 0
     real    :: lmin = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
+    ! the same row scored against the other half's reference (the particle's own noise weights), at the
+    ! seed shift: its mode, mass, breadth and spread; the own mode's rank in it (1: the halves agree), the
+    ! angular distance between the two modes, and the self-reinforcement bonus in nats: T times the loss at
+    ! the own mode (its refined shift) against the other half minus against its own
+    integer :: iproj_x = 0, k99_x = 0, rank_x = 0
+    real    :: lmin_x = 0., pmax_x = 0., neff_x = 0., spread_x = 0., dist_x = 0., bonus = 0.
 end type prob_posterior_stat
 
 ! Cost record of a partition's table fill for the bench file: wall time outside the parallel region,

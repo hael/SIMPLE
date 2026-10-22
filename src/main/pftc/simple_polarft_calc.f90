@@ -195,6 +195,7 @@ type :: polarft_calc
     procedure, private :: gen_euclids
     procedure, private :: gen_prob_likelihood_cc_val
     procedure, private :: gen_best_euclid_val
+    procedure          :: gen_best_euclid_val_cross
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_likelihood_euclid_val
     procedure, private :: gen_prob_power_euclid_val
@@ -718,6 +719,16 @@ interface
         real(sp),                    intent(out)   :: dist
         integer,                     intent(out)   :: irot
     end subroutine gen_best_euclid_val
+
+    !> the Euclidean loss at the best in-plane rotation against the OTHER half's reference, with the
+    !! particle's own noise weights (prob_post_diag: the posterior against a reference it did not enter)
+    module subroutine gen_best_euclid_val_cross(self, iref, iptcl, shift, dist, irot)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+    end subroutine gen_best_euclid_val_cross
 
     module subroutine gen_prob_euclid_val(self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
         class(polarft_calc), target, intent(inout) :: self

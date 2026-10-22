@@ -1,4 +1,4 @@
-!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc) on generated images, through the production polarisation path
+!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half Euclidean loss) on generated images
 ! Three smooth zero-mean images (so the shared mask envelope carries no correlation) are references
 ! and, rotated or unrelated, particles. gen_objfun_vals (objfun=cc) must peak at rotation 1 with cc ~1
 ! for an image against itself, at the applied sixth of a turn for a rotated copy, and stay low for an
@@ -20,7 +20,87 @@ contains
     subroutine run_all_polarft_corr_tests()
         write(*,'(A)') '**** running all polar correlation tests ****'
         call test_generated_images()
+        call test_cross_half_euclid()
     end subroutine run_all_polarft_corr_tests
+
+    !> The Euclidean loss against the other half's reference (gen_best_euclid_val_cross): with image 1 as
+    !! the even reference and an unrelated image 3 as the odd one, an even particle that is image 1 has
+    !! loss 0 at rotation 1 against its own half (no CTF, unit sigma2: L = |X - R|^2 / |X|^2) and a loss
+    !! near 2 (two uncorrelated images of equal power) against the other; flipping the particle's half
+    !! swaps the two, so the switch flips the reference half alone.
+    subroutine test_cross_half_euclid()
+        use simple_eul_prob_tab_utils, only: posterior_temperature
+        integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
+        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        type(parameters), target :: p
+        type(cmdline)       :: cline
+        type(polarft_calc)  :: pftc
+        type(image)         :: img_even, img_odd
+        real, allocatable, target :: sigma2(:,:)
+        real    :: dist_own, dist_cross, temp
+        integer :: pdim(3), kfromto(2), irot_own, irot_cross
+        write(*,'(A)') 'test_cross_half_euclid'
+        call cline%set('box',     real(BOX))
+        call cline%set('smpd',    SMPD)
+        call cline%set('mskdiam', MSKDIAM)
+        call cline%set('nptcls',  real(NPTCLS))
+        call cline%set('nthr',    1.0)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'euclid')
+        call p%new(cline)
+        call set_fixed_seed(20261022)
+        kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
+        call pftc%new(p, NREFS, [1,NPTCLS], kfromto)
+        pdim = pftc%get_pdim_srch()
+        call img_even%new([BOX,BOX,1], SMPD)
+        call img_even%gauran(0.0, 1.0)
+        call img_even%fft
+        call img_even%bpgau2D(0.0, LP)
+        call img_even%ifft
+        call img_even%memoize_mask_coords
+        call img_even%mask2D_soft(MSKRAD, backgr=0.0)
+        call img_odd%new([BOX,BOX,1], SMPD)
+        call img_odd%gauran(0.0, 1.0)
+        call img_odd%fft
+        call img_odd%bpgau2D(0.0, LP)
+        call img_odd%ifft
+        call img_odd%memoize_mask_coords
+        call img_odd%mask2D_soft(MSKRAD, backgr=0.0)
+        call img_even%memoize4polarize(pdim)
+        call img_even%fft
+        call img_odd%fft
+        call pftc%polarize_ref_pft(img_even, 1, iseven=.true.,  pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ref_pft(img_odd,  1, iseven=.false., pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ptcl_pft(img_even, 1, pdim=pdim, oversamp=.false.)
+        call pftc%set_eo(1, .true.)
+        allocate(sigma2(kfromto(1):kfromto(2),2), source=1.0)
+        call pftc%assign_sigma2_noise(sigma2)
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        ! an even particle: its own half is the even reference (itself), the other half the unrelated image
+        call pftc%gen_best_objfun_val(1, 1, [0.0,0.0], dist_own, irot_own)
+        call pftc%gen_best_euclid_val_cross(1, 1, [0.0,0.0], dist_cross, irot_cross)
+        call assert_int(1, irot_own, 'own half: the image against itself peaks at rotation 1')
+        call assert_true(dist_own < 1.e-3, 'own half: the image against itself has loss 0')
+        call assert_true(dist_cross > 0.5, 'other half: an unrelated reference has a loss of order 1')
+        call assert_true(dist_cross > dist_own + 0.5, 'the cross-half loss is the other reference, not the own one')
+        ! the same particle declared odd: own and cross swap
+        call pftc%set_eo(1, .false.)
+        call pftc%memoize_sigma2_weights
+        call pftc%gen_best_objfun_val(1, 1, [0.0,0.0], dist_own, irot_own)
+        call pftc%gen_best_euclid_val_cross(1, 1, [0.0,0.0], dist_cross, irot_cross)
+        call assert_true(dist_own > 0.5, 'declared odd: its own half is now the unrelated reference')
+        call assert_int(1, irot_cross, 'declared odd: the cross half is the image itself, rotation 1')
+        call assert_true(dist_cross < 1.e-3, 'declared odd: the cross-half loss is 0')
+        ! the posterior temperature of this particle, pi wsqsum / (2 pftsz): wsqsum = sum_k k sum_p |X_kp|^2 at
+        ! unit sigma2 is the self-term the calculator memoized, so the temperature is positive and finite
+        temp = posterior_temperature(pftc%wsqsum_ptcl_now(1), pftc%get_pftsz())
+        call assert_true(temp > 0. .and. temp < huge(temp), 'posterior temperature from the memoized self-term is positive and finite')
+        call img_even%kill
+        call img_odd%kill
+        call pftc%kill
+        deallocate(sigma2)
+    end subroutine test_cross_half_euclid
 
     subroutine test_generated_images()
         integer, parameter :: BOX = 64, NREFS = 3, NPTCLS = 5
