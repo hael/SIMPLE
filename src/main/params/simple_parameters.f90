@@ -64,7 +64,7 @@ type :: parameters
     character(len=3)          :: fillin='no'          !< fillin particle sampling
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
-    character(len=3)          :: freq_march_aggressive='no' !< solve3D aggressive frequency marching: stage limits linear in spatial frequency from 12 A (or lpstart) to the final limit, no 20 A first-stage floor, finer early angular sampling(yes|no){no}
+    character(len=3)          :: freq_march_aggressive='no' !< solve3D aggressive frequency marching: from the first prob stage the limits are linear in spatial frequency from 12 A to the final limit, with finer angular sampling; the global stages keep their planned rungs(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}

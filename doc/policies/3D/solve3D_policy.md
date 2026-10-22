@@ -218,34 +218,56 @@ gradual frequency marching. `force_lp_range=yes` and the routes planned by
 **Aggressive frequency marching (`freq_march_aggressive=yes`, 2026-10-21;
 experimental, default `no`).** For a small membrane target the class FRCs
 measure micelle self-consistency at the low resolutions where the default
-ladder parks stages 1-3 (PfCRT: 20.0, 19.4, 18.3 A), and those bands do not
-discriminate orientations: on the `latest6` reference stage 3's overlap peaks
-at its fourth iteration and declines for the remaining thirteen (the
+ladder parks stages 1-3 (PfCRT: 20.0, 19.4, 18.3 A), and stage 3's band does
+not discriminate orientations: on the `latest6` reference its overlap peaks
+at the fourth iteration and declines for the remaining thirteen (the
 iteration-budget note below). The signal that fixes a small particle's
 orientation sits in the 5-10 A band, which the default schedule withholds
-until stage 4. With the key on, the particle route builds its ladder with
-`lpstages_aggressive`: rungs linear in spatial frequency from `lpstart` (12 A
-when not given, `LPSTART_AGGRESSIVE`; no 20 A floor) to the standard final
-limit `lpfinal`, so every stage admits the same number of new Fourier shells
-and the steps are smallest in Angstrom at the fine end; each stage is cropped
-on its own at the particle-route target (smpd lp/3, at least 2 A). The class
-FRCs set neither the start nor the rungs (12.0, 10.5, 9.3, 8.4, 7.6, 7.0, 6.5,
-6.0 A for a 6 A final limit). The finer bands need finer angular sampling, so
-`nspace` follows `NSPACE_AGGRESSIVE` = [1000, 2500, 2500, 2500, 2500, 2500,
-5000, 5000] (a spiral of n directions resolves about 223/sqrt(n) degrees; a
-band lp on a particle of diameter D needs about lp/D radians, 5.7 degrees at
-12 A on 120 A). Everything else stands: `MAXITS`, the stage modes, the NU
-start stage (5; NU before that reinforces a bad alignment, see section 8),
-the non-NU matching ceiling at the rung, the FSC=0.5 promotion, stage
-omission and mid-stage exit, which now act on the closer rungs. The key
-applies to the particle route with a 2D solution only: the input-volume and
-no-2D routes and the add-on have explicit limits and refuse it, the
-class-average route keeps its own ladder and refuses it, and
+until stage 4. With the key on, the particle route plans its ladder from the
+class FRCs as usual and then `lpstages_aggressive` overwrites the rungs from
+`AGGRESSIVE_MARCH_STAGE` (= `PROB_REFINE_STAGE`, 3) on: linear in spatial
+frequency from `LPSTART_AGGRESSIVE` (12 A, no coarser than the kept stage-2
+rung) to the standard final limit `lpfinal`, so every march stage admits the
+same number of new Fourier shells and the steps are smallest in Angstrom at
+the fine end (12.0, 10.0, 8.6, 7.5, 6.7, 6.0 A for a 6 A final limit); each
+march stage is cropped on its own at the particle-route target (smpd lp/3, at
+least 2 A), never below the preceding stage's crop. The finer bands need
+finer angular sampling, so `nspace` follows `NSPACE_AGGRESSIVE` = [500, 1000,
+2500, 2500, 2500, 2500, 5000, 5000] (a spiral of n directions resolves about
+223/sqrt(n) degrees; a band lp on a particle of diameter D needs about lp/D
+radians, 5.7 degrees at 12 A on 120 A). Everything else stands: `MAXITS`, the
+stage modes, the NU start stage (5; NU before that reinforces a bad
+alignment, see section 8), the non-NU matching ceiling at the rung, the
+FSC=0.5 promotion, stage omission and mid-stage exit, which now act on the
+closer rungs.
+
+*Why the march starts at stage 3 and not at stage 1.* The first version
+(PfCRT `latest10`, 2026-10-21) marched from stage 1: 12.0, 10.5, 9.3 A with
+`nspace` 1000/2500. The search from random orientations never consolidated:
+stage 1's overlap plateaued at 0.22 (0.34 at 19.4 A in `latest6` and
+`latest9`), stage 2's at 0.17 (0.23), the FSC=0.5 crossing sat at the band
+(12.9 A) in stage 1 and then *coarsened* to 13.5-15.5 A in stage 2 (noise
+fitted inside a band the reference has no content in), the cFAR of 0.6-0.7
+was that of isotropic noise, and stage 3 consolidated to 0.32 instead of
+0.50: garbage after two stages where the default gives a smooth, correct
+volume. The reference built from random poses carries nothing at 12 A, so the
+stochastic hill climb has no landscape to climb; the low-resolution start is
+what makes the global search converge. In the default the large
+consolidation (overlap 0.23 to 0.50) happens in stage 3 at nearly stage 2's
+band, so it is the switch to the full `prob` search with `ml_reg`, not the
+band, that does it; the march therefore begins with that switch. 12 A at
+stage 3 is also about res05/1.5 after stage 2 on PfCRT (res05 18.3 A), the
+bounded lead the NU stages are known to climb under.
+
+The key applies to the particle route with a 2D solution only: the
+input-volume and no-2D routes and the add-on have explicit limits and refuse
+it, the class-average route keeps its own ladder and refuses it, and
 `force_lp_range=yes` is refused beside it. Test: the ten-restart PfCRT
-regression against the default schedule, scored on the stage-5 FSC, the
-iterations to the stage-6 Nyquist, overlap through stage 6 and above all the
-gold-standard bootstrap of the final poses, plus the same restarts on a
-target that fails under the default schedule.
+regression against the default schedule, scored on stage 3's overlap
+trajectory (does it still churn?), the stage-5 FSC, the iterations to the
+stage-6 Nyquist, overlap through stage 6 and above all the gold-standard
+bootstrap of the final poses, plus the same restarts on a target that fails
+under the default schedule.
 
 The single-state external-volume route (`vol1`, `nstates=1`) starts at
 `VOL_SUPPLIED_STAGE`, the stage after the no-axis-search block

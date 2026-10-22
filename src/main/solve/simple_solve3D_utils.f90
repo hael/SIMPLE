@@ -73,6 +73,10 @@ interface
         real :: lp
     end function solve3D_lpstart_aggressive
 
+    module function solve3D_aggressive_march_stage() result(istage)
+        integer :: istage
+    end function solve3D_aggressive_march_stage
+
     module function solve3D_cenlp_default() result(cenlp)
         real :: cenlp
     end function solve3D_cenlp_default
@@ -473,9 +477,9 @@ contains
         integer,      allocatable :: states(:)
         type(string)     :: frcs_fname
         type(class_frcs) :: clsfrcs
-        real             :: lpfinal, lpstart_eff
+        real             :: lpfinal
         real             :: lpstart_bounds(2), lpstop_bounds(2)
-        integer          :: filtsz, nstages
+        integer          :: filtsz, nstages, imarch
         l_cavgs_mode = l_cavgs
         nstages = active_lp_schedule_nstages()
         if( trim(params%force_lp_range).eq.'yes' )then
@@ -503,20 +507,28 @@ contains
         lpfinal = max(lpstop_bounds(1),calc_lplim_final_stage(3))
         lpfinal = min(lpstop_bounds(2),lpfinal)
         if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
-        if( .not. l_cavgs .and. params%l_freq_march_aggressive )then
-            ! aggressive frequency marching (doc/policies/3D/solve3D_policy.md sec. 4): the class FRCs
-            ! set neither the start nor the rungs; the final limit is the standard one
-            lpstart_eff = solve3D_lpstart_aggressive()
-            if( present(lpstart) ) lpstart_eff = lpstart
-            write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING: ', lpstart_eff, &
-                &' -> ', lpfinal, ' A, rungs linear in spatial frequency, no first-stage floor'
-            call lpstages_aggressive(params%box, nstages, params%smpd, lpstart_eff, lpfinal, lpinfo, verbose=.true.)
-        else if( present(lpstart) )then
+        if( present(lpstart) )then
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.true.)
         else
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
+        endif
+        if( .not. l_cavgs .and. params%l_freq_march_aggressive )then
+            ! aggressive frequency marching (doc/policies/3D/solve3D_policy.md sec. 4): the global stages
+            ! before the march keep their FRC-planned rungs (the search from random orientations needs
+            ! them; PfCRT latest10, 2026-10-21); from the first prob stage on the class FRCs set neither
+            ! the start nor the rungs, and the final limit is the standard one
+            imarch = solve3D_aggressive_march_stage()
+            if( imarch <= nstages )then
+                write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING FROM STAGE ', imarch, ': ', &
+                    &solve3D_lpstart_aggressive(), ' -> ', lpfinal, ' A, rungs linear in spatial frequency'
+                call lpstages_aggressive(params%box, nstages, params%smpd, solve3D_lpstart_aggressive(), lpfinal, lpinfo, &
+                    &verbose=.true., first_stage=imarch)
+            else
+                write(logfhandle,'(A,I0,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING: no stage at or past ', imarch, &
+                    &', the planned ladder stands'
+            endif
         endif
         ! cleanup
         call clsfrcs%kill

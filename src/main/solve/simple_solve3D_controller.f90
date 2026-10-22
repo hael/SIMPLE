@@ -11,10 +11,11 @@ integer,          parameter :: NSTAGES                 = 8
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
-! freq_march_aggressive=yes: the finer early bands need finer angular sampling. A spiral of n directions
-! resolves about 223/sqrt(n) degrees (oris%find_angres); the step a band lp needs on a particle of
-! diameter D is about lp/D radians: 12 A on 120 A is 5.7 degrees (n ~ 1500), 9 A is 4.3 degrees (n ~ 2700)
-integer,          parameter :: NSPACE_AGGRESSIVE(8)    = [1000,2500,2500,2500,2500,2500,5000,5000]
+! freq_march_aggressive=yes: the march from AGGRESSIVE_MARCH_STAGE needs finer angular sampling than the
+! planned rungs. A spiral of n directions resolves about 223/sqrt(n) degrees (oris%find_angres); the step
+! a band lp needs on a particle of diameter D is about lp/D radians: 12 A on 120 A is 5.7 degrees
+! (n ~ 1500), 9 A is 4.3 degrees (n ~ 2700). The global stages before the march keep their nspace.
+integer,          parameter :: NSPACE_AGGRESSIVE(8)    = [500,1000,2500,2500,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve3D_cavgs stages using NSPACE_CAVGS_EARLY
@@ -31,6 +32,7 @@ integer,          parameter :: SYMSRCH_STAGE           = 4           ! search sy
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
+integer,          parameter :: AGGRESSIVE_MARCH_STAGE  = PROB_REFINE_STAGE ! freq_march_aggressive=yes: the march starts with the prob stages; the shc stages from random orientations keep their planned rungs (PfCRT latest10: 12 A at stage 1 never consolidated)
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
@@ -50,7 +52,7 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
 real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
-real,             parameter :: LPSTART_AGGRESSIVE      = 12.  ! freq_march_aggressive=yes: first-stage limit when lpstart is not given (no 20 A floor)
+real,             parameter :: LPSTART_AGGRESSIVE      = 12.  ! freq_march_aggressive=yes: the march's first rung (about res05/1.5 after the global stages on PfCRT)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
 real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for solve3D_cavgs/cavgs_ini
@@ -92,6 +94,11 @@ contains
         real :: lp
         lp = LPSTART_AGGRESSIVE
     end function solve3D_lpstart_aggressive
+
+    module function solve3D_aggressive_march_stage() result(istage)
+        integer :: istage
+        istage = AGGRESSIVE_MARCH_STAGE
+    end function solve3D_aggressive_march_stage
 
     module function solve3D_cenlp_default() result(cenlp)
         real :: cenlp

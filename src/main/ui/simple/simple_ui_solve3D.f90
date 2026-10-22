@@ -154,9 +154,10 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_FILT, 'freq_march_aggressive', 'binary', 'Aggressive frequency marching', &
-                &'Stage limits linear in spatial frequency from 12 A (or lpstart) to the final limit, no 20 A first-stage floor, &
-                &finer early angular sampling; for small targets whose low-resolution signal is the micelle, not the protein; &
-                &particle route with a 2D solution only(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
+                &'From the first prob stage (3) the stage limits are linear in spatial frequency from 12 A to the final limit, &
+                &with finer angular sampling; the global stages 1-2 keep their planned rungs (the search from random orientations &
+                &needs them); for small targets whose low-resolution signal is the micelle, not the protein; particle route with a &
+                &2D solution only(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
             &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         endif
         call prg%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
