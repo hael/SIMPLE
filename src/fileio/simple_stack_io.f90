@@ -105,7 +105,12 @@ contains
         end select
         ! allocate the buffer
         self%bufsz = BUFSZ_DEFAULT
-        if( present(bufsz) ) self%bufsz = bufsz
+        if( present(bufsz) )then
+            self%bufsz = bufsz
+        else
+            ! when too large (ie micrograph) reduce buffer size
+            if( any(self%ldim(1:2) >= 512)) self%bufsz = max(1, nint(real(self%bufsz)/20.))
+        endif
         ! need to have the full stack in buffer on read, since most of it is asynchronuous
         if( self%nptcls /= 0 ) self%bufsz = min(self%bufsz, self%nptcls)
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)

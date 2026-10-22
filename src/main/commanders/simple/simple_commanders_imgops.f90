@@ -784,7 +784,7 @@ contains
                     else
                         fname = add2fbody(filenames(ifile), params%ext, SCALE_SUFFIX)
                     endif
-                    call stkio_w%open(fname, smpd_sc, 'write', box=ldim_scaled(1))
+                    call stkio_w%open(fname, smpd_sc, 'write', ldim=ldim_scaled(1:2), bufsz=1)
                     call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                     ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
                     do iframe= 1, nframes
