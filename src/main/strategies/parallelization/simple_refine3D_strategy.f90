@@ -915,9 +915,12 @@ contains
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
         endif
-        do state = 1, params%nstates
-            call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
-        enddo
+        ! A residual-only sigma pass does not own orientation artifacts.
+        if( trim(params%refine) /= 'sigma' )then
+            do state = 1, params%nstates
+                call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
+            enddo
+        endif
         if( l_write_partial_recs )then
             t_recphase = tic()
             if( trim(params%rec_backend) == 'pcg' )then
@@ -1403,9 +1406,12 @@ contains
         endif
         call write_iteration_states(params, build)
         call job_descr_pass%kill
-        do state = 1, params%nstates
-            call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
-        enddo
+        ! A residual-only sigma pass does not own orientation artifacts.
+        if( trim(params%refine) /= 'sigma' )then
+            do state = 1, params%nstates
+                call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
+            enddo
+        endif
         ! assemble volumes, postprocess, automask
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
