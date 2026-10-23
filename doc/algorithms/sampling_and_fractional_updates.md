@@ -131,10 +131,19 @@ neighbouring in-plane rotations differ by about `1e-3`. The draw above is
 therefore uniform over its `K` candidates. For the in-plane step this puts
 each table entry at a random rotation within `athres` of its best, and on
 PfCRT the committed pose is more than a nat worse than the best grid pose
-on the same reference for 17-25% of the particles, with the mode agreeing
-with the independent half for 54-62% against 93-94% for a deterministic
-scoring. `prob_inpl_draw=argmin` scores every entry at its best grid
-rotation instead (`K_inpl = 1`); the default `likelihood` keeps the draw.
+on the same reference for 17-27% of the particles, with the mode agreeing
+with the independent half for 50-62% against 88-94% for a deterministic
+scoring. That randomness is load-bearing: it is what keeps the direction
+assignment diverse against the references' memory of where each particle
+was last put (the self-reinforcement of the same note, 1-7 nats on the own
+half), and `athres` shrinking with the measured in-plane change anneals it
+as the alignment settles. Scoring every entry at its best grid rotation
+instead (`K_inpl = 1`, tried as a switch on 2026-10-23 and removed again)
+takes the search noise out as intended but traps the run: 5 of 10 PfCRT
+restarts ended near 7 A against 4.0-4.6 A for the other 5 and 4.0 A for
+the draw (`PfCRT_posterior/greedy_inpl`). The in-plane angle a particle
+ends with is the continuous refinement's in either case; what the draw
+buys is the diversity of the direction assignment.
 
 ## Balanced assignment
 

@@ -820,12 +820,22 @@ dominates at this particle count and the switch should move to a later
 stage (or be made conditional on the measured bonus, `self_nats` mean
 above a nat).
 
-## 14. Results of the frame-correct re-run: PfCRT, 2026-10-22 (4_solve3D, stages 3-4)
+## 14. Results of the frame-correct re-run: PfCRT, 2026-10-22 (4_solve3D, stages 3-5)
 
 The same schedule with the 40-column diagnostic (section 11, the two
-frame errors fixed), read at iteration 68 while the run was going on:
-stage 3 (iterations 41-57) complete, stage 4 (58-68) partial. Analysis
-`post5.py` -> `run4b_summary.txt`, `search_test.py` -> `run4b_search_test.txt`.
+frame errors fixed), read at iteration 68 (stages 3 and part of 4) and
+again at iteration 87 (stages 3-5 complete: 41-57, 58-72, 73-80; stage 8
+from 81 at box 150, no dense fill). Analysis `post5.py` ->
+`run4b_summary.txt`, `search_test.py` -> `run4b_search_test.txt`,
+`self_lock.py` -> `run4b_self_lock.txt`. Stage 5 confirms the three
+findings at the NU band: `null_a` zero to three decimals for the refined
+modes (77%; `null_b` median 2.9 nats, p90 44) and for the bank modes;
+production mode equal to the deterministic mode for 49%, worse than the
+deterministic best by more than a nat for 27% of all particles, equal to
+the other half's mode for 50% against the deterministic rows' 88%;
+`self_nats` +4.0 nats on average, rising 1.5 -> 5.4 over iterations
+73-80 as the half-map FSC=0.143 resolution runs 10.4 -> 7.6 A (the
+schedule of this run promoted later than section 12's), control -0.05.
 
 **The null test passes.** For the shift-refined modes (83% and 80% of the
 particles), the shifted-reference kernel at the frame-converted stored
@@ -881,24 +891,101 @@ direction for 79% and 84%, the other for 77% and 79%.
 has to hold the best grid rotation per direction, or a rotation drawn at
 the particle's temperature (`posterior_temperature`, available on the
 worker), so that the draw is a posterior sample and not a uniform one.
-The cheap experiment is built: `prob_inpl_draw=argmin` (default
-`likelihood`, the behaviour above) scores every table entry at its best
-grid rotation in all three probability tables: the 3D dense fill
-(`inpl_likelihood_nsample`), the 3D neighbourhood fills (the same
-function, the stochastic styles' extremal count `smpl_ninpl`, and the
-assignment's in-plane fallback) and the 2D table (`ninpl_smpl` in both
-fills; `neighfrac2nsmpl` never goes below 2, so the 2D and SNHC entries
-otherwise keep a one-step in-plane dither to the end of the extremal
-decay). The refinement of the top set starts from the best rotation;
-nothing else changes (the shift seed, the refinement, the assignment's
-direction draw). The per-particle strategy searches outside the tables
-(`greedy_sub`, the 2D `snhc_smpl`/`inpl_smpl`) sample in-plane by their
-own rules and are not touched. Measured by the diagnostic (`rank_d` -> 1 by
-construction for the unrefined entries; the quantity to watch is the
-production mode's agreement with the other half, 54-62% now against the
-deterministic rows' 93-94%, and the self and reference columns, which the
-switch does not touch) and by the final resolution of the PfCRT schedule
-against 4.03 A. The principled version tempers the in-plane and the
-assignment draws alike with T; it is the first item of section 4's design
-and no longer needs the search to be trusted first, since the null test
-holds.
+The cheap experiment was built as a switch (`prob_inpl_draw=argmin`:
+every table entry at its best grid rotation, in the 3D dense fill, the 3D
+neighbourhood fills including the stochastic styles' extremal count and
+the assignment's in-plane fallback, and the 2D table, where
+`neighfrac2nsmpl` never goes below 2 and the entries otherwise keep a
+one-step dither to the end of the extremal decay), run ten times, and
+removed again the same day: it traps the search (section 15). The noise is
+the exploration. What remains of it in the code is the comment on
+`inpl_likelihood_nsample`. The principled version tempers the direction
+draw with T on an explicit schedule (section 15); it is the first item of
+section 4's design and no longer needs the search to be trusted first,
+since the null test holds.
+
+## 15. The argmin runs: PfCRT, 2026-10-23
+
+The schedule of sections 12 and 14 with `prob_inpl_draw=argmin
+prob_post_diag=yes`. The baselines are `prev/5_solve3D` (section 12,
+finished, 4.03 / 6.90 A) and `prev2/4_solve3D` (section 14, stopped at
+iteration 87 in stage 8, 7.22 / 8.62 A at box 150). Analysis
+`run6_summary.txt`, `run6_search_test.txt`, `run6_self_lock.txt`.
+
+**The search noise is gone.** Production mode equal to the deterministic
+mode: 89%, 90%, 85% (stages 3-5; before 63%, 54%, 49%). Where they differ
+(11%, 10%, 15%) the production's refined loss is lower in 99.9-100% of
+cases, by a median 1.1-1.6 nats: the remaining differences are the
+continuous refinement finding a better pose at a neighbouring direction,
+which is what it is for. No particle commits to a pose more than a nat
+worse than the best grid pose (before 17%, 25%, 27%). Production mode
+equal to the independent half's mode: 88%, 88%, 81% (before 62%, 54%,
+50%; the deterministic rows 95%, 94%, 89%). Production mode equal to the
+inserted direction: 82%, 87%, 70% (before 46%, 39%, 26%), 93% at the last
+stage-5 iteration read.
+
+**The halves agree more, the bonus is unchanged.** Own-half vs
+other-half deterministic modes disagree for 9%, 9%, 17% (before 12%, 14%,
+20%): less search noise goes into the two reconstructions. `self_nats`
++0.81, +2.19, +3.5 (rising 1.5 -> 4.9 over the first five stage-5
+iterations), control -0.03 to -0.08: the switch did not touch the
+reference, as it should not have. The null test passes as before; the
+refined modes are now 18%, 13%, 31% of all (before 77-83%), because the
+seed shift is already the optimum at the previous pose and the refinement
+of a mode that stays there has nothing to improve.
+
+**Convergence and resolution (interim).** Stages 1 and 4 converged in 12
+and 9 iterations (before 20 and 15 in both baselines); stages 2 and 3 as
+before (20, 17). The stage-end resolutions are the ladder's and identical
+across the three runs. Within stage 5, the FSC=0.143 resolution over the
+first five iterations ran 10.35, 9.41, 8.39, 7.96, 7.57 A, against 9.70,
+8.17, 7.76, 7.06, 6.61 (`prev/5_solve3D`) and 10.35, 9.41, 8.87, 8.62,
+8.39 (`prev2/4_solve3D`): the two baselines differ from each other by
+more than either differs from the argmin run, so the stage-5 trajectory
+is not the arbiter; the final map is.
+
+**Final maps: argmin is worse.** Ten restarts with `prob_inpl_draw=argmin`
+(`PfCRT_posterior/greedy_inpl`, 75-82 iterations each, stages 1-5 and 8):
+FSC 0.5 / 0.143 of 7.76/4.63, 8.39/6.90, 7.06/4.03, 8.87/7.06, 8.39/6.75,
+7.39/4.44, 8.62/7.06, 7.39/4.14, 7.76/4.57, 9.41/7.57 A. Five of ten end
+near 7 A, five at 4.0-4.6 A, one at the default's 4.03 A; the default
+reaches ~4 A reliably (Hans's runs; `prev/5_solve3D` 4.03). The sharper,
+less noisy table of the first paragraph produces a worse and bimodal
+outcome: the run converges faster (stages 1 and 4 in 12 and 9 iterations)
+to a self-consistent solution that half the time is the wrong one.
+
+**Reading.** The in-plane draw's randomness is not a defect to remove but
+the search's exploration, and the two measurements of this note are the
+two sides of one mechanism. Self-reinforcement (sections 12 and 14) pulls
+every particle back to the pose it was inserted at, by 1-7 nats on its
+own half; the in-plane noise kicks each entry by a comparable amount
+(median 0.6-1.5 nats, p10 6-9), so the mode of a row keeps moving among
+near-equivalent directions, the assignment stays diverse, and a wrong pose
+can leave. With `argmin` the kick is gone: 93% of particles return to
+their inserted direction each stage-5 iteration (section 15, first
+paragraph; 46-82% with the draw), the reference confirms them, and the
+run locks, right or wrong. `athres` shrinking with the measured in-plane
+change is an annealing schedule: the noise is largest while the alignment
+moves and dies as it settles. Hans's reading, that the effect is indirect
+and acts through the diversity of the direction sampling while the final
+in-plane angle is the continuous refinement's anyway, is what the numbers
+say.
+
+**Consequence for the design.** Section 4's draw from the row posterior
+must carry the exploration the in-plane noise supplies today, or it will
+trap as `argmin` does: a draw at the data temperature T over a posterior
+with n_eff ~ 1 (sections 8, 12) is `argmin` with extra steps. The design
+therefore needs an explicit temperature schedule, T_eff = T / beta with
+beta < 1 early (hotter than the data) annealed towards 1 on the same
+signal `athres` uses (the measured pose change), and the noise placed
+where it belongs, on the direction draw, not on the loss values the
+assignment compares. The diagnostic can calibrate beta: the effective
+kick the present scheme gives is the production mode's loss excess over
+the deterministic best (section 14), a few nats at p50 and 6-9 at p10, so
+the schedule has a measured target. Cross-half scoring (section 13) would
+remove the pull the noise is fighting rather than add noise against it,
+and the two are complementary. The `prob_inpl_draw` key was removed after
+the ten runs (dead code is confusing code); the ablation is reproducible
+by setting `nsample` to 1 in `inpl_likelihood_nsample` and `ninpl_smpl`/
+`smpl_ninpl` to 1 in the neighbourhood and 2D fills.
+

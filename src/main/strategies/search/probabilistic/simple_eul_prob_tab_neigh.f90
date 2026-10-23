@@ -299,8 +299,6 @@ contains
                 nrefs_bound = max(2, min(nfull_refs, nint(real(nfull_refs) * (1. - neigh_frac))))
                 smpl_ninpl  = neighfrac2nsmpl(neigh_frac, nrots)
             endif
-            ! prob_inpl_draw=argmin: the best grid rotation for every entry, the stochastic styles included
-            if( self%p_ptr%l_prob_inpl_argmin ) smpl_ninpl = 1
             prev_corr_loc = -huge(1.0)
             if( (l_shc_neigh .and. (.not. l_greedy_first)) )then
                 call calc_previous_corr(ithr_loc, iptcl_loc, prev_full_ref_loc, prev_corr_loc)
@@ -358,14 +356,9 @@ contains
                 &nsample_loc, dist_loc, corr_loc, irot_loc, dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
         end subroutine score_direct_ref
 
-        !> the in-plane candidates of an entry (the best alone under prob_inpl_draw=argmin), as in the dense fill
         integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
             integer, intent(in) :: istate_loc
             real :: athres_ub
-            if( self%p_ptr%l_prob_inpl_argmin )then
-                nsample = 1
-                return
-            endif
             athres_ub = min(self%p_ptr%prob_athres, inpl_athres(istate_loc))
             nsample = min(nrots, max(1, int(athres_ub * real(nrots) / 180.)))
         end function inpl_likelihood_nsample
@@ -678,14 +671,9 @@ contains
             enddo
         end subroutine evaluate_neighborhood
 
-        !> the in-plane candidates of an entry (the best alone under prob_inpl_draw=argmin), as in the dense fill
         integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
             integer, intent(in) :: istate_loc
             real :: athres_ub
-            if( self%p_ptr%l_prob_inpl_argmin )then
-                nsample = 1
-                return
-            endif
             athres_ub = min(self%p_ptr%prob_athres, inpl_athres(istate_loc))
             nsample = min(nrots, max(1, int(athres_ub * real(nrots) / 180.)))
         end function inpl_likelihood_nsample
@@ -1068,10 +1056,7 @@ contains
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( l_seed_fallback_shift ) sh_seed = o_prev%get_2Dshift()
-                if( self%p_ptr%l_prob_inpl_argmin )then
-                    call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&
-                        &sh_seed, 1, dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
-                else if( self%p_ptr%l_prob_inpl )then
+                if( self%p_ptr%l_prob_inpl )then
                     inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
                         &self%p_ptr%prob_athres, state=fallback_state)
                     call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&

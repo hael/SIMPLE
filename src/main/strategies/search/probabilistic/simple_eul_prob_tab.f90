@@ -702,16 +702,14 @@ contains
                 &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
         end subroutine score_ref_bank
 
-        !> the in-plane candidates an entry's rotation is drawn from: the rotations within the angular threshold,
-        !! or the best one alone (prob_inpl_draw=argmin: the draw at unit temperature on the normalized loss is
-        !! uniform over the candidates, doc/implementation_notes/planned/pose_marginalization.md section 14)
+        !> the in-plane candidates an entry's rotation is drawn from: the rotations within the angular threshold.
+        !! The draw at unit temperature on the normalized loss is uniform over them; that randomness is the
+        !! search's exploration against the references' memory of the particle's last pose, and removing it
+        !! (the best rotation alone) traps the run (doc/implementation_notes/planned/pose_marginalization.md
+        !! sections 14-15, doc/algorithms/sampling_and_fractional_updates.md)
         integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
             integer, intent(in) :: istate_loc
             real :: athres_ub
-            if( self%p_ptr%l_prob_inpl_argmin )then
-                nsample = 1
-                return
-            endif
             athres_ub = min(self%p_ptr%prob_athres, inpl_athres(istate_loc))
             nsample = min(self%b_ptr%pftc%get_nrots(), max(1, int(athres_ub * real(self%b_ptr%pftc%get_nrots()) / 180.)))
         end function inpl_likelihood_nsample
