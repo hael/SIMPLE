@@ -9,6 +9,7 @@ type(ui_program), target :: pdb2mrc
 type(ui_program), target :: simulate_movie
 type(ui_program), target :: simulate_noise
 type(ui_program), target :: simulate_particles
+type(ui_program), target :: simulate_scattering
 
 contains
 
@@ -19,6 +20,7 @@ contains
         call new_simulate_movie(prgtab)
         call new_simulate_noise(prgtab)
         call new_simulate_particles(prgtab)
+        call new_simulate_scattering(prgtab)
     end subroutine construct_sim_programs
 
 subroutine new_cif2mrc( prgtab )
@@ -252,5 +254,56 @@ subroutine new_cif2mrc( prgtab )
         ! add to ui_hash
         call add_ui_program('simulate_particles', simulate_particles, prgtab, UI_CATEGORY)
     end subroutine new_simulate_particles
+
+    subroutine new_simulate_scattering( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call simulate_scattering%new(&
+        &'simulate_scattering',&
+        &'Simulate wave-scattering cryo-EM images',&
+        &'generates detector intensities from a 3D electrostatic potential with the first-Born or multislice forward model used by Ghostbuster. A PDB input is converted with SIMPLE pdb2mrc. The complex exit wave is propagated through an astigmatic objective lens before dose and detector noise are applied. This program generates forward data; it does not run Ghostbuster RAF or DOFS reconstruction.',&
+        &'simple_exec',&
+        &.false., visibility=UI_VIS_ADVANCED, display_name='Simulate Scattering Images')
+        call simulate_scattering%add_input(UI_FILE, 'pdbfile', 'file', 'PDB coordinates', &
+            &'Atomic coordinates converted to an electrostatic potential with SIMPLE pdb2mrc', &
+            &'PDB file, mutually exclusive with vol1', .false., '', visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_IMG, 'vol1', 'file', 'Potential volume', &
+            &'Sampled 3D electrostatic potential in volts', 'MRC volume, mutually exclusive with pdbfile', &
+            &.false., '', visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_requirement('object', 'Scattering object', &
+            &'Select exactly one source for the 3D electrostatic potential', &
+            &[character(len=7) :: 'pdbfile', 'vol1'], min_selected=1, max_selected=1)
+        call simulate_scattering%add_input(UI_PARM, smpd, required_override=.false., visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, vol_dim, required_override=.false., visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_IMG, outvol, visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_PARM, nptcls, visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_FILE, oritab, visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_FILE, outfile, visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_IMG, outstk, visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, 'scattering_model', 'multi', 'Scattering model', &
+            &'Wave-object interaction model', 'first_born or multislice{multislice}', .false., 'multislice', &
+            &choices=ui_choices([character(len=11) :: 'first_born', 'multislice']), visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, 'absorption', 'num', 'Absorptive fraction', &
+            &'Imaginary fraction of the complex object potential', 'range [0,1){0.1}', .false., 0.1, &
+            &visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_PARM, kv, visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, cs, visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_PARM, 'defocus', 'num', 'Exit-plane underfocus', &
+            &'Mean underfocus in microns, measured from the object exit plane', 'microns{2}', .false., 2., &
+            &visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, dferr, visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_PARM, 'astigerr', 'num', 'Astigmatism error', &
+            &'Uniform astigmatism error in microns', 'microns{0}', .false., 0., visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_FILT, 'bfac', 'num', 'Detector envelope B-factor', &
+            &'Gaussian Fourier-amplitude envelope B-factor', 'Angstroms squared{64}', .false., 64., &
+            &visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_PARM, 'total_dose', 'num', 'Electron dose', &
+            &'Poisson exposure dose; zero disables shot noise', 'electrons per Angstrom squared{20}', .false., 20., &
+            &visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, 'noise_sdev', 'num', 'Detector noise', &
+            &'Additive Gaussian detector-noise standard deviation after dose normalization', &
+            &'intensity units{0}', .false., 0., visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call add_ui_program('simulate_scattering', simulate_scattering, prgtab, UI_CATEGORY)
+    end subroutine new_simulate_scattering
 
 end module simple_ui_sim

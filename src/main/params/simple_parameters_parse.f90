@@ -201,6 +201,7 @@ contains
         call reg%add_char('ptcl_old_root', self%ptcl_old_root)
         call reg%add_char('recthres', self%recthres)
         call reg%add_char('refine', self%refine)
+        call reg%add_char('scattering_model', self%scattering_model)
         call reg%add_char('reject_mics', self%reject_mics)
         call reg%add_char('remove_chunks', self%remove_chunks)
         call reg%add_char('remap_cls', self%remap_cls)
@@ -486,6 +487,7 @@ contains
     module subroutine bind_input_rarg(self, reg)
         class(parameters),   target, intent(inout) :: self
         class(param_registry),       intent(inout) :: reg
+        call reg%add_real('absorption', self%absorption)
         call reg%add_real('amsklp', self%amsklp)
         call reg%add_real('angerr', self%angerr)
         call reg%add_real('angthres_mi_proj', self%angthres_mi_proj)
@@ -562,6 +564,7 @@ contains
         call reg%add_real('msk_crop', self%msk_crop)
         call reg%add_real('mskdiam', self%mskdiam)
         call reg%add_real('mskdiam_detect', self%mskdiam_detect)
+        call reg%add_real('noise_sdev', self%noise_sdev)
         call reg%add_real('ndev', self%ndev)
         call reg%add_real('ndev2D', self%ndev2D)
         call reg%add_real('nsig', self%nsig)

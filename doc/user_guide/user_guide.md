@@ -12,6 +12,8 @@ simple_exec prg=list
   average micrograph from a projection stack, with a PDB-to-movie tutorial.
 - [simulate_particles](simulate_particles.md) — generate boxed particle
   images and their simulation metadata from a volume.
+- [simulate_scattering](simulate_scattering.md) — generate boxed first-Born
+  or multislice detector intensities from a PDB or electrostatic potential.
 - [Simulated validation workflows](simulated_workflows.md) — run the
   built-in molecular workflows and quantitative checks with `simple_test_exec`.
 

@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_defs_atoms
 use simple_ctf,       only: ctf
 use simple_simulator, only: simimg
+use simple_scattering_simulator, only: scattering_simulator
 implicit none
 #include "simple_local_flags.inc"
 
@@ -18,6 +19,11 @@ type, extends(commander_base) :: commander_simulate_particles
   contains
     procedure :: execute      => exec_simulate_particles
 end type commander_simulate_particles
+
+type, extends(commander_base) :: commander_simulate_scattering
+  contains
+    procedure :: execute      => exec_simulate_scattering
+end type commander_simulate_scattering
 
 type, extends(commander_base) :: commander_simulate_movie
   contains
@@ -227,6 +233,101 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_PARTICLES NORMAL STOP ****')
     end subroutine exec_simulate_particles
+
+    subroutine exec_simulate_scattering( self, cline )
+        use simple_atoms,            only: atoms
+        use simple_simple_volinterp, only: rotvol
+        class(commander_simulate_scattering), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        type(atoms)      :: molecule
+        type(ori)        :: orientation
+        type(image)      :: rotated_potential
+        class(scattering_simulator), allocatable :: simulator
+        type(string)     :: pdb_arg, pdb_source, potential_file
+        integer          :: i, ldim(3), nptcls_arg, nsec, vol_dim(3)
+        real             :: smpd, dfx, dfy, angast
+        logical          :: from_pdb, has_angast, has_dfy
+        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir', 'no')
+        if( .not. cline%defined('scattering_model') ) call cline%set('scattering_model', 'multislice')
+        if( .not. cline%defined('absorption')       ) call cline%set('absorption', 0.1)
+        if( .not. cline%defined('bfac')             ) call cline%set('bfac', 64.0)
+        if( .not. cline%defined('total_dose')       ) call cline%set('total_dose', 20.0)
+        if( .not. cline%defined('noise_sdev')       ) call cline%set('noise_sdev', 0.0)
+        if( .not. cline%defined('dferr')            ) call cline%set('dferr', 0.0)
+        if( .not. cline%defined('astigerr')         ) call cline%set('astigerr', 0.0)
+        if( .not. cline%defined('outstk')           ) call cline%set('outstk', 'scattering_images.mrcs')
+        if( .not. cline%defined('outfile')          ) call cline%set('outfile', 'scattering_oris.txt')
+        from_pdb = cline%defined('pdbfile')
+        if( from_pdb .eqv. cline%defined('vol1') ) &
+            &THROW_HARD('simulate_scattering needs exactly one of pdbfile and vol1')
+        if( from_pdb )then
+            pdb_arg = cline%get_carg('pdbfile')
+            pdb_source = string(pdb_arg%to_char())
+            write(logfhandle,'(A)') '>>> CONVERTING PDB POTENTIAL: '//pdb_source%to_char()
+            smpd = 1.3
+            if( cline%defined('smpd') ) smpd = cline%get_rarg('smpd')
+            if( cline%defined('outvol') )then
+                potential_file = simple_abspath(cline%get_carg('outvol'), check_exists=.false.)
+            else
+                potential_file = simple_abspath(string('scattering_potential.mrc'), check_exists=.false.)
+            endif
+            if( cline%defined('vol_dim') )then
+                vol_dim = cline%get_iarg('vol_dim')
+                call molecule%pdb2mrc(pdbfile=pdb_source, volfile=potential_file, smpd=smpd, &
+                    &center_pdb=.true., vol_dim=vol_dim)
+            else
+                call molecule%pdb2mrc(pdbfile=pdb_source, volfile=potential_file, smpd=smpd, center_pdb=.true.)
+            endif
+            call molecule%kill
+            call cline%set('vol1', potential_file)
+        endif
+        nptcls_arg = cline%get_iarg('nptcls')
+        call cline%set('nspace', max(2, 2 * ((nptcls_arg + 1) / 2)))
+        call cline%set('eo', 'no')
+        call build%init_params_and_build_general_tbox(cline, params)
+        select case(trim(params%scattering_model))
+        case('first_born', 'multislice')
+        case default
+            THROW_HARD('scattering_model must be first_born or multislice')
+        end select
+        if( params%absorption < 0.0 .or. params%absorption >= 1.0 ) &
+            &THROW_HARD('absorption must be in [0,1)')
+        if( params%total_dose < 0.0 .or. params%noise_sdev < 0.0 ) &
+            &THROW_HARD('total_dose and noise_sdev must be nonnegative')
+        call find_ldim_nptcls(params%vols(1), ldim, nsec)
+        if( any(ldim /= ldim(1)) ) THROW_HARD('simulate_scattering requires a cubic potential volume')
+        call build%vol%read(params%vols(1))
+        if( .not. cline%defined('oritab') ) call build%spproj_field%rnd_oris(0.0, params%eullims)
+        if( .not. build%spproj_field%isthere('dfx') ) &
+            &call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, &
+            &params%defocus, params%dferr, params%astigerr)
+        has_dfy    = build%spproj_field%isthere('dfy')
+        has_angast = build%spproj_field%isthere('angast')
+        allocate(simulator)
+        call simulator%new(params%box, params%smpd, params%kv, params%absorption)
+        write(logfhandle,'(A)') '>>> GENERATING GHOSTBUSTER-COMPATIBLE SCATTERING IMAGES'
+        do i = 1, params%nptcls
+            call progress(i, params%nptcls)
+            call build%spproj_field%get_ori(i, orientation)
+            rotated_potential = rotvol(build%vol, orientation)
+            dfx    = orientation%get('dfx')
+            dfy    = dfx
+            angast = 0.0
+            if( has_dfy    ) dfy    = orientation%get('dfy')
+            if( has_angast ) angast = orientation%get('angast')
+            call simulator%simulate(rotated_potential, build%img, params%scattering_model, &
+                &dfx, dfy, angast, params%cs, params%bfac, params%total_dose, params%noise_sdev)
+            call build%img%write(params%outstk, i)
+            call rotated_potential%kill
+        enddo
+        call build%spproj_field%write(params%outfile, [1,params%nptcls])
+        call simulator%kill
+        deallocate(simulator)
+        call orientation%kill
+        call simple_end('**** SIMPLE_SIMULATE_SCATTERING NORMAL STOP ****')
+    end subroutine exec_simulate_scattering
 
     subroutine exec_simulate_movie( self, cline )
         use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps

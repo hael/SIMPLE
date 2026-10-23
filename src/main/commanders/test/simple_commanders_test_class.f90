@@ -128,6 +128,7 @@ use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_nano_species_tester,              only: run_all_nano_species_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
+use simple_scattering_simulator_tester,      only: run_all_scattering_simulator_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
 use simple_cavgs_state_match_tester,         only: run_all_cavgs_state_match_tests
 use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
@@ -336,6 +337,7 @@ contains
         call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
         call add_suite(s, n, 'CTF',                  run_all_ctf_tests)
         call add_suite(s, n, 'image serialisation',  run_all_image_serialize_tests)
+        call add_suite(s, n, 'scattering simulator', run_all_scattering_simulator_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )

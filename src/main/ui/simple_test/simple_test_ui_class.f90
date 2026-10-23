@@ -103,7 +103,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Images')
         call unit_image%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (image, mrc2jpeg, mrc_validate, image_header, fourier_iterator, b_spline_smoother, masks, nano_mask, volume_shape, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
+            &'One sub-suite of this area to run alone (image, mrc2jpeg, mrc_validate, image_header, fourier_iterator, b_spline_smoother, masks, nano_mask, volume_shape, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation, scattering_simulator)', '', .false., '')
         call add_ui_program('unit_image', unit_image, tsttab, UI_CATEGORY)
     end subroutine new_unit_image
 

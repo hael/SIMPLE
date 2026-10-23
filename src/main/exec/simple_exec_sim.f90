@@ -1,7 +1,8 @@
 !@descr: execution of simulation commanders
 module simple_exec_sim
 use simple_cmdline,          only: cmdline
-use simple_commanders_sim,   only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie
+use simple_commanders_sim,   only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie, &
+    &commander_simulate_scattering
 use simple_commanders_atoms, only: commander_pdb2mrc, commander_cif2mrc
 implicit none
 
@@ -13,6 +14,7 @@ type(commander_pdb2mrc)            :: xpdb2mrc
 type(commander_simulate_movie)     :: xsimulate_movie
 type(commander_simulate_noise)     :: xsimulate_noise
 type(commander_simulate_particles) :: xsimulate_particles
+type(commander_simulate_scattering):: xsimulate_scattering
 
 contains
 
@@ -35,6 +37,8 @@ contains
                 call xsimulate_noise%execute(cline)
             case( 'simulate_particles' )
                 call xsimulate_particles%execute(cline)
+            case( 'simulate_scattering' )
+                call xsimulate_scattering%execute(cline)
             case default
                 l_did_execute = .false.
         end select

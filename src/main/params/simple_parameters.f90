@@ -321,6 +321,7 @@ type :: parameters
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|neigh|greedy|prob|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
+    character(len=STDLEN)     :: scattering_model='multislice' !< scattering forward model(first_born|multislice){multislice}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -497,6 +498,7 @@ type :: parameters
     integer :: xdimpd=0
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
+    real    :: absorption=0.1      !< imaginary fraction of the complex scattering potential[0,1){0.1}
     real    :: amsklp=8.           !< low-pass limit for NU/standalone envelope generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: angthres_mi_proj = ANGTHRES_MI_PROJ_DEFAULT !< 4 convergence checking
@@ -585,6 +587,7 @@ type :: parameters
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mskdiam_detect=0.   !< detect_atoms mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
+    real    :: noise_sdev=0.       !< additive Gaussian detector-noise standard deviation{0}
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
