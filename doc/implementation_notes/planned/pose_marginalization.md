@@ -989,3 +989,76 @@ the ten runs (dead code is confusing code); the ablation is reproducible
 by setting `nsample` to 1 in `inpl_likelihood_nsample` and `ninpl_smpl`/
 `smpl_ninpl` to 1 in the neighbourhood and 2D fills.
 
+## 16. Execution of sections 4 and 10 (2026-10-23)
+
+The design is sections 4 and 10 as written; this section records what the
+measurements of sections 12-15 add to it and the acceptance bar, and
+nothing else. The gate of section 11 is open for items (1) and (2): the
+reference columns score real halves and the null test passes (sections 12,
+14). Item (4), the convergence bypass, is built with the key (10.3, 1).
+Item (3), coverage on known poses, is not done and stays on the list.
+
+- **Acceptance.** PfCRT only, until the new path reproduces and then beats
+  the production path: 10 of 10 restarts, at least 3.6 A at FSC 0.143
+  (the baseline is 4.0). Nothing is tested on other data before that.
+- **Production untouched.** `prob_assign=balanced` is the default and
+  bit-identical; `posterior` is the second branch of `ref_assign` (10.1),
+  the frontier code stays.
+- **Argmin is not a step.** Section 15 showed that taking the randomness
+  out of the in-plane draw traps the run; the per-particle argmin would do
+  the same one level up. The posterior draw of section 4.1 is built
+  directly, at the temperature of section 3, with the tempering factor of
+  4.4 as the one constant (10.3, 3: start at 1). Section 14's calibration
+  says today's exploration corresponds to a factor of order 0.05-0.1, so
+  if stage 3 collapses at 1 the first value to try is known; the schedule
+  (rising to 1 along a stage on the measured pose change) is the follow-up
+  the design already names.
+- **Weighted form.** As in section 4: only if the per-iteration noise of
+  the draw shows in stages 3-4. Not before.
+- **2D.** Added 2026-10-23: the 2D table gets the same per-particle rule
+  under the same key as a later step (a particle's class drawn from its
+  row posterior at its temperature; the frontier default untouched), after
+  the 3D path holds on PfCRT. `prob_neigh` as in 4.5, after that.
+- **Diagnostic.** `prob_post_diag=yes` on every PfCRT run of the series, so
+  the self, reference and search columns say what each step changed.
+
+Order: (a) `draw_posterior_row` with its tests; (b) T_i in the dense part
+file, round trip tested; (c) the `ref_assign` posterior branch with the
+state rule of 10.3 (2), tested on the synthetic tables (huge T gives the
+argmin); (d) the convergence bypass with its unit test; (e) the key, the UI
+entries, the policy docs; (f) the PfCRT 10/10.
+
+**Built 2026-10-23 (a)-(e), awaiting (f).** `draw_posterior_row`
+(`simple_eul_prob_tab_utils`; tests: huge T a unique argmin every time and
+either of two equal minima with equal probability (a flat row is a uniform
+draw at any temperature, the posterior's answer rather than the balanced
+rule's lowest-index convention), T = 0 uniform over the valid distances and
+never an invalid one, T = 1 on [0, 1, 2] within 0.02 of [0.665, 0.245,
+0.090] over 20000 draws, seeded reproducibility, an invalid row draws 0). The
+dense part file carries `temps(nptcls)` after the seed table (format word
+-4; `write_dense_head`/`read_dense_part`; the fill sets
+`temps(i) = posterior_temperature(wsqsum, pftsz)` for every particle; the
+round-trip test checks them). `ref_assign` branches to
+`ref_assign_posterior` under `params%l_prob_assign_posterior`: the state
+label as `assign_state_labels` (blocks of 256 particles, strict `<`), one
+`draw_posterior_row` per particle within the state's block at
+`PROB_POSTERIOR_TEMP_FACTOR * temps(i)` (the constant is 1.0; section 4.4's
+knob), `assign_candidate(dense_candidate)`, `record_seed_shift`, `frac`
+100; the log line reports the fraction of particles drawn at their row
+mode; a particle without a temperature (none expected) takes its argmin
+with a warning; the invalid/flat check is shared with the balanced branch
+(`warn_invalid_and_flat`). Tests on the synthetic tables of
+`compare_with_reference`: huge T gives every particle with a unique row
+minimum its argmin, the flat particle a direction of state 1, the invalid
+one reference 1, and the state ties their lower state; at T = 2 on
+distances in [0, 5] some particles leave the mode and none leaves the
+argmin's state; the same seed gives the same assignment, another seed
+another. `check_conv3D` bypasses the pose-overlap
+rule under the key for `refine=prob` (the dense table; the neighbourhood
+stages keep the frontier and their rule in this step, section 4.5; a
+Cartesian pass has its own rule) and logs it;
+`test_posterior_assignment_bypass`: a frozen assignment converges the
+default rule and not the key's on the dense table, a `prob_neigh` pass keeps
+its rule, and the `lpexit` exit still ends the stage. Key `prob_assign=balanced|posterior` (`posterior` requires
+`objfun=euclid`), on `refine3D` and `solve3D` as advanced search inputs;
+`refine3D_policy.md` and `sampling_and_fractional_updates.md` updated.

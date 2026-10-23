@@ -48,8 +48,65 @@ contains
         call test_multistate_scan_exit()
         write(*,'(A)') 'test_lpexit_gain_guard'
         call test_lpexit_gain_guard()
+        write(*,'(A)') 'test_posterior_assignment_bypass'
+        call test_posterior_assignment_bypass()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
+
+    !> prob_assign=posterior (pose_marginalization.md 10.3): a frozen assignment (full scan, overlap 1) converges
+    !! the regular rule and must not converge under the key on the dense table (refine=prob); a neighbourhood
+    !! pass (refine=prob_neigh, the balanced frontier in this step) keeps the rule; the lpexit rule still ends
+    !! the stage (a stalled 7.5 A past lpexit 8 at the stage's second iteration)
+    subroutine test_posterior_assignment_bypass()
+        call del_file(STATS_FILE)
+        call assert_true(frozen_converged(.false., 'prob', 0., 1, 1),  'the regular rule did not converge on a frozen assignment')
+        call assert_false(frozen_converged(.true., 'prob', 0., 1, 1),  'the pose-overlap rule ended the stage under prob_assign=posterior')
+        call assert_false(frozen_converged(.true., 'prob', 0., 2, 1),  'the pose-overlap rule ended the stage under prob_assign=posterior (second iteration)')
+        call assert_true(frozen_converged(.true., 'prob_neigh', 0., 3, 1), 'a neighbourhood pass lost its pose-overlap rule under prob_assign=posterior')
+        call del_file(STATS_FILE)
+        call assert_false(frozen_converged(.true., 'prob', 8., 1, 1),  'the stage ended at its first iteration under prob_assign=posterior')
+        call assert_true(frozen_converged(.true., 'prob', 8., 2, 1),   'the resolution exit did not end the stage under prob_assign=posterior')
+        call del_file(STATS_FILE)
+    end subroutine test_posterior_assignment_bypass
+
+    !> check_conv3D of a single-state pass of NPTCLS frozen particles (frac 100, mi_proj 1) at FSC=0.5
+    !! 7.5 A, iteration which_iter of a stage from startit, with the refine mode, lpexit and the posterior key as given
+    logical function frozen_converged( l_posterior, refine, lpexit, which_iter, startit ) result( converged )
+        logical,          intent(in) :: l_posterior
+        character(len=*), intent(in) :: refine
+        real,             intent(in) :: lpexit
+        integer,          intent(in) :: which_iter, startit
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        integer :: i
+        call os%new(NPTCLS, is_ptcl=.true.)
+        do i = 1, NPTCLS
+            call os%set_state(i, 1)
+            call os%set(i, 'updatecnt', 1.)
+            call os%set(i, 'sampled',   1.)
+            call os%set(i, 'frac',      100.)
+            call os%set(i, 'mi_proj',   1.)
+            call os%set(i, 'corr',      0.5)
+            call os%set(i, 'res05',     7.5)
+        end do
+        allocate(params)
+        params%nstates    = 1
+        params%trs        = 5.
+        params%refine     = refine
+        params%lpexit     = lpexit
+        params%startit    = startit
+        params%which_iter = which_iter
+        params%l_prob_assign_posterior = l_posterior
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        converged = conv%check_conv3D(params, cline, os, 40.)
+        call cline%kill
+        call os%kill
+        deallocate(params)
+    end function frozen_converged
 
     !> Six particles: corr 0.1 i, corr_cart 0.5 + 0.05 i, improved on the odd ones; the
     !! sampled mask holds particles 1, 2, 3 and 6.

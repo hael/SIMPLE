@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability table: the seed shift of an assigned candidate, the dense part files and ref_assign
+!@descr: unit tests for the 3D probability table: the seed shift of an assigned candidate, the dense part files, ref_assign and its posterior branch
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! ref_assign is compared with the assignment it replaced, kept here as the reference (reference_assign): on synthetic
@@ -12,7 +12,7 @@ use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats
+    &posterior_temperature, posterior_row_stats, draw_posterior_row
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -46,7 +46,205 @@ contains
         call test_ref_assign_against_reference()
         write(*,'(A)') 'test_posterior_row_stats'
         call test_posterior_row_stats()
+        write(*,'(A)') 'test_draw_posterior_row'
+        call test_draw_posterior_row()
+        write(*,'(A)') 'test_ref_assign_posterior'
+        call test_ref_assign_posterior()
     end subroutine run_all_eul_prob_tab_tests
+
+    !> The draw from a row posterior (prob_assign=posterior): a huge temperature gives a unique argmin every
+    !! time and one of two equal minima with equal probability (both drawn over 50 draws, never another);
+    !! temperature 0 draws uniformly over the valid distances and never an invalid one; at T = 1 the row
+    !! [0, 1, 2] is drawn with p = [1, e^-1, e^-2]/Z = [0.665, 0.245, 0.090] to within 0.02 over 20000 draws;
+    !! the same seed gives the same sequence; a row of invalid distances draws 0
+    subroutine test_draw_posterior_row()
+        integer, parameter :: NDRAWS = 20000
+        real    :: dists(6), w(6), dist
+        integer :: which, i, counts(6), seq1(50), seq2(50)
+        logical :: l_ok
+        ! huge temperature, a unique minimum: the argmin every time
+        dists = [0.3, 0.1, 0.15, 0.5, huge(1.), 0.2]
+        call seed_rnd_fixed(20261023)
+        l_ok = .true.
+        do i = 1,50
+            call draw_posterior_row(6, dists, huge(1.), w, which, dist)
+            l_ok = l_ok .and. which == 2 .and. dist == 0.1
+        enddo
+        call assert_true(l_ok, 'a huge temperature draws a unique argmin every time')
+        ! huge temperature, two equal minima: either, with equal probability, never another
+        dists = [0.3, 0.1, 0.1, 0.5, huge(1.), 0.2]
+        counts = 0
+        do i = 1,50
+            call draw_posterior_row(6, dists, huge(1.), w, which, dist)
+            counts(which) = counts(which) + 1
+        enddo
+        call assert_int(50, counts(2) + counts(3), 'a huge temperature draws only the equal minima')
+        call assert_true(counts(2) > 0 .and. counts(3) > 0, 'a huge temperature draws both equal minima')
+        ! temperature 0: uniform over the five valid distances, never the invalid one
+        counts = 0
+        do i = 1,NDRAWS
+            call draw_posterior_row(6, dists, 0., w, which, dist)
+            counts(which) = counts(which) + 1
+        enddo
+        call assert_int(0, counts(5), 'temperature 0 never draws an invalid distance')
+        call assert_true(all(counts([1,2,3,4,6]) > NDRAWS/5 - 300) .and. all(counts([1,2,3,4,6]) < NDRAWS/5 + 300), &
+            &'temperature 0 draws the valid distances uniformly')
+        ! T = 1 on [0, 1, 2]
+        counts = 0
+        do i = 1,NDRAWS
+            call draw_posterior_row(3, [0., 1., 2.], 1., w, which, dist)
+            counts(which) = counts(which) + 1
+        enddo
+        call assert_true(abs(real(counts(1))/NDRAWS - 0.665241) < 0.02, 'the mode is drawn with its posterior mass')
+        call assert_true(abs(real(counts(2))/NDRAWS - 0.244728) < 0.02, 'the second is drawn with e^-1 of the mode''s mass')
+        call assert_true(abs(real(counts(3))/NDRAWS - 0.090031) < 0.02, 'the third is drawn with e^-2 of the mode''s mass')
+        ! reproducibility from the seed
+        call seed_rnd_fixed(20261024)
+        do i = 1,50
+            call draw_posterior_row(3, [0., 1., 2.], 1., w, seq1(i), dist)
+        enddo
+        call seed_rnd_fixed(20261024)
+        do i = 1,50
+            call draw_posterior_row(3, [0., 1., 2.], 1., w, seq2(i), dist)
+        enddo
+        call assert_true(all(seq1 == seq2), 'the same seed gives the same draws')
+        call assert_true(any(seq1 /= seq1(1)), 'the draws at T = 1 are not all the same')
+        ! no valid distance
+        call draw_posterior_row(3, [huge(1.), huge(1.), huge(1.)], 1., w, which, dist)
+        call assert_int(0, which, 'a row without a valid distance draws 0')
+    end subroutine test_draw_posterior_row
+
+    !> ref_assign under prob_assign=posterior on the synthetic tables of compare_with_reference: with a huge
+    !! temperature every particle whose row minimum is unique takes it; the flat particle 1 takes a uniformly
+    !! drawn direction in state 1 (the state label is the lowest-index argmin's) and the invalid particle 4
+    !! takes reference 1; the state-2/state-3 and state-1/state-3 ties of particles 2 and 3 go to the lower
+    !! state, where their minimum is unique. At a temperature of 2 with distances in [0, 5] the draw leaves the
+    !! mode for a fraction of the particles, and the state is always the argmin's; the draw is seeded, so two
+    !! runs from the same seed agree and two seeds differ
+    subroutine test_ref_assign_posterior()
+        call check_posterior_assignment(nspace=200, nstates=1)
+        call check_posterior_assignment(nspace=200, nstates=3)
+        call check_posterior_assignment(nspace=1,  nstates=2)
+    end subroutine test_ref_assign_posterior
+
+    subroutine check_posterior_assignment( nspace, nstates )
+        integer, intent(in) :: nspace, nstates
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab) :: tab
+        real,    allocatable :: dists(:,:)
+        integer, allocatable :: pinds(:), iref_argmin(:), iref_run1(:), iref_run2(:), iref_run3(:)
+        integer :: nrefs, i, iref, nsame, nstate_ok, nmoved
+        character(len=64) :: label
+        write(label,'(A,I0,A,I0)') 'nspace ', nspace, ', nstates ', nstates
+        nrefs = nspace * nstates
+        allocate(params, build)
+        params%nspace      = nspace
+        params%nstates     = nstates
+        params%prob_athres = 10.
+        params%l_doshift   = .false.
+        params%l_prob_assign_posterior = .true.
+        call seed_rnd_fixed(SEED_TAB)
+        allocate(build%spproj_field)
+        call build%spproj_field%new(NPTCLS_TAB, is_ptcl=.true.)
+        do i = 1,NPTCLS_TAB
+            call build%spproj_field%set_state(i, mod(i-1, nstates) + 1)
+            call build%spproj_field%set(i, 'sampled', 1.)
+            call build%spproj_field%set(i, 'dist',    20. * ran3())
+        enddo
+        pinds = [(i, i=1,NPTCLS_TAB)]
+        allocate(dists(nrefs,NPTCLS_TAB), iref_argmin(NPTCLS_TAB), iref_run1(NPTCLS_TAB), iref_run2(NPTCLS_TAB), iref_run3(NPTCLS_TAB))
+        do i = 1,NPTCLS_TAB
+            do iref = 1,nrefs
+                dists(iref,i) = 5. * ran3()
+            enddo
+        enddo
+        dists(:,1) = 1.
+        if( nstates >= 3 )then
+            dists(:,2) = 3. + dists(:,2)
+            dists(nspace + min(5,nspace), 2)   = 0.01
+            dists(2*nspace + min(7,nspace), 2) = 0.01
+            dists(:,3) = 3. + dists(:,3)
+            dists(min(10,nspace), 3)    = 0.01
+            dists(2*nspace + 1, 3)      = 0.01
+        endif
+        dists(:,4) = huge(1.)
+        dists(:,6) = dists(:,5)
+        ! the argmin of every row, the lowest index among equal minima
+        do i = 1,NPTCLS_TAB
+            iref_argmin(i) = 1
+            do iref = 2,nrefs
+                if( dists(iref,i) < dists(iref_argmin(i),i) ) iref_argmin(i) = iref
+            enddo
+        enddo
+        call tab%new(params, build, pinds)
+        do i = 1,NPTCLS_TAB
+            do iref = 1,nrefs
+                call set_dist(tab, iref, i, dists(iref,i))
+            enddo
+        enddo
+        ! a huge temperature: the argmin wherever the row minimum is unique (every row but the flat particle 1)
+        tab%temps = huge(1.)
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        nsame = 0
+        do i = 2,NPTCLS_TAB
+            if( assigned_ref(tab, i, nspace) == iref_argmin(i) ) nsame = nsame + 1
+        enddo
+        call assert_int(NPTCLS_TAB - 1, nsame, 'a huge temperature assigns every particle with a unique minimum its row argmin ('//trim(label)//')')
+        call assert_int(1, tab%assgn_map(1)%istate, 'a flat particle takes the state of reference 1 ('//trim(label)//')')
+        call assert_true(tab%assgn_map(1)%iproj >= 1 .and. tab%assgn_map(1)%iproj <= nspace, &
+            &'a flat particle takes a direction of its state ('//trim(label)//')')
+        call assert_int(1, tab%assgn_map(4)%istate, 'an invalid particle takes the state of reference 1 ('//trim(label)//')')
+        call assert_int(1, tab%assgn_map(4)%iproj,  'an invalid particle takes reference 1 ('//trim(label)//')')
+        if( nstates >= 3 )then
+            call assert_int(2, tab%assgn_map(2)%istate, 'a state 2 / state 3 tie goes to state 2 ('//trim(label)//')')
+            call assert_int(1, tab%assgn_map(3)%istate, 'a state 1 / state 3 tie goes to state 1 ('//trim(label)//')')
+        endif
+        ! the particles' temperatures: a draw that leaves the mode for some, never the argmin's state
+        tab%temps = 2.
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        nstate_ok = 0
+        nmoved    = 0
+        do i = 1,NPTCLS_TAB
+            iref_run1(i) = assigned_ref(tab, i, nspace)
+            if( tab%assgn_map(i)%istate == (iref_argmin(i) - 1)/nspace + 1 ) nstate_ok = nstate_ok + 1
+            if( iref_run1(i) /= iref_argmin(i) ) nmoved = nmoved + 1
+        enddo
+        call assert_int(NPTCLS_TAB, nstate_ok, 'the state is the argmin''s state under the draw ('//trim(label)//')')
+        if( nspace > 1 )then
+            call assert_true(nmoved > 0, 'at temperature 2 on distances in [0,5] some particles leave the mode ('//trim(label)//')')
+            call assert_true(nmoved < NPTCLS_TAB, 'at temperature 2 some particles stay at the mode ('//trim(label)//')')
+        else
+            call assert_int(0, nmoved, 'with one direction per state nothing moves ('//trim(label)//')')
+        endif
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        do i = 1,NPTCLS_TAB
+            iref_run2(i) = assigned_ref(tab, i, nspace)
+        enddo
+        call assert_true(all(iref_run1 == iref_run2), 'the same seed gives the same assignment ('//trim(label)//')')
+        if( nspace > 1 )then
+            call seed_rnd_fixed(SEED_DRAW + 1)
+            call tab%ref_assign
+            do i = 1,NPTCLS_TAB
+                iref_run3(i) = assigned_ref(tab, i, nspace)
+            enddo
+            call assert_true(any(iref_run1 /= iref_run3), 'another seed gives another assignment ('//trim(label)//')')
+        endif
+        call tab%kill
+        call build%spproj_field%kill
+        deallocate(build%spproj_field)
+        deallocate(params, build)
+    end subroutine check_posterior_assignment
+
+    !> the reference index (state block, direction) a particle was assigned
+    integer function assigned_ref( tab, i, nspace ) result( iref )
+        type(eul_prob_tab), intent(in) :: tab
+        integer,            intent(in) :: i, nspace
+        iref = (tab%assgn_map(i)%istate - 1) * nspace + tab%assgn_map(i)%iproj
+    end function assigned_ref
 
     !> The pose posterior over a table row: T = pi wsqsum / (2 pftsz) (15.707963 for 1000 and 100); at T = 1000
     !! the row [0, 0.001, 0.002, 0.5, invalid, 0.4] gives p = [e^0, e^-1, e^-2, ~0, 0, ~0]/Z = [0.665241,
@@ -215,6 +413,7 @@ contains
         do i = 1,NPTCLS_RT
             i_glob = NPTCLS_RT - i + 1
             if( any(master%seed_shifts(:,i_glob) /= seeds(:,i)) .or. .not. master%seed_has_sh(i_glob) ) nwrong = nwrong + 1
+            if( master%temps(i_glob) /= 100. + real(i) ) nwrong = nwrong + 1
             do ri = 1,nrefs
                 cand = master%dense_candidate(ri, i_glob)
                 if( cand%iref /= ri .or. cand%dist /= rows(ri,i)%dist .or. cand%inpl /= rows(ri,i)%inpl )then
@@ -548,6 +747,7 @@ contains
             worker%seed_nrots = 36
             worker%seed_shifts = seeds(:,parts(ipart,1):parts(ipart,2))
             worker%seed_has_sh = .true.
+            worker%temps = [(100. + real(i), i=parts(ipart,1),parts(ipart,2))]
             call worker%begin_write(string('prob_tab_tester_part')//int2str(ipart)//'.dat')
             do ibatch = 1,2
                 first = merge(1, nloc/2 + 1, ibatch == 1)

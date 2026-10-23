@@ -124,6 +124,13 @@ contains
             &'Last solve3D stage to run; default is 5 for nstates>1 and 8 otherwise; &
             &a multi-state run writes final volumes at its last stage',&
             &'last stage', .false., 8., group="search", visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
+        &'How the probabilistic stages commit each particle from its table of losses: balanced draws references '//&
+        &'in turn and gives each its closest free particle, so every reference is populated; posterior draws each '//&
+        &'particle''s pose from its own row posterior at its own noise temperature and forces no reference to be '//&
+        &'populated (the stages then end on the resolution exit or their budget, not on the pose overlap)'//&
+        &'(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
+        &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &

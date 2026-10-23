@@ -16,7 +16,7 @@ public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists, sample_power_dists, sample_likelihood_index
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
-public :: prob_posterior_stat, posterior_temperature, posterior_row_stats
+public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 private
 #include "simple_local_flags.inc"
 
@@ -355,6 +355,64 @@ contains
         integer,  intent(in) :: pftsz
         temp = real(DPI * wsqsum / (2.d0 * real(pftsz,dp)))
     end function posterior_temperature
+
+    !> One draw from the posterior over a table row at temperature temp (prob_assign=posterior,
+    !! doc/implementation_notes/planned/pose_marginalization.md section 4.1): p_r proportional to
+    !! exp(-temp (dist_r - dist_min)) over the valid distances (finite, below the invalid marker), zero
+    !! elsewhere. which is the drawn index and dist its distance; which = 0 when no distance is valid.
+    !! temp = 0 draws uniformly over the valid distances; a huge temp returns the argmin when the minimum
+    !! is unique and one of the equal minima with equal probability otherwise (a flat row is a uniform draw
+    !! at any temperature: the posterior, not the balanced rule's lowest-index convention). w is a work
+    !! array of size >= n; the one random number is ran3's, so the stream is the caller's.
+    subroutine draw_posterior_row( n, dists, temp, w, which, dist )
+        integer, intent(in)    :: n
+        real,    intent(in)    :: dists(n), temp
+        real,    intent(inout) :: w(:)
+        integer, intent(out)   :: which
+        real,    intent(out)   :: dist
+        real(dp) :: wsum, csum, tgt, arg
+        real     :: dmin, invalid
+        integer  :: r, imin
+        invalid = 0.1 * huge(invalid)
+        which   = 0
+        dist    = huge(dist)
+        imin    = 0
+        dmin    = huge(dmin)
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                if( dists(r) < dmin )then
+                    dmin = dists(r)
+                    imin = r
+                endif
+            endif
+        enddo
+        if( imin == 0 ) return
+        wsum = 0.d0
+        do r = 1,n
+            w(r) = 0.
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                ! the mode's weight is exp(0) = 1 whatever temp, so wsum >= 1; weights below exp(-80) are 0
+                ! (not exp'd: a single-precision underflow would flag)
+                arg = real(max(0.,temp),dp) * real(dists(r) - dmin,dp)
+                if( arg < 80.d0 )then
+                    w(r) = real(exp(-arg))
+                    wsum = wsum + real(w(r),dp)
+                endif
+            endif
+        enddo
+        tgt    = real(ran3(),dp) * wsum
+        csum   = 0.d0
+        do r = 1,n
+            if( w(r) <= 0. ) cycle
+            csum = csum + real(w(r),dp)
+            if( csum >= tgt )then
+                which = r
+                exit
+            endif
+        enddo
+        if( which == 0 ) which = imin ! rounding at the top of the cumulative sum
+        dist = dists(which)
+    end subroutine draw_posterior_row
 
     !> The posterior over one table row at temperature temp: p_r proportional to exp(-temp (dist_r - dist_min))
     !! over the valid distances (finite and below the invalid marker, as ref_assign counts them), zero

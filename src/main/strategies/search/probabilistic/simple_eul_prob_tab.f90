@@ -7,7 +7,7 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_temperature, posterior_row_stats
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -18,7 +18,8 @@ private
 #include "simple_local_flags.inc"
 
 ! the format word of a dense part file, in the header slot where a sparse part file holds its candidate count
-integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -3_int64
+integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -4_int64 !< -4 since the particle temperatures (2026-10-23)
+real,           parameter :: PROB_POSTERIOR_TEMP_FACTOR = 1.0  !< prob_assign=posterior: factor on the particle temperature (section 4.4's one tempering constant)
 
 ! outcomes of reading one dense part file, raised after the parallel read
 integer, parameter :: PART_READ_OK = 0, PART_READ_OPEN = 1, PART_READ_IO = 2, PART_READ_NREFS = 3
@@ -43,6 +44,7 @@ type :: eul_prob_tab
     integer,                  allocatable :: refined_offsets(:) !< first refined entry of each particle (nptcls+1)
     type(ptcl_ref), allocatable :: assgn_map(:)    !< assignment map                  (nptcls)
     real,           allocatable :: seed_shifts(:,:) !< per-particle seeded shift       (2,nptcls)
+    real,           allocatable :: temps(:)         !< per-particle posterior temperature pi wsqsum / (2 pftsz) (nptcls; the worker's fill writes it, the master reads it)
     logical,        allocatable :: seed_has_sh(:)   !< per-particle seeded shift flag  (nptcls)
     integer                     :: seed_nrots = 0   !< rotation grid of the table (checked when the parts are read)
     integer,        allocatable :: pinds(:)        !< particle indices for processing
@@ -85,6 +87,8 @@ type :: eul_prob_tab
     procedure, private :: read_dense_part
     procedure :: dense_candidate
     procedure :: ref_assign
+    procedure, private :: ref_assign_posterior
+    procedure, private :: warn_invalid_and_flat
     procedure :: write_assignment
     ! REFERENCE INDEX MAPPING
     procedure :: ref_state
@@ -158,6 +162,7 @@ contains
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
+        allocate(self%temps(self%nptcls), source=0.)
 
     contains
 
@@ -412,6 +417,7 @@ contains
             t0 = omp_get_wtime()
             call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3), l_bank_seed)
             call o_prev_loc%kill
         end subroutine process_particle_with_shift
@@ -427,6 +433,7 @@ contains
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
             enddo
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.], .false.)
         end subroutine process_particle_without_shift
 
@@ -830,6 +837,10 @@ contains
         integer :: alloc_stat, nthr_work
         real    :: projs_athres, dist_tmp, corr_tmp
         character(len=256) :: alloc_msg
+        if( self%p_ptr%l_prob_assign_posterior )then
+            call self%ref_assign_posterior
+            return
+        endif
         nthr_work = 1
         !$ nthr_work = omp_get_max_threads()
         allocate(stab_inds(self%nptcls, self%nrefs), score_work(self%nptcls,nthr_work),&
@@ -841,7 +852,7 @@ contains
             write(logfhandle,*) trim(alloc_msg)
             THROW_HARD('failed allocating probability assignment work arrays')
         endif
-        call count_invalid_and_flat
+        call self%warn_invalid_and_flat
         ! Sort each reference using one scratch score column per worker thread.
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i,ithr)
         do iref = 1, self%nrefs
@@ -883,47 +894,6 @@ contains
             &iref_dist, dists_sorted, state_projs_athres, ptcl_avail, head_first, ref_next)
 
     contains
-
-        !> the particles without a valid distance and those whose valid distances are all equal: warnings, and a stop
-        !! when every particle is one of them. References outside, so that each reference's column streams.
-        subroutine count_invalid_and_flat()
-            real,    allocatable :: min_dist(:), max_dist(:)
-            integer, allocatable :: nvalid(:)
-            real    :: dist_val, invalid_dist
-            integer :: ib, i_loc, iref_loc, nflat, nbad
-            invalid_dist = 0.1 * huge(invalid_dist)
-            allocate(min_dist(self%nptcls), source=huge(invalid_dist))
-            allocate(max_dist(self%nptcls), source=-huge(invalid_dist))
-            allocate(nvalid(self%nptcls), source=0)
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ib,i_loc,iref_loc,dist_val)
-            do ib = 1,self%nptcls,PTCL_BLOCK
-                do iref_loc = 1,self%nrefs
-                    do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
-                        dist_val = self%dists(i_loc,iref_loc)
-                        if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
-                            min_dist(i_loc) = min(min_dist(i_loc), dist_val)
-                            max_dist(i_loc) = max(max_dist(i_loc), dist_val)
-                            nvalid(i_loc)   = nvalid(i_loc) + 1
-                        endif
-                    enddo
-                enddo
-            enddo
-            !$omp end parallel do
-            nbad  = 0
-            nflat = 0
-            do i_loc = 1,self%nptcls
-                if( nvalid(i_loc) == 0 )then
-                    nbad = nbad + 1
-                else if( max_dist(i_loc) - min_dist(i_loc) <= 0. )then
-                    nflat = nflat + 1
-                endif
-            enddo
-            if( nbad == self%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
-            if( nflat == self%nptcls ) THROW_HARD('all probability-table reference distances are flat')
-            if( nbad > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', nbad
-            if( nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', nflat
-            deallocate(min_dist, max_dist, nvalid)
-        end subroutine count_invalid_and_flat
 
         real function ref_score( iref_loc, iptcl_loc ) result(score)
             integer, intent(in) :: iref_loc, iptcl_loc
@@ -1094,6 +1064,128 @@ contains
 
     end subroutine ref_assign
 
+    !> the particles without a valid distance and those whose valid distances are all equal: warnings, and a stop
+    !! when every particle is one of them. References outside, so that each reference's column streams.
+    subroutine warn_invalid_and_flat( self )
+        class(eul_prob_tab), intent(in) :: self
+        real,    allocatable :: min_dist(:), max_dist(:)
+        integer, allocatable :: nvalid(:)
+        real    :: dist_val, invalid_dist
+        integer :: ib, i_loc, iref_loc, nflat, nbad
+        invalid_dist = 0.1 * huge(invalid_dist)
+        allocate(min_dist(self%nptcls), source=huge(invalid_dist))
+        allocate(max_dist(self%nptcls), source=-huge(invalid_dist))
+        allocate(nvalid(self%nptcls), source=0)
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ib,i_loc,iref_loc,dist_val)
+        do ib = 1,self%nptcls,PTCL_BLOCK
+            do iref_loc = 1,self%nrefs
+                do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                    dist_val = self%dists(i_loc,iref_loc)
+                    if( ieee_is_finite(dist_val) .and. dist_val < invalid_dist )then
+                        min_dist(i_loc) = min(min_dist(i_loc), dist_val)
+                        max_dist(i_loc) = max(max_dist(i_loc), dist_val)
+                        nvalid(i_loc)   = nvalid(i_loc) + 1
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        nbad  = 0
+        nflat = 0
+        do i_loc = 1,self%nptcls
+            if( nvalid(i_loc) == 0 )then
+                nbad = nbad + 1
+            else if( max_dist(i_loc) - min_dist(i_loc) <= 0. )then
+                nflat = nflat + 1
+            endif
+        enddo
+        if( nbad == self%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
+        if( nflat == self%nptcls ) THROW_HARD('all probability-table reference distances are flat')
+        if( nbad > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', nbad
+        if( nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', nflat
+        deallocate(min_dist, max_dist, nvalid)
+    end subroutine warn_invalid_and_flat
+
+    !> ptcl -> (proj, state) assignment by one draw per particle from its row posterior (prob_assign=posterior,
+    !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 10). The particle's state is the state
+    !! of its closest reference over all states (ties to the lowest reference index), as the balanced assignment
+    !! labels it; its direction is drawn within that state's block of the row with p proportional to
+    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR on it)
+    !! and L the row's values as the fill left them (sampled in-plane, the top set refined). No reference is
+    !! forced to be populated. The committed candidate is the drawn reference's dense_candidate (its in-plane,
+    !! its refined shift when refined), the seed shift recorded as today, frac 100. A particle without a valid
+    !! distance takes reference 1 as the balanced assignment does. The draws run in particle order on the
+    !! master's random stream, so shared-memory and distributed runs draw alike.
+    subroutine ref_assign_posterior( self )
+        class(eul_prob_tab), intent(inout) :: self
+        integer, allocatable :: iref_best(:)
+        real,    allocatable :: score_best(:), w(:)
+        integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing
+        real    :: score, dist, temp, invalid_dist
+        invalid_dist = 0.1 * huge(invalid_dist)
+        call self%warn_invalid_and_flat
+        ! the state label: each particle's closest reference over all states, references outside in blocks
+        allocate(score_best(self%nptcls), iref_best(self%nptcls), w(self%nrefs))
+        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ib,i,iref,score)
+        do ib = 1,self%nptcls,PTCL_BLOCK
+            do i = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                iref_best(i)  = 1
+                score_best(i) = valid_score(1, i)
+            enddo
+            do iref = 2,self%nrefs
+                do i = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
+                    score = valid_score(iref, i)
+                    if( score < score_best(i) )then
+                        score_best(i) = score
+                        iref_best(i)  = iref
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        ! the draw within the state's block, in particle order on the master's stream
+        nmode         = 0
+        ntemp_missing = 0
+        do i = 1,self%nptcls
+            si     = self%state_to_active_rank(self%ref_state(iref_best(i)))
+            ifirst = (si - 1) * self%p_ptr%nspace + 1
+            ilast  = si * self%p_ptr%nspace
+            nblock = ilast - ifirst + 1
+            temp   = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i)
+            if( .not. (temp > 0.) )then
+                ! no temperature from the fill: the argmin, as the particle has no scale to draw at
+                ntemp_missing = ntemp_missing + 1
+                temp = huge(temp)
+            endif
+            call draw_posterior_row(nblock, self%dists(i,ifirst:ilast), temp, w, which, dist)
+            if( which < 1 )then
+                assigned_iref = iref_best(i) ! no valid distance in the block: the balanced rule's reference
+            else
+                assigned_iref = ifirst - 1 + which
+            endif
+            if( assigned_iref == iref_best(i) ) nmode = nmode + 1
+            call self%assign_candidate(i, self%dense_candidate(assigned_iref, i))
+            call record_seed_shift(self%assgn_map(i), self%seed_shifts(:,i), self%seed_has_sh(i), self%p_ptr%l_doshift)
+            self%assgn_map(i)%frac = 100.
+        enddo
+        write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: posterior draw at the particle temperature, ', &
+            &self%nptcls, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ', &
+            &real(nmode) / real(max(1,self%nptcls))
+        if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
+            &'WARNING: particles without a temperature in the dense part files, assigned to their argmin: ', ntemp_missing
+        deallocate(score_best, iref_best, w)
+
+    contains
+
+        !> the distance, or the invalid marker when it is not finite or at the marker
+        real function valid_score( iref_loc, iptcl_loc ) result(score)
+            integer, intent(in) :: iref_loc, iptcl_loc
+            score = self%dists(iptcl_loc,iref_loc)
+            if( .not.(ieee_is_finite(score) .and. score < invalid_dist) ) score = invalid_dist
+        end function valid_score
+
+    end subroutine ref_assign_posterior
+
     ! ptcl -> state (using assigned iproj or previous iproj) assignment
     pure integer function ref_state( self, iref ) result( state )
         class(eul_prob_tab), intent(in) :: self
@@ -1198,6 +1290,8 @@ contains
         write(self%table_unit,pos=addr) self%pinds
         addr = addr + sizeof(self%pinds)
         call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        write(self%table_unit,pos=addr) self%temps
+        addr = addr + sizeof(self%temps)
         self%rows_addr = addr
     end subroutine write_dense_head
 
@@ -1341,7 +1435,7 @@ contains
         type(prob_dense_entry),   allocatable :: rows_loc(:,:)
         type(prob_refined_entry) :: refined_entry
         type(prob_dense_entry)   :: entry
-        real,    allocatable :: seed_shifts_loc(:,:)
+        real,    allocatable :: seed_shifts_loc(:,:), temps_loc(:)
         logical, allocatable :: seed_has_sh_loc(:)
         integer, allocatable :: pind2glob(:), pinds_loc(:), glob_of(:), ssinds_loc(:)
         integer(int64) :: file_header(4), addr, rows_addr, row_bytes, file_bytes, ptcl_bytes
@@ -1394,7 +1488,8 @@ contains
             endif
             ! every read below lies inside the size the header implies
             row_bytes  = int(self%nrefs,int64) * int(storage_size(entry)/8,int64)
-            ptcl_bytes = int(storage_size(pind)/8 + 2*storage_size(1.)/8 + storage_size(flag)/8,int64) + row_bytes
+            ! a particle's index, its seed shift (2), its seed flag, its temperature and its row
+            ptcl_bytes = int(storage_size(pind)/8 + 3*storage_size(1.)/8 + storage_size(flag)/8,int64) + row_bytes
             inquire(unit=funit, size=file_bytes)
             if( file_bytes /= sizeof(file_header) + int((self%nstates + 2)*storage_size(seed_nrots_loc)/8,int64) +&
                 &int(nptcls_loc,int64) * ptcl_bytes + int(nrefined_loc,int64) * int(storage_size(refined_entry)/8,int64) )then
@@ -1412,7 +1507,7 @@ contains
                 return
             endif
             addr = addr + sizeof(nstates_loc) + sizeof(ssinds_loc)
-            allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc))
+            allocate(pinds_loc(nptcls_loc), seed_shifts_loc(2,nptcls_loc), seed_has_sh_loc(nptcls_loc), temps_loc(nptcls_loc))
             read(funit,pos=addr,iostat=io_stat) pinds_loc
             if( io_stat /= 0 )then
                 status_loc = PART_READ_IO
@@ -1420,6 +1515,14 @@ contains
             endif
             addr = addr + sizeof(pinds_loc)
             call read_seed_shift_table(funit, addr, seed_nrots_loc, seed_shifts_loc, seed_has_sh_loc)
+            if( nptcls_loc > 0 )then
+                read(funit,pos=addr,iostat=io_stat) temps_loc
+                if( io_stat /= 0 )then
+                    status_loc = PART_READ_IO
+                    return
+                endif
+            endif
+            addr = addr + sizeof(temps_loc)
             if( nptcls_loc < 1 ) seed_nrots_loc = 0
             rows_addr = addr
             call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
@@ -1444,6 +1547,7 @@ contains
                 endif
                 self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
                 self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+                self%temps(i_glob)         = temps_loc(i_loc)
             enddo
             ! consecutive particles' rows in one statement, scattered to the master's columns
             nchunk = int(max(1_int64, min(int(max(1,nptcls_loc),int64), ROWS_READ_BYTES / row_bytes)))
@@ -1560,6 +1664,7 @@ contains
         if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)
         if( allocated(self%seed_shifts)  ) deallocate(self%seed_shifts)
         if( allocated(self%seed_has_sh)  ) deallocate(self%seed_has_sh)
+        if( allocated(self%temps)        ) deallocate(self%temps)
         if( allocated(self%pinds)        ) deallocate(self%pinds)
         if( allocated(self%ssinds)       ) deallocate(self%ssinds)
         if( allocated(self%state_to_active_rank) ) deallocate(self%state_to_active_rank)

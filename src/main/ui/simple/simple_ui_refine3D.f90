@@ -49,6 +49,13 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
+        &'How the probabilistic search commits each particle from its table of losses: balanced draws references '//&
+        &'in turn and gives each its closest free particle, so every reference is populated; posterior draws each '//&
+        &'particle''s pose from its own row posterior at its own noise temperature and forces no reference to be '//&
+        &'populated (objfun=euclid; the stage then ends on the resolution exit or its budget, not on the pose '//&
+        &'overlap)(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
+        &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &

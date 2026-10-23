@@ -715,6 +715,16 @@ contains
             case DEFAULT
                 THROW_HARD('prob_post_diag must be yes or no')
         end select
+        select case(trim(self%prob_assign))
+            case('balanced')
+                self%l_prob_assign_posterior = .false.
+            case('posterior')
+                self%l_prob_assign_posterior = .true.
+                ! the posterior is defined by the Euclidean objective (the temperature is its noise scale)
+                if( trim(self%objfun) /= 'euclid' ) THROW_HARD('prob_assign=posterior requires objfun=euclid')
+            case DEFAULT
+                THROW_HARD('prob_assign must be balanced or posterior')
+        end select
         select case(trim(self%freq_march_aggressive))
             case('yes')
                 self%l_freq_march_aggressive = .true.

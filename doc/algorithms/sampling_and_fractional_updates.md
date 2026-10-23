@@ -163,6 +163,15 @@ result is a stochastic greedy matching between particles and references, not
 the optimal assignment that the Hungarian algorithm would find. Optimality is
 not wanted here, because the draw is the exploration mechanism.
 
+`prob_assign=posterior` (2026-10-23, default `balanced`) replaces the
+reference-driven loop by one draw per particle from its own row, within the
+state of its closest reference: p proportional to exp(-T_i (L - L_min)) with
+T_i the particle's noise temperature (above), which the table worker writes
+into the dense part file. No reference is forced to be populated; the stage
+then ends on the resolution exit or its budget, not on the pose overlap.
+The design and its measurements are in
+`doc/implementation_notes/planned/pose_marginalization.md`.
+
 In multi-state 3D, the state label is assigned first, by the same loop with a
 deterministic choice of the lowest head loss, and the projection within the
 state is then drawn

@@ -493,6 +493,30 @@ so the assignment is identical (since 2026-10-16). The unit suite of the
 table keeps the earlier implementation as its reference and compares the
 two.
 
+**`prob_assign=posterior`** (2026-10-23; default `balanced`, the above). The
+assignment is per particle and no reference is forced to be populated: the
+particle's state is the state of its closest reference over all states, as
+above, and its direction is one draw within that state's block of its row
+with p proportional to exp(-T_i (L - L_min)), T_i the particle's own
+temperature pi wsqsum_i / (2 pftsz) (the Euclidean loss's noise scale;
+`objfun=euclid` required), which the table worker computes at the fill and
+writes per particle into the dense part file (format word -4). The drawn
+reference's dense candidate is committed as under `balanced` (its in-plane,
+its refined shift when refined, the seed shift recorded, `frac` 100); the
+draws run in particle order on the master's random stream. A particle
+without a valid distance takes reference 1. The row's values are the fill's
+(sampled in-plane, the top set refined), so the draw is a direction sampler
+on that row. A `refine=prob` stage no longer ends on the pose overlap under
+this key (`check_conv3D` bypasses it: the carried pose is stable from a
+stage's first iterations, so the overlap rule cannot tell a frozen
+assignment from convergence) but on the resolution exit (`lpexit`) or its
+iteration budget. The neighbourhood tables (`refine=prob_neigh`, solve3D's
+stages 1-2 and 6-8) keep the balanced frontier and their overlap rule in
+this step.
+Design, measurements and the acceptance test (PfCRT, 10 of 10 restarts at
+3.6 A or better): `doc/implementation_notes/planned/pose_marginalization.md`
+sections 4, 10 and 16.
+
 ### Probability-table part files
 
 Every table part writes one file that the driver reads after the parts have
