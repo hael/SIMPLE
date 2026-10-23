@@ -72,9 +72,10 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     if( nptcls < 1 .or. nthr_max < 1 .or. any(nspaces < 1) .or. any(nstates_list < 1) )then
         THROW_HARD('polar_matching_bench needs nptcls, nthr, nspace and nstates >= 1')
     endif
-    ! the teams, the full one first (the tile sweeps run there): all threads, the five performance cores, one thread
+    ! the teams, the full one first (the tile sweeps run there): all threads, half of them, one thread
+    ! (half of 11 is the Mac's five performance cores, half of 24 the Dell's 12)
     nthrs = [nthr_max]
-    if( nthr_max > 5 ) nthrs = [nthrs, 5]
+    if( nthr_max > 3 ) nthrs = [nthrs, nthr_max / 2]
     if( nthr_max > 1 ) nthrs = [nthrs, 1]
     do ispace = 1,size(nspaces)
         do istate = 1,size(nstates_list)

@@ -321,23 +321,34 @@ contains
     end subroutine gen_euclid_crvec
 
     !> The euclid sums of one pair over angular bins 1..np, sum_k w_k (FT(CTF2) x FT(REF2) - 2 FT(X.CTF) x FT(REF)*),
-    !! into acc. Plain array dummies: the compiler then knows unit stride and no overlap and vectorizes the bins.
+    !! into acc, one shell per call of euclid_shell_sum: with the shell loop around the bin loop in one procedure gcc
+    !! unroll-and-jams two shells, which on x86 vectorizes with lane permutes and reads twice the memory streams
     subroutine euclid_sums( np, n1, ldr, nk, ctf2, ref2, xctf, ref, wk, acc )
         integer,     intent(in)    :: np, n1, ldr, nk
         complex(sp), intent(in)    :: ctf2(n1,nk), ref2(n1,nk), xctf(n1,nk), ref(ldr,nk)
         real(dp),    intent(in)    :: wk(nk)
         complex(sp), intent(inout) :: acc(n1)
-        complex(sp) :: c
-        integer     :: kk, p
+        integer :: kk
         acc = cmplx(0.,0.,kind=sp)
         do kk = 1,nk
-            do p = 1,np
-                c = ctf2(p,kk) * ref2(p,kk)
-                c = c - 2.0 * xctf(p,kk) * conjg(ref(p,kk))
-                acc(p) = cmplx(acc(p) + wk(kk) * c, kind=sp)
-            enddo
+            call euclid_shell_sum(np, ctf2(:,kk), ref2(:,kk), xctf(:,kk), ref(:,kk), wk(kk), acc)
         enddo
     end subroutine euclid_sums
+
+    !> One shell of euclid_sums: plain array dummies, unit stride and no overlap
+    subroutine euclid_shell_sum( np, ctf2, ref2, xctf, ref, wk, acc )
+        integer,     intent(in)    :: np
+        complex(sp), intent(in)    :: ctf2(np), ref2(np), xctf(np), ref(np)
+        real(dp),    intent(in)    :: wk
+        complex(sp), intent(inout) :: acc(np)
+        complex(sp) :: c
+        integer     :: p
+        do p = 1,np
+            c = ctf2(p) * ref2(p)
+            c = c - 2.0 * xctf(p) * conjg(ref(p))
+            acc(p) = cmplx(acc(p) + wk * c, kind=sp)
+        enddo
+    end subroutine euclid_shell_sum
 
     !> The euclid distances of the n rotations from the inverse FFT r of gen_euclid_crvec, huge above -log(TINY).
     !! Converting every element (vc clamps a huge v) and overwriting those above, not if/else, lets the loop vectorize
@@ -631,7 +642,8 @@ contains
             &sqrt(cc * real(self%sqsums_ptcls(i), sp) * real(2*self%nrots, sp))
     end subroutine gen_corrs_bank
 
-    !> sum_k a_k x b_k (l_conj: a_k x b_k*) over the n1 angular bins into acc, plain array dummies as in euclid_sums
+    !> sum_k a_k x b_k (l_conj: a_k x b_k*) over the n1 angular bins into acc, two shells per call of cc_shells_sum
+    !! (a shell loop here would be unroll-and-jammed, see euclid_sums)
     subroutine cc_sums( n1, ldb, nk, a, b, l_conj, acc )
         integer,     intent(in)    :: n1, ldb, nk
         complex(sp), intent(in)    :: a(n1,nk), b(ldb,nk)
@@ -639,16 +651,37 @@ contains
         complex(sp), intent(inout) :: acc(n1)
         integer :: kk
         acc = cmplx(0.,0.,kind=sp)
-        if( l_conj )then
-            do kk = 1,nk
-                acc = acc + a(:,kk) * conjg(b(1:n1,kk))
-            enddo
-        else
-            do kk = 1,nk
-                acc = acc + a(:,kk) * b(1:n1,kk)
-            enddo
-        endif
+        do kk = 1,nk-1,2
+            call cc_shells_sum(n1, ldb, 2, a(:,kk:kk+1), b(:,kk:kk+1), l_conj, acc)
+        enddo
+        if( mod(nk,2) == 1 ) call cc_shells_sum(n1, ldb, 1, a(:,nk:nk), b(:,nk:nk), l_conj, acc)
     end subroutine cc_sums
+
+    !> One or two shells of cc_sums in one pass over acc, summed in shell order; plain array dummies
+    subroutine cc_shells_sum( n1, ldb, ns, a, b, l_conj, acc )
+        integer,     intent(in)    :: n1, ldb, ns
+        complex(sp), intent(in)    :: a(n1,ns), b(ldb,ns)
+        logical,     intent(in)    :: l_conj
+        complex(sp), intent(inout) :: acc(n1)
+        integer :: p
+        if( ns == 2 )then
+            if( l_conj )then
+                do p = 1,n1
+                    acc(p) = (acc(p) + a(p,1) * conjg(b(p,1))) + a(p,2) * conjg(b(p,2))
+                enddo
+            else
+                do p = 1,n1
+                    acc(p) = (acc(p) + a(p,1) * b(p,1)) + a(p,2) * b(p,2)
+                enddo
+            endif
+        else
+            if( l_conj )then
+                acc = acc + a(:,1) * conjg(b(1:n1,1))
+            else
+                acc = acc + a(:,1) * b(1:n1,1)
+            endif
+        endif
+    end subroutine cc_shells_sum
 
     !> The objective over all rotations (gen_objfun_vals' convention: exp(-loss) for Euclid, cc) of a bank entry.
     module subroutine gen_objfun_vals_bank( self, iref, iptcl, bank, vals )
