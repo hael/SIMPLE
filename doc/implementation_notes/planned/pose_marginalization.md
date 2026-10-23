@@ -628,10 +628,10 @@ re-cut so each column answers one question (the columns are in section 5):
   is the only validation of the temperature as a likelihood scale.
 
 **Review gate for section 4.** (1) reference independence established:
-the `_h`/`_x` columns score the real halves (built; to be read off the
-re-run); (2) own and cross scoring comparable (both deterministic rows use
-the same procedure; built) and the null test passed (`null_a` at zero on
-the re-run); (3) coverage validated on known poses; (4) the convergence
+the `_h`/`_x` columns score the real halves (done, sections 12 and 14);
+(2) own and cross scoring comparable (both deterministic rows use the same
+procedure) and the null test passed (section 14: `null_a` zero to three
+decimals for every mode); (3) coverage validated on known poses; (4) the convergence
 bypass in place and unit-tested, full-sampling and fractional modes both
 covered; (5) best-pose, single-draw and weighted updates compared on
 identical candidate sets and references. The design of section 4 is not
@@ -673,6 +673,38 @@ its last; the control a half turn away averages 0.00 +- 0.01 to 0.03 at
 every stage (|mean| <= 0.13 in every iteration). The per-particle spread is
 large (f(ctrl > 1 nat) 77-87%), so the bonus is a mean effect of a few
 nats on a noise of several, not a per-particle certainty.
+
+**It tracks the admitted band, not the stage's low-pass.** Within stages 3
+and 4 (uniform low-pass at the stage `lp`) the bonus is flat across
+iterations (0.77-0.86 nats; 1.8 then 2.3-2.4). Stage 5 is the first NU
+stage (`NU_FILTER_STAGE = 5`): the nominal `lp` is 11.1 A throughout, but
+the NU-filtered references admit the shells where the halves' FSC says
+there is signal, and the half-map FSC=0.143 resolution runs 9.7, 8.2, 7.8,
+7.1, 6.6, 5.9, 5.2 A over iterations 73-79 while the bonus runs 1.6, 3.3,
+4.3, 5.1, 5.7, 6.3, 6.8 nats, monotone in the admitted band. The particle's
+own noise is a larger share of its half's section at the shells where the
+half is noise-dominated, so the band lead the NU filter buys is paid for in
+self-reinforcement, at about one nat per Angstrom of resolution gained
+here. On the merged reference the matcher scores against, the share is a
+half: 0.8 to 3.4 nats across stage 5.
+
+**It is only weakly a share-of-the-direction effect.** By the population
+of the inserted direction at that iteration (both halves pooled; stage 3
+median 25 of 1000 directions, stage 5 median 10 of 2500), the bonus falls
+from 1.04 (lowest quartile) to 0.67 nats (highest) in stage 3, 2.5 to 2.1
+in stage 4, 5.5 to 3.3 in stage 5; `self * pop` grows four- to threefold
+across the quartiles where a 1/N law would keep it flat. Most of the bonus
+is therefore not the particle's share of one section but its contribution
+spread by the gridding kernel and the filter over the neighbourhood, and
+the sparsely populated views, the ones a small membrane protein with a
+preferred orientation is short of, carry the largest bonus. In loss units
+the bonus is nearly constant across the particle's signal (self/T 1.3-1.5e-3
+in stage 3, 2.1-2.2e-3 in stage 4, 0.9-1.2e-3 in stage 5), so in nats it
+scales with the particle's weighted power: the strongest particles, whose
+posterior gaps are also the largest, carry 2.2 (lowest quartile) to 6.8
+nats (highest) in stage 5. The sharper the own-half posterior, the larger
+the bonus (5.8 nats at n_eff_h <= 1.05, 1.2 at n_eff_h > 3 in stage 5),
+which is cause as much as consequence: the bonus is in that row.
 
 **It is of the size the independent half separates the mode by.** The
 other half's posterior gap, ln(p_max_x / (1 - p_max_x)), has median 3.9
@@ -722,15 +754,151 @@ bookkeeping.
 
 **Consequences for the design.** (1) Self-reinforcement at 1-7 nats on the
 own half, 0.5-3.5 on the merged reference, against mode gaps of a few nats,
-is a locking force in stage 5 and beyond; marginalization over the row
+is a locking force from the NU stage on; marginalization over the row
 posterior does not remove it (the bonus is in the row), so section 4 must
-be paired with references the particle did not enter (gold-standard
-scoring: score even particles against the odd half's reprojections and vice
-versa, which the diagnostic model already builds) or with a correction for
-the particle's own contribution. (2) The posterior must come from
-deterministic best-in-plane values. (3) The halves' disagreement on the
-mode (12-24%, mostly neighbouring directions) is the honest uncertainty
-the data leave at these bands; it is what a draw from the posterior should
-reproduce, and it is small compared with the production search's own
-scatter, which should be removed first.
+be paired with references the particle did not enter (section 13) or with
+a correction for the particle's own contribution. (2) The posterior must
+come from deterministic best-in-plane values. (3) The halves' disagreement
+on the mode (12-24%, mostly neighbouring directions) is the honest
+uncertainty the data leave at these bands; it is what a draw from the
+posterior should reproduce, and it is small compared with the production
+search's own scatter, which should be removed first.
 
+Analysis scripts: `analysis/self_lock.py` (`run5_self_lock.txt`),
+`analysis/self_mechanism.py` (`run5_self_mechanism.txt`).
+
+## 13. Proposal: cross-half matching from the NU stage (not built)
+
+The measurement of section 12 points at the remedy the gold-standard
+refinements use: score each particle against the half it did not enter.
+In the polar calculator this is a slot assignment, not a kernel change:
+the kernels take the reference slot from the particle's half
+(`ieo = merge(REF_EVEN, REF_ODD, iseven)`), so loading the odd half's
+sections into `REF_EVEN` and the even half's into `REF_ODD` makes every
+score cross-half with no other change, and the reconstruction keeps
+inserting even particles into the even half. The noise weights and the
+particle's self-term stay the particle's own (`ih`), as in the diagnostic's
+`cross` kernels. Memory is unchanged: the two slots already exist; only
+solve3D's LP-set stages fill them with one merged map
+(`read_mask_filter_refvols`, section 11 finding 1). The GPU offload
+kernels (`gen_many2many_*`) read `REF_EVEN` alone and are outside the
+probabilistic path; they would need the same slot rule before the switch
+applies to them.
+
+What it costs: the reference's SNR drops from the merged map's to a
+half's (a factor sqrt(2) in amplitude SNR at every shell), which is the
+reason the LP-set stages use the merged map. What it buys: zero
+self-reinforcement at every shell, including the band the NU filter admits.
+The trade-off is a function of the stage: at stage 3 (bonus 0.8 nats on the
+own half, 0.4 on the merged map, against gaps of ~4) the merged map's SNR
+is worth more; from the NU stage (bonus 1.6-6.8 nats and growing with the
+admitted band) the self term is the larger error. The proposal is
+therefore a per-stage switch, `cross_half=yes|no` on the staged children,
+set by the controller from the NU stage (`NU_FILTER_STAGE`) on; the
+halves' independent NU products (`_nu_filt` even/odd, which assembly
+already writes) are what the slots receive, and the merged NU map is
+dropped from the matcher at those stages.
+
+Boundaries: the slot swap belongs to `simple_matcher_refvol_utils`
+(`read_mask_filter_refvols` / `read_mask_filter_reproject_refvols`, the
+diag path of section 5 is the template); the per-stage key to
+`simple_solve3D_controller`; the parameter to `simple_parameters`.
+Nothing in the probabilistic search, the assignment or the reconstruction
+changes. The diagnostic's self test keeps working unchanged (it scores the
+diagnostic model's own and other half), and under `cross_half=yes` the
+matcher's references are the diagnostic's other-half model, so `rank_d`
+against `_x` becomes the direct check.
+
+Test: the PfCRT schedule of section 12 with `cross_half=yes` from stage 5,
+against the 4.03 A / 6.90 A (0.143 / 0.5) of the baseline; the diagnostic
+on, so the same columns compare. The reading to expect if the mechanism is
+what section 12 says: the halves' mode agreement (`rank_x`) and the
+own-half retention of the inserted direction converge to the other half's
+values, the far-move rate of the carried mode falls, and the final
+resolution holds or improves. If the resolution drops, the SNR cost
+dominates at this particle count and the switch should move to a later
+stage (or be made conditional on the measured bonus, `self_nats` mean
+above a nat).
+
+## 14. Results of the frame-correct re-run: PfCRT, 2026-10-22 (4_solve3D, stages 3-4)
+
+The same schedule with the 40-column diagnostic (section 11, the two
+frame errors fixed), read at iteration 68 while the run was going on:
+stage 3 (iterations 41-57) complete, stage 4 (58-68) partial. Analysis
+`post5.py` -> `run4b_summary.txt`, `search_test.py` -> `run4b_search_test.txt`.
+
+**The null test passes.** For the shift-refined modes (83% and 80% of the
+particles), the shifted-reference kernel at the frame-converted stored
+shift reproduces the stored loss to three decimals in nats
+(`null_a` median and p90 +0.000, f(|null_a| > 0.1 nat) = 0.000 over
+239k and 143k particles); the unconverted shift (`null_b`) is off by a
+median 0.8 and 2.0 nats with p90 26 and 40, which is what the first run
+had reported as `null_a` and `null_b` alike. For the modes the refinement
+left at their seed value (17-20%; `mode_src` 2, the top set whose shift
+search found nothing better) the bank kernel reproduces the stored loss
+exactly too, and the shifted-reference kernel at the frame-converted seed
+agrees with the bank kernel to better than 0.001 nats: on real data the
+angular Nyquist bin the two kernels differ by is below 1e-6 of the loss,
+so the row's mixture of kernels (section 11) is harmless. The production
+search's bookkeeping is clean: every stored value is the kernel's loss at
+the stored pose.
+
+**The search test stands, and it is the in-plane sampling.** With the
+deterministic rows now at the production's own seed (through the bank),
+the production row's mode equals the deterministic mode for 63% (stage 3)
+and 54% (stage 4) of particles, as in the first run, and the agreement
+falls along each stage as the reference sharpens (0.69 -> 0.60 over stage
+3, 0.57 -> 0.50 over stage 4; modes more than 20 deg apart 12% -> 19%).
+Where the two modes differ the production's refined loss is *higher* than
+the deterministic best in 56% and 63% of cases (median by 0.6 and 1.5
+nats, p10 by 6 and 9); the production committed to a pose more than a nat
+worse than the best grid pose on the same reference for 17% (stage 3) and
+25% (stage 4) of all particles, a quarter of them more than 20 deg away.
+Against the independent half's mode the deterministic row on the matcher's
+references agrees 94% and 93%, the production row 62% and 54%: the
+production search scatters the pose far more than the data's own
+ambiguity (the two halves disagree for 12-13%).
+
+The mechanism is in `score_ref`: every direction is scored at an in-plane
+rotation *drawn* from the `nsample` lowest losses
+(`inpl_likelihood_nsample`, `prob_athres` 10 deg capped by the mean
+`dist_inpl`, so 5-20 rotations at these boxes), and the draw
+(`draw_likelihood`) weights by exp(-(L - L_min)) on the *normalized* loss,
+where neighbouring rotations differ by 1e-3: the draw is uniform over the
+candidates, the stored loss is the loss at a random rotation within the
+threshold, and the direction whose draw happened to land near its best
+wins the row. The refinement of the top `projs_ns` cannot repair this,
+because the unlucky direction is not in the top set. This is the
+assignment's T = 1 draw (section 2) one level down, applied to every
+entry of every row.
+
+**Self and reference tests reproduced.** `self_nats` +0.86 (stage 3) and
++2.05 (stage 4) with the control at -0.02 and -0.07; own-half vs
+other-half mode agreement 88% and 87%; the own half keeps the inserted
+direction for 79% and 84%, the other for 77% and 79%.
+
+**What follows.** Before any posterior is drawn from the table, the table
+has to hold the best grid rotation per direction, or a rotation drawn at
+the particle's temperature (`posterior_temperature`, available on the
+worker), so that the draw is a posterior sample and not a uniform one.
+The cheap experiment is built: `prob_inpl_draw=argmin` (default
+`likelihood`, the behaviour above) scores every table entry at its best
+grid rotation in all three probability tables: the 3D dense fill
+(`inpl_likelihood_nsample`), the 3D neighbourhood fills (the same
+function, the stochastic styles' extremal count `smpl_ninpl`, and the
+assignment's in-plane fallback) and the 2D table (`ninpl_smpl` in both
+fills; `neighfrac2nsmpl` never goes below 2, so the 2D and SNHC entries
+otherwise keep a one-step in-plane dither to the end of the extremal
+decay). The refinement of the top set starts from the best rotation;
+nothing else changes (the shift seed, the refinement, the assignment's
+direction draw). The per-particle strategy searches outside the tables
+(`greedy_sub`, the 2D `snhc_smpl`/`inpl_smpl`) sample in-plane by their
+own rules and are not touched. Measured by the diagnostic (`rank_d` -> 1 by
+construction for the unrefined entries; the quantity to watch is the
+production mode's agreement with the other half, 54-62% now against the
+deterministic rows' 93-94%, and the self and reference columns, which the
+switch does not touch) and by the final resolution of the PfCRT schedule
+against 4.03 A. The principled version tempers the in-plane and the
+assignment draws alike with T; it is the first item of section 4's design
+and no longer needs the search to be trusted first, since the null test
+holds.

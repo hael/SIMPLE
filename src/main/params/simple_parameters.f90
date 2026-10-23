@@ -117,6 +117,7 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
+    character(len=10)         :: prob_inpl_draw='likelihood' !< the in-plane rotation each probability-table entry (3D dense, 3D neighbourhood, 2D) is scored at: drawn from the lowest losses (prob_athres or the extremal count) or the best grid rotation(likelihood|argmin){likelihood}
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
@@ -671,6 +672,7 @@ type :: parameters
     logical :: l_cohort_sampling = .false.
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
+    logical :: l_prob_inpl_argmin = .false. !< prob_inpl_draw=argmin: every table entry holds its best grid rotation
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

@@ -715,6 +715,14 @@ contains
             case DEFAULT
                 THROW_HARD('prob_post_diag must be yes or no')
         end select
+        select case(trim(self%prob_inpl_draw))
+            case('likelihood')
+                self%l_prob_inpl_argmin = .false.
+            case('argmin')
+                self%l_prob_inpl_argmin = .true.
+            case DEFAULT
+                THROW_HARD('prob_inpl_draw must be likelihood or argmin')
+        end select
         select case(trim(self%freq_march_aggressive))
             case('yes')
                 self%l_freq_march_aggressive = .true.

@@ -116,13 +116,25 @@ log-likelihood, `d = -log(score)`; for correlation, it is
 w_j = exp[-(d_j - d_min)],     p_j = w_j / sum_l w_l.
 ```
 
-No temperature is applied, because the noise normalization of the objective
-already puts `d` in natural log-likelihood units. The `K` candidates are only
-the best-scoring poses near the top of the list, used to decide where to
-search; they are not meant to represent the probability of every possible
-orientation. One candidate is drawn and committed as a hard assignment. A
-particle is never spread over several orientations in proportion to their
-probabilities, as it is in expectation-maximization refinement.
+No temperature is applied. The `K` candidates are only the best-scoring
+poses near the top of the list, used to decide where to search; they are
+not meant to represent the probability of every possible orientation. One
+candidate is drawn and committed as a hard assignment. A particle is never
+spread over several orientations in proportion to their probabilities, as
+it is in expectation-maximization refinement.
+
+*Measured 2026-10-22 (doc/implementation_notes/planned/pose_marginalization.md,
+sections 3 and 14).* The Euclidean `d` is the loss normalized by the
+particle's weighted power, not a log-likelihood: one nat is `1/T` of it with
+`T = pi wsqsum / (2 pftsz)`, several hundred to a thousand on PfCRT, and
+neighbouring in-plane rotations differ by about `1e-3`. The draw above is
+therefore uniform over its `K` candidates. For the in-plane step this puts
+each table entry at a random rotation within `athres` of its best, and on
+PfCRT the committed pose is more than a nat worse than the best grid pose
+on the same reference for 17-25% of the particles, with the mode agreeing
+with the independent half for 54-62% against 93-94% for a deterministic
+scoring. `prob_inpl_draw=argmin` scores every entry at its best grid
+rotation instead (`K_inpl = 1`); the default `likelihood` keeps the draw.
 
 ## Balanced assignment
 

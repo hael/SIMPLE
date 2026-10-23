@@ -293,6 +293,8 @@ contains
         neigh_frac = extremal_decay2D(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
         ninpl_smpl = neighfrac2nsmpl(neigh_frac, self%b_ptr%pftc%get_nrots())
         ninpl_smpl = max(1, min(ninpl_smpl, self%b_ptr%pftc%get_nrots()))
+        ! prob_inpl_draw=argmin: the best grid rotation for every entry
+        if( self%p_ptr%l_prob_inpl_argmin ) ninpl_smpl = 1
         t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
@@ -434,6 +436,7 @@ contains
         smpl_ncls   = max(1, min(smpl_ncls, self%nclasses))
         ninpl_smpl  = neighfrac2nsmpl(neigh_frac, nrots)
         ninpl_smpl  = max(1, min(ninpl_smpl, nrots))
+        if( self%p_ptr%l_prob_inpl_argmin ) ninpl_smpl = 1
         call eval_work%init_eval2D_sparse_ws(self%nclasses, nrots, smpl_ncls, nthr_glob)
         allocate(direct_rts(nthr_glob))
         do ithr = 1, nthr_glob
