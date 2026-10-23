@@ -117,7 +117,7 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
-    character(len=9)          :: prob_assign='balanced' !< probability-table assignment: the reference-balanced frontier, or each particle's pose drawn from its row posterior at its own temperature with no reference forced to be populated (doc/implementation_notes/planned/pose_marginalization.md; objfun=euclid)(balanced|posterior){balanced}
+    character(len=9)          :: prob_assign='balanced' !< probability-table assignment (3D and 2D): the reference-balanced frontier, or each particle's reference/class and in-plane rotation drawn from its row posterior at its own temperature with no reference forced to be populated (doc/implementation_notes/planned/pose_marginalization.md; objfun=euclid)(balanced|posterior){balanced}
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}

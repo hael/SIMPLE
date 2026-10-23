@@ -169,7 +169,16 @@ state of its closest reference: p proportional to exp(-T_i (L - L_min)) with
 T_i the particle's noise temperature (above), which the table worker writes
 into the dense part file. No reference is forced to be populated; the stage
 then ends on the resolution exit or its budget, not on the pose overlap.
-The design and its measurements are in
+Under the same key the in-plane rotation of every row entry is drawn by the
+same rule instead of the uniform draw within the angular threshold above:
+the posterior over all grid rotations of the reference against the seeded
+particle at T_i (`gen_posterior_val`), no truncation, so the exploration of
+the in-plane draw is the data's width rather than a fixed angular window;
+this holds in the dense 3D table, in the neighbourhood tables and in the 2D
+tables, whose class assignment is the same per-particle draw over the row
+(`solve2D_policy.md`). The one tempering constant
+(`PROB_POSTERIOR_TEMP_FACTOR`, 1.0; a factor below one is hotter) applies to
+every draw. The design and its measurements are in
 `doc/implementation_notes/planned/pose_marginalization.md`.
 
 In multi-state 3D, the state label is assigned first, by the same loop with a

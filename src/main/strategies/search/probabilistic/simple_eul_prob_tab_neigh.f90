@@ -5,9 +5,10 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, &
+use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, sample_likelihood_dist, prob_candidate, &
-    &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry
+    &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
+    &PROB_POSTERIOR_TEMP_FACTOR
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -1056,7 +1057,10 @@ contains
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( l_seed_fallback_shift ) sh_seed = o_prev%get_2Dshift()
-                if( self%p_ptr%l_prob_inpl )then
+                if( self%p_ptr%l_prob_assign_posterior )then
+                    call self%b_ptr%pftc%gen_posterior_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
+                        &inpl_posterior_temp(self, self%pinds(iptcl_loc)), dist, irot_loc)
+                else if( self%p_ptr%l_prob_inpl )then
                     inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
                         &self%p_ptr%prob_athres, state=fallback_state)
                     call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&
@@ -1473,7 +1477,9 @@ contains
     end subroutine memoize_seed_bank
 
     !> one reference scored against the particle shifted by shift_xy (particle frame): from the seed bank when it holds
-    !! the shifted particle, with the angular Nyquist bin, otherwise by the shifted-reference kernel
+    !! the shifted particle, with the angular Nyquist bin, otherwise by the shifted-reference kernel. The in-plane
+    !! rotation is drawn from the row posterior at the particle's temperature over every grid rotation
+    !! (prob_assign=posterior; corr is then exp(-dist)), or by the likelihood draw over the nsample best
     subroutine score_seeded_ref( self, full_ref, iptcl, shift_xy, bank, l_bank, nsample, dist, corr, irot, &
             &dists_sorted, inds_sorted )
         class(eul_prob_tab_neigh), intent(in)    :: self
@@ -1485,7 +1491,16 @@ contains
         integer,                   intent(out)   :: irot
         real,                      intent(inout) :: dists_sorted(:)
         integer,                   intent(inout) :: inds_sorted(:)
-        if( l_bank )then
+        if( self%p_ptr%l_prob_assign_posterior )then
+            if( l_bank )then
+                call self%b_ptr%pftc%gen_posterior_val_bank(full_ref, iptcl, bank, inpl_posterior_temp(self, iptcl),&
+                    &dist, irot)
+            else
+                call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl, shift_xy, inpl_posterior_temp(self, iptcl),&
+                    &dist, irot)
+            endif
+            corr = eulprob_corr_switch(dist, self%p_ptr%cc_objfun)
+        else if( l_bank )then
             call self%b_ptr%pftc%gen_likelihood_val_bank(full_ref, iptcl, bank, nsample, dist, corr, irot,&
                 &dists_sorted, inds_sorted)
         else
@@ -1493,6 +1508,15 @@ contains
                 &dists_sorted, inds_sorted)
         endif
     end subroutine score_seeded_ref
+
+    !> the temperature of the in-plane posterior draw of particle iptcl (a calculator index): the particle's
+    !! posterior_temperature under the one tempering constant
+    real function inpl_posterior_temp( self, iptcl ) result(temp)
+        class(eul_prob_tab_neigh), intent(in) :: self
+        integer,                   intent(in) :: iptcl
+        temp = PROB_POSTERIOR_TEMP_FACTOR * &
+            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
+    end function inpl_posterior_temp
 
     ! Optimizes shift & rotation on the top-npeaks_inpl references
     subroutine refine_best_neighbors( self, ew, grad_obj, l_seed_sh_first, max_refs_to_refine,&

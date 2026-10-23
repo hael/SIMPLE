@@ -1,7 +1,7 @@
 !@descr: polarft class submodule for objective function evaluations
 submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
-use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_likelihood_dists, sample_power_dists
+use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_likelihood_dists, sample_power_dists, draw_posterior_row
 #include "simple_local_flags.inc"
 implicit none
 
@@ -681,6 +681,58 @@ contains
                 call sample_euclid_crvec(self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
         end select
     end subroutine gen_likelihood_val_bank
+
+    !> One in-plane rotation drawn from the posterior over the nrots Euclidean losses of reference iref against
+    !! the particle shifted by shift (the shifted-reference kernel) at temperature temp (prob_assign=posterior,
+    !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 16): p_r proportional to
+    !! exp(-temp (L_r - L_min)) over every grid rotation, no angular threshold and no truncation to the best
+    !! nsample (gen_likelihood_val). dist is the drawn rotation's loss. objfun=euclid only: the temperature is
+    !! the Gaussian noise model's (posterior_temperature).
+    module subroutine gen_posterior_val( self, iref, iptcl, shift, temp, dist, irot )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2), temp
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        real(dp) :: norm
+        integer  :: ithr
+        if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_val requires objfun=euclid')
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
+    end subroutine gen_posterior_val
+
+    !> gen_posterior_val for a bank entry (the particle shifted once by its seed, with the angular Nyquist bin)
+    module subroutine gen_posterior_val_bank( self, iref, iptcl, bank, temp, dist, irot )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(in)    :: temp
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+        real(dp) :: norm
+        integer  :: ithr
+        if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_val_bank requires objfun=euclid')
+        call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
+        call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
+    end subroutine gen_posterior_val_bank
+
+    !> the posterior draw over the Euclidean distances of the calling thread's crvec1 (gen_euclid_crvec or its bank
+    !! form), rot_cdf the work array; a row without a valid rotation (every loss above -log(TINY)) returns
+    !! rotation 1 at the invalid marker, as the likelihood draw does
+    subroutine draw_posterior_crvec( self, ithr, norm, temp, dist, irot )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: ithr
+        real(dp),            intent(in)    :: norm
+        real(sp),            intent(in)    :: temp
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
+        call draw_posterior_row(self%nrots, self%heap_vars(ithr)%rot_dists, temp, self%heap_vars(ithr)%rot_cdf, irot, dist)
+        if( irot < 1 )then
+            irot = 1
+            dist = huge(dist)
+        endif
+    end subroutine draw_posterior_crvec
 
     module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self

@@ -279,6 +279,12 @@ contains
         call assert_real(0.2, pmax, 1.e-6, 'uniform posterior: the mode has 1/5')
         call assert_real(5.,  neff, 1.e-4, 'uniform posterior: exp(entropy) = 5')
         call assert_int(5, k99, 'uniform posterior: all five hold 99% of the mass')
+        ! the tempering convention: a factor below one on the temperature heats (more entropy on the same row);
+        ! at 500 the row's [0, 0.001, 0.002] weights are [1, e^-0.5, e^-1]/Z, pmax 0.506480 and exp(H) 2.773725 (numpy)
+        call posterior_row_stats(6, ROW, 0.5 * 1000., w, inds, imin, pmax, neff, k99, nvalid)
+        call assert_real(0.506480, pmax, 1.e-5, 'tempered posterior (factor 0.5): the mode''s mass falls')
+        call assert_true(neff > 2.298819, 'a factor below one on the temperature raises the entropy')
+        call assert_real(2.773725, neff, 1.e-4, 'tempered posterior (factor 0.5): exp(entropy)')
         call posterior_row_stats(3, [huge(1.), huge(1.), huge(1.)], 1000., w, inds, imin, pmax, neff, k99, nvalid)
         call assert_int(0, nvalid, 'no valid distance: nvalid 0')
         call assert_int(0, imin,   'no valid distance: no mode')

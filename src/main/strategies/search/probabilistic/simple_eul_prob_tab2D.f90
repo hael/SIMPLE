@@ -1,14 +1,16 @@
 !@descr: 2D probability table routines for multi-reference class assignment with probabilistic sampling
 module simple_eul_prob_tab2D
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
 use simple_decay_funs,         only: extremal_decay2D
-use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
+use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index, prob_candidate,&
-    &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry
+    &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
+    &posterior_temperature, draw_posterior_row, PROB_POSTERIOR_TEMP_FACTOR
 implicit none
 
 public :: eul_prob_tab2D, prob_assign_profile2D
@@ -18,9 +20,10 @@ private
 real,             parameter :: NHOOD_FRAC           = 0.1
 integer,          parameter :: PROB_TAB2D_IO_CHUNK  = 65536
 ! format words of the part files (header word 3): the candidate stream (refine=prob_snhc) and the dense rows
-! (refine=prob); the 3D dense part file is -3
-integer(int64),   parameter :: PROB_TAB2D_STREAM_FORMAT = -4_int64
-integer(int64),   parameter :: PROB_TAB2D_DENSE_FORMAT  = -5_int64
+! (refine=prob); -6/-7 since the particle temperatures after the seed table (2026-10-23). The 3D dense part file
+! is -4
+integer(int64),   parameter :: PROB_TAB2D_STREAM_FORMAT = -6_int64
+integer(int64),   parameter :: PROB_TAB2D_DENSE_FORMAT  = -7_int64
 ! status of a part file read
 integer,          parameter :: PART_READ_OK = 0, PART_READ_OPEN = 1, PART_READ_IO = 2, PART_READ_FORMAT = 3
 integer,          parameter :: PART_READ_NCLASSES = 4, PART_READ_COUNTS = 5, PART_READ_PTCL = 6, PART_READ_CLASS = 7
@@ -63,6 +66,7 @@ type :: eul_prob_tab2D
     type(ptcl_ref), allocatable :: assgn_map(:)      !< assignment map (nptcls)
     real,           allocatable :: seed_shifts(:,:)  !< per-particle seeded shift (2,nptcls)
     logical,        allocatable :: seed_has_sh(:)    !< per-particle seeded shift flag
+    real,           allocatable :: temps(:)          !< per-particle posterior temperature pi wsqsum / (2 pftsz) (nptcls; the worker's fill writes it, the master reads it; prob_assign=posterior draws at it)
     integer                     :: seed_nrots = 0    !< rotation grid of the table (checked when the parts are read)
     integer,        allocatable :: pinds(:)          !< particle indices for processing
     logical,        allocatable :: class_exists(:)   !< class population filter
@@ -206,6 +210,7 @@ contains
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
+        allocate(self%temps(self%nptcls), source=0.)
     end subroutine new_common
 
     subroutine initialize_storage( self )
@@ -334,6 +339,7 @@ contains
                 endif
                 self%seed_shifts(:,i) = cxy(2:3)
                 self%seed_has_sh(i)   = .true.
+                self%temps(i)         = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
                 call memoize_seed_bank2D(self, iptcl, cxy(2:3), seed_bank(:,:,ithr), l_bank, nbank(ithr))
                 ts_seed(ithr) = ts_seed(ithr) + (omp_get_wtime() - t0)
                 ! (2) search class references using that shared shift
@@ -377,10 +383,16 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 t0    = omp_get_wtime()
+                self%temps(i) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
-                    call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, [0.,0.], ninpl_smpl,&
-                        &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                    if( self%p_ptr%l_prob_assign_posterior )then
+                        call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, [0.,0.], inpl_posterior_temp(self, iptcl),&
+                            &inpl_dist, irot)
+                    else
+                        call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, [0.,0.], ninpl_smpl,&
+                            &inpl_dist, inpl_corr, irot, inpl_corrs, vec_nrots)
+                    endif
                     call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, 0., 0., .false.)
                 end do
                 ts_score(ithr) = ts_score(ithr) + (omp_get_wtime() - t0)
@@ -514,6 +526,7 @@ contains
             endif
             sh_loc = 0.
             if( l_with_shift ) sh_loc = cxy_loc(2:3)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             call memoize_seed_bank2D(self, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
                 &nbank(ithr_loc))
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
@@ -604,7 +617,9 @@ contains
     end subroutine memoize_seed_bank2D
 
     !> one class scored against the particle shifted by shift_xy (particle frame): from the seed bank when it holds
-    !! the shifted particle, with the angular Nyquist bin, otherwise by the shifted-reference kernel
+    !! the shifted particle, with the angular Nyquist bin, otherwise by the shifted-reference kernel. The in-plane
+    !! rotation is drawn from the row posterior at the particle's temperature over every grid rotation
+    !! (prob_assign=posterior; corr is then exp(-dist)), or by the likelihood draw over the nsample best
     subroutine score_seeded_class( self, icls, iptcl, shift_xy, bank, l_bank, nsample, dist, corr, irot, &
             &dists_sorted, inds_sorted )
         class(eul_prob_tab2D), intent(in)    :: self
@@ -616,7 +631,14 @@ contains
         integer,               intent(out)   :: irot
         real,                  intent(inout) :: dists_sorted(:)
         integer,               intent(inout) :: inds_sorted(:)
-        if( l_bank )then
+        if( self%p_ptr%l_prob_assign_posterior )then
+            if( l_bank )then
+                call self%b_ptr%pftc%gen_posterior_val_bank(icls, iptcl, bank, inpl_posterior_temp(self, iptcl), dist, irot)
+            else
+                call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, shift_xy, inpl_posterior_temp(self, iptcl), dist, irot)
+            endif
+            corr = eulprob_corr_switch(dist, self%p_ptr%cc_objfun)
+        else if( l_bank )then
             call self%b_ptr%pftc%gen_likelihood_val_bank(icls, iptcl, bank, nsample, dist, corr, irot,&
                 &dists_sorted, inds_sorted)
         else
@@ -624,6 +646,15 @@ contains
                 &dists_sorted, inds_sorted)
         endif
     end subroutine score_seeded_class
+
+    !> the temperature of the in-plane posterior draw of particle iptcl (a calculator index): the particle's
+    !! posterior_temperature (the value the part file carries for the class draw) under the one tempering constant
+    real function inpl_posterior_temp( self, iptcl ) result(temp)
+        class(eul_prob_tab2D), intent(in) :: self
+        integer,               intent(in) :: iptcl
+        temp = PROB_POSTERIOR_TEMP_FACTOR * &
+            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
+    end function inpl_posterior_temp
 
     !> the start of a class's shift refinement: the particle-frame seed as the shift of the class at the rotation it was
     !! scored at, clamped into the search box
@@ -786,6 +817,13 @@ contains
             THROW_WARN('No active classes after population filtering; falling back to all classes in eul_prob_tab2D')
         endif
         huge_val  = huge(1.0) / 2.0
+        if( self%p_ptr%l_prob_assign_posterior )then
+            t_phase = tic()
+            call assign_particles_posterior()
+            self%assign_profile%frontier = self%assign_profile%frontier + toc(t_phase)
+            deallocate(class_active)
+            return
+        endif
         call build_sparse_assignment_graph()
         t_phase = tic()
         call assign_particles_from_frontier()
@@ -942,6 +980,64 @@ contains
             enddo
         end subroutine update_frontier_after_assignment
 
+        !> ptcl -> class by one draw per particle from the posterior over its evaluated candidates
+        !! (prob_assign=posterior): p_c proportional to exp(-T_i (L_c - L_min)) over the valid candidates (an active
+        !! class, an in-plane index), T_i the particle's temperature from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR
+        !! on it); no class forced to be populated, the drawn candidate committed with its shift, the fraction and
+        !! peak count as the frontier records them. A particle without a temperature (none expected) takes its best
+        !! candidate with a warning. The draws run in particle order on the master's random stream.
+        subroutine assign_particles_posterior()
+            real,    allocatable :: w(:), dists_c(:)
+            integer, allocatable :: pos_c(:)
+            integer :: i_loc, pos_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, npeaks_loc
+            real    :: temp, dist, best_loc
+            maxcand = 0
+            do i_loc = 1,self%nptcls
+                maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
+            enddo
+            allocate(w(max(1,maxcand)), dists_c(max(1,maxcand)), pos_c(max(1,maxcand)))
+            nassigned     = 0
+            nmode         = 0
+            ntemp_missing = 0
+            do i_loc = 1,self%nptcls
+                n_loc    = 0
+                ibest    = 0
+                best_loc = huge(1.0)
+                do pos_loc = int(self%candidate_store%offsets(i_loc)), int(self%candidate_store%offsets(i_loc+1))-1
+                    if( .not. valid_sparse_candidate(pos_loc) ) cycle
+                    n_loc          = n_loc + 1
+                    dists_c(n_loc) = self%candidate_store%candidates(pos_loc)%dist
+                    pos_c(n_loc)   = pos_loc
+                    if( dists_c(n_loc) < best_loc )then
+                        best_loc = dists_c(n_loc)
+                        ibest    = n_loc
+                    endif
+                enddo
+                if( n_loc < 1 )&
+                    &THROW_HARD('Failed sparse posterior particle assignment in eul_prob_tab2D%ref_assign_sparse_likelihood')
+                if( ibest < 1 ) ibest = 1 ! no finite distance: any candidate
+                temp = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i_loc)
+                if( .not. (temp > 0.) )then
+                    ntemp_missing = ntemp_missing + 1
+                    temp = huge(temp)
+                endif
+                call draw_posterior_row(n_loc, dists_c(1:n_loc), temp, w, which, dist)
+                if( which < 1 ) which = ibest ! no valid distance: the best candidate, as the frontier's leftover rule
+                if( which == ibest ) nmode = nmode + 1
+                npeaks_loc = count_npeaks(i_loc)
+                call self%finalize_candidate_assignment(i_loc, self%candidate_store%candidates(pos_c(which)),&
+                    &100. * real(npeaks_loc) / real(self%nclasses), npeaks_loc)
+                nassigned = nassigned + 1
+            enddo
+            write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB2D_ASSIGN: sparse posterior draw at the particle temperature, ',&
+                &nassigned, ' particles x ', self%nclasses, ' classes; fraction drawn at the row mode ',&
+                &real(nmode) / real(max(1,nassigned))
+            if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
+                &'WARNING: particles without a temperature in the 2D part files, assigned to their best candidate: ', ntemp_missing
+            call flush(logfhandle)
+            deallocate(w, dists_c, pos_c)
+        end subroutine assign_particles_posterior
+
         subroutine assign_remaining_particles()
             do i = 1,self%nptcls
                 if( .not. frontier%ptcl_avail(i) ) cycle
@@ -1081,6 +1177,13 @@ contains
             endif
         end do
         nhood_sz_loc = min(self%nhood_sz, nactive)
+        if( self%p_ptr%l_prob_assign_posterior )then
+            t_phase = tic()
+            call assign_posterior
+            self%assign_profile%frontier = self%assign_profile%frontier + toc(t_phase)
+            deallocate(active_cls, active_pos, inds_sorted, icls_dist_inds, cls_dists, corr_proxy, class_active)
+            return
+        endif
         ! work columns for the team the sort runs on
         nthr_work = omp_get_max_threads()
         allocate(score_work(self%nptcls,nthr_work),stab_inds(self%nptcls,self%nclasses),&
@@ -1136,6 +1239,47 @@ contains
 
     contains
 
+        !> ptcl -> class by one draw per particle from its row posterior over the active classes
+        !! (prob_assign=posterior): p_c proportional to exp(-T_i (L_c - L_min)) over the valid distances, T_i the
+        !! particle's temperature from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR on it); no class forced to be
+        !! populated, the drawn class's dense_candidate committed (its in-plane, its refined shift when refined),
+        !! frac 100. A particle without a valid distance takes the first active class; one without a temperature
+        !! (none expected) its argmin with a warning. The draws run in particle order on the master's random stream.
+        subroutine assign_posterior
+            real    :: w(nactive), dists_act(nactive), temp, dist, best_loc, invalid_loc
+            integer :: i_loc, iact_loc, which, iact_best, assigned_loc, nmode, ntemp_missing
+            invalid_loc   = 0.1 * huge(invalid_loc)
+            nmode         = 0
+            ntemp_missing = 0
+            do i_loc = 1,self%nptcls
+                iact_best = 1
+                best_loc  = invalid_loc
+                do iact_loc = 1,nactive
+                    dists_act(iact_loc) = self%rows(active_cls(iact_loc),i_loc)%dist
+                    if( ieee_is_finite(dists_act(iact_loc)) .and. dists_act(iact_loc) < best_loc )then
+                        best_loc  = dists_act(iact_loc)
+                        iact_best = iact_loc
+                    endif
+                enddo
+                temp = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i_loc)
+                if( .not. (temp > 0.) )then
+                    ntemp_missing = ntemp_missing + 1
+                    temp = huge(temp)
+                endif
+                call draw_posterior_row(nactive, dists_act, temp, w, which, dist)
+                if( which < 1 ) which = iact_best
+                if( which == iact_best ) nmode = nmode + 1
+                assigned_loc = active_cls(which)
+                call self%finalize_assignment(i_loc, assigned_loc, 100., 0)
+            enddo
+            write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB2D_ASSIGN: dense posterior draw at the particle temperature, ',&
+                &self%nptcls, ' particles x ', self%nclasses, ' classes; fraction drawn at the row mode ',&
+                &real(nmode) / real(max(1,self%nptcls))
+            if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
+                &'WARNING: particles without a temperature in the 2D part files, assigned to their argmin: ', ntemp_missing
+            call flush(logfhandle)
+        end subroutine assign_posterior
+
         !> class icls joins the head list of the particle its head points at
         subroutine push_head( icls_loc )
             integer, intent(in) :: icls_loc
@@ -1183,6 +1327,7 @@ contains
         if( allocated(self%assgn_map)      ) deallocate(self%assgn_map)
         if( allocated(self%seed_shifts)    ) deallocate(self%seed_shifts)
         if( allocated(self%seed_has_sh)    ) deallocate(self%seed_has_sh)
+        if( allocated(self%temps)          ) deallocate(self%temps)
         if( allocated(self%pinds)          ) deallocate(self%pinds)
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
         if( allocated(self%cand_counts) ) deallocate(self%cand_counts)
@@ -1204,9 +1349,10 @@ contains
     ! FILE IO
 
     !> Opens the part file. The candidate stream (prob_snhc): header (classes, particles, format word, candidates,
-    !! chunks), particle indices, candidate counts per particle (they size the master's store), seed table, then the
-    !! candidate chunks. The dense rows (prob): header (classes, particles, format word, refined entries), particle
-    !! indices, seed table, one row of (distance, in-plane index) per particle and class, then the refined entries.
+    !! chunks), particle indices, candidate counts per particle (they size the master's store), seed table, particle
+    !! temperatures, then the candidate chunks. The dense rows (prob): header (classes, particles, format word,
+    !! refined entries), particle indices, seed table, particle temperatures, one row of (distance, in-plane index)
+    !! per particle and class, then the refined entries.
     subroutine begin_write( self, binfname )
         class(eul_prob_tab2D), intent(inout) :: self
         class(string),         intent(in)    :: binfname
@@ -1238,6 +1384,8 @@ contains
         write(self%table_unit,pos=addr) self%pinds
         addr = addr + sizeof(self%pinds)
         call write_seed_shift_table(self%table_unit,addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        write(self%table_unit,pos=addr) self%temps
+        addr = addr + sizeof(self%temps)
         self%rows_addr = addr
     end subroutine write_dense_head
 
@@ -1255,6 +1403,8 @@ contains
         write(self%table_unit,pos=chunks_addr) self%cand_counts
         chunks_addr = chunks_addr + sizeof(self%cand_counts)
         call write_seed_shift_table(self%table_unit,chunks_addr,self%seed_nrots,self%seed_shifts,self%seed_has_sh)
+        write(self%table_unit,pos=chunks_addr) self%temps
+        chunks_addr = chunks_addr + sizeof(self%temps)
     end subroutine write_stream_head
 
     subroutine flush_candidate_buffers( self )
@@ -1471,7 +1621,7 @@ contains
         type(tab2D_part),      intent(inout) :: part
         integer,               intent(inout) :: nparts_of(:)
         integer,               intent(out)   :: status
-        real,    allocatable :: seed_shifts_loc(:,:)
+        real,    allocatable :: seed_shifts_loc(:,:), temps_loc(:)
         logical, allocatable :: seed_has_sh_loc(:)
         integer, allocatable :: pinds_loc(:), pind2glob(:)
         type(prob_candidate) :: candidate_dummy
@@ -1535,8 +1685,8 @@ contains
                 part%nrefined = int(file_header(4))
                 addr = sizeof(file_header) + 1
             endif
-            ! every read below lies inside the size the header implies
-            ptcl_bytes = int(storage_size(pind)/8 + 2*storage_size(1.)/8 + storage_size(flag)/8,int64)
+            ! every read below lies inside the size the header implies (index, seed shift, seed flag, temperature)
+            ptcl_bytes = int(storage_size(pind)/8 + 3*storage_size(1.)/8 + storage_size(flag)/8,int64)
             if( self%l_sparse_snhc )then
                 expected_bytes = addr - 1 + int(part%nptcls,int64) * (ptcl_bytes + int(storage_size(pind)/8,int64)) +&
                     &int(storage_size(pind)/8,int64) * int(1 + part%nchunks,int64) +&
@@ -1552,7 +1702,7 @@ contains
                 return
             endif
             allocate(pinds_loc(part%nptcls), part%glob_of(part%nptcls),&
-                &seed_shifts_loc(2,part%nptcls), seed_has_sh_loc(part%nptcls))
+                &seed_shifts_loc(2,part%nptcls), seed_has_sh_loc(part%nptcls), temps_loc(part%nptcls))
             read(funit,pos=addr,iostat=io_stat) pinds_loc
             if( io_stat /= 0 )then
                 status_loc = PART_READ_IO
@@ -1573,6 +1723,14 @@ contains
                 addr = addr + sizeof(part%counts)
             endif
             call read_seed_shift_table(funit, addr, part%seed_nrots, seed_shifts_loc, seed_has_sh_loc)
+            if( part%nptcls > 0 )then
+                read(funit,pos=addr,iostat=io_stat) temps_loc
+                if( io_stat /= 0 )then
+                    status_loc = PART_READ_IO
+                    return
+                endif
+            endif
+            addr = addr + sizeof(temps_loc)
             part%chunks_addr = addr
             call build_pind_lookup(self%pinds, pinds_loc, pind2glob, max_pind)
             part%glob_of = 0
@@ -1592,6 +1750,7 @@ contains
                 part%glob_of(i_loc)        = i_glob
                 self%seed_shifts(:,i_glob) = seed_shifts_loc(:,i_loc)
                 self%seed_has_sh(i_glob)   = seed_has_sh_loc(i_loc)
+                self%temps(i_glob)         = temps_loc(i_loc)
             enddo
             status_loc = PART_READ_OK
         end function read_head

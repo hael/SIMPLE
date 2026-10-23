@@ -187,6 +187,8 @@ type :: polarft_calc
     procedure          :: gen_objfun_vals
     procedure          :: gen_objfun_vals_bank
     procedure          :: gen_likelihood_val_bank
+    procedure          :: gen_posterior_val
+    procedure          :: gen_posterior_val_bank
     procedure          :: gen_best_objfun_val
     procedure          :: gen_prob_objfun_val
     procedure          :: gen_likelihood_val
@@ -641,6 +643,23 @@ interface
         real(sp),            intent(inout) :: pvec_sorted(self%nrots)
         integer,             intent(inout) :: sorted_inds(self%nrots)
     end subroutine gen_likelihood_val_bank
+
+    module subroutine gen_posterior_val(self, iref, iptcl, shift, temp, dist, irot)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2), temp
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+    end subroutine gen_posterior_val
+
+    module subroutine gen_posterior_val_bank(self, iref, iptcl, bank, temp, dist, irot)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(in)    :: temp
+        real(sp),            intent(out)   :: dist
+        integer,             intent(out)   :: irot
+    end subroutine gen_posterior_val_bank
 
     module subroutine gen_best_objfun_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), intent(inout) :: self

@@ -755,9 +755,12 @@ bookkeeping.
 **Consequences for the design.** (1) Self-reinforcement at 1-7 nats on the
 own half, 0.5-3.5 on the merged reference, against mode gaps of a few nats,
 is a locking force from the NU stage on; marginalization over the row
-posterior does not remove it (the bonus is in the row), so section 4 must
-be paired with references the particle did not enter (section 13) or with
-a correction for the particle's own contribution. (2) The posterior must
+posterior does not remove it (the bonus is in the row). Scoring against
+references the particle did not enter removes only the direct term and
+couples the halves (section 13, parked); a correction for the particle's
+own contribution, or gold-standard matching once the NU machinery is on
+(Hans: not in the ab initio stages, and only with extensive validation),
+are the open options. (2) The posterior must
 come from deterministic best-in-plane values. (3) The halves' disagreement
 on the mode (12-24%, mostly neighbouring directions) is the honest
 uncertainty the data leave at these bands; it is what a draw from the
@@ -767,58 +770,41 @@ search's own scatter, which should be removed first.
 Analysis scripts: `analysis/self_lock.py` (`run5_self_lock.txt`),
 `analysis/self_mechanism.py` (`run5_self_mechanism.txt`).
 
-## 13. Proposal: cross-half matching from the NU stage (not built)
+## 13. Cross-half matching: an experimental search policy, parked (2026-10-23)
 
-The measurement of section 12 points at the remedy the gold-standard
-refinements use: score each particle against the half it did not enter.
-In the polar calculator this is a slot assignment, not a kernel change:
-the kernels take the reference slot from the particle's half
-(`ieo = merge(REF_EVEN, REF_ODD, iseven)`), so loading the odd half's
-sections into `REF_EVEN` and the even half's into `REF_ODD` makes every
-score cross-half with no other change, and the reconstruction keeps
-inserting even particles into the even half. The noise weights and the
-particle's self-term stay the particle's own (`ih`), as in the diagnostic's
-`cross` kernels. Memory is unchanged: the two slots already exist; only
-solve3D's LP-set stages fill them with one merged map
-(`read_mask_filter_refvols`, section 11 finding 1). The GPU offload
-kernels (`gen_many2many_*`) read `REF_EVEN` alone and are outside the
-probabilistic path; they would need the same slot rule before the switch
-applies to them.
+The first draft of this section (2026-10-23 morning) called scoring each
+particle against the half it did not enter "gold-standard" and claimed
+"zero self-reinforcement at every shell". Both claims were wrong, as the
+review of the same day (`pose_marginalization_review`, finding 1) says.
+Gold-standard refinement is the *opposite* arrangement: each half-set is
+refined against its own map, so the particle's own insertion is fully in
+its reference, and what the scheme buys is the independence of the two
+refinement histories, hence an honest FSC. Cross-half scoring removes the
+particle's *direct* term from its reference but couples the two histories:
+even poses depend on the odd map, which depends on odd poses, which depend
+on the even map the particle is in. The indirect self-influence remains,
+one loop later, and the FSC between the halves is no longer that of two
+independent refinements. The three arrangements are distinct: the merged
+reference of solve3D's LP-set stages (half the direct term, coupled
+histories), gold standard (the full direct term, independent histories),
+cross-half (no direct term, coupled histories).
 
-What it costs: the reference's SNR drops from the merged map's to a
-half's (a factor sqrt(2) in amplitude SNR at every shell), which is the
-reason the LP-set stages use the merged map. What it buys: zero
-self-reinforcement at every shell, including the band the NU filter admits.
-The trade-off is a function of the stage: at stage 3 (bonus 0.8 nats on the
-own half, 0.4 on the merged map, against gaps of ~4) the merged map's SNR
-is worth more; from the NU stage (bonus 1.6-6.8 nats and growing with the
-admitted band) the self term is the larger error. The proposal is
-therefore a per-stage switch, `cross_half=yes|no` on the staged children,
-set by the controller from the NU stage (`NU_FILTER_STAGE`) on; the
-halves' independent NU products (`_nu_filt` even/odd, which assembly
-already writes) are what the slots receive, and the merged NU map is
-dropped from the matcher at those stages.
+Hans's constraint, 2026-10-23: full gold-standard matching cannot be used
+in solve3D's ab initio stages, where it does not converge on a good model
+from the start it has; re-introducing it when the NU machinery is on is
+conceivable but would need extensive validation of its own. Cross-half
+scoring, if ever tried, is an experimental search policy with its own
+validation, not a remedy the design relies on. Nothing in this note's
+plan depends on it; section 16 proceeds without it.
 
-Boundaries: the slot swap belongs to `simple_matcher_refvol_utils`
-(`read_mask_filter_refvols` / `read_mask_filter_reproject_refvols`, the
-diag path of section 5 is the template); the per-stage key to
-`simple_solve3D_controller`; the parameter to `simple_parameters`.
-Nothing in the probabilistic search, the assignment or the reconstruction
-changes. The diagnostic's self test keeps working unchanged (it scores the
-diagnostic model's own and other half), and under `cross_half=yes` the
-matcher's references are the diagnostic's other-half model, so `rank_d`
-against `_x` becomes the direct check.
-
-Test: the PfCRT schedule of section 12 with `cross_half=yes` from stage 5,
-against the 4.03 A / 6.90 A (0.143 / 0.5) of the baseline; the diagnostic
-on, so the same columns compare. The reading to expect if the mechanism is
-what section 12 says: the halves' mode agreement (`rank_x`) and the
-own-half retention of the inserted direction converge to the other half's
-values, the far-move rate of the carried mode falls, and the final
-resolution holds or improves. If the resolution drops, the SNR cost
-dominates at this particle count and the switch should move to a later
-stage (or be made conditional on the measured bonus, `self_nats` mean
-above a nat).
+What remains useful from the draft: the mechanics are a slot assignment
+(the kernels take the reference slot from the particle's half, so loading
+the halves swapped makes every score cross-half with no kernel change;
+the GPU `gen_many2many_*` kernels read `REF_EVEN` alone and would need
+the same rule), and the diagnostic's `_x` columns already measure what
+such a reference sees. The direct self term is 0.8-6.8 nats on the own
+half at stages 3-5 (sections 12, 14), half of that on the merged
+reference; what the coupled loop adds back is not measured.
 
 ## 14. Results of the frame-correct re-run: PfCRT, 2026-10-22 (4_solve3D, stages 3-5)
 
@@ -954,7 +940,15 @@ less noisy table of the first paragraph produces a worse and bimodal
 outcome: the run converges faster (stages 1 and 4 in 12 and 9 iterations)
 to a self-consistent solution that half the time is the wrong one.
 
-**Reading.** The in-plane draw's randomness is not a defect to remove but
+**Reading.** The regression is evidence about the complete ablated
+workflow: the switch took the in-plane draw out of the dense fill *and* the
+neighbourhood fills (stages 1-2 and 6-8), and stages 1 and 4 ended earlier
+(12 and 9 iterations), so the worse maps do not separate the loss of
+exploration in the dense stages from the early neighbourhood search or
+from shorter stages (review finding 4). A dense-stage-only ablation with
+matched stage budgets would separate them; it was not run, and the
+mechanism below is a reading of the numbers, not a measurement. In that
+reading, the in-plane draw's randomness is not a defect to remove but
 the search's exploration, and the two measurements of this note are the
 two sides of one mechanism. Self-reinforcement (sections 12 and 14) pulls
 every particle back to the pose it was inserted at, by 1-7 nats on its
@@ -972,19 +966,23 @@ in-plane angle is the continuous refinement's anyway, is what the numbers
 say.
 
 **Consequence for the design.** Section 4's draw from the row posterior
-must carry the exploration the in-plane noise supplies today, or it will
-trap as `argmin` does: a draw at the data temperature T over a posterior
-with n_eff ~ 1 (sections 8, 12) is `argmin` with extra steps. The design
-therefore needs an explicit temperature schedule, T_eff = T / beta with
-beta < 1 early (hotter than the data) annealed towards 1 on the same
-signal `athres` uses (the measured pose change), and the noise placed
-where it belongs, on the direction draw, not on the loss values the
-assignment compares. The diagnostic can calibrate beta: the effective
-kick the present scheme gives is the production mode's loss excess over
-the deterministic best (section 14), a few nats at p50 and 6-9 at p10, so
-the schedule has a measured target. Cross-half scoring (section 13) would
-remove the pull the noise is fighting rather than add noise against it,
-and the two are complementary. The `prob_inpl_draw` key was removed after
+must carry the exploration the in-plane noise supplies today, or it may
+trap as `argmin` did: a draw at the data temperature T over a posterior
+with n_eff ~ 1 (sections 8, 12) on deterministic rows would be `argmin`
+with extra steps. The design therefore keeps an explicit tempering
+factor, section 4.4's: the weights are exp(-T_eff (L - L_min)) with
+T_eff = beta T, beta < 1 *hotter* than the data (the first draft of this
+paragraph wrote T / beta, which heats in the wrong direction; review
+finding 3; the implemented `PROB_POSTERIOR_TEMP_FACTOR` multiplies T and
+`test_posterior_row_stats` pins that a factor below one raises the
+entropy), annealed towards 1 on the measured pose change if a schedule is
+needed, and the noise placed where it belongs, on the draws, not on the
+loss values the assignment compares. The schedule's values are to be
+calibrated on the posterior runs themselves (section 16), not prescribed
+from the ablation; section 14's numbers (the production mode's loss
+excess over the deterministic best, a few nats at p50 and 6-9 at p10)
+say what today's exploration amounts to and are the first value to try if
+the data temperature traps. The `prob_inpl_draw` key was removed after
 the ten runs (dead code is confusing code); the ablation is reproducible
 by setting `nsample` to 1 in `inpl_likelihood_nsample` and `ninpl_smpl`/
 `smpl_ninpl` to 1 in the neighbourhood and 2D fills.
@@ -1008,11 +1006,12 @@ Item (3), coverage on known poses, is not done and stays on the list.
   out of the in-plane draw traps the run; the per-particle argmin would do
   the same one level up. The posterior draw of section 4.1 is built
   directly, at the temperature of section 3, with the tempering factor of
-  4.4 as the one constant (10.3, 3: start at 1). Section 14's calibration
-  says today's exploration corresponds to a factor of order 0.05-0.1, so
-  if stage 3 collapses at 1 the first value to try is known; the schedule
-  (rising to 1 along a stage on the measured pose change) is the follow-up
-  the design already names.
+  4.4 as the one constant (10.3, 3: start at 1; T_eff = factor x T, a
+  factor below one is hotter). Section 14's calibration says today's
+  exploration corresponds to a factor of order 0.05-0.1, so if stage 3
+  collapses at 1 the first value to try is known; the schedule (rising to 1
+  along a stage on the measured pose change) is the follow-up the design
+  already names.
 - **Weighted form.** As in section 4: only if the per-iteration noise of
   the draw shows in stages 3-4. Not before.
 - **2D.** Added 2026-10-23: the 2D table gets the same per-particle rule
@@ -1062,3 +1061,129 @@ default rule and not the key's on the dense table, a `prob_neigh` pass keeps
 its rule, and the `lpexit` exit still ends the stage. Key `prob_assign=balanced|posterior` (`posterior` requires
 `objfun=euclid`), on `refine3D` and `solve3D` as advanced search inputs;
 `refine3D_policy.md` and `sampling_and_fractional_updates.md` updated.
+
+**Review of 2026-10-23 (`pose_marginalization_review`, four findings),
+all accepted.** (1) Cross-half is not gold standard: section 13
+rewritten and parked. (2) The diagnostic's second reference block was
+offset by `nrefs`, which counts the active states only, while the
+calculator holds the full `nspace*nstates` production model and the
+halves' model after it: wrong block, and a false "halves present" when
+states are inactive. Fixed: `post_ref_offset = nspace*nstates`,
+`post_has_halves = get_nrefs() == 2*post_ref_offset`. No effect on the
+single-state PfCRT runs; the multi-state diagnostic has no unit coverage
+(the fill needs a calculator and images), recorded here as a gap. (3)
+The tempering convention: `T_eff = beta T`, beta below one hotter; the
+text corrected in sections 15 and 16, the factor's direction pinned by a
+test. (4) The argmin ablation does not isolate the dense search; section
+15 now says so and the schedule is calibrated on the posterior runs, not
+prescribed from the ablation. The review's standing limitation holds and
+is section 16's own statement: the direction draw exponentiates a row with
+sampled in-plane scores and selective refinement, an experimental
+direction sampler until the in-plane draw is moved under the same rule
+and the known-pose calibration (gate item 3) is done; final maps decide.
+
+**First posterior runs, 2026-10-23 (f), interim.** PfCRT with
+`prob_assign=posterior prob_post_diag=yes`, the schedule of section 12.
+Restart 1: 94 iterations (stages 20/20/17/15/12/10), 4.03 / 6.21 A (FSC
+0.143 / 0.5) — the same 0.143 as the baseline, the best 0.5 of the series
+(6.90 and 7.06 before); stage 5 ran its twelve iterations without the
+overlap exit and ended at 4.78 A against 5.17 (`prev/5_solve3D`) and 7.57
+(`prev2/4_solve3D`). Restart 2: 104 iterations (stage 5 ended on the
+resolution exit after 7, stage 8 ran 25), 3.98 / 7.06 A. Restart 3 in
+stage 4 at the time of reading. Hans: the maps are the best-looking of
+the series. The fraction of particles drawn at their row mode runs 0.63 at
+a stage's first iteration to 0.90 at its last, the 0.8-0.9 the posterior's
+width predicted (section 16's read-off), and no pose-overlap bypass ever
+fired: the stages never met the overlap rule, so the bypass changed
+nothing here. The diagnostic columns of restart 1 are the baselines' to
+within noise (search test 64/53/44%, halves' agreement 87/86/78%,
+`self_nats` +0.8/+2.3/+6.1, the last larger because stage 5 went deeper;
+`run7_*.txt`), as they must be: the fill is unchanged, only the assignment
+draws differently, and what the assignment changed shows in the maps, not
+in the rows. The 3.6 A bar is not met by the FSC=0.143 of the first two
+restarts; the ten-restart tally decides, and the in-plane draw (item 5)
+is the next step either way.
+
+**The in-plane draw and the 2D route, 2026-10-23 (built, awaiting the
+runs).** Agreed with Hans after the first posterior runs: section 4.5's
+"unchanged" in-plane is revised. The in-plane draw goes under the same key
+by the same rule, and so does the 2D table; the balanced path stays
+bit-identical. What the in-plane draw was (section 14, `inpl_likelihood_nsample`):
+a uniform draw over the rotations within the angular threshold, the
+search's exploration; removing it traps the run (section 15). What it is
+under `prob_assign=posterior`: one draw from exp(-T_i (L_r - L_min)) over
+every grid rotation of the reference against the seeded particle, T_i the
+particle's temperature under the one tempering constant, no angular window
+and no truncation to the best few (`gen_posterior_val`,
+`gen_posterior_val_bank` in `simple_polarft_corr`: the Euclidean crvec
+kernels, `draw_posterior_row` on the thread's rotation buffer, a row without
+a valid rotation returns rotation 1 at the invalid marker as the likelihood
+draw does; `objfun=euclid` only, THROW otherwise). The sites: the dense 3D
+fill (`score_ref`, `score_ref_bank`), the neighbourhood tables
+(`score_seeded_ref`, the three fills behind it, and the assignment's
+fallback), the 2D tables (`score_seeded_class`, the shift-free direct call).
+The refinement of the top set (alternating shift and rotation, greedy in
+rotation) and the continuous in-plane polish are unchanged; so the
+exploration the draw provides is now at the data's width, the particle
+leaving a reference's remembered rotation as often as its posterior lets
+it, and the direction draw exponentiates a row whose in-plane entries are
+posterior draws, not uniform ones within a window (the review's standing
+limitation, one step closer). Tests (`simple_polarft_corr_tester`,
+`test_posterior_inpl_draw`): a huge temperature is the argmin of the same
+kernel with its loss, in both forms; temperature 0 spreads over the grid
+and returns the drawn rotation's at-pose loss; at the particle's own
+temperature the draw's distribution is the posterior computed from the
+row (`gen_objfun_vals` gives every rotation's loss): the mode's frequency
+and the mass within two grid steps of it over 200 draws agree with the
+computed masses to 0.1, in two regimes. The first version of that check
+asked for the mode at least 90% of the time and failed, and the printed
+temperature said why: at unit sigma2 the fixture's temperature is 0.005
+(sigma2 = 1 is enormous against the image's power in the calculator's
+units; the loss is normalized, the temperature is not), the posterior is
+uniform (mode mass 1/nrots = 0.007, drawn 0.005) and the draw was right.
+The test now checks that regime and a second one, sigma2 set at the
+image's own power scale so that T = 100 (a constant sigma2 cancels in the
+normalized loss and scales T as its inverse, so no FFT normalization has
+to be known), where the posterior and the draws concentrate about the
+mode. The lesson stands for the real runs: the draw's width is whatever
+sigma2 says it is, and section 3's T of 500-4000 is sigma2 estimated from
+the data; a sigma2 off by a constant factor moves every draw's
+temperature by that factor.
+
+The 2D route (section 16's 2D item, moved up with Hans's agreement): the
+2D part files carry T_i per particle after the seed table (formats -6
+stream, -7 dense), both fills write it, the master reads it
+(`test_parallel_read` checks the placement). Under the key the assignment
+is one draw per particle: over the active classes of its dense row
+(`ref_assign_likelihood`, `assign_posterior`: the drawn class's
+`dense_candidate`, `frac` 100, the first active class when no distance is
+valid) or over its valid evaluated candidates
+(`ref_assign_sparse_likelihood`, `assign_particles_posterior`: an active
+class with an in-plane index, the drawn candidate with its shift, the peak
+count and fraction as the frontier records them, the best candidate when
+no distance is valid); a particle without a temperature takes its argmin
+with a warning; the draws run in particle order on the master's stream; the
+log line reports the fraction drawn at the row mode. Tests
+(`simple_eul_prob_tab2D_tester`): on the synthetic tables of the reference
+tests, a huge temperature gives every particle with a unique minimum its
+argmin (distance and in-plane carried), a class tie one of the tied
+classes, the invalid particle class 1 (dense) or a candidate at the
+smallest valid distance with the frontier's peak count and fraction
+(sparse), no temperature the argmin, T = 2 on distances in [0, 4] moves
+some particles and none to a smaller distance than their best (sparse),
+the same seed the same assignment and another seed another. The key is an
+advanced search input of `refine2D`, `solve2D` and `solve2D_chunks`;
+`solve2D_policy.md` has the record. The 2D convergence rules are untouched
+in this step; whether the class overlap needs the bypass the 3D dense stage
+has is for the 2D regression to say.
+
+`PROB_POSTERIOR_TEMP_FACTOR` moved to `simple_eul_prob_tab_utils` so the
+three tables share it; the in-plane and the reference/class draws are at
+the same T_eff. Still pending from the plan: the strategy-level in-plane
+samplers (`snhc_smpl`, `inpl_smpl`, `greedy_sub`, `snhc_smpl_many`) onto
+the posterior primitive under the same key, the old samplers deleted only
+once every caller has moved and the regressions pass; the `prob_neigh`
+assignment (4.5); the beta schedule if stage 3 needs it; the known-pose
+calibration (gate item 3). Next: PfCRT x10 with the in-plane draw on, and
+a 2D regression of Hans's choosing for the class route.
+

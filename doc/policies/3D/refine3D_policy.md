@@ -505,14 +505,24 @@ reference's dense candidate is committed as under `balanced` (its in-plane,
 its refined shift when refined, the seed shift recorded, `frac` 100); the
 draws run in particle order on the master's random stream. A particle
 without a valid distance takes reference 1. The row's values are the fill's
-(sampled in-plane, the top set refined), so the draw is a direction sampler
-on that row. A `refine=prob` stage no longer ends on the pose overlap under
+(the top set refined), so the draw is a direction sampler on that row. The
+in-plane rotation of every row entry is drawn under the same key from the
+same rule: the posterior over all grid rotations of the reference against
+the seeded particle at the particle's temperature (`gen_posterior_val`, its
+bank form; `score_ref`, `score_ref_bank`), in place of the balanced fill's
+uniform draw within the angular threshold (`gen_likelihood_val`), in the
+dense table and in the neighbourhood tables (`score_seeded_ref`, the
+fallback of their assignment) alike; the refinement of the top set and the
+continuous in-plane polish are unchanged. The dense in-plane draw and the
+direction draw share the one tempering constant
+(`PROB_POSTERIOR_TEMP_FACTOR`, 1.0). A `refine=prob` stage no longer ends on the pose overlap under
 this key (`check_conv3D` bypasses it: the carried pose is stable from a
 stage's first iterations, so the overlap rule cannot tell a frozen
 assignment from convergence) but on the resolution exit (`lpexit`) or its
 iteration budget. The neighbourhood tables (`refine=prob_neigh`, solve3D's
 stages 1-2 and 6-8) keep the balanced frontier and their overlap rule in
-this step.
+this step; only their in-plane draw follows the key. The 2D tables have the
+same key (`solve2D_policy.md`).
 Design, measurements and the acceptance test (PfCRT, 10 of 10 restarts at
 3.6 A or better): `doc/implementation_notes/planned/pose_marginalization.md`
 sections 4, 10 and 16.
@@ -523,10 +533,12 @@ Every table part writes one file that the driver reads after the parts have
 finished.
 
 - **The dense table (`prob`).** The header holds the number of references
-  and particles, a format word (`PROB_TAB_DENSE_FORMAT`, -3, private to the
-  dense table) and the number of refined entries; then the number and list
-  of the active states, the particle indices, the seed table, one row per
-  particle of (distance, in-plane index) for every reference
+  and particles, a format word (`PROB_TAB_DENSE_FORMAT`, -4 since the
+  particle temperatures, private to the dense table) and the number of
+  refined entries; then the number and list of the active states, the
+  particle indices, the seed table, the particle temperatures
+  (`posterior_temperature`, one real per particle, read by the posterior
+  assignment), one row per particle of (distance, in-plane index) for every reference
   (`prob_dense_entry`, 8 bytes; the reference and particle follow from the
   position), and a list of the refined entries (particle, reference,
   shift; `prob_refined_entry`). An unrefined entry has no shift of its own.

@@ -292,17 +292,22 @@ regions' wall time, the load balance and the shifted particle memos built.
 The 2D part files (`dist_partN.dat`; one iteration's artifacts) have two
 layouts, told apart by a format word in the header:
 
-- the candidate stream (`refine=prob_snhc`, format -4): header (classes,
+- the candidate stream (`refine=prob_snhc`, format -6): header (classes,
   particles, format word, candidates, chunks), particle indices, the
-  candidate count of every particle, the seed table, then the chunks the
-  worker threads flushed (particle indices and 24-byte candidates);
-- the dense rows (`refine=prob`, format -5): header (classes, particles,
-  format word, refined entries), particle indices, the seed table, one row
-  of (distance, in-plane index) per particle and class (8 bytes per entry),
-  then the refined entries (particle, class, shift) of the candidates whose
-  shift was refined. A worker turns each thread's buffered candidates into
-  rows when it flushes them: a particle is processed whole by one thread,
-  so its candidates are consecutive in one buffer.
+  candidate count of every particle, the seed table, the particle
+  temperatures (one real per particle, `posterior_temperature`), then the
+  chunks the worker threads flushed (particle indices and 24-byte
+  candidates);
+- the dense rows (`refine=prob`, format -7): header (classes, particles,
+  format word, refined entries), particle indices, the seed table, the
+  particle temperatures, one row of (distance, in-plane index) per particle
+  and class (8 bytes per entry), then the refined entries (particle, class,
+  shift) of the candidates whose shift was refined. A worker turns each
+  thread's buffered candidates into rows when it flushes them: a particle
+  is processed whole by one thread, so its candidates are consecutive in
+  one buffer.
+
+The formats were -4/-5 before the temperatures (2026-10-23).
 
 `prob_align2D` reads the parts in parallel (one task per part file, file
 names built before the loop, a status per part raised after it): first every
@@ -328,6 +333,32 @@ input, so ties fall as before); the head walk reads those arrays in order,
 and each particle's peak count is computed once. The frontier loop keeps its
 order, its one random draw per step and the swap-remove that decides ties
 within a particle.
+
+**`prob_assign=posterior`** (2026-10-23; default `balanced`, the frontier
+above; `objfun=euclid` required). The key of the 3D tables
+(`refine3D_policy.md`, `doc/implementation_notes/planned/pose_marginalization.md`)
+on the 2D tables, for `refine=prob` and `refine=prob_snhc`: no class is
+forced to be populated. At the fill, every class's in-plane rotation is one
+draw from the posterior over all grid rotations of the class against the
+seeded particle at the particle's temperature T_i = pi wsqsum_i / (2 pftsz)
+(`gen_posterior_val`, its bank form; `score_seeded_class`, the shift-free
+direct call), in place of the likelihood draw over the `ninpl_smpl` best;
+the worker writes T_i per particle into the part file. At the assignment,
+each particle's class is one draw from the posterior over its row, p
+proportional to exp(-T_i (L - L_min)): over the active classes of its dense
+row (`ref_assign_likelihood`, the drawn class's `dense_candidate`, `frac`
+100), or over its valid evaluated candidates (`ref_assign_sparse_likelihood`,
+an active class with an in-plane index; the drawn candidate with its shift,
+the peak count and fraction as the frontier records them). A particle
+without a valid distance takes the first active class (dense) or its best
+candidate (sparse); one without a temperature its argmin, with a warning.
+The draws run in particle order on the master's random stream, so
+shared-memory and distributed runs draw alike; the log reports the fraction
+of particles drawn at their row mode. The one tempering constant
+(`PROB_POSTERIOR_TEMP_FACTOR`, 1.0) applies to the class and in-plane draws
+as to the 3D ones. The frontier code is untouched under the default. The
+key is an advanced search input of `refine2D`, `solve2D` and
+`solve2D_chunks`; the 2D convergence rules are unchanged in this step.
 
 A distributed part with none of the sampled particles is valid: its table
 part writes an empty table (header, no candidates; the readers skip its

@@ -7,7 +7,8 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, &
+    &PROB_POSTERIOR_TEMP_FACTOR
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -19,7 +20,6 @@ private
 
 ! the format word of a dense part file, in the header slot where a sparse part file holds its candidate count
 integer(int64), parameter :: PROB_TAB_DENSE_FORMAT = -4_int64 !< -4 since the particle temperatures (2026-10-23)
-real,           parameter :: PROB_POSTERIOR_TEMP_FACTOR = 1.0  !< prob_assign=posterior: factor on the particle temperature (section 4.4's one tempering constant)
 
 ! outcomes of reading one dense part file, raised after the parallel read
 integer, parameter :: PART_READ_OK = 0, PART_READ_OPEN = 1, PART_READ_IO = 2, PART_READ_NREFS = 3
@@ -61,6 +61,7 @@ type :: eul_prob_tab
     logical                     :: post_is_open   = .false.
     logical                     :: post_slots_identical = .false. !< the two reference slots hold the same sections (header)
     logical                     :: post_has_halves = .false. !< the real halves are loaded beside the references (header)
+    integer                     :: post_ref_offset = 0       !< the diagnostic model's first reference minus one: the full production model's size nspace*nstates (not nrefs, which counts the active states only)
     integer                     :: nptcls          !< size of pinds array
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
@@ -290,7 +291,11 @@ contains
             ! solve3D's LP-set stages put one merged map in both of the matcher's slots (recorded in the header);
             ! the real halves are the diagnostic model loaded after the matcher's references, when there is one
             self%post_slots_identical = self%b_ptr%pftc%ref_slots_identical(self%ref_full(1))
-            self%post_has_halves      = self%b_ptr%pftc%get_nrefs() >= 2 * self%nrefs
+            ! the calculator holds the full production model (every requested state) and, in diagnostic mode,
+            ! the halves' model after it, so the second block starts at nspace*nstates whatever the active
+            ! states, and it is there exactly when the calculator holds twice that
+            self%post_ref_offset = self%p_ptr%nspace * self%p_ptr%nstates
+            self%post_has_halves = self%b_ptr%pftc%get_nrefs() == 2 * self%post_ref_offset
         endif
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
@@ -542,7 +547,7 @@ contains
             ! the deterministic row on the particle's own real half: the references of the diagnostic model
             ! follow the matcher's, direction for direction
             do ri_loc = 1,self%nrefs
-                call deterministic_best(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc) + self%post_ref_offset, iptcl_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
                 post_h(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_h(:,ithr_loc), temp, post_wh(:,ithr_loc), &
@@ -560,7 +565,7 @@ contains
             post_batch(i_loc)%rank_h = rank_in_row(post_h(:,ithr_loc), imin_d)
             ! the same row on the other real half: the reference test
             do ri_loc = 1,self%nrefs
-                call deterministic_best(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, ithr_loc, l_bank, .true., dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc) + self%post_ref_offset, iptcl_loc, ithr_loc, l_bank, .true., dist_loc, irot_loc)
                 post_x(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_x(:,ithr_loc), temp, post_wx(:,ithr_loc), &
@@ -584,7 +589,7 @@ contains
                 &prev_proj >= 1 .and. prev_proj <= self%p_ptr%nspace )then
                 if( self%state_exists(prev_state) )then
                     nrots_loc = self%b_ptr%pftc%get_nrots()
-                    iref_prev = (prev_state-1)*self%p_ptr%nspace + prev_proj + self%nrefs
+                    iref_prev = (prev_state-1)*self%p_ptr%nspace + prev_proj + self%post_ref_offset
                     irot_prev = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
                     if( irot_prev >= 1 .and. irot_prev <= nrots_loc )then
                         irot_ctrl = irot_prev + nrots_loc/2
@@ -684,6 +689,9 @@ contains
             irot_seed = irot
         end subroutine estimate_shift_seed
 
+        !> one reference's row entry: the in-plane rotation drawn from the row posterior at the particle's
+        !! temperature over every grid rotation (prob_assign=posterior), or the likelihood draw within the
+        !! angular threshold (balanced)
         subroutine score_ref( ri_loc, iptcl_loc, shift_xy, ithr_loc, dist_loc, irot_loc )
             integer, intent(in)  :: ri_loc, iptcl_loc, ithr_loc
             real,    intent(in)  :: shift_xy(2)
@@ -694,9 +702,14 @@ contains
             istate_loc = self%ref_state(ri_loc)
             iproj_loc  = self%ref_proj(ri_loc)
             full_ref   = self%ref_full(ri_loc)
-            call self%b_ptr%pftc%gen_likelihood_val(full_ref, iptcl_loc, shift_xy,&
-                &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
-                &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+            if( self%p_ptr%l_prob_assign_posterior )then
+                call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl_loc, shift_xy, inpl_posterior_temp(iptcl_loc),&
+                    &dist_loc, irot_loc)
+            else
+                call self%b_ptr%pftc%gen_likelihood_val(full_ref, iptcl_loc, shift_xy,&
+                    &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+            endif
         end subroutine score_ref
 
         subroutine score_ref_bank( ri_loc, iptcl_loc, ithr_loc, dist_loc, irot_loc )
@@ -704,16 +717,30 @@ contains
             real,    intent(out) :: dist_loc
             integer, intent(out) :: irot_loc
             real :: corr_loc
-            call self%b_ptr%pftc%gen_likelihood_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
-                &inpl_likelihood_nsample(self%ref_state(ri_loc)), dist_loc, corr_loc, irot_loc,&
-                &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+            if( self%p_ptr%l_prob_assign_posterior )then
+                call self%b_ptr%pftc%gen_posterior_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
+                    &inpl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
+            else
+                call self%b_ptr%pftc%gen_likelihood_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
+                    &inpl_likelihood_nsample(self%ref_state(ri_loc)), dist_loc, corr_loc, irot_loc,&
+                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+            endif
         end subroutine score_ref_bank
 
-        !> the in-plane candidates an entry's rotation is drawn from: the rotations within the angular threshold.
-        !! The draw at unit temperature on the normalized loss is uniform over them; that randomness is the
-        !! search's exploration against the references' memory of the particle's last pose, and removing it
-        !! (the best rotation alone) traps the run (doc/implementation_notes/planned/pose_marginalization.md
-        !! sections 14-15, doc/algorithms/sampling_and_fractional_updates.md)
+        !> the temperature of the in-plane posterior draw: the particle's (posterior_temperature, the value the
+        !! part file carries for the assignment draw) under the one tempering constant
+        real function inpl_posterior_temp( iptcl_loc ) result(temp)
+            integer, intent(in) :: iptcl_loc
+            temp = PROB_POSTERIOR_TEMP_FACTOR * &
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+        end function inpl_posterior_temp
+
+        !> the in-plane candidates an entry's rotation is drawn from (prob_assign=balanced): the rotations within
+        !! the angular threshold. The draw at unit temperature on the normalized loss is uniform over them; that
+        !! randomness is the search's exploration against the references' memory of the particle's last pose, and
+        !! removing it (the best rotation alone) traps the run (doc/implementation_notes/planned/pose_marginalization.md
+        !! sections 14-15, doc/algorithms/sampling_and_fractional_updates.md); the posterior draw keeps the
+        !! randomness at the data's width instead
         integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
             integer, intent(in) :: istate_loc
             real :: athres_ub
@@ -1653,6 +1680,7 @@ contains
         self%post_is_open   = .false.
         self%post_slots_identical = .false.
         self%post_has_halves = .false.
+        self%post_ref_offset = 0
         self%table_addr     = 1
         self%rows_addr      = 1
         self%table_nrefined = 0

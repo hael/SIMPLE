@@ -2,7 +2,8 @@
 ! A worker's candidate stream for three particles and two classes is written through the table's
 ! writer, merged into the global table, assigned and written; the assignment file must give each
 ! particle its best class, distance, in-plane index, peak count and fraction: dense (refine=prob)
-! and sparse (refine=prob_snhc).
+! and sparse (refine=prob_snhc). The per-particle posterior draw (prob_assign=posterior) on the
+! synthetic tables of the reference tests, and the particle temperatures through the part files.
 module simple_eul_prob_tab2D_tester
 use simple_core_module_api
 use simple_builder,            only: builder
@@ -36,10 +37,232 @@ contains
         call test_sparse_single_neighborhood()
         call test_dense_assign_against_reference()
         call test_sparse_assign_against_reference()
+        call test_dense_posterior_assignment()
+        call test_sparse_posterior_assignment()
         call test_parallel_read('prob')
         call test_parallel_read('prob_snhc')
         call table%kill
     end subroutine run_all_eul_prob_tab2D_tests
+
+    !> prob_assign=posterior on the dense synthetic table of test_dense_assign_against_reference (ties, a flat
+    !! particle, invalid distances): at a huge temperature every particle with a unique finite minimum takes its
+    !! argmin (its distance and in-plane index), a class tie one of the tied classes, the flat particle any class
+    !! and the invalid one class 1; a particle without a temperature takes its argmin too; at T = 2 on distances
+    !! in [0, 4] some particles leave the mode; the same seed gives the same assignment and another seed another
+    subroutine test_dense_posterior_assignment()
+        integer, parameter :: NP = 150, NC = 20
+        type(eul_prob_tab2D) :: tab
+        real,    allocatable :: dists(:,:)
+        integer, allocatable :: pinds_t(:), icls_a(:), icls_b(:)
+        integer :: i, icls, nwrong, loc(1), ncls_prev, npeaks_prev
+        logical :: l_unique(NP)
+        character(len=len(params%refine)) :: refine_prev
+        write(*,'(A)') 'test_dense_posterior_assignment'
+        ncls_prev   = params%ncls
+        npeaks_prev = params%npeaks_inpl
+        refine_prev = params%refine
+        params%ncls        = NC
+        params%npeaks_inpl = NC
+        params%refine      = 'prob'
+        params%l_prob_assign_posterior = .true.
+        pinds_t = [(i, i=1,NP)]
+        allocate(dists(NC,NP))
+        call seed_rnd_fixed(20261023)
+        do i = 1, NP
+            do icls = 1, NC
+                dists(icls,i) = 4. * ran3()
+            enddo
+        enddo
+        dists(:,1)  = 1.5                  ! flat
+        dists(:,8)  = dists(:,7)           ! identical particles
+        dists(3,9)  = 0.01                 ! a class tie at the minimum
+        dists(11,9) = 0.01
+        dists(5,12) = huge(1.)             ! invalid distances
+        dists(:,13) = huge(1.)
+        l_unique = .true.
+        l_unique([1,9,13]) = .false.
+        ! a huge temperature: the argmin
+        call tab%new(params, build, pinds_t)
+        call set_table(tab, 1.e9)
+        call seed_rnd_fixed(5001)
+        call tab%ref_assign
+        nwrong = 0
+        do i = 1, NP
+            if( l_unique(i) )then
+                loc = minloc(dists(:,i))
+                if( tab%assgn_map(i)%icls /= loc(1) ) nwrong = nwrong + 1
+                if( tab%assgn_map(i)%dist /= dists(loc(1),i) ) nwrong = nwrong + 1
+                if( tab%assgn_map(i)%inpl /= loc(1) ) nwrong = nwrong + 1
+            endif
+        enddo
+        call assert_int(0, nwrong, 'a huge temperature gives every particle with a unique minimum its argmin class')
+        call assert_true(tab%assgn_map(9)%icls == 3 .or. tab%assgn_map(9)%icls == 11, 'a class tie draws one of the tied classes')
+        call assert_true(tab%assgn_map(1)%icls >= 1 .and. tab%assgn_map(1)%icls <= NC, 'the flat particle takes a class')
+        call assert_int(1, tab%assgn_map(13)%icls, 'the particle without a valid distance takes class 1')
+        call assert_true(all(tab%assgn_map(:)%frac == 100.) .and. all(tab%assgn_map(:)%npeaks == 0), 'frac 100 and no peak count')
+        icls_a = tab%assgn_map(:)%icls
+        ! no temperature from the fill: the argmin, as at the huge temperature
+        call set_table(tab, 0.)
+        call seed_rnd_fixed(5001)
+        call tab%ref_assign
+        call assert_int(0, count(pack(tab%assgn_map(:)%icls, l_unique) /= pack(icls_a, l_unique)),&
+            &'a particle without a temperature takes its argmin')
+        ! T = 2: some particles leave the mode, at the same seed the same ones
+        call set_table(tab, 2.)
+        call seed_rnd_fixed(5002)
+        call tab%ref_assign
+        icls_a = tab%assgn_map(:)%icls
+        nwrong = 0
+        do i = 1, NP
+            if( .not. l_unique(i) ) cycle
+            loc = minloc(dists(:,i))
+            if( icls_a(i) /= loc(1) ) nwrong = nwrong + 1
+            if( tab%assgn_map(i)%dist /= dists(icls_a(i),i) ) nwrong = nwrong + NP
+        enddo
+        call assert_true(nwrong > 0 .and. nwrong < NP, 'at T = 2 some particles leave the mode, with the drawn class''s distance')
+        call set_table(tab, 2.)
+        call seed_rnd_fixed(5002)
+        call tab%ref_assign
+        call assert_int(0, count(tab%assgn_map(:)%icls /= icls_a), 'the same seed gives the same dense posterior assignment')
+        call set_table(tab, 2.)
+        call seed_rnd_fixed(5003)
+        call tab%ref_assign
+        icls_b = tab%assgn_map(:)%icls
+        call assert_true(any(icls_b /= icls_a), 'another seed gives another dense posterior assignment')
+        call tab%kill
+        params%l_prob_assign_posterior = .false.
+        params%ncls        = ncls_prev
+        params%npeaks_inpl = npeaks_prev
+        params%refine      = refine_prev
+
+    contains
+
+        subroutine set_table( t, temp )
+            type(eul_prob_tab2D), intent(inout) :: t
+            real,                 intent(in)    :: temp
+            integer :: ip, ic
+            do ip = 1, NP
+                do ic = 1, NC
+                    t%rows(ic,ip)%inpl = ic
+                    t%rows(ic,ip)%dist = dists(ic,ip)
+                enddo
+            enddo
+            t%temps = temp
+        end subroutine set_table
+
+    end subroutine test_dense_posterior_assignment
+
+    !> prob_assign=posterior on the sparse synthetic store of test_sparse_assign_against_reference (1 to 20
+    !! candidates per particle, ties, candidates without an in-plane index): at a huge temperature every particle
+    !! takes a candidate at its smallest valid distance, with the peak count and fraction of the frontier's record;
+    !! at T = 2 some particles leave the mode; the same seed gives the same assignment and another seed another
+    subroutine test_sparse_posterior_assignment()
+        integer, parameter :: NP = 300, NC = 20
+        class(eul_prob_tab2D), allocatable :: tab
+        type(prob_candidate),  allocatable :: cands(:)
+        integer, allocatable :: counts(:), pinds_t(:), icls_a(:), icls_b(:)
+        integer :: i, k, n, nwrong, npeaks, ncls_prev, npeaks_prev
+        real    :: best
+        character(len=len(params%refine)) :: refine_prev
+        write(*,'(A)') 'test_sparse_posterior_assignment'
+        ncls_prev   = params%ncls
+        npeaks_prev = params%npeaks_inpl
+        refine_prev = params%refine
+        params%ncls        = NC
+        params%npeaks_inpl = NC
+        params%refine      = 'prob_snhc'
+        params%l_prob_assign_posterior = .true.
+        pinds_t = [(i, i=1,NP)]
+        call seed_rnd_fixed(20261023)
+        allocate(counts(NP))
+        do i = 1, NP
+            counts(i) = 1 + int(ran3() * real(NC-1))
+        enddo
+        counts(7:8) = NC
+        allocate(cands(sum(counts)))
+        n = 0
+        do i = 1, NP
+            do k = 1, counts(i)
+                n = n + 1
+                cands(n)%iref = 1 + mod(k * 7 + i, NC)
+                cands(n)%inpl = 1 + int(ran3() * 35.)
+                cands(n)%dist = 4. * ran3()
+                if( k > 1 .and. ran3() < 0.05 ) cands(n)%inpl = 0  ! not a candidate
+            enddo
+        enddo
+        n = sum(counts(1:6))
+        cands(n+1:n+NC)%dist = 0.7                                 ! a flat particle
+        cands(n+1:n+NC)%inpl = 3
+        allocate(tab)
+        ! a huge temperature: a candidate at the smallest valid distance
+        call set_store(tab, 1.e9)
+        call seed_rnd_fixed(6001)
+        call tab%ref_assign
+        nwrong = 0
+        n = 0
+        do i = 1, NP
+            best   = huge(1.)
+            npeaks = 0
+            do k = 1, counts(i)
+                if( cands(n+k)%inpl > 0 )then
+                    npeaks = npeaks + 1
+                    best   = min(best, cands(n+k)%dist)
+                endif
+            enddo
+            if( tab%assgn_map(i)%dist /= best ) nwrong = nwrong + 1
+            if( tab%assgn_map(i)%npeaks /= npeaks ) nwrong = nwrong + 1
+            if( abs(tab%assgn_map(i)%frac - 100. * real(npeaks) / real(NC)) > 1.e-4 ) nwrong = nwrong + 1
+            if( tab%assgn_map(i)%inpl < 1 ) nwrong = nwrong + 1
+            n = n + counts(i)
+        enddo
+        call assert_int(0, nwrong, 'a huge temperature gives every particle a candidate at its smallest valid distance')
+        call tab%kill
+        ! T = 2: some particles leave the mode, at the same seed the same ones
+        call set_store(tab, 2.)
+        call seed_rnd_fixed(6002)
+        call tab%ref_assign
+        icls_a = tab%assgn_map(:)%icls
+        nwrong = 0
+        n = 0
+        do i = 1, NP
+            best = huge(1.)
+            do k = 1, counts(i)
+                if( cands(n+k)%inpl > 0 ) best = min(best, cands(n+k)%dist)
+            enddo
+            if( tab%assgn_map(i)%dist > best ) nwrong = nwrong + 1
+            n = n + counts(i)
+        enddo
+        call assert_true(nwrong > 0 .and. nwrong < NP, 'at T = 2 some particles leave the mode')
+        call tab%kill
+        call set_store(tab, 2.)
+        call seed_rnd_fixed(6002)
+        call tab%ref_assign
+        call assert_int(0, count(tab%assgn_map(:)%icls /= icls_a), 'the same seed gives the same sparse posterior assignment')
+        call tab%kill
+        call set_store(tab, 2.)
+        call seed_rnd_fixed(6003)
+        call tab%ref_assign
+        icls_b = tab%assgn_map(:)%icls
+        call assert_true(any(icls_b /= icls_a), 'another seed gives another sparse posterior assignment')
+        call tab%kill
+        deallocate(tab)
+        params%l_prob_assign_posterior = .false.
+        params%ncls        = ncls_prev
+        params%npeaks_inpl = npeaks_prev
+        params%refine      = refine_prev
+
+    contains
+
+        subroutine set_store( t, temp )
+            class(eul_prob_tab2D), intent(inout) :: t
+            real,                  intent(in)    :: temp
+            call t%new(params, build, pinds_t)
+            call t%candidate_store%new_ragged(pinds_t, counts)
+            t%candidate_store%candidates = cands
+            t%temps = temp
+        end subroutine set_store
+
+    end subroutine test_sparse_posterior_assignment
 
     !> refine=prob: every particle carries a candidate per class; the smaller distance wins, and a refined
     !! candidate keeps its shift through the dense part file
@@ -563,6 +786,7 @@ contains
             do i_loc = 1, size(pinds_part)
                 worker%seed_shifts(:,i_loc) = [ran3() - 0.5, ran3() - 0.5]
                 worker%seed_has_sh(i_loc)   = ran3() > 0.3
+                worker%temps(i_loc)         = real(pinds_part(i_loc))
             enddo
             write(fname,'(A,I1,A)') 'prob2d_par_part', ipart, '.dat'
             call worker%begin_write(string(trim(fname)))
@@ -595,6 +819,7 @@ contains
             call tab%new(params, build, pinds_t)
             call tab%read_tabs_to_glob(string('prob2d_par_part'), NPARTS, 1)
             nwrong = nwrong + count(tab%seed_shifts /= ref%seed_shifts) + count(tab%seed_has_sh .neqv. ref%seed_has_sh)
+            nwrong = nwrong + count(tab%temps /= ref%temps)
             if( tab%seed_nrots /= ref%seed_nrots ) nwrong = nwrong + 1
             if( refine == 'prob' )then
                 nwrong = nwrong + count(tab%rows%dist /= ref%rows%dist) + count(tab%rows%inpl /= ref%rows%inpl)
@@ -620,6 +845,7 @@ contains
         enddo
         !$ call omp_set_num_threads(nthr_prev)
         call assert_int(0, nwrong, 'the 2D part read ('//refine//') at every processor equals the read at one thread')
+        call assert_int(0, count(ref%temps /= real(pinds_t)), 'the particle temperatures land at their master particles')
         if( refine == 'prob' )then
             call assert_int(2*NP, size(ref%refined), 'the dense master holds every refined entry')
         else
