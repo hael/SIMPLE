@@ -37,7 +37,7 @@ contains
             &'De novo 2D class-average determination from particle images', &
             &'is a distributed workflow, the 2D equivalent of solve3D, that couples ab initio 2D '//&
             &'classification with initial 2D refinement of the class averages', &
-            &UI_VIS_STANDARD, 'De Novo 2D Class Averages')
+            &UI_VIS_STANDARD, 'Solve 2D Class Averages')
         call add_ui_program('solve2D', solve2D, prgtab, UI_CATEGORY)
     end subroutine new_solve2D
 

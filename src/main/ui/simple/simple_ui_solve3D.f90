@@ -3,7 +3,7 @@ module simple_ui_solve3D
 use simple_ui_modules
 implicit none
 
-type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('solve3d', 'De Novo 3D Map Determination', 50)
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('solve3d', 'Solve 3D Map Determination', 50)
 type(ui_program), target :: solve3D
 type(ui_program), target :: solve3D_cavgs
 type(ui_program), target :: solve3D_addon
@@ -35,7 +35,7 @@ contains
         &'couples ab initio 3D reconstruction with initial 3D refinement',&                ! help
         &'simple_exec',&                                                                   ! executable
         &.true.,&                                                                          ! requires sp_project
-        &visibility=UI_VIS_STANDARD, display_name='De Novo 3D Map Determination')
+        &visibility=UI_VIS_STANDARD, display_name='Solve 3D Map Determination')
         ! INPUT PARAMETER SPECIFICATIONS
         call add_solve3D_base_inputs(solve3D, l_stream_compatible=.false., l_include_nsample=.true., l_include_pcg=.true.)
         ! add to ui_hash
@@ -216,7 +216,7 @@ contains
         &'against a frozen solve3D solution whose particles contribute unsearched; '//&
         &'when the run completes, its project replaces the superset project file',&            ! help
         &'simple_exec',&                                                                       ! executable
-        &.true., visibility=UI_VIS_ADVANCED, display_name='Extend De Novo 3D Map')             ! requires sp_project
+        &.true., visibility=UI_VIS_ADVANCED, display_name='Extend Solve 3D Map')             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call solve3D_addon%add_input(UI_FILE, projfile, &
@@ -328,7 +328,7 @@ contains
         &'is a distributed workflow for de novo map determination from class averages that '//&
         &'couples ab initio 3D reconstruction with initial 3D refinement',&                     ! help
         &'simple_exec',&                                                                        ! executable
-        &.true., visibility=UI_VIS_STANDARD, display_name='De Novo 3D Map from Class Averages') ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Solve 3D Map from Class Averages') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

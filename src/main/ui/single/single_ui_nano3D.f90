@@ -29,7 +29,7 @@ subroutine new_solve3D_nano( prgtab )
         &'De novo 3D map determination for a nanoparticle data set',&    ! summary
         &'is a wrapper around solve3D that applies nanoparticle-oriented defaults while allowing overrides',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., visibility=UI_VIS_STANDARD, display_name='De Novo Nanoparticle Map') ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Solve Nanoparticle Map') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! search controls
         call solve3D_nano%add_input(UI_SRCH, nsample, required_override=.false., &
