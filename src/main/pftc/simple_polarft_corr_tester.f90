@@ -1,4 +1,4 @@
-!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half and at-pose Euclidean losses, the slot detector, the reference model loaded at an offset) on generated images
+!@descr: unit tests of the polar-Fourier correlations (gen_objfun_vals, calc_frc, the cross-half, at-pose and seed-bank Euclidean losses, the slot detector, the reference model loaded at an offset) on generated images
 ! Three smooth zero-mean images (so the shared mask envelope carries no correlation) are references
 ! and, rotated or unrelated, particles. gen_objfun_vals (objfun=cc) must peak at rotation 1 with cc ~1
 ! for an image against itself, at the applied sixth of a turn for a rotated copy, and stay low for an
@@ -9,6 +9,7 @@ use simple_core_module_api
 use simple_cmdline,      only: cmdline
 use simple_parameters,   only: parameters
 use simple_polarft_calc, only: polarft_calc
+use simple_pftc_shsrch_grad, only: shift_ptcl2ref
 use simple_image,        only: image
 use simple_test_utils
 implicit none
@@ -22,7 +23,106 @@ contains
         call test_generated_images()
         call test_cross_half_euclid()
         call test_ref_pfts_offset_io()
+        call test_bank_and_at_pose_kernels()
     end subroutine run_all_polarft_corr_tests
+
+    !> The at-pose loss at a nonzero reference shift is the shift search's objective (gen_objfun_vals, exp(-L))
+    !! at the same shift and rotation: the identical-pose null test of prob_post_diag re-scores a refined mode
+    !! through it. A seed-bank entry (the particle shifted by a particle-frame shift u) scores at rotation irot
+    !! as the reference shifted by shift_ptcl2ref(u, rot(irot)), up to the angular Nyquist bin the
+    !! shifted-reference kernel drops; the bank's best-rotation and at-pose losses agree with each other
+    !! exactly, and cross swaps the half as for the unshifted kernels.
+    subroutine test_bank_and_at_pose_kernels()
+        integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
+        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
+        real,    parameter :: NYQUIST_ATOL = 5.e-2 ! the dropped bin separates the kernels; a frame error is O(1)
+        type(parameters), target :: p
+        type(cmdline)       :: cline
+        type(polarft_calc)  :: pftc
+        type(image)         :: img_even, img_odd
+        real,    allocatable, target :: sigma2(:,:)
+        real,    allocatable :: vals(:)
+        complex, allocatable :: bank(:,:)
+        real    :: s(2), u(2), dist_at, dist_b, dist_bx, dist_r, dist_rx
+        integer :: pdim(3), kfromto(2), irot, irot_b, irot_bx, irot_r, irot_rx, nrots
+        write(*,'(A)') 'test_bank_and_at_pose_kernels'
+        call cline%set('box',     real(BOX))
+        call cline%set('smpd',    SMPD)
+        call cline%set('mskdiam', MSKDIAM)
+        call cline%set('nptcls',  real(NPTCLS))
+        call cline%set('nthr',    1.0)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'euclid')
+        call p%new(cline)
+        call set_fixed_seed(20261024)
+        kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
+        call pftc%new(p, NREFS, [1,NPTCLS], kfromto)
+        pdim  = pftc%get_pdim_srch()
+        nrots = pftc%get_nrots()
+        call img_even%new([BOX,BOX,1], SMPD)
+        call img_even%gauran(0.0, 1.0)
+        call img_even%fft
+        call img_even%bpgau2D(0.0, LP)
+        call img_even%ifft
+        call img_even%memoize_mask_coords
+        call img_even%mask2D_soft(MSKRAD, backgr=0.0)
+        call img_odd%new([BOX,BOX,1], SMPD)
+        call img_odd%gauran(0.0, 1.0)
+        call img_odd%fft
+        call img_odd%bpgau2D(0.0, LP)
+        call img_odd%ifft
+        call img_odd%memoize_mask_coords
+        call img_odd%mask2D_soft(MSKRAD, backgr=0.0)
+        call img_even%memoize4polarize(pdim)
+        call img_even%fft
+        call img_odd%fft
+        call pftc%polarize_ref_pft(img_even, 1, iseven=.true.,  pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ref_pft(img_odd,  1, iseven=.false., pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ptcl_pft(img_even, 1, pdim=pdim, oversamp=.false.)
+        call pftc%set_eo(1, .true.)
+        allocate(sigma2(kfromto(1):kfromto(2),2), source=1.0)
+        call pftc%assign_sigma2_noise(sigma2)
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        allocate(vals(nrots), bank(pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1))
+        ! the at-pose loss at a nonzero reference shift is the shift search's objective, every rotation
+        s = [1.3, -0.6]
+        call pftc%gen_objfun_vals(1, 1, s, vals)
+        do irot = 1,nrots,max(1,nrots/7)
+            call pftc%gen_euclid_val_at(1, 1, s, irot, dist_at)
+            call assert_real(-log(max(vals(irot), 1.e-30)), dist_at, 1.e-4, &
+                &'the at-pose loss at a reference shift is the shift search''s objective at that pose')
+        end do
+        ! a bank entry: the particle shifted by u scores as the reference shifted by shift_ptcl2ref(u, rot)
+        u = [0.9, 1.4]
+        call pftc%memoize_shifted_ptcl(1, u, bank)
+        call pftc%gen_best_euclid_val_bank(1, 1, bank, dist_b, irot_b)
+        call pftc%gen_euclid_val_at_bank(1, 1, bank, irot_b, dist_at)
+        call assert_real(dist_b, dist_at, 1.e-6, 'the bank at-pose loss reproduces the bank best value at its rotation')
+        call pftc%gen_euclid_val_at_bank(1, 1, bank, 0, dist_at)
+        call assert_true(dist_at > 1.e30, 'the bank at-pose loss is huge off the rotation grid')
+        call pftc%gen_euclid_val_at(1, 1, shift_ptcl2ref(u, pftc%get_rot(irot_b)), irot_b, dist_r)
+        call assert_true(abs(dist_r - dist_b) <= NYQUIST_ATOL, &
+            &'the bank loss at its best rotation is the shifted-reference loss at the frame-converted seed, up to the Nyquist bin')
+        call pftc%gen_euclid_val_at(1, 1, u, irot_b, dist_rx)
+        ! the unconverted seed is the wrong frame unless the rotation is near zero or the shift along the axis
+        if( sum(abs(shift_ptcl2ref(u, pftc%get_rot(irot_b)) - u)) > 0.5 ) call assert_true(abs(dist_rx - dist_b) > abs(dist_r - dist_b), &
+            &'the frame-converted seed is closer to the bank loss than the unconverted one')
+        ! cross swaps the half for the bank kernels as for the unshifted ones
+        call pftc%gen_best_euclid_val_bank(1, 1, bank, dist_bx, irot_bx, cross=.true.)
+        call pftc%gen_best_euclid_val_cross(1, 1, shift_ptcl2ref(u, pftc%get_rot(irot_bx)), dist_rx, irot_rx)
+        call assert_true(abs(dist_bx - dist_rx) <= NYQUIST_ATOL, 'the cross bank loss is the cross shifted-reference loss at the converted seed')
+        call assert_true(dist_bx > dist_b + 0.3, 'the other half (an unrelated image) loses to the own half for the shifted particle too')
+        call pftc%set_eo(1, .false.)
+        call pftc%memoize_sigma2_weights
+        call pftc%gen_best_euclid_val_bank(1, 1, bank, dist_r, irot_r, cross=.true.)
+        call assert_real(dist_b, dist_r, 1.e-5, 'declared odd: the cross bank loss is the former own one')
+        call assert_int(irot_b, irot_r, 'declared odd: at the same rotation')
+        call img_even%kill
+        call img_odd%kill
+        call pftc%kill
+        deallocate(sigma2, vals, bank)
+    end subroutine test_bank_and_at_pose_kernels
 
     !> A reprojection model written by a two-reference object (write_ref_pfts) and read back by a
     !! four-reference one at iref_from 1 and 3 (read_ref_pfts): the sections of both halves land at

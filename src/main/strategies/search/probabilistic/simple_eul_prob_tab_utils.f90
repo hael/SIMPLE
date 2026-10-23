@@ -55,12 +55,18 @@ type :: prob_posterior_stat
     integer :: iptcl = 0, istate = 0, iproj = 0, k99 = 0, nvalid = 0
     real    :: lmin = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
     ! the identical-pose null test, in nats: the kernel re-scored at the production mode's exact (reference,
-    ! shift, grid rotation) minus the stored loss, with the stored shift rotated back into the kernel's frame
-    ! (null_a, expected zero) and taken as it is (null_b, the alternative convention)
+    ! shift, grid rotation) minus the stored loss. mode_src says where the stored value came from and what the
+    ! two columns are: 1 the shift search (refined): null_a the shifted-reference kernel at the stored
+    ! particle-frame shift converted to the kernel's frame (shift_ptcl2ref; expected zero), null_b the stored
+    ! shift taken as it is (the wrong frame, for contrast); 2 the seed bank (unrefined, seeded): null_a the bank
+    ! kernel at the stored rotation (expected zero), null_b the shifted-reference kernel at the frame-converted
+    ! seed (the two kernels differ by the angular Nyquist bin); 3 unshifted: both the kernel at zero shift
+    integer :: mode_src = 0
     real    :: null_a = 0., null_b = 0.
-    ! the deterministic row on the own slot (best grid rotation at the seed shift, no sampling, no
-    ! refinement): the search test against the production row; rank_d the production mode's rank in it,
-    ! dist_d the angle between the two modes
+    ! the deterministic row on the matcher's references (best grid rotation at the particle-frame seed the
+    ! production search scored at, through the seed bank when there is one, no sampling, no refinement): the
+    ! search test against the production row; rank_d the production mode's rank in it, dist_d the angle
+    ! between the two modes
     integer :: iproj_d = 0, k99_d = 0, rank_d = 0
     real    :: lmin_d = 0., pmax_d = 0., neff_d = 0., spread_d = 0., dist_d = 0.
     ! the deterministic row on the particle's own real half (the diagnostic model of the independent

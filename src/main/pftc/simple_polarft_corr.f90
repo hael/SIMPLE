@@ -417,6 +417,53 @@ contains
         dist = self%heap_vars(ithr)%rot_dists(irot)
     end subroutine gen_euclid_val_at
 
+    !> The Euclidean loss of a bank entry (the particle shifted by its particle-frame seed, memoize_shifted_ptcl)
+    !! at its best grid rotation, own slot or, with cross, the other half's: the deterministic row of the
+    !! pose-posterior diagnostic at the seed the production search scored at. The bank kernel sums the angular
+    !! Nyquist bin (the shifted-reference kernels drop it).
+    module subroutine gen_best_euclid_val_bank( self, iref, iptcl, bank, dist, irot, cross )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        complex(sp),                 intent(in)    :: bank(:,:)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        logical, optional,           intent(in)    :: cross
+        real(dp) :: norm
+        integer  :: ithr, p
+        logical  :: l_cross
+        l_cross = .false.
+        if( present(cross) ) l_cross = cross
+        call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr, cross=l_cross)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
+        irot = 1
+        dist = self%heap_vars(ithr)%rot_dists(1)
+        do p = 2,self%nrots
+            if( self%heap_vars(ithr)%rot_dists(p) < dist )then
+                irot = p
+                dist = self%heap_vars(ithr)%rot_dists(p)
+            endif
+        enddo
+    end subroutine gen_best_euclid_val_bank
+
+    !> The Euclidean loss of a bank entry at one grid rotation, own slot or the other half's; huge outside 1..nrots
+    module subroutine gen_euclid_val_at_bank( self, iref, iptcl, bank, irot, dist, cross )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        complex(sp),                 intent(in)    :: bank(:,:)
+        real(sp),                    intent(out)   :: dist
+        logical, optional,           intent(in)    :: cross
+        real(dp) :: norm
+        integer  :: ithr
+        logical  :: l_cross
+        l_cross = .false.
+        if( present(cross) ) l_cross = cross
+        dist = huge(dist)
+        if( irot < 1 .or. irot > self%nrots ) return
+        call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr, cross=l_cross)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
+        dist = self%heap_vars(ithr)%rot_dists(irot)
+    end subroutine gen_euclid_val_at_bank
+
     !> whether the two half slots of reference iref hold the same section (solve3D's LP-set stages put one
     !! merged map in both, so a cross-slot score is then the same reference; prob_post_diag records it)
     module logical function ref_slots_identical( self, iref )
@@ -529,17 +576,22 @@ contains
     ! Nyquist bin too (p = 1..pftsz+1), which makes the loss exact against the true shifted loss; the
     ! shifted-reference kernels above drop that bin.
 
-    subroutine gen_euclid_crvec_bank( self, iref, iptcl, bank, norm, ithr )
+    !> cross=.true. scores the bank entry against the other half's reference (prob_post_diag), as gen_euclid_crvec
+    subroutine gen_euclid_crvec_bank( self, iref, iptcl, bank, norm, ithr, cross )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
         complex(sp),         intent(in)    :: bank(:,:)
         real(dp),            intent(out)   :: norm
         integer,             intent(out)   :: ithr
+        logical, optional,   intent(in)    :: cross
         integer :: i, ieo, ih
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
         ih   = merge(1, 2, self%iseven(i))
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        if( present(cross) )then
+            if( cross ) ieo = merge(REF_ODD, REF_EVEN, self%iseven(i))
+        endif
         norm = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
         call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
             &self%ft_ref2(:,:,iref,ieo), bank, self%ft_ref(:,:,iref,ieo), self%sigma2_wk8(:,ih), self%crvec1(ithr)%c)

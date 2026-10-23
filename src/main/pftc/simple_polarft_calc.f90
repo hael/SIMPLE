@@ -197,6 +197,8 @@ type :: polarft_calc
     procedure, private :: gen_best_euclid_val
     procedure          :: gen_best_euclid_val_cross
     procedure          :: gen_euclid_val_at
+    procedure          :: gen_best_euclid_val_bank
+    procedure          :: gen_euclid_val_at_bank
     procedure          :: ref_slots_identical
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_likelihood_euclid_val
@@ -740,6 +742,25 @@ interface
         real(sp),                    intent(out)   :: dist
         logical, optional,           intent(in)    :: cross
     end subroutine gen_euclid_val_at
+
+    !> the Euclidean loss of a bank entry at its best grid rotation, own or other slot
+    module subroutine gen_best_euclid_val_bank(self, iref, iptcl, bank, dist, irot, cross)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        complex(sp),                 intent(in)    :: bank(:,:)
+        real(sp),                    intent(out)   :: dist
+        integer,                     intent(out)   :: irot
+        logical, optional,           intent(in)    :: cross
+    end subroutine gen_best_euclid_val_bank
+
+    !> the Euclidean loss of a bank entry at one grid rotation, own or other slot
+    module subroutine gen_euclid_val_at_bank(self, iref, iptcl, bank, irot, dist, cross)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        complex(sp),                 intent(in)    :: bank(:,:)
+        real(sp),                    intent(out)   :: dist
+        logical, optional,           intent(in)    :: cross
+    end subroutine gen_euclid_val_at_bank
 
     !> whether the two half slots of reference iref hold the same section
     module logical function ref_slots_identical(self, iref)

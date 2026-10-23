@@ -219,17 +219,18 @@ controls on the same particle, each answering one question:
 
 | column | meaning |
 | --- | --- |
-| `null_a_nats` | the identical-pose null test: the kernel re-scored at the production mode's exact (reference, shift, grid rotation) minus the stored loss, in nats, with the stored shift rotated back into the kernel's frame (`shift_ref2ptcl`; the search rotates it to the frame of reference before storing). Expected zero up to precision. |
-| `null_b_nats` | the same with the stored shift taken as it is: the alternative convention, expected nonzero whenever the shift is |
-| `iproj_d`, `lmin_d`, `pmax_d`, `neff_d`, `k99_d`, `spread_d_deg` | the deterministic row on the own slot: best grid rotation at the seed shift for every direction (`gen_best_objfun_val`), no sampling, no refinement, and its posterior |
+| `null_a_nats` | the identical-pose null test: the production mode's stored loss re-computed at its exact (reference, shift, grid rotation) with the kernel the stored value came from, minus the stored loss, in nats; expected zero up to precision. `mode_src` (last column) says which case: **1** the mode was shift-refined, the stored shift is the search's particle-frame value (`shift_ref2ptcl` of the kernel-frame minimizer) and `null_a` feeds `shift_ptcl2ref` of it to the shifted-reference kernel (`gen_euclid_val_at`); **2** the mode is an unrefined entry scored through the seed bank, `null_a` is the bank kernel at the stored rotation (`gen_euclid_val_at_bank`); **3** unshifted, the kernel at zero shift |
+| `null_b_nats` | the contrast: case 1, the stored shift fed to the kernel as it is (the wrong frame; nonzero whenever the shift is); case 2, the shifted-reference kernel at the frame-converted seed, which differs from the bank kernel by the angular Nyquist bin the former drops (the size of that bin on real data); case 3, equal to `null_a` |
+| `iproj_d`, `lmin_d`, `pmax_d`, `neff_d`, `k99_d`, `spread_d_deg` | the deterministic row on the matcher's references: best grid rotation for every direction at the particle-frame seed the production search scored at, through the seed bank when the particle has one (`gen_best_euclid_val_bank`; a reference shift is one frame per rotation, so the seed cannot be fed to the shifted-reference kernel for all rotations at once), unshifted otherwise (`gen_best_objfun_val`); no sampling, no refinement; and its posterior |
 | `dist_d_deg`, `rank_d` | the search test: the angle between the production mode and the deterministic mode, and the production mode's rank in the deterministic row (1: the same mode) |
-| `iproj_h` ... `spread_h_deg` | the same deterministic row on the particle's **own real half** (the diagnostic model below; `gen_best_objfun_val` on the reference at `iref + nrefs`), and its posterior |
+| `iproj_h` ... `spread_h_deg` | the same deterministic row on the particle's **own real half** (the diagnostic model below, the reference at `iref + nrefs`), and its posterior |
 | `dist_h_deg`, `rank_h` | the angle between the matcher-row deterministic mode and the own-half mode, and the matcher mode's rank in the own-half row: what the merged reference and the own half disagree on |
-| `iproj_x` ... `spread_x_deg` | the same deterministic row on the **other real half** (`gen_best_euclid_val_cross` at `iref + nrefs`), and its posterior |
+| `iproj_x` ... `spread_x_deg` | the same deterministic row on the **other real half** (`cross=.true.`, the bank or unshifted kernel at `iref + nrefs`), and its posterior |
 | `dist_x_deg`, `rank_x` | the reference test: the angle between the own-half and other-half deterministic modes, and the own-half mode's rank in the other-half row (1: the two halves agree on the mode) |
 | `iproj_p` | the pose the particle went into its half with: its previous direction on the current grid (`find_closest_proj`; exact within a stage), 0 when there is none (a virgin field, an invalid state) |
 | `self_nats` | the self-reinforcement test: T (L_other - L_own) at that pose (previous direction, previous in-plane rotation, zero residual shift: the image is pre-shifted by its stored shift). Positive when the own half, which holds the particle, favours the pose it was inserted at. The pose was chosen on the previous merged reference, to which both halves contributed alike, so the selection bias is the same for both halves and the mean over particles isolates the particle's own contribution. |
 | `ctrl_nats` | the same difference at the same direction a half turn away in-plane, where the particle's own contribution does not correlate with it (a half turn is the Friedel mate on the polar grid: the cross term is Re X^2, zero in expectation): the noise scale of `self_nats`, expected zero on average |
+| `mode_src` | the null test's case, 1-3 as above (0: no valid mode) |
 
 Two more header lines say which case the file is in: `# slots_identical
 yes|no` (`polarft_calc%ref_slots_identical`, the matcher's two slots;
@@ -271,7 +272,14 @@ reproduces the best value at its rotation, and that the slot detector
 tells distinct sections from a copy; `test_ref_pfts_offset_io` (same suite)
 that a model written by a two-reference object lands unchanged at
 `iref_from` 1 and 3 of a four-reference one, both halves, and that the
-plain read is the `iref_from` 1 case.
+plain read is the `iref_from` 1 case; `test_bank_and_at_pose_kernels`
+(same suite) that the at-pose loss at a nonzero reference shift is the
+shift search's objective (`gen_objfun_vals`) at that pose, that a seed-bank
+entry scores at its best rotation as the reference shifted by
+`shift_ptcl2ref(u, rot)` up to the Nyquist bin (and not as the unconverted
+seed), that the bank's best and at-pose losses agree, and that `cross`
+swaps the half for the bank kernels too. The frame conversions themselves
+are pinned by `test_shift_frames` (suite "in-plane search").
 `posterior_temperature` and `posterior_row_stats` live in
 `simple_eul_prob_tab_utils.f90` and are pinned by `test_posterior_row_stats`
 (`unit_...` suite "3D probability table").
@@ -590,6 +598,28 @@ re-cut so each column answers one question (the columns are in section 5):
   L_own) at the pose the particle was inserted at, on the real halves, with
   `ctrl_nats` a half turn away in-plane as the noise scale. The v2 "bonus"
   (same reference, rotated-frame shift) is superseded.
+- *Two frame errors in the v3 diagnostic, found by the first full run
+  (section 12) and fixed 2026-10-22 evening.* (i) The null test converted
+  the stored shift with `shift_ref2ptcl`, which is the conversion the search
+  applies when it *stores* the shift (`matmul(x, rotmat)` is `shift_ref2ptcl`
+  of the kernel-frame minimizer, `test_shift_frames`); undoing it needs
+  `shift_ptcl2ref`. Both v3 columns were therefore wrong-frame, which is why
+  `null_a` and `null_b` came out alike and nonzero (section 12). (ii) The
+  deterministic rows fed the particle-frame seed to the shifted-reference
+  kernel for every rotation; a reference shift is one frame per rotation,
+  so the production scores a seeded particle through the seed bank
+  (`memoize_shifted_ptcl`, `gen_likelihood_val_bank`), and the rows now do
+  the same (`gen_best_euclid_val_bank`, with `cross`). The rows of the first
+  run are therefore at a shift that is wrong by up to twice the seed, the
+  same for all three rows, so their comparisons with each other (the
+  reference test) stand and their comparison with the production row (the
+  search test) is indicative only. The null test now also records which
+  kernel the stored value came from (`mode_src`), because the production
+  row mixes two: the seed-bank kernel sums the angular Nyquist bin, the
+  shifted-reference kernels (the unseeded scores and the shift search's
+  objective) drop it, and the refined entries of a row are on the latter
+  while its unrefined seeded entries are on the former. `null_b` of the
+  bank case measures that gap on real data.
 - *Known-pose simulation.* Particles projected from a known volume with
   known noise, scored through the production path: the fraction of
   particles whose true direction lies within the 99% set (coverage), the
@@ -616,5 +646,91 @@ deterministic row; `rank_x`/`dist_x` the reference test on real halves;
 the own-half posterior's sharpness (`neff_h`, `pmax_h`): a mean `self_nats`
 of the order of a nat or more where `neff_h` is near 1 would mean the
 inserted pose is favoured by its own insertion by as much as the data
-separate neighbouring directions.
+separate neighbouring directions. The first such run (a full one) is
+section 12; it settled the reference and self tests and exposed the frame
+errors above, so the null and search tests wait for the re-run with the
+40-column diagnostic.
+
+## 12. Results of the real-halves run: PfCRT, 2026-10-22 (5_solve3D)
+
+A full solve3D (8 stages, 92 iterations, final 4.0 A at FSC 0.143 /
+6.9 A at 0.5) with `prob_post_diag=yes`, 39-column files for iterations
+41-79, the stages that fill the dense table (stage 3: iterations 41-57,
+box 108, lp 18.3 A; stage 4: 58-72, box 120, 12.9 A; stage 5: 73-79, box
+130, 11.1 A; stages 1-2 and 8 do not run the dense fill). `# halves yes`
+throughout: the diagnostic model of the real halves loaded on every worker.
+Analysis in `PfCRT_posterior/analysis/` (`post5.py` -> `run5_summary.txt`,
+`self_lock.py` -> `run5_self_lock.txt`). The null and search tests of this
+run are invalid (the frame errors of section 11); the reference and self
+tests are at a common, slightly wrong shift for both halves and at zero
+shift respectively, and stand.
+
+**Self-reinforcement is real and grows with the band.** `self_nats`, the
+own half's advantage at the pose the particle was inserted at, averages
++0.81 nats (stage 3), +2.30 (stage 4) and +4.71 (stage 5), rising
+monotonically within stage 5 from +1.6 at its first iteration to +6.8 at
+its last; the control a half turn away averages 0.00 +- 0.01 to 0.03 at
+every stage (|mean| <= 0.13 in every iteration). The per-particle spread is
+large (f(ctrl > 1 nat) 77-87%), so the bonus is a mean effect of a few
+nats on a noise of several, not a per-particle certainty.
+
+**It is of the size the independent half separates the mode by.** The
+other half's posterior gap, ln(p_max_x / (1 - p_max_x)), has median 3.9
+(stage 3), 6.4 (stage 4), 3.6 nats (stage 5). `self_nats` exceeds that gap
+for 21%, 26% and 51% of particles, against 18%, 16% and 28% for the
+control: beyond noise, the own-half bonus alone outweighs the other half's
+separation of the mode for 3%, 10% and 23% of particles. On the merged
+reference the matcher uses the particle's share is half, so 1-3 nats in
+stage 5 against gaps of a few nats.
+
+**The own half keeps the inserted direction more often than the other
+half.** The deterministic own-half mode is the inserted direction for 78%,
+84%, 71% of particles (stages 3-5), the other half's for 76%, 79%, 62%, the
+matcher's merged reference for 78%, 84%, 69%. Where the two halves
+disagree on the mode (12%, 14%, 24% of particles) the own half keeps the
+inserted direction 44%, 64%, 59% of the time, the other half 30%, 30%, 23%.
+The halves' modes coincide (rank_x = 1) for 88%, 86%, 76% of particles,
+median dist_x 0 deg, more than 20 deg apart for 3% at every stage: the two
+halves agree far more than the production search agrees with either (next
+paragraph). Posteriors on either real half are sharp: median n_eff_h
+1.10/1.01/1.07, n_eff_x 1.11/1.01/1.14, f(n_eff_h > 2) 14%/4%/11%.
+
+**The production row's mode is the inserted direction far less often than
+any deterministic row's: 46%, 39%, 21%.** The production row (likelihood-
+sampled in-plane for every direction, the top `projs_ns` refined) agrees
+with the deterministic row on the same references for 61%, 54%, 46% of
+particles (`rank_d` = 1), while two deterministic rows on *different data*
+(the two halves) agree for 88%, 86%, 76%. With the caveat that the
+deterministic rows of this run are at a slightly wrong shift, the ordering
+is not in doubt: the sampled in-plane rotation stores, for most
+directions, a loss above the direction's best, so the row's minimum and
+its exponential are dominated by which directions happened to draw their
+best rotation. This is section 9's search effect measured against
+independent data, and it says the production row as filled is not the data
+posterior over directions; a posterior for section 4 has to be built from
+deterministic best-in-plane values (the refined set, or a row scored at the
+best rotation), not by exponentiating the table as it stands.
+
+**Null test (invalid in this run, kept for the record).** `null_a` median
++0.5, +1.0, +2.0 nats with p90 22-32 and `null_b` the same to within 5%:
+both columns used the wrong frame (section 11), and the re-run with
+`mode_src` decides it. A median of a nat with a tail to tens is the size a
+frame error on sub-pixel refined shifts gives at these bands (a 0.2 px
+error is a third of a radian at the band edge), so the result is consistent
+with the diagnostic's error and says nothing yet about the search's
+bookkeeping.
+
+**Consequences for the design.** (1) Self-reinforcement at 1-7 nats on the
+own half, 0.5-3.5 on the merged reference, against mode gaps of a few nats,
+is a locking force in stage 5 and beyond; marginalization over the row
+posterior does not remove it (the bonus is in the row), so section 4 must
+be paired with references the particle did not enter (gold-standard
+scoring: score even particles against the odd half's reprojections and vice
+versa, which the diagnostic model already builds) or with a correction for
+the particle's own contribution. (2) The posterior must come from
+deterministic best-in-plane values. (3) The halves' disagreement on the
+mode (12-24%, mostly neighbouring directions) is the honest uncertainty
+the data leave at these bands; it is what a draw from the posterior should
+reproduce, and it is small compared with the production search's own
+scatter, which should be removed first.
 

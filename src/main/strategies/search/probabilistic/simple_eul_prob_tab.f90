@@ -412,7 +412,7 @@ contains
             t0 = omp_get_wtime()
             call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
-            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3))
+            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3), l_bank_seed)
             call o_prev_loc%kill
         end subroutine process_particle_with_shift
 
@@ -427,7 +427,7 @@ contains
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
             enddo
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
-            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.])
+            if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.], .false.)
         end subroutine process_particle_without_shift
 
         !> The pose posterior over the particle's finished production row (likelihood-sampled in-plane,
@@ -435,15 +435,19 @@ contains
         !! spread of the references holding 99% of the mass about the mode (the mode's state, across the
         !! symmetry operations). Then the controls (doc/implementation_notes/planned/pose_marginalization.md
         !! sections 5 and 11): the identical-pose null test, the kernel re-scored at the production mode's
-        !! exact (reference, shift, grid rotation) against the stored loss; the deterministic row on the
-        !! matcher's references (best grid rotation at the seed shift, no sampling, no refinement), the
+        !! exact (reference, shift, grid rotation) against the stored loss, with the kernel the stored value
+        !! came from (the shift search's shifted-reference kernel at the frame-converted stored shift, or the
+        !! seed bank); the deterministic row on the matcher's references (best grid rotation at the
+        !! particle-frame seed, through the bank when the particle has one, no sampling, no refinement), the
         !! search test; and, when the real halves are loaded beside the references, the same deterministic
         !! row on the particle's own real half and on the other one, the reference test, with the
         !! self-reinforcement test at the pose the particle went into its half with.
-        subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc, shift_xy )
+        subroutine posterior_diag( i_loc, iptcl_loc, ithr_loc, shift_xy, l_bank )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_xy(2)
+            logical, intent(in) :: l_bank
             type(ori) :: o_prev_loc
+            logical   :: l_refined
             real     :: temp, pmax, neff, euls_min(3), euls_d(3), euls_h(3), euls_x(3), euls_sym(3), euldist, inpldist
             real     :: sh_mode(2), sh_kernel(2), dist_loc, dist_at, dist_own, dist_other
             integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, irot_min, j_loc
@@ -467,25 +471,50 @@ contains
             post_batch(i_loc)%lmin   = rows_batch(imin,i_loc)%dist
             euls_min = self%b_ptr%eulspace%get_euler(iproj_min)
             post_batch(i_loc)%spread = spread_about(istate_min, euls_min, k99, post_w(:,ithr_loc), post_inds(:,ithr_loc))
-            ! the null test: the production mode's shift as stored (the refined shift when it was refined,
-            ! rotated to the frame of reference by the search; the seed shift otherwise)
-            sh_mode = shift_xy
+            ! the null test, with the kernel the stored value came from. A refined mode: the shift search's
+            ! shifted-reference kernel (gen_euclids) at the stored shift, which the search returns in the
+            ! particle frame (shift_ref2ptcl of the kernel-frame minimizer), converted back with shift_ptcl2ref;
+            ! null_b is the stored shift fed to the kernel as it is, the wrong frame. An unrefined mode with a
+            ! seed bank: the bank kernel at the stored rotation; null_b the shifted-reference kernel at the
+            ! frame-converted seed, which differs by the angular Nyquist bin the latter drops. Neither: the
+            ! unshifted kernel for both.
+            l_refined = .false.
+            sh_mode   = shift_xy
             do j_loc = 1,nrefined_batch(i_loc)
                 if( refined_batch(j_loc,i_loc)%ri == imin )then
-                    sh_mode = [refined_batch(j_loc,i_loc)%x, refined_batch(j_loc,i_loc)%y]
+                    sh_mode   = [refined_batch(j_loc,i_loc)%x, refined_batch(j_loc,i_loc)%y]
+                    l_refined = .true.
                     exit
                 endif
             end do
             if( irot_min >= 1 )then
-                sh_kernel = shift_ref2ptcl(sh_mode, self%b_ptr%pftc%get_rot(irot_min))
-                call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_kernel, irot_min, dist_at)
-                post_batch(i_loc)%null_a = temp * (dist_at - rows_batch(imin,i_loc)%dist)
-                call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_mode, irot_min, dist_at)
-                post_batch(i_loc)%null_b = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                if( l_refined )then
+                    post_batch(i_loc)%mode_src = 1
+                    sh_kernel = shift_ptcl2ref(sh_mode, self%b_ptr%pftc%get_rot(irot_min))
+                    call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_kernel, irot_min, dist_at)
+                    post_batch(i_loc)%null_a = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                    call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_mode, irot_min, dist_at)
+                    post_batch(i_loc)%null_b = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                else if( l_bank )then
+                    post_batch(i_loc)%mode_src = 2
+                    call self%b_ptr%pftc%gen_euclid_val_at_bank(self%ref_full(imin), iptcl_loc, seed_bank(:,:,ithr_loc), irot_min, dist_at)
+                    post_batch(i_loc)%null_a = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                    sh_kernel = shift_ptcl2ref(shift_xy, self%b_ptr%pftc%get_rot(irot_min))
+                    call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, sh_kernel, irot_min, dist_at)
+                    post_batch(i_loc)%null_b = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                else
+                    post_batch(i_loc)%mode_src = 3
+                    call self%b_ptr%pftc%gen_euclid_val_at(self%ref_full(imin), iptcl_loc, [0.,0.], irot_min, dist_at)
+                    post_batch(i_loc)%null_a = temp * (dist_at - rows_batch(imin,i_loc)%dist)
+                    post_batch(i_loc)%null_b = post_batch(i_loc)%null_a
+                endif
             endif
-            ! the deterministic row on the own slot: the search test
+            ! the deterministic row on the matcher's references: the search test. The production search scored
+            ! every reference at the particle-frame seed through the bank (a reference shift is one frame per
+            ! rotation, so the seed cannot be fed to the shifted-reference kernel); without a bank the seed is
+            ! below the shift tolerance and the unshifted kernel is the production's
             do ri_loc = 1,self%nrefs
-                call self%b_ptr%pftc%gen_best_objfun_val(self%ref_full(ri_loc), iptcl_loc, shift_xy, dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc), iptcl_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
                 post_d(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_d(:,ithr_loc), temp, post_wd(:,ithr_loc), &
@@ -506,7 +535,7 @@ contains
             ! the deterministic row on the particle's own real half: the references of the diagnostic model
             ! follow the matcher's, direction for direction
             do ri_loc = 1,self%nrefs
-                call self%b_ptr%pftc%gen_best_objfun_val(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, shift_xy, dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, ithr_loc, l_bank, .false., dist_loc, irot_loc)
                 post_h(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_h(:,ithr_loc), temp, post_wh(:,ithr_loc), &
@@ -524,7 +553,7 @@ contains
             post_batch(i_loc)%rank_h = rank_in_row(post_h(:,ithr_loc), imin_d)
             ! the same row on the other real half: the reference test
             do ri_loc = 1,self%nrefs
-                call self%b_ptr%pftc%gen_best_euclid_val_cross(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, shift_xy, dist_loc, irot_loc)
+                call deterministic_best(self%ref_full(ri_loc) + self%nrefs, iptcl_loc, ithr_loc, l_bank, .true., dist_loc, irot_loc)
                 post_x(ri_loc,ithr_loc) = dist_loc
             end do
             call posterior_row_stats(self%nrefs, post_x(:,ithr_loc), temp, post_wx(:,ithr_loc), &
@@ -565,6 +594,23 @@ contains
             endif
             call o_prev_loc%kill
         end subroutine posterior_diag
+
+        !> the Euclidean loss of reference iref (the calculator's index) at its best grid rotation, at the
+        !! particle-frame seed through the bank when the particle has one, unshifted otherwise; own slot or,
+        !! with cross, the other half's
+        subroutine deterministic_best( iref, iptcl_loc, ithr_loc, l_bank_loc, cross, dist_loc, irot_loc )
+            integer, intent(in)  :: iref, iptcl_loc, ithr_loc
+            logical, intent(in)  :: l_bank_loc, cross
+            real,    intent(out) :: dist_loc
+            integer, intent(out) :: irot_loc
+            if( l_bank_loc )then
+                call self%b_ptr%pftc%gen_best_euclid_val_bank(iref, iptcl_loc, seed_bank(:,:,ithr_loc), dist_loc, irot_loc, cross=cross)
+            else if( cross )then
+                call self%b_ptr%pftc%gen_best_euclid_val_cross(iref, iptcl_loc, [0.,0.], dist_loc, irot_loc)
+            else
+                call self%b_ptr%pftc%gen_best_objfun_val(iref, iptcl_loc, [0.,0.], dist_loc, irot_loc)
+            endif
+        end subroutine deterministic_best
 
         !> the rank of reference iref in a row of losses (1: the lowest)
         integer function rank_in_row( row, iref ) result( rank )
@@ -719,7 +765,7 @@ contains
                 &'iproj_d lmin_d pmax_d neff_d k99_d spread_d_deg dist_d_deg rank_d '//&
                 &'iproj_h lmin_h pmax_h neff_h k99_h spread_h_deg dist_h_deg rank_h '//&
                 &'iproj_x lmin_x pmax_x neff_x k99_x spread_x_deg dist_x_deg rank_x '//&
-                &'iproj_p self_nats ctrl_nats'
+                &'iproj_p self_nats ctrl_nats mode_src'
             if( self%post_slots_identical )then
                 write(self%post_unit,'(A)') '# slots_identical yes'
             else
@@ -739,7 +785,7 @@ contains
                 &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,'//&
                 &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,'//&
                 &'1X,I0,1X,ES13.6,1X,F8.5,1X,F10.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,'//&
-                &'1X,I0,1X,ES13.6,1X,ES13.6)') &
+                &'1X,I0,1X,ES13.6,1X,ES13.6,1X,I0)') &
                 &post_batch(i)%iptcl, post_batch(i)%istate, post_batch(i)%iproj, post_batch(i)%nvalid, &
                 &post_batch(i)%lmin, post_batch(i)%temp, post_batch(i)%pmax, post_batch(i)%neff, &
                 &post_batch(i)%k99, post_batch(i)%spread, &
@@ -750,7 +796,7 @@ contains
                 &post_batch(i)%k99_h, post_batch(i)%spread_h, post_batch(i)%dist_h, post_batch(i)%rank_h, &
                 &post_batch(i)%iproj_x, post_batch(i)%lmin_x, post_batch(i)%pmax_x, post_batch(i)%neff_x, &
                 &post_batch(i)%k99_x, post_batch(i)%spread_x, post_batch(i)%dist_x, post_batch(i)%rank_x, &
-                &post_batch(i)%iproj_p, post_batch(i)%self_nats, post_batch(i)%ctrl_nats
+                &post_batch(i)%iproj_p, post_batch(i)%self_nats, post_batch(i)%ctrl_nats, post_batch(i)%mode_src
         end do
     end subroutine write_posterior_diag
 
