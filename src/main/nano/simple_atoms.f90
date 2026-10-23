@@ -1447,40 +1447,49 @@ contains
         THROW_WARN('PDB atomic center moved to the center of the box; center_pdbcoord')
     end subroutine center_pdbcoord
 
-    subroutine map_validate( self, vol1, vol2, filename )
+    subroutine map_validate( self, vol1, vol2, filename, smpd_target )
         use simple_image, only: image
         class(atoms),            intent(inout) :: self
         type(image),             intent(in)    :: vol1, vol2
         class(string), optional, intent(in)    :: filename
+        real,          optional, intent(in)    :: smpd_target
         type(image) :: vol_at1, vol_at2
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3), i_res, funit
-        real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
-        logical     :: outside
+        integer     :: i_atom, atom_box, box_scaled, i_res, funit, ldim(3)
+        real        :: atom_coord(3), smpd, smpd_work, cc, cc_score, cc_score_byres, sdev
+        logical     :: outside1, outside2
         logical, allocatable :: mask_byres(:)
-        smpd = vol1%get_smpd()
+        smpd      = vol1%get_smpd()
+        smpd_work = smpd
+        if( present(smpd_target) )then
+            if( smpd_target <= 0. ) THROW_HARD('smpd_target must be positive; map_validate')
+            if( smpd_target < smpd )then
+                ! Match the effective sampling produced by padding the complete map to an even box.
+                ldim       = vol1%get_ldim()
+                box_scaled = round2even(real(ldim(1)) * smpd / smpd_target)
+                smpd_work  = smpd * real(ldim(1)) / real(box_scaled)
+            endif
+        endif
         if( present(filename) )then
             call fopen(funit, FILE=filename//".csv", STATUS='NEW', action='WRITE')
         endif
         do i_atom = 1, self%n
-            atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
+            atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd_work))
             if( atom_box <= 2 )then !for cases where the atom box is too small
                 atom_box = 4
             endif 
             call self%extract_atom(atom, i_atom)
             atom_coord(:) = atom%get_coord(1)
-            ! extract the atom volume from the molecule volume 1
-            call vol_at1%new([atom_box, atom_box, atom_box], smpd)
-            call vol_at2%new([atom_box, atom_box, atom_box], smpd)
-            ! 0-based corner (window_slim adds 1) of the box whose voxel atom_box/2+1 holds the atom,
-            ! where center_inbox puts the simulated atom; ang2vox is 1-based, hence the -1
-            center(:) = ang2vox(atom_coord(:), smpd) - 1 - atom_box/2
-            call vol1%window_slim(center, atom_box, vol_at1, outside)
+            call sample_atom_window(vol1, atom_coord, atom_box, smpd_work, vol_at1, outside1)
+            call sample_atom_window(vol2, atom_coord, atom_box, smpd_work, vol_at2, outside2)
             call vol_at1%mask3D_soft(real(atom_box)/2.)
-            call vol2%window_slim(center, atom_box, vol_at2, outside)
             call vol_at2%mask3D_soft(real(atom_box)/2.)
             ! compute cross-correlation between both volumes
-            cc = vol_at1%real_corr(vol_at2)
+            if( outside1 .or. outside2 )then
+                cc = 0.
+            else
+                cc = vol_at1%real_corr(vol_at2)
+            endif
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
             if( present(filename) )then
@@ -1517,31 +1526,29 @@ contains
         class(atoms),  intent(inout) :: self
         real,          intent(in)    :: smpd, smpd_target
         class(string), intent(in)    :: pdb_file, exp_vol_file, even_vol_file, odd_vol_file
-        type(image)       :: exp_vol, even_vol, odd_vol
-        real              :: smpd_new, upscaling_factor
-        real, allocatable :: beta_map_model(:), beta_even_odd(:)
-        integer           :: ifoo, ldim(3), ldim_new(3), box, box_new, natoms
-        natoms = self%n; allocate(beta_map_model(natoms),beta_even_odd(natoms))
+        type(image) :: exp_vol, even_vol, odd_vol
+        integer     :: ifoo, ldim(3), box, box_scaled
+        real        :: smpd_work
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
-        box              = ldim(1)
-        upscaling_factor = smpd / smpd_target
-        box_new          = round2even(real(ldim(1)) * upscaling_factor)
-        ldim_new(:)      = box_new
-        upscaling_factor = real(box_new) / real(box)
-        smpd_new         = smpd / upscaling_factor
-        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        box = ldim(1)
+        smpd_work = smpd
+        if( smpd_target < smpd )then
+            box_scaled = round2even(real(box) * smpd / smpd_target)
+            smpd_work  = smpd * real(box) / real(box_scaled)
+        endif
+        write(logfhandle,'(a,f8.3,a)') 'Local atom-window sampling: ', smpd_work, ' Angstrom'
         call self%new(pdb_file)
         if( any(self%xyz(:,:) < 0.) )then
             write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
             call self%center_pdbcoord(ldim, smpd)
         endif
-        call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
-        call even_vol%read_and_crop(even_vol_file, smpd, box_new, smpd_new)
-        call odd_vol%read_and_crop(odd_vol_file, smpd, box_new, smpd_new)
-        call self%atom_validate(exp_vol, string('experimental'))
-        call self%atom_validate(even_vol, string('exp-even'))
-        call self%atom_validate(odd_vol, string('exp-odd'))
+        call exp_vol%read_and_crop(exp_vol_file, smpd, box, smpd)
+        call even_vol%read_and_crop(even_vol_file, smpd, box, smpd)
+        call odd_vol%read_and_crop(odd_vol_file, smpd, box, smpd)
+        call self%atom_validate(exp_vol, string('experimental'), smpd_target)
+        call self%atom_validate(even_vol, string('exp-even'), smpd_target)
+        call self%atom_validate(odd_vol, string('exp-odd'), smpd_target)
         call exp_vol%kill
         call even_vol%kill
         call odd_vol%kill
@@ -1552,67 +1559,74 @@ contains
         class(atoms),  intent(inout) :: self
         class(string), intent(in)    :: pdb_file, exp_vol_file
         real,          intent(in)    :: smpd, smpd_target
-        type(string) :: upscale_vol_file
         type(image)  :: exp_vol
-        real         :: smpd_new, upscaling_factor
-        integer      :: ifoo, ldim(3), ldim_new(3), box, box_new     
-        upscale_vol_file = get_fbody(exp_vol_file,string('mrc'))//'_upscale.mrc'
+        integer      :: ifoo, ldim(3), box, box_scaled
+        real         :: smpd_work
         call find_ldim_nptcls(exp_vol_file, ldim, ifoo)
         write(logfhandle,'(a,3i6,a,f8.3,a)') 'Original dimensions (', ldim,' ) voxels, smpd: ', smpd, ' Angstrom'
-        box              = ldim(1)
-        upscaling_factor = smpd / smpd_target
-        box_new          = round2even(real(ldim(1)) * upscaling_factor)
-        ldim_new(:)      = box_new
-        upscaling_factor = real(box_new) / real(box)
-        smpd_new         = smpd / upscaling_factor
-        write(logfhandle,'(a,3i6,a,f8.3,a)') 'Scaled dimensions   (', ldim_new,' ) voxels, smpd: ', smpd_new, ' Angstrom'
+        box = ldim(1)
+        smpd_work = smpd
+        if( smpd_target < smpd )then
+            box_scaled = round2even(real(box) * smpd / smpd_target)
+            smpd_work  = smpd * real(box) / real(box_scaled)
+        endif
+        write(logfhandle,'(a,f8.3,a)') 'Local atom-window sampling: ', smpd_work, ' Angstrom'
         call self%new(pdb_file)
         if( any(self%xyz(:,:) < 0.) )then
             write(logfhandle,'(A)') 'Warning: PDB atomic center moved to the center of the box'
             call self%center_pdbcoord(ldim, smpd)
         endif
-        call exp_vol%read_and_crop(exp_vol_file, smpd, box_new, smpd_new)
-        call exp_vol%write(upscale_vol_file)
-        call self%atom_validate(exp_vol, string('model_val_corr'))
+        call exp_vol%read_and_crop(exp_vol_file, smpd, box, smpd)
+        call self%atom_validate(exp_vol, string('model_val_corr'), smpd_target)
         call exp_vol%kill()
     end subroutine model_validate
 
-    subroutine atom_validate( self, vol, filename )
+    subroutine atom_validate( self, vol, filename, smpd_target )
         use simple_image, only: image
         class(atoms),            intent(inout) :: self
         type(image),             intent(in)    :: vol
         class(string), optional, intent(in)    :: filename
+        real,          optional, intent(in)    :: smpd_target
         type(image) :: vol_atom, vol_at
         type(atoms) :: atom
-        integer     :: i_atom, atom_box, center(3), i_res, funit
-        real        :: atom_coord(3), smpd, cc, cc_score, cc_score_byres, sdev
+        integer     :: i_atom, atom_box, box_scaled, i_res, funit, ldim(3)
+        real        :: atom_coord(3), smpd, smpd_work, cc, cc_score, cc_score_byres, sdev
         logical     :: outside
         logical, allocatable :: mask_byres(:)
-        cc_score = 0.
-        smpd     = vol%get_smpd()
+        cc_score  = 0.
+        smpd      = vol%get_smpd()
+        smpd_work = smpd
+        if( present(smpd_target) )then
+            if( smpd_target <= 0. ) THROW_HARD('smpd_target must be positive; atom_validate')
+            if( smpd_target < smpd )then
+                ! Match the effective sampling produced by padding the complete map to an even box.
+                ldim       = vol%get_ldim()
+                box_scaled = round2even(real(ldim(1)) * smpd / smpd_target)
+                smpd_work  = smpd * real(ldim(1)) / real(box_scaled)
+            endif
+        endif
         if(present(filename))then
             call fopen(funit, FILE=filename//".csv", STATUS='NEW', action='WRITE')
         endif
         do i_atom = 1, self%n
-            atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd))
+            atom_box = round2even(2 * (((self%radius(i_atom))*1.5)/smpd_work))
             if( atom_box <= 2 )then !for cases where the atom box is too small
                 atom_box = 4
             endif 
             ! generate simulated atom volume
-            call vol_atom%new([atom_box, atom_box, atom_box], smpd)
+            call vol_atom%new([atom_box, atom_box, atom_box], smpd_work)
             call self%extract_atom(atom, i_atom)
             atom_coord(:) = atom%get_coord(1)
-            call atom%center_inbox(1, atom_box, smpd)
-            call atom%convolve(vol_atom, cutoff = 8*smpd)
-            ! extract the atom volume from the molecule volume
-            call vol_at%new([atom_box, atom_box, atom_box], smpd)
-            ! 0-based corner (window_slim adds 1) of the box whose voxel atom_box/2+1 holds the atom,
-            ! where center_inbox puts the simulated atom; ang2vox is 1-based, hence the -1
-            center(:) = ang2vox(atom_coord(:), smpd) - 1 - atom_box/2
-            call vol%window_slim(center, atom_box, vol_at, outside)
+            call atom%center_inbox(1, atom_box, smpd_work)
+            call atom%convolve(vol_atom, cutoff = 8*smpd_work)
+            call sample_atom_window(vol, atom_coord, atom_box, smpd_work, vol_at, outside)
             call vol_at%mask3D_soft(real(atom_box)/2.)
             ! compute cross-correlation between both volumes
-            cc       = vol_atom%real_corr(vol_at)
+            if( outside )then
+                cc = 0.
+            else
+                cc = vol_atom%real_corr(vol_at)
+            endif
             cc_score = cc_score + cc
             call self%set_atom_corr(i_atom, cc)
             call self%set_beta(i_atom, cc)
@@ -1641,6 +1655,117 @@ contains
             call self%writepdb(filename//'.pdb')
         endif
     end subroutine atom_validate
+
+    !> Fourier-oversample an atom-centered cube without rescaling the complete input volume.
+    subroutine sample_atom_window( vol, atom_coord, box, smpd_out, vol_out, outside )
+        use simple_image, only: image
+        type(image), intent(in)    :: vol
+        real,        intent(in)    :: atom_coord(3), smpd_out
+        integer,     intent(in)    :: box
+        type(image), intent(inout) :: vol_out
+        logical,     intent(out)   :: outside
+        integer, parameter :: HALO = 8
+        type(image) :: vol_native, vol_fine
+        real    :: anchor_coord(3), fine_coord(3), frac(3), grid(3), point(3), &
+            &scale, smpd_fine, smpd_in, val, wx, wy, wz
+        integer :: atom_vox(3), box_core, box_fine, box_native, center, corner_native(3), &
+            &edge, halo_here, hi(3), i, ii, j, jj, k, kk, ldim(3), lo(3), max_box, os_factor
+        ldim    = vol%get_ldim()
+        smpd_in = vol%get_smpd()
+        call vol_out%new([box, box, box], smpd_out)
+        outside = .false.
+        atom_vox = ang2vox(atom_coord, smpd_in)
+        if( smpd_out >= smpd_in - 10. * epsilon(smpd_in) )then
+            corner_native = atom_vox - 1 - box/2
+            call vol%window_slim(corner_native, box, vol_out, outside)
+            return
+        endif
+        box_core = max(4, ceiling(real(box) * smpd_out / smpd_in))
+        if( mod(box_core, 2) /= 0 ) box_core = box_core + 1
+        max_box = 2 * minval(min(atom_vox - 1, ldim - atom_vox + 1))
+        box_native = min(box_core + 2 * HALO, max_box)
+        if( mod(box_native, 2) /= 0 ) box_native = box_native - 1
+        if( box_native < box_core )then
+            outside = .true.
+            return
+        endif
+        corner_native = atom_vox - 1 - box_native/2
+        call vol_native%new([box_native, box_native, box_native], smpd_in)
+        call vol%window_slim(corner_native, box_native, vol_native, outside)
+        if( outside )then
+            call vol_native%kill
+            return
+        endif
+        ! The untouched central core supplies the score window; taper only the halo so the
+        ! extracted cube can be treated as periodic without ringing from its artificial edges.
+        halo_here = (box_native - box_core) / 2
+        do k = 1,box_native
+            edge = min(k - 1, box_native - k)
+            wz = 1.
+            if( edge < halo_here ) wz = sin(0.5 * PI * real(edge) / real(halo_here))**2
+            do j = 1,box_native
+                edge = min(j - 1, box_native - j)
+                wy = 1.
+                if( edge < halo_here ) wy = sin(0.5 * PI * real(edge) / real(halo_here))**2
+                do i = 1,box_native
+                    edge = min(i - 1, box_native - i)
+                    wx = 1.
+                    if( edge < halo_here ) wx = sin(0.5 * PI * real(edge) / real(halo_here))**2
+                    val = vol_native%get_rmat_at(i, j, k)
+                    call vol_native%set_rmat_at(i, j, k, wx * wy * wz * val)
+                enddo
+            enddo
+        enddo
+        scale = smpd_in / smpd_out
+        os_factor = max(2, ceiling(scale - 10. * epsilon(scale)))
+        if( abs(scale - real(os_factor)) > 1.e-5 ) os_factor = os_factor + 1
+        box_fine  = box_native * os_factor
+        call vol_fine%copy(vol_native)
+        call vol_fine%fft
+        call vol_fine%pad_inplace([box_fine, box_fine, box_fine], antialiasing=.false.)
+        call vol_fine%ifft
+        smpd_fine   = vol_fine%get_smpd()
+        anchor_coord = real(atom_vox - 1) * smpd_in
+        fine_coord   = real(ang2vox(atom_coord, smpd_out) - 1) * smpd_out
+        center       = box/2 + 1
+        ! Sample the Fourier-oversampled cube on the same global grid as the previous
+        ! whole-map padding route. Interpolation is only needed for non-commensurate scales.
+        do k = 1,box
+            do j = 1,box
+                do i = 1,box
+                    point = fine_coord + real([i-center, j-center, k-center]) * smpd_out
+                    grid  = (point - anchor_coord) / smpd_fine + real(box_fine/2 + 1)
+                    lo    = floor(grid)
+                    frac  = grid - real(lo)
+                    hi    = lo + 1
+                    where( lo == box_fine .and. abs(frac) < 10. * epsilon(1.) )
+                        hi   = lo
+                        frac = 0.
+                    end where
+                    if( any(lo < 1) .or. any(hi > box_fine) )then
+                        outside = .true.
+                        cycle
+                    endif
+                    val = 0.
+                    do kk = 0,1
+                        wz = merge(1. - frac(3), frac(3), kk == 0)
+                        do jj = 0,1
+                            wy = merge(1. - frac(2), frac(2), jj == 0)
+                            do ii = 0,1
+                                wx = merge(1. - frac(1), frac(1), ii == 0)
+                                val = val + wx * wy * wz * vol_fine%get_rmat_at(&
+                                    &merge(lo(1), hi(1), ii == 0), merge(lo(2), hi(2), jj == 0), &
+                                    &merge(lo(3), hi(3), kk == 0))
+                            enddo
+                        enddo
+                    enddo
+                    call vol_out%set_rmat_at(i, j, k, val)
+                enddo
+            enddo
+        enddo
+        call vol_native%kill
+        call vol_fine%kill
+    end subroutine sample_atom_window
 
     ! MODIFIERS
 

@@ -179,9 +179,10 @@ contains
         integer, parameter :: B3 = 32
         real,    parameter :: SMPD = 1.0
         type(atoms) :: a
-        type(image) :: vol, vol2
+        type(image) :: vol, vol2, vol_full_oversampled
         integer     :: i, nthr_saved
-        real        :: beta_min
+        integer     :: ldim_before(3)
+        real        :: beta_min, beta_native(3), beta_fine(3), beta_full_oversampled(3), smpd_before
         logical     :: ok
         write(*,'(A)') 'test_validation'
         call make_model(a)
@@ -206,12 +207,53 @@ contains
         end do
         call assert_true(ok, 'map_validate of a map against itself scores every atom 1')
         call a%atom_validate(vol)
-        beta_min = minval([(a%get_beta(i), i=1,a%get_n())])
+        beta_native = [(a%get_beta(i), i=1,a%get_n())]
+        beta_min = minval(beta_native)
         write(logfhandle,'(A,F8.4)') 'atom_validate, lowest atom correlation: ', beta_min
         call assert_true(beta_min > 0.95, 'atom_validate: every atom correlates with its own simulated density')
+        ldim_before = vol%get_ldim()
+        smpd_before = vol%get_smpd()
+        call a%atom_validate(vol, smpd_target=0.5)
+        beta_fine = [(a%get_beta(i), i=1,a%get_n())]
+        call assert_true(minval(beta_fine) > 0.90, &
+            &'atom_validate: locally oversampled atom windows retain the model signal')
+        call assert_true(all(vol%get_ldim() == ldim_before) .and. vol%get_smpd() == smpd_before, &
+            &'atom_validate: local oversampling leaves the input volume unchanged')
+        call vol_full_oversampled%copy(vol)
+        call vol_full_oversampled%fft
+        call vol_full_oversampled%pad_inplace([2*B3, 2*B3, 2*B3], antialiasing=.false.)
+        call vol_full_oversampled%ifft
+        call a%atom_validate(vol_full_oversampled)
+        beta_full_oversampled = [(a%get_beta(i), i=1,a%get_n())]
+        call assert_true(maxval(abs(beta_fine - beta_full_oversampled)) < 0.002, &
+            &'atom_validate: local oversampling agrees with whole-volume Fourier oversampling')
+        call a%map_validate(vol, vol2, smpd_target=0.5)
+        ok = .true.
+        do i = 1,a%get_n()
+            if( abs(a%get_beta(i) - 1.) > 1.e-4 ) ok = .false.
+        enddo
+        call assert_true(ok, 'map_validate: identical maps remain identical after local oversampling')
+        call a%set_coord(1, [ 8.25, 16.125, 15.75])
+        call a%set_coord(2, [16.40, 16.300, 16.20])
+        call a%set_coord(3, [23.60, 15.800, 16.35])
+        call vol%kill
+        call vol_full_oversampled%kill
+        call vol%new([B3,B3,B3], SMPD, wthreads=.false.)
+        call a%convolve(vol, cutoff=8.*SMPD)
+        call a%atom_validate(vol, smpd_target=0.6)
+        beta_fine = [(a%get_beta(i), i=1,a%get_n())]
+        call vol_full_oversampled%copy(vol)
+        call vol_full_oversampled%fft
+        call vol_full_oversampled%pad_inplace([54, 54, 54], antialiasing=.false.)
+        call vol_full_oversampled%ifft
+        call a%atom_validate(vol_full_oversampled)
+        beta_full_oversampled = [(a%get_beta(i), i=1,a%get_n())]
+        call assert_true(maxval(abs(beta_fine - beta_full_oversampled)) < 0.01, &
+            &'atom_validate: local Fourier oversampling preserves fractional-phase scores at a non-integer scale')
         call a%kill
         call vol%kill
         call vol2%kill
+        call vol_full_oversampled%kill
         call unmemoize_mask_coords ! atom_validate memoised the mask of its 4-voxel windows
     end subroutine test_validation
 
