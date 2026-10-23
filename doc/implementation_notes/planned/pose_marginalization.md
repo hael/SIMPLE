@@ -1179,11 +1179,57 @@ has is for the 2D regression to say.
 
 `PROB_POSTERIOR_TEMP_FACTOR` moved to `simple_eul_prob_tab_utils` so the
 three tables share it; the in-plane and the reference/class draws are at
-the same T_eff. Still pending from the plan: the strategy-level in-plane
-samplers (`snhc_smpl`, `inpl_smpl`, `greedy_sub`, `snhc_smpl_many`) onto
-the posterior primitive under the same key, the old samplers deleted only
-once every caller has moved and the regressions pass; the `prob_neigh`
-assignment (4.5); the beta schedule if stage 3 needs it; the known-pose
-calibration (gate item 3). Next: PfCRT x10 with the in-plane draw on, and
-a 2D regression of Hans's choosing for the class route.
+the same T_eff. Still pending from the plan after this step: the beta
+schedule if stage 3 needs it; the known-pose calibration (gate item 3).
+Next: PfCRT x10 with the in-plane draw on, and a 2D regression of Hans's
+choosing for the class route.
+
+**The strategy-level samplers and the `prob_neigh` assignment, 2026-10-23
+(built, awaiting the runs).** The temperature every draw runs at is now
+one function, `pftc%ptcl_posterior_temp(iptcl)` (the factor on
+`posterior_temperature` of the memoized self-term), used by the three
+tables and the strategies alike; `draw_posterior_scores` (utils) is
+`draw_posterior_row` over a buffer of exp(-L) scores with the strategies'
+sentinel (a score at or below zero is unscored), tested beside it.
+
+*4.5, the `prob_neigh` assignment.* The neighbourhood part file carries
+T_i after its seed table (both fills write it, `read_sparse_tab_to_glob`
+reads it). `ref_assign_neigh` branches under the key after the seeding of
+empty particles: the particle's state is the state of its closest valid
+candidate over all states (an active reference with an in-plane index,
+ties to the first in store order; the dense table's rule on the store),
+and within that state one draw from exp(-T_i (L - L_min)) over its valid
+candidates; the drawn candidate committed with its shift, the seed shift
+recorded, `frac` as the frontier records it; a particle without a valid
+candidate keeps its orientation (the frontier's leftover rule), one
+without a temperature its argmin with a warning; the log line reports the
+fraction at the mode. The pose-overlap bypass now covers `prob_neigh`
+(`check_conv3D`; the tester asserts it, and that a `shc` pass keeps its
+rule). Test (`test_ref_assign_neigh_posterior`): a synthetic store of 150
+particles over 3 states x 20 directions, 1 to 12 candidates each, some
+without an in-plane index; a huge temperature gives every particle its
+closest valid candidate with its in-plane index, distance and evaluated
+fraction; T = 2 moves some and none out of its state; seeds.
+
+*The strategies.* Each keeps its structure and gets the posterior rule
+where it drew: `snhc_smpl` and `snhc_smpl_many` draw each class's
+rotation from the posterior at the seed shift (`gen_posterior_val`; the
+batched scores through `draw_posterior_scores`) and the class from the
+posterior over the whole evaluated row, the best `snhc_smpl_ncls` entries
+shift-refined and the rest left as scored (`inpl_srch_peaks` with
+`l_keep_unrefined`: the balanced path invalidates the unrefined entries so
+its power sampler draws among the refined few, the posterior path draws
+over the mixed row as the tables do); the drawn class's shift refined as
+today. `inpl_smpl` draws the rotation from the posterior at the seed shift
+and refines the shift at it (draw, then polish; one shift search instead
+of `snhc_smpl_ninpl`). `greedy_smpl` draws each class's rotation from the
+posterior, its class selection greedy as named. 3D `refine=neigh`
+(`strategy3D_greedy_sub`) with `prob_inpl=yes` draws the neighbourhood's
+rotations from the posterior in place of the bounded sampler within the
+angular threshold; its coarse pass and peak selection stay greedy, as
+named. The old samplers (`gen_likelihood_val`, `gen_prob_objfun_val`,
+`gen_prob_power_objfun_val`, `power_sampling`, `squared_sampling`,
+`angle_sampling`) remain the default's code; they go once every caller has
+moved and the regressions have passed. No unit test covers a strategy
+(they need a calculator and images); the regressions do.
 

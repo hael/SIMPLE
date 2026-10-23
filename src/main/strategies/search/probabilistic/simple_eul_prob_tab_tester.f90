@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability table: the seed shift of an assigned candidate, the dense part files, ref_assign and its posterior branch
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, ref_assign and its posterior branch, the neighbourhood table's posterior assignment
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! ref_assign is compared with the assignment it replaced, kept here as the reference (reference_assign): on synthetic
@@ -10,9 +10,10 @@ use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
+use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -50,7 +51,175 @@ contains
         call test_draw_posterior_row()
         write(*,'(A)') 'test_ref_assign_posterior'
         call test_ref_assign_posterior()
+        write(*,'(A)') 'test_draw_posterior_scores'
+        call test_draw_posterior_scores()
+        write(*,'(A)') 'test_ref_assign_neigh_posterior'
+        call test_ref_assign_neigh_posterior()
     end subroutine run_all_eul_prob_tab_tests
+
+    !> The draw over scores stored as exp(-L) (draw_posterior_scores, the search strategies' buffers): a huge
+    !! temperature gives the largest score, never a sentinel at or below zero; the returned loss is -log of the
+    !! drawn score; at T = 1 the scores [1, e^-1, e^-2] draw as the row [0, 1, 2] does (0.665, 0.245, 0.090 to
+    !! within 0.02 over 20000 draws); a buffer of sentinels draws 0
+    subroutine test_draw_posterior_scores()
+        integer, parameter :: NDRAWS = 20000
+        real    :: scores(5), w(5), dists(5), dist
+        integer :: which, i, counts(5)
+        logical :: l_ok
+        scores = [0.3, -huge(1.), 0.9, 0., 0.5]
+        call seed_rnd_fixed(20261024)
+        l_ok = .true.
+        do i = 1,50
+            call draw_posterior_scores(5, scores, huge(1.), w, dists, which, dist)
+            if( which /= 3 ) l_ok = .false.
+            if( abs(dist + log(0.9)) > 1.e-6 ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a huge temperature draws the largest score, with its loss')
+        call assert_true(dists(2) > 1.e30 .and. dists(4) > 1.e30, 'sentinel scores are invalid losses')
+        call assert_real(-log(0.3), dists(1), 1.e-6, 'a score becomes the loss -log(score)')
+        scores = [1., exp(-1.), exp(-2.), 0., -1.]
+        counts = 0
+        do i = 1,NDRAWS
+            call draw_posterior_scores(5, scores, 1., w, dists, which, dist)
+            counts(which) = counts(which) + 1
+        enddo
+        call assert_true(abs(real(counts(1))/real(NDRAWS) - 0.665) < 0.02 .and. &
+            &abs(real(counts(2))/real(NDRAWS) - 0.245) < 0.02 .and. abs(real(counts(3))/real(NDRAWS) - 0.090) < 0.02, &
+            &'at T = 1 the scores [1, e^-1, e^-2] draw with [0.665, 0.245, 0.090]')
+        call assert_int(0, counts(4) + counts(5), 'sentinel scores are never drawn')
+        scores = [0., 0., -1., 0., 0.]
+        call draw_posterior_scores(5, scores, 1., w, dists, which, dist)
+        call assert_int(0, which, 'a buffer of sentinels draws 0')
+    end subroutine test_draw_posterior_scores
+
+    !> prob_assign=posterior on the neighbourhood table (ref_assign_neigh, section 4.5): a synthetic candidate
+    !! store of 150 particles over 3 states x 20 directions (1 to 12 candidates each, some without an in-plane
+    !! index; every particle has a valid one, since a particle without one is re-seeded through the calculator,
+    !! which this test has not). At a huge temperature every particle takes the state of its closest valid
+    !! candidate and the argmin within it, with its in-plane index and distance and the evaluated fraction. At
+    !! T = 2 some particles leave the mode and none its state; the same seed gives the same assignment, another
+    !! seed another.
+    subroutine test_ref_assign_neigh_posterior()
+        integer, parameter :: NSPACE = 20, NSTATES = 3, NP = 150
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab_neigh) :: tab
+        type(prob_candidate), allocatable :: cands(:)
+        integer, allocatable :: counts(:), pinds(:), state_best(:), ref_best(:), run1(:), run2(:)
+        real,    allocatable :: dist_best(:)
+        integer :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref, nvalid
+        nrefs = NSPACE * NSTATES
+        allocate(params, build)
+        params%nspace          = NSPACE
+        params%nstates         = NSTATES
+        params%prob_athres     = 10.
+        params%l_doshift       = .false.
+        params%prob_neigh_mode = 'snhc'
+        params%l_prob_assign_posterior = .true.
+        call seed_rnd_fixed(SEED_TAB)
+        allocate(build%spproj_field)
+        call build%spproj_field%new(NP, is_ptcl=.true.)
+        do i = 1,NP
+            call build%spproj_field%set_state(i, mod(i-1, NSTATES) + 1)
+            call build%spproj_field%set(i, 'sampled', 1.)
+            call build%spproj_field%set(i, 'dist',    20. * ran3())
+        enddo
+        pinds = [(i, i=1,NP)]
+        allocate(counts(NP))
+        do i = 1,NP
+            counts(i) = 1 + int(ran3() * 11.)
+        enddo
+        allocate(cands(sum(counts)))
+        n = 0
+        do i = 1,NP
+            do k = 1,counts(i)
+                n = n + 1
+                cands(n)%iref = 1 + int(ran3() * real(nrefs))       ! a full reference index (state, direction)
+                cands(n)%inpl = 1 + int(ran3() * real(NROTS))
+                cands(n)%dist = 4. * ran3()
+                if( k > 1 .and. ran3() < 0.1 ) cands(n)%inpl = 0    ! not a candidate
+            enddo
+        enddo
+        ! the expected argmin per particle: the closest valid candidate over all states
+        allocate(state_best(NP), ref_best(NP), dist_best(NP), run1(NP), run2(NP))
+        n = 0
+        do i = 1,NP
+            state_best(i) = 0
+            ref_best(i)   = 0
+            dist_best(i)  = huge(1.)
+            do k = 1,counts(i)
+                if( cands(n+k)%inpl <= 0 ) cycle
+                if( cands(n+k)%dist < dist_best(i) )then
+                    dist_best(i)  = cands(n+k)%dist
+                    ref_best(i)   = cands(n+k)%iref
+                    state_best(i) = (cands(n+k)%iref - 1) / NSPACE + 1
+                endif
+            enddo
+            n = n + counts(i)
+        enddo
+        ! a huge temperature: the argmin within the argmin's state
+        call set_store(1.e9)
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        nwrong = 0
+        n = 0
+        do i = 1,NP
+            if( state_best(i) > 0 )then
+                iref = (tab%assgn_map(i)%istate - 1) * NSPACE + tab%assgn_map(i)%iproj
+                if( iref /= ref_best(i) ) nwrong = nwrong + 1
+                if( tab%assgn_map(i)%dist /= dist_best(i) ) nwrong = nwrong + 1
+                if( tab%assgn_map(i)%inpl < 1 ) nwrong = nwrong + 1
+                nvalid = 0
+                do k = 1,counts(i)
+                    if( cands(n+k)%inpl > 0 ) nvalid = nvalid + 1
+                enddo
+                if( abs(tab%assgn_map(i)%frac - 100. * real(nvalid) / real(nrefs)) > 1.e-4 ) nwrong = nwrong + 1
+            endif
+            n = n + counts(i)
+        enddo
+        call assert_int(0, nwrong, 'a huge temperature gives every particle its closest valid neighbourhood candidate')
+        call tab%kill
+        ! T = 2: some particles leave the mode, none its state; seeds
+        call set_store(2.)
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        nmoved    = 0
+        nstate_ok = 0
+        do i = 1,NP
+            run1(i) = (tab%assgn_map(i)%istate - 1) * NSPACE + tab%assgn_map(i)%iproj
+            if( state_best(i) == 0 ) cycle
+            if( run1(i) /= ref_best(i) ) nmoved = nmoved + 1
+            if( tab%assgn_map(i)%istate == state_best(i) ) nstate_ok = nstate_ok + 1
+        enddo
+        call assert_true(nmoved > 0 .and. nmoved < NP, 'at T = 2 some particles leave the mode')
+        call assert_int(NP, nstate_ok, 'the state is the argmin''s state under the draw')
+        call tab%kill
+        call set_store(2.)
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        run2 = (tab%assgn_map(:)%istate - 1) * NSPACE + tab%assgn_map(:)%iproj
+        call assert_int(0, count(run2 /= run1), 'the same seed gives the same neighbourhood posterior assignment')
+        call tab%kill
+        call set_store(2.)
+        call seed_rnd_fixed(SEED_DRAW + 1)
+        call tab%ref_assign
+        run2 = (tab%assgn_map(:)%istate - 1) * NSPACE + tab%assgn_map(:)%iproj
+        call assert_true(any(run2 /= run1), 'another seed gives another neighbourhood posterior assignment')
+        call tab%kill
+        call build%spproj_field%kill
+        deallocate(params, build, cands, counts, pinds, state_best, ref_best, dist_best, run1, run2)
+
+    contains
+
+        subroutine set_store( temp )
+            real, intent(in) :: temp
+            call tab%new_neigh_global(params, build, pinds)
+            call tab%candidate_store%new_ragged(pinds, counts)
+            tab%candidate_store%candidates = cands
+            tab%temps = temp
+        end subroutine set_store
+
+    end subroutine test_ref_assign_neigh_posterior
 
     !> The draw from a row posterior (prob_assign=posterior): a huge temperature gives a unique argmin every
     !! time and one of two equal minima with equal probability (both drawn over 50 draws, never another);

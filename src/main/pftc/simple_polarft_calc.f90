@@ -202,6 +202,7 @@ type :: polarft_calc
     procedure          :: gen_best_euclid_val_bank
     procedure          :: gen_euclid_val_at_bank
     procedure          :: ref_slots_identical
+    procedure          :: ptcl_posterior_temp
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_likelihood_euclid_val
     procedure, private :: gen_prob_power_euclid_val
@@ -786,6 +787,12 @@ interface
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iref
     end function ref_slots_identical
+
+    !> the temperature of particle iptcl's posterior draws (prob_assign=posterior)
+    module real function ptcl_posterior_temp(self, iptcl)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+    end function ptcl_posterior_temp
 
     module subroutine gen_prob_euclid_val(self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
         class(polarft_calc), target, intent(inout) :: self

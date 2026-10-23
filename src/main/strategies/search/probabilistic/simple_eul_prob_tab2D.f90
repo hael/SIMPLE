@@ -387,7 +387,7 @@ contains
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
                     if( self%p_ptr%l_prob_assign_posterior )then
-                        call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, [0.,0.], inpl_posterior_temp(self, iptcl),&
+                        call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, [0.,0.], self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
                             &inpl_dist, irot)
                     else
                         call self%b_ptr%pftc%gen_likelihood_val(icls, iptcl, [0.,0.], ninpl_smpl,&
@@ -633,9 +633,11 @@ contains
         integer,               intent(inout) :: inds_sorted(:)
         if( self%p_ptr%l_prob_assign_posterior )then
             if( l_bank )then
-                call self%b_ptr%pftc%gen_posterior_val_bank(icls, iptcl, bank, inpl_posterior_temp(self, iptcl), dist, irot)
+                call self%b_ptr%pftc%gen_posterior_val_bank(icls, iptcl, bank, self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
+                    &dist, irot)
             else
-                call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, shift_xy, inpl_posterior_temp(self, iptcl), dist, irot)
+                call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, shift_xy, self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
+                    &dist, irot)
             endif
             corr = eulprob_corr_switch(dist, self%p_ptr%cc_objfun)
         else if( l_bank )then
@@ -646,15 +648,6 @@ contains
                 &dists_sorted, inds_sorted)
         endif
     end subroutine score_seeded_class
-
-    !> the temperature of the in-plane posterior draw of particle iptcl (a calculator index): the particle's
-    !! posterior_temperature (the value the part file carries for the class draw) under the one tempering constant
-    real function inpl_posterior_temp( self, iptcl ) result(temp)
-        class(eul_prob_tab2D), intent(in) :: self
-        integer,               intent(in) :: iptcl
-        temp = PROB_POSTERIOR_TEMP_FACTOR * &
-            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
-    end function inpl_posterior_temp
 
     !> the start of a class's shift refinement: the particle-frame seed as the shift of the class at the rotation it was
     !! scored at, clamped into the search box

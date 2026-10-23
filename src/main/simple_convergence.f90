@@ -520,12 +520,13 @@ contains
         ! a Cartesian pass reports frac = 100 and an overlap any small motion meets: its own rule
         if( params%l_cart_refine ) &
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
-        ! prob_assign=posterior on the dense table (refine=prob; the neighbourhood tables keep the balanced
-        ! frontier in this step): the committed pose is a draw from the row posterior and sits near the
-        ! posterior's own stability from a stage's first iterations, so the pose-overlap rule would end
-        ! the stage at once and cannot tell a frozen assignment from convergence; the stage ends on the
-        ! resolution exit below or on its iteration budget (pose_marginalization.md section 10.3)
-        if( params%l_prob_assign_posterior .and. trim(params%refine) == 'prob' .and. .not. params%l_cart_refine )then
+        ! prob_assign=posterior on the probability tables (refine=prob and prob_neigh): the committed pose is
+        ! a draw from the row posterior and sits near the posterior's own stability from a stage's first
+        ! iterations, so the pose-overlap rule would end the stage at once and cannot tell a frozen assignment
+        ! from convergence; the stage ends on the resolution exit below or on its iteration budget
+        ! (pose_marginalization.md section 10.3)
+        if( params%l_prob_assign_posterior .and. .not. params%l_cart_refine .and. &
+            &(trim(params%refine) == 'prob' .or. trim(params%refine) == 'prob_neigh') )then
             if( converged ) write(logfhandle,'(A)') '>>> POSE-OVERLAP CONVERGENCE BYPASSED (prob_assign=posterior): the stage ends on the resolution exit or its budget'
             converged = .false.
         endif

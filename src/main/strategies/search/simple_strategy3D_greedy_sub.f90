@@ -42,15 +42,21 @@ contains
         integer   :: iref, isample, loc(1), iproj, ipeak, inds(self%s%nrots)
         integer   :: peak_refs(self%s%npeaks)
         real      :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots)
-        real      :: dist, corr
+        real      :: dist, corr, temp
         logical   :: lnns(self%s%p_ptr%nspace), lcells(self%s%p_ptr%nspace_sub)
-        logical   :: l_prob_objfun
+        logical   :: l_prob_objfun, l_posterior
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
             l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
+            ! prob_assign=posterior with prob_inpl=yes: the neighbourhood's in-plane rotations are drawn from the
+            ! posterior over every grid rotation at the particle's temperature (gen_posterior_val) instead of the
+            ! bounded sampler within the angular threshold; the coarse pass and the peak selection stay greedy
+            l_posterior = self%s%p_ptr%l_prob_assign_posterior .and. self%s%p_ptr%l_prob_inpl
+            temp        = 0.
+            if( l_posterior ) temp = self%s%b_ptr%pftc%ptcl_posterior_temp(self%s%iptcl)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! search
@@ -100,7 +106,14 @@ contains
                 iref = (self%s%prev_state - 1) * self%s%p_ptr%nspace + iproj
                 if( s3D%state_exists(ref_state_from_index(iref,self%s%nprojs)) )then
                     ! identify the top scoring in-plane angle
-                    if( l_prob_objfun .and. self%s%p_ptr%l_prob_inpl )then
+                    if( l_posterior )then
+                        if( self%s%l_sh_first )then
+                            call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, self%s%xy_first, temp, dist, loc(1))
+                        else
+                            call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, [0.,0.], temp, dist, loc(1))
+                        endif
+                        corr = exp(-dist)
+                    elseif( l_prob_objfun .and. self%s%p_ptr%l_prob_inpl )then
                         if( self%s%l_sh_first )then
                             call self%s%b_ptr%pftc%gen_prob_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
                                 &s3D%smpl_inpl_athres(ref_state_from_index(iref,self%s%nprojs)), self%s%p_ptr%prob_athres,&

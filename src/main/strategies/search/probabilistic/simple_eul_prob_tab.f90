@@ -703,8 +703,8 @@ contains
             iproj_loc  = self%ref_proj(ri_loc)
             full_ref   = self%ref_full(ri_loc)
             if( self%p_ptr%l_prob_assign_posterior )then
-                call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl_loc, shift_xy, inpl_posterior_temp(iptcl_loc),&
-                    &dist_loc, irot_loc)
+                call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl_loc, shift_xy,&
+                    &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
             else
                 call self%b_ptr%pftc%gen_likelihood_val(full_ref, iptcl_loc, shift_xy,&
                     &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
@@ -719,21 +719,13 @@ contains
             real :: corr_loc
             if( self%p_ptr%l_prob_assign_posterior )then
                 call self%b_ptr%pftc%gen_posterior_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
-                    &inpl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
+                    &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
             else
                 call self%b_ptr%pftc%gen_likelihood_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
                     &inpl_likelihood_nsample(self%ref_state(ri_loc)), dist_loc, corr_loc, irot_loc,&
                     &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
             endif
         end subroutine score_ref_bank
-
-        !> the temperature of the in-plane posterior draw: the particle's (posterior_temperature, the value the
-        !! part file carries for the assignment draw) under the one tempering constant
-        real function inpl_posterior_temp( iptcl_loc ) result(temp)
-            integer, intent(in) :: iptcl_loc
-            temp = PROB_POSTERIOR_TEMP_FACTOR * &
-                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
-        end function inpl_posterior_temp
 
         !> the in-plane candidates an entry's rotation is drawn from (prob_assign=balanced): the rotations within
         !! the angular threshold. The draw at unit temperature on the normalized loss is uniform over them; that

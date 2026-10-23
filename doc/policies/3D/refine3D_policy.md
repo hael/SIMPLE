@@ -520,9 +520,26 @@ this key (`check_conv3D` bypasses it: the carried pose is stable from a
 stage's first iterations, so the overlap rule cannot tell a frozen
 assignment from convergence) but on the resolution exit (`lpexit`) or its
 iteration budget. The neighbourhood tables (`refine=prob_neigh`, solve3D's
-stages 1-2 and 6-8) keep the balanced frontier and their overlap rule in
-this step; only their in-plane draw follows the key. The 2D tables have the
-same key (`solve2D_policy.md`).
+stages 1-2 and 6-8; section 4.5 of the note, built 2026-10-23) follow the
+same rule on their candidate store: the particle's state is the state of
+its closest valid candidate over all states (an active reference with an
+in-plane index), and within that state one draw from exp(-T_i (L - L_min))
+over its valid candidates (`ref_assign_neigh`, `assign_particles_posterior`),
+the drawn candidate committed with its shift, `frac` as the frontier
+records it; a particle without a valid candidate keeps its orientation, as
+the frontier's leftover rule. T_i travels in the neighbourhood part file
+after the seed table (one real per particle, both fills write it). The
+pose-overlap bypass covers `prob_neigh` as it covers `prob`. The search
+strategies that drew their in-plane rotation or class with a sampler of
+their own follow the key too: `refine=neigh` (`strategy3D_greedy_sub`, with
+`prob_inpl=yes`) draws the neighbourhood's in-plane rotations from the
+posterior instead of the bounded sampler within the angular threshold; its
+coarse pass and its peak selection stay greedy. The 2D tables and the 2D
+strategies have the same key (`solve2D_policy.md`). The samplers the key
+replaces (`gen_likelihood_val`, `gen_prob_objfun_val`,
+`gen_prob_power_objfun_val`, `power_sampling`, `squared_sampling`,
+`angle_sampling`) stay as the default's code until every caller has moved
+and the regressions have passed.
 Design, measurements and the acceptance test (PfCRT, 10 of 10 restarts at
 3.6 A or better): `doc/implementation_notes/planned/pose_marginalization.md`
 sections 4, 10 and 16.
@@ -561,9 +578,11 @@ finished.
 - **The neighbourhood table (`prob_neigh`)** keeps its candidate stream
   (particle index and full candidate per entry). The neighbourhood part
   writes the number of candidates of each particle after the particle
-  indices; the driver sizes its store from these counts and then places the
-  candidates in file order (the order decides ties). The 2D table's parts
-  are described in `solve2D_policy.md`.
+  indices, then the seed table and the particle temperatures
+  (`posterior_temperature`, one real per particle, since 2026-10-23); the
+  driver sizes its store from these counts and then places the candidates
+  in file order (the order decides ties). The 2D table's parts are
+  described in `solve2D_policy.md`.
 - An empty part writes the header of its own table type. The neighbourhood
   table refuses `write_rows`, the dense table's row writer.
 

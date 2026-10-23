@@ -361,19 +361,29 @@ contains
         invalid        = self%continuous_route_outcome == CONT_ROUTE_INVALID
     end subroutine get_continuous_route_status
 
-    subroutine inpl_srch_peaks( self, npeaks_inpl )
+    !> shift-refines the npeaks_inpl best stored classes at their stored rotation. The other stored entries are
+    !! invalidated so that the class selection draws among the refined ones only, unless l_keep_unrefined: then
+    !! they stay as the search scored them (prob_assign=posterior draws over the whole evaluated row, the top
+    !! entries refined, as the probability tables do)
+    subroutine inpl_srch_peaks( self, npeaks_inpl, l_keep_unrefined )
         class(strategy2D_srch), intent(inout) :: self
         integer,                intent(in)    :: npeaks_inpl
+        logical, optional,      intent(in)    :: l_keep_unrefined
         real    :: sorted_cls_corrs(self%nrefs), cxy(3)
         integer :: sorted_cls_inds(self%nrefs), saved_inpl_inds(self%nrefs), iref, isample, inpl_ind
+        logical :: l_keep
         if( .not. s2D%do_inplsrch(self%iptcl_batch) ) return
+        l_keep = .false.
+        if( present(l_keep_unrefined) ) l_keep = l_keep_unrefined
         sorted_cls_corrs         = s2D%class_space_corrs(   :, self%ithr)
         saved_inpl_inds          = s2D%class_space_inplinds(:, self%ithr)
         sorted_cls_inds          = (/(iref,iref=1,self%nrefs)/)
         call hpsort(sorted_cls_corrs, sorted_cls_inds)
-        ! reset class-space arrays so only shift-refined entries will be valid
-        s2D%class_space_corrs(   :,self%ithr) = -1.
-        s2D%class_space_inplinds(:,self%ithr) = 0
+        if( .not. l_keep )then
+            ! reset class-space arrays so only shift-refined entries will be valid
+            s2D%class_space_corrs(   :,self%ithr) = -1.
+            s2D%class_space_inplinds(:,self%ithr) = 0
+        endif
         do isample = self%nrefs-npeaks_inpl+1,self%nrefs
             iref     = sorted_cls_inds(isample)
             inpl_ind = saved_inpl_inds(iref)

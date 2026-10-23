@@ -360,6 +360,24 @@ as to the 3D ones. The frontier code is untouched under the default. The
 key is an advanced search input of `refine2D`, `solve2D` and
 `solve2D_chunks`; the 2D convergence rules are unchanged in this step.
 
+The 2D search strategies that draw with a sampler of their own follow the
+key as well (2026-10-23): `snhc_smpl` and `snhc_smpl_many` draw each
+class's in-plane rotation from the posterior over every grid rotation at
+the seed shift (`gen_posterior_val`; the batched scores of
+`snhc_smpl_many` through `draw_posterior_scores`) and the class from the
+posterior over the whole evaluated row, its best `snhc_smpl_ncls` entries
+shift-refined and the rest as scored (`inpl_srch_peaks` with
+`l_keep_unrefined`), in place of the power sampler over the refined top
+few; the drawn class's shift is then refined as today. `inpl_smpl` draws
+the rotation of its class from the posterior at the seed shift and refines
+the shift at the drawn rotation (draw, then polish, as the tables do),
+in place of refining the best `snhc_smpl_ninpl` rotations and power
+sampling among them. `greedy_smpl` draws each class's rotation from the
+posterior in place of the squared sampler over the best `smpl_ninpl`; its
+class selection stays greedy. `snhc` (no sampler) and `greedy` are
+untouched. The old samplers stay as the default's code until every caller
+has moved and the regressions have passed.
+
 A distributed part with none of the sampled particles is valid: its table
 part writes an empty table (header, no candidates; the readers skip its
 rotation grid), and its matcher pass runs without batches, writing its

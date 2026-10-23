@@ -39,10 +39,17 @@ contains
         integer :: refs_inds(self%s%nrefs), refs_inplinds(self%s%nrefs), inds(self%s%nrots)
         integer :: iref, inpl_ind, isample, order_ind
         real    :: refs_corrs(self%s%nrefs), inpl_corrs(self%s%nrots), cxy(3)
-        real    :: inpl_corr
+        real    :: inpl_corr, inpl_dist, temp
+        logical :: l_posterior
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
+            ! prob_assign=posterior: each class's in-plane rotation is one draw from the posterior over every grid
+            ! rotation at the particle's temperature (gen_posterior_val) instead of the squared sampler over the
+            ! best smpl_ninpl; the class selection stays greedy, as the mode's name says
+            l_posterior = self%s%p_ptr%l_prob_assign_posterior
+            temp        = 0.
+            if( l_posterior ) temp = self%s%b_ptr%pftc%ptcl_posterior_temp(self%s%iptcl)
             ! Shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
@@ -51,6 +58,14 @@ contains
                 if( s2D%cls_pops(iref) == 0 )then
                     refs_corrs(iref)    = -1.
                     refs_inplinds(iref) = 0
+                else if( l_posterior )then
+                    if( self%s%l_sh_first )then
+                        call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, self%s%xy_first, temp, inpl_dist, inpl_ind)
+                    else
+                        call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, [0.,0.], temp, inpl_dist, inpl_ind)
+                    endif
+                    refs_inplinds(iref) = inpl_ind
+                    refs_corrs(iref)    = exp(-inpl_dist)
                 else
                     ! in-plane sampling
                     if( self%s%l_sh_first )then

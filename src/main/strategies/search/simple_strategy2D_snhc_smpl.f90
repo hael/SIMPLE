@@ -1,11 +1,12 @@
 !@descr: 2D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
 module simple_strategy2D_snhc_smpl
 use simple_pftc_srch_api
-use simple_strategy2D_alloc, only: s2D
-use simple_strategy2D,       only: strategy2D
-use simple_strategy2D_srch,  only: strategy2D_spec
-use simple_builder,          only: builder
-use simple_type_defs,        only: OBJFUN_EUCLID
+use simple_strategy2D_alloc,   only: s2D
+use simple_strategy2D,         only: strategy2D
+use simple_strategy2D_srch,    only: strategy2D_spec
+use simple_builder,            only: builder
+use simple_type_defs,          only: OBJFUN_EUCLID
+use simple_eul_prob_tab_utils, only: draw_posterior_scores
 implicit none
 
 public :: strategy2D_snhc_smpl
@@ -31,20 +32,29 @@ contains
         self%spec = spec
     end subroutine new_snhc_smpl
 
+    !> The stochastic neighbourhood search: the classes in random order up to the neighbourhood bound, each at a
+    !! sampled in-plane rotation at the seed shift; the best few shift-refined; the class drawn. Under
+    !! prob_assign=posterior every draw is from the posterior at the particle's temperature: the in-plane
+    !! rotation of each class over every grid rotation (gen_posterior_val), the class over the whole evaluated
+    !! row (its top entries shift-refined, the rest as scored; draw_posterior_scores), no truncation to the best
+    !! few and no power on the draw; the drawn class's shift is then refined as today (inpl_srch)
     subroutine srch_snhc_smpl( self, os )   
         class(strategy2D_snhc_smpl), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots)
-        real    :: cls_corrs(self%s%nrefs)
-        real    :: inpl_corr, inpl_dist
+        real    :: cls_corrs(self%s%nrefs), w_cls(self%s%nrefs), d_cls(self%s%nrefs)
+        real    :: inpl_corr, inpl_dist, temp, cls_dist
         integer :: sorted_cls_inds(self%s%nrefs), vec_nrots(self%s%nrots)
         integer :: iref, isample, inpl_ind, order_ind, class_rank
         integer :: nrefs_coarse_eval
-        logical :: l_prob_objfun
+        logical :: l_prob_objfun, l_posterior
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
             l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
+            l_posterior   = self%s%p_ptr%l_prob_assign_posterior
+            temp          = 0.
+            if( l_posterior ) temp = self%s%b_ptr%pftc%ptcl_posterior_temp(self%s%iptcl)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! Class search
@@ -58,7 +68,14 @@ contains
                 if(nrefs_coarse_eval > s2D%snhc_nrefs_bound) exit
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! In-plane sampling
-                if( l_prob_objfun )then
+                if( l_posterior )then
+                    if( self%s%l_sh_first )then
+                        call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, self%s%xy_first, temp, inpl_dist, inpl_ind)
+                    else
+                        call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, [0.,0.], temp, inpl_dist, inpl_ind)
+                    endif
+                    inpl_corr = exp(-inpl_dist)
+                else if( l_prob_objfun )then
                     if( self%s%l_sh_first )then
                         call self%s%b_ptr%pftc%gen_prob_power_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
                             &s2D%power, s2D%snhc_smpl_ninpl, inpl_dist, inpl_corr, inpl_ind, inpl_corrs, vec_nrots)
@@ -78,14 +95,22 @@ contains
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
             end do
             ! Performs shift search for top scoring subset
-            call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns))
+            call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns), l_keep_unrefined=l_posterior)
             ! Class selection: sample from a working copy, power_sampling sorts
             ! its correlation argument in place and class_space_corrs must stay
             ! class-indexed for store_solution/assign_ori
             cls_corrs = s2D%class_space_corrs(:, self%s%ithr)
-            call power_sampling( s2D%power, self%s%nrefs, cls_corrs, &
-                                &sorted_cls_inds, s2D%snhc_smpl_ncls, &
-                                &self%s%best_class, class_rank, self%s%best_corr )
+            if( l_posterior )then
+                ! one draw from the posterior over the evaluated classes (an unscored class is a sentinel below zero)
+                call draw_posterior_scores(self%s%nrefs, cls_corrs, temp, w_cls, d_cls, self%s%best_class, cls_dist)
+                if( self%s%best_class >= 1 .and. self%s%best_class <= self%s%nrefs )then
+                    self%s%best_corr = cls_corrs(self%s%best_class)
+                endif
+            else
+                call power_sampling( s2D%power, self%s%nrefs, cls_corrs, &
+                                    &sorted_cls_inds, s2D%snhc_smpl_ncls, &
+                                    &self%s%best_class, class_rank, self%s%best_corr )
+            endif
             self%s%nrefs_eval = nrefs_coarse_eval
             ! In-plane angle
             if( self%s%best_class < 1 .or. self%s%best_class > self%s%nrefs )then

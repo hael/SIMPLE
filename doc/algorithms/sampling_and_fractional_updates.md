@@ -176,7 +176,14 @@ particle at T_i (`gen_posterior_val`), no truncation, so the exploration of
 the in-plane draw is the data's width rather than a fixed angular window;
 this holds in the dense 3D table, in the neighbourhood tables and in the 2D
 tables, whose class assignment is the same per-particle draw over the row
-(`solve2D_policy.md`). The one tempering constant
+(`solve2D_policy.md`). The neighbourhood tables' assignment follows the
+same rule on their candidate store (the state of the closest valid
+candidate, one draw within it), and so do the search strategies with a
+sampler of their own: `refine=neigh` in 3D with `prob_inpl=yes`, and
+`snhc_smpl`, `snhc_smpl_many`, `inpl_smpl` and `greedy_smpl` in 2D draw
+their in-plane rotation, and where they drew the class, their class, from
+the posterior at the particle's temperature (`refine3D_policy.md`,
+`solve2D_policy.md`). The one tempering constant
 (`PROB_POSTERIOR_TEMP_FACTOR`, 1.0; a factor below one is hotter) applies to
 every draw. The design and its measurements are in
 `doc/implementation_notes/planned/pose_marginalization.md`.
