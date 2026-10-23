@@ -12,8 +12,7 @@
     hidden — not rendered; value or placeholder submitted silently.
     int    — number spinner, step 1.
     float  — number spinner, step 0.0001.
-    multi  — <select> dropdown; option marked selected via value or
-             placeholder flag.
+    multi  — <select> dropdown; blank by default, with saved values selected.
     dir    — text input + folder-picker icon that opens the workspace jobs iframe
              as a temporary full-screen directory selector.
     file   — text input + file-picker icon, same temporary full-screen
@@ -142,11 +141,10 @@
                                         <select id="field_{{ input.key }}" name="{{ input.key }}"
                                                 {% if input.required %}required{% endif %}
                                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput ring-1 ring-streamaction ring-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                            <option value=""></option>
                                             {% for option in input.options %}
                                                 <option value="{{ option }}"
                                                     {% if "value" in input and option == input.value %}selected
-                                                    {% elif "has_default" in input and input.has_default and option == input.default %}selected
-                                                    {% elif "placeholder" in input and option == input.placeholder %}selected
                                                     {% endif %}>{{ option }}</option>
                                             {% endfor %}
                                         </select>
@@ -375,10 +373,10 @@
                                                         <select id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                 {% if input.required %}required{% endif %}
                                                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                            <option value=""></option>
                                                             {% for option in input.options %}
                                                                 <option value="{{ option }}"
                                                                     {% if "value" in input and option == input.value %}selected
-                                                                    {% elif "value" not in input and input.has_default and option == input.default %}selected
                                                                     {% endif %}>{{ option }}</option>
                                                             {% endfor %}
                                                         </select>
@@ -600,10 +598,10 @@
                                                         <select id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                 {% if input.required %}required{% endif %}
                                                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                            <option value=""></option>
                                                             {% for option in input.options %}
                                                                 <option value="{{ option }}"
                                                                     {% if "value" in input and option == input.value %}selected
-                                                                    {% elif input.has_default and option == input.default %}selected
                                                                     {% endif %}>{{ option }}</option>
                                                             {% endfor %}
                                                         </select>
