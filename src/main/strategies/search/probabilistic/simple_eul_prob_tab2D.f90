@@ -10,7 +10,7 @@ use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index, prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
-    &posterior_temperature, draw_posterior_row, PROB_POSTERIOR_TEMP_FACTOR
+    &posterior_temperature, draw_posterior_row
 implicit none
 
 public :: eul_prob_tab2D, prob_assign_profile2D
@@ -975,7 +975,7 @@ contains
 
         !> ptcl -> class by one draw per particle from the posterior over its evaluated candidates
         !! (prob_assign=posterior): p_c proportional to exp(-T_i (L_c - L_min)) over the valid candidates (an active
-        !! class, an in-plane index), T_i the particle's temperature from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR
+        !! class, an in-plane index), T_i the particle's temperature from the fill (temps; prob_beta
         !! on it); no class forced to be populated, the drawn candidate committed with its shift, the fraction and
         !! peak count as the frontier records them. A particle without a temperature (none expected) takes its best
         !! candidate with a warning. The draws run in particle order on the master's random stream.
@@ -1009,7 +1009,7 @@ contains
                 if( n_loc < 1 )&
                     &THROW_HARD('Failed sparse posterior particle assignment in eul_prob_tab2D%ref_assign_sparse_likelihood')
                 if( ibest < 1 ) ibest = 1 ! no finite distance: any candidate
-                temp = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i_loc)
+                temp = self%p_ptr%prob_beta * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     ntemp_missing = ntemp_missing + 1
                     temp = huge(temp)
@@ -1234,7 +1234,7 @@ contains
 
         !> ptcl -> class by one draw per particle from its row posterior over the active classes
         !! (prob_assign=posterior): p_c proportional to exp(-T_i (L_c - L_min)) over the valid distances, T_i the
-        !! particle's temperature from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR on it); no class forced to be
+        !! particle's temperature from the fill (temps; prob_beta on it); no class forced to be
         !! populated, the drawn class's dense_candidate committed (its in-plane, its refined shift when refined),
         !! frac 100. A particle without a valid distance takes the first active class; one without a temperature
         !! (none expected) its argmin with a warning. The draws run in particle order on the master's random stream.
@@ -1254,7 +1254,7 @@ contains
                         iact_best = iact_loc
                     endif
                 enddo
-                temp = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i_loc)
+                temp = self%p_ptr%prob_beta * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     ntemp_missing = ntemp_missing + 1
                     temp = huge(temp)

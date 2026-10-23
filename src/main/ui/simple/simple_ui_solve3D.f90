@@ -131,6 +131,10 @@ contains
         &'forces no reference to be populated (the stages then end on the resolution exit or their budget, not on '//&
         &'the pose overlap)(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
         &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
+        &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
+        &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
+        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &

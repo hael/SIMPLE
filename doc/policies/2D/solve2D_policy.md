@@ -354,9 +354,9 @@ without a valid distance takes the first active class (dense) or its best
 candidate (sparse); one without a temperature its argmin, with a warning.
 The draws run in particle order on the master's random stream, so
 shared-memory and distributed runs draw alike; the log reports the fraction
-of particles drawn at their row mode. The one tempering constant
-(`PROB_POSTERIOR_TEMP_FACTOR`, 1.0) applies to the class and in-plane draws
-as to the 3D ones. The frontier code is untouched under the default. The
+of particles drawn at their row mode. The tempering factor `prob_beta`
+(default 1, below one hotter) multiplies the temperature of the class and
+in-plane draws as of the 3D ones. The frontier code is untouched under the default. The
 key is an advanced search input of `refine2D`, `solve2D` and
 `solve2D_chunks`; the 2D convergence rules are unchanged in this step.
 

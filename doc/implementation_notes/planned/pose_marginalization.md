@@ -1178,7 +1178,8 @@ in this step; whether the class overlap needs the bypass the 3D dense stage
 has is for the 2D regression to say.
 
 `PROB_POSTERIOR_TEMP_FACTOR` moved to `simple_eul_prob_tab_utils` so the
-three tables share it; the in-plane and the reference/class draws are at
+three tables share it (it became the run-time `prob_beta` after section
+17); the in-plane and the reference/class draws are at
 the same T_eff. Still pending from the plan after this step: the beta
 schedule if stage 3 needs it; the known-pose calibration (gate item 3).
 Next: PfCRT x10 with the in-plane draw on, and a 2D regression of Hans's
@@ -1241,4 +1242,135 @@ run there, and an error served nobody: `solve3D_cavgs
 prob_assign=posterior` died in its random-start reconstruction, which
 inherits the workflow's command line with `objfun=cc` and makes no draw.
 The two pftc primitives keep their contract guard.
+
+## 17. The posterior everywhere: PfCRT, 2026-10-23 (4_solve3D, run 8)
+
+The first run with the in-plane draw and the `prob_neigh` assignment under
+the key, `prob_assign=posterior prob_post_diag=yes`, restart 1: 116
+iterations (stages 20/20/17/15/7/-/12/25), 5.35 / 7.96 A (FSC 0.143 /
+0.5), against 4.03 and 3.98 A for the two restarts of section 16's first
+posterior runs (the key on the dense assignment only: likelihood in-plane
+everywhere, the balanced frontier in the neighbourhood stages). The 2D
+route is fine on Hans's regression; `solve3D_cavgs` on streptavidin fails
+2 of 10, which is unusual. The trajectory and the comparison with
+`prev/5_solve3D` (a 4.0 A run) are in `analysis/run8_trajectory.txt`.
+
+**Where it is lost.** Stages 1-4 end where the earlier runs end (11.1 A
+at the end of stage 4 against 10.7-11.1). Stage 5 is slower: 10.7 to 7.6 A
+over its seven iterations where the 4.0 A run went 9.4 to 5.1 over the
+same seven, and it ended on the resolution exit (FSC 0.5 at 9.70 twice,
+the shell value; FSC 0.143 still gaining 0.2-0.4 A per iteration; the
+exit's "no longer gaining" is quantised to a Fourier shell, and section
+16's restart 2 met the same exit). The neighbourhood stages do not
+recover: stage 7 8.4 to 6.8 A in 12 iterations, stage 8 6.8 to 5.3 in 25
+and still gaining, where the balanced neighbourhood stages took the 4.0 A
+run from 8.0 to 4.0 in eighteen.
+
+**What the draws did.** The fraction drawn at the row mode is 0.93 at the
+first iteration of stage 1, 0.80 at the first of stage 5 (0.63 before,
+section 16) and 0.85-0.95 through stages 7-8; the pose overlap reaches
+0.86 at the second iteration of stage 7 and 0.93 by the end; the
+posterior's median mode mass is 0.97 by the tenth iteration of stage 3
+and 0.99 in stages 4-5 (n_eff 1.02-1.05). The self test is as before:
++0.8 nats in stage 3, +2.3 in stage 4, +1.6 to +5.2 across stage 5's
+seven iterations (p90 13 nats), growing with the NU band; the search and
+reference tests are the baselines'.
+
+**Reading (corrected after Hans's objection, 2026-10-23).** The first
+reading blamed the self-term: the particle's own contribution to the
+reference makes its previous pose look 2 to 5 nats better than the data
+say, more in the deep band. The diagnostic does not support that as the
+first-order cause. Against the other real half, where there is no
+self-term, the row posterior is as narrow as the production row's: in the
+run7 reference test n_eff_x is 1.20 against 1.18 for the production row by
+the fourth iteration of stage 3, p_max 0.97. The self-term moves the mode
+for a minority of particles; it does not make the posterior sharp. At the
+physical temperature the posterior over directions is a delta with or
+without the bias, the draw is the argmin, and the map-pose alternation is
+a coordinate descent that stops at the nearest fixed point. That is what
+this run shows: section 16's first posterior runs reached 4.0 A because
+the uniform in-plane draw and the balanced frontier were still supplying
+the exploration the direction draw no longer had, and this step removed
+both. The old samplers were an ad hoc annealing, which is why their
+removal (section 15's argmin in-plane, this run) traps the search every
+time. The streptavidin failures read the same way: class averages have
+high power, T is large, every draw is the argmin from the first iteration.
+
+**What follows.** The design has this case in 4.4: the posterior at T is
+the right weight for the reconstruction, but the search from a random
+start needs a temperature above the physical one, falling to it as the
+stage settles; one constant. Section 14 calibrated the old exploration at
+beta 0.05-0.1. The next step is the constant as a run-time parameter
+applied to every draw (the in-plane, direction, class and neighbourhood
+draws share T_eff already), two restarts each at beta 0.1 and 0.3 with
+the diagnostic on, read off on the fraction at the row mode at a stage's
+first iteration (0.63 in the working regime, 0.80 here) and on stage 5's
+end resolution (5.1 A in the 4.0 A run, 7.6 here); then, if a constant
+works, the schedule rising to 1 along each stage on the measured pose
+change, so the last iterations weight at the physical posterior. The
+self-term stays on the list as a second-order correction (cross-half
+scoring from the NU stage on, section 13), after the annealing is in. The
+known-good fallback is section 16's configuration, which is not the
+design.
+
+**Built 2026-10-23: `prob_beta`.** The tempering constant is the run-time
+parameter `prob_beta` (default 1.0, the physical posterior; below one
+hotter; an advanced search input of `refine3D`, `solve3D`, `refine2D`,
+`solve2D`, `solve2D_chunks`), applied in `pftc%ptcl_posterior_temp` for
+every draw at the fills and the strategies and on the stored T_i at the
+three assignments, so every draw sits at the same T_eff; the constant is
+gone. The 3D tester pins the semantics (temps 4 at beta 0.5 draws as
+temps 2 at beta 1, draw for draw). The schedule (beta rising to 1 along a
+stage) waits until a constant is calibrated on PfCRT: beta 0.1 and 0.3,
+two restarts each, diagnostic on.
+
+## 18. After the posterior path is stable: one temperature, no thresholds (2026-10-23)
+
+Hans's standing instruction: once `prob_assign=posterior` with a
+calibrated `prob_beta` reproduces and beats production on PfCRT (section
+16's bar) and the 2D regression, the hand-set neighbourhood sizes,
+angular thresholds and sampler constants go. One temperature decides
+every draw; nothing else should. The inventory, in the order to retire
+it, each step with its own regression and nothing deleted until every
+caller has moved:
+
+1. **Already replaced by T_eff under the key** (delete once the default
+   flips to `posterior`): the in-plane angular window (`prob_athres` and
+   `dist_inpl` through `inpl_likelihood_nsample`, `calc_athres` for the
+   in-plane, `likelihood_nsample`), the bounded sampler of `refine=neigh`
+   (`gen_prob_objfun_val`, `angle_sampling`, `smpl_inpl_athres`), the power
+   and squared samplers and their constants (`power_sampling`,
+   `squared_sampling`, `EXTR_POWER`, `POST_EXTR_POWER`, `snhc_smpl_ninpl`,
+   `smpl_ninpl`), the likelihood samplers of the tables (`gen_likelihood_val`
+   and its bank form, `sample_likelihood_dist(s)`, `sample_likelihood_index`,
+   `sample_bounded_dists`, `sample_power_dists`), the balanced frontier of
+   the three tables and its draw width (`nhood_sz`, `NHOOD_FRAC`,
+   `npeaks_inpl` as a width, the frontier's `prob_athres`), the reference
+   check for flat rows that only the frontier needs.
+2. **Refinement counts, to be driven by the posterior mass**: `projs_ns`
+   from `calc_num2sample(prob_athres, dist)` in the dense 3D fill,
+   `nhood_sz`, `snhc_smpl_ncls` and `smpl_ncls` in 2D, `npeaks_inpl` in 3D.
+   The rule: shift-refine the entries holding a fixed fraction of the
+   row's posterior mass at T_eff (the diagnostic's k99: median 3-5 at a
+   stage's start, 1-2 as it settles), so the budget follows the data's
+   width and shrinks as the posterior sharpens. This retires
+   `prob_athres` from the fills.
+3. **Neighbourhood construction**, the cost control that decides what is
+   scored before anything is scored: the stochastic bound
+   (`extremal_decay`, `neigh_frac`, `snhc_nrefs_bound`, `MIN_STOCH_FINE_REFS`),
+   the subspace cells and peak counts of `prob_neigh_mode=state|geom`
+   (`npeaks`, the pooled capacity), the 2D `snhc_nrefs_bound`. The honest
+   replacement is the previous iteration's posterior mass deciding which
+   cells to re-score; a larger change, last.
+4. **Then the keys themselves**: `prob_assign` (posterior the only path),
+   `prob_inpl`, and the refine modes that only existed to pick a sampler
+   (`snhc_smpl`, `snhc_smpl_many`, `inpl_smpl`, `greedy_smpl`, and
+   `refine=neigh`'s sampled in-plane), collapsed onto the posterior path.
+   What stays is what is not a sampler: the resolution ladder, the shift
+   bounds (`trs`), the continuous polish and its bounds, `nspace`.
+
+Not before: the calibration of `prob_beta` (section 17), the schedule if
+a constant is not enough, the PfCRT 10/10 at the bar, the 2D regression,
+and the known-pose calibration of the temperature (gate item 3), which
+is what makes the one number mean what it says.
 

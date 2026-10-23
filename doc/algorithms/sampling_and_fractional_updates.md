@@ -183,9 +183,13 @@ sampler of their own: `refine=neigh` in 3D with `prob_inpl=yes`, and
 `snhc_smpl`, `snhc_smpl_many`, `inpl_smpl` and `greedy_smpl` in 2D draw
 their in-plane rotation, and where they drew the class, their class, from
 the posterior at the particle's temperature (`refine3D_policy.md`,
-`solve2D_policy.md`). The one tempering constant
-(`PROB_POSTERIOR_TEMP_FACTOR`, 1.0; a factor below one is hotter) applies to
-every draw. The design and its measurements are in
+`solve2D_policy.md`). One tempering factor, `prob_beta` (default 1, the
+physical posterior; below one hotter), multiplies the particle
+temperature of every draw: the search's annealing knob, since at the
+physical temperature the posterior over directions is a delta once the
+map has any resolution (n_eff 1.0-1.2) and the map-pose alternation then
+stops at the nearest fixed point (section 17 of the note). The design and
+its measurements are in
 `doc/implementation_notes/planned/pose_marginalization.md`.
 
 In multi-state 3D, the state label is assigned first, by the same loop with a

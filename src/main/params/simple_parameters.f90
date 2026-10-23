@@ -598,6 +598,7 @@ type :: parameters
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
+    real    :: prob_beta=1.        !< prob_assign=posterior: tempering factor on the particle temperature of every posterior draw (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob (pose_marginalization.md section 4.4){1.0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}
     real    :: res_target = 3.     !< resolution target in A

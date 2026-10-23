@@ -56,6 +56,10 @@ contains
         &'forces no reference to be populated (objfun=euclid; the stage then ends on the resolution exit or its '//&
         &'budget, not on the pose overlap)(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
         &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
+        &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
+        &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
+        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &

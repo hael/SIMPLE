@@ -513,9 +513,11 @@ bank form; `score_ref`, `score_ref_bank`), in place of the balanced fill's
 uniform draw within the angular threshold (`gen_likelihood_val`), in the
 dense table and in the neighbourhood tables (`score_seeded_ref`, the
 fallback of their assignment) alike; the refinement of the top set and the
-continuous in-plane polish are unchanged. The dense in-plane draw and the
-direction draw share the one tempering constant
-(`PROB_POSTERIOR_TEMP_FACTOR`, 1.0). A `refine=prob` stage no longer ends on the pose overlap under
+continuous in-plane polish are unchanged. Every draw (in-plane,
+direction, class, neighbourhood) runs at `prob_beta` times the particle
+temperature (`pftc%ptcl_posterior_temp`; default 1, below one hotter): the
+search's annealing knob, section 4.4 of the note, run-time since
+2026-10-23 after section 17's run froze at the physical temperature. A `refine=prob` stage no longer ends on the pose overlap under
 this key (`check_conv3D` bypasses it: the carried pose is stable from a
 stage's first iterations, so the overlap rule cannot tell a frozen
 assignment from convergence) but on the resolution exit (`lpexit`) or its

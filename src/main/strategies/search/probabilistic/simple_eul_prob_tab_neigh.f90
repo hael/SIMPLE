@@ -8,7 +8,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, sample_likelihood_dist, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
-    &draw_posterior_row, PROB_POSTERIOR_TEMP_FACTOR
+    &draw_posterior_row
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -743,7 +743,7 @@ contains
         !! particle's state is the state of its closest valid candidate over all states (an active reference with
         !! an in-plane index; ties to the first in store order), as the dense table labels it; within that state
         !! p_c proportional to exp(-T_i (L_c - L_min)) over the valid candidates, T_i the particle's temperature
-        !! from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR on it). The drawn candidate is committed with its
+        !! from the fill (temps; prob_beta on it). The drawn candidate is committed with its
         !! shift, the seed shift recorded, frac as the frontier records it; no reference is forced to be
         !! populated. A particle without a valid candidate (a state emptied mid-run) keeps its orientation, as
         !! the frontier's leftover rule; one without a temperature (none expected) takes its argmin with a
@@ -793,7 +793,7 @@ contains
                         ibest    = n_loc
                     endif
                 enddo
-                temp = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i_loc)
+                temp = self%p_ptr%prob_beta * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     ntemp_missing = ntemp_missing + 1
                     temp = huge(temp)

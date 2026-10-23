@@ -17,14 +17,8 @@ public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists,
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores
-public :: PROB_POSTERIOR_TEMP_FACTOR
 private
 #include "simple_local_flags.inc"
-
-!> prob_assign=posterior: the one tempering constant on the particle temperature (section 4.4 of
-!! doc/implementation_notes/planned/pose_marginalization.md), on the reference, class and in-plane draws alike;
-!! T_eff = factor x T, a factor below one is hotter
-real, parameter :: PROB_POSTERIOR_TEMP_FACTOR = 1.0
 
 type :: prob_candidate
     integer :: iref   = 0

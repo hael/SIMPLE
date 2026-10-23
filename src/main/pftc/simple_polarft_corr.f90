@@ -2,7 +2,7 @@
 submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
 use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_likelihood_dists, sample_power_dists, draw_posterior_row, &
-    &posterior_temperature, PROB_POSTERIOR_TEMP_FACTOR
+    &posterior_temperature
 #include "simple_local_flags.inc"
 implicit none
 
@@ -478,12 +478,13 @@ contains
 
     !> The temperature every posterior draw of particle iptcl runs at (prob_assign=posterior): the Gaussian noise
     !! model's pi wsqsum / (2 pftsz) from the memoized self-term under the current sigma2 (posterior_temperature)
-    !! under the one tempering constant. The table workers write the untempered value into their part files; the
-    !! assignments apply the constant there, so a draw at the fill and a draw at the assignment sit at the same T.
+    !! times the tempering factor prob_beta (T_eff = beta T, below one hotter: the search's annealing knob). The
+    !! table workers write the untempered value into their part files; the assignments apply the factor there,
+    !! so a draw at the fill and a draw at the assignment sit at the same T_eff.
     module real function ptcl_posterior_temp( self, iptcl )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
-        ptcl_posterior_temp = PROB_POSTERIOR_TEMP_FACTOR * posterior_temperature(self%wsqsum_ptcl_now(iptcl), self%pftsz)
+        ptcl_posterior_temp = self%p_ptr%prob_beta * posterior_temperature(self%wsqsum_ptcl_now(iptcl), self%pftsz)
     end function ptcl_posterior_temp
 
     module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )

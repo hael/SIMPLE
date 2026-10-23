@@ -7,8 +7,7 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, &
-    &PROB_POSTERIOR_TEMP_FACTOR
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -1129,7 +1128,7 @@ contains
     !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 10). The particle's state is the state
     !! of its closest reference over all states (ties to the lowest reference index), as the balanced assignment
     !! labels it; its direction is drawn within that state's block of the row with p proportional to
-    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; PROB_POSTERIOR_TEMP_FACTOR on it)
+    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; prob_beta on it)
     !! and L the row's values as the fill left them (sampled in-plane, the top set refined). No reference is
     !! forced to be populated. The committed candidate is the drawn reference's dense_candidate (its in-plane,
     !! its refined shift when refined), the seed shift recorded as today, frac 100. A particle without a valid
@@ -1170,7 +1169,7 @@ contains
             ifirst = (si - 1) * self%p_ptr%nspace + 1
             ilast  = si * self%p_ptr%nspace
             nblock = ilast - ifirst + 1
-            temp   = PROB_POSTERIOR_TEMP_FACTOR * self%temps(i)
+            temp   = self%p_ptr%prob_beta * self%temps(i)
             if( .not. (temp > 0.) )then
                 ! no temperature from the fill: the argmin, as the particle has no scale to draw at
                 ntemp_missing = ntemp_missing + 1

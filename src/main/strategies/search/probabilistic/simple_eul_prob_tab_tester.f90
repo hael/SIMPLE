@@ -382,6 +382,18 @@ contains
             if( iref_run1(i) /= iref_argmin(i) ) nmoved = nmoved + 1
         enddo
         call assert_int(NPTCLS_TAB, nstate_ok, 'the state is the argmin''s state under the draw ('//trim(label)//')')
+        ! the tempering factor: temps 4 at prob_beta 0.5 is temps 2 at 1, draw for draw
+        params%prob_beta = 0.5
+        tab%temps = 4.
+        call seed_rnd_fixed(SEED_DRAW)
+        call tab%ref_assign
+        nsame = 0
+        do i = 1,NPTCLS_TAB
+            if( assigned_ref(tab, i, nspace) == iref_run1(i) ) nsame = nsame + 1
+        enddo
+        call assert_int(NPTCLS_TAB, nsame, 'prob_beta scales the temperature of the draw ('//trim(label)//')')
+        params%prob_beta = 1.
+        tab%temps = 2.
         if( nspace > 1 )then
             call assert_true(nmoved > 0, 'at temperature 2 on distances in [0,5] some particles leave the mode ('//trim(label)//')')
             call assert_true(nmoved < NPTCLS_TAB, 'at temperature 2 some particles stay at the mode ('//trim(label)//')')
