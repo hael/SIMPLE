@@ -1233,3 +1233,12 @@ named. The old samplers (`gen_likelihood_val`, `gen_prob_objfun_val`,
 moved and the regressions have passed. No unit test covers a strategy
 (they need a calculator and images); the regressions do.
 
+The key is inert under `objfun=cc`: the parser sets
+`l_prob_assign_posterior` only with `objfun=euclid`, and no program checks
+it. There is nothing to draw at without the Euclidean loss (no
+temperature, no sigma2), so the balanced path is the only one that can
+run there, and an error served nobody: `solve3D_cavgs
+prob_assign=posterior` died in its random-start reconstruction, which
+inherits the workflow's command line with `objfun=cc` and makes no draw.
+The two pftc primitives keep their contract guard.
+
