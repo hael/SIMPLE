@@ -27,6 +27,7 @@ logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override   = .false.
 logical          :: l_refine3D_lp_override     = .false.
 logical          :: l_refine3D_lpstop_override = .false.
+logical          :: l_prob_beta_end_override   = .false. !< the user set prob_beta_end: the stages keep it
 logical          :: l_cavgs_mode = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
@@ -207,6 +208,7 @@ contains
         l_refine3D_mode_override   = cline%defined('refine')
         l_refine3D_lp_override     = cline%defined('lp')
         l_refine3D_lpstop_override = cline%defined('lpstop')
+        l_prob_beta_end_override   = cline%defined('prob_beta_end')
         if( l_refine3D_mode_override ) refine3D_mode_override = trim(params%refine)
         if( l_refine3D_mode_override ) write(logfhandle,'(A,A)') &
             &'>>> SOLVE3D REFINE MODE OVERRIDE: ', refine3D_mode_override%to_char()

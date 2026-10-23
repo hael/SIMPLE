@@ -723,6 +723,8 @@ contains
                 ! objfun=cc there is nothing to draw at and the key is inert: the balanced path runs
                 self%l_prob_assign_posterior = trim(self%objfun) == 'euclid'
                 if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
+                ! no ramp unless an end is given: the run stays at prob_beta
+                if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
             case DEFAULT
                 THROW_HARD('prob_assign must be balanced or posterior')
         end select

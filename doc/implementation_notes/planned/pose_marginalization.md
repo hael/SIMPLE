@@ -1324,6 +1324,82 @@ temps 2 at beta 1, draw for draw). The schedule (beta rising to 1 along a
 stage) waits until a constant is calibrated on PfCRT: beta 0.1 and 0.3,
 two restarts each, diagnostic on.
 
+**beta = 0.1: PfCRT, 2026-10-23 (`prob_beta0_1`, run 9).** Three
+restarts finished, a fourth in stage 5 on the same track: 4.03 / 7.22,
+4.03 / 7.22, 4.03 / 7.22 A (FSC 0.143 / 0.5), 105-107 iterations each
+(stages 20/20/17/15/8-10/-/-/25). Stage 5 ends at 5.0-5.8 A on the
+resolution exit (7.6 A frozen at beta 1, 5.1 in the 4.0 A run), stages
+6-7 are omitted because FSC 0.5 is already past their limits, and stage 8
+climbs 5.9 to 4.03 A in about seven iterations and sits there for the
+remaining eighteen. The search is hot: the fraction drawn at the row
+mode is 0.01-0.07 in stage 3, 0.08-0.13 in stage 4, 0.04-0.14 in stage 5
+and 0.15-0.29 in stage 8; the overlap never passes 0.16; the committed
+pose moves 90 degrees per iteration at the start of stage 3 and still
+7.5 degrees at the end of stage 8, about one grid step. The
+reconstruction is an average over that neighbourhood and does not care
+at 0.143, so three restarts give the same number; it does care at 0.5
+(7.22 against 6.21 and 7.06 for the two beta = 1 restarts of section 16
+and 6.90 for the baseline). Trajectory: `analysis/run9_beta0.1_trajectory.txt`.
+
+*The ceiling.* 4.03 A is shell 77 (box x smpd = 310.5 A, so shells are
+physical at every crop); stage 8 runs at crop 160 of 300, Nyquist 3.88 A
+(shell 80), and the NU ladder's finest rung is 3.98 A (shell 78). Every
+run of the series that "reaches 4.0" is at this ceiling; section 16's bar
+of 3.6 A cannot be met or measured inside this ladder, and FSC 0.5 is
+the number with headroom. The bar needs restating against what stage 8
+can align, or the measurement moves to the refinement that follows.
+
+*Reading.* beta 0.1 is the regime that searches: three of three at the
+ceiling where beta 1 froze at 5.35. It is also hotter than the posterior
+the data support in the late stages (the pose wanders a grid step at 4 A),
+and the 0.5 FSC pays for it. That is the case for the schedule the plan
+names: beta of order 0.1 while the stage is settling, rising to 1 over
+its last iterations so the map is weighted at the physical posterior
+once the search has found its basin; the read-off is FSC 0.5 and the
+fraction at the mode in the last iterations. beta 0.3 is still worth its
+pair for the bracket.
+
+*Terminology (Hans's question, 2026-10-23).* At beta below one the draw
+is from the tempered posterior, p(theta|X)^beta normalized, the power
+posterior of annealing and parallel tempering; it is the posterior only
+at beta 1. Two readings of beta < 1 are both exact: annealing, the same
+function used as search dynamics rather than as weights; or the posterior
+under a noise model whose variance is inflated by 1/beta, since beta T is
+what a sigma2 larger by that factor gives. The second reading is why the
+known-pose calibration (gate item 3) still matters: if the physical T is
+overestimated by some factor, that part of beta is a correction and the
+ramp's end should be that factor, not 1. The key `prob_assign=posterior`
+names the assignment rule (one draw per particle from its own row at a
+data-derived temperature, no reference forced to be populated) against
+the reference-driven frontier; the form, the per-particle normalization
+and the temperature's origin are the posterior's at any beta, the
+exponent is the knob, and the ramp's last iterations are the posterior
+proper. The policies and this note say "tempered posterior" wherever a
+beta below one is in play.
+
+**Built 2026-10-23: the default and the ramp.** `prob_beta` defaults to
+0.1 (Hans, on run 9). `prob_beta_end` (default 0: a flat run at
+`prob_beta`) is the factor a refine3D run reaches at its last iteration by
+a geometric ramp from `prob_beta` (`prob_beta_at` in utils: beta_k =
+beta0 (beta1/beta0)^((k-1)/(n-1)) over the run's n iterations, so every
+iteration cools by the same factor, x1.1 per iteration for 0.1 to 1 over
+25; a one-iteration run is at beta1; tested); `exec_refine3D` sets the
+iteration's factor on the master's parameters and on the command line,
+the distributed job description carries it to the workers, one log line
+per iteration. solve3D sets `prob_beta_end=1` on its last stage under
+the key unless the user set it; the other stages run flat, since they end
+on their budgets or on the resolution exit at an unpredictable iteration
+and run 9 did not say their ends need cooling. The last stage has no exit
+but its budget (the overlap bypass holds), so its ramp always reaches 1
+and the final iterations weight the map at the physical posterior. 2D
+does not anneal. Run: PfCRT at the defaults, three restarts; the
+read-off is FSC 0.5 at the end (7.22 flat at 0.1; 6.21 and 6.90 the
+numbers to beat) and the fraction at the mode over stage 8's last
+iterations, which should climb from about 0.25 toward the 0.9 of the
+beta = 1 regime without the resolution going backwards. If the last
+iterations re-freeze and 0.5 does not improve, the cold end is meeting
+the self-term, and cross-half scoring (section 13) earns its turn.
+
 ## 18. After the posterior path is stable: one temperature, no thresholds (2026-10-23)
 
 Hans's standing instruction: once `prob_assign=posterior` with a

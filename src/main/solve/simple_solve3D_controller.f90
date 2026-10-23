@@ -713,6 +713,16 @@ contains
             call cline_refine3D%delete('gauref')
             call cline_refine3D%delete('gaufreq')
         endif
+        ! prob_assign=posterior: the last stage anneals its draws from prob_beta to the physical posterior
+        ! (prob_beta_end=1) over its budget, the other stages run flat at prob_beta, unless the user set the end
+        ! (pose_marginalization.md section 17)
+        if( params%l_prob_assign_posterior .and. .not. l_prob_beta_end_override )then
+            if( istage == active_refine3D_nstages() )then
+                call cline_refine3D%set('prob_beta_end',  1.)
+            else
+                call cline_refine3D%delete('prob_beta_end')
+            endif
+        endif
     end subroutine emit_refine3D_stage_cfg
 
     !> Last stage run to its full budget: the symmetry-search stage and, on the particles of a

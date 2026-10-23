@@ -134,7 +134,10 @@ contains
         call prg%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
         &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the last iteration', &
+        &'The factor the geometric ramp from prob_beta reaches at the run''s last iteration (1 the physical posterior); 0 keeps prob_beta throughout'//&
+        &'; solve3D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &

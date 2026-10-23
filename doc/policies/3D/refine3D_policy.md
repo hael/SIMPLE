@@ -515,9 +515,20 @@ dense table and in the neighbourhood tables (`score_seeded_ref`, the
 fallback of their assignment) alike; the refinement of the top set and the
 continuous in-plane polish are unchanged. Every draw (in-plane,
 direction, class, neighbourhood) runs at `prob_beta` times the particle
-temperature (`pftc%ptcl_posterior_temp`; default 1, below one hotter): the
-search's annealing knob, section 4.4 of the note, run-time since
-2026-10-23 after section 17's run froze at the physical temperature. A `refine=prob` stage no longer ends on the pose overlap under
+temperature (`pftc%ptcl_posterior_temp`; default 0.1, calibrated on PfCRT,
+section 17 of the note; below one hotter), so at `prob_beta` below one
+the draws are from the tempered posterior, p^beta, and from the posterior
+proper only at 1: the search's annealing knob,
+section 4.4, run-time since 2026-10-23 after the run at the physical
+temperature froze. A refine3D run anneals when `prob_beta_end` is given:
+a geometric ramp from `prob_beta` at its first iteration to `prob_beta_end`
+at its last (`prob_beta_at`; every iteration cools by the same factor), the
+iteration's factor on the master's parameters and on the workers' command
+line (`>>> POSTERIOR DRAW TEMPERING, BETA`); `prob_beta_end=0` (the
+default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
+under the key unless the user set it, so the stages search hot and the
+final map is weighted at the physical posterior; the other stages run
+flat at `prob_beta`. A `refine=prob` stage no longer ends on the pose overlap under
 this key (`check_conv3D` bypasses it: the carried pose is stable from a
 stage's first iterations, so the overlap rule cannot tell a frozen
 assignment from convergence) but on the resolution exit (`lpexit`) or its

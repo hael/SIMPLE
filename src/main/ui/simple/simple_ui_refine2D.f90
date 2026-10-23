@@ -80,7 +80,7 @@ contains
         call refine2D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
         &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
@@ -160,7 +160,7 @@ contains
         call program%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
         &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
@@ -256,7 +256,7 @@ contains
         call solve2D_chunks%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
         &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="cluster 2D", visibility=UI_VIS_ADVANCED)
+        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)

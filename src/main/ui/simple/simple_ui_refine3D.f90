@@ -59,7 +59,10 @@ contains
         call refine3D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
         &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{1.0}', 'factor on T{1.0}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the last iteration', &
+        &'The factor the geometric ramp from prob_beta reaches at the run''s last iteration (1 the physical posterior); 0 keeps prob_beta throughout'//&
+        &'{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &

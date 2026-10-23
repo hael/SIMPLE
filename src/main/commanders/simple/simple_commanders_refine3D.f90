@@ -1697,6 +1697,7 @@ contains
     subroutine exec_refine3D( self, cline )
         use simple_core_module_api
         use simple_refine3D_strategy
+        use simple_eul_prob_tab_utils, only: prob_beta_at
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy
@@ -1706,6 +1707,7 @@ contains
         character(len=STDLEN) :: errmsg
         logical          :: converged
         integer          :: niters
+        real             :: beta_start
         ! the modes the 3D matcher implements, refused here so that a distributed master never
         ! waits for workers that stop on an unknown mode
         if( cline%defined('refine') )then
@@ -1760,10 +1762,18 @@ contains
         else
             params%extr_iter = params%startit - 1
         endif
+        beta_start = params%prob_beta
         do
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
+            ! prob_assign=posterior: the iteration's tempering factor, a geometric ramp from prob_beta to
+            ! prob_beta_end over the run's budget (flat when they are equal); on the command line for the workers
+            if( params%l_prob_assign_posterior )then
+                params%prob_beta = prob_beta_at(niters, params%maxits, beta_start, params%prob_beta_end)
+                call cline%set('prob_beta', params%prob_beta)
+                write(logfhandle,'(A,F7.4)') '>>> POSTERIOR DRAW TEMPERING, BETA ', params%prob_beta
+            endif
             call strategy%execute_iteration(params, build, cline, converged)
             call strategy%finalize_iteration(params, build)
             if( converged .or. niters >= params%maxits ) exit

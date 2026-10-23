@@ -355,8 +355,11 @@ candidate (sparse); one without a temperature its argmin, with a warning.
 The draws run in particle order on the master's random stream, so
 shared-memory and distributed runs draw alike; the log reports the fraction
 of particles drawn at their row mode. The tempering factor `prob_beta`
-(default 1, below one hotter) multiplies the temperature of the class and
-in-plane draws as of the 3D ones. The frontier code is untouched under the default. The
+(default 0.1, calibrated on the 3D path; below one hotter) multiplies the
+temperature of the class and in-plane draws as of the 3D ones, so below
+one they draw from the tempered posterior p^beta; the 2D
+runs do not anneal (`prob_beta_end` is a refine3D/solve3D control). The
+frontier code is untouched under the default. The
 key is an advanced search input of `refine2D`, `solve2D` and
 `solve2D_chunks`; the 2D convergence rules are unchanged in this step.
 

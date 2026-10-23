@@ -65,6 +65,7 @@ contains
         params%npeaks_inpl = NC
         params%refine      = 'prob'
         params%l_prob_assign_posterior = .true.
+        params%prob_beta = 1.
         pinds_t = [(i, i=1,NP)]
         allocate(dists(NC,NP))
         call seed_rnd_fixed(20261023)
@@ -172,6 +173,7 @@ contains
         params%npeaks_inpl = NC
         params%refine      = 'prob_snhc'
         params%l_prob_assign_posterior = .true.
+        params%prob_beta = 1.
         pinds_t = [(i, i=1,NP)]
         call seed_rnd_fixed(20261023)
         allocate(counts(NP))

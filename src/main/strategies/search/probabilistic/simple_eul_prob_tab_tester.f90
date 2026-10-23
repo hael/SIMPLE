@@ -13,7 +13,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores, prob_beta_at
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -53,9 +53,36 @@ contains
         call test_ref_assign_posterior()
         write(*,'(A)') 'test_draw_posterior_scores'
         call test_draw_posterior_scores()
+        write(*,'(A)') 'test_prob_beta_at'
+        call test_prob_beta_at()
         write(*,'(A)') 'test_ref_assign_neigh_posterior'
         call test_ref_assign_neigh_posterior()
     end subroutine run_all_eul_prob_tab_tests
+
+    !> The tempering ramp (prob_beta_at): beta0 at the first iteration, beta1 at the last, the geometric
+    !! midpoint halfway (0.1 to 1 over 25 iterations: sqrt(0.1) at the 13th), the same factor every step;
+    !! flat when the ends are equal; a one-iteration run at beta1; iterations outside the run clamped
+    subroutine test_prob_beta_at()
+        real    :: ratio, prev
+        integer :: it
+        logical :: l_ok
+        call assert_real(0.1, prob_beta_at(1, 25, 0.1, 1.), 1.e-6, 'the ramp starts at beta0')
+        call assert_real(1.0, prob_beta_at(25, 25, 0.1, 1.), 1.e-6, 'the ramp ends at beta1')
+        call assert_real(sqrt(0.1), prob_beta_at(13, 25, 0.1, 1.), 1.e-6, 'the geometric midpoint halfway')
+        l_ok  = .true.
+        ratio = prob_beta_at(2, 25, 0.1, 1.) / prob_beta_at(1, 25, 0.1, 1.)
+        prev  = prob_beta_at(1, 25, 0.1, 1.)
+        do it = 2,25
+            if( abs(prob_beta_at(it, 25, 0.1, 1.) / prev - ratio) > 1.e-5 ) l_ok = .false.
+            prev = prob_beta_at(it, 25, 0.1, 1.)
+        enddo
+        call assert_true(l_ok, 'every iteration cools by the same factor')
+        call assert_real(10.**(1./24.), ratio, 1.e-5, 'the factor is (beta1/beta0)^(1/(n-1))')
+        call assert_real(0.3, prob_beta_at(7, 20, 0.3, 0.3), 1.e-6, 'equal ends give a flat run')
+        call assert_real(1.0, prob_beta_at(1, 1, 0.1, 1.), 1.e-6, 'a one-iteration run is at beta1')
+        call assert_real(0.1, prob_beta_at(0, 25, 0.1, 1.), 1.e-6, 'an iteration before the run is clamped to the start')
+        call assert_real(1.0, prob_beta_at(30, 25, 0.1, 1.), 1.e-6, 'an iteration past the run is clamped to the end')
+    end subroutine test_prob_beta_at
 
     !> The draw over scores stored as exp(-L) (draw_posterior_scores, the search strategies' buffers): a huge
     !! temperature gives the largest score, never a sentinel at or below zero; the returned loss is -log of the
@@ -116,6 +143,7 @@ contains
         params%l_doshift       = .false.
         params%prob_neigh_mode = 'snhc'
         params%l_prob_assign_posterior = .true.
+        params%prob_beta = 1.
         call seed_rnd_fixed(SEED_TAB)
         allocate(build%spproj_field)
         call build%spproj_field%new(NP, is_ptcl=.true.)
@@ -313,6 +341,7 @@ contains
         params%prob_athres = 10.
         params%l_doshift   = .false.
         params%l_prob_assign_posterior = .true.
+        params%prob_beta = 1.
         call seed_rnd_fixed(SEED_TAB)
         allocate(build%spproj_field)
         call build%spproj_field%new(NPTCLS_TAB, is_ptcl=.true.)

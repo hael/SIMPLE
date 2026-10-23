@@ -17,6 +17,7 @@ public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists,
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores
+public :: prob_beta_at
 private
 #include "simple_local_flags.inc"
 
@@ -355,6 +356,22 @@ contains
         integer,  intent(in) :: pftsz
         temp = real(DPI * wsqsum / (2.d0 * real(pftsz,dp)))
     end function posterior_temperature
+
+    !> The tempering factor of iteration iter of a run of niters (prob_assign=posterior): a geometric ramp from
+    !! beta0 at the first iteration to beta1 at the last, so every iteration cools by the same factor (0.1 to 1
+    !! over 25 iterations is x1.1 per iteration; pose_marginalization.md section 17). beta0 = beta1 is a flat
+    !! run; a run of one iteration is at beta1, the factor the map is weighted at
+    pure real function prob_beta_at( iter, niters, beta0, beta1 ) result( beta )
+        integer, intent(in) :: iter, niters
+        real,    intent(in) :: beta0, beta1
+        real :: frac
+        if( niters <= 1 )then
+            beta = beta1
+            return
+        endif
+        frac = real(max(1, min(iter, niters)) - 1) / real(niters - 1)
+        beta = beta0 * (beta1 / beta0)**frac
+    end function prob_beta_at
 
     !> One draw from the posterior over a table row at temperature temp (prob_assign=posterior,
     !! doc/implementation_notes/planned/pose_marginalization.md section 4.1): p_r proportional to

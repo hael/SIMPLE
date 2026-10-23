@@ -598,7 +598,8 @@ type :: parameters
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
-    real    :: prob_beta=1.        !< prob_assign=posterior: tempering factor on the particle temperature of every posterior draw (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob (pose_marginalization.md section 4.4){1.0}
+    real    :: prob_beta=0.1       !< prob_assign=posterior: tempering factor on the particle temperature of every posterior draw (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.1 calibrated on PfCRT (pose_marginalization.md sections 4.4, 17){0.1}
+    real    :: prob_beta_end=0.    !< prob_assign=posterior: the factor at a refine3D run's last iteration, reached by a geometric ramp from prob_beta over its iterations (1 = the physical posterior); 0 = prob_beta, no ramp; solve3D sets 1 on its last stage{0.0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}
     real    :: res_target = 3.     !< resolution target in A
