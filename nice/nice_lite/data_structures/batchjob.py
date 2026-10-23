@@ -5,6 +5,7 @@ import os
 import shutil
 import signal
 import struct
+import subprocess
 import time
 from collections import Counter
 
@@ -1407,33 +1408,85 @@ class BatchJob(Job):
             return None
         return process_group
 
+    def _stop_slurm_jobs(self, job_dir):
+        """Cancel this batch job and workers submitted from its directories."""
+        try:
+            result = subprocess.run(
+                ["squeue", "--me", "--noheader", "--format=%A|%Z"],
+                capture_output=True, text=True, check=True, timeout=10,
+            )
+            job_ids = set()
+            for row in result.stdout.splitlines():
+                job_id, separator, work_dir = row.partition("|")
+                job_id, work_dir = job_id.strip(), work_dir.strip()
+                if (
+                    not separator or not job_id.isascii() or not job_id.isdecimal()
+                    or not os.path.isabs(work_dir)
+                ):
+                    continue
+                try:
+                    if int(job_id) > 0 and os.path.commonpath(
+                        (job_dir, os.path.realpath(work_dir))
+                    ) == job_dir:
+                        job_ids.add(str(int(job_id)))
+                except ValueError:
+                    continue
+            if not job_ids:
+                logger.error("stop: no SLURM jobs found for the job directory")
+                return False
+            subprocess.run(
+                ["scancel", *sorted(job_ids)],
+                capture_output=True, text=True, check=True, timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            logger.error("stop: failed to cancel SLURM jobs: %s", error)
+            return False
+        return True
+
     def stop(self):
-        """Stop a running local batch job by terminating its process group."""
+        """Stop a running batch job through SLURM or its local process group."""
         with transaction.atomic():
             jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
             if jobmodel is None or jobmodel.status != "running":
                 logger.error("stop: batch job is not running")
                 return False
 
-            pid_path = os.path.join(self.get_absdir() or "", "nice.pid")
-            try:
-                with open(pid_path, encoding="utf-8") as pid_file:
-                    pid = int(pid_file.read(32).strip())
-            except (OSError, ValueError):
-                logger.error("stop: nice.pid is missing or invalid")
+            job_dir = self.get_safe_job_dir()
+            if job_dir is None:
+                logger.error("stop: job directory is unavailable or unsafe")
                 return False
-            if pid <= 1:
-                logger.error("stop: nice.pid contains an unsafe process id")
+            try:
+                with open(os.path.join(job_dir, "job.script"), encoding="utf-8") as script_file:
+                    is_slurm = any(line.lstrip().startswith("#SBATCH") for line in script_file)
+            except FileNotFoundError:
+                is_slurm = False
+            except OSError:
+                logger.error("stop: job script could not be read")
                 return False
 
-            process_group = self._get_local_process_group(pid)
-            if process_group is None:
-                return False
-            try:
-                os.killpg(process_group, signal.SIGTERM)
-            except OSError:
-                logger.error("stop: failed to terminate the job process group")
-                return False
+            if is_slurm:
+                if not self._stop_slurm_jobs(job_dir):
+                    return False
+            else:
+                pid_path = os.path.join(job_dir, "nice.pid")
+                try:
+                    with open(pid_path, encoding="utf-8") as pid_file:
+                        pid = int(pid_file.read(32).strip())
+                except (OSError, ValueError):
+                    logger.error("stop: nice.pid is missing or invalid")
+                    return False
+                if pid <= 1:
+                    logger.error("stop: nice.pid contains an unsafe process id")
+                    return False
+
+                process_group = self._get_local_process_group(pid)
+                if process_group is None:
+                    return False
+                try:
+                    os.killpg(process_group, signal.SIGTERM)
+                except OSError:
+                    logger.error("stop: failed to terminate the job process group")
+                    return False
 
             self.status = "stopped"
             jobmodel.status = "stopped"
