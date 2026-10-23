@@ -99,8 +99,11 @@
 
         <!-- Right actions -->
         <div class="flex items-center gap-2 ml-auto">
-            <a href="{% url 'nice_lite:logout' %}"
-               class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">logout</a>
+            <form method="POST" action="{% url 'nice_lite:logout' %}">
+                {% csrf_token %}
+                <button type="submit"
+                        class="text-xs px-3 py-1 border border-streamline rounded-lg text-streamsubtle hover:bg-streamsurface transition-colors">logout</button>
+            </form>
         </div>
 
     </header>
