@@ -1450,3 +1450,43 @@ a constant is not enough, the PfCRT 10/10 at the bar, the 2D regression,
 and the known-pose calibration of the temperature (gate item 3), which
 is what makes the one number mean what it says.
 
+## 19. The early stages keep their own samplers (2026-10-24)
+
+The tempered posterior now draws only on the tables of the later stages:
+`refine=prob` and `prob_neigh` over `state|geom` in 3D (solve3D stages 3-8),
+`prob` and `prob_snhc` in 2D (solve2D stages 3-6). The direct stochastic
+neighbourhoods (`prob_neigh_mode=shc|snhc`, solve3D stages 1-2) and the
+search strategies with a sampler of their own (`refine=neigh`; `snhc_smpl`,
+`snhc_smpl_many`, `inpl_smpl`, `greedy_smpl`) run their pre-posterior
+samplers under the key: the balanced frontier with the likelihood in-plane
+draw within the angular window, and the bounded, power and squared samplers.
+The parameters decide it once (`l_prob_assign_posterior` is set for the
+later-stage table modes only), and the strategies' posterior branches are
+gone (Hans's ruling).
+
+**Why: streptavidin, ten restarts at `prob_beta=0.3`.** Stages 1-2 did
+nothing in any restart: pose overlap 0.000-0.002 over their 40 iterations,
+the pose moving 85-90 degrees per iteration (what random pairs give), the
+stage-1 score flat at e^-1 and the stage-1 map a round blob. Stage 3 started
+from random poses (at its first iteration the pose stage 2 handed over was
+the data's mode for 1% of the particles) and solved the structure from
+scratch, nine times to the Nyquist limit of the 88-pixel crop (3.12 A, a
+ceiling) and once to 3.27 A. Two causes combine.
+
+- The shc fill scores references in random order and stops at the first
+  that beats the current pose, the current pose scored last. That is a
+  hill climb's proposal set: the frontier turns it into a move to the
+  improvement, a hot posterior draw over it into a move to a random
+  proposal, and the current pose is never a candidate.
+- The temperature is small where the band is small. T is about the band's
+  Fourier component count over L_min (`T x L_min` 356 and 406 against 347
+  and 396 components in stages 3 and 4 of that run), so stage 1 (rings 2-5
+  on a 137 A box) sits near T = 33, T_eff = 10 at beta 0.3, where even the
+  final map separates a typical pair of directions by a third of a nat.
+
+PfCRT at beta 1 (section 17, run 8) kept stages 1-4 on track because its
+draw was cold enough to pick the improvement; run 9's 90-degree pose moves
+at the start of stage 3 at beta 0.1 are streptavidin's effect on a particle
+whose stage 3 recovers. Section 18's retirement list changes accordingly:
+the early-stage modes keep their samplers, and the list covers the
+later-stage tables only.

@@ -7,7 +7,6 @@ use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
 use simple_builder,          only: builder
 use simple_type_defs,        only: OBJFUN_EUCLID
-use simple_eul_prob_tab_utils, only: draw_posterior_scores
 implicit none
 
 public :: strategy2D_snhc_smpl_many
@@ -33,28 +32,20 @@ contains
         self%spec = spec
     end subroutine new_snhc_smpl_many
 
-    !> srch_snhc_smpl with the neighbourhood's rotation scores computed in one batched pass (gen_many_euclids)
-    !! when no first shift is searched. Under prob_assign=posterior the in-plane rotation of each class is drawn
-    !! from the posterior at the particle's temperature (the batched scores through draw_posterior_scores, the
-    !! seeded ones through gen_posterior_val) and the class over the whole evaluated row, as in
-    !! strategy2D_snhc_smpl
     subroutine srch_snhc_smpl_many( self, os )   
         class(strategy2D_snhc_smpl_many), intent(inout) :: self
         class(oris),                 intent(inout) :: os
-        real    :: inpl_corrs(self%s%nrots), w_rot(self%s%nrots), d_rot(self%s%nrots)
-        real    :: cls_corrs(self%s%nrefs), w_cls(self%s%nrefs), d_cls(self%s%nrefs)
-        real    :: inpl_corr, inpl_dist, temp, cls_dist
+        real    :: inpl_corrs(self%s%nrots)
+        real    :: cls_corrs(self%s%nrefs)
+        real    :: inpl_corr, inpl_dist
         integer :: sorted_cls_inds(self%s%nrefs), vec_nrots(self%s%nrots)
         integer :: iref, isample, inpl_ind, order_ind, class_rank
         integer :: nrefs_coarse_eval
-        logical :: l_prob_objfun, l_posterior
+        logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
             l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
-            l_posterior   = self%s%p_ptr%l_prob_assign_posterior
-            temp          = 0.
-            if( l_posterior ) temp = self%s%b_ptr%pftc%ptcl_posterior_temp(self%s%iptcl)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
             ! evaluate all references
@@ -78,10 +69,7 @@ contains
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! In-plane sampling
                 if( self%s%l_sh_first )then
-                    if( l_posterior )then
-                        call self%s%b_ptr%pftc%gen_posterior_val(iref, self%s%iptcl, self%s%xy_first, temp, inpl_dist, inpl_ind)
-                        inpl_corr = exp(-inpl_dist)
-                    else if( l_prob_objfun )then
+                    if( l_prob_objfun )then
                         call self%s%b_ptr%pftc%gen_prob_power_objfun_val(iref, self%s%iptcl, self%s%xy_first,&
                             &s2D%power, s2D%snhc_smpl_ninpl, inpl_dist, inpl_corr, inpl_ind, inpl_corrs, vec_nrots)
                     else
@@ -91,45 +79,23 @@ contains
                     endif
                 else
                     call self%s%b_ptr%pftc%get_precalc_objfun_vals(isample, self%s%ithr, inpl_corrs)
-                    if( l_posterior )then
-                        ! the batched scores are exp(-L): the posterior over every grid rotation
-                        call draw_posterior_scores(self%s%nrots, inpl_corrs, temp, w_rot, d_rot, inpl_ind, inpl_dist)
-                        inpl_corr = 0.
-                        if( inpl_ind >= 1 .and. inpl_ind <= self%s%nrots ) inpl_corr = inpl_corrs(inpl_ind)
-                    else
-                        call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
-                                            &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
-                    endif
+                    call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
+                                        &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 endif
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
             end do
             ! Performs shift search for top scoring subset
-            call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns), l_keep_unrefined=l_posterior)
+            call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns))
             ! Class selection: sample from a working copy, power_sampling sorts
             ! its correlation argument in place and class_space_corrs must stay
             ! class-indexed for store_solution/assign_ori
             cls_corrs = s2D%class_space_corrs(:, self%s%ithr)
-            if( l_posterior )then
-                ! one draw from the posterior over the evaluated classes (an unscored class is a sentinel below zero)
-                call draw_posterior_scores(self%s%nrefs, cls_corrs, temp, w_cls, d_cls, self%s%best_class, cls_dist)
-                if( self%s%best_class < 1 .or. self%s%best_class > self%s%nrefs ) self%s%best_class = self%s%prev_class
-                self%s%best_corr = cls_corrs(self%s%best_class)
-            else
-                call power_sampling( s2D%power, self%s%nrefs, cls_corrs, &
-                                    &sorted_cls_inds, s2D%snhc_smpl_ncls, &
-                                    &self%s%best_class, class_rank, self%s%best_corr )
-            endif
+            call power_sampling( s2D%power, self%s%nrefs, cls_corrs, &
+                                &sorted_cls_inds, s2D%snhc_smpl_ncls, &
+                                &self%s%best_class, class_rank, self%s%best_corr )
             self%s%nrefs_eval = nrefs_coarse_eval
             ! In-plane angle
             self%s%best_rot = s2D%class_space_inplinds(self%s%best_class, self%s%ithr)
-            if( l_posterior )then
-                if( self%s%best_rot < 1 .or. self%s%best_rot > self%s%nrots )then
-                    ! no scored class to draw from: the previous discrete state
-                    self%s%best_class = self%s%prev_class
-                    self%s%best_rot   = self%s%prev_rot
-                    self%s%best_corr  = self%s%prev_corr
-                endif
-            endif
             ! In-plane search
             call self%s%inpl_srch ! needed because inpl_srch_peaks doesn't store shifts
             ! Updates solution

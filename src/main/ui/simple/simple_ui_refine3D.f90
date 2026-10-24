@@ -50,11 +50,12 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic search commits each particle from its table of losses: balanced draws references '//&
-        &'in turn and gives each its closest free particle, so every reference is populated; posterior draws each '//&
-        &'particle''s direction and in-plane rotation from its own row posterior at its own noise temperature and '//&
-        &'forces no reference to be populated (objfun=euclid; the stage then ends on the resolution exit or its '//&
-        &'budget, not on the pose overlap)(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
+        &'How the probabilistic search (refine=prob, or prob_neigh with prob_neigh_mode=state|geom) commits each '//&
+        &'particle from its table of losses: balanced draws references in turn and gives each its closest free '//&
+        &'particle, so every reference is populated; posterior draws each particle''s direction and in-plane rotation '//&
+        &'from its own row posterior at its own noise temperature and forces no reference to be populated '//&
+        &'(objfun=euclid; the stage then ends on the resolution exit or its budget, not on the pose overlap); the '//&
+        &'other modes keep their own sampling(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
         &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&

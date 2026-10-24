@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, ref_assign and its posterior branch, the neighbourhood table's posterior assignment
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, ref_assign and its posterior branch, the neighbourhood table's posterior assignment, the modes the posterior key draws on
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! ref_assign is compared with the assignment it replaced, kept here as the reference (reference_assign): on synthetic
@@ -8,12 +8,13 @@ module simple_eul_prob_tab_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,            only: builder
+use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores, prob_beta_at
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -51,8 +52,8 @@ contains
         call test_draw_posterior_row()
         write(*,'(A)') 'test_ref_assign_posterior'
         call test_ref_assign_posterior()
-        write(*,'(A)') 'test_draw_posterior_scores'
-        call test_draw_posterior_scores()
+        write(*,'(A)') 'test_posterior_key_modes'
+        call test_posterior_key_modes()
         write(*,'(A)') 'test_prob_beta_at'
         call test_prob_beta_at()
         write(*,'(A)') 'test_ref_assign_neigh_posterior'
@@ -84,48 +85,51 @@ contains
         call assert_real(1.0, prob_beta_at(30, 25, 0.1, 1.), 1.e-6, 'an iteration past the run is clamped to the end')
     end subroutine test_prob_beta_at
 
-    !> The draw over scores stored as exp(-L) (draw_posterior_scores, the search strategies' buffers): a huge
-    !! temperature gives the largest score, never a sentinel at or below zero; the returned loss is -log of the
-    !! drawn score; at T = 1 the scores [1, e^-1, e^-2] draw as the row [0, 1, 2] does (0.665, 0.245, 0.090 to
-    !! within 0.02 over 20000 draws); a buffer of sentinels draws 0
-    subroutine test_draw_posterior_scores()
-        integer, parameter :: NDRAWS = 20000
-        real    :: scores(5), w(5), dists(5), dist
-        integer :: which, i, counts(5)
-        logical :: l_ok
-        scores = [0.3, -huge(1.), 0.9, 0., 0.5]
-        call seed_rnd_fixed(20261024)
-        l_ok = .true.
-        do i = 1,50
-            call draw_posterior_scores(5, scores, huge(1.), w, dists, which, dist)
-            if( which /= 3 ) l_ok = .false.
-            if( abs(dist + log(0.9)) > 1.e-6 ) l_ok = .false.
-        enddo
-        call assert_true(l_ok, 'a huge temperature draws the largest score, with its loss')
-        call assert_true(dists(2) > 1.e30 .and. dists(4) > 1.e30, 'sentinel scores are invalid losses')
-        call assert_real(-log(0.3), dists(1), 1.e-6, 'a score becomes the loss -log(score)')
-        scores = [1., exp(-1.), exp(-2.), 0., -1.]
-        counts = 0
-        do i = 1,NDRAWS
-            call draw_posterior_scores(5, scores, 1., w, dists, which, dist)
-            counts(which) = counts(which) + 1
-        enddo
-        call assert_true(abs(real(counts(1))/real(NDRAWS) - 0.665) < 0.02 .and. &
-            &abs(real(counts(2))/real(NDRAWS) - 0.245) < 0.02 .and. abs(real(counts(3))/real(NDRAWS) - 0.090) < 0.02, &
-            &'at T = 1 the scores [1, e^-1, e^-2] draw with [0.665, 0.245, 0.090]')
-        call assert_int(0, counts(4) + counts(5), 'sentinel scores are never drawn')
-        scores = [0., 0., -1., 0., 0.]
-        call draw_posterior_scores(5, scores, 1., w, dists, which, dist)
-        call assert_int(0, which, 'a buffer of sentinels draws 0')
-    end subroutine test_draw_posterior_scores
+    !> prob_assign=posterior draws only on the later-stage tables: refine=prob and prob_snhc, and prob_neigh over
+    !! state|geom; the direct stochastic neighbourhoods (prob_neigh shc|snhc), the sampling strategies, refine=neigh
+    !! and objfun=cc keep their own samplers, and prob_assign=balanced never draws
+    subroutine test_posterior_key_modes()
+        call assert_true( posterior_key('posterior', 'prob',       'state', 'euclid'), 'refine=prob draws under the key')
+        call assert_true( posterior_key('posterior', 'prob_snhc',  'state', 'euclid'), 'refine=prob_snhc draws under the key')
+        call assert_true( posterior_key('posterior', 'prob_neigh', 'state', 'euclid'), 'prob_neigh over state draws under the key')
+        call assert_true( posterior_key('posterior', 'prob_neigh', 'geom',  'euclid'), 'prob_neigh over geom draws under the key')
+        call assert_false(posterior_key('posterior', 'prob_neigh', 'shc',   'euclid'), 'prob_neigh shc keeps the frontier')
+        call assert_false(posterior_key('posterior', 'prob_neigh', 'snhc',  'euclid'), 'prob_neigh snhc keeps the frontier')
+        call assert_false(posterior_key('posterior', 'snhc_smpl',      'state', 'euclid'), 'snhc_smpl keeps its sampler')
+        call assert_false(posterior_key('posterior', 'snhc_smpl_many', 'state', 'euclid'), 'snhc_smpl_many keeps its sampler')
+        call assert_false(posterior_key('posterior', 'inpl_smpl',      'state', 'euclid'), 'inpl_smpl keeps its sampler')
+        call assert_false(posterior_key('posterior', 'greedy_smpl',    'state', 'euclid'), 'greedy_smpl keeps its sampler')
+        call assert_false(posterior_key('posterior', 'neigh',          'state', 'euclid'), 'refine=neigh keeps its sampler')
+        call assert_false(posterior_key('posterior', 'prob',       'state', 'cc'),     'objfun=cc makes the key inert')
+        call assert_false(posterior_key('balanced',  'prob',       'state', 'euclid'), 'prob_assign=balanced never draws')
+    end subroutine test_posterior_key_modes
 
-    !> prob_assign=posterior on the neighbourhood table (ref_assign_neigh, section 4.5): a synthetic candidate
-    !! store of 150 particles over 3 states x 20 directions (1 to 12 candidates each, some without an in-plane
-    !! index; every particle has a valid one, since a particle without one is re-seeded through the calculator,
-    !! which this test has not). At a huge temperature every particle takes the state of its closest valid
-    !! candidate and the argmin within it, with its in-plane index and distance and the evaluated fraction. At
-    !! T = 2 some particles leave the mode and none its state; the same seed gives the same assignment, another
-    !! seed another.
+    !> l_prob_assign_posterior as the parameters derive it from a minimal command line
+    logical function posterior_key( prob_assign, refine, prob_neigh_mode, objfun ) result( l_posterior )
+        character(len=*), intent(in) :: prob_assign, refine, prob_neigh_mode, objfun
+        class(parameters), allocatable :: params
+        type(cmdline) :: cline
+        call cline%set('smpd',            1.5)
+        call cline%set('box',             32)
+        call cline%set('mskdiam',         36.)
+        call cline%set('ctf',             'no')
+        call cline%set('nthr',            1)
+        call cline%set('objfun',          objfun)
+        call cline%set('refine',          refine)
+        call cline%set('prob_neigh_mode', prob_neigh_mode)
+        call cline%set('prob_assign',     prob_assign)
+        allocate(params)
+        call params%new(cline, silent=.true.)
+        l_posterior = params%l_prob_assign_posterior
+        deallocate(params)
+        call cline%kill
+    end function posterior_key
+
+    !> prob_assign=posterior on the subspace neighbourhood table (ref_assign_neigh): a synthetic candidate store of
+    !! 150 particles over 3 states x 20 directions (1 to 12 candidates each, some without an in-plane index; every
+    !! particle has a valid one, as re-seeding needs the calculator). At a huge temperature every particle takes
+    !! the closest valid candidate's state and the argmin within it, with its in-plane index and distance. At
+    !! T = 2 some leave the mode and none its state; the same seed gives the same assignment, another another.
     subroutine test_ref_assign_neigh_posterior()
         integer, parameter :: NSPACE = 20, NSTATES = 3, NP = 150
         class(parameters), allocatable, target :: params
@@ -134,17 +138,18 @@ contains
         type(prob_candidate), allocatable :: cands(:)
         integer, allocatable :: counts(:), pinds(:), state_best(:), ref_best(:), run1(:), run2(:)
         real,    allocatable :: dist_best(:)
-        integer :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref, nvalid
+        integer :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref
         nrefs = NSPACE * NSTATES
         allocate(params, build)
         params%nspace          = NSPACE
         params%nstates         = NSTATES
         params%prob_athres     = 10.
         params%l_doshift       = .false.
-        params%prob_neigh_mode = 'snhc'
+        params%prob_neigh_mode = 'state'
         params%l_prob_assign_posterior = .true.
         params%prob_beta = 1.
         call seed_rnd_fixed(SEED_TAB)
+        allocate(build%subspace_inds(1), source=1)   ! the subspace modes' table needs a subspace map; the fill is not run
         allocate(build%spproj_field)
         call build%spproj_field%new(NP, is_ptcl=.true.)
         do i = 1,NP
@@ -190,20 +195,15 @@ contains
         call seed_rnd_fixed(SEED_DRAW)
         call tab%ref_assign
         nwrong = 0
-        n = 0
         do i = 1,NP
             if( state_best(i) > 0 )then
                 iref = (tab%assgn_map(i)%istate - 1) * NSPACE + tab%assgn_map(i)%iproj
                 if( iref /= ref_best(i) ) nwrong = nwrong + 1
                 if( tab%assgn_map(i)%dist /= dist_best(i) ) nwrong = nwrong + 1
                 if( tab%assgn_map(i)%inpl < 1 ) nwrong = nwrong + 1
-                nvalid = 0
-                do k = 1,counts(i)
-                    if( cands(n+k)%inpl > 0 ) nvalid = nvalid + 1
-                enddo
-                if( abs(tab%assgn_map(i)%frac - 100. * real(nvalid) / real(nrefs)) > 1.e-4 ) nwrong = nwrong + 1
+                ! a subspace neighbourhood records a full search
+                if( abs(tab%assgn_map(i)%frac - 100.) > 1.e-4 ) nwrong = nwrong + 1
             endif
-            n = n + counts(i)
         enddo
         call assert_int(0, nwrong, 'a huge temperature gives every particle its closest valid neighbourhood candidate')
         call tab%kill

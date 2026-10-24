@@ -117,7 +117,7 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
-    character(len=9)          :: prob_assign='balanced' !< probability-table assignment (3D and 2D): the reference-balanced frontier, or each particle's reference/class and in-plane rotation drawn from its row posterior at its own temperature with no reference forced to be populated (doc/implementation_notes/planned/pose_marginalization.md; objfun=euclid)(balanced|posterior){balanced}
+    character(len=9)          :: prob_assign='balanced' !< probability-table assignment (3D and 2D): the reference-balanced frontier, or each particle's reference/class and in-plane rotation drawn from its row posterior at its own temperature with no reference forced to be populated; posterior applies to refine=prob, prob_snhc and prob_neigh with prob_neigh_mode=state|geom, every other mode keeps its own sampler (doc/implementation_notes/planned/pose_marginalization.md; objfun=euclid)(balanced|posterior){balanced}
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
@@ -677,7 +677,7 @@ type :: parameters
     logical :: l_cohort_sampling = .false.
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
-    logical :: l_prob_assign_posterior = .false. !< prob_assign=posterior: per-particle draw from the row posterior
+    logical :: l_prob_assign_posterior = .false. !< prob_assign=posterior on a later-stage table (prob, prob_snhc, prob_neigh state|geom; objfun=euclid)
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

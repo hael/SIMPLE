@@ -54,16 +54,16 @@ contains
     end subroutine run_all_convergence_tests
 
     !> prob_assign=posterior (pose_marginalization.md 10.3): a frozen assignment (full scan, overlap 1) converges
-    !! the regular rule and must not converge under the key on the dense table (refine=prob) nor on the
-    !! neighbourhood table (refine=prob_neigh, its posterior assignment since 2026-10-23); a shc pass keeps the
-    !! rule; the lpexit rule still ends the stage (a stalled 7.5 A past lpexit 8 at the stage's second iteration)
+    !! the regular rule and must not converge under the flag, which only a later-stage table carries (the dense
+    !! table, prob_neigh over state|geom; test_posterior_key_modes); a neighbourhood pass without it (prob_neigh
+    !! shc|snhc) keeps the rule; the lpexit rule still ends the stage (a stalled 7.5 A past lpexit 8 at iteration 2)
     subroutine test_posterior_assignment_bypass()
         call del_file(STATS_FILE)
         call assert_true(frozen_converged(.false., 'prob', 0., 1, 1),  'the regular rule did not converge on a frozen assignment')
         call assert_false(frozen_converged(.true., 'prob', 0., 1, 1),  'the pose-overlap rule ended the stage under prob_assign=posterior')
         call assert_false(frozen_converged(.true., 'prob', 0., 2, 1),  'the pose-overlap rule ended the stage under prob_assign=posterior (second iteration)')
         call assert_false(frozen_converged(.true., 'prob_neigh', 0., 3, 1), 'the pose-overlap rule ended a neighbourhood stage under prob_assign=posterior')
-        call assert_true(frozen_converged(.true., 'shc', 0., 3, 1), 'a shc pass lost its pose-overlap rule under prob_assign=posterior')
+        call assert_true(frozen_converged(.false., 'prob_neigh', 0., 3, 1), 'a neighbourhood pass without the flag lost its pose-overlap rule')
         call del_file(STATS_FILE)
         call assert_false(frozen_converged(.true., 'prob', 8., 1, 1),  'the stage ended at its first iteration under prob_assign=posterior')
         call assert_true(frozen_converged(.true., 'prob', 8., 2, 1),   'the resolution exit did not end the stage under prob_assign=posterior')

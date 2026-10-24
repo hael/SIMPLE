@@ -719,9 +719,19 @@ contains
             case('balanced')
                 self%l_prob_assign_posterior = .false.
             case('posterior')
-                ! the posterior is defined by the Euclidean objective (the temperature is its noise scale); under
-                ! objfun=cc there is nothing to draw at and the key is inert: the balanced path runs
-                self%l_prob_assign_posterior = trim(self%objfun) == 'euclid'
+                ! only the probability tables of the later stages draw (solve3D 3 on, solve2D 3 on); the direct
+                ! stochastic neighbourhoods and the sampling strategies keep their own samplers. Under objfun=cc
+                ! there is no temperature to draw at: the key is inert and the balanced path runs
+                select case(trim(self%refine))
+                    case('prob','prob_snhc')
+                        self%l_prob_assign_posterior = .true.
+                    case('prob_neigh')
+                        self%l_prob_assign_posterior = trim(self%prob_neigh_mode) == 'state' .or. &
+                            &trim(self%prob_neigh_mode) == 'geom'
+                    case DEFAULT
+                        self%l_prob_assign_posterior = .false.
+                end select
+                if( trim(self%objfun) /= 'euclid' ) self%l_prob_assign_posterior = .false.
                 if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
                 ! no ramp unless an end is given: the run stays at prob_beta
                 if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta

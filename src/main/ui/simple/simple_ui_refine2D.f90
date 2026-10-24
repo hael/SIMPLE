@@ -152,10 +152,11 @@ contains
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic stages commit each particle from its table of losses: balanced draws classes in '//&
+        &'How the probabilistic stages (3 on) commit each particle from its table of losses: balanced draws classes in '//&
         &'turn and gives each its closest free particle, so every class is populated; posterior draws each '//&
         &'particle''s class and in-plane rotation from its own row posterior at its own noise temperature and '//&
-        &'forces no class to be populated (objfun=euclid)(balanced|posterior){balanced}', '', .false., 'balanced', &
+        &'forces no class to be populated (objfun=euclid); stages 1-2 keep their stochastic search'//&
+        &'(balanced|posterior){balanced}', '', .false., 'balanced', &
         &group="search", choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
@@ -249,9 +250,10 @@ contains
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic stages commit each particle: balanced populates every class from the class frontier; '//&
+        &'How the probabilistic stages (3 on) commit each particle: balanced populates every class from the class frontier; '//&
         &'posterior draws each particle''s class and in-plane rotation from its own row posterior at its own noise '//&
-        &'temperature (objfun=euclid)(balanced|posterior){balanced}', '', .false., 'balanced', group="cluster 2D", &
+        &'temperature (objfun=euclid); stages 1-2 keep their stochastic search(balanced|posterior){balanced}', '', .false., &
+        &'balanced', group="cluster 2D", &
         &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&

@@ -363,23 +363,16 @@ frontier code is untouched under the default. The
 key is an advanced search input of `refine2D`, `solve2D` and
 `solve2D_chunks`; the 2D convergence rules are unchanged in this step.
 
-The 2D search strategies that draw with a sampler of their own follow the
-key as well (2026-10-23): `snhc_smpl` and `snhc_smpl_many` draw each
-class's in-plane rotation from the posterior over every grid rotation at
-the seed shift (`gen_posterior_val`; the batched scores of
-`snhc_smpl_many` through `draw_posterior_scores`) and the class from the
-posterior over the whole evaluated row, its best `snhc_smpl_ncls` entries
-shift-refined and the rest as scored (`inpl_srch_peaks` with
-`l_keep_unrefined`), in place of the power sampler over the refined top
-few; the drawn class's shift is then refined as today. `inpl_smpl` draws
-the rotation of its class from the posterior at the seed shift and refines
-the shift at the drawn rotation (draw, then polish, as the tables do),
-in place of refining the best `snhc_smpl_ninpl` rotations and power
-sampling among them. `greedy_smpl` draws each class's rotation from the
-posterior in place of the squared sampler over the best `smpl_ninpl`; its
-class selection stays greedy. `snhc` (no sampler) and `greedy` are
-untouched. The old samplers stay as the default's code until every caller
-has moved and the regressions have passed.
+The key draws only on the tables of solve2D's stages 3 on (`refine=prob`,
+`prob_snhc`): the parameters set `l_prob_assign_posterior` for these modes
+alone (2026-10-24). The 2D search strategies keep their own samplers under
+the key: `snhc_smpl` (solve2D's stages 1-2 and the stream's 2D pool) and
+`snhc_smpl_many` the power sampler over the refined top few, `inpl_smpl` the
+power sampling among its best `snhc_smpl_ninpl` refined rotations,
+`greedy_smpl` the squared sampler over the best `smpl_ninpl`. Their
+posterior draws (2026-10-23) were removed with the 3D direct stochastic
+neighbourhood's, whose hot draw over a hill climb's proposal set kept
+solve3D's stages 1-2 from converging (`refine3D_policy.md`).
 
 A distributed part with none of the sampled particles is valid: its table
 part writes an empty table (header, no candidates; the readers skip its

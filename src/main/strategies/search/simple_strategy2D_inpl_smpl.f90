@@ -31,16 +31,11 @@ contains
         self%spec = spec
     end subroutine new_inpl_smpl
 
-    !> The in-plane search of the previous class: the best few rotations shift-refined and one drawn among them
-    !! with the power sampler, or the rotation drawn directly when no shift is searched. Under
-    !! prob_assign=posterior the rotation is one draw from the posterior over every grid rotation at the
-    !! particle's temperature and the seed shift (gen_posterior_val), and the shift is then refined at the drawn
-    !! rotation: draw, then polish, as the probability tables do; no truncation to the best few
     subroutine srch_inpl_smpl( self, os )
         class(strategy2D_inpl_smpl), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots), sorted_corrs(self%s%nrots), offsets(2,self%s%nrots), cxy(3)
-        real    :: inpl_dist, temp
+        real    :: inpl_dist
         integer :: sorted_inds(self%s%nrots), isample, inpl_ind, order_ind
         logical :: l_prob_objfun
         if( os%get_state(self%s%iptcl) > 0 )then
@@ -49,10 +44,6 @@ contains
             l_prob_objfun = (self%s%p_ptr%cc_objfun == OBJFUN_EUCLID)
             ! shift search on previous best reference
             call self%s%inpl_srch_first
-            if( self%s%p_ptr%l_prob_assign_posterior )then
-                call srch_posterior
-                return
-            endif
             ! In-plane sampling
             if( .not. (l_prob_objfun .and. .not. s2D%do_inplsrch(self%s%iptcl_batch)) )then
                 if( self%s%l_sh_first )then
@@ -123,51 +114,6 @@ contains
         else
             call os%reject(self%s%iptcl)
         endif
-
-    contains
-
-        !> prob_assign=posterior: the rotation drawn from the posterior at the seed shift, the shift refined at it
-        subroutine srch_posterior
-            temp = self%s%b_ptr%pftc%ptcl_posterior_temp(self%s%iptcl)
-            if( self%s%l_sh_first )then
-                call self%s%b_ptr%pftc%gen_posterior_val(self%s%best_class, self%s%iptcl, self%s%xy_first, temp,&
-                    &inpl_dist, inpl_ind)
-            else
-                call self%s%b_ptr%pftc%gen_posterior_val(self%s%best_class, self%s%iptcl, [0.,0.], temp, inpl_dist, inpl_ind)
-            endif
-            self%s%best_rot   = inpl_ind
-            self%s%best_corr  = exp(-inpl_dist)
-            self%s%best_shvec = 0.
-            if( s2D%do_inplsrch(self%s%iptcl_batch) )then
-                ! the shift at the drawn rotation (the stored rotation when the search finds no improvement)
-                call self%s%grad_shsrch_obj2%set_indices(self%s%best_class, self%s%iptcl)
-                if( self%s%l_sh_first )then
-                    cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind, xy_in=self%s%xy_first)
-                    if( inpl_ind == 0 )then
-                        inpl_ind = self%s%best_rot
-                        cxy(1)   = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(self%s%best_class, self%s%iptcl,&
-                            &real(self%s%xy_first,dp), inpl_ind))
-                        cxy(2:3) = self%s%xy_first_rot
-                    endif
-                else
-                    cxy = self%s%grad_shsrch_obj2%minimize(irot=inpl_ind)
-                    if( inpl_ind == 0 )then
-                        inpl_ind = self%s%best_rot
-                        cxy      = [real(self%s%b_ptr%pftc%gen_corr_for_rot_8(self%s%best_class, self%s%iptcl, inpl_ind)), 0.,0.]
-                    endif
-                endif
-                self%s%best_rot   = inpl_ind
-                self%s%best_corr  = cxy(1)
-                self%s%best_shvec = cxy(2:3)
-            endif
-            self%s%nrefs_eval = self%s%nrefs
-            ! polish-only: one local joint solve of the drawn pose, angle only, as the sampled route
-            if( self%s%continuous_active ) &
-                &call self%s%refine_selected_continuously(l_polish_shifts=.false.)
-            call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
-            call self%s%assign_ori(os)
-        end subroutine srch_posterior
-
     end subroutine srch_inpl_smpl
 
     subroutine kill_inpl_smpl( self )

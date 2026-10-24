@@ -16,7 +16,7 @@ public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists, sample_power_dists, sample_likelihood_index
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
-public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_scores
+public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 public :: prob_beta_at
 private
 #include "simple_local_flags.inc"
@@ -430,24 +430,6 @@ contains
         if( which == 0 ) which = imin ! rounding at the top of the cumulative sum
         dist = dists(which)
     end subroutine draw_posterior_row
-
-    !> draw_posterior_row over scores stored as exp(-L) (the search strategies' class and rotation buffers): a
-    !! score above zero is the loss -log(score), one at or below zero an unscored entry (the buffers' sentinel),
-    !! invalid for the draw. dists is a work array of size >= n that holds the losses on return; which is the
-    !! drawn entry (0 when none is scored) and dist its loss
-    subroutine draw_posterior_scores( n, scores, temp, w, dists, which, dist )
-        integer, intent(in)    :: n
-        real,    intent(in)    :: scores(n), temp
-        real,    intent(inout) :: w(:), dists(:)
-        integer, intent(out)   :: which
-        real,    intent(out)   :: dist
-        integer :: i
-        do i = 1,n
-            dists(i) = huge(dist)
-            if( scores(i) > 0. ) dists(i) = -log(scores(i))
-        enddo
-        call draw_posterior_row(n, dists(1:n), temp, w, which, dist)
-    end subroutine draw_posterior_scores
 
     !> The posterior over one table row at temperature temp: p_r proportional to exp(-temp (dist_r - dist_min))
     !! over the valid distances (finite and below the invalid marker, as ref_assign counts them), zero
