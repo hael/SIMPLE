@@ -53,30 +53,32 @@ contains
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
 
-    !> prob_assign=posterior (pose_marginalization.md 10.3): a frozen assignment (full scan, overlap 1) converges
-    !! the regular rule and must not converge under the flag, which only a later-stage table carries (the dense
-    !! table, prob_neigh over state|geom; test_posterior_key_modes); a neighbourhood pass without it (prob_neigh
-    !! shc|snhc) keeps the rule; the lpexit rule still ends the stage (a stalled 7.5 A past lpexit 8 at iteration 2)
+    !> the probability tables' posterior draws (pose_marginalization.md 10.3): a frozen assignment (full scan,
+    !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)
+    !! nor on the neighbourhood table (refine=prob_neigh, every neighbourhood mode), whose committed pose is a
+    !! draw; the lpexit rule still ends the stage (a stalled 7.5 A past lpexit 8 at the stage's second iteration)
     subroutine test_posterior_assignment_bypass()
         call del_file(STATS_FILE)
-        call assert_true(frozen_converged(.false., 'prob', 0., 1, 1),  'the regular rule did not converge on a frozen assignment')
-        call assert_false(frozen_converged(.true., 'prob', 0., 1, 1),  'the pose-overlap rule ended the stage under prob_assign=posterior')
-        call assert_false(frozen_converged(.true., 'prob', 0., 2, 1),  'the pose-overlap rule ended the stage under prob_assign=posterior (second iteration)')
-        call assert_false(frozen_converged(.true., 'prob_neigh', 0., 3, 1), 'the pose-overlap rule ended a neighbourhood stage under prob_assign=posterior')
-        call assert_true(frozen_converged(.false., 'prob_neigh', 0., 3, 1), 'a neighbourhood pass without the flag lost its pose-overlap rule')
+        call assert_true(frozen_converged('shc', 0., 1, 1), 'the regular rule did not converge on a frozen shc assignment')
+        call assert_false(frozen_converged('prob', 0., 1, 1), 'the pose-overlap rule ended a dense-table stage')
+        call assert_false(frozen_converged('prob', 0., 2, 1), 'the pose-overlap rule ended a dense-table stage (second iteration)')
+        call assert_false(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='shc'), 'the pose-overlap rule ended a neighbourhood stage (shc)')
+        call assert_false(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='state'), 'the pose-overlap rule ended a neighbourhood stage (state)')
+        call assert_true(frozen_converged('shc', 0., 3, 1), 'a shc pass lost its pose-overlap rule')
         call del_file(STATS_FILE)
-        call assert_false(frozen_converged(.true., 'prob', 8., 1, 1),  'the stage ended at its first iteration under prob_assign=posterior')
-        call assert_true(frozen_converged(.true., 'prob', 8., 2, 1),   'the resolution exit did not end the stage under prob_assign=posterior')
+        call assert_false(frozen_converged('prob', 8., 1, 1), 'the stage ended at its first iteration')
+        call assert_true(frozen_converged('prob', 8., 2, 1),  'the resolution exit did not end the stage')
         call del_file(STATS_FILE)
     end subroutine test_posterior_assignment_bypass
 
     !> check_conv3D of a single-state pass of NPTCLS frozen particles (frac 100, mi_proj 1) at FSC=0.5
-    !! 7.5 A, iteration which_iter of a stage from startit, with the refine mode, lpexit and the posterior key as given
-    logical function frozen_converged( l_posterior, refine, lpexit, which_iter, startit ) result( converged )
-        logical,          intent(in) :: l_posterior
-        character(len=*), intent(in) :: refine
-        real,             intent(in) :: lpexit
-        integer,          intent(in) :: which_iter, startit
+    !! 7.5 A, iteration which_iter of a stage from startit, with the refine mode, lpexit and, for prob_neigh, the
+    !! neighbourhood mode as given
+    logical function frozen_converged( refine, lpexit, which_iter, startit, neigh_mode ) result( converged )
+        character(len=*),           intent(in) :: refine
+        real,                       intent(in) :: lpexit
+        integer,                    intent(in) :: which_iter, startit
+        character(len=*), optional, intent(in) :: neigh_mode
         class(parameters), allocatable :: params
         type(convergence) :: conv
         type(cmdline)     :: cline
@@ -99,7 +101,7 @@ contains
         params%lpexit     = lpexit
         params%startit    = startit
         params%which_iter = which_iter
-        params%l_prob_assign_posterior = l_posterior
+        if( present(neigh_mode) ) params%prob_neigh_mode = neigh_mode
         call cline%set('trs',      5.)
         call cline%set('overlap',  0.99)
         call cline%set('fracsrch', 99.)

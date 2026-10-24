@@ -1410,19 +1410,25 @@ every draw; nothing else should. The inventory, in the order to retire
 it, each step with its own regression and nothing deleted until every
 caller has moved:
 
-1. **Already replaced by T_eff under the key** (delete once the default
-   flips to `posterior`): the in-plane angular window (`prob_athres` and
-   `dist_inpl` through `inpl_likelihood_nsample`, `calc_athres` for the
-   in-plane, `likelihood_nsample`), the bounded sampler of `refine=neigh`
-   (`gen_prob_objfun_val`, `angle_sampling`, `smpl_inpl_athres`), the power
-   and squared samplers and their constants (`power_sampling`,
-   `squared_sampling`, `EXTR_POWER`, `POST_EXTR_POWER`, `snhc_smpl_ninpl`,
-   `smpl_ninpl`), the likelihood samplers of the tables (`gen_likelihood_val`
-   and its bank form, `sample_likelihood_dist(s)`, `sample_likelihood_index`,
-   `sample_bounded_dists`, `sample_power_dists`), the balanced frontier of
-   the three tables and its draw width (`nhood_sz`, `NHOOD_FRAC`,
-   `npeaks_inpl` as a width, the frontier's `prob_athres`), the reference
-   check for flat rows that only the frontier needs.
+1. **Already replaced by T_eff in the tables**: the in-plane angular
+   window of the fills (`prob_athres` and `dist_inpl` through
+   `inpl_likelihood_nsample`, `calc_athres` for the in-plane,
+   `likelihood_nsample`), the likelihood samplers of the tables
+   (`gen_likelihood_val` and its bank form, `sample_likelihood_dist(s)`),
+   the balanced frontier and its draw width (the frontier's `prob_athres`),
+   the reference check for flat rows that only the frontier needs. Deleted
+   from every table on 2026-10-24 (section 19, items 5-6;
+   `sample_likelihood_index`, the function-form `sample_likelihood_dist`
+   and the neighbourhood fills' likelihood in-plane draw with them); what
+   remains of the list is `gen_likelihood_val` and its bank form in the
+   pftc, with bench and tester callers only, and `prob_athres` in the
+   strategies and the dense fill's refinement count (item 2). The 2D
+   `nhood_sz`/`NHOOD_FRAC` now size only the shift refinement (item 2). The
+   SHC strategies' samplers (`power_sampling`,
+   `squared_sampling`, `gen_prob_objfun_val`, `angle_sampling`,
+   `gen_prob_power_objfun_val`, `sample_bounded_dists`,
+   `sample_power_dists`) stay: the posterior is the tables' rule
+   (section 19, item 3).
 2. **Refinement counts, to be driven by the posterior mass**: `projs_ns`
    from `calc_num2sample(prob_athres, dist)` in the dense 3D fill,
    `nhood_sz`, `snhc_smpl_ncls` and `smpl_ncls` in 2D, `npeaks_inpl` in 3D.
@@ -1438,8 +1444,9 @@ caller has moved:
    (`npeaks`, the pooled capacity), the 2D `snhc_nrefs_bound`. The honest
    replacement is the previous iteration's posterior mass deciding which
    cells to re-score; a larger change, last.
-4. **Then the keys themselves**: `prob_assign` (posterior the only path),
-   `prob_inpl`, and the refine modes that only existed to pick a sampler
+4. **Then the keys themselves**: `prob_assign` went on 2026-10-24 (one
+   draw on every table; section 19, items 5-6); `prob_inpl`, and the
+   refine modes that only existed to pick a sampler
    (`snhc_smpl`, `snhc_smpl_many`, `inpl_smpl`, `greedy_smpl`, and
    `refine=neigh`'s sampled in-plane), collapsed onto the posterior path.
    What stays is what is not a sampler: the resolution ladder, the shift
@@ -1450,43 +1457,127 @@ a constant is not enough, the PfCRT 10/10 at the bar, the 2D regression,
 and the known-pose calibration of the temperature (gate item 3), which
 is what makes the one number mean what it says.
 
-## 19. The early stages keep their own samplers (2026-10-24)
+## 19. Decisions of 2026-10-24
 
-The tempered posterior now draws only on the tables of the later stages:
-`refine=prob` and `prob_neigh` over `state|geom` in 3D (solve3D stages 3-8),
-`prob` and `prob_snhc` in 2D (solve2D stages 3-6). The direct stochastic
-neighbourhoods (`prob_neigh_mode=shc|snhc`, solve3D stages 1-2) and the
-search strategies with a sampler of their own (`refine=neigh`; `snhc_smpl`,
-`snhc_smpl_many`, `inpl_smpl`, `greedy_smpl`) run their pre-posterior
-samplers under the key: the balanced frontier with the likelihood in-plane
-draw within the angular window, and the bounded, power and squared samplers.
-The parameters decide it once (`l_prob_assign_posterior` is set for the
-later-stage table modes only), and the strategies' posterior branches are
-gone (Hans's ruling).
+Hans, with the code "a little messy" and several failure modes under test
+(streptavidin `solve3D_cavgs` fails 1 of 10 on the current code; its best
+results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
 
-**Why: streptavidin, ten restarts at `prob_beta=0.3`.** Stages 1-2 did
-nothing in any restart: pose overlap 0.000-0.002 over their 40 iterations,
-the pose moving 85-90 degrees per iteration (what random pairs give), the
-stage-1 score flat at e^-1 and the stage-1 map a round blob. Stage 3 started
-from random poses (at its first iteration the pose stage 2 handed over was
-the data's mode for 1% of the particles) and solved the structure from
-scratch, nine times to the Nyquist limit of the 88-pixel crop (3.12 A, a
-ceiling) and once to 3.27 A. Two causes combine.
+1. **`prob_beta` defaults to 0.3.** The runs optimise for small membrane
+   proteins on the assumption that the rest follows; 0.1 searched PfCRT
+   to the ceiling three of three (section 17) but is the hotter end.
+2. **The balanced reference assignment goes.** Methodologically a
+   no-brainer: particles are assigned to references, references are not
+   forced to be assigned particles, on every 2D and 3D table route.
+   The frontier was first kept reachable as `prob_assign=balanced` for one
+   more round of testing; Hans: "delete it now" (the same day), and item 5
+   says what was deleted and what stays.
+3. **The posterior sampling is the tables'.** It is restricted to the
+   prob modes of the later stages of abinitio2D and abinitio3D
+   (`refine=prob|prob_snhc` in 2D, `prob|prob_neigh` in 3D). The
+   migration of the SHC strategies (`snhc_smpl`, `snhc_smpl_many`,
+   `inpl_smpl`, `greedy_smpl`, `refine=neigh`) onto the posterior
+   primitive, built on 2026-10-23 (section 16), is taken back: the six
+   strategy files are restored to their state before it, `inpl_srch_peaks`
+   loses `l_keep_unrefined`, and `draw_posterior_scores` goes with its
+   only callers (its test too). Section 18's inventory is read with this
+   in mind: the strategies' samplers are not in scope; the tables' are.
+   solve3D's stages 1-2 are `prob_neigh` too (mode `shc`, from random
+   orientations), so they drew from the tempered posterior like the later
+   stages. Hans: "This might be the problem I have been seeing. Can we
+   put them back to the original sampling approach for now?" Items 5-6.
+4. **The streptavidin regression** is not attributed. Between 43de9b34
+   and the posterior work sit changes to the stage control that a bisect
+   should visit first, each with 10 restarts of the (fast) cavgs run:
+   24d50aabf (the lpexit gain guard made able to fire), 0c9542e50 (the
+   modified stage progression, nu_stage), a29f0e00c and fd9cfde6f
+   (freq_march_aggressive), f078cf683 (2D tables, 3D table, NU label
+   optimisation), af13bc828 (the search's crop reused in the 3D
+   reconstruction), f4d6accff (the frequency marching with vol1), then
+   the posterior commits 0b723362c onwards. The posterior path is off by
+   default before this commit, so a failure at balanced points at the
+   stage control, not at the draw.
+5. **What was deleted, what stays (the same day).** The class-balanced
+   frontier is deleted from every table: the dense 3D table
+   (`simple_eul_prob_tab.f90`: `ref_assign` is the posterior draw), the 2D
+   tables (`simple_eul_prob_tab2D.f90`: `ref_assign`, `ref_assign_sparse`;
+   the `ninpl_smpl` plumbing, the in-plane work arrays of the sparse
+   workspace and the likelihood branches of `score_seeded_class` with it)
+   and the neighbourhood table (`simple_eul_prob_tab_neigh.f90`:
+   `ref_assign_neigh` re-seeds a particle without a candidate and draws;
+   the graph, the frontier, the greedy state labels and the leftover rule
+   are gone). With them: the reference tests
+   (`test_ref_assign_against_reference`, `reference_assign`,
+   `test_dense/sparse_assign_against_reference`, `reference_assign2D`,
+   `reference_sparse_assign2D`), `sample_likelihood_index` and the
+   function-form `sample_likelihood_dist` (no caller left; the array form
+   stays for the pftc samplers), the 2D bench's frontier timings
+   (`prob_assign_profile2D`: reads and draws), and the `prob_assign` key
+   itself (one assignment per table mode, no key; the tables' constructors
+   require `objfun=euclid`, the loss the posterior is defined by). The
+   convergence bypass covers `refine=prob` and `prob_neigh` over the
+   subspace neighbourhoods (item 6).
+   Hans, on a first version that kept the neighbourhood table's frontier for
+   solve3D's stages 1-2: "I do not want reference-particle association to be
+   balanced but be done in the same style as the posterior route even if the
+   sampling of the orientations is not." Item 6 says what the stages 1-2
+   question (item 3) came to.
+6. **The early stages are a hill climb; the draw over its proposal set is
+   not a search (streptavidin, ten restarts at `prob_beta=0.3`, the
+   posterior everywhere).** Stages 1-2 did nothing in any restart: pose
+   overlap 0.000-0.002 over their 40 iterations, the pose moving 85-90
+   degrees per iteration (what random pairs give), the stage-1 score flat
+   at e^-1 and the stage-1 map a round blob. Stage 3 started from random
+   poses (at its first iteration the pose stage 2 handed over was the
+   data's mode for 1% of the particles) and solved the structure from
+   scratch, nine times to the Nyquist limit of the 88-pixel crop (3.12 A,
+   a ceiling) and once to 3.27 A. Two causes combine.
+   - The shc fill scores references in random order and stops at the first
+     that beats the current pose, the current pose scored last. That is a
+     hill climb's proposal set: taking the improvement is the climb's move,
+     a hot posterior draw over it is a move to a random proposal.
+   - The temperature is small where the band is small. T is about the
+     band's Fourier component count over L_min (`T x L_min` 356 and 406
+     against 347 and 396 components in stages 3 and 4 of that run), so
+     stage 1 (rings 2-5 on a 137 A box) sits near T = 33, T_eff = 10 at
+     beta 0.3, where even the final map separates a typical pair of
+     directions by a third of a nat.
+   PfCRT at beta 1 (section 17, run 8) kept stages 1-4 on track because its
+   draw was cold enough to pick the improvement; run 9's 90-degree pose
+   moves at the start of stage 3 at beta 0.1 are streptavidin's effect on a
+   particle whose stage 3 recovers.
+   Two answers were tried the same afternoon. The first kept the
+   neighbourhood frontier for stages 1-2; Hans: no balanced frontier in any
+   assignment ("if all the images represent one projection direction, they
+   should be assigned to that projection direction, nothing else makes
+   sense"). The second had the direct stochastic neighbourhoods take their
+   best candidate, the hill climb's move; Hans: "we can never do argmin
+   here ever. It simply doesn't work." So every table draws, and the two
+   causes are met where they are:
+   - **The current pose is a candidate.** `evaluate_direct_stochastic_refs`
+     scores the previous reference when the stop rule left it out, so the
+     draw over the store is an acceptance step over the proposals and the
+     incumbent, not a forced move.
+   - **The temperature of the early stages is not decided.** A first
+     version set `prob_beta=1` on the stages before `PROB_REFINE_STAGE`
+     (beta 1 read as the working point of PfCRT run 8's early stages);
+     Hans: a run at 1, then 0.3, then back to 1 on the last stage is not
+     elegant, and "I am not even sure we need prob_beta=1 for the first two
+     stages." It was an inference, not a measurement (the diagnosis run
+     had both causes at once), so it is out: every stage runs at
+     `prob_beta`, and the streptavidin tally with the incumbent in the set
+     is the experiment that separates the two causes. If the early stages
+     stay dead, the principled next step is not a stage schedule but the
+     draw sharpness as the one control (section 18, item 2, made literal):
+     per particle, the temperature at which the row posterior has a fixed
+     effective number of candidates n_eff = 1/sum p^2, colder than physical
+     where the data are flat (stage 1) and hotter where they are a delta
+     (stage 5), the final map weighted at the physical posterior. That
+     replaces `prob_beta` and `prob_beta_end` with one number.
+   With that the neighbourhood table's likelihood in-plane draw went too
+   (`score_seeded_ref` posterior only; `calc_athres` for `dist_inpl` and
+   the `nsample` plumbing out of the neighbourhood fills; `prob_assign` and
+   a short-lived `prob_inpl_draw` gone). `gen_likelihood_val` and its bank
+   form keep their bench and tester callers for now. No key decides any of
+   this: the stage plan does.
 
-- The shc fill scores references in random order and stops at the first
-  that beats the current pose, the current pose scored last. That is a
-  hill climb's proposal set: the frontier turns it into a move to the
-  improvement, a hot posterior draw over it into a move to a random
-  proposal, and the current pose is never a candidate.
-- The temperature is small where the band is small. T is about the band's
-  Fourier component count over L_min (`T x L_min` 356 and 406 against 347
-  and 396 components in stages 3 and 4 of that run), so stage 1 (rings 2-5
-  on a 137 A box) sits near T = 33, T_eff = 10 at beta 0.3, where even the
-  final map separates a typical pair of directions by a third of a nat.
-
-PfCRT at beta 1 (section 17, run 8) kept stages 1-4 on track because its
-draw was cold enough to pick the improvement; run 9's 90-degree pose moves
-at the start of stage 3 at beta 0.1 are streptavidin's effect on a particle
-whose stage 3 recovers. Section 18's retirement list changes accordingly:
-the early-stage modes keep their samplers, and the list covers the
-later-stage tables only.

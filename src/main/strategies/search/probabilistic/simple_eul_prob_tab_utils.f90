@@ -13,7 +13,7 @@ implicit none
 public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
-public :: sample_bounded_dists, sample_likelihood_dist, sample_likelihood_dists, sample_power_dists, sample_likelihood_index
+public :: sample_bounded_dists, sample_likelihood_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
@@ -139,13 +139,6 @@ end type prob_candidate_store
 interface angle_sampling
     module procedure angle_sampling_1
     module procedure angle_sampling_2
-end interface
-
-abstract interface
-    function dist_eval_fun( ind ) result( dist )
-        integer, intent(in) :: ind
-        real :: dist
-    end function dist_eval_fun
 end interface
 
 contains
@@ -357,7 +350,7 @@ contains
         temp = real(DPI * wsqsum / (2.d0 * real(pftsz,dp)))
     end function posterior_temperature
 
-    !> The tempering factor of iteration iter of a run of niters (prob_assign=posterior): a geometric ramp from
+    !> The tempering factor of iteration iter of a run of niters (the tables' posterior draws): a geometric ramp from
     !! beta0 at the first iteration to beta1 at the last, so every iteration cools by the same factor (0.1 to 1
     !! over 25 iterations is x1.1 per iteration; pose_marginalization.md section 17). beta0 = beta1 is a flat
     !! run; a run of one iteration is at beta1, the factor the map is weighted at
@@ -373,7 +366,7 @@ contains
         beta = beta0 * (beta1 / beta0)**frac
     end function prob_beta_at
 
-    !> One draw from the posterior over a table row at temperature temp (prob_assign=posterior,
+    !> One draw from the posterior over a table row at temperature temp (the tables' assignment,
     !! doc/implementation_notes/planned/pose_marginalization.md section 4.1): p_r proportional to
     !! exp(-temp (dist_r - dist_min)) over the valid distances (finite, below the invalid marker), zero
     !! elsewhere. which is the drawn index and dist its distance; which = 0 when no distance is valid.
@@ -686,43 +679,11 @@ contains
         call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
     end subroutine select_lowest_dists
 
-    ! Truncated, numerically-stabilized softmax over a lazily-evaluated distance function.
-    ! The distances are noise-variance-normalized negative-log-likelihoods (whitened per
-    ! Fourier shell by the estimated sigma2_noise upstream), so exp(-dist) is a properly
-    ! calibrated likelihood weight and no external temperature/tau factor is required. The
-    ! per-candidate min-shift only guards against overflow; it cancels in the normalized
-    ! weights. Only the best nsample candidates form the sampling support (top-K sampling).
-    subroutine sample_likelihood_dist( n, dist_fun, nsample, dist, corr, which, pvec_sorted, sorted_inds )
-        integer,   intent(in)    :: n, nsample
-        procedure(dist_eval_fun)  :: dist_fun
-        real,      intent(out)   :: dist, corr
-        integer,   intent(out)   :: which
-        real,      intent(inout) :: pvec_sorted(:)
-        integer,   intent(inout) :: sorted_inds(:)
-        real    :: cdf(max(1,nsample)), dist_tmp
-        integer :: num_ub, i
-        num_ub = min(n,max(1,nsample))
-        do i = 1,num_ub
-            pvec_sorted(i) = dist_fun(i)
-            sorted_inds(i) = i
-        enddo
-        do i = num_ub / 2, 1, -1
-            call maxheap_sift_down(pvec_sorted, sorted_inds, i, num_ub)
-        enddo
-        do i = num_ub + 1,n
-            dist_tmp = dist_fun(i)
-            if( dist_tmp < pvec_sorted(1) )then
-                pvec_sorted(1) = dist_tmp
-                sorted_inds(1) = i
-                call maxheap_sift_down(pvec_sorted, sorted_inds, 1, num_ub)
-            endif
-        enddo
-        call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
-        call draw_likelihood(num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which)
-    end subroutine sample_likelihood_dist
-
-    !> sample_likelihood_dist over distances already evaluated, dists(1:n), with the caller's work buffer cdf
-    !! (size >= nsample): the same draw without an internal procedure or an allocation per call
+    ! Truncated, numerically-stabilized softmax over the distances dists(1:n), with the caller's work buffer cdf
+    ! (size >= nsample). The distances are noise-variance-normalized negative-log-likelihoods (whitened per
+    ! Fourier shell by the estimated sigma2_noise upstream), so exp(-dist) is a calibrated likelihood weight and no
+    ! temperature is applied. The per-candidate min-shift only guards against overflow; it cancels in the
+    ! normalized weights. Only the best nsample candidates form the sampling support (top-K sampling).
     subroutine sample_likelihood_dists( n, dists, nsample, dist, corr, which, pvec_sorted, sorted_inds, cdf )
         integer, intent(in)    :: n, nsample
         real,    intent(in)    :: dists(:)
@@ -778,57 +739,6 @@ contains
         dist  = pvec_sorted(pick)
         corr  = exp(-dist)
     end subroutine draw_likelihood
-
-    ! Array-based counterpart of sample_likelihood_dist for the global assignment stage.
-    ! Given the already-evaluated distances of n candidates, draw one index with the same
-    ! truncated, min-shifted softmax exp(-(dist-min_dist)) over the best ntop candidates.
-    ! Candidates with dist >= huge_val (exhausted/sentinel entries) are excluded. sorted and
-    ! order are caller-provided work buffers of size >= n. Shared by the 2D sparse and dense
-    ! class-assignment frontiers to keep a single softmax implementation.
-    subroutine sample_likelihood_index( n, dists, ntop, huge_val, sorted, order, which )
-        integer, intent(in)    :: n, ntop
-        real,    intent(in)    :: dists(:)
-        real,    intent(in)    :: huge_val
-        real,    intent(inout) :: sorted(:)
-        integer, intent(inout) :: order(:)
-        integer, intent(out)   :: which
-        integer :: j, ntop_eff
-        real    :: min_dist, csum, rnd, acc, weight
-        if( n < 1 )then
-            which = 1
-            return
-        endif
-        do j = 1,n
-            sorted(j) = dists(j)
-            order(j)  = j
-        enddo
-        call hpsort(sorted(1:n), order(1:n))
-        min_dist = sorted(1)
-        ntop_eff = min(max(1,ntop), n)
-        csum = 0.
-        do j = 1,ntop_eff
-            if( sorted(j) >= huge_val ) cycle
-            weight = exp(-(sorted(j) - min_dist))
-            if( weight > TINY ) csum = csum + weight
-        enddo
-        if( csum < TINY )then
-            which = order(1)
-            return
-        endif
-        rnd = ran3() * csum
-        acc = 0.
-        do j = 1,ntop_eff
-            if( sorted(j) >= huge_val ) cycle
-            weight = exp(-(sorted(j) - min_dist))
-            if( weight <= TINY ) cycle
-            acc = acc + weight
-            if( acc >= rnd )then
-                which = order(j)
-                return
-            endif
-        enddo
-        which = order(1)
-    end subroutine sample_likelihood_index
 
     subroutine maxheap_sift_down( pvec_sorted, sorted_inds, root_in, heap_size )
         real,    intent(inout) :: pvec_sorted(:)

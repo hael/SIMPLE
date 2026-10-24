@@ -487,7 +487,7 @@ contains
         ref_slots_identical = all(self%pfts_refs(:,:,iref,REF_EVEN) == self%pfts_refs(:,:,iref,REF_ODD))
     end function ref_slots_identical
 
-    !> The temperature every posterior draw of particle iptcl runs at (prob_assign=posterior): the Gaussian noise
+    !> The temperature every posterior draw of particle iptcl runs at (the probability tables): the Gaussian noise
     !! model's pi wsqsum / (2 pftsz) from the memoized self-term under the current sigma2 (posterior_temperature)
     !! times the tempering factor prob_beta (T_eff = beta T, below one hotter: the search's annealing knob). The
     !! table workers write the untempered value into their part files; the assignments apply the factor there,
@@ -728,7 +728,7 @@ contains
     end subroutine gen_likelihood_val_bank
 
     !> One in-plane rotation drawn from the posterior over the nrots Euclidean losses of reference iref against
-    !! the particle shifted by shift (the shifted-reference kernel) at temperature temp (prob_assign=posterior,
+    !! the particle shifted by shift (the shifted-reference kernel) at temperature temp (the probability tables' fill,
     !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 16): p_r proportional to
     !! exp(-temp (L_r - L_min)) over every grid rotation, no angular threshold and no truncation to the best
     !! nsample (gen_likelihood_val). dist is the drawn rotation's loss. objfun=euclid only: the temperature is

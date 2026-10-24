@@ -318,61 +318,43 @@ implies, and every particle of the master must be in exactly one part
 nptcls)` of 8 bytes and the refined entries in compressed-row form; the
 assignment rebuilds a full candidate from them (`dense_candidate`). The
 `PROB_ALIGN2D` report splits the reads (heads, candidates) and the
-assignment (class lists: counts, fill, sort; the frontier loop; the leftover
-particles).
+assignment (the posterior draws).
 
-Dense assignment (`ref_assign_likelihood`): every active class sorts the
-particles by distance; each step draws among the classes' closest available
-particles (the frontier). The frontier is kept, not rescanned: after an
-assignment only the classes whose head was the assigned particle move on.
+The assignment is one draw per particle from its tempered row posterior
+(2026-10-23; the tables' only assignment since 2026-10-24, when the
+class-balanced frontier was deleted; the constructor requires
+`objfun=euclid`, the loss the posterior is defined by). The rule of the 3D
+tables (`refine3D_policy.md`,
+`doc/implementation_notes/planned/pose_marginalization.md`) on the 2D tables,
+for `refine=prob` and `refine=prob_snhc`: no class is forced to be
+populated. At the fill, every class's in-plane rotation is one draw from the
+posterior over all grid rotations of the class against the seeded particle at
+the particle's temperature T_i = pi wsqsum_i / (2 pftsz) (`gen_posterior_val`,
+its bank form; `score_seeded_class`, the shift-free direct call), no angular
+threshold; the worker writes T_i per particle into the part file. At the
+assignment, each particle's class is one draw from the posterior over its
+row, p proportional to exp(-T_i (L - L_min)): over the active classes of its
+dense row (`ref_assign`, the drawn class's `dense_candidate`, `frac` 100), or
+over its valid evaluated candidates (`ref_assign_sparse`, an active class
+with an in-plane index; the drawn candidate with its shift, the peak count
+the candidates with an in-plane index and the fraction their share of the
+classes). A particle without a valid distance takes the first active class
+(dense) or its best candidate (sparse); one without a temperature its argmin,
+with a warning. The draws run in particle order on the master's random
+stream, so shared-memory and distributed runs draw alike; the log reports the
+fraction of particles drawn at their row mode. The tempering factor
+`prob_beta` (default 0.3, for small membrane proteins; below one hotter)
+multiplies the temperature of the class and in-plane draws as of the 3D ones,
+so below one they draw from the tempered posterior p^beta; the 2D runs do not
+anneal (`prob_beta_end` is a refine3D/solve3D control). `prob_beta` is an
+advanced search input of `refine2D`, `solve2D` and `solve2D_chunks`; the 2D
+convergence rules are unchanged in this step.
 
-Sparse assignment (`ref_assign_sparse_likelihood`): each class's candidates
-are gathered with their particles and distances during the fill pass and
-sorted in parallel over the classes (the same unstable `hpsort` on the same
-input, so ties fall as before); the head walk reads those arrays in order,
-and each particle's peak count is computed once. The frontier loop keeps its
-order, its one random draw per step and the swap-remove that decides ties
-within a particle.
-
-**`prob_assign=posterior`** (2026-10-23; default `balanced`, the frontier
-above; `objfun=euclid` required). The key of the 3D tables
-(`refine3D_policy.md`, `doc/implementation_notes/planned/pose_marginalization.md`)
-on the 2D tables, for `refine=prob` and `refine=prob_snhc`: no class is
-forced to be populated. At the fill, every class's in-plane rotation is one
-draw from the posterior over all grid rotations of the class against the
-seeded particle at the particle's temperature T_i = pi wsqsum_i / (2 pftsz)
-(`gen_posterior_val`, its bank form; `score_seeded_class`, the shift-free
-direct call), in place of the likelihood draw over the `ninpl_smpl` best;
-the worker writes T_i per particle into the part file. At the assignment,
-each particle's class is one draw from the posterior over its row, p
-proportional to exp(-T_i (L - L_min)): over the active classes of its dense
-row (`ref_assign_likelihood`, the drawn class's `dense_candidate`, `frac`
-100), or over its valid evaluated candidates (`ref_assign_sparse_likelihood`,
-an active class with an in-plane index; the drawn candidate with its shift,
-the peak count and fraction as the frontier records them). A particle
-without a valid distance takes the first active class (dense) or its best
-candidate (sparse); one without a temperature its argmin, with a warning.
-The draws run in particle order on the master's random stream, so
-shared-memory and distributed runs draw alike; the log reports the fraction
-of particles drawn at their row mode. The tempering factor `prob_beta`
-(default 0.1, calibrated on the 3D path; below one hotter) multiplies the
-temperature of the class and in-plane draws as of the 3D ones, so below
-one they draw from the tempered posterior p^beta; the 2D
-runs do not anneal (`prob_beta_end` is a refine3D/solve3D control). The
-frontier code is untouched under the default. The
-key is an advanced search input of `refine2D`, `solve2D` and
-`solve2D_chunks`; the 2D convergence rules are unchanged in this step.
-
-The key draws only on the tables of solve2D's stages 3 on (`refine=prob`,
-`prob_snhc`): the parameters set `l_prob_assign_posterior` for these modes
-alone (2026-10-24). The 2D search strategies keep their own samplers under
-the key: `snhc_smpl` (solve2D's stages 1-2 and the stream's 2D pool) and
-`snhc_smpl_many` the power sampler over the refined top few, `inpl_smpl` the
-power sampling among its best `snhc_smpl_ninpl` refined rotations,
-`greedy_smpl` the squared sampler over the best `smpl_ninpl`. Their
-posterior draws (2026-10-23) were removed with the 3D direct stochastic
-neighbourhood's, whose hot draw over a hill climb's proposal set kept
-solve3D's stages 1-2 from converging (`refine3D_policy.md`).
+The posterior sampling is the tables' (`refine=prob|prob_snhc`, the modes
+of the later stages); the SHC strategies of the early stages (`snhc_smpl`,
+`snhc_smpl_many`, `inpl_smpl`, `greedy_smpl`) keep their own samplers. A
+day's migration of those onto the posterior primitive (2026-10-23) was
+taken back on 2026-10-24.
 
 A distributed part with none of the sampled particles is valid: its table
 part writes an empty table (header, no candidates; the readers skip its

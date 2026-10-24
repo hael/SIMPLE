@@ -12,9 +12,9 @@ cost, and they must not be confused:
 
 The outer problem is a stochastic-gradient idea: a fraction of the data gives
 a cheaper but noisier update of the references. The inner problem is
-importance sampling over poses. This chapter covers both, the balanced
-assignment that consumes the inner samples, and the rule that blends a
-partial update into the running reference estimate.
+importance sampling over poses. This chapter covers both, the assignment
+that consumes the inner samples, and the rule that blends a partial update
+into the running reference estimate.
 
 ## Outer sampling
 
@@ -92,121 +92,113 @@ between every particle in the subset and every reference `j`: in 3D the
 1. a common shift seed is found by shift-only optimization at the particle's
    previous pose;
 2. every reference is scored at that shift over all in-plane rotations, and
-   the in-plane rotation is drawn from the best `K_inpl` rotations by the
-   softmax defined below;
+   one in-plane rotation is drawn from the row's tempered posterior over all
+   of them (below);
 3. the best `K_ref` references are refined again in shift.
 
-For a list of `n` candidates, the truncation `K` is derived from an angular
-threshold rather than fixed:
+For the Euclidean objective, the loss `d` is the whitened negative
+log-likelihood, `d = -log(score)`, normalized by the particle's weighted
+power: one nat is `1/T_i` of it with
 
 ```text
-K      = min(n, max(1, floor(athres * n / 180))),
-athres = min(prob_athres, mean angular change of the last iteration),
+T_i = pi wsqsum_i / (2 pftsz),
 ```
 
-with `prob_athres` defaulting to 10 degrees. As the alignment settles, the
-measured angular change shrinks and the candidate list tightens
-automatically.
-
-For the Euclidean objective, the loss is the whitened negative
-log-likelihood, `d = -log(score)`; for correlation, it is
-`d = 1 - max(cc, 0)`. A draw from `K` candidates uses
+the particle's noise temperature, several hundred to a thousand on PfCRT
+(measured 2026-10-22, doc/implementation_notes/planned/pose_marginalization.md,
+sections 3 and 14). A draw from `n` candidates uses
 
 ```text
-w_j = exp[-(d_j - d_min)],     p_j = w_j / sum_l w_l.
+w_j = exp[-beta T_i (d_j - d_min)],     p_j = w_j / sum_l w_l,
 ```
 
-No temperature is applied. The `K` candidates are only the best-scoring
-poses near the top of the list, used to decide where to search; they are
-not meant to represent the probability of every possible orientation. One
-candidate is drawn and committed as a hard assignment. A particle is never
-spread over several orientations in proportion to their probabilities, as
-it is in expectation-maximization refinement.
+the tempered posterior p^beta with `beta = prob_beta` (default 0.3, for
+small membrane proteins; 1 is the physical posterior; below one hotter). No
+truncation: the exploration of the draw is the data's width, not a fixed
+angular window. The tables refuse the correlation objective. One candidate
+is drawn and committed as a hard assignment. A particle is never spread
+over several orientations in proportion to their probabilities, as it is
+in expectation-maximization refinement.
 
-*Measured 2026-10-22 (doc/implementation_notes/planned/pose_marginalization.md,
-sections 3 and 14).* The Euclidean `d` is the loss normalized by the
-particle's weighted power, not a log-likelihood: one nat is `1/T` of it with
-`T = pi wsqsum / (2 pftsz)`, several hundred to a thousand on PfCRT, and
-neighbouring in-plane rotations differ by about `1e-3`. The draw above is
-therefore uniform over its `K` candidates. For the in-plane step this puts
-each table entry at a random rotation within `athres` of its best, and on
-PfCRT the committed pose is more than a nat worse than the best grid pose
-on the same reference for 17-27% of the particles, with the mode agreeing
-with the independent half for 50-62% against 88-94% for a deterministic
-scoring. That randomness is load-bearing: it is what keeps the direction
-assignment diverse against the references' memory of where each particle
-was last put (the self-reinforcement of the same note, 1-7 nats on the own
-half), and `athres` shrinking with the measured in-plane change anneals it
-as the alignment settles. Scoring every entry at its best grid rotation
-instead (`K_inpl = 1`, tried as a switch on 2026-10-23 and removed again)
-takes the search noise out as intended but traps the run: 5 of 10 PfCRT
-restarts ended near 7 A against 4.0-4.6 A for the other 5 and 4.0 A for
-the draw (`PfCRT_posterior/greedy_inpl`). The in-plane angle a particle
-ends with is the continuous refinement's in either case; what the draw
-buys is the diversity of the direction assignment.
+The randomness of the in-plane draw is load-bearing: it is what keeps the
+direction assignment diverse against the references' memory of where each
+particle was last put (the self-reinforcement of the same note, 1-7 nats
+on the own half). Scoring every entry at its best grid rotation instead
+(`K_inpl = 1`, tried as a switch on 2026-10-23 and removed again) takes the
+search noise out as intended but traps the run: 5 of 10 PfCRT restarts
+ended near 7 A against 4.0-4.6 A for the other 5 and 4.0 A for the draw
+(`PfCRT_posterior/greedy_inpl`). The in-plane angle a particle ends with is
+the continuous refinement's in either case; what the draw buys is the
+diversity of the direction assignment.
 
-## Balanced assignment
+Before the posterior (until 2026-10-24) the in-plane rotation was drawn by
+the untempered softmax `exp[-(d_j - d_min)]` over the best `K_inpl`
+rotations, the truncation derived from an angular threshold,
+`K = min(n, max(1, floor(athres * n / 180)))` with
+`athres = min(prob_athres, mean angular change of the last iteration)` and
+`prob_athres` 10 degrees: since `T_i` is hundreds, a uniform draw over a
+random rotation within `athres` of the best (on PfCRT more than a nat worse
+than the best grid pose for 17-27% of the particles; the note, section 14),
+which `athres` shrinking with the measured in-plane change annealed as the
+alignment settled. The tables' fills no longer use it; the SHC strategies
+of the early 2D stages keep their own samplers.
 
-The table is not consumed particle by particle. It is consumed as one global
-assignment problem, which is what prevents a few references from absorbing
-most of the particles:
+## Assignment
 
-1. for each reference `j`, sort all particles by `d_ij`;
-2. each reference keeps a *head*, its best still-unassigned particle;
-3. until every particle is assigned, repeat: draw one reference from the
-   softmax over the head losses (truncated to the best `K` heads), give it
-   its head particle, mark the particle as taken, and advance all heads.
+The table is consumed particle by particle (2026-10-23; the only assignment
+since 2026-10-24, when the class-balanced frontier was deleted from every
+table): each particle's reference is one draw from its own row by the
+tempered posterior above, within the state of its closest reference, `T_i`
+written by the table worker into the part file. Particles are assigned to
+references; no reference is forced to be populated, and no particle takes
+an argmin. The stage then ends on the resolution exit or its budget, not on
+the pose overlap (the committed pose is a draw and stable from a stage's
+first iterations). The 2D class assignment is the same per-particle draw
+over the row (`solve2D_policy.md`); the neighbourhood tables follow the rule
+on their candidate store (the state of the closest valid candidate, one
+draw within it), the current pose among the candidates so that the draw is
+an acceptance step and not a forced move.
 
-Every reference competes at every step, and a reference that wins takes
-exactly one particle, so populations even out without explicit quotas. The
-result is a stochastic greedy matching between particles and references, not
-the optimal assignment that the Hungarian algorithm would find. Optimality is
-not wanted here, because the draw is the exploration mechanism.
-
-`prob_assign=posterior` (2026-10-23, default `balanced`) replaces the
-reference-driven loop by one draw per particle from its own row, within the
-state of its closest reference: p proportional to exp(-T_i (L - L_min)) with
-T_i the particle's noise temperature (above), which the table worker writes
-into the dense part file. No reference is forced to be populated; the stage
-then ends on the resolution exit or its budget, not on the pose overlap.
-Under the same key the in-plane rotation of every row entry is drawn by the
-same rule instead of the uniform draw within the angular threshold above:
-the posterior over all grid rotations of the reference against the seeded
-particle at T_i (`gen_posterior_val`), no truncation, so the exploration of
-the in-plane draw is the data's width rather than a fixed angular window;
-this holds in the dense 3D table, in the subspace neighbourhood tables
-(`prob_neigh_mode=state|geom`) and in the 2D tables, whose class assignment
-is the same per-particle draw over the row (`solve2D_policy.md`). The
-subspace neighbourhood tables' assignment follows the same rule on their
-candidate store (the state of the closest valid candidate, one draw within
-it). The key draws on these tables of the later stages only (solve3D and
-solve2D from stage 3): the early stages' direct stochastic neighbourhoods
-(`prob_neigh_mode=shc|snhc`) keep the frontier and the likelihood in-plane
-draw, because their candidate set is a hill climb's proposals with the
-current pose left out, and the search strategies with a sampler of their own
-(`refine=neigh` in 3D, `snhc_smpl`, `snhc_smpl_many`, `inpl_smpl` and
-`greedy_smpl` in 2D) keep it (`refine3D_policy.md`, 2026-10-24). One
-tempering factor, `prob_beta` (default 0.1,
-calibrated on PfCRT; 1 is the physical posterior; below one hotter),
-multiplies the particle temperature of every draw: the search's annealing
-knob, since at the physical temperature the posterior over directions is
-a delta once the map has any resolution (n_eff 1.0-1.2) and the map-pose
-alternation then stops at the nearest fixed point (section 17 of the
-note). A refine3D run with `prob_beta_end` anneals geometrically from
-`prob_beta` to it over its iterations; solve3D does so on its last stage,
-to 1, so the final map is weighted at the physical posterior. The design and
-its measurements are in
+The temperature is the band's: T_i grows with the number of Fourier
+components the stage searches, so at solve3D's stages 1-2 (rings 2-5 on a
+137 A box) T is about 33 where it is hundreds from stage 3 on, and the
+physical posterior is flat there and a delta later; the ladder is itself a
+cooling schedule. In ten streptavidin restarts at beta 0.3, with the current
+pose missing from the shc neighbourhood's candidates, stages 1-2 did nothing
+and stage 3 solved the structure from scratch (the note, section 19); the
+incumbent is a candidate since, and whether the early stages also need a
+colder draw is the open measurement. `prob_beta` is the
+search's annealing knob, since at the physical temperature the posterior
+over directions is a delta once the map has any resolution (n_eff 1.0-1.2)
+and the map-pose alternation then stops at the nearest fixed point (section
+17 of the note). A refine3D run with `prob_beta_end` anneals geometrically
+from `prob_beta` to it over its iterations; solve3D does so on its last
+stage, to 1, so the final map is weighted at the physical posterior. The
+design and its measurements are in
 `doc/implementation_notes/planned/pose_marginalization.md`.
 
-In multi-state 3D, the state label is assigned first, by the same loop with a
-deterministic choice of the lowest head loss, and the projection within the
-state is then drawn
-stochastically. Neighborhood variants (`prob_neigh`) restrict which
-references are scored for each particle: a stochastic subset (`shc`,
-`snhc`), the coarse cell of projection directions that contains the previous
-projection (`geom`), or the best `npeaks` coarse cells pooled across states
-(`state`); the cells are defined in [refine3D](refine3d.md). The assignment
-loop is the same in every case.
+### The balanced frontier, deleted
+
+Until 2026-10-24 the tables consumed the table as one global assignment
+problem: for each reference, sort its particles by `d_ij`; each reference
+keeps a head, its best still-unassigned particle; until every particle is
+assigned, draw one reference from the softmax over the head losses
+(truncated to the best `K` heads), give it its head particle and advance
+the heads. Every reference competed at every step and a winning reference
+took exactly one particle, so populations evened out without quotas: a
+stochastic greedy matching between particles and references, which forced
+every reference to be populated whether or not any particle's data put it
+there. Hans, 2026-10-24: methodologically it makes no sense; particles are
+assigned to references, not references to particles. It was deleted from
+the dense 3D table, the 2D tables and the neighbourhood table, with its
+samplers and reference tests (the note, section 19).
+
+Neighborhood variants (`prob_neigh`) restrict which references are scored
+for each particle: a stochastic subset (`shc`, `snhc`), the coarse cell of
+projection directions that contains the previous projection (`geom`), or
+the best `npeaks` coarse cells pooled across states (`state`); the cells are
+defined in [refine3D](refine3d.md). The assignment is the same in every
+case.
 
 ## Blending partial updates
 

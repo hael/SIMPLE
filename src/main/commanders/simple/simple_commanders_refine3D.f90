@@ -1767,9 +1767,10 @@ contains
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
-            ! prob_assign=posterior: the iteration's tempering factor, a geometric ramp from prob_beta to
-            ! prob_beta_end over the run's budget (flat when they are equal); on the command line for the workers
-            if( params%l_prob_assign_posterior )then
+            ! the probability tables' posterior draws: the iteration's tempering factor, a geometric ramp from
+            ! prob_beta to prob_beta_end over the run's budget (flat when they are equal); on the command line for
+            ! the workers
+            if( params%l_prob_align_mode )then
                 params%prob_beta = prob_beta_at(niters, params%maxits, beta_start, params%prob_beta_end)
                 call cline%set('prob_beta', params%prob_beta)
                 write(logfhandle,'(A,F7.4)') '>>> POSTERIOR DRAW TEMPERING, BETA ', params%prob_beta

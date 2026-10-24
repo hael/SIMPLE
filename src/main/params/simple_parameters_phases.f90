@@ -715,29 +715,10 @@ contains
             case DEFAULT
                 THROW_HARD('prob_post_diag must be yes or no')
         end select
-        select case(trim(self%prob_assign))
-            case('balanced')
-                self%l_prob_assign_posterior = .false.
-            case('posterior')
-                ! only the probability tables of the later stages draw (solve3D 3 on, solve2D 3 on); the direct
-                ! stochastic neighbourhoods and the sampling strategies keep their own samplers. Under objfun=cc
-                ! there is no temperature to draw at: the key is inert and the balanced path runs
-                select case(trim(self%refine))
-                    case('prob','prob_snhc')
-                        self%l_prob_assign_posterior = .true.
-                    case('prob_neigh')
-                        self%l_prob_assign_posterior = trim(self%prob_neigh_mode) == 'state' .or. &
-                            &trim(self%prob_neigh_mode) == 'geom'
-                    case DEFAULT
-                        self%l_prob_assign_posterior = .false.
-                end select
-                if( trim(self%objfun) /= 'euclid' ) self%l_prob_assign_posterior = .false.
-                if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
-                ! no ramp unless an end is given: the run stays at prob_beta
-                if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
-            case DEFAULT
-                THROW_HARD('prob_assign must be balanced or posterior')
-        end select
+        ! the probability tables' posterior draws: their tempering factor, and no ramp unless an end is given (the
+        ! run stays at prob_beta)
+        if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
+        if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
         select case(trim(self%freq_march_aggressive))
             case('yes')
                 self%l_freq_march_aggressive = .true.

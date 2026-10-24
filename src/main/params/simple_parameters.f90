@@ -117,7 +117,6 @@ type :: parameters
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
-    character(len=9)          :: prob_assign='balanced' !< probability-table assignment (3D and 2D): the reference-balanced frontier, or each particle's reference/class and in-plane rotation drawn from its row posterior at its own temperature with no reference forced to be populated; posterior applies to refine=prob, prob_snhc and prob_neigh with prob_neigh_mode=state|geom, every other mode keeps its own sampler (doc/implementation_notes/planned/pose_marginalization.md; objfun=euclid)(balanced|posterior){balanced}
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
     character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
@@ -598,8 +597,8 @@ type :: parameters
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
-    real    :: prob_beta=0.1       !< prob_assign=posterior: tempering factor on the particle temperature of every posterior draw (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.1 calibrated on PfCRT (pose_marginalization.md sections 4.4, 17){0.1}
-    real    :: prob_beta_end=0.    !< prob_assign=posterior: the factor at a refine3D run's last iteration, reached by a geometric ramp from prob_beta over its iterations (1 = the physical posterior); 0 = prob_beta, no ramp; solve3D sets 1 on its last stage{0.0}
+    real    :: prob_beta=0.3       !< tempering factor on the particle temperature of every posterior draw of the probability tables (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.3 for small membrane proteins (pose_marginalization.md sections 4.4, 17){0.3}
+    real    :: prob_beta_end=0.    !< the factor at a refine3D run's last iteration, reached by a geometric ramp from prob_beta over its iterations (1 = the physical posterior); 0 = prob_beta, no ramp; solve3D sets 1 on its last stage{0.0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}
     real    :: res_target = 3.     !< resolution target in A
@@ -677,7 +676,6 @@ type :: parameters
     logical :: l_cohort_sampling = .false.
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
-    logical :: l_prob_assign_posterior = .false. !< prob_assign=posterior on a later-stage table (prob, prob_snhc, prob_neigh state|geom; objfun=euclid)
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

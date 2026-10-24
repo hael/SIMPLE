@@ -446,124 +446,111 @@ before evaluating candidates:
 - `snhc`: use the same direct stochastic candidate path without the initial
   shift seed. It is consequently also the zero-shift default for this mode.
 
-Probabilistic-table assignments use the calibrated likelihood path. The stored
-distances are noise-normalized negative log-likelihoods for the Euclidean
-objective, and evaluated candidates are sampled with weights proportional to
-`exp(-dist)` over an explicit top-K support. The implementation uses a
-per-particle minimum shift before exponentiation for numerical stability; this
-does not change normalized weights.
+The probabilistic tables score with the calibrated likelihood path: the
+stored distances are noise-normalized negative log-likelihoods for the
+Euclidean objective (`objfun=euclid`; the tables' constructors refuse the
+CC objective, since the posterior they draw from is defined by the
+Euclidean loss). The implementation uses a per-particle minimum shift
+before exponentiation for numerical stability; this does not change
+normalized weights.
 
-The top-K truncation is deliberate. It defines the local discrete support
-actually evaluated by the pre-alignment step; it is not meant to represent a
-full posterior over all SO(3) grid points. If the CC objective is enabled, its
-existing likelihood-compatible transformation remains the source of the
-probability weights, but should not be described as a calibrated Gaussian
-likelihood.
-
-Likelihood-weighted probability-table modes may still profile or MAP-refine
-shifts, and sometimes in-plane rotation, after stochastic candidate selection.
-The stored assignment distance is then the refined/profiled objective value.
-This is intended current behavior, not a full soft-assignment EM update.
+Probability-table modes may still profile or MAP-refine shifts, and sometimes
+in-plane rotation, after stochastic candidate selection. The stored
+assignment distance is then the refined/profiled objective value. This is
+intended current behavior, not a full soft-assignment EM update.
 
 ### Dense-table assignment (`ref_assign`)
 
 The `prob` driver assigns the particles from the dense table
-(`simple_eul_prob_tab.f90`, `ref_assign`). Every reference sorts the
-particles by distance, and its head is its closest particle not yet assigned.
+(`simple_eul_prob_tab.f90`, `ref_assign`) by one draw per particle from its
+tempered row posterior (since 2026-10-23; the only assignment since
+2026-10-24, when the reference-balanced frontier was deleted from every
+table). Particles are assigned to references; no reference is forced to be
+populated. The particle's state is the state of its closest
+reference over all states (an exact tie goes to the lowest reference index),
+and its direction is one draw within that state's block of its row with p
+proportional to exp(-T_i (L - L_min)), T_i the particle's own temperature
+pi wsqsum_i / (2 pftsz) (the Euclidean loss's noise scale), which the table
+worker computes at the fill and writes per particle into the dense part file
+(format word -4). The drawn reference's dense candidate is committed (its
+in-plane, its refined shift when refined, the seed shift recorded, `frac`
+100); the draws run in particle order on the master's random stream, so
+distributed runs draw alike. A particle without a valid distance takes
+reference 1. The row's values are the fill's (the top set refined), so the
+draw is a direction sampler on that row. The in-plane rotation of every row
+entry is drawn by the same rule: the posterior over all grid rotations of
+the reference against the seeded particle at the particle's temperature
+(`gen_posterior_val`, its bank form; `score_ref`, `score_ref_bank`), no
+angular threshold; the refinement of the top set and the continuous in-plane
+polish are unchanged. Every draw (in-plane, direction, class, neighbourhood)
+runs at `prob_beta` times the particle temperature
+(`pftc%ptcl_posterior_temp`; default 0.3, for small membrane proteins,
+section 19 of the note; below one hotter), so at `prob_beta` below one the
+draws are from the tempered posterior, p^beta, and from the posterior proper
+only at 1: the search's annealing knob, section 4.4, run-time since
+2026-10-23 after the run at the physical temperature froze. A refine3D run
+anneals when `prob_beta_end` is given: a geometric ramp from `prob_beta` at
+its first iteration to `prob_beta_end` at its last (`prob_beta_at`; every
+iteration cools by the same factor), the iteration's factor on the master's
+parameters and on the workers' command line (`>>> POSTERIOR DRAW TEMPERING,
+BETA`); `prob_beta_end=0` (the default) is a flat run. solve3D sets
+`prob_beta_end=1` on its last stage under the key unless the user set it, so
+the stages search hot and the final map is weighted at the physical
+posterior; the other stages run flat at `prob_beta`. A `refine=prob` stage
+does not end on the pose overlap (`check_conv3D` bypasses it: the carried
+pose is stable from a stage's first iterations, so the overlap rule cannot
+tell a frozen assignment from convergence) but on the resolution exit
+(`lpexit`) or its iteration budget.
 
-- **One state.** Each step draws a reference from the heads' distances with
-  the likelihood sampler above and assigns that reference's head particle.
-  Only the heads that pointed at that particle move on.
-- **Several states.** A particle's state is the state of its closest
-  reference over all states. An exact tie between references goes to the
-  lowest reference index, which is the label the earlier global greedy
-  frontier gave. Then the same draw runs within each state, over that state's
-  references and particles.
+### Neighbourhood-table assignment (`ref_assign_neigh`)
 
-The routine keeps a count of the unassigned particles and, for every
-particle, the list of references whose head it is. After an assignment it
-advances only that particle's list, instead of testing every particle and
-every reference again. The driver holds the table by reference
-(`dists(nptcls,nrefs)`, `inpls(nptcls,nrefs)`), so each reference's
-distances are contiguous for its sort. The states' labels and the check for
-invalid or flat particles run with the references outside, over blocks of
-256 particles in parallel, each particle keeping its best so far (strict `<`,
-references in ascending order). The draws and their order are those of the earlier implementation,
-so the assignment is identical (since 2026-10-16). The unit suite of the
-table keeps the earlier implementation as its reference and compares the
-two.
+The neighbourhood tables (`refine=prob_neigh`, solve3D's stages 1-2 and
+6-8; section 4.5 of the note, built 2026-10-23) follow the same rule on
+their candidate store, whatever the neighbourhood (`prob_neigh_mode`). A
+particle without a valid candidate is first re-seeded at its previous
+orientation (its state's reference at its closest direction, scored at the
+seed shift; `seed_fallback_if_empty`). Then the particle's state is the
+state of its closest valid candidate over all states (an active reference
+with an in-plane index), and within that state one draw from
+exp(-beta T_i (L - L_min)) over its valid candidates
+(`assign_particles_posterior`), the drawn candidate committed with its
+shift, `frac` the evaluated fraction; a particle whose state emptied mid-run
+keeps its orientation. The in-plane rotation of every candidate is the
+posterior draw over all grid rotations (`score_seeded_ref`,
+`gen_posterior_val` and its bank form), as in the dense and 2D tables; the
+re-seeding draws its in-plane the same way. T_i travels in the neighbourhood
+part file after the seed table (one real per particle; both fills write it).
+The pose-overlap bypass covers `prob_neigh` as it covers `prob`. Particles
+are assigned to references and no reference is forced to be populated: the
+reference-balanced frontier (every active reference drawing its closest free
+particle, the greedy state labels, the leftover rule) was deleted on
+2026-10-24 with the dense and 2D frontiers, and the particle never takes an
+argmin.
 
-**`prob_assign=posterior`** (2026-10-23; default `balanced`, the above). The
-assignment is per particle and no reference is forced to be populated: the
-particle's state is the state of its closest reference over all states, as
-above, and its direction is one draw within that state's block of its row
-with p proportional to exp(-T_i (L - L_min)), T_i the particle's own
-temperature pi wsqsum_i / (2 pftsz) (the Euclidean loss's noise scale;
-`objfun=euclid` required), which the table worker computes at the fill and
-writes per particle into the dense part file (format word -4). The drawn
-reference's dense candidate is committed as under `balanced` (its in-plane,
-its refined shift when refined, the seed shift recorded, `frac` 100); the
-draws run in particle order on the master's random stream. A particle
-without a valid distance takes reference 1. The row's values are the fill's
-(the top set refined), so the draw is a direction sampler on that row. The
-in-plane rotation of every row entry is drawn under the same key from the
-same rule: the posterior over all grid rotations of the reference against
-the seeded particle at the particle's temperature (`gen_posterior_val`, its
-bank form; `score_ref`, `score_ref_bank`), in place of the balanced fill's
-uniform draw within the angular threshold (`gen_likelihood_val`), in the
-dense table and in the neighbourhood tables (`score_seeded_ref`, the
-fallback of their assignment) alike; the refinement of the top set and the
-continuous in-plane polish are unchanged. Every draw (in-plane,
-direction, class, neighbourhood) runs at `prob_beta` times the particle
-temperature (`pftc%ptcl_posterior_temp`; default 0.1, calibrated on PfCRT,
-section 17 of the note; below one hotter), so at `prob_beta` below one
-the draws are from the tempered posterior, p^beta, and from the posterior
-proper only at 1: the search's annealing knob,
-section 4.4, run-time since 2026-10-23 after the run at the physical
-temperature froze. A refine3D run anneals when `prob_beta_end` is given:
-a geometric ramp from `prob_beta` at its first iteration to `prob_beta_end`
-at its last (`prob_beta_at`; every iteration cools by the same factor), the
-iteration's factor on the master's parameters and on the workers' command
-line (`>>> POSTERIOR DRAW TEMPERING, BETA`); `prob_beta_end=0` (the
-default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
-under the key unless the user set it, so the stages search hot and the
-final map is weighted at the physical posterior; the other stages run
-flat at `prob_beta`. A `refine=prob` stage no longer ends on the pose overlap under
-this key (`check_conv3D` bypasses it: the carried pose is stable from a
-stage's first iterations, so the overlap rule cannot tell a frozen
-assignment from convergence) but on the resolution exit (`lpexit`) or its
-iteration budget. The subspace neighbourhood tables (`refine=prob_neigh`
-with `prob_neigh_mode=state|geom`, solve3D's stages 6-8; section 4.5 of the
-note) follow the same rule on their candidate store: the particle's state is
-the state of its closest valid candidate over all states (an active
-reference with an in-plane index), and within that state one draw from
-exp(-T_i (L - L_min)) over its valid candidates (`ref_assign_neigh`,
-`assign_particles_posterior`), the drawn candidate committed with its shift,
-`frac` as the frontier records it; a particle without a valid candidate
-keeps its orientation, as the frontier's leftover rule. T_i travels in the
-neighbourhood part file after the seed table (one real per particle, both
-fills write it). The pose-overlap bypass covers these tables as it covers
-`prob`.
+On the direct stochastic neighbourhoods (`shc|snhc`, solve3D's stages
+1-2, from random orientations) ten streptavidin restarts at `prob_beta=0.3`
+had stages 1-2 do nothing (poses moving 85-90 degrees per iteration) and
+stage 3 solve the structure from scratch (the note, section 19). The `shc`
+fill scores references in random order and stops at the first that beats
+the previous pose, so its store held references worse than the current pose
+plus the one that beat it, and a draw over it was a forced move. The fill
+now scores the previous reference too when the stop rule left it out
+(`evaluate_direct_stochastic_refs`), so the draw is an acceptance step over
+the proposals and the incumbent. Whether that alone revives the early
+stages, or their small temperature (T about 33 at stage 1, where it is
+hundreds from stage 3 on) also needs a colder draw than `prob_beta` gives,
+is the open measurement; the stages run at `prob_beta` like the others
+until it is made.
 
-*Where the key draws (2026-10-24).* Only on the tables of the later stages:
-`refine=prob` and `prob_neigh` over `state|geom` here, `prob` and
-`prob_snhc` in 2D (`solve2D_policy.md`). The parameters set
-`l_prob_assign_posterior` for these modes alone, so every other mode runs
-its own sampler whatever the key says. The direct stochastic neighbourhoods
-(`prob_neigh_mode=shc|snhc`, solve3D's stages 1-2) keep the likelihood
-in-plane draw within the angular threshold and the balanced frontier: the
-shc fill scores references in random order and stops at the first that
-beats the current pose (the current pose scored last), a hill climb's
-proposal set that the frontier turns into a move to the improvement, while a
-hot posterior draw over it moves the particle to a random proposal and never
-keeps it. On streptavidin at `prob_beta=0.3` that held stages 1-2 at pose
-overlap 0 in ten of ten restarts and handed stage 3 random poses.
-`refine=neigh` (`strategy3D_greedy_sub`) keeps its bounded sampler.
-solve3D sets `prob_beta_end=1` on its last stage whenever the key is given;
-whether a stage draws is decided by its own mode.
-Design, measurements and the acceptance test (PfCRT, 10 of 10 restarts at
-3.6 A or better): `doc/implementation_notes/planned/pose_marginalization.md`
-sections 4, 10 and 16.
+The posterior sampling is the probability tables' (`refine=prob|prob_neigh`,
+and the 2D tables, `solve2D_policy.md`): the search strategies of the other
+modes (`shc`, `neigh`, `greedy`, and the 2D SHC strategies) keep their own
+samplers; a day's migration of those onto the posterior primitive
+(2026-10-23) was taken back on 2026-10-24, the posterior being the rule for
+the table modes of the later stages. Design, measurements and the acceptance
+test (PfCRT, 10 of 10 restarts at 3.6 A or better):
+`doc/implementation_notes/planned/pose_marginalization.md` sections 4, 10,
+16-19.
 
 ### Probability-table part files
 

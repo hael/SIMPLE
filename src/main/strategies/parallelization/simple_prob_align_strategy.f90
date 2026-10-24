@@ -431,11 +431,7 @@ contains
             write(fnr,'(a)') '*** READ AND ASSIGNMENT DETAIL TIMINGS (s) ***'
             write(fnr,'(a,1x,f0.3)') 'prob_align2D read, candidate counts  :', assign2D%read_count
             write(fnr,'(a,1x,f0.3)') 'prob_align2D read, candidates        :', assign2D%read_fill
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, counts     :', assign2D%lists_count
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, fill       :', assign2D%lists_fill
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D class lists, sort       :', assign2D%lists_sort
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D frontier loop           :', assign2D%frontier
-            write(fnr,'(a,1x,f0.3)') 'prob_align2D leftover particles      :', assign2D%leftover
+            write(fnr,'(a,1x,f0.3)') 'prob_align2D posterior draws         :', assign2D%draws
         endif
         call fclose(fnr)
     end subroutine write_prob_align_bench

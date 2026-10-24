@@ -27,7 +27,7 @@ contains
         call test_posterior_inpl_draw()
     end subroutine run_all_polarft_corr_tests
 
-    !> The in-plane posterior draw (gen_posterior_val and its bank form, prob_assign=posterior): at a huge
+    !> The in-plane posterior draw (gen_posterior_val and its bank form, the probability tables' fill): at a huge
     !! temperature the argmin of the same kernel (gen_best_objfun_val, gen_best_euclid_val_bank), with its loss;
     !! at temperature 0 uniform over the grid (many distinct rotations, the argmin a minority), the returned loss
     !! the at-pose loss of the drawn rotation; at the particle's own temperature (posterior_temperature) the

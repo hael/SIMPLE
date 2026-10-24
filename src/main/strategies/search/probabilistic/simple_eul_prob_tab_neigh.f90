@@ -5,8 +5,8 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dist_switch, eulprob_corr_switch, &
-    &read_seed_shift_table, write_seed_shift_table, record_seed_shift, sample_likelihood_dist, prob_candidate, &
+use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
+    &read_seed_shift_table, write_seed_shift_table, record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
     &draw_posterior_row
 use simple_decay_funs,         only: extremal_decay
@@ -155,11 +155,11 @@ contains
         type(pftc_shsrch_grad)      :: grad_shsrch_obj(nthr_glob)
         type(eval_ws)               :: eval_work
         type(ran_tabu), allocatable :: direct_rts(:)
-        integer,        allocatable :: inds_sorted(:,:), direct_srch_order(:,:)
-        real,           allocatable :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:), corrs_inpl(:,:)
+        integer,        allocatable :: direct_srch_order(:,:)
+        real,           allocatable :: corrs_inpl(:,:)
         complex(sp),    allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        integer :: i, istate, ithr, max_refs_to_refine, nfull_refs
-        integer :: iptcl, si, i_from, i_to, nrots
+        integer :: i, ithr, max_refs_to_refine, nfull_refs
+        integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob)
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
@@ -181,15 +181,9 @@ contains
         call seed_rnd
         call alloc_seed_bank(self, seed_bank)
         nfull_refs = self%p_ptr%nstates * self%p_ptr%nspace
-        allocate(inpl_athres(self%p_ptr%nstates), source=self%p_ptr%prob_athres)
-        allocate(dists_inpl(nrots,nthr_glob), dists_inpl_sorted(nrots,nthr_glob),&
-            &corrs_inpl(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
+        allocate(corrs_inpl(nrots,nthr_glob))
         max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
         call eval_work%init_eval_stoch_ws(self, max_refs_to_refine)
-        do si = 1, self%nstates
-            istate = self%ssinds(si)
-            inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
-        enddo
         allocate(direct_srch_order(nfull_refs,nthr_glob), direct_rts(nthr_glob))
         do ithr = 1,nthr_glob
             direct_rts(ithr) = ran_tabu(nfull_refs)
@@ -235,7 +229,7 @@ contains
             call grad_shsrch_obj(ithr)%kill
         end do
         deallocate(direct_srch_order,direct_rts)
-        deallocate(inds_sorted, dists_inpl_sorted, dists_inpl, corrs_inpl, inpl_athres, seed_bank)
+        deallocate(corrs_inpl, seed_bank)
 
     contains
 
@@ -276,10 +270,11 @@ contains
             logical, intent(in)  :: l_with_shift
             integer, intent(out) :: neval_loc
             integer :: full_ref_loc, prev_full_ref_loc, isample, ri_loc, irot_loc
-            integer :: nrefs_bound, nmin_refs, smpl_ninpl, nrots
+            integer :: nrefs_bound, nmin_refs
             real    :: dist_loc, corr_loc, prev_corr_loc, neigh_frac
-            logical :: l_greedy_first
-            neval_loc = 0
+            logical :: l_greedy_first, l_prev_scored
+            neval_loc     = 0
+            l_prev_scored = .false.
             call direct_rts(ithr_loc)%ne_ran_iarr(direct_srch_order(:,ithr_loc))
             prev_full_ref_loc = 0
             if( prev_state_loc >= 1 .and. prev_state_loc <= self%p_ptr%nstates .and.&
@@ -291,15 +286,12 @@ contains
             ! search result. Keying this off updatecnt makes iteration 2 behave
             ! like a full scan for first-time sampled particles.
             l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_been_searched(iptcl_loc))
-            nrots          = self%b_ptr%pftc%get_nrots()
             nrefs_bound    = nfull_refs
             if( self%nrefs < 1 ) THROW_HARD('direct stochastic neighborhood search has no active references')
             nmin_refs      = min(MIN_STOCH_FINE_REFS,self%nrefs)
-            smpl_ninpl     = nrots
             if( l_snhc_neigh )then
                 neigh_frac  = extremal_decay(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
                 nrefs_bound = max(2, min(nfull_refs, nint(real(nfull_refs) * (1. - neigh_frac))))
-                smpl_ninpl  = neighfrac2nsmpl(neigh_frac, nrots)
             endif
             prev_corr_loc = -huge(1.0)
             if( (l_shc_neigh .and. (.not. l_greedy_first)) )then
@@ -313,12 +305,12 @@ contains
                 if( full_ref_loc < 1 .or. full_ref_loc > size(eval_work%fullref_to_sparse_ref) ) cycle
                 ri_loc = eval_work%fullref_to_sparse_ref(full_ref_loc)
                 if( ri_loc < 1 ) cycle
-                call score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed, l_with_shift,&
-                    &l_snhc_neigh, smpl_ninpl, dist_loc, corr_loc, irot_loc)
+                call score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed, l_with_shift, dist_loc, corr_loc, irot_loc)
                 call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
                 neval_loc = neval_loc + 1
                 eval_work%evaluated_ref_ids(neval_loc,ithr_loc)   = ri_loc
                 eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
+                if( full_ref_loc == prev_full_ref_loc ) l_prev_scored = .true.
                 ! SHC acceptance is likewise deferred until the candidate
                 ! floor has been established for this sampled particle.
                 if( l_shc_neigh .and. (.not. l_greedy_first) .and. corr_loc > prev_corr_loc .and. &
@@ -326,6 +318,20 @@ contains
             enddo
             if( neval_loc < nmin_refs )then
                 THROW_HARD('direct stochastic neighborhood search did not meet the minimum active-reference count')
+            endif
+            ! the current pose is a candidate: the posterior draw over the store is then an acceptance step over
+            ! the proposals and the incumbent, not a forced move (the stop rule above leaves a set of references
+            ! worse than the current pose plus the one that beat it; 2026-10-24, the note, section 19)
+            if( prev_full_ref_loc > 0 .and. .not. l_prev_scored )then
+                ri_loc = eval_work%fullref_to_sparse_ref(prev_full_ref_loc)
+                if( ri_loc > 0 )then
+                    call score_direct_ref(prev_full_ref_loc, ithr_loc, iptcl_loc, shift_seed, l_with_shift,&
+                        &dist_loc, corr_loc, irot_loc)
+                    call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist_loc, irot_loc, 0., 0., .false.)
+                    neval_loc = neval_loc + 1
+                    eval_work%evaluated_ref_ids(neval_loc,ithr_loc)   = ri_loc
+                    eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
+                endif
             endif
         end subroutine evaluate_direct_stochastic_refs
 
@@ -340,30 +346,19 @@ contains
             prev_corr_loc = max(0., maxval(corrs_inpl(:,ithr_loc)))
         end subroutine calc_previous_corr
 
-        ! Scores a single reference selecting
-        subroutine score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift,&
-            &l_snhc_style, smpl_ninpl_loc, dist_loc, corr_loc, irot_loc)
-            integer, intent(in)  :: full_ref_loc, ithr_loc, iptcl_loc, smpl_ninpl_loc
+        ! Scores a single reference at the seed shift
+        subroutine score_direct_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, dist_loc, corr_loc, irot_loc)
+            integer, intent(in)  :: full_ref_loc, ithr_loc, iptcl_loc
             real,    intent(in)  :: shift_seed_loc(3)
-            logical, intent(in)  :: l_with_shift, l_snhc_style
+            logical, intent(in)  :: l_with_shift
             real,    intent(out) :: dist_loc, corr_loc
             integer, intent(out) :: irot_loc
-            integer :: istate_loc, nsample_loc
             real    :: sh_loc(2)
             sh_loc = 0.
             if( l_with_shift .and. l_seed_sh_first ) sh_loc = shift_seed_loc(2:3)
-            istate_loc = (full_ref_loc - 1) / self%p_ptr%nspace + 1
-            nsample_loc = merge(smpl_ninpl_loc, inpl_likelihood_nsample(istate_loc), l_snhc_style)
             call score_seeded_ref(self, full_ref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
-                &nsample_loc, dist_loc, corr_loc, irot_loc, dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                &dist_loc, corr_loc, irot_loc)
         end subroutine score_direct_ref
-
-        integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
-            integer, intent(in) :: istate_loc
-            real :: athres_ub
-            athres_ub = min(self%p_ptr%prob_athres, inpl_athres(istate_loc))
-            nsample = min(nrots, max(1, int(athres_ub * real(nrots) / 180.)))
-        end function inpl_likelihood_nsample
 
     end subroutine fill_tab_stoch_range
 
@@ -377,11 +372,9 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(coarse_search_ws) :: coarse_ws
         type(eval_ws)          :: eval_work
-        integer, allocatable   :: inds_sorted(:,:)
-        real,    allocatable   :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        integer :: i, istate, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
-        integer :: iptcl, si, i_from, i_to, nrots
+        integer :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
+        integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first, l_bank(nthr_glob)
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
@@ -407,14 +400,8 @@ contains
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
         npooled_capacity = min(nsubs, max(1, npeak_target * max(1, self%nstates)))
-        allocate(inpl_athres(self%p_ptr%nstates), source=self%p_ptr%prob_athres)
-        allocate(dists_inpl(nrots,nthr_glob), dists_inpl_sorted(nrots,nthr_glob), inds_sorted(nrots,nthr_glob))
         max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
         call eval_work%init_eval_subspace_ws(self, nsubs, max_refs_to_refine)
-        do si = 1, self%nstates
-            istate = self%ssinds(si)
-            inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
-        enddo
         call coarse_ws%alloc_coarse_ws(npeak_target, npooled_capacity, self%p_ptr%nstates, nthr_glob)
         t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
@@ -454,7 +441,7 @@ contains
         end do
         call coarse_ws%dealloc_coarse_ws
         call eval_work%dealloc_eval_ws
-        deallocate(inds_sorted, dists_inpl_sorted, dists_inpl, inpl_athres, seed_bank)
+        deallocate(seed_bank)
 
     contains
 
@@ -545,14 +532,11 @@ contains
             logical, intent(in)  :: l_with_shift
             real,    intent(out) :: dist_loc
             integer, intent(out) :: irot_loc
-            integer :: istate_loc
             real    :: corr_loc, sh_loc(2)
-            istate_loc = (full_ref_loc - 1) / self%p_ptr%nspace + 1
             sh_loc = 0.
             if( l_with_shift ) sh_loc = shift_seed_loc(2:3)
             call score_seeded_ref(self, full_ref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
-                &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
-                &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                &dist_loc, corr_loc, irot_loc)
         end subroutine score_subspace_ref
 
         ! Maintains a sorted top-npeak_target list of subspace indices per state; prob_neigh_mode=state
@@ -663,8 +647,7 @@ contains
                         iproj_loc = self%ref_proj(ri_loc)
                         iref_loc  = self%ref_full(ri_loc)
                         call score_seeded_ref(self, iref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc),&
-                            &l_bank(ithr_loc), inpl_likelihood_nsample(istate_loc), dist, corr_loc, irot_loc,&
-                            &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
+                            &l_bank(ithr_loc), dist, corr_loc, irot_loc)
                         call record_sparse_eval(self, i_loc, ithr_loc, ri_loc, dist, irot_loc, 0., 0., .false.)
                         neval = neval + 1
                         eval_work%evaluated_ref_ids(neval,ithr_loc)   = ri_loc
@@ -674,80 +657,37 @@ contains
             enddo
         end subroutine evaluate_neighborhood
 
-        integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
-            integer, intent(in) :: istate_loc
-            real :: athres_ub
-            athres_ub = min(self%p_ptr%prob_athres, inpl_athres(istate_loc))
-            nsample = min(nrots, max(1, int(athres_ub * real(nrots) / 180.)))
-        end function inpl_likelihood_nsample
-
     end subroutine fill_tab_subspace_range
 
     ! ASSIGNMENT SUBROUTINES
 
     ! Sparse graph traversal on-the-fly for reference assignment
+    !> ptcl -> (proj, state) assignment over the candidate store: a particle without a valid candidate is re-seeded
+    !! at its previous orientation, then every particle draws one of its own candidates from its tempered posterior.
+    !! Particles are assigned to references; no reference is forced to be populated (the reference-balanced frontier
+    !! was deleted 2026-10-24, doc/implementation_notes/planned/pose_marginalization.md section 19)
     subroutine ref_assign_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
-        ! Sparse global assignment:
-        ! 1) ensure every particle has at least one evaluated candidate
-        ! 2) normalize sparse scores
-        ! 3) build ref->particle and particle->ref adjacency
-        ! 4) repeatedly assign the best currently available particle per active ref
-        ! 5) fall back to best evaluated sparse ref for leftovers
-
-        type :: assign_graph_ws
-            integer, allocatable :: ref_counts(:), ref_offsets(:), ref_fill(:), ref_list(:), ref_pos(:), active_refs(:)
-            integer, allocatable :: ptcl_counts(:), ptcl_offsets(:), ptcl_fill(:), ptcl_refs(:)
-            integer, allocatable :: ref_candidate_pos(:)
-            real,    allocatable :: ref_dists(:)
-        end type assign_graph_ws
-
-        type :: assign_frontier_ws
-            integer, allocatable :: inds_sorted(:), order(:), work_ptcl(:), work_cpos(:), sel_refs(:), sel_pos(:)
-            real,    allocatable :: iref_dist(:), dists_sorted(:), work_d(:), sel_dists(:), sel_dists_sorted(:)
-            logical, allocatable :: ptcl_avail(:)
-        end type assign_frontier_ws
-
-        type(assign_graph_ws)    :: graph
-        type(assign_frontier_ws) :: frontier
-        real,    allocatable :: dists_inpl_sorted(:)
-        integer, allocatable :: inds_sorted(:)
-        integer   :: i, iref, assigned_iref, assigned_ptcl, istate, si, fallback_ref
-        integer   :: k, idx, nactive, total, m, start, maxref, nleft, assigned_idx, nsel, pos, last_ref
-        integer   :: candidate_pos, first_candidate, last_candidate
-        integer   :: greedy_state(self%nptcls)
-        real      :: projs_athres, state_projs_athres(self%p_ptr%nstates)
-        real      :: huge_val, dist_tmp, corr_tmp
-        logical   :: final_assigned(self%nptcls), l_filter_greedy_state, l_seed_fallback_shift
-        huge_val = huge(1.0)
+        integer :: i, candidate_pos
+        logical :: l_seed_fallback_shift
         l_seed_fallback_shift = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. &
             &trim(self%p_ptr%prob_neigh_mode) /= 'snhc'
-        allocate(dists_inpl_sorted(self%b_ptr%pftc%get_nrots()), inds_sorted(self%b_ptr%pftc%get_nrots()))
         do i = 1, self%nptcls
-            ! Seed particle with no evaluated candidate with previous orientation
             call seed_fallback_if_empty(i)
         enddo
-        if( self%p_ptr%l_prob_assign_posterior )then
-            call assign_particles_posterior()
-            deallocate(inds_sorted, dists_inpl_sorted)
-            return
-        endif
-        call build_sparse_assignment_graph()
-        call assign_particles_globally()
-        call assign_remaining_particles_from_best_touched_ref()
-        deallocate(inds_sorted, dists_inpl_sorted)
+        call assign_particles_posterior()
+
     contains
 
-        !> ptcl -> (proj, state) by one draw per particle from the posterior over its evaluated candidates
-        !! (prob_assign=posterior, doc/implementation_notes/planned/pose_marginalization.md section 4.5). The
-        !! particle's state is the state of its closest valid candidate over all states (an active reference with
-        !! an in-plane index; ties to the first in store order), as the dense table labels it; within that state
-        !! p_c proportional to exp(-T_i (L_c - L_min)) over the valid candidates, T_i the particle's temperature
-        !! from the fill (temps; prob_beta on it). The drawn candidate is committed with its
-        !! shift, the seed shift recorded, frac as the frontier records it; no reference is forced to be
-        !! populated. A particle without a valid candidate (a state emptied mid-run) keeps its orientation, as
-        !! the frontier's leftover rule; one without a temperature (none expected) takes its argmin with a
-        !! warning. The draws run in particle order on the master's random stream.
+        !> ptcl -> (proj, state) by one draw per particle from its tempered posterior over its evaluated candidates
+        !! (doc/implementation_notes/planned/pose_marginalization.md section 4.5). The particle's state is the
+        !! state of its closest valid candidate over all states (an active reference with an in-plane index; ties
+        !! to the first in store order), as the dense table labels it; within that state p_c proportional to
+        !! exp(-T_i (L_c - L_min)) over the valid candidates, T_i the particle's temperature from the fill (temps)
+        !! scaled by prob_beta. The drawn candidate is committed with its shift, the seed shift recorded, frac the
+        !! evaluated fraction; no reference is forced to be populated. A particle without a valid candidate (a
+        !! state emptied mid-run) keeps its orientation; one without a temperature (none expected) takes its
+        !! argmin with a warning. The draws run in particle order on the master's random stream.
         subroutine assign_particles_posterior()
             real,    allocatable :: w(:), dists_c(:)
             integer, allocatable :: pos_c(:)
@@ -818,7 +758,7 @@ contains
         end subroutine assign_particles_posterior
 
         !> the compact reference of a store entry when it is a valid candidate (an active reference with an
-        !! in-plane index, as pick_best_evaluated_ref counts them), 0 otherwise
+        !! in-plane index), 0 otherwise
         integer function valid_compact_ref( pos_loc ) result(ri_loc)
             integer, intent(in) :: pos_loc
             ri_loc = self%full_to_compact_ref(self%candidate_store%candidates(pos_loc)%iref)
@@ -829,226 +769,18 @@ contains
             if( self%candidate_store%candidates(pos_loc)%inpl <= 0 ) ri_loc = 0
         end function valid_compact_ref
 
-        subroutine build_sparse_assignment_graph()
-            allocate(graph%ref_counts(self%nrefs), graph%ref_offsets(self%nrefs+1), graph%ref_fill(self%nrefs), graph%ref_pos(self%nrefs),&
-            &frontier%iref_dist(self%nrefs), frontier%dists_sorted(self%nrefs), frontier%inds_sorted(self%nrefs), frontier%ptcl_avail(self%nptcls),&
-            &graph%ptcl_counts(self%nptcls), graph%ptcl_offsets(self%nptcls+1), graph%ptcl_fill(self%nptcls))
-            graph%ref_counts = 0
-            graph%ptcl_counts = 0
-            do i = 1, self%nptcls
-                first_candidate = int(self%candidate_store%offsets(i))
-                last_candidate  = int(self%candidate_store%offsets(i+1)) - 1
-                do candidate_pos = first_candidate,last_candidate
-                    iref = self%full_to_compact_ref(self%candidate_store%candidates(candidate_pos)%iref)
-                    if( iref < 1 .or. iref > self%nrefs       ) cycle
-                    if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 ) cycle
-                    graph%ref_counts(iref) = graph%ref_counts(iref) + 1
-                    graph%ptcl_counts(i)   = graph%ptcl_counts(i) + 1
-                enddo
-            enddo
-            nactive = count(graph%ref_counts > 0)
-            allocate(graph%active_refs(max(1,nactive)), source=0)
-            if( nactive > 0 ) graph%active_refs(1:nactive) = pack((/(iref, iref=1,self%nrefs)/), graph%ref_counts > 0)
-            graph%ref_offsets(1) = 1
-            do iref = 1, self%nrefs
-                graph%ref_offsets(iref+1) = graph%ref_offsets(iref) + graph%ref_counts(iref)
-            enddo
-            total = graph%ref_offsets(self%nrefs+1) - 1
-            allocate(graph%ref_list(max(1,total)), graph%ref_candidate_pos(max(1,total)), graph%ref_dists(max(1,total)))
-            graph%ptcl_offsets(1) = 1
-            do i = 1, self%nptcls
-                graph%ptcl_offsets(i+1) = graph%ptcl_offsets(i) + graph%ptcl_counts(i)
-            enddo
-            allocate(graph%ptcl_refs(max(1,graph%ptcl_offsets(self%nptcls+1)-1)))
-            graph%ref_fill = graph%ref_offsets(1:self%nrefs)
-            graph%ptcl_fill = graph%ptcl_offsets(1:self%nptcls)
-            do i = 1, self%nptcls
-                first_candidate = int(self%candidate_store%offsets(i))
-                last_candidate  = int(self%candidate_store%offsets(i+1)) - 1
-                do candidate_pos = first_candidate,last_candidate
-                    iref = self%full_to_compact_ref(self%candidate_store%candidates(candidate_pos)%iref)
-                    if( iref < 1 .or. iref > self%nrefs ) cycle
-                    if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 ) cycle
-                    idx = graph%ref_fill(iref)
-                    graph%ref_list(idx)          = i
-                    graph%ref_candidate_pos(idx) = candidate_pos
-                    graph%ref_dists(idx)         = self%candidate_store%candidates(candidate_pos)%dist
-                    graph%ref_fill(iref) = idx + 1
-                    idx = graph%ptcl_fill(i)
-                    graph%ptcl_refs(idx) = iref
-                    graph%ptcl_fill(i)   = idx + 1
-                enddo
-            enddo
-            maxref = max(1, maxval(graph%ref_counts))
-            allocate(frontier%work_d(maxref), frontier%order(maxref), frontier%work_ptcl(maxref), frontier%work_cpos(maxref))
-            allocate(frontier%sel_refs(max(1,nactive)), frontier%sel_pos(self%nrefs), frontier%sel_dists(max(1,nactive)),&
-            &frontier%sel_dists_sorted(max(1,nactive)))
-            frontier%sel_pos = 0
-            do idx = 1, nactive
-                iref = graph%active_refs(idx)
-                m    = graph%ref_counts(iref)
-                if( m <= 1 ) cycle
-                start = graph%ref_offsets(iref)
-                frontier%work_d(1:m)    = graph%ref_dists(start:start+m-1)
-                frontier%work_ptcl(1:m) = graph%ref_list(start:start+m-1)
-                frontier%work_cpos(1:m) = graph%ref_candidate_pos(start:start+m-1)
-                frontier%order(1:m)     = (/(k,k=1,m)/)
-                call hpsort(frontier%work_d(1:m), frontier%order(1:m))
-                do k = 1, m
-                    graph%ref_dists(start+k-1) = frontier%work_d(k)
-                    graph%ref_list(start+k-1)  = frontier%work_ptcl(frontier%order(k))
-                    graph%ref_candidate_pos(start+k-1) = frontier%work_cpos(frontier%order(k))
-                enddo
-            enddo
-        end subroutine build_sparse_assignment_graph
-
-        subroutine assign_particles_globally()
-            projs_athres = 0.
-            state_projs_athres = 0.
-            do si = 1, self%nstates
-                istate = self%ssinds(si)
-                state_projs_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist',&
-                    &self%p_ptr%prob_athres, state=istate)
-                projs_athres = max(projs_athres, state_projs_athres(istate))
-            enddo
-            final_assigned = .false.
-            if( self%nstates > 1 )then
-                call assign_greedy_state_labels()
-                do si = 1,self%nstates
-                    call assign_particles_for_state(self%ssinds(si))
-                enddo
-            else
-                call assign_particles_single_state()
-            endif
-            frontier%ptcl_avail = .not. final_assigned
-        end subroutine assign_particles_globally
-
-        subroutine init_frontier()
-            graph%ref_pos       = 1
-            frontier%iref_dist  = huge_val
-            frontier%sel_pos    = 0
-            nsel                = 0
-            do idx = 1, nactive
-                iref = graph%active_refs(idx)
-                call advance_ref_head(iref)
-                call sync_frontier_ref(iref)
-            enddo
-        end subroutine init_frontier
-
-        subroutine assign_greedy_state_labels()
-            greedy_state = 0
-            l_filter_greedy_state = .false.
-            graph%ref_pos       = 1
-            frontier%iref_dist  = huge_val
-            frontier%ptcl_avail = .true.
-            nleft = self%nptcls
-            call init_frontier()
-            do while( nleft > 0 )
-                if( nsel == 0 ) exit
-                ! Multi-state state labelling is deterministic (argmin distance) for both weighting
-                ! schemes; probabilistic exploration is confined to the within-state projection
-                ! assignment (assign_particles_for_state).
-                assigned_idx = minloc(frontier%sel_dists(1:nsel), dim=1)
-                assigned_iref = frontier%sel_refs(assigned_idx)
-                assigned_ptcl = graph%ref_list(graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1)
-                greedy_state(assigned_ptcl) = self%ref_state(assigned_iref)
-                frontier%ptcl_avail(assigned_ptcl) = .false.
-                nleft = nleft - 1
-                call update_frontier_after_assignment(assigned_ptcl)
-            enddo
-            do i = 1,self%nptcls
-                if( greedy_state(i) == 0 )then
-                    fallback_ref = pick_best_evaluated_ref(i)
-                    if( fallback_ref > 0 ) greedy_state(i) = self%ref_state(fallback_ref)
+        !> the particle holds at least one valid candidate
+        logical function has_valid_candidate( iptcl_loc ) result( l_valid )
+            integer, intent(in) :: iptcl_loc
+            integer :: pos_loc
+            l_valid = .false.
+            do pos_loc = int(self%candidate_store%offsets(iptcl_loc)), int(self%candidate_store%offsets(iptcl_loc+1))-1
+                if( valid_compact_ref(pos_loc) > 0 )then
+                    l_valid = .true.
+                    return
                 endif
             enddo
-        end subroutine assign_greedy_state_labels
-
-        subroutine assign_particles_single_state()
-            l_filter_greedy_state = .false.
-            frontier%ptcl_avail = .true.
-            nleft = self%nptcls
-            call init_frontier()
-            do while( nleft > 0 )
-                if( nsel == 0 ) exit
-                call sample_likelihood_dist(nsel, selected_frontier_dist, likelihood_nsample(nsel, projs_athres),&
-                    &dist_tmp, corr_tmp, assigned_idx, frontier%sel_dists_sorted, frontier%inds_sorted)
-                call commit_selected_assignment()
-            enddo
-        end subroutine assign_particles_single_state
-
-        subroutine assign_particles_for_state( state_filter )
-            integer, intent(in) :: state_filter
-            l_filter_greedy_state = .true.
-            frontier%ptcl_avail = (greedy_state == state_filter) .and. (.not. final_assigned)
-            nleft = count(frontier%ptcl_avail)
-            call init_frontier()
-            do while( nleft > 0 )
-                if( nsel == 0 ) exit
-                call sample_likelihood_dist(nsel, selected_frontier_dist, likelihood_nsample(nsel, state_projs_athres(state_filter)),&
-                    &dist_tmp, corr_tmp, assigned_idx, frontier%sel_dists_sorted, frontier%inds_sorted)
-                call commit_selected_assignment()
-            enddo
-        end subroutine assign_particles_for_state
-
-        subroutine commit_selected_assignment()
-            assigned_iref = frontier%sel_refs(assigned_idx)
-            idx = graph%ref_offsets(assigned_iref) + graph%ref_pos(assigned_iref) - 1
-            assigned_ptcl = graph%ref_list(idx)
-            frontier%ptcl_avail(assigned_ptcl) = .false.
-            final_assigned(assigned_ptcl) = .true.
-            nleft = nleft - 1
-            call self%assign_candidate(assigned_ptcl, self%candidate_store%candidates(graph%ref_candidate_pos(idx)))
-            call record_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift)
-            self%assgn_map(assigned_ptcl)%frac = search_frac(assigned_ptcl)
-            call update_frontier_after_assignment(assigned_ptcl)
-        end subroutine commit_selected_assignment
-
-        subroutine update_frontier_after_assignment( iptcl_assigned )
-            integer, intent(in) :: iptcl_assigned
-            do idx = graph%ptcl_offsets(iptcl_assigned), graph%ptcl_offsets(iptcl_assigned+1)-1
-                iref = graph%ptcl_refs(idx)
-                m    = graph%ref_counts(iref)
-                if( graph%ref_pos(iref) > m ) cycle
-                start = graph%ref_offsets(iref)
-                if( graph%ref_list(start + graph%ref_pos(iref) - 1) /= iptcl_assigned ) cycle
-                call advance_ref_head(iref)
-                call sync_frontier_ref(iref)
-            enddo
-        end subroutine update_frontier_after_assignment
-
-        subroutine assign_remaining_particles_from_best_touched_ref()
-            do i = 1, self%nptcls
-                if( .not. frontier%ptcl_avail(i) ) cycle
-                if( self%nstates > 1 .and. greedy_state(i) > 0 )then
-                    fallback_ref = pick_best_evaluated_ref_for_state(i,greedy_state(i))
-                else
-                    fallback_ref = pick_best_evaluated_ref(i)
-                endif
-                if( fallback_ref == 0 )then
-                    call seed_fallback_if_empty(i)
-                    if( self%nstates > 1 .and. greedy_state(i) > 0 )then
-                        fallback_ref = pick_best_evaluated_ref_for_state(i,greedy_state(i))
-                    else
-                        fallback_ref = pick_best_evaluated_ref(i)
-                    endif
-                endif
-                if( fallback_ref == 0 ) fallback_ref = pick_best_evaluated_ref(i)
-                candidate_pos = 0
-                if( fallback_ref > 0 ) candidate_pos = find_candidate_position(i, fallback_ref)
-                if( candidate_pos < 1 )then
-                    ! No valid evaluated candidate (e.g. a state emptied mid-run);
-                    ! leave this particle's orientation unchanged and move on.
-                    cycle
-                endif
-                call self%assign_candidate(i, self%candidate_store%candidates(candidate_pos))
-                call record_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
-                    &self%seed_has_sh(i), self%p_ptr%l_doshift)
-                self%assgn_map(i)%frac = search_frac(i)
-                final_assigned(i) = .true.
-            enddo
-        end subroutine assign_remaining_particles_from_best_touched_ref
+        end function has_valid_candidate
 
         real function search_frac(iptcl_loc)
             integer, intent(in) :: iptcl_loc
@@ -1059,36 +791,15 @@ contains
             endif
         end function search_frac
 
-        integer function pick_best_evaluated_ref(iptcl_loc) result(ri_best)
+        integer function particle_evaluated_count(iptcl_loc) result(nevaluated)
             integer, intent(in) :: iptcl_loc
-            ri_best = pick_best_evaluated_ref_filtered(iptcl_loc,0)
-        end function pick_best_evaluated_ref
-
-        integer function pick_best_evaluated_ref_for_state(iptcl_loc,state_filter) result(ri_best)
-            integer, intent(in) :: iptcl_loc, state_filter
-            ri_best = pick_best_evaluated_ref_filtered(iptcl_loc,state_filter)
-        end function pick_best_evaluated_ref_for_state
-
-        integer function pick_best_evaluated_ref_filtered(iptcl_loc,state_filter) result(ri_best)
-            integer, intent(in) :: iptcl_loc
-            integer, intent(in) :: state_filter
-            integer :: pos_loc, ri_loc, first_loc, last_loc
-            real    :: best_dist
-            ri_best = 0
-            best_dist = huge(1.0)
-            first_loc = int(self%candidate_store%offsets(iptcl_loc))
-            last_loc  = int(self%candidate_store%offsets(iptcl_loc+1)) - 1
-            do pos_loc = first_loc,last_loc
-                ri_loc = self%full_to_compact_ref(self%candidate_store%candidates(pos_loc)%iref)
-                if( ri_loc < 1 .or. ri_loc > self%nrefs ) cycle
-                if( self%candidate_store%candidates(pos_loc)%inpl <= 0 ) cycle
-                if( state_filter > 0 .and. self%ref_state(ri_loc) /= state_filter ) cycle
-                if( self%candidate_store%candidates(pos_loc)%dist < best_dist )then
-                    best_dist = self%candidate_store%candidates(pos_loc)%dist
-                    ri_best   = ri_loc
-                endif
+            integer :: pos_loc
+            nevaluated = 0
+            do pos_loc = int(self%candidate_store%offsets(iptcl_loc)),&
+                &int(self%candidate_store%offsets(iptcl_loc+1))-1
+                if( self%candidate_store%candidates(pos_loc)%inpl > 0 ) nevaluated = nevaluated + 1
             enddo
-        end function pick_best_evaluated_ref_filtered
+        end function particle_evaluated_count
 
         integer function find_candidate_position(iptcl_loc, iref_loc) result(pos_found)
             integer, intent(in) :: iptcl_loc, iref_loc
@@ -1104,23 +815,15 @@ contains
             enddo
         end function find_candidate_position
 
-        integer function particle_evaluated_count(iptcl_loc) result(nevaluated)
-            integer, intent(in) :: iptcl_loc
-            integer :: pos_loc
-            nevaluated = 0
-            do pos_loc = int(self%candidate_store%offsets(iptcl_loc)),&
-                &int(self%candidate_store%offsets(iptcl_loc+1))-1
-                if( self%candidate_store%candidates(pos_loc)%inpl > 0 ) nevaluated = nevaluated + 1
-            enddo
-        end function particle_evaluated_count
-
+        !> a particle without a valid candidate is re-seeded at its previous orientation (its state's reference
+        !! at its closest direction), scored at the seed shift with the posterior in-plane draw of the fill
         subroutine seed_fallback_if_empty(iptcl_loc)
             integer, intent(in) :: iptcl_loc
             type(ori) :: o_prev
             integer :: istate_loc, iproj_loc, irot_loc, fallback_state, fallback_proj, fallback_ref_full
             integer :: ri_loc, fallback_ref_loc
-            real    :: inpl_athres_state, sh_seed(2), dist, corr_loc
-            if( pick_best_evaluated_ref(iptcl_loc) > 0 ) return
+            real    :: sh_seed(2), dist
+            if( has_valid_candidate(iptcl_loc) ) return
             call self%b_ptr%spproj_field%get_ori(self%pinds(iptcl_loc), o_prev)
             istate_loc = o_prev%get_state()
             if( istate_loc < 1 .or. istate_loc > self%p_ptr%nstates ) istate_loc = 1
@@ -1155,19 +858,8 @@ contains
                 fallback_ref_full = (fallback_state-1)*self%p_ptr%nspace + fallback_proj
                 sh_seed = 0.
                 if( l_seed_fallback_shift ) sh_seed = o_prev%get_2Dshift()
-                if( self%p_ptr%l_prob_assign_posterior )then
-                    call self%b_ptr%pftc%gen_posterior_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
-                        &self%b_ptr%pftc%ptcl_posterior_temp(self%pinds(iptcl_loc)), dist, irot_loc)
-                else if( self%p_ptr%l_prob_inpl )then
-                    inpl_athres_state = calc_athres(self%b_ptr%spproj_field, 'dist_inpl',&
-                        &self%p_ptr%prob_athres, state=fallback_state)
-                    call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&
-                        &sh_seed, likelihood_nsample(self%b_ptr%pftc%get_nrots(), inpl_athres_state),&
-                        &dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
-                else
-                    call self%b_ptr%pftc%gen_likelihood_val(fallback_ref_full, self%pinds(iptcl_loc),&
-                        &sh_seed, self%b_ptr%pftc%get_nrots(), dist, corr_loc, irot_loc, dists_inpl_sorted, inds_sorted)
-                endif
+                call self%b_ptr%pftc%gen_posterior_val(fallback_ref_full, self%pinds(iptcl_loc), sh_seed,&
+                    &self%b_ptr%pftc%ptcl_posterior_temp(self%pinds(iptcl_loc)), dist, irot_loc)
                 if( irot_loc < 1 .or. irot_loc > self%b_ptr%pftc%get_nrots() ) irot_loc = 1
                 self%candidate_store%candidates(candidate_pos)%iref   = self%ref_full(fallback_ref_loc)
                 self%candidate_store%candidates(candidate_pos)%dist   = dist
@@ -1178,71 +870,6 @@ contains
             endif
             call o_prev%kill
         end subroutine seed_fallback_if_empty
-
-        subroutine advance_ref_head(iref)
-            integer, intent(in) :: iref
-            integer :: mloc, sloc, cand
-            mloc = graph%ref_counts(iref)
-            if( graph%ref_pos(iref) > mloc )then
-                frontier%iref_dist(iref) = huge_val
-                return
-            endif
-            sloc = graph%ref_offsets(iref)
-            do while( graph%ref_pos(iref) <= mloc )
-                cand = graph%ref_list(sloc + graph%ref_pos(iref) - 1)
-                if( frontier%ptcl_avail(cand) )then
-                    if( .not. l_filter_greedy_state )then
-                        frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
-                        return
-                    endif
-                    if( greedy_state(cand) == self%ref_state(iref) )then
-                        frontier%iref_dist(iref) = graph%ref_dists(sloc + graph%ref_pos(iref) - 1)
-                        return
-                    endif
-                endif
-                graph%ref_pos(iref) = graph%ref_pos(iref) + 1
-            enddo
-            frontier%iref_dist(iref) = huge_val
-        end subroutine advance_ref_head
-
-        subroutine sync_frontier_ref(iref)
-            integer, intent(in) :: iref
-            if( frontier%sel_pos(iref) > 0 )then
-                if( frontier%iref_dist(iref) >= huge_val )then
-                    pos = frontier%sel_pos(iref)
-                    if( pos < nsel )then
-                        last_ref                   = frontier%sel_refs(nsel)
-                        frontier%sel_refs(pos)     = last_ref
-                        frontier%sel_dists(pos)    = frontier%sel_dists(nsel)
-                        frontier%sel_pos(last_ref) = pos
-                    endif
-                    frontier%sel_pos(iref) = 0
-                    nsel = nsel - 1
-                else
-                    frontier%sel_dists(frontier%sel_pos(iref)) = frontier%iref_dist(iref)
-                endif
-            else
-                if( frontier%iref_dist(iref) < huge_val )then
-                    nsel                     = nsel + 1
-                    frontier%sel_refs(nsel)  = iref
-                    frontier%sel_dists(nsel) = frontier%iref_dist(iref)
-                    frontier%sel_pos(iref)   = nsel
-                endif
-            endif
-        end subroutine sync_frontier_ref
-
-        integer function likelihood_nsample( n, athres_ub_in ) result(nsample)
-            integer, intent(in) :: n
-            real,    intent(in) :: athres_ub_in
-            real :: athres_ub
-            athres_ub = min(self%p_ptr%prob_athres, athres_ub_in)
-            nsample = min(n, max(1, int(athres_ub * real(n) / 180.)))
-        end function likelihood_nsample
-
-        real function selected_frontier_dist( isel ) result(dist)
-            integer, intent(in) :: isel
-            dist = frontier%sel_dists(isel)
-        end function selected_frontier_dist
 
     end subroutine ref_assign_neigh
 
@@ -1585,35 +1212,24 @@ contains
 
     !> one reference scored against the particle shifted by shift_xy (particle frame): from the seed bank when it holds
     !! the shifted particle, with the angular Nyquist bin, otherwise by the shifted-reference kernel. The in-plane
-    !! rotation is drawn from the row posterior at the particle's temperature over every grid rotation
-    !! (prob_assign=posterior; corr is then exp(-dist)), or by the likelihood draw over the nsample best
-    subroutine score_seeded_ref( self, full_ref, iptcl, shift_xy, bank, l_bank, nsample, dist, corr, irot, &
-            &dists_sorted, inds_sorted )
-        class(eul_prob_tab_neigh), intent(in)    :: self
-        integer,                   intent(in)    :: full_ref, iptcl, nsample
-        real,                      intent(in)    :: shift_xy(2)
-        complex(sp),               intent(in)    :: bank(:,:)
-        logical,                   intent(in)    :: l_bank
-        real,                      intent(out)   :: dist, corr
-        integer,                   intent(out)   :: irot
-        real,                      intent(inout) :: dists_sorted(:)
-        integer,                   intent(inout) :: inds_sorted(:)
-        if( self%p_ptr%l_prob_assign_posterior )then
-            if( l_bank )then
-                call self%b_ptr%pftc%gen_posterior_val_bank(full_ref, iptcl, bank,&
-                    &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), dist, irot)
-            else
-                call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl, shift_xy,&
-                    &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), dist, irot)
-            endif
-            corr = eulprob_corr_switch(dist, self%p_ptr%cc_objfun)
-        else if( l_bank )then
-            call self%b_ptr%pftc%gen_likelihood_val_bank(full_ref, iptcl, bank, nsample, dist, corr, irot,&
-                &dists_sorted, inds_sorted)
+    !! rotation is drawn from the row's tempered posterior at the particle's temperature over every grid rotation;
+    !! corr is exp(-dist)
+    subroutine score_seeded_ref( self, full_ref, iptcl, shift_xy, bank, l_bank, dist, corr, irot )
+        class(eul_prob_tab_neigh), intent(in)  :: self
+        integer,                   intent(in)  :: full_ref, iptcl
+        real,                      intent(in)  :: shift_xy(2)
+        complex(sp),               intent(in)  :: bank(:,:)
+        logical,                   intent(in)  :: l_bank
+        real,                      intent(out) :: dist, corr
+        integer,                   intent(out) :: irot
+        if( l_bank )then
+            call self%b_ptr%pftc%gen_posterior_val_bank(full_ref, iptcl, bank,&
+                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), dist, irot)
         else
-            call self%b_ptr%pftc%gen_likelihood_val(full_ref, iptcl, shift_xy, nsample, dist, corr, irot,&
-                &dists_sorted, inds_sorted)
+            call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl, shift_xy,&
+                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl), dist, irot)
         endif
+        corr = eulprob_corr_switch(dist, self%p_ptr%cc_objfun)
     end subroutine score_seeded_ref
 
     ! Optimizes shift & rotation on the top-npeaks_inpl references

@@ -71,16 +71,10 @@ contains
         &.false., 'snhc_smpl', group="search", &
         &choices=ui_choices([character(len=9) :: 'snhc_smpl', 'snhc', 'prob', 'prob_snhc']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic modes (refine=prob|prob_snhc) commit each particle from its table of losses: balanced '//&
-        &'draws classes in turn and gives each its closest free particle, so every class is populated; posterior '//&
-        &'draws each particle''s class and in-plane rotation from its own row posterior at its own noise temperature '//&
-        &'and forces no class to be populated (objfun=euclid)(balanced|posterior){balanced}', '', .false., 'balanced', &
-        &group="search", choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
-        &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
+        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
+        &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
+        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
@@ -151,17 +145,10 @@ contains
         &.false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic stages (3 on) commit each particle from its table of losses: balanced draws classes in '//&
-        &'turn and gives each its closest free particle, so every class is populated; posterior draws each '//&
-        &'particle''s class and in-plane rotation from its own row posterior at its own noise temperature and '//&
-        &'forces no class to be populated (objfun=euclid); stages 1-2 keep their stochastic search'//&
-        &'(balanced|posterior){balanced}', '', .false., 'balanced', &
-        &group="search", choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
-        &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
+        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
+        &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
+        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
@@ -249,16 +236,10 @@ contains
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="cluster 2D", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call solve2D_chunks%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic stages (3 on) commit each particle: balanced populates every class from the class frontier; '//&
-        &'posterior draws each particle''s class and in-plane rotation from its own row posterior at its own noise '//&
-        &'temperature (objfun=euclid); stages 1-2 keep their stochastic search(balanced|posterior){balanced}', '', .false., &
-        &'balanced', group="cluster 2D", &
-        &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
-        &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="cluster 2D", visibility=UI_VIS_ADVANCED)
+        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
+        &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
+        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)

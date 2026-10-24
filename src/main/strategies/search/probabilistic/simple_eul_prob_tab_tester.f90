@@ -1,18 +1,16 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, ref_assign and its posterior branch, the neighbourhood table's posterior assignment, the modes the posterior key draws on
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
-! ref_assign is compared with the assignment it replaced, kept here as the reference (reference_assign): on synthetic
-! dense tables of one and of several states, with the same random seed, both give every particle the same reference.
-! A particle's state is the state of its closest reference; an exact tie goes to the lowest reference index.
+! ref_assign draws every particle's reference from its tempered row posterior on synthetic dense tables of one and
+! of several states, with ties, a flat and an invalid particle. A particle's state is the state of its closest
+! reference; an exact tie goes to the lowest reference index.
 module simple_eul_prob_tab_tester
-use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,            only: builder
-use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
-use simple_eul_prob_tab_utils, only: record_seed_shift, calc_athres, sample_likelihood_dist, sample_likelihood_dists, &
+use simple_eul_prob_tab_utils, only: record_seed_shift, sample_likelihood_dists, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at
 use simple_rnd,                only: seed_rnd_fixed
@@ -26,10 +24,10 @@ public :: run_all_eul_prob_tab_tests
 ! eight in-plane rotations
 integer, parameter :: NROTS = 8
 real,    parameter :: SEED(2) = [1.5, -0.5]
-! the synthetic dense tables of the assignment comparison
+! the synthetic dense tables of the assignment tests
 integer, parameter :: NPTCLS_TAB = 150
 integer, parameter :: SEED_TAB   = 20261016   !< the distances and the particles' angular distances
-integer, parameter :: SEED_DRAW  = 20261017   !< the assignment's draws, the same for both assignments
+integer, parameter :: SEED_DRAW  = 20261017   !< the assignment's draws
 
 contains
 
@@ -40,20 +38,14 @@ contains
         call test_dense_part_round_trip()
         write(*,'(A)') 'test_dense_read_threads'
         call test_dense_read_threads()
-        write(*,'(A)') 'test_likelihood_samplers'
-        call test_likelihood_samplers()
         write(*,'(A)') 'test_bounded_and_power_samplers'
         call test_bounded_and_power_samplers()
-        write(*,'(A)') 'test_ref_assign_against_reference'
-        call test_ref_assign_against_reference()
         write(*,'(A)') 'test_posterior_row_stats'
         call test_posterior_row_stats()
         write(*,'(A)') 'test_draw_posterior_row'
         call test_draw_posterior_row()
         write(*,'(A)') 'test_ref_assign_posterior'
         call test_ref_assign_posterior()
-        write(*,'(A)') 'test_posterior_key_modes'
-        call test_posterior_key_modes()
         write(*,'(A)') 'test_prob_beta_at'
         call test_prob_beta_at()
         write(*,'(A)') 'test_ref_assign_neigh_posterior'
@@ -85,51 +77,13 @@ contains
         call assert_real(1.0, prob_beta_at(30, 25, 0.1, 1.), 1.e-6, 'an iteration past the run is clamped to the end')
     end subroutine test_prob_beta_at
 
-    !> prob_assign=posterior draws only on the later-stage tables: refine=prob and prob_snhc, and prob_neigh over
-    !! state|geom; the direct stochastic neighbourhoods (prob_neigh shc|snhc), the sampling strategies, refine=neigh
-    !! and objfun=cc keep their own samplers, and prob_assign=balanced never draws
-    subroutine test_posterior_key_modes()
-        call assert_true( posterior_key('posterior', 'prob',       'state', 'euclid'), 'refine=prob draws under the key')
-        call assert_true( posterior_key('posterior', 'prob_snhc',  'state', 'euclid'), 'refine=prob_snhc draws under the key')
-        call assert_true( posterior_key('posterior', 'prob_neigh', 'state', 'euclid'), 'prob_neigh over state draws under the key')
-        call assert_true( posterior_key('posterior', 'prob_neigh', 'geom',  'euclid'), 'prob_neigh over geom draws under the key')
-        call assert_false(posterior_key('posterior', 'prob_neigh', 'shc',   'euclid'), 'prob_neigh shc keeps the frontier')
-        call assert_false(posterior_key('posterior', 'prob_neigh', 'snhc',  'euclid'), 'prob_neigh snhc keeps the frontier')
-        call assert_false(posterior_key('posterior', 'snhc_smpl',      'state', 'euclid'), 'snhc_smpl keeps its sampler')
-        call assert_false(posterior_key('posterior', 'snhc_smpl_many', 'state', 'euclid'), 'snhc_smpl_many keeps its sampler')
-        call assert_false(posterior_key('posterior', 'inpl_smpl',      'state', 'euclid'), 'inpl_smpl keeps its sampler')
-        call assert_false(posterior_key('posterior', 'greedy_smpl',    'state', 'euclid'), 'greedy_smpl keeps its sampler')
-        call assert_false(posterior_key('posterior', 'neigh',          'state', 'euclid'), 'refine=neigh keeps its sampler')
-        call assert_false(posterior_key('posterior', 'prob',       'state', 'cc'),     'objfun=cc makes the key inert')
-        call assert_false(posterior_key('balanced',  'prob',       'state', 'euclid'), 'prob_assign=balanced never draws')
-    end subroutine test_posterior_key_modes
-
-    !> l_prob_assign_posterior as the parameters derive it from a minimal command line
-    logical function posterior_key( prob_assign, refine, prob_neigh_mode, objfun ) result( l_posterior )
-        character(len=*), intent(in) :: prob_assign, refine, prob_neigh_mode, objfun
-        class(parameters), allocatable :: params
-        type(cmdline) :: cline
-        call cline%set('smpd',            1.5)
-        call cline%set('box',             32)
-        call cline%set('mskdiam',         36.)
-        call cline%set('ctf',             'no')
-        call cline%set('nthr',            1)
-        call cline%set('objfun',          objfun)
-        call cline%set('refine',          refine)
-        call cline%set('prob_neigh_mode', prob_neigh_mode)
-        call cline%set('prob_assign',     prob_assign)
-        allocate(params)
-        call params%new(cline, silent=.true.)
-        l_posterior = params%l_prob_assign_posterior
-        deallocate(params)
-        call cline%kill
-    end function posterior_key
-
-    !> prob_assign=posterior on the subspace neighbourhood table (ref_assign_neigh): a synthetic candidate store of
-    !! 150 particles over 3 states x 20 directions (1 to 12 candidates each, some without an in-plane index; every
-    !! particle has a valid one, as re-seeding needs the calculator). At a huge temperature every particle takes
-    !! the closest valid candidate's state and the argmin within it, with its in-plane index and distance. At
-    !! T = 2 some leave the mode and none its state; the same seed gives the same assignment, another another.
+    !> the neighbourhood table's posterior assignment (ref_assign_neigh, section 4.5; the same draw on every
+    !! neighbourhood mode): a synthetic candidate store of 150 particles over 3 states x 20 directions (1 to 12
+    !! candidates each, some without an in-plane index; every particle has a valid one, since a particle without one
+    !! is re-seeded through the calculator, which this test has not). At a huge temperature every particle takes the
+    !! state of its closest valid candidate and the argmin within it, with its in-plane index and distance and the
+    !! evaluated fraction. At T = 2 some particles leave the mode and none its state; the same seed gives the same
+    !! assignment, another seed another.
     subroutine test_ref_assign_neigh_posterior()
         integer, parameter :: NSPACE = 20, NSTATES = 3, NP = 150
         class(parameters), allocatable, target :: params
@@ -138,18 +92,16 @@ contains
         type(prob_candidate), allocatable :: cands(:)
         integer, allocatable :: counts(:), pinds(:), state_best(:), ref_best(:), run1(:), run2(:)
         real,    allocatable :: dist_best(:)
-        integer :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref
+        integer :: i, k, n, nrefs, nwrong, nmoved, nstate_ok, iref, nvalid
         nrefs = NSPACE * NSTATES
         allocate(params, build)
         params%nspace          = NSPACE
         params%nstates         = NSTATES
         params%prob_athres     = 10.
         params%l_doshift       = .false.
-        params%prob_neigh_mode = 'state'
-        params%l_prob_assign_posterior = .true.
-        params%prob_beta = 1.
+        params%prob_neigh_mode = 'snhc'
+        params%prob_beta       = 1.
         call seed_rnd_fixed(SEED_TAB)
-        allocate(build%subspace_inds(1), source=1)   ! the subspace modes' table needs a subspace map; the fill is not run
         allocate(build%spproj_field)
         call build%spproj_field%new(NP, is_ptcl=.true.)
         do i = 1,NP
@@ -195,15 +147,20 @@ contains
         call seed_rnd_fixed(SEED_DRAW)
         call tab%ref_assign
         nwrong = 0
+        n = 0
         do i = 1,NP
             if( state_best(i) > 0 )then
                 iref = (tab%assgn_map(i)%istate - 1) * NSPACE + tab%assgn_map(i)%iproj
                 if( iref /= ref_best(i) ) nwrong = nwrong + 1
                 if( tab%assgn_map(i)%dist /= dist_best(i) ) nwrong = nwrong + 1
                 if( tab%assgn_map(i)%inpl < 1 ) nwrong = nwrong + 1
-                ! a subspace neighbourhood records a full search
-                if( abs(tab%assgn_map(i)%frac - 100.) > 1.e-4 ) nwrong = nwrong + 1
+                nvalid = 0
+                do k = 1,counts(i)
+                    if( cands(n+k)%inpl > 0 ) nvalid = nvalid + 1
+                enddo
+                if( abs(tab%assgn_map(i)%frac - 100. * real(nvalid) / real(nrefs)) > 1.e-4 ) nwrong = nwrong + 1
             endif
+            n = n + counts(i)
         enddo
         call assert_int(0, nwrong, 'a huge temperature gives every particle its closest valid neighbourhood candidate')
         call tab%kill
@@ -249,7 +206,7 @@ contains
 
     end subroutine test_ref_assign_neigh_posterior
 
-    !> The draw from a row posterior (prob_assign=posterior): a huge temperature gives a unique argmin every
+    !> The draw from a row posterior (draw_posterior_row): a huge temperature gives a unique argmin every
     !! time and one of two equal minima with equal probability (both drawn over 50 draws, never another);
     !! temperature 0 draws uniformly over the valid distances and never an invalid one; at T = 1 the row
     !! [0, 1, 2] is drawn with p = [1, e^-1, e^-2]/Z = [0.665, 0.245, 0.090] to within 0.02 over 20000 draws;
@@ -311,7 +268,10 @@ contains
         call assert_int(0, which, 'a row without a valid distance draws 0')
     end subroutine test_draw_posterior_row
 
-    !> ref_assign under prob_assign=posterior on the synthetic tables of compare_with_reference: with a huge
+    !> ref_assign on synthetic dense tables (one state of 200 directions, three states of 200, two states of one
+    !! direction; random distances with the tie cases: particle 1 flat, particle 2 tied at its minimum between a
+    !! reference of state 2 and one of state 3, particle 3 between state 1 and state 3, particle 4 with invalid
+    !! distances only, particles 5 and 6 identical): with a huge
     !! temperature every particle whose row minimum is unique takes it; the flat particle 1 takes a uniformly
     !! drawn direction in state 1 (the state label is the lowest-index argmin's) and the invalid particle 4
     !! takes reference 1; the state-2/state-3 and state-1/state-3 ties of particles 2 and 3 go to the lower
@@ -340,8 +300,7 @@ contains
         params%nstates     = nstates
         params%prob_athres = 10.
         params%l_doshift   = .false.
-        params%l_prob_assign_posterior = .true.
-        params%prob_beta = 1.
+        params%prob_beta   = 1.
         call seed_rnd_fixed(SEED_TAB)
         allocate(build%spproj_field)
         call build%spproj_field%new(NPTCLS_TAB, is_ptcl=.true.)
@@ -502,111 +461,6 @@ contains
         call assert_int(0, k99,    'no valid distance: k99 0')
     end subroutine test_posterior_row_stats
 
-    !> One state of 200 directions, three states of 200, and two states of one direction (each state's draw
-    !! has a single reference). A different draw seed changes the reference assignment of the first two
-    !! tables, so their agreement is not that of a draw-free assignment. Every table is random but holds the tie cases: particle 1 is flat (every
-    !! distance equal), particle 2 ties its minimum between a reference of state 2 and one of state 3,
-    !! particle 3 between state 1 and state 3, particle 4 has only invalid distances, and particles 5 and
-    !! 6 have identical distances (ties between particles in every reference's order).
-    subroutine test_ref_assign_against_reference()
-        integer :: nthr_prev, nthr_global_prev
-        nthr_prev = 1
-        !$ nthr_prev = omp_get_max_threads()
-        nthr_global_prev = nthr_glob
-        nthr_glob = 1
-        !$ call omp_set_num_threads(14)
-        call compare_with_reference(nspace=200, nstates=1)
-        call compare_with_reference(nspace=200, nstates=3)
-        call compare_with_reference(nspace=1,  nstates=2)
-        !$ call omp_set_num_threads(nthr_prev)
-        nthr_glob = nthr_global_prev
-    end subroutine test_ref_assign_against_reference
-
-    subroutine compare_with_reference( nspace, nstates )
-        integer, intent(in) :: nspace, nstates
-        class(parameters), allocatable, target :: params
-        class(builder),    allocatable, target :: build
-        type(eul_prob_tab) :: tab
-        real,    allocatable :: dists(:,:), state_athres(:)
-        integer, allocatable :: ref_expected(:), ref_other(:), pinds(:)
-        integer :: nrefs, i, iref, istate, nsame
-        character(len=64) :: label
-        write(label,'(A,I0,A,I0)') 'nspace ', nspace, ', nstates ', nstates
-        nrefs = nspace * nstates
-        allocate(params, build)
-        params%nspace     = nspace
-        params%nstates    = nstates
-        params%prob_athres = 10.
-        params%l_doshift  = .false.
-        ! the particle field: states in turn, every particle sampled, angular distances of 0 to 20 degrees
-        call seed_rnd_fixed(SEED_TAB)
-        allocate(build%spproj_field)
-        call build%spproj_field%new(NPTCLS_TAB, is_ptcl=.true.)
-        do i = 1,NPTCLS_TAB
-            call build%spproj_field%set_state(i, mod(i-1, nstates) + 1)
-            call build%spproj_field%set(i, 'sampled', 1.)
-            call build%spproj_field%set(i, 'dist',    20. * ran3())
-        enddo
-        pinds = [(i, i=1,NPTCLS_TAB)]
-        ! the distances, with the tie cases
-        allocate(dists(nrefs,NPTCLS_TAB))
-        do i = 1,NPTCLS_TAB
-            do iref = 1,nrefs
-                dists(iref,i) = 5. * ran3()
-            enddo
-        enddo
-        dists(:,1) = 1.
-        if( nstates >= 3 )then
-            dists(:,2) = 3. + dists(:,2)
-            dists(nspace + min(5,nspace), 2)   = 0.01
-            dists(2*nspace + min(7,nspace), 2) = 0.01
-            dists(:,3) = 3. + dists(:,3)
-            dists(min(10,nspace), 3)    = 0.01
-            dists(2*nspace + 1, 3)      = 0.01
-        endif
-        dists(:,4) = huge(1.)
-        dists(:,6) = dists(:,5)
-        ! the new assignment
-        call tab%new(params, build, pinds)
-        do i = 1,NPTCLS_TAB
-            do iref = 1,nrefs
-                call set_dist(tab, iref, i, dists(iref,i))
-            enddo
-        enddo
-        call seed_rnd_fixed(SEED_DRAW)
-        call tab%ref_assign
-        ! the reference assignment on the same table and draws
-        allocate(state_athres(nstates))
-        do istate = 1,nstates
-            state_athres(istate) = calc_athres(build%spproj_field, 'dist', params%prob_athres, state=istate)
-        enddo
-        call seed_rnd_fixed(SEED_DRAW)
-        call reference_assign(dists, nspace, nstates, params%prob_athres, state_athres, ref_expected)
-        nsame = 0
-        do i = 1,NPTCLS_TAB
-            iref = ref_expected(i)
-            if( tab%assgn_map(i)%istate == (iref - 1)/nspace + 1 .and. &
-                &tab%assgn_map(i)%iproj == modulo(iref - 1, nspace) + 1 ) nsame = nsame + 1
-        enddo
-        call assert_int(NPTCLS_TAB, nsame, 'ref_assign agrees with the reference assignment ('//trim(label)//')')
-        if( nspace > 1 )then
-            call seed_rnd_fixed(SEED_DRAW + 1)
-            call reference_assign(dists, nspace, nstates, params%prob_athres, state_athres, ref_other)
-            call assert_true(any(ref_other /= ref_expected), 'the draws do not change the assignment ('//trim(label)//')')
-        endif
-        ! the written tie rule: the state of the lowest-index reference at the particle's minimum
-        call assert_int(1, tab%assgn_map(1)%istate, 'a flat particle takes the state of reference 1 ('//trim(label)//')')
-        call assert_int(1, tab%assgn_map(4)%istate, 'an invalid particle takes the state of reference 1 ('//trim(label)//')')
-        if( nstates >= 3 )then
-            call assert_int(2, tab%assgn_map(2)%istate, 'a state 2 / state 3 tie goes to state 2 ('//trim(label)//')')
-            call assert_int(1, tab%assgn_map(3)%istate, 'a state 1 / state 3 tie goes to state 1 ('//trim(label)//')')
-        endif
-        call tab%kill
-        call build%spproj_field%kill
-        deallocate(build%spproj_field)
-        deallocate(params, build)
-    end subroutine compare_with_reference
-
     !> Two dense part files written by worker tables in batches, read by a master whose particle order is the reverse:
     !! every row, refined shift and seed comes back exactly, an unrefined entry without shift
     subroutine test_dense_part_round_trip()
@@ -645,43 +499,6 @@ contains
         call master%kill
         call kill_round_trip_parts(params, build, NPARTS_RT)
     end subroutine test_dense_part_round_trip
-
-    !> The likelihood sampler over an array of distances draws exactly as the one over a distance function, from the same
-    !! seed: 200 random sets of 1 to 300 distances with ties, a flat set, sentinel distances and every sample size
-    subroutine test_likelihood_samplers()
-        real,    allocatable :: dists(:), pvec(:), pvec2(:), cdf(:)
-        integer, allocatable :: inds(:), inds2(:)
-        real    :: dist1, corr1, dist2, corr2
-        integer :: iset, n, nsample, which1, which2, i, nwrong
-        call seed_rnd_fixed(SEED_TAB)
-        nwrong = 0
-        do iset = 1,200
-            n = 1 + int(299. * ran3())
-            allocate(dists(n), pvec(n), pvec2(n), cdf(n), inds(n), inds2(n))
-            do i = 1,n
-                dists(i) = 10. * ran3()
-            enddo
-            if( n > 4 ) dists(n/2:n/2+2) = dists(1)
-            if( mod(iset,10) == 0 ) dists = 3.
-            if( mod(iset,13) == 0 ) dists(1:(n+1)/2) = huge(1.)
-            nsample = 1 + mod(iset-1, n)
-            call seed_rnd_fixed(SEED_DRAW + iset)
-            call sample_likelihood_dist(n, dist_at, nsample, dist1, corr1, which1, pvec, inds)
-            call seed_rnd_fixed(SEED_DRAW + iset)
-            call sample_likelihood_dists(n, dists, nsample, dist2, corr2, which2, pvec2, inds2, cdf)
-            if( which1 /= which2 .or. dist1 /= dist2 .or. corr1 /= corr2 ) nwrong = nwrong + 1
-            deallocate(dists, pvec, pvec2, cdf, inds, inds2)
-        enddo
-        call assert_int(0, nwrong, 'the array likelihood sampler draws exactly as the function sampler')
-
-    contains
-
-        real function dist_at( i )
-            integer, intent(in) :: i
-            dist_at = dists(i)
-        end function dist_at
-
-    end subroutine test_likelihood_samplers
 
     !> The bounded and power samplers over an array of distances draw exactly as the ones over a distance function
     !! they replaced (kept here as reference_bounded and reference_power), from the same seed: 200 random sets of 1 to
@@ -1006,151 +823,6 @@ contains
         tab%dists(i,iref) = dist
         tab%inpls(i,iref) = 0
     end subroutine set_dist
-
-    !> The assignment ref_assign replaced (as of 2026-10-15), on a dense table dists(nrefs,nptcls) whose
-    !! states all exist: every reference sorts the particles; one state draws among all heads and
-    !! advances every head after each assignment; several states label every particle by a global
-    !! greedy frontier (the minimal head first, minloc over the references), then draw within each
-    !! state among its active references, advancing every head of the state after each assignment.
-    !! iref_assigned(i) is the reference particle i was assigned.
-    subroutine reference_assign( dists, nspace, nstates, prob_athres, state_athres, iref_assigned )
-        real,                 intent(in)  :: dists(:,:), prob_athres, state_athres(:)
-        integer,              intent(in)  :: nspace, nstates
-        integer, allocatable, intent(out) :: iref_assigned(:)
-        integer, allocatable :: stab_inds(:,:), inds_sorted(:), iref_dist_inds(:), greedy_state(:)
-        integer, allocatable :: active_refs(:), active_inds(:)
-        real,    allocatable :: score_work(:), iref_dist(:), dists_sorted(:), active_dists(:), active_dists_sorted(:)
-        logical, allocatable :: ptcl_avail(:)
-        integer :: nrefs, nptcls, i, iref, assigned_iref, assigned_ptcl, istate, active_idx, nactive
-        real    :: projs_athres, dist_tmp, corr_tmp
-        nrefs  = size(dists,1)
-        nptcls = size(dists,2)
-        allocate(stab_inds(nptcls,nrefs), score_work(nptcls), inds_sorted(nrefs), iref_dist_inds(nrefs),&
-            &greedy_state(nptcls), active_refs(nrefs), active_inds(nrefs), iref_dist(nrefs), dists_sorted(nrefs),&
-            &active_dists(nrefs), active_dists_sorted(nrefs), ptcl_avail(nptcls), iref_assigned(nptcls))
-        iref_assigned = 0
-        do iref = 1,nrefs
-            do i = 1,nptcls
-                stab_inds(i,iref) = i
-                score_work(i)     = ref_score(iref, i)
-            enddo
-            call hpsort(score_work, stab_inds(:,iref))
-        enddo
-        projs_athres = maxval(state_athres)
-        greedy_state = 0
-        if( nstates > 1 )then
-            call reset_ref_frontier()
-            do while( any(ptcl_avail) )
-                assigned_iref = minloc(iref_dist, dim=1)
-                assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
-                greedy_state(assigned_ptcl) = ref_state(assigned_iref)
-                ptcl_avail(assigned_ptcl)   = .false.
-                do iref = 1,nrefs
-                    call advance_ref_head(iref, 0)
-                enddo
-            enddo
-            do istate = 1,nstates
-                call reset_ref_frontier()
-                ptcl_avail = greedy_state == istate
-                do iref = 1,nrefs
-                    if( ref_state(iref) == istate ) call advance_ref_head(iref, istate)
-                enddo
-                do while( any(ptcl_avail) )
-                    nactive = 0
-                    do iref = 1,nrefs
-                        if( ref_state(iref) /= istate ) cycle
-                        if( iref_dist_inds(iref) > nptcls ) cycle
-                        nactive = nactive + 1
-                        active_refs(nactive)  = iref
-                        active_dists(nactive) = iref_dist(iref)
-                    enddo
-                    if( nactive == 1 )then
-                        active_idx = 1
-                    else
-                        call sample_likelihood_dist(nactive, active_ref_dist, likelihood_nsample(nactive, state_athres(istate)),&
-                            &dist_tmp, corr_tmp, active_idx, active_dists_sorted, active_inds)
-                    endif
-                    assigned_iref = active_refs(active_idx)
-                    call assign_current_ref()
-                    do iref = 1,nrefs
-                        if( ref_state(iref) == istate ) call advance_ref_head(iref, istate)
-                    enddo
-                enddo
-            enddo
-        else
-            call reset_ref_frontier()
-            do while( any(ptcl_avail) )
-                call sample_likelihood_dist(nrefs, frontier_ref_dist, likelihood_nsample(nrefs, projs_athres),&
-                    &dist_tmp, corr_tmp, assigned_iref, dists_sorted, inds_sorted)
-                call assign_current_ref()
-                do iref = 1,nrefs
-                    call advance_ref_head(iref, 0)
-                enddo
-            enddo
-        endif
-
-    contains
-
-        real function ref_score( iref_loc, iptcl_loc ) result( score )
-            integer, intent(in) :: iref_loc, iptcl_loc
-            real :: invalid_dist
-            invalid_dist = 0.1 * huge(invalid_dist)
-            score = dists(iref_loc,iptcl_loc)
-            if( .not.(ieee_is_finite(score) .and. score < invalid_dist) ) score = invalid_dist
-        end function ref_score
-
-        integer function ref_state( iref_loc )
-            integer, intent(in) :: iref_loc
-            ref_state = (iref_loc - 1) / nspace + 1
-        end function ref_state
-
-        integer function likelihood_nsample( n, athres_ub_in ) result( nsample )
-            integer, intent(in) :: n
-            real,    intent(in) :: athres_ub_in
-            nsample = min(n, max(1, int(min(prob_athres, athres_ub_in) * real(n) / 180.)))
-        end function likelihood_nsample
-
-        real function frontier_ref_dist( iref_loc ) result( dist )
-            integer, intent(in) :: iref_loc
-            dist = iref_dist(iref_loc)
-        end function frontier_ref_dist
-
-        real function active_ref_dist( active_loc ) result( dist )
-            integer, intent(in) :: active_loc
-            dist = active_dists(active_loc)
-        end function active_ref_dist
-
-        subroutine reset_ref_frontier()
-            integer :: iref_loc
-            do iref_loc = 1,nrefs
-                iref_dist(iref_loc) = ref_score(iref_loc, stab_inds(1,iref_loc))
-            enddo
-            iref_dist_inds = 1
-            ptcl_avail     = .true.
-        end subroutine reset_ref_frontier
-
-        subroutine advance_ref_head( iref_current, state_filter )
-            integer, intent(in) :: iref_current, state_filter
-            integer :: iptcl_current
-            do while( iref_dist_inds(iref_current) <= nptcls )
-                iptcl_current = stab_inds(iref_dist_inds(iref_current), iref_current)
-                if( ptcl_avail(iptcl_current) .and. &
-                    &(state_filter == 0 .or. greedy_state(iptcl_current) == state_filter) )then
-                    iref_dist(iref_current) = ref_score(iref_current, iptcl_current)
-                    return
-                endif
-                iref_dist_inds(iref_current) = iref_dist_inds(iref_current) + 1
-            enddo
-            iref_dist(iref_current) = huge(iref_dist(iref_current))
-        end subroutine advance_ref_head
-
-        subroutine assign_current_ref()
-            assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
-            ptcl_avail(assigned_ptcl)    = .false.
-            iref_assigned(assigned_ptcl) = assigned_iref
-        end subroutine assign_current_ref
-
-    end subroutine reference_assign
 
     subroutine test_record_seed_shift()
         type(ptcl_ref) :: assgn

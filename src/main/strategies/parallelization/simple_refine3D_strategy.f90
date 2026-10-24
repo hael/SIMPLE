@@ -1370,7 +1370,7 @@ contains
         call cline%set(          'extr_iter',  params%extr_iter)
         call self%job_descr%set( 'startit',    int2str(params%startit))
         call cline%set(          'startit',    params%startit)
-        if( params%l_prob_assign_posterior ) call self%job_descr%set('prob_beta', real2str(params%prob_beta))
+        if( params%l_prob_align_mode ) call self%job_descr%set('prob_beta', real2str(params%prob_beta))
         if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         if( trim(params%volrec).eq.'yes' )then
             call remove_partial_rec_files(params)

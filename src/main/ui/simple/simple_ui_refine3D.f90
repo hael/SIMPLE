@@ -49,18 +49,10 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'prob_assign', 'multi', 'Probability-table assignment', &
-        &'How the probabilistic search (refine=prob, or prob_neigh with prob_neigh_mode=state|geom) commits each '//&
-        &'particle from its table of losses: balanced draws references in turn and gives each its closest free '//&
-        &'particle, so every reference is populated; posterior draws each particle''s direction and in-plane rotation '//&
-        &'from its own row posterior at its own noise temperature and forces no reference to be populated '//&
-        &'(objfun=euclid; the stage then ends on the resolution exit or its budget, not on the pose overlap); the '//&
-        &'other modes keep their own sampling(balanced|posterior){balanced}', '', .false., 'balanced', group="search", &
-        &choices=ui_choices([character(len=9) :: 'balanced', 'posterior']), visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the posterior draws (prob_assign=posterior): the particle temperature of every draw '//&
-        &'(in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.1}', 'factor on T{0.1}', .false., 0.1, group="search", visibility=UI_VIS_ADVANCED)
+        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_neigh): the particle temperature of '//&
+        &'every draw (in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
+        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the last iteration', &
         &'The factor the geometric ramp from prob_beta reaches at the run''s last iteration (1 the physical posterior); 0 keeps prob_beta throughout'//&
         &'{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)

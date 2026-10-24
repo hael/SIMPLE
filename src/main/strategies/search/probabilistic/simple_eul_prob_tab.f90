@@ -4,8 +4,8 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample, &
-    &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, sample_likelihood_dist, &
+use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
+    &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 use simple_type_defs,          only: OBJFUN_EUCLID
@@ -87,7 +87,6 @@ type :: eul_prob_tab
     procedure, private :: read_dense_part
     procedure :: dense_candidate
     procedure :: ref_assign
-    procedure, private :: ref_assign_posterior
     procedure, private :: warn_invalid_and_flat
     procedure :: write_assignment
     ! REFERENCE INDEX MAPPING
@@ -145,6 +144,9 @@ contains
         call self%kill
         self%p_ptr => params
         self%b_ptr  => build
+        ! the posterior is defined by the Euclidean objective (the particle temperature is its noise scale)
+        if( params%cc_objfun /= OBJFUN_EUCLID )&
+            &THROW_HARD('the probability tables draw from the tempered posterior: refine=prob|prob_neigh needs objfun=euclid')
         self%nptcls       = size(pinds)
         self%state_exists = self%b_ptr%spproj_field%states_exist(self%p_ptr%nstates, thres=MIN_POP)
         ! weighted: a state is populated by the effective sample size of its frozen weights
@@ -244,10 +246,10 @@ contains
         real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
         integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
         logical :: l_post
-        integer :: i, si, iptcl, n, projs_ns, ithr, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), istate
+        integer :: i, si, iptcl, n, projs_ns, ithr, istate
         integer :: inpl_refs(self%nrefs,nthr_glob)
-        real    :: lims(2,2), lims_init(2,2), inpl_athres(self%p_ptr%nstates)
-        real    :: dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
+        real    :: lims(2,2), lims_init(2,2)
+        real    :: dists_refs(self%nrefs,nthr_glob)
         logical :: l_sh_first, l_grid
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo (single state)
         integer(int64) :: seed_builds, bank_ithr
@@ -274,7 +276,6 @@ contains
             istate = self%ssinds(si)
             call calc_num2sample(self%b_ptr%spproj_field, self%p_ptr%nspace, 'dist', n, self%p_ptr%prob_athres, state=istate)
             projs_ns            = max(projs_ns, n)
-            inpl_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist_inpl', self%p_ptr%prob_athres, state=istate)
         enddo
         if( allocated(locn) ) deallocate(locn)
         allocate(locn(projs_ns,nthr_glob), source=0)
@@ -411,7 +412,7 @@ contains
                 if( l_bank_seed )then
                     call score_ref_bank(ri_loc, iptcl_loc, ithr_loc, dist_loc, irot_loc)
                 else
-                    call score_ref(ri_loc, iptcl_loc, shift_seed(2:3), ithr_loc, dist_loc, irot_loc)
+                    call score_ref(ri_loc, iptcl_loc, shift_seed(2:3), dist_loc, irot_loc)
                 endif
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
                 dists_refs(ri_loc,ithr_loc) = dist_loc
@@ -433,7 +434,7 @@ contains
             real(dp) :: t0
             t0 = omp_get_wtime()
             do ri_loc = 1,self%nrefs
-                call score_ref(ri_loc, iptcl_loc, [0.,0.], ithr_loc, dist_loc, irot_loc)
+                call score_ref(ri_loc, iptcl_loc, [0.,0.], dist_loc, irot_loc)
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
             enddo
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
@@ -689,55 +690,25 @@ contains
         end subroutine estimate_shift_seed
 
         !> one reference's row entry: the in-plane rotation drawn from the row posterior at the particle's
-        !! temperature over every grid rotation (prob_assign=posterior), or the likelihood draw within the
-        !! angular threshold (balanced)
-        subroutine score_ref( ri_loc, iptcl_loc, shift_xy, ithr_loc, dist_loc, irot_loc )
-            integer, intent(in)  :: ri_loc, iptcl_loc, ithr_loc
+        !! temperature over every grid rotation (gen_posterior_val; the uniform draw within an angular window it
+        !! replaced was the search's exploration, doc/implementation_notes/planned/pose_marginalization.md
+        !! sections 14-17, now the tempered posterior's)
+        subroutine score_ref( ri_loc, iptcl_loc, shift_xy, dist_loc, irot_loc )
+            integer, intent(in)  :: ri_loc, iptcl_loc
             real,    intent(in)  :: shift_xy(2)
             real,    intent(out) :: dist_loc
             integer, intent(out) :: irot_loc
-            integer :: istate_loc, iproj_loc, full_ref
-            real    :: corr_loc
-            istate_loc = self%ref_state(ri_loc)
-            iproj_loc  = self%ref_proj(ri_loc)
-            full_ref   = self%ref_full(ri_loc)
-            if( self%p_ptr%l_prob_assign_posterior )then
-                call self%b_ptr%pftc%gen_posterior_val(full_ref, iptcl_loc, shift_xy,&
-                    &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
-            else
-                call self%b_ptr%pftc%gen_likelihood_val(full_ref, iptcl_loc, shift_xy,&
-                    &inpl_likelihood_nsample(istate_loc), dist_loc, corr_loc, irot_loc,&
-                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-            endif
+            call self%b_ptr%pftc%gen_posterior_val(self%ref_full(ri_loc), iptcl_loc, shift_xy,&
+                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
         end subroutine score_ref
 
         subroutine score_ref_bank( ri_loc, iptcl_loc, ithr_loc, dist_loc, irot_loc )
             integer, intent(in)  :: ri_loc, iptcl_loc, ithr_loc
             real,    intent(out) :: dist_loc
             integer, intent(out) :: irot_loc
-            real :: corr_loc
-            if( self%p_ptr%l_prob_assign_posterior )then
-                call self%b_ptr%pftc%gen_posterior_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
-                    &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
-            else
-                call self%b_ptr%pftc%gen_likelihood_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
-                    &inpl_likelihood_nsample(self%ref_state(ri_loc)), dist_loc, corr_loc, irot_loc,&
-                    &dists_inpl_sorted(:,ithr_loc), inds_sorted(:,ithr_loc))
-            endif
+            call self%b_ptr%pftc%gen_posterior_val_bank(self%ref_full(ri_loc), iptcl_loc, seed_bank(:,:,ithr_loc),&
+                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
         end subroutine score_ref_bank
-
-        !> the in-plane candidates an entry's rotation is drawn from (prob_assign=balanced): the rotations within
-        !! the angular threshold. The draw at unit temperature on the normalized loss is uniform over them; that
-        !! randomness is the search's exploration against the references' memory of the particle's last pose, and
-        !! removing it (the best rotation alone) traps the run (doc/implementation_notes/planned/pose_marginalization.md
-        !! sections 14-15, doc/algorithms/sampling_and_fractional_updates.md); the posterior draw keeps the
-        !! randomness at the data's width instead
-        integer function inpl_likelihood_nsample( istate_loc ) result(nsample)
-            integer, intent(in) :: istate_loc
-            real :: athres_ub
-            athres_ub = min(self%p_ptr%prob_athres, inpl_athres(istate_loc))
-            nsample = min(self%b_ptr%pftc%get_nrots(), max(1, int(athres_ub * real(self%b_ptr%pftc%get_nrots()) / 180.)))
-        end function inpl_likelihood_nsample
 
         subroutine refine_best_refs( i_loc, iptcl_loc, ithr_loc, shift_seed )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
@@ -837,251 +808,6 @@ contains
         profile = self%fill_profile
     end function get_fill_profile
 
-    ! ptcl -> (proj, state) assignment using calibrated likelihood weights.
-    ! Every reference sorts the particles by distance; its head is its closest available particle.
-    ! One state: draw a reference among the heads, assign its head, advance the heads that pointed
-    ! at that particle. Several states: a particle's state is the state of its closest reference over
-    ! all states (ties: the lowest reference index), then the same draw runs within each state over
-    ! that state's references. A particle-indexed list of the references whose head it is
-    ! (head_first, ref_next) finds the heads to advance without rescanning every reference.
-    subroutine ref_assign( self )
-        class(eul_prob_tab), intent(inout) :: self
-        integer, allocatable :: stab_inds(:,:), inds_sorted(:), iref_dist_inds(:)
-        integer, allocatable :: greedy_state(:), head_first(:), ref_next(:)
-        real,    allocatable :: score_work(:,:)
-        real,    allocatable :: iref_dist(:), dists_sorted(:), state_projs_athres(:)
-        logical, allocatable :: ptcl_avail(:)
-        integer :: i, iref, assigned_iref, assigned_ptcl, istate, si, active_idx, ithr, nleft, ref_offset
-        integer :: alloc_stat, nthr_work
-        real    :: projs_athres, dist_tmp, corr_tmp
-        character(len=256) :: alloc_msg
-        if( self%p_ptr%l_prob_assign_posterior )then
-            call self%ref_assign_posterior
-            return
-        endif
-        nthr_work = 1
-        !$ nthr_work = omp_get_max_threads()
-        allocate(stab_inds(self%nptcls, self%nrefs), score_work(self%nptcls,nthr_work),&
-            &inds_sorted(self%nrefs), iref_dist_inds(self%nrefs), greedy_state(self%nptcls),&
-            &iref_dist(self%nrefs), dists_sorted(self%nrefs), state_projs_athres(self%p_ptr%nstates),&
-            &ptcl_avail(self%nptcls), head_first(self%nptcls), ref_next(self%nrefs), stat=alloc_stat, errmsg=alloc_msg)
-        if( alloc_stat /= 0 )then
-            write(logfhandle,*) 'eul_prob_tab%ref_assign allocation failed for nptcls/nrefs: ', self%nptcls, self%nrefs
-            write(logfhandle,*) trim(alloc_msg)
-            THROW_HARD('failed allocating probability assignment work arrays')
-        endif
-        call self%warn_invalid_and_flat
-        ! Sort each reference using one scratch score column per worker thread.
-        !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iref,i,ithr)
-        do iref = 1, self%nrefs
-            ithr = omp_get_thread_num() + 1
-            do i = 1,self%nptcls
-                stab_inds(i,iref) = i
-                score_work(i,ithr) = ref_score(iref, i)
-            enddo
-            call hpsort(score_work(:,ithr), stab_inds(:,iref))
-        enddo
-        !$omp end parallel do
-        projs_athres = 0.
-        state_projs_athres = 0.
-        do si = 1, self%nstates
-            istate = self%ssinds(si)
-            state_projs_athres(istate) = calc_athres(self%b_ptr%spproj_field, 'dist',&
-                &self%p_ptr%prob_athres, state=istate)
-            projs_athres = max(projs_athres, state_projs_athres(istate))
-        enddo
-        greedy_state = 0
-        if( self%nstates > 1 )then
-            call assign_state_labels()
-            do si = 1,self%nstates
-                call assign_refs_for_state(si)
-            enddo
-        else
-            call reset_ref_frontier(1, self%nrefs)
-            ptcl_avail = .true.
-            nleft      = self%nptcls
-            call build_head_lists(1, self%nrefs)
-            do while( nleft > 0 )
-                call sample_likelihood_dist(self%nrefs, frontier_ref_dist, likelihood_nsample(self%nrefs, projs_athres),&
-                    &dist_tmp, corr_tmp, assigned_iref, dists_sorted, inds_sorted)
-                call assign_current_ref()
-                call advance_heads_at(assigned_ptcl)
-            enddo
-        endif
-        deallocate(stab_inds, inds_sorted, iref_dist_inds, greedy_state, score_work,&
-            &iref_dist, dists_sorted, state_projs_athres, ptcl_avail, head_first, ref_next)
-
-    contains
-
-        real function ref_score( iref_loc, iptcl_loc ) result(score)
-            integer, intent(in) :: iref_loc, iptcl_loc
-            real :: dist_val, invalid_dist
-            invalid_dist = 0.1 * huge(invalid_dist)
-            dist_val = self%dists(iptcl_loc,iref_loc)
-            score = 1.
-            if( .not.(ieee_is_finite(dist_val) .and. dist_val < invalid_dist) )then
-                score = invalid_dist
-                return
-            endif
-            score = dist_val
-        end function ref_score
-
-        integer function likelihood_nsample( n, athres_ub_in ) result(nsample)
-            integer, intent(in) :: n
-            real,    intent(in) :: athres_ub_in
-            real :: athres_ub
-            athres_ub = min(self%p_ptr%prob_athres, athres_ub_in)
-            nsample = min(n, max(1, int(athres_ub * real(n) / 180.)))
-        end function likelihood_nsample
-
-        real function frontier_ref_dist( iref_loc ) result(dist)
-            integer, intent(in) :: iref_loc
-            dist = iref_dist(iref_loc)
-        end function frontier_ref_dist
-
-        !> the references ifirst..ilast with their heads at their closest particle
-        subroutine reset_ref_frontier( ifirst, ilast )
-            integer, intent(in) :: ifirst, ilast
-            integer :: iref_loc
-            do iref_loc = ifirst,ilast
-                iref_dist(iref_loc) = ref_score(iref_loc, stab_inds(1,iref_loc))
-            enddo
-            iref_dist_inds(ifirst:ilast) = 1
-        end subroutine reset_ref_frontier
-
-        !> move the head of iref_current to its closest available particle (huge distance when none is left)
-        subroutine advance_ref_head( iref_current )
-            integer, intent(in) :: iref_current
-            integer :: iptcl_current
-            do while( iref_dist_inds(iref_current) <= self%nptcls )
-                iptcl_current = stab_inds(iref_dist_inds(iref_current), iref_current)
-                if( ptcl_avail(iptcl_current) )then
-                    iref_dist(iref_current) = ref_score(iref_current, iptcl_current)
-                    return
-                endif
-                iref_dist_inds(iref_current) = iref_dist_inds(iref_current) + 1
-            enddo
-            iref_dist(iref_current) = huge(iref_dist(iref_current))
-        end subroutine advance_ref_head
-
-        !> enter reference iref_loc in the list of its head particle
-        subroutine push_head( iref_loc )
-            integer, intent(in) :: iref_loc
-            integer :: iptcl_head
-            if( iref_dist_inds(iref_loc) > self%nptcls ) return
-            iptcl_head             = stab_inds(iref_dist_inds(iref_loc), iref_loc)
-            ref_next(iref_loc)     = head_first(iptcl_head)
-            head_first(iptcl_head) = iref_loc
-        end subroutine push_head
-
-        subroutine build_head_lists( ifirst, ilast )
-            integer, intent(in) :: ifirst, ilast
-            integer :: iref_loc
-            head_first = 0
-            do iref_loc = ifirst,ilast
-                call push_head(iref_loc)
-            enddo
-        end subroutine build_head_lists
-
-        !> advance the heads that pointed at the particle just assigned: no other head changes
-        subroutine advance_heads_at( iptcl_assigned )
-            integer, intent(in) :: iptcl_assigned
-            integer :: iref_loc, iref_next
-            iref_loc = head_first(iptcl_assigned)
-            head_first(iptcl_assigned) = 0
-            do while( iref_loc > 0 )
-                iref_next = ref_next(iref_loc)
-                call advance_ref_head(iref_loc)
-                call push_head(iref_loc)
-                iref_loc = iref_next
-            enddo
-        end subroutine advance_heads_at
-
-        subroutine assign_current_ref()
-            assigned_ptcl = stab_inds(iref_dist_inds(assigned_iref), assigned_iref)
-            ptcl_avail(assigned_ptcl)     = .false.
-            nleft = nleft - 1
-            call self%assign_candidate(assigned_ptcl, self%dense_candidate(assigned_iref,assigned_ptcl))
-            call record_seed_shift(self%assgn_map(assigned_ptcl), self%seed_shifts(:,assigned_ptcl),&
-                &self%seed_has_sh(assigned_ptcl), self%p_ptr%l_doshift)
-            self%assgn_map(assigned_ptcl)%frac = 100.
-        end subroutine assign_current_ref
-
-        !> Multi-state state labelling is deterministic (argmin distance) for both weighting schemes;
-        !! probabilistic exploration is confined to the within-state projection assignment
-        !! (assign_refs_for_state). A particle's state is the state of its closest reference over
-        !! all states; an exact tie between references goes to the lowest reference index. This is
-        !! the label the global greedy frontier (the closest available reference-particle pair first,
-        !! the lowest reference index among equal distances) gives every particle.
-        subroutine assign_state_labels()
-            real,    allocatable :: score_best(:)
-            integer, allocatable :: iref_best(:)
-            integer :: ib, i_loc, iref_loc
-            real    :: score
-            allocate(score_best(self%nptcls), iref_best(self%nptcls))
-            ! references outside, ascending, with the strict < per particle
-            !$omp parallel do default(shared) proc_bind(close) schedule(static) private(ib,i_loc,iref_loc,score)
-            do ib = 1,self%nptcls,PTCL_BLOCK
-                do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
-                    iref_best(i_loc)  = 1
-                    score_best(i_loc) = ref_score(1, i_loc)
-                enddo
-                do iref_loc = 2,self%nrefs
-                    do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
-                        score = ref_score(iref_loc, i_loc)
-                        if( score < score_best(i_loc) )then
-                            score_best(i_loc) = score
-                            iref_best(i_loc)  = iref_loc
-                        endif
-                    enddo
-                enddo
-                do i_loc = ib,min(self%nptcls,ib+PTCL_BLOCK-1)
-                    greedy_state(i_loc) = self%ref_state(iref_best(i_loc))
-                enddo
-            enddo
-            !$omp end parallel do
-            deallocate(score_best, iref_best)
-        end subroutine assign_state_labels
-
-        !> the projection assignment of the particles labelled with the state of rank si, over that
-        !! state's references, the contiguous block (si-1)*nspace+1..si*nspace; each of them keeps a
-        !! head while a particle of the state is left
-        subroutine assign_refs_for_state( si_loc )
-            integer, intent(in) :: si_loc
-            integer :: state_filter, ifirst, ilast, nblock, iref_loc
-            state_filter = self%ssinds(si_loc)
-            ifirst       = (si_loc - 1) * self%p_ptr%nspace + 1
-            ilast        = si_loc * self%p_ptr%nspace
-            nblock       = ilast - ifirst + 1
-            ref_offset   = ifirst - 1
-            call reset_ref_frontier(ifirst, ilast)
-            ptcl_avail = greedy_state == state_filter
-            nleft      = count(ptcl_avail)
-            do iref_loc = ifirst,ilast
-                call advance_ref_head(iref_loc)
-            enddo
-            call build_head_lists(ifirst, ilast)
-            do while( nleft > 0 )
-                if( nblock == 1 )then
-                    active_idx = 1
-                else
-                    call sample_likelihood_dist(nblock, block_ref_dist,&
-                        &likelihood_nsample(nblock, state_projs_athres(state_filter)),&
-                        &dist_tmp, corr_tmp, active_idx, dists_sorted, inds_sorted)
-                endif
-                assigned_iref = ref_offset + active_idx
-                call assign_current_ref()
-                call advance_heads_at(assigned_ptcl)
-            enddo
-        end subroutine assign_refs_for_state
-
-        real function block_ref_dist( active_loc ) result(dist)
-            integer, intent(in) :: active_loc
-            dist = iref_dist(ref_offset + active_loc)
-        end function block_ref_dist
-
-    end subroutine ref_assign
-
     !> the particles without a valid distance and those whose valid distances are all equal: warnings, and a stop
     !! when every particle is one of them. References outside, so that each reference's column streams.
     subroutine warn_invalid_and_flat( self )
@@ -1124,17 +850,18 @@ contains
         deallocate(min_dist, max_dist, nvalid)
     end subroutine warn_invalid_and_flat
 
-    !> ptcl -> (proj, state) assignment by one draw per particle from its row posterior (prob_assign=posterior,
-    !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 10). The particle's state is the state
-    !! of its closest reference over all states (ties to the lowest reference index), as the balanced assignment
-    !! labels it; its direction is drawn within that state's block of the row with p proportional to
+    !> ptcl -> (proj, state) assignment by one draw per particle from its row posterior
+    !! (doc/implementation_notes/planned/pose_marginalization.md sections 4 and 10). The particle's state is the state
+    !! of its closest reference over all states (ties to the lowest reference index); its direction is drawn within
+    !! that state's block of the row with p proportional to
     !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; prob_beta on it)
     !! and L the row's values as the fill left them (sampled in-plane, the top set refined). No reference is
     !! forced to be populated. The committed candidate is the drawn reference's dense_candidate (its in-plane,
-    !! its refined shift when refined), the seed shift recorded as today, frac 100. A particle without a valid
-    !! distance takes reference 1 as the balanced assignment does. The draws run in particle order on the
-    !! master's random stream, so shared-memory and distributed runs draw alike.
-    subroutine ref_assign_posterior( self )
+    !! its refined shift when refined), the seed shift recorded, frac 100. A particle without a valid distance
+    !! takes reference 1. The draws run in particle order on the master's random stream, so shared-memory and
+    !! distributed runs draw alike. The reference-balanced frontier this replaced (every reference drawing its
+    !! closest free particle) was removed on 2026-10-24 (note, section 19).
+    subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         integer, allocatable :: iref_best(:)
         real,    allocatable :: score_best(:), w(:)
@@ -1202,7 +929,7 @@ contains
             if( .not.(ieee_is_finite(score) .and. score < invalid_dist) ) score = invalid_dist
         end function valid_score
 
-    end subroutine ref_assign_posterior
+    end subroutine ref_assign
 
     ! ptcl -> state (using assigned iproj or previous iproj) assignment
     pure integer function ref_state( self, iref ) result( state )

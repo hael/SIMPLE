@@ -788,7 +788,7 @@ interface
         integer,             intent(in) :: iref
     end function ref_slots_identical
 
-    !> the temperature of particle iptcl's posterior draws (prob_assign=posterior)
+    !> the temperature of particle iptcl's posterior draws (the probability tables)
     module real function ptcl_posterior_temp(self, iptcl)
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
