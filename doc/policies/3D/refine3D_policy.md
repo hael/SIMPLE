@@ -495,8 +495,9 @@ until neither FSC 0.5 nor FSC 0.143 gained on the previous iteration
 iteration's STATS_FILE record), then ramps geometrically from `prob_beta` to
 `prob_beta_end` over the next `PROB_BETA_TAIL` (5) iterations
 (`prob_beta_at`; `exec_refine3D` puts the iteration's factor on the master's
-parameters and the workers' command line, `>>> POSTERIOR DRAW TEMPERING,
-BETA`) and ends when the tail is complete; a budget too short for a stall
+parameters and the workers' command line, and the settings box of the
+convergence report shows it, `POSTERIOR DRAW BETA`, with the tail's progress)
+and ends when the tail is complete; a budget too short for a stall
 anneals over its last five iterations regardless. `prob_beta_end=0` (the
 default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
 unless the user set it, so the stages search hot and the final map is

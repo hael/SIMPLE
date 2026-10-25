@@ -69,6 +69,7 @@ contains
         type(string) :: s_ratio, cont_ratio, numstr
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
+        character(len=80) :: beta_str
         integer :: n, nptcls, nsampled, nactive
         real    :: overlap_lim, fracsrch_lim, realized_update_frac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
@@ -128,6 +129,10 @@ contains
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
+        if( params%l_prob_align_mode )then
+        write(beta_str,'(F6.3,A)') params%prob_beta, ' (flat)' ! the 2D tables' posterior draws do not anneal
+        write(logfhandle,609) '>>> | POSTERIOR DRAW BETA           | '//trim(adjustl(beta_str))
+        endif
         if( trim(params%gauref).eq.'yes' )then
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
         else
@@ -260,6 +265,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
+        character(len=80) :: beta_str
         real    :: res05_now, res05_prev, res143_now, res143_prev
         logical :: converged, cont_stats_available, pose_stats_available, l_stalled
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
@@ -409,6 +415,21 @@ contains
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
         write(logfhandle,609) '>>> | PROB NEIGH MODE               | '//trim(params%prob_neigh_mode)
         write(logfhandle,609) '>>> | NSPACE PROJECTION DIRECTIONS  | '//trim(int2str(params%nspace))
+        if( params%l_prob_align_mode )then
+        ! the probability tables' posterior draws: the tempering factor of this iteration, and the annealing to
+        ! prob_beta_end once the resolution stops gaining (the tail; exec_refine3D sets the factor)
+        if( params%prob_beta_tail_start > 0 )then
+        write(beta_str,'(F6.3,A,I0,A,I0,A,F6.3)') params%prob_beta, ' (annealing tail ',&
+            &min(PROB_BETA_TAIL, params%which_iter - params%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL,&
+            &' to ', params%prob_beta_end, ')'
+        else if( params%prob_beta_end > TINY .and. abs(params%prob_beta_end - params%prob_beta) > TINY )then
+        write(beta_str,'(F6.3,A,F6.3,A)') params%prob_beta, ' (annealing to ', params%prob_beta_end,&
+            &' once the resolution stops gaining)'
+        else
+        write(beta_str,'(F6.3,A)') params%prob_beta, ' (flat)'
+        endif
+        write(logfhandle,609) '>>> | POSTERIOR DRAW BETA           | '//trim(adjustl(beta_str))
+        endif
         if( trim(params%gauref).eq.'yes' )then
         write(logfhandle,609) '>>> | GAU REGULARIZATION            | on'
         else
@@ -547,11 +568,11 @@ contains
                     endif
                     if( l_stalled )then
                         params%prob_beta_tail_start = params%which_iter + 1
-                        write(logfhandle,'(A,I0,A,F6.3)') '>>> RESOLUTION NO LONGER GAINING: the next ', PROB_BETA_TAIL,&
-                            &' iterations anneal the posterior draws to prob_beta_end ', params%prob_beta_end
+                        write(logfhandle,'(A,I0,A)') '>>> RESOLUTION NO LONGER GAINING: annealing the posterior draws over the next ',&
+                            &PROB_BETA_TAIL, ' iterations'
                     endif
                 else if( params%which_iter >= params%prob_beta_tail_start + PROB_BETA_TAIL - 1 )then
-                    write(logfhandle,'(A)') '>>> ANNEALING TAIL COMPLETE: the draws reached prob_beta_end'
+                    write(logfhandle,'(A)') '>>> ANNEALING TAIL COMPLETE'
                     converged = .true.
                 endif
             endif

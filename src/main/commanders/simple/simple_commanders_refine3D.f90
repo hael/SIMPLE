@@ -1771,16 +1771,16 @@ contains
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
             ! the probability tables' posterior draws: the iteration's tempering factor, on the command line for the
-            ! workers. A run with prob_beta_end searches flat at prob_beta until its resolution stops gaining
-            ! (check_conv3D starts the tail), then ramps geometrically to prob_beta_end over the PROB_BETA_TAIL
-            ! iterations of the tail and ends; a budget too short for a stall still anneals over its last
-            ! PROB_BETA_TAIL iterations (pose_marginalization.md sections 17 and 19)
+            ! workers (check_conv3D reports it in its settings box). A run with prob_beta_end searches flat at
+            ! prob_beta until its resolution stops gaining (check_conv3D starts the tail), then ramps geometrically
+            ! to prob_beta_end over the PROB_BETA_TAIL iterations of the tail and ends; a budget too short for a
+            ! stall still anneals over its last PROB_BETA_TAIL iterations (pose_marginalization.md sections 17, 19)
             if( params%l_prob_align_mode )then
                 if( l_anneal )then
                     if( params%prob_beta_tail_start == 0 .and. niters > params%maxits - PROB_BETA_TAIL )then
                         params%prob_beta_tail_start = params%which_iter
-                        write(logfhandle,'(A,I0,A)') '>>> BUDGET END: the last ', PROB_BETA_TAIL,&
-                            &' iterations anneal the posterior draws to prob_beta_end'
+                        write(logfhandle,'(A,I0,A)') '>>> BUDGET END: annealing the posterior draws over the last ',&
+                            &PROB_BETA_TAIL, ' iterations'
                     endif
                     if( params%prob_beta_tail_start > 0 )then
                         params%prob_beta = prob_beta_at(params%which_iter - params%prob_beta_tail_start + 1,&
@@ -1790,7 +1790,6 @@ contains
                     endif
                 endif
                 call cline%set('prob_beta', params%prob_beta)
-                write(logfhandle,'(A,F7.4)') '>>> POSTERIOR DRAW TEMPERING, BETA ', params%prob_beta
             endif
             call strategy%execute_iteration(params, build, cline, converged)
             call strategy%finalize_iteration(params, build)
