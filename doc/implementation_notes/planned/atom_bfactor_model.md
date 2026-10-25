@@ -4,6 +4,13 @@ Implementation note, 2026-10-09. Design for review; nothing here is implemented.
 the species-discovery work (`species_discovery_completed.md`), whose second run adds the pieces this note
 uses, and it is meant to start after that run is merged.
 
+**Status 2026-10-25:** the maintainer ruled that intensities and B factors are measured on the
+map alone (no half maps required, no image-side measurements). The fitting method is therefore
+settled by `atomic_density_model.md`: a Gaussian atom through a two-parameter map transfer,
+with per-particle profiles in the coordination number. Option 1 of section 1a (measure B in
+the refinement) is withdrawn; the products and the refinement loop of this note follow once
+that model fits the 66 real maps.
+
 **Status, after the checks of section 1a: the fitting method is open.** Per-atom B factors
 fitted to a reconstructed map are not trustworthy yet, in any form tried. The rendering,
 product and refinement parts of this note stand; how B is measured has to be settled first
