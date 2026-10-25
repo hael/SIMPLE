@@ -419,7 +419,7 @@ contains
         ! the probability tables' posterior draws: the tempering factor of this iteration, and the annealing to
         ! prob_beta_end once the resolution stops gaining (the tail; exec_refine3D sets the factor)
         if( params%prob_beta_tail_start > 0 )then
-        write(beta_str,'(F6.3,A,I0,A,I0,A,F6.3)') params%prob_beta, ' (annealing tail ',&
+        write(beta_str,'(F6.3,A,I0,A,I0,A,F6.3,A)') params%prob_beta, ' (annealing tail ',&
             &min(PROB_BETA_TAIL, params%which_iter - params%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL,&
             &' to ', params%prob_beta_end, ')'
         else if( params%prob_beta_end > TINY .and. abs(params%prob_beta_end - params%prob_beta) > TINY )then
