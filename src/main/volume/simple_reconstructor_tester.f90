@@ -12,7 +12,7 @@ use simple_sp_project,      only: sp_project
 use simple_sym,             only: sym
 use simple_memoize_ft_maps, only: forget_ft_maps, memoize_ft_maps
 use simple_type_defs,       only: CTFFLAG_NO, ctfparams, fplane_type
-use simple_reconstructor,   only: reconstructor
+use simple_reconstructor,   only: reconstructor, wiener_ridge
 use simple_test_utils
 implicit none
 private
@@ -29,7 +29,33 @@ contains
     subroutine run_all_reconstructor_tests()
         write(*,'(A)') '**** running all reconstructor tests ****'
         call test_weighted_insertion_linearity()
+        write(*,'(A)') 'test_wiener_ridge_scale_free'
+        call test_wiener_ridge_scale_free()
     end subroutine run_all_reconstructor_tests
+
+    !> the ML regularization's ridge (wiener_ridge): the shrinkage rho / (rho + ridge) a shell of FSC at the floor
+    !! (SSNR 0.001, tau2 = 0.001 sig2 with sig2 = 1/rho) gets is about 1/1001 whatever the scale of rho, from a
+    !! single particle to the 1e9 of the Euclidean weights; an unsampled shell (tau2 = 0) is shrunk the same;
+    !! a shell of SSNR 1 at tau 1 is shrunk by half
+    subroutine test_wiener_ridge_scale_free()
+        real    :: rho(5), tau2, ridge, shrink
+        integer :: i
+        character(len=96) :: msg
+        rho = [1., 1.e2, 1.e4, 1.e7, 1.e9]
+        do i = 1, size(rho)
+            tau2   = 0.001 * (1. / rho(i))
+            ridge  = wiener_ridge(tau2, 1., rho(i))
+            shrink = rho(i) / (rho(i) + ridge)
+            write(msg,'(A,ES8.1)') 'a shell at the SSNR floor is shrunk by 1/1001 at rho ', rho(i)
+            call assert_true(abs(shrink - 1./1001.) < 1.e-5, trim(msg))
+            ridge  = wiener_ridge(0., 1., rho(i))
+            shrink = rho(i) / (rho(i) + ridge)
+            write(msg,'(A,ES8.1)') 'an unsampled shell is shrunk by 1/1001 at rho ', rho(i)
+            call assert_true(abs(shrink - 1./1001.) < 1.e-5, trim(msg))
+        enddo
+        ridge = wiener_ridge(1. / 1.e4, 1., 1.e4)  ! SSNR 1: tau2 = sig2 = 1/rho
+        call assert_true(abs(1.e4 / (1.e4 + ridge) - 0.5) < 1.e-5, 'a shell of SSNR 1 is shrunk by half at tau 1')
+    end subroutine test_wiener_ridge_scale_free
 
     subroutine test_weighted_insertion_linearity()
         real, parameter :: WEIGHTS(3) = [0.37, 0.05, 0.81]

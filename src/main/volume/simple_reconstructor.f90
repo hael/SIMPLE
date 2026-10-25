@@ -7,7 +7,7 @@ use simple_parameters, only: parameters
 use simple_gridding,   only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 implicit none
 
-public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi
+public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi, wiener_ridge
 private
 #include "simple_local_flags.inc"
 
@@ -1277,17 +1277,30 @@ contains
                     sh = nint(sqrt(real(h*h + k*k + m*m)))
                     if( (sh < reslim_ind) .or. (sh > sz) ) cycle
                     phys = self%comp_addr_phys(h, k, m)
-                    if( tau2(sh) > TINY)then
-                        invtau2 = 1.0/(fudge*tau2(sh))
-                    else
-                        invtau2 = min(1.e3, 1.e3 * self%rho(phys(1),phys(2),phys(3)))
-                    endif
+                    invtau2 = wiener_ridge(tau2(sh), fudge, self%rho(phys(1),phys(2),phys(3)))
                     self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + invtau2
                 enddo
             enddo
         enddo
         !$omp end parallel do
     end subroutine add_invtausq2rho
+
+    !> the ridge a voxel's density gets from its shell's signal power tau2 (the Gaussian prior of the MAP estimate,
+    !! x = B / (D + 1/(tau tau2))): 1/(tau tau2) when the shell has a power estimate, a thousandfold its own density
+    !! when it has none (an unsampled shell, sig2 = 0), so that it is shrunk by 1/1001 whatever the scale of rho. The
+    !! scale-free form matters: with the Euclidean 1/sigma2 weights rho runs to 1e7 and beyond, and a floor on tau2
+    !! against an absolute TINY with the ridge then capped at 1e3 left every shell of zero FSC unregularized when
+    !! tau2 = 0.001 sig2 fell under 1e-10 (PfCRT, 2026-10-25: the final map's power beyond the FSC=0.143 cutoff was
+    !! 6.7 times the power of its 10 A to cutoff band, pure noise that the postprocess sharpened and the Butterworth
+    !! let through as grain; doc/implementation_notes/planned/pose_marginalization.md section 19)
+    pure real function wiener_ridge( tau2, fudge, rho ) result( invtau2 )
+        real, intent(in) :: tau2, fudge, rho
+        if( tau2 > 0. )then
+            invtau2 = 1.0 / (fudge * tau2)
+        else
+            invtau2 = 1.e3 * rho
+        endif
+    end function wiener_ridge
 
     ! DESTRUCTORS
 

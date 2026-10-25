@@ -1623,6 +1623,37 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    (stall at the 3rd, tail 4-8) plus the combined iteration, against 26.
    `prob_beta_end` keeps its meaning; what it took the run to get there is
    no longer the budget.
+9. **The "over-sharpened" final maps (2026-10-25).** Hans: the
+   `rec_final*pproc*` maps look over-sharpened, the B-factor policy upweights
+   the high resolutions too much. Measured on the shell spectra of the
+   unfiltered pair, the regularized final map and its postprocessed version
+   (`streptav_posterior/analysis/pproc_spectra.py`, `pproc_leak.py`):
+   - Streptavidin (box 128, cutoff 3.27 A): the regularized map's amplitude
+     is the unfiltered pair's times the FSC, shell for shell (0.57 at FSC
+     0.57, 0.20 at 0.20), a stronger attenuation than RELION's
+     sqrt(2FSC/(1+FSC)); the windowed B of -47 leaves the postprocessed map
+     a Guinier slope of +70 to +80 (RELION flattens to 0); beyond the cutoff
+     the postprocessed map holds 0.1% of the signal band's power. Not
+     over-sharpened by any spectral measure.
+   - PfCRT (box 300, crop 160 for the search, cutoff 3.98 A): the
+     regularized final map holds 6.7 times more power beyond the cutoff
+     than in its 10 A to cutoff band. Shells of FSC at or below zero pass
+     the unfiltered noise nearly unattenuated (amplitude ratio 0.94-0.99),
+     shells of FSC 0.007 are shrunk (0.2-0.5): the opposite of the Wiener
+     order, the signature of `add_invtausq2rho`'s fallback. tau2 = 0.001
+     sig2 with sig2 = 1/mean(rho) falls under the absolute TINY (1e-10) once
+     rho passes 1e7 (the Euclidean 1/sigma2 weights, many particles), and
+     the fallback ridge min(1e3, 1e3 rho) = 1e3 is nothing against such a
+     rho: no regularization. Streptavidin's 2000 particles keep rho below
+     the threshold. The postprocess then sharpens those shells by the capped
+     gain and the Butterworth lets 6% of the signal band's power through as
+     pure noise over the many voxels beyond the cutoff: the grain read as
+     over-sharpening. The fix is scale-free (`wiener_ridge`: 1/(tau tau2)
+     whenever tau2 > 0, a thousandfold the voxel's own density otherwise),
+     with a unit test from rho 1 to 1e9. The B-factor policy stays; the
+     references of every Euclidean ML-regularized refinement with a large
+     rho carried this noise beyond the FSC cutoff too, within the matching
+     low-pass of their stage.
    With that the neighbourhood table's likelihood in-plane draw went too
    (`score_seeded_ref` posterior only; `calc_athres` for `dist_inpl` and
    the `nsample` plumbing out of the neighbourhood fills; `prob_assign` and

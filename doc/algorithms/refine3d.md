@@ -144,11 +144,19 @@ x_hat(q) = B(q) / [ D(q) + 1/(tau tau2(k)) ],
 
 where `B` and `D` are the noise-weighted numerator and CTF-squared density of
 [reconstruction](reconstruction.md), and `tau` (default 1) is a fudge factor.
-Shells below index 6 are not regularized. Because `1/tau2` grows as the FSC
-falls, the estimator shrinks poorly determined high-frequency coefficients
-toward zero in proportion to their expected signal, which is the same
-operation as the Wiener filter but applied before the density division rather
-than after, where it also regularizes the division itself.
+Shells below index 6 are not regularized; the FSC is floored at 0.001, so a
+shell of zero or negative FSC is shrunk a thousandfold, and an unsampled
+shell (no density, so no `sigma2`) gets a ridge of a thousand times its own
+density, the same shrinkage whatever the scale of `D` (`wiener_ridge`). The
+scale matters: with the Euclidean weights `D` runs to 1e7 and beyond, and
+until 2026-10-25 a floor on `tau2` against an absolute 1e-10 with the ridge
+then capped at 1e3 left every zero-FSC shell of such a reconstruction
+unregularized (PfCRT's final map carried 6.7 times more power beyond the
+FSC=0.143 cutoff than in its 10 A to cutoff band). Because `1/tau2` grows as
+the FSC falls, the estimator shrinks poorly determined high-frequency
+coefficients toward zero in proportion to their expected signal, which is
+the same operation as the Wiener filter but applied before the density
+division rather than after, where it also regularizes the division itself.
 
 ## Automasking and nonuniform filtering
 
