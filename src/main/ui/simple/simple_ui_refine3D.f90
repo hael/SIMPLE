@@ -53,8 +53,9 @@ contains
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_neigh): the particle temperature of '//&
         &'every draw (in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the last iteration', &
-        &'The factor the geometric ramp from prob_beta reaches at the run''s last iteration (1 the physical posterior); 0 keeps prob_beta throughout'//&
+        call refine3D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
+        &'The factor the draws anneal to once the resolution stops gaining: a geometric ramp from prob_beta over the '//&
+        &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout'//&
         &'{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &

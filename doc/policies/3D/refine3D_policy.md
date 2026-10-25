@@ -489,18 +489,26 @@ section 19 of the note; below one hotter), so at `prob_beta` below one the
 draws are from the tempered posterior, p^beta, and from the posterior proper
 only at 1: the search's annealing knob, section 4.4, run-time since
 2026-10-23 after the run at the physical temperature froze. A refine3D run
-anneals when `prob_beta_end` is given: a geometric ramp from `prob_beta` at
-its first iteration to `prob_beta_end` at its last (`prob_beta_at`; every
-iteration cools by the same factor), the iteration's factor on the master's
-parameters and on the workers' command line (`>>> POSTERIOR DRAW TEMPERING,
-BETA`); `prob_beta_end=0` (the default) is a flat run. solve3D sets
-`prob_beta_end=1` on its last stage under the key unless the user set it, so
-the stages search hot and the final map is weighted at the physical
-posterior; the other stages run flat at `prob_beta`. A `refine=prob` stage
-does not end on the pose overlap (`check_conv3D` bypasses it: the carried
-pose is stable from a stage's first iterations, so the overlap rule cannot
-tell a frozen assignment from convergence) but on the resolution exit
-(`lpexit`) or its iteration budget.
+anneals when `prob_beta_end` is given: it searches flat at `prob_beta`
+until neither FSC 0.5 nor FSC 0.143 gained on the previous iteration
+(`check_conv3D`, the same gain test as the resolution exit, on the previous
+iteration's STATS_FILE record), then ramps geometrically from `prob_beta` to
+`prob_beta_end` over the next `PROB_BETA_TAIL` (5) iterations
+(`prob_beta_at`; `exec_refine3D` puts the iteration's factor on the master's
+parameters and the workers' command line, `>>> POSTERIOR DRAW TEMPERING,
+BETA`) and ends when the tail is complete; a budget too short for a stall
+anneals over its last five iterations regardless. `prob_beta_end=0` (the
+default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
+unless the user set it, so the stages search hot and the final map is
+weighted at the physical posterior; the other stages run flat at
+`prob_beta`. The tail replaced a ramp spread over the stage's whole budget
+on 2026-10-24: on streptavidin the last stage ran its 25 iterations with the
+resolution reached at the second (section 19 of the note). A `refine=prob`
+or `prob_neigh` stage does not end on the pose overlap (`check_conv3D`
+bypasses it: the carried pose is a draw and sits near the posterior's own
+stability from a stage's first iterations, so the overlap rule cannot tell a
+frozen assignment from convergence) but on the resolution exit (`lpexit`),
+its annealing tail, or its iteration budget.
 
 ### Neighbourhood-table assignment (`ref_assign_neigh`)
 

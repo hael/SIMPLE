@@ -713,9 +713,9 @@ contains
             call cline_refine3D%delete('gauref')
             call cline_refine3D%delete('gaufreq')
         endif
-        ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) over its
-        ! budget, the other stages run flat at prob_beta, unless the user set the end (pose_marginalization.md
-        ! section 17)
+        ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its
+        ! resolution stops gaining (the tail of PROB_BETA_TAIL iterations, then the stage ends); the other stages
+        ! run flat at prob_beta, unless the user set the end (pose_marginalization.md sections 17 and 19)
         if( .not. l_prob_beta_end_override )then
             if( istage == active_refine3D_nstages() )then
                 call cline_refine3D%set('prob_beta_end',  1.)

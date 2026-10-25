@@ -11,7 +11,7 @@ module simple_convergence_tester
 use simple_core_module_api, only: oris, del_file
 use simple_cmdline,         only: cmdline
 use simple_convergence,     only: convergence, cont_particle_stable
-use simple_parameters,      only: parameters
+use simple_parameters,      only: parameters, PROB_BETA_TAIL
 use simple_defs_fname,      only: STATS_FILE
 use simple_defs_conv,       only: CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A, CONT_CONV_FRAC
 use simple_cartft_pose_opt, only: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, &
@@ -50,8 +50,88 @@ contains
         call test_lpexit_gain_guard()
         write(*,'(A)') 'test_posterior_assignment_bypass'
         call test_posterior_assignment_bypass()
+        write(*,'(A)') 'test_posterior_anneal_tail'
+        call test_posterior_anneal_tail()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
+
+    !> the annealing tail (pose_marginalization.md 19): a refine=prob run with prob_beta_end above prob_beta
+    !! searches flat while the resolution gains (FSC 0.5 or 0.143 finer than the previous iteration), starts the
+    !! tail at the first iteration where neither gained (tail_start = the next iteration), and converges at the
+    !! tail's last iteration, PROB_BETA_TAIL after its start; a run without prob_beta_end never starts a tail
+    subroutine test_posterior_anneal_tail()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        real    :: res05(8), res143(8)
+        logical :: conv_at(8)
+        integer :: it
+        call del_file(STATS_FILE)
+        res05  = [7.5, 7.0, 7.0, 6.9, 6.9, 6.9, 6.9, 6.9]  ! gain at 2, flat at 3 (stall), a late gain inside the tail
+        res143 = [6.5, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0]
+        allocate(params)
+        params%nstates          = 1
+        params%trs              = 5.
+        params%refine           = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta        = 0.3
+        params%prob_beta_end    = 1.
+        params%startit          = 1
+        params%maxits           = 25
+        params%prob_beta_tail_start = 0
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        do it = 1, 8
+            params%which_iter = it
+            call frozen_field(os, res05(it), res143(it))
+            conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+            if( it == 2 ) call assert_int(0, params%prob_beta_tail_start, 'a gaining iteration starts no tail')
+            if( it == 3 ) call assert_int(4, params%prob_beta_tail_start, 'the first iteration without gain starts the tail at the next')
+        enddo
+        call assert_true(.not. any(conv_at(1:3)), 'the search phase does not converge')
+        call assert_true(.not. any(conv_at(4:4+PROB_BETA_TAIL-2)), 'the tail does not converge before its last iteration')
+        call assert_true(conv_at(4+PROB_BETA_TAIL-1), 'the tail converges at its last iteration')
+        call assert_int(4, params%prob_beta_tail_start, 'a gain inside the tail does not restart it')
+        ! no prob_beta_end: no tail
+        call del_file(STATS_FILE)
+        params%prob_beta_end        = params%prob_beta
+        params%prob_beta_tail_start = 0
+        do it = 1, 4
+            params%which_iter = it
+            call frozen_field(os, 7.0, 6.0)
+            conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_int(0, params%prob_beta_tail_start, 'a flat run (prob_beta_end = prob_beta) starts no tail')
+        call assert_true(.not. any(conv_at(1:4)), 'a flat run does not converge on the stall')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+
+    contains
+
+        !> NPTCLS frozen particles (full scan, overlap 1) at the given FSC=0.5 and FSC=0.143 resolutions
+        subroutine frozen_field( os_loc, r05, r143 )
+            type(oris), intent(inout) :: os_loc
+            real,       intent(in)    :: r05, r143
+            integer :: i
+            call os_loc%new(NPTCLS, is_ptcl=.true.)
+            do i = 1, NPTCLS
+                call os_loc%set_state(i, 1)
+                call os_loc%set(i, 'updatecnt', 1.)
+                call os_loc%set(i, 'sampled',   1.)
+                call os_loc%set(i, 'frac',      100.)
+                call os_loc%set(i, 'mi_proj',   1.)
+                call os_loc%set(i, 'corr',      0.5)
+                call os_loc%set(i, 'res05',     r05)
+                call os_loc%set(i, 'res',       r143)
+            end do
+        end subroutine frozen_field
+
+    end subroutine test_posterior_anneal_tail
 
     !> the probability tables' posterior draws (pose_marginalization.md 10.3): a frozen assignment (full scan,
     !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)

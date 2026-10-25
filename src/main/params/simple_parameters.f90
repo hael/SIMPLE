@@ -12,9 +12,13 @@ use simple_decay_funs
 use simple_parameters_registry, only: param_registry
 implicit none
 
-public :: parameters
+public :: parameters, PROB_BETA_TAIL
 private
 #include "simple_local_flags.inc"
+
+!> the annealing tail of a refine3D run with prob_beta_end: once the resolution stops gaining, the probability
+!! tables' draws ramp geometrically from prob_beta to prob_beta_end over this many iterations and the run ends
+integer, parameter :: PROB_BETA_TAIL = 5
 
 type :: parameters
     ! pointer 2 program UI
@@ -488,6 +492,7 @@ type :: parameters
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
+    integer :: prob_beta_tail_start=0 !< runtime: the first iteration of the annealing tail to prob_beta_end (0: the run still searches at prob_beta); set by check_conv3D when the resolution stops gaining, or by exec_refine3D at the budget's end
     integer :: workers=0           !< # workers for distributed execution
     integer :: worker_nthr=0       !< # threads per worker for distributed execution
     integer :: worker_server_nthr=0 !< # threads per worker of the worker_server (0: not given)
@@ -598,7 +603,7 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: prob_beta=0.3       !< tempering factor on the particle temperature of every posterior draw of the probability tables (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.3 for small membrane proteins (pose_marginalization.md sections 4.4, 17){0.3}
-    real    :: prob_beta_end=0.    !< the factor at a refine3D run's last iteration, reached by a geometric ramp from prob_beta over its iterations (1 = the physical posterior); 0 = prob_beta, no ramp; solve3D sets 1 on its last stage{0.0}
+    real    :: prob_beta_end=0.    !< the factor the run anneals to once its resolution stops gaining: a geometric ramp from prob_beta over the last PROB_BETA_TAIL iterations, then the run ends (1 = the physical posterior); 0 = prob_beta, no annealing; solve3D sets 1 on its last stage{0.0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}
     real    :: res_target = 3.     !< resolution target in A

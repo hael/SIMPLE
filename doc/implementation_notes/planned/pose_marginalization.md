@@ -1574,6 +1574,53 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
      where the data are flat (stage 1) and hotter where they are a delta
      (stage 5), the final map weighted at the physical posterior. That
      replaces `prob_beta` and `prob_beta_end` with one number.
+7. **The streptavidin tally (2026-10-24 evening; `for_claude/streptav_posterior`,
+   `analysis/frontier_vs_posterior_beta0_3.txt`).** Ten restarts of the
+   posterior-only build (811934ca5: every table draws, the incumbent in the
+   shc candidate set, beta 0.3 flat, the last stage ramping to 1) against
+   ten of the frontier (the 7dfea61a5 build at its default, which turned
+   out to be the pre-posterior production path on every stage; a baseline,
+   kept as `frontier_baseline`). 2000 particles, 88-pixel crop, ladder
+   8.0 to 4.5 A, stages 6-7 skipped on the resolution exit.
+   - Both 10/10. Final full-box maps 3.71-3.81 / 3.19-3.35 A (FSC 0.5 /
+     0.143); the posterior at 3.71 in 6 of 10, the frontier in 3 of 10: one
+     shell, not a difference. Stage by stage the same resolutions (stage 3
+     6.86 A both, the posterior's 0.143 at 4.57 against 5.35).
+   - Stages 1-2 are alive with the incumbent in the set (pose overlap 0.19
+     and 0.12 against 0.000-0.002 in the diagnosis run): the forced move
+     was the dominant cause. But hotter than the frontier: mean pose change
+     65 and 69 degrees per iteration against 50 and 27, row-mode fraction
+     0.50 and 0.38; stage 2 barely improves on stage 1 and hands stage 3 a
+     nearly random start (overlap 0.04 against 0.21), which stage 3 (T in
+     the hundreds) recovers in full. The early stages work and contribute
+     little at beta 0.3: T about 33 there. The row-mode fraction at each
+     stage's first iteration, 0.22 (3), 0.70 (4), 0.09 (5), 0.25 (8), is
+     the exploration beta 0.3 buys at each band: hot at the band jumps,
+     cold inside stage 4. The n_eff control of item 6, not a stage
+     schedule, is the answer to both.
+   - Cost: 426 against 323 s per restart (+32%), all of it stage 8: 26
+     iterations against 7. The resolution (3.81/3.35 A) is reached at the
+     stage's second iteration and does not move for 24 more; the overlap
+     climbs with the ramp and crosses 0.95 at beta 0.90, iteration 22 of
+     25. The ramp spread over the stage's budget and the pose-overlap
+     bypass together make the last stage always run its budget, for
+     nothing here.
+8. **The annealing tail (the same evening).** A run with `prob_beta_end`
+   searches flat at `prob_beta` until neither FSC 0.5 nor FSC 0.143 gained
+   on the previous iteration (`check_conv3D`, the gain test of the
+   resolution exit on the previous iteration's STATS_FILE record; the
+   tail's first iteration is kept in `params%prob_beta_tail_start`), then
+   `exec_refine3D` ramps the draws geometrically to `prob_beta_end` over
+   `PROB_BETA_TAIL` = 5 iterations and the run ends when the tail is
+   complete (`converged`, so the combined even/odd final iteration
+   follows as usual, at `prob_beta_end`); a budget too short for a stall
+   anneals over its last five iterations regardless. Flat runs
+   (`prob_beta_end` = `prob_beta`, the stages before the last) are
+   untouched: the resolution exit and the budget end them. On the
+   streptavidin trace the last stage would end at its 8th iteration
+   (stall at the 3rd, tail 4-8) plus the combined iteration, against 26.
+   `prob_beta_end` keeps its meaning; what it took the run to get there is
+   no longer the budget.
    With that the neighbourhood table's likelihood in-plane draw went too
    (`score_seeded_ref` posterior only; `calc_athres` for `dist_inpl` and
    the `nsample` plumbing out of the neighbourhood fills; `prob_assign` and
