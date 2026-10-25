@@ -1,5 +1,5 @@
 !@descr: one thread's multislice image of a particle from its rotated cube's spectrum, its linearisation and adjoint
-! (doc/implementation_notes/planned/ghostbuster_operators.md, section 3.7)
+! (the sweep and its checkpoints: doc/policies/3D/wave_model_policy.md, section 3)
 module simple_wave_multislice
 use, intrinsic :: iso_c_binding, only: c_associated, c_f_pointer, c_float_complex, c_int, c_ptr, c_size_t, c_null_ptr
 use simple_defs,         only: PI
@@ -15,21 +15,9 @@ private
 
 public :: wave_multislice
 
-!> The multislice image of one particle. The input C(h,k,l) is the native spectrum of the particle's rotated
-!! potential (volts, unnormalised native DFT, the beam along +z), on the sphere h^2+k^2+l^2 <= R^2 with
-!! |l| < R, R = nat/2 (pcg_lattice%gather_cube, times nat^3 and the shift phase). Slice j = 1..nat, at
-!! z_j = j - (nat/2+1) from the box centre, has the native-disk spectrum
-!!
-!!   s_j(h,k) = (1/nat) sum_l C(h,k,l) exp(+2 pi i l z_j / nat)      (one transform along l)
-!!
-!! and, on the fine grid of n = osf nat points, the transmission t_j = exp(c u_j), u_j = bwd(embed(s_j)),
-!! c = i sigma a (sqrt(1-fraca^2) + i fraca). The beam enters through the first section (kappa = -1, ewald=neg)
-!! or the last (+1): psi <- t_j psi and, between sections, Kirkland's one-section propagator
-!! P = exp(-i pi lambda a |k|^2). The exit wave is carried back to the midplane, the box centre (section
-!! nat/2+1: nat/2-1 sections upstream of the exit for kappa = -1, nat/2 for +1), and imaged by wave_imaging's
-!! lens and detector. forward stores the wave at the start of every segment of ceil(sqrt(nat)) sections;
-!! adjoint sweeps back through the segments, recomputing each from its checkpoint (the transpose of a
-!! section: conj(t_j), of a propagation: conj(P)). The linearisation propagates the tangent beside the wave.
+!> The multislice image of one particle from its rotated cube's native spectrum C(h,k,l): one transform along l
+!! gives the sections, transmitted and propagated on the fine grid, then wave_imaging's lens and detector; the adjoint
+!! sweeps back through segments of ceil(sqrt(nat)) sections from checkpoints (wave_model_policy.md, section 3)
 type :: wave_multislice
     private
     integer :: nat = 0, R = 0, rl = 0, n = 0, osf = 0, kappa = 0, kseg = 0, nseg = 0

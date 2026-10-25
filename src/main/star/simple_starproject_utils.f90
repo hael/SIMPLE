@@ -1,11 +1,10 @@
 !@descr: starproject utilities
 module simple_starproject_utils
 use simple_core_module_api
-use simple_sp_project, only: sp_project
 implicit none
 
-public :: LEN_FLAG, RELION_PHASE_DEG2RAD, stk_map, star_flag, star_data, star_file, tilt_info
-public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
+public :: LEN_FLAG, RELION_PHASE_DEG2RAD, star_flag, star_data, star_file, tilt_info
+public :: enable_rlnflag, enable_splflag, enable_splflags
 public :: split_dataline, h_clust, find_separators, resolve_stack_path, get_value_from_ptcls
 public :: VERBOSE_OUTPUT
 private
@@ -15,14 +14,8 @@ integer, parameter :: LEN_FLAG = 64
 real,    parameter :: RELION_PHASE_DEG2RAD = PI/180.
 logical            :: VERBOSE_OUTPUT =.false.
 
-type stk_map
-    type(string) :: stkpath
-    integer      :: stkmax
-end type stk_map
-
 type star_flag
     character(LEN=LEN_FLAG) :: rlnflag
-    character(LEN=LEN_FLAG) :: rlnflag2   = ''
     character(LEN=LEN_FLAG) :: splflag
     character(LEN=LEN_FLAG) :: splflag2   = ''
     integer                 :: ind        = 0
@@ -31,7 +24,7 @@ type star_flag
     logical                 :: int        = .false.
     real                    :: mult       = 0
     logical                 :: imagesplit = .false.
-    logical                 :: addstk     = .false.
+    logical                 :: angst      = .false. ! Angstrom in STAR, pixels of the particle's stack in SIMPLE
 end type star_flag
 
 type star_data
@@ -51,13 +44,13 @@ type star_file
     type(star_data)      :: particles2D
     type(star_data)      :: particles3D
     type(star_data)      :: clusters2D
-    type(star_data)      :: class3D
     integer, allocatable :: opticsmap(:)
     integer, allocatable :: stkmap(:,:) ! per STAR line: (stack id, project particle index, z in stack)
     integer, allocatable :: stkstates(:)
     integer              :: stkptclcount
     integer              :: fd
-    logical              :: initialised = .false.
+    logical              :: initialised   = .false.
+    logical              :: origins_angst = .false. ! imported particle origins still in Angstrom
 end type star_file
 
 type tilt_info
@@ -137,20 +130,6 @@ contains
         call testori%kill
     end subroutine enable_splflags
 
-    subroutine get_rlnflagindex(rlnflag, flags, flagindex)
-        type(star_flag),  intent(in)  :: flags(:)
-        character(LEN=*), intent(in)  :: rlnflag
-        integer,          intent(out) :: flagindex
-        integer :: i
-        flagindex = 0
-        do i = 1, size(flags)
-            if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0) then
-                flagindex = flags(i)%ind
-                exit
-            end if
-        end do
-    end subroutine get_rlnflagindex
-
     subroutine split_dataline(line, splitline, fieldmask)
         class(string),  intent(in)    :: line
         class(string),  intent(inout) :: splitline(:)
@@ -177,23 +156,6 @@ contains
             istart = istart + delimiter
         end do
     end subroutine split_dataline
-
-    subroutine center_boxes(spproj, sporis)
-        class(sp_project),        intent(inout) :: spproj
-        class(oris),              intent(inout) :: sporis
-        integer                                 :: iori, stkind
-        real                                    :: stkbox, xpos, ypos
-        do iori=1, sporis%get_noris()
-            if(sporis%get_state(iori) > 0) then
-                stkind = sporis%get_int(iori, "stkind")
-                stkbox = spproj%os_stk%get(stkind, "box")
-                xpos = sporis%get(iori, "xpos") + (stkbox / 2.)
-                ypos = sporis%get(iori, "ypos") + (stkbox / 2.)
-                call sporis%set(iori, "xpos", xpos)
-                call sporis%set(iori, "ypos", ypos)
-            end if
-        end do
-    end subroutine center_boxes
 
     ! distance threshold based yerarchical clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10

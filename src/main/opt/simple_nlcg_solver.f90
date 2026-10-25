@@ -2,24 +2,17 @@
 ! on a client-supplied loss, gradient, curvature, preconditioner, inner product and constraint projection
 module simple_nlcg_solver
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api, only: dp, logfhandle, simple_exception
+use simple_defs,  only: dp, logfhandle
+use simple_error, only: simple_exception
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: nlcg_objective, nlcg_solver_options, nlcg_solver_outcome, nlcg_solve
 
-!> A client exposes its objective L(x) = data misfit + prior through contiguous rank-1 views; the engine
-!! owns only its search vectors. The deferred procedures:
-!!   size        the length of x
-!!   eval        L(x) and its gradient g (a full pass over the data)
-!!   curvature   the Gauss-Newton curvature along d at x, ||J d||^2 plus the prior's d^T P d, which may be
-!!               estimated on a subset of the data scaled to the whole
-!!   line_losses the losses at x + t(j) d, j = 1..size(t), on the step subset (the same data in every call
-!!               of one iteration, so the values compare with each other but not with eval)
-!!   precond     z = M r, M symmetric positive definite
-!!   dot         the inner product of the solve, in double precision
-!!   project     v = P v, the projection onto the model's constraints (a support), P^2 = P
+!> The client of nlcg_solve: its objective (data misfit plus prior) through contiguous rank-1 views, with the
+!! deferred size, eval, curvature, line_losses, precond, dot and project (the contract: wave_model_policy.md,
+!! section 6.1); the engine owns only its search vectors
 type, abstract :: nlcg_objective
   contains
     procedure(nlcg_size_i),        deferred :: size
@@ -107,16 +100,9 @@ end interface
 
 contains
 
-    !> Minimise L from x by preconditioned Polak-Ribiere conjugate gradients (beta clipped at zero, a
-    !! direction that does not descend restarts from the preconditioned steepest descent). The step along
-    !! d is the Gauss-Newton estimate t0 = -<g,d> / curvature(d), the exact minimiser of a quadratic model;
-    !! with refine_step it is refined by the parabola through the subset losses at 0, t0 and 2 t0 when that
-    !! parabola is convex, kept within [tmin_frac, tmax_frac] t0. A step that raises the full loss is
-    !! halved up to max_backtracks times (each trial P(x + t d) from the same start); one that still raises
-    !! it is not taken: the iterate stays, the search restarts from the steepest descent, and a steepest
-    !! descent that cannot descend ends the solve ('no_descent'). The gradient tolerance applies to the
-    !! projected gradient P g. On a quadratic objective without refinement this is linear preconditioned
-    !! CG in exact arithmetic.
+    !> Minimise L from x by preconditioned Polak-Ribiere conjugate gradients with the Gauss-Newton step
+    !! -<g,d> / curvature(d), optionally refined by a parabola, halving steps that raise the loss and
+    !! restarting from steepest descent (the algorithm: wave_model_policy.md, section 6.1)
     subroutine nlcg_solve( obj, x, options, outcome )
         class(nlcg_objective),     intent(inout) :: obj
         real, contiguous,          intent(inout) :: x(:)

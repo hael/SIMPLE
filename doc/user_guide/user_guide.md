@@ -219,6 +219,37 @@ Inherited map outputs and registered sigma state are cleared from the
 subset project. Reconstruct the subset before judging map quality; score
 selection alone does not guarantee improved resolution.
 
+## Exchanging particles with RELION (STAR files)
+
+SIMPLE stores a particle's shift (`x`, `y`) in pixels of the stack its image
+lives in; RELION stores it as `rlnOriginXAngst`, `rlnOriginYAngst` in
+Angstroms. Every STAR import divides by the pixel size of the particle's stack,
+every export multiplies by it, once per particle. Euler angles map one to one
+(`e1`, `e2`, `e3` are `rlnAngleRot`, `rlnAngleTilt`, `rlnAnglePsi`); defocus is
+in micrometres in SIMPLE and Angstroms in STAR, the phase shift in radians in
+SIMPLE and degrees in STAR. A particle whose stack has no pixel size stops a
+conversion of a nonzero shift with a message naming the particle and stack.
+
+Only RELION 3.1 or later files are read: a STAR file without a `data_optics`
+block (the RELION 3.0 layout) is refused with a message that says so; convert
+it with RELION first.
+
+- `import_particles starfile=particles.star` reads the 3D field (rotation,
+  tilt, psi, origins, CTF) and copies it to the 2D field without rotation and
+  tilt.
+- `import_starproject import_type=ptcl3D` reads the same into the 3D field;
+  `import_type=ptcl2D` reads psi and the origins into the 2D field;
+  `import_type=mic` reads micrographs.
+- `export_starproject` writes `micrographs.star` and, for a project with
+  micrographs, `particles2D.star`: image and micrograph names, coordinates,
+  CTF, optics group, psi and the origins in Angstroms.
+- `export_relion` writes RELION 3.1 files (optics and particles blocks) with
+  image names, coordinates and CTF, and the poses: rotation, tilt, psi and the
+  origins in Angstroms from the 3D field when it holds 3D poses, otherwise psi
+  and the origins from the 2D field.
+- The streaming pipeline's particle export writes its origins in Angstroms the
+  same way.
+
 ## NICE (New Interface for CryoEM)
 Launch the Graphical User Interface (GUI) with:
 ```shell

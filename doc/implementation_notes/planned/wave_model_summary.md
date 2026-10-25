@@ -1,7 +1,9 @@
 # Wave-model image formation in SIMPLE: where we are and what comes next
 
-Status: summary for review, 2026-10-24. Nothing below is started unless it says
-so.
+Status: summary for review, 2026-10-24; sections 1 to 3 are done (sections 2
+and 3 by the run `star_wave`, report
+`doc/implementation_notes/completed/star_origins_and_wave_simulate_run_report.md`).
+Section 4 is not started.
 
 ## Terms
 
@@ -86,7 +88,7 @@ Open from the run, not yet decided:
   roll-off and attenuates density away from the centre by 8 to 10%. The wave
   code no longer uses it; other callers may want a look.
 
-## 2. Ready to launch: STAR origins
+## 2. Done: STAR origins
 
 Found by the same run: every STAR import and export path copies SIMPLE's
 particle shifts (pixels) into RELION's Angstrom origins without the pixel size
@@ -94,11 +96,20 @@ particle shifts (pixels) into RELION's Angstrom origins without the pixel size
 STAR file without an optics block fails with an unhelpful message. A two-phase
 Dell run fixes all paths, makes `export_relion` write poses, refuses the old
 RELION 3.0 layout with a clear message, and checks positions both ways through
-specter. Plan: `doc/implementation_notes/planned/star_origins_angstrom.md`.
+specter. Plan: `doc/implementation_notes/completed/star_origins_angstrom.md`.
 It runs as the first phase of the combined run `star_wave` (see "Order of
 work").
 
-## 3. Proposed next run: simulate_particles, speed, clean-up
+## 3. Done: simulate_particles, speed, clean-up
+
+Done by the run `star_wave` (2026-10-24), as proposed below, with these
+results: a wave-mode stack reconstructs with `reconstruct3D` to its map's scale
+within a few percent; without `wave_model` the program writes the same bytes as
+before; one gradient pass of the single-scatter models is 15 to 20% faster,
+multislice unchanged; `reconstruct3D_wave` as a whole about as fast as before,
+because the preparation of every particle at every pass (shared with the PCG
+reconstruction) costs as much as the operator's passes and was outside the
+run. The proposal as it stood:
 
 **A wave option in `simulate_particles`.** `wave_model=` (and `ewald=`) on the
 existing program; without the key it behaves exactly as today. In wave mode:
@@ -140,7 +151,7 @@ the operator, and code comments pointing at the policy
 Decided for this run (2026-10-24): Poisson shot noise at the dose followed by
 Gaussian detector noise in real space; the input of wave mode is an ordinary
 SIMPLE map converted with the scale link. The run's plan is
-`doc/implementation_notes/planned/wave_simulate_speed.md`.
+`doc/implementation_notes/completed/wave_simulate_speed.md`.
 
 ## 4. Later: coupling to refinement (to plan with Ruben)
 
@@ -166,6 +177,6 @@ iteration is the potential. Where the wave model enters:
 The work stays in `~/src/SIMPLE-for-codex` until it goes to the repository.
 
 1. The `wave_operators` changes are there, committed on `811934ca5` (2026-10-24).
-2. One unattended run, `star_wave`, carries out section 2 and then section 3
-   (run plan `star_origins_and_wave_simulate_run.md`).
+2. One unattended run, `star_wave`, carried out section 2 and then section 3
+   (run plan `doc/implementation_notes/completed/star_origins_and_wave_simulate_run.md`).
 3. Plan the refinement coupling (section 4) with Ruben.

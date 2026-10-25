@@ -361,7 +361,9 @@ contains
         character(len=XLONGSTRLEN)           :: stkname, micname
         integer(timer_int_kind)              :: ms0 = 0_timer_int_kind
         real(timer_int_kind)                 :: ms_complete
+        real                                 :: smpd
         if( self%verbose ) ms0 = tic()
+        call check_origin_smpd(ptcl2d_oris, stk_oris)
         call starfile_table__new(ptcl_table)
         call starfile_table__setIsList(ptcl_table, .false.)
         call starfile_table__setname(ptcl_table, 'particles')
@@ -386,8 +388,11 @@ contains
             if( ptcl2d_oris%isthere(iptcl, 'e3'     ) ) call starfile_table__setValue_double(ptcl_table, EMDL_ORIENT_PSI,               real(ptcl2d_oris%get(iptcl, 'e3'     ),                 dp))
             if( ptcl2d_oris%isthere(iptcl, 'xpos'   ) ) call starfile_table__setValue_double(ptcl_table, EMDL_IMAGE_COORD_X,            real(ptcl2d_oris%get(iptcl, 'xpos'   ) + half_boxsize,  dp))
             if( ptcl2d_oris%isthere(iptcl, 'ypos'   ) ) call starfile_table__setValue_double(ptcl_table, EMDL_IMAGE_COORD_Y,            real(ptcl2d_oris%get(iptcl, 'ypos'   ) + half_boxsize,  dp))
-            if( ptcl2d_oris%isthere(iptcl, 'x'      ) ) call starfile_table__setValue_double(ptcl_table, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'x'      ),                 dp))
-            if( ptcl2d_oris%isthere(iptcl, 'y'      ) ) call starfile_table__setValue_double(ptcl_table, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'y'      ),                 dp))
+            if( has_origin(ptcl2d_oris, iptcl) )then
+                smpd = stk_oris%get(stkind, 'smpd')
+                call starfile_table__setValue_double(ptcl_table, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'x') * smpd, dp))
+                call starfile_table__setValue_double(ptcl_table, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'y') * smpd, dp))
+            endif
             ! strings
             if( indstk > 0 ) then
                 if( stk_oris%isthere(stkind, 'stk') ) then
@@ -452,8 +457,10 @@ contains
         integer                              :: ipart, iptcl, pathtrim, half_boxsize, stkind, indstk, nobj
         integer(timer_int_kind)              :: ms0 = 0_timer_int_kind
         real(timer_int_kind)                 :: ms_complete
+        real                                 :: smpd
         logical                              :: header_written
         if( self%verbose ) ms0 = tic()
+        call check_origin_smpd(ptcl2d_oris, stk_oris)
         ! --- Fast path: empty input — emit an empty table and return ----------
         if( ptcl2d_oris%get_noris() == 0 ) then
             call starfile_table__new(part_table)
@@ -475,7 +482,7 @@ contains
         ! --- Parallel ordered write -------------------------------------------
         header_written = .false.
         !$omp parallel do ordered default(shared) &
-        !$omp   private(ipart, iptcl, part_table, half_boxsize, stkind, indstk, pathtrim, nobj, str_stk, micname) &
+        !$omp   private(ipart, iptcl, part_table, half_boxsize, stkind, indstk, pathtrim, nobj, str_stk, micname, smpd) &
         !$omp   proc_bind(close)
         do ipart = 1, size(part_boundaries, 1)
             if( part_boundaries(ipart,1) > part_boundaries(ipart,2) ) cycle
@@ -505,8 +512,11 @@ contains
                 if( ptcl2d_oris%isthere(iptcl, 'e3'     ) ) call starfile_table__setValue_double(part_table, EMDL_ORIENT_PSI,               real(ptcl2d_oris%get(iptcl, 'e3'     ),                 dp))
                 if( ptcl2d_oris%isthere(iptcl, 'xpos'   ) ) call starfile_table__setValue_double(part_table, EMDL_IMAGE_COORD_X,            real(ptcl2d_oris%get(iptcl, 'xpos'   ) + half_boxsize,  dp))
                 if( ptcl2d_oris%isthere(iptcl, 'ypos'   ) ) call starfile_table__setValue_double(part_table, EMDL_IMAGE_COORD_Y,            real(ptcl2d_oris%get(iptcl, 'ypos'   ) + half_boxsize,  dp))
-                if( ptcl2d_oris%isthere(iptcl, 'x'      ) ) call starfile_table__setValue_double(part_table, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'x'      ),                 dp))
-                if( ptcl2d_oris%isthere(iptcl, 'y'      ) ) call starfile_table__setValue_double(part_table, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'y'      ),                 dp))
+                if( has_origin(ptcl2d_oris, iptcl) )then
+                    smpd = stk_oris%get(stkind, 'smpd')
+                    call starfile_table__setValue_double(part_table, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'x') * smpd, dp))
+                    call starfile_table__setValue_double(part_table, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(ptcl2d_oris%get(iptcl, 'y') * smpd, dp))
+                endif
                 ! Keep the complete string-wrapper operation thread-safe.
                 if( indstk > 0 ) then
                     if( stk_oris%isthere(stkind, 'stk') ) then
@@ -584,5 +594,32 @@ contains
             end function get_relative_path_here
 
     end subroutine write_ptcl2D_table_parallel
+
+    ! SIMPLE's x and y are pixels of the particle's stack, RELION's origins Angstrom
+    pure logical function has_origin( ptcl2d_oris, iptcl )
+        class(oris), intent(in) :: ptcl2d_oris
+        integer,     intent(in) :: iptcl
+        has_origin = ptcl2d_oris%isthere(iptcl, 'x') .or. ptcl2d_oris%isthere(iptcl, 'y')
+    end function has_origin
+
+    ! a written particle with a nonzero origin needs its stack's pixel size; checked before any table is built
+    subroutine check_origin_smpd( ptcl2d_oris, stk_oris )
+        class(oris), intent(in) :: ptcl2d_oris, stk_oris
+        character(len=XLONGSTRLEN) :: msg, stkname
+        integer :: iptcl, stkind
+        do iptcl = 1, ptcl2d_oris%get_noris()
+            if( ptcl2d_oris%get_state(iptcl) == 0 ) cycle
+            stkind = ptcl2d_oris%get_int(iptcl, 'stkind')
+            if( stkind <= 0 ) cycle
+            if( .not. has_origin(ptcl2d_oris, iptcl) ) cycle
+            if( ptcl2d_oris%get(iptcl, 'x') == 0. .and. ptcl2d_oris%get(iptcl, 'y') == 0. ) cycle
+            if( stk_oris%get(stkind, 'smpd') > 0. ) cycle
+            stkname = ''
+            if( stk_oris%isthere(stkind, 'stk') ) call stk_oris%get_static(stkind, 'stk', stkname)
+            write(msg,'(A,I0,A,I0,3A)') 'particle ', iptcl, ' of stack ', stkind, ' (', trim(stkname),&
+                &') has no pixel size to write its origin in Angstrom'
+            THROW_HARD(trim(msg))
+        end do
+    end subroutine check_origin_smpd
 
 end module simple_starfile

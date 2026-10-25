@@ -91,6 +91,7 @@ use simple_wave_field_tester,                only: run_all_wave_field_tests
 use simple_wave_imaging_tester,              only: run_all_wave_imaging_tests
 use simple_wave_multislice_tester,           only: run_all_wave_multislice_tests
 use simple_wave_projector_tester,            only: run_all_wave_projector_tests
+use simple_simulator_tester,                 only: run_all_simulator_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
@@ -447,6 +448,7 @@ contains
         call add_suite(s, n, 'wave imaging',              run_all_wave_imaging_tests)
         call add_suite(s, n, 'wave multislice',           run_all_wave_multislice_tests)
         call add_suite(s, n, 'wave projector',            run_all_wave_projector_tests)
+        call add_suite(s, n, 'wave simulation',           run_all_simulator_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches

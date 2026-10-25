@@ -334,23 +334,76 @@ contains
             end do
         end do
         !$omp end parallel
-        ! serial pass over the wrapping rim (see win_wraps): confined to the outermost
-        ! shell, so cheap, and reproducible unlike an atomic
+        call scatter_rim(self, plane, rots, curv, vol_accum)
+    end subroutine scatter_plane
+
+    !> the serial pass of a plane over the wrapping rim (see win_wraps): confined to the outermost shell,
+    !! reproducible unlike an atomic; each row visits only its two segments outside the free middle |k| < kb
+    subroutine scatter_rim( self, plane, rots, curv, vol_accum )
+        class(pcg_lattice), intent(in)    :: self
+        complex,            intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
+                                                  &self%lims2(2,1):self%lims2(2,2))
+        real,               intent(in)    :: rots(:,:,:), curv
+        complex,            intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                      &self%lims3(2,1):self%lims3(2,2),&
+                                                      &self%lims3(3,1):self%lims3(3,2))
+        real    :: loc(3), w(self%wdim,self%wdim,self%wdim)
+        integer :: h, k, g, i0(3), kb, iseg, klo, khi
         do g = 1, size(rots,3)
             do h = self%lims2(1,1), self%lims2(1,2)
-                do k = self%lims2(2,1), self%lims2(2,2)
-                    if( h*h + k*k > self%sqlp ) cycle
-                    if( rim_free(self, h, k, curv) ) cycle
-                    if( plane(h,k) == cmplx(0.,0.) ) cycle
-                    loc = plane_loc(self, h, k, rots(:,:,g), curv)
-                    i0  = nint(loc) - self%iwinsz
-                    if( .not. win_wraps(self, i0) ) cycle
-                    call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                    call scatter_window(self, i0, w, self%padsc * plane(h,k), vol_accum)
+                kb = rim_row_start(self, h, curv)
+                do iseg = 1, 2
+                    if( iseg == 1 )then
+                        klo = self%lims2(2,1)
+                        khi = min(-kb, self%lims2(2,2))
+                    else
+                        klo = max(kb, -kb + 1, self%lims2(2,1))
+                        khi = self%lims2(2,2)
+                    endif
+                    do k = klo, khi
+                        if( h*h + k*k > self%sqlp ) cycle
+                        if( rim_free(self, h, k, curv) ) cycle
+                        if( plane(h,k) == cmplx(0.,0.) ) cycle
+                        loc = plane_loc(self, h, k, rots(:,:,g), curv)
+                        i0  = nint(loc) - self%iwinsz
+                        if( .not. win_wraps(self, i0) ) cycle
+                        call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                        call scatter_window(self, i0, w, self%padsc * plane(h,k), vol_accum)
+                    end do
                 end do
             end do
         end do
-    end subroutine scatter_plane
+    end subroutine scatter_rim
+
+    !> the first k >= 0 of row h that rim_free does not exempt: |k| < kb is free
+    pure integer function rim_row_start( self, h, curv ) result( kb )
+        class(pcg_lattice), intent(in) :: self
+        integer,            intent(in) :: h
+        real,               intent(in) :: curv
+        ! rim_free needs h^2 + k^2 <= sq_rim, the curvature only shrinks the free disk
+        kb = isqrt(self%sq_rim - h*h)
+        do while( kb >= 0 )
+            if( rim_free(self, h, kb, curv) ) exit
+            kb = kb - 1
+        end do
+        kb = kb + 1
+    end function rim_row_start
+
+    !> floor(sqrt(n)), -1 for n < 0
+    pure integer function isqrt( n ) result( r )
+        integer, intent(in) :: n
+        if( n < 0 )then
+            r = -1
+            return
+        endif
+        r = int(sqrt(real(n)))
+        do while( (r + 1) * (r + 1) <= n )
+            r = r + 1
+        end do
+        do while( r * r > n )
+            r = r - 1
+        end do
+    end function isqrt
 
     !> The native spectrum of the volume rotated by rot, the cube cube(h,k,l) = padsc * gather(padf [h,k,l] rot)
     !! on the native sphere h^2+k^2+l^2 <= R^2 with |l| < R (the plane disk lims2 times l = -(R-1):(R-1); a
@@ -395,7 +448,7 @@ contains
                                                       &self%lims3(2,1):self%lims3(2,2),&
                                                       &self%lims3(3,1):self%lims3(3,2))
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim)
-        integer :: h, k, l, m, g, i0(3), rl
+        integer :: h, k, l, m, g, i0(3), rl, hb, iseg, hlo, hhi
         rl = self%lims2(1,2) - 1
         !$omp parallel default(shared) private(h,k,l,m,g,loc,i0,w) proc_bind(close)
         do g = 1, size(rots,3)
@@ -418,19 +471,30 @@ contains
             end do
         end do
         !$omp end parallel
-        ! the wrapping rim, serial (|loc| = padf |[h,k,l]| decides, as rim_free does for a flat plane)
+        ! the wrapping rim, serial (|loc| = padf |[h,k,l]| decides, as rim_free does for a flat plane);
+        ! each row visits only its two segments outside the free middle |h| <= hb
         do g = 1, size(rots,3)
             do l = -rl, rl
                 do k = self%lims2(2,1), self%lims2(2,2)
-                    do h = self%lims2(1,1), self%lims2(1,2)
-                        if( h*h + k*k + l*l > self%sqlp ) cycle
-                        if( h*h + k*k + l*l <= self%sq_rim ) cycle
-                        if( cube(h,k,l) == cmplx(0.,0.) ) cycle
-                        loc = real(self%padf) * matmul(real([h,k,l]), rots(:,:,g))
-                        i0  = nint(loc) - self%iwinsz
-                        if( .not. win_wraps(self, i0) ) cycle
-                        call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                        call scatter_window(self, i0, w, self%padsc * cube(h,k,l), vol_accum)
+                    hb = isqrt(self%sq_rim - k*k - l*l)
+                    do iseg = 1, 2
+                        if( iseg == 1 )then
+                            hlo = self%lims2(1,1)
+                            hhi = min(-hb - 1, self%lims2(1,2))
+                        else
+                            hlo = max(hb + 1, -hb, self%lims2(1,1))
+                            hhi = self%lims2(1,2)
+                        endif
+                        do h = hlo, hhi
+                            if( h*h + k*k + l*l > self%sqlp ) cycle
+                            if( h*h + k*k + l*l <= self%sq_rim ) cycle
+                            if( cube(h,k,l) == cmplx(0.,0.) ) cycle
+                            loc = real(self%padf) * matmul(real([h,k,l]), rots(:,:,g))
+                            i0  = nint(loc) - self%iwinsz
+                            if( .not. win_wraps(self, i0) ) cycle
+                            call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                            call scatter_window(self, i0, w, self%padsc * cube(h,k,l), vol_accum)
+                        end do
                     end do
                 end do
             end do

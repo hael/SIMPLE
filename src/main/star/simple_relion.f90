@@ -274,8 +274,14 @@ contains
         real                      :: dfxmin
         real                      :: dfxmax
         real                      :: dfxstep
+        logical                   :: l_poses3D
         if(spproj%os_ptcl2D%get_noris() == 0) then
             return
+        endif
+        ! 3D poses when the 3D field holds them, else the 2D field's in-plane poses
+        l_poses3D = .false.
+        if( spproj%os_ptcl3D%get_noris() == spproj%os_ptcl2D%get_noris() )then
+            l_poses3D = spproj%has_valid_ptcl3D_alignment()
         endif
         write(logfhandle, *) 'Generating particles2D.star ... '
         call simple_mkdir('particles')
@@ -300,7 +306,7 @@ contains
         ptcldfy     = spproj%os_ptcl2D%isthere(i, 'dfy')
         ptclangast  = spproj%os_ptcl2D%isthere(i, 'angast')
         !trial up to 1000 particles for non 0 values of xpos and ypos
-        do j=i, i + 1000
+        do j=i, min(i + 1000, spproj%os_ptcl2D%get_noris())
           if((spproj%os_ptcl2D%get(j, 'xpos') .GT. 0) .OR. (spproj%os_ptcl2D%get(j, 'ypos') .GT. 0)) then
             xpos = .TRUE.
             ypos = .TRUE.
@@ -388,6 +394,11 @@ contains
                         endif
                         call starfile_table__setValue_double(startable, EMDL_CTF_PHASESHIFT, &
                             &real(rad2deg(spproj%os_ptcl2D%get(i, 'phshift')), dp))
+                        if( l_poses3D )then
+                            call write_pose(spproj%os_ptcl3D)
+                        else
+                            call write_pose(spproj%os_ptcl2D)
+                        endif
                         if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
                             group = ceiling((spproj%os_stk%get_dfx(stkindex) - dfxmin) / dfxstep)
                             write(groupname, *) group
@@ -406,6 +417,37 @@ contains
         call getstring_base%kill
         call getstring_mrc%kill
         call getstring_mrcs%kill
+
+        contains
+
+            ! the pose of particle i in os; origins from pixels of its stack to Angstrom
+            subroutine write_pose( os )
+                class(oris), intent(in) :: os
+                character(len=XLONGSTRLEN) :: msg, stkname
+                real :: smpd, x, y
+                if( l_poses3D )then
+                    call starfile_table__setValue_double(startable, EMDL_ORIENT_ROT,  real(os%e1get(i), dp))
+                    call starfile_table__setValue_double(startable, EMDL_ORIENT_TILT, real(os%e2get(i), dp))
+                endif
+                call starfile_table__setValue_double(startable, EMDL_ORIENT_PSI, real(os%e3get(i), dp))
+                x = os%get(i, 'x')
+                y = os%get(i, 'y')
+                if( x /= 0. .or. y /= 0. )then
+                    smpd = spproj%os_stk%get(stkindex, 'smpd')
+                    if( smpd <= 0. )then
+                        stkname = ''
+                        if( spproj%os_stk%isthere(stkindex, 'stk') ) call spproj%os_stk%get_static(stkindex, 'stk', stkname)
+                        write(msg,'(A,I0,A,I0,3A)') 'particle ', i, ' of stack ', stkindex, ' (', trim(stkname),&
+                            &') has no pixel size to write its origin in Angstrom'
+                        THROW_HARD(trim(msg))
+                    endif
+                    x = x * smpd
+                    y = y * smpd
+                endif
+                call starfile_table__setValue_double(startable, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(x, dp))
+                call starfile_table__setValue_double(startable, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(y, dp))
+            end subroutine write_pose
+
     end subroutine write_particles2D_star
 
     subroutine find_movienames(self, cline, spproj)

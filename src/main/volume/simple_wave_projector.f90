@@ -1,5 +1,5 @@
 !@descr: the wave operator of a particle set (projection, first Born, Rytov, multislice) on the PCG lattice
-! (doc/implementation_notes/planned/ghostbuster_operators.md, sections 3.1 to 3.5, 3.7 and 3.8)
+! (the operator and its conventions: doc/policies/3D/wave_model_policy.md, sections 3 to 5)
 module simple_wave_projector
 use simple_defs,              only: dp, PI
 use simple_type_defs,         only: ctfparams, ctfvars, CTFFLAG_FLIP
@@ -21,34 +21,23 @@ private
 
 public :: wave_projector
 
-!> The image of a potential V (volts, native box) predicted by a single-scatter wave model, for every
-!! particle of a selection, its derivative and transpose:
-!!
-!!   v -> v / env (KB deapodisation) -> pad, transform (SIMPLE's fft, origin at the box centre, 1/boxpd^3)
-!!   S_i(h,k) = (1/nsym) sum_g gather(padf [h, k, kz] R_i S_g),  kz = curv_i (h^2+k^2), curv_i = ewald_curv
-!!   s_i = nat^3 S_i exp(+2 pi i (h sx + k sy) / nat)         (the shift on the model side, as PCG's)
-!!   p_i = -g ihat_i(s_i) / nat^2                              (wave_imaging; SIMPLE's particle units)
-!!
-!! g the gain sqrt(dose a^2) that maps relative intensity onto contrast-inverted, noise-normalised
-!! particles (section 3.4); projection samples the central section, the curved models the paraboloid.
-!! The misfit of a particle is 1/2 sum_(h,k) w_i(h,k) |y_i - p_i|^2, w_i = w_i inv_sig2(shell), zero at
-!! the origin. The volume-to-plane map and its transpose (scatter at R_i S_g, Hermitian fold, inverse
-!! transform, 1/boxpd^3, deapodisation) are exact transposes, so the gradient is the true gradient in
-!! volts. Each thread runs the 2D chain of one particle with its own wave_imaging; the gradient planes of a
-!! batch are scattered afterwards in particle order with the lattice's coloured scatter, and losses are
-!! summed per particle in double precision in particle order, so results do not depend on the threads.
-!! Multislice (section 3.7) gathers the particle's rotated cube instead of a section,
-!!   C_i(h,k,l) = nat^3 (1/nsym) sum_g gather(padf [h, k, l] R_i S_g) exp(+2 pi i (h sx + k sy) / nat),
-!! and runs wave_multislice on it; the transpose scatters the cube. Its gradient passes go in chunks of one
-!! particle per thread, each chunk's cubes scattered in particle order before the next.
-!! The operator runs its own parallel regions and is not called from inside another one.
+!> one thread's work arrays of a pass, allocated once (the cubes only for multislice, ct only for line_losses)
+type :: pass_work
+    complex, allocatable :: s(:,:), ihat(:,:), q(:,:), sadj(:,:), ds(:,:), dihat(:,:), plane(:,:)
+    complex, allocatable :: cx(:,:,:), cd(:,:,:), ct(:,:,:)
+    complex, allocatable :: phh(:), phk(:)          !< the separable shift phase of the current particle
+end type pass_work
+
+!> The image p_i = -g ihat_i / nat^2 a wave model predicts of each particle of a selection from a potential in volts,
+!! its derivative and exact transpose, the misfit 1/2 sum w |y - p|^2 and its gradient; it runs its own parallel
+!! regions, results independent of the threads (wave_model_policy.md, sections 3, 5 and 7)
 type, extends(pcg_lattice) :: wave_projector
     private
     integer :: model = 0
     integer :: kappa = 0          !< -1, 0, +1 for ewald=neg, no, pos (projection: 0)
     integer :: osf   = 2          !< oversampling of the image formation
     real    :: gain  = 1.0        !< g = sqrt(dose a^2)
-    real    :: bfac  = 0.0        !< B-factor of the lens envelope (A^2)
+    real    :: bfac  = 0.0        !< B-factor of the lens envelope (A^2), unless per particle
     integer :: fft_nthreads = 1
     type(image)          :: wimg                  !< persistent padded work image (keeps its FFTW plans)
     complex, allocatable :: cmat_x(:,:,:)         !< packed transform of the current volume
@@ -64,9 +53,11 @@ type, extends(pcg_lattice) :: wave_projector
     type(ctfparams), allocatable :: ctfparms(:)      !< (nptcls), at the native sampling
     real,            allocatable :: inv_sig2(:)      !< (0:R) 1/sigma2 of the selection's half (1 without)
     real,            allocatable :: wts(:)           !< (nptcls) particle weights
+    real,            allocatable :: bfacs(:)         !< (nptcls) lens B-factors (A^2)
     integer,         allocatable :: wshell(:,:)      !< (h,k) resolution shell, for the loss weights
     type(wave_imaging), allocatable :: imgs(:)       !< one per thread (the single-scatter models)
     type(wave_multislice), allocatable :: ms(:)      !< one per thread (multislice)
+    type(pass_work),       allocatable :: work(:)    !< one per thread
     ! ---- gradient accumulator ----
     complex, allocatable :: gacc(:,:,:)
     logical :: l_vol = .false., l_dir = .false., l_grad = .false., exists = .false.
@@ -86,6 +77,7 @@ type, extends(pcg_lattice) :: wave_projector
     procedure :: line_losses
     procedure :: gain_terms
     procedure :: get_exit_wave
+    procedure :: plane_to_image
     procedure :: get_nptcls
     procedure :: get_model
     procedure, private :: transform
@@ -93,6 +85,9 @@ type, extends(pcg_lattice) :: wave_projector
     procedure, private :: spectrum_cube
     procedure, private :: prep_optics
     procedure, private :: ensure_imgs
+    procedure, private :: ensure_work
+    procedure, private :: ensure_cubes
+    procedure, private :: shift_vectors
     procedure, private :: pass
     procedure :: kill
 end type wave_projector
@@ -176,12 +171,12 @@ contains
 
     !> the particles' orientations, shifts (native pixels) and CTF (at the native sampling) from os, as
     !! rec_obs_oris gives them; inv_sig2(0:) the selection's noise spectrum at the native shells, weights
-    !! one per particle
-    subroutine prep_particles( self, os, inv_sig2, weights )
+    !! and bfacs (the lens B-factors, the operator's by default) one per particle
+    subroutine prep_particles( self, os, inv_sig2, weights, bfacs )
         class(wave_projector), intent(inout) :: self
         class(oris),           intent(inout) :: os
         real, optional,        intent(in)    :: inv_sig2(0:)
-        real, optional,        intent(in)    :: weights(:)
+        real, optional,        intent(in)    :: weights(:), bfacs(:)
         type(ori)     :: o
         type(ctf)     :: tfun
         type(ctfvars) :: vars
@@ -194,10 +189,12 @@ contains
         if( allocated(self%ctfparms) ) deallocate(self%ctfparms)
         if( allocated(self%inv_sig2) ) deallocate(self%inv_sig2)
         if( allocated(self%wts)      ) deallocate(self%wts)
+        if( allocated(self%bfacs)    ) deallocate(self%bfacs)
         allocate(self%rotmats(3,3,self%nptcls), self%shifts(2,self%nptcls), self%curvs(self%nptcls), &
             &self%ctfparms(self%nptcls))
         allocate(self%inv_sig2(0:self%Rnat), source=1.)
         allocate(self%wts(self%nptcls), source=1.)
+        allocate(self%bfacs(self%nptcls), source=self%bfac)
         call o%new(.true.)
         do i = 1, self%nptcls
             call os%get_ori(i, o)
@@ -227,6 +224,10 @@ contains
         if( present(weights) )then
             if( size(weights) /= self%nptcls ) THROW_HARD('one weight per particle; wave_projector%prep_particles')
             self%wts = weights
+        endif
+        if( present(bfacs) )then
+            if( size(bfacs) /= self%nptcls ) THROW_HARD('one B-factor per particle; wave_projector%prep_particles')
+            self%bfacs = bfacs
         endif
     end subroutine prep_particles
 
@@ -274,16 +275,17 @@ contains
         g = g * self%invenv / real(self%boxpd)**3
     end subroutine get_grad
 
-    !> s_i of the current volume (l_dir = .false.) or of the direction (.true.), on the native disk
-    subroutine spectrum( self, i, l_dir, s )
+    !> s_i of the current volume (l_dir = .false.) or of the direction (.true.), on the native disk; plane a
+    !! work plane, phh and phk the particle's shift phase (shift_vectors)
+    subroutine spectrum( self, i, l_dir, s, plane, phh, phk )
         class(wave_projector), intent(in)    :: self
         integer,               intent(in)    :: i
         logical,               intent(in)    :: l_dir
         complex,               intent(out)   :: s(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
-        complex, allocatable :: plane(:,:)
-        real    :: rot(3,3), arg, scale
+        complex,               intent(out)   :: plane(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
+        complex,               intent(in)    :: phh(self%lims2(1,1):self%lims2(1,2)), phk(self%lims2(2,1):self%lims2(2,2))
+        real    :: rot(3,3), scale
         integer :: g, h, k
-        allocate(plane(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
         s = cmplx(0.,0.)
         do g = 1, self%nsym
             rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
@@ -298,23 +300,22 @@ contains
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp ) cycle
-                arg    = 2.0*PI * (real(h)*self%shifts(1,i) + real(k)*self%shifts(2,i)) / real(self%box)
-                s(h,k) = scale * s(h,k) * cmplx(cos(arg), sin(arg))
+                s(h,k) = scale * s(h,k) * (phh(h) * phk(k))
             end do
         end do
-        deallocate(plane)
     end subroutine spectrum
 
     !> C_i of the current volume (l_dir = .false.) or of the direction (.true.): the rotated cube's spectrum
-    subroutine spectrum_cube( self, i, l_dir, cube )
+    subroutine spectrum_cube( self, i, l_dir, cube, phh, phk )
         class(wave_projector), intent(in)  :: self
         integer,               intent(in)  :: i
         logical,               intent(in)  :: l_dir
         complex,               intent(out) :: cube(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),&
                                                   &-(self%Rnat-1):self%Rnat-1)
+        complex,               intent(in)  :: phh(self%lims2(1,1):self%lims2(1,2)), phk(self%lims2(2,1):self%lims2(2,2))
         complex, allocatable :: part(:,:,:)
         complex :: ph
-        real    :: rot(3,3), arg, scale
+        real    :: rot(3,3), scale
         integer :: g, h, k
         ! the first rotation straight into the cube, a second buffer only for a point group
         rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,1))
@@ -337,8 +338,7 @@ contains
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp ) cycle
-                arg = 2.0*PI * (real(h)*self%shifts(1,i) + real(k)*self%shifts(2,i)) / real(self%box)
-                ph  = scale * cmplx(cos(arg), sin(arg))
+                ph  = scale * (phh(h) * phk(k))
                 cube(h,k,:) = ph * cube(h,k,:)
             end do
         end do
@@ -352,12 +352,12 @@ contains
         ! Rytov on the paraboloid exponentiates at the exit face, half the box downstream (the specimen
         ! fills the box); without curvature the model has no depth
         if( self%model == WAVE_MSLICE )then
-            call self%ms(ithr)%set_optics(self%ctfparms(i), self%bfac, self%kappa)
+            call self%ms(ithr)%set_optics(self%ctfparms(i), self%bfacs(i), self%kappa)
             return
         endif
         depth = 0.
         if( self%model == WAVE_RYTOV .and. self%kappa /= 0 ) depth = real(self%box) / 2.
-        call self%imgs(ithr)%set_optics(self%ctfparms(i), self%bfac, depth)
+        call self%imgs(ithr)%set_optics(self%ctfparms(i), self%bfacs(i), depth)
     end subroutine prep_optics
 
     !> one wave_imaging per thread, sized at the point of use; every threaded entry passes here first, so the
@@ -368,6 +368,7 @@ contains
         !$ if( omp_in_parallel() ) THROW_HARD('wave_projector runs its own parallel regions, not inside another')
         nthr = 1
         !$ nthr = omp_get_max_threads()
+        call self%ensure_work(nthr)
         if( self%model == WAVE_MSLICE )then
             if( allocated(self%ms) )then
                 if( size(self%ms) >= nthr ) return
@@ -394,6 +395,68 @@ contains
             call self%imgs(t)%new(self%box, self%osf, self%model)
         end do
     end subroutine ensure_imgs
+
+    !> one pass_work per thread (at least nthr), its planes sized at the point of use; the cubes are zero-sized
+    !! until ensure_cubes gives them the multislice extent
+    subroutine ensure_work( self, nthr )
+        class(wave_projector), intent(inout) :: self
+        integer,               intent(in)    :: nthr
+        integer :: t, lo1, hi1, lo2, hi2
+        if( allocated(self%work) )then
+            if( size(self%work) >= nthr ) return
+            deallocate(self%work)
+        endif
+        lo1 = self%lims2(1,1); hi1 = self%lims2(1,2); lo2 = self%lims2(2,1); hi2 = self%lims2(2,2)
+        allocate(self%work(nthr))
+        do t = 1, nthr
+            allocate(self%work(t)%s(lo1:hi1,lo2:hi2))
+            allocate(self%work(t)%ihat, self%work(t)%q, self%work(t)%sadj, self%work(t)%ds, self%work(t)%dihat, &
+                &self%work(t)%plane, mold=self%work(t)%s)
+            allocate(self%work(t)%cx(1,1,0), self%work(t)%cd(1,1,0), self%work(t)%ct(1,1,0))
+            allocate(self%work(t)%phh(lo1:hi1), self%work(t)%phk(lo2:hi2))
+        end do
+    end subroutine ensure_work
+
+    !> gives the threads' cubes the multislice extent: cx always, cd for the direction, ct for line_losses
+    subroutine ensure_cubes( self, l_cd, l_ct )
+        class(wave_projector), intent(inout) :: self
+        logical,               intent(in)    :: l_cd, l_ct
+        integer :: t, rl
+        rl = self%Rnat - 1
+        do t = 1, size(self%work)
+            call grow(self%work(t)%cx, .true.)
+            call grow(self%work(t)%cd, l_cd)
+            call grow(self%work(t)%ct, l_ct)
+        end do
+
+        contains
+
+            subroutine grow( c, l_need )
+                complex, allocatable, intent(inout) :: c(:,:,:)
+                logical,              intent(in)    :: l_need
+                if( .not. l_need .or. size(c) > 0 ) return
+                deallocate(c)
+                allocate(c(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), -rl:rl))
+            end subroutine grow
+
+    end subroutine ensure_cubes
+
+    !> the separable shift phase of particle i, exp(+2 pi i (h sx + k sy) / box) = phh(h) phk(k), box the native box
+    pure subroutine shift_vectors( self, i, phh, phk )
+        class(wave_projector), intent(in)  :: self
+        integer,               intent(in)  :: i
+        complex,               intent(out) :: phh(self%lims2(1,1):self%lims2(1,2)), phk(self%lims2(2,1):self%lims2(2,2))
+        real    :: arg
+        integer :: h, k
+        do h = self%lims2(1,1), self%lims2(1,2)
+            arg    = 2.0*PI * real(h) * self%shifts(1,i) / real(self%box)
+            phh(h) = cmplx(cos(arg), sin(arg))
+        end do
+        do k = self%lims2(2,1), self%lims2(2,2)
+            arg    = 2.0*PI * real(k) * self%shifts(2,i) / real(self%box)
+            phk(k) = cmplx(cos(arg), sin(arg))
+        end do
+    end subroutine shift_vectors
 
     !> p_i of particles ifrom..ifrom+nb-1 of the selection at the current volume
     subroutine predict( self, nb, ifrom, planes )
@@ -458,7 +521,6 @@ contains
         complex,               intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
         real(dp),              intent(in)    :: t(:)
         real(dp),              intent(out)   :: losses(:)
-        complex, allocatable :: sx(:,:), sd(:,:), st(:,:), ihat(:,:), cx(:,:,:), cd(:,:,:), ct(:,:,:)
         real(dp), allocatable :: lossmat(:,:)
         integer :: ib, i, ithr, j
         if( .not. (self%l_vol .and. self%l_dir) ) THROW_HARD('set_volume and set_direction first; line_losses')
@@ -466,37 +528,36 @@ contains
         if( nb < 1 ) return
         if( ifrom < 1 .or. ifrom + nb - 1 > self%nptcls ) THROW_HARD('batch outside the particle selection; line_losses')
         call self%ensure_imgs
+        if( self%model == WAVE_MSLICE ) call self%ensure_cubes(.true., .true.)
         allocate(lossmat(size(t),nb))
-        !$omp parallel do default(shared) private(ib,i,ithr,j,sx,sd,st,ihat,cx,cd,ct) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(ib,i,ithr,j) schedule(static) proc_bind(close)
         do ib = 1, nb
             i    = ifrom + ib - 1
             ithr = 1
             !$ ithr = omp_get_thread_num() + 1
-            allocate(ihat(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+            associate( sx => self%work(ithr)%s, sd => self%work(ithr)%ds, st => self%work(ithr)%q, &
+                &ihat => self%work(ithr)%ihat, cx => self%work(ithr)%cx, cd => self%work(ithr)%cd, &
+                &ct => self%work(ithr)%ct, phh => self%work(ithr)%phh, phk => self%work(ithr)%phk )
             call self%prep_optics(ithr, i)
+            call self%shift_vectors(i, phh, phk)
             if( self%model == WAVE_MSLICE )then
-                allocate(cx(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), -(self%Rnat-1):self%Rnat-1))
-                allocate(cd, ct, mold=cx)
-                call self%spectrum_cube(i, .false., cx)
-                call self%spectrum_cube(i, .true.,  cd)
+                call self%spectrum_cube(i, .false., cx, phh, phk)
+                call self%spectrum_cube(i, .true.,  cd, phh, phk)
                 do j = 1, size(t)
                     ct = cx + real(t(j)) * cd
                     call self%ms(ithr)%forward(ct, ihat)
                     lossmat(j,ib) = misfit(self, i, y_batch(:,:,ib), ihat)
                 end do
-                deallocate(cx, cd, ct)
             else
-                allocate(sx, sd, st, mold=ihat)
-                call self%spectrum(i, .false., sx)
-                call self%spectrum(i, .true.,  sd)
+                call self%spectrum(i, .false., sx, self%work(ithr)%plane, phh, phk)
+                call self%spectrum(i, .true.,  sd, self%work(ithr)%plane, phh, phk)
                 do j = 1, size(t)
                     st = sx + real(t(j)) * sd
                     call self%imgs(ithr)%forward(st, ihat)
                     lossmat(j,ib) = misfit(self, i, y_batch(:,:,ib), ihat)
                 end do
-                deallocate(sx, sd, st)
             endif
-            deallocate(ihat)
+            end associate
         end do
         !$omp end parallel do
         do j = 1, size(t)
@@ -507,11 +568,9 @@ contains
         end do
     end subroutine line_losses
 
-    !> The terms of the one-scalar fit of the data's nonlinear part (section 3.4 of the plan): with p_i the
-    !! prediction at the current volume and l_i = J_i(0) v its linear part (the weak-phase image of the same
-    !! volume), q_i = p_i - l_i; num(ib) = sum w Re(conj(y_i - l_i) q_i) and den(ib) = sum w |q_i|^2. The data
-    !! fix g v through the linear part, so y - l = (g / g_data) q, and the gain the data prefer is
-    !! g sum(den) / sum(num)
+    !> The terms of the fitted gain (wave_model_policy.md, section 5): with l_i the linear part of p_i and
+    !! q_i = p_i - l_i, num(ib) = sum w Re(conj(y_i - l_i) q_i) and den(ib) = sum w |q_i|^2; the gain the data
+    !! prefer is g sum(den) / sum(num)
     subroutine gain_terms( self, y_batch, nb, ifrom, num, den )
         class(wave_projector), intent(inout) :: self
         integer,               intent(in)    :: nb, ifrom
@@ -525,7 +584,7 @@ contains
         class(wave_projector), intent(inout) :: self
         integer,               intent(in)    :: i
         complex,               intent(out)   :: psi(:,:)
-        complex, allocatable :: s(:,:), ihat(:,:), cube(:,:,:)
+        complex, allocatable :: s(:,:), ihat(:,:), plane(:,:), cube(:,:,:), phh(:), phk(:)
         if( .not. self%l_vol ) THROW_HARD('set_volume has not been called; get_exit_wave')
         call self%ensure_imgs
         if( i < 1 .or. i > self%nptcls ) THROW_HARD('particle outside the selection; get_exit_wave')
@@ -533,23 +592,24 @@ contains
             THROW_HARD('exit wave array size; get_exit_wave')
         endif
         allocate(s(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        allocate(ihat, mold=s)
+        allocate(ihat, plane, mold=s)
+        allocate(phh(self%lims2(1,1):self%lims2(1,2)), phk(self%lims2(2,1):self%lims2(2,2)))
         call self%prep_optics(1, i)
+        call self%shift_vectors(i, phh, phk)
         if( self%model == WAVE_MSLICE )then
             allocate(cube(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), -(self%Rnat-1):self%Rnat-1))
-            call self%spectrum_cube(i, .false., cube)
+            call self%spectrum_cube(i, .false., cube, phh, phk)
             call self%ms(1)%forward(cube, ihat)
             call self%ms(1)%get_exit_wave(psi)
         else
-            call self%spectrum(i, .false., s)
+            call self%spectrum(i, .false., s, plane, phh, phk)
             call self%imgs(1)%forward(s, ihat)
             call self%imgs(1)%get_exit_wave(psi)
         endif
     end subroutine get_exit_wave
 
-    !> one pass over a batch: every particle's chain on its thread, then (for the gradient passes) the
-    !! scatter of its plane or cube in particle order. yin holds y (loss_grad) or q (adjoint), pout receives p
-    !! (predict) or J d (linearize_planes). The single-scatter models run the batch as one chunk; multislice in
+    !> one pass over a batch: each particle's chain on its thread, then the gradient's scatter in particle order;
+    !! yin holds y (loss_grad) or q (adjoint), pout receives p (predict) or J d (linearize_planes); multislice runs
     !! chunks of one particle per thread, which bounds the gradient cubes held for the scatter
     subroutine pass( self, mode, nb, ifrom, vals, yin, pout, vals2 )
         class(wave_projector), intent(inout) :: self
@@ -558,10 +618,8 @@ contains
         real(dp), optional,    intent(out)   :: vals2(nb)
         complex, optional,     intent(in)    :: yin(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
         complex, optional,     intent(out)   :: pout(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),nb)
-        complex, allocatable :: s(:,:), ihat(:,:), q(:,:), sadj(:,:), ds(:,:), dihat(:,:)
-        complex, allocatable :: cx(:,:,:), cd(:,:,:)
         complex, allocatable :: gplanes(:,:,:), gcubes(:,:,:,:)
-        real    :: rots(3,3,self%nsym), arg, pscale, scale
+        real    :: rots(3,3,self%nsym), pscale, scale
         integer :: ib, ib0, ib1, i, ithr, h, k, g, nchunk, rl
         logical :: l_ms, l_grad
         if( .not. self%l_vol ) THROW_HARD('set_volume has not been called; wave_projector pass')
@@ -585,6 +643,8 @@ contains
         call self%ensure_imgs
         l_ms   = self%model == WAVE_MSLICE
         l_grad = mode == PASS_LOSS_GRAD .or. mode == PASS_ADJOINT
+        ! the direction's cube only where a pass uses one
+        if( l_ms ) call self%ensure_cubes(mode == PASS_LINEAR .or. mode == PASS_CURVATURE .or. mode == PASS_GAIN, .false.)
         rl     = self%Rnat - 1
         pscale = -self%gain / real(self%box)**2
         scale  = real(self%box)**3 / real(self%nsym)
@@ -605,23 +665,22 @@ contains
         if( present(vals2) ) vals2 = 0.0_dp
         do ib0 = 1, nb, nchunk
             ib1 = min(nb, ib0 + nchunk - 1)
-            !$omp parallel do default(shared) private(ib,i,ithr,h,k,arg,s,ihat,q,sadj,ds,dihat,cx,cd) &
-            !$omp schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(ib,i,ithr,h,k) schedule(static) proc_bind(close)
             do ib = ib0, ib1
                 i    = ifrom + ib - 1
                 ithr = 1
                 !$ ithr = omp_get_thread_num() + 1
-                allocate(s(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-                allocate(ihat, q, sadj, ds, dihat, mold=s)
+                associate( s => self%work(ithr)%s, ihat => self%work(ithr)%ihat, q => self%work(ithr)%q, &
+                    &sadj => self%work(ithr)%sadj, ds => self%work(ithr)%ds, dihat => self%work(ithr)%dihat, &
+                    &cx => self%work(ithr)%cx, cd => self%work(ithr)%cd, phh => self%work(ithr)%phh, &
+                    &phk => self%work(ithr)%phk )
                 call self%prep_optics(ithr, i)
+                call self%shift_vectors(i, phh, phk)
                 if( l_ms )then
-                    allocate(cx(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), -rl:rl))
-                    ! the direction's cube only where a pass uses one
-                    if( mode == PASS_LINEAR .or. mode == PASS_CURVATURE .or. mode == PASS_GAIN ) allocate(cd, mold=cx)
-                    call self%spectrum_cube(i, .false., cx)
+                    call self%spectrum_cube(i, .false., cx, phh, phk)
                     call self%ms(ithr)%forward(cx, ihat)
                 else
-                    call self%spectrum(i, .false., s)
+                    call self%spectrum(i, .false., s, self%work(ithr)%plane, phh, phk)
                     call self%imgs(ithr)%forward(s, ihat)
                 endif
                 select case(mode)
@@ -653,8 +712,7 @@ contains
                                         gcubes(h,k,:,ib-ib0+1) = cmplx(0.,0.)
                                         cycle
                                     endif
-                                    arg = 2.0*PI * (real(h)*self%shifts(1,i) + real(k)*self%shifts(2,i)) / real(self%box)
-                                    gcubes(h,k,:,ib-ib0+1) = (scale * cmplx(cos(arg), -sin(arg))) * gcubes(h,k,:,ib-ib0+1)
+                                    gcubes(h,k,:,ib-ib0+1) = (scale * conjg(phh(h) * phk(k))) * gcubes(h,k,:,ib-ib0+1)
                                 end do
                             end do
                         else
@@ -663,17 +721,16 @@ contains
                             do k = self%lims2(2,1), self%lims2(2,2)
                                 do h = self%lims2(1,1), self%lims2(1,2)
                                     if( h*h + k*k > self%sqlp ) cycle
-                                    arg = 2.0*PI * (real(h)*self%shifts(1,i) + real(k)*self%shifts(2,i)) / real(self%box)
-                                    gplanes(h,k,ib) = scale * sadj(h,k) * cmplx(cos(arg), -sin(arg))
+                                    gplanes(h,k,ib) = scale * sadj(h,k) * conjg(phh(h) * phk(k))
                                 end do
                             end do
                         endif
                     case(PASS_LINEAR, PASS_CURVATURE)
                         if( l_ms )then
-                            call self%spectrum_cube(i, .true., cd)
+                            call self%spectrum_cube(i, .true., cd, phh, phk)
                             call self%ms(ithr)%linearize(cd, dihat)
                         else
-                            call self%spectrum(i, .true., ds)
+                            call self%spectrum(i, .true., ds, self%work(ithr)%plane, phh, phk)
                             call self%imgs(ithr)%linearize(ds, dihat)
                         endif
                         if( mode == PASS_LINEAR )then
@@ -709,9 +766,7 @@ contains
                             end do
                         end do
                 end select
-                deallocate(s, ihat, q, sadj, ds, dihat)
-                if( allocated(cx) ) deallocate(cx)
-                if( allocated(cd) ) deallocate(cd)
+                end associate
             end do
             !$omp end parallel do
             if( l_grad )then
@@ -763,6 +818,24 @@ contains
         misfit = 0.5_dp * misfit
     end function misfit
 
+    !> the relative intensity of a predicted plane (p = -g ihat / nat^2) as a real-space image of the native box
+    subroutine plane_to_image( self, plane, img )
+        class(wave_projector), intent(in)    :: self
+        complex,               intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2))
+        class(image),          intent(inout) :: img
+        integer :: h, k, phys(3), r
+        r = self%box / 2
+        call img%zero_and_flag_ft
+        do k = -r, r
+            do h = 0, r
+                if( h*h + k*k > r*r ) cycle
+                phys = img%comp_addr_phys(h,k,0)
+                call img%set_fcomp([h,k,0], phys, -plane(h,k) / self%gain)
+            enddo
+        enddo
+        call img%ifft
+    end subroutine plane_to_image
+
     pure integer function get_nptcls( self )
         class(wave_projector), intent(in) :: self
         get_nptcls = self%nptcls
@@ -789,6 +862,7 @@ contains
             end do
             deallocate(self%ms)
         endif
+        if( allocated(self%work) ) deallocate(self%work)
         if( self%exists ) call self%wimg%kill
         if( allocated(self%cmat_x)   ) deallocate(self%cmat_x)
         if( allocated(self%cmat_d)   ) deallocate(self%cmat_d)
@@ -800,6 +874,7 @@ contains
         if( allocated(self%ctfparms) ) deallocate(self%ctfparms)
         if( allocated(self%inv_sig2) ) deallocate(self%inv_sig2)
         if( allocated(self%wts)      ) deallocate(self%wts)
+        if( allocated(self%bfacs)    ) deallocate(self%bfacs)
         if( allocated(self%wshell)   ) deallocate(self%wshell)
         if( allocated(self%gacc)     ) deallocate(self%gacc)
         call self%kill_lattice

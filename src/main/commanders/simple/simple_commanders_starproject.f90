@@ -98,21 +98,21 @@ contains
                 call spproj%os_ptcl2D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl2D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl2D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
             else if(iteration .and. file_exists(str_import_dir//"/"//"run_it"//itchar//"_class001.mrc") .and. file_exists(str_import_dir//"/"//"run_it"//itchar//"_data.star")) then
                 call starproj%import_ptcls3D(cline, spproj, str_import_dir // "/" // "run_it" // itchar // "_data.star" )
                 call spproj%os_ptcl2D%copy(spproj%os_ptcl3D, is_ptcl=.true.)
                 call spproj%os_ptcl2D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl2D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl2D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
             else if(iteration .and. file_exists(str_import_dir//"/"//"run_it"//itchar//"_classes.mrcs") .and. file_exists(str_import_dir//"/"//"run_it"//itchar//"_data.star")) then
                 call starproj%import_ptcls2D(cline, spproj, str_import_dir//"/"//"run_it"//itchar//"_data.star" )
                 call spproj%os_ptcl3D%copy(spproj%os_ptcl2D, is_ptcl=.true.)
                 call spproj%os_ptcl3D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
                 if(file_exists(str_import_dir//"/"//"run_it"//itchar//"_model.star")) then
                     call starproj%import_cls2D(cline, spproj, str_import_dir//"/"//"run_it"//itchar//"_model.star" )
                 end if
@@ -122,14 +122,14 @@ contains
                 call spproj%os_ptcl3D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
             else if(file_exists(str_import_dir//"/"//"particles2D.star")) then
                 call starproj%import_ptcls2D(cline, spproj, str_import_dir//"/"//"particles2D.star")
                 call spproj%os_ptcl3D%copy(spproj%os_ptcl2D, is_ptcl=.true.)
                 call spproj%os_ptcl3D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
             else if(file_exists(str_import_dir//"/"//"micrographs_ctf.star")) then
                 call starproj%import_mics(cline, spproj, str_import_dir//"/"//"micrographs_ctf.star")
             else if(file_exists(str_import_dir //"/"//"corrected_micrographs.star")) then
@@ -148,14 +148,14 @@ contains
                 call spproj%os_ptcl2D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl2D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl2D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
             else if( str_import_type%substr_ind('ptcl2D') > 0 ) then
                 call starproj%import_ptcls2D(cline, spproj, str_star_file)
                 call spproj%os_ptcl3D%copy(spproj%os_ptcl2D, is_ptcl=.true.)
                 call spproj%os_ptcl3D%set_all2single("e1", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e2", 0.0)
                 call spproj%os_ptcl3D%set_all2single("e3", 0.0)
-                call starproj%check_stk_params(spproj)
+                call starproj%finalise_ptcl_import(spproj)
             else if( str_import_type%substr_ind('mic') > 0 )then
                 call starproj%import_mics(cline, spproj, str_star_file)
             end if

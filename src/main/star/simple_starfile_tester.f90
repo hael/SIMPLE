@@ -2,7 +2,8 @@
 !        Covers: init/complete lifecycle, tmp-file staging, atomic rename,
 !        write_optics_table, write_mics_table, write_ptcl2D_table,
 !        write_ptcl2D_table_parallel, empty-table fast paths, state-filtered
-!        rows, parallel write ordering, and relative-path relativisation.
+!        rows, parallel write ordering, relative-path relativisation, and particle origins
+!        (pixels of the particle's stack in SIMPLE, Angstrom in STAR).
 module simple_starfile_tester
     use omp_lib
     use simple_core_module_api
@@ -54,6 +55,8 @@ contains
         call test_write_ptcl2D_parallel_empty()
         call test_write_ptcl2D_parallel_count()
         call test_write_ptcl2D_parallel_vs_serial()
+        ! --- particle origins: pixels to Angstrom ---
+        call test_write_ptcl2D_origins_angstrom()
         ! --- verbose flag does not alter output ---
         call test_verbose_flag_no_content_change()
     end subroutine run_all_starfile_tests
@@ -759,6 +762,94 @@ contains
             call ptcl%set(i, 'class',  real(mod(i, 10) + 1))
         end do
     end subroutine fill_ptcl_stk
+
+    !=======================================================================
+    !  SECTION 5b: particle origins
+    !=======================================================================
+
+    ! both writers write an origin of x pixels as x times the pixel size of the particle's stack
+    ! (two stacks at different pixel sizes), a particle without a shift with a zero origin
+    subroutine test_write_ptcl2D_origins_angstrom()
+        real,    parameter :: SMPDS(2) = [1.3, 0.9]
+        integer, parameter :: N = 40
+        type(starfile) :: sf_ser, sf_par
+        type(oris)     :: ptcl, stk
+        type(string)   :: fname_ser, fname_par
+        real(dp)       :: ox_ser(N), oy_ser(N), ox_par(N), oy_par(N)
+        real           :: xs(N), ys(N), err, smpd
+        integer        :: i, nser, npar
+        write(*,'(A)') 'test_write_ptcl2D_origins_angstrom'
+        fname_ser = tmp('ptcl2D_origins_serial.star')
+        fname_par = tmp('ptcl2D_origins_parallel.star')
+        call make_oris_n(stk, 2, .false.)
+        do i = 1, 2
+            call stk%set(i, 'box',  64.0)
+            call stk%set(i, 'smpd', SMPDS(i))
+            call stk%set(i, 'stk',  'origins_'//int2str(i)//'.mrcs')
+        end do
+        call make_oris_n(ptcl, N, .true.)
+        call fill_ptcl_stk(ptcl, stk, N)
+        do i = 1, N
+            xs(i) = 0.37 * real(i) - 7.
+            ys(i) = 5. - 0.29 * real(i)
+            ! odd particles in stack 1, even in stack 2
+            call ptcl%set(i, 'stkind', real(2 - mod(i, 2)))
+        end do
+        xs(1) = 0.
+        ys(1) = 0.
+        do i = 1, N
+            call ptcl%set(i, 'x', xs(i))
+            call ptcl%set(i, 'y', ys(i))
+        end do
+        call sf_ser%init(fname_ser)
+        call sf_ser%write_ptcl2D_table(ptcl, stk)
+        call sf_ser%complete()
+        call omp_set_num_threads(3)
+        call sf_par%init(fname_par)
+        call sf_par%write_ptcl2D_table_parallel(ptcl, stk)
+        call sf_par%complete()
+        call readback_origins(fname_ser, ox_ser, oy_ser, nser)
+        call readback_origins(fname_par, ox_par, oy_par, npar)
+        call assert_int(N, nser, 'origins: serial writer writes every particle')
+        call assert_int(N, npar, 'origins: parallel writer writes every particle')
+        if( nser == N .and. npar == N )then
+            call assert_true(abs(ox_ser(1)) < 1.e-9_dp .and. abs(oy_ser(1)) < 1.e-9_dp, &
+                &'origins: a particle without a shift has a zero origin')
+            err = 0.
+            do i = 2, N
+                smpd = SMPDS(2 - mod(i, 2))
+                err  = max(err, abs(real(ox_ser(i)) - smpd * xs(i)), abs(real(oy_ser(i)) - smpd * ys(i)))
+            end do
+            call assert_real(0., err, 1.e-5, 'origins: pixels times the pixel size of the particle''s stack')
+            call assert_true(all(ox_par == ox_ser) .and. all(oy_par == oy_ser), &
+                &'origins: the parallel writer writes the serial origins')
+        endif
+        call ptcl%kill() ; call stk%kill()
+    end subroutine test_write_ptcl2D_origins_angstrom
+
+    ! the origins of every particle row of fname in file order; -1e6 where a row has none
+    subroutine readback_origins( fname, ox, oy, n )
+        type(string), intent(in)  :: fname
+        real(dp),     intent(out) :: ox(:), oy(:)
+        integer,      intent(out) :: n
+        type(starfile_table_type) :: tbl
+        real(dp) :: v
+        integer  :: obj
+        ox = -1.e6_dp
+        oy = -1.e6_dp
+        n  = 0
+        call starfile_table__new(tbl)
+        call starfile_table__read(tbl, fname, 'particles')
+        obj = int(starfile_table__firstobject(tbl))
+        do while( obj >= 0 )
+            n = n + 1
+            if( n > size(ox) ) exit
+            if( starfile_table__getValue_double(tbl, EMDL_ORIENT_ORIGIN_X_ANGSTROM, v) ) ox(n) = v
+            if( starfile_table__getValue_double(tbl, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, v) ) oy(n) = v
+            obj = int(starfile_table__nextobject(tbl))
+        end do
+        call starfile_table__delete(tbl)
+    end subroutine readback_origins
 
     !=======================================================================
     !  SECTION 6: verbose flag

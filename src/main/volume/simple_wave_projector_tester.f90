@@ -4,7 +4,7 @@
 ! - The transpose of the volume-level linearisation (gather, shift, 2D chain): Re<J dV, q> = <dV, J^T q> to
 !   1e-5, every model and both curvature signs, with point-group replication.
 ! - The gradient of the misfit against a fourth-order central difference to 1e-3, every model and both signs,
-!   on a potential of about a radian of phase (the nonlinear regime).
+!   on a potential of about a radian of phase (the nonlinear regime), data predicted at V + dV plus noise.
 ! - The weak-phase identity: at V = 0 the linearisation is 2 g sigma a N times PCG's forward_plane times
 !   build_transfer (CTF, shift) of the same deapodised volume, to 1e-5.
 ! - Rytov with no curvature is projection, bitwise; first Born is the linearisation of Rytov at V = 0; at V = 0
@@ -129,9 +129,12 @@ contains
             &abs(lhs-rhs)/max(abs(lhs),abs(rhs))
         call assert_true(abs(lhs - rhs) <= 1.0e-5_dp * max(abs(lhs), abs(rhs)), &
             &'the volume gradient is the transpose of the volume linearisation')
-        ! gradient of the misfit against a central difference
+        ! gradient of the misfit against a central difference, on data predicted at v + dv plus noise: the residual
+        ! has a part along J dv, so the derivative along dv cannot cancel down to the misfit's rounding
         allocate(y(-R:R,-R:R,NP))
+        call wp%set_volume(v + dv)
         call wp%predict(NP, 1, y)
+        call wp%set_volume(v)
         y = y + 0.3 * maxval(abs(y(1:,:,:))) * random_planes(NP)
         call wp%begin_grad
         an = wp%loss_grad(y, NP, 1)

@@ -1,6 +1,6 @@
-!@descr: the 2D image formation of one particle under a single-scatter wave model, its linearisation and adjoint
-! (doc/implementation_notes/planned/ghostbuster_operators.md, sections 3.2, 3.3 and 3.5); the lens and detection of
-! a given exit wave (multislice); the detector step of simulate_scattering
+!@descr: the 2D image formation of one particle under a single-scatter wave model, its linearisation and adjoint;
+! the lens and detection of a given exit wave (multislice); the detector step of simulate_scattering and
+! simulate_particles (the chain: doc/policies/3D/wave_model_policy.md, section 3)
 module simple_wave_imaging
 use simple_defs,       only: PI
 use simple_type_defs,  only: ctfparams, ctfvars, CTFFLAG_NO, CTFFLAG_FLIP
@@ -21,27 +21,9 @@ integer, parameter :: WAVE_FIRST_BORN = 2   !< 1 + c u
 integer, parameter :: WAVE_RYTOV      = 3   !< exp(c u) of the paraboloid section
 integer, parameter :: WAVE_MSLICE = 4   !< the exit wave is given (simple_wave_multislice): lens and detection
 
-!> One thread's image formation. The input s(h,k) is the native-disk spectrum (-R <= h,k <= R,
-!! h^2+k^2 <= R^2, R = nat/2) of the specimen's projected potential, in volts times voxels and in the units
-!! of an unnormalised native DFT (the projector's gathered section times nat^3 and the shift phase). On the
-!! fine grid of n = osf*nat points per side:
-!!
-!!   a     = c bwd(embed(P s)),          c = i sigma a_px (sqrt(1-f^2) + i f), f = fraca
-!!   psi   = exp(a) (projection, Rytov) or 1 + a (first Born)
-!!   psi_T = bwd(T P^-1 fwd(psi)),       T = exp(i eval_phase) exp(-B |k|^2/4), Kirkland's exp(-i chi),
-!!                                       T(0) = 1 (the phase shift acts on the scattered waves)
-!!
-!! s refers to the specimen's midplane (the paraboloid is sampled about the box centre), and so does the
-!! nominal defocus. Rytov exponentiates the scattered field where the wave leaves the specimen, at the exit
-!! face, exit_depth (nat/2 for a curved model, the specimen filling the box) downstream:
-!! P = exp(-i pi lambda d |k|^2) carries the field there and P^-1 carries the wave back to the midplane for
-!! the lens (Kirkland's propagator; specter's Rytov does the same). For first Born the two cancel exactly,
-!! and without curvature the model has no depth, so P = 1 there and Rytov is projection.
-!!   ihat  = crop(fwd(|psi_T|^2))        the native DFT of the relative intensity (vacuum 1)
-!!
-!! forward stores psi and psi_T; linearize maps ds to d ihat at the stored point, adjoint is its transpose
-!! under the real inner product Re<a,b> = sum Re(conj(a) b). The real-space origin of the fine grid is its
-!! first point (no checkerboard): every step is shift-equivariant, so ihat keeps the origin convention of s.
+!> One thread's image formation from a native-disk spectrum s (volts times voxels, unnormalised native DFT):
+!! exit wave, lens, intensity, crop (wave_model_policy.md, section 3); forward stores psi and psi_T, linearize and
+!! adjoint act at that point under Re<a,b>. The fine grid's real-space origin is its first point
 type :: wave_imaging
     private
     integer              :: nat   = 0
@@ -57,7 +39,12 @@ type :: wave_imaging
     complex, allocatable :: tlens(:,:)            !< T P^-1 on the fine grid, FFT order
     complex, allocatable :: pexit(:,:)            !< P on the native disk (Rytov), 1 otherwise
     real,    allocatable :: fsq(:,:)              !< |k|^2 of the fine grid in native cycles per pixel
-    real,    allocatable :: fang(:,:)             !< azimuth atan2(k,h) of the fine grid
+    real,    allocatable :: c2ang(:,:), s2ang(:,:) !< cos and sin of twice the azimuth atan2(k,h) of the fine grid
+    real,    allocatable :: env(:,:)              !< the B-factor envelope of env_bfac at env_smpd
+    complex, allocatable :: pinv(:,:)             !< P^-1 on the fine grid, of pexit_wl and pexit_d
+    real                 :: env_bfac = 0., env_smpd = 0.
+    real                 :: pexit_wl = 0., pexit_d = 0.   !< the wavelength and depth of pexit
+    logical              :: l_env = .false., l_pexit = .false.
     logical              :: l_optics = .false.
     logical              :: l_point  = .false.   !< forward has stored a point
   contains
@@ -101,32 +88,33 @@ contains
         self%model = model
         call self%fpsi%new(self%n)
         call self%fpt%new(self%n)
-        call self%fw%new(self%n)
+        call self%fw%new(self%n, with_real=.true.)
         allocate(self%tlens(self%n,self%n), source=cmplx(1.,0.))
         allocate(self%pexit(-self%R:self%R,-self%R:self%R), source=cmplx(1.,0.))
         ! the particle-independent geometry of the lens, once: the fine grid's frequencies h/nat
-        allocate(self%fsq(self%n,self%n), self%fang(self%n,self%n))
+        allocate(self%fsq(self%n,self%n), self%c2ang(self%n,self%n), self%s2ang(self%n,self%n), self%env(self%n,self%n))
+        allocate(self%pinv(self%n,self%n))
         do j = 1, self%n
             kf = wave_freq(j, self%n)
             do i = 1, self%n
                 hf = wave_freq(i, self%n)
-                self%fsq(i,j)  = real(hf*hf + kf*kf) / real(self%nat)**2
-                self%fang(i,j) = atan2(real(kf), real(hf))
+                self%fsq(i,j)   = real(hf*hf + kf*kf) / real(self%nat)**2
+                self%c2ang(i,j) = cos(2. * atan2(real(kf), real(hf)))
+                self%s2ang(i,j) = sin(2. * atan2(real(kf), real(hf)))
             end do
         end do
     end subroutine new
 
     !> The particle's lens and scattering coefficient: ctfparms at the native sampling (smpd), bfac the
     !! B-factor (A^2) of the lens envelope, exit_depth (native pixels) the distance from the midplane to
-    !! where Rytov exponentiates (0: at the midplane). ctfflag no is an aberration-free lens; a
-    !! phase-flipped particle has no wave model
+    !! where Rytov exponentiates (0: at the midplane). ctfflag no is an aberration-free lens
     subroutine set_optics( self, ctfparms, bfac, exit_depth )
         class(wave_imaging), intent(inout) :: self
         type(ctfparams),     intent(in)    :: ctfparms
         real,                intent(in)    :: bfac, exit_depth
         type(ctf)     :: tfun
         type(ctfvars) :: vars
-        real    :: sig, beta, ph, env, dprop
+        real    :: sig, beta, ph, dprop, dsum, ddiff, ca, sa, pwl, hwl2cs
         integer :: i, j, h, k
         if( self%n == 0 ) THROW_HARD('new has not been called; wave_imaging%set_optics')
         if( ctfparms%ctfflag == CTFFLAG_FLIP ) THROW_HARD('phase-flipped particles have no wave model; set_optics')
@@ -139,38 +127,56 @@ contains
         vars = tfun%get_ctfvars(ctfparms%phshift)
         self%wl = vars%wl
         ! Rytov's exit face exit_depth pixels downstream of the midplane, P = exp(-i pi wl d s^2), wl and s
-        ! in pixels; P = 1 for the other models
+        ! in pixels; P = 1 for the other models. It and the envelope change with the wavelength and B only
         dprop = 0.
         if( self%model == WAVE_RYTOV ) dprop = exit_depth
-        do k = -self%R, self%R
-            do h = -self%R, self%R
-                ph = -PI * vars%wl * dprop * real(h*h + k*k) / real(self%nat)**2
-                self%pexit(h,k) = cmplx(cos(ph), sin(ph))
+        if( .not. self%l_pexit .or. vars%wl /= self%pexit_wl .or. dprop /= self%pexit_d )then
+            do k = -self%R, self%R
+                do h = -self%R, self%R
+                    ph = -PI * vars%wl * dprop * real(h*h + k*k) / real(self%nat)**2
+                    self%pexit(h,k) = cmplx(cos(ph), sin(ph))
+                end do
             end do
-        end do
+            ! and P^-1 back to the midplane, on the fine grid
+            do j = 1, self%n
+                do i = 1, self%n
+                    ph = PI * vars%wl * dprop * self%fsq(i,j)
+                    self%pinv(i,j) = cmplx(cos(ph), sin(ph))
+                end do
+            end do
+            self%pexit_wl = vars%wl
+            self%pexit_d  = dprop
+            self%l_pexit  = .true.
+        endif
+        if( .not. self%l_env .or. bfac /= self%env_bfac .or. ctfparms%smpd /= self%env_smpd )then
+            self%env      = exp(-0.25 * bfac * self%fsq / ctfparms%smpd**2)
+            self%env_bfac = bfac
+            self%env_smpd = ctfparms%smpd
+            self%l_env    = .true.
+        endif
+        ! T on the fine grid: the aberration phase of ctf%eval_phase with the astigmatism's angle terms expanded;
+        ! P^-1 a factor of its own, so that P and P^-1 cancel to rounding (first Born is Rytov linearised)
         if( ctfparms%ctfflag == CTFFLAG_NO )then
             self%tlens = cmplx(1.,0.)
         else
+            dsum   = vars%dfx + vars%dfy
+            ddiff  = vars%dfx - vars%dfy
+            ca     = cos(2. * vars%angast)
+            sa     = sin(2. * vars%angast)
+            pwl    = PI * vars%wl
+            hwl2cs = 0.5 * vars%wl * vars%wl * vars%cs
             do j = 1, self%n
                 do i = 1, self%n
-                    ph  = tfun%eval_phase(self%fsq(i,j), self%fang(i,j), vars%phshift)
-                    env = exp(-0.25 * bfac * self%fsq(i,j) / ctfparms%smpd**2)
-                    self%tlens(i,j) = env * cmplx(cos(ph), sin(ph))
+                    ph = pwl * self%fsq(i,j) * (0.5 * (dsum + (self%c2ang(i,j) * ca + self%s2ang(i,j) * sa) * ddiff) &
+                        &- hwl2cs * self%fsq(i,j)) + vars%phshift
+                    self%tlens(i,j) = self%env(i,j) * cmplx(cos(ph), sin(ph))
                 end do
             end do
             ! the unscattered beam keeps its phase: a phase plate (phshift) shifts the scattered waves
             ! relative to it, and a common phase of all would vanish from the intensity
             self%tlens(1,1) = cmplx(1.,0.)
         endif
-        ! P^-1 back to the midplane, on the fine grid
-        if( dprop /= 0. )then
-            do j = 1, self%n
-                do i = 1, self%n
-                    ph = PI * vars%wl * dprop * self%fsq(i,j)
-                    self%tlens(i,j) = self%tlens(i,j) * cmplx(cos(ph), sin(ph))
-                end do
-            end do
-        endif
+        if( dprop /= 0. ) self%tlens = self%tlens * self%pinv
         self%l_optics = .true.
         self%l_point  = .false.
     end subroutine set_optics
@@ -214,17 +220,17 @@ contains
     subroutine lens_forward( self, ihat )
         class(wave_imaging), intent(inout) :: self
         complex,             intent(out)   :: ihat(-self%R:self%R,-self%R:self%R)
-        complex, pointer :: psi(:,:), pt(:,:), w(:,:)
+        complex, pointer :: psi(:,:), pt(:,:)
+        real,    pointer :: r(:,:)
         psi => self%fpsi%ptr()
         pt  => self%fpt%ptr()
-        w   => self%fw%ptr()
+        r   => self%fw%rptr()
         pt = psi
         call self%fpt%fwd
         pt = pt * self%tlens
         call self%fpt%bwd
-        w = cmplx(real(pt)**2 + aimag(pt)**2, 0.)
-        call self%fw%fwd
-        call self%fw%crop(ihat, self%R)
+        r = real(pt)**2 + aimag(pt)**2
+        call self%fw%fwd_real_crop(ihat, self%R)
         self%l_point = .true.
     end subroutine lens_forward
 
@@ -263,14 +269,15 @@ contains
         class(wave_imaging), intent(inout) :: self
         complex,             intent(out)   :: dihat(-self%R:self%R,-self%R:self%R)
         complex, pointer :: pt(:,:), w(:,:)
+        real,    pointer :: r(:,:)
         pt => self%fpt%ptr()
         w  => self%fw%ptr()
+        r  => self%fw%rptr()
         call self%fw%fwd
         w = w * self%tlens
         call self%fw%bwd                            ! d psi_T
-        w = cmplx(2. * real(conjg(pt) * w), 0.)     ! dI = 2 Re(conj(psi_T) d psi_T)
-        call self%fw%fwd
-        call self%fw%crop(dihat, self%R)
+        r = 2. * real(conjg(pt) * w)                ! dI = 2 Re(conj(psi_T) d psi_T)
+        call self%fw%fwd_real_crop(dihat, self%R)
     end subroutine lens_linearize
 
     !> ds_adj = J^T q at the point forward stored, under Re<a,b>
@@ -310,13 +317,14 @@ contains
         class(wave_imaging), intent(inout) :: self
         complex,             intent(in)    :: q(-self%R:self%R,-self%R:self%R)
         complex, pointer :: pt(:,:), w(:,:)
+        real,    pointer :: r(:,:)
         pt => self%fpt%ptr()
         w  => self%fw%ptr()
-        ! (crop o fwd)^T = fwd^H crop_t = n^2 bwd crop_t, onto the real field dI
-        call self%fw%crop_t(q, self%R)
-        call self%fw%bwd
+        r  => self%fw%rptr()
+        ! (crop o fwd)^T = fwd^H crop_t = n^2 bwd crop_t, onto the real field dI: r = n^2 Re(bwd crop_t q)
+        call self%fw%crop_t_real(q, self%R)
         ! d psi_T* = 2 Re(.) psi_T
-        w = (2. * real(self%n)**2 * real(w)) * pt
+        w = (2. * r) * pt
         ! (bwd T fwd)^T = bwd conj(T) fwd
         call self%fw%fwd
         w = w * conjg(self%tlens)
@@ -359,7 +367,12 @@ contains
         if( allocated(self%tlens) ) deallocate(self%tlens)
         if( allocated(self%pexit) ) deallocate(self%pexit)
         if( allocated(self%fsq)   ) deallocate(self%fsq)
-        if( allocated(self%fang)  ) deallocate(self%fang)
+        if( allocated(self%c2ang) ) deallocate(self%c2ang)
+        if( allocated(self%s2ang) ) deallocate(self%s2ang)
+        if( allocated(self%env)   ) deallocate(self%env)
+        if( allocated(self%pinv)  ) deallocate(self%pinv)
+        self%env_bfac = 0.; self%env_smpd = 0.; self%pexit_wl = 0.; self%pexit_d = 0.
+        self%l_env = .false.; self%l_pexit = .false.
         self%nat = 0; self%R = 0; self%n = 0; self%osf = 0; self%model = 0
         self%c = cmplx(0.,0.)
         self%wl = 0.

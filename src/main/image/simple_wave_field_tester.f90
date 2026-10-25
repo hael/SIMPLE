@@ -1,10 +1,8 @@
 !@descr: unit tests of wave_field: transforms, round trips, transposes, embedding and crop
-! The forward transform equals a double-precision direct DFT on a 12-point grid to 1e-5 of its scale;
-! bwd(fwd(x)) = x to 1e-6; Re<F x, y> = Re<x, F^H y> with F^H = n^2 F^-1, and the embed and crop
-! transposes, hold to 1e-5 relative (single-precision fields, double-precision dot products);
-! crop(embed(S)) = S exactly up to the scale's rounding, and bwd(embed(S)) on the even fine-grid
-! points is the native image of S (its Nyquist pair included) to 1e-5. On the native grid itself (the
-! disk's Nyquist pairs sharing a bin) embed and crop stay transposes to 1e-5.
+! The forward transform equals a double-precision direct DFT (12-point grid) to 1e-5; bwd(fwd(x)) = x to 1e-6;
+! the transposes of F, embed and crop hold to 1e-5 relative; crop(embed(S)) = S, and bwd(embed(S)) on the even
+! fine-grid points is the native image of S to 1e-5; on the native grid (Nyquist pairs sharing a bin) embed and
+! crop stay transposes; the real-field transforms equal their complex counterparts to 1e-5 on both grids.
 module simple_wave_field_tester
 use simple_defs,       only: dp, PI
 use simple_wave_field, only: wave_field, wave_freq
@@ -26,6 +24,8 @@ contains
         call test_disk_transposes()
         call test_embedded_amplitude()
         call test_native_grid()
+        call test_real_transforms(NFINE)
+        call test_real_transforms(2*RNAT)
     end subroutine run_all_wave_field_tests
 
     subroutine test_freq()
@@ -186,6 +186,34 @@ contains
         call assert_true(abs(lhs - rhs) <= 1.0e-5_dp * max(abs(lhs), abs(rhs)), 'on the native grid crop_t is the transpose of crop')
         call f%kill
     end subroutine test_native_grid
+
+    !> fwd_real_crop is crop(fwd) of the real field and crop_t_real is n^2 Re(bwd(crop_t)), on the grid of n
+    !! points (n = 2 RNAT: the native grid, the disk's Nyquist pairs sharing a bin)
+    subroutine test_real_transforms( n )
+        integer, intent(in) :: n
+        type(wave_field) :: f
+        complex, pointer :: p(:,:)
+        real,    pointer :: r(:,:)
+        complex :: s(-RNAT:RNAT,-RNAT:RNAT), t1(-RNAT:RNAT,-RNAT:RNAT), t2(-RNAT:RNAT,-RNAT:RNAT), u(n,n)
+        real    :: rref(n,n)
+        call f%new(n, with_real=.true.)
+        p => f%ptr()
+        r => f%rptr()
+        u = random_field(n)
+        r = real(u)
+        call f%fwd_real_crop(t1, RNAT)
+        p = cmplx(real(u), 0.)
+        call f%fwd
+        call f%crop(t2, RNAT)
+        call assert_true(maxval(abs(t1 - t2)) <= 1.0e-5 * maxval(abs(t2)), 'fwd_real_crop is crop(fwd) of the real field')
+        s = random_disk()
+        call f%crop_t_real(s, RNAT)
+        call f%crop_t(s, RNAT)
+        call f%bwd
+        rref = real(n)**2 * real(p)
+        call assert_true(maxval(abs(r - rref)) <= 1.0e-5 * maxval(abs(rref)), 'crop_t_real is n^2 Re(bwd(crop_t))')
+        call f%kill
+    end subroutine test_real_transforms
 
     function random_field( n ) result( x )
         integer, intent(in) :: n

@@ -181,12 +181,14 @@ subroutine new_cif2mrc( prgtab )
         &'is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but&
         & it is nevertheless useful for testing purposes. With nstates=K it projects each particle from the volume of&
         & its state (vol1 to volK): the states come from the state field of oritab, or are drawn with the population&
-        & fractions of state_pops (equal by default), in exact counts, and are written to the output orientations. It does not do any multi-slice simulation and it cannot be&
-        & used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input&
+        & fractions of state_pops (equal by default), in exact counts, and are written to the output orientations. Without wave_model it does no multi-slice simulation and it cannot be&
+        & used for simulating molecules containing heavy atoms. It does not accept a PDB file as an input. Input&
         & is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is&
         & projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are&
         & then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed&
-        & before the remaining 80% of the noise (white noise) is added',& ! help
+        & before the remaining 80% of the noise (white noise) is added. With wave_model the images are instead those of&
+        & the wave model: the map, divided by the scale link of total_dose, is the potential in volts; the predicted&
+        & electron counts get Poisson shot noise at the dose, then Gaussian detector noise set by snr',& ! help
         &'simple_exec',&                                                  ! executable
         &.false., &
         &visibility=UI_VIS_ADVANCED, &
@@ -229,6 +231,14 @@ subroutine new_cif2mrc( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call simulate_particles%add_input(UI_PARM, ctf, &
         &visibility=UI_VIS_STANDARD)
+        call simulate_particles%add_input(UI_PARM, wave_model, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, ewald, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, 'total_dose', 'num', 'Electron dose', &
+        &'Total exposure in electrons per square Angstrom, with wave_model: the scale link of the map and the&
+        & shot noise', 'electrons per Angstrom squared', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
         call simulate_particles%add_input(UI_PARM, nstates, &
         &visibility=UI_VIS_ADVANCED)
         call simulate_particles%add_input(UI_PARM, 'state_pops', 'str', 'State populations', 'Comma-separated population fractions of the states, summing to 1, every state at least one particle; refused beside an oritab that holds states{equal}', 'e.g. 0.5,0.3,0.2', .false., '', &

@@ -3,15 +3,17 @@
 Contract of the code that runs today: SIMPLE's wave operators, which predict a
 particle image from a three-dimensional electrostatic potential with wave optics,
 their hand-written derivatives, the program `reconstruct3D_wave` that
-reconstructs half maps with them, and `simulate_scattering`, which draws data
-with the same operators. The design came from Ghostbuster, the reconstruction
+reconstructs half maps with them, and `simulate_scattering` and the wave mode of
+`simulate_particles`, which draw data with the same operators. The design came from Ghostbuster, the reconstruction
 inside the specter package, and was rebuilt on SIMPLE's own machinery; the plan
 with its measurements is
 `doc/implementation_notes/planned/ghostbuster_operators.md` (sections 3 and 4,
 and section 8 for the evidence of every number below), the run's summary
-`doc/implementation_notes/planned/ghostbuster_operators_report.md`. The user
-guides are `doc/user_guide/reconstruct3D_wave.md` and
-`doc/user_guide/simulate_scattering.md`.
+`doc/implementation_notes/planned/ghostbuster_operators_report.md`; the run that
+added the wave mode of `simulate_particles` and made the operator faster is
+`doc/implementation_notes/completed/star_origins_and_wave_simulate_run_report.md`.
+The user guides are `doc/user_guide/reconstruct3D_wave.md`,
+`doc/user_guide/simulate_scattering.md` and `doc/user_guide/simulate_particles.md`.
 
 Terms used throughout:
 
@@ -59,19 +61,20 @@ domain module imports a strategy.
 
 | File | Contents |
 | --- | --- |
-| `src/utils/math/simple_math_ctf.f90` | `electron_wavelength(kv)` and `electron_interaction_constant(kv)`, the one home of both (the CTF's wavelength) |
+| `src/utils/math/simple_math_ctf.f90` | `electron_wavelength(kv)`, `electron_interaction_constant(kv)` and `electron_scale_link(total_dose, kv, smpd, box)`, the one home of each (the CTF's wavelength; the scale link of section 5) |
 | `src/utils/math/simple_rnd.f90` | `poisson_rnd`, the detector's Poisson sampler |
 | `src/main/ctf/simple_ctf.f90` | public `eval_phase`, the CTF's aberration phase including the phase shift (a required argument), used for the lens transfer |
-| `src/main/volume/simple_pcg_lattice.f90` | the padded lattice shared with the PCG backend: `gather_plane` and `scatter_plane` with the curvature (`ewald_curv`, `plane_loc`, `rim_free`, `win_wraps`), `fold_lattice_accum` (with the Hermitian option for the two-cap planes of the curved models), and `gather_cube` and `scatter_cube`, a particle's rotated spectrum cube for multislice |
-| `src/main/image/simple_wave_field.f90` | `wave_field`: a 2D complex field with its own c2c FFTW plans, the native-disk embedding into the twice-finer grid and the crop back, each with its transpose |
-| `src/main/image/simple_wave_imaging.f90` | `wave_imaging`: one thread's 2D chain of one particle (exponential or linear exit wave, lens, intensity, crop) with its linearisation and adjoint; the lens and detection of a given exit wave for multislice; `detect_intensity`, the dose and detector noise of `simulate_scattering`; the model constants `WAVE_PROJECTION`, `WAVE_FIRST_BORN`, `WAVE_RYTOV`, `WAVE_MSLICE` |
+| `src/main/volume/simple_pcg_lattice.f90` | the padded lattice shared with the PCG backend: `gather_plane` and `scatter_plane` with the curvature (`ewald_curv`, `plane_loc`, `rim_free`, `win_wraps`), `fold_lattice_accum` (with the Hermitian option for the two-cap planes of the curved models), and `gather_cube` and `scatter_cube`, a particle's rotated spectrum cube for multislice; the scatters' serial rim passes visit only each row's outer segments |
+| `src/main/image/simple_wave_field.f90` | `wave_field`: a 2D complex field with its own c2c FFTW plans, the native-disk embedding into the twice-finer grid and the crop back, each with its transpose; an optional real field with r2c and c2r plans and the crop of its transform and the transpose (section 3.1) |
+| `src/main/image/simple_wave_imaging.f90` | `wave_imaging`: one thread's 2D chain of one particle (exponential or linear exit wave, lens, intensity, crop) with its linearisation and adjoint; the lens and detection of a given exit wave for multislice; `detect_intensity`, the shot and detector noise of `simulate_scattering` and `simulate_particles`; the model constants `WAVE_PROJECTION`, `WAVE_FIRST_BORN`, `WAVE_RYTOV`, `WAVE_MSLICE` |
 | `src/main/volume/simple_wave_multislice.f90` | `wave_multislice`: one thread's multislice of a particle from its rotated cube's spectrum, with its linearisation and the adjoint sweep |
-| `src/main/volume/simple_wave_projector.f90` | `wave_projector extends pcg_lattice`: the operator over a particle set (the volume's padded transform, the particles' geometry and optics, one `wave_imaging` and one `wave_multislice` per thread); loss and gradient, curvature along a direction, line losses, linearised planes, predictions, exit waves, the terms of the fitted gain |
+| `src/main/volume/simple_wave_projector.f90` | `wave_projector extends pcg_lattice`: the operator over a particle set (the volume's padded transform, the particles' geometry and optics, one `wave_imaging` and one `wave_multislice` per thread); loss and gradient, curvature along a direction, line losses, linearised planes, predictions, exit waves, the terms of the fitted gain; a lens B-factor per particle; `plane_to_image`, a predicted plane as the relative intensity of the native box; per-thread work buffers |
 | `src/main/opt/simple_nlcg_solver.f90` | `nlcg_objective` (abstract) and `nlcg_solve`: preconditioned Polak-Ribiere nonlinear conjugate gradients with a Gauss-Newton step refined by a parabola, generic for later CTF and pose refinement |
 | `src/main/strategies/search/simple_matcher_ptcl_io.f90` | the observation-batch frame of reconstruction (`rec_state_half`, `rec_obs_oris`, `rec_obs_inv_sig2`, `read_rec_obs_batch`), one copy shared by the PCG worker and the wave objective |
 | `src/main/strategies/parallelization/simple_rec3D_wave_strategy.f90` | `exec_rec3D_wave(params, build)`, the program body, and `rec3D_wave_objective extends nlcg_objective`, whose passes run on the caller's `params` and `build` |
 | `src/main/commanders/simple/simple_commanders_rec.f90` | `commander_rec3D_wave`: defaults and refusals on `cline`, one `params` and builder, the strategy call |
-| `src/main/commanders/simple/simple_commanders_sim.f90` | `simulate_scattering` on `wave_projector` |
+| `src/main/simple_simulator.f90` | `simimg_wave`, the detector and the particle units of `simulate_particles`' wave mode (section 11) |
+| `src/main/commanders/simple/simple_commanders_sim.f90` | `simulate_scattering` and the wave mode of `simulate_particles` on `wave_projector` |
 | `src/main/ui/simple/simple_ui_reconstruct3D.f90`, `simple_ui_sim.f90`, `simple_ui_params_common.f90` | the descriptors and the shared metadata of `wave_model` and `ewald` |
 
 Each new stateful module holds one type with private components and symmetric,
@@ -135,6 +138,37 @@ backend's `forward_plane` times its `build_transfer` (CTF with shift, defocus,
 astigmatism and amplitude contrast). The `wave projector` and `wave imaging`
 tests hold it to `1e-5`.
 
+### 3.1 The field's transforms
+
+A `wave_field` holds an `n x n` complex field (`x` the first index), in real or
+Fourier space as its owner keeps track; Fourier arrays are in FFT order (index
+`i` holds frequency `wave_freq(i,n)`). The transforms work in place on the
+field's own FFTW buffer with plans made once (`FFTW_ESTIMATE`, the same
+arithmetic in every run): `fwd` is the unnormalised forward DFT `F` (sign
+`-1`), `bwd` its inverse `F^-1 = F^H / n^2`, so `fwd^H = n^2 bwd` and
+`bwd^H = fwd / n^2`. One field belongs to one thread; its plans are made and
+destroyed in the unnamed critical section; a field is never copied (a copy
+would alias the buffer).
+
+A native-disk spectrum `S(h,k)`, `-R <= h,k <= R`, `h^2 + k^2 <= R^2`, is the
+transform of a native image of box `nat = 2R`. `embed` places it on the fine
+grid scaled by `(n/nat)^2`, so that `bwd` gives the native image's band-limited
+interpolant at its own amplitude; `crop` takes the disk back scaled by
+`(nat/n)^2`, so `crop(embed(S)) = S` and the crop of `fwd(f)` is the native
+transform of `f` sampled at the native pixels; `embed_t` and `crop_t` are their
+transposes under `Re<a,b>`. On a grid of the native box itself (`n = nat`, the
+oversampling 1 of measurements) the disk's two Nyquist points of an axis share
+a bin: `embed` adds them and `crop` gives the bin to both, so the pairs stay
+transposes.
+
+The optional real field (`new(n, with_real=.true.)`) has out-of-place r2c and
+c2r plans: `fwd_real_crop` is `crop(fwd(f))` of the real field, the negative
+`h` from Hermitian symmetry; `crop_t_real` sets the real field to
+`n^2 Re(bwd(crop_t(S)))`, building the Hermitian part of `crop_t(S)` on the half
+grid (each disk point adds half its value to its bin and half its conjugate to
+the mirrored bin, which covers the shared Nyquist bins). The image chain uses
+them for the intensity, its derivative and the real part taken in the adjoint.
+
 ## 4. Conventions
 
 Measured against specter and RELION in the run's first phase (plan section
@@ -167,7 +201,9 @@ equal SIMPLE's at one voxel less defocus.
   normalisation precedes any Fourier crop, so `box_crop` keeps it).
   `total_dose` is required.
 - **Maps.** By the weak-phase identity a SIMPLE map is `2 g sigma a N` times
-  the potential in volts. The solver works in volts; the program writes its maps
+  the potential in volts, the scale link, computed in one place,
+  `electron_scale_link(total_dose, kv, smpd, box)` (`simple_math_ctf`), by
+  `reconstruct3D_wave` and `simulate_particles`. The solver works in volts; the program writes its maps
   at SIMPLE's scale, so they compare directly with `reconstruct3D` maps.
 - **Prior in volts.** The PCG backend's normal operator, density and ML
   (maximum-likelihood) prior, the per-shell regularisation it builds from the
@@ -223,6 +259,34 @@ Defaults: `wave_model=rytov`, `ewald=neg` (`no` for projection), `maxits=4`,
 ten times smaller interpolation errors, at 1.4 times the run time, and changed
 no band of the run's ribosome set).
 
+### 6.1 The solver
+
+`nlcg_solve` minimises a client's objective (data misfit plus prior), held as
+contiguous rank-1 views; the engine owns only its search vectors. The client
+(`nlcg_objective`) supplies: `size`, the length of `x`; `eval`, `L(x)` and its
+gradient (a full pass over the data); `curvature`, the Gauss-Newton curvature
+along `d`, `||J d||^2` plus the prior's `d^T P d`, which may be estimated on a
+subset scaled to the whole; `line_losses`, the losses at `x + t(j) d` on the
+step subset (the same data in every call of one iteration, so its values
+compare with each other but not with `eval`); `precond`, `z = M r` with `M`
+symmetric positive definite; `dot`, the inner product in double precision;
+`project`, `v = P v`, the projection onto the constraints (a support,
+`P^2 = P`).
+
+The method is preconditioned Polak-Ribiere conjugate gradients, `beta`
+clipped at zero; a direction that does not descend restarts from the
+preconditioned steepest descent. The step along `d` is the Gauss-Newton
+estimate `t0 = -<g,d> / curvature(d)`, the minimiser of the quadratic model;
+with `refine_step` it is refined by the parabola through the subset losses at
+0, `t0` and `2 t0` when that parabola is convex, kept within
+`[tmin_frac, tmax_frac] t0`. A step that raises the full loss is halved up to
+`max_backtracks` times (each trial `P(x + t d)` from the same start); one that
+still raises it is not taken: the iterate stays, the search restarts from
+steepest descent, and a steepest descent that cannot descend ends the solve
+(`no_descent`). The gradient tolerance applies to the projected gradient
+`P g`. On a quadratic objective without refinement this is linear
+preconditioned CG in exact arithmetic.
+
 ## 7. Numerical invariants
 
 - **Zero curvature is the PCG backend.** `gather_plane` and `scatter_plane` at
@@ -233,8 +297,8 @@ no band of the run's ribosome set).
   padded point more than 0.49 voxel past the Nyquist sphere, so no window
   reaches past the wrap table. The rim prefilter of the scatter includes `kz`.
 - **Thread determinism.** Results are identical at any thread count: per-thread
-  `wave_imaging`, `wave_multislice` and FFT plans in arrays sized by
-  `omp_get_max_threads()` at the point of use; FFTW plans made and destroyed in
+  `wave_imaging`, `wave_multislice`, work buffers and FFT plans in arrays sized
+  by `omp_get_max_threads()` before each parallel region; FFTW plans made and destroyed in
   the unnamed critical section (the one lock of every FFTW planner call in
   SIMPLE); scatters through the coloured h-strided pass with the serial rim
   pass; losses and dot products in double precision per particle, reduced in
@@ -256,10 +320,11 @@ Sub-suites (one tester module each; no CTest entry of their own, so
 | Sub-suite (suite) | What it holds |
 | --- | --- |
 | `PCG lattice` (`unit_reconstruction`) | the curved scatter is the transpose of the gather with point-group replication (`1e-5`); the curved point lies at `padf [h,k,kz] R`; a point along the beam carries the paraboloid's phase and sign (0.05 rad); the cube gather's transpose (`1e-5`), its plane `l = 0` bitwise the flat gather; gather and scatter of planes and cubes bitwise identical at 1, 11, 16 and 24 threads, twice each |
-| `wave field` (`unit_reconstruction`) | the forward transform is the direct DFT (`1e-5`), round trips (`1e-6`), the transposes of the transforms, the embedding and the crop (`1e-5`) |
+| `wave field` (`unit_reconstruction`) | the forward transform is the direct DFT (`1e-5`), round trips (`1e-6`), the transposes of the transforms, the embedding and the crop (`1e-5`); the real field's transforms equal their complex counterparts on the oversampled and the native grid (`1e-5`) |
 | `wave imaging` (`unit_reconstruction`) | the transpose of the 2D linearisation (`1e-5`); the gradient against a fourth-order finite difference on half-radian fields (`1e-3`); the weak-phase limit `-2 sigma a CTF` (`1e-5`); first Born is Rytov's linearisation (`1e-6`); the image of a given exit wave is the chain's, bitwise, and its adjoint; the detector's counts are nonnegative integers |
 | `wave multislice` (`unit_reconstruction`) | the sweep's adjoint (`1e-5`) and gradient (`1e-3`) at both beam directions; a weak sheet in the midplane images as the weak-phase model, 16 A downstream at `df + 16 A` and not at `df - 16 A`, with the beam reversed at `df - 16 A` (`5e-3`); zero and constant potentials give the vacuum and the analytic absorption |
 | `wave projector` (`unit_reconstruction`) | the operator's transpose (`1e-5`) and gradient (`1e-3`) for every model, both signs, with point-group replication; the weak-phase identity against the PCG backend (`1e-5`); Rytov without curvature is projection bitwise; the vacuum; a point scatterer at height `z0` images at `df + z0` for `ewald=neg` (`2e-2`) and at least ten times worse at `df - z0`; line losses (`1e-5`); the scale link (`1e-4`); specter's golden images at box 16 and 24 (1.10e-2 of the contrast with three taps, 6.1e-4 with seven); multislice tends to first Born of its own sign (`2.2e-2`) and a smooth off-centre blob tells the signs apart (the opposite sign at least four times the error of the same); every output bitwise identical at 1, 11, 16 and 24 threads, twice each, for Rytov and multislice |
+| `wave simulation` (`unit_reconstruction`) | `simulate_particles`' wave chain (map over the scale link, prediction, `plane_to_image`, `simimg_wave`): on a weak map the part odd in the map's sign is twice the Fourier-projection particle of the deapodised map (`1.1e-2`, the lattice tolerance), the even part doubles with the map (second order, `2 phi`); a particle with its own lens B-factor predicts bitwise as an operator with it; the detector's counts in an empty region have mean `D a^2` and variance `D a^2 + sdev^2` (four standard errors) |
 | `nonlinear conjugate gradient` (`unit_numerics`) | on a quadratic the engine reproduces linear PCG's iterates (`1e-4`), with and without the parabola refinement of the step, and run to convergence solves the system and, with a support projection, the restricted one (`1e-4`); on a nonconvex least squares it reaches the known minimum with a loss that never rises, halves overlong steps and refuses a step it cannot bring downhill |
 | `wave reconstruction` (`lib_reconstruction`) | a phantom of 150 Gaussian atoms 100 A across, box 128 at 1 A, 300 particles imaged by multislice at 100 kV with detector noise; between the curvature limit (2.7 A) and Nyquist the truth FSC of Rytov with the data's sign beats the flat start and the opposite sign |
 
@@ -281,9 +346,15 @@ the PCG identity case, and the thread checks at 1, 11, 16 and 24 threads.
 - **Strong scatterers filling the box.** The native-disk design drops the
   content specter's native square holds beyond Nyquist; for a box-filling Pt
   particle under Rytov (2.6 rad) this moved images by 1% against specter.
-- **Cost of multislice.** At box 160 about 0.9 s forward, 1.2 s adjoint and
-  0.8 s cube gather per particle on one core: suited to nanoparticle boxes and
-  small sets. A Rytov gradient pass costs 1.7 to 3 times a PCG accumulation.
+- **Cost.** One gradient pass at 24 threads costs about 0.65 ms per particle
+  at box 128 and 3.6 to 4.3 ms at box 256 for the single-scatter models,
+  about 120 ms and 1 s for multislice (the star_wave run, on a 24-core Core
+  Ultra 9); multislice suits nanoparticle boxes and small sets. Of a pass, the
+  gather and the scatter of the lattice take about a fifth and a quarter of
+  the wall time; the scatter is limited by memory traffic. In
+  `reconstruct3D_wave` on a 4000-particle box-320 set the operator's passes are
+  a fifth of the run; the preparation of each particle at every pass
+  (`read_rec_obs_batch`, a serial loop) costs as much.
 - **Scale of real data.** Dose-weighted sums do not have Poisson background
   noise, and background-based normalisation sees delocalised signal; the
   fitted gain shows by how much the gain from the dose is off.
@@ -297,3 +368,32 @@ weight sets and fractional updates; Ewald correction in the PCG and gridding
 backends; CTF and pose refinement; tomography. The objective's particle pass is
 the piece a worker would run, and `nlcg_solve` needs only gradient sums and
 subset curvatures.
+
+## 11. Simulation
+
+Both simulators run `wave_projector` on the particles' orientations, shifts
+and CTF parameters, turn each predicted plane into the relative intensity of
+the native box with `plane_to_image`, and detect it with `detect_intensity`
+(Poisson counts at the dose, then Gaussian detector noise, kept
+nonnegative).
+
+- **`simulate_scattering`** takes a PDB model (converted with
+  `atoms%pdb2mrc`) or a potential in volts, writes relative intensities with
+  its own keys `total_dose` and `noise_sdev`, and is the route from atoms.
+- **`simulate_particles` with `wave_model`** takes an ordinary SIMPLE map per
+  state, masked as in its Fourier-projection mode, and divides it by the scale
+  link of `total_dose`; one operator per state predicts the particles in
+  batches in the output order, each with its lens B-factor (`bfac`,
+  `bfacerr`). `simimg_wave` adds Gaussian noise of standard deviation
+  `sqrt(var(E) / snr)` for `snr` below 5 (the rule of `add_gauran`, `E` the
+  noiseless counts) and writes SIMPLE's particles,
+  `x = -(counts - D a^2) / sqrt(D a^2)`. Without `wave_model` the program is
+  the Fourier-projection simulator, unchanged byte for byte; that mode's
+  noiseless particle is half the wave mode's weak limit (it normalises the
+  projection over the twice-padded box and does not deapodise), a scale it
+  never relies on.
+- **Scale.** A wave-mode stack reconstructed by `reconstruct3D` (PCG) returns
+  its map's scale to within the second-order terms at low and middle
+  resolution when the particles' background is free of signal; delocalised
+  signal in the background normalisation lowers it (0.84 of the scale for a
+  64 A box at 1.5 micrometres of defocus).

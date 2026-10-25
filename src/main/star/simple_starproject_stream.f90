@@ -206,8 +206,9 @@ contains
         class(starproject_stream), intent(inout) :: self
         class(sp_project),         intent(inout) :: spproj
         type(string)               :: stkname
-        character(len=XLONGSTRLEN) :: str_stk, str_mic
+        character(len=XLONGSTRLEN) :: str_stk, str_mic, msg
         integer      :: i, ind_in_stk, stkind, pathtrim, half_boxsize
+        real         :: smpd
         pathtrim = 0
         call starfile_table__clear(self%starfile)
         call starfile_table__new(self%starfile)
@@ -231,8 +232,18 @@ contains
             if(spproj%os_ptcl2d%isthere(i, 'e3'     )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_PSI,                real(spproj%os_ptcl2d%get(i, 'e3'),                  dp))
             if(spproj%os_ptcl2d%isthere(i, 'xpos'   )) call starfile_table__setValue_double(self%starfile,  EMDL_IMAGE_COORD_X,             real(spproj%os_ptcl2d%get(i, 'xpos') + half_boxsize, dp))
             if(spproj%os_ptcl2d%isthere(i, 'ypos'   )) call starfile_table__setValue_double(self%starfile,  EMDL_IMAGE_COORD_Y,             real(spproj%os_ptcl2d%get(i, 'ypos') + half_boxsize, dp))
-            if(spproj%os_ptcl2d%isthere(i, 'x'      )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_ORIGIN_X_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'x'),                   dp))
-            if(spproj%os_ptcl2d%isthere(i, 'y'      )) call starfile_table__setValue_double(self%starfile,  EMDL_ORIENT_ORIGIN_Y_ANGSTROM,  real(spproj%os_ptcl2d%get(i, 'y'),                   dp))
+            ! origins: pixels of the particle's stack to Angstrom
+            if(spproj%os_ptcl2d%isthere(i, 'x') .or. spproj%os_ptcl2d%isthere(i, 'y'))then
+                smpd = spproj%os_stk%get(stkind, 'smpd')
+                if( smpd <= 0. .and. (spproj%os_ptcl2d%get(i, 'x') /= 0. .or. spproj%os_ptcl2d%get(i, 'y') /= 0.) )then
+                    call spproj%os_stk%get_static(stkind, 'stk', str_stk)
+                    write(msg,'(A,I0,A,I0,3A)') 'particle ', i, ' of stack ', stkind, ' (', trim(str_stk),&
+                        &') has no pixel size to write its origin in Angstrom'
+                    THROW_HARD(trim(msg))
+                endif
+                call starfile_table__setValue_double(self%starfile, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(spproj%os_ptcl2d%get(i, 'x') * smpd, dp))
+                call starfile_table__setValue_double(self%starfile, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(spproj%os_ptcl2d%get(i, 'y') * smpd, dp))
+            endif
             ! strings: the particle's image in its stack, and its micrograph
             call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
             if( stkname%strlen_trim() > 0 .and. ind_in_stk > 0 )then

@@ -105,7 +105,7 @@ tester module (section 4.1).
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
-| `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, weighted insertion, volume pair metrics, nonuniform filtering, solve3D_cavgs stage rules, state assignment rules, atomic prior, PCG lattice (the gather and scatter of planes on the Ewald paraboloid and of a particle's spectrum cube), wave field, wave imaging, wave multislice, wave projector (the wave operators of `reconstruct3D_wave` and `simulate_scattering`: adjoint and finite-difference checks, the weak-phase identity, the curvature's sign and size, specter's golden images, thread identity at 1, 11, 16 and 24 threads; `doc/policies/3D/wave_model_policy.md`) |
+| `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, weighted insertion, volume pair metrics, nonuniform filtering, solve3D_cavgs stage rules, state assignment rules, atomic prior, PCG lattice (the gather and scatter of planes on the Ewald paraboloid and of a particle's spectrum cube), wave field, wave imaging, wave multislice, wave projector (the wave operators of `reconstruct3D_wave` and `simulate_scattering`: adjoint and finite-difference checks, the weak-phase identity, the curvature's sign and size, specter's golden images, thread identity at 1, 11, 16 and 24 threads; `doc/policies/3D/wave_model_policy.md`), wave simulation (the wave mode of `simulate_particles`: its weak-signal limit against the Fourier-projection particle, the second order, per-particle B-factors, the detector's noise statistics) |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match |
 | `unit_cart_align3D` | Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator, flex cls_expansion, flex cls_expansion kernel |
@@ -170,6 +170,7 @@ running tests using `simple_test_exec test=<entry> suite=list`; for example,
 
 ```text
 ./compile_debug.sh                                      # build, run the fast gate, install
+./recompile.sh                                          # the same in the existing build, only what changed
 simple_test_exec test=list                              # every test program
 simple_test_exec test=unit_image                        # one area suite
 simple_test_exec test=unit_image suite=masks            # one sub-suite of it
@@ -186,8 +187,10 @@ simple_test_exec test=nightly                           # the whole high-level s
 compiling; it runs the fast gate when given no mode, and takes
 `--build-dir <dir>`. `make check` in the build directory runs the same fast gate
 as the compile scripts. The day-to-day loop in an existing `build/` is
-`make -C build -j<n>`, `scripts/run_fast_gate.sh build`, then
-`make -C build -j<n> install`; the compile scripts run that sequence from a
+`./recompile.sh`: `make -C build -j<n>`, `scripts/run_fast_gate.sh build`, then
+`make -C build -j<n> install`, with cmake rerun first when a source file under
+`src/` was added or removed (the library globs its sources at configure time);
+`--no-gate` leaves out the gate. The compile scripts run that sequence from a
 fresh directory. `simple_test_exec` parses its command line against the
 generated argument vocabulary, so a key that only the front door reads
 (`seed_offset`, `target`, `nseeds`, `dir1`, `dir2`, `keep_outputs`) is also

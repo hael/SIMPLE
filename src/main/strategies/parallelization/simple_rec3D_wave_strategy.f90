@@ -1,5 +1,5 @@
 !@descr: reconstruct3D_wave: half maps under a single-scatter wave model, solved by nonlinear conjugate gradients from the flat PCG maps
-! (doc/implementation_notes/planned/ghostbuster_operators.md, sections 3.4, 3.6 and 4.3)
+! (the program: doc/policies/3D/wave_model_policy.md, section 6)
 module simple_rec3D_wave_strategy
 use simple_defs,                only: dp, MAXIMGBATCHSZ, OSMPL_PAD_FAC, logfhandle
 use simple_type_defs,           only: ctfparams, OBJFUN_EUCLID
@@ -12,7 +12,7 @@ use simple_parameters,          only: parameters
 use simple_builder,             only: builder
 use simple_image,               only: image
 use simple_oris,                only: oris
-use simple_math_ctf,            only: electron_interaction_constant
+use simple_math_ctf,            only: electron_scale_link
 use simple_eo_partition,        only: ensure_field_halves
 use simple_sigma2_files,        only: load_sigma2
 use simple_nlcg_solver,         only: nlcg_objective, nlcg_solver_options, nlcg_solver_outcome, nlcg_solve
@@ -44,14 +44,9 @@ type :: raw_density
     real, allocatable :: d(:,:,:)
 end type raw_density
 
-!> The objective of one half under the wave model, in volts on the native box (rank-1 views of box^3):
-!!   L(V) = 1/2 sum_i sum_(h,k) w_i |y_i - p_i(V)|^2  +  1/2 kappa^2 V^T P V / boxpd^3
-!! with the data term and its gradient from wave_projector over the half's particles (read in batches
-!! through the reconstruction's observation frame), P the ML prior of the half's flat PCG operator and
-!! kappa = 2 g sigma a N the scale of the PCG map in volts (x_pcg = kappa V, the weak-phase identity), so
-!! that kappa^2 P / boxpd^3 is that prior in volts (PCG's operators carry boxpd^3, see objective_new). The preconditioner is the PCG operator's (density and prior; a
-!! constant scale of it does not change the iterates), the constraint the PCG solve support. The curvature
-!! and the line losses are measured on the step subset, the first nsub particles, scaled to the half.
+!> One half's objective in volts, L(V) = 1/2 sum w |y - p(V)|^2 + 1/2 kappa^2 V^T P V / boxpd^3 (P the flat PCG
+!! operator's ML prior, kappa the scale link); preconditioner and support the PCG operator's, curvature and line
+!! losses on the step subset (wave_model_policy.md, sections 5 and 6)
 type, extends(nlcg_objective) :: rec3D_wave_objective
     private
     class(parameters),        pointer :: params => null()
@@ -104,7 +99,7 @@ contains
         real,    allocatable, target :: v(:,:,:)
         real,    pointer :: vp(:)
         integer  :: model, kappa, state, ihalf, nhalf(2), i, buffer_status, nstates_done
-        real     :: gain, sigma, kv, kv2, scale_volts
+        real     :: gain, kv, kv2, scale_volts
         real(dp) :: gain_fit, gain_num, gain_den
         logical  :: l_sigma_loaded
         character(len=4), parameter :: HALF_NAMES(2) = ['even', 'odd ']
@@ -175,8 +170,7 @@ contains
             call state_scale(halves(1:nhalf(1),1), kv)
             call state_scale(halves(1:nhalf(2),2), kv2)
             if( abs(kv - kv2) > 1.e-3 ) THROW_HARD('the halves of a state differ in voltage; reconstruct3D_wave')
-            sigma       = electron_interaction_constant(kv)
-            scale_volts = 2. * gain * sigma * params%smpd_crop * real(params%box_crop)
+            scale_volts = electron_scale_link(params%total_dose, kv, params%smpd, params%box)
             do ihalf = 1, 2
                 call base_solve(ihalf, halves(1:nhalf(ihalf),ihalf), vols(ihalf))
             end do
@@ -537,7 +531,7 @@ contains
         v3 = v3 * self%supp
     end subroutine objective_project
 
-    !> The gain the data prefer (section 3.4, a diagnostic): the one-scalar fit of the data's nonlinear part
+    !> The gain the data prefer (a diagnostic, wave_model_policy.md section 5): the one-scalar fit of the data's nonlinear part
     !! at v over the half (wave_projector%gain_terms), with its two sums; zero when the fit of the nonlinear
     !! part is not positive (the data hold no measurable nonlinear part)
     real(dp) function objective_fitted_gain( self, v, snum, sden ) result( g_fit )

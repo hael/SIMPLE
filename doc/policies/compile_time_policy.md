@@ -126,7 +126,7 @@ code; they cost nothing at run time.
   did not (see the evidence).
 - **Builds use a bounded job count.** The `compile_*.sh` scripts use the number
   of available processors or `CMAKE_BUILD_PARALLEL_LEVEL` (`compile_clean.sh`
-  also takes `--jobs N`); never an unbounded `make -j`.
+  and `recompile.sh` also take `--jobs N`); never an unbounded `make -j`.
 - **Day-to-day builds may leave out the tests** (`./compile_clean.sh
   --exclude-tests`). Test code is about a fifth of the summed compile time.
   Builds that precede a commit include the tests and the fast gate.

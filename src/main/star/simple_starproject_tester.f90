@@ -22,12 +22,19 @@ use simple_starproject_utils
 use simple_string
 use simple_test_utils
 use simple_type_defs, only: canonical_phshift
+use simple_image,     only: image
+use simple_oris,      only: oris
+use simple_fileio,    only: simple_getcwd
 implicit none
 
 private
 public :: run_all_starproject_tests
 
 character(len=*), parameter :: TMPDIR = "test_star_tmp"
+! the origins fixture: particle i alone in stack i, optics group i, at ORIGINS_SMPDS(i) A per pixel
+real,             parameter :: ORIGINS_SMPDS(2) = [1.3, 0.9]
+real,             parameter :: ORIGINS_PX(2,2) = reshape([2., -1., -3., 0.5], [2,2]) ! (x|y, particle)
+real,             parameter :: ORIGINS_EUL(3,2) = reshape([10., 20., 30., 40., 50., 60.], [3,2])
 
 contains
 
@@ -59,6 +66,7 @@ contains
         call test_relion_phase_shift()
         call test_split_dataline_terminal_field()
         call test_resolve_stack_path()
+        call test_relion_export_poses()
         write(*,'(A)') "**** Completed PART 2/4 (simple_relion tests) ****"
         write(*,'(A)') "**** Running OpenMP tests (Part 3/4) ****"
         call test_large_particle_table_export()
@@ -71,6 +79,9 @@ contains
         call test_xml_tiltinfo()
         call test_relion_writer_micrographs()
         call test_roundtrip_micrographs()
+        call test_import_origins_angstrom()
+        call test_roundtrip_origins()
+        call test_relion30_layout_refused()
         write(*,'(A)') "**** Completed big integration tests (Part 4/4) ****"
         call omp_set_num_threads(nthr_orig)
         ! the caller reports and fails the run (simple_test_utils counters are process-wide)
@@ -904,5 +915,308 @@ contains
             call str_intg%kill
         end do
     end subroutine test_roundtrip_micrographs
+
+    !-----------------------------------------------------------------------
+    !  PARTICLE ORIGINS: Angstrom in STAR, pixels of the particle's stack in SIMPLE
+    !-----------------------------------------------------------------------
+
+    ! the absolute fixture directory and its two stacks of one 16x16 image, at ORIGINS_SMPDS
+    subroutine make_origins_stacks( dir, stknames )
+        type(string), intent(out) :: dir, stknames(2)
+        type(image)  :: img
+        type(string) :: cwd
+        integer      :: i
+        call simple_getcwd(cwd)
+        dir = cwd//'/'//TMPDIR//'/origins'
+        call create_directory(dir%to_char())
+        do i = 1, 2
+            stknames(i) = dir//'/ptcls_'//int2str(i)//'.mrcs'
+            call img%new([16,16,1], ORIGINS_SMPDS(i))
+            call img%gauran(0., 1.)
+            call img%write(stknames(i), 1)
+            call img%kill
+        end do
+    end subroutine make_origins_stacks
+
+    ! a RELION 3.1 particle STAR file of the fixture: poses, and origins in Angstrom
+    subroutine write_origins_star( fname, stknames )
+        class(string), intent(in) :: fname, stknames(2)
+        integer :: funit, i
+        open(newunit=funit, file=fname%to_char(), status='replace', action='write')
+        write(funit,'(A)') 'data_optics'
+        write(funit,'(A)') 'loop_'
+        write(funit,'(A)') '_rlnOpticsGroupName #1'
+        write(funit,'(A)') '_rlnOpticsGroup #2'
+        write(funit,'(A)') '_rlnVoltage #3'
+        write(funit,'(A)') '_rlnSphericalAberration #4'
+        write(funit,'(A)') '_rlnAmplitudeContrast #5'
+        write(funit,'(A)') '_rlnImagePixelSize #6'
+        write(funit,'(A)') '_rlnImageSize #7'
+        do i = 1, 2
+            write(funit,'(A,I0,A,I0,A,F8.4,A)') 'opticsGroup', i, ' ', i, ' 300.0 2.7 0.1 ', ORIGINS_SMPDS(i), ' 16'
+        end do
+        write(funit,'(A)') ''
+        write(funit,'(A)') 'data_particles'
+        write(funit,'(A)') 'loop_'
+        write(funit,'(A)') '_rlnImageName #1'
+        write(funit,'(A)') '_rlnAngleRot #2'
+        write(funit,'(A)') '_rlnAngleTilt #3'
+        write(funit,'(A)') '_rlnAnglePsi #4'
+        write(funit,'(A)') '_rlnOriginXAngst #5'
+        write(funit,'(A)') '_rlnOriginYAngst #6'
+        write(funit,'(A)') '_rlnOpticsGroup #7'
+        do i = 1, 2
+            write(funit,'(2A,5F12.6,A,I0)') '1@', stknames(i)%to_char(), ORIGINS_EUL(:,i), &
+                &ORIGINS_SMPDS(i) * ORIGINS_PX(:,i), ' ', i
+        end do
+        close(funit)
+    end subroutine write_origins_star
+
+    ! both particle fields hold the fixture's pixel origins; the 3D field its Euler angles when l3D
+    subroutine check_origins_px( proj, l3D, label )
+        class(sp_project), intent(inout) :: proj
+        logical,           intent(in)    :: l3D
+        character(len=*),  intent(in)    :: label
+        real    :: err, eerr
+        integer :: i
+        call assert_int(2, proj%os_ptcl2D%get_noris(), label//': two particles in the 2D field')
+        call assert_int(2, proj%os_ptcl3D%get_noris(), label//': two particles in the 3D field')
+        if( proj%os_ptcl2D%get_noris() /= 2 .or. proj%os_ptcl3D%get_noris() /= 2 ) return
+        err  = 0.
+        eerr = 0.
+        do i = 1, 2
+            err = max(err, abs(proj%os_ptcl2D%get(i, 'x') - ORIGINS_PX(1,i)), abs(proj%os_ptcl2D%get(i, 'y') - ORIGINS_PX(2,i)))
+            err = max(err, abs(proj%os_ptcl3D%get(i, 'x') - ORIGINS_PX(1,i)), abs(proj%os_ptcl3D%get(i, 'y') - ORIGINS_PX(2,i)))
+            if( l3D ) eerr = max(eerr, maxval(abs(proj%os_ptcl3D%get_euler(i) - ORIGINS_EUL(:,i))))
+        end do
+        call assert_real(0., err, 1.e-5, label//': Angstrom origins import to the known pixel shifts')
+        if( l3D ) call assert_real(0., eerr, 1.e-4, label//': Euler angles import unchanged')
+    end subroutine check_origins_px
+
+    ! every particle import path converts the origins once, by the pixel size of the particle's stack:
+    ! import_starproject with import_type ptcl2D and ptcl3D (the commander's sequence), import_particles
+    subroutine test_import_origins_angstrom()
+        type(starproject) :: sp
+        type(sp_project)  :: proj
+        type(cmdline)     :: cl
+        type(string)      :: dir, stknames(2), fname
+        integer           :: ipath
+        write(*,'(A)') 'test_import_origins_angstrom'
+        call make_origins_stacks(dir, stknames)
+        fname = dir//'/particles31.star'
+        call write_origins_star(fname, stknames)
+        call cl%set('import_dir', dir%to_char())
+        do ipath = 1, 3
+            select case(ipath)
+                case(1)
+                    call sp%import_ptcls2D(cl, proj, fname)
+                    call proj%os_ptcl3D%copy(proj%os_ptcl2D, is_ptcl=.true.)
+                    call sp%finalise_ptcl_import(proj)
+                    call check_origins_px(proj, .false., 'import_starproject ptcl2D')
+                case(2)
+                    call sp%import_ptcls3D(cl, proj, fname)
+                    call proj%os_ptcl2D%copy(proj%os_ptcl3D, is_ptcl=.true.)
+                    call sp%finalise_ptcl_import(proj)
+                    call check_origins_px(proj, .true., 'import_starproject ptcl3D')
+                case(3)
+                    call sp%import_ptcls(fname, proj, string('no'))
+                    call check_origins_px(proj, .true., 'import_particles')
+            end select
+            call sp%kill
+            call proj%kill
+        end do
+    end subroutine test_import_origins_angstrom
+
+    ! pixels -> STAR (the writer of export_starproject) -> pixels is the identity, two stacks at
+    ! different pixel sizes
+    subroutine test_roundtrip_origins()
+        type(starfile)    :: sf
+        type(starproject) :: sp
+        type(sp_project)  :: proj, proj2
+        type(cmdline)     :: cl
+        type(string)      :: dir, stknames(2), fname
+        integer           :: i
+        write(*,'(A)') 'test_roundtrip_origins'
+        call make_origins_stacks(dir, stknames)
+        fname = dir//'/roundtrip.star'
+        call proj%os_optics%new(2, is_ptcl=.false.)
+        call proj%os_stk%new(2, is_ptcl=.false.)
+        call proj%os_ptcl2D%new(2, is_ptcl=.true.)
+        do i = 1, 2
+            call proj%os_optics%set(i, 'ogid',   i)
+            call proj%os_optics%set(i, 'ogname', 'opticsgroup'//int2str(i))
+            call proj%os_optics%set(i, 'kv',     300.)
+            call proj%os_optics%set(i, 'cs',     2.7)
+            call proj%os_optics%set(i, 'fraca',  0.1)
+            call proj%os_optics%set(i, 'smpd',   ORIGINS_SMPDS(i))
+            call proj%os_optics%set(i, 'box',    16)
+            call proj%os_optics%set_state(i, 1)
+            call proj%os_stk%set(i, 'stk',   stknames(i))
+            call proj%os_stk%set(i, 'box',   16)
+            call proj%os_stk%set(i, 'smpd',  ORIGINS_SMPDS(i))
+            call proj%os_stk%set(i, 'ogid',  i)
+            call proj%os_stk%set(i, 'fromp', i)
+            call proj%os_stk%set(i, 'top',   i)
+            call proj%os_stk%set_state(i, 1)
+            call proj%os_ptcl2D%set(i, 'stkind', i)
+            call proj%os_ptcl2D%set(i, 'indstk', 1)
+            call proj%os_ptcl2D%set(i, 'ogid',   i)
+            call proj%os_ptcl2D%set(i, 'x',      ORIGINS_PX(1,i))
+            call proj%os_ptcl2D%set(i, 'y',      ORIGINS_PX(2,i))
+            call proj%os_ptcl2D%set_state(i, 1)
+        end do
+        call sf%init(fname)
+        call sf%write_optics_table(proj%os_optics)
+        call sf%write_ptcl2D_table(proj%os_ptcl2D, proj%os_stk)
+        call sf%complete()
+        call cl%set('import_dir', dir%to_char())
+        call sp%import_ptcls2D(cl, proj2, fname)
+        call proj2%os_ptcl3D%copy(proj2%os_ptcl2D, is_ptcl=.true.)
+        call sp%finalise_ptcl_import(proj2)
+        call check_origins_px(proj2, .false., 'pixels to STAR to pixels')
+        call sp%kill
+        call proj%kill
+        call proj2%kill
+    end subroutine test_roundtrip_origins
+
+    ! the rows' values of label in the particles table of fname; found when every row has it
+    subroutine read_particle_doubles( fname, label, vals, found )
+        class(string), intent(in)  :: fname
+        integer,       intent(in)  :: label
+        real(dp),      intent(out) :: vals(:)
+        logical,       intent(out) :: found
+        type(starfile_table_type) :: tbl
+        real(dp) :: v
+        integer  :: obj, n
+        vals  = 0._dp
+        found = .true.
+        n     = 0
+        call starfile_table__new(tbl)
+        call starfile_table__read(tbl, fname, 'particles')
+        obj = int(starfile_table__firstobject(tbl))
+        do while( obj >= 0 )
+            n = n + 1
+            if( n > size(vals) ) exit
+            if( starfile_table__getValue_double(tbl, label, v) )then
+                vals(n) = v
+            else
+                found = .false.
+            endif
+            obj = int(starfile_table__nextobject(tbl))
+        end do
+        if( n /= size(vals) ) found = .false.
+        call starfile_table__delete(tbl)
+    end subroutine read_particle_doubles
+
+    ! export_relion writes the 3D poses and origins when the 3D field holds poses, else the
+    ! 2D field's in-plane angle and origins; origins in Angstrom
+    subroutine test_relion_export_poses()
+        real, parameter :: X2D(2) = [1.5, -2.5], Y2D(2) = [0.5, 3.0], PSI2D(2) = [15., 25.]
+        type(relion_project) :: rp
+        type(sp_project)     :: proj
+        type(cmdline)        :: cl
+        type(string)         :: fname
+        real(dp)             :: vals(2)
+        logical              :: found
+        integer              :: i, icase
+        write(*,'(A)') 'test_relion_export_poses'
+        fname = string('particles2D.star')
+        call cl%set('reliongroups',  0.0)
+        call cl%set('optics_offset', 0.0)
+        do icase = 1, 2
+            call proj%os_stk%new(1, is_ptcl=.false.)
+            call proj%os_stk%set(1, 'stk',  'ptcls_from_poses_intg.mrc')
+            call proj%os_stk%set(1, 'box',  16)
+            call proj%os_stk%set(1, 'smpd', ORIGINS_SMPDS(1))
+            call proj%os_stk%set_state(1, 1)
+            call proj%os_ptcl2D%new(2, is_ptcl=.true.)
+            call proj%os_ptcl3D%new(2, is_ptcl=.true.)
+            do i = 1, 2
+                call proj%os_ptcl2D%set(i, 'stkind', 1)
+                call proj%os_ptcl2D%set(i, 'e3',     PSI2D(i))
+                call proj%os_ptcl2D%set(i, 'x',      X2D(i))
+                call proj%os_ptcl2D%set(i, 'y',      Y2D(i))
+                call proj%os_ptcl2D%set_state(i, 1)
+                call proj%os_ptcl3D%set(i, 'stkind', 1)
+                call proj%os_ptcl3D%set_state(i, 1)
+                if( icase == 1 )then
+                    call proj%os_ptcl3D%set_euler(i, ORIGINS_EUL(:,i))
+                    call proj%os_ptcl3D%set(i, 'x', ORIGINS_PX(1,i))
+                    call proj%os_ptcl3D%set(i, 'y', ORIGINS_PX(2,i))
+                endif
+            end do
+            rp%opticsgroups = 1
+            if( file_exists(fname) ) call del_file(fname)
+            call rp%write_particles2D_star(cl, proj)
+            if( icase == 1 )then
+                call read_particle_doubles(fname, EMDL_ORIENT_ROT, vals, found)
+                call assert_true(found, 'export_relion 3D poses: rlnAngleRot written')
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_EUL(1,:)))), 1.e-4, 'export_relion 3D poses: rot = e1')
+                call read_particle_doubles(fname, EMDL_ORIENT_TILT, vals, found)
+                call assert_true(found, 'export_relion 3D poses: rlnAngleTilt written')
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_EUL(2,:)))), 1.e-4, 'export_relion 3D poses: tilt = e2')
+                call read_particle_doubles(fname, EMDL_ORIENT_PSI, vals, found)
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_EUL(3,:)))), 1.e-4, 'export_relion 3D poses: psi = e3')
+                call read_particle_doubles(fname, EMDL_ORIENT_ORIGIN_X_ANGSTROM, vals, found)
+                call assert_true(found, 'export_relion 3D poses: rlnOriginXAngst written')
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_SMPDS(1) * ORIGINS_PX(1,:)))), 1.e-4, &
+                    &'export_relion 3D poses: origin x in Angstrom')
+                call read_particle_doubles(fname, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, vals, found)
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_SMPDS(1) * ORIGINS_PX(2,:)))), 1.e-4, &
+                    &'export_relion 3D poses: origin y in Angstrom')
+            else
+                call read_particle_doubles(fname, EMDL_ORIENT_ROT, vals, found)
+                call assert_false(found, 'export_relion 2D poses: no rlnAngleRot')
+                call read_particle_doubles(fname, EMDL_ORIENT_PSI, vals, found)
+                call assert_true(found, 'export_relion 2D poses: rlnAnglePsi written')
+                call assert_real(0., real(maxval(abs(vals - PSI2D))), 1.e-4, 'export_relion 2D poses: psi = 2D e3')
+                call read_particle_doubles(fname, EMDL_ORIENT_ORIGIN_X_ANGSTROM, vals, found)
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_SMPDS(1) * X2D))), 1.e-4, &
+                    &'export_relion 2D poses: origin x in Angstrom')
+                call read_particle_doubles(fname, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, vals, found)
+                call assert_real(0., real(maxval(abs(vals - ORIGINS_SMPDS(1) * Y2D))), 1.e-4, &
+                    &'export_relion 2D poses: origin y in Angstrom')
+            endif
+            call proj%kill
+        end do
+    end subroutine test_relion_export_poses
+
+    ! a STAR file without a data_optics block (the RELION 3.0 layout) is refused with a message
+    ! that names the missing block; a RELION 3.1 file is not
+    subroutine test_relion30_layout_refused()
+        type(starproject) :: sp
+        type(string)      :: dir, stknames(2), fname, msg
+        integer           :: funit, iblock
+        write(*,'(A)') 'test_relion30_layout_refused'
+        call make_origins_stacks(dir, stknames)
+        do iblock = 1, 2
+            fname = dir//'/relion30_'//int2str(iblock)//'.star'
+            open(newunit=funit, file=fname%to_char(), status='replace', action='write')
+            ! RELION 3.0 writes one unnamed block; a particles block alone is refused alike
+            if( iblock == 1 )then
+                write(funit,'(A)') 'data_'
+            else
+                write(funit,'(A)') 'data_particles'
+            endif
+            write(funit,'(A)') 'loop_'
+            write(funit,'(A)') '_rlnImageName #1'
+            write(funit,'(A)') '_rlnAnglePsi #2'
+            write(funit,'(A)') '_rlnOriginXAngst #3'
+            write(funit,'(A)') '_rlnImagePixelSize #4'
+            write(funit,'(3A)') '1@', stknames(1)%to_char(), ' 10.0 2.6 1.3'
+            close(funit)
+            sp%starfile%filename = fname
+            call sp%read_layout(msg)
+            call assert_true(index(msg%to_char(), 'no data_optics block') > 0, 'RELION 3.0 layout: the refusal names data_optics')
+            call assert_true(index(msg%to_char(), 'RELION 3.1 or later') > 0, 'RELION 3.0 layout: the refusal names RELION 3.1')
+            call sp%kill
+        end do
+        fname = dir//'/relion31.star'
+        call write_origins_star(fname, stknames)
+        sp%starfile%filename = fname
+        call sp%read_layout(msg)
+        call assert_int(0, msg%strlen(), 'a RELION 3.1 file is not refused')
+        call sp%kill
+    end subroutine test_relion30_layout_refused
 
 end module simple_starproject_tester

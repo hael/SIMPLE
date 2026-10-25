@@ -45,4 +45,12 @@ contains
         sigma = real(2.0d0 * real(PI,kind=8) * relativistic_mass * ELEMENTARY_CHARGE * wavelength_m / PLANCK**2 * 1.0d-10)
     end function electron_interaction_constant
 
+    !> The scale link kappa = 2 g sigma a N: a SIMPLE map is kappa times the potential in volts, with the
+    !! gain g = sqrt(total_dose) a (electrons per A^2, kV, A per pixel, box in pixels; wave_model_policy.md)
+    elemental real function electron_scale_link( total_dose, kv, smpd, box ) result( kappa )
+        real,    intent(in) :: total_dose, kv, smpd
+        integer, intent(in) :: box
+        kappa = 2.0 * (sqrt(total_dose) * smpd) * electron_interaction_constant(kv) * smpd * real(box)
+    end function electron_scale_link
+
 end module simple_math_ctf

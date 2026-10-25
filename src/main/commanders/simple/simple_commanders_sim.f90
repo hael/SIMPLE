@@ -3,11 +3,11 @@ module simple_commanders_sim
 use simple_commanders_api
 use simple_defs_atoms
 use simple_ctf,       only: ctf
-use simple_simulator, only: simimg
+use simple_simulator, only: simimg, simimg_wave
 implicit none
 #include "simple_local_flags.inc"
 
-private :: state_fractions, draw_states, oritab_holds_states
+private :: state_fractions, draw_states, oritab_holds_states, simulate_particles_wave
 
 type, extends(commander_base) :: commander_simulate_noise
   contains
@@ -80,8 +80,22 @@ contains
         integer,         allocatable :: states(:)
         real             :: bfac, bfacerr, euls(3), euls_mirr(3)
         integer          :: i, cnt, ntot, nstates, istate, ldim_vol(3), nsec
-        logical          :: apply_ctf, l_oritab_states
+        logical          :: apply_ctf, l_oritab_states, l_wave
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',   'no')
+        ! wave mode: the keys and defaults of reconstruct3D_wave
+        l_wave = cline%defined('wave_model')
+        if( l_wave )then
+            if( .not. cline%defined('total_dose') ) THROW_HARD('wave_model needs total_dose, the dose of the scale link and the shot noise')
+            if( .not. cline%defined('ewald') )then
+                if( cline%get_carg('wave_model') .eq. 'projection' )then
+                    call cline%set('ewald', 'no')
+                else
+                    call cline%set('ewald', 'neg')
+                endif
+            endif
+        else
+            if( cline%defined('ewald') .or. cline%defined('total_dose') ) THROW_HARD('ewald and total_dose belong to wave_model')
+        endif
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
         if( .not. cline%defined('dferr')    ) call cline%set('dferr',    1.5)
         if( .not. cline%defined('astigerr') ) call cline%set('astigerr', 0.5)
@@ -96,6 +110,7 @@ contains
                 THROW_HARD('simulate_particles applies ctf=yes or ctf=no only')
         end select
         apply_ctf     = trim(params%ctf) .eq. 'yes'
+        if( l_wave .and. .not. apply_ctf ) THROW_HARD('wave_model needs ctf=yes: a phase object in focus has almost no contrast')
         if( .not. cline%defined('outstk') ) params%outstk = string('simulated_particles')//params%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -147,21 +162,6 @@ contains
                 if( count(states == istate) == 0 ) THROW_HARD('state '//int2str(istate)//' of the mixture holds no particle')
             enddo
         endif
-        ! prepare for image generation: one padded volume per state, held together
-        allocate(vol_pads(nstates))
-        do istate = 1, nstates
-            call find_ldim_nptcls(params%vols(istate), ldim_vol, nsec)
-            if( any(ldim_vol /= [params%box, params%box, params%box]) ) THROW_HARD('the volumes of the states differ in box')
-            call build%vol%read(params%vols(istate))
-            call build%vol%mask3D_soft(params%msk, backgr=0.)
-            call vol_pads(istate)%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
-            call build%vol%pad(vol_pads(istate))
-            call vol_pads(istate)%fft
-            call vol_pads(istate)%expand_cmat()
-        enddo
-        write(logfhandle,'(A)') '>>> GENERATING IMAGES'
-        cnt  = 0
-        ntot = params%top-params%fromp+1
         if( trim(params%recthres).eq.'yes' )then
             euls = [params%e1, params%e2, params%e3]
             call euler_mirror(euls, euls_mirr)
@@ -170,43 +170,67 @@ contains
             call o_mirr%new(is_ptcl=.true.)
             call o_mirr%set_euler(euls_mirr)
         endif
-        call memoize_ft_maps(build%img_pad%get_ldim(),build%img_pad%get_smpd())
-        do i=params%fromp,params%top
-            ! extract ori
-            call build%spproj_field%get_ori(i, orientation)
-            if( trim(params%recthres).eq.'yes' )then
-                if( rad2deg(orientation .euldist. o_thres) < params%rec_athres .or.&
-                   &rad2deg(orientation .euldist. o_mirr ) < params%rec_athres ) cycle
-            endif
-            cnt = cnt+1
-            call progress(cnt,ntot)
-            ! project vol
-            call build%img_pad%zero_and_flag_ft
-            call vol_pads(orientation%get_state())%fproject(orientation, build%img_pad)
-            ! shift
-            call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
-            call build%img%zero_and_unflag_ft
-            if( cline%defined('bfac') )then
-                ! calculate bfactor
-                bfacerr = ran3()*params%bfacerr
-                if( ran3() < 0.5 )then
-                    bfac = params%bfac-bfacerr
-                else
-                    bfac = params%bfac+bfacerr
+        if( l_wave )then
+            call simulate_particles_wave(params, build, cline, o_thres, o_mirr, cnt)
+        else
+            ! prepare for image generation: one padded volume per state, held together
+            allocate(vol_pads(nstates))
+            do istate = 1, nstates
+                call find_ldim_nptcls(params%vols(istate), ldim_vol, nsec)
+                if( any(ldim_vol /= [params%box, params%box, params%box]) ) THROW_HARD('the volumes of the states differ in box')
+                call build%vol%read(params%vols(istate))
+                call build%vol%mask3D_soft(params%msk, backgr=0.)
+                call vol_pads(istate)%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
+                call build%vol%pad(vol_pads(istate))
+                call vol_pads(istate)%fft
+                call vol_pads(istate)%expand_cmat()
+            enddo
+            write(logfhandle,'(A)') '>>> GENERATING IMAGES'
+            cnt  = 0
+            ntot = params%top-params%fromp+1
+            call memoize_ft_maps(build%img_pad%get_ldim(),build%img_pad%get_smpd())
+            do i=params%fromp,params%top
+                ! extract ori
+                call build%spproj_field%get_ori(i, orientation)
+                if( trim(params%recthres).eq.'yes' )then
+                    if( rad2deg(orientation .euldist. o_thres) < params%rec_athres .or.&
+                       &rad2deg(orientation .euldist. o_mirr ) < params%rec_athres ) cycle
                 endif
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
-            else
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
-            endif
-            ! clip
-            call build%img_pad%clip(build%img)
-            ! write to stack
-            if( cline%defined('part') )then
-                call build%img%write(string('simulated_particles_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char(), cnt)
-            else
-                call build%img%write(params%outstk, cnt)
-            endif
-        end do
+                cnt = cnt+1
+                call progress(cnt,ntot)
+                ! project vol
+                call build%img_pad%zero_and_flag_ft
+                call vol_pads(orientation%get_state())%fproject(orientation, build%img_pad)
+                ! shift
+                call build%img_pad%shift([orientation%get('x'),orientation%get('y'),0.])
+                call build%img%zero_and_unflag_ft
+                if( cline%defined('bfac') )then
+                    ! calculate bfactor
+                    bfacerr = ran3()*params%bfacerr
+                    if( ran3() < 0.5 )then
+                        bfac = params%bfac-bfacerr
+                    else
+                        bfac = params%bfac+bfacerr
+                    endif
+                    call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
+                else
+                    call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
+                endif
+                ! clip
+                call build%img_pad%clip(build%img)
+                ! write to stack
+                if( cline%defined('part') )then
+                    call build%img%write(string('simulated_particles_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char(), cnt)
+                else
+                    call build%img%write(params%outstk, cnt)
+                endif
+            end do
+            do istate = 1, nstates
+                call vol_pads(istate)%kill_expanded
+                call vol_pads(istate)%kill
+            enddo
+            deallocate(vol_pads)
+        endif
         if( trim(params%recthres).eq.'yes' )then
             call packed_oris%new(cnt, is_ptcl=.true.)
             cnt = 0
@@ -222,11 +246,6 @@ contains
         else
             call build%spproj_field%write(params%outfile, [1,params%nptcls])
         endif
-        do istate = 1, nstates
-            call vol_pads(istate)%kill_expanded
-            call vol_pads(istate)%kill
-        enddo
-        deallocate(vol_pads)
         call killimgbatch(build)
         call orientation%kill
         ! end gracefully
@@ -249,7 +268,7 @@ contains
         class(wave_projector),       allocatable :: wproj
         type(string)     :: pdb_arg, pdb_source, potential_file
         complex, allocatable :: planes(:,:,:)
-        integer          :: i, ib, nb, ldim(3), nptcls_arg, nsec, vol_dim(3), model, kappa, R, h, k, phys(3)
+        integer          :: i, ib, nb, ldim(3), nptcls_arg, nsec, vol_dim(3), model, kappa, R
         real             :: smpd
         logical          :: from_pdb, has_angast, has_dfy, has_phshift
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir', 'no')
@@ -362,16 +381,7 @@ contains
             nb = min(BATCH, params%nptcls - ib + 1)
             call wproj%predict(nb, ib, planes(:,:,1:nb))
             do i = 1, nb
-                ! p = -ihat / box^2 with gain 1: -p is SIMPLE's transform of the relative intensity
-                call build%img%zero_and_flag_ft
-                do k = -R, R
-                    do h = 0, R
-                        if( h*h + k*k > R*R ) cycle
-                        phys = build%img%comp_addr_phys(h,k,0)
-                        call build%img%set_fcomp([h,k,0], phys, -planes(h,k,i))
-                    enddo
-                enddo
-                call build%img%ifft
+                call wproj%plane_to_image(planes(:,:,i), build%img)
                 call detect_intensity(build%img, params%total_dose, params%noise_sdev)
                 call build%img%write(params%outstk, ib + i - 1)
             enddo
@@ -1127,5 +1137,159 @@ contains
         enddo
         call shuffle(states)
     end function draw_states
+
+    !> simulate_particles in wave mode: the wave operator's image of each state's map, converted to volts with
+    !! the scale link, detected with shot and detector noise (simimg_wave); the particles of the part in
+    !! output order, cnt of them, recthres applied as in the flat mode
+    subroutine simulate_particles_wave( params, build, cline, o_thres, o_mirr, cnt )
+        use simple_wave_imaging,   only: WAVE_PROJECTION, WAVE_FIRST_BORN, WAVE_RYTOV, WAVE_MSLICE
+        use simple_wave_projector, only: wave_projector
+        use simple_math_ctf,       only: electron_scale_link
+        class(parameters), intent(inout) :: params
+        class(builder),    intent(inout) :: build
+        class(cmdline),    intent(inout) :: cline
+        class(ori),        intent(in)    :: o_thres, o_mirr
+        integer,           intent(out)   :: cnt
+        integer, parameter :: BATCH = 64
+        type(wave_projector), allocatable :: wprojs(:)
+        type(oris),           allocatable :: sels(:)
+        complex,              allocatable :: planes(:,:,:), buf(:,:,:)
+        real,                 allocatable :: bfacs(:), vol_volts(:,:,:)
+        integer,              allocatable :: inds(:), states(:), isel(:), nsel(:)
+        type(ori)       :: orientation
+        type(ctfparams) :: ctfparms
+        type(string)    :: fname
+        real    :: bfacerr, scale_link
+        integer :: model, kappa, nstates, n, i, j, j0, j1, nb, istate, a, b, r, ldim_vol(3), nsec
+        logical :: has_dfy, has_angast, has_phshift
+        select case(trim(params%wave_model))
+            case('projection')
+                model = WAVE_PROJECTION
+            case('first_born')
+                model = WAVE_FIRST_BORN
+            case('rytov')
+                model = WAVE_RYTOV
+            case('multislice')
+                model = WAVE_MSLICE
+            case DEFAULT
+                THROW_HARD('unknown wave_model; simulate_particles')
+        end select
+        select case(trim(params%ewald))
+            case('neg')
+                kappa = -1
+            case('pos')
+                kappa = 1
+            case DEFAULT
+                kappa = 0
+        end select
+        if( model == WAVE_PROJECTION .and. kappa /= 0 ) THROW_HARD('wave_model=projection samples the central section: ewald=no')
+        if( model == WAVE_MSLICE .and. kappa == 0 ) THROW_HARD('wave_model=multislice propagates through the box: ewald=neg or pos')
+        if( params%total_dose <= 0. ) THROW_HARD('total_dose must be positive; simulate_particles')
+        if( params%snr <= 0. ) THROW_HARD('snr must be positive; simulate_particles')
+        nstates = max(1, params%nstates)
+        ! the particles of the part in output order, their states and lens B-factors
+        allocate(inds(params%top - params%fromp + 1), states(params%top - params%fromp + 1))
+        n = 0
+        do i = params%fromp, params%top
+            call build%spproj_field%get_ori(i, orientation)
+            if( trim(params%recthres).eq.'yes' )then
+                if( rad2deg(orientation .euldist. o_thres) < params%rec_athres .or.&
+                   &rad2deg(orientation .euldist. o_mirr ) < params%rec_athres ) cycle
+            endif
+            n         = n + 1
+            inds(n)   = i
+            states(n) = orientation%get_state()
+        end do
+        allocate(bfacs(n), source=0.)
+        if( cline%defined('bfac') )then
+            do j = 1, n
+                bfacerr = ran3() * params%bfacerr
+                if( ran3() < 0.5 )then
+                    bfacs(j) = params%bfac - bfacerr
+                else
+                    bfacs(j) = params%bfac + bfacerr
+                endif
+            end do
+        endif
+        ! each state's selection, in output order: particle j is particle isel(j) of its state's
+        has_dfy     = build%spproj_field%isthere('dfy')
+        has_angast  = build%spproj_field%isthere('angast')
+        has_phshift = build%spproj_field%isthere('phshift')
+        allocate(sels(nstates), nsel(nstates), isel(n))
+        nsel = 0
+        do j = 1, n
+            nsel(states(j)) = nsel(states(j)) + 1
+            isel(j)         = nsel(states(j))
+        end do
+        do istate = 1, nstates
+            call sels(istate)%new(nsel(istate), is_ptcl=.true.)
+        end do
+        do j = 1, n
+            call build%spproj_field%get_ori(inds(j), orientation)
+            ctfparms%ctfflag = CTFFLAG_YES
+            ctfparms%smpd    = params%smpd
+            ctfparms%kv      = params%kv
+            ctfparms%cs      = params%cs
+            ctfparms%fraca   = params%fraca
+            ctfparms%dfx     = orientation%get('dfx')
+            ctfparms%dfy     = ctfparms%dfx
+            ctfparms%angast  = 0.
+            ctfparms%phshift = 0.
+            if( has_dfy     ) ctfparms%dfy     = orientation%get('dfy')
+            if( has_angast  ) ctfparms%angast  = orientation%get('angast')
+            if( has_phshift ) ctfparms%phshift = orientation%get('phshift')
+            call orientation%set_ctfvars(ctfparms)
+            call sels(states(j))%set_ori(isel(j), orientation)
+        end do
+        ! one operator per state, its map (masked as in the flat mode) in volts
+        scale_link = electron_scale_link(params%total_dose, params%kv, params%smpd, params%box)
+        allocate(wprojs(nstates))
+        do istate = 1, nstates
+            if( nsel(istate) == 0 ) cycle
+            call find_ldim_nptcls(params%vols(istate), ldim_vol, nsec)
+            if( any(ldim_vol /= [params%box, params%box, params%box]) ) THROW_HARD('the volumes of the states differ in box')
+            call build%vol%read(params%vols(istate))
+            call build%vol%mask3D_soft(params%msk, backgr=0.)
+            vol_volts = build%vol%get_rmat() / scale_link
+            call wprojs(istate)%new(params%box, params%smpd, model, kappa, 1.0, fft_nthreads=params%nthr)
+            call wprojs(istate)%prep_particles(sels(istate), bfacs=pack(bfacs, states(1:n) == istate))
+            call wprojs(istate)%set_volume(vol_volts)
+        end do
+        write(logfhandle,'(A)') '>>> GENERATING WAVE IMAGES: '//trim(params%wave_model)
+        if( cline%defined('part') )then
+            fname = string('simulated_particles_part')//int2str_pad(params%part,params%numlen)//params%ext%to_char()
+        else
+            fname = params%outstk
+        endif
+        r = params%box / 2
+        allocate(planes(-r:r,-r:r,BATCH), buf(-r:r,-r:r,BATCH))
+        do j0 = 1, n, BATCH
+            j1 = min(n, j0 + BATCH - 1)
+            ! a state's particles of the batch are consecutive in its selection
+            do istate = 1, nstates
+                if( .not. any(states(j0:j1) == istate) ) cycle
+                a  = minval(isel(j0:j1), mask=states(j0:j1) == istate)
+                b  = maxval(isel(j0:j1), mask=states(j0:j1) == istate)
+                nb = b - a + 1
+                call wprojs(istate)%predict(nb, a, buf(:,:,1:nb))
+                do j = j0, j1
+                    if( states(j) == istate ) planes(:,:,j-j0+1) = buf(:,:,isel(j)-a+1)
+                end do
+            end do
+            do j = j0, j1
+                call progress(j, n)
+                call wprojs(states(j))%plane_to_image(planes(:,:,j-j0+1), build%img)
+                call simimg_wave(build%img, params%total_dose, params%snr)
+                call build%img%write(fname, j)
+            end do
+        end do
+        cnt = n
+        do istate = 1, nstates
+            call wprojs(istate)%kill
+            call sels(istate)%kill
+        end do
+        deallocate(wprojs, sels, planes, buf)
+        call orientation%kill
+    end subroutine simulate_particles_wave
 
 end module simple_commanders_sim

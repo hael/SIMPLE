@@ -2,15 +2,19 @@
 ! The fixture is a project of two micrographs, each with a stack of two particles, in a fresh
 ! fixture directory; one particle is deselected. Its particles are exported as particles2D.star,
 ! and the rows are read back as text: the field holding '@' is the image name, the field ending
-! in '_intg.mrc' the micrograph name.
+! in '_intg.mrc' the micrograph name. The origins are read back through the STAR table.
 module simple_starproject_stream_tester
 use simple_test_utils
+use simple_defs,               only: dp
 use simple_string,             only: string
 use simple_string_utils,       only: int2str
 use simple_fileio,             only: file_exists, simple_getcwd
 use simple_parameters,         only: parameters
 use simple_sp_project,         only: sp_project
 use simple_starproject_stream, only: starproject_stream
+use simple_starfile_wrappers, only: starfile_table_type, starfile_table__new, starfile_table__read, &
+    &starfile_table__firstobject, starfile_table__nextobject, starfile_table__getValue_double, starfile_table__delete, &
+    &EMDL_ORIENT_ORIGIN_X_ANGSTROM, EMDL_ORIENT_ORIGIN_Y_ANGSTROM
 implicit none
 private
 public :: run_all_starproject_stream_tests
@@ -23,6 +27,7 @@ contains
     subroutine run_all_starproject_stream_tests()
         write(*,'(A)') '**** running all stream STAR export tests ****'
         call test_particles2D_names()
+        call test_particles2D_origins()
     end subroutine run_all_starproject_stream_tests
 
     !> every exported particle names its image in its stack (index@stack) and its micrograph; a
@@ -54,6 +59,60 @@ contains
         call spproj%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_particles2D_names
+
+    !> the exported origins are the particles' shifts (pixels of their stack) times the pixel size
+    !! of their stack, in Angstrom; the two stacks have different pixel sizes
+    subroutine test_particles2D_origins()
+        real, parameter :: SMPDS(2) = [1.3, 0.9]
+        real, parameter :: XS(4) = [1.5, 0., -2.25, 4.], YS(4) = [-0.5, 0., 3.75, -1.]
+        type(starproject_stream)  :: star
+        type(parameters)          :: params
+        type(sp_project)          :: spproj
+        type(starfile_table_type) :: tbl
+        type(string)              :: cwd_saved, root, cwd
+        real(dp) :: ox, oy
+        real     :: err, smpd
+        logical  :: found
+        integer  :: nfail0, i, n, obj, nmissing
+        integer, parameter :: SELECTED(3) = [1, 3, 4], STKINDS(4) = [1, 1, 2, 2]
+        write(*,'(A)') 'test_particles2D_origins'
+        nfail0 = tests_failed
+        call enter_fixture('star_stream_origins', cwd_saved, root)
+        call simple_getcwd(cwd)
+        call make_two_stack_project(spproj, cwd)
+        do i = 1,2
+            call spproj%os_stk%set(i, 'smpd', SMPDS(i))
+        enddo
+        do i = 1,4
+            call spproj%os_ptcl2D%set(i, 'x', XS(i))
+            call spproj%os_ptcl2D%set(i, 'y', YS(i))
+        enddo
+        call star%stream_export_particles_2D(params, spproj, cwd, optics_set=.true.)
+        call starfile_table__new(tbl)
+        call starfile_table__read(tbl, string('particles2D.star'), 'particles')
+        n        = 0
+        nmissing = 0
+        err      = 0.
+        obj = int(starfile_table__firstobject(tbl))
+        do while( obj >= 0 )
+            n = n + 1
+            if( n > size(SELECTED) ) exit
+            ox = 0._dp
+            oy = 0._dp
+            found = starfile_table__getValue_double(tbl, EMDL_ORIENT_ORIGIN_X_ANGSTROM, ox)
+            if( found ) found = starfile_table__getValue_double(tbl, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, oy)
+            if( .not. found ) nmissing = nmissing + 1
+            smpd = SMPDS(STKINDS(SELECTED(n)))
+            err  = max(err, abs(real(ox) - smpd * XS(SELECTED(n))), abs(real(oy) - smpd * YS(SELECTED(n))))
+            obj = int(starfile_table__nextobject(tbl))
+        enddo
+        call starfile_table__delete(tbl)
+        call assert_int(3, n, 'one origin row per selected particle')
+        call assert_int(0, nmissing, 'every row has an origin')
+        call assert_real(0., err, 1.e-5, 'origins are written in Angstrom')
+        call spproj%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_particles2D_origins
 
     ! ---- fixtures ------------------------------------------------------------
 
