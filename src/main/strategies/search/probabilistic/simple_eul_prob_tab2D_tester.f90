@@ -74,6 +74,7 @@ contains
         enddo
         dists(:,1)  = 1.5                  ! flat
         dists(:,8)  = dists(:,7)           ! identical particles
+        dists(:,9)  = max(dists(:,9), 0.5) ! the tie below is the only minimum, whatever the random fill drew
         dists(3,9)  = 0.01                 ! a class tie at the minimum
         dists(11,9) = 0.01
         dists(5,12) = huge(1.)             ! invalid distances
