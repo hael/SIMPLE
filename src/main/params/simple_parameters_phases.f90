@@ -996,8 +996,12 @@ contains
         end select
         if( self%l_atm_prior )then
             if( trim(self%rec_backend) /= 'pcg' ) THROW_HARD('atm_prior=yes requires rec_backend=pcg')
-            if( .not. cline%defined('pdbfile') )  THROW_HARD('atm_prior=yes requires the atom model pdbfile')
-            if( .not. file_exists(self%pdbfile) ) THROW_HARD('atm_prior=yes: pdbfile does not exist')
+            if( cline%defined('pdbfile') )then
+                if( .not. file_exists(self%pdbfile) ) THROW_HARD('atm_prior=yes: pdbfile does not exist')
+            else
+                if( trim(self%prg%to_char()) /= 'autorefine3D_nano' ) &
+                    &THROW_HARD('atm_prior=yes requires the atom model pdbfile; program is '//trim(self%prg%to_char()))
+            endif
             if( self%l_ml_reg )    THROW_HARD('atm_prior=yes requires ml_reg=no')
             if( self%l_pcg_solvent ) THROW_HARD('atm_prior=yes and pcg_solvent=yes are exclusive')
             if( self%l_nonuniform ) THROW_HARD('atm_prior=yes takes no nonuniform filtering')
@@ -1017,7 +1021,9 @@ contains
         if( cline%defined('element') )then
             if( index(self%element, ',') > 0 )then
                 ! a species list, brightest first: its length is the number of classes, level 1 runs on its first symbol
-                if( self%prg%to_char() /= 'detect_atoms' ) THROW_HARD('a list of elements is accepted by detect_atoms only')
+                if( trim(self%prg%to_char()) /= 'detect_atoms' .and. &
+                    &trim(self%prg%to_char()) /= 'autorefine3D_nano' ) &
+                    &THROW_HARD('a list of elements is accepted by detect_atoms and autorefine3D_nano only')
                 if( .not. parse_element_list(self%element, self%species, selector, errmsg) ) THROW_HARD(errmsg%to_char())
                 self%l_species_list     = .true.
                 self%l_discover_species = .true.

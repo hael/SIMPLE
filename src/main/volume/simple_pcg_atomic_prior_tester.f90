@@ -6,7 +6,7 @@ module simple_pcg_atomic_prior_tester
 use simple_defs,              only: dp, PI
 use simple_oris,              only: oris
 use simple_image,             only: image
-use simple_pcg_atomic_prior,  only: pcg_atomic_prior
+use simple_pcg_atomic_prior,  only: pcg_atomic_prior, pcg_atomic_prior_stats
 use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL, PCG_OP_MATRIXFREE, PCG_LAMBDA
 use simple_test_utils,        only: assert_true
 use ieee_arithmetic,          only: ieee_is_finite
@@ -42,6 +42,7 @@ contains
         call test_projector()
         call test_apply_symmetric()
         call test_column_scaling()
+        call test_fitted_model_projector()
         call test_gram_solve()
         call test_width_fit()
         call test_reconstructor_zero_strength()
@@ -228,6 +229,64 @@ contains
         call p1%kill
         call p2%kill
     end subroutine test_column_scaling
+
+    !> fitted B shapes the kernels, while occupancy times model intensity fixes their relative weights up to one scale
+    subroutine test_fitted_model_projector()
+        class(pcg_atomic_prior), allocatable :: p1, p2, p3, p4
+        type(pcg_atomic_prior_stats) :: stats
+        real, allocatable :: pos(:,:), supp(:,:,:), q(:), q2(:), inten(:), inten2(:), b(:), b2(:)
+        real, allocatable :: model(:,:,:), pmodel(:,:,:), probe(:,:,:), pp1(:,:,:), pp2(:,:,:), pp3(:,:,:), pp4(:,:,:),&
+            &amodel(:,:,:)
+        real(dp), allocatable :: coeff(:)
+        real(dp) :: err_model, err_q, err_i, err_b, err_null
+        integer :: i
+        write(*,'(A)') 'test_fitted_model_projector'
+        allocate(p1, p2, p3, p4)
+        call build_atoms(NATOMS, ATOM_RAD, ATOM_DMIN, BOX, pos)
+        supp = sphere_support(BOX, SUPPORT_RAD)
+        allocate(q(NATOMS), q2(NATOMS), inten(NATOMS), inten2(NATOMS), b(NATOMS), b2(NATOMS))
+        do i = 1, NATOMS
+            q(i)     = 0.35 + 0.65 * modulo(real(i) * 0.381966, 1.)
+            inten(i) = 0.6 + 1.8 * modulo(real(i) * 0.618034, 1.)
+            b(i)     = bfac_of_sigma(1.0 + 0.7 * modulo(real(i) * 0.414214, 1.), SMPD)
+            b2(i)    = bfac_of_sigma(1.0 + 0.7 * modulo(real(i) * 0.732051, 1.), SMPD)
+        enddo
+        q2     = q(NATOMS:1:-1)
+        inten2 = inten(NATOMS:1:-1)
+        call p1%new(BOX, SMPD, pos, supp, bfacs=b,  occupancies=q,  intensities=inten)
+        call p2%new(BOX, SMPD, pos, supp, bfacs=b,  occupancies=q2, intensities=inten)
+        call p3%new(BOX, SMPD, pos, supp, bfacs=b,  occupancies=q,  intensities=inten2)
+        call p4%new(BOX, SMPD, pos, supp, bfacs=b2, occupancies=q,  intensities=inten)
+        coeff = real(q * inten * (4. * PI / b)**1.5,dp)
+        model = p1%scatter(coeff)
+        pmodel = p1%project(model)
+        err_model = normv(pmodel - model) / normv(model)
+        allocate(amodel(BOX,BOX,BOX), source=0.)
+        call p1%apply(2.5, model, amodel)
+        err_null = normv(amodel) / (2.5_dp * normv(model))
+        probe = probe_map(BOX, 11)
+        pp1 = p1%project(probe)
+        pp2 = p2%project(probe)
+        pp3 = p3%project(probe)
+        pp4 = p4%project(probe)
+        err_q = normv(pp2 - pp1) / normv(pp1)
+        err_i = normv(pp3 - pp1) / normv(pp1)
+        err_b = normv(pp4 - pp1) / normv(pp1)
+        stats = p1%get_stats()
+        write(*,'(A,5ES11.3)') '  model error, null error, q effect, I effect, B effect: ', &
+            &err_model, err_null, err_q, err_i, err_b
+        call assert_true(p1%uses_fitted_model(), 'the fitted-model mode is active')
+        call assert_true(stats%bfac_model_max > stats%bfac_model_min, 'the fitted-model B range is retained')
+        call assert_true(err_model <= PROJ_TOL, 'the fitted model is in the active prior subspace')
+        call assert_true(err_null <= PROJ_TOL, 'the prior vanishes on a scaled fitted model')
+        call assert_true(err_q  > 1.e-3_dp, 'occupancy changes the active prior subspace')
+        call assert_true(err_i  > 1.e-3_dp, 'model intensity changes the active prior subspace')
+        call assert_true(err_b  > 1.e-3_dp, 'per-atom B factors change the active prior subspace')
+        call p1%kill
+        call p2%kill
+        call p3%kill
+        call p4%kill
+    end subroutine test_fitted_model_projector
 
     !> the Gram solve returns a known solution of G^T G c = y
     subroutine test_gram_solve()

@@ -379,9 +379,8 @@ contains
         call b%kill
     end subroutine test_pseudo_pdb_roundtrip
 
-    ! bfac_pdb: a Pt atom's beta is added to every b_j beside the blur bfac = (8 smpd)**2 of convolve, so the voxel
-    ! sum is kept and the peak falls by sum a_j / (b_j + bfac + B)**1.5 over sum a_j / (b_j + bfac)**1.5; without
-    ! the flag beta is not read, and a pseudo-atom (whose beta is its width already) ignores the flag
+    ! bfac_pdb: a Pt atom's occupancy scales the amplitude and beta is added to every b_j beside the blur
+    ! bfac = (8 smpd)**2 of convolve; without the flag neither column is read, and a pseudo-atom ignores the flag
     subroutine test_element_bfac()
         integer, parameter :: BX = 64
         real,    parameter :: SMPD = 0.358, BFAC_PT = 20., CUTOFF = 10.
@@ -389,7 +388,7 @@ contains
         real,    parameter :: B_PT(5) = [0.2263, 1.3813, 5.3243, 17.5987, 60.0171]
         type(atoms) :: a
         type(image) :: vol0, vol20, vol_def0, vol_def20, volp, volp_flag
-        real :: blur, ratio, sum0, sum20
+        real :: blur, ratio, sum0, sum20, peak20
         write(*,'(A)') 'test_element_bfac'
         blur  = (8. * SMPD)**2
         ratio = sum(A_PT / (B_PT + blur + BFAC_PT)**1.5) / sum(A_PT / (B_PT + blur)**1.5)
@@ -412,12 +411,22 @@ contains
         call a%convolve(vol_def20, CUTOFF)
         sum0  = sum(vol0%get_rmat())
         sum20 = sum(vol20%get_rmat())
+        peak20 = vol20%get_rmat_at(33,33,33)
         call assert_true(all(vol0%get_rmat() == vol_def0%get_rmat()), 'bfac_pdb with B = 0 renders as the default')
         call assert_real(sum0, sum20, 0.01 * sum0, 'bfac_pdb: B = 20 A**2 keeps the voxel sum within 1%')
         call assert_real(ratio, vol20%get_rmat_at(33,33,33) / vol0%get_rmat_at(33,33,33), 0.01 * ratio,&
             &'bfac_pdb: the peak falls by sum a_j / (b_j + bfac + B)**1.5 over sum a_j / (b_j + bfac)**1.5 within 1%')
         call assert_real(0.243, ratio, 0.001, 'the Pt peak ratio at B = 20 A**2 and the default blur is 0.243')
         call assert_true(all(vol_def20%get_rmat() == vol_def0%get_rmat()), 'without bfac_pdb the B column is not read')
+        call a%set_occupancy(1, 0.25)
+        call a%convolve(vol20, CUTOFF, bfac_pdb=.true.)
+        call a%convolve(vol_def20, CUTOFF)
+        call assert_real(0.25 * sum20, sum(vol20%get_rmat()), 0.01 * sum20,&
+            &'bfac_pdb: occupancy 0.25 scales the voxel sum')
+        call assert_real(0.25 * peak20, vol20%get_rmat_at(33,33,33), 1.e-5 * peak20,&
+            &'bfac_pdb: occupancy 0.25 scales the peak')
+        call assert_true(all(vol_def20%get_rmat() == vol_def0%get_rmat()),&
+            &'without bfac_pdb the occupancy column is not read')
         call a%kill
         ! a pseudo-atom is unaffected by the flag
         call make_pseudo(a, [32., 32., 32.] * SMPD, 1., 13.9)

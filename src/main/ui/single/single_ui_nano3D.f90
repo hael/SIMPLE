@@ -76,7 +76,10 @@ subroutine new_solve3D_nano( prgtab )
         &visibility=UI_VIS_STANDARD)
         call autorefine3D_nano%add_input(UI_PARM, element, &
         &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
+        call autorefine3D_nano%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend for each refinement stage; the detected-model loop requires PCG(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
+        &visibility=UI_VIS_ADVANCED)
         ! <empty>
         ! search controls
         call autorefine3D_nano%add_input(UI_SRCH, nspace, &
@@ -107,6 +110,27 @@ subroutine new_solve3D_nano( prgtab )
         &visibility=UI_VIS_STANDARD)
         call autorefine3D_nano%add_input(UI_FILT, icm, &
         &visibility=UI_VIS_ADVANCED)
+        call autorefine3D_nano%add_input(UI_FILT, 'atm_prior', 'binary', 'Detected-atom reconstruction loop', &
+        &'Run the first stage without a model, detect atoms, then use each detected model as the atomicity prior of the next PCG reconstruction; '//&
+        &'atom detection and FSC continue to use the prior-free base half maps(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call autorefine3D_nano%add_input(UI_FILT, 'lambda_atm', 'num', 'Atomicity prior strength', &
+        &'Strength relative to the data precision per voxel; 0 = the moment estimate of the base pair', 'coefficient{0}', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call autorefine3D_nano%add_input(UI_FILT, 'bfac_data', 'num', 'Atomicity prior kernel B', &
+        &'B (A^2) added to the narrowest prior kernel; fitted on each base map when not given', 'B in A^2', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call autorefine3D_nano%add_input(UI_FILT, 'maxits_atm', 'num', 'Atomicity prior PCG iterations', &
+        &'Cap of the PCG iterations of each atomicity-prior solve', 'iterations{30}', &
+        &.false., 30., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
+        call autorefine3D_nano%add_input(UI_FILT, 'rtol_atm', 'num', 'Atomicity prior PCG tolerance', &
+        &'Stop each atomicity-prior solve at this true L2 relative residual; <=0 runs exactly maxits_atm', 'tolerance{0}', &
+        &.false., 0., visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('atm_prior', [character(len=3) :: 'yes']))
         ! mask controls
         call autorefine3D_nano%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

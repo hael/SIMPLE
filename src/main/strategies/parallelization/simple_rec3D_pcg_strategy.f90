@@ -44,7 +44,7 @@ integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost
 ! the sphere for automsk=no, the lag-one density envelope for yes and nu
 ! (never the NU-evidence envelope), an explicit pcg_mskfile over both.
 logical, parameter :: DEBUG = .false.
-! atomicity prior: the per-half amplitude fit through the data operator (pcg_atomic_prior%amplitudes)
+! atomicity prior: fitted B/occupancy/posterior intensity with a species table; otherwise free amplitudes
 integer, parameter :: ATM_AMP_MAXITS = 30
 real,    parameter :: ATM_AMP_RTOL   = 1.0e-3
 
@@ -1211,8 +1211,10 @@ contains
             type(atoms)       :: model
             type(pcg_atomic_prior_stats) :: astats
             real, allocatable :: pos(:,:), supp(:,:,:), xb(:,:,:), model_map(:,:,:)
+            real, allocatable :: atom_bfac(:), atom_occ(:), atom_prior_intensity(:)
             real    :: bdata, lambda_rel_est, shift_a
             integer :: i, nsh
+            logical :: l_fitted_model
             call model%new(params%pdbfile)
             if( model%get_n() < 1 ) THROW_HARD('the atom model pdbfile holds no atoms; atm_prior')
             ! PDB A = 0-based native voxel * smpd; the crop keeps the box centre and the field of view
@@ -1221,18 +1223,28 @@ contains
             do i = 1, model%get_n()
                 pos(:,i) = (model%get_coord(i) - shift_a) / params%smpd_crop + real(params%box_crop/2 + 1)
             end do
+            call read_species_prior_fields(model%get_n(), atom_bfac, atom_occ, atom_prior_intensity, l_fitted_model)
             call model%kill
             call even_job%pcgop%get_solve_support(supp)
-            call atm_prior%new(params%box_crop, params%smpd_crop, pos, supp)
+            if( l_fitted_model )then
+                call atm_prior%new(params%box_crop, params%smpd_crop, pos, supp, bfacs=atom_bfac,&
+                    &occupancies=atom_occ, intensities=atom_prior_intensity)
+            else
+                call atm_prior%new(params%box_crop, params%smpd_crop, pos, supp)
+            endif
             deallocate(pos, supp)
             xb  = 0.5 * (even_job%x + odd_job%x)
             nsh = 0
-            if( params%l_bfac_data_fit )then
+            if( l_fitted_model )then
+                bdata = 0.
+            elseif( params%l_bfac_data_fit )then
                 call atm_prior%fit_width(xb, bdata, nsh)
             else
                 bdata = params%bfac_data
             endif
-            if( bdata > 0. ) call atm_prior%build(atm_prior%get_bfac_min() + bdata)
+            if( .not. l_fitted_model )then
+                if( bdata > 0. ) call atm_prior%build(atm_prior%get_bfac_min() + bdata)
+            endif
             lambda_rel_est = atm_prior%estimate_lambda(xb, even_job%x, odd_job%x)
             atm_lambda_rel = lambda_rel_est
             if( params%lambda_atm > 0. ) atm_lambda_rel = params%lambda_atm
@@ -1240,21 +1252,31 @@ contains
             write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') '>>> PCG ATOMIC PRIOR: STATE ', state_here, ', ', &
                 &astats%natoms, ' of ', astats%natoms_in, ' atoms (', astats%ndup, ' duplicates, ', astats%noutside, &
                 &' off the support)'
-            write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,F6.3,A,I0)') '>>> PCG ATOMIC PRIOR: B_min ', astats%bfac_min, &
-                &' A^2 + B_data ', astats%bfac_data, ' A^2 (fit over ', nsh, ' shells), sigma ', astats%sigma_vox, &
-                &' voxels, footprint radius ', astats%foot_rad
+            if( astats%fitted_model )then
+                write(logfhandle,'(A,3F8.3,A,F7.4,A,ES11.3)') '>>> PCG ATOMIC PRIOR: fitted B min/mean/max ', &
+                    &astats%bfac_model_min, astats%bfac_model_mean, astats%bfac_model_max, &
+                    &' A^2, mean occupancy ', astats%occupancy_mean, ', mean posterior intensity ', astats%intensity_mean
+            else
+                write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,F6.3,A,I0)') '>>> PCG ATOMIC PRIOR: B_min ', astats%bfac_min, &
+                    &' A^2 + B_data ', astats%bfac_data, ' A^2 (fit over ', nsh, ' shells), sigma ', astats%sigma_vox, &
+                    &' voxels, footprint radius ', astats%foot_rad
+            endif
             write(logfhandle,'(A,4ES11.3,A,F7.4,A,F9.5,A)') '>>> PCG ATOMIC PRIOR: N S E C^2 ', astats%noise, &
                 &astats%signal, astats%explained, astats%c2, ' -> lambda_rel estimate ', astats%lambda_rel_est, &
                 &' (merged-map ratio ', astats%lambda_rel_merged, ')'
             ! amplitudes per half through its own operator, before the prior is attached (it vanishes on span(G))
             allocate(atm_c(atm_prior%get_natoms(),2), source=0._dp)
             call fit_amplitudes_pair
-            model_map = 0.5 * (even_job%pcgop%atomic_model_map(atm_prior, atm_c(:,1)) + &
-                &odd_job%pcgop%atomic_model_map(atm_prior, atm_c(:,2)))
+            if( atm_prior%uses_fitted_model() )then
+                model_map = atm_prior%project(xb)
+            else
+                model_map = 0.5 * (even_job%pcgop%atomic_model_map(atm_prior, atm_c(:,1)) + &
+                    &odd_job%pcgop%atomic_model_map(atm_prior, atm_c(:,2)))
+            endif
             call atm_res%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call atm_res%set_rmat(xb - model_map, .false.)
             deallocate(xb, model_map)
-            write(logfhandle,'(A,2(I0,A,ES10.3,A))') '>>> PCG ATOMIC PRIOR: amplitudes fitted to the data, even ', &
+            write(logfhandle,'(A,2(I0,A,ES10.3,A))') '>>> PCG ATOMIC PRIOR: free amplitudes fitted for diagnostics, even ', &
                 &atm_amp_nits(1), ' iterations (residual ', atm_amp_rres(1), '), odd ', atm_amp_nits(2), &
                 &' iterations (residual ', atm_amp_rres(2), ')'
             call even_job%pcgop%set_atomic_prior(atm_prior, atm_lambda_rel)
@@ -1264,6 +1286,48 @@ contains
                 &' | lambda_A even/odd ', atm_lambda_abs, ' | realspace diagonal even/odd ', &
                 &even_job%pcgop%get_realspace_diagonal(), odd_job%pcgop%get_realspace_diagonal()
         end subroutine prepare_atomic_prior_on_pair
+
+        !> The species CSV beside its PDB carries fitted B, occupancy and posterior-weighted prior intensity.
+        subroutine read_species_prior_fields( natoms, bfacs, occupancies, prior_intensities, found )
+            integer,           intent(in)  :: natoms
+            real, allocatable, intent(out) :: bfacs(:), occupancies(:), prior_intensities(:)
+            logical,           intent(out) :: found
+            type(string) :: csvfile
+            character(len=STDLEN) :: line
+            real, allocatable :: row(:)
+            integer :: funit, io_stat, i, j, ncol
+            found   = .false.
+            csvfile = get_fbody(params%pdbfile, 'pdb')//'.csv'
+            if( .not. file_exists(csvfile) ) return
+            call fopen(funit, file=csvfile, status='old', action='read', iostat=io_stat)
+            call fileiochk('atomic prior opening fitted model table '//csvfile%to_char(), io_stat)
+            read(funit,'(A)',iostat=io_stat) line
+            call fileiochk('atomic prior reading fitted model table header', io_stat)
+            if( index(trim(line), 'MODEL_INTENSITY,POSTERIOR_INTENSITY,OCCUPANCY') == 0 )then
+                call fclose(funit)
+                return
+            endif
+            ncol = count([(line(j:j) == ',', j=1,len_trim(line))]) + 1
+            allocate(row(ncol), bfacs(natoms), occupancies(natoms), prior_intensities(natoms))
+            do i = 1, natoms
+                read(funit,'(A)',iostat=io_stat) line
+                call fileiochk('atomic prior reading fitted model table row', io_stat)
+                do j = 1, len_trim(line)
+                    if( line(j:j) == ',' ) line(j:j) = ' '
+                enddo
+                read(line,*,iostat=io_stat) row
+                call fileiochk('atomic prior parsing fitted model table row', io_stat)
+                bfacs(i)      = row(13)
+                prior_intensities(i) = row(ncol-1)
+                occupancies(i) = row(ncol)
+            enddo
+            read(funit,'(A)',iostat=io_stat) line
+            if( io_stat == 0 ) THROW_HARD('fitted model table has more rows than its PDB; atomic prior')
+            call fclose(funit)
+            if( any(.not. ieee_is_finite(bfacs)) .or. any(.not. ieee_is_finite(occupancies)) .or. &
+                &any(.not. ieee_is_finite(prior_intensities)) ) THROW_HARD('fitted atomic model fields must be finite')
+            found = .true.
+        end subroutine read_species_prior_fields
 
         !> the per-half amplitude fits, concurrently as the half solves
         subroutine fit_amplitudes_pair
@@ -1295,7 +1359,7 @@ contains
             atm_c(:,2) = c_odd
         end subroutine fit_amplitudes_pair
 
-        !> atm_prior=yes: the prior-free pair and its average under _base, the residual x_b - G c under _res, the
+        !> atm_prior=yes: the prior-free pair and its average under _base, the residual to the active atom model under _res, the
         !! sidecar _atmprior.txt; half_even/half_odd and merged still hold the base pair here
         subroutine write_atomic_prior_products( state_here )
             integer, intent(in) :: state_here
@@ -1321,7 +1385,13 @@ contains
             write(funit,'(A,I0)')     'support_voxels=',     astats%nsupport
             write(funit,'(A,F10.4)')  'bfac_min=',           astats%bfac_min
             write(funit,'(A,F10.4)')  'bfac_data=',          astats%bfac_data
-            write(funit,'(A,L1)')     'bfac_data_fitted=',   params%l_bfac_data_fit
+            write(funit,'(A,L1)')     'bfac_data_fitted=',   params%l_bfac_data_fit .and. .not. astats%fitted_model
+            write(funit,'(A,L1)')     'fitted_model=',       astats%fitted_model
+            write(funit,'(A,F10.4)')  'bfac_model_min=',     astats%bfac_model_min
+            write(funit,'(A,F10.4)')  'bfac_model_mean=',    astats%bfac_model_mean
+            write(funit,'(A,F10.4)')  'bfac_model_max=',     astats%bfac_model_max
+            write(funit,'(A,F10.6)')  'occupancy_mean=',     astats%occupancy_mean
+            write(funit,'(A,ES14.6)') 'posterior_intensity_mean=', astats%intensity_mean
             write(funit,'(A,I0)')     'width_fit_shells=',   astats%nshells_fit
             write(funit,'(A,F10.4)')  'sigma_voxels=',       astats%sigma_vox
             write(funit,'(A,I0)')     'footprint_radius=',   astats%foot_rad
@@ -1345,13 +1415,14 @@ contains
             call fclose(funit)
             call fname%kill
             write(logfhandle,'(A,I0,A)') '>>> PCG ATOMIC PRIOR: STATE ', state_here, ', prior-free pair written '//&
-                &'under _base (the FSC is theirs), residual x_b - G c under _res, prior''d pair ships'
+                &'under _base (the FSC is theirs), residual to the active atom model under _res, prior''d pair ships'
         end subroutine write_atomic_prior_products
 
         function atomic_prior_provenance() result( prov )
             character(len=:), allocatable :: prov
             prov = 'lambda_rel='//trim(real2str(atm_lambda_rel))//' natoms='//int2str(atm_prior%get_natoms())//&
-                &' bfac='//trim(real2str(atm_prior%get_bfac()))
+                &' bfac='//trim(real2str(atm_prior%get_bfac()))//' fitted_model='//&
+                &merge('yes','no ',atm_prior%uses_fitted_model())
         end function atomic_prior_provenance
 
         !> pcg_solvent=yes: solvent_even/odd receive the ridge re-solve, even/odd

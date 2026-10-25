@@ -1,7 +1,6 @@
-!@descr: atomicity prior of the PCG reconstruction, lambda_A x^T (I - P_G) x with P_G the projector onto atom kernels
-! The map is modelled as x = G c + e and only e is penalized. The columns of G are Gaussian atom kernels clipped
-! to the solve support; G^T G is sparse (only overlapping footprints couple) and solved by Jacobi-preconditioned CG
-! in double precision. Design: doc/implementation_notes/completed/single_pcg_integration_completed.md.
+!@descr: atomicity prior of PCG reconstruction, projected onto free atom kernels or a fitted per-atom density model
+! The fallback map model is x = G c + e. A fitted model supplies B, occupancy and intensity per atom and restricts
+! the unpenalized subspace to the global scale of that model. G^T G is sparse and solved in double precision.
 module simple_pcg_atomic_prior
 use simple_core_module_api, only: dp, PI, simple_exception
 use simple_pcg_solver,      only: pcg_operator
@@ -46,6 +45,12 @@ type :: pcg_atomic_prior_stats
     real    :: c2            = 0.  !< C^2, explained fraction of the signal
     real    :: lambda_rel_merged = 0. !< (N/S)/(1-C^2), the ratio for a solve of the merged data
     real    :: lambda_rel_est    = 0. !< the same with the half-map noise 2N, the ratio for a half solve
+    real    :: bfac_model_min    = 0. !< smallest fitted per-atom B (A^2), zero without a fitted model
+    real    :: bfac_model_mean   = 0. !< mean fitted per-atom B (A^2)
+    real    :: bfac_model_max    = 0. !< largest fitted per-atom B (A^2)
+    real    :: occupancy_mean    = 0. !< mean fitted occupancy
+    real    :: intensity_mean    = 0. !< mean posterior-weighted model intensity
+    logical :: fitted_model      = .false. !< B, occupancy and intensity define the active one-vector subspace
 end type pcg_atomic_prior_stats
 
 type :: pcg_atomic_prior
@@ -59,6 +64,8 @@ type :: pcg_atomic_prior
     real    :: sigma  = 0.     !< width of the current kernels (voxels)
     real,     allocatable :: pos(:,:)        !< (3,natoms) atom positions, voxels (1-based)
     real,     allocatable :: amp(:)          !< column scale of each kernel
+    real,     allocatable :: bfac_atom(:)    !< fitted B of each retained atom (A^2)
+    real(dp), allocatable :: model_coeff(:)  !< fitted integrated intensity converted to Gaussian peak coefficient
     integer,  allocatable :: corner(:,:)     !< (3,natoms) lowest voxel of each footprint cube
     real,     allocatable :: fval(:,:)       !< (nside**3,natoms) kernel values, zero off the support and box
     logical,  allocatable :: support(:,:,:)  !< the solve support
@@ -66,6 +73,7 @@ type :: pcg_atomic_prior
     integer,  allocatable :: gcol(:)         !< CSR columns
     real(dp), allocatable :: gval(:)         !< CSR values
     real(dp), allocatable :: gdiag(:)        !< diagonal of G^T G
+    real(dp) :: model_norm2 = 0._dp           !< |G model_coeff|^2
     type(pcg_atomic_prior_stats) :: stats
     logical :: exists = .false.
   contains
@@ -84,6 +92,7 @@ type :: pcg_atomic_prior
     procedure :: get_box
     procedure :: get_bfac
     procedure :: get_bfac_min
+    procedure :: uses_fitted_model
     procedure :: is_built
     procedure :: kill
     procedure, private :: build_gram
@@ -97,24 +106,39 @@ contains
 
     !> The model: atom positions in voxels (1-based, the solve box), the solve support (> 0) and optional
     !! column scales; duplicates and atoms centred off the support are dropped. Kernels at B_min
-    subroutine new( self, box, smpd, pos_vox, support, amps )
+    subroutine new( self, box, smpd, pos_vox, support, amps, bfacs, occupancies, intensities )
         class(pcg_atomic_prior), intent(inout) :: self
         integer,                 intent(in)    :: box
         real,                    intent(in)    :: smpd
         real,                    intent(in)    :: pos_vox(:,:)
         real,                    intent(in)    :: support(:,:,:)
         real,          optional, intent(in)    :: amps(:)
+        real,          optional, intent(in)    :: bfacs(:), occupancies(:), intensities(:)
         logical, allocatable :: keep(:)
         integer :: n, a, b, iv(3)
         real    :: minsep2
+        logical :: l_model_fields
         call self%kill
         if( size(pos_vox,1) /= 3 ) THROW_HARD('atom positions are (3,natoms); new')
         if( any(shape(support) /= box) ) THROW_HARD('support dimensions differ from the box; new')
         if( smpd <= 0. ) THROW_HARD('sampling distance must be positive; new')
         n = size(pos_vox,2)
+        l_model_fields = present(bfacs)
+        if( present(occupancies) .neqv. l_model_fields ) THROW_HARD('B, occupancy and intensity must be supplied together; new')
+        if( present(intensities) .neqv. l_model_fields ) THROW_HARD('B, occupancy and intensity must be supplied together; new')
         if( present(amps) )then
             if( size(amps) /= n ) THROW_HARD('one column scale per atom; new')
             if( any(amps <= 0.) ) THROW_HARD('column scales must be positive; new')
+        endif
+        if( l_model_fields )then
+            if( present(amps) ) THROW_HARD('column scales and a fitted atomic model are exclusive; new')
+            if( size(bfacs) /= n .or. size(occupancies) /= n .or. size(intensities) /= n )then
+                THROW_HARD('one B, occupancy and intensity per atom; new')
+            endif
+            if( any(bfacs <= 0.) ) THROW_HARD('fitted atom B factors must be positive; new')
+            if( any(occupancies < 0.) .or. any(occupancies > 1.) ) THROW_HARD('fitted atom occupancies must be in [0,1]; new')
+            if( any(intensities <= 0.) ) THROW_HARD('fitted atom intensities must be positive; new')
+            if( all(occupancies * intensities <= 0.) ) THROW_HARD('the fitted atomic model has zero intensity; new')
         endif
         self%box  = box
         self%smpd = smpd
@@ -139,6 +163,7 @@ contains
         self%natoms = count(keep)
         if( self%natoms < 1 ) THROW_HARD('no atom of the model lies on the solve support; new')
         allocate(self%pos(3,self%natoms), self%amp(self%natoms))
+        if( l_model_fields ) allocate(self%bfac_atom(self%natoms), self%model_coeff(self%natoms))
         b = 0
         do a = 1, n
             if( .not. keep(a) ) cycle
@@ -146,9 +171,22 @@ contains
             self%pos(:,b) = pos_vox(:,a)
             self%amp(b)   = 1.
             if( present(amps) ) self%amp(b) = amps(a)
+            if( l_model_fields )then
+                self%bfac_atom(b)   = bfacs(a)
+                self%model_coeff(b) = real(occupancies(a) * intensities(a) * &
+                    &(4. * PI / bfacs(a))**1.5,dp)
+            endif
         end do
         self%stats%natoms   = self%natoms
         self%stats%bfac_min = self%get_bfac_min()
+        if( l_model_fields )then
+            self%stats%fitted_model   = .true.
+            self%stats%bfac_model_min  = minval(self%bfac_atom)
+            self%stats%bfac_model_mean = sum(self%bfac_atom) / real(self%natoms)
+            self%stats%bfac_model_max  = maxval(self%bfac_atom)
+            self%stats%occupancy_mean = sum(pack(occupancies, keep)) / real(self%natoms)
+            self%stats%intensity_mean = sum(pack(intensities, keep)) / real(self%natoms)
+        endif
         self%exists = .true.
         call self%build(self%stats%bfac_min)
 
@@ -201,23 +239,32 @@ contains
         class(pcg_atomic_prior), intent(inout) :: self
         real,                    intent(in)    :: bfac
         integer :: a, di, dj, dk, i, j, k, l
-        real    :: d2, two_sig2
+        real    :: d2, two_sig2, sigma_here, sigma_max
         if( .not. self%exists ) THROW_HARD('new has not been called; build')
         if( bfac <= 0. ) THROW_HARD('kernel B must be positive; build')
         self%bfac  = bfac
         self%sigma = sqrt(bfac / (8. * PI * PI)) / self%smpd
-        self%rad   = min(FOOT_RAD_MAX, max(FOOT_RAD_MIN, ceiling(FOOT_NSIGMA * self%sigma)))
+        sigma_max  = self%sigma
+        if( allocated(self%bfac_atom) )then
+            self%bfac  = sum(self%bfac_atom) / real(self%natoms)
+            self%sigma = sum(sqrt(self%bfac_atom / (8. * PI * PI)) / self%smpd) / real(self%natoms)
+            sigma_max  = sqrt(maxval(self%bfac_atom) / (8. * PI * PI)) / self%smpd
+        endif
+        self%rad   = min(FOOT_RAD_MAX, max(FOOT_RAD_MIN, ceiling(FOOT_NSIGMA * sigma_max)))
         self%nside = 2 * self%rad + 1
         self%stats%foot_rad  = self%rad
         self%stats%sigma_vox = self%sigma
         self%stats%bfac_data = bfac - self%stats%bfac_min
+        if( allocated(self%bfac_atom) ) self%stats%bfac_data = 0.
         if( allocated(self%corner) ) deallocate(self%corner)
         if( allocated(self%fval)   ) deallocate(self%fval)
         allocate(self%corner(3,self%natoms))
         allocate(self%fval(self%nside**3,self%natoms), source=0.)
-        two_sig2 = 2. * self%sigma**2
-        !$omp parallel do default(shared) private(a,di,dj,dk,i,j,k,l,d2) schedule(static)
+        !$omp parallel do default(shared) private(a,di,dj,dk,i,j,k,l,d2,two_sig2,sigma_here) schedule(static)
         do a = 1, self%natoms
+            sigma_here = self%sigma
+            if( allocated(self%bfac_atom) ) sigma_here = sqrt(self%bfac_atom(a) / (8. * PI * PI)) / self%smpd
+            two_sig2 = 2. * sigma_here**2
             self%corner(:,a) = nint(self%pos(:,a)) - self%rad
             do dk = 0, self%nside-1
                 k = self%corner(3,a) + dk
@@ -238,6 +285,16 @@ contains
         end do
         !$omp end parallel do
         call self%build_gram
+        self%model_norm2 = 0._dp
+        if( allocated(self%model_coeff) )then
+            do a = 1, self%natoms
+                do l = self%gptr(a), self%gptr(a+1)-1
+                    self%model_norm2 = self%model_norm2 + self%model_coeff(a) * self%gval(l) * &
+                        &self%model_coeff(self%gcol(l))
+                enddo
+            enddo
+            if( self%model_norm2 <= 0._dp ) THROW_HARD('the fitted atomic model is empty on the support; build')
+        endif
     end subroutine build
 
     !> G^T G in CSR from a cell grid of the footprint side: footprints of atoms more than one cell apart are disjoint
@@ -459,13 +516,20 @@ contains
         if( present(rel_resid) ) rel_resid = rnorm / ynorm
     end subroutine solve_gram
 
-    !> P_G x = G (G^T G)^-1 G^T x
+    !> Active projection: onto all free atom amplitudes, or onto the global scale of the fitted B/q/intensity model
     function project( self, x ) result( px )
         class(pcg_atomic_prior), intent(in) :: self
         real,                    intent(in) :: x(:,:,:)
         real, allocatable :: px(:,:,:)
-        real(dp), allocatable :: c(:)
-        call self%solve_gram(self%gather(x), c)
+        real(dp), allocatable :: c(:), gx(:)
+        real(dp) :: scale
+        gx = self%gather(x)
+        if( allocated(self%model_coeff) )then
+            scale = dot_product(self%model_coeff, gx) / self%model_norm2
+            c = scale * self%model_coeff
+        else
+            call self%solve_gram(gx, c)
+        endif
         px = self%scatter(c)
     end function project
 
@@ -475,9 +539,16 @@ contains
         real,                    intent(in)    :: lambda
         real,                    intent(in)    :: p(:,:,:)
         real,                    intent(inout) :: hp(:,:,:)
-        real(dp), allocatable :: c(:)
+        real(dp), allocatable :: c(:), gp(:)
+        real(dp) :: scale
         integer :: i, j, k
-        call self%solve_gram(self%gather(p), c)
+        gp = self%gather(p)
+        if( allocated(self%model_coeff) )then
+            scale = dot_product(self%model_coeff, gp) / self%model_norm2
+            c = scale * self%model_coeff
+        else
+            call self%solve_gram(gp, c)
+        endif
         !$omp parallel do collapse(2) default(shared) private(i,j,k) schedule(static)
         do k = 1, self%box
             do j = 1, self%box
@@ -651,7 +722,7 @@ contains
         real,                    intent(in)    :: xb(:,:,:), xe(:,:,:), xo(:,:,:)
         real, allocatable :: pgx(:,:,:)
         real(dp) :: nv, dmean, d2, xb2, e2, n_noise, s_sig, e_exp, ep, c2
-        integer  :: i, j, k
+        integer  :: i, j, k, model_dof
         if( any(shape(xb) /= self%box) .or. any(shape(xe) /= self%box) .or. any(shape(xo) /= self%box) ) &
             &THROW_HARD('map dimensions differ from the box; estimate_lambda')
         pgx   = self%project(xb)
@@ -675,7 +746,9 @@ contains
         n_noise = d2 / nv - dmean**2
         s_sig   = max(xb2 / nv - n_noise, real(SIGNAL_FLOOR,dp) * n_noise)
         e_exp   = e2 / nv
-        ep      = max(e_exp - n_noise * real(self%natoms,dp) / nv, 0._dp)
+        model_dof = self%natoms
+        if( allocated(self%model_coeff) ) model_dof = 1
+        ep      = max(e_exp - n_noise * real(model_dof,dp) / nv, 0._dp)
         c2      = min(ep / s_sig, real(C2_MAX,dp))
         self%stats%noise     = real(n_noise)
         self%stats%signal    = real(s_sig)
@@ -714,6 +787,11 @@ contains
         get_bfac_min = 8. * PI * PI * (SIGMA_MIN_VOX * self%smpd)**2
     end function get_bfac_min
 
+    pure logical function uses_fitted_model( self )
+        class(pcg_atomic_prior), intent(in) :: self
+        uses_fitted_model = allocated(self%model_coeff)
+    end function uses_fitted_model
+
     pure logical function is_built( self )
         class(pcg_atomic_prior), intent(in) :: self
         is_built = self%exists .and. allocated(self%gdiag)
@@ -723,6 +801,8 @@ contains
         class(pcg_atomic_prior), intent(inout) :: self
         if( allocated(self%pos)     ) deallocate(self%pos)
         if( allocated(self%amp)     ) deallocate(self%amp)
+        if( allocated(self%bfac_atom) ) deallocate(self%bfac_atom)
+        if( allocated(self%model_coeff) ) deallocate(self%model_coeff)
         if( allocated(self%corner)  ) deallocate(self%corner)
         if( allocated(self%fval)    ) deallocate(self%fval)
         if( allocated(self%support) ) deallocate(self%support)
@@ -737,6 +817,7 @@ contains
         self%smpd   = 1.
         self%bfac   = 0.
         self%sigma  = 0.
+        self%model_norm2 = 0._dp
         self%stats  = pcg_atomic_prior_stats()
         self%exists = .false.
     end subroutine kill

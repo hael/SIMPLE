@@ -39,9 +39,16 @@ new keys behaves as before.
   linearly with the atom's coordination number (its number of neighbours),
   with one slope shared by all classes. The slope is fitted with the classes
   and written to `_species.txt` as `coord_slope`.
-- Discovery writes four extra files: `_species.csv` (one row per atom),
+- Discovery writes five extra files: `_species.csv` (one row per atom),
   `_species_radial.csv`, `_species.txt` (the summary) and `_species.pdb`
-  (class in the element column). They are diagnostics only: the five
+  (class in the element column), plus `_species_SIM.mrc`, the fitted Gaussian
+  density with per-atom B and combined species/occupancy intensity. The table
+  ends with the fully occupied hard-class/environment intensity, its
+  species-posterior expectation for the reconstruction prior, and the fitted
+  occupancy; the PDB carries the hard label, occupancy and B. With
+  `autorefine3D_nano atm_prior=yes rec_backend=pcg`, the same-stem PDB and CSV
+  define the next reconstruction's fitted atomic prior. Otherwise they remain
+  diagnostics: the five
   existing products, `_ATMS.pdb`, `_CC.mrc` and `_SIM.mrc` among them, are
   identical with and without discovery.
 

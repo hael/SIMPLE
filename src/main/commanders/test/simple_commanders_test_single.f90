@@ -1143,16 +1143,17 @@ subroutine exec_test_species_discovery( self, cline )
     ! a run against the generating model
     subroutine evaluate( ir )
         integer, intent(in) :: ir
-        character(len=:), allocatable :: tag, csv, txt, pdb, rad_csv
+        character(len=:), allocatable :: tag, csv, txt, pdb, sim, rad_csv
         character(len=2), allocatable :: syms(:)
-        real,    allocatable :: rows(:,:), xyz(:,:), radial(:,:), rsort(:)
+        real,    allocatable :: rows(:,:), xyz(:,:), radial(:,:), rsort(:), class_intensity(:), posterior_expected(:)
         integer, allocatable :: match(:), hits(:), order(:), cls(:), sel(:)
         type(atoms) :: found_atms
         character(len=2) :: el2
-        real    :: tol, dpt, ratio, ratio_gen, rise_fit, rise_gen, rin, rout, min_light
+        real    :: tol, dpt, ratio, ratio_gen, rise_fit, rise_gen, rin, rout, min_light, model_field_err
+        real    :: posterior_field_err, posterior_effect, posterior_softness, coord_slope, expected_class
         integer, parameter :: MAXLEV = 8
         integer :: nrow, j, nfalse, nwrong, k_found, nrec, nsh, nin, nout, kc, j1, j2, ic, nfound(0:2,0:MAXLEV)
-        logical :: l_list, l_disc
+        logical :: l_list, l_disc, pdb_fields_ok
         ic     = RUN_CASE(ir)
         el2    = SECOND(ic)
         tag    = trim(CASES(ic))//'/'//trim(RUN_NAME(ir))
@@ -1161,14 +1162,55 @@ subroutine exec_test_species_discovery( self, cline )
         csv    = trim(RUN_NAME(ir))//'/map_species.csv'
         txt    = trim(RUN_NAME(ir))//'/map_species.txt'
         pdb    = trim(RUN_NAME(ir))//'/map_species.pdb'
+        sim    = trim(RUN_NAME(ir))//'/map_species_SIM.mrc'
         ! found atoms: the species table with discovery, the present atoms otherwise
         if( l_disc )then
-            call gate%check(tag//': species files written', file_exists(csv) .and. file_exists(txt) .and. file_exists(pdb))
-            if( .not. (file_exists(csv) .and. file_exists(txt) .and. file_exists(pdb)) ) return
+            call gate%check(tag//': species files written', file_exists(csv) .and. file_exists(txt) .and. file_exists(pdb)&
+                &.and. file_exists(sim))
+            if( .not. (file_exists(csv) .and. file_exists(txt) .and. file_exists(pdb) .and. file_exists(sim)) ) return
             call read_table(csv, rows)
             nrow = size(rows, 2)
             xyz  = rows(3:5,:)
             cls  = nint(rows(16,:))
+            k_found = nint(report_value(txt, 'K'))
+            coord_slope = report_value(txt, 'coord_slope')
+            allocate(class_intensity(k_found), posterior_expected(nrow), source=0.)
+            do kc = 1, k_found
+                class_intensity(kc) = report_value(txt, 'class_intensity_'//int2str(kc))
+            enddo
+            do j = 1, nrow
+                do kc = 1, k_found
+                    expected_class = class_intensity(kc) + coord_slope * (rows(7,j) - 12.)
+                    posterior_expected(j) = posterior_expected(j) + rows(16+kc,j) * max(expected_class, TINY)
+                enddo
+            enddo
+            posterior_field_err = maxval(abs(rows(size(rows,1)-1,:) - posterior_expected))
+            call gate%check(tag//': prior intensity is the species-posterior expectation', &
+                &posterior_field_err <= 1.e-5 * max(1., maxval(abs(posterior_expected))))
+            if( k_found > 1 )then
+                posterior_effect = maxval(abs(rows(size(rows,1)-1,:) - rows(size(rows,1)-2,:)))
+                posterior_softness = maxval(1. - maxval(rows(17:16+k_found,:), dim=1))
+                if( posterior_softness > 1.e-6 )then
+                    call gate%check(tag//': soft species probabilities affect the prior intensity', &
+                        &posterior_effect > 1.e-6 * max(1., maxval(abs(rows(size(rows,1)-2,:)))))
+                else
+                    call gate%report(tag//': largest posterior-intensity change for effectively hard labels', posterior_effect)
+                endif
+            endif
+            model_field_err = maxval(abs(rows(size(rows,1),:) * rows(size(rows,1)-2,:) - &
+                &min(rows(11,:) * (rows(13,:) / (4. * PI))**1.5, rows(size(rows,1)-2,:))))
+            call gate%check(tag//': occupancy times hard-class intensity reproduces the bounded fitted integral', &
+                &model_field_err <= 1.e-5 * max(1., maxval(abs(rows(11,:)))))
+            call found_atms%new(string(pdb))
+            pdb_fields_ok = found_atms%get_n() == nrow
+            if( pdb_fields_ok )then
+                do j = 1, nrow
+                    if( abs(found_atms%get_beta(j) - rows(13,j)) > 0.0051 ) pdb_fields_ok = .false.
+                    if( abs(found_atms%get_occupancy(j) - rows(size(rows,1),j)) > 0.0051 ) pdb_fields_ok = .false.
+                enddo
+            endif
+            call gate%check(tag//': species PDB carries fitted B and occupancy', pdb_fields_ok)
+            call found_atms%kill
         else
             call gate%check(tag//': atoms written', file_exists(trim(RUN_NAME(ir))//'/map_ATMS.pdb'))
             if( .not. file_exists(trim(RUN_NAME(ir))//'/map_ATMS.pdb') ) return
@@ -1219,7 +1261,6 @@ subroutine exec_test_species_discovery( self, cline )
         if( .not. l_disc ) return
         call gate%metric(tag//': recall over all eligible', recall_of(elig, hits), MIN_ALL_RECALL,&
             &recall_of(elig, hits) >= MIN_ALL_RECALL)
-        k_found = nint(report_value(txt, 'K'))
         nrec    = count(nint(rows(2,:)) == 1)
         call gate%report(tag//': K', real(k_found))
         call gate%report(tag//': recovered atoms', real(nrec))
@@ -1421,7 +1462,7 @@ subroutine exec_test_single_workflow( self, cline )
     type(string)                          :: aref_projfile, nano_projfile
     type(string)                          :: suite_name, projname, projfile, project_dir, startvol
     type(string)                          :: simulated_vol, reprojections, trajectory, denoised_trajectory
-    type(string)                          :: autorefine_dir, final_volume, run_dir
+    type(string)                          :: autorefine_dir, final_volume, run_dir, atomic_product
     type(test_gate)                       :: gate
     character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
     character(len=*), parameter           :: TRAJECTORY_STK    = 'simulated_trajectory.mrc'
@@ -1592,10 +1633,24 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_aref3Dnano%set('maxits',               NREFINE_ITERS)
     call cline_aref3Dnano%set('maxits_between',     NITERS_BETWEEN)
     call cline_aref3Dnano%set('nspace',                     NSPACE)
+    if( suite_name == 'fcc' )then
+        call cline_aref3Dnano%set('rec_backend', 'pcg')
+        call cline_aref3Dnano%set('atm_prior',   'yes')
+        call cline_aref3Dnano%set('maxits_atm',      2)
+    endif
     call xaref3Dnano%execute(cline_aref3Dnano)
     call simple_getcwd(autorefine_dir)
     final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
         &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
+    if( suite_name == 'fcc' )then
+        atomic_product = add2fbody(final_volume, MRC_EXT, '_base')
+        if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: atomic-loop base map is missing')
+        atomic_product = add2fbody(final_volume, MRC_EXT, '_res')
+        if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: atomic-loop residual is missing')
+        atomic_product = filepath(filepath(autorefine_dir, 'final_results'), &
+            &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//'_atmprior.txt')
+        if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: atomic-loop sidecar is missing')
+    endif
     call validate_reconstructed_volume(simulated_vol, final_volume, params%smpd, BOX, 0.001, real(MOLDIAM), &
         &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, 'autorefine3D_nano', volume_corr, volume_fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)

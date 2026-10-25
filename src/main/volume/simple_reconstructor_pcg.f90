@@ -490,8 +490,8 @@ contains
         call self%fold_ridges_into_precond
     end subroutine set_solvent_prior
 
-    !> Atomicity prior lambda_A (I - P_G) with lambda_A = lambda_rel * realspace_diag (the data precision per voxel).
-    !! The prior object must outlive the solves; lambda_rel = 0 detaches it and leaves the operator untouched.
+    !> Atomicity prior lambda_A (I - P) with lambda_A = lambda_rel * realspace_diag (the data precision per voxel).
+    !! P spans free atom amplitudes or the global scale of a fitted B/occupancy/intensity model.
     !! Deapodized mode only, no ML prior beside it; call after end_accum
     subroutine set_atomic_prior( self, prior, lambda_rel )
         class(reconstructor_pcg),        intent(inout) :: self
@@ -522,8 +522,8 @@ contains
         get_atomic_lambda = self%atm_lambda
     end function get_atomic_lambda
 
-    !> Per-atom amplitudes fitted to this half's data through its normal operator, c = argmin |A G c - b|^2
-    !! (pcg_atomic_prior%amplitudes); the prior term vanishes on span(G), so it may be attached or not
+    !> Per-atom amplitudes fitted to this half's data through its normal operator, c = argmin |A G c - b|^2.
+    !! With a fitted model these are diagnostics; the active prior spans that model's single global scale.
     subroutine fit_atom_amplitudes( self, prior, c, maxits, rtol, niters, rel_resid )
         class(reconstructor_pcg), target, intent(inout) :: self
         class(pcg_atomic_prior),          intent(in)    :: prior
@@ -607,7 +607,7 @@ contains
     end function get_solvent_lambda
 
     !> the ridge terms of the normal operator: the band precision lambda I and, when set, the position-dependent
-    !! solvent ridge lambda_s (1-w) and the atomicity prior lambda_A (I - P_G); both operator modes come here
+    !! solvent ridge lambda_s (1-w) and the atomicity prior lambda_A (I - P); both operator modes come here
     subroutine add_ridge( self, p, hp )
         class(reconstructor_pcg), intent(in)    :: self
         real,                     intent(in)    :: p(self%box,self%box,self%box)

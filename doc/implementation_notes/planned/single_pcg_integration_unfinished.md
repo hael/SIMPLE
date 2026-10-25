@@ -1,7 +1,8 @@
 # The atomicity prior on the PCG backend: open work
 
-Status (2026-10-20): the prior works inside `reconstruct3D`; it is not yet used by `refine_tomo`,
-`refine3D_nano` or `autorefine3D_nano`. Design, rationale, the rules every prior obeys, and the
+Status (updated 2026-10-25): the prior works inside `reconstruct3D`, and `autorefine3D_nano`
+can bootstrap it from each round's `detect_atoms` model. It is not yet used by `refine_tomo` or
+standalone `refine3D_nano`. Design, rationale, the rules every prior obeys, and the
 record of what was built are in
 [`../completed/single_pcg_integration_completed.md`](../completed/single_pcg_integration_completed.md)
 (read its sections 3 to 6 for the maths and section 11 for the implementation choices).
@@ -55,12 +56,21 @@ the prior'd halves are never a noise reference (use the prior-free `_base` halve
    `B_i = B_min + B_data`, as `atoms%convolve` uses. Make `atoms%convolve`'s per-element tables a
    kernel builder shared by the simulator and the prior. The prior currently uses one Gaussian for
    all species, which suits annular dark-field STEM (AET) but not TEM data (SINGLE).
-4. **SINGLE particles.** The EM loop in `refine3D_nano` / `autorefine3D_nano`: `detect_atoms`
-   builds the model after each refinement stage (M-step); the next stage reconstructs with the
-   regularized solve (E-step) as the alignment reference, the base solve kept for resolution and
-   the residual. Stage 1, with no model, runs prior-free. ICM (the old filter) is not combined
-   with the prior. Needs item 3. Judged by held-out image prediction and the atom statistics of
-   `detect_atoms`. Files: `single_commanders_nano3D.f90`.
+4. **SINGLE particles, partly implemented.** `autorefine3D_nano atm_prior=yes rec_backend=pcg`
+   now runs stage 1 prior-free, builds a model with `detect_atoms`, and passes that PDB to the next
+   stage's atomic-prior reconstruction. The published map is the regularized solve; resolution,
+   the next atom detection, and species discovery use the prior-free `_base` pair. Every stage
+   retains `_base`, `_res`, and `_atmprior.txt` beside the existing products. ICM is rejected.
+   An element list such as `Pt,Ni` is passed only to `detect_atoms`, so the child refinement does
+   not parse a species selector. With discovery enabled, the next prior uses `_species.pdb`, which
+   includes residual-recovered weak sites, and all species products are retained per round. The
+   same-stem species table now supplies the fitted per-atom B, occupancy and species-posterior
+   expectation of the class/environment model intensity. Their Gaussian model defines the prior's
+   one-dimensional unpenalized subspace; only
+   its global scale stays free and is therefore set by the particle data. A PDB without this table
+   keeps the previous position-only, free-amplitude prior. Species-dependent TEM kernels still need
+   item 3. Standalone `refine3D_nano`, the full `single_workflow` acceptance trajectory and the
+   held-out image check remain open.
 5. **Per-atom amplitudes for species discovery.** Write the data-fitted amplitude
    `c = argmin || A G c - b ||^2` (solves `G^T H G c = G^T r` with the reconstructor's normal
    operator, by a small CG in atom space) and let `discover_species` use it instead of the aperture

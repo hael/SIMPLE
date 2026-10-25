@@ -1350,7 +1350,7 @@ contains
         integer      :: nnew, i, iround, isweep
         logical      :: l_halves
         if( self%d_nn <= 0. ) THROW_HARD('d_NN was not measured; discover_species')
-        write(logfhandle,'(A)') '>>> SPECIES DISCOVERY (DIAGNOSTICS ONLY)'
+        write(logfhandle,'(A)') '>>> SPECIES DISCOVERY'
         s        = self%smpd
         d        = self%d_nn
         dv       = d / s
@@ -1444,6 +1444,7 @@ contains
         call write_radial_profiles
         call write_species_table
         call write_species_pdb
+        call write_species_map
         ! tables: discovery fields of the level-1 atoms, the recovered atoms on their own
         self%atominfo(1:n1) = tab(1:n1)
         if( allocated(self%recovered) ) deallocate(self%recovered)
@@ -2104,8 +2105,9 @@ contains
             do kc = 1,K
                 header = header//',POST'//int2str(kc)
             enddo
-            header = header//',VALID_CORR,GATE_USED'
-            fmt    = '(I0,",",I0,5(",",ES16.8),2(",",I0),6(",",ES16.8),",",I0,'//int2str(K+1)//'(",",ES16.8),",",I0)'
+            header = header//',VALID_CORR,GATE_USED,MODEL_INTENSITY,POSTERIOR_INTENSITY,OCCUPANCY'
+            fmt    = '(I0,",",I0,5(",",ES16.8),2(",",I0),6(",",ES16.8),",",I0,'//int2str(K+1)//&
+                &'(",",ES16.8),",",I0,3(",",ES16.8))'
             call fopen(funit, file=self%fbody//'_species.csv', status='REPLACE', action='WRITE')
             write(funit,'(A)') header%to_char()
             do j = 1,n
@@ -2113,25 +2115,23 @@ contains
                 write(funit,fmt%to_char()) j, origin,&
                     &(tab(j)%center - 1.) * s, rad(j), real(coord(j)), tab(j)%det_stage, tab(j)%det_level, tab(j)%det_z,&
                     &tab(j)%amp, tab(j)%bfac_stage1, tab(j)%bfac, tab(j)%aper_int, tab(j)%aper_snr, tab(j)%species,&
-                    &post(j,:), tab(j)%valid_corr, merge(1, 0, tab(j)%gate_used)
+                    &post(j,:), tab(j)%valid_corr, merge(1, 0, tab(j)%gate_used), species_model_intensity(j),&
+                    &posterior_model_intensity(j), species_occupancy(j)
             enddo
             call fclose(funit)
         end subroutine write_species_table
 
         ! every atom with its class: element column and chain by class (X1, or the first named species, and chain A
-        ! the strongest), occupancy the class intensity over the strongest class's, B column the stage-2 B factor;
-        ! a viewer selects a class by chain
+        ! the strongest), occupancy the fitted intensity relative to the class/environment model, B column the stage-2
+        ! B factor; a viewer selects a class by chain
         subroutine write_species_pdb
             type(atoms)      :: atms
             character(len=2) :: el
             integer          :: j, kc
-            real             :: occ
             if( K > 36 ) THROW_HARD('more classes than PDB chains A-Z, 0-9; write_species_pdb')
             call atms%new(n, dummy=.true.)
             do j = 1,n
                 kc  = tab(j)%species
-                occ = 1.
-                if( mu(1) > TINY ) occ = max(mu(kc), 0.) / mu(1)
                 if( allocated(self%species) )then
                     el = self%species(kc)
                 else
@@ -2147,13 +2147,47 @@ contains
                 call atms%set_coord(    j, (tab(j)%center - 1.) * s)
                 call atms%set_num(      j, j)
                 call atms%set_resnum(   j, j)
-                call atms%set_occupancy(j, occ)
+                call atms%set_occupancy(j, species_occupancy(j))
                 call atms%set_beta(     j, tab(j)%bfac)
             enddo
             call atms%writepdb(self%fbody//'_species.pdb')
             call atms%kill
             write(logfhandle,'(A)') 'output, atoms with their class:   '//self%fbody%to_char()//'_species.pdb'
         end subroutine write_species_pdb
+
+        ! fully occupied intensity at this atom's class and coordination
+        real function species_model_intensity( j )
+            integer, intent(in) :: j
+            species_model_intensity = max(expected_int(j, tab(j)%species), TINY)
+        end function species_model_intensity
+
+        ! class/environment intensity averaged over the atom's species posterior
+        real function posterior_model_intensity( j )
+            integer, intent(in) :: j
+            integer :: kc
+            posterior_model_intensity = 0.
+            do kc = 1,K
+                posterior_model_intensity = posterior_model_intensity + post(j,kc) * max(expected_int(j, kc), TINY)
+            enddo
+        end function posterior_model_intensity
+
+        ! observed intensity relative to the fully occupied class/environment model
+        real function species_occupancy( j )
+            integer, intent(in) :: j
+            real :: fitted_intensity
+            fitted_intensity = tab(j)%amp * (tab(j)%bfac / (4. * PI))**1.5
+            species_occupancy = min(1., max(0., fitted_intensity / species_model_intensity(j)))
+        end function species_occupancy
+
+        ! The fitted Gaussian model carries B and combined species/occupancy intensity without an atomic number.
+        subroutine write_species_map
+            type(image) :: species_map
+            call species_map%new(ldim, s)
+            call species_map%set_rmat(model, .false.)
+            call species_map%write(self%fbody//'_species_SIM.mrc')
+            call species_map%kill
+            write(logfhandle,'(A)') 'output, fitted intensity model:     '//self%fbody%to_char()//'_species_SIM.mrc'
+        end subroutine write_species_map
 
         subroutine write_species_report
             real, allocatable :: lnb(:), r(:)
@@ -2163,7 +2197,7 @@ contains
             integer :: funit, kc, l, ninner, nsh, ish, nlow, nin
             real    :: bmed, cn_inner, misclass, rms2, cn_out, frac_out
             call fopen(funit, file=self%fbody//'_species.txt', status='REPLACE', action='WRITE')
-            write(funit,'(A)') '# species discovery of detect_atoms (discover_species=yes): diagnostics, not used by any product'
+            write(funit,'(A)') '# species discovery of detect_atoms (discover_species=yes): fitted model products'
             call write_kv(funit, 'K', int2str(K))
             call write_kv(funit, 'nspecies_fixed', int2str(self%nspecies))
             do kc = 1,K

@@ -938,7 +938,8 @@ contains
     ! and parametrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
     ! A pseudo-atom (X1..X3) is q (4 pi / B)**1.5 exp(-4 pi**2 r**2 / B), q = occupancy, B = beta:
     ! unit q integrates to one; lp does not blur it, its width is B
-    ! bfac_pdb: an element atom's beta is its Debye-Waller B, added to every b_j with the blur (default off)
+    ! bfac_pdb: an element atom's occupancy scales its scattering amplitude and beta is its Debye-Waller B,
+    ! added to every b_j with the blur (default off)
     subroutine convolve( self, vol, cutoff, lp, bfac_pdb )
         use simple_image, only: image
         class(atoms),      intent(in)    :: self
@@ -1275,6 +1276,10 @@ contains
                 b = b + bfac ! eq B.6
                 if( l_bfac_pdb )then
                     if( self%beta(i) < 0. ) THROW_HARD('negative B factor with bfac_pdb; convolve')
+                    if( self%occupancy(i) < 0. .or. self%occupancy(i) > 1. )then
+                        THROW_HARD('occupancy outside [0,1] with bfac_pdb; convolve')
+                    endif
+                    a = self%occupancy(i) * a
                     b = b + self%beta(i)
                 endif
             endif

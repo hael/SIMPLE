@@ -1,6 +1,8 @@
 # Atomic B factors in SINGLE model building and refinement
 
-Implementation note, 2026-10-09. Design for review; nothing here is implemented. It builds on
+Implementation note, 2026-10-09, updated 2026-10-25. The rendering foundation, the fitted-model
+products, and their reconstruction feedback loop are implemented; the physical interpretation of
+map-fitted B and occupancy remains under validation. It builds on
 the species-discovery work (`species_discovery_completed.md`), whose second run adds the pieces this note
 uses, and it is meant to start after that run is merged.
 
@@ -10,6 +12,27 @@ settled by `atomic_density_model.md`: a Gaussian atom through a two-parameter ma
 with per-particle profiles in the coordination number. Option 1 of section 1a (measure B in
 the refinement) is withdrawn; the products and the refinement loop of this note follow once
 that model fits the 66 real maps.
+
+`detect_atoms discover_species=yes` writes `_species_SIM.mrc`. This is the fitted Gaussian model
+on the experimental map's intensity scale: every atom carries the stage-2 B factor and its fitted
+amplitude, so the density represents the coupled species/occupancy intensity without assuming an
+atomic number. `_species.csv` also carries the fully occupied hard-class/environment intensity, the
+posterior-weighted intensity `Ibar_i = sum_k POST_ik I_ik`, and the atom's fitted integrated
+intensity relative to its hard-class model as occupancy. With
+`pdb_bfac=yes`, elemental rendering also scales each atom by its PDB occupancy as well as adding its
+B factor.
+
+`autorefine3D_nano atm_prior=yes rec_backend=pcg` closes the reconstruction loop. Stage 1 is
+prior-free; the next PCG solve reads the `_species.pdb` and its same-stem CSV. Each atom kernel uses
+its fitted `B_i`, and its relative coefficient is
+`q_i Ibar_i (4 pi / B_i)^(3/2)`. Thus uncertain species assignments interpolate between their
+class/environment intensities instead of becoming a hard prior. The unpenalized subspace is the
+global scale of that complete fitted model, so the particle data still set one overall density scale
+instead of inheriting the preceding map's arbitrary scale. The next detection remains on the
+prior-free `_base` maps. Without the
+fitted-model CSV, the prior retains its previous position-only behavior: one fitted common width and
+free atom amplitudes. Sharing the five-Gaussian element kernels and acceptance testing of the new
+feedback remain open.
 
 **Status, after the checks of section 1a: the fitting method is open.** Per-atom B factors
 fitted to a reconstructed map are not trustworthy yet, in any form tried. The rendering,
@@ -213,19 +236,24 @@ species fit's.
 - Anisotropic displacement parameters in the fit or the reference.
 - Joint refinement of positions with B factors.
 - A B-factor-dependent pruning rule: pruning stays as it is.
-- Carrying B factors between rounds of `autorefine3D_nano`.
+- Element-specific five-Gaussian kernels in the fitted-model PCG prior; it currently uses the
+  species-free Gaussian described above.
 
 ## 10. Phases
 
-1. Occupancy scaling in the element branch of `convolve` (with `bfac_pdb`), with unit tests; the
-   profile fit and the per-atom fit as routines on arrays in `simple_nano_species`, with unit
-   tests on samples drawn from a known profile.
+1. **Partly implemented.** Occupancy scaling in the element branch of `convolve` (with
+   `bfac_pdb`) and its unit tests are present. `discover_species=yes` writes a diagnostic fitted
+   intensity/B map. The profile fit and per-atom fit as reusable routines in
+   `simple_nano_species`, with unit tests on samples drawn from a known profile, are still open.
 2. `fit_bfactors` in `detect_atoms`: the fit on the present path, the products of section 5,
    `atoms_stats` on the fitted factors. Exit: with `no` byte-identical; with `yes`, on a simulated
    particle with a known profile, the profile within 15% at the core and the surface and the
    occupancies within 0.1.
-3. `autorefine3D_nano`: the key passed through, the per-round products, and the `single_workflow`
-   case of section 8. Exit: the floors of section 8.
+3. **Fitted-model loop implemented.** `autorefine3D_nano` passes the detected species PDB and its
+   table to the next PCG reconstruction and retains the base/residual/sidecar products. The prior
+   uses per-atom B, occupancy and posterior-weighted model intensity up to one fitted global scale.
+   Validation with the full `single_workflow` case of section 8 remains open. Exit: the floors of
+   section 8.
 4. The real maps, inside the species validation run.
 
 ## 11. Open questions
