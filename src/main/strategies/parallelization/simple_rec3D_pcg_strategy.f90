@@ -8,11 +8,11 @@ use simple_parameters,          only: parameters
 use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA, PCG_WEIGHT_THRESHOLD, &
     &pcg_raw_accum_compatible, measure_closed_form_agreement, handle_cold_restart_outcome, report_pcg_solve, &
     &report_closed_form_agreement, write_closed_form_diagnostics, validate_solved_map, read_pcg_raw_accum_header
-use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session, killimgbatch, prep_rec_observation, &
-    &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, take_records, get_rec_observation
+use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session, killimgbatch, &
+    &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, rec_state_half, rec_obs_oris, &
+    &rec_obs_inv_sig2, read_rec_obs_batch
 use simple_matcher_3Drec,       only: write_rec3D_bench
 use simple_sigma2_files,        only: load_sigma2
-use simple_euclid_sigma2,       only: sigma2_half
 use simple_image,               only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
     &write_support_provenance
@@ -34,6 +34,7 @@ implicit none
 
 public :: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 public :: rec3D_master_nthr, validate_pcg_common
+public :: set_pcg_solve_support, calculate_pcg_state_diagnostics, accumulate_pcg_state_half
 public :: pcg_assemble_bench, write_pcg_assemble_bench
 private
 #include "simple_local_flags.inc"
@@ -267,7 +268,7 @@ contains
         logical :: l_sigma_loaded
         type(ptcl_read_counts)  :: reads0, reads
         type(ptcl_read_session) :: rsess
-        integer(timer_int_kind) :: t0, t_half, t_prep
+        integer(timer_int_kind) :: t0, t_half
         real(timer_int_kind)    :: rt_init, rt_half, rt_prep
 
         if( L_BENCH_GLOB )then
@@ -306,7 +307,7 @@ contains
                 if( l_weighted )then
                     call collect_weighted_state_half(state, eo, selected_pinds, half_pinds, half_w)
                 else
-                    call collect_worker_state_half(state, eo, selected_pinds, half_pinds)
+                    call rec_state_half(build, state, eo, selected_pinds, half_pinds)
                 endif
                 n_half = size(half_pinds)
                 nimgs  = nimgs + n_half
@@ -330,28 +331,6 @@ contains
         endif
 
     contains
-
-        subroutine collect_worker_state_half( state_here, eo_here, pinds, selected )
-            integer,              intent(in)  :: state_here, eo_here, pinds(:)
-            integer, allocatable, intent(out) :: selected(:)
-            integer :: i, n, p
-            n = 0
-            do i = 1, size(pinds)
-                p = pinds(i)
-                if( build%spproj_field%get_state(p) /= state_here ) cycle
-                if( build%spproj_field%get_eo(p) /= eo_here ) cycle
-                n = n + 1
-            enddo
-            allocate(selected(n))
-            n = 0
-            do i = 1, size(pinds)
-                p = pinds(i)
-                if( build%spproj_field%get_state(p) /= state_here ) cycle
-                if( build%spproj_field%get_eo(p) /= eo_here ) cycle
-                n = n + 1
-                selected(n) = p
-            enddo
-        end subroutine collect_worker_state_half
 
         !> the state's weighted members of one half (only params%state when state= was given)
         subroutine collect_weighted_state_half( state_here, eo_here, pinds, selected, weights )
@@ -385,17 +364,7 @@ contains
             integer,          intent(in) :: state_here, eo_here, pinds(:)
             character(len=*), intent(in) :: provenance_here
             type(reconstructor_pcg) :: pcgop
-            type(oris)      :: selection
-            type(ori)       :: orientation
-            type(ctfparams) :: ctfparms
             type(string)    :: fname
-            type(image)     :: obs
-            complex, allocatable :: y_batch(:,:,:)
-            real,    allocatable :: inv_sig2(:)
-            integer :: lims2(2,2), R, batchlims(2), batchsz, ih
-            integer :: i, ii, iptcl, ibatch
-            real    :: shift(2), crop_factor
-            logical :: l_records
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             fname = refine3D_pcg_raw_accum_fname(state_here, params%part, params%numlen, &
@@ -407,69 +376,11 @@ contains
                 call fname%kill
                 return
             endif
-            call pcgop%set_sym(build%pgrpsyms)
-            lims2 = pcgop%get_lims2()
-            R     = lims2(1,2)
-            ! every particle of the call is in half eo_here: one inverse spectrum at the native shells 0:R, read
-            ! from the spectra's plane grid at the padded shells OSMPL_PAD_FAC*n, which hold exactly sigma2(n)
-            if( params%cc_objfun == OBJFUN_EUCLID )then
-                call build%esig%prep_fplane_grid(params%box_croppd, lbound(build%esig%sigma2_noise,1))
-                ih = sigma2_half(eo_here)
-                allocate(inv_sig2(0:R))
-                if( OSMPL_PAD_FAC*R > build%esig%fplane%nyq ) THROW_HARD('the plane grid does not reach the PCG shells')
-                inv_sig2(0:R) = build%esig%fplane%inv_sig2(0:OSMPL_PAD_FAC*R:OSMPL_PAD_FAC, ih)
-            endif
-            call selection%new(size(pinds), .true.)
-            call orientation%new(.false.)
-            crop_factor = real(params%box_crop) / real(params%box)
-            do i = 1, size(pinds)
-                iptcl = pinds(i)
-                call build%spproj_field%get_ori(iptcl, orientation)
-                ctfparms      = build%spproj%get_ctfparams(params%oritype, iptcl)
-                ctfparms%smpd = params%smpd_crop
-                shift         = build%spproj_field%get_2Dshift(iptcl) * crop_factor
-                call orientation%set_ctfvars(ctfparms)
-                call orientation%set_shift(shift)
-                call selection%set_ori(i, orientation)
-            enddo
-            ! the state weight acts as an inverse noise scale: it multiplies the B term and |T|^2 alike
-            if( allocated(inv_sig2) )then
-                if( l_weighted )then
-                    call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2, weights=half_w)
-                else
-                    call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2)
-                endif
+            if( l_weighted )then
+                call accumulate_pcg_state_half(params, build, rsess, eo_here, pinds, pcgop, rt_prep, half_w)
             else
-                if( l_weighted )then
-                    call pcgop%prep_particles(selection, use_ctf=.true., weights=half_w)
-                else
-                    call pcgop%prep_particles(selection, use_ctf=.true.)
-                endif
+                call accumulate_pcg_state_half(params, build, rsess, eo_here, pinds, pcgop, rt_prep)
             endif
-            allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
-            call pcgop%begin_accum
-            call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
-            do ibatch = 1, size(pinds), MAXIMGBATCHSZ
-                batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
-                batchsz   = batchlims(2) - batchlims(1) + 1
-                ! the search's records of a cropped pass are the batch's observations, else the batch is read
-                l_records = take_records(pinds(batchlims(1):batchlims(2)))
-                if( .not. l_records ) call rsess%read(params, build, size(pinds), pinds, batchlims)
-                if( L_BENCH_GLOB ) t_prep = tic()
-                do ii = 1, batchsz
-                    ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
-                    if( l_records )then
-                        call get_rec_observation(pinds(batchlims(1)+ii-1), obs, .true.)
-                    else
-                        call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
-                    endif
-                    call obs%fft
-                    y_batch(:,:,ii) = pcgop%extract_native_plane(obs)
-                enddo
-                if( L_BENCH_GLOB ) rt_prep = rt_prep + toc(t_prep)
-                call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
-            enddo
-            call obs%kill
             if( l_weighted )then
                 call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
                     &params%nparts, size(pinds), provenance_here, mass=sum(real(half_w,dp)), wset_id=wset_id)
@@ -478,14 +389,63 @@ contains
                     &params%nparts, size(pinds), provenance_here)
             endif
             call pcgop%kill
-            call selection%kill
-            call orientation%kill
             call fname%kill
-            deallocate(y_batch)
-            if( allocated(inv_sig2) ) deallocate(inv_sig2)
         end subroutine accumulate_worker_state_half
 
     end subroutine execute_rec3D_pcg_worker
+
+    !> The accumulation of the particles pinds, all in half eo_here, into pcgop (made by the caller): the
+    !! point group, the half's noise spectrum at the native shells (objfun=euclid), the particles' orientations
+    !! and CTF at the cropped box, and one pass over their observation batches through rsess. The frame the
+    !! PCG worker publishes and reconstruct3D_wave's start finalizes. weights: the state weights, an inverse
+    !! noise scale that multiplies the B term and |T|^2 alike
+    subroutine accumulate_pcg_state_half( params, build, rsess, eo_here, pinds, pcgop, rt_prep, weights )
+        class(parameters),        intent(in)    :: params
+        class(builder),           intent(inout) :: build
+        class(ptcl_read_session), intent(inout) :: rsess
+        integer,                  intent(in)    :: eo_here, pinds(:)
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        real(timer_int_kind),     intent(inout) :: rt_prep
+        real, optional,           intent(in)    :: weights(:)
+        type(oris)  :: selection
+        type(image) :: obs
+        complex, allocatable :: y_batch(:,:,:)
+        real,    allocatable :: inv_sig2(:)
+        integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch
+        call pcgop%set_sym(build%pgrpsyms)
+        lims2 = pcgop%get_lims2()
+        R     = lims2(1,2)
+        ! every particle of the call is in half eo_here: one inverse spectrum at the native shells 0:R
+        if( params%cc_objfun == OBJFUN_EUCLID ) call rec_obs_inv_sig2(params, build, eo_here, R, inv_sig2)
+        call rec_obs_oris(params, build, pinds, selection)
+        if( allocated(inv_sig2) )then
+            if( present(weights) )then
+                call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2, weights=weights)
+            else
+                call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2)
+            endif
+        else
+            if( present(weights) )then
+                call pcgop%prep_particles(selection, use_ctf=.true., weights=weights)
+            else
+                call pcgop%prep_particles(selection, use_ctf=.true.)
+            endif
+        endif
+        allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
+        call pcgop%begin_accum
+        call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
+        do ibatch = 1, size(pinds), MAXIMGBATCHSZ
+            batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+            batchsz   = batchlims(2) - batchlims(1) + 1
+            ! the search's records of a cropped pass are the batch's observations, else the batch is read
+            call read_rec_obs_batch(params, build, rsess, pinds, batchlims, obs, lims2, R*R, y_batch, rt_prep)
+            call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
+        enddo
+        call obs%kill
+        call selection%kill
+        deallocate(y_batch)
+        if( allocated(inv_sig2) ) deallocate(inv_sig2)
+    end subroutine accumulate_pcg_state_half
 
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
     !! order, then perform all folding, finalization and PCG locally. For each

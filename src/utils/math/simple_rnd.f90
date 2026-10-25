@@ -7,7 +7,7 @@ implicit none
 
 public :: seed_rnd, seed_rnd_fixed, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
-public :: shuffle, partial_shuffle, has_global_seed
+public :: shuffle, partial_shuffle, has_global_seed, poisson_rnd
 private
 #include "simple_local_flags.inc"
 
@@ -295,6 +295,48 @@ contains
             shuffled(irnd) = tmp
         enddo
     end subroutine partial_shuffle_2
+
+    !> A Poisson deviate of the given mean: multiplication of uniforms below 30, the transformed
+    !! rejection of Hormann (1993, PTRS) above
+    integer function poisson_rnd( mean )
+        real, intent(in) :: mean
+        ! the smallest normal single (tiny(1.0); simple_defs' TINY shadows the intrinsic here)
+        real, parameter :: FLT_MIN = scale(1.0, minexponent(1.0) - 1)
+        real    :: a, b, inv_alpha, kreal, log_mean, product, sqrt_mean, u, us, v, vr
+        integer :: k
+        if( mean <= 0.0 )then
+            poisson_rnd = 0
+        else if( mean < 30.0 )then
+            product = 1.0
+            k = 0
+            do
+                k = k + 1
+                product = product * max(ran3(), FLT_MIN)
+                if( product <= exp(-mean) ) exit
+            enddo
+            poisson_rnd = k - 1
+        else
+            sqrt_mean = sqrt(mean)
+            log_mean  = log(mean)
+            b         = 0.931 + 2.53 * sqrt_mean
+            a         = -0.059 + 0.02483 * b
+            inv_alpha = 1.1239 + 1.1328 / (b - 3.4)
+            vr        = 0.9277 - 3.6224 / (b - 2.0)
+            do
+                u  = ran3() - 0.5
+                v  = ran3()
+                us = 0.5 - abs(u)
+                if( us <= FLT_MIN ) cycle
+                kreal = floor((2.0 * a / us + b) * u + mean + 0.43)
+                k  = int(kreal)
+                if( us >= 0.07 .and. v <= vr ) exit
+                if( k < 0 .or. (us < 0.013 .and. v > us) ) cycle
+                if( log(v * inv_alpha / (a / (us * us) + b)) <= &
+                    &-mean + kreal * log_mean - log_gamma(kreal + 1.0) ) exit
+            enddo
+            poisson_rnd = k
+        endif
+    end function poisson_rnd
 
     !>  \brief  generates a multinomal 1-of-K random number according to the
     !!          distribution in pvec

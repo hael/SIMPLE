@@ -813,6 +813,16 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
+        select case(trim(self%wave_model))
+            case('projection','first_born','rytov','multislice')
+            case DEFAULT
+                THROW_HARD('wave_model must be projection, first_born, rytov or multislice')
+        end select
+        select case(trim(self%ewald))
+            case('neg','pos','no')
+            case DEFAULT
+                THROW_HARD('ewald must be neg, pos or no')
+        end select
         select case(trim(self%m_estimator))
             case('no','flex')
             case DEFAULT

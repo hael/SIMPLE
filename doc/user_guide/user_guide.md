@@ -12,8 +12,12 @@ simple_exec prg=list
   average micrograph from a projection stack, with a PDB-to-movie tutorial.
 - [simulate_particles](simulate_particles.md) — generate boxed particle
   images and their simulation metadata from a volume.
-- [simulate_scattering](simulate_scattering.md) — generate boxed first-Born
-  or multislice detector intensities from a PDB or electrostatic potential.
+- [simulate_scattering](simulate_scattering.md) — generate boxed detector
+  intensities under a wave model (projection, first Born, Rytov or multislice)
+  from a PDB or electrostatic potential.
+- [reconstruct3D_wave](reconstruct3D_wave.md) — reconstruct half maps from
+  oriented particles under a wave model of the image (Ewald-sphere curvature,
+  strong phase, multiple scattering).
 - [Simulated validation workflows](simulated_workflows.md) — run the
   built-in molecular workflows and quantitative checks with `simple_test_exec`.
 

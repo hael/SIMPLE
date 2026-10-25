@@ -26,6 +26,7 @@ use simple_srch_sort_loc_tester,             only: run_all_srch_sort_loc_tests
 use simple_decay_funs_tester,                only: run_all_decay_funs_tests
 use simple_pca_tester,                       only: run_all_pca_tests
 use simple_opt_tester,                       only: run_all_opt_tests
+use simple_nlcg_solver_tester,               only: run_all_nlcg_solver_tests
 use simple_lpstages_tester,                  only: run_all_lpstages_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_nano_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
@@ -72,6 +73,7 @@ use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
 use simple_frozen_accum_tester,              only: run_all_frozen_accum_tests
 use simple_reconstructor_tester,             only: run_all_reconstructor_tests
 use simple_rec3D_service_tester,             only: run_all_rec3D_service_lib_tests
+use simple_rec3D_wave_strategy_tester,       only: run_all_rec3D_wave_lib_tests
 use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
 use simple_state_assignment_tester,          only: run_all_state_assignment_tests
@@ -84,6 +86,11 @@ use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_te
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
 use simple_pcg_atomic_prior_tester,          only: run_all_pcg_atomic_prior_tests
+use simple_pcg_lattice_tester,               only: run_all_pcg_lattice_tests
+use simple_wave_field_tester,                only: run_all_wave_field_tests
+use simple_wave_imaging_tester,              only: run_all_wave_imaging_tests
+use simple_wave_multislice_tester,           only: run_all_wave_multislice_tests
+use simple_wave_projector_tester,            only: run_all_wave_projector_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
@@ -128,7 +135,6 @@ use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_nano_species_tester,              only: run_all_nano_species_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
-use simple_scattering_simulator_tester,      only: run_all_scattering_simulator_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
 use simple_cavgs_state_match_tester,         only: run_all_cavgs_state_match_tests
 use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
@@ -337,7 +343,6 @@ contains
         call add_suite(s, n, 'trailing-reconstruction blend', run_all_accum_blend_tests)
         call add_suite(s, n, 'CTF',                  run_all_ctf_tests)
         call add_suite(s, n, 'image serialisation',  run_all_image_serialize_tests)
-        call add_suite(s, n, 'scattering simulator', run_all_scattering_simulator_tests)
     end subroutine suites_image
 
     subroutine suites_numerics( s, n )
@@ -361,6 +366,7 @@ contains
         call add_suite(s, n, 'cavg quality selection',  run_all_cavg_quality_selection_tests)
         call add_suite(s, n, 'diffusion-map graphs',    run_all_diff_map_graphs_tests)
         call add_suite(s, n, 'optimisers',              run_all_opt_tests)
+        call add_suite(s, n, 'nonlinear conjugate gradient', run_all_nlcg_solver_tests)
         call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
         call add_suite(s, n, 'shift search',            run_all_ftexp_shsrch_tests)
@@ -436,6 +442,11 @@ contains
         call add_suite(s, n, 'solve3D_cavgs stage rules', run_all_solve3D_reseed_tests)
         call add_suite(s, n, 'state assignment rules',    run_all_state_assignment_tests)
         call add_suite(s, n, 'atomic prior',              run_all_pcg_atomic_prior_tests)
+        call add_suite(s, n, 'PCG lattice',               run_all_pcg_lattice_tests)
+        call add_suite(s, n, 'wave field',                run_all_wave_field_tests)
+        call add_suite(s, n, 'wave imaging',              run_all_wave_imaging_tests)
+        call add_suite(s, n, 'wave multislice',           run_all_wave_multislice_tests)
+        call add_suite(s, n, 'wave projector',            run_all_wave_projector_tests)
     end subroutine suites_reconstruction
 
     !> registration on the polar Fourier transform, shared by the 2D and 3D searches
@@ -570,6 +581,7 @@ contains
         call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
         call add_suite(s, n, 'truth map docking', run_all_truth_docking_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
+        call add_suite(s, n, 'wave reconstruction',  run_all_rec3D_wave_lib_tests)
     end subroutine suites_lib_reconstruction
 
     subroutine add_suite( s, n, name, proc )

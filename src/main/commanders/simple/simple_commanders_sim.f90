@@ -4,7 +4,6 @@ use simple_commanders_api
 use simple_defs_atoms
 use simple_ctf,       only: ctf
 use simple_simulator, only: simimg
-use simple_scattering_simulator, only: scattering_simulator
 implicit none
 #include "simple_local_flags.inc"
 
@@ -235,30 +234,41 @@ contains
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_scattering( self, cline )
-        use simple_atoms,            only: atoms
-        use simple_simple_volinterp, only: rotvol
+        use simple_atoms,                only: atoms
+        use simple_wave_imaging,         only: WAVE_PROJECTION, WAVE_FIRST_BORN, WAVE_RYTOV, WAVE_MSLICE, detect_intensity
+        use simple_wave_projector,       only: wave_projector
         class(commander_simulate_scattering), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        integer, parameter :: BATCH = 64
         type(parameters) :: params
         type(builder)    :: build
         type(atoms)      :: molecule
         type(ori)        :: orientation
-        type(image)      :: rotated_potential
-        class(scattering_simulator), allocatable :: simulator
+        type(oris)       :: selection
+        type(ctfparams)  :: ctfparms
+        class(wave_projector),       allocatable :: wproj
         type(string)     :: pdb_arg, pdb_source, potential_file
-        integer          :: i, ldim(3), nptcls_arg, nsec, vol_dim(3)
-        real             :: smpd, dfx, dfy, angast
-        logical          :: from_pdb, has_angast, has_dfy
-        if( .not. cline%defined('mkdir')            ) call cline%set('mkdir', 'no')
-        if( .not. cline%defined('scattering_model') ) call cline%set('scattering_model', 'multislice')
-        if( .not. cline%defined('absorption')       ) call cline%set('absorption', 0.1)
-        if( .not. cline%defined('bfac')             ) call cline%set('bfac', 64.0)
-        if( .not. cline%defined('total_dose')       ) call cline%set('total_dose', 20.0)
-        if( .not. cline%defined('noise_sdev')       ) call cline%set('noise_sdev', 0.0)
-        if( .not. cline%defined('dferr')            ) call cline%set('dferr', 0.0)
-        if( .not. cline%defined('astigerr')         ) call cline%set('astigerr', 0.0)
-        if( .not. cline%defined('outstk')           ) call cline%set('outstk', 'scattering_images.mrcs')
-        if( .not. cline%defined('outfile')          ) call cline%set('outfile', 'scattering_oris.txt')
+        complex, allocatable :: planes(:,:,:)
+        integer          :: i, ib, nb, ldim(3), nptcls_arg, nsec, vol_dim(3), model, kappa, R, h, k, phys(3)
+        real             :: smpd
+        logical          :: from_pdb, has_angast, has_dfy, has_phshift
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir', 'no')
+        if( .not. cline%defined('wave_model') ) call cline%set('wave_model', 'multislice')
+        if( .not. cline%defined('ewald')      )then
+            ! projection samples the central section; the curved models default to specter's negative sign
+            if( cline%get_carg('wave_model') .eq. 'projection' )then
+                call cline%set('ewald', 'no')
+            else
+                call cline%set('ewald', 'neg')
+            endif
+        endif
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac', 64.0)
+        if( .not. cline%defined('total_dose') ) call cline%set('total_dose', 20.0)
+        if( .not. cline%defined('noise_sdev') ) call cline%set('noise_sdev', 0.0)
+        if( .not. cline%defined('dferr')      ) call cline%set('dferr', 0.0)
+        if( .not. cline%defined('astigerr')   ) call cline%set('astigerr', 0.0)
+        if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'scattering_images.mrcs')
+        if( .not. cline%defined('outfile')    ) call cline%set('outfile', 'scattering_oris.txt')
         from_pdb = cline%defined('pdbfile')
         if( from_pdb .eqv. cline%defined('vol1') ) &
             &THROW_HARD('simulate_scattering needs exactly one of pdbfile and vol1')
@@ -287,13 +297,28 @@ contains
         call cline%set('nspace', max(2, 2 * ((nptcls_arg + 1) / 2)))
         call cline%set('eo', 'no')
         call build%init_params_and_build_general_tbox(cline, params)
-        select case(trim(params%scattering_model))
-        case('first_born', 'multislice')
-        case default
-            THROW_HARD('scattering_model must be first_born or multislice')
+        select case(trim(params%wave_model))
+            case('projection')
+                model = WAVE_PROJECTION
+            case('first_born')
+                model = WAVE_FIRST_BORN
+            case('rytov')
+                model = WAVE_RYTOV
+            case('multislice')
+                model = WAVE_MSLICE
+            case DEFAULT
+                THROW_HARD('unknown wave_model; simulate_scattering')
         end select
-        if( params%absorption < 0.0 .or. params%absorption >= 1.0 ) &
-            &THROW_HARD('absorption must be in [0,1)')
+        select case(trim(params%ewald))
+            case('neg')
+                kappa = -1
+            case('pos')
+                kappa = 1
+            case DEFAULT
+                kappa = 0
+        end select
+        if( model == WAVE_PROJECTION .and. kappa /= 0 ) THROW_HARD('wave_model=projection samples the central section: ewald=no')
+        if( model == WAVE_MSLICE .and. kappa == 0 ) THROW_HARD('wave_model=multislice propagates through the box: ewald=neg or pos')
         if( params%total_dose < 0.0 .or. params%noise_sdev < 0.0 ) &
             &THROW_HARD('total_dose and noise_sdev must be nonnegative')
         call find_ldim_nptcls(params%vols(1), ldim, nsec)
@@ -303,28 +328,59 @@ contains
         if( .not. build%spproj_field%isthere('dfx') ) &
             &call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, &
             &params%defocus, params%dferr, params%astigerr)
-        has_dfy    = build%spproj_field%isthere('dfy')
-        has_angast = build%spproj_field%isthere('angast')
-        allocate(simulator)
-        call simulator%new(params%box, params%smpd, params%kv, params%absorption)
-        write(logfhandle,'(A)') '>>> GENERATING GHOSTBUSTER-COMPATIBLE SCATTERING IMAGES'
+        has_dfy     = build%spproj_field%isthere('dfy')
+        has_angast  = build%spproj_field%isthere('angast')
+        has_phshift = build%spproj_field%isthere('phshift')
+        ! the particles: orientation, shift and the CTF at the potential's sampling
+        call selection%new(params%nptcls, .true.)
         do i = 1, params%nptcls
-            call progress(i, params%nptcls)
             call build%spproj_field%get_ori(i, orientation)
-            rotated_potential = rotvol(build%vol, orientation)
-            dfx    = orientation%get('dfx')
-            dfy    = dfx
-            angast = 0.0
-            if( has_dfy    ) dfy    = orientation%get('dfy')
-            if( has_angast ) angast = orientation%get('angast')
-            call simulator%simulate(rotated_potential, build%img, params%scattering_model, &
-                &dfx, dfy, angast, params%cs, params%bfac, params%total_dose, params%noise_sdev)
-            call build%img%write(params%outstk, i)
-            call rotated_potential%kill
+            ctfparms%ctfflag = CTFFLAG_YES
+            ctfparms%smpd    = params%smpd
+            ctfparms%kv      = params%kv
+            ctfparms%cs      = params%cs
+            ctfparms%fraca   = params%fraca
+            ctfparms%dfx     = orientation%get('dfx')
+            ctfparms%dfy     = ctfparms%dfx
+            ctfparms%angast  = 0.0
+            ctfparms%phshift = 0.0
+            if( has_dfy     ) ctfparms%dfy     = orientation%get('dfy')
+            if( has_angast  ) ctfparms%angast  = orientation%get('angast')
+            if( has_phshift ) ctfparms%phshift = orientation%get('phshift')
+            call orientation%set_ctfvars(ctfparms)
+            call selection%set_ori(i, orientation)
         enddo
-        call build%spproj_field%write(params%outfile, [1,params%nptcls])
-        call simulator%kill
-        deallocate(simulator)
+        write(logfhandle,'(A)') '>>> GENERATING WAVE-SCATTERING IMAGES: '//trim(params%wave_model)
+        ! the shared operator: relative intensity on the native disk
+        allocate(wproj)
+        call wproj%new(params%box, params%smpd, model, kappa, 1.0, bfac=params%bfac, fft_nthreads=params%nthr)
+        call wproj%prep_particles(selection)
+        call wproj%set_volume(build%vol%get_rmat())
+        R = params%box / 2
+        allocate(planes(-R:R,-R:R,BATCH))
+        do ib = 1, params%nptcls, BATCH
+            nb = min(BATCH, params%nptcls - ib + 1)
+            call wproj%predict(nb, ib, planes(:,:,1:nb))
+            do i = 1, nb
+                ! p = -ihat / box^2 with gain 1: -p is SIMPLE's transform of the relative intensity
+                call build%img%zero_and_flag_ft
+                do k = -R, R
+                    do h = 0, R
+                        if( h*h + k*k > R*R ) cycle
+                        phys = build%img%comp_addr_phys(h,k,0)
+                        call build%img%set_fcomp([h,k,0], phys, -planes(h,k,i))
+                    enddo
+                enddo
+                call build%img%ifft
+                call detect_intensity(build%img, params%total_dose, params%noise_sdev)
+                call build%img%write(params%outstk, ib + i - 1)
+            enddo
+        enddo
+        call wproj%kill
+        deallocate(wproj, planes)
+        ! the truth: orientations, shifts and the CTF parameters the images were made with
+        call selection%write(params%outfile, [1,params%nptcls])
+        call selection%kill
         call orientation%kill
         call simple_end('**** SIMPLE_SIMULATE_SCATTERING NORMAL STOP ****')
     end subroutine exec_simulate_scattering

@@ -2,10 +2,12 @@
 ! Full and partial Fisher-Yates shuffles keep every value and give a duplicate-free
 ! prefix; the multinomial draw reproduces its probabilities within four binomial
 ! standard deviations (1000 draws: 0.013 at p = 0.8, 0.009 at p = 0.1) and never draws
-! an entry of probability zero. Every test starts from a fixed seed.
+! an entry of probability zero; the Poisson deviates of both branches (means 4 and 250) have
+! their mean and variance within four standard errors. Every test starts from a fixed seed.
 module simple_rnd_tester
 use simple_defs,       only: dp
-use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal, seed_rnd, seed_rnd_fixed, has_global_seed
+use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal, seed_rnd, seed_rnd_fixed, has_global_seed, &
+    &poisson_rnd
 use simple_math,       only: hpsort
 use simple_test_utils
 implicit none
@@ -23,6 +25,7 @@ contains
         call test_shuffle()
         call test_partial_shuffle()
         call test_multinomal()
+        call test_poisson()
     end subroutine run_all_rnd_tests
 
     !> Library reseeding and intrinsic draws must replay from the propagated root seed.
@@ -186,5 +189,34 @@ contains
         end do
         call assert_false(l_zero_drawn, 'an entry of probability zero is never drawn')
     end subroutine test_multinomal
+
+    !> Poisson deviates: zero at mean zero, never negative, and the sample mean and variance of NPOIS
+    !! draws within four standard errors of the mean (sqrt(mu/n) for the mean, about mu sqrt(2/n) for
+    !! the variance) on both branches, multiplication below 30 and the transformed rejection above
+    subroutine test_poisson()
+        integer, parameter :: NPOIS = 20000
+        real,    parameter :: MEANS(2) = [4.0, 250.0]
+        real(dp) :: s1, s2, smean, svar
+        real     :: tol
+        integer  :: i, j, k, nneg
+        call fix_test_seed()
+        call assert_int(0, poisson_rnd(0.0), 'a Poisson deviate of mean zero is zero')
+        do j = 1, size(MEANS)
+            s1 = 0.0_dp; s2 = 0.0_dp; nneg = 0
+            do i = 1, NPOIS
+                k = poisson_rnd(MEANS(j))
+                if( k < 0 ) nneg = nneg + 1
+                s1 = s1 + real(k,dp)
+                s2 = s2 + real(k,dp)**2
+            enddo
+            smean = s1 / real(NPOIS,dp)
+            svar  = s2 / real(NPOIS,dp) - smean**2
+            call assert_int(0, nneg, 'Poisson deviates are never negative')
+            call assert_true(abs(smean - MEANS(j)) < 4.0 * sqrt(MEANS(j) / real(NPOIS)), &
+                &'Poisson deviates have the requested mean')
+            tol = 4.0 * sqrt(2.0 / real(NPOIS)) + 4.0 / sqrt(MEANS(j) * real(NPOIS))
+            call assert_true(abs(svar / MEANS(j) - 1.0_dp) < tol, 'Poisson deviates have a variance equal to their mean')
+        enddo
+    end subroutine test_poisson
 
 end module simple_rnd_tester

@@ -12,6 +12,11 @@ type, extends(commander_base) :: commander_rec3D
     procedure :: execute => exec_rec3D
 end type commander_rec3D
 
+type, extends(commander_base) :: commander_rec3D_wave
+  contains
+    procedure :: execute => exec_rec3D_wave
+end type commander_rec3D_wave
+
 type, extends(commander_base) :: commander_rec3D_worker
   contains
     procedure :: execute      => exec_rec3D_distr_worker
@@ -23,6 +28,39 @@ type, extends(commander_base) :: random_rec_commander
 end type random_rec_commander
 
 contains
+
+    !> reconstruct3D_wave: shared memory, the strategy routine on this run's one parameters and builder
+    subroutine exec_rec3D_wave( self, cline )
+        use simple_rec3D_wave_strategy, only: run_rec3D_wave => exec_rec3D_wave
+        use simple_parameters,          only: parameters
+        use simple_builder,             only: builder
+        class(commander_rec3D_wave), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters), target :: params
+        type(builder),    target :: build
+        if( cline%defined('nparts') )then
+            THROW_HARD('reconstruct3D_wave runs in shared memory; distributed execution comes with rec_backend=wave')
+        endif
+        if( .not. cline%defined('total_dose') )then
+            THROW_HARD('reconstruct3D_wave needs total_dose, the dose that gives the gain of the scale link')
+        endif
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('wave_model') ) call cline%set('wave_model', 'rytov')
+        if( .not. cline%defined('ewald')      )then
+            ! projection samples the central section; the curved models default to specter's negative sign
+            if( cline%get_carg('wave_model') .eq. 'projection' )then
+                call cline%set('ewald', 'no')
+            else
+                call cline%set('ewald', 'neg')
+            endif
+        endif
+        if( .not. cline%defined('maxits')     ) call cline%set('maxits',     4)
+        call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call run_rec3D_wave(params, build)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_RECONSTRUCT3D_WAVE NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_rec3D_wave
 
     subroutine exec_rec3D( self, cline )
         use simple_rec3D_strategy, only: rec3D_strategy, create_rec3D_strategy

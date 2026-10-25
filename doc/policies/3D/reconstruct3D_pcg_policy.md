@@ -193,7 +193,7 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 | File | Contents |
 | --- | --- |
 | `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type, raw accumulator format, `PCG_WEIGHT_THRESHOLD` |
-| `src/main/volume/simple_pcg_lattice.f90` | `pcg_lattice`, which `reconstructor_pcg` extends: padded-lattice geometry, KB window, wrap table and solve support (`set_window_sphere`, `set_window_volume`), shared with the FLEX PCG operator |
+| `src/main/volume/simple_pcg_lattice.f90` | `pcg_lattice`, which `reconstructor_pcg` extends: padded-lattice geometry, KB window, wrap table and solve support (`set_window_sphere`, `set_window_volume`); the plane gather and scatter (`gather_plane`, `scatter_plane`, under `forward_plane` and `adjoint_plane_add`), the wrap test and rim radius (`win_wraps`, `rim_free`, `sq_rim`) and the fold of the scatter accumulator (`fold_lattice_accum`); shared with the FLEX PCG operator and the wave operators, which sample the Ewald paraboloid with the same gather at a nonzero curvature (`doc/policies/3D/wave_model_policy.md`); at zero curvature, the PCG backend's case, the code is the PCG code bitwise |
 | `src/main/opt/simple_pcg_solver.f90` | the preconditioned conjugate-gradient engine and `pcg_solver_outcome` |
 | `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | PCG worker accumulation and master reduction and solve, for both execution modes |
 | `src/main/strategies/parallelization/simple_rec3D_service.f90` | reconstruction service: weight source, dispatch, naming, registration |
@@ -476,7 +476,7 @@ parallelized by h-strided colouring, whose separation guarantee holds on
 *unwrapped* coordinates only. The accumulator is periodic, so windows that reach
 the wrap boundary can collide after folding even in the same colour. All scatter
 sites therefore split: the parallel colour sweep skips any window `win_wraps`
-flags, and a serial pass handles the rim (pre-filtered by `sq_rim`, a radius
+(in `pcg_lattice`) flags, and a serial pass handles the rim (pre-filtered by `sq_rim`, a radius
 below which wrapping is provably impossible). Serial, not `atomic` — an atomic
 would fix the race but leave summation order thread-dependent, and bitwise
 run-to-run reproducibility is what makes a residual trace usable as a regression
@@ -544,7 +544,7 @@ and FSC; a similar operator is not enough.
 Point-group symmetry is applied by **coordinate replication** inside the
 operator: each plane pixel is gathered and scattered at all `M` orientations
 `R_i . S_g`. Replication is applied to `H` (`accumulate_absT2`,
-`apply_normal_matrixfree`) and to `b` (`scatter_plane`, reached from
+`apply_normal_matrixfree`) and to `b` (`scatter_plane` of `pcg_lattice`, reached from
 `apply_adjoint_all` and `accumulate_rhs_density`), so the system solved is consistently
 symmetrized.
 

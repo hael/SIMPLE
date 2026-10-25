@@ -9,6 +9,7 @@
 ! license terms ( http://license.janelia.org/license/jfrc_copyright_1_1.html )
 module simple_ctf
 use simple_core_module_api
+use simple_math_ctf, only: electron_wavelength
 implicit none
 
 public :: ctf
@@ -29,7 +30,8 @@ type ctf
     contains
     procedure          :: init
     procedure          :: get_ctfvars
-    procedure, private :: evalPhSh
+    ! the argument of the CTF, -chi in Kirkland's sign: the wave models' lens transfer is exp(i eval_phase)
+    procedure          :: eval_phase
     ! the only evaluator: the numerical phase is a required argument, already canonical
     ! (get_ctfvars canonicalises once per record; conventional callers pass zero explicitly)
     procedure          :: eval_canonical
@@ -90,12 +92,14 @@ contains
         ctfvals%phshift         = canonical_phshift(phshift)
     end function get_ctfvars
 
-    !>  \brief returns the argument (radians) to the ctf
+    !>  \brief returns the argument (radians) to the ctf, the phase the objective lens imparts on a scattered
+    !!  wave in SIMPLE's sign (Kirkland's chi with its sign reversed); the additive phase shift is required
+    !!  (phase_shift_ctf_policy.md), already canonical
     !!
     !!  We follow the convention, like the rest of the cryo-EM/3DEM field, that underfocusing the objective lens
     !!  gives rise to a positive phase shift of scattered electrons, whereas the spherical aberration gives a
     !!  negative phase shift of scattered electrons
-    elemental real function evalPhSh( self, spaFreqSq, ang, add_phshift )
+    elemental real function eval_phase( self, spaFreqSq, ang, add_phshift )
         class(ctf), intent(in) :: self        !< instance
         real,       intent(in) :: spaFreqSq   !< square of spatial frequency at which to compute the ctf (1/pixels^2)
         real,       intent(in) :: ang         !< angle at which to compute the ctf (radians)
@@ -104,9 +108,9 @@ contains
         !! compute the defocus
         df = self%eval_df(ang)
         !! compute the ctf argument
-        evalPhSh = PI * self%wl * spaFreqSq * (df - 0.5 * self%wl*self%wl * spaFreqSq * self%Cs) &
+        eval_phase = PI * self%wl * spaFreqSq * (df - 0.5 * self%wl*self%wl * spaFreqSq * self%Cs) &
             &+ add_phshift
-    end function evalPhSh
+    end function eval_phase
 
     !> Returns the CTF for a phase already canonicalized to [0,2pi).
     !! Use this in verified pixel loops to avoid repeated modulo operations.
@@ -115,7 +119,7 @@ contains
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< angle at which to compute the CTF (radians)
         real,       intent(in) :: add_phshift !< additive CTF phase shift (canonical radians)
-        eval_canonical = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
+        eval_canonical = sin( self%eval_phase(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
     end function eval_canonical
 
     !>  \brief  Return the effective defocus given the pre-set CTF parameters (from CTFFIND4)
@@ -143,10 +147,10 @@ contains
         endif
         ! extrema
         if( spaFreqSq <= chi_extremem_spafreqsq )then
-            rn = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, canonical_phase)+self%amp_contr_const) + 0.5))
+            rn = abs(floor( 1. / PI * (self%eval_phase(spaFreqSq, ang, canonical_phase)+self%amp_contr_const) + 0.5))
         else
-            nextrema_before_chi_extremum = floor( 1. / PI * (self%evalPhSh(chi_extremem_spafreqsq, ang, canonical_phase)+self%amp_contr_const) + 0.5)
-            rn = floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, canonical_phase)+self%amp_contr_const) + 0.5)
+            nextrema_before_chi_extremum = floor( 1. / PI * (self%eval_phase(chi_extremem_spafreqsq, ang, canonical_phase)+self%amp_contr_const) + 0.5)
+            rn = floor( 1. / PI * (self%eval_phase(spaFreqSq, ang, canonical_phase)+self%amp_contr_const) + 0.5)
             rn = nextrema_before_chi_extremum + abs(rn-nextrema_before_chi_extremum)
         endif
         nextrema = nint(abs(rn))
@@ -187,7 +191,7 @@ contains
 
     elemental real function kV2wl( self ) result( wavelength )
         class(ctf), intent(in) :: self
-        wavelength = 12.26 / sqrt((1000.0 * self%kV) + (0.9784*(1000.0 * self%kV)**2)/(10.0**6.0))
+        wavelength = electron_wavelength(self%kV)
     end function kV2wl
 
     subroutine apply_convention( self, dfx, dfy, angast )

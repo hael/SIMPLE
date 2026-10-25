@@ -260,7 +260,7 @@ subroutine new_cif2mrc( prgtab )
         call simulate_scattering%new(&
         &'simulate_scattering',&
         &'Simulate wave-scattering cryo-EM images',&
-        &'generates detector intensities from a 3D electrostatic potential with the first-Born or multislice forward model used by Ghostbuster. A PDB input is converted with SIMPLE pdb2mrc. The complex exit wave is propagated through an astigmatic objective lens before dose and detector noise are applied. This program generates forward data; it does not run Ghostbuster RAF or DOFS reconstruction.',&
+        &'generates detector intensities from a 3D electrostatic potential with the wave models of reconstruct3D_wave (projection, first Born, Rytov on the Ewald paraboloid) or multislice, with Kirkland''s sign conventions and the defocus referred to the specimen midplane. A PDB input is converted with SIMPLE pdb2mrc. The exit wave passes the objective lens of SIMPLE''s CTF before dose and detector noise are applied.',&
         &'simple_exec',&
         &.false., visibility=UI_VIS_ADVANCED, display_name='Simulate Scattering Images')
         call simulate_scattering%add_input(UI_FILE, 'pdbfile', 'file', 'PDB coordinates', &
@@ -279,16 +279,13 @@ subroutine new_cif2mrc( prgtab )
         call simulate_scattering%add_input(UI_FILE, oritab, visibility=UI_VIS_ADVANCED)
         call simulate_scattering%add_input(UI_FILE, outfile, visibility=UI_VIS_ADVANCED)
         call simulate_scattering%add_input(UI_IMG, outstk, visibility=UI_VIS_STANDARD)
-        call simulate_scattering%add_input(UI_PARM, 'scattering_model', 'multi', 'Scattering model', &
-            &'Wave-object interaction model', 'first_born or multislice{multislice}', .false., 'multislice', &
-            &choices=ui_choices([character(len=11) :: 'first_born', 'multislice']), visibility=UI_VIS_STANDARD)
-        call simulate_scattering%add_input(UI_PARM, 'absorption', 'num', 'Absorptive fraction', &
-            &'Imaginary fraction of the complex object potential', 'range [0,1){0.1}', .false., 0.1, &
-            &visibility=UI_VIS_ADVANCED)
+        call simulate_scattering%add_input(UI_PARM, wave_model, visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, ewald, visibility=UI_VIS_ADVANCED)
         call simulate_scattering%add_input(UI_PARM, kv, visibility=UI_VIS_STANDARD)
+        call simulate_scattering%add_input(UI_PARM, fraca, visibility=UI_VIS_ADVANCED)
         call simulate_scattering%add_input(UI_PARM, cs, visibility=UI_VIS_ADVANCED)
-        call simulate_scattering%add_input(UI_PARM, 'defocus', 'num', 'Exit-plane underfocus', &
-            &'Mean underfocus in microns, measured from the object exit plane', 'microns{2}', .false., 2., &
+        call simulate_scattering%add_input(UI_PARM, 'defocus', 'num', 'Underfocus', &
+            &'Mean underfocus in microns, referred to the specimen midplane (the box centre)', 'microns{2}', .false., 2., &
             &visibility=UI_VIS_STANDARD)
         call simulate_scattering%add_input(UI_PARM, dferr, visibility=UI_VIS_ADVANCED)
         call simulate_scattering%add_input(UI_PARM, 'astigerr', 'num', 'Astigmatism error', &

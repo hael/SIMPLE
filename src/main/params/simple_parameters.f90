@@ -62,6 +62,7 @@ type :: parameters
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of solve2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: eo_rebalance='yes'   !< reassign selected particle halves by direction and score(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
+    character(len=3)          :: ewald='neg'          !< Ewald-sphere curvature of the wave models(neg|pos|no){neg}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
@@ -324,7 +325,6 @@ type :: parameters
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|neigh|greedy|prob|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
-    character(len=STDLEN)     :: scattering_model='multislice' !< scattering forward model(first_born|multislice){multislice}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -335,6 +335,7 @@ type :: parameters
     character(len=STDLEN)     :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN)     :: suite=''             !< one sub-suite of a unit-test area to run alone (simple_test_exec test=unit_<area> suite=<name>)
     character(len=STDLEN)     :: tag=''               !< just a tag
+    character(len=STDLEN)     :: wave_model='rytov'   !< wave model of the image formation(projection|first_born|rytov|multislice){rytov}
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
@@ -501,7 +502,6 @@ type :: parameters
     integer :: xdimpd=0
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
-    real    :: absorption=0.1      !< imaginary fraction of the complex scattering potential[0,1){0.1}
     real    :: amsklp=8.           !< low-pass limit for NU/standalone envelope generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: angthres_mi_proj = ANGTHRES_MI_PROJ_DEFAULT !< 4 convergence checking

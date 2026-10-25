@@ -85,6 +85,7 @@ contains
         call reg%add_char('eo_stage', self%eo_stage)
         call reg%add_char('eo_rebalance', self%eo_rebalance)
         call reg%add_char('even', self%even)
+        call reg%add_char('ewald', self%ewald)
         call reg%add_char('exit_collapse', self%exit_collapse)
         call reg%add_char('extract', self%extract)
         call reg%add_char('extractfrommov', self%extractfrommov)
@@ -201,7 +202,6 @@ contains
         call reg%add_char('ptcl_old_root', self%ptcl_old_root)
         call reg%add_char('recthres', self%recthres)
         call reg%add_char('refine', self%refine)
-        call reg%add_char('scattering_model', self%scattering_model)
         call reg%add_char('reject_mics', self%reject_mics)
         call reg%add_char('remove_chunks', self%remove_chunks)
         call reg%add_char('remap_cls', self%remap_cls)
@@ -249,6 +249,7 @@ contains
         call reg%add_char('verbose_exit_fname', self%verbose_exit_fname)
         call reg%add_char('vol_old_root', self%vol_old_root)
         call reg%add_char('volrec', self%volrec)
+        call reg%add_char('wave_model', self%wave_model)
         call reg%add_char('wcrit', self%wcrit)
         call reg%add_char('wfloat16', self%wfloat16)
         call reg%add_char('worker_priority', self%worker_priority)
@@ -486,7 +487,6 @@ contains
     module subroutine bind_input_rarg(self, reg)
         class(parameters),   target, intent(inout) :: self
         class(param_registry),       intent(inout) :: reg
-        call reg%add_real('absorption', self%absorption)
         call reg%add_real('amsklp', self%amsklp)
         call reg%add_real('angerr', self%angerr)
         call reg%add_real('angthres_mi_proj', self%angthres_mi_proj)

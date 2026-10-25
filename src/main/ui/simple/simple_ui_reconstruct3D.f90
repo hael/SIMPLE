@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = &
     category_descriptor('reconstruct3d', 'Reconstruct 3D Workflows', 68)
 type(ui_program), target :: reconstruct3D
 type(ui_program), target :: bootstrap_rec3D
+type(ui_program), target :: reconstruct3D_wave
 
 contains
 
@@ -14,6 +15,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_reconstruct3D(prgtab)
         call new_bootstrap_rec3D(prgtab)
+        call new_reconstruct3D_wave(prgtab)
     end subroutine construct_reconstruct3D_programs
 
     subroutine new_reconstruct3D( prgtab )
@@ -201,5 +203,60 @@ contains
         ! add to ui_hash
         call add_ui_program('bootstrap_rec3D', bootstrap_rec3D, prgtab, UI_CATEGORY)
     end subroutine new_bootstrap_rec3D
+
+    subroutine new_reconstruct3D_wave( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call reconstruct3D_wave%new(&
+        &'reconstruct3D_wave',&                                          ! name
+        &'3D reconstruction under a wave model of the image',&           ! summary
+        &'reconstructs half maps from oriented particles with known CTF under a wave model of the image&
+        & (projection, first Born or Rytov on the Ewald paraboloid of either curvature sign, or multislice), in&
+        & shared memory. Per state, the flat PCG maps of the two halves are the start and their FSC sets the&
+        & maximum-likelihood prior; each half is then solved by nonlinear conjugate gradients on the potential in&
+        & volts, with the gain sqrt(total_dose) smpd linking it to the normalised particles. The maps are written&
+        & at the scale of reconstruct3D',&
+        &'simple_exec',&                                                 ! executable
+        &.true., &                                                       ! requires sp_project
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Wave-Model 3D Reconstruction')
+        ! parameter input/output
+        call reconstruct3D_wave%add_input(UI_PARM, wave_model, visibility=UI_VIS_STANDARD)
+        call reconstruct3D_wave%add_input(UI_PARM, ewald, visibility=UI_VIS_STANDARD)
+        call reconstruct3D_wave%add_input(UI_PARM, 'total_dose', 'num', 'Electron dose', &
+        &'Total exposure in electrons per square Angstrom; its root times the pixel size is the gain from&
+        & relative intensity to the noise-normalised particles', 'electrons per Angstrom squared', .true., 0., &
+        &visibility=UI_VIS_STANDARD)
+        call reconstruct3D_wave%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
+        &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
+        &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)
+        call reconstruct3D_wave%add_input(UI_PARM, objfun, visibility=UI_VIS_ADVANCED)
+        ! search controls
+        call reconstruct3D_wave%add_input(UI_SRCH, pgrp, visibility=UI_VIS_STANDARD)
+        ! filter controls
+        call reconstruct3D_wave%add_input(UI_FILT, 'maxits', 'num', 'Wave solve iterations', &
+        &'Nonlinear conjugate-gradient iterations of each half, one pass over its particles each', &
+        &'iterations{4}', .false., 4., visibility=UI_VIS_STANDARD)
+        call reconstruct3D_wave%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations of the flat start solves', 'iterations{2}', .false., 2., &
+        &visibility=UI_VIS_ADVANCED)
+        call reconstruct3D_wave%add_input(UI_FILT, 'maxits_ml', 'num', 'Regularized-solve PCG iterations', &
+        &'Coupled PCG iterations of the regularized flat start from the closed-form Wiener start; 0 = closed form only', &
+        &'iterations{0}', .false., 0., visibility=UI_VIS_ADVANCED)
+        call reconstruct3D_wave%add_input(UI_FILT, 'winsz', 'num', 'Wave operator KB window', &
+        &'Half-width of the Kaiser-Bessel window of the wave operator''s lattice: 1.5 is the PCG backend''s three taps,&
+        & 3 gives seven taps and ten times smaller interpolation errors at about 1.4 times the run time', &
+        &'half-width in voxels{1.5}', .false., 1.5, visibility=UI_VIS_ADVANCED)
+        call reconstruct3D_wave%add_input(UI_FILT, 'pcg_mskfile', 'file', 'Support mask volume', &
+        &'Real-space [0,1] mask volume whose nonzero voxels are the support of the start and wave solves; '//&
+        &'the spherical mskdiam support when absent', 'e.g. focusmask.mrc', .false., '', group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call reconstruct3D_wave%add_input(UI_MASK, mskdiam, visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call reconstruct3D_wave%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('reconstruct3D_wave', reconstruct3D_wave, prgtab, UI_CATEGORY)
+    end subroutine new_reconstruct3D_wave
 
 end module simple_ui_reconstruct3D

@@ -103,7 +103,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Images')
         call unit_image%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (image, mrc2jpeg, mrc_validate, image_header, fourier_iterator, b_spline_smoother, masks, nano_mask, volume_shape, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation, scattering_simulator)', '', .false., '')
+            &'One sub-suite of this area to run alone (image, mrc2jpeg, mrc_validate, image_header, fourier_iterator, b_spline_smoother, masks, nano_mask, volume_shape, binary_image, segmentation, trailing_reconstruction_blend, ctf, image_serialisation)', '', .false., '')
         call add_ui_program('unit_image', unit_image, tsttab, UI_CATEGORY)
     end subroutine new_unit_image
 
@@ -116,7 +116,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Numerics')
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, cavg_quality_selection, diffusion_map_graphs, optimisers, low_pass_stages, shift_search, truth_metrics)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, pca, cavg_quality_relations, cavg_quality_selection, diffusion_map_graphs, optimisers, nonlinear_conjugate_gradient, low_pass_stages, shift_search, truth_metrics)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -177,11 +177,11 @@ contains
         call unit_reconstruction%new(&
         &'unit_reconstruction',&
         &'unit tests: 3D reconstruction backends and observation noise',&
-        &'is the fast-gate unit suite for 3D reconstruction: the rec3D backend selector, the Gaussian observation-noise contracts, the nonuniform filter competition and the PCG atomicity prior',&
+        &'is the fast-gate unit suite for 3D reconstruction: the rec3D backend selector, the Gaussian observation-noise contracts, the nonuniform filter competition, the PCG atomicity prior, the PCG lattice''s flat and curved plane gather and scatter, the wave field, the wave imaging, the multislice chain and the wave projector',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Reconstruction')
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, weighted_insertion, volume_pair_metrics, nonuniform_filtering, solve3d_cavgs_stage_rules, state_assignment_rules, atomic_prior)', '', .false., '')
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, trailing_chain_identity, frozen_accumulator, weighted_insertion, volume_pair_metrics, nonuniform_filtering, solve3d_cavgs_stage_rules, state_assignment_rules, atomic_prior, pcg_lattice, wave_field, wave_imaging, wave_multislice, wave_projector)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
 
@@ -190,11 +190,11 @@ contains
         call lib_reconstruction%new(&
         &'lib_reconstruction',&
         &'library tests: half-set PCG reconstruction against gridding, map docking',&
-        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; PCG from sparse and preferred-orientation view sets against gridding; the solve3D_addon report docking a moved map',&
+        &'is the nightly library suite for 3D reconstruction: independent half-set PCG solves, lambda sweep and FSC against gridding; PCG from sparse and preferred-orientation view sets against gridding; the solve3D_addon report docking a moved map; reconstruct3D_wave on a multislice-imaged phantom',&
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, fractional_reconstruction)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, fractional_reconstruction, wave_reconstruction)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 

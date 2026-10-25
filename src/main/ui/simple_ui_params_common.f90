@@ -40,6 +40,7 @@ type(ui_param) :: element
 type(ui_param) :: envfsc
 type(ui_param) :: envmsklp
 type(ui_param) :: eo
+type(ui_param) :: ewald
 type(ui_param) :: flipgain
 type(ui_param) :: fraca
 type(ui_param) :: fraction_dose_target
@@ -169,6 +170,7 @@ type(ui_param) :: user_email
 type(ui_param) :: user_project
 type(ui_param) :: vol_dim
 type(ui_param) :: walltime
+type(ui_param) :: wave_model
 type(ui_param) :: wcrit
 type(ui_param) :: wfloat16
 type(ui_param) :: width
@@ -328,6 +330,12 @@ subroutine set_ui_params
     call eo%set_param(             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', &
                                    'Gold-standard FSC for filtering and resolution estimation(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+
+    call ewald%set_param(          'ewald',           'multi',  'Ewald-sphere curvature', &
+                                   'Ewald-sphere curvature of the wave models: neg samples the paraboloid kz = -lambda |k|^2/2 '//&
+                                   '(specter''s negative sign), pos the opposite one, no the central section(neg|pos|no){neg}', &
+                                   '', .false., 'neg', &
+    &choices=ui_choices([character(len=3) :: 'neg', 'pos', 'no']))
 
     call flipgain%set_param(       'flipgain',        'multi',  'Flip the gain reference', &
                                    'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}','', .false., 'no', &
@@ -835,6 +843,13 @@ subroutine set_ui_params
     call walltime%set_param(       'walltime',        'num',    'Walltime', &
                                    'Maximum execution time for job scheduling and management(23h59mins){86340}', &
                                    'in seconds(23h59mins){86340}', .false., 86340.)
+
+    call wave_model%set_param(     'wave_model',      'multi',  'Wave model', &
+                                   'Wave model of the image formation: projection exp(i sigma V) of the projected potential, '//&
+                                   'first_born 1 + i sigma V, rytov exp(i sigma V) on the Ewald surface, multislice '//&
+                                   'slice-by-slice propagation(projection|first_born|rytov|multislice){rytov}', &
+                                   '', .false., 'rytov', &
+    &choices=ui_choices([character(len=10) :: 'projection', 'first_born', 'rytov', 'multislice']))
 
     call wcrit%set_param(          'wcrit',           'multi',  'Correlation to weights conversion scheme', &
                                    'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}','', .false., 'softmax', &
