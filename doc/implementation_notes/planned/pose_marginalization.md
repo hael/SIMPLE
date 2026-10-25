@@ -1609,7 +1609,9 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    searches flat at `prob_beta` until neither FSC 0.5 nor FSC 0.143 gained
    on the previous iteration (`check_conv3D`, the gain test of the
    resolution exit on the previous iteration's STATS_FILE record; the
-   tail's first iteration is kept in `params%prob_beta_tail_start`), then
+   tail's first iteration is the convergence object's, since the in-memory
+   strategy rebuilds `params` from the command line every iteration, which
+   a first version keeping it in `params` learnt on a cavgs run), then
    `exec_refine3D` ramps the draws geometrically to `prob_beta_end` over
    `PROB_BETA_TAIL` = 5 iterations and the run ends when the tail is
    complete (`converged`, so the combined even/odd final iteration

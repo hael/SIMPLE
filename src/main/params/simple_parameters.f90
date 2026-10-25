@@ -492,7 +492,6 @@ type :: parameters
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
-    integer :: prob_beta_tail_start=0 !< runtime: the first iteration of the annealing tail to prob_beta_end (0: the run still searches at prob_beta); set by check_conv3D when the resolution stops gaining, or by exec_refine3D at the budget's end
     integer :: workers=0           !< # workers for distributed execution
     integer :: worker_nthr=0       !< # threads per worker for distributed execution
     integer :: worker_server_nthr=0 !< # threads per worker of the worker_server (0: not given)

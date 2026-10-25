@@ -38,6 +38,7 @@ contains
     procedure(finalize_iter_interface), deferred :: finalize_iteration
     procedure(finalize_run_interface),  deferred :: finalize_run
     procedure(cleanup_interface),       deferred :: cleanup
+    procedure(tail_start_interface),    deferred :: anneal_tail_start
 end type refine3D_strategy
 
 type :: refine3D_bench_state
@@ -82,6 +83,7 @@ contains
     procedure :: finalize_iteration => inmem_finalize_iteration
     procedure :: finalize_run       => inmem_finalize_run
     procedure :: cleanup            => inmem_cleanup
+    procedure :: anneal_tail_start  => inmem_anneal_tail_start
 end type refine3D_inmem_strategy
 
 ! ======================================================================
@@ -110,6 +112,7 @@ contains
     procedure :: finalize_iteration => distr_finalize_iteration
     procedure :: finalize_run       => distr_finalize_run
     procedure :: cleanup            => distr_cleanup
+    procedure :: anneal_tail_start  => distr_anneal_tail_start
 end type refine3D_distr_strategy
 
 abstract interface
@@ -144,6 +147,12 @@ abstract interface
         type(builder),            intent(inout) :: build
         type(cmdline),            intent(inout) :: cline
     end subroutine finalize_run_interface
+
+    !> the first iteration of the probability tables' annealing tail (0: none yet), kept by the convergence object
+    integer function tail_start_interface(self) result(it)
+        import :: refine3D_strategy
+        class(refine3D_strategy), intent(in) :: self
+    end function tail_start_interface
 
     subroutine cleanup_interface(self, params)
         import :: refine3D_strategy, parameters
@@ -1668,5 +1677,15 @@ contains
             &trim(params%rec_backend), '): ', secs, ' s on ', nthr, ' threads = ', secs*real(nthr), &
             &' thread-s, peak RSS ', peak_gib, ' GiB'
     end subroutine report_rec_master_phase
+
+    integer function inmem_anneal_tail_start(self) result(it)
+        class(refine3D_inmem_strategy), intent(in) :: self
+        it = self%conv%anneal_tail_start()
+    end function inmem_anneal_tail_start
+
+    integer function distr_anneal_tail_start(self) result(it)
+        class(refine3D_distr_strategy), intent(in) :: self
+        it = self%conv%anneal_tail_start()
+    end function distr_anneal_tail_start
 
 end module simple_refine3D_strategy

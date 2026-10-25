@@ -61,7 +61,7 @@ contains
     !! tail's last iteration, PROB_BETA_TAIL after its start; a run without prob_beta_end never starts a tail
     subroutine test_posterior_anneal_tail()
         class(parameters), allocatable :: params
-        type(convergence) :: conv
+        type(convergence) :: conv, conv_short, conv_flat
         type(cmdline)     :: cline
         type(oris)        :: os
         real    :: res05(8), res143(8)
@@ -79,7 +79,6 @@ contains
         params%prob_beta_end    = 1.
         params%startit          = 1
         params%maxits           = 25
-        params%prob_beta_tail_start = 0
         call cline%set('trs',      5.)
         call cline%set('overlap',  0.99)
         call cline%set('fracsrch', 99.)
@@ -88,24 +87,38 @@ contains
             call frozen_field(os, res05(it), res143(it))
             conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
             call os%kill
-            if( it == 2 ) call assert_int(0, params%prob_beta_tail_start, 'a gaining iteration starts no tail')
-            if( it == 3 ) call assert_int(4, params%prob_beta_tail_start, 'the first iteration without gain starts the tail at the next')
+            if( it == 2 ) call assert_int(0, conv%anneal_tail_start(), 'a gaining iteration starts no tail')
+            if( it == 3 ) call assert_int(4, conv%anneal_tail_start(), 'the first iteration without gain starts the tail at the next')
         enddo
         call assert_true(.not. any(conv_at(1:3)), 'the search phase does not converge')
         call assert_true(.not. any(conv_at(4:4+PROB_BETA_TAIL-2)), 'the tail does not converge before its last iteration')
         call assert_true(conv_at(4+PROB_BETA_TAIL-1), 'the tail converges at its last iteration')
-        call assert_int(4, params%prob_beta_tail_start, 'a gain inside the tail does not restart it')
+        call assert_int(4, conv%anneal_tail_start(), 'a gain inside the tail does not restart it')
+        ! a budget too short for a stall: the tail starts so that it completes within it
+        call del_file(STATS_FILE)
+        conv_short = convergence()
+        params%maxits = PROB_BETA_TAIL + 2
+        do it = 1, params%maxits
+            params%which_iter = it
+            call frozen_field(os, res05(it), res143(it))
+            conv_at(it) = conv_short%check_conv3D(params, cline, os, 40.)
+            call os%kill
+            if( it == 1 ) call assert_int(0, conv_short%anneal_tail_start(), 'the first iteration of a short budget starts no tail')
+            if( it == 2 ) call assert_int(3, conv_short%anneal_tail_start(), 'a short budget starts the tail in time to complete')
+        enddo
+        call assert_true(conv_at(params%maxits), 'a short budget anneals to its last iteration')
         ! no prob_beta_end: no tail
         call del_file(STATS_FILE)
-        params%prob_beta_end        = params%prob_beta
-        params%prob_beta_tail_start = 0
+        conv_flat = convergence()
+        params%maxits        = 25
+        params%prob_beta_end = params%prob_beta
         do it = 1, 4
             params%which_iter = it
             call frozen_field(os, 7.0, 6.0)
-            conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
+            conv_at(it) = conv_flat%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
-        call assert_int(0, params%prob_beta_tail_start, 'a flat run (prob_beta_end = prob_beta) starts no tail')
+        call assert_int(0, conv_flat%anneal_tail_start(), 'a flat run (prob_beta_end = prob_beta) starts no tail')
         call assert_true(.not. any(conv_at(1:4)), 'a flat run does not converge on the stall')
         call cline%kill
         deallocate(params)

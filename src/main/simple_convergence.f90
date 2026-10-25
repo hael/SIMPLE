@@ -33,6 +33,7 @@ type convergence
     real    :: cont_stable_pct        = 0. !< refine=cont: stable particles of the least stable state (%)
     real    :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
     real    :: progress               = 0. !< progress estimation
+    integer :: prob_beta_tail_start   = 0  !< the probability tables' annealing tail to prob_beta_end: its first iteration (0: the run still searches at prob_beta); set when the resolution stops gaining or at the budget's end
   contains
     procedure :: check_conv2D
     procedure, nopass :: print_verdict
@@ -44,6 +45,7 @@ type convergence
     procedure :: calc_polish_stats
     procedure :: check_cont_conv
     procedure :: get
+    procedure :: anneal_tail_start
 end type convergence
 
 contains
@@ -418,9 +420,9 @@ contains
         if( params%l_prob_align_mode )then
         ! the probability tables' posterior draws: the tempering factor of this iteration, and the annealing to
         ! prob_beta_end once the resolution stops gaining (the tail; exec_refine3D sets the factor)
-        if( params%prob_beta_tail_start > 0 )then
+        if( self%prob_beta_tail_start > 0 )then
         write(beta_str,'(F6.3,A,I0,A,I0,A,F6.3,A)') params%prob_beta, ' (annealing tail ',&
-            &min(PROB_BETA_TAIL, params%which_iter - params%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL,&
+            &min(PROB_BETA_TAIL, params%which_iter - self%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL,&
             &' to ', params%prob_beta_end, ')'
         else if( params%prob_beta_end > TINY .and. abs(params%prob_beta_end - params%prob_beta) > TINY )then
         write(beta_str,'(F6.3,A,F6.3,A)') params%prob_beta, ' (annealing to ', params%prob_beta_end,&
@@ -553,12 +555,14 @@ contains
             converged = .false.
             ! the annealing tail (prob_beta_end differs from prob_beta): the run searches flat at prob_beta until
             ! neither FSC=0.5 nor FSC=0.143 gained on the previous iteration, then exec_refine3D ramps the draws to
-            ! prob_beta_end over PROB_BETA_TAIL iterations and the run ends; the streptavidin tally of 2026-10-24
-            ! had the ramp spread over the last stage's budget run 26 iterations where the resolution was reached
-            ! at the second (pose_marginalization.md section 19)
+            ! prob_beta_end over the PROB_BETA_TAIL iterations from self%prob_beta_tail_start and the run ends; a
+            ! budget too short for a stall starts the tail so that it completes within it. The state is this
+            ! object's: the in-memory strategy rebuilds params from the command line every iteration. The
+            ! streptavidin tally of 2026-10-24 had the ramp spread over the last stage's budget run 26 iterations
+            ! where the resolution was reached at the second (pose_marginalization.md section 19)
             if( (params%l_prob_align_mode .and. params%prob_beta_end > TINY .and. &
-                &abs(params%prob_beta_end - params%prob_beta) > TINY) .or. params%prob_beta_tail_start > 0 )then
-                if( params%prob_beta_tail_start == 0 )then
+                &abs(params%prob_beta_end - params%prob_beta) > TINY) .or. self%prob_beta_tail_start > 0 )then
+                if( self%prob_beta_tail_start == 0 )then
                     l_stalled = .false.
                     if( params%which_iter > params%startit .and. res05_now > TINY .and. res143_now > TINY )then
                         res05_prev  = prev_iter_res(params, 'RESOLUTION_FSC05_STATE')
@@ -567,11 +571,15 @@ contains
                             &res05_now >= res05_prev - TINY .and. res143_now >= res143_prev - TINY
                     endif
                     if( l_stalled )then
-                        params%prob_beta_tail_start = params%which_iter + 1
+                        self%prob_beta_tail_start = params%which_iter + 1
                         write(logfhandle,'(A,I0,A)') '>>> RESOLUTION NO LONGER GAINING: annealing the posterior draws over the next ',&
                             &PROB_BETA_TAIL, ' iterations'
+                    else if( params%which_iter + 1 >= params%startit + params%maxits - PROB_BETA_TAIL )then
+                        self%prob_beta_tail_start = params%which_iter + 1
+                        write(logfhandle,'(A,I0,A)') '>>> BUDGET END: annealing the posterior draws over the last ',&
+                            &PROB_BETA_TAIL, ' iterations'
                     endif
-                else if( params%which_iter >= params%prob_beta_tail_start + PROB_BETA_TAIL - 1 )then
+                else if( params%which_iter >= self%prob_beta_tail_start + PROB_BETA_TAIL - 1 )then
                     write(logfhandle,'(A)') '>>> ANNEALING TAIL COMPLETE'
                     converged = .true.
                 endif
@@ -1003,6 +1011,12 @@ contains
         call exec_cmdline(ps2pdf_cmd, suppress_errors=.true., exitstat=iostat)
         if( iostat == 0 ) call del_file(fname_eps)
     end subroutine plot_projdirs
+
+    !> the first iteration of the annealing tail (0: none yet)
+    integer function anneal_tail_start( self ) result( it )
+        class(convergence), intent(in) :: self
+        it = self%prob_beta_tail_start
+    end function anneal_tail_start
 
     real function get( self, which )
         class(convergence), intent(in) :: self
