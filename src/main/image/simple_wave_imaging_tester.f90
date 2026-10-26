@@ -63,7 +63,7 @@ contains
         complex  :: s(-R:R,-R:R), ds(-R:R,-R:R), q(-R:R,-R:R), y(-R:R,-R:R), ihat(-R:R,-R:R)
         complex  :: jds(-R:R,-R:R), jtq(-R:R,-R:R), grad(-R:R,-R:R)
         real(dp) :: lhs, rhs, fd, an
-        real     :: h
+        real     :: h, hdata
         call wi%new(NAT, OSF, model)
         call wi%set_optics(optics(), BFAC, real(R))
         ! about half a radian of phase: u ~ |s|/nat^2 summed over the disk
@@ -78,8 +78,11 @@ contains
         write(*,'(A,I2,A,ES10.3)') '    model ', model, ' adjoint relative error ', abs(lhs-rhs)/max(abs(lhs),abs(rhs))
         call assert_true(abs(lhs - rhs) <= 1.0e-5_dp * max(abs(lhs), abs(rhs)), &
             &'the adjoint is the transpose of the linearisation')
-        ! the gradient of 1/2 |y - ihat|^2 along ds
-        y = ihat + 0.3 * maxval(abs(ihat(1:,:))) * random_disk()
+        ! Displace the data along ds so its derivative cannot cancel down
+        ! to the scalar misfit's single-precision rounding.
+        hdata = 0.3 * maxval(abs(s)) / maxval(abs(ds))
+        call wi%forward(s + hdata*ds, y)
+        y = y + 0.3 * maxval(abs(y(1:,:))) * random_disk()
         call wi%forward(s, ihat)
         call wi%adjoint(-(y - ihat), grad)
         an = redot(grad, ds)
