@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('volum
 type(ui_program), target :: center
 type(ui_program), target :: detect_calpha
 type(ui_program), target :: reproject
+type(ui_program), target :: sharpvol
 type(ui_program), target :: volops
 
 contains
@@ -16,6 +17,7 @@ contains
         call new_center(prgtab)
         call new_detect_calpha(prgtab)
         call new_reproject(prgtab)
+        call new_sharpvol(prgtab)
         call new_volops(prgtab)
     end subroutine construct_volume_programs
 
@@ -145,6 +147,42 @@ subroutine new_center( prgtab )
         ! add to ui_hash
         call add_ui_program('reproject', reproject, prgtab, UI_CATEGORY)
     end subroutine new_reproject
+
+    subroutine new_sharpvol( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call sharpvol%new(&
+        &'sharpvol',&
+        &'Sharpen a density map inside a docked atomic-model envelope',&
+        &'docks PDB-derived density to the input map over 100-20 Angstroms, builds a soft envelope with a '//&
+        &'six-pixel cosine edge, and applies global B-factor sharpening. Requires matching <map>_even and '//&
+        &'<map>_odd half-maps beside the input volume. Their unmasked FSC determines the filter and FSC=0.143 '//&
+        &'cutoff. Writes <map>_lp, <map>_pproc, the simulated and docked model densities, and a binary FSC curve.',&
+        &'simple_exec',&
+        &.false., visibility=UI_VIS_STANDARD, display_name='Sharpen with Atomic Model')
+        call sharpvol%add_input(UI_IMG, 'vol1', 'file', 'Volume', &
+        &'Input density map with matching _even and _odd half-maps in the same directory', &
+        &'e.g. map.mrc', .true., '', visibility=UI_VIS_STANDARD)
+        call sharpvol%add_input(UI_FILE, 'pdbfile', 'file', 'Atomic model', &
+        &'PDB coordinates used to generate and dock the masking envelope', &
+        &'e.g. model.pdb', .true., '', visibility=UI_VIS_STANDARD)
+        call sharpvol%add_input(UI_PARM, smpd, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call sharpvol%add_input(UI_PARM, center_pdb, visibility=UI_VIS_ADVANCED)
+        call sharpvol%add_input(UI_FILE, 'fsc', 'file', 'FSC output', &
+        &'Output binary FSC curve, recalculated from the half-maps; overwrites this path when supplied. '//&
+        &'Otherwise writes <map>_fsc.bin in the execution directory', &
+        &'e.g. map_fsc.bin', .false., '', visibility=UI_VIS_ADVANCED)
+        call sharpvol%add_input(UI_FILT, bfac, &
+        &help_override='B-factor in Angstroms^2; when omitted, estimated by a Guinier fit if the FSC cutoff is '//&
+        &'better than 5 Angstroms, otherwise zero', visibility=UI_VIS_ADVANCED)
+        call sharpvol%add_input(UI_PARM, mirr, &
+        &help_override='Write an additional x-mirrored postprocessed map; mirr=no disables this output', &
+        &visibility=UI_VIS_ADVANCED)
+        call sharpvol%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call sharpvol%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call add_ui_program('sharpvol', sharpvol, prgtab, UI_CATEGORY)
+    end subroutine new_sharpvol
 
     subroutine new_volops( prgtab )
         class(ui_hash), intent(inout) :: prgtab

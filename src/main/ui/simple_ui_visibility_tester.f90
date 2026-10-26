@@ -204,6 +204,8 @@ contains
         call assert_registered_category('postprocess', 'postprocess', 'Post-processing', 69)
         call assert_registered_category('postprocess_nu', 'postprocess', 'Post-processing', 69)
         call assert_int(2, count_prgs_in_category('postprocess'), 'postprocess program count')
+        call assert_registered_category('sharpvol', 'volume', 'Volume Processing', 180)
+        call assert_registered_required_keys('sharpvol', [character(len=7) :: 'vol1', 'pdbfile', 'nthr'])
         call assert_registered_category('automask', 'mask', 'Masking', 100)
         call assert_registered_category('cls_expansion', 'refine2d', 'Refine 2D Workflows', 30)
         call assert_registered_category('reimport_particles', 'project', 'Project Management', 10)

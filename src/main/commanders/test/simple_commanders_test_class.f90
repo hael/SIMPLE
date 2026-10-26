@@ -134,6 +134,7 @@ use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_nano_species_tester,              only: run_all_nano_species_tests
+use simple_commanders_volops_tester,         only: run_all_sharpvol_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
@@ -582,6 +583,7 @@ contains
         call add_suite(s, n, 'PCG sparse sampling',  run_all_pcg_sparse_tests)
         call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
         call add_suite(s, n, 'truth map docking', run_all_truth_docking_tests)
+        call add_suite(s, n, 'sharpvol', run_all_sharpvol_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
         call add_suite(s, n, 'wave reconstruction',  run_all_rec3D_wave_lib_tests)
     end subroutine suites_lib_reconstruction
