@@ -15,6 +15,7 @@ private
 public :: pcg_lattice, PCG_FFT_MEASURE_MIN_BOXPD
 public :: plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, scatter_window_real, scatter_window_pair
 public :: scatter_window_nowrap, scatter_window_pair_nowrap, scatter_window_cmplx_nowrap
+public :: slab_count, slab_planes, slab_k_range
 
 !> padded boxes from here get measured FFTW plans for an operator's work image (the size from which the
 !! image threads its plans); below it the estimate heuristic keeps small fixtures run-to-run identical
@@ -96,9 +97,11 @@ contains
         ! oversampling: the unknown lives on the native box, every Fourier operation
         ! on the padf-times padded lattice, as in Fourier gridding
         self%padf    = OSMPL_PAD_FAC
-        ! same-colour h-lines stay a full window apart along one axis after rotation: plane points
-        ! padf*stride apart in Euclidean norm are at least that / sqrt(3) apart in max-norm
-        self%stride  = ceiling(sqrt(3.0) * real(self%wdim) / real(self%padf))
+        ! same-colour h-lines stay a full window apart along one axis after rotation (max-norm >=
+        ! Euclidean norm / sqrt(3)); disjoint windows alone are not enough: the rows of one sweep run
+        ! concurrently, and at half this stride their windows share cache lines along the contiguous
+        ! axis for a sixth of the orientations (false sharing, three times slower, not faster)
+        self%stride  = ceiling(sqrt(3.0) * real(self%wdim))
         self%boxpd   = self%padf * box
         self%pad_off = (self%boxpd - box) / 2
         self%Rnat    = box / 2
@@ -597,6 +600,61 @@ contains
         integer,                  intent(in) :: i0(3)
         win_below_fold = i0(1) + self%wdim - 1 < 0 .and. i0(1) > self%wlims(1)
     end function win_below_fold
+
+    ! SLAB OWNERSHIP: the alternative to colouring for a scatter of flat planes. The third axis of the
+    ! accumulator (its slowest in memory) is cut into slabs wdim planes thick and a window belongs to the
+    ! slab its first plane i0(3) lies in; the slabs are scattered in two phases, even-numbered then odd,
+    ! and within a phase each slab by one thread, so concurrent windows are a whole plane apart (no race,
+    ! no shared cache line) and every element receives its windows in a fixed order whatever the thread
+    ! count. A thread visits only the k-intervals of each plane row that fall into its slabs (slab_k_range)
+
+    !> the number of slabs of the period box, wdim planes each (the last may be thinner)
+    pure integer function slab_count( self )
+        class(pcg_lattice), intent(in) :: self
+        slab_count = (self%wlims(2) - self%wlims(1) + self%wdim) / self%wdim
+    end function slab_count
+
+    !> the planes [slo, shi] a window's first plane i0(3) lies in to belong to slab islab (0-based)
+    pure subroutine slab_planes( self, islab, slo, shi )
+        class(pcg_lattice), intent(in)  :: self
+        integer,            intent(in)  :: islab
+        integer,            intent(out) :: slo, shi
+        slo = self%wlims(1) + islab * self%wdim
+        shi = min(slo + self%wdim - 1, self%wlims(2))
+    end subroutine slab_planes
+
+    !> the k-interval [klo, khi] of plane row h (flat section at rot, loc = padf [h,k,0] rot) whose
+    !! windows start in the planes [slo, shi]: nint(loc(3)) - iwinsz in [slo, shi]. The interval is
+    !! widened by one sample at either end (the caller applies the exact test) and clipped to the
+    !! disk; klo > khi when the row misses the slab
+    pure subroutine slab_k_range( self, h, rot, slo, shi, klo, khi )
+        class(pcg_lattice), intent(in)  :: self
+        integer,            intent(in)  :: h, slo, shi
+        real,               intent(in)  :: rot(3,3)
+        integer,            intent(out) :: klo, khi
+        real    :: a, b, lo, hi, t1, t2, tmax
+        integer :: kmax
+        klo = 1
+        khi = 0
+        if( h*h > self%sqlp ) return
+        kmax = int(sqrt(real(self%sqlp - h*h)))
+        a    = real(self%padf) * real(h) * rot(1,3)
+        b    = real(self%padf) * rot(2,3)
+        lo   = real(slo + self%iwinsz) - 0.5
+        hi   = real(shi + self%iwinsz) + 0.5
+        if( b == 0.0 )then
+            ! the whole row lies in one plane
+            if( a < lo - 0.5 .or. a > hi + 0.5 ) return
+            klo = -kmax
+            khi =  kmax
+            return
+        endif
+        tmax = real(kmax) + 2.0
+        t1   = max(-tmax, min(tmax, (lo - a) / b))
+        t2   = max(-tmax, min(tmax, (hi - a) / b))
+        klo  = max(-kmax, floor(min(t1, t2)) - 1)
+        khi  = min( kmax, ceiling(max(t1, t2)) + 1)
+    end subroutine slab_k_range
 
     !> KB-weighted scatter of one complex value into the full-range accumulator
     pure subroutine scatter_window( self, i0, w, val, vol_accum )

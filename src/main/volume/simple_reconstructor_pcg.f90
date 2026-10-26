@@ -15,11 +15,11 @@ use simple_cartesian_fourier, only: extract_native_fourier_plane, gather_packed_
 use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
 use simple_pcg_lattice,       only: pcg_lattice, plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, &
     &scatter_window_real, scatter_window_pair, scatter_window_nowrap, scatter_window_pair_nowrap, &
-    &PCG_FFT_MEASURE_MIN_BOXPD
+    &slab_count, slab_planes, slab_k_range, PCG_FFT_MEASURE_MIN_BOXPD
 use simple_pcg_atomic_prior,  only: pcg_atomic_prior
 use simple_pcg_solver,        only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve, &
     &PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
-!$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
+!$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num, omp_get_num_threads
 implicit none
 
 public :: reconstructor_pcg, pcg_solver_outcome
@@ -1779,7 +1779,8 @@ contains
     end subroutine add_raw_accum_weighted
 
     !> accumulates the weighted RHS B and the density D in one traversal: same
-    !! orientation, coordinate and KB window for both scatters. The planes are Hermitian
+    !! orientation, coordinate and KB window for both scatters, the threads owning plane
+    !! slabs of the accumulators (pcg_lattice, SLAB OWNERSHIP). The planes are Hermitian
     !! and the accumulators are read as their h >= 0 half, so windows wholly below it are
     !! skipped (win_below_fold): half the scatter, the same sums
     subroutine accumulate_rhs_density( self, y_batch, nb, ifrom, bacc, dacc )
@@ -1796,33 +1797,44 @@ contains
         complex, allocatable :: weighted(:,:)
         real,    allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
-        integer :: ib, i, g, h, k, l, i0(3)
+        integer :: ib, i, g, h, k, i0(3), nslab, nthr, ithr, iphase, islab, slo, shi, klo, khi
         if( nb < 1 ) return
         allocate(weighted(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        !$omp parallel default(shared) private(ib,i,g,h,k,l,loc,i0,w,rot) proc_bind(close)
+        nslab = slab_count(self)
+        !$omp parallel default(shared) private(ib,i,g,h,k,loc,i0,w,rot,nthr,ithr,iphase,islab,slo,shi,klo,khi) &
+        !$omp proc_bind(close)
+        nthr = 1
+        ithr = 0
+        !$ nthr = omp_get_num_threads()
+        !$ ithr = omp_get_thread_num()
         do ib = 1, nb
             i = ifrom + ib - 1
             call self%prepare_fused_planes(i, y_batch(:,:,ib), weighted, absT2)
             do g = 1, self%nsym
                 rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
-                do l = 0, self%stride-1
-                    !$omp do schedule(static,1)
-                    do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
-                        do k = self%lims2(2,1), self%lims2(2,2)
-                            if( h*h + k*k > self%sqlp ) cycle
-                            if( absT2(h,k) == 0. .and. weighted(h,k) == cmplx(0.,0.) ) cycle
-                            loc = plane_loc(self, h, k, rot, 0.)
-                            i0  = nint(loc) - self%iwinsz
-                            if( win_wraps(self, i0) ) cycle
-                            ! Hermitian planes: only the h >= 0 half of the accumulator is ever read
-                            if( win_below_fold(self, i0) ) cycle
-                            call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                            call scatter_window_pair_nowrap(self, i0, w, self%padsc * weighted(h,k), &
-                                &absT2(h,k), bacc, dacc)
+                do iphase = 0, 1
+                    do islab = iphase, nslab-1, 2
+                        if( mod(islab/2, nthr) /= ithr ) cycle   ! another thread's slab
+                        call slab_planes(self, islab, slo, shi)
+                        do h = self%lims2(1,1), self%lims2(1,2)
+                            call slab_k_range(self, h, rot, slo, shi, klo, khi)
+                            do k = klo, khi
+                                if( h*h + k*k > self%sqlp ) cycle
+                                if( absT2(h,k) == 0. .and. weighted(h,k) == cmplx(0.,0.) ) cycle
+                                loc = plane_loc(self, h, k, rot, 0.)
+                                i0  = nint(loc) - self%iwinsz
+                                if( i0(3) < slo .or. i0(3) > shi ) cycle   ! the exact ownership test
+                                if( win_wraps(self, i0) ) cycle
+                                ! Hermitian planes: only the h >= 0 half of the accumulator is ever read
+                                if( win_below_fold(self, i0) ) cycle
+                                call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                                call scatter_window_pair_nowrap(self, i0, w, self%padsc * weighted(h,k), &
+                                    &absT2(h,k), bacc, dacc)
+                            end do
                         end do
                     end do
-                    !$omp end do
+                    !$omp barrier
                 end do
                 !$omp single
                 do h = self%lims2(1,1), self%lims2(1,2)
@@ -1948,34 +1960,45 @@ contains
         integer,                  optional, intent(in)    :: ifrom, ito
         real, allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
-        integer :: i, g, h, k, l, i0(3), ii_from, ii_to
+        integer :: i, g, h, k, i0(3), ii_from, ii_to, nslab, nthr, ithr, iphase, islab, slo, shi, klo, khi
         ii_from = 1
         ii_to   = self%nptcls
         if( present(ifrom) ) ii_from = ifrom
         if( present(ito)   ) ii_to   = ito
         if( ii_to < ii_from ) return
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,rot) proc_bind(close)
+        nslab = slab_count(self)
+        !$omp parallel default(shared) private(i,g,h,k,loc,i0,w,rot,nthr,ithr,iphase,islab,slo,shi,klo,khi) &
+        !$omp proc_bind(close)
+        nthr = 1
+        ithr = 0
+        !$ nthr = omp_get_num_threads()
+        !$ ithr = omp_get_thread_num()
         do i = ii_from, ii_to
             call self%absT2_plane(i, absT2)
-            ! replication at every R_i.S_g, g outside the colour sweep; symmats(:,:,1)=I gives c1
+            ! replication at every R_i.S_g, g outside the slab phases; symmats(:,:,1)=I gives c1
             do g = 1, self%nsym
                 rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
-                do l = 0, self%stride-1
-                    !$omp do schedule(static,1)
-                    do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
-                        do k = self%lims2(2,1), self%lims2(2,2)
-                            if( h*h + k*k > self%sqlp ) cycle
-                            if( absT2(h,k) == 0. ) cycle
-                            loc = plane_loc(self, h, k, rot, 0.)
-                            i0  = nint(loc) - self%iwinsz
-                            if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
-                            if( win_below_fold(self, i0) ) cycle
-                            call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                            call scatter_window_nowrap(self, i0, w, absT2(h,k), acc)
+                do iphase = 0, 1
+                    do islab = iphase, nslab-1, 2
+                        if( mod(islab/2, nthr) /= ithr ) cycle
+                        call slab_planes(self, islab, slo, shi)
+                        do h = self%lims2(1,1), self%lims2(1,2)
+                            call slab_k_range(self, h, rot, slo, shi, klo, khi)
+                            do k = klo, khi
+                                if( h*h + k*k > self%sqlp ) cycle
+                                if( absT2(h,k) == 0. ) cycle
+                                loc = plane_loc(self, h, k, rot, 0.)
+                                i0  = nint(loc) - self%iwinsz
+                                if( i0(3) < slo .or. i0(3) > shi ) cycle
+                                if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
+                                if( win_below_fold(self, i0) ) cycle
+                                call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                                call scatter_window_nowrap(self, i0, w, absT2(h,k), acc)
+                            end do
                         end do
                     end do
-                    !$omp end do
+                    !$omp barrier
                 end do
                 ! wrapping rim, serialized: see win_wraps
                 !$omp single

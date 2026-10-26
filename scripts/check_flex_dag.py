@@ -51,6 +51,7 @@ LAYERS = {
 IGNORED = {
     "simple_flex_cls_expansion",  # A different program; outside the FLEX-PCA refactor.
     "simple_flex_cls_kernel",     # cls_expansion's kernel route; outside the FLEX-PCA refactor.
+    "simple_flex_traj_denoise",   # trajectory_denoise pca_mode=flex; outside the FLEX-PCA refactor.
 }
 
 MODULE_RE = re.compile(r"^\s*module\s+(?!procedure\b|subroutine\b|function\b)(\w+)", re.I)

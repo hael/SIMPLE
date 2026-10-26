@@ -152,11 +152,19 @@ subroutine new_extract_substk( prgtab )
         ! search controls
         ! <empty>
         ! filter controls
-        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of diffusion-map components (0 => auto; default 0)', 'Number of diffusion-map components (0 => auto; default 0)', '# eigenvecs', .false., 0.0, &
+        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of components (0 => auto; default 0; pca_mode=flex: the largest latent rank, default 32)', &
+        &'Number of components (0 => auto; default 0; pca_mode=flex: the largest latent rank the cross-validation may choose, default 32)', '# eigenvecs', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA, or kernel PCA', 'PCA methods','', .false., 'diffusion_maps', &
-        &choices=ui_choices([character(len=15) :: 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca']), &
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, '//&
+        &'or flex (every frame the kernel pre-image of the frames that look like it, no alignment)', 'PCA methods','', .false., 'diffusion_maps', &
+        &choices=ui_choices([character(len=15) :: 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca', 'flex']), &
         &visibility=UI_VIS_ADVANCED)
+        call trajectory_denoise%add_input(UI_FILT, 'halfwin', 'num', 'Window half-width in frames (pca_mode=flex; 0 => the whole trajectory)', &
+        &'pca_mode=flex: frames pool only within this many frames of their block; 0 => every frame may pool with every frame (default 0)', &
+        &'# frames', .false., 0.0, visibility=UI_VIS_ADVANCED)
+        call trajectory_denoise%add_input(UI_FILT, 'eo_pool', 'binary', 'Pool by row parity (pca_mode=flex)', &
+        &'pca_mode=flex: a frame pools only frames of its own row parity, so the even/odd halves stay independent(yes|no){yes}', '', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0, &
         &visibility=UI_VIS_ADVANCED)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}','', .false., 'rbf', &

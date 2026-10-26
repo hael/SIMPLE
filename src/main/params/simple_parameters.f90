@@ -61,6 +61,7 @@ type :: parameters
     character(len=3)          :: pcg_solvent_check='no' !< PCG solvent prior: re-solve the strength grid for real and print it beside the closed-form estimate (validation only)(yes|no){no}
     character(len=3)          :: eo_stage='yes'       !< Whether the last stage of solve2D uses a resolution limit determined with e/o pairs(yes|no){yes}
     character(len=3)          :: eo_rebalance='yes'   !< reassign selected particle halves by direction and score(yes|no){yes}
+    character(len=3)          :: eo_pool='yes'        !< trajectory_denoise flex: pool only frames of the same row parity(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: ewald='neg'          !< Ewald-sphere curvature of the wave models(neg|pos|no){neg}
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
@@ -369,6 +370,7 @@ type :: parameters
     integer :: fromp=1             !< start ptcl index
     integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
+    integer :: halfwin=0           !< trajectory_denoise flex: window half-width in frames (0: the whole trajectory)
     integer :: hpind_fsc           !< high-pass Fourier index for FSC
     integer :: iptcl=1
     integer :: istart=0

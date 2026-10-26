@@ -38,10 +38,11 @@ the production-module layers, and runs before the fast test gate.
 - the folder root: shared helpers (`util`), figures (`plot`, `umap`) and the
   fast-gate testers.
 
-There are 43 source files: 32 production modules, the probe fit's four
+There are 44 source files: 32 production modules, the probe fit's four
 submodule files, the self-test submodules of the PCG operator and of the
-`cls_expansion` kernel route, three testers and `cls_expansion` with its kernel
-route (`simple_flex_cls_kernel`, both outside the layering). `scripts/check_flex_dag.py`
+`cls_expansion` kernel route, three testers, `cls_expansion` with its kernel
+route (`simple_flex_cls_kernel`) and the `trajectory_denoise pca_mode=flex` prototype
+(`simple_flex_traj_denoise`), the last three outside the layering. `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and
 cycles. CMake discovers `src/main` through a recursive glob without
 `CONFIGURE_DEPENDS`; reconfigure once before building after adding or restoring
@@ -226,3 +227,13 @@ through `transform_ptcls(keep_ft=.true.)`, owns the part files, the merge and th
 writes; the commander (`../commanders/simple/simple_commanders_denoise.f90`) runs the one pass.
 Method and
 benchmarks: `doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md`.
+
+## `trajectory_denoise pca_mode=flex` (prototype)
+
+`simple_flex_traj_denoise.f90`: every frame of a trajectory the kernel pre-image of the frames that
+look like it (the latents of class models on the fit band's two coefficient sets) and lie near it in
+time, with rank, latent bandwidth and temporal bandwidth chosen by coefficient-split
+cross-validation; frames as given (no alignment), the whole trajectory or windows (`halfwin`), only
+frames of the same row parity pooled (`eo_pool`). It reuses `flex_cls_fit`; arrays in, arrays out;
+the commander (`../commanders/single/single_commanders_trajectory.f90`) does the stack I/O. Design,
+toy and validation: `doc/implementation_notes/planned/trajectory_denoise_flex.md`.

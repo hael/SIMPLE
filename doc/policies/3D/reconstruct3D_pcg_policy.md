@@ -475,14 +475,25 @@ removing edge artefacts where deapodization amplifies hardest, it shrinks the
 problem: at `mskdiam` 180 in a 256 box the sphere is ~18% of the volume. Edge
 profile is production's `cosedge_r2_3d`.
 
-**Scatter reproducibility.** Every scatter into a Fourier accumulator is
-parallelized by h-strided colouring, whose separation guarantee holds on
-*unwrapped* coordinates only. The stride is `ceiling(sqrt(3) wdim / padf)`:
-plane rows a stride apart land `padf*stride` apart on the padded lattice under
-any rotation, hence more than a window apart along one axis. The accumulator
-is periodic, so windows that reach
-the wrap boundary can collide after folding even in the same colour. All scatter
-sites therefore split: the parallel colour sweep skips any window `win_wraps`
+**Scatter reproducibility.** The production accumulations
+(`accumulate_rhs_density`, `accumulate_absT2`) are parallelized by slab
+ownership (`pcg_lattice`, `slab_count`/`slab_planes`/`slab_k_range`): the
+accumulator's third axis, its slowest in memory, is cut into slabs `wdim`
+planes thick, a window belongs to the slab its first plane lies in, even
+slabs are scattered before odd ones and each slab by one thread, which walks
+only the `k`-intervals of each plane row that reach its slabs. Concurrent
+windows are a whole plane apart — no race and no shared cache line — and
+every element receives its windows in one fixed order at any thread count.
+The lattice's generic scatters (`scatter_plane`, `scatter_cube`, the
+matrix-free reference, flex) keep h-strided colouring, whose separation
+guarantee holds on *unwrapped* coordinates only, with stride
+`ceiling(sqrt(3) wdim)`: rows a stride apart are more than a window apart along
+one axis under any rotation, and far enough apart that the concurrent rows of
+one sweep do not share cache lines along the contiguous axis (at half the
+stride they do for a sixth of the orientations, and the scatter runs three
+times slower, 2026-10-26). The accumulator is periodic, so windows that reach
+the wrap boundary can collide after folding under either scheme. All scatter
+sites therefore split: the parallel pass skips any window `win_wraps`
 (in `pcg_lattice`) flags, and a serial pass handles the rim (pre-filtered by `sq_rim`, a radius
 below which wrapping is provably impossible). Serial, not `atomic` — an atomic
 would fix the race but leave summation order thread-dependent, and bitwise

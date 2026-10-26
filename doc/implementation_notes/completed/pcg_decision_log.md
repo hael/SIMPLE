@@ -962,9 +962,23 @@ for Hermitian planes -- bit-identical sums, half the scatter; the
 matrix-free reference and the wave fold keep the full scatter. (2) The raw
 artifact is version 3 (`SIMPLE_PCG_RAW03`): the read half of each slice
 plus the wrapped Nyquist mate, half the bytes written, read and summed;
-`compare_raw_accum` compares those rows. (3) The colouring stride is
-`ceiling(sqrt(3) wdim / padf)` (3 instead of 6 at `padf=2`): the same
-window separation on the padded lattice, half the barriers per plane.
+`compare_raw_accum` compares those rows. (3) The colouring stride was
+first halved to `ceiling(sqrt(3) wdim / padf)` (the same window separation
+on the padded lattice, half the barriers), which made the accumulation
+three times slower, not faster (benchmark `BENCH_ACC_PCG`: 10.4 s per part
+at box 108 against 3.4 s): disjoint windows are not enough, the rows of one
+sweep run concurrently and at that stride their windows share cache lines
+along the contiguous axis for a sixth of the orientations (false sharing).
+The stride is back at `ceiling(sqrt(3) wdim)` for the lattice's generic
+scatters, and the production accumulations now parallelize by slab
+ownership instead (`slab_count`/`slab_planes`/`slab_k_range`): each thread
+owns slabs of `wdim` planes of the accumulator's slowest axis, even slabs
+then odd, and scatters only the windows whose first plane lies in them,
+visiting each plane row's matching `k`-interval; concurrent windows are a
+plane apart, two barriers per plane instead of six, and the summation order
+of every element is fixed at any thread count. A numpy emulation of the
+lattice conventions checks that the slab walk visits every non-wrapping
+window exactly once (random, axis-aligned and degenerate orientations).
 (4) `read_rec_obs_batch` prepares and transforms a batch in parallel over
 per-thread observation images. (5) The kernel apply, the preconditioner,
 the Fourier diagonal, the folds and `finalize_khat` run on the work image's

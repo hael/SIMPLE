@@ -374,7 +374,13 @@ contains
         class(commander_trajectory_denoise), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den
+        type(string) :: pca_mode
         if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode',  'diffusion_maps')
+        pca_mode = cline%get_carg('pca_mode')
+        if( pca_mode%to_char() == 'flex' )then
+            call trajectory_denoise_flex(cline)
+            return
+        endif
         if( .not. cline%defined('neigs')                   ) call cline%set('neigs',                  200)
         if( .not. cline%defined('kpca_nystrom_npts')       ) call cline%set('kpca_nystrom_npts',      512)
         if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 96)
@@ -382,6 +388,108 @@ contains
         if( .not. cline%defined('k_nn')                    ) call cline%set('k_nn',                     5)
         call xkpca_den%execute(cline)
     end subroutine exec_trajectory_denoise
+
+    !> pca_mode=flex: every frame the kernel pre-image of the frames that look like it and lie near it in time
+    !! (simple_flex_traj_denoise). Frames as given: no shift, rotation or interpolation; each frame's mean removed,
+    !! soft-masked by the box's inscribed circle, its mean restored in the output. Writes outstk (same rows, box and
+    !! sampling) and trajectory_denoise_flex.txt (per frame: Kish population of its weights, the CV's rank, tau, h)
+    subroutine trajectory_denoise_flex( cline )
+        use simple_flex_traj_denoise, only: flex_traj_denoise
+        use simple_memoize_ft_maps,   only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
+        class(cmdline), intent(inout) :: cline
+        integer, parameter :: SEED = 20261026
+        type(parameters) :: params
+        type(image)      :: img
+        complex(sp), allocatable :: y(:,:), yden(:,:)
+        real(dp),    allocatable :: ess(:), choice(:,:)
+        real(sp),    allocatable :: wq(:), avgs(:)
+        integer,     allocatable :: hidx(:), kidx(:), shell(:)
+        integer :: ldim(3), lims(3,2), n, i, j, h, k, sh, nyq, ncoeff, kfit, kband, funit, iostat
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
+        if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'trajectory_denoised'//STK_EXT)
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',   32)
+        if( .not. cline%defined('halfwin') ) call cline%set('halfwin', 0)
+        if( .not. cline%defined('eo_pool') ) call cline%set('eo_pool', 'yes')
+        call params%new(cline)
+        if( .not. file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk); trajectory_denoise_flex')
+        call find_ldim_nptcls(params%stk, ldim, n)
+        ldim(3) = 1
+        if( ldim(1) /= ldim(2) ) THROW_HARD('square frames only; trajectory_denoise_flex')
+        ! the half-plane lattice, shells 1..nyq
+        call memoize_ft_maps(ldim, params%smpd)
+        lims   = ft_map_lims
+        nyq    = fdim(ldim(1)) - 1
+        ncoeff = 0
+        do h = 0, lims(1,2)
+            do k = lims(2,1), lims(2,2)
+                if( h == 0 .and. k < 0 ) cycle
+                sh = nint(hyp(h,k))
+                if( sh < 1 .or. sh > nyq ) cycle
+                ncoeff = ncoeff + 1
+            end do
+        end do
+        allocate(hidx(ncoeff), kidx(ncoeff), shell(ncoeff), wq(ncoeff))
+        j = 0
+        do h = 0, lims(1,2)
+            do k = lims(2,1), lims(2,2)
+                if( h == 0 .and. k < 0 ) cycle
+                sh = nint(hyp(h,k))
+                if( sh < 1 .or. sh > nyq ) cycle
+                j = j + 1
+                hidx(j)  = h
+                kidx(j)  = k
+                shell(j) = sh
+                wq(j)    = 2.      ! each listed coefficient stands for itself and its conjugate (as flex_class_planes)
+            end do
+        end do
+        ! the frames: mean removed, soft-masked by the inscribed circle, their half-plane coefficients
+        allocate(y(ncoeff,n), yden(ncoeff,n), ess(n), choice(3,n), avgs(n))
+        call img%new(ldim, params%smpd)
+        call img%memoize_mask_coords
+        do i = 1, n
+            call img%set_ft(.false.)
+            call img%read(params%stk, i)
+            avgs(i) = img%mean()
+            call img%add(-avgs(i))
+            call img%mask2D_soft(real(ldim(1)) / 2. - 2., backgr=0.)
+            call img%fft
+            do j = 1, ncoeff
+                y(j,i) = img%get_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1)
+            end do
+        end do
+        kfit = 0
+        if( cline%defined('lp') ) kfit = calc_fourier_index(params%lp, ldim(1), params%smpd)
+        write(logfhandle,'(A,I7,A,I5,A,I4,A,I5,A,A)') '>>> TRAJECTORY_DENOISE FLEX: frames=', n, ' box=', ldim(1), &
+            &' max rank=', params%neigs, ' halfwin=', params%halfwin, ' eo_pool=', trim(params%eo_pool)
+        call flush(logfhandle)
+        call flex_traj_denoise(y, hidx, kidx, shell, wq, params%neigs, kfit, params%halfwin, &
+            &trim(params%eo_pool) == 'yes', SEED, yden, ess, choice, kband)
+        ! the pre-images back to frames, the frame's mean restored
+        do i = 1, n
+            call img%zero_and_flag_ft
+            do j = 1, ncoeff
+                call img%set_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1, yden(j,i))
+                ! the half-plane keeps the h = 0 column for k >= 0 only; its k < 0 mate is the conjugate
+                if( hidx(j) == 0 .and. kidx(j) > 0 ) call img%set_cmat_at(ft_map_phys_addrh(0,-kidx(j)), &
+                    &ft_map_phys_addrk(0,-kidx(j)), 1, conjg(yden(j,i)))
+            end do
+            call img%ifft
+            call img%add(avgs(i))
+            call img%write(params%outstk, i)
+        end do
+        call forget_ft_maps
+        call img%kill
+        ! per frame: the Kish population of its weights and the CV's choice
+        call fopen(funit, file=string('trajectory_denoise_flex.txt'), status='replace', action='write', iostat=iostat)
+        write(funit,'(A)') '# frame neff rank tau h   (rank 0 / tau -1: the temporal kernel alone; h -1: no temporal kernel)'
+        do i = 1, n
+            write(funit,'(I7,F10.2,I5,F8.2,F8.1)') i, ess(i), nint(choice(1,i)), choice(2,i), choice(3,i)
+        end do
+        call fclose(funit)
+        write(logfhandle,'(A,F10.2,A,F10.2,A,F10.2,A,I4)') '>>> TRAJECTORY_DENOISE FLEX: neff min/median/max ', minval(ess), &
+            &' / ', median(ess), ' / ', maxval(ess), '; fit band shells 1-', kband
+        call simple_end('**** TRAJECTORY_DENOISE NORMAL STOP ****')
+    end subroutine trajectory_denoise_flex
 
     subroutine exec_trajectory_swap_stack( self, cline )
         class(commander_trajectory_swap_stack), intent(inout) :: self
