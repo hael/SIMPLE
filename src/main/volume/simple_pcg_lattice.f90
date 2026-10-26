@@ -12,9 +12,13 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: pcg_lattice
+public :: pcg_lattice, PCG_FFT_MEASURE_MIN_BOXPD
 public :: plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, scatter_window_real, scatter_window_pair
 public :: scatter_window_nowrap, scatter_window_pair_nowrap, scatter_window_cmplx_nowrap
+
+!> padded boxes from here get measured FFTW plans for an operator's work image (the size from which the
+!! image threads its plans); below it the estimate heuristic keeps small fixtures run-to-run identical
+integer, parameter :: PCG_FFT_MEASURE_MIN_BOXPD = 200
 
 !> A solve whose unknown lives on the native box while every Fourier operation runs on the padf-times
 !! padded lattice (centre-pad in, centre-crop out): the KB window, the OpenMP colouring stride of the

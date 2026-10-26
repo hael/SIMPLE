@@ -9,11 +9,11 @@ use simple_oris,              only: oris
 use simple_sym,               only: sym
 use simple_image,             only: image
 use simple_ctf,               only: ctf
-use simple_cartesian_fourier, only: center_embed_real3d
 use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
-use simple_pcg_lattice,       only: pcg_lattice
+use simple_pcg_lattice,       only: pcg_lattice, PCG_FFT_MEASURE_MIN_BOXPD
 use simple_wave_imaging,      only: wave_imaging, WAVE_PROJECTION, WAVE_FIRST_BORN, WAVE_RYTOV, WAVE_MSLICE
 use simple_wave_multislice,   only: wave_multislice
+use, intrinsic :: iso_c_binding, only: c_float, c_float_complex
 !$ use omp_lib,               only: omp_get_max_threads, omp_get_thread_num, omp_in_parallel
 implicit none
 private
@@ -129,8 +129,10 @@ contains
         self%fft_nthreads = 1
         if( present(fft_nthreads) ) self%fft_nthreads = max(1, fft_nthreads)
         call self%new_lattice(box, smpd, winsz)
+        ! three padded transforms per NLCG iteration and one per line-search evaluation: measured plans
         call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], smpd, &
-            &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads)
+            &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads, &
+            &fft_measure=self%boxpd >= PCG_FFT_MEASURE_MIN_BOXPD)
         ! the KB deapodisation of the native box, as the PCG backend's (separable, centred crop)
         call kb_stencil_centered_crop_inv_envelope_1d(self%kbwin, self%boxpd, self%box, inv1d)
         allocate(self%invenv(box,box,box))
@@ -249,19 +251,55 @@ contains
         self%l_dir = .true.
     end subroutine set_direction
 
+    !> the deapodised volume centred in the padded box, transformed, its packed transform copied into
+    !! cmat. In place through the work image's pointers (image%get_cmat_ptr states the contract): the
+    !! copies of set_rmat/get_cmat and the padded temporary cost more than the transform
     subroutine transform( self, v, cmat )
         class(wave_projector), intent(inout) :: self
         real,                  intent(in)    :: v(self%box,self%box,self%box)
         complex, allocatable,  intent(inout) :: cmat(:,:,:)
-        call self%wimg%set_rmat(center_embed_real3d(v * self%invenv, self%boxpd), .false.)
+        real(c_float),            pointer :: rptr(:,:,:)
+        complex(c_float_complex), pointer :: cptr(:,:,:)
+        integer :: j, k, o, box, boxpd
+        call self%wimg%get_rmat_ptr(rptr)
+        o     = self%pad_off
+        box   = self%box
+        boxpd = self%boxpd
+        !$omp parallel do collapse(2) default(shared) private(j,k) schedule(static) proc_bind(close)
+        do k = 1, boxpd
+            do j = 1, boxpd
+                if( k > o .and. k <= o+box .and. j > o .and. j <= o+box )then
+                    rptr(1:o,j,k)           = 0.0
+                    rptr(o+1:o+box,j,k)     = v(:,j-o,k-o) * self%invenv(:,j-o,k-o)
+                    rptr(o+box+1:boxpd,j,k) = 0.0
+                else
+                    rptr(:,j,k) = 0.0
+                endif
+            end do
+        end do
+        !$omp end parallel do
+        call self%wimg%set_ft(.false.)
         call self%wimg%fft()
-        cmat = self%wimg%get_cmat()
+        call self%wimg%get_cmat_ptr(cptr)
+        if( allocated(cmat) )then
+            if( any(shape(cmat) /= self%cdim) ) deallocate(cmat)
+        endif
+        if( .not. allocated(cmat) ) allocate(cmat(self%cdim(1),self%cdim(2),self%cdim(3)))
+        !$omp parallel do collapse(2) default(shared) private(j,k) schedule(static) proc_bind(close)
+        do k = 1, self%cdim(3)
+            do j = 1, self%cdim(2)
+                cmat(:,j,k) = cptr(:,j,k)
+            end do
+        end do
+        !$omp end parallel do
     end subroutine transform
 
     !> zeroes the gradient accumulator
     subroutine begin_grad( self )
         class(wave_projector), intent(inout) :: self
-        self%gacc   = cmplx(0.,0.)
+        !$omp parallel workshare proc_bind(close)
+        self%gacc = cmplx(0.,0.)
+        !$omp end parallel workshare
         self%l_grad = .true.
     end subroutine begin_grad
 

@@ -977,7 +977,12 @@ is planned with `FFTW_MEASURE` from padded box 200 (`image%new(fft_measure)`,
 10 s budget per plan, buffer re-zeroed after the trial transforms), the
 wisdom staying in the process; the lattice geometry comes from an `ftiter`
 instead of a probe image, and the work image is made on first transform,
-so a worker never allocates it. Expected on the benchmark: the per-part
-partial reconstruction near gridding's, the raw I/O halved, the solves
-bounded by measured FFTs. To verify on the cluster: the same `solve3D`
+so a worker never allocates it. (7) The wave projector inherits the stride,
+the pointer fold and the parallel batch preparation through the shared
+lattice and I/O; its work image takes the same measured plans, `transform`
+runs in place through the image's pointers and `begin_grad` zeroes in
+parallel; the h < 0 skip does not apply to it, since its Ewald caps are
+not Hermitian and `get_grad` folds both halves. Expected on the benchmark:
+the per-part partial reconstruction near gridding's, the raw I/O halved,
+the solves bounded by measured FFTs. To verify on the cluster: the same `solve3D`
 with `rec_backend=pcg`, the REC3D and PCG_ASSEMBLE bench records.

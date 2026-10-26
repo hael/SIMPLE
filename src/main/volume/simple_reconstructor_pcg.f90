@@ -14,7 +14,8 @@ use simple_ctf,               only: ctf
 use simple_cartesian_fourier, only: extract_native_fourier_plane, gather_packed_window
 use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
 use simple_pcg_lattice,       only: pcg_lattice, plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, &
-    &scatter_window_real, scatter_window_pair, scatter_window_nowrap, scatter_window_pair_nowrap
+    &scatter_window_real, scatter_window_pair, scatter_window_nowrap, scatter_window_pair_nowrap, &
+    &PCG_FFT_MEASURE_MIN_BOXPD
 use simple_pcg_atomic_prior,  only: pcg_atomic_prior
 use simple_pcg_solver,        only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve, &
     &PCG_STOP_INDEFINITE, PCG_XTOL, PCG_RESID_REPLACE, PCG_RHO_FLOOR_FRAC
@@ -36,9 +37,6 @@ integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cos
 integer, parameter :: PCG_RAW_ACCUM_VERSION = 3
 integer, parameter :: PCG_RAW_PROV_LEN = 256
 real,    parameter :: PCG_SUPPORT_DIV_MIN = 0.1 !< window floor of the x/window warm-start conversion, see window_div
-!> padded boxes from here get measured FFTW plans for the work image (the size from which the image
-!! threads its plans); below it the estimate heuristic keeps small fixtures run-to-run identical
-integer, parameter :: PCG_FFT_MEASURE_MIN_BOXPD = 200
 real,    parameter :: PCG_RHO_SAMPLED_FRAC = 0.1 !< density below this fraction of its shell's measured mean is unmeasured, see finalize_density_accum
 character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW03'
 

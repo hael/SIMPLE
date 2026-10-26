@@ -758,14 +758,17 @@ that transform (`ensure_wimg`); a worker, which only accumulates and
 publishes raw artifacts, never allocates it. Every padded transform runs in
 place on the image's buffers through `get_rmat_ptr`/`get_cmat_ptr`
 (`embed_fft`, `ifft_crop`, the folds, `finalize_khat`): no copy in or out.
-From `PCG_FFT_MEASURE_MIN_BOXPD` (200, the size from which the image threads
-its plans) the work image's plans are measured (`FFTW_MEASURE` under the
-image's time budget) instead of estimated, and the measured plan's wisdom
-serves every later operator of the same size in the process, so a run pays
-the planning once per crop. A measured plan is chosen by timing, so the
-rounding of a solve is fixed within a process but may differ between
-processes; small fixtures stay on the estimate heuristic and remain
-run-to-run identical.
+From `PCG_FFT_MEASURE_MIN_BOXPD` (200 in `simple_pcg_lattice`, the size from
+which the image threads its plans) the work image's plans are measured
+(`FFTW_MEASURE` under the image's time budget) instead of estimated, and the
+measured plan's wisdom serves every later operator of the same size in the
+process, so a run pays the planning once per crop. A measured plan is chosen
+by timing, so the rounding of a solve is fixed within a process but may
+differ between processes; small fixtures stay on the estimate heuristic and
+remain run-to-run identical. The wave projector's work image follows the
+same rule, and its `transform` and gradient zeroing run in place and in
+parallel like the PCG operator's; its two-cap gradient scatter keeps the
+full both-sign-h lattice (section 4).
 
 ### Backend comparison protocol (review 2026-09-09)
 
