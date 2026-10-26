@@ -73,7 +73,7 @@ contains
         call test_shmat_searched_shells()
         call test_search_threads()
         call test_loaded_reference()
-        call test_likelihood_threads()
+        call test_posterior_threads()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
 
@@ -704,23 +704,22 @@ contains
     end subroutine test_shift_frames
 
     !> a bank entry (shifted particle memo) against the direct sum at the reference-frame shift it corresponds to
-    !! at every rotation, for both objectives, and the likelihood route on the same entry
+    !! at every rotation, for both objectives, and the posterior route on the same entry
     subroutine test_particle_bank()
         real(dp), parameter :: TODAY_ATOL = 5.d-2 ! the dropped Nyquist bin separates the two kernels; a frame error is O(1)
         type(builder),    target :: b
         type(parameters), target :: p
         complex(sp), allocatable :: bank(:,:)
         real(sp),    allocatable :: vals(:), vals_today(:), pvec(:)
-        integer,     allocatable :: inds(:)
         real(dp) :: max_err, max_today, direct
-        real(sp) :: t(2), s(2), dist, corr
+        real(sp) :: t(2), s(2), dist
         integer  :: iobj, ish, irot, irot_s, nrots, kfromto(2), irot_seed
         write(*,'(A)') 'test_particle_bank'
         do iobj = OBJ_EUCLID, OBJ_CC
             call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, [2., -1.5], .false.)
             nrots   = b%pftc%get_nrots()
             kfromto = b%pftc%get_kfromto()
-            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), vals(nrots), vals_today(nrots), pvec(nrots), inds(nrots))
+            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), vals(nrots), vals_today(nrots), pvec(nrots))
             max_err   = 0.d0
             max_today = 0.d0
             do ish = 1, size(PROBE_SHIFTS,2)
@@ -740,10 +739,15 @@ contains
             call assert_true(max_today <= TODAY_ATOL, 'and agrees with the shifted-reference kernel up to the Nyquist bin')
             write(*,'(A,I0,A,ES10.2,A,ES10.2)') '  objective ', iobj, ': max |bank - direct| ', max_err, &
                 &'   max |bank - shifted-reference kernel| ', max_today
-            ! the likelihood route with one sample takes the best rotation of the same entry
-            call b%pftc%gen_likelihood_val_bank(1, 1, bank, 1, dist, corr, irot_s, pvec, inds)
-            call assert_int(maxloc(vals, dim=1), irot_s, 'the likelihood route picks the best rotation of the entry')
-            call assert_true(abs(corr - vals(irot_s)) <= 1.e-4, 'and reports its score')
+            ! the posterior route (euclid): the bank row is the loss of the same entry at every rotation, and a draw
+            ! at a cold temperature takes its best rotation
+            if( iobj == OBJ_EUCLID )then
+                call b%pftc%gen_euclid_dists_bank(1, 1, bank, pvec)
+                call assert_true(maxval(abs(exp(-pvec) - vals)) <= 1.e-4, 'the bank row is -log of the bank values')
+                call b%pftc%gen_posterior_val_bank(1, 1, bank, huge(1._sp), dist, irot_s)
+                call assert_int(maxloc(vals, dim=1), irot_s, 'the cold posterior draw picks the best rotation of the entry')
+                call assert_true(abs(exp(-dist) - vals(irot_s)) <= 1.e-4, 'and reports its loss')
+            endif
             ! a seed from the shift search: estimated at irot_seed as a reference shift, held as one particle shift
             irot_seed = nrots / 3
             s = [1.2, -0.8]
@@ -756,7 +760,7 @@ contains
                 &'a seed scores at its own rotation exactly as the reference-frame seed')
             call assert_true(abs(vals(irot_seed) - vals_today(irot_seed)) <= TODAY_ATOL, &
                 &'and as today''s kernel up to the Nyquist bin')
-            deallocate(bank, vals, vals_today, pvec, inds)
+            deallocate(bank, vals, vals_today, pvec)
             call kill_fixture(b)
         enddo
 
@@ -853,7 +857,7 @@ contains
 
     end subroutine test_grid_ptcl_search
 
-    ! ---- exact checks: shift matrix range, loaded reference, likelihood scores ----
+    ! ---- exact checks: shift matrix range, loaded reference, the tables' kernels across threads ----
 
     !> the alignment shift matrix holds only the searched shells: the scores are the same, bit for bit, whatever the
     !! shells above kfromto(2) hold (shift_ptcl fills them with another shift; the searched shells are then reset)
@@ -937,17 +941,20 @@ contains
         enddo
     end subroutine test_loaded_reference
 
-    !> the likelihood scores of the table fill (shifted reference and particle bank) and, with euclid, the power and
-    !! bounded samplers of the 2D and greedy searches, over 24 references, at one thread and 20 times at every
-    !! processor: the same distance, score and rotation, bit for bit (one sample: the draw is the best)
-    subroutine test_likelihood_threads()
-        integer, parameter :: NREFS_LT = 24, NRES = 11
+    !> the kernels the probability tables score with, over 24 references at one thread and 20 times at every
+    !! processor: the rows of gen_euclid_dists (shifted-reference kernel) and gen_euclid_dists_bank, the posterior
+    !! draws at a cold temperature (the row's argmin, deterministic) and the SHC strategies' single-sample draws, bit
+    !! for bit the same; and a draw at the particle's own temperature always returns a rotation of its row at the
+    !! row's value. cc has no posterior kernel: its rows are gen_objfun_vals and gen_objfun_vals_bank
+    subroutine test_posterior_threads()
+        integer, parameter :: NREFS_LT = 24, NRES = 10
+        real(sp), parameter :: COLD = huge(1._sp)
         type(builder),    target :: b
         type(parameters), target :: p
         complex(sp), allocatable :: bank(:,:)
-        real(sp),    allocatable :: res1(:,:), resn(:,:)
-        integer :: iobj, nthr_prev, nthr_full, kfromto(2), irep, ndiff
-        write(*,'(A)') 'test_likelihood_threads'
+        real(sp),    allocatable :: res1(:,:), resn(:,:), rows1(:,:,:), rowsn(:,:,:)
+        integer :: iobj, nthr_prev, nthr_full, kfromto(2), irep, ndiff, nrots, nbad
+        write(*,'(A)') 'test_posterior_threads'
         nthr_prev = 1
         nthr_full = 1
         !$ nthr_prev = omp_get_max_threads()
@@ -956,47 +963,80 @@ contains
         do iobj = OBJ_EUCLID, OBJ_CC
             call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false., nrefs=NREFS_LT, nthr=nthr_full)
             kfromto = b%pftc%get_kfromto()
-            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1))
+            nrots   = b%pftc%get_nrots()
+            allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), rows1(nrots,2,NREFS_LT), rowsn(nrots,2,NREFS_LT))
             call b%pftc%memoize_shifted_ptcl(1, [0.7, -0.4], bank)
             !$ call omp_set_num_threads(1)
-            call score_refs(res1)
+            call score_refs(res1, rows1)
             !$ call omp_set_num_threads(nthr_full)
             ndiff = 0
+            nbad  = 0
             do irep = 1,20
-                call score_refs(resn)
+                call score_refs(resn, rowsn)
                 ndiff = ndiff + count(transfer(res1,0,size(res1)) /= transfer(resn,0,size(resn)))
+                ndiff = ndiff + count(transfer(rows1,0,size(rows1)) /= transfer(rowsn,0,size(rowsn)))
+                if( iobj == OBJ_EUCLID ) nbad = nbad + draws_off_row(rowsn)
             enddo
             !$ call omp_set_num_threads(nthr_prev)
-            call assert_int(0, ndiff, 'the likelihood and sampler scores at every processor equal those at one, bit for bit')
-            deallocate(bank)
+            call assert_int(0, ndiff, 'the rows, the cold draws and the single-sample draws at every processor equal those at one, bit for bit')
+            if( iobj == OBJ_EUCLID ) call assert_int(0, nbad, 'a draw at the particle temperature returns a rotation of the row at its value')
+            deallocate(bank, rows1, rowsn)
             call kill_fixture(b)
         enddo
         nthr_glob = nthr_prev
 
     contains
 
-        subroutine score_refs( res )
-            real(sp), intent(out) :: res(:,:)
-            real(sp) :: pvec(b%pftc%get_nrots()), dist, corr
-            integer  :: inds(b%pftc%get_nrots()), iref, irot
+        !> res: the cold draws (dist, irot) of the shifted and the bank kernel, then (euclid) the SHC strategies'
+        !! single-sample draws; rows: the two kernels' rows
+        subroutine score_refs( res, rows )
+            real(sp), intent(out) :: res(:,:), rows(:,:,:)
+            real(sp) :: pvec(nrots), dist, corr
+            integer  :: inds(nrots), iref, irot
             res = 0.
             !$omp parallel do default(shared) private(iref,pvec,inds,dist,corr,irot) schedule(dynamic)
             do iref = 1,NREFS_LT
-                call b%pftc%gen_likelihood_val(iref, 1, [1.1, -0.6], 1, dist, corr, irot, pvec, inds)
-                res(1:3,iref) = [dist, corr, real(irot)]
-                call b%pftc%gen_likelihood_val_bank(iref, 1, bank, 1, dist, corr, irot, pvec, inds)
-                res(4:6,iref) = [dist, corr, real(irot)]
                 if( iobj == OBJ_EUCLID )then
+                    call b%pftc%gen_euclid_dists(iref, 1, [1.1, -0.6], rows(:,1,iref))
+                    call b%pftc%gen_euclid_dists_bank(iref, 1, bank, rows(:,2,iref))
+                    call b%pftc%gen_posterior_val(iref, 1, [1.1, -0.6], COLD, dist, irot)
+                    res(1:2,iref) = [dist, real(irot)]
+                    call b%pftc%gen_posterior_val_bank(iref, 1, bank, COLD, dist, irot)
+                    res(3:4,iref) = [dist, real(irot)]
                     call b%pftc%gen_prob_power_objfun_val(iref, 1, [1.1, -0.6], 2., 1, dist, corr, irot, pvec, inds)
-                    res(7:9,iref) = [dist, corr, real(irot)]
+                    res(5:7,iref) = [dist, corr, real(irot)]
                     call b%pftc%gen_prob_objfun_val(iref, 1, [1.1, -0.6], 0.1, 0.1, dist, irot, pvec, inds)
-                    res(10:11,iref) = [dist, real(irot)]
+                    res(8:9,iref) = [dist, real(irot)]
+                    res(10,iref)  = b%pftc%ptcl_posterior_temp(1)
+                else
+                    call b%pftc%gen_objfun_vals(iref, 1, [1.1, -0.6], rows(:,1,iref))
+                    call b%pftc%gen_objfun_vals_bank(iref, 1, bank, rows(:,2,iref))
                 endif
             enddo
             !$omp end parallel do
         end subroutine score_refs
 
-    end subroutine test_likelihood_threads
+        !> draws at the particle's temperature over the shifted kernel: the number whose rotation is outside the
+        !! row or whose value is not the row's at that rotation
+        integer function draws_off_row( rows ) result( nbad_loc )
+            real(sp), intent(in) :: rows(:,:,:)
+            real(sp) :: dist, temp
+            integer  :: iref, irot
+            temp     = b%pftc%ptcl_posterior_temp(1)
+            nbad_loc = 0
+            !$omp parallel do default(shared) private(iref,dist,irot) schedule(dynamic) reduction(+:nbad_loc)
+            do iref = 1,NREFS_LT
+                call b%pftc%gen_posterior_val(iref, 1, [1.1, -0.6], temp, dist, irot)
+                if( irot < 1 .or. irot > nrots )then
+                    nbad_loc = nbad_loc + 1
+                else if( dist /= rows(irot,1,iref) )then
+                    nbad_loc = nbad_loc + 1
+                endif
+            enddo
+            !$omp end parallel do
+        end function draws_off_row
+
+    end subroutine test_posterior_threads
 
     !> the alternating shift search (as the probabilistic tables run it) over 24 references and three start shifts,
     !! euclid and cc, at one thread and 20 times at every processor: every result bit for bit the same

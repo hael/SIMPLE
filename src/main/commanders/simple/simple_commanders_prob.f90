@@ -448,7 +448,7 @@ contains
                 if( fill%nrefined > 0 ) write(fnr,'(a,i0)') 'prob_tab refined refs (all)         : ', fill%nrefined
             else
                 write(fnr,'(a,i0)') 'prob_tab references                 : ', fill%nrefs
-                write(fnr,'(a,i0)') 'prob_tab refined refs per particle  : ', fill%projs_ns
+                write(fnr,'(a,i0)') 'prob_tab max refined refs/particle  : ', fill%projs_ns
                 write(fnr,'(a,i0)') 'prob_tab refined refs (all)         : ', fill%nrefined
             endif
             write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls

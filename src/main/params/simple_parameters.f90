@@ -422,7 +422,7 @@ type :: parameters
     integer :: nparts_pool =1      !< # partitions for pool distributed execution
     integer :: nparts3D=0          !< # partitions of the stream's 3D jobs (0: the stage's default)
     integer :: npeaks=NPEAKS_DEFAULT !< # of greedy subspace peaks to construct multi-neighborhood search spaces from
-    integer :: npeaks_inpl=NPEAKS_INPL_DEFAULT !< # multi-neighborhood search peaks to refine with L-BFGS
+    integer :: npeaks_inpl=NPEAKS_INPL_DEFAULT !< # peaks the SHC strategies' in-plane search refines with L-BFGS (refine=neigh, the 2D *_smpl modes); the probability tables refine by posterior mass
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_base=0       !< # particles in the initial solve3D snapshot
@@ -574,7 +574,6 @@ type :: parameters
     real    :: lpstop_fine=0.      !< stop low-pass limit(in A){0}
     real    :: lpthres=STREAM_RES_THRESHOLD
     real    :: local_ang_bound=-1. !< refine3D_states local projection-angle override in degrees; negative is automatic
-    real    :: local_inpl_bound=-1. !< refine3D_states local in-plane-angle override in degrees; negative is automatic
     real    :: local_shift_bound=-1. !< refine3D_states local shift override in pixels; negative is automatic
     real    :: min_state_frac=0.   !< flex_pca population floor: fraction of embedded particles every delivered state must hold; 0=off
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
@@ -600,7 +599,7 @@ type :: parameters
     real    :: phshift_max=180.    !< maximum fitted phase shift(in degrees){180}
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
-    real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
+    real    :: prob_athres=10.     !< in-plane angular bound of the SHC strategies' samplers (refine=neigh, the 2D *_smpl modes); the probability tables draw without a threshold
     real    :: prob_beta=0.3       !< tempering factor on the particle temperature of every posterior draw of the probability tables (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.3 for small membrane proteins (pose_marginalization.md sections 4.4, 17){0.3}
     real    :: prob_beta_end=0.    !< the factor the run anneals to once its resolution stops gaining: a geometric ramp from prob_beta over the last PROB_BETA_TAIL iterations, then the run ends (1 = the physical posterior); 0 = prob_beta, no annealing; solve3D sets 1 on its last stage{0.0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction

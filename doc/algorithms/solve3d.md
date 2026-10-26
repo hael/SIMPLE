@@ -73,14 +73,19 @@ ends and interpolates the box in between, always preserving
 smpd_crop))` pixels. The downscaled particle cache is 2D-only; `solve3D`
 rejects `cache` and `cache_dir`.
 
-**Search stochasticity.** Stages 1 and 2 use the stochastic direct
-neighborhood (first-improvement over a random subset of directions);
-stages 3 to 5 use the full probabilistic table with balanced assignment;
-stages 6 to 8 restrict the table to pooled coarse-peak neighborhoods so the
-late search is local and exhaustive within it. The coarse subspace is
-rescaled with `nspace` so its granularity stays constant. Independent
-multi-state runs use plain first-improvement hill climbing for the first two
-stages.
+**Search stochasticity.** Every stage commits, per particle, one draw from
+the tempered posterior over the references it scored
+([sampling](sampling_and_fractional_updates.md)). Stages 1 and 2 score the
+stochastic direct neighborhood (a random subset of directions up to the
+first that beats the current pose, the current pose among the candidates);
+stages 3 to 5 score the full probabilistic table; stages 6 to 8 restrict
+the table to pooled coarse-peak neighborhoods so the late search is local
+and exhaustive within it. The coarse subspace is rescaled with `nspace` so
+its granularity stays constant. Independent multi-state runs use plain
+first-improvement hill climbing for the first two stages. The last stage
+anneals its draws to the physical posterior once its resolution stops
+gaining (`prob_beta_end=1`, the annealing tail of
+[refine3D](refine3d.md)).
 
 **Particle subset.** A fixed target `nsample` (default 10 000 per state)
 gives `update_frac = nsample * nstates / N_active`, capped at 0.9 so that

@@ -1429,14 +1429,12 @@ caller has moved:
    `gen_prob_power_objfun_val`, `sample_bounded_dists`,
    `sample_power_dists`) stay: the posterior is the tables' rule
    (section 19, item 3).
-2. **Refinement counts, to be driven by the posterior mass**: `projs_ns`
-   from `calc_num2sample(prob_athres, dist)` in the dense 3D fill,
-   `nhood_sz`, `snhc_smpl_ncls` and `smpl_ncls` in 2D, `npeaks_inpl` in 3D.
-   The rule: shift-refine the entries holding a fixed fraction of the
-   row's posterior mass at T_eff (the diagnostic's k99: median 3-5 at a
-   stage's start, 1-2 as it settles), so the budget follows the data's
-   width and shrinks as the posterior sharpens. This retires
-   `prob_athres` from the fills.
+2. **Refinement counts, driven by the posterior mass** (done 2026-10-25,
+   section 19, item 10): `projs_ns` from `calc_num2sample(prob_athres,
+   dist)` in the dense 3D fill, `nhood_sz` and `smpl_ncls` in 2D,
+   `npeaks_inpl` in the neighbourhood table, replaced by
+   `posterior_refine_set`. `prob_athres` and `npeaks_inpl` stay as the SHC
+   strategies' bounds (`snhc_smpl_ncls` is theirs too).
 3. **Neighbourhood construction**, the cost control that decides what is
    scored before anything is scored: the stochastic bound
    (`extremal_decay`, `neigh_frac`, `snhc_nrefs_bound`, `MIN_STOCH_FINE_REFS`),
@@ -1660,4 +1658,31 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    a short-lived `prob_inpl_draw` gone). `gen_likelihood_val` and its bank
    form keep their bench and tester callers for now. No key decides any of
    this: the stage plan does.
+10. **The refined set by posterior mass (2026-10-25).** Hans, on
+   `calc_num2sample(prob_athres, dist)`: could it be its upper bound, or
+   something more elegant? The bound (nspace/18 for every particle, every
+   iteration) would have refined three to ten times more late in a stage
+   than the pose-change rule did, and kept `prob_athres`. The rule now, on
+   every table (`posterior_refine_set`, one constant `PROB_REFINE_MASS` =
+   0.99): take the row's entries in ascending loss while each holds at
+   least 1% of the row's tempered posterior mass, until 99% is covered,
+   the mode always. A sharp row refines its mode, a row open over a few
+   poses refines those, a flat row (the draw lands anywhere) refines its
+   mode only; at most 100 entries can hold 1% each, which sizes the work
+   arrays without a second constant. Per state block in the dense 3D
+   table and per state in the neighbourhood table, so the state label
+   compares refined with refined; over the active classes in the 2D
+   dense table, over the evaluated candidates in the sparse one. Gone
+   with it: `calc_num2sample`, the 2D `nhood_sz`/`NHOOD_FRAC` and the
+   table's `smpl_ncls`, the tables' reading of `prob_athres` and
+   `npeaks_inpl` (both stay for the SHC strategies), and the
+   `refine3D_states` key `local_inpl_bound`, which only set `prob_athres`
+   for a `prob_neigh` run and so had been dead since item 5. The
+   likelihood in-plane chain of item 9's last paragraph went the same day
+   (`gen_likelihood_val`, its bank form and samplers; the bench and
+   testers read the posterior kernels' rows through `gen_euclid_dists`).
+   The measurement that follows: the fill profile's largest and total
+   refined counts (`prob_tab max refined refs/particle`, `refined refs
+   (all)`) against the previous rule's on the streptavidin and PfCRT
+   restarts, and the resolution.
 

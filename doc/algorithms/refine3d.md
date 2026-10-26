@@ -66,7 +66,7 @@ One iteration:
    density that is present in the images destroys pose discrimination under
    the Euclidean objective.
 2. **Candidate preparation** (probabilistic modes). Build the probability
-   table and run the balanced assignment described in
+   table and run the per-particle posterior assignment described in
    [sampling](sampling_and_fractional_updates.md).
 3. **Search and commit.** For each active particle choose one direction,
    in-plane rotation, shift, and state:
@@ -78,16 +78,20 @@ One iteration:
    - `neigh`: score the coarse representatives exhaustively, keep the best
      `npeaks`, and search every fine direction in their cells, and in the
      cell of the previous direction, exhaustively.
-   - `prob`: the table covers every direction of every state, and the
-     balanced assignment commits one candidate per particle.
-   - `prob_neigh`: the table is restricted, per particle, to a neighborhood.
+   - `prob`: the table covers every direction of every state, and each
+     particle commits one draw from the tempered posterior over its row
+     (within the state of its closest reference; `prob_beta` tempers the
+     draw, the run's annealing knob).
+   - `prob_neigh`: the table is restricted, per particle, to a neighborhood,
+     and the particle draws from the posterior over the candidates it scored.
      In `state` mode (the default) the coarse representatives are scored and
      the best `npeaks` cells, pooled across states, form the neighborhood;
      in `geom` mode it is the cell that contains the previous projection, the
      same for every state. The `shc` and `snhc` modes use no cells: they
      score a stochastic subset of the fine directions with the
      first-improvement rule of `shc` (unbounded for `shc`, annealed for
-     `snhc`) after a floor of five candidates.
+     `snhc`) after a floor of five candidates, the current pose scored into
+     the set so that the draw is an acceptance step and not a forced move.
    There is no state-only mode: a consensus refinement becomes a multi-state
    one through `refine3D_states`, whose [flex PCA](heterogeneity_analysis/flex_pca.md)
    initializer assigns the first states at fixed poses.
@@ -175,10 +179,16 @@ Per particle the search records `mi_proj` (1 if the direction moved less than
 2 degrees), the visited fraction `frac`, and the running mean angular change.
 A single-state run has converged when the average `mi_proj` exceeds 0.99 and
 the visited fraction exceeds 99 percent. Multi-state runs use the joint
-state-and-direction overlap (0.96). Shift search is switched on once the
-visited fraction exceeds 75 percent, with `trs = clamp(0.07 msk, 5, 6)`
-pixels. A `combine_eo=yes` run ends with one full-update iteration at a
-tighter band with the halves merged.
+state-and-direction overlap (0.96). The probabilistic modes (`prob`,
+`prob_neigh`) bypass the overlap test, since a committed pose is a draw: the
+run ends on the resolution exit, its iteration budget, or, with
+`prob_beta_end`, its annealing tail: once neither FSC 0.5 nor FSC 0.143
+gained on the previous iteration, the draws ramp geometrically from
+`prob_beta` to `prob_beta_end` over the last five iterations and the run
+ends. Shift search is switched on once the visited fraction exceeds 75
+percent, with `trs = clamp(0.07 msk, 5, 6)` pixels. A `combine_eo=yes` run
+ends with one full-update iteration at a tighter band with the halves
+merged.
 
 ## Rationale
 

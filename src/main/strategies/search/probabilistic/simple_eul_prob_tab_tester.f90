@@ -10,9 +10,10 @@ use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
-use simple_eul_prob_tab_utils, only: record_seed_shift, sample_likelihood_dists, &
+use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at, posterior_refine_set, &
+    &PROB_REFINE_MASS, PROB_REFINE_NMAX
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -44,6 +45,8 @@ contains
         call test_posterior_row_stats()
         write(*,'(A)') 'test_draw_posterior_row'
         call test_draw_posterior_row()
+        write(*,'(A)') 'test_posterior_refine_set'
+        call test_posterior_refine_set()
         write(*,'(A)') 'test_ref_assign_posterior'
         call test_ref_assign_posterior()
         write(*,'(A)') 'test_prob_beta_at'
@@ -267,6 +270,68 @@ contains
         call draw_posterior_row(3, [huge(1.), huge(1.), huge(1.)], 1., w, which, dist)
         call assert_int(0, which, 'a row without a valid distance draws 0')
     end subroutine test_draw_posterior_row
+
+    !> The refined set of a row (posterior_refine_set): the mode alone when the posterior is a delta, the entries
+    !! holding the mass when it is open over a few, the mode alone on a flat row (no entry holds the floor), in
+    !! ascending distance, never more than the bound, none without a valid distance
+    subroutine test_posterior_refine_set()
+        integer, parameter :: N = 500
+        real    :: dists(N), pvec(PROB_REFINE_NMAX), temp
+        integer :: inds(PROB_REFINE_NMAX), nrefine, i, nvalid_set
+        real(dp) :: z, cum
+        logical :: l_ok
+        ! a delta: the mode is 10 nats below the rest at T = 1000 (loss difference 0.01)
+        dists = 1.0
+        dists(137) = 0.99
+        call posterior_refine_set(N, dists, 1000., pvec, inds, nrefine)
+        call assert_int(1, nrefine, 'a delta posterior refines its mode only')
+        call assert_int(137, inds(1), 'and that entry is the mode')
+        ! open over four: four entries within 0.001 of the mode, the rest 10 nats off
+        dists = 1.0
+        dists([5, 300, 301, 499]) = [0.9900, 0.9905, 0.9910, 0.9902]
+        call posterior_refine_set(N, dists, 1000., pvec, inds, nrefine)
+        call assert_int(4, nrefine, 'a posterior open over four entries refines the four')
+        call assert_true(all(inds(1:4) == [5, 499, 300, 301]), 'in ascending distance')
+        call assert_true(all(pvec(1:4) == dists(inds(1:4))), 'with their distances')
+        ! flat: no entry holds the floor, so the mode alone
+        dists = 1.0
+        call posterior_refine_set(N, dists, 1000., pvec, inds, nrefine)
+        call assert_int(1, nrefine, 'a flat row refines its mode only')
+        ! a uniform posterior over fewer entries than the bound refines nearly all of them
+        call posterior_refine_set(50, dists(1:50), 0., pvec, inds, nrefine)
+        call assert_int(ceiling(PROB_REFINE_MASS * 50.), nrefine, 'a uniform row shorter than the bound refines its mass')
+        ! a smooth posterior: the walk stops at the mass bound, never past the entries holding the floor
+        temp = 300.
+        do i = 1,N
+            dists(i) = 1.0 + 0.001 * real(i - 1)**1.5
+        enddo
+        call posterior_refine_set(N, dists, temp, pvec, inds, nrefine)
+        z = 0.d0
+        do i = 1,N
+            z = z + exp(-real(temp,dp) * real(dists(i) - dists(1),dp))
+        enddo
+        cum = 0.d0
+        do i = 1,nrefine
+            cum = cum + exp(-real(temp,dp) * real(dists(inds(i)) - dists(1),dp))
+        enddo
+        call assert_true(nrefine >= 1 .and. nrefine <= PROB_REFINE_NMAX, 'the count is within the bound')
+        call assert_true(all(inds(1:nrefine) == [(i, i=1,nrefine)]), 'the refined entries are the lowest, in order')
+        ! the distances rise with the index, so the next entry in the walk is the next index
+        l_ok = cum >= real(PROB_REFINE_MASS,dp) * z .or. &
+            &exp(-real(temp,dp) * real(dists(nrefine+1) - dists(1),dp)) < (1.d0 - real(PROB_REFINE_MASS,dp)) * z
+        call assert_true(l_ok, 'the walk ends at the mass bound or before the first entry below the floor')
+        nvalid_set = count(exp(-real(temp,dp) * real(dists - dists(1),dp)) >= (1.d0 - real(PROB_REFINE_MASS,dp)) * z)
+        call assert_true(nrefine <= max(1, nvalid_set), 'no refined entry but the mode is below the floor')
+        ! invalid entries are skipped, none valid gives none
+        dists = huge(1.)
+        dists(3) = 0.5
+        dists(9) = 0.6
+        call posterior_refine_set(N, dists, 1., pvec, inds, nrefine)
+        call assert_true(nrefine == 2 .and. all(inds(1:2) == [3, 9]), 'invalid entries are skipped')
+        dists = huge(1.)
+        call posterior_refine_set(N, dists, 1., pvec, inds, nrefine)
+        call assert_int(0, nrefine, 'a row without a valid distance refines none')
+    end subroutine test_posterior_refine_set
 
     !> ref_assign on synthetic dense tables (one state of 200 directions, three states of 200, two states of one
     !! direction; random distances with the tie cases: particle 1 flat, particle 2 tied at its minimum between a

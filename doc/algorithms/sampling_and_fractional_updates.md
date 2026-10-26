@@ -94,7 +94,8 @@ between every particle in the subset and every reference `j`: in 3D the
 2. every reference is scored at that shift over all in-plane rotations, and
    one in-plane rotation is drawn from the row's tempered posterior over all
    of them (below);
-3. the best `K_ref` references are refined again in shift.
+3. the references holding the row's posterior mass are refined again in
+   shift (`posterior_refine_set`, below).
 
 For the Euclidean objective, the loss `d` is the whitened negative
 log-likelihood, `d = -log(score)`, normalized by the particle's weighted
@@ -143,6 +144,24 @@ which `athres` shrinking with the measured in-plane change annealed as the
 alignment settled. The tables' fills no longer use it; the SHC strategies
 of the early 2D stages keep their own samplers.
 
+**The refined set** (since 2026-10-25) is sized by the same posterior, per
+particle: the entries of the row taken in ascending loss while each still
+holds at least 1% of the row's tempered posterior mass, until 99% of the
+mass is covered, the mode always (`posterior_refine_set`, one constant,
+`PROB_REFINE_MASS`; the two bounds together allow at most 100 entries, which
+sizes the work arrays). Refinement is spent where the draw can land: a sharp
+row refines its mode, a row open over a few poses refines those, a flat row,
+which the draw lands anywhere on, refines its mode only, and the count
+shrinks on its own as the posterior sharpens. In the dense 3D table the rule
+runs per state block and in the neighbourhood table per state, so the state
+label (the closest reference over all states) compares refined with refined;
+the 2D dense table runs it over the active classes and the sparse table over
+the evaluated candidates. It replaced the hand-set counts: in 3D
+`projs_ns = min(prob_athres, mean pose change) x nspace / 180` of the dense
+fill and `npeaks_inpl` of the neighbourhood table, in 2D `nhood_sz`
+(a tenth of the classes, at most `npeaks_inpl`) and the annealed
+`smpl_ncls`; `prob_athres` and `npeaks_inpl` remain the SHC strategies'.
+
 ## Assignment
 
 The table is consumed particle by particle (2026-10-23; the only assignment
@@ -171,8 +190,10 @@ colder draw is the open measurement. `prob_beta` is the
 search's annealing knob, since at the physical temperature the posterior
 over directions is a delta once the map has any resolution (n_eff 1.0-1.2)
 and the map-pose alternation then stops at the nearest fixed point (section
-17 of the note). A refine3D run with `prob_beta_end` anneals geometrically
-from `prob_beta` to it over its iterations; solve3D does so on its last
+17 of the note). A refine3D run with `prob_beta_end` searches flat at
+`prob_beta` until neither FSC 0.5 nor FSC 0.143 gained on the previous
+iteration, then anneals geometrically to `prob_beta_end` over the next five
+iterations and ends (the annealing tail); solve3D does so on its last
 stage, to 1, so the final map is weighted at the physical posterior. The
 design and its measurements are in
 `doc/implementation_notes/planned/pose_marginalization.md`.

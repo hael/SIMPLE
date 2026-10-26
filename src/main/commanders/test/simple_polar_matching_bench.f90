@@ -17,14 +17,14 @@ public :: PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, 
 public :: PMB_NKINDS
 private
 
-integer, parameter :: PMB_PER_PAIR     = 1   !< layout 1: production gen_likelihood_val, particle against every reference
+integer, parameter :: PMB_PER_PAIR     = 1   !< layout 1: production gen_posterior_val, particle against every reference
 integer, parameter :: PMB_REPLICA      = 2   !< layout 1's sums and FFT on the benchmark memo (the identity baseline)
 integer, parameter :: PMB_BLOCKED      = 3   !< layout 2: B particles x R references per tile, same per-pair sums
 integer, parameter :: PMB_STATES_INNER = 4   !< layout 3: every state of a direction, one batched inverse FFT
 integer, parameter :: PMB_MATRIX       = 5   !< layout 4: cgemm per angular bin over a tile, batched inverse FFT
 integer, parameter :: PMB_MATRIX_T     = 6   !< layout 4 with the products transposed to contiguous FFT input
 integer, parameter :: PMB_PER_PAIR_CC  = 7   !< layout 1 with objfun=cc (gen_corrs)
-integer, parameter :: PMB_NKINDS       = 4   !< production kernels of prod_kernels: unshifted, shifted, bank draw, bank values
+integer, parameter :: PMB_NKINDS       = 4   !< production kernels of prod_kernels: unshifted, shifted, bank row, bank values
 real(sp), parameter :: PMB_SHIFT(2)    = [1.3, -0.7]  !< the shift of the shifted and bank kernels (pixels)
 integer, parameter :: PMB_BOX      = 180           !< native box (pixels)
 integer, parameter :: PMB_BOX_CROP = 160
@@ -58,8 +58,7 @@ type :: pmb_buf
     real(c_float),            pointer :: rout(:,:)   => null()   !< (nrots, R*B)
     complex(c_float_complex), pointer :: ct(:,:)     => null()   !< (pftsz+1, R*B) transposed products
     complex(sp), allocatable :: q(:,:,:)                         !< (2nk, B, pftsz) weighted particle block
-    real(sp),    allocatable :: dists(:), pvec(:), cdf(:)
-    integer,     allocatable :: inds(:)
+    real(sp),    allocatable :: dists(:), w(:)                   !< one row over the rotations, the draw's weights
     real(dp) :: t_parts(3) = 0._dp                               !< thread seconds: sums, inverse FFTs, distances and draw
 end type pmb_buf
 
@@ -76,15 +75,14 @@ type :: polar_matching_bench
     complex(sp),         allocatable :: gmat(:,:,:,:)        !< layout 4 bin-major (2nk, nrefs, pftsz, half)
     real(dp),            allocatable :: wk8(:,:)             !< k/sigma2 (shell, half)
     real(dp),            allocatable :: norms(:)             !< wsqsum * 2 nrots per particle
+    real(sp),            allocatable :: temps(:)             !< the temperature of every draw (ptcl_posterior_temp)
     logical,             allocatable :: iseven(:)
-    ! check records of particles 1..nkeep: full distance vectors and the nsample lowest with their rotations
+    ! check records of particles 1..nkeep: the full rows over the rotations (the distances; the correlations with cc)
     real(sp),            allocatable :: vecs(:,:,:)          !< (nrots, nrefs, nkeep)
-    real(sp),            allocatable :: tops_d(:,:,:)        !< (nsample, nrefs, nkeep)
-    integer,             allocatable :: tops_i(:,:,:)
     type(c_ptr) :: plan_c2r = c_null_ptr, plan_bat = c_null_ptr, plan_bins = c_null_ptr
     integer :: plan_bins_shape(3) = 0                      !< R, B and layout the plan was made for
     integer :: nspace = 0, nstates = 0, nrefs = 0, nptcls = 0, nthr_max = 0, nkeep = 0
-    integer :: pftsz = 0, nrots = 0, kfromto(2) = 0, nk = 0, interpklim = 0, nsample = 0
+    integer :: pftsz = 0, nrots = 0, kfromto(2) = 0, nk = 0, interpklim = 0
     real(dp) :: t_gmat = 0._dp                                !< seconds spent building gmat
     real(dp) :: t_parts(3) = 0._dp                            !< last score's thread seconds per part (replica, matrix)
     logical :: with_prod_refs = .false., with_memo = .false., with_gmat = .false., l_cc = .false.
@@ -95,7 +93,6 @@ contains
     procedure :: score
     procedure :: get_sizes
     procedure :: get_vecs
-    procedure :: get_tops
     procedure :: get_gmat_build_time
     procedure :: get_parts
     procedure :: ref_bytes_per_pair
@@ -179,8 +176,6 @@ contains
         self%nk         = self%kfromto(2) - self%kfromto(1) + 1
         pdim            = self%pftc%get_pdim_interp()
         self%interpklim = pdim(3)
-        ! fill_tab_range's in-plane sample size on a fresh project (inpl_athres = prob_athres)
-        self%nsample    = min(self%nrots, max(1, int(self%params%prob_athres * real(self%nrots) / 180.)))
         ! production's memo transforms, on buffers of its alignment
         p_cmat  = fftwf_alloc_complex(int(self%nrots * self%nk, c_size_t))
         call c_f_pointer(p_cmat, cmat, [self%nrots, self%nk])
@@ -250,18 +245,15 @@ contains
         call self%pftc%assign_sigma2_noise(self%sigma2)
         call self%pftc%memoize_refs
         call self%pftc%memoize_ptcls
-        allocate(self%norms(nptcls))
+        allocate(self%norms(nptcls), self%temps(nptcls))
         do i = 1,nptcls
             self%norms(i) = self%pftc%wsqsum_ptcl_now(i) * real(2*self%nrots, dp)
+            self%temps(i) = self%pftc%ptcl_posterior_temp(i)
         enddo
         if( memo .or. gmat ) call memoize_ptcls_here
         allocate(self%dists(self%nrefs,nptcls), source=0._sp)
         allocate(self%irots(self%nrefs,nptcls), source=0)
-        if( nkeep > 0 )then
-            allocate(self%vecs(self%nrots,self%nrefs,nkeep),     source=0._sp)
-            allocate(self%tops_d(self%nsample,self%nrefs,nkeep), source=0._sp)
-            allocate(self%tops_i(self%nsample,self%nrefs,nkeep), source=0)
-        endif
+        if( nkeep > 0 ) allocate(self%vecs(self%nrots,self%nrefs,nkeep), source=0._sp)
         call fftwf_destroy_plan(plan_fwd)
         call fftwf_destroy_plan(plan_r2c)
         call fftwf_free(p_cmat)
@@ -386,8 +378,9 @@ contains
         if( allocated(self%gmat)        ) deallocate(self%gmat)
         if( allocated(self%wk8)         ) deallocate(self%wk8)
         if( allocated(self%norms)       ) deallocate(self%norms)
+        if( allocated(self%temps)       ) deallocate(self%temps)
         if( allocated(self%iseven)      ) deallocate(self%iseven)
-        if( allocated(self%vecs)        ) deallocate(self%vecs, self%tops_d, self%tops_i)
+        if( allocated(self%vecs)        ) deallocate(self%vecs)
         if( c_associated(self%plan_c2r)  ) call fftwf_destroy_plan(self%plan_c2r)
         if( c_associated(self%plan_bat)  ) call fftwf_destroy_plan(self%plan_bat)
         if( c_associated(self%plan_bins) ) call fftwf_destroy_plan(self%plan_bins)
@@ -465,8 +458,7 @@ contains
             bufs(ithr)%p_vec = fftwf_alloc_complex(int(n1, c_size_t))
             call c_f_pointer(bufs(ithr)%p_vec, bufs(ithr)%cvec, [n1])
             call c_f_pointer(bufs(ithr)%p_vec, bufs(ithr)%rvec, [self%nrots+2])
-            allocate(bufs(ithr)%dists(self%nrots), bufs(ithr)%pvec(self%nrots), bufs(ithr)%cdf(self%nrots),&
-                &bufs(ithr)%inds(self%nrots))
+            allocate(bufs(ithr)%dists(self%nrots), bufs(ithr)%w(self%nrots))
             bufs(ithr)%cvec = cmplx(0.,0.,kind=c_float_complex)
             if( layout == PMB_STATES_INNER )then
                 bufs(ithr)%p_bat = fftwf_alloc_complex(int(n1 * nst, c_size_t))
@@ -529,38 +521,41 @@ contains
     end subroutine kill_bufs
 
     !> Layout 1: fill_tab_range's loop, a thread takes a particle and scores it against every reference in turn
+    !! (the posterior in-plane draw at the particle's temperature; with cc the correlations and their best rotation).
+    !! A kept particle's check record is its full row, read again through the same kernel after the draw.
     function score_per_pair( self, nptcls_use ) result( wall )
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: nptcls_use
         real(dp) :: wall
-        real(sp), allocatable :: pvec_sorted(:,:)
-        integer,  allocatable :: sorted_inds(:,:)
-        real(sp) :: dist, corr
+        real(sp), allocatable :: row(:,:)
+        real(sp) :: dist
         integer  :: nteam, i, ithr, iref, irot
         nteam = 1
         !$ nteam = omp_get_max_threads()
-        allocate(pvec_sorted(self%nrots,nteam), source=0._sp)
-        allocate(sorted_inds(self%nrots,nteam), source=0)
+        allocate(row(self%nrots,nteam), source=0._sp)
         wall = 0._dp
         !$ wall = omp_get_wtime()
-        !$omp parallel do default(shared) private(i,ithr,iref,dist,corr,irot) proc_bind(close) schedule(dynamic)
+        !$omp parallel do default(shared) private(i,ithr,iref,dist,irot) proc_bind(close) schedule(dynamic)
         do i = 1,nptcls_use
             ithr = 1
             !$ ithr = omp_get_thread_num() + 1
             do iref = 1,self%nrefs
-                call self%pftc%gen_likelihood_val(iref, i, [0._sp,0._sp], self%nsample, dist, corr, irot,&
-                    &pvec_sorted(:,ithr), sorted_inds(:,ithr))
+                if( self%l_cc )then
+                    call self%pftc%gen_objfun_vals(iref, i, [0._sp,0._sp], row(:,ithr))
+                    irot = maxloc(row(:,ithr), dim=1)
+                    dist = 1. - row(irot,ithr)
+                    if( i <= self%nkeep ) self%vecs(:,iref,i) = row(:,ithr)
+                else
+                    call self%pftc%gen_posterior_val(iref, i, [0._sp,0._sp], self%temps(i), dist, irot)
+                    if( i <= self%nkeep ) call self%pftc%gen_euclid_dists(iref, i, [0._sp,0._sp], self%vecs(:,iref,i))
+                endif
                 self%dists(iref,i) = dist
                 self%irots(iref,i) = irot
-                if( i <= self%nkeep )then
-                    self%tops_d(:,iref,i) = pvec_sorted(1:self%nsample,ithr)
-                    self%tops_i(:,iref,i) = sorted_inds(1:self%nsample,ithr)
-                endif
             enddo
         enddo
         !$omp end parallel do
         !$ wall = omp_get_wtime() - wall
-        deallocate(pvec_sorted, sorted_inds)
+        deallocate(row)
     end function score_per_pair
 
     !> The replica of layout 1 on the benchmark memo: particle-major, gen_euclid_crvec's sums and FFT per pair
@@ -803,17 +798,17 @@ contains
         enddo
     end subroutine pair_sums
 
-    !> euclid_dists_from_crvec over all rotations, then the production likelihood draw; stores the row entry
-    !! and, for kept particles, the check records
+    !> euclid_dists_from_crvec over all rotations, then the production posterior draw at the particle's temperature
+    !! (draw_posterior_row, as draw_posterior_crvec); stores the row entry and, for kept particles, the check record
     subroutine pair_finish( self, i, iref, rv, buf )
         use simple_defs,               only: TINY
-        use simple_eul_prob_tab_utils, only: sample_likelihood_dists
+        use simple_eul_prob_tab_utils, only: draw_posterior_row
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: i, iref
         real(c_float),               intent(in)    :: rv(:)
         type(pmb_buf),               intent(inout) :: buf
         real(dp) :: v
-        real(sp) :: dist, corr
+        real(sp) :: dist
         integer  :: p, irot
         do p = 1,self%nrots
             v = 1.d0 + real(rv(p), dp) / self%norms(i)
@@ -823,52 +818,42 @@ contains
                 buf%dists(p) = real(v, sp)
             endif
         enddo
-        call sample_likelihood_dists(self%nrots, buf%dists, self%nsample, dist, corr, irot, buf%pvec, buf%inds, buf%cdf)
+        call draw_posterior_row(self%nrots, buf%dists, self%temps(i), buf%w, irot, dist)
+        if( irot < 1 )then
+            irot = 1
+            dist = huge(dist)
+        endif
         self%dists(iref,i) = dist
         self%irots(iref,i) = irot
-        if( i <= self%nkeep )then
-            self%vecs(:,iref,i)   = buf%dists
-            self%tops_d(:,iref,i) = buf%pvec(1:self%nsample)
-            self%tops_i(:,iref,i) = buf%inds(1:self%nsample)
-        endif
+        if( i <= self%nkeep ) self%vecs(:,iref,i) = buf%dists
     end subroutine pair_finish
 
-    !> The production kernels on particles 1..nptcls_use against every reference, team of nthr: the full distance
-    !! vectors (nrots, nrefs, nptcls_use, PMB_NKINDS) of the unshifted kernel, the kernel at PMB_SHIFT, the bank draw
-    !! and the bank values at PMB_SHIFT, the nsample lowest of gen_likelihood_val and, for euclid, gen_best_euclid_val.
-    !! Euclid: gen_likelihood_val and gen_likelihood_val_bank with nsample = nrots sort every rotation's distance,
-    !! gen_objfun_vals_bank gives exp(-loss). cc: gen_objfun_vals and gen_objfun_vals_bank give the correlations,
-    !! gen_likelihood_val_bank the distances 1 - cc.
-    subroutine prod_kernels( self, nthr, nptcls_use, vecs, tops_d, tops_i, best_d, best_i )
+    !> The production kernels on particles 1..nptcls_use against every reference, team of nthr: the full rows
+    !! (nrots, nrefs, nptcls_use, PMB_NKINDS) of the unshifted kernel, the kernel at PMB_SHIFT, the bank entry at
+    !! PMB_SHIFT and the bank values, and, for euclid, gen_best_euclid_val. Euclid: gen_euclid_dists and
+    !! gen_euclid_dists_bank give the losses the posterior draws run over, gen_objfun_vals_bank exp(-loss). cc:
+    !! gen_objfun_vals and gen_objfun_vals_bank give the correlations (kinds 1-3; kind 4 stays zero).
+    subroutine prod_kernels( self, nthr, nptcls_use, vecs, best_d, best_i )
         class(polar_matching_bench), intent(inout) :: self
         integer,                     intent(in)    :: nthr, nptcls_use
-        real(sp), allocatable,       intent(inout) :: vecs(:,:,:,:), tops_d(:,:,:), best_d(:,:)
-        integer,  allocatable,       intent(inout) :: tops_i(:,:,:), best_i(:,:)
-        real(sp),    allocatable :: pvec(:,:)
-        integer,     allocatable :: inds(:,:)
+        real(sp), allocatable,       intent(inout) :: vecs(:,:,:,:), best_d(:,:)
+        integer,  allocatable,       intent(inout) :: best_i(:,:)
         complex(sp), allocatable :: bank(:,:,:)
-        real(sp) :: dist, corr
-        integer  :: nteam, i, ithr, iref, irot, j
+        integer  :: nteam, i, ithr, iref
         if( .not. self%with_prod_refs ) THROW_HARD('polar_matching_bench: prod_kernels needs production references')
         if( nthr < 1 .or. nthr > self%nthr_max ) THROW_HARD('polar_matching_bench: team larger than the calculator')
         if( nptcls_use < 1 .or. nptcls_use > self%nptcls ) THROW_HARD('polar_matching_bench: invalid particle count')
         if( allocated(vecs)   ) deallocate(vecs)
-        if( allocated(tops_d) ) deallocate(tops_d)
-        if( allocated(tops_i) ) deallocate(tops_i)
         if( allocated(best_d) ) deallocate(best_d)
         if( allocated(best_i) ) deallocate(best_i)
         allocate(vecs(self%nrots,self%nrefs,nptcls_use,PMB_NKINDS), source=0._sp)
-        allocate(tops_d(self%nsample,self%nrefs,nptcls_use), source=0._sp)
-        allocate(tops_i(self%nsample,self%nrefs,nptcls_use), source=0)
         allocate(best_d(self%nrefs,nptcls_use), source=0._sp)
         allocate(best_i(self%nrefs,nptcls_use), source=0)
         !$ call omp_set_num_threads(nthr)
         nteam = 1
         !$ nteam = omp_get_max_threads()
-        allocate(pvec(self%nrots,nteam), source=0._sp)
-        allocate(inds(self%nrots,nteam), source=0)
         allocate(bank(self%pftsz+1,self%nk,nteam), source=cmplx(0.,0.,kind=sp))
-        !$omp parallel do default(shared) private(i,ithr,iref,irot,j,dist,corr) proc_bind(close) schedule(dynamic)
+        !$omp parallel do default(shared) private(i,ithr,iref) proc_bind(close) schedule(dynamic)
         do i = 1,nptcls_use
             ithr = 1
             !$ ithr = omp_get_thread_num() + 1
@@ -877,64 +862,38 @@ contains
                 if( self%l_cc )then
                     call self%pftc%gen_objfun_vals(iref, i, [0._sp,0._sp], vecs(:,iref,i,1))
                     call self%pftc%gen_objfun_vals(iref, i, PMB_SHIFT, vecs(:,iref,i,2))
+                    call self%pftc%gen_objfun_vals_bank(iref, i, bank(:,:,ithr), vecs(:,iref,i,3))
                 else
-                    call self%pftc%gen_likelihood_val(iref, i, [0._sp,0._sp], self%nrots, dist, corr, irot,&
-                        &pvec(:,ithr), inds(:,ithr))
-                    do j = 1,self%nrots
-                        vecs(inds(j,ithr),iref,i,1) = pvec(j,ithr)
-                    enddo
-                    call self%pftc%gen_likelihood_val(iref, i, PMB_SHIFT, self%nrots, dist, corr, irot,&
-                        &pvec(:,ithr), inds(:,ithr))
-                    do j = 1,self%nrots
-                        vecs(inds(j,ithr),iref,i,2) = pvec(j,ithr)
-                    enddo
+                    call self%pftc%gen_euclid_dists(iref, i, [0._sp,0._sp], vecs(:,iref,i,1))
+                    call self%pftc%gen_euclid_dists(iref, i, PMB_SHIFT, vecs(:,iref,i,2))
+                    call self%pftc%gen_euclid_dists_bank(iref, i, bank(:,:,ithr), vecs(:,iref,i,3))
+                    call self%pftc%gen_objfun_vals_bank(iref, i, bank(:,:,ithr), vecs(:,iref,i,4))
                     call self%pftc%gen_best_objfun_val(iref, i, [0._sp,0._sp], best_d(iref,i), best_i(iref,i))
                 endif
-                call self%pftc%gen_likelihood_val_bank(iref, i, bank(:,:,ithr), self%nrots, dist, corr, irot,&
-                    &pvec(:,ithr), inds(:,ithr))
-                do j = 1,self%nrots
-                    vecs(inds(j,ithr),iref,i,3) = pvec(j,ithr)
-                enddo
-                call self%pftc%gen_objfun_vals_bank(iref, i, bank(:,:,ithr), vecs(:,iref,i,4))
-                call self%pftc%gen_likelihood_val(iref, i, [0._sp,0._sp], self%nsample, dist, corr, irot,&
-                    &pvec(:,ithr), inds(:,ithr))
-                tops_d(:,iref,i) = pvec(1:self%nsample,ithr)
-                tops_i(:,iref,i) = inds(1:self%nsample,ithr)
             enddo
         enddo
         !$omp end parallel do
         !$ call omp_set_num_threads(self%nthr_max)
-        deallocate(pvec, inds, bank)
+        deallocate(bank)
     end subroutine prod_kernels
 
-    !> pftsz, nrots, kfromto, nsample, nrefs
-    subroutine get_sizes( self, pftsz, nrots, kfromto, nsample, nrefs )
+    !> pftsz, nrots, kfromto, nrefs
+    subroutine get_sizes( self, pftsz, nrots, kfromto, nrefs )
         class(polar_matching_bench), intent(in)  :: self
-        integer,                     intent(out) :: pftsz, nrots, kfromto(2), nsample, nrefs
+        integer,                     intent(out) :: pftsz, nrots, kfromto(2), nrefs
         pftsz   = self%pftsz
         nrots   = self%nrots
         kfromto = self%kfromto
-        nsample = self%nsample
         nrefs   = self%nrefs
     end subroutine get_sizes
 
-    !> the distance vectors of the kept particles from the last score
+    !> the rows of the kept particles from the last score
     subroutine get_vecs( self, vecs )
         class(polar_matching_bench), intent(in)    :: self
         real(sp), allocatable,       intent(inout) :: vecs(:,:,:)
         if( .not. allocated(self%vecs) ) THROW_HARD('polar_matching_bench: no kept particles')
         vecs = self%vecs
     end subroutine get_vecs
-
-    !> the nsample lowest distances and their rotations of the kept particles from the last score
-    subroutine get_tops( self, tops_d, tops_i )
-        class(polar_matching_bench), intent(in)    :: self
-        real(sp), allocatable,       intent(inout) :: tops_d(:,:,:)
-        integer,  allocatable,       intent(inout) :: tops_i(:,:,:)
-        if( .not. allocated(self%tops_d) ) THROW_HARD('polar_matching_bench: no kept particles')
-        tops_d = self%tops_d
-        tops_i = self%tops_i
-    end subroutine get_tops
 
     !> thread seconds of the last score (replica, matrix): sums or cgemm, inverse FFTs, distances and draw
     function get_parts( self ) result( parts )

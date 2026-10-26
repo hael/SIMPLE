@@ -101,9 +101,10 @@ Fixed-pose classification (keeping every projection direction and choosing
 only the state) is not a pose policy: it is what `flex_pca` does when it
 initializes the states.
 
-For `local`, angular, in-plane, and shift bounds are automatic. Advanced
-`local_ang_bound`, `local_inpl_bound`, and `local_shift_bound` values override
-only the corresponding automatic bound and are rejected for other policies.
+For `local`, the angular and shift bounds are automatic. Advanced
+`local_ang_bound` and `local_shift_bound` values override only the
+corresponding automatic bound and are rejected for other policies. The
+in-plane search has no bound: the tables draw the rotation from the posterior.
 
 The implementation-shaped `multivol_mode` and `prob_neigh_mode` controls are
 not public inputs to this workflow; the controller derives them from

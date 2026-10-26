@@ -10,16 +10,21 @@ use simple_rnd,       only: ran3
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 implicit none
 
-public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
+public :: angle_sampling, build_pind_lookup, calc_athres
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
-public :: sample_bounded_dists, sample_likelihood_dists, sample_power_dists
+public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
-public :: prob_beta_at
+public :: prob_beta_at, posterior_refine_set, PROB_REFINE_MASS, PROB_REFINE_NMAX
 private
 #include "simple_local_flags.inc"
+
+!> The posterior mass a table fill shift-refines (posterior_refine_set): the entries holding this fraction of a
+!! row's mass, each with at least the complement; the complement's reciprocal bounds their number
+real,    parameter :: PROB_REFINE_MASS = 0.99
+integer, parameter :: PROB_REFINE_NMAX = nint(1. / (1. - PROB_REFINE_MASS))
 
 type :: prob_candidate
     integer :: iref   = 0
@@ -51,7 +56,7 @@ end type prob_refined_entry
 !! references exp(entropy), the number holding 99% of the mass and their posterior-weighted mean angular
 !! distance from the mode in degrees (the mode's state only, symmetry-aware)
 type :: prob_posterior_stat
-    ! the production row (likelihood-sampled in-plane, the best projs_ns shift-refined): mode, loss,
+    ! the production row (posterior-drawn in-plane, the mass-holding entries shift-refined): mode, loss,
     ! temperature, mass, breadth and spread
     integer :: iptcl = 0, istate = 0, iproj = 0, k99 = 0, nvalid = 0
     real    :: lmin = 0., temp = 0., pmax = 0., neff = 0., spread = 0.
@@ -98,7 +103,7 @@ type :: prob_fill_profile
     real(dp)       :: ts_refine      = 0.d0   !< thread-seconds in the refinement of the best references
     integer        :: nthr           = 1      !< threads of the parallel region
     integer        :: nrefs          = 0      !< references scored per particle
-    integer        :: projs_ns       = 0      !< references refined per particle (largest over batches)
+    integer        :: projs_ns       = 0      !< largest number of references refined for one particle (posterior_refine_set)
     integer(int64) :: nptcls         = 0_int64 !< particles filled
     integer(int64) :: nrefined       = 0_int64 !< references handed to the shift search
     integer(int64) :: objective_evals = 0_int64 !< objective evaluations of the search objects (rotations count nrots)
@@ -311,18 +316,6 @@ contains
         addr = addr + sizeof(seed_has_sh)
     end subroutine read_seed_shift_table
 
-    subroutine calc_num2sample( os, num_all, field_str, num_smpl, prob_athres, state)
-        class(oris),       intent(in)  :: os
-        integer,           intent(in)  :: num_all
-        character(len=*),  intent(in)  :: field_str
-        integer,           intent(out) :: num_smpl
-        real,              intent(in)  :: prob_athres
-        integer, optional, intent(in)  :: state
-        real :: athres
-        athres   = calc_athres(os, field_str, prob_athres, state=state)
-        num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
-    end subroutine calc_num2sample
-
     function calc_athres( os, field_str, prob_athres, state ) result( athres )
         class(oris),       intent(in) :: os
         character(len=*),  intent(in) :: field_str
@@ -423,6 +416,61 @@ contains
         if( which == 0 ) which = imin ! rounding at the top of the cumulative sum
         dist = dists(which)
     end subroutine draw_posterior_row
+
+    !> The entries of a row to shift-refine (every table fill): refinement is spent where the draw can land. Over
+    !! the valid distances of dists(1:n) (finite, below the invalid marker) at temperature temp, the posterior of
+    !! draw_posterior_row, the entries are taken in ascending distance (descending mass) while each still holds at
+    !! least 1 - PROB_REFINE_MASS of the row's mass, until PROB_REFINE_MASS of the mass is covered; the mode
+    !! always (its mass can be anything on a flat row). A sharp row refines its mode, a row open over a few poses
+    !! refines those, and a flat row, which the draw lands anywhere on, refines its mode only: the count follows
+    !! each particle's own posterior and shrinks as it sharpens (pose_marginalization.md section 18). The two
+    !! bounds are one number: at most PROB_REFINE_NMAX = 1/(1 - PROB_REFINE_MASS) entries hold that much mass
+    !! each, which sizes the work arrays pvec and inds (>= PROB_REFINE_NMAX). inds(1:nrefine) are the entries in
+    !! ascending distance, pvec their distances; nrefine = 0 when no distance is valid. temp = 0 is the uniform
+    !! posterior (the mode alone unless n <= PROB_REFINE_NMAX).
+    subroutine posterior_refine_set( n, dists, temp, pvec, inds, nrefine )
+        integer, intent(in)    :: n
+        real,    intent(in)    :: dists(n), temp
+        real,    intent(inout) :: pvec(:)
+        integer, intent(inout) :: inds(:)
+        integer, intent(out)   :: nrefine
+        real(dp) :: z, csum, arg, w, wmin
+        real     :: dmin, invalid
+        integer  :: r, nvalid, num_ub
+        invalid = 0.1 * huge(invalid)
+        nrefine = 0
+        nvalid  = 0
+        dmin    = huge(dmin)
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                nvalid = nvalid + 1
+                dmin   = min(dmin, dists(r))
+            endif
+        enddo
+        if( nvalid == 0 ) return
+        ! the row's mass (the mode's weight is 1, so z >= 1; weights below exp(-80) are 0, not exp'd)
+        z = 0.d0
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                arg = real(max(0.,temp),dp) * real(dists(r) - dmin,dp)
+                if( arg < 80.d0 ) z = z + exp(-arg)
+            endif
+        enddo
+        ! the PROB_REFINE_NMAX lowest distances, ascending; the walk stops at the mass bound or the weight floor
+        num_ub = min(PROB_REFINE_NMAX, nvalid)
+        call select_lowest_dists(n, dists, num_ub, pvec, inds)
+        wmin = (1.d0 - real(PROB_REFINE_MASS,dp)) * z
+        csum = 0.d0
+        do r = 1,num_ub
+            arg = real(max(0.,temp),dp) * real(pvec(r) - dmin,dp)
+            w   = 0.d0
+            if( arg < 80.d0 ) w = exp(-arg)
+            if( r > 1 .and. w < wmin ) exit
+            csum    = csum + w
+            nrefine = r
+            if( csum >= real(PROB_REFINE_MASS,dp) * z ) exit
+        enddo
+    end subroutine posterior_refine_set
 
     !> The posterior over one table row at temperature temp: p_r proportional to exp(-temp (dist_r - dist_min))
     !! over the valid distances (finite and below the invalid marker, as ref_assign counts them), zero
@@ -678,67 +726,6 @@ contains
         enddo
         call hpsort(pvec_sorted(1:num_ub), sorted_inds(1:num_ub))
     end subroutine select_lowest_dists
-
-    ! Truncated, numerically-stabilized softmax over the distances dists(1:n), with the caller's work buffer cdf
-    ! (size >= nsample). The distances are noise-variance-normalized negative-log-likelihoods (whitened per
-    ! Fourier shell by the estimated sigma2_noise upstream), so exp(-dist) is a calibrated likelihood weight and no
-    ! temperature is applied. The per-candidate min-shift only guards against overflow; it cancels in the
-    ! normalized weights. Only the best nsample candidates form the sampling support (top-K sampling).
-    subroutine sample_likelihood_dists( n, dists, nsample, dist, corr, which, pvec_sorted, sorted_inds, cdf )
-        integer, intent(in)    :: n, nsample
-        real,    intent(in)    :: dists(:)
-        real,    intent(out)   :: dist, corr
-        integer, intent(out)   :: which
-        real,    intent(inout) :: pvec_sorted(:)
-        integer, intent(inout) :: sorted_inds(:)
-        real,    intent(inout) :: cdf(:)
-        integer :: num_ub
-        num_ub = min(n,max(1,nsample))
-        call select_lowest_dists(n, dists, num_ub, pvec_sorted, sorted_inds)
-        call draw_likelihood(num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which)
-    end subroutine sample_likelihood_dists
-
-    !> the draw of the likelihood samplers from the num_ub best distances, sorted ascending
-    subroutine draw_likelihood( num_ub, pvec_sorted, sorted_inds, cdf, dist, corr, which )
-        integer, intent(in)    :: num_ub
-        real,    intent(in)    :: pvec_sorted(:)
-        integer, intent(in)    :: sorted_inds(:)
-        real,    intent(inout) :: cdf(:)
-        real,    intent(out)   :: dist, corr
-        integer, intent(out)   :: which
-        real    :: rnd, csum, min_dist
-        integer :: i, rank, pick
-        min_dist = pvec_sorted(1)
-        do i = 1,num_ub
-            cdf(i) = exp(-(pvec_sorted(num_ub-i+1) - min_dist))
-        enddo
-        if( all(cdf(1:num_ub) < TINY) )then
-            pick  = 1
-            which = sorted_inds(pick)
-            dist  = pvec_sorted(pick)
-            corr  = exp(-dist)
-            return
-        endif
-        where( cdf(1:num_ub) < TINY ) cdf(1:num_ub) = 0.
-        do i = 2,num_ub
-            cdf(i) = cdf(i) + cdf(i-1)
-        enddo
-        csum = cdf(num_ub)
-        cdf(1:num_ub) = cdf(1:num_ub) / csum
-        rnd = ran3()
-        rank = 0
-        do i = 1,num_ub
-            if( cdf(i) > rnd )then
-                rank = i
-                exit
-            endif
-        enddo
-        if( rank == 0 ) rank = num_ub
-        pick  = num_ub - rank + 1
-        which = sorted_inds(pick)
-        dist  = pvec_sorted(pick)
-        corr  = exp(-dist)
-    end subroutine draw_likelihood
 
     subroutine maxheap_sift_down( pvec_sorted, sorted_inds, root_in, heap_size )
         real,    intent(inout) :: pvec_sorted(:)

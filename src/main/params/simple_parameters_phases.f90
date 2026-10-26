@@ -1098,7 +1098,6 @@ contains
         end select
         ! negative values other than the -1. automatic sentinel are invalid
         if( (self%local_ang_bound   < 0. .and. abs(self%local_ang_bound   + 1.) > 1.e-6) .or. &
-            (self%local_inpl_bound  < 0. .and. abs(self%local_inpl_bound  + 1.) > 1.e-6) .or. &
             (self%local_shift_bound < 0. .and. abs(self%local_shift_bound + 1.) > 1.e-6) )then
             THROW_HARD('local pose bounds must be -1 (automatic) or non-negative')
         endif

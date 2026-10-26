@@ -235,9 +235,6 @@ call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
         call refine3D_states%add_input(UI_SRCH, 'local_ang_bound', 'num', 'Local projection-angle bound', &
         &'Advanced override for the automatically derived local projection-direction neighborhood in degrees', &
         &'degrees (-1=automatic)', .false., -1., group='search', visibility=UI_VIS_DEVELOPER)
-        call refine3D_states%add_input(UI_SRCH, 'local_inpl_bound', 'num', 'Local in-plane angle bound', &
-        &'Advanced upper bound for the automatically derived probabilistic in-plane neighborhood in degrees', &
-        &'degrees (-1=automatic)', .false., -1., group='search', visibility=UI_VIS_DEVELOPER)
         call refine3D_states%add_input(UI_SRCH, 'local_shift_bound', 'num', 'Local shift bound', &
         &'Advanced override for the automatically derived local translational half-width in pixels', &
         &'pixels (-1=automatic)', .false., -1., group='search', visibility=UI_VIS_DEVELOPER)

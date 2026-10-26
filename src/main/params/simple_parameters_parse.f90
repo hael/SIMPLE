@@ -544,7 +544,6 @@ contains
         call reg%add_real('lpstop', self%lpstop)
         call reg%add_real('lpexit', self%lpexit)
         call reg%add_real('local_ang_bound', self%local_ang_bound)
-        call reg%add_real('local_inpl_bound', self%local_inpl_bound)
         call reg%add_real('local_shift_bound', self%local_shift_bound)
         call reg%add_real('min_state_frac', self%min_state_frac)
         call reg%add_real('lpstart_ini3D', self%lpstart_ini3D)

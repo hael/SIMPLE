@@ -58,12 +58,19 @@ Important details:
   lattice in multi-state tables) after identifying a probabilistic
   neighborhood. Shifts are held in the particle frame.
 - `ref_assign` converts the aggregated table into a single assignment map; the
-  state label is the deterministic argmin over states, and only the projection
-  within the state is drawn (likelihood weights `exp(-dist)` over a top-K
-  support, `sample_likelihood_dist`).
-- `prob_athres` bounds the angular range of the thresholded candidate draws
-  (`angle_sampling`, `sample_bounded_dists`); it is not exact posterior
-  integration.
+  state label is the deterministic argmin over states, and the projection
+  within the state is one draw from the tempered posterior over the row,
+  `p_r ∝ exp(-prob_beta T_i (L_r - L_min))` with `T_i = pi wsqsum / (2 pftsz)`
+  the particle's Gaussian noise temperature (`draw_posterior_row`,
+  `posterior_temperature`). The in-plane rotation of each row entry is the
+  same draw over the grid rotations (`gen_posterior_val`). No reference is
+  forced to be populated.
+- The shift-refined set of every fill is sized by the row's posterior mass
+  (`posterior_refine_set`: the lowest losses holding `PROB_REFINE_MASS` =
+  99% of the tempered mass, each at least 1%, the mode always; per state in
+  the 3D tables). `prob_athres` and `npeaks_inpl` bound only the SHC
+  strategies' candidate draws (`angle_sampling`, `sample_bounded_dists`,
+  `inpl_srch_peaks`); the tables' draws take no threshold.
 
 ## Search Modes
 

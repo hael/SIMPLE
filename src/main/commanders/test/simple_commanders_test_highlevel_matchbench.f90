@@ -159,9 +159,9 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
     integer,                     intent(in)    :: layout, nspace, nstates, nptcls, nthr, bsz, rsz
     real(dp) :: wall_best, walls(NREPS), pairs, us_pair, pairs_per_s, ref_gbps, parts(3)
     real     :: load1
-    integer  :: nptcls_use, nwarm, irep, funit, pftsz, nrots, kfromto(2), nsample, nrefs
+    integer  :: nptcls_use, nwarm, irep, funit, pftsz, nrots, kfromto(2), nrefs
     logical  :: l_new
-    call bench%get_sizes(pftsz, nrots, kfromto, nsample, nrefs)
+    call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
     nptcls_use = nptcls
     if( nthr == 1 ) nptcls_use = min(nptcls, NPTCLS_ONE_THREAD)
     nwarm = min(nptcls_use, max(2*nthr, nptcls_use/10))
@@ -181,13 +181,13 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
     open(newunit=funit, file=MATCHBENCH_TSV, position='append', action='write', status='unknown')
     if( l_new ) write(funit,'(a)') 'layout'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//'nrefs'//achar(9)//&
         &'nptcls'//achar(9)//'nthr'//achar(9)//'B'//achar(9)//'R'//achar(9)//'pftsz'//achar(9)//'nrots'//achar(9)//&
-        &'kfrom'//achar(9)//'kto'//achar(9)//'nsample'//achar(9)//'load1'//achar(9)//'wall_s'//achar(9)//&
+        &'kfrom'//achar(9)//'kto'//achar(9)//'load1'//achar(9)//'wall_s'//achar(9)//&
         &'wall_rep1'//achar(9)//'wall_rep2'//achar(9)//'wall_rep3'//achar(9)//'us_pair_thread'//achar(9)//&
         &'pairs_per_s'//achar(9)//'ref_GBps'//achar(9)//'memo_GB'//achar(9)//'check'//achar(9)//&
         &'us_sums'//achar(9)//'us_fft'//achar(9)//'us_draw'
-    write(funit,'(a,12(a,i0),a,f6.2,4(a,f10.4),a,f9.3,a,es12.5,a,f8.3,a,f8.3,a,a,3(a,f9.3))') layout_name(layout),&
+    write(funit,'(a,11(a,i0),a,f6.2,4(a,f10.4),a,f9.3,a,es12.5,a,f8.3,a,f8.3,a,a,3(a,f9.3))') layout_name(layout),&
         &achar(9), nspace, achar(9), nstates, achar(9), nrefs, achar(9), nptcls_use, achar(9), nthr, achar(9), bsz,&
-        &achar(9), rsz, achar(9), pftsz, achar(9), nrots, achar(9), kfromto(1), achar(9), kfromto(2), achar(9), nsample,&
+        &achar(9), rsz, achar(9), pftsz, achar(9), nrots, achar(9), kfromto(1), achar(9), kfromto(2),&
         &achar(9), load1, achar(9), wall_best, achar(9), walls(1), achar(9), walls(2), achar(9), walls(3), achar(9),&
         &us_pair, achar(9), pairs_per_s, achar(9), ref_gbps, achar(9), bench%memo_gbytes(layout), achar(9), '-',&
         &achar(9), parts(1), achar(9), parts(2), achar(9), parts(3)
@@ -197,13 +197,13 @@ function time_one( bench, layout, nspace, nstates, nptcls, nthr, bsz, rsz ) resu
         &' us/pair/thread, ', ref_gbps, ' GB/s'
 end function time_one
 
-!> The identity checks of one case on nkeep particles. Production (layout 1) at one thread is the reference of
-!! the nsample lowest distances and their rotations; the replica at one thread that of the full distance vectors.
+!> The identity checks of one case on nkeep particles, on the full rows over the rotations (the losses the posterior
+!! draws run over): production (layout 1) at one thread is the reference every layout is held to byte for byte, the
+!! replica at one thread a second reference for layouts 2-4, and each layout's own one-thread run its thread identity.
 subroutine check_case( nspace, nstates, nthr_max )
     integer, intent(in) :: nspace, nstates, nthr_max
     class(polar_matching_bench), allocatable, target :: bench
-    real(sp), allocatable :: prod_d(:,:,:), vecs_ref(:,:,:), vecs_one(:,:,:)
-    integer,  allocatable :: prod_i(:,:,:)
+    real(sp), allocatable :: vecs_prod(:,:,:), vecs_ref(:,:,:), vecs_one(:,:,:)
     integer :: nkeep, irep, ib
     nkeep = 64
     if( nspace * nstates > 5000 ) nkeep = 32
@@ -252,60 +252,54 @@ subroutine check_case( nspace, nstates, nthr_max )
     subroutine check_run( layout, nthr, irep, bsz, rsz, l_make_ref )
         integer, intent(in) :: layout, nthr, irep, bsz, rsz
         logical, intent(in) :: l_make_ref
-        real(sp), allocatable :: vecs(:,:,:), tops_d(:,:,:)
-        integer,  allocatable :: tops_i(:,:,:)
-        real(dp) :: wall, max_abs, max_rel, d, max_top_abs
-        integer  :: nrefs, p, iref, i, n_vec_diff, n_argmin_diff, n_top_diff, n_top_ptcls, n_vec_diff_one, funit
+        real(sp), allocatable :: vecs(:,:,:)
+        real(dp) :: wall, max_abs, max_rel, d, max_prod_abs
+        integer  :: nrefs, p, iref, i, n_vec_diff, n_argmin_diff, n_prod_diff, n_prod_ptcls, n_vec_diff_one, funit
         logical  :: l_ptcl_diff
-        logical  :: l_new, l_vecs
+        logical  :: l_new
         wall = bench%score(layout, nthr, nkeep, bsz, rsz)
-        call bench%get_tops(tops_d, tops_i)
-        nrefs = size(tops_d,2)
-        l_vecs = layout /= PMB_PER_PAIR
-        if( l_vecs ) call bench%get_vecs(vecs)
+        call bench%get_vecs(vecs)
+        nrefs = size(vecs,2)
         if( l_make_ref )then
             if( layout == PMB_PER_PAIR )then
-                prod_d = tops_d
-                prod_i = tops_i
+                vecs_prod = vecs
             else
                 vecs_ref = vecs
             endif
         endif
-        ! the nsample lowest distances and their rotations against production's, byte for byte
-        n_top_diff  = 0
-        n_top_ptcls = 0
-        max_top_abs = 0._dp
+        ! the rows against production's, byte for byte
+        n_prod_diff  = 0
+        n_prod_ptcls = 0
+        max_prod_abs = 0._dp
         do i = 1,nkeep
             l_ptcl_diff = .false.
             do iref = 1,nrefs
-                if( any(tops_d(:,iref,i) /= prod_d(:,iref,i)) .or. any(tops_i(:,iref,i) /= prod_i(:,iref,i)) )then
-                    n_top_diff  = n_top_diff + 1
+                if( any(vecs(:,iref,i) /= vecs_prod(:,iref,i)) )then
+                    n_prod_diff = n_prod_diff + 1
                     l_ptcl_diff = .true.
                 endif
-                max_top_abs = max(max_top_abs, maxval(abs(real(tops_d(:,iref,i),dp) - real(prod_d(:,iref,i),dp))))
+                max_prod_abs = max(max_prod_abs, maxval(abs(real(vecs(:,iref,i),dp) - real(vecs_prod(:,iref,i),dp))))
             enddo
-            if( l_ptcl_diff ) n_top_ptcls = n_top_ptcls + 1
+            if( l_ptcl_diff ) n_prod_ptcls = n_prod_ptcls + 1
         enddo
-        ! the full vectors against this layout's own one-thread run (irep 0), thread identity
+        ! the rows against this layout's own one-thread run (irep 0), thread identity
         n_vec_diff_one = -1
-        if( l_vecs )then
-            if( irep == 0 )then
-                vecs_one = vecs
-            else
-                n_vec_diff_one = 0
-                do i = 1,nkeep
-                    do iref = 1,nrefs
-                        if( any(vecs(:,iref,i) /= vecs_one(:,iref,i)) ) n_vec_diff_one = n_vec_diff_one + 1
-                    enddo
+        if( irep == 0 )then
+            vecs_one = vecs
+        else
+            n_vec_diff_one = 0
+            do i = 1,nkeep
+                do iref = 1,nrefs
+                    if( any(vecs(:,iref,i) /= vecs_one(:,iref,i)) ) n_vec_diff_one = n_vec_diff_one + 1
                 enddo
-            endif
+            enddo
         endif
-        ! the full vectors against the replica's
+        ! the rows against the replica's (layouts 2-4)
         n_vec_diff    = -1
         n_argmin_diff = -1
         max_abs       = -1._dp
         max_rel       = -1._dp
-        if( l_vecs .and. allocated(vecs_ref) )then
+        if( layout /= PMB_PER_PAIR .and. allocated(vecs_ref) )then
             n_vec_diff    = 0
             n_argmin_diff = 0
             max_abs       = 0._dp
@@ -327,16 +321,16 @@ subroutine check_case( nspace, nstates, nthr_max )
         open(newunit=funit, file=MATCHCHECK_TSV, position='append', action='write', status='unknown')
         if( l_new ) write(funit,'(a)') 'layout'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//'nrefs'//achar(9)//&
             &'nptcls'//achar(9)//'nthr'//achar(9)//'rep'//achar(9)//'B'//achar(9)//'R'//achar(9)//'pairs'//achar(9)//&
-            &'top_diff_vs_prod'//achar(9)//'vec_diff_vs_replica'//achar(9)//'argmin_diff_vs_replica'//achar(9)//&
-            &'max_abs_diff'//achar(9)//'max_rel_diff'//achar(9)//'wall_s'//achar(9)//'top_diff_ptcls'//achar(9)//&
-            &'max_top_abs_diff'//achar(9)//'vec_diff_vs_own_1thr'
+            &'vec_diff_vs_prod'//achar(9)//'vec_diff_vs_replica'//achar(9)//'argmin_diff_vs_replica'//achar(9)//&
+            &'max_abs_diff'//achar(9)//'max_rel_diff'//achar(9)//'wall_s'//achar(9)//'vec_diff_ptcls_vs_prod'//achar(9)//&
+            &'max_abs_diff_vs_prod'//achar(9)//'vec_diff_vs_own_1thr'
         write(funit,'(a,12(a,i0),2(a,es12.5),a,f10.4,a,i0,a,es12.5,a,i0)') layout_name(layout), achar(9), nspace, achar(9), nstates,&
             &achar(9), nrefs, achar(9), nkeep, achar(9), nthr, achar(9), irep, achar(9), bsz, achar(9), rsz, achar(9),&
-            &nrefs*nkeep, achar(9), n_top_diff, achar(9), n_vec_diff, achar(9), n_argmin_diff, achar(9), max_abs,&
-            &achar(9), max_rel, achar(9), wall, achar(9), n_top_ptcls, achar(9), max_top_abs, achar(9), n_vec_diff_one
+            &nrefs*nkeep, achar(9), n_prod_diff, achar(9), n_vec_diff, achar(9), n_argmin_diff, achar(9), max_abs,&
+            &achar(9), max_rel, achar(9), wall, achar(9), n_prod_ptcls, achar(9), max_prod_abs, achar(9), n_vec_diff_one
         close(funit)
         write(logfhandle,'(4x,a,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,es10.3)') layout_name(layout), ' nthr=', nthr,&
-            &' rep=', irep, ' B=', bsz, ' R=', rsz, ' top_diff_vs_prod=', n_top_diff, ' vec_diff=', n_vec_diff,&
+            &' rep=', irep, ' B=', bsz, ' R=', rsz, ' vec_diff_vs_prod=', n_prod_diff, ' vec_diff=', n_vec_diff,&
             &' argmin_diff=', n_argmin_diff, ' max_rel=', max_rel
     end subroutine check_run
 
@@ -350,43 +344,39 @@ subroutine identity_case( nspace, nstates, nkeep, nthr_max )
     integer, intent(in) :: nspace, nstates, nkeep, nthr_max
     character(len=*), parameter :: OBJFUNS(2) = ['euclid', 'cc    ']
     class(polar_matching_bench), allocatable, target :: bench
-    real(sp), allocatable :: v1(:,:,:,:), td1(:,:,:), bd1(:,:), v(:,:,:,:), td(:,:,:), bd(:,:)
-    integer,  allocatable :: ti1(:,:,:), bi1(:,:), ti(:,:,:), bi(:,:)
+    real(sp), allocatable :: v1(:,:,:,:), bd1(:,:), v(:,:,:,:), bd(:,:)
+    integer,  allocatable :: bi1(:,:), bi(:,:)
     character(len=:), allocatable :: fname
     character(len=32) :: casestr
     real(dp) :: wall
-    integer  :: iobj, irep, funit, ikind, iref, i, ndiff(PMB_NKINDS), ndiff_tops, ndiff_best
-    integer  :: pftsz, nrots, kfromto(2), nsample, nrefs
+    integer  :: iobj, irep, funit, ikind, iref, i, ndiff(PMB_NKINDS), ndiff_best
+    integer  :: pftsz, nrots, kfromto(2), nrefs
     logical  :: l_new
     allocate(bench)
     write(casestr,'(i0,a,i0)') nspace, 'x', nstates
     do iobj = 1,size(OBJFUNS)
         call bench%new(nspace, nstates, nkeep, nthr_max, .true., .false., .false., 0, objfun=trim(OBJFUNS(iobj)))
         call report_case(bench, nspace, nstates)
-        call bench%get_sizes(pftsz, nrots, kfromto, nsample, nrefs)
-        call bench%prod_kernels(1, nkeep, v1, td1, ti1, bd1, bi1)
+        call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
+        call bench%prod_kernels(1, nkeep, v1, bd1, bi1)
         fname = 'polar_kernel_identity_'//trim(OBJFUNS(iobj))//'_'//trim(casestr)//'.bin'
         open(newunit=funit, file=fname, access='stream', form='unformatted', action='write', status='replace')
-        write(funit) nrots, nrefs, nkeep, PMB_NKINDS, nsample
-        write(funit) v1, td1, ti1, bd1, bi1
+        write(funit) nrots, nrefs, nkeep, PMB_NKINDS
+        write(funit) v1, bd1, bi1
         close(funit)
         write(logfhandle,'(4x,a,a)') 'one-thread kernels written to ', fname
         do irep = 1,NREPS_CHECK
             wall = 0._dp
             !$ wall = omp_get_wtime()
-            call bench%prod_kernels(nthr_max, nkeep, v, td, ti, bd, bi)
+            call bench%prod_kernels(nthr_max, nkeep, v, bd, bi)
             !$ wall = omp_get_wtime() - wall
             ndiff      = 0
-            ndiff_tops = 0
             ndiff_best = 0
             do i = 1,nkeep
                 do iref = 1,nrefs
                     do ikind = 1,PMB_NKINDS
                         if( any(v(:,iref,i,ikind) /= v1(:,iref,i,ikind)) ) ndiff(ikind) = ndiff(ikind) + 1
                     enddo
-                    if( any(td(:,iref,i) /= td1(:,iref,i)) .or. any(ti(:,iref,i) /= ti1(:,iref,i)) )then
-                        ndiff_tops = ndiff_tops + 1
-                    endif
                     if( bd(iref,i) /= bd1(iref,i) .or. bi(iref,i) /= bi1(iref,i) ) ndiff_best = ndiff_best + 1
                 enddo
             enddo
@@ -395,16 +385,14 @@ subroutine identity_case( nspace, nstates, nkeep, nthr_max )
             open(newunit=funit, file=IDENTITY_TSV, position='append', action='write', status='unknown')
             if( l_new ) write(funit,'(a)') 'objfun'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//'nrefs'//&
                 &achar(9)//'nptcls'//achar(9)//'nthr'//achar(9)//'rep'//achar(9)//'pairs'//achar(9)//&
-                &'diff_unshifted'//achar(9)//'diff_shifted'//achar(9)//'diff_bank_draw'//achar(9)//&
-                &'diff_bank_vals'//achar(9)//'diff_tops'//achar(9)//'diff_best'//achar(9)//'wall_s'
-            write(funit,'(a,13(a,i0),a,f10.4)') trim(OBJFUNS(iobj)), achar(9), nspace, achar(9), nstates, achar(9),&
+                &'diff_unshifted'//achar(9)//'diff_shifted'//achar(9)//'diff_bank_row'//achar(9)//&
+                &'diff_bank_vals'//achar(9)//'diff_best'//achar(9)//'wall_s'
+            write(funit,'(a,12(a,i0),a,f10.4)') trim(OBJFUNS(iobj)), achar(9), nspace, achar(9), nstates, achar(9),&
                 &nrefs, achar(9), nkeep, achar(9), nthr_max, achar(9), irep, achar(9), nrefs*nkeep, achar(9), ndiff(1),&
-                &achar(9), ndiff(2), achar(9), ndiff(3), achar(9), ndiff(4), achar(9), ndiff_tops, achar(9),&
-                &ndiff_best, achar(9), wall
+                &achar(9), ndiff(2), achar(9), ndiff(3), achar(9), ndiff(4), achar(9), ndiff_best, achar(9), wall
             close(funit)
-            write(logfhandle,'(4x,a,a,i0,a,i0,a,4(1x,i0),a,i0,a,i0)') trim(OBJFUNS(iobj)), ' nthr=', nthr_max,&
-                &' rep=', irep, ' vectors differing from one thread:', ndiff, ' tops: ', ndiff_tops, ' best: ',&
-                &ndiff_best
+            write(logfhandle,'(4x,a,a,i0,a,i0,a,4(1x,i0),a,i0)') trim(OBJFUNS(iobj)), ' nthr=', nthr_max,&
+                &' rep=', irep, ' rows differing from one thread:', ndiff, ' best: ', ndiff_best
         enddo
         call bench%kill
     enddo
@@ -414,11 +402,11 @@ end subroutine identity_case
 subroutine report_case( bench, nspace, nstates )
     class(polar_matching_bench), intent(in) :: bench
     integer,                     intent(in) :: nspace, nstates
-    integer :: pftsz, nrots, kfromto(2), nsample, nrefs
-    call bench%get_sizes(pftsz, nrots, kfromto, nsample, nrefs)
-    write(logfhandle,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') '>>> POLAR_MATCHING_BENCH case nspace=', nspace,&
+    integer :: pftsz, nrots, kfromto(2), nrefs
+    call bench%get_sizes(pftsz, nrots, kfromto, nrefs)
+    write(logfhandle,'(a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') '>>> POLAR_MATCHING_BENCH case nspace=', nspace,&
         &' nstates=', nstates, ' nrefs=', nrefs, ' pftsz=', pftsz, ' nrots=', nrots, ' k=', kfromto(1), '..',&
-        &kfromto(2), ' nsample=', nsample
+        &kfromto(2)
 end subroutine report_case
 
 function layout_name( layout ) result( name )

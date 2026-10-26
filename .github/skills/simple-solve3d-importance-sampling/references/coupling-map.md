@@ -179,13 +179,22 @@ logic, with the samplers in `simple_eul_prob_tab_utils.f90`.
 
 Important points:
 
-- `angle_sampling` and `sample_bounded_dists` draw among the best candidates
-  within the `prob_athres` angular bound
-- `ref_assign` draws each state's projection with likelihood weights
-  `exp(-dist)` over a top-K support (`sample_likelihood_dist`); the state label
-  is the deterministic argmin over states
+- the fill draws each reference's in-plane rotation from the tempered
+  posterior over every grid rotation at the particle's temperature
+  (`gen_posterior_val`, `ptcl_posterior_temp`; `prob_beta` tempers it) and
+  shift-refines, per state block, the references holding the row's tempered
+  posterior mass (`posterior_refine_set`: 99% of the mass, each entry at least
+  1%, the mode always; no hand-set count)
+- `ref_assign` draws each particle's projection from the tempered posterior
+  over its row (`draw_posterior_row` at `prob_beta` times the temperature the
+  worker wrote); the state label is the deterministic argmin over states; no
+  reference is forced to be populated (the balanced frontier was deleted
+  2026-10-24)
 - `prob_neigh` restricts this to neighbourhood candidate sets
-  (`prob_neigh_mode=state|geom|shc|snhc`)
+  (`prob_neigh_mode=state|geom|shc|snhc`), the current pose among the
+  candidates
+- `angle_sampling` and `sample_bounded_dists` belong to the SHC strategies
+  (`refine=neigh`, the 2D `*_smpl` modes), not to the tables
 
 This sampling is not the same as the outer `update_frac` selection:
 

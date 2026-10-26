@@ -100,7 +100,9 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 - `simple_eul_prob_tab_neigh.f90`
   Neighbourhood table (`prob_neigh`), candidate streams.
 - `simple_eul_prob_tab_utils.f90`
-  Samplers (`angle_sampling`, `sample_bounded_dists`, `sample_likelihood_dist`),
+  The posterior primitives (`posterior_temperature`, `draw_posterior_row`,
+  `posterior_row_stats`, `prob_beta_at`), the SHC strategies' samplers
+  (`angle_sampling`, `sample_bounded_dists`, `sample_power_dists`),
   part-file entry types.
 
 ### Reconstruction/Postprocessing

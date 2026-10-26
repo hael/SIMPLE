@@ -1,8 +1,7 @@
 !@descr: polarft class submodule for objective function evaluations
 submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
-use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_likelihood_dists, sample_power_dists, draw_posterior_row, &
-    &posterior_temperature
+use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_power_dists, draw_posterior_row, posterior_temperature
 #include "simple_local_flags.inc"
 implicit none
 
@@ -83,25 +82,6 @@ contains
                 call self%gen_prob_euclid_val(iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
         end select
     end subroutine gen_prob_objfun_val
-
-    module subroutine gen_likelihood_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
-        &pvec_sorted, sorted_inds )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, nsample
-        real(sp),            intent(in)    :: shift(2)
-        real(sp),            intent(out)   :: dist, corr
-        integer,             intent(out)   :: irot
-        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
-        integer,             intent(inout) :: sorted_inds(self%nrots)
-        select case(self%p_ptr%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gen_prob_likelihood_cc_val(iref, iptcl, shift, nsample, dist, corr, irot, &
-                    &pvec_sorted, sorted_inds)
-            case(OBJFUN_EUCLID)
-                call self%gen_prob_likelihood_euclid_val(iref, iptcl, shift, nsample, dist, corr, irot, &
-                    &pvec_sorted, sorted_inds)
-        end select
-    end subroutine gen_likelihood_val
 
     module subroutine gen_prob_power_objfun_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds )
@@ -515,67 +495,6 @@ contains
             &pvec_sorted, sorted_inds)
     end subroutine gen_prob_euclid_val
 
-    module subroutine gen_prob_likelihood_cc_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
-        &pvec_sorted, sorted_inds )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, nsample
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist, corr
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
-        integer :: ithr
-        ithr = omp_get_thread_num() + 1
-        call self%gen_corrs(iref, iptcl, shift, self%heap_vars(ithr)%rot_scores)
-        call sample_cc_scores(self, ithr, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
-    end subroutine gen_prob_likelihood_cc_val
-
-    !> the likelihood draw over the cc scores of the calling thread's buffer: distance 1 - cc, cc clamped to [0,1]
-    subroutine sample_cc_scores( self, ithr, nsample, dist, corr, irot, pvec_sorted, sorted_inds )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: ithr, nsample
-        real(sp),            intent(out)   :: dist, corr
-        integer,             intent(out)   :: irot
-        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
-        integer,             intent(inout) :: sorted_inds(self%nrots)
-        integer :: p
-        do p = 1,self%nrots
-            self%heap_vars(ithr)%rot_dists(p) = 1. - max(0., min(1., self%heap_vars(ithr)%rot_scores(p)))
-        enddo
-        call sample_likelihood_dists(self%nrots, self%heap_vars(ithr)%rot_dists, nsample, dist, corr, irot,&
-            &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
-        corr = max(0., min(1., self%heap_vars(ithr)%rot_scores(irot)))
-    end subroutine sample_cc_scores
-
-    !> the likelihood draw over the Euclidean distances of the calling thread's crvec1 (gen_euclid_crvec)
-    subroutine sample_euclid_crvec( self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: ithr, nsample
-        real(dp),            intent(in)    :: norm
-        real(sp),            intent(out)   :: dist, corr
-        integer,             intent(out)   :: irot
-        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
-        integer,             intent(inout) :: sorted_inds(self%nrots)
-        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
-        call sample_likelihood_dists(self%nrots, self%heap_vars(ithr)%rot_dists, nsample, dist, corr, irot,&
-            &pvec_sorted, sorted_inds, self%heap_vars(ithr)%rot_cdf)
-    end subroutine sample_euclid_crvec
-
-    module subroutine gen_prob_likelihood_euclid_val( self, iref, iptcl, shift, nsample, dist, corr, irot,&
-        &pvec_sorted, sorted_inds )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl, nsample
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: dist, corr
-        integer,                     intent(out)   :: irot
-        real(sp),                    intent(inout) :: pvec_sorted(self%nrots)
-        integer,                     intent(inout) :: sorted_inds(self%nrots)
-        real(dp) :: norm
-        integer  :: ithr
-        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        call sample_euclid_crvec(self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
-    end subroutine gen_prob_likelihood_euclid_val
-
     module subroutine gen_prob_power_euclid_val( self, iref, iptcl, shift, power, nsample, dist, corr, irot,&
         &pvec_sorted, sorted_inds )
         class(polarft_calc), target, intent(inout) :: self
@@ -704,35 +623,41 @@ contains
         end select
     end subroutine gen_objfun_vals_bank
 
-    !> gen_likelihood_val for a bank entry.
-    module subroutine gen_likelihood_val_bank( self, iref, iptcl, bank, nsample, dist, corr, irot,&
-        &pvec_sorted, sorted_inds )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl, nsample
-        complex(sp),         intent(in)    :: bank(:,:)
-        real(sp),            intent(out)   :: dist, corr
-        integer,             intent(out)   :: irot
-        real(sp),            intent(inout) :: pvec_sorted(self%nrots)
-        integer,             intent(inout) :: sorted_inds(self%nrots)
+    !> The row the posterior draws run over: the Euclidean loss of reference iref against the particle shifted by
+    !! shift (the shifted-reference kernel) at every grid rotation, the invalid marker where the loss is not finite
+    !! (euclid_dists_from_crvec). The posterior draws below compute this row into the thread's buffer and draw
+    !! from it; the bench and the testers read it through here. objfun=euclid only.
+    module subroutine gen_euclid_dists( self, iref, iptcl, shift, dists )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: dists(self%nrots)
         real(dp) :: norm
         integer  :: ithr
-        select case(self%p_ptr%cc_objfun)
-            case(OBJFUN_CC)
-                ithr = omp_get_thread_num() + 1
-                call gen_corrs_bank(self, iref, iptcl, bank, self%heap_vars(ithr)%rot_scores)
-                call sample_cc_scores(self, ithr, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
-            case(OBJFUN_EUCLID)
-                call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
-                call sample_euclid_crvec(self, ithr, norm, nsample, dist, corr, irot, pvec_sorted, sorted_inds)
-        end select
-    end subroutine gen_likelihood_val_bank
+        if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_euclid_dists requires objfun=euclid')
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, dists)
+    end subroutine gen_euclid_dists
+
+    !> gen_euclid_dists for a bank entry (the particle shifted once by its seed, with the angular Nyquist bin)
+    module subroutine gen_euclid_dists_bank( self, iref, iptcl, bank, dists )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iref, iptcl
+        complex(sp),         intent(in)    :: bank(:,:)
+        real(sp),            intent(out)   :: dists(self%nrots)
+        real(dp) :: norm
+        integer  :: ithr
+        if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_euclid_dists_bank requires objfun=euclid')
+        call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
+        call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, dists)
+    end subroutine gen_euclid_dists_bank
 
     !> One in-plane rotation drawn from the posterior over the nrots Euclidean losses of reference iref against
     !! the particle shifted by shift (the shifted-reference kernel) at temperature temp (the probability tables' fill,
     !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 16): p_r proportional to
-    !! exp(-temp (L_r - L_min)) over every grid rotation, no angular threshold and no truncation to the best
-    !! nsample (gen_likelihood_val). dist is the drawn rotation's loss. objfun=euclid only: the temperature is
-    !! the Gaussian noise model's (posterior_temperature).
+    !! exp(-temp (L_r - L_min)) over every grid rotation, no angular threshold and no truncation to a best subset.
+    !! dist is the drawn rotation's loss. objfun=euclid only: the temperature is the Gaussian noise model's
+    !! (posterior_temperature).
     module subroutine gen_posterior_val( self, iref, iptcl, shift, temp, dist, irot )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -763,7 +688,7 @@ contains
 
     !> the posterior draw over the Euclidean distances of the calling thread's crvec1 (gen_euclid_crvec or its bank
     !! form), rot_cdf the work array; a row without a valid rotation (every loss above -log(TINY)) returns
-    !! rotation 1 at the invalid marker, as the likelihood draw does
+    !! rotation 1 at the invalid marker
     subroutine draw_posterior_crvec( self, ithr, norm, temp, dist, irot )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: ithr
