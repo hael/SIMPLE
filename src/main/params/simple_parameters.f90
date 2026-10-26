@@ -601,6 +601,7 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angular bound of the SHC strategies' in-plane samplers (refine=neigh, the 2D *_smpl modes) and of the dense table's refined set (projs_ns with the mean pose change); the tables' draws take no threshold
     real    :: prob_beta=0.3       !< tempering factor on the particle temperature of every posterior draw of the probability tables (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.3 for small membrane proteins (pose_marginalization.md sections 4.4, 17){0.3}
+    real    :: prob_beta_ini=0.3   !< solve3D particle stages 1-2: explicit initial tempering factor; omitted = prob_beta, positive and capped at prob_beta{0.3}
     real    :: prob_beta_end=0.    !< the factor the run anneals to once its resolution stops gaining: a geometric ramp from prob_beta over the last PROB_BETA_TAIL iterations, then the run ends (1 = the physical posterior); 0 = prob_beta, no annealing; solve3D sets 1 on its last stage{0.0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}

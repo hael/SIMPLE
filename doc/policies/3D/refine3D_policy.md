@@ -507,8 +507,10 @@ and ends when the tail is complete; a budget too short for a stall
 anneals over its last five iterations regardless. `prob_beta_end=0` (the
 default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
 unless the user set it, so the stages search hot and the final map is
-weighted at the physical posterior; the other stages run flat at
-`prob_beta`. The tail replaced a ramp spread over the stage's whole budget
+weighted at the physical posterior; the other stages run flat at their
+starting beta. That is normally `prob_beta`; an explicit solve3D
+`prob_beta_ini` replaces it on particle stages 1-2 only. The tail replaced a
+ramp spread over the stage's whole budget
 on 2026-10-24: on streptavidin the last stage ran its 25 iterations with the
 resolution reached at the second (section 19 of the note). A `refine=prob`
 or `prob_neigh` stage does not end on the pose overlap (`check_conv3D`
@@ -554,8 +556,9 @@ now scores the previous reference too when the stop rule left it out
 the proposals and the incumbent. Whether that alone revives the early
 stages, or their small temperature (T about 33 at stage 1, where it is
 hundreds from stage 3 on) also needs a colder draw than `prob_beta` gives,
-is the open measurement; the stages run at `prob_beta` like the others
-until it is made.
+is the open measurement. By default the stages run at `prob_beta` like the
+others; `prob_beta_ini` exposes a solve3D-only experiment with an equal or
+hotter initial draw because it is capped at `prob_beta`.
 
 The posterior sampling is the probability tables' (`refine=prob|prob_neigh`,
 and the 2D tables, `solve2D_policy.md`): the search strategies of the other

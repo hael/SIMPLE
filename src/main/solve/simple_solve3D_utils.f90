@@ -27,6 +27,7 @@ logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override   = .false.
 logical          :: l_refine3D_lp_override     = .false.
 logical          :: l_refine3D_lpstop_override = .false.
+logical          :: l_prob_beta_ini_override   = .false. !< the user set solve3D's stages 1-2 beta
 logical          :: l_prob_beta_end_override   = .false. !< the user set prob_beta_end: the stages keep it
 logical          :: l_cavgs_mode = .false.
 type(sym)        :: se1, se2
@@ -146,6 +147,14 @@ interface
         logical :: l_skip
     end function solve3D_stage_skipping
 
+    module pure subroutine solve3D_stage_prob_beta( prob_beta, prob_beta_ini, istage, l_override, l_cavgs, l_apply, beta )
+        real,    intent(in)  :: prob_beta, prob_beta_ini
+        integer, intent(in)  :: istage
+        logical, intent(in)  :: l_override, l_cavgs
+        logical, intent(out) :: l_apply
+        real,    intent(out) :: beta
+    end subroutine solve3D_stage_prob_beta
+
     module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
@@ -208,6 +217,7 @@ contains
         l_refine3D_mode_override   = cline%defined('refine')
         l_refine3D_lp_override     = cline%defined('lp')
         l_refine3D_lpstop_override = cline%defined('lpstop')
+        l_prob_beta_ini_override   = cline%defined('prob_beta_ini')
         l_prob_beta_end_override   = cline%defined('prob_beta_end')
         if( l_refine3D_mode_override ) refine3D_mode_override = trim(params%refine)
         if( l_refine3D_mode_override ) write(logfhandle,'(A,A)') &
@@ -272,12 +282,12 @@ contains
         call child_cline%delete('smpd_crop')
     end subroutine strip_refine3D_planning_keys
 
-    !> the sampling units are formed once by solve3D; child command lines do not carry its keys and
-    !! the stage controller sets them on every refine3D stage line
+    !> solve3D owns the sampling units and initial tempering; the stage controller emits child values
     subroutine strip_sampling_keys( child_cline )
         class(cmdline), intent(inout) :: child_cline
         call child_cline%delete('balance')
         call child_cline%delete('nclust')
+        call child_cline%delete('prob_beta_ini')
     end subroutine strip_sampling_keys
 
     ! Remove the PCG backend key together with every PCG-only control. Any

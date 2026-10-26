@@ -82,7 +82,10 @@ stages 3 to 5 score the full probabilistic table; stages 6 to 8 restrict
 the table to pooled coarse-peak neighborhoods so the late search is local
 and exhaustive within it. The coarse subspace is rescaled with `nspace` so
 its granularity stays constant. Independent multi-state runs use plain
-first-improvement hill climbing for the first two stages. The last stage
+first-improvement hill climbing for the first two stages. An optional
+`prob_beta_ini` replaces `prob_beta` for particle stages 1 and 2 only; it is
+positive, capped at `prob_beta`, and omission leaves the ordinary schedule
+unchanged. The last stage
 anneals its draws to the physical posterior once its resolution stops
 gaining (`prob_beta_end=1`, the annealing tail of
 [refine3D](refine3d.md)).

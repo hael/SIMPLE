@@ -128,6 +128,12 @@ contains
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_neigh): the particle temperature of '//&
         &'every draw (in-plane, direction, neighbourhood) is multiplied by this factor, below one hotter; the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
+        if( .not. l_stream_compatible )then
+            call prg%add_input(UI_SRCH, 'prob_beta_ini', 'num', 'Initial posterior draw tempering', &
+            &'Optional tempering for particle stages 1 and 2. When omitted, these stages keep prob_beta. An explicit '//&
+            &'value must be positive and is capped at prob_beta, so it can make the early draws only as hot or hotter', &
+            &'e.g. 0.3', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
+        endif
         call prg%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of a stage', &
         &'The factor the draws anneal to once a stage''s resolution stops gaining: a geometric ramp from prob_beta over '//&
         &'the last five iterations, after which the stage ends (1 the physical posterior); 0 keeps prob_beta '//&

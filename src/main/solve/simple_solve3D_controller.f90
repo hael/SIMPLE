@@ -191,6 +191,18 @@ contains
         l_skip = nstates <= 1
     end function solve3D_stage_skipping
 
+    module pure subroutine solve3D_stage_prob_beta( prob_beta, prob_beta_ini, istage, l_override, l_cavgs, l_apply, beta )
+        real,    intent(in)  :: prob_beta, prob_beta_ini
+        integer, intent(in)  :: istage
+        logical, intent(in)  :: l_override, l_cavgs
+        logical, intent(out) :: l_apply
+        real,    intent(out) :: beta
+        l_apply = l_override .and. .not. l_cavgs
+        beta    = prob_beta
+        if( .not. l_apply ) return
+        if( istage < PROB_REFINE_STAGE ) beta = prob_beta_ini
+    end subroutine solve3D_stage_prob_beta
+
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
         istage = ML_REG_START_STAGE
@@ -564,8 +576,8 @@ contains
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
-        real :: lp_eff, lpstop_eff, lp_cap
-        logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
+        real :: lp_eff, lpstop_eff, lp_cap, prob_beta_eff
+        logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted, l_set_prob_beta
         l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
@@ -713,6 +725,9 @@ contains
             call cline_refine3D%delete('gauref')
             call cline_refine3D%delete('gaufreq')
         endif
+        call solve3D_stage_prob_beta(params%prob_beta, params%prob_beta_ini, istage, l_prob_beta_ini_override, &
+            &l_cavgs, l_set_prob_beta, prob_beta_eff)
+        if( l_set_prob_beta ) call cline_refine3D%set('prob_beta', prob_beta_eff)
         ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its
         ! resolution stops gaining (the tail of PROB_BETA_TAIL iterations, then the stage ends); the other stages
         ! run flat at prob_beta, unless the user set the end (pose_marginalization.md sections 17 and 19)
