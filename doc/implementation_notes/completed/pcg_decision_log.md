@@ -943,3 +943,41 @@ between neighbouring voxels at Nyquist, under a Butterworth of 1e-3).
 The `_lp` product carries no B and is unchanged. postprocess_nu is not
 capped: its stretched weighting reaches zero at the first shell where the
 global FSC falls below 1e-4, as RELION's does.
+
+**2026-10-26 -- distributed-route performance: half-lattice scatter, half raw artifacts, in-place padded transforms, parallel observation preparation.**
+Observation (solve3D benchmark, 16832 particles, box 300, 10 parts x 8
+threads, master 32 threads): the PCG route took 3774 s against gridding's
+2914 s. Per-part partial reconstruction was 3.3-4.2x gridding's at every
+crop (box 108: 4.5 s vs 1.4 s; box 300: 45 s vs 11 s), its preparation
+serial (1.0 s vs 0.2 s) and its scatter touching the whole both-sign-h
+padded lattice (121 MB at box 108, 2.6 GB at box 300, all DRAM traffic
+under ten concurrent parts) where gridding deposits into a cache-resident
+native-lattice half; the master's assembly (539 s over 55 iterations) spent
+its time in the two solves and the finalize, each padded transform going
+through `set_rmat`/`get_cmat`/`set_cmat`/`get_rmat` copies and fresh
+`boxpd^3` allocations, and read 2.4-7.9 GB of raw artifacts per iteration.
+Decisions: (1) `accumulate_rhs_density`/`accumulate_absT2` skip every window
+wholly in the `h < 0` half (`win_below_fold`), which the fold never reads
+for Hermitian planes -- bit-identical sums, half the scatter; the
+matrix-free reference and the wave fold keep the full scatter. (2) The raw
+artifact is version 3 (`SIMPLE_PCG_RAW03`): the read half of each slice
+plus the wrapped Nyquist mate, half the bytes written, read and summed;
+`compare_raw_accum` compares those rows. (3) The colouring stride is
+`ceiling(sqrt(3) wdim / padf)` (3 instead of 6 at `padf=2`): the same
+window separation on the padded lattice, half the barriers per plane.
+(4) `read_rec_obs_batch` prepares and transforms a batch in parallel over
+per-thread observation images. (5) The kernel apply, the preconditioner,
+the Fourier diagonal, the folds and `finalize_khat` run on the work image's
+`rmat`/`cmat` through pointers (`image%get_cmat_ptr`), no copies in or out;
+`update_lambda_from_density` is threaded. (6) At box 130 (padded 260 =
+2^2 x 5 x 13) every FFT-bound phase of the assembly was 3-5x slower than
+boxes 120 and 160 predict while the I/O phases scaled normally: an
+`FFTW_ESTIMATE` plan for the radix-13 size. Decision (Hans): the work image
+is planned with `FFTW_MEASURE` from padded box 200 (`image%new(fft_measure)`,
+10 s budget per plan, buffer re-zeroed after the trial transforms), the
+wisdom staying in the process; the lattice geometry comes from an `ftiter`
+instead of a probe image, and the work image is made on first transform,
+so a worker never allocates it. Expected on the benchmark: the per-part
+partial reconstruction near gridding's, the raw I/O halved, the solves
+bounded by measured FFTs. To verify on the cluster: the same `solve3D`
+with `rec_backend=pcg`, the REC3D and PCG_ASSEMBLE bench records.

@@ -128,7 +128,7 @@ contains
         if( present(bfac) ) self%bfac = bfac
         self%fft_nthreads = 1
         if( present(fft_nthreads) ) self%fft_nthreads = max(1, fft_nthreads)
-        call self%new_lattice(box, smpd, self%fft_nthreads, winsz)
+        call self%new_lattice(box, smpd, winsz)
         call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], smpd, &
             &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads)
         ! the KB deapodisation of the native box, as the PCG backend's (separable, centred crop)

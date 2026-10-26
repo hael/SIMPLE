@@ -9,15 +9,20 @@ contains
     ! Constructors / lifecycle
     !========================================
 
-    module subroutine new( self, ldim, smpd, wthreads, fft_nthreads )
+    !> fft_measure: plans by measurement (FFTW_MEASURE under FFTW_MEASURE_TIME_LIMIT) instead of the
+    !! estimate heuristic; for large, repeated transforms. The trial transforms clobber the buffer,
+    !! which is zeroed again after planning, and the plan's wisdom serves every later plan of the
+    !! same problem (size, threads, alignment) in this process
+    module subroutine new( self, ldim, smpd, wthreads, fft_nthreads, fft_measure )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: wthreads
         integer, optional, intent(in)    :: fft_nthreads
-        integer(kind=c_int) :: rc
+        logical, optional, intent(in)    :: fft_measure
+        integer(kind=c_int) :: rc, planner_flags
         integer             :: i, plan_nthreads
-        logical             :: do_allocate
+        logical             :: do_allocate, l_measure
         ! we need to be clever about allocation (because it is costly)
         if( self%existence )then
             if( any(self%ldim /= ldim) )then
@@ -35,6 +40,10 @@ contains
         endif
         plan_nthreads = nthr_glob
         if( present(fft_nthreads) ) plan_nthreads = max(1, fft_nthreads)
+        l_measure = .false.
+        if( present(fft_measure) ) l_measure = fft_measure
+        planner_flags = FFTW_ESTIMATE
+        if( l_measure ) planner_flags = FFTW_MEASURE
         self%wthreads = .true.
         if( present(wthreads) ) self%wthreads = wthreads
         self%wthreads = self%wthreads .and. plan_nthreads > 1
@@ -67,18 +76,22 @@ contains
             rc = fftwf_init_threads()
             call fftwf_plan_with_nthreads(plan_nthreads)
         endif
+        if( l_measure ) call fftwf_set_timelimit(FFTW_MEASURE_TIME_LIMIT)
         if(self%ldim(3) > 1)then
-            self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
-            self%plan_bwd = fftwf_plan_dft_c2r_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
+            self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, planner_flags)
+            self%plan_bwd = fftwf_plan_dft_c2r_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%cmat, self%rmat, planner_flags)
         else
-            self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)
-            self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, FFTW_ESTIMATE)
+            self%plan_fwd = fftwf_plan_dft_r2c_2d(self%ldim(2), self%ldim(1), self%rmat, self%cmat, planner_flags)
+            self%plan_bwd = fftwf_plan_dft_c2r_2d(self%ldim(2), self%ldim(1), self%cmat, self%rmat, planner_flags)
         endif
+        if( l_measure ) call fftwf_set_timelimit(FFTW_NO_TIME_LIMIT)
         if( self%wthreads .and. (any(ldim >= 200) .or. ldim(3) >= 100) )then
             ! disable threads for subsequent plans
             call fftwf_plan_with_nthreads(1)
         endif
         !$omp end critical
+        ! a measured plan ran trial transforms on the buffer
+        if( l_measure ) self%rmat = 0.
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then

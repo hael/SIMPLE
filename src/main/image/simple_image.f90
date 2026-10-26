@@ -15,6 +15,11 @@ public :: image, image_stack, unmemoize_mask_coords, unmemoize_powspec_coords
 private
 #include "simple_local_flags.inc"
 
+!> planning budget of a measured FFTW plan (new with fft_measure): the planner keeps the best plan
+!! found within it, and its wisdom stays in the process for every later plan of the same problem
+real(dp), parameter :: FFTW_MEASURE_TIME_LIMIT = 10.0_dp
+real(dp), parameter :: FFTW_NO_TIME_LIMIT      = -1.0_dp
+
 ! mask memoization
 integer              :: mem_msk_box = 0
 real,    allocatable :: mem_msk_cs(:), mem_msk_cs2(:)
@@ -149,6 +154,7 @@ contains
     procedure          :: get_rmat_sub
     procedure          :: get_rmat_at
     procedure          :: get_cmat
+    procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
     procedure          :: allocate_cmat
     procedure          :: get_cmat_at
@@ -437,12 +443,13 @@ interface
 
     ! ===== Constructors/lifecycle =====
 
-    module subroutine new( self, ldim, smpd, wthreads, fft_nthreads )
+    module subroutine new( self, ldim, smpd, wthreads, fft_nthreads, fft_measure )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: wthreads
         integer, optional, intent(in)    :: fft_nthreads
+        logical, optional, intent(in)    :: fft_measure
     end subroutine new
 
     module subroutine set_wthreads( self, wthreads )
@@ -1046,6 +1053,11 @@ interface
         class(image), intent(in) :: self
         complex, allocatable :: cmat(:,:,:)
     end function get_cmat
+
+    module subroutine get_cmat_ptr( self, cmat_ptr )
+        class(image), target,                   intent(in)  :: self
+        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
+    end subroutine get_cmat_ptr
 
     module pure subroutine get_cmat_sub( self, cmat )
         class(image), intent(in)  :: self

@@ -115,6 +115,25 @@ contains
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
     end function get_cmat
 
+    !>  \brief  pointer to the packed Fourier components, array_shape(1) x array_shape(2) x
+    !!          array_shape(3) = fdim(ldim(1)) x ldim(2) x ldim(3) with lower bounds 1 (physical
+    !!          addresses, see comp_addr_phys), the Fourier-space twin of get_rmat_ptr. Unlike rmat,
+    !!          the packed array has no padding rows: its physical shape is its logical one
+    !!          (get_array_shape, what get_cmat copies), so the pointer is the whole array and a
+    !!          whole-array expression on it is an expression on every component, none outside.
+    !!          A deliberate breach of the copy-in/copy-out
+    !!          encapsulation of get_cmat/set_cmat: those copy the whole packed array, and an operator
+    !!          that transforms a boxpd^3 volume several times per iteration (the PCG reconstructor's
+    !!          kernel apply, preconditioner and folds, 80 MB at box 108, 870 MB at box 300) paid more
+    !!          for the copies and their allocations than for the transforms. Contract: the caller
+    !!          reads and writes components in place only, never reallocates or frees the target,
+    !!          sets the Fourier flag through set_ft, and drops the pointer before kill or new
+    module subroutine get_cmat_ptr( self, cmat_ptr )
+        class(image), target,                   intent(in)  :: self
+        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
+        cmat_ptr => self%cmat
+    end subroutine get_cmat_ptr
+
     module pure subroutine get_cmat_sub( self, cmat )
         class(image), intent(in)  :: self
         complex,      intent(out) :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))

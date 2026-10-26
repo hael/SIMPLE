@@ -11,6 +11,7 @@ use simple_timer,               only: timer_int_kind
 use simple_parameters,          only: parameters
 use simple_builder,             only: builder
 use simple_image,               only: image
+use simple_imgarr_utils,        only: alloc_imgarr, dealloc_imgarr
 use simple_oris,                only: oris
 use simple_math_ctf,            only: electron_scale_link
 use simple_eo_partition,        only: ensure_field_halves
@@ -27,6 +28,7 @@ use simple_rec3D_pcg_strategy,  only: set_pcg_solve_support, calculate_pcg_state
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, write_halfmap_diagnostics
 use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_fsc_fname, &
     &refine3D_resolution_txt_fbody, refine3D_state_vol_suffix_fname
+!$ use omp_lib,                 only: omp_get_max_threads
 implicit none
 
 public :: exec_rec3D_wave, rec3D_wave_objective
@@ -54,7 +56,7 @@ type, extends(nlcg_objective) :: rec3D_wave_objective
     class(reconstructor_pcg), pointer :: pcgop  => null()
     type(wave_projector),    allocatable :: wp
     type(ptcl_read_session), allocatable :: rsess
-    type(image)          :: obs
+    type(image), allocatable :: obs(:)          !< per-thread observation work images
     integer, allocatable :: pinds(:)            !< the half's particles, the step subset first
     complex, allocatable :: ybatch(:,:,:)       !< one batch of observation planes
     complex, allocatable :: ysub(:,:,:)         !< the step subset's observation planes
@@ -373,7 +375,7 @@ contains
         real,                             intent(in)    :: gain_here, scale_volts
         type(oris) :: selection
         real, allocatable :: inv_sig2(:)
-        integer :: i, j, stride, batchlims(2), eo
+        integer :: i, j, stride, batchlims(2), eo, nthr
         logical, allocatable :: l_sub(:)
         call self%kill
         self%params => params
@@ -423,7 +425,9 @@ contains
         self%sqlp  = self%lims2(1,2)**2
         allocate(self%ybatch(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), MAXIMGBATCHSZ))
         allocate(self%ysub(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2), self%nsub))
-        call self%obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        call alloc_imgarr(nthr, [params%box_crop,params%box_crop,1], params%smpd_crop, self%obs)
         allocate(self%rsess)
         call self%rsess%new(params)
         ! the step subset's planes, read once
@@ -570,7 +574,7 @@ contains
             call self%rsess%kill
             deallocate(self%rsess)
         endif
-        call self%obs%kill
+        if( allocated(self%obs)    ) call dealloc_imgarr(self%obs)
         if( allocated(self%pinds)  ) deallocate(self%pinds)
         if( allocated(self%ybatch) ) deallocate(self%ybatch)
         if( allocated(self%ysub)   ) deallocate(self%ysub)

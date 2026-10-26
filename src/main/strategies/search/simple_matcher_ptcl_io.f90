@@ -9,6 +9,7 @@ use simple_image,             only: image
 use simple_cartesian_fourier, only: extract_native_fourier_plane
 use simple_euclid_sigma2,     only: sigma2_half
 use, intrinsic :: iso_fortran_env, only: int64
+!$ use omp_lib,                only: omp_get_max_threads, omp_get_thread_num
 implicit none
 #include "simple_local_flags.inc"
 
@@ -651,34 +652,42 @@ contains
     !> y_batch(:,:,ii) receives the native Fourier plane (the disk lims2, h^2+k^2 <= sqlp) of the
     !! reconstruction observation of particle pinds(batchlims(1)+ii-1): from the search's records when
     !! a cropped pass sealed them, else read through rsess (which then reads the next batch ahead) and
-    !! prepared by prep_rec_observation, tapered. obs is a work image at box_crop; rt_prep accumulates
+    !! prepared by prep_rec_observation, tapered, the batch in parallel over the work images obs (one
+    !! per thread at box_crop, sized by omp_get_max_threads at their allocation); rt_prep accumulates
     !! the preparation's wall time (L_BENCH_GLOB)
     subroutine read_rec_obs_batch( params, build, rsess, pinds, batchlims, obs, lims2, sqlp, y_batch, rt_prep )
         class(parameters),       intent(in)    :: params
         class(builder),          intent(inout) :: build
         class(ptcl_read_session),intent(inout) :: rsess
         integer,                 intent(in)    :: pinds(:), batchlims(2), lims2(2,2), sqlp
-        class(image),            intent(inout) :: obs
+        class(image),            intent(inout) :: obs(:)
         complex,                 intent(inout) :: y_batch(lims2(1,1):,lims2(2,1):,:)
         real(timer_int_kind),    intent(inout) :: rt_prep
         integer(timer_int_kind) :: t_prep
-        integer :: ii, batchsz
+        integer :: ii, ithr, nthr, batchsz
         logical :: l_records
         batchsz = batchlims(2) - batchlims(1) + 1
         if( size(y_batch,3) < batchsz ) THROW_HARD('the plane batch is smaller than the particle batch; read_rec_obs_batch')
+        if( size(obs) < 1 ) THROW_HARD('no observation work images; read_rec_obs_batch')
         l_records = take_records(pinds(batchlims(1):batchlims(2)))
         if( .not. l_records ) call rsess%read(params, build, size(pinds), pinds, batchlims)
         if( L_BENCH_GLOB ) t_prep = tic()
+        nthr = 1
+        !$ nthr = min(size(obs), omp_get_max_threads())
+        !$omp parallel do default(shared) private(ii,ithr) schedule(static) num_threads(nthr) proc_bind(close)
         do ii = 1, batchsz
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
             ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
             if( l_records )then
-                call get_rec_observation(pinds(batchlims(1)+ii-1), obs, .true.)
+                call get_rec_observation(pinds(batchlims(1)+ii-1), obs(ithr), .true.)
             else
-                call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
+                call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs(ithr), .true.)
             endif
-            call obs%fft
-            y_batch(:,:,ii) = extract_native_fourier_plane(obs, lims2, sqlp)
+            call obs(ithr)%fft
+            y_batch(:,:,ii) = extract_native_fourier_plane(obs(ithr), lims2, sqlp)
         enddo
+        !$omp end parallel do
         if( L_BENCH_GLOB ) rt_prep = rt_prep + toc(t_prep)
     end subroutine read_rec_obs_batch
 

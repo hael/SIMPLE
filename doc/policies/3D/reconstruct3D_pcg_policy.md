@@ -46,12 +46,16 @@ once into its state/half accumulation and is never reread during PCG iterations.
 In distributed execution, each worker atomically publishes one versioned raw
 artifact per `(state,half,part)`. It contains the unfolded complex `B`, real
 `D`, contributor count, applied weight mass, weight-set identity, geometry, and
-provenance. The format is version 2 (magic `SIMPLE_PCG_RAW02`, 2026-10-07). Its
+provenance. The format is version 3 (magic `SIMPLE_PCG_RAW03`, 2026-10-26). Its
 header carries the applied mass as a 64-bit real beside the integer contributor
 count; under hard labels the mass is the count. It also carries the identity of
 the state weight set the part was built under, its generation and layout
-digest, both zero under hard labels. The payload is unchanged and is present
-only when the contributor count is positive. No reader of version 1 is kept.
+digest, both zero under hard labels. The payload, present only when the
+contributor count is positive, is the half of each accumulator the fold reads:
+for every `m`-slice the rows `h = 0 .. lims3(1,2)-1` followed by the wrapped
+Nyquist mate stored at `h = lims3(1,1)` (the row `lims3(1,2)` is never
+scattered into); version 2 wrote the full both-sign-`h` lattice. No reader of
+an earlier version is kept: a chain of an earlier version is stale and re-seeded.
 The master validates and adds these artifacts in ascending part-number order,
 and stops when a part's weight-set identity differs from its own. Only after
 the complete state/half reduction does it fold the RHS, calculate rho floors,
@@ -473,7 +477,10 @@ profile is production's `cosedge_r2_3d`.
 
 **Scatter reproducibility.** Every scatter into a Fourier accumulator is
 parallelized by h-strided colouring, whose separation guarantee holds on
-*unwrapped* coordinates only. The accumulator is periodic, so windows that reach
+*unwrapped* coordinates only. The stride is `ceiling(sqrt(3) wdim / padf)`:
+plane rows a stride apart land `padf*stride` apart on the padded lattice under
+any rotation, hence more than a window apart along one axis. The accumulator
+is periodic, so windows that reach
 the wrap boundary can collide after folding even in the same colour. All scatter
 sites therefore split: the parallel colour sweep skips any window `win_wraps`
 (in `pcg_lattice`) flags, and a serial pass handles the rim (pre-filtered by `sq_rim`, a radius
@@ -481,6 +488,19 @@ below which wrapping is provably impossible). Serial, not `atomic` — an atomic
 would fix the race but leave summation order thread-dependent, and bitwise
 run-to-run reproducibility is what makes a residual trace usable as a regression
 signal. The rim is a thin outer shell, so the serial cost is small.
+
+**Half-lattice accumulation of Hermitian planes.** The `B` and `D` accumulators
+of the production route (`accumulate_rhs_density`, `accumulate_absT2`) are
+read only as their `h >= 0` half plus the wrapped Nyquist mate at
+`lims3(1,1)` (`fold_and_ifft`, `finalize_density_accum`). The planes they
+deposit are Hermitian (central sections of real images, real even `|T|^2`), so
+the mirrored window of each plane point's Friedel mate deposits the conjugate
+and the `h < 0` half carries nothing the fold needs. Windows wholly inside that
+dead half are therefore skipped (`win_below_fold`, 2026-10-26), halving the
+scatter with bit-identical sums; the raw artifact (above) carries only the
+read half. The exact adjoint pair `forward_plane`/`adjoint_plane_add` and the
+matrix-free reference operator keep the full both-sign-`h` scatter, as does the
+two-cap fold of a wave model (`l_hermitian`).
 
 ## 5. Preconditioner and kernelized operator
 
@@ -730,6 +750,22 @@ implemented and tested here rather than repurposed from production gridding.
   gridding/storage conversions, not established linear adjoints.
 
 ## 12. Execution-path identity and performance rules
+
+### Work image and FFTW plans (2026-10-26)
+
+The operator's `boxpd^3` work image is made on first use by the routines
+that transform (`ensure_wimg`); a worker, which only accumulates and
+publishes raw artifacts, never allocates it. Every padded transform runs in
+place on the image's buffers through `get_rmat_ptr`/`get_cmat_ptr`
+(`embed_fft`, `ifft_crop`, the folds, `finalize_khat`): no copy in or out.
+From `PCG_FFT_MEASURE_MIN_BOXPD` (200, the size from which the image threads
+its plans) the work image's plans are measured (`FFTW_MEASURE` under the
+image's time budget) instead of estimated, and the measured plan's wisdom
+serves every later operator of the same size in the process, so a run pays
+the planning once per crop. A measured plan is chosen by timing, so the
+rounding of a solve is fixed within a process but may differ between
+processes; small fixtures stay on the estimate heuristic and remain
+run-to-run identical.
 
 ### Backend comparison protocol (review 2026-09-09)
 

@@ -14,6 +14,7 @@ use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session, killimgba
 use simple_matcher_3Drec,       only: write_rec3D_bench
 use simple_sigma2_files,        only: load_sigma2
 use simple_image,               only: image
+use simple_imgarr_utils,        only: alloc_imgarr, dealloc_imgarr
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
     &write_support_provenance
 use simple_image_msk,           only: image_msk
@@ -408,10 +409,10 @@ contains
         real(timer_int_kind),     intent(inout) :: rt_prep
         real, optional,           intent(in)    :: weights(:)
         type(oris)  :: selection
-        type(image) :: obs
-        complex, allocatable :: y_batch(:,:,:)
-        real,    allocatable :: inv_sig2(:)
-        integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch
+        type(image), allocatable :: obs(:)
+        complex,     allocatable :: y_batch(:,:,:)
+        real,        allocatable :: inv_sig2(:)
+        integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch, nthr
         call pcgop%set_sym(build%pgrpsyms)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
@@ -433,7 +434,10 @@ contains
         endif
         allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
         call pcgop%begin_accum
-        call obs%new([params%box_crop,params%box_crop,1], params%smpd_crop)
+        ! one observation work image per thread of the batch preparation
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        call alloc_imgarr(nthr, [params%box_crop,params%box_crop,1], params%smpd_crop, obs)
         do ibatch = 1, size(pinds), MAXIMGBATCHSZ
             batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
@@ -441,7 +445,7 @@ contains
             call read_rec_obs_batch(params, build, rsess, pinds, batchlims, obs, lims2, R*R, y_batch, rt_prep)
             call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
         enddo
-        call obs%kill
+        call dealloc_imgarr(obs)
         call selection%kill
         deallocate(y_batch)
         if( allocated(inv_sig2) ) deallocate(inv_sig2)

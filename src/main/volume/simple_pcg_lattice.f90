@@ -1,18 +1,20 @@
 !@descr: padded-lattice geometry, solve support and KB plane gather/scatter (flat or Ewald paraboloid) of the PCG and wave operators
 ! (reconstructor_pcg and flex_pcg_t extend it; the wave operators sample the Ewald paraboloid with it)
 module simple_pcg_lattice
-use simple_core_module_api,   only: cyci_1d, KBALPHA, KBWINSZ, kbinterpol, OSMPL_PAD_FAC, simple_exception
+use simple_core_module_api,   only: cyci_1d, fdim, KBALPHA, KBWINSZ, kbinterpol, OSMPL_PAD_FAC, simple_exception
 use simple_image,             only: image
+use simple_ftiter,            only: ftiter
 use simple_gridding,          only: kb_stencil_envelope_1d
-use simple_cartesian_fourier, only: gather_packed_window, center_crop_real3d
+use simple_cartesian_fourier, only: gather_packed_window
+use, intrinsic :: iso_c_binding, only: c_float, c_float_complex
 !$ use omp_lib,               only: omp_in_parallel
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: pcg_lattice
-public :: plane_loc, rim_free, win_wraps, scatter_window, scatter_window_real, scatter_window_pair, scatter_window_nowrap
-public :: scatter_window_pair_nowrap, scatter_window_cmplx_nowrap
+public :: plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, scatter_window_real, scatter_window_pair
+public :: scatter_window_nowrap, scatter_window_pair_nowrap, scatter_window_cmplx_nowrap
 
 !> A solve whose unknown lives on the native box while every Fourier operation runs on the padf-times
 !! padded lattice (centre-pad in, centre-crop out): the KB window, the OpenMP colouring stride of the
@@ -65,17 +67,16 @@ end type pcg_lattice
 contains
 
     !> The geometry of a solve at box: KB window, colouring stride, padded box, limits, rim radius,
-    !! wrap table and deposition envelope. fft_nthreads only sizes the plans of the probe image. winsz is
-    !! the KB window's half-width (KBWINSZ, three taps, unless a caller needs a more accurate gather)
-    subroutine new_lattice( self, box, smpd, fft_nthreads, winsz )
+    !! wrap table and deposition envelope. winsz is the KB window's half-width (KBWINSZ, three taps,
+    !! unless a caller needs a more accurate gather)
+    subroutine new_lattice( self, box, smpd, winsz )
         class(pcg_lattice), intent(inout) :: self
         integer,            intent(in)    :: box
         real,               intent(in)    :: smpd
-        integer, optional,  intent(in)    :: fft_nthreads
         real,    optional,  intent(in)    :: winsz
-        type(image) :: tmp
-        integer     :: lo, hi, i, nthr
-        real        :: rlim
+        type(ftiter) :: fit
+        integer      :: lo, hi, i
+        real         :: rlim
         call self%kill_lattice
         self%box    = box
         self%smpd   = smpd
@@ -88,12 +89,12 @@ contains
         ! odd width centred on nint(loc): negating loc negates the window as a set,
         ! which the h>=0 folds rely on
         self%wdim   = 2*self%iwinsz + 1
-        ! same-colour h-lines stay a full window apart along one axis after rotation
-        ! (max-norm >= Euclidean norm / sqrt(3)), as in reconstructor%insert_plane_oversamp
-        self%stride = ceiling(sqrt(3.0) * real(self%wdim))
         ! oversampling: the unknown lives on the native box, every Fourier operation
         ! on the padf-times padded lattice, as in Fourier gridding
         self%padf    = OSMPL_PAD_FAC
+        ! same-colour h-lines stay a full window apart along one axis after rotation: plane points
+        ! padf*stride apart in Euclidean norm are at least that / sqrt(3) apart in max-norm
+        self%stride  = ceiling(sqrt(3.0) * real(self%wdim) / real(self%padf))
         self%boxpd   = self%padf * box
         self%pad_off = (self%boxpd - box) / 2
         self%Rnat    = box / 2
@@ -104,13 +105,10 @@ contains
         self%lims2(2,:) = [-self%Rnat, self%Rnat]
         self%sqlp       = self%Rnat * self%Rnat
         self%padsc      = real(self%padf)**3
-        nthr = 1
-        if( present(fft_nthreads) ) nthr = max(1, fft_nthreads)
-        call tmp%new([self%boxpd,self%boxpd,self%boxpd], smpd, wthreads=nthr > 1, fft_nthreads=nthr)
-        call tmp%fft()
-        self%lims3 = tmp%loop_lims(3)
-        self%cdim  = tmp%get_array_shape()
-        call tmp%kill
+        ! the padded image's logical limits and packed shape, without the image
+        call fit%new([self%boxpd,self%boxpd,self%boxpd], smpd)
+        self%lims3 = fit%loop_lims(3)
+        self%cdim  = [fdim(self%boxpd), self%boxpd, self%boxpd]
         ! true period-box wrap range: lims3(1,:) spans both Friedel Nyquist mates
         ! (one longer than the period), axes 2/3 do not
         self%wlims = self%lims3(2,:)
@@ -516,29 +514,48 @@ contains
         class(image),       intent(inout) :: wimg
         logical,            intent(in)    :: l_hermitian
         real, allocatable :: z(:,:,:)
-        complex :: val
-        integer :: h, hh, k, m, phys(3)
-        call wimg%zero_and_flag_ft()
-        !$omp parallel do collapse(2) default(shared) private(h,hh,k,m,phys,val) &
+        complex(c_float_complex), pointer :: cptr(:,:,:)
+        real(c_float),            pointer :: rptr(:,:,:)
+        integer :: h, hh, k, m, pk, pm, n2, n3, o, j
+        ! every packed element (h >= 0, all k and m) is written in place through the image's pointer
+        ! (get_cmat_ptr states the contract): a set_cmat_at call per element and the copies of
+        ! get_rmat/center_crop were most of the fold; physical addresses as comp_addr_phys
+        call wimg%get_cmat_ptr(cptr)
+        call wimg%set_ft(.true.)
+        n2 = self%boxpd
+        n3 = self%boxpd
+        !$omp parallel do collapse(2) default(shared) private(h,hh,k,m,pk,pm) &
         !$omp schedule(static) proc_bind(close)
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
-                do h = 0, self%lims3(1,2)
-                    hh   = self%wrap(h)
-                    phys = wimg%comp_addr_phys(h,k,m)
-                    if( l_hermitian )then
-                        val = 0.5 * (vol_accum(hh,k,m) + conjg(vol_accum(self%wrap(-h),self%wrap(-k),self%wrap(-m))))
-                        call wimg%set_cmat_at(phys(1),phys(2),phys(3), val)
-                    else
-                        call wimg%set_cmat_at(phys(1),phys(2),phys(3), vol_accum(hh,k,m))
-                    endif
-                end do
+                pm = m + 1; if( m < 0 ) pm = pm + n3
+                pk = k + 1; if( k < 0 ) pk = pk + n2
+                if( l_hermitian )then
+                    do h = 0, self%lims3(1,2)
+                        hh = self%wrap(h)
+                        cptr(h+1,pk,pm) = 0.5 * (vol_accum(hh,k,m) + &
+                            &conjg(vol_accum(self%wrap(-h),self%wrap(-k),self%wrap(-m))))
+                    end do
+                else
+                    do h = 0, self%lims3(1,2)
+                        cptr(h+1,pk,pm) = vol_accum(self%wrap(h),k,m)
+                    end do
+                endif
             end do
         end do
         !$omp end parallel do
         call wimg%ifft()
         ! back to the native lattice: the unknown never leaves box^3
-        z = center_crop_real3d(wimg%get_rmat(), self%box)
+        call wimg%get_rmat_ptr(rptr)
+        o = self%pad_off
+        allocate(z(self%box,self%box,self%box))
+        !$omp parallel do collapse(2) default(shared) private(j,k) schedule(static) proc_bind(close)
+        do k = 1, self%box
+            do j = 1, self%box
+                z(:,j,k) = rptr(o+1:o+self%box,o+j,o+k)
+            end do
+        end do
+        !$omp end parallel do
     end function fold_lattice_accum
 
     subroutine kill_lattice( self )
@@ -565,6 +582,17 @@ contains
         integer,                  intent(in) :: i0(3)
         win_wraps = any(i0 < self%wlims(1)) .or. any(i0 + self%wdim - 1 > self%wlims(2))
     end function win_wraps
+
+    !> does the window lie wholly in the h < 0 half, clear of the wrapped Nyquist mate at wlims(1)?
+    !! The accumulator of Hermitian planes is read as its h >= 0 half (fold_lattice_accum with
+    !! l_hermitian = .false.), so such a window deposits nothing that is ever read: the Friedel
+    !! mate of its plane point deposits the conjugate at the mirrored window. Not for the
+    !! two-cap planes of a wave model, whose fold reads both halves
+    pure logical function win_below_fold( self, i0 )
+        class(pcg_lattice),       intent(in) :: self
+        integer,                  intent(in) :: i0(3)
+        win_below_fold = i0(1) + self%wdim - 1 < 0 .and. i0(1) > self%wlims(1)
+    end function win_below_fold
 
     !> KB-weighted scatter of one complex value into the full-range accumulator
     pure subroutine scatter_window( self, i0, w, val, vol_accum )
