@@ -941,8 +941,8 @@ contains
         ! register imgs
         allocate(inpl_corrs(nrots), algninfo(nrefs,ntargets),&
         &algninfo_mirr(nrefs,ntargets), frc(kfromto(1):kfromto(2)))
-        !$omp parallel do private(i,j,k,m,ithr,inpl_corrs,loc,irot,cxy,frc,l_rot_shvec,rotind_frac,inpl_angle,joint_lims_loc)&
-        !$omp default(shared) collapse(2) schedule(static) proc_bind(close)
+        !$omp parallel do private(i,j,k,m,ithr,inpl_corrs,loc,irot,irot_seed,cxy,frc,l_rot_shvec,rotind_frac,inpl_angle,&
+        !$omp joint_lims_loc,rotmat) default(shared) collapse(2) schedule(static) proc_bind(close)
         do i = 1, npfts        ! ptcls, then their mirrors
             do j = 1, nrefs    ! refs
                 ithr = omp_get_thread_num() + 1
