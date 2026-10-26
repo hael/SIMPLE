@@ -1,13 +1,14 @@
 # trajectory_denoise on the flex kernel: every frame a pre-image of the frames that look like it
 
-Implementation note, 2026-10-26. **Prototype implemented, not yet built or run**: written against `7d8586b88`
-without a compiler at hand; the maintainer builds. Sections 1-3 are the contract and the method as implemented,
-section 4 the toy behind the choices, section 5 how to run and tune it on real data, sections 6-7 validation and
-open points. The toy is a numpy script outside the repository (claude.ai project SIMPLE,
+Implementation note, 2026-10-26. **Prototype implemented and run on a first real trajectory** (written against
+`7d8586b88` without a compiler at hand; the maintainer builds). First look on real data: high-resolution detail
+better preserved than with `ppca`, `ppca` stronger at low resolution. Sections 1-3 are the contract and the method
+as implemented, section 4 the toy behind the choices, section 5 how to run and tune it on real data, sections 6-7
+validation and open points. The toy is a numpy script outside the repository (claude.ai project SIMPLE,
 `claude/trajectory_denoise_flex_toy.py`).
 
     single_exec prg=trajectory_denoise stk=traj.mrcs smpd=0.358 pca_mode=flex nthr=16 \
-        [neigs=32] [halfwin=0] [eo_pool=yes] [lp=<A>] [outstk=trajectory_denoised.mrcs]
+        [neigs=32] [halfwin=0] [eo_pool=yes] [lp=<A>] [mskdiam=<A>] [outstk=trajectory_denoised.mrcs]
 
 ## 1. Why
 
@@ -26,7 +27,8 @@ weighted average of the data of those frames.
 
 - In: `stk` (rows are frames in time order), `smpd`; `neigs` (largest latent rank the CV may choose, default 32),
   `halfwin` (0, the default: the whole trajectory pools; > 0: windows), `eo_pool` (default yes), optional `lp`
-  (the fit band), `nthr`. No project, no CTF (SINGLE trajectories are `ctf=no`).
+  (the fit band), optional `mskdiam` (the similarity mask), `nthr`. No project, no CTF (SINGLE trajectories are
+  `ctf=no`).
 - Out: `outstk` with the input's row count, box, sampling and row order, and `trajectory_denoise_flex.txt` (per
   frame: the Kish population of its weights and the CV's rank, tau, h).
 - **No alignment.** Frames are used exactly as given: no shift, rotation, interpolation or re-centring. Every
@@ -38,8 +40,11 @@ weighted average of the data of those frames.
 - `eo_pool=yes`: even and odd output rows share no input row. The halves of an imported stack are row parity
   (`simple_eo_partition`: a stack row without a micrograph row takes the per-index route), so the 3D half-sets of
   the denoised stack stay independent. `eo_pool=no` pools across parity (more neighbours, for viewing and 2D only).
-- Each frame's mean is removed before the soft inscribed-circle mask and restored afterwards; outside the circle the
-  output is the frame's mean.
+- **No output mask.** The mask shapes the similarity only: the models, latents, noise spectrum, fit band and CV see
+  soft-masked frames (`mskdiam` when given, at most the box's inscribed circle; else the inscribed circle), the
+  pre-images average the frames themselves, so every output row is the whole box. Outside the mask the weights are
+  the ones the particle earned, so the background is averaged over frames whose particle looks alike. Each frame's
+  mean is removed before and restored after.
 - Deterministic for a given input (the models are seeded per set).
 
 ## 3. Method as implemented
@@ -48,14 +53,17 @@ Files: `src/main/flex/simple_flex_traj_denoise.f90` (new, arrays in and out, out
 the cls kernel); `exec_trajectory_denoise` routes `pca_mode=flex` to `trajectory_denoise_flex` in
 `single_commanders_trajectory.f90` (stack I/O); keys `halfwin`, `eo_pool` (`simple_parameters*.f90`, the UI).
 
-1. **Planes.** Each frame minus its mean, soft-masked by the box's inscribed circle (`mask2D_soft(box/2 - 2)`),
-   Fourier transformed, on the half-plane lattice of `flex_class_planes` (shells 1..nyq, `wq = 2`); `c = 1`.
+1. **Planes.** Each frame minus its mean, Fourier transformed on the half-plane lattice of `flex_class_planes`
+   (shells 1..nyq, `wq = 2`; `c = 1`), twice: unmasked (`yu`, what the pre-images average) and soft-masked
+   (`ym`, `mask2D_soft` at radius `min(box/2 - 2, mskdiam / 2 smpd)`, what every similarity step sees).
 2. **Noise.** Per shell, the median over consecutive frame pairs of `|y_t - y_t+1|^2 / 2`: model-free and robust
    to events; it includes the signal change between consecutive frames, so it errs on the high side. One spectrum
    for the trajectory; noise weights `w = 1 / s2(shell)`, the same for every frame.
 3. **Fit band.** `lp` when given; otherwise up to the last shell whose spectral SNR (mean frame power over the noise
    spectrum, minus one) reaches 0.1, gaps allowed (lattice fringes sit beyond shells of weak signal), at least 6
-   shells. Split into two coefficient sets A and B, 4x4 Fourier blocks in a checkerboard (as the cls kernel).
+   shells. Split into two coefficient sets A and B, Fourier blocks in a checkerboard (as the cls kernel). The mask
+   correlates each coefficient with its neighbours over about box / radius pixels, so the block side grows with the
+   mask: `nint(2 box / radius)`, between 4 (the inscribed circle) and 16; logged as `split block`.
 4. **Sets.** `halfwin=0`: one set, the whole trajectory, every frame a candidate of every frame. `halfwin>0`: blocks
    of 10 frames, each with the frames within `halfwin` of its centre as its set (the model, CV and choice per
    block).
@@ -87,7 +95,8 @@ the cls kernel); `exec_trajectory_denoise` routes `pca_mode=flex` to `trajectory
 Cost, whole trajectory of N frames: two model fits on half the band; per CV direction about 440 weight settings,
 each a `1000 x N x 2000` single-precision product (a few minutes for N of several thousand on one node); the
 pre-images three N x N weight matrices (3 x 4 N^2 bytes) and an `N x N x 2 ncoeff` product. Memory is dominated by
-the frames' coefficients (8 bytes x ncoeff x N, twice).
+the frames' coefficients (8 bytes x ncoeff x N, three times: masked, unmasked, pre-images; the first two are freed
+before the output is written).
 
 ## 4. Toy evidence
 
@@ -148,10 +157,12 @@ Start with the defaults; compare against `pca_mode=ppca` on the same stack (mont
 | z small (below about 3) | barely better than the parity mean | the frames may be too noisy or too varied |
 | neff per frame near 1 | unsupported frame (junk, event, lost track) | inspect those frames in `trajectory_denoise_flex.txt` |
 | `eo_pool=no` | more neighbours, halves share noise | for viewing and 2D only, never for 3D |
+| neighbours or carbon edges in the box drive the latent | the similarity sees more than the particle | `mskdiam=` a little above the particle (only the metric changes; the output stays unmasked) |
 
 ## 6. Validation still to do
 
-- **Build** and the fast gate (`scripts/check_flex_dag.py` and `scripts/check_descr.py` pass on the change set).
+- **Build** (done by the maintainer) and the fast gate (`scripts/check_flex_dag.py` and `scripts/check_descr.py`
+  pass on the change set).
 - **Unit tests** (a tester next to the module, suite in `unit_heterogeneity`): a noise-free static trajectory comes
   back unchanged; `tau` none with finite `h` gives the Gaussian temporal mean over same-parity frames (closed form);
   zero weight across parity with `eo_pool=yes`; an abrupt change with an informative latent leaves less than 1% of
@@ -161,7 +172,8 @@ Start with the defaults; compare against `pca_mode=ppca` on the same stack (mont
   against the clean reprojections stage 2 already writes (error over noise, FRC 0.5 against the truth); downstream
   the existing map correlation, FSC and rotation errors. `flex` becomes the default when it is better on both
   suites and downstream no worse than `ppca` within the existing margins.
-- **Real data**: a GLC trajectory, `ppca` against `flex` (both `halfwin` settings), then `analysis2D_nano`.
+- **Real data**: a GLC trajectory, `ppca` against `flex` (both `halfwin` settings), then `analysis2D_nano`. First
+  run: flex keeps more high-resolution detail, `ppca` more low-resolution signal (see section 7, *low resolution*).
 
 ## 7. Open
 
@@ -172,6 +184,9 @@ Start with the defaults; compare against `pca_mode=ppca` on the same stack (mont
   shift would use no search and no interpolation. The owner's call.
 - **Noise calibration.** The frame-difference spectrum is conservative; the CV picks the bandwidths regardless.
 - **Fit band** threshold (0.1), to be settled on real data.
+- **Low resolution.** `ppca`'s global subspace is strong at low resolution (as in the toy at SNR 1.0). A per-band
+  choice (the CV run per resolution band, low shells with the wider bandwidths) would give each band its own
+  pooling; not tried.
 - **Window and whole trajectory together**: a local model as the metric with whole-trajectory candidates would take
   the best of both rows of section 4; not tried.
 - **Junk axis.** Junk frames only lower their weights through their latents.

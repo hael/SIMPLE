@@ -187,7 +187,8 @@ subroutine new_extract_substk( prgtab )
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call trajectory_denoise%add_input(UI_MASK, mskdiam, required_override=.false., &
-        &visibility=UI_VIS_ADVANCED)
+        &help_override='Mask diameter in A (pca_mode=flex: shapes the frame similarity only, the output is unmasked; '//&
+        &'default the inscribed circle)', visibility=UI_VIS_ADVANCED)
         ! computer controls
         call trajectory_denoise%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)

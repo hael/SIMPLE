@@ -390,21 +390,26 @@ contains
     end subroutine exec_trajectory_denoise
 
     !> pca_mode=flex: every frame the kernel pre-image of the frames that look like it and lie near it in time
-    !! (simple_flex_traj_denoise). Frames as given: no shift, rotation or interpolation; each frame's mean removed,
-    !! soft-masked by the box's inscribed circle, its mean restored in the output. Writes outstk (same rows, box and
-    !! sampling) and trajectory_denoise_flex.txt (per frame: Kish population of its weights, the CV's rank, tau, h)
+    !! (simple_flex_traj_denoise). Frames as given: no shift, rotation or interpolation; each frame's mean removed and
+    !! restored in the output. The mask (mskdiam when given, else the box's inscribed circle) shapes the similarity
+    !! only: the weights compare soft-masked frames and average the frames themselves, so the output is the whole box,
+    !! unmasked. Writes outstk (same rows, box and sampling) and trajectory_denoise_flex.txt (per frame: Kish
+    !! population of its weights, the CV's rank, tau, h)
     subroutine trajectory_denoise_flex( cline )
         use simple_flex_traj_denoise, only: flex_traj_denoise
         use simple_memoize_ft_maps,   only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
         class(cmdline), intent(inout) :: cline
         integer, parameter :: SEED = 20261026
+        integer, parameter :: BATCH = 256      !< frames read (written) one by one, then processed in parallel
         type(parameters) :: params
-        type(image)      :: img
-        complex(sp), allocatable :: y(:,:), yden(:,:)
+        type(image), allocatable :: imgs(:)
+        complex(sp), allocatable :: ym(:,:), yu(:,:), yden(:,:)   !< masked frames (similarity), frames, pre-images
         real(dp),    allocatable :: ess(:), choice(:,:)
         real(sp),    allocatable :: wq(:), avgs(:)
         integer,     allocatable :: hidx(:), kidx(:), shell(:)
-        integer :: ldim(3), lims(3,2), n, i, j, h, k, sh, nyq, ncoeff, kfit, kband, funit, iostat
+        integer(timer_int_kind)  :: t0
+        integer :: ldim(3), lims(3,2), n, i, j, h, k, sh, nyq, ncoeff, kfit, kband, funit, iostat, i0, i1, ib, nb, nblk
+        real    :: rmsk
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'trajectory_denoised'//STK_EXT)
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',   32)
@@ -415,6 +420,13 @@ contains
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1
         if( ldim(1) /= ldim(2) ) THROW_HARD('square frames only; trajectory_denoise_flex')
+        ! the similarity mask: mskdiam when given, at most the inscribed circle. A tighter mask correlates the Fourier
+        ! coefficients over a wider neighbourhood (~ box / radius pixels), so the blocks of the coefficient split grow
+        ! with it (4 pixels at the inscribed circle)
+        rmsk = real(ldim(1)) / 2. - 2.
+        if( cline%defined('mskdiam') ) rmsk = min(rmsk, 0.5 * params%mskdiam / params%smpd)
+        if( rmsk < 4. ) THROW_HARD('mask radius below 4 pixels, check mskdiam; trajectory_denoise_flex')
+        nblk = min(16, max(4, nint(2. * real(ldim(1)) / rmsk)))
         ! the half-plane lattice, shells 1..nyq
         call memoize_ft_maps(ldim, params%smpd)
         lims   = ft_map_lims
@@ -442,43 +454,79 @@ contains
                 wq(j)    = 2.      ! each listed coefficient stands for itself and its conjugate (as flex_class_planes)
             end do
         end do
-        ! the frames: mean removed, soft-masked by the inscribed circle, their half-plane coefficients
-        allocate(y(ncoeff,n), yden(ncoeff,n), ess(n), choice(3,n), avgs(n))
-        call img%new(ldim, params%smpd)
-        call img%memoize_mask_coords
-        do i = 1, n
-            call img%set_ft(.false.)
-            call img%read(params%stk, i)
-            avgs(i) = img%mean()
-            call img%add(-avgs(i))
-            call img%mask2D_soft(real(ldim(1)) / 2. - 2., backgr=0.)
-            call img%fft
-            do j = 1, ncoeff
-                y(j,i) = img%get_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1)
-            end do
+        ! the frames, mean removed: their half-plane coefficients, unmasked (yu) and soft-masked (ym)
+        t0 = tic()
+        allocate(ym(ncoeff,n), yu(ncoeff,n), yden(ncoeff,n), ess(n), choice(3,n), avgs(n))
+        nb = min(BATCH, n)
+        allocate(imgs(nb))
+        do ib = 1, nb
+            call imgs(ib)%new(ldim, params%smpd)
         end do
+        call imgs(1)%memoize_mask_coords
+        do i0 = 1, n, nb
+            i1 = min(n, i0 + nb - 1)
+            do i = i0, i1
+                call imgs(i-i0+1)%set_ft(.false.)
+                call imgs(i-i0+1)%read(params%stk, i)
+            end do
+            !$omp parallel do default(shared) private(i,ib,j) schedule(static) proc_bind(close)
+            do i = i0, i1
+                ib = i - i0 + 1
+                avgs(i) = imgs(ib)%mean()
+                call imgs(ib)%add(-avgs(i))
+                call imgs(ib)%fft
+                do j = 1, ncoeff
+                    yu(j,i) = imgs(ib)%get_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1)
+                end do
+                call imgs(ib)%ifft
+                call imgs(ib)%mask2D_soft(rmsk, backgr=0.)
+                call imgs(ib)%fft
+                do j = 1, ncoeff
+                    ym(j,i) = imgs(ib)%get_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1)
+                end do
+            end do
+            !$omp end parallel do
+        end do
+        write(logfhandle,'(A,F9.2)') '>>> TRAJECTORY_DENOISE FLEX: frames read and transformed, s=', toc(t0)
         kfit = 0
         if( cline%defined('lp') ) kfit = calc_fourier_index(params%lp, ldim(1), params%smpd)
-        write(logfhandle,'(A,I7,A,I5,A,I4,A,I5,A,A)') '>>> TRAJECTORY_DENOISE FLEX: frames=', n, ' box=', ldim(1), &
-            &' max rank=', params%neigs, ' halfwin=', params%halfwin, ' eo_pool=', trim(params%eo_pool)
+        write(logfhandle,'(A,I7,A,I5,A,I4,A,I5,A,A,A,F7.1,A,I3)') '>>> TRAJECTORY_DENOISE FLEX: frames=', n, &
+            &' box=', ldim(1), ' max rank=', params%neigs, ' halfwin=', params%halfwin, ' eo_pool=', trim(params%eo_pool), &
+            &' similarity mask radius (pixels)=', rmsk, ' split block=', nblk
         call flush(logfhandle)
-        call flex_traj_denoise(y, hidx, kidx, shell, wq, params%neigs, kfit, params%halfwin, &
-            &trim(params%eo_pool) == 'yes', SEED, yden, ess, choice, kband)
+        t0 = tic()
+        call flex_traj_denoise(ym, yu, hidx, kidx, shell, wq, params%neigs, kfit, params%halfwin, &
+            &trim(params%eo_pool) == 'yes', SEED, nblk, yden, ess, choice, kband)
+        deallocate(ym, yu)
+        write(logfhandle,'(A,F9.2)') '>>> TRAJECTORY_DENOISE FLEX: denoising, s=', toc(t0)
         ! the pre-images back to frames, the frame's mean restored
-        do i = 1, n
-            call img%zero_and_flag_ft
-            do j = 1, ncoeff
-                call img%set_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1, yden(j,i))
-                ! the half-plane keeps the h = 0 column for k >= 0 only; its k < 0 mate is the conjugate
-                if( hidx(j) == 0 .and. kidx(j) > 0 ) call img%set_cmat_at(ft_map_phys_addrh(0,-kidx(j)), &
-                    &ft_map_phys_addrk(0,-kidx(j)), 1, conjg(yden(j,i)))
+        t0 = tic()
+        do i0 = 1, n, nb
+            i1 = min(n, i0 + nb - 1)
+            !$omp parallel do default(shared) private(i,ib,j) schedule(static) proc_bind(close)
+            do i = i0, i1
+                ib = i - i0 + 1
+                call imgs(ib)%zero_and_flag_ft
+                do j = 1, ncoeff
+                    call imgs(ib)%set_cmat_at(ft_map_phys_addrh(hidx(j),kidx(j)), ft_map_phys_addrk(hidx(j),kidx(j)), 1, yden(j,i))
+                    ! the half-plane keeps the h = 0 column for k >= 0 only; its k < 0 mate is the conjugate
+                    if( hidx(j) == 0 .and. kidx(j) > 0 ) call imgs(ib)%set_cmat_at(ft_map_phys_addrh(0,-kidx(j)), &
+                        &ft_map_phys_addrk(0,-kidx(j)), 1, conjg(yden(j,i)))
+                end do
+                call imgs(ib)%ifft
+                call imgs(ib)%add(avgs(i))
             end do
-            call img%ifft
-            call img%add(avgs(i))
-            call img%write(params%outstk, i)
+            !$omp end parallel do
+            do i = i0, i1
+                call imgs(i-i0+1)%write(params%outstk, i)
+            end do
         end do
+        write(logfhandle,'(A,F9.2)') '>>> TRAJECTORY_DENOISE FLEX: frames transformed back and written, s=', toc(t0)
         call forget_ft_maps
-        call img%kill
+        do ib = 1, nb
+            call imgs(ib)%kill
+        end do
+        deallocate(imgs)
         ! per frame: the Kish population of its weights and the CV's choice
         call fopen(funit, file=string('trajectory_denoise_flex.txt'), status='replace', action='write', iostat=iostat)
         write(funit,'(A)') '# frame neff rank tau h   (rank 0 / tau -1: the temporal kernel alone; h -1: no temporal kernel)'
