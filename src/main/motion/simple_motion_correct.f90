@@ -351,7 +351,7 @@ contains
         if( l_BENCH ) t_dose = tic()
         if( p_ptr%l_dose_weight )then
             call movie_frames_scaled(1)%apply_dose_weighing(nframes,&
-                &movie_frames_scaled(:), [1,nframes], total_dose, kV)
+                &movie_frames_scaled(:), [1,nframes], total_dose, kV, mode='GG')
         endif
         if( l_BENCH ) rt_dose = toc(t_dose)
         ! Micrograph
@@ -454,7 +454,7 @@ contains
             !$omp end parallel do
             if( p_ptr%l_dose_weight )then
                 call movie_frames_scaled(1)%apply_dose_weighing(nframes,&
-                    &movie_frames_scaled(:), [1,nframes], total_dose, kV)
+                    &movie_frames_scaled(:), [1,nframes], total_dose, kV, mode='GG')
             endif
             !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(guided)
             do iframe=1,nframes

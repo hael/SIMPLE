@@ -311,7 +311,7 @@ contains
         endif
         if( apply_dose_weighting )then
             call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
-                &[1,self%nframes], self%total_dose, self%kv)
+                &[1,self%nframes], self%total_dose, self%kv, mode='GG')
             !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
             do iframe = 1,self%nframes
                 call self%frames(iframe)%ifft

@@ -2330,13 +2330,14 @@ interface
 
     !--- Dose weighing ---!
 
-    module subroutine apply_dose_weighing( self, nframes, frames, frange, total_dose, voltage )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: nframes
-        class(image), intent(inout) :: frames(nframes)
-        integer,      intent(in)    :: frange(2)
-        real,         intent(in)    :: total_dose
-        real,         intent(in)    :: voltage
+    module subroutine apply_dose_weighing( self, nframes, frames, frange, total_dose, voltage, mode )
+        class(image),     intent(inout) :: self
+        integer,          intent(in)    :: nframes
+        class(image),     intent(inout) :: frames(nframes)
+        integer,          intent(in)    :: frange(2)
+        real,             intent(in)    :: total_dose
+        real,             intent(in)    :: voltage
+        character(len=*), intent(in)    :: mode
     end subroutine apply_dose_weighing
 
     ! ===== polarization procedure interfaces =====

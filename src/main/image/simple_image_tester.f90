@@ -42,6 +42,7 @@ contains
         call test_fft_roundtrip_and_nyquist()
         call test_bandpass()
         call test_apply_filter()
+        call test_dose_weighing_modes()
         call test_power_spectrum()
         call test_shifts()
         call test_flip()
@@ -316,6 +317,119 @@ contains
         call assert_true(ok, 'apply_filter scales every component by the filter of its shell')
         call vol%kill
     end subroutine test_apply_filter
+
+    ! Closed-form weights pin the legacy GG branch and the normalized CryoSPARC curve.
+    subroutine test_dose_weighing_modes()
+        integer, parameter :: NFRAMES = 5
+        integer, parameter :: NVOLTAGES = 3
+        integer, parameter :: LDIM(3) = [8,6,1]
+        integer, parameter :: FRANGE(2) = [2,4]
+        real,    parameter :: PIXEL_SIZE = 1.25
+        real,    parameter :: TOTAL_DOSE = 25.
+        real,    parameter :: VOLTAGES(NVOLTAGES) = [100.,200.,300.]
+        character(len=2), parameter :: CS_MODES(NVOLTAGES) = ['CS','cs','CS']
+        real(dp), parameter :: DOSE_DIVISORS(NVOLTAGES) = [0.64d0,0.8d0,1.0d0]
+        real(dp), parameter :: A = 0.245d0, B = -1.665d0, C = 2.81d0
+        complex, parameter :: BASE = cmplx(1.25,-0.75)
+        type(image) :: gg_upper(NFRAMES,NVOLTAGES), gg_lower(NFRAMES,NVOLTAGES)
+        type(image) :: cs(NFRAMES,NVOLTAGES)
+        real(dp) :: s, freq, twoNe, critical_exposure, dose_per_frame
+        real(dp) :: r_gg, r_cs, gg_sumsq, cs_sum, expected_gg, expected_cs
+        real     :: max_gg_error, max_gg_case_error, max_gg_norm_error
+        real     :: max_cs_error, max_cs_norm_error, actual_gg_sumsq, actual_cs_sum
+        integer  :: array_shape(3), hphys, kphys, h, k, iframe, ivoltage, j
+        integer  :: ldimx_half, ldimy_half, nsel
+        complex  :: actual_gg, actual_gg_lower, actual_cs
+        write(*,'(A)') 'test_dose_weighing_modes'
+        do ivoltage = 1,NVOLTAGES
+            do iframe = 1,NFRAMES
+                call gg_upper(iframe,ivoltage)%new(LDIM, PIXEL_SIZE, wthreads=.false.)
+                call gg_lower(iframe,ivoltage)%new(LDIM, PIXEL_SIZE, wthreads=.false.)
+                call cs(iframe,ivoltage)%new(LDIM, PIXEL_SIZE, wthreads=.false.)
+                call gg_upper(iframe,ivoltage)%set_cmat(BASE)
+                call gg_lower(iframe,ivoltage)%set_cmat(BASE)
+                call cs(iframe,ivoltage)%set_cmat(BASE)
+            enddo
+            call gg_upper(1,ivoltage)%apply_dose_weighing(NFRAMES, gg_upper(:,ivoltage), FRANGE, &
+                &TOTAL_DOSE, VOLTAGES(ivoltage), mode='GG')
+            call gg_lower(1,ivoltage)%apply_dose_weighing(NFRAMES, gg_lower(:,ivoltage), FRANGE, &
+                &TOTAL_DOSE, VOLTAGES(ivoltage), mode='gg')
+            call cs(1,ivoltage)%apply_dose_weighing(NFRAMES, cs(:,ivoltage), FRANGE, &
+                &TOTAL_DOSE, VOLTAGES(ivoltage), mode=CS_MODES(ivoltage))
+        enddo
+        array_shape      = gg_upper(1,1)%get_array_shape()
+        ldimx_half       = LDIM(1) / 2
+        ldimy_half       = LDIM(2) / 2
+        nsel             = FRANGE(2) - FRANGE(1) + 1
+        max_gg_error      = 0.
+        max_gg_case_error = 0.
+        max_gg_norm_error = 0.
+        max_cs_error      = 0.
+        max_cs_norm_error = 0.
+        do ivoltage = 1,NVOLTAGES
+            dose_per_frame = real(TOTAL_DOSE,dp) / real(NFRAMES,dp) / DOSE_DIVISORS(ivoltage)
+            do kphys = 1,array_shape(2)
+                k = kphys - 1 - merge(LDIM(2), 0, kphys - 1 > ldimy_half)
+                do hphys = 1,array_shape(1)
+                    h = hphys - 1 - merge(LDIM(1), 0, hphys - 1 > ldimx_half)
+                    freq = sqrt((real(h,dp)/(real(LDIM(1),dp)*real(PIXEL_SIZE,dp)))**2 + &
+                        &(real(k,dp)/(real(LDIM(2),dp)*real(PIXEL_SIZE,dp)))**2)
+                    if( h == 0 .and. k == 0 )then
+                        r_gg = 1.0d0
+                        r_cs = 1.0d0
+                    else
+                        s                 = freq * freq
+                        twoNe             = 2.0d0 * (A * s**(0.5d0*B) + C)
+                        r_gg              = exp(-dose_per_frame / twoNe)
+                        critical_exposure = 0.67586d0 * freq**(-1.31489d0)
+                        r_cs              = exp(-dose_per_frame / (2.0d0*critical_exposure))
+                    endif
+                    gg_sumsq = 0.0d0
+                    cs_sum   = 0.0d0
+                    do j = 0,nsel-1
+                        gg_sumsq = gg_sumsq + r_gg**(2*j)
+                        cs_sum   = cs_sum + r_cs**j
+                    enddo
+                    actual_gg_sumsq = 0.
+                    actual_cs_sum   = 0.
+                    do iframe = 1,NFRAMES
+                        if( iframe < FRANGE(1) .or. iframe > FRANGE(2) )then
+                            expected_gg = 1.0d0
+                            expected_cs = 1.0d0
+                        else
+                            j = iframe - FRANGE(1)
+                            expected_gg = r_gg**j / sqrt(gg_sumsq)
+                            expected_cs = real(nsel,dp) * r_cs**j / cs_sum
+                        endif
+                        actual_gg       = gg_upper(iframe,ivoltage)%get_cmat_at(hphys,kphys,1)
+                        actual_gg_lower = gg_lower(iframe,ivoltage)%get_cmat_at(hphys,kphys,1)
+                        actual_cs       = cs(iframe,ivoltage)%get_cmat_at(hphys,kphys,1)
+                        max_gg_error = max(max_gg_error, abs(actual_gg-BASE*real(expected_gg)))
+                        max_gg_case_error = max(max_gg_case_error, abs(actual_gg-actual_gg_lower))
+                        max_cs_error = max(max_cs_error, abs(actual_cs-BASE*real(expected_cs)))
+                        if( iframe >= FRANGE(1) .and. iframe <= FRANGE(2) )then
+                            actual_gg_sumsq = actual_gg_sumsq + real(actual_gg/BASE)**2
+                            actual_cs_sum   = actual_cs_sum + real(actual_cs/BASE)
+                        endif
+                    enddo
+                    max_gg_norm_error = max(max_gg_norm_error, abs(actual_gg_sumsq-1.))
+                    max_cs_norm_error = max(max_cs_norm_error, abs(actual_cs_sum-real(nsel)))
+                enddo
+            enddo
+        enddo
+        call assert_real(0., max_gg_error, 2.e-6, 'GG dose weights preserve the legacy closed form')
+        call assert_real(0., max_gg_case_error, 0., 'gg and GG select identical dose weights')
+        call assert_real(0., max_gg_norm_error, 2.e-6, 'GG dose weights have unit squared sum')
+        call assert_real(0., max_cs_error, 2.e-6, 'CS dose weights match the critical-exposure closed form')
+        call assert_real(0., max_cs_norm_error, 2.e-6, 'CS dose weights have mean one')
+        do ivoltage = 1,NVOLTAGES
+            do iframe = 1,NFRAMES
+                call gg_upper(iframe,ivoltage)%kill()
+                call gg_lower(iframe,ivoltage)%kill()
+                call cs(iframe,ivoltage)%kill()
+            enddo
+        enddo
+    end subroutine test_dose_weighing_modes
 
     !---------------- power spectrum ----------------
 
