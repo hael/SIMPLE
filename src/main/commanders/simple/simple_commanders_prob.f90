@@ -450,6 +450,12 @@ contains
                 write(fnr,'(a,i0)') 'prob_tab references                 : ', fill%nrefs
                 write(fnr,'(a,i0)') 'prob_tab refined refs per particle  : ', fill%projs_ns
                 write(fnr,'(a,i0)') 'prob_tab refined refs (all)         : ', fill%nrefined
+                if( fill%nrefined > 0 )then
+                    ! where the entry lowest after refinement sat in the unrefined ranking: is the budget binding?
+                    write(fnr,'(a,i0)')     'prob_tab refined argmin at unrefined rank 1 : ', fill%rank_counts(0)
+                    write(fnr,'(a,10(1x,i0))') 'prob_tab refined argmin by decile of the cap:', fill%rank_counts(1:10)
+                    write(fnr,'(a,i0)')     'prob_tab refined argmin outside refined set : ', fill%rank_counts(11)
+                endif
             endif
             write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls
             write(fnr,'(a,i0)') 'prob_tab alternations               : ', fill%alternations

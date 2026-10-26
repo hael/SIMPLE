@@ -255,6 +255,7 @@ contains
         integer(int64) :: seed_builds, bank_ithr
         integer :: kfromto_loc(2)
         integer(int64) :: fit_ithr(0:5)
+        integer(int64) :: rank_ithr(0:11,nthr_glob)  !< per thread: the refined argmin's unrefined rank (bench, prob_fill_profile%rank_counts)
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
         integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
@@ -264,6 +265,7 @@ contains
         ts_seed   = 0.d0
         ts_score  = 0.d0
         ts_refine = 0.d0
+        rank_ithr = 0_int64
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
         ! the particle-frame grid and its quadratic step in the multi-state table, the particle-frame seed in the
@@ -346,6 +348,7 @@ contains
         if( self%p_ptr%l_doshift )then
             self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, projs_ns)
             self%fill_profile%nrefined = self%fill_profile%nrefined + int(i_last - i_first + 1, int64) * int(projs_ns, int64)
+            self%fill_profile%rank_counts = self%fill_profile%rank_counts + sum(rank_ithr, dim=2)
         endif
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
@@ -713,9 +716,9 @@ contains
         subroutine refine_best_refs( i_loc, iptcl_loc, ithr_loc, shift_seed )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_seed(3)
-            integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc
-            real    :: refined_shift(3), xy_start(2)
-            locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns)
+            integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc, jbest
+            real    :: refined_shift(3), xy_start(2), dbest
+            locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns) ! ascending: j is the unrefined rank
             do j_loc = 1,projs_ns
                 ri_loc     = locn(j_loc,ithr_loc)
                 istate_loc = self%ref_state(ri_loc)
@@ -740,6 +743,22 @@ contains
                         &refined_shift(2), refined_shift(3))
                 endif
             enddo
+            ! the bench record of whether the budget binds: the unrefined rank of the entry lowest after refinement
+            jbest = 0
+            dbest = huge(dbest)
+            do j_loc = 1,projs_ns
+                if( rows_batch(locn(j_loc,ithr_loc),i_loc)%dist < dbest )then
+                    dbest = rows_batch(locn(j_loc,ithr_loc),i_loc)%dist
+                    jbest = j_loc
+                endif
+            enddo
+            if( jbest < 1 .or. minval(rows_batch(:,i_loc)%dist) < dbest )then
+                rank_ithr(11,ithr_loc) = rank_ithr(11,ithr_loc) + 1_int64
+            else
+                if( jbest == 1 ) rank_ithr(0,ithr_loc) = rank_ithr(0,ithr_loc) + 1_int64
+                j_loc = min(10, (jbest - 1) * 10 / projs_ns + 1)
+                rank_ithr(j_loc,ithr_loc) = rank_ithr(j_loc,ithr_loc) + 1_int64
+            endif
         end subroutine refine_best_refs
 
     end subroutine fill_tab_range

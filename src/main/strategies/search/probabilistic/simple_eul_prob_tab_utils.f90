@@ -109,6 +109,12 @@ type :: prob_fill_profile
     integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
     integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
     integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
+    !> Is the refinement budget binding? Per particle of the dense fill, the rank in the unrefined row of the entry
+    !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
+    !! of the refined count projs_ns (rank 1 is in decile 1); (11) an unrefined entry below every refined one. Mass
+    !! in the top deciles says the truth lands near the cap and more refinements would help; mass at rank 1 says
+    !! the cap is slack (pose_marginalization.md section 19, item 10)
+    integer(int64) :: rank_counts(0:11) = 0_int64
 end type prob_fill_profile
 
 ! Thread-owned append buffer used while candidate counts are not known in advance.
