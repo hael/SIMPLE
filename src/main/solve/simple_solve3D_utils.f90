@@ -155,9 +155,10 @@ interface
         real,    intent(out) :: beta
     end subroutine solve3D_stage_prob_beta
 
-    module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
+    module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
+        class(parameters),       intent(in) :: params
+        integer,                 intent(in) :: istage
+        class(string), optional, intent(in) :: projfile
         logical :: l_behind
     end function solve3D_stage_behind_fsc05
 

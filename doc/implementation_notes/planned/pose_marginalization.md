@@ -2,9 +2,19 @@
 
 Implementation note, 2026-10-21, revised 2026-10-22 twice: after the
 measurements (sections 8-9) and after the review
-(`pose_marginalization_review.md`, section 11). **Design, not yet
-justified; the diagnostic is implemented (`prob_post_diag=yes`), the
-design is not, and the review gate of section 11 comes before it.**
+(`pose_marginalization_review.md`, section 11), and kept as the execution
+record since (sections 16-20). **Status, 2026-10-26:** built and in
+production on every probability table (sections 16 and 19): one draw per
+particle from its tempered row posterior, no balanced frontier, no argmin,
+`prob_beta` 0.3 flat with an annealing tail to the physical posterior on the
+last stage (19.8); streptavidin 10/10 at the frontier's resolution (19.7),
+PfCRT's ten restarts still to be made on the build that regularizes the
+gridding map beyond the cutoff (19.9), with the 3.6 A bar set aside (21.1).
+Section 20 is the next design step: one exploration level and a particle
+count that follow the resolution ladder, in place of the flat `prob_beta`
+and the flat `nsample`; section 21 the calibration of the temperature on
+real data, which is the review gate's last open item. The sentence below is
+the note's original frame; what it asked for is what sections 16-19 built.
 Sections 2-3 describe what exists and the posterior; section 4 is the
 design; sections 5-7 are the diagnostic, the preconditions and the test
 plan; sections 8-9 the measurements, with section 9's inference
@@ -1704,3 +1714,264 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    which only set `prob_athres` for a `prob_neigh` run and so had been
    dead since item 5.
 
+## 20. Annealing coupled to importance sampling (proposal, 2026-10-26)
+
+Hans, after the streptavidin tally and the PfCRT fix: the implementation
+is crude. cryoSPARC's deterministic annealing is coupled to its importance
+sampling, so that more and more particles enter as the search proceeds and
+the rapid early gains come cheap from few particles; here the sampling
+strategy changed but the run keeps one flat `prob_beta` (0.3) until the
+tail of the last stage and one flat `nsample`, and the two early stages,
+on stochastic neighbourhoods, need a policy for particles that enter with
+`updatecnt` 0, or they inject random orientations.
+
+### 20.1 What the three settings are standing in for
+
+The resolution ladder is itself an annealing schedule: T_i is about the
+number of Fourier components in the band over L_min (section 17), so the
+physical posterior over directions is flat at 25 A (T about 33 at
+streptavidin's stage 1, a third of a nat between neighbouring directions)
+and a delta at 4 A (hundreds of nats, n_eff 1.0-1.2 in run 8). `prob_beta`
+below one exists only to undo the over-cooling late; at stage 1 it makes a
+flat posterior flatter, which is why the early stages are alive but
+contribute little at 0.3 (19.7: pose change 65 and 69 degrees per
+iteration against the frontier's 50 and 27, row-mode fraction 0.50 and
+0.38, stage 3 handed a nearly random start). The tail (19.8) exists
+because the final map must be weighted at the physical posterior, not at
+the search's. And `nsample` is flat because nothing ties the particle
+count to what a stage can use. cryoSPARC rides its noise annealing and its
+batch growth on its resolution schedule; the analogue here is to ride the
+draw's sharpness and the particle count on the stage ladder, with nothing
+set per stage by hand.
+
+### 20.2 The draw's sharpness: n_eff, not beta
+
+The quantity to hold fixed across the ladder is the exploration of the
+draw, measured in units that do not depend on the band or the particle
+count: the effective number of candidates a particle draws among,
+n_eff = 1 / sum_c p_c^2 over its row at the draw's temperature. The
+control: one global beta per iteration, chosen so that the mean n_eff over
+the particles equals a target N* (2 to 4; the row-mode fraction the logs
+carry since 2026-10-24 is the readout, 0.5 at stage 1 and 0.2-0.7 at the
+later stages' first iterations under 0.3, 19.7). Global, not per particle:
+a well-determined particle keeps a sharp row and an ambiguous one a broad
+row, only the overall level is pinned; a per-particle n_eff would force a
+flat row to concentrate on its noise-ordered top, which is the hill climb
+by another name.
+
+What it does on the ladder: at stage 1 the physical posterior is flat, so
+holding N* = 3 comes out colder than physical (beta well above 1) and the
+particle goes to one of its best few references: the climbing the early
+stages lost without being an argmin. At stage 5 it comes out hotter than
+physical, which is what 0.3 was doing, and by exactly the amount the
+row's sharpness there asks for. As the particle count grows and the map
+sharpens (20.3) the control cools on its own.
+
+Implementation: the master holds the rows at assignment time (`ref_assign`
+of the dense table, `ref_assign_neigh` over the candidate store, the 2D
+tables), so beta is solved by bisection on the mean n_eff over a subsample
+of rows (a thousand rows, twenty passes) before the draws; the 2D tables
+take the same rule. The ramp of `prob_beta_at` goes; the tail (19.8) stays
+and becomes clean: once the resolution stalls, N* ramps to the physical
+posterior's own n_eff over `PROB_BETA_TAIL` iterations, i.e. beta ramps to
+1 from wherever the control sits, and the run ends. `prob_beta` goes;
+`prob_neff` (N*) replaces it; `prob_beta_end` loses its number (the end is
+physical) and becomes the switch that the last stage already sets.
+
+### 20.3 The particle count: Rosenthal-Henderson, per stage
+
+The particles a stage needs are the ones that let the map resolve the band
+the stage searches at; more are spent for nothing at that band, fewer
+leave the band unresolved. The half-map SSNR is linear in the particle
+count (Rosenthal and Henderson 2003), so from the FSC of the current map
+at the next stage's limit and the population that map represents (the
+trailing reconstruction's M_k, which the population rule of
+`sampling_and_fractional_updates.md` keeps), the count at which FSC 0.5
+lands on that rung is
+
+```text
+N_next = M_k / SSNR_half(lp_next),    SSNR_half = FSC / (1 - FSC) of the halves,
+```
+
+floored (a few thousand, below which the trailing average is too noisy to
+read), capped at the active set, and taken as the next stage's `nsample`;
+the full set once N_next passes the full-sampling switch
+(`solve3D_full_sample_switch_frac`). Few particles at 20 A, all of them by
+the NU stage, no schedule written down; the early iterations get cheap, so
+the early stages afford more of them, and the stage budget should then be
+counted in particle evaluations, not iterations (`MAXITS` becomes a
+consequence). Pose error early makes the FSC read low and N_next high, a
+safe direction: the count only falls once the poses are good enough for
+the map to show it. The trailing blend (`update_frac`, `ufrac_trec`) is
+the momentum of this scheme and is untouched.
+
+### 20.4 Particles entering with updatecnt 0
+
+The concern: a particle sampled for the first time in stage 1 or 2 has a
+random current pose, the `shc` fill's stop rule ends at the first
+reference that beats it, so its candidate set is a few random references
+and the draw among them is a random orientation into the reconstruction.
+The scan is already handled: `evaluate_direct_stochastic_refs` forces a
+dense first pass on a particle that has never been searched
+(`l_greedy_first`, keyed on `updatecnt`), so the candidate set of an
+entering particle is every reference; `snhc` should do the same (its
+random subset is no better for an entering particle than the stop rule).
+What makes the entering particle inject noise is the draw, not the scan:
+at beta 0.3 and T about 33 a draw over 500 candidates is a random pick.
+Under 20.2 it is not: the particle lands on one of its best few, and the
+incumbent-in-the-set rule (19.6) keeps a searched particle from being
+forced to move. So the policy for entering particles is the dense first
+scan plus the N* draw; the alternative of scanning the average fraction
+the searched particles scan is weaker than the full scan and does not
+address the draw.
+
+### 20.5 What the existing settings become
+
+- `prob_beta`: a consequence of N* and the row; gone as an input.
+- `prob_beta_end`: the end is the physical posterior; the key becomes the
+  last stage's switch, which solve3D sets.
+- `nsample`: a consequence of the FSC and the stage's limit (20.3); the
+  user's `nsample` remains a cap.
+- `MAXITS` per stage: a budget in particle evaluations, the resolution
+  exit and the tail end the stages before it.
+- `prob_beta_ini` (Cyril, 2026-10-26, commit f18ebb0f: a separate beta for
+  particle stages 1-2, capped at `prob_beta`, so an equal or hotter early
+  draw): the opposite sign of what 20.2 predicts for those stages (holding
+  N* at stage 1 comes out colder than 0.3, not hotter), so its runs are a
+  direct test of that prediction before 20.2 is built: if a hotter stage
+  1-2 helps, 20.2's N* is wrong there, or the neighbourhood tables' rows
+  are not the dense rows the argument was made on. Under 20.2 the key goes
+  with `prob_beta`.
+- `prob_athres`, `nhood_sz`, `npeaks_inpl` and the rest of section 18:
+  unchanged by this step. Item 2 of section 18 was tried and taken back the
+  same day (19.10, PorF): the unrefined row's posterior is not the refined
+  row's, so n_eff is not a basis for the refinement budget. The n_eff of
+  20.2 is measured on the finished row, the row the draw is from, which is
+  the quantity 19.10 says is sound.
+
+### 20.6 The risk, and its readout
+
+N* small is a cold draw, and a cold draw on noise-ordered rows can trap:
+the `K_inpl = 1` argmin of section 15 left 5 of 10 PfCRT restarts near
+7 A. N* = 2-3 is a draw among the best few, not the argmin, but the
+calibration is the same tally as always, and the readouts per stage are
+in the logs already: the mean n_eff and the row-mode fraction (20.2
+makes the first a reported quantity), the pose change per iteration, and
+the stage-3 handover overlap, which 19.7 put at 0.04 against the
+frontier's 0.21.
+
+### 20.7 Order of work
+
+1. 20.2 alone, everything else as it is: streptavidin ten restarts against
+   the 19.7 tally (stages 1-2 alive and tightening, handover overlap, final
+   numbers, wall time), then PfCRT ten against the acceptance bar.
+2. 20.3, with the budget in evaluations.
+3. The `snhc` first scan (20.4), one line.
+4. Then section 18 in its order.
+
+## 21. Rulings of 2026-10-26, and the calibration on real data
+
+### 21.1 Rulings
+
+- **The 3.6 A bar is set aside.** PfCRT at 3.6 A is probably not reachable
+  without a solvent prior or a mask, so the acceptance run of section 7,
+  item 3, is ten restarts that converge, judged on their maps and on the
+  tally of 19.7 (overlap trajectories, handover, iterations, wall time),
+  not on a resolution number. The bar returns with the solvent prior.
+- **The streptavidin regression (19.4) is closed.** There is none to
+  attribute: the posterior build and the frontier build are both 10 of 10
+  on streptavidin (19.7), and the cavgs-route failure that opened the item
+  predates the posterior path. The bisect is dropped.
+- **The stage exits of `solve3D_cavgs` were not built** when 19.8's tail
+  state fix was committed under that title (a01ac3226 carries the tail
+  fix, not the exits). Built today: the `lpexit` emission and the
+  `solve3D_stage_behind_fsc05` omission on the class-average route, same
+  eligibility as the particle route, res05 read from the temporary project
+  (`solve3D_cavgs_policy.md` section 5).
+
+### 21.2 Why known poses are not needed
+
+Gate item (3) of section 11 asked for coverage on known poses because a
+coverage test needs, per particle, a pose the scoring did not choose. A
+simulation gives that trivially, and nothing else: the Gaussian model is
+true on simulated data by construction, so a flat coverage histogram there
+says the machinery computes the posterior it claims to (the temperature,
+the kernel's bin sum, the polar sampling), and says nothing about whether
+the data's posterior is that posterior. The question the temperature
+raises is the second one. On real data the pose the scoring did not choose
+exists too: the particle's **converged pose from the finished run, scored
+against the stage's other-half reference**. The other half did not hold
+the particle (section 12: the cross-half rows are reference-independent,
+`null_a` zero), so that row is a prediction of where the particle is from
+the other half's data alone, and the converged pose is where the whole run,
+many bands later, put it. Whether the converged pose is the truth is the
+one assumption, and it is weak where it matters: at a stage's band the
+posterior is broad against the final angular precision (the stage-3 row's
+99% set spans tens of degrees where the final pose is good to a degree or
+two), so the proxy's error is a small fraction of the width being tested.
+At the last stage it is not, and there the gold-standard bootstrap of the
+final poses (the two halves' independent poses of the same particle) is
+the proxy: the other half's pose, not the merged one.
+
+### 21.3 The test
+
+Per particle and stage k, with p_x the tempered cross-half posterior over
+the stage's direction grid at beta and j* the grid direction nearest the
+converged pose:
+
+- the **posterior quantile** of the converged pose, `pit_x` = sum of
+  p_x(j) over the directions j with p_x(j) > p_x(j*): the mass the
+  posterior places above the truth. A calibrated posterior makes `pit_x`
+  uniform on [0, 1] over particles (the probability-integral transform; for
+  a 1 - alpha highest-density set, coverage is the fraction with `pit_x`
+  below 1 - alpha). Too sharp, the histogram piles at 1: the truth falls
+  outside the credible set more often than alpha. Too broad, it piles at 0.
+- the **truth's depth**, `nats_x` = T (L_x(j*) - L_x,min) in nats: the
+  same information as a distance rather than a quantile, comparable across
+  stages.
+
+The readout is beta* per stage: the beta at which the `pit_x` histogram is
+flat (equivalently, coverage holds at alpha of 0.5, 0.1, 0.01 at once).
+Three outcomes, each decisive for something already in the code:
+
+- beta* near 1 at every stage: the temperature is the data's likelihood
+  scale, section 3's claim; `prob_beta` 0.3 is exploration and nothing
+  else, section 20's n_eff control is its right frame, and the annealing
+  tail's endpoint of 1 is the physical posterior.
+- beta* near 0.3 (or any constant below 1): the physical posterior is
+  broader than the model says, by that factor (coloured noise, CTF error,
+  the micelle); the tail then over-sharpens at its end and `prob_beta_end`
+  should be beta*, and any weighted reconstruction (section 18's deferred
+  item) must use beta*.
+- beta* varying with the stage, or with the particle (the decided-by-both
+  subset of section 9 against the rest): the mismatch is not one factor,
+  and the n_eff control of 20.2 is the only policy that does not care.
+
+The junk fraction sets a floor: a particle whose converged pose is wrong
+sits outside every credible set at every beta, so the histogram's pile at 1
+has a floor the test cannot remove, read off the decided-by-both subset
+against the rest (the rest's pile is the floor).
+
+### 21.4 Where it runs
+
+Nothing new in the search. The diagnostic of section 5 already scores the
+deterministic cross-half row (`_x`) and records the particle's stored
+direction on the current grid (`iproj_p`). Run on a copy of the finished
+project (the converged poses are then the stored poses, so `iproj_p` is j*)
+with the stage's half maps as the references and the stage's `lp`, one
+iteration with `prob_post_diag=yes`, it needs two more columns: `nats_x` at
+`iproj_p`, a few lines beside `self_nats`, which already evaluates the row
+at that direction, and `pit_x` at a fixed set of betas (0.1, 0.3, 0.5, 1;
+the row itself is not written, and the posterior at a beta is one
+renormalization of the distances the worker holds), so one pass per stage
+gives the histogram at every beta. Simulation as the control of the machinery, cheap and worth having
+once: the final map projected at the converged poses with the particles'
+own CTFs and Gaussian noise at the measured per-shell sigma2
+(`simulate_particles`), scored the same way; the histogram there must be
+flat at beta 1, and if it is not the fault is in the temperature's
+computation (section 3's kernel terms), not in the model. Real minus
+simulated is the model mismatch.
+
+This runs after a finished run and blocks nothing in 20.7; its answer sets
+the tail's endpoint and decides whether section 18's weighted
+reconstruction can use the posterior as it stands.

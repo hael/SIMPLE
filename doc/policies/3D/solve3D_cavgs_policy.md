@@ -127,6 +127,27 @@ Because `l_cavgs=.true.` removes `update_frac`, `refine3D` derives full-update
 mode and disables trailing reconstruction effectively, even when the shared
 stage controller emits `trail_rec=yes`.
 
+**Stage omission and mid-stage resolution exit (2026-10-26).** The two
+resolution rules of the particle route (`solve3D_policy.md` section 4) apply
+to the class-average stages with the same eligibility: a stage past the first
+two whose planned limit the halves already resolve past at FSC=0.5 is omitted
+(`solve3D_stage_behind_fsc05`, logged `>>> SOLVE3D OMITTING STAGE`), and an
+eligible stage ends once FSC=0.5 resolves past the next rung's planned limit
+and has stopped gaining (`lpexit`, logged `>>> STAGE RESOLUTION EXIT`). Never
+the first or the last stage, nor the axis-search stage when an axis is
+searched, and single-state runs only. The even and odd class averages are
+reconstructed from the two halves of the 2D classification, so the FSC between
+the stage's half maps is a cross-half measure as on the particle route, and
+the ladder's rungs come from the FRCs, so a stage that resolves past the next
+rung has nothing left to do at its crop. The `res05` field is read from the
+temporary project, which is the project the stages write to. Before, both
+rules were gated off on the route: a run of 7 stages took 97 iterations, with
+stage 3 converged by its 33rd iteration of 45 and later stages running their
+budgets on maps finished within a few iterations. The FSC=0.5 promotion of a
+stage's limit (`promote_stage_lp_from_fsc05`) stays off on the route: its rungs
+are already set from the class averages' own resolution and its cap is the
+ladder's last rung.
+
 At the symmetry-search stage, the workflow runs the shared symmetry handling
 used by the solve3D workflows. The axis is searched after stage 4
 (`solve3D_policy.md` section 7), so a run with `pgrp_start != pgrp` and

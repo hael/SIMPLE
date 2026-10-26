@@ -249,6 +249,17 @@ contains
         call rndstart(cline_refine3D)
         l_reseeded = .false.
         do istage = 1, nstages_ini3D
+            ! Omit the stage when the halves already agree past its planned limit, as the particle
+            ! route does (2026-10-26): never the first or last stage, nor the axis-search stage, nor
+            ! any stage of a multi-state run; the res05 the stages write is the work project's
+            if( istage > 1 .and. istage < nstages_ini3D .and. &
+                &.not.( l_srch4symaxis .and. istage == solve3D_symsrch_stage(.true.) ) )then
+                if( solve3D_stage_behind_fsc05(params, istage, projfile=work_projfile) )then
+                    write(logfhandle,'(A,I3,A,F5.1,A)')'>>> SOLVE3D OMITTING STAGE ', istage, &
+                        &': PLANNED LP ', lpinfo(istage)%lp, ' A ALREADY REACHED AT FSC=0.5'
+                    cycle
+                endif
+            endif
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', lpinfo(istage)%lp, ' A'
             ! Preparation of command line for probabilistic search

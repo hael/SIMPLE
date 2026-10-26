@@ -704,8 +704,11 @@ contains
         ! so that test fires on nothing (reverted 2026-10-18). Same eligibility as the
         ! shift: never the entry stage, the first two stages, the last stage or the axis-search stage.
         ! Single-state only: a multi-state stage runs until its own convergence (solve3D_stage_skipping).
+        ! The cavgs route too (2026-10-26): its e/o class averages come from the 2D halves, so their
+        ! reconstructions' FSC is a cross-half measure like the particles', and its rungs come from the
+        ! FRCs; without the exit a cavgs stage ran its budget on a map finished at its second iteration
         if( solve3D_stage_skipping(params%nstates) .and. &
-            &.not. l_cavgs .and. istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
+            &istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
             &istage < active_refine3D_nstages() .and. allocated(lpinfo) .and. &
             &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
             call cline_refine3D%set('lpexit',             lpinfo(istage+1)%lp)
@@ -785,7 +788,7 @@ contains
         if( istage >= size(lpinfo) )           return ! no next rung
         ! silent: the stage banner reports the limit actually used and its
         ! provenance (no res05 field = nothing to advance from)
-        res05 = project_best_fsc05_resolution(params)
+        res05 = project_best_fsc05_resolution(params%projfile)
         if( res05 < TINY ) return
         if( res05 >= lp )  return ! not ahead of schedule
         lp_new = max(lpinfo(istage+1)%lp, lp_cap)
@@ -797,11 +800,12 @@ contains
 
     !> Is the stage's planned matching limit already behind the measured FSC=0.5
     !! resolution? Such a stage would iterate at a crop that cannot represent
-    !! what the halves already agree on. Particle route of a single-state run, past
+    !! what the halves already agree on. Either route of a single-state run, past
     !! FSC05_PROMOTE_MIN_STAGE; .false. without a res05 field.
-    module function solve3D_stage_behind_fsc05( params, istage ) result( l_behind )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: istage
+    module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
+        class(parameters),       intent(in) :: params
+        integer,                 intent(in) :: istage
+        class(string), optional, intent(in) :: projfile !< the project the stages write to (the cavgs route's work project); params%projfile otherwise
         logical :: l_behind
         real :: res05
         l_behind = .false.
@@ -809,21 +813,25 @@ contains
         if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
         if( .not. allocated(lpinfo) )           return
         if( istage > size(lpinfo) )             return
-        res05 = project_best_fsc05_resolution(params)
+        if( present(projfile) )then
+            res05 = project_best_fsc05_resolution(projfile)
+        else
+            res05 = project_best_fsc05_resolution(params%projfile)
+        endif
         if( res05 < TINY ) return
         l_behind = res05 < lpinfo(istage)%lp
     end function solve3D_stage_behind_fsc05
 
     !> FSC=0.5 resolution of the best resolved populated state, read from the
-    !! per-particle res05 field the reconstruction writes; 0 when absent
-    real function project_best_fsc05_resolution( params ) result( res05 )
-        class(parameters), intent(in) :: params
+    !! per-particle res05 field the reconstruction writes into projfile; 0 when absent
+    real function project_best_fsc05_resolution( projfile ) result( res05 )
+        class(string), intent(in) :: projfile
         type(sp_project)     :: spproj
         real,    allocatable :: res05s(:), states(:)
         logical, allocatable :: mask(:)
         res05 = 0.
-        if( .not. file_exists(params%projfile) ) return
-        call spproj%read_segment('ptcl3D', params%projfile)
+        if( .not. file_exists(projfile) ) return
+        call spproj%read_segment('ptcl3D', projfile)
         if( spproj%os_ptcl3D%get_noris() > 0 .and. spproj%os_ptcl3D%isthere('res05') )then
             states = spproj%os_ptcl3D%get_all('state')
             res05s = spproj%os_ptcl3D%get_all('res05')
