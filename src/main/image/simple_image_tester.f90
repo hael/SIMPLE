@@ -37,6 +37,7 @@ contains
     subroutine run_all_image_tests()
         write(*,'(A)') '**** running all image tests ****'
         call test_construct_and_access()
+        call test_copy_and_inplace_threading()
         call test_checkups_and_stats()
         call test_fft_roundtrip_and_nyquist()
         call test_bandpass()
@@ -100,6 +101,95 @@ contains
         call assert_false(img%exists(), 'a killed 2D image does not exist')
         call assert_false(vol%exists(), 'a killed 3D image does not exist')
     end subroutine test_construct_and_access
+
+    ! Copying clones the source policy; fast copies and in-place replacements keep the receiver policy.
+    subroutine test_copy_and_inplace_threading()
+        integer, parameter :: COPY_DIMS(3) = [8,6,1]
+        logical, parameter :: THREAD_MODES(2) = [.false., .true.]
+        type(image) :: threaded, serial, dest, assigned, padded, filtered, upsampled
+        real,    allocatable :: input(:,:,:), output(:,:,:)
+        complex, allocatable :: source_ft(:,:,:), dest_ft(:,:,:)
+        integer :: i, imode, nthr_saved
+        write(*,'(A)') 'test_copy_and_inplace_threading'
+        nthr_saved = nthr_glob
+        nthr_glob  = 2
+        input = reshape([(real(i), i=1,product(COPY_DIMS))], COPY_DIMS)
+        call threaded%new(COPY_DIMS, SMPD, wthreads=.true.)
+        call threaded%set_rmat(input, .false.)
+        call serial%new(COPY_DIMS, SMPD, wthreads=.false.)
+        call serial%set_rmat(input + 100., .false.)
+
+        call dest%new(COPY_DIMS, SMPD, wthreads=.false.)
+        call dest%copy(threaded)
+        call assert_true(dest%is_wthreads(), 'copy inherits a threaded source policy')
+        call assert_true(all(dest%get_rmat() == input), 'copy clones real-space data from a threaded source')
+        call dest%new(COPY_DIMS, SMPD, wthreads=.true.)
+        call dest%copy(serial)
+        call assert_false(dest%is_wthreads(), 'copy inherits a serial source policy')
+        call assert_true(all(dest%get_rmat() == input + 100.), 'copy clones real-space data from a serial source')
+
+        call assigned%new(COPY_DIMS, SMPD, wthreads=.false.)
+        assigned = threaded
+        call assert_true(assigned%is_wthreads(), 'defined assignment inherits a threaded source policy')
+        call assert_true(all(assigned%get_rmat() == input), 'defined assignment clones the source data')
+        call assigned%new(COPY_DIMS, SMPD, wthreads=.true.)
+        assigned = serial
+        call assert_false(assigned%is_wthreads(), 'defined assignment inherits a serial source policy')
+
+        call dest%new(COPY_DIMS, SMPD, wthreads=.false.)
+        call dest%copy_fast(threaded)
+        call assert_false(dest%is_wthreads(), 'copy_fast keeps a serial destination policy')
+        call assert_true(all(dest%get_rmat() == input), 'copy_fast copies real-space data')
+        call threaded%fft
+        call dest%copy_fast(threaded)
+        source_ft = threaded%get_cmat()
+        dest_ft   = dest%get_cmat()
+        call assert_true(dest%is_ft(), 'copy_fast copies the Fourier-state flag')
+        call assert_true(all(dest_ft == source_ft), 'copy_fast copies Fourier-space data')
+        call dest%new(COPY_DIMS, SMPD, wthreads=.true.)
+        call dest%copy_fast(serial)
+        call assert_true(dest%is_wthreads(), 'copy_fast keeps a threaded destination policy')
+        call assert_true(all(dest%get_rmat() == input + 100.), 'copy_fast copies into a threaded destination')
+
+        do imode = 1,size(THREAD_MODES)
+            input = reshape([(real(i), i=1,16)], [4,4,1])
+            call padded%new([4,4,1], SMPD, wthreads=THREAD_MODES(imode))
+            call padded%set_rmat(input, .false.)
+            call padded%pad_mirr([6,6,1])
+            output = padded%get_rmat()
+            call assert_true(padded%is_wthreads() .eqv. THREAD_MODES(imode), 'pad_mirr keeps the receiver policy')
+            call assert_true(all(output(2:5,2:5,1) == input(:,:,1)), 'pad_mirr keeps the source pixels centred')
+            call padded%kill
+
+            input = 3.
+            call filtered%new([4,4,1], SMPD, wthreads=THREAD_MODES(imode))
+            call filtered%set_rmat(input, .false.)
+            call filtered%real_space_filter(1, 'average')
+            call assert_true(filtered%is_wthreads() .eqv. THREAD_MODES(imode), &
+                &'real_space_filter keeps the receiver policy')
+            call assert_true(all(abs(filtered%get_rmat() - 3.) < 1.e-6), &
+                &'an average real-space filter keeps a constant image')
+            call filtered%kill
+
+            input = 2.
+            call upsampled%new([4,4,1], SMPD, wthreads=THREAD_MODES(imode))
+            call upsampled%set_rmat(input, .false.)
+            call upsampled%upsample_square_background([8,8])
+            call assert_true(upsampled%is_wthreads() .eqv. THREAD_MODES(imode), &
+                &'upsample_square_background keeps the receiver policy')
+            call assert_true(all(upsampled%get_ldim() == [8,8,1]), 'upsample_square_background changes the dimensions')
+            call assert_real(2. * SMPD, upsampled%get_smpd(), 0., 'upsample_square_background changes the sampling')
+            call assert_true(all(abs(upsampled%get_rmat() - 0.5) < 1.e-6), &
+                &'upsample_square_background scales a constant image by the area ratio')
+            call upsampled%kill
+        enddo
+
+        call threaded%kill
+        call serial%kill
+        call dest%kill
+        call assigned%kill
+        nthr_glob = nthr_saved
+    end subroutine test_copy_and_inplace_threading
 
     !---------------- dimension checks and statistics ----------------
 

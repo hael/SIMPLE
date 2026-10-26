@@ -311,7 +311,7 @@ contains
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
-        call img_bin%copy(img)
+        call img_bin%copy_fast(img)
         call cc_img%new_bimg( ldim, smpd, wthreads=.false.)
         call img_bin%zero_edgeavg
         ! low-pass filter
@@ -474,7 +474,7 @@ contains
         smpd = img%get_smpd()
         mskrad = automask2D_mskrad(settings, ldim)
         call img_bin%new_bimg(ldim, smpd, wthreads=.false.)
-        call img_bin%copy(img)
+        call img_bin%copy_fast(img)
         call bin_mask%new_bimg(ldim, smpd, wthreads=.false.)
         call img_bin%zero_edgeavg
         ! dampens below zero (object positive in class averages/reprojs)

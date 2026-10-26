@@ -354,7 +354,7 @@ contains
         if( ldim(1) /= ldim(2) ) THROW_HARD('Unsupported dimensions!')
         scales = real(self%ldim(1:2)) / real(ldim(1:2))
         scale  = product(scales)
-        call upsampled%new([ldim(1), ldim(2), 1], self%smpd/scales(1))
+        call upsampled%new([ldim(1), ldim(2), 1], self%smpd/scales(1), wthreads=self%wthreads)
         !$omp parallel do default(shared) collapse(2) proc_bind(close)&
         !$omp private(i,j,x,y,fx,fy,fpx,fpy,dx,dy,b)
         do j = 1,ldim(1)

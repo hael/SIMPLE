@@ -509,7 +509,7 @@ contains
             endif
         endif
         ! make the output image
-        call img_filt%new(self%ldim, self%smpd)
+        call img_filt%new(self%ldim, self%smpd, wthreads=self%wthreads)
         ! filter
         if( self%ldim(3) == 1 )then
             select case(which)

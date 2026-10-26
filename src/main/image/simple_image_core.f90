@@ -145,7 +145,7 @@ contains
     module subroutine copy( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
-        call self%new(self_in%ldim, self_in%smpd, self%wthreads)
+        call self%new(self_in%ldim, self_in%smpd, wthreads=self_in%wthreads)
         self%rmat = self_in%rmat
         self%ft   = self_in%ft
     end subroutine copy

@@ -263,7 +263,7 @@ contains
         !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk,cen,ave,sdev,maxv,minv)
         do icls = 1, ncls
             ithr = omp_get_thread_num() + 1
-            call cavg_threads(ithr)%copy(cavgs(icls))
+            call cavg_threads(ithr)%copy_fast(cavgs(icls))
             ! variance criterion
             call cavg_threads(ithr)%stats('foreground', ave, sdev, maxv, minv, large_msk)
             l_non_junk(icls) = sdev*sdev <=  ABS_VAR_THRESHOLD
@@ -754,7 +754,7 @@ contains
         call alloc_imgarr(n, ldim, smpd, imgs_mirr)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, n
-            call imgs_mirr(i)%copy(imgs(i))
+            call imgs_mirr(i)%copy_fast(imgs(i))
             call imgs_mirr(i)%mirror('x')
         end do
         !$omp end parallel do
@@ -928,7 +928,7 @@ contains
             if( .not. l_mirr_srch ) cycle
             ! target mirror
             m = ntargets+i
-            call imgs_targ_mirr(i)%copy(imgs_targ(i))
+            call imgs_targ_mirr(i)%copy_fast(imgs_targ(i))
             call imgs_targ_mirr(i)%mirror('x')
             call imgs_targ_mirr(i)%fft()
             call build%pftc%polarize_ptcl_pft(imgs_targ_mirr(i), m, pdim=pdim_srch, oversamp=.false.)

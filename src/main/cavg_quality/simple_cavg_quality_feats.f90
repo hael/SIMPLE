@@ -1,7 +1,7 @@
 !@descr: feature inventory and feature extraction for 2D class-average quality
 module simple_cavg_quality_feats
 !$ use omp_lib
-use simple_defs,               only: nthr_glob, COSMSKHALFWIDTH
+use simple_defs,               only: COSMSKHALFWIDTH
 use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_image_bin,          only: image_bin
@@ -165,7 +165,7 @@ contains
         real,                       allocatable   :: res(:), corr(:), corr_in(:)
         real,                       allocatable   :: rmat_cc(:,:,:,:), rmat_disc(:,:,:,:)
         character(len=32) :: context
-        integer           :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold
+        integer           :: ncls, i, ldim(3), pop_hard_threshold, pool_pop_hard_threshold, nworkers
         real              :: smpd, rad_px
         real              :: centroid_norm, locvar_fg, locvar_bg
         real              :: cc_area_frac
@@ -214,11 +214,12 @@ contains
             rad_px = (mskdiam / smpd) / 2.0
         endif
         call imgs(1)%memoize_mask_coords()
-        allocate(bin_img(nthr_glob), cc_img(nthr_glob), disc_img(nthr_glob))
-        allocate(disc_area(nthr_glob), source=0)
-        allocate(rmat_cc(ldim(1), ldim(2), ldim(3), nthr_glob), &
-                 rmat_disc(ldim(1), ldim(2), ldim(3), nthr_glob))
-        do ithr = 1, nthr_glob
+        nworkers = omp_get_max_threads()
+        allocate(bin_img(nworkers), cc_img(nworkers), disc_img(nworkers))
+        allocate(disc_area(nworkers), source=0)
+        allocate(rmat_cc(ldim(1), ldim(2), ldim(3), nworkers), &
+                 rmat_disc(ldim(1), ldim(2), ldim(3), nworkers))
+        do ithr = 1, nworkers
             call bin_img(ithr)%new_bimg(ldim,  smpd, wthreads=.false.)
             call cc_img(ithr)%new_bimg(ldim,   smpd, wthreads=.false.)
             call disc_img(ithr)%disc(ldim,     smpd, rad_px)
@@ -269,7 +270,7 @@ contains
                 locvar_fg, locvar_bg, bp_center_edge_var, quality%raw(i, I_FUZZY_BALL_SIGNAL),quality%reasons(i))
         end do
         !$omp end parallel do
-        do ithr = 1, nthr_glob
+        do ithr = 1, nworkers
             call bin_img(ithr)%kill_bimg()
             call cc_img(ithr)%kill_bimg()
             call disc_img(ithr)%kill_bimg()
@@ -391,7 +392,7 @@ contains
         nccs_valid    = 0
         no_component  = .false.
         mask_hard_reject = .false.
-        call bin_img%copy(img)
+        call bin_img%copy_fast(img)
         call bin_img%zero_edgeavg()
         call bin_img%bp(0.0, FOREGROUND_SEG_LP)
         call otsu_img(bin_img)
@@ -439,15 +440,18 @@ contains
         real,         intent(out)   :: presence_score, bp_center_edge_var
         type(image)       :: img, img_bin, img_bp
         real, allocatable :: bin_mask(:,:,:)
-        real              :: bp_center_edge_std
+        real              :: bp_center_edge_std, smpd
         integer           :: ldim(3), ldim_target(3)
-        img  = img_src
-        ldim = img%get_ldim()
+        ldim = img_src%get_ldim()
+        smpd = img_src%get_smpd()
+        call img%new(ldim, smpd, wthreads=.false.)
+        call img%copy_fast(img_src)
         call img%zero_edgeavg()
         call img%bp(0.0, SIGNAL_METRIC_LP)
         presence_score = img%presence()
         center_edge_snr = img%center_edge_snr(rad_px)
-        img_bp = img
+        call img_bp%new(ldim, smpd, wthreads=.false.)
+        call img_bp%copy_fast(img)
         ldim_target = [ANALYSIS_BOXSIZE, ANALYSIS_BOXSIZE, ldim(3)]
         call img_bp%fft()
         if( ldim(1) > ldim_target(1) .or. ldim(2) > ldim_target(2) )then
@@ -459,7 +463,8 @@ contains
         call img_bp%bp(OVERFIT_SIGNAL_BP_HP, OVERFIT_SIGNAL_BP_LP)
         bp_center_edge_std = img_bp%center_edge_snr((real(ldim_target(1)) * 0.4))
         bp_center_edge_var = bp_center_edge_std * bp_center_edge_std
-        img_bin = img
+        call img_bin%new(ldim, smpd, wthreads=.false.)
+        call img_bin%copy_fast(img)
         call otsu_img(img_bin)
         allocate(bin_mask(ldim(1), ldim(2), ldim(3)))
         call img_bin%get_rmat_sub(bin_mask)
