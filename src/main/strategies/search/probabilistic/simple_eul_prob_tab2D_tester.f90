@@ -31,6 +31,7 @@ contains
     subroutine run_all_eul_prob_tab2D_tests()
         write(*,'(A)') '**** running all 2D probability table tests ****'
         params%ncls         = NCLASSES
+        params%npeaks_inpl  = NCLASSES
         params%l_doshift    = .false.
         params%prob_beta    = 1.
         call test_dense_stream()
@@ -53,13 +54,15 @@ contains
         type(eul_prob_tab2D) :: tab
         real,    allocatable :: dists(:,:)
         integer, allocatable :: pinds_t(:), icls_a(:), icls_b(:)
-        integer :: i, icls, nwrong, loc(1), ncls_prev
+        integer :: i, icls, nwrong, loc(1), ncls_prev, npeaks_prev
         logical :: l_unique(NP)
         character(len=len(params%refine)) :: refine_prev
         write(*,'(A)') 'test_dense_posterior_assignment'
         ncls_prev   = params%ncls
+        npeaks_prev = params%npeaks_inpl
         refine_prev = params%refine
         params%ncls        = NC
+        params%npeaks_inpl = NC
         params%refine      = 'prob'
         pinds_t = [(i, i=1,NP)]
         allocate(dists(NC,NP))
@@ -128,6 +131,7 @@ contains
         call assert_true(any(icls_b /= icls_a), 'another seed gives another dense posterior assignment')
         call tab%kill
         params%ncls        = ncls_prev
+        params%npeaks_inpl = npeaks_prev
         params%refine      = refine_prev
 
     contains
@@ -157,13 +161,15 @@ contains
         class(eul_prob_tab2D), allocatable :: tab
         type(prob_candidate),  allocatable :: cands(:)
         integer, allocatable :: counts(:), pinds_t(:), icls_a(:), icls_b(:)
-        integer :: i, k, n, nwrong, npeaks, ncls_prev
+        integer :: i, k, n, nwrong, npeaks, ncls_prev, npeaks_prev
         real    :: best
         character(len=len(params%refine)) :: refine_prev
         write(*,'(A)') 'test_sparse_posterior_assignment'
         ncls_prev   = params%ncls
+        npeaks_prev = params%npeaks_inpl
         refine_prev = params%refine
         params%ncls        = NC
+        params%npeaks_inpl = NC
         params%refine      = 'prob_snhc'
         pinds_t = [(i, i=1,NP)]
         call seed_rnd_fixed(20261023)
@@ -240,6 +246,7 @@ contains
         call tab%kill
         deallocate(tab)
         params%ncls        = ncls_prev
+        params%npeaks_inpl = npeaks_prev
         params%refine      = refine_prev
 
     contains
@@ -342,13 +349,15 @@ contains
         class(eul_prob_tab2D), allocatable :: worker, ref, tab
         type(prob_candidate) :: candidate
         integer, allocatable :: pinds_t(:), pinds_part(:)
-        integer :: i, i_loc, ipart, k, ncand, irep, nwrong, nthr_prev, nthr_full, ncls_prev
+        integer :: i, i_loc, ipart, k, ncand, irep, nwrong, nthr_prev, nthr_full, ncls_prev, npeaks_prev
         character(len=len(params%refine)) :: refine_prev
         character(len=32) :: fname
         write(*,'(A)') 'test_parallel_read '//refine
         ncls_prev   = params%ncls
+        npeaks_prev = params%npeaks_inpl
         refine_prev = params%refine
         params%ncls        = NC
+        params%npeaks_inpl = NC
         params%refine      = refine
         nthr_prev = 1
         nthr_full = 1
@@ -437,6 +446,7 @@ contains
         enddo
         deallocate(worker, ref, tab)
         params%ncls        = ncls_prev
+        params%npeaks_inpl = npeaks_prev
         params%refine      = refine_prev
     end subroutine test_parallel_read
 

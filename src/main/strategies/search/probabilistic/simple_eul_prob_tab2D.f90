@@ -11,13 +11,14 @@ use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
-    &posterior_temperature, draw_posterior_row, posterior_refine_set, PROB_REFINE_NMAX
+    &posterior_temperature, draw_posterior_row
 implicit none
 
 public :: eul_prob_tab2D, prob_assign_profile2D
 private
 #include "simple_local_flags.inc"
 
+real,             parameter :: NHOOD_FRAC           = 0.1
 integer,          parameter :: PROB_TAB2D_IO_CHUNK  = 65536
 ! format words of the part files (header word 3): the candidate stream (refine=prob_snhc) and the dense rows
 ! (refine=prob); -6/-7 since the particle temperatures after the seed table (2026-10-23). The 3D dense part file
@@ -77,6 +78,7 @@ type :: eul_prob_tab2D
     logical                     :: l_sparse_snhc = .false.
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
+    integer                     :: nhood_sz = 1      !< classes around the best one whose shifts fill_tab refines
     type(prob_fill_profile)     :: fill_profile      !< cost record of the fills since new (bench file)
     type(prob_assign_profile2D) :: assign_profile    !< wall time of the master's reads and assignment (bench file)
     contains
@@ -118,8 +120,7 @@ end type eul_prob_tab2D
 type :: eval2D_sparse_ws
     integer, allocatable :: direct_srch_order(:,:) ! [nclasses,nthr]
     integer, allocatable :: eval_cls(:,:)          ! [nclasses,nthr]
-    integer, allocatable :: best_locs(:,:)         ! [PROB_REFINE_NMAX,nthr] the candidates to refine (posterior_refine_set)
-    real,    allocatable :: best_dists(:,:)        ! [PROB_REFINE_NMAX,nthr] their distances
+    integer, allocatable :: best_locs(:,:)         ! [smpl_ncls,nthr]
     real,    allocatable :: eval_dists(:,:)        ! [nclasses,nthr]
 contains
     procedure :: init_eval2D_sparse_ws
@@ -185,6 +186,7 @@ contains
         class(parameters), target, intent(in)    :: params
         class(builder),    target, intent(in)    :: build
         integer,                   intent(in)    :: pinds(:)
+        integer :: nactive
         call self%kill
         self%p_ptr     => params
         self%b_ptr     => build
@@ -198,6 +200,11 @@ contains
         ! In 2D probabilistic assignment classes must be able to recover, otherwise
         ! low-population classes are permanently excluded and the solution collapses.
         self%class_exists = .true.
+        nactive = count(self%class_exists)
+        if( nactive == 0 ) nactive = self%nclasses
+        self%nhood_sz = max(1, ceiling(NHOOD_FRAC * real(nactive)))
+        self%nhood_sz = min(self%nhood_sz, nactive)
+        self%nhood_sz = min(self%nhood_sz, params%npeaks_inpl)
         allocate(self%pinds(self%nptcls), source=pinds)
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
@@ -244,12 +251,12 @@ contains
         integer,               intent(in)    :: i_first, i_last
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< shift search object, L-BFGS with gradient
         type(ori)              :: o_prev
-        integer :: i, icls, iptcl, ithr, irot, irot0, icls_prev, iref_n, nactive, nrefine
+        integer :: i, icls, iptcl, ithr, irot, irot0, icls_prev, iref_n, nactive, nhood_sz_loc
         integer :: i_from, i_to
         integer :: active_cls(self%nclasses)
-        integer :: refine_inds(PROB_REFINE_NMAX), nrefine_max(nthr_glob)
+        integer :: loc(1)
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), xy0(2)
-        real    :: cls_dists(self%nclasses), refine_dists(PROB_REFINE_NMAX)
+        real    :: cls_dists(self%nclasses), cls_dists_work(self%nclasses)
         real    :: inpl_dist
         logical :: class_active(self%nclasses)
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region, t0
@@ -271,7 +278,6 @@ contains
         nscored   = 0_int64
         nbank     = 0_int64
         nrefined  = 0_int64
-        nrefine_max = 0
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -286,6 +292,7 @@ contains
                 active_cls(nactive) = icls
             endif
         end do
+        nhood_sz_loc = min(self%nhood_sz, nactive)
         t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
             ! make shift search objects
@@ -300,8 +307,8 @@ contains
             call alloc_seed_bank2D(self, seed_bank)
             ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
             ! whole by one thread with its own search object, so only its random draws change
-            !$omp parallel do default(shared) private(i,iptcl,ithr,irot,irot0,cxy,icls,icls_prev,&
-            !$omp& cls_dists,refine_inds,refine_dists,nrefine,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0)&
+            !$omp parallel do default(shared) private(i,iptcl,ithr,irot,irot0,cxy,icls,icls_prev,loc,&
+            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0)&
             !$omp firstprivate(o_prev) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
@@ -340,14 +347,13 @@ contains
                     cls_dists(icls) = inpl_dist
                 end do
                 ts_score(ithr) = ts_score(ithr) + (omp_get_wtime() - t0)
-                ! (3) refine the shifts of the classes holding the row's posterior mass at the particle's tempered
-                ! temperature (posterior_refine_set; the inactive classes are the invalid marker)
+                ! (3) refine shifts for a neighborhood of classes around the best one
                 t0 = omp_get_wtime()
-                call posterior_refine_set(self%nclasses, cls_dists, self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
-                    &refine_dists, refine_inds, nrefine)
-                nrefine_max(ithr) = max(nrefine_max(ithr), nrefine)
-                do iref_n = 1, nrefine
-                    icls = refine_inds(iref_n)
+                cls_dists_work = cls_dists
+                do iref_n = 1, nhood_sz_loc
+                    loc = minloc(cls_dists_work)
+                    icls = loc(1)
+                    if( cls_dists_work(icls) >= huge(1.0)/2.0 ) exit
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
                     nrefined(ithr) = nrefined(ithr) + 1_int64
                     irot     = self%candidate_buffers(ithr)%get_inpl(i, icls)
@@ -358,6 +364,7 @@ contains
                             &eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun), irot,&
                             &cxy_prob(2), cxy_prob(3), .true.)
                     endif
+                    cls_dists_work(icls) = huge(1.0)
                 end do
                 ts_refine(ithr) = ts_refine(ithr) + (omp_get_wtime() - t0)
             end do
@@ -382,7 +389,7 @@ contains
             !$omp end parallel do
         endif
         call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
-            &nscored, nbank, nrefined, i_to - i_from + 1, nactive, maxval(nrefine_max))
+            &nscored, nbank, nrefined, i_to - i_from + 1, nactive, nhood_sz_loc)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -402,7 +409,7 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
         type(eval2D_sparse_ws) :: eval_work
         type(ran_tabu), allocatable :: direct_rts(:)
-        integer :: ithr, i, iptcl, nrefs_bound, nrots, nrefine_max(nthr_glob)
+        integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, nrots
         integer :: i_from, i_to
         real    :: lims(2,2), lims_init(2,2), neigh_frac, cxy(3)
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
@@ -418,14 +425,15 @@ contains
         nscored   = 0_int64
         nbank     = 0_int64
         nrefined  = 0_int64
-        nrefine_max = 0
         call seed_rnd
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         neigh_frac  = extremal_decay2D(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
         nrefs_bound = max(2, min(self%nclasses, nint(real(self%nclasses) * (1. - neigh_frac))))
         nrefs_bound = max(1, min(nrefs_bound, self%nclasses))
-        call eval_work%init_eval2D_sparse_ws(self%nclasses, nthr_glob)
+        smpl_ncls   = neighfrac2nsmpl(neigh_frac, self%nclasses)
+        smpl_ncls   = max(1, min(smpl_ncls, self%nclasses))
+        call eval_work%init_eval2D_sparse_ws(self%nclasses, smpl_ncls, nthr_glob)
         allocate(direct_rts(nthr_glob))
         do ithr = 1, nthr_glob
             direct_rts(ithr) = ran_tabu(self%nclasses)
@@ -464,7 +472,7 @@ contains
             !$omp end parallel do
         endif
         call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
-            &nscored, nbank, nrefined, i_to - i_from + 1, 0, maxval(nrefine_max))
+            &nscored, nbank, nrefined, i_to - i_from + 1, 0, smpl_ncls)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -541,8 +549,6 @@ contains
             if( irot_loc < 1 .or. irot_loc > nrots ) irot_loc = 1
         end subroutine score_class
 
-        !> the shift refinement of the evaluated candidates holding the posterior mass at the particle's tempered
-        !! temperature (posterior_refine_set)
         subroutine refine_best_classes(i_loc, ithr_loc, iptcl_loc, sh_loc, neval_loc, l_with_shift)
             integer, intent(in) :: i_loc, ithr_loc, iptcl_loc, neval_loc
             real,    intent(in) :: sh_loc(2)
@@ -551,10 +557,8 @@ contains
             real    :: cxy_prob_loc(3), xy0_loc(2)
             if( .not. l_with_shift ) return
             if( neval_loc < 1 ) return
-            call posterior_refine_set(neval_loc, eval_work%eval_dists(1:neval_loc,ithr_loc),&
-                &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), eval_work%best_dists(:,ithr_loc),&
-                &eval_work%best_locs(:,ithr_loc), nrefine_loc)
-            nrefine_max(ithr_loc) = max(nrefine_max(ithr_loc), nrefine_loc)
+            nrefine_loc = min(smpl_ncls, neval_loc)
+            eval_work%best_locs(1:nrefine_loc,ithr_loc) = minnloc(eval_work%eval_dists(1:neval_loc,ithr_loc), nrefine_loc)
             do j_loc = 1, nrefine_loc
                 eval_slot_loc = eval_work%best_locs(j_loc,ithr_loc)
                 if( eval_slot_loc < 1 ) cycle
@@ -1556,13 +1560,12 @@ contains
         deallocate(assgn_glob, pind2glob, pinds_glob)
     end subroutine read_assignment
 
-    subroutine init_eval2D_sparse_ws( self, nclasses, nthr )
+    subroutine init_eval2D_sparse_ws( self, nclasses, smpl_ncls, nthr )
         class(eval2D_sparse_ws), intent(inout) :: self
-        integer,                 intent(in)    :: nclasses, nthr
+        integer,                 intent(in)    :: nclasses, smpl_ncls, nthr
         call self%dealloc_eval2D_sparse_ws
         allocate(self%direct_srch_order(nclasses,nthr), self%eval_cls(nclasses,nthr), source=0)
-        allocate(self%best_locs(PROB_REFINE_NMAX,nthr), source=0)
-        allocate(self%best_dists(PROB_REFINE_NMAX,nthr), source=0.)
+        allocate(self%best_locs(max(1,smpl_ncls),nthr), source=0)
         allocate(self%eval_dists(nclasses,nthr), source=huge(1.0))
     end subroutine init_eval2D_sparse_ws
 
@@ -1571,7 +1574,6 @@ contains
         if( allocated(self%direct_srch_order) ) deallocate(self%direct_srch_order)
         if( allocated(self%eval_cls)          ) deallocate(self%eval_cls)
         if( allocated(self%best_locs)         ) deallocate(self%best_locs)
-        if( allocated(self%best_dists)        ) deallocate(self%best_dists)
         if( allocated(self%eval_dists)        ) deallocate(self%eval_dists)
     end subroutine dealloc_eval2D_sparse_ws
 

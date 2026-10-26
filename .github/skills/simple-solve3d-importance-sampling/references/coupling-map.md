@@ -182,9 +182,9 @@ Important points:
 - the fill draws each reference's in-plane rotation from the tempered
   posterior over every grid rotation at the particle's temperature
   (`gen_posterior_val`, `ptcl_posterior_temp`; `prob_beta` tempers it) and
-  shift-refines, per state block, the references holding the row's tempered
-  posterior mass (`posterior_refine_set`: 99% of the mass, each entry at least
-  1%, the mode always; no hand-set count)
+  shift-refines the best `projs_ns` references (`calc_num2sample` on
+  `prob_athres` and the mean pose change: a search budget, not a posterior
+  quantity; sizing it by the unrefined row's mass broke PorF, 2026-10-25)
 - `ref_assign` draws each particle's projection from the tempered posterior
   over its row (`draw_posterior_row` at `prob_beta` times the temperature the
   worker wrote); the state label is the deterministic argmin over states; no

@@ -8,7 +8,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
-    &draw_posterior_row, posterior_refine_set, PROB_REFINE_NMAX
+    &draw_posterior_row
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -50,8 +50,7 @@ end type eul_prob_tab_neigh
 ! Workspace for per-thread arrays for both the stochastic and subspace paths
 type :: eval_ws
     integer, allocatable :: evaluated_ref_ids(:,:)     ! [nrefs,nthr]
-    integer, allocatable :: best_evals(:,:)            ! [PROB_REFINE_NMAX,nthr] the entries to refine (posterior_refine_set)
-    real,    allocatable :: best_dists(:,:)            ! [PROB_REFINE_NMAX,nthr] their distances
+    integer, allocatable :: best_evals(:,:)            ! [max_refine,nthr]
     integer, allocatable :: fullref_to_sparse_ref(:)   ! [nstates*nspace]
     real,    allocatable :: evaluated_ref_dists(:,:)   ! [nrefs,nthr]
     real,    allocatable :: state_eval_dists(:,:)      ! [nrefs,nthr]
@@ -159,7 +158,7 @@ contains
         integer,        allocatable :: direct_srch_order(:,:)
         real,           allocatable :: corrs_inpl(:,:)
         complex(sp),    allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        integer :: i, ithr, nfull_refs
+        integer :: i, ithr, max_refs_to_refine, nfull_refs
         integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob)
@@ -183,7 +182,8 @@ contains
         call alloc_seed_bank(self, seed_bank)
         nfull_refs = self%p_ptr%nstates * self%p_ptr%nspace
         allocate(corrs_inpl(nrots,nthr_glob))
-        call eval_work%init_eval_stoch_ws(self)
+        max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
+        call eval_work%init_eval_stoch_ws(self, max_refs_to_refine)
         allocate(direct_srch_order(nfull_refs,nthr_glob), direct_rts(nthr_glob))
         do ithr = 1,nthr_glob
             direct_rts(ithr) = ran_tabu(nfull_refs)
@@ -255,7 +255,7 @@ contains
             nscored(ithr_loc)  = nscored(ithr_loc) + int(neval_loc, int64)
             if( l_with_shift )then
                 t0 = omp_get_wtime()
-                call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first,&
+                call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
                 &i_loc, ithr_loc, iptcl_loc, shift_seed, neval_loc)
                 ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             endif
@@ -373,7 +373,7 @@ contains
         type(coarse_search_ws) :: coarse_ws
         type(eval_ws)          :: eval_work
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        integer :: i, ithr, nsubs, npeak_target, npooled_capacity
+        integer :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
         integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first, l_bank(nthr_glob)
@@ -400,7 +400,8 @@ contains
         nsubs        = size(self%b_ptr%subspace_inds)
         npeak_target = min(max(1, self%p_ptr%npeaks), nsubs)
         npooled_capacity = min(nsubs, max(1, npeak_target * max(1, self%nstates)))
-        call eval_work%init_eval_subspace_ws(self, nsubs)
+        max_refs_to_refine = max(1, self%p_ptr%npeaks_inpl)
+        call eval_work%init_eval_subspace_ws(self, nsubs, max_refs_to_refine)
         call coarse_ws%alloc_coarse_ws(npeak_target, npooled_capacity, self%p_ptr%nstates, nthr_glob)
         t_region = omp_get_wtime()
         if( self%p_ptr%l_doshift )then
@@ -472,7 +473,7 @@ contains
             nscored(ithr_loc)  = nscored(ithr_loc) + int(neval, int64)
             if( l_with_shift )then
                 t0 = omp_get_wtime()
-                call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first,&
+                call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
                     &i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval)
                 ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             endif
@@ -1231,22 +1232,20 @@ contains
         corr = eulprob_corr_switch(dist, self%p_ptr%cc_objfun)
     end subroutine score_seeded_ref
 
-    !> The shift refinement of the evaluated candidates holding the posterior mass, per state (every state keeps
-    !! its own refined candidates, so the state label compares refined with refined) at the particle's tempered
-    !! temperature (posterior_refine_set; the other states' entries are the invalid marker)
-    subroutine refine_best_neighbors( self, ew, grad_obj, l_seed_sh_first, i, ithr, iptcl, shift_seed, neval )
+    ! Optimizes shift & rotation on the top-npeaks_inpl references
+    subroutine refine_best_neighbors( self, ew, grad_obj, l_seed_sh_first, max_refs_to_refine,&
+        &i, ithr, iptcl, shift_seed, neval)
         class(eul_prob_tab_neigh), intent(inout) :: self
         type(eval_ws),             intent(inout) :: ew
         type(pftc_shsrch_grad),    intent(inout) :: grad_obj(:)
         logical,                   intent(in)    :: l_seed_sh_first
-        integer,                   intent(in)    :: i, ithr, iptcl, neval
+        integer,                   intent(in)    :: max_refs_to_refine, i, ithr, iptcl, neval
         real,                      intent(in)    :: shift_seed(3)
         integer :: nrefs_to_refine, nstate_eval, j, eval_slot, ri, istate, iproj, irot
         integer :: si, state_eval
-        real    :: refined_shift(3), xy_start(2), temp
+        real    :: refined_shift(3), xy_start(2)
         ew%best_evals(:,ithr) = 0
         if( neval <= 0 ) return
-        temp = self%b_ptr%pftc%ptcl_posterior_temp(iptcl)
         do si = 1, self%nstates
             state_eval = self%ssinds(si)
             ew%state_eval_dists(1:neval,ithr) = huge(1.0)
@@ -1258,9 +1257,10 @@ contains
                 nstate_eval = nstate_eval + 1
                 ew%state_eval_dists(j,ithr) = ew%evaluated_ref_dists(j,ithr)
             enddo
-            if( nstate_eval < 1 ) cycle
-            call posterior_refine_set(neval, ew%state_eval_dists(1:neval,ithr), temp, ew%best_dists(:,ithr),&
-                &ew%best_evals(:,ithr), nrefs_to_refine)
+            nrefs_to_refine = min(max_refs_to_refine, nstate_eval)
+            if( nrefs_to_refine < 1 ) cycle
+            ew%best_evals(1:nrefs_to_refine,ithr) = &
+                &minnloc(ew%state_eval_dists(1:neval,ithr), nrefs_to_refine)
             do j = 1, nrefs_to_refine
                 eval_slot = ew%best_evals(j,ithr)
                 if( eval_slot < 1 ) cycle
@@ -1311,24 +1311,22 @@ contains
     ! EVAL_WS bound procedures
 
     ! Allocates all stochastic-path arrays
-    subroutine alloc_eval_stoch_ws( self, nrefs, nstates, nspace, nthr )
+    subroutine alloc_eval_stoch_ws( self, nrefs, nstates, nspace, max_refine, nthr )
         class(eval_ws), intent(inout) :: self
-        integer,           intent(in)    :: nrefs, nstates, nspace, nthr
+        integer,           intent(in)    :: nrefs, nstates, nspace, max_refine, nthr
         call self%dealloc_eval_ws
-        allocate(self%best_evals(PROB_REFINE_NMAX,nthr), self%evaluated_ref_ids(nrefs,nthr), source=0)
-        allocate(self%best_dists(PROB_REFINE_NMAX,nthr), source=0.)
+        allocate(self%best_evals(max(1,max_refine),nthr), self%evaluated_ref_ids(nrefs,nthr), source=0)
         allocate(self%fullref_to_sparse_ref(nstates*nspace), source=0)
         allocate(self%evaluated_ref_dists(nrefs,nthr), source=huge(1.0))
         allocate(self%state_eval_dists(nrefs,nthr),    source=huge(1.0))
     end subroutine alloc_eval_stoch_ws
 
     ! Allocates all subspace-path arrays
-    subroutine alloc_eval_subspace_ws( self, nrefs, nstates, nspace, nsubs, nthr )
+    subroutine alloc_eval_subspace_ws( self, nrefs, nstates, nspace, nsubs, max_refine, nthr )
         class(eval_ws), intent(inout) :: self
-        integer,           intent(in)    :: nrefs, nstates, nspace, nsubs, nthr
+        integer,           intent(in)    :: nrefs, nstates, nspace, nsubs, max_refine, nthr
         call self%dealloc_eval_ws
-        allocate(self%best_evals(PROB_REFINE_NMAX,nthr), self%evaluated_ref_ids(nrefs,nthr), source=0)
-        allocate(self%best_dists(PROB_REFINE_NMAX,nthr), source=0.)
+        allocate(self%best_evals(max(1,max_refine),nthr), self%evaluated_ref_ids(nrefs,nthr), source=0)
         allocate(self%fullref_to_sparse_ref(nstates*nspace), source=0)
         allocate(self%sub_ref_counts(nsubs,nstates), self%sub_ref_offsets(nsubs,nstates),&
             &self%sub_ref_list(nrefs), source=0)
@@ -1337,11 +1335,12 @@ contains
     end subroutine alloc_eval_subspace_ws
 
         ! Allocates and initialises eval_ws arrays required by the direct stochastic path.
-    subroutine init_eval_stoch_ws( self, tabneigh )
+    subroutine init_eval_stoch_ws( self, tabneigh, max_refs_to_refine )
         class(eval_ws),            intent(inout) :: self
         class(eul_prob_tab_neigh), intent(in)    :: tabneigh
+        integer,                   intent(in)    :: max_refs_to_refine
         integer :: iref, iref_full
-        call self%alloc_eval_stoch_ws(tabneigh%nrefs, tabneigh%p_ptr%nstates, tabneigh%p_ptr%nspace, nthr_glob)
+        call self%alloc_eval_stoch_ws(tabneigh%nrefs, tabneigh%p_ptr%nstates, tabneigh%p_ptr%nspace, max_refs_to_refine, nthr_glob)
         do iref = 1, tabneigh%nrefs
             iref_full = tabneigh%ref_full(iref)
             if( iref_full >= 1 .and. iref_full <= size(self%fullref_to_sparse_ref) )&
@@ -1350,13 +1349,13 @@ contains
     end subroutine init_eval_stoch_ws
 
     ! Allocates and initialises eval_ws arrays required by the subspace neighborhood path.
-    subroutine init_eval_subspace_ws( self, tabneigh, nsubs )
+    subroutine init_eval_subspace_ws( self, tabneigh, nsubs, max_refs_to_refine )
         class(eval_ws),            intent(inout) :: self
         class(eul_prob_tab_neigh), intent(in)    :: tabneigh
-        integer,                   intent(in)    :: nsubs
+        integer,                   intent(in)    :: nsubs, max_refs_to_refine
         integer :: i, ri, istate, isub, iref, iref_full
         call self%alloc_eval_subspace_ws(tabneigh%nrefs, tabneigh%p_ptr%nstates, tabneigh%p_ptr%nspace,&
-            &nsubs, nthr_glob)
+            &nsubs, max_refs_to_refine, nthr_glob)
         do iref = 1, tabneigh%nrefs
             iref_full = tabneigh%ref_full(iref)
             if( iref_full >= 1 .and. iref_full <= size(self%fullref_to_sparse_ref) )&
@@ -1391,7 +1390,6 @@ contains
         class(eval_ws), intent(inout) :: self
         if( allocated(self%evaluated_ref_ids)     ) deallocate(self%evaluated_ref_ids)
         if( allocated(self%best_evals)            ) deallocate(self%best_evals)
-        if( allocated(self%best_dists)            ) deallocate(self%best_dists)
         if( allocated(self%fullref_to_sparse_ref) ) deallocate(self%fullref_to_sparse_ref)
         if( allocated(self%evaluated_ref_dists)   ) deallocate(self%evaluated_ref_dists)
         if( allocated(self%state_eval_dists)      ) deallocate(self%state_eval_dists)

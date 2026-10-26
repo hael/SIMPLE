@@ -65,12 +65,12 @@ Important details:
   `posterior_temperature`). The in-plane rotation of each row entry is the
   same draw over the grid rotations (`gen_posterior_val`). No reference is
   forced to be populated.
-- The shift-refined set of every fill is sized by the row's posterior mass
-  (`posterior_refine_set`: the lowest losses holding `PROB_REFINE_MASS` =
-  99% of the tempered mass, each at least 1%, the mode always; per state in
-  the 3D tables). `prob_athres` and `npeaks_inpl` bound only the SHC
-  strategies' candidate draws (`angle_sampling`, `sample_bounded_dists`,
-  `inpl_srch_peaks`); the tables' draws take no threshold.
+- `prob_athres` sizes the shift-refined set of the dense fill (`projs_ns`,
+  with the mean pose change) and bounds the SHC strategies' candidate draws
+  (`angle_sampling`, `sample_bounded_dists`); `npeaks_inpl` sizes the
+  neighbourhood and 2D tables' refined sets. The refined set is a search
+  budget: sizing it by the unrefined row's posterior mass broke PorF
+  (2026-10-25). The tables' draws take no threshold.
 
 ## Search Modes
 

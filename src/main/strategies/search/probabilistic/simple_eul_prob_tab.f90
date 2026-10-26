@@ -4,11 +4,10 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_eul_prob_tab_utils, only: build_pind_lookup, &
+use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, &
-    &posterior_refine_set, PROB_REFINE_NMAX
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -229,11 +228,10 @@ contains
     subroutine fill_tab_range( self, i_first, i_last )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: i_first, i_last
-        integer, allocatable   :: locn(:,:)                   !< per thread: the entries of one state block to refine (posterior_refine_set)
-        real,    allocatable   :: locd(:,:)                   !< per thread: their distances
+        integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         type(prob_dense_entry),   allocatable :: rows_batch(:,:)     !< the batch's rows (nrefs,i_first:i_last)
-        type(prob_refined_entry), allocatable :: refined_batch(:,:)  !< refined entries per particle (nstates*PROB_REFINE_NMAX,i_first:i_last)
+        type(prob_refined_entry), allocatable :: refined_batch(:,:)  !< refined entries per particle (projs_ns,i_first:i_last)
         integer,                  allocatable :: nrefined_batch(:)
         type(prob_posterior_stat), allocatable :: post_batch(:)      !< pose-posterior statistics per particle (prob_post_diag=yes)
         real,                      allocatable :: post_w(:,:)        !< per thread: the posterior over the row, sorted
@@ -248,7 +246,7 @@ contains
         real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
         integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
         logical :: l_post
-        integer :: i, iptcl, ithr
+        integer :: i, si, iptcl, n, projs_ns, ithr, istate
         integer :: inpl_refs(self%nrefs,nthr_glob)
         real    :: lims(2,2), lims_init(2,2)
         real    :: dists_refs(self%nrefs,nthr_glob)
@@ -273,11 +271,15 @@ contains
         l_grid          = self%p_ptr%nstates > 1
         seed_builds     = 0_int64
         call seed_rnd
-        ! the refined set is each particle's, per state block, by posterior mass (posterior_refine_set): at most
-        ! PROB_REFINE_NMAX entries per state
-        allocate(locn(PROB_REFINE_NMAX,nthr_glob), source=0)
-        allocate(locd(PROB_REFINE_NMAX,nthr_glob), source=0.)
-        allocate(rows_batch(self%nrefs,i_first:i_last), refined_batch(self%nstates*PROB_REFINE_NMAX,i_first:i_last))
+        projs_ns = 0
+        do si = 1, self%nstates
+            istate = self%ssinds(si)
+            call calc_num2sample(self%b_ptr%spproj_field, self%p_ptr%nspace, 'dist', n, self%p_ptr%prob_athres, state=istate)
+            projs_ns            = max(projs_ns, n)
+        enddo
+        if( allocated(locn) ) deallocate(locn)
+        allocate(locn(projs_ns,nthr_glob), source=0)
+        allocate(rows_batch(self%nrefs,i_first:i_last), refined_batch(max(1,projs_ns),i_first:i_last))
         allocate(nrefined_batch(i_first:i_last), source=0)
         ! the pose posterior is defined by the Euclidean objective only
         l_post = self%p_ptr%l_prob_post_diag .and. self%p_ptr%cc_objfun == OBJFUN_EUCLID
@@ -342,8 +344,8 @@ contains
         self%fill_profile%nrefs     = self%nrefs
         self%fill_profile%nptcls    = self%fill_profile%nptcls + int(i_last - i_first + 1, int64)
         if( self%p_ptr%l_doshift )then
-            self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, maxval(nrefined_batch))
-            self%fill_profile%nrefined = self%fill_profile%nrefined + int(sum(nrefined_batch), int64)
+            self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, projs_ns)
+            self%fill_profile%nrefined = self%fill_profile%nrefined + int(i_last - i_first + 1, int64) * int(projs_ns, int64)
         endif
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
@@ -441,7 +443,7 @@ contains
         end subroutine process_particle_without_shift
 
         !> The pose posterior over the particle's finished production row (posterior-drawn in-plane,
-        !! the mass-holding entries shift-refined) at the temperature of its weighted power, with the angular
+        !! the best projs_ns shift-refined) at the temperature of its weighted power, with the angular
         !! spread of the references holding 99% of the mass about the mode (the mode's state, across the
         !! symmetry operations). Then the controls (doc/implementation_notes/planned/pose_marginalization.md
         !! sections 5 and 11): the identical-pose null test, the kernel re-scored at the production mode's
@@ -708,42 +710,35 @@ contains
                 &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
         end subroutine score_ref_bank
 
-        !> the shift refinement of the entries holding the row's posterior mass, per state block (the blocks of
-        !! nspace references of the active states, as ref_assign draws in them) at the particle's tempered
-        !! temperature (posterior_refine_set): every state keeps its own refined candidates, so the state label
-        !! (the closest reference over all states) compares refined with refined
         subroutine refine_best_refs( i_loc, iptcl_loc, ithr_loc, shift_seed )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_seed(3)
-            integer :: j_loc, ri_loc, irot_loc, si_loc, ifirst_loc, nrefine_loc
-            real    :: refined_shift(3), xy_start(2), temp_loc
-            temp_loc = self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc)
-            do si_loc = 1,self%nstates
-                ifirst_loc = (si_loc - 1) * self%p_ptr%nspace + 1
-                call posterior_refine_set(self%p_ptr%nspace, dists_refs(ifirst_loc:ifirst_loc+self%p_ptr%nspace-1,ithr_loc),&
-                    &temp_loc, locd(:,ithr_loc), locn(:,ithr_loc), nrefine_loc)
-                do j_loc = 1,nrefine_loc
-                    ri_loc = ifirst_loc - 1 + locn(j_loc,ithr_loc)
-                    call grad_shsrch_obj(ithr_loc)%set_indices(self%ref_full(ri_loc), iptcl_loc)
-                    irot_loc = inpl_refs(ri_loc,ithr_loc)
-                    if( l_sh_first )then
-                        ! the particle-frame seed as the shift of this reference at the rotation it was scored at, in the box
-                        xy_start = shift_ptcl2ref(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_loc))
-                        xy_start(1) = max(lims(1,1), min(lims(1,2), xy_start(1)))
-                        xy_start(2) = max(lims(2,1), min(lims(2,2), xy_start(2)))
-                        refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
-                            &sh_rot=.true., xy_in=xy_start)
-                    else
-                        refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
-                    endif
-                    if( irot_loc > 0 )then
-                        rows_batch(ri_loc,i_loc) = prob_dense_entry(eulprob_dist_switch(refined_shift(1),&
-                            &self%p_ptr%cc_objfun), irot_loc)
-                        nrefined_batch(i_loc) = nrefined_batch(i_loc) + 1
-                        refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc,&
-                            &refined_shift(2), refined_shift(3))
-                    endif
-                enddo
+            integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc
+            real    :: refined_shift(3), xy_start(2)
+            locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns)
+            do j_loc = 1,projs_ns
+                ri_loc     = locn(j_loc,ithr_loc)
+                istate_loc = self%ref_state(ri_loc)
+                iproj_loc  = self%ref_proj(ri_loc)
+                call grad_shsrch_obj(ithr_loc)%set_indices(self%ref_full(ri_loc), iptcl_loc)
+                irot_loc = inpl_refs(ri_loc,ithr_loc)
+                if( l_sh_first )then
+                    ! the particle-frame seed as the shift of this reference at the rotation it was scored at, in the box
+                    xy_start = shift_ptcl2ref(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot_loc))
+                    xy_start(1) = max(lims(1,1), min(lims(1,2), xy_start(1)))
+                    xy_start(2) = max(lims(2,1), min(lims(2,2), xy_start(2)))
+                    refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
+                        &sh_rot=.true., xy_in=xy_start)
+                else
+                    refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
+                endif
+                if( irot_loc > 0 )then
+                    rows_batch(ri_loc,i_loc) = prob_dense_entry(eulprob_dist_switch(refined_shift(1),&
+                        &self%p_ptr%cc_objfun), irot_loc)
+                    nrefined_batch(i_loc) = nrefined_batch(i_loc) + 1
+                    refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc,&
+                        &refined_shift(2), refined_shift(3))
+                endif
             enddo
         end subroutine refine_best_refs
 

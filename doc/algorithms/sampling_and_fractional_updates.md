@@ -94,8 +94,7 @@ between every particle in the subset and every reference `j`: in 3D the
 2. every reference is scored at that shift over all in-plane rotations, and
    one in-plane rotation is drawn from the row's tempered posterior over all
    of them (below);
-3. the references holding the row's posterior mass are refined again in
-   shift (`posterior_refine_set`, below).
+3. the best `K_ref` references are refined again in shift (below).
 
 For the Euclidean objective, the loss `d` is the whitened negative
 log-likelihood, `d = -log(score)`, normalized by the particle's weighted
@@ -144,23 +143,22 @@ which `athres` shrinking with the measured in-plane change annealed as the
 alignment settled. The tables' fills no longer use it; the SHC strategies
 of the early 2D stages keep their own samplers.
 
-**The refined set** (since 2026-10-25) is sized by the same posterior, per
-particle: the entries of the row taken in ascending loss while each still
-holds at least 1% of the row's tempered posterior mass, until 99% of the
-mass is covered, the mode always (`posterior_refine_set`, one constant,
-`PROB_REFINE_MASS`; the two bounds together allow at most 100 entries, which
-sizes the work arrays). Refinement is spent where the draw can land: a sharp
-row refines its mode, a row open over a few poses refines those, a flat row,
-which the draw lands anywhere on, refines its mode only, and the count
-shrinks on its own as the posterior sharpens. In the dense 3D table the rule
-runs per state block and in the neighbourhood table per state, so the state
-label (the closest reference over all states) compares refined with refined;
-the 2D dense table runs it over the active classes and the sparse table over
-the evaluated candidates. It replaced the hand-set counts: in 3D
-`projs_ns = min(prob_athres, mean pose change) x nspace / 180` of the dense
-fill and `npeaks_inpl` of the neighbourhood table, in 2D `nhood_sz`
-(a tenth of the classes, at most `npeaks_inpl`) and the annealed
-`smpl_ncls`; `prob_athres` and `npeaks_inpl` remain the SHC strategies'.
+**The refined set** is a search budget, not a posterior quantity. The dense
+3D fill refines the `K_ref = min(prob_athres, mean pose change of the last
+iteration) x nspace / 180` lowest losses of the row (`calc_num2sample`; 10
+degrees gives nspace/18 while the poses move, a few percent of nspace as they
+settle), the neighbourhood table the `npeaks_inpl` lowest per state, the 2D
+dense table a tenth of the classes (at most `npeaks_inpl`) and the sparse
+table its annealed `smpl_ncls`. Sizing it by the row's own posterior mass
+instead (tried 2026-10-25: the entries holding 99% of the tempered mass, each
+at least 1%, the mode always) broke PorF: stages 3 and 4 a little worse,
+stage 5 at 7.8-8.0 A against 4.9-6.8 A in ten restarts (the note, section 19,
+item 10). The row's losses are conditional on the one seed shift and the
+previous band, so after a band jump the posterior is sharp around poses
+fitted at the coarser band, and only refining many candidates lets the shift
+search re-rank them: the refinement is the search, and its breadth must come
+from the pose uncertainty (what the pose-change term measures), not from the
+sharpness of a row that has not been refined yet.
 
 ## Assignment
 

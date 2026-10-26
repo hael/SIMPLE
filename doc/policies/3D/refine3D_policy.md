@@ -476,20 +476,19 @@ worker computes at the fill and writes per particle into the dense part file
 in-plane, its refined shift when refined, the seed shift recorded, `frac`
 100); the draws run in particle order on the master's random stream, so
 distributed runs draw alike. A particle without a valid distance takes
-reference 1. The row's values are the fill's (the mass-holding entries
-refined), so the draw is a direction sampler on that row. The in-plane
-rotation of every row entry is drawn by the same rule: the posterior over
-all grid rotations of the reference against the seeded particle at the
-particle's temperature (`gen_posterior_val`, its bank form; `score_ref`,
-`score_ref_bank`), no angular threshold. The entries whose shift the fill
-refines are sized by the same posterior, per particle and per state block
-(`posterior_refine_set`, `refine_best_refs`): the lowest losses holding 99%
-of the block's tempered mass, each with at least 1%, the mode always, so a
-sharp row refines one entry and a flat row its mode only; the neighbourhood
-fills apply the rule per state to the evaluated candidates
-(`refine_best_neighbors`). No hand-set count sizes the refinement
-(`prob_athres` and `npeaks_inpl` are the SHC strategies' bounds, not the
-tables'). Every draw (in-plane, direction, class, neighbourhood)
+reference 1. The row's values are the fill's (the top set refined), so the
+draw is a direction sampler on that row. The in-plane rotation of every row
+entry is drawn by the same rule: the posterior over all grid rotations of
+the reference against the seeded particle at the particle's temperature
+(`gen_posterior_val`, its bank form; `score_ref`, `score_ref_bank`), no
+angular threshold. The top set the fill shift-refines is a search budget,
+`projs_ns = min(prob_athres, mean pose change) x nspace / 180`
+(`calc_num2sample`; the neighbourhood fills refine the `npeaks_inpl` lowest
+per state): sizing it by the unrefined row's posterior mass instead broke
+PorF (2026-10-25, the note, section 19, item 10), since that row is
+conditional on the seed shift and the previous band and the shift
+refinement is what re-ranks it. Every draw (in-plane, direction, class,
+neighbourhood)
 runs at `prob_beta` times the particle temperature
 (`pftc%ptcl_posterior_temp`; default 0.3, for small membrane proteins,
 section 19 of the note; below one hotter), so at `prob_beta` below one the

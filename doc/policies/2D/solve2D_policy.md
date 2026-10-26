@@ -279,11 +279,7 @@ probabilistic pre-step): the shift estimated at the particle's previous class
 is converted once at the rotation its search ended at, the particle is
 shifted once by it (`memoize_shifted_ptcl`, unless the shift is below
 `SHERRSQ`), every class is scored against that memo with the bank kernel
-(`gen_posterior_val_bank`, which includes the angular Nyquist bin), the
-classes holding the row's tempered posterior mass are shift-refined (the
-lowest losses holding 99% of the mass, each with at least 1%, the mode
-always: `posterior_refine_set`, no `nhood_sz` or `npeaks_inpl`; the sparse
-table applies the rule to the candidates it evaluated), a
+(`gen_posterior_val_bank`, which includes the angular Nyquist bin), a
 refined class starts its shift search from the seed converted at its own
 rotation and clamped into the search box, and an assigned, unrefined
 candidate records the seed as it is (`record_seed_shift`). The particle loops
