@@ -171,11 +171,13 @@ contains
         call cont_refine3D_1jxy%new(&
         &'cont_refine3D_1jxy',&                     ! name
         &'validate continuous Cartesian pose refinement end to end on simulated 1JYX particles',&
-        &'refine3D refine=cont (euclid, cc, distributed) and refine3D_auto pose_cont=only on 1 000 simulated 1JYX '//&
+        &'refine3D refine=cont (euclid, cc, distributed) and refine3D_local on 1 000 simulated 1JYX '//&
         &'particles from poses perturbed by 15 degrees and 2 pixels, and as the continuation of a polar refine3D_auto, '//&
         &'checked against the simulation truth',&
         &'simple_test_exec',&                       ! executable
         &.false., display_name='Continuous Refinement Validation')                                   ! requires sp_project
+        call cont_refine3D_1jxy%add_input(UI_PARM, 'suite', 'str', 'Run one integration case', &
+            &'all (default) runs the complete gate; nu_handoff runs only verified NU-bundle continuation', '', .false., '')
         ! add to ui_hash
         call add_ui_program('cont_refine3D_1jxy', cont_refine3D_1jxy, tsttab, UI_CATEGORY)
     end subroutine new_cont_refine3D_1jxy

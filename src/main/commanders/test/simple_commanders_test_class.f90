@@ -94,6 +94,7 @@ use simple_wave_projector_tester,            only: run_all_wave_projector_tests
 use simple_simulator_tester,                 only: run_all_simulator_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
+use simple_refine3D_local_tester, only: run_all_refine3D_local_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
 use simple_convergence_tester,               only: run_all_convergence_tests
 use simple_strategy3D_cont_1jyx_tester,      only: run_all_strategy3D_cont_1jyx_tests
@@ -473,6 +474,7 @@ contains
     subroutine suites_cart_align3D( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
+        call add_suite(s, n, 'local startup', run_all_refine3D_local_tests)
         call add_suite(s, n, 'Cartesian Fourier', run_all_cartesian_fourier_tests)
         call add_suite(s, n, 'cart calculator',   run_all_cartft_calc_tests)
         call add_suite(s, n, 'pose optimizer',    run_all_cartft_pose_opt_tests)

@@ -877,8 +877,11 @@ internal name of the polish pass and is refused on the command line.
 Tests: `unit_cart_align3D` (`cart calculator`, `pose optimizer`,
 `pose strategy`, `pose statistics`), `lib_cart_align3D` (1 000 simulated 1JYX
 particles through `strategy3D_cont`), and the high-level gate
-`cont_refine3D_1jxy` (shared memory, distributed, `refine3D_auto`, the polish),
+`cont_refine3D_1jxy` (shared memory, distributed, `refine3D_local`, auto and the polish),
 all gated on the simulation's ground-truth orientations.
+
+`refine3D_local` is the single-state continuous continuation command. It uses
+this `refine=cont` engine; see [refine3D_local_policy.md](refine3D_local_policy.md).
 
 ### Per-state M-estimation
 

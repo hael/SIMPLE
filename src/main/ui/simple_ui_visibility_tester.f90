@@ -6,8 +6,8 @@
 ! requirements and CLI summaries; the registered test programs; and the phase-shift contract
 ! of the five CTF-fitting programs (fit_phshift binary, default no; phshift_min/max/step);
 ! N21, the continuous-pose surface of section 6.5 of the pose_cont refactoring plan: refine3D
-! offers refine=cont and pose_cont=yes|no, refine3D_auto offers pose_cont=no|yes|only and no
-! refine, both offer athres_cont, and pose_cont_route, pose_cont_mode and the program
+! offers refine=cont and pose_cont=yes|no, refine3D_auto offers pose_cont=no|yes and no
+! refine; refine3D_local selects continuous refinement directly; all offer athres_cont, and pose_cont_route, pose_cont_mode and the program
 ! refine3D_pose_cont are gone.
 module simple_ui_visibility_tester
 use simple_test_utils
@@ -18,6 +18,7 @@ use simple_ui_param,      only: UI_PLACEHOLDER_MAX_LEN, ui_param
 use simple_ui_program,    only: UI_DISPLAY_NAME_MAX_LEN, UI_FILE, UI_PARM, UI_SUMMARY_MAX_LEN, &
     &category_descriptor, ui_cli_param_choices, ui_cli_param_summary, ui_program, ui_program_input, &
     &ui_activation_equals_any
+use simple_ui_default_values, only: get_ui_default
 use simple_ui_descriptor_types, only: ui_choices
 use simple_ui_visibility, only: UI_VIS_STANDARD, UI_VIS_ADVANCED, UI_VIS_DEVELOPER, &
                                &ui_visibility_is_valid, ui_visibility_name
@@ -284,8 +285,10 @@ contains
 
     !> N21: the continuous-pose surface (section 6.5, O7)
     subroutine test_cont_surface_contract()
-        character(len=13), parameter :: REFINE3D_PROGRAMS(2) = [character(len=13) :: 'refine3D', 'refine3D_auto']
+        character(len=14), parameter :: REFINE3D_PROGRAMS(3) = &
+            &[character(len=14) :: 'refine3D', 'refine3D_auto', 'refine3D_local']
         type(string) :: choices
+        character(len=16) :: default_value
         logical      :: found
         integer      :: i
         write(*,'(A)') 'test_cont_surface_contract'
@@ -307,8 +310,31 @@ contains
         if( associated(registered_prg) )then
             call find_ui_param(registered_prg%srch_ctrls, 'pose_cont', found, choices)
             call assert_true(found, 'refine3D_auto offers pose_cont')
-            call assert_char('|no|yes|only', choices%to_char(), 'refine3D_auto pose_cont choices')
+            call assert_char('|no|yes', choices%to_char(), 'refine3D_auto pose_cont choices')
             call assert_false(program_has_key(registered_prg, 'refine'), 'refine3D_auto does not offer refine')
+        endif
+        call get_ui_default('simple_exec', 'refine3D_auto', 'autoscale', found, default_value)
+        call assert_true(found, 'auto autoscale display default is resolved')
+        call assert_char('yes', trim(default_value), 'auto keeps autoscale=yes')
+        call get_ui_default('simple_exec', 'refine3D_local', 'autoscale', found, default_value)
+        call assert_true(found, 'local autoscale display default is resolved')
+        call assert_char('no', trim(default_value), 'local defaults to native sampling')
+        program_name = 'refine3D_local'
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), 'refine3D_local is registered')
+        if( associated(registered_prg) )then
+            call assert_false(program_has_key(registered_prg, 'pose_cont'), 'local selects continuous refinement directly')
+            call assert_false(program_has_key(registered_prg, 'refine'), 'local derives refine')
+            call assert_false(program_has_key(registered_prg, 'regpass'), 'local offers no registration pass')
+            call assert_false(program_has_key(registered_prg, 'ref_pose_init'), 'local offers no pose acquisition')
+            call find_ui_param(registered_prg%filt_ctrls, 'filt_mode', found, choices)
+            call assert_true(found, 'local offers filtering mode')
+            call assert_true(program_has_key(registered_prg, 'lpstop'), 'local offers a half-specific band cap')
+            call assert_char('|none|nonuniform', choices%to_char(), 'local offers only half-specific filtering modes')
+            call assert_true(program_has_key(registered_prg, 'trs'), 'local offers the shift bound')
+            call assert_true(program_has_key(registered_prg, 'cont_conv_rot'), 'local offers rotation convergence')
+            call assert_true(program_has_key(registered_prg, 'cont_conv_shift'), 'local offers shift convergence')
+            call assert_true(program_has_key(registered_prg, 'cont_conv_frac'), 'local offers stable fraction')
         endif
         do i = 1, size(REFINE3D_PROGRAMS)
             program_name = trim(REFINE3D_PROGRAMS(i))

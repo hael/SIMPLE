@@ -11,10 +11,11 @@ use simple_defs_ori,        only: N_PTCL_ORIPARAMS
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
 use simple_ori,             only: ori
+use simple_oris,            only: oris
 use simple_cartft_calc,     only: cartft_calc
 use simple_strategy3D,      only: strategy3D
 use simple_strategy3D_srch, only: strategy3D_spec
-use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid
+use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid, cont_reference_geometry_is_valid, check_cont_seeds
 use simple_cartft_pose_opt, only: CARTFT_ACCEPTED
 use simple_type_defs,       only: ctfparams, CTFFLAG_NO, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
@@ -35,6 +36,9 @@ contains
         write(*,'(A)') '**** running all Cartesian 3D strategy tests ****'
         write(*,'(A)') 'test_seed_contract'
         call test_seed_contract()
+        call test_reference_geometry()
+        call test_selected_seeds()
+        call test_particle_seed_contract()
         write(*,'(A)') 'test_lifecycle_and_rejection'
         call test_lifecycle_and_rejection()
         write(*,'(A)') 'test_commit_contract'
@@ -165,6 +169,74 @@ contains
     end function rotation_distance
 
     ! TESTS
+    subroutine test_reference_geometry()
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+        integer :: dims(3,3)
+        real :: sampling(3)
+        dims = 32
+        sampling = 1.5
+        call assert_true(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'valid reference geometry rejected')
+        ! Both grids span 48 Angstrom: 32 * 1.5 = 16 * 3.
+        dims = 16
+        sampling = 3.
+        call assert_true(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'compatible coarse reference rejected')
+        dims(1,2) = 15
+        call assert_false(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'mismatched half dimensions accepted')
+        dims = 16
+        sampling(3) = 2.
+        call assert_false(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'mismatched half sampling accepted')
+        sampling = 2.
+        call assert_false(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'wrong physical extent accepted')
+        sampling = 0.
+        call assert_false(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'zero sampling accepted')
+        sampling = 1.5
+        sampling(2) = ieee_value(0., ieee_quiet_nan)
+        call assert_false(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'NaN sampling accepted')
+        sampling = 1.5
+        dims = 0
+        call assert_false(cont_reference_geometry_is_valid(dims, sampling, 32, 1.5), 'empty map geometry accepted')
+    end subroutine test_reference_geometry
+
+    ! An invalid row outside the selected state must not reject that state's continuation.
+    subroutine test_selected_seeds()
+        class(oris), allocatable :: particles
+        type(ori) :: seed
+        allocate(particles)
+        call seed%new(is_ptcl=.true.)
+        call particles%new(2, is_ptcl=.true.)
+        call seed%set_euler([0., 0., 0.])
+        call seed%set_shift([0., 0.])
+        call seed%set('state', 1.)
+        call seed%set('eo', 0.)
+        call seed%set('proj', 1.)
+        call particles%set_ori(1, seed)
+        call seed%set('state', 2.)
+        call seed%set('proj', 0.)
+        call particles%set_ori(2, seed)
+        call check_cont_seeds(particles, [.true., .false.])
+        call assert_true(particles%get(2, 'proj') == 0., 'seed validation changed an excluded row')
+        call seed%kill()
+        call particles%kill()
+    end subroutine test_selected_seeds
+
+    ! Both binary labels are valid in packed particle records, including the zero-valued even half.
+    subroutine test_particle_seed_contract()
+        type(ori) :: seed
+        call seed%new(is_ptcl=.true.)
+        call seed%set_euler([0., 0., 0.])
+        call seed%set_shift([0., 0.])
+        call seed%set('state', 1.)
+        call seed%set('proj', 1.)
+        call seed%set('eo', 0.)
+        call assert_true(cont_seed_is_valid(seed), 'a packed even-half seed was rejected')
+        call seed%set('eo', 1.)
+        call assert_true(cont_seed_is_valid(seed), 'a packed odd-half seed was rejected')
+        call seed%set('eo', 0.5)
+        call assert_false(cont_seed_is_valid(seed), 'a fractional packed half label was accepted')
+        call seed%set('eo', -1.)
+        call assert_false(cont_seed_is_valid(seed), 'an unassigned packed half label was accepted')
+        call seed%kill()
+    end subroutine test_particle_seed_contract
 
     ! E19 (seed validity, moved from the pose_cont strategy tester): the identity is a valid
     ! initialized pose; explicit state, half and projection, not nonzero Euler angles, define it
@@ -176,9 +248,18 @@ contains
         call seed%set('eo', 0.)
         call seed%set('proj', 1.)
         call assert_true(cont_seed_is_valid(seed), 'a valid identity seed was rejected')
+        call seed%set_shift([0., 0.])
+        call assert_true(cont_seed_is_valid(seed), 'zero shifts were rejected')
+        call seed%delete_entry('e1')
+        call assert_false(cont_seed_is_valid(seed), 'a missing Euler angle was accepted')
+        call seed%set('e1', 0.)
         call seed%set('proj', 0.)
         call assert_false(cont_seed_is_valid(seed), 'a seed without projection direction was accepted')
         call seed%set('proj', 1.)
+        call seed%delete_entry('eo')
+        call assert_false(cont_seed_is_valid(seed), 'a missing half-set was accepted as even')
+        call seed%set('eo', 0.5)
+        call assert_false(cont_seed_is_valid(seed), 'a fractional half-set was rounded and accepted')
         call seed%set('eo', 2.)
         call assert_false(cont_seed_is_valid(seed), 'a seed without half-set was accepted')
         call seed%kill()

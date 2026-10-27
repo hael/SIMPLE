@@ -15,6 +15,7 @@ use simple_matcher_3Drec,       only: write_rec3D_bench
 use simple_sigma2_files,        only: load_sigma2
 use simple_image,               only: image
 use simple_imgarr_utils,        only: alloc_imgarr, dealloc_imgarr
+use simple_refine3D_provenance,  only: begin_reference_set, publish_reference_set, publish_reuse_provenance
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
     &write_support_provenance
 use simple_image_msk,           only: image_msk
@@ -733,6 +734,7 @@ contains
             endif
             time_map_output = 0.0_dp
             time_nu_filter  = 0.0_dp
+            if( params%oritype == 'ptcl3D' ) call begin_reference_set(fname_vol)
             if( params%l_ml_reg )then
                 fname_even_unfil = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
                 fname_odd_unfil  = refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
@@ -837,6 +839,10 @@ contains
                 endif
                 time_nu_filter = real(toc(t_state_phase),dp)
             endif
+            eonames(1) = fname_even
+            eonames(2) = fname_odd
+            call publish_reference_set(params, build%spproj, build%spproj_field, state, fname_vol, &
+                &eonames, fname_fsc, align_lps(state))
             call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output, time_nu_filter)
             if( L_BENCH_GLOB )then
                 bt%rt_map_output  = bt%rt_map_output + time_map_output
@@ -1115,7 +1121,7 @@ contains
         subroutine write_chain_manifest( state_here )
             integer, intent(in) :: state_here
             type(trail_chain_manifest) :: man
-            type(string)    :: manifest, half_fname
+            type(string)    :: manifest, half_fname, files(3)
             integer(int64)  :: sizes(4)
             integer         :: io_stat, gen
             integer(timer_int_kind) :: t_manifest
@@ -1132,6 +1138,12 @@ contains
                 &gen, sizes, real(sum(chain_mass)), sum(chain_contrib), wset_id)
             call man%write(manifest, io_stat)
             if( io_stat /= 0 ) THROW_WARN('failed to write the PCG trailing chain manifest; the chain will be re-seeded')
+            if( io_stat == 0 )then
+                files(1) = manifest
+                files(2) = refine3D_pcg_trail_accum_fname(state_here, 'even')
+                files(3) = refine3D_pcg_trail_accum_fname(state_here, 'odd')
+                call publish_reuse_provenance(params, build%spproj, build%spproj_field, 'chain', manifest, files)
+            endif
             call man%kill
             call manifest%kill
             if( L_BENCH_GLOB ) bt%rt_chain = bt%rt_chain + toc(t_manifest)

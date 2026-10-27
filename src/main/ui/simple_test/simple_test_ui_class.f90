@@ -221,7 +221,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Cartesian Alignment')
         call unit_cart_align3D%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (cartesian_fourier, cart_calculator, pose_optimizer, pose_strategy, pose_statistics)', '', .false., '')
+            &'One sub-suite of this area to run alone (local_startup, cartesian_fourier, cart_calculator, pose_optimizer, pose_strategy, pose_statistics)', '', .false., '')
         call add_ui_program('unit_cart_align3D', unit_cart_align3D, tsttab, UI_CATEGORY)
     end subroutine new_unit_cart_align3D
 

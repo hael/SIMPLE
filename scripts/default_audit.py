@@ -58,7 +58,7 @@ TRACED_DEFAULT_HELPERS = {"set_automask2d_defaults", "set_refine2d_defaults"}
 
 # Commander execute methods that only forward the command line to one workflow
 # procedure: the workflow's missing-key assignments are the program's evidence.
-DELEGATED_WORKFLOWS = {"exec_solve2d_workflow"}
+DELEGATED_WORKFLOWS = {"exec_solve2d_workflow", "exec_refine3d_workflow"}
 
 # These helpers inspect or report the command line but do not assign defaults.
 READ_ONLY_CLINE_HELPERS = {"warn_for_forced_bootstrap_overrides"}

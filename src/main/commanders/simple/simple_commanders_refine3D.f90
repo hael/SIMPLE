@@ -7,12 +7,18 @@ use simple_refine3D_stage_plan,                    only: refine3D_stage_plan_ent
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 use simple_gui_communicator,                       only: gui_communicator
 implicit none
+private :: exec_refine3D_workflow
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_refine3D_auto
   contains
     procedure :: execute      => exec_refine3D_auto
 end type commander_refine3D_auto
+
+type, extends(commander_base) :: commander_refine3D_local
+  contains
+    procedure :: execute      => exec_refine3D_local
+end type commander_refine3D_local
 
 type, extends(commander_base) :: commander_refine3D_states
   contains
@@ -47,19 +53,35 @@ end type commander_bootstrap_rec3D
 contains
 
     subroutine exec_refine3D_auto( self, cline )
+        class(commander_refine3D_auto), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        call exec_refine3D_workflow(cline, .false.)
+    end subroutine exec_refine3D_auto
+
+    subroutine exec_refine3D_local( self, cline )
+        class(commander_refine3D_local), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'no')
+        call exec_refine3D_workflow(cline, .true.)
+    end subroutine exec_refine3D_local
+
+    ! Owns the workflow project; local and auto share startup, sampling and finalization.
+    subroutine exec_refine3D_workflow( cline, l_cont_only )
         use simple_final_rec,         only: calc_final_rec
         use simple_commanders_rec,    only: commander_rec3D
         use simple_estimate_ssnr,     only: lpstages_setlims
         use simple_commanders_euclid, only: commander_calc_pspec
-        use simple_refine3D_strategy, only: strip_refine3D_search_only_args
+        use simple_refine3D_strategy, only: strip_refine3D_search_only_args, &
+            &stage_refine3D_local_references, stage_refine3D_local_chain
         use simple_strategy3D_cont,   only: check_cont_seeds
-        class(commander_refine3D_auto), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline), intent(inout) :: cline
+        logical, intent(in) :: l_cont_only
         type(cmdline)               :: cline_boot, cline_pass
         type(parameters)            :: params
         type(sp_project)            :: spproj
         type(gui_communicator)      :: gui_comm
-        type(string)                :: init_vol
+        type(string)                :: init_vol, source_ref_vol, source_fsc_fname, source_sigma_state
         type(string)                :: pose_init_refs(1), pose_init_checkpoint(1)
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
         ! Registration pass: one refine=greedy iteration of all particles against the masked startup
@@ -69,7 +91,7 @@ contains
         integer, parameter :: MAIN_NSPACE_SUB    = 500
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO = 4.0
-        character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_AUTO'
+        character(len=14) :: WORKFLOW_LABEL
         logical, parameter :: DEBUG  = .true.
         integer, parameter :: MINBOX = 256
         ! Minimum iterations before the convergence test (overlap > 0.99) may stop the run:
@@ -79,7 +101,8 @@ contains
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
-        logical :: l_external_input, l_ref_pose_init_requested, l_cont_only, l_polish
+        logical :: l_external_input, l_ref_pose_init_requested, l_polish
+        logical :: l_source_support_verified, l_reused_derivatives
         type(string) :: pose_cont_arg
         ! commanders
         type(commander_rec3D)           :: xrec3D
@@ -87,38 +110,44 @@ contains
         type(commander_calc_pspec)      :: xcalc_pspec
         type(commander_refine3D)        :: xrefine3D
         maxits_user      = 0
+        l_source_support_verified = .false.
         l_external_input = cline%defined('vol1')
-        ! continuous pose refinement (O7 of the pose_cont refactoring): pose_cont=no|yes|only is the
-        ! workflow switch and refine is derived from it, as refine3D_states derives multivol_mode
-        if( cline%defined('refine') ) THROW_HARD(WORKFLOW_LABEL//' derives refine from pose_cont; use pose_cont=no|yes|only')
-        if( .not. cline%defined('pose_cont') ) call cline%set('pose_cont', 'no')
-        pose_cont_arg = cline%get_carg('pose_cont')
-        select case(trim(pose_cont_arg%to_char()))
-            case('no')
-                l_cont_only = .false.
-                l_polish    = .false.
-            case('yes')
-                ! a continuous pass after every main-loop iteration (C19); the registration pass,
-                ! the pose initialization and the bootstraps run without it
-                l_cont_only = .false.
-                l_polish    = .true.
-            case('only')
-                ! a continuation mode (C11): no discrete search, so no pose initialization and no
-                ! registration pass; the Cartesian pass keeps objfun=euclid (C20)
-                l_cont_only = .true.
-                l_polish    = .false.
-                if( cline%defined('ref_pose_init') )then
-                    if( cline%get_carg('ref_pose_init') == 'cc' ) &
-                        &THROW_HARD(WORKFLOW_LABEL//' pose_cont=only continues from existing poses; ref_pose_init=cc is a discrete pose initialization')
-                endif
-                if( cline%defined('regpass') )then
-                    if( cline%get_carg('regpass') == 'yes' ) &
-                        &THROW_HARD(WORKFLOW_LABEL//' pose_cont=only runs no discrete registration pass; regpass=yes is not available with it')
-                endif
-                call cline%set('regpass', 'no')
-            case DEFAULT
-                THROW_HARD(WORKFLOW_LABEL//' supports pose_cont=no|yes|only')
-        end select
+        WORKFLOW_LABEL = 'REFINE3D_AUTO'
+        if( l_cont_only ) WORKFLOW_LABEL = 'REFINE3D_LOCAL'
+        if( cline%defined('refine') ) THROW_HARD('The workflow derives refine; remove the refine argument')
+        l_polish = .false.
+        if( l_cont_only )then
+            call cline%set('prg', 'refine3D_local')
+            if( cline%defined('pose_cont') ) THROW_HARD('refine3D_local selects continuous refinement; remove pose_cont')
+            if( cline%defined('nspace') .or. cline%defined('nspace_sub') ) THROW_HARD('refine3D_local uses no projection grid; remove nspace and nspace_sub')
+            call require_local_value('ref_pose_init', 'none')
+            call require_local_value('regpass', 'no')
+            call require_local_value('objfun', 'euclid')
+            call require_local_value('ml_reg', 'yes')
+            call require_local_value('center', 'no')
+            call require_local_value('combine_eo', 'no')
+            if( cline%defined('lp') ) THROW_HARD('refine3D_local requires half-specific references; use lpstop instead of lp')
+            if( cline%defined('filt_mode') )then
+                if( cline%get_carg('filt_mode') == 'nonuniform_lpset' ) THROW_HARD('refine3D_local does not support filt_mode=nonuniform_lpset')
+            endif
+            if( cline%defined('nstates') )then
+                if( cline%get_iarg('nstates') /= 1 ) THROW_HARD('refine3D_local refines one state; use state=X')
+            endif
+            if( cline%defined('trail_seed') ) THROW_HARD('trail_seed is reserved for refine3D_local')
+            call cline%set('regpass', 'no')
+        else
+            if( .not. cline%defined('pose_cont') ) call cline%set('pose_cont', 'no')
+            pose_cont_arg = cline%get_carg('pose_cont')
+            select case(trim(pose_cont_arg%to_char()))
+                case('no')
+                case('yes')
+                    l_polish = .true.
+                case('only')
+                    THROW_HARD('pose_cont=only is retired; use prg=refine3D_local without pose_cont')
+                case DEFAULT
+                    THROW_HARD('refine3D_auto supports pose_cont=no|yes')
+            end select
+        endif
         ! hard defaults
         call cline%set('balance',       'none') ! global lowest-updatecnt sampling, no sampling units
         call cline%set('greedy_sampling', 'no') ! only active with sampling units (balance=class|cavg)
@@ -143,7 +172,6 @@ contains
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
-        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! evidence-constrained background filtering
         l_maxits_defined = cline%defined('maxits')
@@ -156,6 +184,8 @@ contains
         else
             call cline%set('minits', MINITS_REFINE3D_AUTO)
         endif
+        ! Validate first: params%new can create missing halves from the merged map.
+        if( l_cont_only ) call preflight_cont_startup()
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
         ! state=X: that state alone, refined on a work project (per-state M-estimation with m_estimator=flex);
@@ -166,6 +196,7 @@ contains
         else if( params%l_m_estimator_flex )then
             THROW_HARD(WORKFLOW_LABEL//' m_estimator=flex refines one state of the project''s state weight set; give state=')
         endif
+        if( l_cont_only ) call stage_local_sigma2()
         call gui_comm%new(params)
         l_ref_pose_init_requested = trim(params%ref_pose_init).eq.'cc'
         if( l_ref_pose_init_requested .and. .not. l_external_input )then
@@ -184,7 +215,25 @@ contains
         l_have_init_vol = .false.
         init_box        = 0
         init_smpd       = 0.
-        if( cline%defined('vol1') )then
+        if( l_cont_only )then
+            call spproj%read_segment('out', params%projfile)
+            init_vol = source_ref_vol
+            if( .not. file_exists(init_vol) )then
+                THROW_HARD('REFINE3D_LOCAL starting volume does not exist: '//init_vol%to_char())
+            endif
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call stage_refine3D_local_references(params, spproj, init_vol, source_fsc_fname, &
+                &l_source_support_verified, l_reused_derivatives)
+            if( l_reused_derivatives ) call spproj%write_segment_inside('ptcl3D', params%projfile)
+            call spproj%write_segment_inside('out', params%projfile)
+            params%vols(1)      = init_vol
+            params%vols_even(1) = add2fbody(init_vol, MRC_EXT, '_even')
+            params%vols_odd(1)  = add2fbody(init_vol, MRC_EXT, '_odd')
+            l_have_init_vol = .true.
+            call cline%set('vol1', init_vol)
+            write(logfhandle,'(A,1X,A)') '>>> REFINE3D_LOCAL USING STAGED SAVED REFERENCES:', init_vol%to_char()
+            call spproj%kill
+        else if( cline%defined('vol1') )then
             init_vol = cline%get_carg('vol1')
             if( .not. file_exists(init_vol) )then
                 THROW_HARD('File: '//init_vol%to_char()//' does not exist! '//WORKFLOW_LABEL)
@@ -221,7 +270,13 @@ contains
             call spproj%kill
         endif
         smpd_target = SMPD_TARGET_DEFAULT
-        if( .not. params%l_autoscale .or. params%box <= MINBOX )then
+        if( cline%defined('box_crop') )then
+            box_crop    = params%box_crop
+            smpd_crop   = params%smpd_crop
+            smpd_target = smpd_crop
+            scale       = real(box_crop) / real(params%box)
+            l_autoscale = box_crop < params%box
+        else if( .not. params%l_autoscale .or. params%box <= MINBOX )then
             smpd_target = params%smpd
             smpd_crop   = params%smpd
             box_crop    = params%box
@@ -232,6 +287,7 @@ contains
             l_autoscale = box_crop < params%box
         endif
         trslim = min(8.,max(2.0, AHELIX_WIDTH / smpd_crop))
+        if( l_cont_only .and. cline%defined('trs') ) trslim = params%trs
         if( DEBUG )then
             print *, 'smpd_target: ', smpd_target
             print *, 'box:         ', params%box
@@ -245,42 +301,37 @@ contains
         call cline%set('trs', trslim)
         if( l_autoscale )then
             call cline%set('box_crop',  box_crop)
-            call cline%set('smpd_crop', smpd_crop)
         else
             call cline%delete('box_crop')
-            call cline%delete('smpd_crop')
         endif
+        call cline%delete('smpd_crop')
+        if( l_cont_only ) call stage_local_trailing_chain(source_ref_vol)
         if( l_ref_pose_init_requested ) call initialize_external_reference_poses
-        ! Startup: particle-power sigmas (the committed state refine3D reuses), then ONE regularized
-        ! reconstruct3D with the refinement's filtering, so iteration 1 sees the references iteration N will.
-        cline_boot = cline
-        call strip_refine3D_search_only_args(cline_boot)
-        call cline_boot%set('prg', 'calc_pspec')
-        call cline_boot%set('which_iter', 1)
-        call xcalc_pspec%execute(cline_boot)
-        cline_boot = cline
-        call cline_boot%set('prg', 'reconstruct3D')
-        call cline_boot%delete('trail_rec')
-        call cline_boot%delete('update_frac')
-        call cline_boot%delete('endit')
-        ! alignment-loop controls have no meaning for a reconstruction
-        call cline_boot%delete('refine')
-        call cline_boot%delete('maxits')
-        call cline_boot%delete('minits')
-        call cline_boot%delete('continue')
-        call cline_boot%set('postprocess', 'no')
-        call cline_boot%set('which_iter',      1)
-        ! the initial volume is the lag-one reference of the startup
-        ! reconstruction: on PCG it supplies the density-envelope support of
-        ! the base pair, so iteration 1 starts from an envelope-constrained
-        ! pair and an estimator-constrained FSC like every later iteration
-        if( l_have_init_vol .and. .not. cline_boot%defined('vol1') ) call cline_boot%set('vol1', init_vol)
-        call xrec3D%execute(cline_boot)
-        ! the bootstrap reconstruction is now the starting reference, and its
-        ! NU-filtered halves, masks and matching-lp handoff are on disk and in
-        ! the project, so iteration 1 matches exactly what iteration N will
-        call cline%set('vol1', refine3D_state_vol_fname(1))
-        call cline_boot%kill
+        ! Auto builds startup references from particles; local continues from its staged saved pair.
+        if( .not. l_cont_only )then
+            cline_boot = cline
+            call strip_refine3D_search_only_args(cline_boot)
+            call cline_boot%set('prg', 'calc_pspec')
+            call cline_boot%set('which_iter', 1)
+            call xcalc_pspec%execute(cline_boot)
+            cline_boot = cline
+            call cline_boot%set('prg', 'reconstruct3D')
+            call cline_boot%delete('trail_rec')
+            call cline_boot%delete('update_frac')
+            call cline_boot%delete('endit')
+            ! alignment-loop controls have no meaning for a reconstruction
+            call cline_boot%delete('refine')
+            call cline_boot%delete('maxits')
+            call cline_boot%delete('minits')
+            call cline_boot%delete('continue')
+            call cline_boot%set('postprocess', 'no')
+            call cline_boot%set('which_iter', 1)
+            ! The bootstrap pair is the lag-one reference of the first auto iteration.
+            if( l_have_init_vol .and. .not. cline_boot%defined('vol1') ) call cline_boot%set('vol1', init_vol)
+            call xrec3D%execute(cline_boot)
+            call cline%set('vol1', refine3D_state_vol_fname(1))
+            call cline_boot%kill
+        endif
         call seed_refine3D_auto_nonuniform_lpset()
         ! global registration pass against the masked startup references
         call run_registration_pass()
@@ -311,6 +362,12 @@ contains
         call gui_comm%kill()
 
     contains
+        subroutine require_local_value( key, expected )
+            character(len=*), intent(in) :: key, expected
+            if( .not. cline%defined(key) ) return
+            if( cline%get_carg(key) /= expected ) THROW_HARD('refine3D_local requires '//key//'='//expected)
+        end subroutine require_local_value
+
 
         !> One global refine=greedy iteration (REGPASS_NSPACE directions, every particle) banded via lpstop
         !! at the startup pair's FSC=regpass_fsc resolution; logs direction/shift reassignment fractions.
@@ -474,6 +531,31 @@ contains
                 &abs(init_smpd - params%smpd) <= 1.e-6
         end function project_init_vol_compatible
 
+        ! Select rows once by hard labels or the state's frozen applied weights; no project writes.
+        subroutine select_state_rows( project, state, use_flex, selected, weights )
+            use, intrinsic :: iso_fortran_env, only: real32
+            use simple_state_weight_set, only: state_weight_set
+            class(sp_project), intent(in) :: project
+            integer, intent(in) :: state
+            logical, intent(in) :: use_flex
+            logical, allocatable, intent(out) :: selected(:)
+            class(state_weight_set), intent(inout) :: weights
+            real(real32), allocatable :: column(:)
+            integer :: i
+            allocate(selected(project%os_ptcl3D%get_noris()))
+            if( use_flex )then
+                call weights%new(project, project%os_ptcl3D)
+                if( state > weights%get_nstates() ) THROW_HARD('Requested state is outside the frozen weight set')
+                call weights%get_applied_weights(state, 0., column)
+                selected = column > 0._real32
+            else
+                do i = 1, size(selected)
+                    selected(i) = project%os_ptcl3D%get_state(i) == state
+                enddo
+            endif
+            if( .not. any(selected) ) THROW_HARD('No particle is selected for the requested state')
+        end subroutine select_state_rows
+
         !> state=X, as solve3D's state continuation: a copy of the project holding state X alone, as state 1,
         !! which the run refines; the project it was copied from is not written. With m_estimator=flex the
         !! rows are those with a positive weight for X in the project's state weight set, and the copy gets
@@ -482,7 +564,6 @@ contains
         !! (the parent's set opens only under the parent's name). The copy keeps state X's map and FSC as
         !! state 1's.
         subroutine prepare_state_work_project()
-            use, intrinsic :: iso_fortran_env,  only: real32
             use simple_commanders_project_core, only: commander_selection
             use simple_state_weight_set,        only: state_weight_set
             type(commander_selection) :: xselection
@@ -491,7 +572,6 @@ contains
             type(state_weight_set)    :: parent_set, work_set
             type(string)              :: src_projfile, work_projfile, work_projname, selfile
             type(string)              :: vol_fname, fsc_fname, pstk, wstk
-            real(real32), allocatable :: wcol(:)
             integer,      allocatable :: parent_rows(:)
             logical,      allocatable :: l_sel(:)
             real    :: vol_smpd
@@ -503,7 +583,7 @@ contains
             ! that is removed below: never in the parent's directory, nor beside another state's work project
             if( cline%get_carg('mkdir') /= 'yes' ) THROW_HARD(WORKFLOW_LABEL//' state= runs in its own directory: mkdir=yes')
             src_projfile  = params%projfile
-            work_projfile = 'refine3D_auto_state'//int2str_pad(state,2)//'.simple'
+            work_projfile = trim(params%prg%to_char())//'_state'//int2str_pad(state,2)//'.simple'
             work_projname = get_fbody(work_projfile, 'simple')
             ! the parent opens under its own name: its state weight set is tied to it
             call parent%read(src_projfile)
@@ -519,22 +599,9 @@ contains
             call cline_sel%set('prune',    'yes')
             call cline_sel%set('append',   'no')
             call cline_sel%set('mkdir',    'no')
-            allocate(l_sel(nparent))
-            if( params%l_m_estimator_flex )then
-                call parent_set%new(parent, parent%os_ptcl3D)
-                if( state > parent_set%get_nstates() ) &
-                    &THROW_HARD(WORKFLOW_LABEL//' state= lies outside the project''s state weight set')
-                call parent_set%get_applied_weights(state, 0., wcol)
-                l_sel = wcol > 0._real32
-                if( .not. any(l_sel) ) THROW_HARD(WORKFLOW_LABEL//' no particle has weight for this state')
-            else
-                do i = 1, nparent
-                    l_sel(i) = parent%os_ptcl3D%get_state(i) == state
-                enddo
-                if( .not. any(l_sel) ) THROW_HARD(WORKFLOW_LABEL//' state= is absent from ptcl3D')
-            endif
+            call select_state_rows(parent, state, params%l_m_estimator_flex, l_sel, parent_set)
             ! the rows, as the selection program's per-row selection file
-            selfile = 'refine3D_auto_state'//int2str_pad(state,2)//'_rows.txt'
+            selfile = trim(params%prg%to_char())//'_state'//int2str_pad(state,2)//'_rows.txt'
             call fopen(funit, file=selfile, status='REPLACE', action='WRITE')
             do i = 1, nparent
                 write(funit,'(I1)') merge(1, 0, l_sel(i))
@@ -659,6 +726,196 @@ contains
             endif
         end subroutine set_refine3D_auto_sampling
 
+        ! Reads source headers and project only; writes no project, map, or half assignment.
+        subroutine preflight_cont_startup()
+            use simple_imghead, only: get_mrcfile_info
+            use simple_state_weight_set, only: state_weight_set
+            use simple_strategy3D_cont, only: cont_reference_geometry_is_valid
+            use simple_sigma2_files, only: canonical_sigma2_consumable
+            use simple_refine3D_provenance, only: validate_reference_set, reference_matches_project, REFSET_OK, REFSET_LEGACY
+            class(sp_project), allocatable :: source
+            class(state_weight_set), allocatable :: weights
+            logical, allocatable :: selected(:)
+            logical :: use_flex, source_sigma_found
+            type(string) :: project_file, previous_dir, volume, names(3), project_dir, relative_volume
+            class(oris), pointer :: source_os
+            character(len=STDLEN) :: sigma_message
+            type(string), allocatable :: projects(:)
+            integer :: idir, state, i, dims(3,3), native_box, registered_box, halves(0:1), particle_state
+            integer :: provenance_status
+            real :: sampling(3), native_smpd, registered_smpd
+
+            if( cline%defined('projfile') )then
+                project_file = cline%get_carg('projfile')
+            else
+                ! Match parameter-side project discovery, then pin that choice before directory creation.
+                idir = find_next_int_dir_prefix(string('.'), previous_dir)
+                if( previous_dir%is_allocated() )then
+                    call simple_list_files(previous_dir%to_char()//'/*.simple', projects)
+                else
+                    call simple_list_files('*.simple', projects)
+                endif
+                if( .not. allocated(projects) ) THROW_HARD('Continuous startup requires an existing project')
+                if( size(projects) /= 1 ) THROW_HARD('Continuous startup requires an unambiguous projfile')
+                project_file = projects(1)
+                call cline%set('projfile', project_file)
+            endif
+            allocate(source)
+            call source%read(project_file)
+            call source%update_projinfo(project_file)
+            source_fsc_fname = ''
+            state = 1
+            if( cline%defined('state') )then
+                state = cline%get_iarg('state')
+                if( state < 1 ) THROW_HARD('Continuous startup requires a positive state')
+                use_flex = .false.
+                if( cline%defined('m_estimator') ) use_flex = cline%get_carg('m_estimator') == 'flex'
+                allocate(weights)
+                call select_state_rows(source, state, use_flex, selected, weights)
+            else
+                allocate(selected(source%os_ptcl3D%get_noris()), source=.true.)
+                do i = 1, size(selected)
+                    if( source%os_ptcl3D%get_state(i) > 1 ) THROW_HARD('refine3D_local needs state=X for a multistate project')
+                enddo
+            endif
+            call check_cont_seeds(source%os_ptcl3D, selected)
+            ! Seed validation above guarantees labels 0/1, which index these two counters.
+            halves = 0
+            do i = 1, size(selected)
+                if( .not. selected(i) ) cycle
+                particle_state = source%os_ptcl3D%get_state(i)
+                if( particle_state <= 0 ) cycle
+                idir = source%os_ptcl3D%get_eo(i)
+                halves(idir) = halves(idir) + 1
+            enddo
+            if( any(halves == 0) ) THROW_HARD('Continuous startup requires particles in both half-sets')
+            native_box = source%get_box()
+            native_smpd = source%get_smpd()
+            if( cline%defined('vol1') )then
+                volume = cline%get_carg('vol1')
+            else
+                call source%get_vol('vol', state, volume, registered_smpd, registered_box)
+                ! A stored relative map path may refer to the source project directory.
+                if( .not. file_exists(volume) )then
+                    project_dir = get_fpath(project_file)
+                    relative_volume = project_dir%to_char()//volume%to_char()
+                    if( file_exists(relative_volume) ) volume = relative_volume
+                endif
+            endif
+            source_ref_vol = simple_abspath(volume)
+            ! Require the original pair before initialization can manufacture missing halves.
+            names(1) = volume
+            names(2) = add2fbody(volume, MRC_EXT, '_even')
+            names(3) = add2fbody(volume, MRC_EXT, '_odd')
+            do i = 1,3
+                if( .not. file_exists(names(i)) )then
+                    THROW_HARD('Continuous startup requires an existing reference: '//names(i)%to_char())
+                endif
+                call get_mrcfile_info(names(i), dims(:,i), 'M', sampling(i), .false.)
+            enddo
+            if( .not. cont_reference_geometry_is_valid(dims, sampling, native_box, native_smpd) ) &
+                THROW_HARD('Continuous startup reference dimensions, sampling, or physical extent are incompatible')
+            provenance_status = validate_reference_set(source_ref_vol, source_fsc_fname, l_source_support_verified, sigma_message)
+            select case(provenance_status)
+                case(REFSET_OK)
+                    if( .not. reference_matches_project(source_ref_vol, source, state, l_external_input, sigma_message) ) &
+                        &THROW_HARD('Continuous startup reference provenance failed: '//trim(sigma_message))
+                    if( len_trim(sigma_message) > 0 ) write(logfhandle,'(A)') '>>> REFINE3D_LOCAL '//trim(sigma_message)
+                    write(logfhandle,'(A)') '>>> REFINE3D_LOCAL VERIFIED THE SOURCE REFERENCE SET'
+                case(REFSET_LEGACY)
+                    write(logfhandle,'(A)') '>>> REFINE3D_LOCAL LEGACY BASE PAIR: REBUILDING UNVERIFIED FSC AND DERIVED PRODUCTS'
+                case default
+                    THROW_HARD('Continuous startup reference provenance failed: '//trim(sigma_message))
+            end select
+            call source%ptr2oritype('ptcl3D', source_os)
+            if( canonical_sigma2_consumable(source, source_os, native_box, native_smpd, sigma_message) )then
+                call source%get_sigma2_state_path(source_sigma_state, source_sigma_found)
+                if( source_sigma_found ) source_sigma_state = simple_abspath(source_sigma_state)
+            endif
+            nullify(source_os)
+            call source%kill
+        end subroutine preflight_cont_startup
+
+        ! Loads the work project once; the strategy stages files without project-file I/O.
+        subroutine stage_local_trailing_chain( source_vol )
+            type(string), intent(in) :: source_vol
+            class(sp_project), allocatable :: project
+            logical :: valid
+            if( .not. params%l_update_frac .or. .not. params%l_trail_rec ) return
+            allocate(project)
+            call project%read_segment('projinfo', params%projfile)
+            call project%update_projinfo(params%projfile)
+            call project%read_segment('stk', params%projfile)
+            call project%read_segment('optics', params%projfile)
+            call project%read_segment('out', params%projfile)
+            call project%read_segment('ptcl3D', params%projfile)
+            valid = stage_refine3D_local_chain(params, project, source_vol, box_crop, smpd_crop)
+            if( valid )then
+                call cline%set('trail_seed', 'no')
+                write(logfhandle,'(A)') '>>> REFINE3D_LOCAL REUSING A COMPATIBLE TRAILING ACCUMULATOR CHAIN'
+            else
+                call cline%set('trail_seed', 'yes')
+                write(logfhandle,'(A)') '>>> REFINE3D_LOCAL WILL USE A FULL FIRST UPDATE TO SEED THE TRAILING CHAIN'
+            endif
+            call project%kill
+        end subroutine stage_local_trailing_chain
+
+        ! Copy only a committed state that validates against the selected work-project rows.
+        subroutine stage_local_sigma2()
+            use simple_sigma2_files, only: canonical_sigma2_consumable
+            use simple_refine3D_provenance, only: reuse_provenance_matches, provenance_file
+            type(sp_project) :: sigma_project
+            type(string) :: state_path, staged_path, source_record, staged_record
+            class(oris), pointer :: os
+            logical :: valid
+            character(len=STDLEN) :: message
+            call sigma_project%read_segment('projinfo', params%projfile)
+            call sigma_project%update_projinfo(params%projfile)
+            ! Remove inherited registration so a rejected store cannot bypass the bootstrap gate.
+            call sigma_project%projinfo%delete_entry(1, 'sigma2_state')
+            call sigma_project%write_segment_inside('projinfo', params%projfile)
+            if( .not. source_sigma_state%is_allocated() )then
+                write(logfhandle,'(A)') '>>> REFINE3D_LOCAL HAS NO COMPATIBLE SOURCE SIGMA2; PARTICLE-POWER BOOTSTRAP WILL RUN'
+                call sigma_project%kill
+                return
+            endif
+            call sigma_project%set_sigma2_state_path(source_sigma_state)
+            call sigma_project%read_segment('stk', params%projfile)
+            call sigma_project%read_segment('optics', params%projfile)
+            call sigma_project%read_segment('ptcl3D', params%projfile)
+            call sigma_project%ptr2oritype('ptcl3D', os)
+            valid = canonical_sigma2_consumable(sigma_project, os, params%box, params%smpd, message)
+            if( valid ) valid = reuse_provenance_matches(params, sigma_project, os, 'sigma', &
+                &source_sigma_state, [source_sigma_state], message)
+            if( valid )then
+                state_path = source_sigma_state
+                staged_path = basename(state_path)
+                if( simple_abspath(state_path) /= simple_abspath(staged_path, check_exists=.false.) ) &
+                    &call simple_copy_file(state_path, staged_path)
+                source_record = provenance_file(state_path)
+                staged_record = provenance_file(staged_path)
+                if( simple_abspath(source_record) /= simple_abspath(staged_record, check_exists=.false.) ) &
+                    &call simple_copy_file(source_record, staged_record)
+                staged_record = staged_record//'.pending'
+                if( file_exists(staged_record) ) call del_file(staged_record)
+                call sigma_project%set_sigma2_state_path(staged_path)
+                valid = canonical_sigma2_consumable(sigma_project, os, params%box, params%smpd, message)
+                if( valid ) valid = reuse_provenance_matches(params, sigma_project, os, 'sigma', &
+                    &staged_path, [staged_path], message)
+            endif
+            if( valid )then
+                call sigma_project%write_segment_inside('projinfo', params%projfile)
+                write(logfhandle,'(A)') '>>> REFINE3D_LOCAL REUSING A STAGED COMMITTED SIGMA2 STATE'
+            else
+                write(logfhandle,'(A)') '>>> REFINE3D_LOCAL SIGMA2 REUSE REJECTED: '//trim(message)
+                write(logfhandle,'(A)') '>>> REFINE3D_LOCAL PARTICLE-POWER BOOTSTRAP WILL RUN'
+            endif
+            nullify(os)
+            call sigma_project%kill
+            call state_path%kill
+            call staged_path%kill
+        end subroutine stage_local_sigma2
+
         ! Prepare external input e/o volumes & FSC for refinement and import into project
         subroutine prepare_external_init_vol( init_vol )
             use simple_refine3D_fnames,     only: refine3D_startvol_fname, refine3D_fsc_fname
@@ -754,7 +1011,7 @@ contains
                 &'>>> REFINE3D_AUTO POSE INITIALIZATION CHECKPOINT RECONSTRUCTED; ENTERING EUCLIDEAN REFINEMENT'
         end subroutine initialize_external_reference_poses
 
-    end subroutine exec_refine3D_auto
+    end subroutine exec_refine3D_workflow
 
     subroutine exec_refine3D_states( self, cline )
         use simple_final_rec,                  only: calc_final_rec

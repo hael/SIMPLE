@@ -24,6 +24,7 @@ implicit none
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
 public :: create_refine3D_strategy
 public :: strip_refine3D_search_only_args
+public :: stage_refine3D_local_references, stage_refine3D_local_chain
 
 private
 #include "simple_local_flags.inc"
@@ -162,6 +163,206 @@ abstract interface
 end interface
 
 contains
+
+    ! Stages reference files and updates the caller's out/particle fields; no project-file I/O.
+    subroutine stage_refine3D_local_references( params, project, source_vol, source_fsc_fname, &
+        &support_verified, reused_derivatives )
+        use simple_refine3D_fnames, only: refine3D_startvol_fname
+        use simple_imghead, only: find_ldim_nptcls, find_img_smpd
+        use simple_halfmap_diagnostics, only: copy_support_provenance, remove_support_provenance, write_base_halfmap_fsc
+        use simple_refine3D_provenance, only: provenance_file, local_import_marker, stage_reference_derivatives
+        class(parameters), intent(in) :: params
+        class(sp_project), intent(inout) :: project
+        type(string), intent(inout) :: source_vol
+        type(string), intent(in) :: source_fsc_fname
+        logical, intent(in) :: support_verified
+        logical, intent(out) :: reused_derivatives
+        type(string) :: source_even, source_odd, staged_vol, staged_even, staged_odd
+        type(string) :: fsc_source, stale, bases(3)
+        real :: source_smpd, align_lp
+        character(len=STDLEN) :: message
+        integer :: fsc_box, fsc_bytes, n, dims(3), i
+        source_even = add2fbody(source_vol, MRC_EXT, '_even')
+        source_odd  = add2fbody(source_vol, MRC_EXT, '_odd')
+        staged_vol  = refine3D_startvol_fname(1)
+        if( simple_abspath(source_vol) == simple_abspath(staged_vol, check_exists=.false.) ) &
+            &staged_vol = add2fbody(staged_vol, MRC_EXT, '_local')
+        staged_even = add2fbody(staged_vol, MRC_EXT, '_even')
+        staged_odd  = add2fbody(staged_vol, MRC_EXT, '_odd')
+        if( .not. file_exists(source_even) .or. .not. file_exists(source_odd) ) &
+            &THROW_HARD('REFINE3D_LOCAL cannot stage an incomplete half-map pair')
+        if( simple_abspath(source_vol) /= simple_abspath(staged_vol, check_exists=.false.) )then
+            call simple_copy_file(source_vol, staged_vol)
+            call simple_copy_file(source_even, staged_even)
+            call simple_copy_file(source_odd, staged_odd)
+            if( support_verified )then
+                call copy_support_provenance(source_vol, staged_vol)
+            else
+                call remove_support_provenance(staged_vol)
+            endif
+        endif
+        ! Clear run-owned derivatives before choosing verified reuse or the base-half fallback.
+        bases = [staged_vol, staged_even, staged_odd]
+        do i = 1,3
+            stale = add2fbody(bases(i), MRC_EXT, NUFILT_SUFFIX)
+            if( file_exists(stale) ) call del_file(stale)
+        enddo
+        stale = add2fbody(staged_vol, MRC_EXT, NULOCRES_SUFFIX)
+        if( file_exists(stale) ) call del_file(stale)
+        stale = provenance_file(staged_vol)
+        if( file_exists(stale) ) call del_file(stale)
+        stale = stale//'.pending'
+        if( file_exists(stale) ) call del_file(stale)
+        stale = local_import_marker(staged_vol)
+        if( file_exists(stale) ) call del_file(stale)
+        reused_derivatives = stage_reference_derivatives(params, source_vol, staged_vol, align_lp, message)
+        if( reused_derivatives )then
+            call project%os_ptcl3D%set_all2single('lp', align_lp)
+            call project%os_ptcl3D%set_all2single('lp_est', align_lp)
+            write(logfhandle,'(A,F8.3)') '>>> REFINE3D_LOCAL STAGED VERIFIED NU REFERENCES; MATCHING LP: ', align_lp
+        else
+            call simple_touch(local_import_marker(staged_vol))
+            write(logfhandle,'(A)') '>>> REFINE3D_LOCAL BASE-HALF FALLBACK: '//trim(message)
+        endif
+        call find_ldim_nptcls(source_vol, dims, n)
+        source_smpd = find_img_smpd(source_vol)
+        fsc_source = refine3D_fsc_fname(1)
+        fsc_box = dims(1)
+        fsc_bytes = 0
+        if( file_exists(source_fsc_fname) ) inquire(file=source_fsc_fname%to_char(), size=fsc_bytes)
+        if( fsc_bytes > 0 )then
+            ! An in-place continuation already owns this FSC; replacing it would truncate the source.
+            if( simple_abspath(source_fsc_fname) /= simple_abspath(fsc_source, check_exists=.false.) ) &
+                &call simple_copy_file(source_fsc_fname, fsc_source)
+        else
+            call write_base_halfmap_fsc(source_even, source_odd, dims, source_smpd, fsc_source)
+        endif
+        call project%add_vol2os_out(staged_vol, source_smpd, 1, 'vol', box=dims(1))
+        call project%add_fsc2os_out(fsc_source, 1, fsc_box)
+        source_vol = staged_vol
+        call source_even%kill
+        call source_odd%kill
+        call staged_even%kill
+        call staged_odd%kill
+        call fsc_source%kill
+        call staged_vol%kill
+    end subroutine stage_refine3D_local_references
+
+    ! Validates/stages accumulator files using the caller's project; no project-file I/O.
+    logical function stage_refine3D_local_chain( params, project, source_vol, box_crop, smpd_crop ) result(valid)
+        use simple_refine3D_fnames, only: refine3D_trail_rec_fname, refine3D_trail_rho_fname, &
+            &refine3D_trail_manifest_fname, refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
+        use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
+        use simple_state_weight_set, only: state_weight_set
+        use simple_refine3D_provenance, only: reuse_provenance_matches, provenance_file
+        use, intrinsic :: iso_fortran_env, only: int64
+        class(parameters), intent(in) :: params
+        class(sp_project), target, intent(inout) :: project
+        type(string), intent(in) :: source_vol
+        integer, intent(in) :: box_crop
+        real, intent(in) :: smpd_crop
+        class(oris), pointer :: os
+        class(state_weight_set), allocatable :: weights
+        type(trail_chain_manifest) :: manifest
+        type(string) :: source_dir, src_manifest, dst_manifest, source_file
+        type(string) :: components(4), files(5), src_record, dst_record
+        integer(int64) :: expected_sizes(4), actual_size
+        integer(int64) :: wset_id(2)
+        integer :: ncomponents, i, status
+        real :: source_extent, current_extent
+        character(len=STDLEN) :: message
+        valid = .false.
+        if( .not. params%l_update_frac .or. .not. params%l_trail_rec ) return
+        call project%ptr2oritype('ptcl3D', os)
+        wset_id = 0_int64
+        if( params%l_m_estimator_flex )then
+            allocate(weights)
+            call weights%new(project, os)
+            wset_id = [weights%get_generation(), weights%get_layout_digest()]
+        endif
+        source_dir = get_fpath(source_vol)
+        if( .not. source_dir%is_allocated() ) source_dir = './'
+        if( trim(params%rec_backend) == 'pcg' )then
+            components(1) = refine3D_pcg_trail_accum_fname(1, 'even')
+            components(2) = refine3D_pcg_trail_accum_fname(1, 'odd')
+            ncomponents = 2
+            dst_manifest = refine3D_pcg_trail_manifest_fname(1)
+        else
+            components(1) = refine3D_trail_rec_fname(1, 'even')
+            components(2) = refine3D_trail_rho_fname(1, 'even')
+            components(3) = refine3D_trail_rec_fname(1, 'odd')
+            components(4) = refine3D_trail_rho_fname(1, 'odd')
+            ncomponents = 4
+            dst_manifest = refine3D_trail_manifest_fname(1)
+        endif
+        src_manifest = source_dir//basename(dst_manifest)
+        valid = file_exists(src_manifest)
+        do i = 1, ncomponents
+            source_file = source_dir//basename(components(i))
+            if( .not. file_exists(source_file) ) valid = .false.
+        enddo
+        if( valid )then
+            call manifest%read(src_manifest, status)
+            valid = status == TRAIL_MANIFEST_OK
+        endif
+        if( valid )then
+            valid = manifest%get_nptcls() == project%os_ptcl3D%get_noris() .and. &
+                &manifest%get_nstates() == 1 .and. manifest%get_state() == 1
+            if( valid )then
+                expected_sizes = 0_int64
+                do i = 1, ncomponents
+                    source_file = source_dir//basename(components(i))
+                    actual_size = -1_int64
+                    if( file_exists(source_file) ) inquire(file=source_file%to_char(), size=actual_size)
+                    expected_sizes(i) = actual_size
+                enddo
+                do i = 1, ncomponents
+                    if( manifest%get_size(i) /= expected_sizes(i) ) valid = .false.
+                enddo
+                source_extent  = real(manifest%get_box()) * manifest%get_smpd()
+                current_extent = real(box_crop) * smpd_crop
+                if( manifest%get_box() > box_crop .or. &
+                    &abs(source_extent - current_extent) > 0.01 * current_extent ) valid = .false.
+                if( any(manifest%get_wset_id() /= wset_id) ) valid = .false.
+            endif
+        endif
+        if( valid )then
+            files(1) = src_manifest
+            do i = 1,ncomponents
+                files(i+1) = source_dir//basename(components(i))
+            enddo
+            valid = reuse_provenance_matches(params, project, os, 'chain', src_manifest, files(:ncomponents+1), message)
+            if( .not. valid ) write(logfhandle,'(A)') '>>> REFINE3D_LOCAL CHAIN REUSE REJECTED: '//trim(message)
+        endif
+        if( valid )then
+            do i = 1, ncomponents
+                source_file = source_dir//basename(components(i))
+                if( simple_abspath(source_file) /= simple_abspath(components(i), check_exists=.false.) ) &
+                    &call simple_copy_file(source_file, components(i))
+            enddo
+            src_record = provenance_file(src_manifest)
+            dst_record = provenance_file(dst_manifest)
+            if( simple_abspath(src_record) /= simple_abspath(dst_record, check_exists=.false.) ) &
+                &call simple_copy_file(src_record, dst_record)
+            if( simple_abspath(src_manifest) /= simple_abspath(dst_manifest, check_exists=.false.) ) &
+                &call simple_copy_file(src_manifest, dst_manifest)
+            dst_record = dst_record//'.pending'
+            if( file_exists(dst_record) ) call del_file(dst_record)
+            files(1) = dst_manifest
+            files(2:ncomponents+1) = components(:ncomponents)
+            valid = reuse_provenance_matches(params, project, os, 'chain', dst_manifest, files(:ncomponents+1), message)
+        endif
+        nullify(os)
+        if( allocated(weights) ) call weights%kill
+        call manifest%kill
+        call source_dir%kill
+        call src_manifest%kill
+        call dst_manifest%kill
+        do i = 1, 4
+            call components(i)%kill
+        enddo
+    end function stage_refine3D_local_chain
+
 
     !> The polish of C8 and C19 (pose_cont=yes) is a refine=cont pass this strategy schedules
     !! after every discrete pass over the same particle sample (Phase 9 of the pose_cont
@@ -428,23 +629,32 @@ contains
     !! statistics. The gridding path retains its four-file-plus-manifest
     !! validation; a missing chain is seeded from the current sample.
     subroutine carry_over_trail_rec_chains( params, prev_refine_path )
+        use simple_refine3D_provenance, only: provenance_file
         type(parameters), intent(in) :: params
         class(string),    intent(in) :: prev_refine_path
-        type(string) :: chain_files(4), manifest
+        type(string) :: chain_files(4), manifest, record
         integer      :: state, ifile
         logical      :: l_complete
         if( trim(params%rec_backend) == 'pcg' )then
             do state = 1, params%nstates
                 chain_files(1) = refine3D_pcg_trail_accum_fname(state, 'even')
                 chain_files(2) = refine3D_pcg_trail_accum_fname(state, 'odd')
+                manifest = refine3D_pcg_trail_manifest_fname(state)
+                if( simple_abspath(prev_refine_path//manifest, check_exists=.false.) == &
+                    &simple_abspath(manifest, check_exists=.false.) ) cycle
+                record = provenance_file(manifest)
+                if( file_exists(manifest) ) call del_file(manifest)
+                if( file_exists(record) ) call del_file(record)
                 do ifile = 1, 2
                     if( file_exists(chain_files(ifile)) ) call del_file(chain_files(ifile))
                 enddo
                 l_complete = file_exists(prev_refine_path//chain_files(1)) .and. &
-                    &file_exists(prev_refine_path//chain_files(2))
+                    &file_exists(prev_refine_path//chain_files(2)) .and. file_exists(prev_refine_path//manifest)
                 if( .not. l_complete ) THROW_HARD('continued PCG refinement requires complete even/odd accumulator chains')
                 call simple_copy_file(prev_refine_path//chain_files(1), chain_files(1))
                 call simple_copy_file(prev_refine_path//chain_files(2), chain_files(2))
+                if( file_exists(prev_refine_path//record) ) call simple_copy_file(prev_refine_path//record, record)
+                call simple_copy_file(prev_refine_path//manifest, manifest)
                 call chain_files(1)%kill
                 call chain_files(2)%kill
             enddo
@@ -456,12 +666,16 @@ contains
             chain_files(3) = refine3D_trail_rec_fname(state, 'odd')
             chain_files(4) = refine3D_trail_rho_fname(state, 'odd')
             manifest       = refine3D_trail_manifest_fname(state)
+            if( simple_abspath(prev_refine_path//manifest, check_exists=.false.) == &
+                &simple_abspath(manifest, check_exists=.false.) ) cycle
+            record = provenance_file(manifest)
             ! never leave stale destination components that could combine with
             ! a later partial write into an apparently complete chain
             do ifile = 1,4
                 if( file_exists(chain_files(ifile)) ) call del_file(chain_files(ifile))
             enddo
             if( file_exists(manifest) ) call del_file(manifest)
+            if( file_exists(record) ) call del_file(record)
             ! copy only complete source sets, manifest last
             l_complete = file_exists(prev_refine_path//manifest)
             do ifile = 1,4
@@ -471,6 +685,7 @@ contains
                 do ifile = 1,4
                     call simple_copy_file(prev_refine_path//chain_files(ifile), chain_files(ifile))
                 enddo
+                if( file_exists(prev_refine_path//record) ) call simple_copy_file(prev_refine_path//record, record)
                 call simple_copy_file(prev_refine_path//manifest, manifest)
             endif
             do ifile = 1,4
@@ -721,7 +936,7 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         integer                               :: startit
-        logical                               :: l_proj_dirty
+        logical                               :: l_proj_dirty, l_preserve_chain_history
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! the execution directory exists now: every iteration rebuilds its parameters from cline,
@@ -732,13 +947,15 @@ contains
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         l_proj_dirty = .false.
+        l_preserve_chain_history = .false.
+        if( cline%defined('trail_seed') ) l_preserve_chain_history = cline%get_carg('trail_seed') == 'no'
         ! Some refine modes manage sampling/updatecnt internally
         if( params%l_prob_align_mode )then
             ! random sampling and updatecnt dealt with in prob_align
         else if( trim(params%refine) == 'sigma' )then
             ! a residual-only sigma2 pass leaves the update history as it is
         else
-            if( startit == 1 )then
+            if( startit == 1 .and. .not. l_preserve_chain_history )then
                 call build%spproj_field%clean_entry('updatecnt', 'sampled')
                 l_proj_dirty = .true.
             endif
@@ -807,7 +1024,8 @@ contains
         integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
         logical                           :: l_prob_neigh_mode
-        logical                           :: l_write_partial_recs, l_polish
+        logical                           :: l_write_partial_recs, l_polish, l_force_full_first
+        real                              :: requested_update_frac
         type(string)                      :: volname
         601 format(A,1X,F12.3)
         if( L_BENCH_GLOB )then
@@ -817,6 +1035,10 @@ contains
         endif
         iter      = params%which_iter
         extr_iter = params%extr_iter
+        requested_update_frac = params%update_frac
+        l_force_full_first = iter == params%startit .and. params%l_update_frac .and. cline%defined('trail_seed')
+        if( l_force_full_first ) l_force_full_first = cline%get_carg('trail_seed') == 'yes'
+        if( l_force_full_first ) call cline%set('update_frac', 1.0)
         call self%conv%print_iteration(params%which_iter)
         ! In shared-memory mode, rebuild the toolbox from the settled
         ! per-iteration settings. Keep the stage startit in params so
@@ -969,6 +1191,10 @@ contains
             endif
             if( L_BENCH_GLOB ) call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
                 &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
+        endif
+        if( l_force_full_first )then
+            call cline%set('update_frac', requested_update_frac)
+            call cline%delete('trail_seed')
         endif
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
@@ -1310,7 +1536,8 @@ contains
         logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
         integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
-        logical :: l_prob_neigh_mode, l_polish
+        logical :: l_prob_neigh_mode, l_polish, l_force_full_first, l_requested_update_frac, l_requested_trail_rec
+        real    :: requested_update_frac
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -1318,6 +1545,18 @@ contains
         endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
+        requested_update_frac = params%update_frac
+        l_requested_update_frac = params%l_update_frac
+        l_requested_trail_rec   = params%l_trail_rec
+        l_force_full_first = iter == params%startit .and. params%l_update_frac .and. cline%defined('trail_seed')
+        if( l_force_full_first ) l_force_full_first = cline%get_carg('trail_seed') == 'yes'
+        if( l_force_full_first )then
+            params%update_frac   = 1.0
+            params%l_update_frac = .false.
+            params%l_trail_rec   = .false.
+            call cline%set('update_frac', 1.0)
+            call self%job_descr%set('update_frac', real2str(1.0))
+        endif
         call self%conv%print_iteration(iter)
         ! annealing
         if( params%l_noise_reg )then
@@ -1606,6 +1845,14 @@ contains
         if( allocated(l_no_new_map) ) deallocate(l_no_new_map)
         ! the iteration's particle field, once (its out segment went to the file before postprocessing)
         call build%spproj%write_segment_inside(params%oritype)
+        if( l_force_full_first )then
+            params%update_frac   = requested_update_frac
+            params%l_update_frac = l_requested_update_frac
+            params%l_trail_rec   = l_requested_trail_rec
+            call cline%set('update_frac', requested_update_frac)
+            call cline%delete('trail_seed')
+            call self%job_descr%set('update_frac', real2str(requested_update_frac))
+        endif
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
 

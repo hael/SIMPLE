@@ -297,7 +297,7 @@ type :: parameters
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement; internal, not a command-line key (no only under refine=cont)
-    character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose refinement(no|yes|only){no}
+    character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose polishing(no|yes){no}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|flex){ppca}; trajectory_denoise: {flex}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}

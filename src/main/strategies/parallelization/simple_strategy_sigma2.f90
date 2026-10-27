@@ -79,6 +79,7 @@ contains
     !! reports (refine2D passes the iteration the committed store feeds, refine3D the matcher iteration)
     subroutine commit_sigma2_exec( params, build, which_iter, nthr )
         use simple_core_module_api
+        use simple_refine3D_provenance, only: publish_reuse_provenance
         use simple_sigma2_state,      only: sigma2_state_candidate_path, sigma2_state_assemble_candidate, &
             &sigma2_state_range_path, sigma2_state_next_generation
         use simple_sigma2_state_file, only: sigma2_state_publish
@@ -133,6 +134,7 @@ contains
             endif
             call sigma2_state_publish(candidate_path%to_char(), state_path%to_char(), status, message)
             if( status /= 0 ) THROW_HARD(trim(message))
+            call publish_reuse_provenance(params, build%spproj, build%spproj_field, 'sigma', state_path, [state_path])
             if( L_BENCH_GLOB ) rt_publish = toc(t_publish)
             do ipart = 1, params%nparts
                 call del_file(range_paths(ipart))

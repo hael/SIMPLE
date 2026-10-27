@@ -890,7 +890,7 @@ contains
                 ! reported once, by the workflow driver; every subprocess
                 ! applies the same rule silently
                 select case(trim(self%prg%to_char()))
-                    case('refine3D_auto','solve3D','solve3D_cavgs','refine3D_states','classify3D_refs')
+                    case('refine3D_auto','refine3D_local','solve3D','solve3D_cavgs','refine3D_states','classify3D_refs')
                         write(logfhandle,'(A,I0,A,F5.2,A,F6.3,A)') '>>> DENSITY ENVELOPE DILATION: ', binwidth_min, &
                             &' layers (', ENVMSKWIDTH_A_MIN, ' A at ', self%smpd_crop, ' A/pixel)'
                 end select
@@ -902,14 +902,13 @@ contains
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
         endif
         ! pose_cont: no|yes on refine3D (yes, the scheduled polish, from Phase 9 of the pose_cont
-        ! refactoring); only is the continuation switch of refine3D_auto (O7), which derives refine
+        ! refactoring); continuation uses refine3D_local, which derives refine
         select case(trim(self%pose_cont))
             case('yes','no')
             case('only')
-                if( trim(self%prg%to_char()) /= 'refine3D_auto' ) &
-                    &THROW_HARD('pose_cont=only is a refine3D_auto switch; refine3D takes refine=cont')
+                THROW_HARD('pose_cont=only is retired; use prg=refine3D_local without pose_cont')
             case DEFAULT
-                THROW_HARD('pose_cont must be no, yes or only')
+                THROW_HARD('pose_cont must be no or yes; use refine3D_local for continuous-only refinement')
         end select
         self%l_dose_weight = cline%defined('total_dose')
         if( self%fraction_dose_target < 0.01 )then

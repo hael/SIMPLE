@@ -14,6 +14,7 @@ use simple_oris,            only: population_blend_weights
 use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING
 use simple_state_weight_set,     only: state_weight_set
 use simple_reconstructor_pcg,    only: PCG_WEIGHT_THRESHOLD
+use simple_refine3D_provenance,  only: begin_reference_set, publish_reference_set, publish_reuse_provenance
 implicit none
 private
 public :: run_volassemble, volassemble_exec, filter_pcg_nonuniform_maps
@@ -101,6 +102,7 @@ contains
             call even_rec%floor_rho_shellwise
             call odd_rec%floor_rho_shellwise
         endif
+        if( params%oritype == 'ptcl3D' ) call begin_reference_set(volname)
         call restore_eos_and_write_fsc()
         call sum_eos_after_density_correction_if_needed()
         call restore_merged_volume()
@@ -317,7 +319,7 @@ contains
         !! remnants are rejected and discarded by the next validation.
         subroutine write_trail_chain_set()
             type(trail_chain_manifest) :: man
-            type(string)    :: manifest
+            type(string)    :: manifest, files(5)
             integer(kind=8) :: sizes(4)
             integer         :: io_stat, ifile
             manifest = refine3D_trail_manifest_fname(state)
@@ -330,6 +332,13 @@ contains
                 &trail_chain_gen + 1, sizes, trail_mrep_new, trail_ncontrib, wset_id)
             call man%write(manifest, io_stat)
             if( io_stat /= 0 ) THROW_WARN('failed to write trailing chain manifest; chain will be re-seeded next iteration')
+            if( io_stat == 0 )then
+                files(1) = manifest
+                do ifile = 1,4
+                    files(ifile+1) = trail_chain_component(ifile)
+                enddo
+                call publish_reuse_provenance(params, build%spproj, build%spproj_field, 'chain', manifest, files)
+            endif
             call man%kill
             call manifest%kill
         end subroutine write_trail_chain_set
@@ -1202,6 +1211,8 @@ contains
 
         subroutine postprocess_state()
             if( l_nonuniform_mode ) call run_state_nonuniform_filter()
+            call publish_reference_set(params, build%spproj, build%spproj_field, state, &
+                &volname, eonames, refine3D_fsc_fname(state), nu_align_lps(state))
         end subroutine postprocess_state
 
         subroutine run_state_nonuniform_filter()

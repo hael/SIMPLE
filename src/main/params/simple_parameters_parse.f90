@@ -221,6 +221,7 @@ contains
         call reg%add_char('speckind', self%speckind)
         call reg%add_char('split_mode', self%split_mode)
         call reg%add_char('stats', self%stats)
+        call reg%add_char('suite', self%suite)
         call reg%add_char('states', self%states)
         call reg%add_char('state_pops', self%state_pops)
         call reg%add_char('stepwise', self%stepwise)

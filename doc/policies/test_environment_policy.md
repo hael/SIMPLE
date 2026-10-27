@@ -29,7 +29,7 @@ entry per suite, never one per test. The entries fall into two tiers and four
 labels.
 
 | label | entries | when | what |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` and the PCG entries `pcg_recon` and `pcg_frac_update` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
 | `highlevel` | 19 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
@@ -96,7 +96,7 @@ Each area suite runs its sub-suites in one process. One sub-suite is one
 tester module (section 4.1).
 
 | suite | sub-suites |
-|---|---|
+| --- | --- |
 | `unit_core` | ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
@@ -107,7 +107,7 @@ tester module (section 4.1).
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, frozen accumulator, weighted insertion, volume pair metrics, nonuniform filtering, solve3D_cavgs stage rules, state assignment rules, atomic prior, PCG lattice (the gather and scatter of planes on the Ewald paraboloid and of a particle's spectrum cube), wave field, wave imaging, wave multislice, wave projector (the wave operators of `reconstruct3D_wave` and `simulate_scattering`: adjoint and finite-difference checks, the weak-phase identity, the curvature's sign and size, specter's golden images, thread identity at 1, 11, 16 and 24 threads; `doc/policies/3D/wave_model_policy.md`), wave simulation (the wave mode of `simulate_particles`: its weak-signal limit against the Fourier-projection particle, the second order, per-particle B-factors, the detector's noise statistics) |
 | `unit_pftc_align2D3D` | polar correlation, continuous in-plane, refine3D in-plane state, 2D probability table I/O, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match |
-| `unit_cart_align3D` | Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
+| `unit_cart_align3D` | local startup, Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator, flex cls_expansion, flex cls_expansion kernel |
 | `unit_parallel` | qsys control, qsys environment, test tools (the profile statistics, packing, identity rules and the registry of the suite runner) |
 | `unit_single` | atoms, cif2mrc, C-alpha finder, species |
@@ -119,7 +119,7 @@ convenience and deliberately not a CTest entry.
 ### 1.2 Long-running CTest entries
 
 | entry | label | what it runs |
-|---|---|---|
+| --- | --- | --- |
 | `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame; PDB-masked sharpening: identical and opposite half-maps give FSC +1 and -1 and retain or suppress the output accordingly; fractional reconstruction; wave reconstruction: a phantom imaged by multislice at 100 kV and reconstructed by `reconstruct3D_wave` with Rytov, which must beat its flat start and the opposite curvature sign against the truth beyond the curvature limit (about five minutes) |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA on a two-state phantom, flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
@@ -133,7 +133,7 @@ convenience and deliberately not a CTest entry.
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume; `simulate_particles` with three blob volumes and given populations (exact state counts, every image closest to the projection of its own state's volume at its true pose); 50 images without CTF, each correlating better with the reprojection at its own recorded pose than with one at another image's pose |
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
-| `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_auto pose_cont=only`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations |
+| `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_local`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations; the positive NU-bundle handoff case also runs alone with `suite=nu_handoff`, checking staged constituents, first matching LP and source preservation |
 | `multistate_assignment` | highlevel | `refine3D nstates=3` with `refine=prob` and with `refine=prob_neigh` on 1 500 simulated particles of the three blob phantoms of the state fixture (populations 50, 30 and 20 %, SNR 2), from the truths low-passed to 20 A and random initial states, scored by correlation (`objfun=cc`, as production's state assignment), gated on the known state of every particle (adjusted Rand index, accuracy, each state's recall, the populations, no estimated state empty: a merge of two states fails), the maps (their mapping agreeing with the label mapping, their fit, their discrimination inside the difference mask) and the poses of the correctly assigned particles; the shuffled-label and duplicated-maps controls in both refinements; `suite=identical` runs the identical-states control by hand (labels only: identical truths leave nothing to discriminate) |
 | `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1), in four routes: `cavgs`, `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs` (owner ruling 2026-10-17); `shc`, `solve3D` from the particles; `states`, `refine3D_states` from the true poses and the consensus map; `consensus`, single-state `solve3D` in C1 followed by `refine3D_states`, the route used on real data (owner ruling 2026-10-18). Each is judged against the simulation truth: the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses, with the shuffled-label and duplicated-maps controls. The de novo routes `shc` and `cavgs` resolve every true state in only part of the runs (13 and 9 of 20 in the profile of 2026-10-19), a limitation of the method: whether they do is a `success` row, held by `test=profile` to 6 and 2 of 20 seeds, and their labels are reported; their path, checks and pose ceilings are gates. The `states` and `consensus` routes resolve every state in every run: that is checked, and their labels, populations, discrimination and poses are held to floors. The entry runs all four (1 913 s at eight threads alone); `suite=<route>` runs one, `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on), `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`), `suite=<route>_identical` (identical states) and `suite=hard_<route>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
@@ -434,7 +434,7 @@ that mixes "is it right" with "how reliably" cannot say which of the two
 failed. So there are four kinds of test, and each answers one question:
 
 | kind | question | how it is run | how it passes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **identity** | did a refactoring change any result? | one thread, fixed seed, the same case on two builds (`test=identity`) | the declared outputs byte-identical, run-specific fields excluded by a declared list |
 | **correctness** | does the code recover the truth it was given? | one run on simulated data with a large, known signal (CTest, `test=nightly`) | truth metrics against floors that sit far from both the observed distribution and the negative control |
 | **robustness** | how reliably, and how well, across draws? | the same case over many seeds and thread settings (`test=profile`) | a distribution (median, spread, worst, failure rate) recorded and compared over time; never a single-run gate |
@@ -720,7 +720,7 @@ The assertion and reporting layer. A tester uses the assertions and
 `set_fixed_seed`; the suite runner uses the rest.
 
 | routine | use |
-|---|---|
+| --- | --- |
 | `assert_true(cond, msg)`, `assert_false(cond, msg)` | a logical guarantee |
 | `assert_int(expected, actual, msg)` | an exact integer |
 | `assert_real(expected, actual, tol, msg)` | a real within an absolute tolerance (`tol = 0.` for an exact value) |
@@ -742,7 +742,7 @@ Shared by the highlevel test commanders (`src/main/commanders/test/`, built
 with the tests); a new gate uses these instead of its own copies.
 
 | routine | use |
-|---|---|
+| --- | --- |
 | `test_gate` (`simple_test_gate`): `new(fname)`, `check(name, ok)`, `metric(name, val, floor, ok[, upper])`, `report(name, val)`, `success(name, ok, floor)`, `passed()`, `kill` | a gate's checks and metrics, logged as PASS/FAIL and tabulated in a TSV file (name, value, floor, pass, sense); `upper=.true.` marks the floor as a ceiling; a success never fails the run, and `test=profile` holds the fraction of its runs that succeed to `floor` |
 | `validate_reconstructed_volume` (`simple_test_truth_metrics`) | a workflow's final map against its simulation truth: box and sampling, docking in both hands, correlation and masked-FSC floors, each decision also a row of the gate it is given |
 | `dock_both_hands`, `compare_to_truth` | the two steps of it, for a gate with its own floors (the masked FSC is the production `compare_volpair` of `simple_volpair_metrics`, which also gives a band-limited correlation) |
@@ -974,6 +974,7 @@ threads and the CPU reservation of the registry. No floor has been profiled on t
 Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry.
 
 **`mini_stream_6vxx`, `mini_stream_1jxy`**
+
 - Claim: six micrographs simulated from the embedded model (8 particles each) go through CTF
   estimation, picking, extraction, `solve2D` and shape ranking, and the defocus and the picks agree
   with the simulation.
@@ -991,6 +992,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 6vxx 59 s at 8 threads (reserving 2 cores); 1jxy 66 s at 8 threads (reserving 3 cores); each commander one thread.
 
 **`simulated_workflow_6vxx`, `simulated_workflow_1jxy`**
+
 - Claim: simulated particles (6vxx: 160 in 16 movies; 1jxy: 100 in 10 movies) go through import,
   motion correction, CTF estimation, picking, extraction, `solve2D` and `solve3D`, and the map
   matches the map of the atomic model; 1jxy runs `solve3D` a second time distributed over two worker
@@ -1007,6 +1009,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 6vxx 1129 s at 1 thread (reserving 2 cores); 1jxy 999 s at 1 thread (reserving 3 cores) with two one-thread workers in its distributed step.
 
 **`single_workflow_fcc`, `single_workflow_wurtzite`**
+
 - Claim: a simulated Pt (face-centred cubic) or CdSe (wurtzite) nanoparticle goes through
   reprojection, a trajectory, denoising, `analysis2D_nano`, `autorefine3D_nano`, `refine3D_nano
   refine=cont` and the polish, and its map and poses match the truth.
@@ -1023,6 +1026,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: fcc 592 s at 1 thread (reserving 2 cores); wurtzite 586 s at 1 thread (reserving 2 cores).
 
 **`simulate_particles`**
+
 - Claim: `reproject` and `simulate_particles` make the images they are asked for.
 - Checks: the images against the reprojections at their recorded poses (50 images without CTF:
   each closer to its own pose's reprojection than to another image's); with three blob volumes and
@@ -1034,6 +1038,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 11 s at 8 threads (reserving 8 cores).
 
 **`state_fixture`**
+
 - Claim: the multi-state test fixture builds the datasets the multi-state tests rely on.
 - Checks: the blob phantoms in the search, known-pose and exact-view modes (built twice, the second
   from the cache, the records equal) and the beta-galactosidase states, each truth holding its
@@ -1043,6 +1048,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 7 s at 8 threads (reserving 8 cores) (from the cache; about 25 s when it builds the datasets).
 
 **`solve3D_addon`**
+
 - Claim: `solve3D_addon` extends a frozen solution with new particles without disturbing it.
 - Checks: the union map against the truth (correlation floor 0.90, at most 0.03 below the base map,
   FSC at most 1 Å worse than the base); coverage of the new cohort (floor 0.90); the cohort's pose
@@ -1055,6 +1061,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 289 s at 8 threads (reserving 11 cores); about 25 minutes at one thread.
 
 **`cont_refine3D_1jxy`**
+
 - Claim: continuous Cartesian refinement recovers the poses of 1 000 simulated 1JYX particles from
   perturbed starts, in every route that uses it.
 - Checks: median rotation error at most 1.5°, shift at most 0.2 px, at least 95 % inside the basin
@@ -1073,6 +1080,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   cores), up to 11 GiB; about 37 minutes at one thread (2026-10-19, before stages i and j).
 
 **`multistate_assignment`**
+
 - Claim: `refine3D nstates=3` (`refine=prob` and `prob_neigh`) recovers the known states of three
   blob phantoms (1 500 particles, populations 50/30/20 %, SNR 2) from the truths low-passed to 20 Å
   and random initial states, scored by correlation.
@@ -1087,6 +1095,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 78 s at 8 threads (reserving 11 cores); about 10 minutes at one thread.
 
 **`multistate_workflows`**
+
 - Claim: the multi-state workflows recover three compositional beta-galactosidase states (the
   tetramer, the tetramer less chain D, the A-B dimer; 50/30/20 %) in four routes: `cavgs`
   (`solve3D_cavgs` on 600 simulated class averages imported with `import_cavgs`), `shc` (`solve3D`
@@ -1113,6 +1122,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 1809 s at 8 threads (reserving 11 cores) for the four routes; the consensus route alone about 70 minutes at one thread.
 
 **`single_atoms_stats` and its CdSe variants (`_cdsew`, `_cdsez`, `_cdser`)**
+
 - Claim: atom detection and statistics recover the atoms of simulated Pt and CdSe (wurtzite,
   zincblende, rocksalt) nanoparticles.
 - Checks: recall and precision at least 0.90, position error at most 0.75 Å, density correlation
@@ -1122,6 +1132,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 19, 10, 12 and 14 s at 8 threads (reserving 3 or 4 cores).
 
 **`species_discovery`**
+
 - Claim: `detect_atoms` with a species list and with `discover_species=yes` recovers the elements of
   simulated Pt, Pt/Ni and Pt/Al particles.
 - Checks: Pt recall 0.98, all species 0.95, the second element 0.89 (aluminium 0.88), at most one
@@ -1132,6 +1143,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 46 s at 8 threads (reserving 8 cores).
 
 **`stream_preproc`**
+
 - Claim: five simulated movies go through the stream's preprocessing stage, its work done by worker
   jobs of the local queue, and the defocus, frame drift and image are recovered.
 - Checks: defocus within 0.20 µm, drift within 0.5 px, the integrated micrograph's correlation with
@@ -1142,6 +1154,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: 82 s at 8 threads (reserving 2 cores), its jobs one thread each.
 
 **`flex_pca_blobs`**
+
 - Claim: `flex_pca` separates two blob states at their true poses, in shared memory and with two
   worker processes; the per-state refinement holds; the class-average state route runs end to end.
 - Checks: label accuracy at least 0.60 (one-to-one mapping) in both modes, the two maps matching
@@ -1240,7 +1253,7 @@ modified or moved, and 47 were deleted or retired outright. The reasons for
 deletion fall into these groups.
 
 | reason | tests |
-|---|---|
+| --- | --- |
 | printed or plotted results for eyeballing; nothing to assert that other tests do not assert | `uniform_euler`, `uniform_rot`, `order_corr`, `phasecorr`, `ptcl_center` |
 | benchmarks and timing loops | `rotate_ref`, `eval_polarftcc`, `io`, `io_parallel`, `star_export`, `openacc`, `openmp`, `simd` |
 | duplicates of a route or of a gate sub-suite | `starfile`, `binoris_test`, `binoris_io_test`, `imgfile`, the standalone `mini_stream`, `gui_assembler`, `gui_metadata`, `project_merge`, `clustering`, `multinomal_test` |
@@ -1257,7 +1270,7 @@ replacement; the reason is in section 8 and in the inventory. A sub-suite is
 written as `sub-suite` (entry).
 
 | old test | now |
-|---|---|
+| --- | --- |
 | `abinitio2D_stream` | deleted; `solve2D` runs nightly in `simulated_workflow_6vxx` and `simulated_workflow_1jxy` |
 | `angres` | the program `simple_exec prg=measure_projspace_angres nspace=<n>`; the table of values is a comment above `find_angres` |
 | `ansi_colors` | `string` (`unit_core`) |

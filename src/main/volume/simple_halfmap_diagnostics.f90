@@ -8,6 +8,7 @@ use simple_fsc,        only: phase_rand_fsc, fsc_area_score_result
 implicit none
 
 public :: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics
+public :: write_base_halfmap_fsc
 public :: support_provenance_fname, write_support_provenance, read_support_provenance
 public :: copy_support_provenance, rename_support_provenance, remove_support_provenance
 private
@@ -32,6 +33,28 @@ type :: halfmap_diagnostics_result
 end type halfmap_diagnostics_result
 
 contains
+
+    ! Raw saved-half FSC only: preserves the startup fallback without adding mask or filtering policy.
+    subroutine write_base_halfmap_fsc( even_file, odd_file, dims, smpd, fsc_file )
+        use simple_fileio, only: arr2file
+        type(string), intent(in) :: even_file, odd_file, fsc_file
+        integer, intent(in) :: dims(3)
+        real, intent(in) :: smpd
+        class(image), allocatable :: even, odd
+        real, allocatable :: fsc(:)
+        allocate(even, odd)
+        call even%new(dims, smpd)
+        call odd%new(dims, smpd)
+        call even%read(even_file)
+        call odd%read(odd_file)
+        allocate(fsc(even%get_lfny(1)), source=0.)
+        call even%fft
+        call odd%fft
+        call even%fsc(odd, fsc)
+        call arr2file(fsc, fsc_file)
+        call even%kill
+        call odd%kill
+    end subroutine write_base_halfmap_fsc
 
     !> Evaluate the half-map FSC, cFAR, and Nyquist-clamped FSC=0.5/0.143
     !! resolutions for one explicitly prepared real-space pair, with explicit

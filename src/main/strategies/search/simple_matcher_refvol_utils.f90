@@ -497,10 +497,16 @@ contains
         !! first assembly neither artifact need exist, so the references retain
         !! the spherical mask and that bootstrap is logged.
         subroutine apply_automatic_envelope_to_refs( prefer_nu )
+            use simple_refine3D_provenance, only: local_import_marker
             logical, optional, intent(in) :: prefer_nu
             type(string) :: fname_envmsk
             type(image)  :: envmsk
             logical      :: l_prefer_nu
+            ! An imported base pair has no lagged envelope produced in this run.
+            if( file_exists(local_import_marker(params%vols(s))) )then
+                write(logfhandle,'(A)') '>>> LOCAL IMPORT: reference envelopes await the first assembly; using spherical support'
+                return
+            endif
             l_prefer_nu = .false.
             if( present(prefer_nu) ) l_prefer_nu = prefer_nu
             if( l_prefer_nu )then

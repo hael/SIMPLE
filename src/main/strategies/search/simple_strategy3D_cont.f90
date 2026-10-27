@@ -19,7 +19,7 @@ use simple_cartft_pose_opt,  only: cartft_pose_opt, cartft_pose_work, CARTFT_ACC
     &CARTFT_INVALID_PREPARATION
 implicit none
 
-public :: strategy3D_cont, cont_seed_is_valid, check_cont_seeds
+public :: strategy3D_cont, cont_seed_is_valid, check_cont_seeds, cont_reference_geometry_is_valid
 private
 
 #include "simple_local_flags.inc"
@@ -47,6 +47,24 @@ end type strategy3D_cont
 
 contains
 
+    ! Columns 1/2/3 hold merged/even/odd geometry; a coarser grid is valid at the same physical extent.
+    pure logical function cont_reference_geometry_is_valid( dims, sampling, box, smpd ) result(valid)
+        integer, intent(in) :: dims(3,3), box
+        real,    intent(in) :: sampling(3), smpd
+        real :: extent, tol
+        valid = .false.
+        if( box <= 0 .or. any(dims <= 0) ) return
+        if( .not. all(ieee_is_finite(sampling)) .or. .not. ieee_is_finite(smpd) ) return
+        if( any(sampling <= 0.) .or. smpd <= 0. ) return
+        if( any(dims(:,1) /= dims(:,2)) .or. any(dims(:,1) /= dims(:,3)) ) return
+        if( any(dims(:,1) /= dims(1,1)) ) return
+        tol = 100. * epsilon(1.)
+        if( any(abs(sampling - sampling(1)) > tol * sampling(1)) ) return
+        extent = real(box) * smpd
+        if( abs(real(dims(1,1))*sampling(1) - extent) > tol * extent ) return
+        valid = .true.
+    end function cont_reference_geometry_is_valid
+
     !> An initialized seed of a Cartesian pass: positive state, a half-set, a projection
     !! direction from the discrete workflow the poses came from, finite Euler angles and shift.
     !! The identity rotation is a valid pose. The caller turns false into a stop.
@@ -54,6 +72,17 @@ contains
         class(ori), intent(in) :: seed
         real    :: euler(3), shift(2)
         integer :: eo
+        valid = .false.
+        ! Packed records always hold eo; isthere('eo') treats the valid even label 0 as absent.
+        if( .not. seed%is_particle() )then
+            if( .not. seed%isthere('eo') ) return
+        endif
+        if( .not. seed%isthere('e1') .or. .not. seed%isthere('e2') .or. .not. seed%isthere('e3') ) return
+        if( .not. seed%isthere('x') .or. .not. seed%isthere('y') ) return
+        if( .not. ieee_is_finite(seed%get('eo')) ) return
+        ! Check the stored label before integer conversion can round a fractional value.
+        if( seed%get('eo') /= 0. .and. seed%get('eo') /= 1. ) return
+        if( .not. ieee_is_finite(seed%get('state')) .or. .not. ieee_is_finite(seed%get('proj')) ) return
         euler = seed%get_euler()
         shift = seed%get_2Dshift()
         eo    = seed%get_eo()
@@ -65,13 +94,21 @@ contains
     !! holds a valid seed (cont_seed_is_valid), so the pass continues from poses a discrete
     !! workflow left in the project. THROW_HARD naming the requirement otherwise, or when no
     !! particle is active.
-    subroutine check_cont_seeds( os )
+    subroutine check_cont_seeds( os, selected )
         class(oris), intent(in) :: os
+        logical, optional, intent(in) :: selected(:)
         type(ori) :: seed
         integer   :: iptcl, nactive, ninvalid
+        if( present(selected) )then
+            if( size(selected) /= os%get_noris() ) THROW_HARD('Continuous seed selection has the wrong size')
+        endif
         nactive  = 0
         ninvalid = 0
         do iptcl = 1, os%get_noris()
+            if( present(selected) )then
+                if( .not. selected(iptcl) ) cycle
+            endif
+            if( .not. ieee_is_finite(os%get(iptcl, 'state')) ) THROW_HARD('Invalid stored particle state')
             if( os%get_state(iptcl) <= 0 ) cycle
             nactive = nactive + 1
             call os%get_ori(iptcl, seed)

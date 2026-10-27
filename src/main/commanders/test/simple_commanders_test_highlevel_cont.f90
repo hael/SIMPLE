@@ -19,7 +19,7 @@ module subroutine exec_test_cont_refine3D_1jxy( self, cline )
     type(parameters) :: params
     type(string)     :: cwd_saved, fixture_root
     integer          :: status
-    logical          :: all_ok
+    logical          :: all_ok, nu_handoff_only
     call simple_getcwd(cwd_saved)
     fixture_root = filepath(cwd_saved, 'test_cont_refine3D_1jxy_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
@@ -27,13 +27,30 @@ module subroutine exec_test_cont_refine3D_1jxy( self, cline )
     call simple_chdir(fixture_root, status)
     if( status /= 0 ) THROW_HARD('TEST_CONT_REFINE3D_1JXY FAILED: could not enter fixture directory')
     call params%new(cline)
+    select case(trim(params%suite))
+        case('', 'all')
+            nu_handoff_only = .false.
+        case('nu_handoff')
+            nu_handoff_only = .true.
+        case default
+            THROW_HARD('cont_refine3D_1jxy supports suite=all|nu_handoff')
+    end select
+    if( nu_handoff_only )then
+        write(logfhandle,'(A)') '>>> CONT_REFINE3D_1JXY SELECTED SUITE: nu_handoff'
+    else
+        write(logfhandle,'(A)') '>>> CONT_REFINE3D_1JXY SELECTED SUITE: all'
+    endif
     all_ok = .true.
-    call run_cont_refine3D_gate(params%nthr, filepath(cwd_saved, 'metrics.tsv'), all_ok)
+    call run_cont_refine3D_gate(params%nthr, filepath(cwd_saved, 'metrics.tsv'), all_ok, nu_handoff_only)
     call simple_chdir(cwd_saved, status)
     if( status /= 0 ) THROW_HARD('TEST_CONT_REFINE3D_1JXY FAILED: could not restore original directory')
     if( all_ok )then
         call simple_rmdir(fixture_root)
-        write(logfhandle,'(a)') 'PASS: refine=cont validated against the simulation truth'
+        if( nu_handoff_only )then
+            write(logfhandle,'(A)') 'PASS: focused NU-bundle handoff integration'
+        else
+            write(logfhandle,'(A)') 'PASS: complete refine=cont gate, in-place continuation and NU handoff'
+        endif
         call simple_end('**** SIMPLE_TEST_CONT_REFINE3D_1JXY NORMAL STOP ****')
     else
         THROW_HARD('TEST_CONT_REFINE3D_1JXY FAILED')
@@ -55,8 +72,8 @@ end subroutine exec_test_cont_refine3D_1jxy
 !  c  stage a distributed over two parts: poses agree with stage a
 !  d  a-c (and e): no polar reprojection model or probability table in the run directory, and
 !     the projection direction no discrete pass would leave alone is the seed's in every particle
-!  e  refine3D_auto pose_cont=only from the perturbed project: runs to maxits, samples nsample
-!     particles per iteration, runs no pose initialization or registration pass, and reduces
+!  e  refine3D_local from the perturbed project: with no saved chain it makes one full
+!     update, then samples nsample particles; it runs no pose initialization or registration pass and reduces
 !     the pose error
 !  f  refine3D refine=neigh against the truth reference with pose_cont=yes and with no, two
 !     trailing iterations over 30% samples: with the polish the error over the updated particles
@@ -68,7 +85,7 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     error is no worse than h's polar run without the polish
 !  h  the normal entry: a polar refine3D_auto from the perturbed project, its poses first
 !     initialized against the independent truth map (ref_pose_init=cc, the polar workflow's path
-!     for poor input poses), then refine3D_auto pose_cont=only on its output: the polar run
+!     for poor input poses), then refine3D_local on its output: the polar run
 !     improves on the seeds (the precondition of the stage), and the continuation accepts its
 !     poses and leaves the pose error no worse. 1JYX is D2-symmetric and the gate runs in c1, so
 !     the global searches of the polar workflow assign any of the four symmetry-related poses
@@ -77,16 +94,17 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     from the poses, in the truth map's frame, which the refinements share
 !  i  stage a on the production route (the joint stage alone; a-c take the shift-then-joint seam)
 !  j  stage b on the production route
+!  k  verified NU bundle from one base iteration, then one local iteration in a new directory
 !  The negative control of every E25 stage (a, b, c, i, j): its rotation error and basin fraction
 !  against the truth shuffled among the particles fail the floors. The simulation has no shift,
 !  which shuffling keeps, so the shift error has no such control. Every metric goes to metrics.tsv.
-subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
+subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple_atoms,              only: atoms
     use simple_molecule_data,      only: molecule_data, betagal_1jyx
     use simple_ui,                 only: make_ui
     use simple_image,              only: image
-    use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_auto
+    use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_auto, commander_refine3D_local
     use simple_cartft_pose_opt,    only: right_increment_rotation
     use simple_refine3D_fnames,    only: refine3D_reproj_model_fname, refine3D_trail_manifest_fname
     use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
@@ -96,6 +114,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     integer,       intent(in)    :: nthr
     class(string), intent(in)    :: metrics_file
     logical,       intent(inout) :: all_ok
+    logical,       intent(in)    :: nu_handoff_only
     character(len=*), parameter :: GATE_DIR   = 'cont_refine3D_gate'
     character(len=*), parameter :: ATOM_VOL   = '1JYX_atoms.mrc'
     character(len=*), parameter :: TRUTH_VOL  = '1JYX.mrc'
@@ -155,6 +174,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     type(commander_new_project)        :: xnew_project
     type(commander_refine3D)           :: xrefine3D
     type(commander_refine3D_auto)      :: xauto
+    type(commander_refine3D_local)     :: xlocal
     type(cmdline)       :: cl
     type(atoms)         :: molecule
     type(molecule_data) :: mol
@@ -165,14 +185,14 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     type(ctfparams)     :: ctfvars
     type(test_gate)     :: gate
     type(string)        :: root, gate_root, stk_abs, truth_abs, proj_dir
-    integer, allocatable :: inds(:)
+    integer, allocatable :: inds(:), before_updates(:)
     real    :: med_rot, med_sh, basin, seed_rot, seed_sh, pair_seed, pair_before, pair_after, frac5
     real    :: sym_seed, sym_before, sym_after, sym_nopolish, sym_polish, d2ops(3,3,4), o(3), f(3,3)
     real    :: corr_mean
     logical :: updated(NPTCLS), l_sample_ok, l_finite
     type(sp_project) :: out_f
     real    :: diffs(NPTCLS)
-    integer :: i, status
+    integer :: i, status, fsc_bytes
     call make_ui
     write(logfhandle,'(a)') '>>> TEST_CONT_REFINE3D_1JXY: refine=cont gate'
     call simple_getcwd(root)
@@ -272,6 +292,11 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     call gate%report('seed_median_rotation_error_deg', seed_rot)
     call gate%report('seed_median_shift_error_px',     seed_sh)
     call simple_chdir(gate_root, status)
+    if( nu_handoff_only )then
+        call run_nu_handoff()
+        call finish_gate()
+        return
+    endif
     ! ---- a, b, c: refine3D refine=cont against the truth reference ----
     call run_refine3D_cont('a_euclid', 'euclid', 0, out_a)
     call gate_e25('a', out_a)
@@ -289,20 +314,22 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     ! a non-finite difference counts as differing
     call gate%metric('c_fraction_differing_by_more_than_0.1deg', real(count(.not. (diffs <= DIFF_LIM)))/real(NPTCLS), &
         &MAX_FRAC_DIFF, real(count(.not. (diffs <= DIFF_LIM)))/real(NPTCLS) <= MAX_FRAC_DIFF, upper=.true.)
-    ! ---- e: refine3D_auto pose_cont=only from the perturbed project ----
+    ! ---- e: refine3D_local from the perturbed project ----
     call enter_stage('e_auto')
-    call cl%set('prg',       'refine3D_auto')
+    call cl%set('prg',       'refine3D_local')
+    call cl%set('vol1',      truth_abs)
     call cl%set('projfile',  simple_abspath(string(PROJNAME//'.simple')))
     call cl%set('mkdir',     'no')
-    call cl%set('pose_cont', 'only')
     call cl%set('pgrp',      'c1')
     call cl%set('mskdiam',   MSKDIAM)
     call cl%set('nsample',   AUTO_NSAMPLE)
     call cl%set('maxits',    AUTO_MAXITS)
     call cl%set('nthr',      nthr)
-    call xauto%execute(cl)
+    call xlocal%execute(cl)
     call cl%kill
     call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
+    call gate%check('e_first_full_update_reached_every_particle', &
+        &minval(run_proj%os_ptcl3D%get_all('updatecnt')) >= 1.)
     call stats%new(1, is_ptcl=.false.)
     call stats%read(string(STATS_FILE))
     call gate%check('e_ran_to_maxits', nint(stats%get(1, 'ITERATION')) == AUTO_MAXITS)
@@ -377,15 +404,14 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     call gate%metric('h_polar_sym_pose_error_deg', sym_before, sym_seed, sym_before < sym_seed, upper=.true.)
     call pose_errors(run_proj%os_ptcl3D, med_rot, med_sh, basin)
     call gate%report('h_polar_median_rotation_error_deg', med_rot)
-    call cl%set('prg',       'refine3D_auto')
+    call cl%set('prg',       'refine3D_local')
     call cl%set('projfile',  simple_abspath(string(PROJNAME//'.simple')))
     call cl%set('mkdir',     'no')
-    call cl%set('pose_cont', 'only')
     call cl%set('pgrp',      'c1')
     call cl%set('mskdiam',   MSKDIAM)
     call cl%set('maxits',    CONT_MAXITS)
     call cl%set('nthr',      nthr)
-    call xauto%execute(cl)
+    call xlocal%execute(cl)
     call cl%kill
     call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
     pair_after = pair_pose_error(run_proj%os_ptcl3D, truth, inds, inds, NPAIRS, GATE_SEED, frac5)
@@ -428,18 +454,154 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     call gate_e25('i', run_proj)
     call run_refine3D_cont('j_joint_cc', 'cc', 0, run_proj, l_production_route=.true.)
     call gate_e25('j', run_proj)
-    all_ok = all_ok .and. gate%passed()
-    call gate%kill
-    call seeded%kill
-    call out_f%kill
-    call out_a%kill
-    call out_c%kill
-    call run_proj%kill
-    call truth%kill
-    call shuffled%kill
-    call simple_chdir(root, status)
+    ! Continue stage e's saved project; the preceding stages leave other projects in run_proj.
+    write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE local_inplace'
+    call simple_chdir(filepath(gate_root, 'e_auto'), status)
+    if( status /= 0 ) THROW_HARD('Could not enter the local continuation fixture')
+    call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
+    before_updates = nint(run_proj%os_ptcl3D%get_all('updatecnt'))
+    call cl%set('prg',       'refine3D_local')
+    call cl%set('projfile',  simple_abspath(string(PROJNAME//'.simple')))
+    call cl%set('mkdir',     'no')
+    call cl%set('pgrp',      'c1')
+    call cl%set('mskdiam',   MSKDIAM)
+    call cl%set('maxits',    CONT_MAXITS)
+    call cl%set('nsample',   AUTO_NSAMPLE)
+    call cl%set('nthr',      nthr)
+    call xlocal%execute(cl)
+    call cl%kill
+    call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
+    call gate%check('local_inplace_particle_count', run_proj%os_ptcl3D%get_noris() == NPTCLS)
+    call gate%check('local_inplace_preserved_update_history', &
+        &all(nint(run_proj%os_ptcl3D%get_all('updatecnt')) >= before_updates))
+    call pose_errors(run_proj%os_ptcl3D, med_rot, med_sh, basin)
+    call gate%check('local_inplace_finite_pose_errors', ieee_is_finite(med_rot) .and. ieee_is_finite(med_sh))
+    call stats%new(1, is_ptcl=.false.)
+    call stats%read(string(STATS_FILE))
+    call gate%check('local_inplace_ran_to_maxits', nint(stats%get(1, 'ITERATION')) == CONT_MAXITS)
+    call gate%check('local_inplace_fractional_sample', &
+        &nint(stats%get(1, 'PERCEN_PARTICLES_SAMPLED')*real(NPTCLS)/100.) == AUTO_NSAMPLE)
+    call stats%kill
+    fsc_bytes = 0
+    inquire(file='fsc_state01.bin', size=fsc_bytes, iostat=status)
+    call gate%check('local_inplace_nonempty_fsc', status == 0 .and. fsc_bytes > 0)
+    call simple_chdir(gate_root, status)
+    call run_nu_handoff()
+    call finish_gate()
 
   contains
+
+    subroutine finish_gate()
+        all_ok = all_ok .and. gate%passed()
+        call gate%kill
+        call seeded%kill
+        call out_f%kill
+        call out_a%kill
+        call out_c%kill
+        call run_proj%kill
+        call truth%kill
+        call shuffled%kill
+        call simple_chdir(root, status)
+    end subroutine finish_gate
+
+    ! A base iteration keeps its assembly-owned NU products; a workflow ending replaces them.
+    subroutine run_nu_handoff()
+        use, intrinsic :: iso_fortran_env, only: int64
+        use simple_defs_fname, only: NUFILT_SUFFIX, NULOCRES_SUFFIX
+        use simple_refine3D_fnames, only: refine3D_startvol_fname
+        use simple_refine3D_provenance, only: validate_reference_set, provenance_file, local_import_marker, REFSET_OK
+        use simple_sigma2_state_file, only: sigma2_state_digest_file
+        type(string) :: source_files(12), staged_files(4), staged_base, producer_dir
+        integer(int64) :: digests(12)
+        integer :: j, ref_status, vol_box, halves(NPTCLS)
+        real :: vol_smpd, saved_lp, used_lp, expected_lp
+        logical :: support_verified, sigma_found
+        character(len=STDLEN) :: message
+        write(logfhandle,'(A)') '>>> CONT_REFINE3D_1JXY STAGE nu_handoff'
+        call run_refine3D_cont('k_nu_producer', 'euclid', 0, run_proj, &
+            &l_production_route=.true., l_nu_producer=.true.)
+        producer_dir = filepath(gate_root, 'k_nu_producer')
+        call simple_chdir(producer_dir, status)
+        if( status /= 0 ) THROW_HARD('Could not enter the NU producer fixture')
+        source_files(1) = simple_abspath(string(PROJNAME//'.simple'))
+        call run_proj%get_vol('vol', 1, source_files(2), vol_smpd, vol_box)
+        source_files(2) = simple_abspath(source_files(2))
+        source_files(3) = add2fbody(source_files(2), MRC_EXT, '_even')
+        source_files(4) = add2fbody(source_files(2), MRC_EXT, '_odd')
+        ref_status = validate_reference_set(source_files(2), source_files(5), support_verified, message)
+        call gate%check('nu_handoff_producer_reference_set', ref_status == REFSET_OK)
+        if( ref_status /= REFSET_OK ) return
+        source_files(6) = provenance_file(source_files(2))
+        source_files(7) = add2fbody(source_files(2), MRC_EXT, NUFILT_SUFFIX)
+        source_files(8) = add2fbody(source_files(3), MRC_EXT, NUFILT_SUFFIX)
+        source_files(9) = add2fbody(source_files(4), MRC_EXT, NUFILT_SUFFIX)
+        source_files(10) = add2fbody(source_files(2), MRC_EXT, NULOCRES_SUFFIX)
+        call run_proj%get_sigma2_state_path(source_files(11), sigma_found)
+        call gate%check('nu_handoff_producer_committed_sigma', sigma_found)
+        if( .not. sigma_found ) return
+        source_files(11) = simple_abspath(source_files(11))
+        source_files(12) = provenance_file(source_files(11))
+        do j = 1,size(source_files)
+            digests(j) = sigma2_state_digest_file(source_files(j))
+        enddo
+        call gate%check('nu_handoff_complete_source_bundle', all(digests /= 0_int64))
+        if( any(digests == 0_int64) ) return
+        call stats%new(1, is_ptcl=.false.)
+        call stats%read(string(STATS_FILE))
+        saved_lp = stats%get(1, 'LP_NU_HANDOFF')
+        call stats%kill
+        call gate%check('nu_handoff_positive_producer_lp', ieee_is_finite(saved_lp) .and. saved_lp > 0.)
+        if( .not. ieee_is_finite(saved_lp) ) return
+        if( saved_lp <= 0. ) return
+        halves = run_proj%os_ptcl3D%get_all_asint('eo')
+        call simple_chdir(gate_root, status)
+        call simple_mkdir('k_nu_local')
+        call simple_chdir(string('k_nu_local'), status)
+        if( status /= 0 ) THROW_HARD('Could not enter the NU consumer fixture')
+        ! Pass the original project so preflight captures its stores before creating the run directory.
+        call cl%set('prg',       'refine3D_local')
+        call cl%set('projfile',  source_files(1))
+        call cl%set('mkdir',     'yes')
+        call cl%set('pgrp',      'c1')
+        call cl%set('mskdiam',   MSKDIAM)
+        call cl%set('maxits',    1)
+        call cl%set('nthr',      nthr)
+        call xlocal%execute(cl)
+        call cl%kill
+        staged_base = refine3D_startvol_fname(1)
+        staged_files(1) = add2fbody(staged_base, MRC_EXT, NUFILT_SUFFIX)
+        staged_base = add2fbody(refine3D_startvol_fname(1), MRC_EXT, '_even')
+        staged_files(2) = add2fbody(staged_base, MRC_EXT, NUFILT_SUFFIX)
+        staged_base = add2fbody(refine3D_startvol_fname(1), MRC_EXT, '_odd')
+        staged_files(3) = add2fbody(staged_base, MRC_EXT, NUFILT_SUFFIX)
+        staged_base = refine3D_startvol_fname(1)
+        staged_files(4) = add2fbody(staged_base, MRC_EXT, NULOCRES_SUFFIX)
+        call gate%check('nu_handoff_did_not_take_import_fallback', .not. file_exists(local_import_marker(staged_base)))
+        do j = 1,size(staged_files)
+            call gate%check('nu_handoff_staged_constituent_'//int2str(j), &
+                &sigma2_state_digest_file(staged_files(j)) == digests(j+6))
+        enddo
+        call stats%new(1, is_ptcl=.false.)
+        call stats%read(string(STATS_FILE))
+        used_lp = stats%get(1, 'LP_MATCHING')
+        expected_lp = calc_lowpass_lim(calc_fourier_index(saved_lp, BOX, SMPD), BOX, SMPD)
+        call gate%check('nu_handoff_first_matching_band', ieee_is_finite(used_lp) .and. abs(used_lp-expected_lp) < 1.e-3)
+        call gate%check('nu_handoff_completed_one_local_iteration', nint(stats%get(1, 'ITERATION')) == 1)
+        call gate%check('nu_handoff_continuous_work', nint(stats%get(1, 'POSE_CONT_ATTEMPTS')) == NPTCLS)
+        call gate%report('nu_handoff_producer_lp', saved_lp)
+        call gate%report('nu_handoff_first_matching_lp', used_lp)
+        call stats%kill
+        call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
+        call check_no_polar('nu_handoff', run_proj)
+        call gate%check('nu_handoff_half_labels_preserved', all(run_proj%os_ptcl3D%get_all_asint('eo') == halves))
+        do j = 1,size(source_files)
+            call gate%check('nu_handoff_source_preserved_'//int2str(j), &
+                &sigma2_state_digest_file(source_files(j)) == digests(j))
+        enddo
+        ref_status = validate_reference_set(source_files(2), source_files(5), support_verified, message)
+        call gate%check('nu_handoff_source_record_still_valid', ref_status == REFSET_OK)
+        call simple_chdir(gate_root, status)
+    end subroutine run_nu_handoff
 
     !> the truth pose of particle i perturbed by exactly ROT_ERR about a random axis and
     !! SH_ERR in a random direction (as E25 perturbs its seeds)
@@ -520,12 +682,12 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
     !> one refine3D refine=cont pass against the truth reference on the shift-then-joint route of
     !! the E25 floors, or on the production route (the joint stage alone) with l_production_route;
     !! nparts > 0 distributes it
-    subroutine run_refine3D_cont( dir, objfun, nparts, out, l_production_route )
+    subroutine run_refine3D_cont( dir, objfun, nparts, out, l_production_route, l_nu_producer )
         use simple_syslib, only: simple_list_files
         character(len=*),  intent(in)    :: dir, objfun
         integer,           intent(in)    :: nparts
         type(sp_project),  intent(inout) :: out
-        logical, optional, intent(in)    :: l_production_route
+        logical, optional, intent(in)    :: l_production_route, l_nu_producer
         type(string), allocatable :: bench_parts(:)
         logical :: l_seam
         call enter_stage(dir)
@@ -543,6 +705,14 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok )
         l_seam = .true.
         if( present(l_production_route) ) l_seam = .not. l_production_route
         if( l_seam ) call cl%set('cont_route', 'shift_then_joint')
+        if( present(l_nu_producer) )then
+            if( l_nu_producer )then
+                call cl%set('filt_mode', 'nonuniform')
+                call cl%set('ml_reg',    'yes')
+                call cl%set('automsk',   'yes')
+                call cl%set('envfsc',    'yes')
+            endif
+        endif
         call cl%set('maxits',   1)
         if( nparts > 0 )then
             call cl%set('nparts', nparts)

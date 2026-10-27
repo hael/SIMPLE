@@ -222,35 +222,19 @@ with `nstates > 1`.
 
 ## 7. Continuous Pose Refinement
 
-`pose_cont=no|yes|only` is the workflow's one switch for continuous Cartesian
-pose refinement (contract of the pose_cont refactoring,
-`doc/refactoring_notes/completed/pose_cont_refactoring.md`; the base mode is
-described in [refine3D_policy.md](refine3D_policy.md), "Continuous Cartesian
-pose policy"). `refine` is derived from it and rejected on the command line,
-as `refine3D_states` derives `multivol_mode` from `pose_policy`.
+`pose_cont=no|yes` selects optional continuous Cartesian polishing. `refine`
+is derived and rejected on the command line.
 
 - `no` (default): the discrete workflow above.
 - `yes`: every main-loop iteration is followed by a continuous pass over the
-  same particle sample (the polish); the registration pass, the pose
-  initialization and the bootstraps run without it. One reconstruction per
-  iteration, from the polished poses; convergence keeps measuring the
-  discrete search.
-- `only`: a continuation mode that runs no discrete search. The project must
-  hold 3D poses from a discrete workflow (`solve3D`, or a polar
-  `refine3D_auto` or `refine3D` run); the workflow checks every active
-  particle at entry, before the sampling and the sigma bootstrap, and stops
-  with a message otherwise. `ref_pose_init=cc` and `regpass=yes` are rejected
-  with it, the registration pass is skipped, and the main loop runs
-  `refine=cont` with no projection grid, probability table or polar
-  reprojection model. Sampling (`nsample`), the sigma bootstrap, the startup
-  reconstruction, NU low-pass seeding and the final reconstruction are
-  unchanged; when the final reconstruction must rebuild sigma2 at native
-  sampling, its `bootstrap_rec3D` residual pass still runs through the polar
-  matcher. The continuous pass converges by the `refine=cont` rule of
-  `refine3D_policy.md` (motion of most sampled particles below 0.5 degrees
-  and 1 A); with an automatic `maxits` the run can therefore stop before the
-  update budget, and an explicit `maxits` also sets `minits`, so it runs to
-  `maxits`.
+  same particle sample. Registration, pose initialization and bootstraps run
+  without polishing. Each iteration reconstructs once from the polished poses;
+  convergence continues to measure the discrete search.
+
+`pose_cont=only` is retired. Use `prg=refine3D_local` without `pose_cont` for
+continuous continuation from saved poses and existing half references. See
+[refine3D_local_policy.md](refine3D_local_policy.md) for the implemented boundary
+and the startup work that is still retained.
 
 `objfun` stays `euclid`; `objfun=cc` with `refine=cont` is available through
 `refine3D`.
