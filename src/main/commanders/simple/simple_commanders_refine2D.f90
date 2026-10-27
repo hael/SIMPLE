@@ -33,13 +33,16 @@ contains
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.
     subroutine exec_refine2D( self, cline )
         use simple_refine2D_strategy
+        use simple_eul_prob_tab_utils, only: prob_beta_control_last, prob_beta_at
+        use simple_parameters,         only: PROB_BETA_TAIL
         class(commander_refine2D), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(refine2D_strategy), allocatable     :: strategy
         type(parameters)       :: params
         type(builder)          :: build
-        logical                :: converged
-        integer                :: niters
+        logical                :: converged, l_anneal, l_control
+        integer                :: niters, it_tail
+        real                   :: beta_last, beta_start
         ! local defaults (kept consistent with previous distributed master)
         call cline%set('prg', 'refine2D')
         call set_refine2D_defaults(cline)
@@ -61,10 +64,43 @@ contains
         else
             params%extr_iter = params%startit   - 1
         endif
+        ! the probability tables' posterior draws, as exec_refine3D: the iteration's tempering factor on the command
+        ! line for the workers, the annealing tail to prob_beta_end once the class overlap converges (check_conv2D
+        ! starts it), and under the n_eff control (prob_neff) the previous iteration's solved factor for the fills
+        ! and the tail's progress for the ramp of the solved factor to 1 (pose_marginalization.md sections 19.8, 20.2)
+        beta_start = params%prob_beta
+        l_control  = params%l_prob_align_mode .and. params%prob_neff > 0.
+        if( l_control )then
+            l_anneal = params%prob_beta_end > TINY
+        else
+            l_anneal = params%l_prob_align_mode .and. abs(params%prob_beta_end - beta_start) > TINY
+        endif
         do
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
+            if( params%l_prob_align_mode )then
+                if( l_control )then
+                    beta_last = prob_beta_control_last()
+                    if( beta_last > 0. ) params%prob_beta = beta_last
+                    params%prob_anneal_frac = 0.
+                    if( l_anneal )then
+                        it_tail = strategy%anneal_tail_start()
+                        if( it_tail > 0 ) params%prob_anneal_frac = real(min(PROB_BETA_TAIL, &
+                            &max(1, params%which_iter - it_tail + 1)) - 1) / real(max(1, PROB_BETA_TAIL - 1))
+                    endif
+                    call cline%set('prob_anneal_frac', params%prob_anneal_frac)
+                else if( l_anneal )then
+                    it_tail = strategy%anneal_tail_start()
+                    if( it_tail > 0 )then
+                        params%prob_beta = prob_beta_at(params%which_iter - it_tail + 1, PROB_BETA_TAIL,&
+                            &beta_start, params%prob_beta_end)
+                    else
+                        params%prob_beta = beta_start
+                    endif
+                endif
+                call cline%set('prob_beta', params%prob_beta)
+            endif
             ! Strategy handles everything: alignment + cavgs + convergence
             call strategy%execute_iteration(params, build, cline, converged)
             call strategy%finalize_iteration(params, build)

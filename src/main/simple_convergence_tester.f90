@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D convergence report and the refine=cont convergence rule (simple_convergence)
+!@descr: unit tests for the 3D and 2D convergence reports, the annealing tails and the refine=cont convergence rule (simple_convergence)
 ! N19: a Cartesian pass reports the mean corr_cart, attempts and improved percentage over its sample;
 ! a polar pass reports corr. N25: a refine=cont pass converges when 90% of every state moved at most
 ! 0.5 deg and 1 A with an accepted or no-improvement outcome, over a streak covering 90% of the active
@@ -52,8 +52,119 @@ contains
         call test_posterior_assignment_bypass()
         write(*,'(A)') 'test_posterior_anneal_tail'
         call test_posterior_anneal_tail()
+        write(*,'(A)') 'test_posterior_anneal_tail2D'
+        call test_posterior_anneal_tail2D()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
+
+    !> the 2D annealing tail (as the 3D one, keyed on the class overlap): a refine=prob run with prob_beta_end above
+    !! prob_beta whose class overlap converges starts the tail at the first converged iteration past minits (tail_start
+    !! = the next iteration) and converges at the tail's last iteration, PROB_BETA_TAIL after its start; a budget too
+    !! short for that starts the tail so that it completes at maxits (the absolute end iteration of the 2D rule);
+    !! under the n_eff control any positive prob_beta_end is the switch; a flat run has no tail and converges as before
+    subroutine test_posterior_anneal_tail2D()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv, conv_short, conv_ctrl, conv_flat
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        logical :: conv_at(10)
+        integer :: it
+        call del_file(STATS_FILE)
+        allocate(params)
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 1.
+        params%startit           = 1
+        params%minits            = 3
+        params%maxits            = 25
+        params%trs               = 5.
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        ! the class overlap converged from the first iteration: the tail starts once minits is reached
+        do it = 1, 10
+            params%which_iter = it
+            call converged_field(os)
+            conv_at(it) = conv%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+            if( it == 2 ) call assert_int(0, conv%anneal_tail_start(), '2D: a converged iteration before minits starts no tail')
+            if( it == 3 ) call assert_int(4, conv%anneal_tail_start(), '2D: the first converged iteration past minits starts the tail at the next')
+        enddo
+        call assert_true(.not. any(conv_at(1:3)), '2D: the search phase does not converge')
+        call assert_true(.not. any(conv_at(4:4+PROB_BETA_TAIL-2)), '2D: the tail does not converge before its last iteration')
+        call assert_true(conv_at(4+PROB_BETA_TAIL-1), '2D: the tail converges at its last iteration')
+        call assert_true(conv_at(4+PROB_BETA_TAIL), '2D: a completed tail stays converged')
+        ! a budget too short (minits = maxits, as solve2D's long stages): the tail completes at maxits
+        call del_file(STATS_FILE)
+        conv_short = convergence()
+        params%minits = PROB_BETA_TAIL + 1
+        params%maxits = PROB_BETA_TAIL + 1
+        do it = 1, params%maxits
+            params%which_iter = it
+            call converged_field(os)
+            conv_at(it) = conv_short%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+            if( it == 1 ) call assert_int(2, conv_short%anneal_tail_start(), '2D: a short budget starts the tail at its second iteration')
+        enddo
+        call assert_true(.not. any(conv_at(1:params%maxits-1)), '2D: a short budget does not converge before its last iteration')
+        call assert_true(conv_at(params%maxits), '2D: a short budget anneals to its last iteration')
+        ! the n_eff control: prob_beta_end is the switch, whatever its value
+        call del_file(STATS_FILE)
+        conv_ctrl = convergence()
+        params%minits        = 3
+        params%maxits        = 25
+        params%prob_neff     = 3.
+        params%prob_beta_end = params%prob_beta
+        do it = 1, 3
+            params%which_iter = it
+            call converged_field(os)
+            conv_at(it) = conv_ctrl%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+        enddo
+        call assert_int(4, conv_ctrl%anneal_tail_start(), '2D: under the n_eff control prob_beta_end = prob_beta still starts the tail')
+        call assert_true(.not. any(conv_at(1:3)), '2D: under the n_eff control the run does not end on the overlap')
+        ! no tail: the overlap rule converges as before
+        call del_file(STATS_FILE)
+        conv_flat = convergence()
+        params%prob_neff     = 0.
+        params%prob_beta_end = params%prob_beta
+        do it = 1, 3
+            params%which_iter = it
+            call converged_field(os)
+            conv_at(it) = conv_flat%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+        enddo
+        call assert_int(0, conv_flat%anneal_tail_start(), '2D: a flat run starts no tail')
+        call assert_true(all(conv_at(1:3)), '2D: a flat run converges on the class overlap (minits is the caller''s)')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+
+    contains
+
+        !> NPTCLS particles whose class overlap is complete and whose search scanned everything
+        subroutine converged_field( os_loc )
+            type(oris), intent(inout) :: os_loc
+            integer :: i
+            call os_loc%new(NPTCLS, is_ptcl=.true.)
+            do i = 1, NPTCLS
+                call os_loc%set_state(i, 1)
+                call os_loc%set(i, 'updatecnt', 1.)
+                call os_loc%set(i, 'sampled',   1.)
+                call os_loc%set(i, 'class',     real(i))
+                call os_loc%set(i, 'frac',      100.)
+                call os_loc%set(i, 'mi_class',  1.)
+                call os_loc%set(i, 'corr',      0.5)
+                call os_loc%set(i, 'dist_inpl', 0.1)
+                call os_loc%set(i, 'shincarg',  0.1)
+                call os_loc%set(i, 'lp',        8.)
+                call os_loc%set(i, 'lp_est',    8.)
+                call os_loc%set(i, 'res',       8.)
+            end do
+        end subroutine converged_field
+
+    end subroutine test_posterior_anneal_tail2D
 
     !> the annealing tail (pose_marginalization.md 19): a refine=prob run with prob_beta_end above prob_beta
     !! searches flat while the resolution gains (FSC 0.5 or 0.143 finer than the previous iteration), starts the

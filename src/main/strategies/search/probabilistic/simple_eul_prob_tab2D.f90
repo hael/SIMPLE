@@ -11,7 +11,7 @@ use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
-    &posterior_temperature, draw_posterior_row, shift_prior_sigma2
+    &posterior_temperature, draw_posterior_row, shift_prior_sigma2, prob_neff_control, PROB_NEFF_ROWS
 implicit none
 
 public :: eul_prob_tab2D, prob_assign_profile2D
@@ -788,36 +788,38 @@ contains
         !! index and the fraction their share of the classes. A particle without a temperature (none expected)
         !! takes its best candidate with a warning. The draws run in particle order on the master's random stream.
         subroutine assign_particles_posterior()
+            type(prob_neff_control) :: ctrl
             real,    allocatable :: w(:), dists_c(:)
             integer, allocatable :: pos_c(:)
-            integer :: i_loc, pos_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, npeaks_loc
-            real    :: temp, dist, best_loc
+            integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, npeaks_loc
+            real    :: temp, dist, beta_eff
             maxcand = 0
             do i_loc = 1,self%nptcls
                 maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
             enddo
             allocate(w(max(1,maxcand)), dists_c(max(1,maxcand)), pos_c(max(1,maxcand)))
+            ! the n_eff control: the iteration's tempering factor from a subsample of the rows the draws are from
+            beta_eff = self%p_ptr%prob_beta
+            if( self%p_ptr%prob_neff > 0. )then
+                call ctrl%new(self%nptcls, PROB_NEFF_ROWS, ceiling(2. * self%p_ptr%prob_neff))
+                do i_loc = 1,self%nptcls
+                    if( .not. ctrl%wanted(i_loc) ) cycle
+                    call gather_row(i_loc, dists_c, pos_c, n_loc, ibest)
+                    if( n_loc < 1 ) cycle
+                    call ctrl%offer(n_loc, dists_c(1:n_loc), self%temps(i_loc))
+                enddo
+                call ctrl%apply(self%p_ptr%prob_neff, self%p_ptr%prob_beta, self%p_ptr%prob_anneal_frac, beta_eff)
+                call ctrl%kill
+            endif
             nassigned     = 0
             nmode         = 0
             ntemp_missing = 0
             do i_loc = 1,self%nptcls
-                n_loc    = 0
-                ibest    = 0
-                best_loc = huge(1.0)
-                do pos_loc = int(self%candidate_store%offsets(i_loc)), int(self%candidate_store%offsets(i_loc+1))-1
-                    if( .not. valid_sparse_candidate(pos_loc) ) cycle
-                    n_loc          = n_loc + 1
-                    dists_c(n_loc) = self%candidate_store%candidates(pos_loc)%dist
-                    pos_c(n_loc)   = pos_loc
-                    if( dists_c(n_loc) < best_loc )then
-                        best_loc = dists_c(n_loc)
-                        ibest    = n_loc
-                    endif
-                enddo
+                call gather_row(i_loc, dists_c, pos_c, n_loc, ibest)
                 if( n_loc < 1 )&
                     &THROW_HARD('Failed sparse posterior particle assignment in eul_prob_tab2D%ref_assign_sparse')
                 if( ibest < 1 ) ibest = 1 ! no finite distance: any candidate
-                temp = self%p_ptr%prob_beta * self%temps(i_loc)
+                temp = beta_eff * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     ntemp_missing = ntemp_missing + 1
                     temp = huge(temp)
@@ -838,6 +840,29 @@ contains
             call flush(logfhandle)
             deallocate(w, dists_c, pos_c)
         end subroutine assign_particles_posterior
+
+        !> the particle's valid candidates into dists_row/pos_row, with the position of the best (0 without a finite one)
+        subroutine gather_row( i_row, dists_row, pos_row, n_row, ibest_row )
+            integer, intent(in)    :: i_row
+            real,    intent(inout) :: dists_row(:)
+            integer, intent(inout) :: pos_row(:)
+            integer, intent(out)   :: n_row, ibest_row
+            integer :: pos_loc
+            real    :: best_loc
+            n_row     = 0
+            ibest_row = 0
+            best_loc  = huge(1.0)
+            do pos_loc = int(self%candidate_store%offsets(i_row)), int(self%candidate_store%offsets(i_row+1))-1
+                if( .not. valid_sparse_candidate(pos_loc) ) cycle
+                n_row            = n_row + 1
+                dists_row(n_row) = self%candidate_store%candidates(pos_loc)%dist
+                pos_row(n_row)   = pos_loc
+                if( dists_row(n_row) < best_loc )then
+                    best_loc  = dists_row(n_row)
+                    ibest_row = n_row
+                endif
+            enddo
+        end subroutine gather_row
 
         integer function count_npeaks( iptcl_loc ) result(npeaks)
             integer, intent(in) :: iptcl_loc
@@ -906,9 +931,24 @@ contains
         !! takes the first active class; one without a temperature (none expected) its argmin with a warning. The
         !! draws run in particle order on the master's random stream.
         subroutine assign_posterior
-            real    :: w(nactive), dists_act(nactive), temp, dist, best_loc, invalid_loc
+            type(prob_neff_control) :: ctrl
+            real    :: w(nactive), dists_act(nactive), temp, dist, best_loc, invalid_loc, beta_eff
             integer :: i_loc, iact_loc, which, iact_best, assigned_loc, nmode, ntemp_missing
             invalid_loc   = 0.1 * huge(invalid_loc)
+            ! the n_eff control: the iteration's tempering factor from a subsample of the rows the draws are from
+            beta_eff = self%p_ptr%prob_beta
+            if( self%p_ptr%prob_neff > 0. )then
+                call ctrl%new(self%nptcls, PROB_NEFF_ROWS, ceiling(2. * self%p_ptr%prob_neff))
+                do i_loc = 1,self%nptcls
+                    if( .not. ctrl%wanted(i_loc) ) cycle
+                    do iact_loc = 1,nactive
+                        dists_act(iact_loc) = self%rows(active_cls(iact_loc),i_loc)%dist
+                    enddo
+                    call ctrl%offer(nactive, dists_act, self%temps(i_loc))
+                enddo
+                call ctrl%apply(self%p_ptr%prob_neff, self%p_ptr%prob_beta, self%p_ptr%prob_anneal_frac, beta_eff)
+                call ctrl%kill
+            endif
             nmode         = 0
             ntemp_missing = 0
             do i_loc = 1,self%nptcls
@@ -921,7 +961,7 @@ contains
                         iact_best = iact_loc
                     endif
                 enddo
-                temp = self%p_ptr%prob_beta * self%temps(i_loc)
+                temp = beta_eff * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     ntemp_missing = ntemp_missing + 1
                     temp = huge(temp)

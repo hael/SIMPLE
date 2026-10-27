@@ -2,7 +2,7 @@
 module simple_eul_prob_tab_utils
 use, intrinsic :: iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_defs,      only: TINY, dp, DPI
+use simple_defs,      only: TINY, dp, DPI, logfhandle
 use simple_error,     only: simple_exception
 use simple_math,      only: hpsort
 use simple_oris,      only: oris
@@ -18,6 +18,7 @@ public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
 public :: prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
+public :: prob_neff_control, prob_beta_control_last, PROB_NEFF_ROWS, PROB_NEFF_MIN_ROWS
 private
 #include "simple_local_flags.inc"
 
@@ -38,6 +39,38 @@ type :: prob_candidate
     real    :: y      = 0.
     logical :: has_sh = .false.
 end type prob_candidate
+
+!> The n_eff control of the tables' posterior draws (prob_neff > 0; doc/implementation_notes/planned/
+!! pose_marginalization.md section 20.2): one tempering factor per iteration, solved so that the mean effective
+!! number of candidates exp(entropy) over a subsample of rows equals the target. The tables offer their rows in
+!! particle order before the draws: every stride-th particle whose row holds at least nmin valid distances is
+!! kept, up to nmax rows, packed as distances above the row minimum with the particle's temperature. Rows with
+!! fewer candidates than nmin are drawn at the solved factor but do not set it: a row of two candidates lands
+!! on one of its best two at any factor, and would pull the level of the rows where the choice is open. Below
+!! PROB_NEFF_MIN_ROWS kept rows the control falls back to the flat factor. The last factor applied is kept for
+!! the commander (prob_beta_control_last), which hands it to the next iteration's fills as prob_beta.
+integer, parameter :: PROB_NEFF_ROWS     = 1000  !< rows of the subsample
+integer, parameter :: PROB_NEFF_MIN_ROWS = 50    !< below which the control falls back to prob_beta
+real,    parameter :: PROB_NEFF_BETA_LO  = 1.e-3 !< the bracket of the solve, in beta
+real,    parameter :: PROB_NEFF_BETA_HI  = 1.e3
+integer, parameter :: PROB_NEFF_BISECT   = 40    !< bisections in log beta (a factor 1e6 bracket to 1e-6)
+real               :: prob_beta_last_solved = 0. !< the factor the last control applied (0: none this process)
+
+type :: prob_neff_control
+    private
+    integer :: stride = 1, nmax = 0, nmin = 2, nrows = 0, nvals = 0
+    integer, allocatable :: offs(:)
+    real,    allocatable :: dists(:), temps(:)
+contains
+    procedure :: new       => neff_control_new
+    procedure :: wanted    => neff_control_wanted
+    procedure :: offer     => neff_control_offer
+    procedure :: nkept     => neff_control_nkept
+    procedure :: mean_neff => neff_control_mean_neff
+    procedure :: solve     => neff_control_solve
+    procedure :: apply     => neff_control_apply
+    procedure :: kill      => neff_control_kill
+end type prob_neff_control
 
 ! One entry of the dense table, a particle and a reference: the distance and the in-plane index. No default values:
 ! the fill and the read write every entry.
@@ -400,6 +433,182 @@ contains
         frac = real(max(1, min(iter, niters)) - 1) / real(niters - 1)
         beta = beta0 * (beta1 / beta0)**frac
     end function prob_beta_at
+
+    ! ---- the n_eff control ------------------------------------------------------------------------------------
+
+    !> nptcls rows will be offered; keep up to nmax of them, each with at least nmin valid distances
+    subroutine neff_control_new( self, nptcls, nmax, nmin )
+        class(prob_neff_control), intent(inout) :: self
+        integer,                  intent(in)    :: nptcls, nmax, nmin
+        call self%kill
+        self%nmax   = max(1, nmax)
+        self%nmin   = max(2, nmin)
+        self%stride = max(1, nptcls / self%nmax)
+        self%nrows  = 0
+        self%nvals  = 0
+        allocate(self%offs(self%nmax + 1), self%temps(self%nmax), self%dists(64 * self%nmax))
+        self%offs(1) = 1
+    end subroutine neff_control_new
+
+    !> is particle i's row wanted (its turn in the stride, room left)? the caller skips building the rest
+    pure logical function neff_control_wanted( self, i ) result( l_wanted )
+        class(prob_neff_control), intent(in) :: self
+        integer,                  intent(in) :: i
+        l_wanted = self%nrows < self%nmax .and. mod(i - 1, self%stride) == 0
+    end function neff_control_wanted
+
+    !> offer a row: its valid distances (finite, below the invalid marker) are packed above their minimum when
+    !! there are at least nmin of them and the temperature is positive
+    subroutine neff_control_offer( self, n, dists, temp )
+        class(prob_neff_control), intent(inout) :: self
+        integer,                  intent(in)    :: n
+        real,                     intent(in)    :: dists(n), temp
+        real, allocatable :: tmp(:)
+        real    :: dmin, invalid
+        integer :: r, nvalid, need
+        if( self%nrows >= self%nmax ) return
+        if( .not. (temp > 0.) )       return
+        invalid = 0.1 * huge(invalid)
+        nvalid  = 0
+        dmin    = huge(dmin)
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                nvalid = nvalid + 1
+                dmin   = min(dmin, dists(r))
+            endif
+        enddo
+        if( nvalid < self%nmin ) return
+        need = self%nvals + nvalid
+        if( need > size(self%dists) )then
+            allocate(tmp(max(need, 2 * size(self%dists))))
+            tmp(1:self%nvals) = self%dists(1:self%nvals)
+            call move_alloc(tmp, self%dists)
+        endif
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                self%nvals             = self%nvals + 1
+                self%dists(self%nvals) = dists(r) - dmin
+            endif
+        enddo
+        self%nrows             = self%nrows + 1
+        self%temps(self%nrows) = temp
+        self%offs(self%nrows + 1) = self%nvals + 1
+    end subroutine neff_control_offer
+
+    pure integer function neff_control_nkept( self ) result( nrows )
+        class(prob_neff_control), intent(in) :: self
+        nrows = self%nrows
+    end function neff_control_nkept
+
+    !> the mean over the kept rows of exp(entropy) of the row posterior at tempering factor beta:
+    !! p_r proportional to exp(-beta T d_r), d_r the distance above the row minimum; in one pass per row,
+    !! H = log z + beta T <d>_p with z the partition sum
+    real function neff_control_mean_neff( self, beta ) result( neff )
+        class(prob_neff_control), intent(in) :: self
+        real,                     intent(in) :: beta
+        real(dp) :: z, s, acc, a, e
+        integer  :: irow, k
+        acc = 0.d0
+        !$omp parallel do default(shared) private(irow,k,z,s,a,e) schedule(static) reduction(+:acc)
+        do irow = 1,self%nrows
+            z = 0.d0
+            s = 0.d0
+            do k = self%offs(irow), self%offs(irow + 1) - 1
+                a = real(beta,dp) * real(self%temps(irow),dp) * real(self%dists(k),dp)
+                if( a < 80.d0 )then
+                    e = exp(-a)
+                    z = z + e
+                    s = s + a * e
+                endif
+            enddo
+            acc = acc + exp(log(z) + s / z)
+        enddo
+        !$omp end parallel do
+        neff = 0.
+        if( self%nrows > 0 ) neff = real(acc / real(self%nrows,dp))
+    end function neff_control_mean_neff
+
+    !> the factor at which the mean n_eff of the kept rows is the target: a bisection in log beta over
+    !! [PROB_NEFF_BETA_LO, PROB_NEFF_BETA_HI] (the mean n_eff falls monotonically with beta: the entropy of
+    !! each tempered row does, dH/dbeta = -beta Var(T d)); an unreachable target returns the bracket's end.
+    !! neff_at is the mean at the solution, neff_phys the mean at beta 1 (the physical posterior)
+    subroutine neff_control_solve( self, target, beta, neff_at, neff_phys )
+        class(prob_neff_control), intent(in)  :: self
+        real,                     intent(in)  :: target
+        real,                     intent(out) :: beta, neff_at, neff_phys
+        real    :: lo, hi, mid, neff_lo, neff_hi
+        integer :: it
+        neff_phys = self%mean_neff(1.)
+        lo        = log(PROB_NEFF_BETA_LO)
+        hi        = log(PROB_NEFF_BETA_HI)
+        neff_lo   = self%mean_neff(PROB_NEFF_BETA_LO)
+        neff_hi   = self%mean_neff(PROB_NEFF_BETA_HI)
+        if( neff_lo <= target )then
+            beta    = PROB_NEFF_BETA_LO
+            neff_at = neff_lo
+            return
+        endif
+        if( neff_hi >= target )then
+            beta    = PROB_NEFF_BETA_HI
+            neff_at = neff_hi
+            return
+        endif
+        do it = 1,PROB_NEFF_BISECT
+            mid     = 0.5 * (lo + hi)
+            neff_at = self%mean_neff(exp(mid))
+            if( neff_at > target )then
+                lo = mid
+            else
+                hi = mid
+            endif
+        enddo
+        beta    = exp(0.5 * (lo + hi))
+        neff_at = self%mean_neff(beta)
+    end subroutine neff_control_solve
+
+    !> the control of one assignment: the factor the draws use. The solved factor when enough rows were kept,
+    !! the flat factor beta_flat otherwise; in the annealing tail (anneal_frac in (0,1]) the factor ramps
+    !! geometrically from the solved value to 1, the physical posterior, so the tail of section 19.8 keeps its
+    !! shape from wherever the control sits. Logs one line; keeps the factor for the commander
+    subroutine neff_control_apply( self, target, beta_flat, anneal_frac, beta )
+        class(prob_neff_control), intent(in)  :: self
+        real,                     intent(in)  :: target, beta_flat, anneal_frac
+        real,                     intent(out) :: beta
+        real :: neff_at, neff_phys, frac
+        if( self%nrows < PROB_NEFF_MIN_ROWS )then
+            beta = beta_flat
+            write(logfhandle,'(A,I0,A,I0,A,F9.4)') '>>> POSTERIOR DRAW CONTROL: ', self%nrows, &
+                &' rows with at least ', self%nmin, ' candidates, fewer than needed; the flat factor ', beta
+        else
+            call self%solve(target, beta, neff_at, neff_phys)
+            frac = min(1., max(0., anneal_frac))
+            if( frac > 0. .and. beta > 0. )then
+                beta = beta**(1. - frac)
+                write(logfhandle,'(A,F9.4,A,F6.2,A,F8.2,A,I0,A,F8.2,A,F4.2,A)') '>>> POSTERIOR DRAW CONTROL: BETA ', beta, &
+                    &' (solved for n_eff ', target, ': ', neff_at, ' over ', self%nrows, ' rows; at beta 1: ', neff_phys, &
+                    &'; annealing tail, frac ', frac, ' to 1)'
+            else
+                write(logfhandle,'(A,F9.4,A,F6.2,A,F8.2,A,I0,A,F8.2,A)') '>>> POSTERIOR DRAW CONTROL: BETA ', beta, &
+                    &' FOR N_EFF ', target, ' (', neff_at, ' over ', self%nrows, ' rows; n_eff at beta 1: ', neff_phys, ')'
+            endif
+        endif
+        prob_beta_last_solved = beta
+        call flush(logfhandle)
+    end subroutine neff_control_apply
+
+    subroutine neff_control_kill( self )
+        class(prob_neff_control), intent(inout) :: self
+        if( allocated(self%offs)  ) deallocate(self%offs)
+        if( allocated(self%dists) ) deallocate(self%dists)
+        if( allocated(self%temps) ) deallocate(self%temps)
+        self%nrows = 0
+        self%nvals = 0
+    end subroutine neff_control_kill
+
+    !> the factor the last n_eff control of this process applied; 0 when none ran
+    real function prob_beta_control_last() result( beta )
+        beta = prob_beta_last_solved
+    end function prob_beta_control_last
 
     !> One draw from the posterior over a table row at temperature temp (the tables' assignment,
     !! doc/implementation_notes/planned/pose_marginalization.md section 4.1): p_r proportional to

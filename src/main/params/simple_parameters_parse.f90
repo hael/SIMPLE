@@ -580,6 +580,8 @@ contains
         call reg%add_real('prob_beta', self%prob_beta)
         call reg%add_real('prob_beta_ini', self%prob_beta_ini)
         call reg%add_real('prob_beta_end', self%prob_beta_end)
+        call reg%add_real('prob_neff', self%prob_neff)
+        call reg%add_real('prob_anneal_frac', self%prob_anneal_frac)
         call reg%add_real('rec_athres', self%rec_athres)
         call reg%add_real('regpass_fsc', self%regpass_fsc)
         call reg%add_real('res_target', self%res_target)

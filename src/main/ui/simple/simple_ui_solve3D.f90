@@ -137,7 +137,14 @@ contains
         call prg%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of a stage', &
         &'The factor the draws anneal to once a stage''s resolution stops gaining: a geometric ramp from prob_beta over '//&
         &'the last five iterations, after which the stage ends (1 the physical posterior); 0 keeps prob_beta '//&
-        &'throughout; solve3D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., &
+        &'throughout; solve3D sets 1 on its last stage unless given; under prob_neff any positive value switches the '//&
+        &'tail on and the solved factor ramps to 1{0.0}', 'factor on T{0.0}', .false., 0., &
+        &group="search", visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'prob_neff', 'num', 'Posterior draw n_eff target (experimental)', &
+        &'The n_eff control of the posterior draws: the tempering factor is solved every iteration so that the mean '//&
+        &'effective number of candidates a particle draws among (exp entropy of its row posterior, over a subsample of '//&
+        &'rows) is this target, in place of prob_beta, which then sets the first iteration only; the solved factor '//&
+        &'is handed to the next iteration''s in-plane draws. 2-4; 0 off{0.0}', 'n_eff target{0.0}', .false., 0., &
         &group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&

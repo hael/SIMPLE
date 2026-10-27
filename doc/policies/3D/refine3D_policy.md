@@ -536,6 +536,37 @@ stability from a stage's first iterations, so the overlap rule cannot tell a
 frozen assignment from convergence) but on the resolution exit (`lpexit`),
 its annealing tail, or its iteration budget.
 
+**The n_eff control (`prob_neff`, experimental, 2026-10-27; section 20.2 of
+the note).** With `prob_neff` set (a target above 1, 2-4 meant) the
+tempering factor is not an input but is solved every iteration, at
+assignment time on the master, so that the mean effective number of
+candidates a particle draws among, exp(entropy) of its tempered row
+posterior, over a subsample of the rows the draws are from, equals the
+target: one global factor, a bisection in log beta on up to
+`PROB_NEFF_ROWS` (1000) rows taken at a fixed stride through the particles,
+each with at least twice the target in valid candidates (a row of two
+candidates lands on one of its best two at any factor and would otherwise
+pull the level of the rows where the choice is open); fewer than
+`PROB_NEFF_MIN_ROWS` (50) such rows fall back to `prob_beta` for that
+iteration (`prob_neff_control` in `simple_eul_prob_tab_utils`; every table,
+dense 3D, neighbourhood, dense and sparse 2D, applies it before its draws
+and logs `POSTERIOR DRAW CONTROL` with the solved factor, the mean n_eff at
+it and at beta 1). The solved factor is handed to the next iteration's fills
+as `prob_beta`, so the in-plane draws run one iteration behind the
+direction draws; `prob_beta` itself sets the first iteration only. On the
+ladder the control comes out colder than 0.3 where the physical posterior
+is flat (the early bands) and hotter where it is sharp, with nothing set per
+stage. Under the control `prob_beta_end` is the annealing tail's switch
+alone: any positive value starts the tail of section 19.8 once the
+resolution stops gaining, and the factor ramps geometrically from the
+solved value to 1 over the tail (`prob_anneal_frac`, the tail's progress,
+internal, set by `exec_refine3D`); `prob_beta_end=0` leaves the run under
+the control throughout. `prob_neff=0` (the default) is the flat `prob_beta`
+path, unchanged. Unit-tested on synthetic rows against a numpy emulation
+(`test_neff_control`) and on the dense table's assignment. The 2D route has
+the control and, since the same day, the same tail keyed on its class
+overlap (`solve2D_policy.md`).
+
 ### Neighbourhood-table assignment (`ref_assign_neigh`)
 
 The neighbourhood tables (`refine=prob_neigh`, solve3D's stages 1-2 and

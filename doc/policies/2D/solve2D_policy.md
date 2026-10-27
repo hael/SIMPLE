@@ -345,10 +345,30 @@ stream, so shared-memory and distributed runs draw alike; the log reports the
 fraction of particles drawn at their row mode. The tempering factor
 `prob_beta` (default 0.3, for small membrane proteins; below one hotter)
 multiplies the temperature of the class and in-plane draws as of the 3D ones,
-so below one they draw from the tempered posterior p^beta; the 2D runs do not
-anneal (`prob_beta_end` is a refine3D/solve3D control). `prob_beta` is an
-advanced search input of `refine2D`, `solve2D` and `solve2D_chunks`; the 2D
-convergence rules are unchanged in this step.
+so below one they draw from the tempered posterior p^beta. `prob_beta` is an
+advanced search input of `refine2D`, `solve2D` and `solve2D_chunks`. The n_eff
+control of the 3D tables (`prob_neff`, experimental, `refine3D_policy.md`:
+the factor solved every iteration so that the mean effective number of
+classes a particle draws among is the target, `prob_beta` the first
+iteration only) applies to the 2D tables through the same input.
+
+**The annealing tail (2026-10-27, as the 3D one).** A `refine=prob|prob_snhc`
+run with `prob_beta_end` searches at `prob_beta` until its class overlap
+converges past `minits` (`check_conv2D`'s own rule), then `exec_refine2D`
+ramps the draws geometrically to `prob_beta_end` over the next
+`PROB_BETA_TAIL` (5) iterations and the run ends (`>>> CLASS OVERLAP
+CONVERGED: annealing ...`, `>>> ANNEALING TAIL COMPLETE`); a budget too short
+for that starts the tail so that it completes at `maxits`, the absolute end
+iteration of the 2D rule (`>>> BUDGET END`). Under `prob_neff` any positive
+`prob_beta_end` is the switch and the solved factor ramps to 1. The tail's
+state lives in the strategy's convergence object (the shared-memory strategy
+keeps one across iterations since this step, as the 3D one). `solve2D` sets
+`prob_beta_end=1` on its last stage unless the user set it, so the last
+probabilistic stage ends with draws from the physical posterior before the
+terminal greedy pass and the final class averages; the earlier stages run
+flat, as before. Until this step the 2D runs never annealed: a run at 0.3
+wrote its last class averages from draws at 0.3, in expectation a soft
+membership among the best few classes.
 
 The posterior sampling is the tables' (`refine=prob|prob_snhc`, the modes
 of the later stages); the SHC strategies of the early stages (`snhc_smpl`,

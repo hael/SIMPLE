@@ -41,6 +41,8 @@ type refine2D_stage_cfg
     type(string) :: refine, center, objfun, refs, gauref, ml_reg
     integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
     real         :: trs=0., gaufreq=0.
+    logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
+    logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
 end type refine2D_stage_cfg
 
 contains
@@ -176,6 +178,11 @@ contains
         call set_refine2D_stage_phase_policy( cfg, istage )
         call set_refine2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
         call set_refine2D_stage_search_policy( cfg, params, istage, size(stage_parms) )
+        ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its class
+        ! overlap converges (the tail of PROB_BETA_TAIL iterations, then the stage ends), as solve3D's last stage;
+        ! the other stages run flat, unless the user set the end (pose_marginalization.md section 19.8)
+        cfg%l_prob_beta_end_user = cline%defined('prob_beta_end')
+        cfg%l_anneal_tail        = istage == size(stage_parms) .and. istage >= PROBREFINE_STAGE
     end subroutine build_refine2D_stage_cfg
 
     subroutine set_refine2D_stage_objfun_policy( cfg, params )
@@ -362,6 +369,13 @@ contains
         call cline_refine2D%set('startit',    cfg%iter)
         call cline_refine2D%set('refine',     cfg%refine)
         call cline_refine2D%set('objfun',     cfg%objfun)
+        if( .not. cfg%l_prob_beta_end_user )then
+            if( cfg%l_anneal_tail )then
+                call cline_refine2D%set('prob_beta_end', 1.)
+            else
+                call cline_refine2D%delete('prob_beta_end')
+            endif
+        endif
         call cline_refine2D%set('trs',        cfg%trs)
         call cline_refine2D%set('center',     cfg%center)
         call cline_refine2D%set('restore_cavgs', 'yes')

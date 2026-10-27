@@ -1822,7 +1822,9 @@ set per stage by hand.
 The quantity to hold fixed across the ladder is the exploration of the
 draw, measured in units that do not depend on the band or the particle
 count: the effective number of candidates a particle draws among,
-n_eff = 1 / sum_c p_c^2 over its row at the draw's temperature. The
+n_eff = exp(H) of its row posterior at the draw's temperature (the
+diagnostic's `neff`; the entropy of a tempered row falls monotonically with
+beta, dH/dbeta = -beta Var(T d), so the solve is a bisection). The
 control: one global beta per iteration, chosen so that the mean n_eff over
 the particles equals a target N* (2 to 4; the row-mode fraction the logs
 carry since 2026-10-24 is the readout, 0.5 at stage 1 and 0.2-0.7 at the
@@ -1850,6 +1852,90 @@ posterior's own n_eff over `PROB_BETA_TAIL` iterations, i.e. beta ramps to
 1 from wherever the control sits, and the run ends. `prob_beta` goes;
 `prob_neff` (N*) replaces it; `prob_beta_end` loses its number (the end is
 physical) and becomes the switch that the last stage already sets.
+
+**Built 2026-10-27, behind `prob_neff` (0, the default, is the flat
+`prob_beta` path, bit for bit).** `prob_neff_control` in the tables' utils:
+rows offered at a fixed stride through the particles, up to 1000 kept, each
+with at least 2 N* valid candidates (a row of two candidates lands on one
+of its best two at any beta and would pull the level of the rows where the
+choice is open: the neighbourhood tables' stop-rule rows), packed above
+their minimum; the mean n_eff at a beta in one pass per row (H = log Z +
+beta T <d>); 40 bisections in log beta over [1e-3, 1e3]; fewer than 50 kept
+rows fall back to `prob_beta` for the iteration. Every table (dense 3D,
+neighbourhood, dense and sparse 2D) runs it before its draws and logs
+`POSTERIOR DRAW CONTROL` with the solved beta, the mean n_eff at it and at
+beta 1 (the physical posterior's own n_eff, which is section 21's first
+reading for free). The solved beta goes back to the commander
+(`prob_beta_control_last`) and out as `prob_beta` to the next iteration's
+fills, so the in-plane draws run one iteration behind the direction draws
+and `prob_beta` sets the first iteration only; `prob_beta_ini` is then
+moot. The tail: `prob_beta_end` is the switch (any positive value; solve3D
+sets 1 on the last stage), `exec_refine3D` passes the tail's progress as
+`prob_anneal_frac` and the table ramps the solved beta geometrically to 1.
+Unit tests: `test_neff_control` (synthetic geometric rows against numpy,
+`neff_control_ref.py`: the solved beta for N* = 3, monotonicity, the
+temperature scaling, the stride, the row minimum, the fallback, the ramp)
+and the dense table's assignment under the control. What is not yet done
+from this subsection: `prob_beta` is still the key the flat path reads, the
+20.5 retirements wait for the tally.
+
+Hans, the same day: solve2D and solve3D are to be consistent. The 2D route
+had the control but no tail, so a 2D run ended with its draws at the
+control's level (or at 0.3 before) and its last class averages were, in
+expectation, a soft membership among the best few classes. Built: the tail
+in `check_conv2D`, keyed on the class overlap converging past `minits`
+(2D has no per-iteration resolution) or on the budget's end, the same
+`PROB_BETA_TAIL` ramp in `exec_refine2D`, the tail's state in the 2D
+strategies' convergence object (the shared-memory strategy kept a fresh one
+every iteration; it keeps one now, as the 3D one), `prob_beta_end` on the
+2D inputs, and solve2D setting `prob_beta_end=1` on its last stage unless
+the user set it, before its terminal greedy pass. `test_posterior_anneal_tail2D`
+covers the start past minits, the short budget completing at `maxits`, the
+switch under the control and the flat run.
+
+**The shift prior (19.11) under the schedule** (Hans, 2026-10-27: check
+carefully how the two marry). They do, by construction, on three points:
+
+- *What beta tempers.* The row holds the MAP loss L + |s - s0|^2 /
+  (2 sigma^2 T) and the draw is p_c proportional to exp(-beta T (d_c -
+  d_min)) = exp(-beta [T L_c + |s_c - s0|^2 / 2 sigma^2] + const): the
+  tempering acts on likelihood and prior together, the tempered posterior
+  (likelihood x prior)^beta. So beta never changes the balance between the
+  two, at any value the control picks (a cold beta above 1 at stage 3 does
+  not make the prior stiffer relative to the data, it sharpens the whole
+  row); the balance is set once, in the fill, where the MAP refinement runs
+  at the untempered T whatever the draw's beta (`set_shift_prior` takes
+  `posterior_temperature`, not `prob_beta` times it). The alternative, a
+  prior left out of the tempering, would make the prior's weight relative
+  to the data a function of beta, which is what must not happen; the
+  present form is the right one and the control needs nothing from it.
+- *The feedback through sigma.* The prior's width is the previous
+  iteration's increments, and the draw's temperature sets the increments:
+  colder draws commit smaller moves, so sigma tightens as the schedule
+  cools (the control's cold early betas, the tail) and loosens where it is
+  hot. The direction is the right one, and where it could bite the floor
+  decouples the two: in the coarse bands the band term (a quarter
+  wavelength in original pixels, 4-5 px at 16-20 A) is above any measured
+  increment, so the early cold draws of the control cannot pin the prior;
+  in the fine bands the floor is one pixel and the prior can tighten only
+  into the sub-pixel regime, where a half-pixel move costs an eighth of a
+  nat and the prior constrains nothing the refinement would want. In the
+  tail (five iterations, beta to 1) the increments shrink toward the floor
+  and the prior with them, one iteration behind: harmless at the last
+  band for the same reason. solve3D's stages 1-2 search no shifts, so
+  sigma sits at the floor through stage 3's entry under either schedule.
+- *The control's readout.* The prior sharpens the rows (far-shift
+  candidates pay nats), so holding N* comes out at a hotter beta than
+  without it, and the control does not undo what the prior did: the prior
+  decides which candidates are credible, the control how many of them the
+  draw spreads over. The `n_eff at beta 1` of the control's log line is
+  the physical posterior's width with and without the prior, a companion
+  to item 11's rank histogram: the prior is working if that number falls
+  and the histogram's tail stops being flat.
+
+The weighted insertion of 20.8 takes the MAP losses as the draw does,
+prior included, at the draw's beta: nothing to add. The 2D tables carry the
+prior the same way, so the 2D tail anneals the same row.
 
 ### 20.3 The particle count: Rosenthal-Henderson, per stage
 
@@ -1938,9 +2024,79 @@ frontier's 0.21.
 1. 20.2 alone, everything else as it is: streptavidin ten restarts against
    the 19.7 tally (stages 1-2 alive and tightening, handover overlap, final
    numbers, wall time), then PfCRT ten against the acceptance bar.
-2. 20.3, with the budget in evaluations.
-3. The `snhc` first scan (20.4), one line.
-4. Then section 18 in its order.
+2. 20.8, the weighted insertion, behind a key: the one-stage comparison,
+   then the iteration counts in a full run.
+3. 20.3, with the budget in evaluations.
+4. The `snhc` first scan (20.4), one line.
+5. 20.8's second experiment, the two temperatures, one number.
+6. Then section 18 in its order.
+
+### 20.8 Weighted insertion: the draw's expectation without its noise (2026-10-27)
+
+Hans, after 20.2 was built: the next natural step is to put the n_eff
+candidates into the reconstruction with weights.
+
+**The argument.** One draw from p^beta per particle, inserted with weight
+one, gives a map whose expectation over the draws is the weighted
+insertion of the row at p^beta. Inserting the row's posterior mass with
+its weights therefore changes nothing about what the map converges to and
+removes the per-iteration Monte Carlo noise of one pose per particle
+(Rao-Blackwellization). The next iteration's references are then the
+expectation the present scheme only approximates, and the gain should
+show as fewer iterations to the same resolution: the draw's variance is
+what the n_eff control pays for.
+
+That settles two things:
+
+- *The weights are at the draw's beta, not the physical one.* Inserting at
+  beta 1 while drawing at the control's beta would sharpen the map
+  relative to the search, a different scheme (see the second experiment
+  below). The tail anneals the draw and the weights to 1 together, so the
+  final map is at the physical posterior either way, and section 21's
+  calibration is not a prerequisite: a miscalibrated temperature affects
+  the draw and the weighted insertion identically.
+- *The committed pose stays the draw.* The search state for the next
+  iteration (the seed shift, the neighbourhood, the incumbent in the
+  candidate set of 19.6) is one pose, and a draw is the right one-pose
+  summary of a broad row. Only the reconstruction takes the expectation,
+  which needs no summary.
+
+**Where it lands.** At assignment the master holds the row. Beside the one
+`ptcl_ref` of `ASSIGNMENT_FBODY` it writes the entries holding 99% of the
+mass at the draw's beta, capped at a few (the diagnostic's k99: median 3-5
+at a stage's start, 1-2 as it settles), each with its in-plane, its shift
+(the refined shift of a refined entry, the seed shift otherwise: what the
+draw commits today) and its normalized weight. The reconstruction inserts
+K slices per particle into the particle's half, each at p_k times the
+particle weight; the insertion already takes a per-particle weight, so
+this is a loop over the entries. The cost is the insertion time times the
+mean K, about 1.5 early and 1 late, against a search that dominates. The
+trailing blend and `update_frac` are untouched: K poses for the sampled
+particles, the momentum for the rest. The 2D tables can take the same
+step later (soft class membership in the class averages).
+
+**The readout.** On one stage, the FSC of the weighted map against the
+single-draw map at the same iteration from the same assignment (the same
+rows: a controlled comparison), then the iterations to the stage exit in a
+full run. Built after the `prob_neff` tally: the weighted insertion is the
+variance-reduced form of whatever the control's beta does and inherits its
+tuning.
+
+**What it separates, and the second experiment.** The weighted insertion
+makes the draw's reconstruction role redundant but not its search role,
+and that splits the two halves of what `prob_beta` was doing. After this
+step the annealing means two things that share a beta: how far the search
+state may wander, and how blurred the map is. cryoSPARC couples them
+through the noise model because it never commits a pose; here they are
+coupled by choice. One knob, and the tail ends both at the physical
+posterior, is probably right for now, but it is also the point where they
+can legitimately separate: a search held at N* = 3 for exploration while
+the map is inserted at a sharper beta gives the references the next
+iteration scores against less blur without taking the exploration away.
+Whether that is better or a way to lock in early is what section 15's
+argmin runs warn about, so it is not to be guessed: once the weighted
+insertion exists it is one number, a second key for the insertion's beta
+(or its own N*), the same tally.
 
 ## 21. Rulings of 2026-10-26, and the calibration on real data
 

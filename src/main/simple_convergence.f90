@@ -60,7 +60,7 @@ contains
     end subroutine print_iteration
 
     function check_conv2D( self, params, cline, os, ncls, msk ) result( converged )
-        use simple_parameters, only: parameters
+        use simple_parameters, only: parameters, PROB_BETA_TAIL
         class(convergence), intent(inout) :: self
         class(parameters),  intent(inout) :: params
         class(cmdline),     intent(inout) :: cline
@@ -71,11 +71,11 @@ contains
         type(string) :: s_ratio, cont_ratio, numstr
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
-        character(len=80) :: beta_str
+        character(len=96) :: beta_str
         integer :: n, nptcls, nsampled, nactive
         real    :: overlap_lim, fracsrch_lim, realized_update_frac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        logical :: converged, chk4conv, cont_stats_available
+        logical :: converged, chk4conv, cont_stats_available, l_tail_run
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -132,7 +132,28 @@ contains
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
         if( params%l_prob_align_mode )then
-        write(beta_str,'(F6.3,A)') params%prob_beta, ' (flat)' ! the 2D tables' posterior draws do not anneal
+        ! the probability tables' posterior draws: the tempering factor of this iteration (under the n_eff control
+        ! the factor is solved at assignment time), and the annealing tail once the class overlap converges
+        ! (exec_refine2D sets the factor; the tail as in check_conv3D)
+        if( params%prob_neff > 0. )then
+        if( self%prob_beta_tail_start > 0 )then
+        write(beta_str,'(A,F5.2,A,I0,A,I0,A)') 'n_eff control, target ', params%prob_neff, ' (annealing tail ',&
+            &min(PROB_BETA_TAIL, params%which_iter - self%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL, ' to 1)'
+        else if( params%prob_beta_end > TINY )then
+        write(beta_str,'(A,F5.2,A)') 'n_eff control, target ', params%prob_neff, ' (annealing to 1 once the class overlap converges)'
+        else
+        write(beta_str,'(A,F5.2,A)') 'n_eff control, target ', params%prob_neff, ' (flat)'
+        endif
+        else if( self%prob_beta_tail_start > 0 )then
+        write(beta_str,'(F6.3,A,I0,A,I0,A,F6.3,A)') params%prob_beta, ' (annealing tail ',&
+            &min(PROB_BETA_TAIL, params%which_iter - self%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL,&
+            &' to ', params%prob_beta_end, ')'
+        else if( params%prob_beta_end > TINY .and. abs(params%prob_beta_end - params%prob_beta) > TINY )then
+        write(beta_str,'(F6.3,A,F6.3,A)') params%prob_beta, ' (annealing to ', params%prob_beta_end,&
+            &' once the class overlap converges)'
+        else
+        write(beta_str,'(F6.3,A)') params%prob_beta, ' (flat)'
+        endif
         write(logfhandle,609) '>>> | POSTERIOR DRAW BETA           | '//trim(adjustl(beta_str))
         endif
         if( trim(params%gauref).eq.'yes' )then
@@ -213,6 +234,35 @@ contains
                 converged = self%dist_inpl%avg < 0.5
             endif
         endif
+        ! The annealing tail of the probability tables' posterior draws, as check_conv3D's (pose_marginalization.md
+        ! section 19.8): a run with prob_beta_end (under the n_eff control, prob_neff, any positive value) searches at
+        ! its factor until its class overlap converges past minits, then exec_refine2D ramps the draws to
+        ! prob_beta_end (to 1 under the control) over the PROB_BETA_TAIL iterations from self%prob_beta_tail_start
+        ! and the run ends; a budget (maxits, the absolute end iteration check_refine2D_convergence enforces) too
+        ! short for that starts the tail so that it completes within it. The state is this object's, which the
+        ! strategies keep across iterations. The 2D runs had no tail before 2026-10-27: a run at prob_beta 0.3 wrote
+        ! its last class averages from draws at 0.3
+        l_tail_run = params%l_prob_align_mode .and. params%prob_beta_end > TINY .and. &
+            &(params%prob_neff > 0. .or. abs(params%prob_beta_end - params%prob_beta) > TINY)
+        if( l_tail_run .or. self%prob_beta_tail_start > 0 )then
+            if( self%prob_beta_tail_start == 0 )then
+                if( converged .and. params%which_iter >= params%minits )then
+                    self%prob_beta_tail_start = params%which_iter + 1
+                    write(logfhandle,'(A,I0,A)') '>>> CLASS OVERLAP CONVERGED: annealing the posterior draws over the next ',&
+                        &PROB_BETA_TAIL, ' iterations'
+                else if( params%which_iter + PROB_BETA_TAIL >= params%maxits )then
+                    self%prob_beta_tail_start = params%which_iter + 1
+                    write(logfhandle,'(A,I0,A)') '>>> BUDGET END: annealing the posterior draws over the last ',&
+                        &PROB_BETA_TAIL, ' iterations'
+                endif
+                converged = .false.
+            else if( params%which_iter >= self%prob_beta_tail_start + PROB_BETA_TAIL - 1 )then
+                write(logfhandle,'(A)') '>>> ANNEALING TAIL COMPLETE'
+                converged = .true.
+            else
+                converged = .false.
+            endif
+        endif
         ! stats
         call ostats%new(1, is_ptcl=.false.)
         call ostats%set(1,'ITERATION',                params%which_iter)
@@ -267,7 +317,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
-        character(len=80) :: beta_str
+        character(len=96) :: beta_str
         real    :: res05_now, res05_prev, res143_now, res143_prev
         logical :: converged, cont_stats_available, pose_stats_available, l_stalled
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
@@ -420,7 +470,17 @@ contains
         if( params%l_prob_align_mode )then
         ! the probability tables' posterior draws: the tempering factor of this iteration, and the annealing to
         ! prob_beta_end once the resolution stops gaining (the tail; exec_refine3D sets the factor)
+        if( params%prob_neff > 0. )then
+        ! the n_eff control: the tables solve the factor at assignment time (prob_beta is the last one solved)
         if( self%prob_beta_tail_start > 0 )then
+        write(beta_str,'(A,F5.2,A,I0,A,I0,A)') 'n_eff control, target ', params%prob_neff, ' (annealing tail ',&
+            &min(PROB_BETA_TAIL, params%which_iter - self%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL, ' to 1)'
+        else if( params%prob_beta_end > TINY )then
+        write(beta_str,'(A,F5.2,A)') 'n_eff control, target ', params%prob_neff, ' (annealing to 1 once the resolution stops gaining)'
+        else
+        write(beta_str,'(A,F5.2,A)') 'n_eff control, target ', params%prob_neff, ' (flat)'
+        endif
+        else if( self%prob_beta_tail_start > 0 )then
         write(beta_str,'(F6.3,A,I0,A,I0,A,F6.3,A)') params%prob_beta, ' (annealing tail ',&
             &min(PROB_BETA_TAIL, params%which_iter - self%prob_beta_tail_start + 1), '/', PROB_BETA_TAIL,&
             &' to ', params%prob_beta_end, ')'
@@ -560,8 +620,10 @@ contains
             ! object's: the in-memory strategy rebuilds params from the command line every iteration. The
             ! streptavidin tally of 2026-10-24 had the ramp spread over the last stage's budget run 26 iterations
             ! where the resolution was reached at the second (pose_marginalization.md section 19)
+            ! Under the n_eff control (prob_neff) prob_beta_end is the switch alone: the solved factor ramps to 1
             if( (params%l_prob_align_mode .and. params%prob_beta_end > TINY .and. &
-                &abs(params%prob_beta_end - params%prob_beta) > TINY) .or. self%prob_beta_tail_start > 0 )then
+                &(params%prob_neff > 0. .or. abs(params%prob_beta_end - params%prob_beta) > TINY)) .or. &
+                &self%prob_beta_tail_start > 0 )then
                 if( self%prob_beta_tail_start == 0 )then
                     l_stalled = .false.
                     if( params%which_iter > params%startit .and. res05_now > TINY .and. res143_now > TINY )then

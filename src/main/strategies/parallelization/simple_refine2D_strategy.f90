@@ -33,6 +33,7 @@ contains
     procedure(finalize_iter_interface), deferred :: finalize_iteration
     procedure(finalize_run_interface),  deferred :: finalize_run
     procedure(cleanup_interface),       deferred :: cleanup
+    procedure(tail_start_interface),    deferred :: anneal_tail_start
 end type refine2D_strategy
 
 !> Timings of an iteration, from its start to the end of finalize_iteration (the REFINE2D_STRATEGY bench record)
@@ -69,6 +70,7 @@ contains
     procedure :: finalize_iteration => inmem_finalize_iteration
     procedure :: finalize_run       => inmem_finalize_run
     procedure :: cleanup            => inmem_cleanup
+    procedure :: anneal_tail_start  => inmem_anneal_tail_start
 end type refine2D_inmem_strategy
 
 type, extends(refine2D_strategy) :: refine2D_distr_strategy
@@ -83,6 +85,7 @@ contains
     procedure :: finalize_iteration => distr_finalize_iteration
     procedure :: finalize_run       => distr_finalize_run
     procedure :: cleanup            => distr_cleanup
+    procedure :: anneal_tail_start  => distr_anneal_tail_start
 end type refine2D_distr_strategy
 
 abstract interface
@@ -123,6 +126,12 @@ abstract interface
         class(refine2D_strategy), intent(inout) :: self
         type(parameters),          intent(in)    :: params
     end subroutine cleanup_interface
+
+    !> the first iteration of the posterior draws' annealing tail (0: not started); check_conv2D sets it
+    integer function tail_start_interface(self) result(it)
+        import :: refine2D_strategy
+        class(refine2D_strategy), intent(in) :: self
+    end function tail_start_interface
 end interface
 
 contains
@@ -184,7 +193,6 @@ contains
         type(commander_commit_sigma2) :: xcommit_sigma2
         type(starproject) :: starproj
         type(cmdline)     :: cline_prob_align
-        type(convergence) :: conv     !< a fresh convergence object every iteration
         real              :: update_frac_req
         logical           :: l_full_update, l_update_frac_req, l_frac
         if( L_BENCH_GLOB )then
@@ -229,8 +237,9 @@ contains
             self%bench%rt_cavg = toc(self%bench%t)
             self%bench%t       = tic()
         endif
-        ! before update_frac is restored: check_conv2D reads params%l_update_frac
-        call check_refine2D_convergence(params, build, cline, conv, converged)
+        ! before update_frac is restored: check_conv2D reads params%l_update_frac; the strategy's convergence
+        ! object, which keeps the annealing tail's state across iterations
+        call check_refine2D_convergence(params, build, cline, self%conv, converged)
         if( L_BENCH_GLOB ) self%bench%rt_conv = toc(self%bench%t)
         if( l_full_update )then
             params%update_frac   = update_frac_req
@@ -874,5 +883,15 @@ contains
         call mrc%kill
         call jpg%kill
     end subroutine gen_jpeg
+
+    integer function inmem_anneal_tail_start(self) result(it)
+        class(refine2D_inmem_strategy), intent(in) :: self
+        it = self%conv%anneal_tail_start()
+    end function inmem_anneal_tail_start
+
+    integer function distr_anneal_tail_start(self) result(it)
+        class(refine2D_distr_strategy), intent(in) :: self
+        it = self%conv%anneal_tail_start()
+    end function distr_anneal_tail_start
 
 end module simple_refine2D_strategy

@@ -7,7 +7,8 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2, &
+    &prob_neff_control, PROB_NEFF_ROWS
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -880,7 +881,8 @@ contains
     !! (doc/implementation_notes/planned/pose_marginalization.md sections 4 and 10). The particle's state is the state
     !! of its closest reference over all states (ties to the lowest reference index); its direction is drawn within
     !! that state's block of the row with p proportional to
-    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; prob_beta on it)
+    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; prob_beta on it, or the factor
+    !! the n_eff control solves for this iteration when prob_neff is set: pose_marginalization.md section 20.2)
     !! and L the row's values as the fill left them (sampled in-plane, the top set refined). No reference is
     !! forced to be populated. The committed candidate is the drawn reference's dense_candidate (its in-plane,
     !! its refined shift when refined), the seed shift recorded, frac 100. A particle without a valid distance
@@ -889,10 +891,11 @@ contains
     !! closest free particle) was removed on 2026-10-24 (note, section 19).
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
+        type(prob_neff_control) :: ctrl
         integer, allocatable :: iref_best(:)
         real,    allocatable :: score_best(:), w(:)
         integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing
-        real    :: score, dist, temp, invalid_dist
+        real    :: score, dist, temp, invalid_dist, beta_eff
         invalid_dist = 0.1 * huge(invalid_dist)
         call self%warn_invalid_and_flat
         ! the state label: each particle's closest reference over all states, references outside in blocks
@@ -914,6 +917,20 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        ! the n_eff control: the iteration's tempering factor from a subsample of the rows the draws are from
+        beta_eff = self%p_ptr%prob_beta
+        if( self%p_ptr%prob_neff > 0. )then
+            call ctrl%new(self%nptcls, PROB_NEFF_ROWS, ceiling(2. * self%p_ptr%prob_neff))
+            do i = 1,self%nptcls
+                if( .not. ctrl%wanted(i) ) cycle
+                si     = self%state_to_active_rank(self%ref_state(iref_best(i)))
+                ifirst = (si - 1) * self%p_ptr%nspace + 1
+                ilast  = si * self%p_ptr%nspace
+                call ctrl%offer(ilast - ifirst + 1, self%dists(i,ifirst:ilast), self%temps(i))
+            enddo
+            call ctrl%apply(self%p_ptr%prob_neff, self%p_ptr%prob_beta, self%p_ptr%prob_anneal_frac, beta_eff)
+            call ctrl%kill
+        endif
         ! the draw within the state's block, in particle order on the master's stream
         nmode         = 0
         ntemp_missing = 0
@@ -922,7 +939,7 @@ contains
             ifirst = (si - 1) * self%p_ptr%nspace + 1
             ilast  = si * self%p_ptr%nspace
             nblock = ilast - ifirst + 1
-            temp   = self%p_ptr%prob_beta * self%temps(i)
+            temp   = beta_eff * self%temps(i)
             if( .not. (temp > 0.) )then
                 ! no temperature from the fill: the argmin, as the particle has no scale to draw at
                 ntemp_missing = ntemp_missing + 1

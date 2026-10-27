@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table, the n_eff control
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! ref_assign draws every particle's reference from its tempered row posterior on synthetic dense tables of one and
@@ -12,7 +12,8 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at, prob_neff_control, &
+    &prob_beta_control_last, PROB_NEFF_MIN_ROWS
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -50,7 +51,100 @@ contains
         call test_prob_beta_at()
         write(*,'(A)') 'test_ref_assign_neigh_posterior'
         call test_ref_assign_neigh_posterior()
+        write(*,'(A)') 'test_neff_control'
+        call test_neff_control()
     end subroutine run_all_eul_prob_tab_tests
+
+    !> The n_eff control (prob_neff): 200 rows of 50 distances k s_r (k = 0..49, s_r = 0.01 r) at temperature 2,
+    !! so row r's posterior at factor beta is geometric with ratio exp(-2 beta s_r). Reference values from
+    !! neff_control_ref.py (numpy): one row at a = 0.5 has exp(H) = 5.493135; the mean over the rows is 49.9721
+    !! at beta 0.001, 6.023447 at 0.5, 3.582882 at 1 and 2.243834 at 2, so the factor for a mean of 3 is
+    !! 1.282899. Doubling the temperatures halves it. Rows with fewer valid distances than nmin, a non-positive
+    !! temperature or outside the stride are not kept, invalid distances are dropped; fewer than
+    !! PROB_NEFF_MIN_ROWS rows fall back to the flat factor; the annealing tail ramps the solved factor to 1
+    subroutine test_neff_control()
+        integer, parameter :: NROWS_NC = 200, NCAND_NC = 50
+        type(prob_neff_control) :: ctrl
+        real    :: row(NCAND_NC), beta, neff_at, neff_phys, beta2, prev, neff
+        integer :: r, k, nwanted
+        logical :: l_monotone
+        ! one row
+        call ctrl%new(1, 1, 2)
+        row = [(0.25 * real(k - 1), k = 1,NCAND_NC)]   ! a = 2 * 0.25 = 0.5 at beta 1
+        call ctrl%offer(NCAND_NC, row, 2.)
+        call assert_int(1, ctrl%nkept(), 'n_eff control: one row kept')
+        call assert_real(5.493135, ctrl%mean_neff(1.), 1.e-4, 'n_eff control: exp(entropy) of a geometric row (numpy)')
+        call assert_real(real(NCAND_NC), ctrl%mean_neff(1.e-6), 1.e-2, 'n_eff control: a cold factor of 1e-6 is the uniform row')
+        call assert_real(1., ctrl%mean_neff(1.e3), 1.e-4, 'n_eff control: a huge factor is the argmin')
+        call ctrl%kill
+        ! the 200 rows, all wanted (stride 1)
+        call ctrl%new(NROWS_NC, NROWS_NC, 6)
+        do r = 1,NROWS_NC
+            call assert_true(ctrl%wanted(r), 'n_eff control: every row wanted at stride 1')
+            row = [(0.01 * real(r) * real(k - 1), k = 1,NCAND_NC)]
+            call ctrl%offer(NCAND_NC, row, 2.)
+        enddo
+        call assert_int(NROWS_NC, ctrl%nkept(), 'n_eff control: 200 rows kept')
+        call assert_real(49.9721,  ctrl%mean_neff(1.e-3), 1.e-2, 'n_eff control: mean n_eff at 0.001 (numpy)')
+        call assert_real(6.023447, ctrl%mean_neff(0.5),   1.e-3, 'n_eff control: mean n_eff at 0.5 (numpy)')
+        call assert_real(3.582882, ctrl%mean_neff(1.),    1.e-3, 'n_eff control: mean n_eff at 1 (numpy)')
+        call assert_real(2.243834, ctrl%mean_neff(2.),    1.e-3, 'n_eff control: mean n_eff at 2 (numpy)')
+        l_monotone = .true.
+        prev       = huge(prev)
+        do k = -30,30
+            neff = ctrl%mean_neff(10.**(real(k)/10.))
+            if( neff > prev ) l_monotone = .false.
+            prev = neff
+        enddo
+        call assert_true(l_monotone, 'n_eff control: the mean n_eff falls monotonically with the factor')
+        call ctrl%solve(3., beta, neff_at, neff_phys)
+        call assert_real(1.282899, beta,      1.e-3, 'n_eff control: the factor for a mean n_eff of 3 (numpy)')
+        call assert_real(3.,       neff_at,   1.e-3, 'n_eff control: the mean n_eff at the solution')
+        call assert_real(3.582882, neff_phys, 1.e-3, 'n_eff control: the mean n_eff at the physical posterior')
+        call ctrl%solve(100., beta2, neff_at, neff_phys)
+        call assert_real(1.e-3, beta2, 1.e-9, 'n_eff control: an unreachable hot target returns the bracket''s low end')
+        call ctrl%solve(1., beta2, neff_at, neff_phys)
+        call assert_real(1.e3, beta2, 1.e-3, 'n_eff control: a target of 1 (the argmin) returns the bracket''s high end')
+        ! apply: the solved factor; the tail's ramp to 1
+        call ctrl%apply(3., 0.3, 0., beta2)
+        call assert_real(beta, beta2, 1.e-5, 'n_eff control: apply returns the solved factor outside the tail')
+        call assert_real(beta, prob_beta_control_last(), 1.e-5, 'n_eff control: the last factor is kept for the commander')
+        call ctrl%apply(3., 0.3, 0.5, beta2)
+        call assert_real(sqrt(beta), beta2, 1.e-5, 'n_eff control: halfway through the tail, the geometric midpoint to 1')
+        call ctrl%apply(3., 0.3, 1., beta2)
+        call assert_real(1., beta2, 1.e-6, 'n_eff control: the end of the tail is the physical posterior')
+        call ctrl%kill
+        ! doubling the temperatures halves the factor
+        call ctrl%new(NROWS_NC, NROWS_NC, 6)
+        do r = 1,NROWS_NC
+            row = [(0.01 * real(r) * real(k - 1), k = 1,NCAND_NC)]
+            call ctrl%offer(NCAND_NC, row, 4.)
+        enddo
+        call ctrl%solve(3., beta2, neff_at, neff_phys)
+        call assert_real(0.5 * beta, beta2, 1.e-3, 'n_eff control: the factor scales inversely with the temperature')
+        call ctrl%kill
+        ! the stride, the minimum row size, the temperature, invalid distances
+        call ctrl%new(1000, 100, 6)
+        nwanted = 0
+        do r = 1,1000
+            if( ctrl%wanted(r) ) nwanted = nwanted + 1
+        enddo
+        call assert_int(100, nwanted, 'n_eff control: 100 of 1000 rows wanted at stride 10')
+        call assert_true(ctrl%wanted(1) .and. ctrl%wanted(11) .and. .not. ctrl%wanted(2), 'n_eff control: the stride starts at row 1')
+        row = [(0.25 * real(k - 1), k = 1,NCAND_NC)]
+        call ctrl%offer(5, row(1:5), 2.)
+        call assert_int(0, ctrl%nkept(), 'n_eff control: a row of five candidates is not kept at nmin 6')
+        call ctrl%offer(NCAND_NC, row, 0.)
+        call assert_int(0, ctrl%nkept(), 'n_eff control: a row without a temperature is not kept')
+        row(7:NCAND_NC) = huge(1.)
+        call ctrl%offer(NCAND_NC, row, 2.)
+        call assert_int(1, ctrl%nkept(), 'n_eff control: six valid distances among invalid ones are kept')
+        call assert_real(6., ctrl%mean_neff(1.e-6), 1.e-3, 'n_eff control: the invalid distances are dropped')
+        call ctrl%apply(3., 0.3, 0., beta2)
+        call assert_real(0.3, beta2, 1.e-6, 'n_eff control: fewer rows than PROB_NEFF_MIN_ROWS fall back to the flat factor')
+        call assert_true(PROB_NEFF_MIN_ROWS > 1, 'n_eff control: the fallback threshold is above one row')
+        call ctrl%kill
+    end subroutine test_neff_control
 
     !> The tempering ramp (prob_beta_at): beta0 at the first iteration, beta1 at the last, the geometric
     !! midpoint halfway (0.1 to 1 over 25 iterations: sqrt(0.1) at the 13th), the same factor every step;
@@ -291,7 +385,10 @@ contains
         type(eul_prob_tab) :: tab
         real,    allocatable :: dists(:,:)
         integer, allocatable :: pinds(:), iref_argmin(:), iref_run1(:), iref_run2(:), iref_run3(:)
-        integer :: nrefs, i, iref, nsame, nstate_ok, nmoved
+        real,    allocatable :: w_c(:)
+        integer, allocatable :: inds_c(:)
+        integer :: nrefs, i, iref, nsame, nstate_ok, nmoved, si_c, imin_c, k99_c, nvalid_c, nkept_c
+        real    :: beta_c, neff_mean, pmax_c, neff_c
         character(len=64) :: label
         write(label,'(A,I0,A,I0)') 'nspace ', nspace, ', nstates ', nstates
         nrefs = nspace * nstates
@@ -340,6 +437,7 @@ contains
                 call set_dist(tab, iref, i, dists(iref,i))
             enddo
         enddo
+        allocate(w_c(nspace), inds_c(nspace))
         ! a huge temperature: the argmin wherever the row minimum is unique (every row but the flat particle 1)
         tab%temps = huge(1.)
         call seed_rnd_fixed(SEED_DRAW)
@@ -401,6 +499,36 @@ contains
                 iref_run3(i) = assigned_ref(tab, i, nspace)
             enddo
             call assert_true(any(iref_run1 /= iref_run3), 'another seed gives another assignment ('//trim(label)//')')
+            ! the n_eff control: the factor solved on the rows (every particle: 150 rows at stride 1, the invalid
+            ! one not kept) gives the target as the mean exp(entropy) over the kept rows at that factor
+            params%prob_neff = 3.
+            call seed_rnd_fixed(SEED_DRAW)
+            call tab%ref_assign
+            beta_c = prob_beta_control_last()
+            call assert_true(beta_c > 0., 'n_eff control on the dense table: a factor was solved ('//trim(label)//')')
+            neff_mean = 0.
+            nkept_c   = 0
+            do i = 1,NPTCLS_TAB
+                si_c = (iref_argmin(i) - 1) / nspace
+                call posterior_row_stats(nspace, dists(si_c*nspace+1:(si_c+1)*nspace, i), beta_c * tab%temps(i), &
+                    &w_c, inds_c, imin_c, pmax_c, neff_c, k99_c, nvalid_c)
+                if( nvalid_c < 6 ) cycle
+                nkept_c   = nkept_c + 1
+                neff_mean = neff_mean + neff_c
+            enddo
+            call assert_int(NPTCLS_TAB - 1, nkept_c, 'n_eff control on the dense table: every valid row kept ('//trim(label)//')')
+            call assert_real(3., neff_mean / real(nkept_c), 2.e-3, &
+                &'n_eff control on the dense table: the mean n_eff at the solved factor is the target ('//trim(label)//')')
+            do i = 1,NPTCLS_TAB
+                iref_run2(i) = assigned_ref(tab, i, nspace)
+            enddo
+            call seed_rnd_fixed(SEED_DRAW)
+            call tab%ref_assign
+            do i = 1,NPTCLS_TAB
+                iref_run3(i) = assigned_ref(tab, i, nspace)
+            enddo
+            call assert_true(all(iref_run2 == iref_run3), 'n_eff control on the dense table: the same seed gives the same assignment ('//trim(label)//')')
+            params%prob_neff = 0.
         endif
         call tab%kill
         call build%spproj_field%kill
