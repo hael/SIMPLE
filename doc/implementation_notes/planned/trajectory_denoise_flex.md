@@ -79,7 +79,15 @@ the cls kernel); `exec_trajectory_denoise` routes `pca_mode=flex` to `trajectory
    Set A's latents weigh the other frames (the validation frame left out, only its parity with `eo_pool=yes`) to
    predict its set-B coefficients, and vice versa; whitened error per held-out coefficient (1 is the noise floor).
    At most 1000 validation frames and 1000 held-out coefficients per set (strided). The predictions are single
-   precision matrix products (`sgemm`). The optimum over the whole grid is the choice, the parity mean (tau and h
+   precision matrix products (`sgemm`), each thread its own block of validation frames through the whole grid, all
+   temporal bandwidths of a (rank, tau) in one product. How the products run is decided once per run, with no
+   environment variable: a probe compares the process CPU time of a few serial-region `sgemm` calls with their
+   wall time. A serial BLAS (e.g. RHEL's `libopenblas`): blocks of validation frames, one or more per thread, each
+   its own products. A threaded BLAS (an OpenMP OpenBLAS such as the bundled build, MKL, a pthreads OpenBLAS): wide
+   blocks one after the other, the products from the serial region, the kernels around them in parallel; inside a
+   team (`halfwin>0`) the BLAS when the build knows it stays on the calling thread there (`SIMPLE_BLAS_TEAM_SAFE`,
+   see `blas_openmp_policy.md`), else the compiler's `matmul`. The log line `Trajectory flex: BLAS cpu/wall` says
+   which. The optimum over the whole grid is the choice, the parity mean (tau and h
    none) included; z is its paired per-frame gain over that mean.
 8. **Pre-images.** With the weights the CV scored: the fit band's set-A coefficients averaged with weights from the
    set-B model's latents and vice versa (no selection bias, so no Stein term), every other coefficient with the mean
@@ -87,7 +95,8 @@ the cls kernel); `exec_trajectory_denoise` routes `pca_mode=flex` to `trajectory
    would sit at squared distance 2 per whitened direction from it (two frames' noise), so the frame gets that twin's
    expected weight, `((2 + tau^2) / (4 + tau^2))^(r/2)`; at weight 1 its own noise dominates at high rank (in the
    toy a rank-64 choice kept a third of the noise although the CV, which leaves the frame out, looked good). The
-   means are matrix products over chunks of 1024 coefficients.
+   means are matrix products over chunks of coefficients (serial BLAS: at most 128, one product per thread;
+   threaded BLAS: 512, from the serial region).
 9. **Readouts.** `Trajectory flex:` the band, the noise spectrum; `Trajectory flex CV by temporal bandwidth`,
    `by latent rank`, `by tau` (the curves); `Trajectory flex set=` the choice, CV, parity-mean CV, z, mean neff;
    at the end neff min/median/max. Per frame in `trajectory_denoise_flex.txt`.

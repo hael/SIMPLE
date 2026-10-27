@@ -9,7 +9,7 @@ README.
 - macOS 10.10 or newer
 - CMake 3.5 or newer
 - GNU `gcc` and `gfortran` 14.2 or newer
-- BLAS and LAPACK
+- BLAS and LAPACK; on Linux an OpenMP build of OpenBLAS (see below)
 - ARPACK or ARPACK-NG
 - FFTW 3.3 or newer, with double, single, and threaded builds
 - libcurl 7 or newer
@@ -18,6 +18,14 @@ README.
 - Python 3.10 or newer
 
 If BLAS, LAPACK, or ARPACK are not available, they will be downloaded and compiled.
+
+SIMPLE calls BLAS from serial code, where the library should use the OpenMP threads, and inside its OpenMP
+teams, where it should stay on the calling thread. An OpenMP build of OpenBLAS does both, so on Linux with GNU
+compilers CMake links one: Debian/Ubuntu `libopenblas-openmp-dev`, Fedora/RHEL/Rocky `openblas-devel` (its
+`libopenblaso`). When the system BLAS is a serial or pthreads OpenBLAS (or one whose threading CMake cannot
+probe), CMake builds the OpenMP OpenBLAS, and ARPACK against it, in the build folder instead. MKL and FlexiBLAS
+with an OpenMP backend are kept as found; `-DSIMPLE_BLAS_OPENMP=OFF`, an explicit `BLA_VENDOR` or
+`BLAS_LIBRARIES` keep any system BLAS. macOS uses Accelerate. No `OPENBLAS_NUM_THREADS` is needed.
 
 ## Obtain The Source
 

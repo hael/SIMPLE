@@ -14,6 +14,7 @@ use simple_linalg,             only: cholesky, chol_forward, jacobi, spd_inverse
 use simple_stat,               only: kish_ess, median
 use simple_rnd,                only: seed_rnd_fixed
 use simple_timer,              only: tic, toc, timer_int_kind
+!$ use omp_lib,                only: omp_get_max_threads, omp_in_parallel
 implicit none
 
 public :: flex_traj_denoise, flex_traj_noise_spectrum, flex_traj_fit_band
@@ -32,7 +33,25 @@ real(dp), parameter :: WIENER    = 0.1d0    !< CV prediction denominator + this
 real(dp), parameter :: LWMIN     = -46.d0   !< log weights this far below the largest are zero
 real(dp), parameter :: SNR_BAND  = 0.1d0    !< derived fit band: up to the last shell whose spectral SNR reaches this
 integer,  parameter :: KBAND_MIN = 6        !< derived fit band: at least this many shells
-integer,  parameter :: CHUNK     = 1024     !< coefficients per matrix product of the pre-images
+integer,  parameter :: CHUNK     = 128      !< coefficients per matrix product of the pre-images (one per thread)
+integer,  parameter :: NVB_MIN   = 16       !< validation frames per CV block, at least (one block per thread)
+integer,  parameter :: NVB_MAX   = 64       !< and at most (bounds a thread's kernel block)
+integer,  parameter :: LIBCOLS   = 1024     !< threaded BLAS: columns of a CV product (validation frames x bandwidths)
+integer,  parameter :: LIBCHUNK  = 512      !< threaded BLAS: coefficients per pre-image product
+
+! whether the linked BLAS threads one product (probe_blas, once per run). A serial BLAS is called inside the OpenMP
+! team, one product per thread; a threaded one (an OpenMP OpenBLAS, MKL, a pthreads OpenBLAS) from the serial region
+! with wide products, the kernels around it in parallel; inside a team (halfwin > 0) the compiler's matmul instead,
+! since a pthreads BLAS would start its threads in every team thread. No environment variable either way
+logical :: l_blas_probed   = .false.
+logical :: l_blas_threaded = .false.
+! the build's BLAS stays on the calling thread inside an OpenMP team (CMake: an OpenMP OpenBLAS, MKL, FlexiBLAS with
+! an OpenMP backend), so a team may call it even when it threads serial-region products
+#ifdef SIMPLE_BLAS_TEAM_SAFE
+logical, parameter :: L_BLAS_TEAM_SAFE = .true.
+#else
+logical, parameter :: L_BLAS_TEAM_SAFE = .false.
+#endif
 
 !> a set's latents: ML latents of a model, noise-whitened (unit noise per coordinate), by decreasing scatter
 type whitened_latents
@@ -74,6 +93,7 @@ contains
             &THROW_HARD('flex_traj_denoise: lattice sizes')
         if( size(yden,1) /= ncoeff .or. size(yden,2) /= n .or. size(ess) /= n ) THROW_HARD('flex_traj_denoise: outputs')
         if( size(choice,1) /= 3 .or. size(choice,2) /= n ) THROW_HARD('flex_traj_denoise: choice shape')
+        call probe_blas
         ! the noise spectrum and the fit band of the whole trajectory
         t0 = tic()
         call flex_traj_noise_spectrum(ym, shell, nsh, s2)
@@ -441,7 +461,9 @@ contains
 
     !> one direction of the CV: latents zeta (a set model's, or none when nr = 0) predict the validation frames'
     !! coefficients in valset (at most NQMAX of them) from the other frames; err(v,it,ih,ir) the weighted squared error.
-    !! Every array is laid out frame by frame (a validation frame's kernel and a frame's coefficients contiguous)
+    !! The validation frames go in blocks, each through the whole grid, every temporal bandwidth of a (rank, tau) in one
+    !! product: with a serial BLAS one or more blocks per thread, each its own products; with a threaded BLAS wide
+    !! blocks one after the other, the products from the serial region (probe_blas)
     subroutine cv_direction( zeta, y, w, wq, valset, times, even, vinds, nr, err )
         real(dp),    intent(in)    :: zeta(:,:)
         complex(sp), intent(in)    :: y(:,:)
@@ -449,12 +471,10 @@ contains
         logical,     intent(in)    :: valset(:), even(:)
         integer,     intent(in)    :: times(:), vinds(:), nr
         real(dp),    intent(inout) :: err(:,:,:,:)
-        real(sp), allocatable :: rmt(:,:), kmat(:,:), predt(:,:)
-        real(dp), allocatable :: d2(:,:), ksum(:), lw(:)
+        real(sp), allocatable :: rmt(:,:)
         integer,  allocatable :: qidx(:)
-        real(dp) :: tau, h, lwmax, sc
-        integer  :: m, nv, nq, nt, nh, ir, it, ih, v, i, j, q, rprev, r, ie
-        logical  :: l_ok
+        real(dp) :: sc
+        integer  :: m, nv, nq, nt, nh, j, q, nthr, nvb, nblk, ib, v0
         m  = size(y,2)
         nv = size(vinds)
         nt = size(TAUS)
@@ -473,67 +493,105 @@ contains
             end do
         end do
         !$omp end parallel do
-        allocate(d2(m,nv), source=0.d0)
-        allocate(kmat(m,nv), predt(2*nq,nv), ksum(nv))
-        rprev = 0
-        do ir = 0, nr
-            ! ir = 0: the temporal kernel alone; ir > 0: the latent squared distances over the leading RANKS(ir)
-            if( ir > 0 )then
-                r = RANKS(ir)
-                !$omp parallel do default(shared) private(v,i,q) schedule(static)
-                do v = 1, nv
-                    i = vinds(v)
-                    do q = rprev + 1, r
-                        d2(:,v) = d2(:,v) + (zeta(:,q) - zeta(i,q))**2
-                    end do
-                end do
-                !$omp end parallel do
-                rprev = r
-            endif
-            ie = max(ir, 1)
-            do it = 1, nt
-                tau = TAUS(it)
-                if( ir == 0 .and. tau >= 0.d0 ) cycle
-                if( ir >  0 .and. tau <  0.d0 ) cycle
-                do ih = 1, nh
-                    h = HS(ih)
-                    ! every validation frame's kernel over the frames of its parity, itself left out
-                    !$omp parallel default(shared) private(v,i,j,lw,lwmax,l_ok)
-                    allocate(lw(m))
-                    !$omp do schedule(static)
-                    do v = 1, nv
-                        i     = vinds(v)
-                        lwmax = -huge(1.d0)
-                        do j = 1, m
-                            lw(j) = 0.d0
-                            if( (even(j) .neqv. even(i)) .or. j == i ) cycle
-                            if( tau >= 0.d0 ) lw(j) = -0.5d0 * d2(j,v) / (2.d0 + tau * tau)
-                            if( h > 0.d0 ) lw(j) = lw(j) - 0.5d0 * (real(times(i) - times(j),dp) / h)**2
-                            lwmax = max(lwmax, lw(j))
-                        end do
-                        ksum(v) = 0.d0
-                        do j = 1, m
-                            kmat(j,v) = 0.
-                            l_ok = (even(j) .eqv. even(i)) .and. j /= i
-                            if( l_ok )then
-                                if( lw(j) - lwmax > LWMIN ) kmat(j,v) = real(exp(lw(j) - lwmax), sp)
-                            endif
-                            ksum(v) = ksum(v) + real(kmat(j,v),dp)
+        nthr = 1
+        !$ if( .not. omp_in_parallel() ) nthr = omp_get_max_threads()
+        if( l_blas_threaded .or. nthr == 1 )then
+            nvb = max(1, min(nv, LIBCOLS / nh))
+            do v0 = 0, nv - 1, nvb
+                call cv_block(v0, min(nvb, nv - v0), nthr > 1)
+            end do
+        else
+            nvb  = min(NVB_MAX, max(NVB_MIN, (nv + nthr - 1) / nthr))
+            nblk = (nv + nvb - 1) / nvb
+            !$omp parallel do default(shared) private(ib) schedule(dynamic,1) proc_bind(close)
+            do ib = 1, nblk
+                call cv_block((ib - 1) * nvb, min(nvb, nv - (ib - 1) * nvb), .false.)
+            end do
+            !$omp end parallel do
+        endif
+
+      contains
+
+        !> validation frames v0+1..v0+nb through the whole grid; l_par: their kernels and errors in parallel
+        subroutine cv_block( v0, nb, l_par )
+            integer, intent(in) :: v0, nb
+            logical, intent(in) :: l_par
+            real(sp), allocatable :: kloc(:,:), ploc(:,:)
+            real(dp), allocatable :: d2(:,:), ksum(:)
+            real(dp) :: tau
+            integer  :: ir, ie, it, v, i, q, rprev, col
+            allocate(d2(m,nb), source=0.d0)
+            allocate(kloc(m,nb*nh), ploc(2*nq,nb*nh), ksum(nb*nh))
+            rprev = 0
+            do ir = 0, nr
+                ! ir = 0: the temporal kernel alone; ir > 0: the latent squared distances over the leading RANKS(ir)
+                if( ir > 0 )then
+                    !$omp parallel do default(shared) private(v,i,q) schedule(static) if(l_par)
+                    do v = 1, nb
+                        i = vinds(v0 + v)
+                        do q = rprev + 1, RANKS(ir)
+                            d2(:,v) = d2(:,v) + (zeta(:,q) - zeta(i,q))**2
                         end do
                     end do
-                    !$omp end do
-                    deallocate(lw)
-                    !$omp end parallel
-                    ! the predictions of every validation frame at once
-                    call sgemm('N', 'N', 2*nq, nv, m, 1.0, rmt, 2*nq, kmat, m, 0.0, predt, 2*nq)
-                    !$omp parallel do default(shared) private(v) schedule(static)
-                    do v = 1, nv
-                        err(v,it,ih,ie) = sum((real(rmt(:,vinds(v)),dp) - real(predt(:,v),dp) / (ksum(v) + WIENER))**2)
+                    !$omp end parallel do
+                    rprev = RANKS(ir)
+                endif
+                ie = max(ir, 1)
+                do it = 1, nt
+                    tau = TAUS(it)
+                    if( ir == 0 .and. tau >= 0.d0 ) cycle
+                    if( ir >  0 .and. tau <  0.d0 ) cycle
+                    ! column (ih - 1) * nb + v: validation frame v0 + v at temporal bandwidth HS(ih)
+                    !$omp parallel do default(shared) private(col,v) schedule(static) if(l_par)
+                    do col = 1, nb * nh
+                        v = mod(col - 1, nb) + 1
+                        call kernel_col(v0 + v, (col - 1) / nb + 1, tau, d2(:,v), kloc(:,col), ksum(col))
+                    end do
+                    !$omp end parallel do
+                    call gemm_nn(rmt, kloc, ploc)
+                    !$omp parallel do default(shared) private(col,v) schedule(static) if(l_par)
+                    do col = 1, nb * nh
+                        v = v0 + mod(col - 1, nb) + 1
+                        err(v,it,(col - 1) / nb + 1,ie) = sum((real(rmt(:,vinds(v)),dp) - &
+                            &real(ploc(:,col),dp) / (ksum(col) + WIENER))**2)
                     end do
                     !$omp end parallel do
                 end do
             end do
-        end do
+            deallocate(d2, kloc, ploc, ksum)
+        end subroutine cv_block
+
+        !> validation frame v's kernel at temporal bandwidth HS(ih) over the frames of its parity, itself left out
+        subroutine kernel_col( v, ih, tau, d2v, kcol, ks )
+            integer,  intent(in)  :: v, ih
+            real(dp), intent(in)  :: tau, d2v(:)
+            real(sp), intent(out) :: kcol(:)
+            real(dp), intent(out) :: ks
+            real(dp), allocatable :: lw(:)
+            real(dp) :: lwmax
+            integer  :: i, j
+            logical  :: l_ok
+            allocate(lw(m))
+            i     = vinds(v)
+            lwmax = -huge(1.d0)
+            do j = 1, m
+                lw(j) = 0.d0
+                if( tau >= 0.d0 ) lw(j) = -0.5d0 * d2v(j) / (2.d0 + tau * tau)
+                if( HS(ih) > 0.d0 ) lw(j) = lw(j) - 0.5d0 * (real(times(i) - times(j),dp) / HS(ih))**2
+                if( (even(j) .eqv. even(i)) .and. j /= i ) lwmax = max(lwmax, lw(j))
+            end do
+            ks = 0.d0
+            do j = 1, m
+                kcol(j) = 0.
+                l_ok = (even(j) .eqv. even(i)) .and. j /= i
+                if( l_ok )then
+                    if( lw(j) - lwmax > LWMIN ) kcol(j) = real(exp(lw(j) - lwmax), sp)
+                endif
+                ks = ks + real(kcol(j),dp)
+            end do
+            deallocate(lw)
+        end subroutine kernel_col
+
     end subroutine cv_direction
 
     !> the targets' pre-images over the frames of their parity at (r, tau, h), with the weights the CV scored: the
@@ -572,9 +630,9 @@ contains
         ia = pack([(q, q=1,ncoeff)], seta)
         ib = pack([(q, q=1,ncoeff)], setb)
         io = pack([(q, q=1,ncoeff)], .not. (seta .or. setb))
-        call kernel_means(ka, ia)
-        call kernel_means(kb, ib)
-        call kernel_means(ko, io)
+        call kernel_means(y, ka, ia, yden)
+        call kernel_means(y, kb, ib, yden)
+        call kernel_means(y, ko, io, yden)
 
       contains
 
@@ -607,33 +665,119 @@ contains
             wk = wk / wsum
         end subroutine kernel_row
 
-        !> yden(idx,:) = the frames' coefficients idx times the weights kmat, a chunk of coefficients at a time
-        subroutine kernel_means( kmat, idx )
-            real(sp), intent(in) :: kmat(:,:)
-            integer,  intent(in) :: idx(:)
-            real(sp), allocatable :: ycht(:,:), outt(:,:)
-            integer :: c0, c1, nc, j, t
-            do c0 = 1, size(idx), CHUNK
-                c1 = min(size(idx), c0 + CHUNK - 1)
-                nc = c1 - c0 + 1
-                allocate(ycht(2*nc,m), outt(2*nc,nt))
-                !$omp parallel do default(shared) private(j) schedule(static)
-                do j = 1, m
-                    ycht(1:nc,j)      = real(y(idx(c0:c1),j))
-                    ycht(nc+1:2*nc,j) = aimag(y(idx(c0:c1),j))
-                end do
-                !$omp end parallel do
-                call sgemm('N', 'N', 2*nc, nt, m, 1.0, ycht, 2*nc, kmat, m, 0.0, outt, 2*nc)
-                !$omp parallel do default(shared) private(t) schedule(static)
-                do t = 1, nt
-                    yden(idx(c0:c1),t) = cmplx(outt(1:nc,t), outt(nc+1:2*nc,t), kind=sp)
-                end do
-                !$omp end parallel do
-                deallocate(ycht, outt)
-            end do
-        end subroutine kernel_means
-
     end subroutine preimages
+
+    !> yden(idx,:) = the frames' coefficients idx (rows of y) times the weights kmat (frames x targets), in chunks of
+    !! coefficients: with a serial BLAS one or more chunks per thread, each its own product; with a threaded BLAS
+    !! wider chunks one after the other, the products from the serial region (probe_blas)
+    subroutine kernel_means( y, kmat, idx, yden )
+        complex(sp),          intent(in)    :: y(:,:)
+        real(sp), contiguous, intent(in)    :: kmat(:,:)
+        integer,              intent(in)    :: idx(:)
+        complex(sp),          intent(inout) :: yden(:,:)
+        integer :: m, nt, nthr, nchunk, csz, ic, c0
+        if( size(idx) == 0 ) return
+        m    = size(y,2)
+        nt   = size(kmat,2)
+        nthr = 1
+        !$ if( .not. omp_in_parallel() ) nthr = omp_get_max_threads()
+        if( l_blas_threaded .or. nthr == 1 )then
+            csz = min(size(idx), LIBCHUNK)
+            do c0 = 1, size(idx), csz
+                call mean_chunk(c0, min(size(idx), c0 + csz - 1), nthr > 1)
+            end do
+        else
+            ! chunks of at most CHUNK coefficients, their number a multiple of the threads (even shares)
+            nchunk = nthr * max(1, (size(idx) + nthr * CHUNK - 1) / (nthr * CHUNK))
+            csz    = (size(idx) + nchunk - 1) / nchunk
+            nchunk = (size(idx) + csz - 1) / csz
+            !$omp parallel do default(shared) private(ic) schedule(dynamic,1) proc_bind(close)
+            do ic = 1, nchunk
+                call mean_chunk((ic - 1) * csz + 1, min(size(idx), ic * csz), .false.)
+            end do
+            !$omp end parallel do
+        endif
+
+      contains
+
+        !> the coefficients idx(c0:c1); l_par: their gather and scatter in parallel
+        subroutine mean_chunk( c0, c1, l_par )
+            integer, intent(in) :: c0, c1
+            logical, intent(in) :: l_par
+            real(sp), allocatable :: ycht(:,:), outt(:,:)
+            integer :: nc, j, t
+            nc = c1 - c0 + 1
+            allocate(ycht(2*nc,m), outt(2*nc,nt))
+            !$omp parallel do default(shared) private(j) schedule(static) if(l_par)
+            do j = 1, m
+                ycht(1:nc,j)      = real(y(idx(c0:c1),j))
+                ycht(nc+1:2*nc,j) = aimag(y(idx(c0:c1),j))
+            end do
+            !$omp end parallel do
+            call gemm_nn(ycht, kmat, outt)
+            !$omp parallel do default(shared) private(t) schedule(static) if(l_par)
+            do t = 1, nt
+                yden(idx(c0:c1),t) = cmplx(outt(1:nc,t), outt(nc+1:2*nc,t), kind=sp)
+            end do
+            !$omp end parallel do
+            deallocate(ycht, outt)
+        end subroutine mean_chunk
+
+    end subroutine kernel_means
+
+    !> once per run: does the linked BLAS run one product on several threads? The process CPU time of serial-region
+    !! products against their wall time, after a warm-up long enough for the OpenMP threads of earlier regions to stop
+    !! spinning (their spinning would count as BLAS threads)
+    subroutine probe_blas
+        integer,  parameter :: NP = 512, NREP = 8
+        real,     parameter :: WARMUP = 0.1     !< s
+        real(sp), allocatable :: a(:,:), b(:,:), c(:,:)
+        integer(timer_int_kind) :: t0
+        real    :: c0, c1, wall, ratio
+        integer :: irep
+        if( l_blas_probed ) return
+        allocate(a(NP,NP), b(NP,NP), c(NP,NP))
+        a  = 1.e-3
+        b  = 1.e-3
+        t0 = tic()
+        do
+            call sgemm('N', 'N', NP, NP, NP, 1.0, a, NP, b, NP, 0.0, c, NP)
+            if( real(toc(t0)) >= WARMUP ) exit
+        end do
+        call cpu_time(c0)
+        t0 = tic()
+        do irep = 1, NREP
+            call sgemm('N', 'N', NP, NP, NP, 1.0, a, NP, b, NP, 0.0, c, NP)
+        end do
+        wall = max(real(toc(t0)), 1.e-6)
+        call cpu_time(c1)
+        ratio           = (c1 - c0) / wall
+        l_blas_threaded = ratio > 1.8
+        l_blas_probed   = .true.
+        if( l_blas_threaded )then
+            write(logfhandle,'(A,F6.2,A)') 'Trajectory flex: BLAS cpu/wall ', ratio, &
+                &' (threaded): wide products from the serial region'
+        else
+            write(logfhandle,'(A,F6.2,A)') 'Trajectory flex: BLAS cpu/wall ', ratio, &
+                &' (serial): one BLAS product per thread'
+        endif
+        call flush(logfhandle)
+    end subroutine probe_blas
+
+    !> c = a b, single precision: the BLAS, except inside an OpenMP team when the BLAS threads (probe_blas) and the
+    !! build does not know it stays on the calling thread there (L_BLAS_TEAM_SAFE)
+    subroutine gemm_nn( a, b, c )
+        real(sp), contiguous, intent(in)  :: a(:,:), b(:,:)
+        real(sp), contiguous, intent(out) :: c(:,:)
+        logical :: l_team
+        l_team = .false.
+        !$ l_team = omp_in_parallel()
+        if( l_team .and. l_blas_threaded .and. .not. L_BLAS_TEAM_SAFE )then
+            c = matmul(a, b)
+        else
+            call sgemm('N', 'N', size(a,1), size(b,2), size(a,2), 1.0, a, size(a,1), b, size(b,1), 0.0, c, size(c,1))
+        endif
+    end subroutine gemm_nn
 
     !> the fit band in two interleaved coefficient sets, block-pixel Fourier blocks in a checkerboard (blocks,
     !! because the soft mask correlates neighbouring coefficients); as simple_flex_cls_kernel's
