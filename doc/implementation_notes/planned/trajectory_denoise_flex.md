@@ -1,13 +1,14 @@
 # trajectory_denoise on the flex kernel: every frame a pre-image of the frames that look like it
 
-Implementation note, 2026-10-26. **Prototype implemented and run on a first real trajectory** (written against
-`7d8586b88` without a compiler at hand; the maintainer builds). First look on real data: high-resolution detail
+Implementation note, 2026-10-26. **Implemented; the default `pca_mode` of `trajectory_denoise` since 2026-10-26**
+(the maintainer's call after a first real trajectory; the previous default was `diffusion_maps`). Written against
+`7d8586b88` without a compiler at hand; the maintainer builds. First look on real data: high-resolution detail
 better preserved than with `ppca`, `ppca` stronger at low resolution. Sections 1-3 are the contract and the method
 as implemented, section 4 the toy behind the choices, section 5 how to run and tune it on real data, sections 6-7
 validation and open points. The toy is a numpy script outside the repository (claude.ai project SIMPLE,
 `claude/trajectory_denoise_flex_toy.py`).
 
-    single_exec prg=trajectory_denoise stk=traj.mrcs smpd=0.358 pca_mode=flex nthr=16 \
+    single_exec prg=trajectory_denoise stk=traj.mrcs smpd=0.358 nthr=16 [pca_mode=flex] \
         [neigs=32] [halfwin=0] [eo_pool=yes] [lp=<A>] [mskdiam=<A>] [outstk=trajectory_denoised.mrcs]
 
 ## 1. Why
@@ -179,8 +180,9 @@ Start with the defaults; compare against `pca_mode=ppca` on the same stack (mont
 - **Workflow** `test_single_workflow` (`fcc`, `wurtzite`): its trajectory is 30 orientation groups of 10 frames with
   a reorientation every 10 frames and no shifts. Run the denoise stage with `ppca` and with `flex`; add metrics
   against the clean reprojections stage 2 already writes (error over noise, FRC 0.5 against the truth); downstream
-  the existing map correlation, FSC and rotation errors. `flex` becomes the default when it is better on both
-  suites and downstream no worse than `ppca` within the existing margins.
+  the existing map correlation, FSC and rotation errors. The denoise stage sets no `pca_mode`, so it now runs
+  `flex`: its downstream margins are the first check of the default change (they were set with
+  `diffusion_maps`).
 - **Real data**: a GLC trajectory, `ppca` against `flex` (both `halfwin` settings), then `analysis2D_nano`. First
   run: flex keeps more high-resolution detail, `ppca` more low-resolution signal (see section 7, *low resolution*).
 

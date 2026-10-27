@@ -375,7 +375,7 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(commander_ppca_denoise) :: xkpca_den
         type(string) :: pca_mode
-        if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode',  'diffusion_maps')
+        if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode',            'flex')
         pca_mode = cline%get_carg('pca_mode')
         if( pca_mode%to_char() == 'flex' )then
             call trajectory_denoise_flex(cline)
@@ -413,6 +413,7 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'trajectory_denoised'//STK_EXT)
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',   32)
+        if( cline%get_iarg('neigs') <= 0   ) call cline%set('neigs',   32)   ! 0 => auto, as the other modes
         if( .not. cline%defined('halfwin') ) call cline%set('halfwin', 0)
         if( .not. cline%defined('eo_pool') ) call cline%set('eo_pool', 'yes')
         call params%new(cline)

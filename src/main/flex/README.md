@@ -41,7 +41,7 @@ the production-module layers, and runs before the fast test gate.
 There are 44 source files: 32 production modules, the probe fit's four
 submodule files, the self-test submodules of the PCG operator and of the
 `cls_expansion` kernel route, three testers, `cls_expansion` with its kernel
-route (`simple_flex_cls_kernel`) and the `trajectory_denoise pca_mode=flex` prototype
+route (`simple_flex_cls_kernel`) and `trajectory_denoise pca_mode=flex`
 (`simple_flex_traj_denoise`), the last three outside the layering. `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and
 cycles. CMake discovers `src/main` through a recursive glob without
@@ -228,7 +228,7 @@ writes; the commander (`../commanders/simple/simple_commanders_denoise.f90`) run
 Method and
 benchmarks: `doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md`.
 
-## `trajectory_denoise pca_mode=flex` (prototype)
+## `trajectory_denoise pca_mode=flex` (the default mode)
 
 `simple_flex_traj_denoise.f90`: every frame of a trajectory the kernel pre-image of the frames that
 look like it (the latents of class models on the fit band's two coefficient sets) and lie near it in

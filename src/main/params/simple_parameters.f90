@@ -298,7 +298,7 @@ type :: parameters
     character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement; internal, not a command-line key (no only under refine=cont)
     character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose refinement(no|yes|only){no}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
+    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|flex){ppca}; trajectory_denoise: {flex}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}

@@ -155,9 +155,10 @@ subroutine new_extract_substk( prgtab )
         call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of components (0 => auto; default 0; pca_mode=flex: the largest latent rank, default 32)', &
         &'Number of components (0 => auto; default 0; pca_mode=flex: the largest latent rank the cross-validation may choose, default 32)', '# eigenvecs', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, '//&
-        &'or flex (every frame the kernel pre-image of the frames that look like it, no alignment)', 'PCA methods','', .false., 'diffusion_maps', &
-        &choices=ui_choices([character(len=15) :: 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca', 'flex']), &
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'Denoising method: flex (default; every frame the kernel pre-image of the '//&
+        &'frames that look like it, no alignment), diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', &
+        &'Denoising method(flex|diffusion_maps|ppca|ppca_kpca_resid|pca_svd|kpca){flex}','', .false., 'flex', &
+        &choices=ui_choices([character(len=15) :: 'flex', 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca']), &
         &visibility=UI_VIS_ADVANCED)
         call trajectory_denoise%add_input(UI_FILT, 'halfwin', 'num', 'Window half-width in frames (pca_mode=flex; 0 => the whole trajectory)', &
         &'pca_mode=flex: frames pool only within this many frames of their block; 0 => every frame may pool with every frame (default 0)', &
