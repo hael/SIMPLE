@@ -158,7 +158,16 @@ previous band, so after a band jump the posterior is sharp around poses
 fitted at the coarser band, and only refining many candidates lets the shift
 search re-rank them: the refinement is the search, and its breadth must come
 from the pose uncertainty (what the pose-change term measures), not from the
-sharpness of a row that has not been refined yet.
+sharpness of a row that has not been refined yet. Nor does a larger budget
+help: at 20 and 40 degrees PorF was worse, because every refined wrong
+reference gets a chance gain from fitting its shift to noise and the largest
+of many such gains beats the true pose for a few percent of the particles
+(the bench histogram of where the refined argmin sat in the unrefined
+ranking is flat deep down: winners by chance). `shift_prior=yes` is the
+experiment against that: the tables' shift searches carry a Gaussian prior
+on the shift's distance from the seed, width the previous iteration's shift
+variance, so a wandering wrong reference pays what it was gaining and the
+true one near its seed pays nothing (the note, section 19, item 11).
 
 ## Assignment
 

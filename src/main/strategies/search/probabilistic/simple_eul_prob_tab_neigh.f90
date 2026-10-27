@@ -8,7 +8,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
-    &draw_posterior_row
+    &draw_posterior_row, shift_prior_sigma2
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -159,6 +159,7 @@ contains
         real,           allocatable :: corrs_inpl(:,:)
         complex(sp),    allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
         integer :: i, ithr, max_refs_to_refine, nfull_refs
+        real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
         integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob)
@@ -178,6 +179,7 @@ contains
         nscored   = 0_int64
         nbank     = 0_int64
         l_bank    = .false.
+        sigma2_prior = 0.
         call seed_rnd
         call alloc_seed_bank(self, seed_bank)
         nfull_refs = self%p_ptr%nstates * self%p_ptr%nspace
@@ -198,6 +200,8 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
+            ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
             ! dynamic: particles differ in cost (stopping rule, shift searches); each is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed)&
@@ -243,6 +247,8 @@ contains
             real(dp)  :: t0
             call get_particle_context(self, iptcl_loc, o_prev, prev_state_loc, prev_proj_loc)
             t0 = omp_get_wtime()
+            if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev,&
                 &l_seed_sh_first, shift_seed)
             call memoize_seed_bank(self, iptcl_loc, shift_seed, seed_bank(:,:,ithr_loc), l_bank(ithr_loc), nbank(ithr_loc))
@@ -374,6 +380,7 @@ contains
         type(eval_ws)          :: eval_work
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
         integer :: i, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
+        real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
         integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
         logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first, l_bank(nthr_glob)
@@ -395,6 +402,7 @@ contains
         nscored   = 0_int64
         nbank     = 0_int64
         l_bank    = .false.
+        sigma2_prior = 0.
         call seed_rnd
         call alloc_seed_bank(self, seed_bank)
         nsubs        = size(self%b_ptr%subspace_inds)
@@ -413,6 +421,8 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
+            ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
             ! dynamic: particles differ in cost (stopping rule, shift searches); each is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(dynamic)
@@ -455,6 +465,8 @@ contains
             real(dp)  :: t0
             call get_particle_context(self, iptcl_loc, o_prev, prev_state, prev_proj)
             t0 = omp_get_wtime()
+            if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state, prev_proj, o_prev,&
                 &l_seed_sh_first, shift_seed_loc)
             call memoize_seed_bank(self, iptcl_loc, shift_seed_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&

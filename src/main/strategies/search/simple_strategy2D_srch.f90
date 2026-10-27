@@ -4,6 +4,7 @@ use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
+use simple_eul_prob_tab_utils, only: posterior_temperature
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_builder,          only: builder
 implicit none
@@ -145,6 +146,10 @@ contains
         self%has_continuous_e3 = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         self%ithr       = omp_get_thread_num() + 1
+        ! the shift prior on the polish of the committed class (the prob modes), at the particle's temperature
+        if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s2D%shift_prior_sigma2 > 0. ) &
+            &call self%joint_inpl_optimizer%set_shift_prior(s2D%shift_prior_sigma2, &
+            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
         ! find previous discrete alignment parameters
         self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
         if( self%l_fresh_start )then

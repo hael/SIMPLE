@@ -11,7 +11,7 @@ use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
-    &posterior_temperature, draw_posterior_row
+    &posterior_temperature, draw_posterior_row, shift_prior_sigma2
 implicit none
 
 public :: eul_prob_tab2D, prob_assign_profile2D
@@ -257,7 +257,7 @@ contains
         integer :: loc(1)
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), xy0(2)
         real    :: cls_dists(self%nclasses), cls_dists_work(self%nclasses)
-        real    :: inpl_dist
+        real    :: inpl_dist, sigma2_prior
         logical :: class_active(self%nclasses)
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region, t0
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob)
@@ -278,6 +278,7 @@ contains
         nscored   = 0_int64
         nbank     = 0_int64
         nrefined  = 0_int64
+        sigma2_prior = 0.
         class_active = self%class_exists
         nactive      = count(class_active)
         if( nactive == 0 )then
@@ -304,6 +305,8 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
+            ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
             call alloc_seed_bank2D(self, seed_bank)
             ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
             ! whole by one thread with its own search object, so only its random draws change
@@ -315,6 +318,8 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 ! (1) identify shifts using the previously assigned best class
                 t0 = omp_get_wtime()
+                if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr)%set_shift_prior(sigma2_prior,&
+                    &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz()))
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)      ! previous ori
                 irot0 = self%b_ptr%pftc%get_roind(360. - o_prev%e3get()) ! in-plane angle index seed
                 icls_prev = nint(self%b_ptr%spproj_field%get(iptcl, 'class'))
@@ -411,7 +416,7 @@ contains
         type(ran_tabu), allocatable :: direct_rts(:)
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, nrots
         integer :: i_from, i_to
-        real    :: lims(2,2), lims_init(2,2), neigh_frac, cxy(3)
+        real    :: lims(2,2), lims_init(2,2), neigh_frac, cxy(3), sigma2_prior
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob)
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
@@ -425,6 +430,7 @@ contains
         nscored   = 0_int64
         nbank     = 0_int64
         nrefined  = 0_int64
+        sigma2_prior = 0.
         call seed_rnd
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
@@ -450,6 +456,8 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
+            ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
             ! dynamic: the particles' shift searches differ in cost; each is processed whole by one thread with its
             ! own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(dynamic)
@@ -499,6 +507,8 @@ contains
                 call put_last(icls_prev_loc, eval_work%direct_srch_order(:,ithr_loc))
             endif
             cxy_loc = 0.
+            if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             if( l_with_shift .and. icls_prev_loc >= 1 .and. icls_prev_loc <= self%nclasses )then
                 irot0_loc = self%b_ptr%pftc%get_roind(360. - o_prev_loc%e3get())
                 irot_loc  = irot0_loc

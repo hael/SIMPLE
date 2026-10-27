@@ -57,6 +57,13 @@ contains
         &'The factor the draws anneal to once the resolution stops gaining: a geometric ramp from prob_beta over the '//&
         &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout'//&
         &'{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
+        &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&
+        &'seed, with the previous iteration''s shift variance as its width and the particle''s temperature converting '//&
+        &'it to loss units; the row holds the MAP loss. An experiment against refinements that wander onto noise '//&
+        &'optima(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &

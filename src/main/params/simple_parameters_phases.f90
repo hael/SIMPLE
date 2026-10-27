@@ -715,6 +715,14 @@ contains
             case DEFAULT
                 THROW_HARD('prob_post_diag must be yes or no')
         end select
+        select case(trim(self%shift_prior))
+            case('yes')
+                self%l_shift_prior = .true.
+            case('no')
+                self%l_shift_prior = .false.
+            case DEFAULT
+                THROW_HARD('shift_prior must be yes or no')
+        end select
         ! the probability tables' posterior draws: their tempering factor, and no ramp unless an end is given (the
         ! run stays at prob_beta)
         if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')

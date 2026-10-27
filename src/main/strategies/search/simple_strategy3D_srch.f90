@@ -6,6 +6,7 @@ use simple_strategy3D_alloc, only: prep_strategy3D_thread, s3D, &
     &seed_continuous_inplane_candidate
 use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
+use simple_eul_prob_tab_utils, only: posterior_temperature
 use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
@@ -170,6 +171,10 @@ contains
         self%nrefs_eval = 0
         self%ntrs_eval  = 0
         self%prev_corr  = 0.
+        ! the shift prior on the polish of the committed pose, at the particle's temperature, as in the tables
+        if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s3D%shift_prior_sigma2 > 0. ) &
+            &call self%joint_inpl_optimizer%set_shift_prior(s3D%shift_prior_sigma2, &
+            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
         if( self%prev_state > 0 )then
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4prob')
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4prob')

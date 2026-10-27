@@ -16,6 +16,7 @@ type strategy2D_alloc
     integer              :: snhc_smpl_ninpl  = 0        !       =snhc_smpl
     integer              :: smpl_ninpl       = 0        !       =greedy_smpl
     integer              :: smpl_ncls        = 0        !       =greedy_smpl
+    real                 :: shift_prior_sigma2 = 0.     ! the shift prior's variance per axis (shift_prior=yes, the prob modes' polish)
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -58,13 +59,17 @@ contains
 
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( params, spproj, nrots, neigh_frac )
-        use simple_eul_prob_tab_utils, only: calc_athres
+        use simple_eul_prob_tab_utils, only: calc_athres, shift_prior_sigma2
         class(parameters), intent(in)    :: params
         type(sp_project),  intent(inout) :: spproj
         integer,           intent(in)    :: nrots
         real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
         logical :: l_fresh_start
+        ! the shift prior's width for the committed class's polish, as the 2D tables' (shift_prior_sigma2)
+        s2D%shift_prior_sigma2 = 0.
+        if( params%l_shift_prior .and. str_has_substr(params%refine, 'prob') ) &
+            &s2D%shift_prior_sigma2 = shift_prior_sigma2(spproj%os_ptcl2D, params%lp / params%smpd_crop)
         ! gather class populations
         l_fresh_start = is_fresh_2D_start(params, params%which_iter)
         if( l_fresh_start )then

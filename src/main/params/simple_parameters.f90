@@ -146,6 +146,7 @@ type :: parameters
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
+    character(len=3)          :: shift_prior='no'     !< the probability tables' shift searches carry a Gaussian prior on the shift's distance from the seed, width from the previous iteration's shift increments (an experiment, pose_marginalization.md section 19)(yes|no){no}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
@@ -682,6 +683,7 @@ type :: parameters
     logical :: l_cohort_sampling = .false.
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
+    logical :: l_shift_prior     = .false. !< shift_prior=yes
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

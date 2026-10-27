@@ -12,6 +12,7 @@ private
 type strategy3D_alloc
     ! global parameters
     real,           allocatable :: smpl_inpl_athres(:)      !< angular threshold of in-plane rotation sampling
+    real                        :: shift_prior_sigma2 = 0.  !< the shift prior's variance per axis (shift_prior=yes, the prob modes' polish)
     logical,        allocatable :: state_exists(:)          !< indicates state existence
     ! per thread allocation
     type(ran_tabu), allocatable :: rts(:)                   !< stochastic search order generators
@@ -33,7 +34,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( params, build )
-        use simple_eul_prob_tab_utils, only: calc_athres
+        use simple_eul_prob_tab_utils, only: calc_athres, shift_prior_sigma2
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer :: istate, ithr, nrefs, nrefs_sub
@@ -92,6 +93,9 @@ contains
                 s3D%inpl_order       = 1
                 if( allocated(s3D%srch_order_sub) ) s3D%srch_order_sub = 0
         end select
+        ! the shift prior's width for the committed pose's polish, as the tables' (shift_prior_sigma2)
+        s3D%shift_prior_sigma2 = 0.
+        if( params%l_shift_prior .and. l_prob_mode ) s3D%shift_prior_sigma2 = shift_prior_sigma2(build%spproj_field, params%lp / params%smpd_crop)
         ! calculate peak thresholds for probabilistic searches
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
         if( .not. l_prob_mode )then

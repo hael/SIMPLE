@@ -75,6 +75,12 @@ contains
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
         &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
+        &'The 2D tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from '//&
+        &'the seed, with the previous iteration''s shift variance as its width and the particle''s temperature '//&
+        &'converting it to loss units (an experiment)(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)

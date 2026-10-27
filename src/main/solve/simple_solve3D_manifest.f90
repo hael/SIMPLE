@@ -30,11 +30,11 @@ integer,          parameter :: KLEN = 24
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
 !! search policy plus the entry routes (provenance)
-character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(33) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(34) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'nstates', 'nstages', 'rec_backend', 'maxits_pcg', &
     &'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', &
     &'objfun', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
-    &'prob_athres', 'bfac', 'gauref', 'balance', 'nclust', &
+    &'prob_athres', 'shift_prior', 'bfac', 'gauref', 'balance', 'nclust', &
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']
 
 !> The subset solve3D_addon replays as given: everything that describes the

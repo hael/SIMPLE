@@ -62,6 +62,14 @@ type :: pftc_shsrch_grad
     real                      :: vals_cache_xy(2) = 0.
     logical                   :: vals_cache_on    = .false. !< only within minimize: the pftc may change between calls
     logical                   :: vals_cache_valid = .false.
+    ! the shift prior (shift_prior=yes, the probability tables): a Gaussian on the shift's distance from the start
+    ! of the minimisation, folded into the objective as the factor exp(-prior_w |xy - prior_xy0|^2) on the
+    ! correlation exp(-L), so the search and the row hold the MAP loss L + |xy - xy0|^2 / (2 sigma^2 T);
+    ! prior_w = 1 / (2 sigma^2 T) with sigma^2 the previous iteration's shift variance per axis and T the
+    ! particle's temperature (set_shift_prior). 0: no prior. The joint route (the polish of the committed pose)
+    ! adds the same term to its raw Euclidean loss; cc has no loss scale for it
+    real(dp)                  :: prior_w          = 0.d0
+    real(dp)                  :: prior_xy0(2)     = 0.d0
 contains
     procedure          :: new_alternating      => grad_shsrch_new_alternating
     procedure          :: new_fixed       => grad_shsrch_new_fixed
@@ -74,6 +82,10 @@ contains
     procedure          :: does_opt_angle
     procedure          :: uses_joint_inplane
     procedure          :: set_limits
+    procedure          :: set_shift_prior
+    procedure          :: clear_shift_prior
+    procedure          :: has_shift_prior
+    procedure, private :: prior_factor
     procedure, private :: coarse_search
     procedure, private :: coarse_search_opt_angle
     procedure          :: reset_profile     => grad_shsrch_reset_profile
@@ -202,6 +214,36 @@ contains
         call self%ospec%set_limits(lims)
     end subroutine set_limits
 
+    !> The shift prior of the next minimisations: sigma2 the shift variance per axis (pixels^2, from the previous
+    !! iteration's shift increments), temp the particle's temperature (posterior_temperature, untempered: the prior
+    !! is part of the loss the tempering acts on). Centred at each minimisation's start (minimize sets it).
+    subroutine set_shift_prior( self, sigma2, temp )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real,                    intent(in)    :: sigma2, temp
+        if( self%search_mode == SHSRCH_JOINT .and. self%joint_cc ) THROW_HARD('the shift prior is a Euclidean loss term; no cc joint route')
+        if( .not. (sigma2 > 0. .and. temp > 0.) ) THROW_HARD('set_shift_prior needs a positive variance and temperature')
+        self%prior_w = 1.d0 / (2.d0 * real(sigma2,dp) * real(temp,dp))
+    end subroutine set_shift_prior
+
+    subroutine clear_shift_prior( self )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        self%prior_w   = 0.d0
+        self%prior_xy0 = 0.d0
+    end subroutine clear_shift_prior
+
+    pure logical function has_shift_prior( self )
+        class(pftc_shsrch_grad), intent(in) :: self
+        has_shift_prior = self%prior_w > 0.d0
+    end function has_shift_prior
+
+    !> the prior's factor on the correlation at shift xy: exp(-prior_w |xy - xy0|^2), 1 without a prior
+    pure real(dp) function prior_factor( self, xy )
+        class(pftc_shsrch_grad), intent(in) :: self
+        real(dp),                intent(in) :: xy(2)
+        prior_factor = 1.d0
+        if( self%prior_w > 0.d0 ) prior_factor = exp(-self%prior_w * sum((xy - self%prior_xy0)**2))
+    end function prior_factor
+
     ! Objective dispatch for the joint continuous route. Evaluators return a
     ! quantity to minimize: raw Euclidean loss or -cc.
     subroutine joint_grad_at_angle( self, vec, cost, grad )
@@ -214,6 +256,11 @@ contains
         else
             call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
                 &vec(1:2), vec(3), cost, grad)
+            if( self%prior_w > 0.d0 )then
+                ! the MAP loss: L + w |xy - xy0|^2, its shift gradient + 2w (xy - xy0)
+                cost      = cost      + self%prior_w * sum((vec(1:2) - self%prior_xy0)**2)
+                grad(1:2) = grad(1:2) + 2.d0 * self%prior_w * (vec(1:2) - self%prior_xy0)
+            endif
         endif
     end subroutine joint_grad_at_angle
 
@@ -249,6 +296,7 @@ contains
                     endif
                 else
                     cost = - self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx)
+                    if( self%prior_w > 0.d0 ) cost = cost * self%prior_factor(vec(1:2))
                 endif
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
@@ -260,7 +308,7 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: grad(D)
-        real(dp)                :: corrs, corrs_grad(2), joint_grad(3), joint_loss
+        real(dp)                :: corrs, corrs_grad(2), joint_grad(3), joint_loss, g
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
@@ -271,6 +319,11 @@ contains
                 else
                     call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     grad = - corrs_grad
+                    if( self%prior_w > 0.d0 )then
+                        ! d/dxy of -(c g): -(dc) g + c g 2w (xy - xy0)
+                        g    = self%prior_factor(vec(1:2))
+                        grad = grad * g + corrs * g * 2.d0 * self%prior_w * (vec(1:2) - self%prior_xy0)
+                    endif
                 endif
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
@@ -282,7 +335,7 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: f, grad(D)
-        real(dp)                :: corrs
+        real(dp)                :: corrs, g
         real(dp)                :: corrs_grad(2), joint_grad(3)
         f    = 0.
         grad = 0.
@@ -301,6 +354,11 @@ contains
                     call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     f    = - corrs
                     grad = - corrs_grad
+                    if( self%prior_w > 0.d0 )then
+                        g    = self%prior_factor(vec(1:2))
+                        f    = f * g
+                        grad = grad * g + corrs * g * 2.d0 * self%prior_w * (vec(1:2) - self%prior_xy0)
+                    endif
                 endif
             class default
                 THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
@@ -341,6 +399,7 @@ contains
         endif
         self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
         call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, xy, vals)
+        if( self%prior_w > 0.d0 ) vals = vals * real(self%prior_factor(real(xy,dp)))
         if( self%vals_cache_on )then
             self%vals_cache       = vals
             self%vals_cache_xy    = xy
@@ -394,6 +453,7 @@ contains
             self%ospec%x     = [0.,0.]
         endif
         self%ospec%x_8 = dble(self%ospec%x)
+        self%prior_xy0 = self%ospec%x_8 ! the prior is centred at the start: the seed, or zero
         found_better   = .false.
         self%profile_minimize_calls = self%profile_minimize_calls + 1_int64
         ! the objective's double-precision reference, copied once per minimisation
@@ -530,6 +590,7 @@ contains
         call self%set_limits(joint_lims)
         self%ospec%x = [xy_in, real(irot)]
         self%ospec%x_8 = dble(self%ospec%x)
+        self%prior_xy0 = self%ospec%x_8(1:2) ! the prior is centred at the start: the committed shift
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
@@ -646,6 +707,7 @@ contains
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_grid_points     = self%profile_grid_points + 1_int64
                 cost = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, [x,y], self%cur_inpl_idx)
+                if( self%prior_w > 0.d0 ) cost = cost * self%prior_factor([x,y])
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -682,6 +744,7 @@ contains
                 else
                     call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
                 endif
+                if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor([x,y]))
                 if( self%grid_fit ) self%grid_corrs(:,(ix-1)*coarse_num_steps+iy) = corrs
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
@@ -943,6 +1006,8 @@ contains
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         self%joint_cc = .false.
+        self%prior_w   = 0.d0
+        self%prior_xy0 = 0.d0
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

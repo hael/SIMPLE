@@ -1713,6 +1713,66 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    `gen_euclid_dists`), and the `refine3D_states` key `local_inpl_bound`,
    which only set `prob_athres` for a `prob_neigh` run and so had been
    dead since item 5.
+11. **The refined count is a false-positive control, and the shift prior
+   experiment (2026-10-26/27).** Hans ran the cap up: `prob_athres=20`
+   (three PorF restarts: 7.09 A failing from stage 3, 4.95, 4.66) and 40
+   (two: 5.03, 4.80, stage 5 stalling two or three iterations early at
+   5.7-6.0 A, the dense fill 1.8x the wall time), against ten at 10
+   (4.59-5.11 A). The bench histogram of where the entry lowest after
+   refinement sat in the unrefined ranking (`prob_fill_profile%rank_counts`,
+   the `PROB_TAB` bench files) says why: at stage 3's first iteration with
+   the cap at 222 of 1000, 31% of the particles keep the unrefined argmin,
+   77% land within the top 22 ranks and about 86% within the old cap of 55;
+   the rest spread over ranks 56-222 at one or two percent per decile, and
+   at stage 5's first iteration (cap 168 of 2500) the tail is flat at
+   2.1-2.7% per decile. A flat tail is winners by chance: where the
+   unrefined loss carries no information, a win after refinement is a wrong
+   reference whose shift and in-plane search found a noise optimum, and
+   the largest such gain over K refined wrong candidates grows like log K,
+   at these temperatures one or two nats, the size of the gap between the
+   true pose and the best wrong one. So the count is a false-positive
+   control, not a search budget: 55 catches the real wins at ranks 2-50,
+   222 or 555 hand a few percent of the particles to a lucky wrong
+   reference each iteration. Ten degrees stays.
+   What would let more candidates be refined without the lottery is to
+   take the noise gain away from the wrong references, which have no reason
+   to sit near the particle's shift: the shift prior, `shift_prior=yes`,
+   an experiment (default `no`, the proven path untouched). The tables'
+   shift searches and seed estimates carry a Gaussian on the shift's
+   distance from the search's start (the seed converted to the reference's
+   frame; zero for the seed estimate), folded into the objective as the
+   factor exp(-|s - s0|^2 / (2 sigma^2 T)) on the correlation exp(-L), so
+   the search minimises and the row holds the MAP loss
+   L + |s - s0|^2 / (2 sigma^2 T) (`pftc_shsrch_grad%set_shift_prior`,
+   applied in the cost, its gradient, the all-rotation objective and the
+   coarse grid). The polish of the committed pose under `inpl_cont=yes`,
+   the last optimizer to touch the shift, is the joint route over
+   (sx, sy, rotind) within the full `trs`: it carries the same term on its
+   raw loss, centred at its own start, the committed shift, armed per
+   particle by the prob strategies' `prep4prob`/`prep4srch` with the width
+   `prep_strategy3D`/`prep_strategy2D_glob` measured once per pass;
+   without that the polish would have undone the tables' regularisation
+   at the last step. T is the particle's
+   untempered temperature, since the prior is part of the loss the tempering
+   acts on; sigma^2 is the variance per axis of the shift increments the
+   sampled particles made in their last search (`shincarg`, half its mean
+   square; a particle never searched counts as zero, which a particle
+   record cannot tell from a search that kept its shift;
+   `shift_prior_sigma2`), floored at a pixel or a quarter of the matching
+   wavelength, whichever is wider: below a pixel the prior would only fight
+   the sub-pixel moves, and since increments measured under the prior can
+   never exceed it, a floor that ignored the band could pin the width at a
+   coarse stage for good. At stage 5's start on PorF the increments average 2 px, so a
+   wrong reference wandering 2-3 sigma pays 2-4.5 nats, the size of the
+   gain it was getting for free, and the true reference near its seed pays
+   nothing. Hans's reading, and Cyril's on Tat and SLC: the shifts are the
+   problem for the small particles.
+   The readout, PorF first: three restarts at `shift_prior=yes` with the
+   cap at 10 against the ten at 10; then three at `prob_athres=20
+   shift_prior=yes`, which failed one of three without the prior. The
+   histogram's tail should stop being flat before the resolution shows
+   anything; if it stays flat the prior is not doing what it is for and
+   comes out again. `SHIFT INCR ARG` in the logs is sigma's own trace.
 
 ## 20. Annealing coupled to importance sampling (proposal, 2026-10-26)
 

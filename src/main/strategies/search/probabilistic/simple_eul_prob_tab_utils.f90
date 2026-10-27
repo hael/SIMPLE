@@ -17,9 +17,16 @@ public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
-public :: prob_beta_at
+public :: prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 private
 #include "simple_local_flags.inc"
+
+!> The floor of the shift prior's width: one pixel, or SHIFT_PRIOR_LP_FRAC of the matching wavelength when that
+!! is wider. Below a pixel the increments are the refinement's sub-pixel moves, which a prior that tight would
+!! only fight; and increments measured under the prior can never exceed it, so without a band-aware floor a
+!! coarse band's prior could pin the width wherever it started
+real, parameter :: SHIFT_PRIOR_SIGMA_MIN = 1.0
+real, parameter :: SHIFT_PRIOR_LP_FRAC   = 0.25
 
 type :: prob_candidate
     integer :: iref   = 0
@@ -328,6 +335,23 @@ contains
         athres   = calc_athres(os, field_str, prob_athres, state=state)
         num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
+
+    !> The width of the shift prior (shift_prior=yes): the variance per axis of the shift increments the sampled
+    !! particles made in their last search (shincarg, the increment's length, zero when the search kept the shift
+    !! and zero for a particle never searched, which a particle record cannot tell apart: for a 2D Gaussian the
+    !! mean square length is twice the variance per axis), floored at the square of max(SHIFT_PRIOR_SIGMA_MIN,
+    !! SHIFT_PRIOR_LP_FRAC x lp_pix), lp_pix the matching wavelength in pixels. A fresh field (no increments yet)
+    !! sits at the floor, so the prior holds a search within a quarter wavelength or a pixel of its seed
+    real function shift_prior_sigma2( os, lp_pix ) result( sigma2 )
+        class(oris), intent(in) :: os
+        real,        intent(in) :: lp_pix
+        real, allocatable :: vals(:)
+        real :: sigma_min
+        sigma_min = max(SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC * lp_pix)
+        sigma2    = sigma_min**2
+        vals      = os%get_all_sampled('shincarg')
+        if( size(vals) > 0 ) sigma2 = max(sigma2, real(0.5d0 * sum(real(vals,dp)**2) / real(size(vals),dp)))
+    end function shift_prior_sigma2
 
     function calc_athres( os, field_str, prob_athres, state ) result( athres )
         class(oris),       intent(in) :: os

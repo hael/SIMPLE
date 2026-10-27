@@ -487,7 +487,21 @@ angular threshold. The top set the fill shift-refines is a search budget,
 per state): sizing it by the unrefined row's posterior mass instead broke
 PorF (2026-10-25, the note, section 19, item 10), since that row is
 conditional on the seed shift and the previous band and the shift
-refinement is what re-ranks it. Every draw (in-plane, direction, class,
+refinement is what re-ranks it; raising the cap (20, 40 degrees) did not
+help either, since refining more candidates hands more particles to a
+wrong reference whose shift search found a noise optimum (the bench
+histogram `refined argmin by decile of the cap`, item 11). With
+`shift_prior=yes` (an experiment, default `no`) the tables' shift searches
+and seed estimates carry a Gaussian on the shift's distance from the
+search's start, width the previous iteration's shift variance per axis
+(`shift_prior_sigma2`, from the sampled particles' `shincarg`, floored at
+a pixel or a quarter of the matching wavelength) and the particle's
+untempered temperature converting it
+to loss units; the search minimises and the row holds the MAP loss
+(`pftc_shsrch_grad%set_shift_prior`), and the `inpl_cont` polish of the
+committed pose carries the same term on its joint loss, centred at the
+committed shift (`prep4prob` arms it, `prep_strategy3D` measures the width).
+Every draw (in-plane, direction, class,
 neighbourhood)
 runs at `prob_beta` times the particle temperature
 (`pftc%ptcl_posterior_temp`; default 0.3, for small membrane proteins,

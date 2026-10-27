@@ -15,6 +15,8 @@ use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
     &shift_ptcl2ref, shift_ref2ptcl
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
+use simple_eul_prob_tab_utils,      only: posterior_temperature, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
+use simple_oris,                    only: oris
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
 use, intrinsic :: iso_fortran_env,  only: int64
@@ -74,6 +76,7 @@ contains
         call test_search_threads()
         call test_loaded_reference()
         call test_posterior_threads()
+        call test_shift_prior()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
 
@@ -1037,6 +1040,130 @@ contains
         end function draws_off_row
 
     end subroutine test_posterior_threads
+
+    !> The shift prior of the probability tables' searches (shift_prior=yes): off, the search is the search
+    !! (bitwise, also after a prior was set and cleared); on, the correlation a search reports is the raw
+    !! correlation at its shift times exp(-|s - s0|^2 / (2 sigma^2 T)) with s0 the start, the in-plane choice
+    !! unchanged; a prior far wider than the move leaves the free search's objective (its value, not its path:
+    !! a factor within L-BFGS-B's stopping tolerance can end an alternation elsewhere) and a prior far narrower
+    !! pins the search at its start, on the shift route and on the joint polish alike. And the width from a
+    !! field: half the mean squared increment of the sampled particles, floored by the band
+    subroutine test_shift_prior()
+        real, parameter :: START(2) = [1.5, -1.0]
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(pftc_shsrch_grad)   :: srch
+        type(oris) :: os
+        real(dp) :: w, g, rotind_frac, cost_free, cost_prior
+        real     :: limits(2,2), lims_init(2,2), joint_lims(3,2), temp, cxy_free(3), cxy_again(3), cxy(3)
+        real     :: corr_prior, corr_raw, sigma2, sigma2_weak, sigma2_strong
+        real,    allocatable :: scores(:)
+        integer  :: irot_free, irot_again, irot, irot2, irot3, irot_seed, i
+        logical  :: l_valid, l_improved
+        write(*,'(A)') 'test_shift_prior'
+        limits(:,1)    = -TRS
+        limits(:,2)    =  TRS
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
+        temp = posterior_temperature(b%pftc%wsqsum_ptcl_now(1), b%pftc%get_pftsz())
+        call assert_true(temp > 0., 'the fixture particle has a temperature')
+        ! the widths in the fixture's own units: w = 1/(2 sigma2 T); weak: w (10 px)^2 < 1e-6 nats, strong:
+        ! w (0.1 px)^2 > 5 nats
+        sigma2_weak   = 1.e8 / temp
+        sigma2_strong = 1.e-3 / temp
+        call srch%new_alternating(b, limits, lims_init=lims_init, maxits=p%maxits_sh, coarse_init=.true.)
+        call srch%set_indices(1, 1)
+        call assert_false(srch%has_shift_prior(), 'a new search object has no prior')
+        ! the free search from the start, twice: the second after a prior was set and cleared
+        irot_free = 1
+        cxy_free  = srch%minimize(irot_free, sh_rot=.false., xy_in=START)
+        call assert_true(irot_free > 0, 'the free search moves from the start')
+        call assert_true(norm2(cxy_free(2:3) - START) > 0.5, 'and moves it by more than half a pixel')
+        call srch%set_shift_prior(1., temp)
+        call assert_true(srch%has_shift_prior(), 'set_shift_prior arms the prior')
+        call srch%clear_shift_prior
+        irot_again = 1
+        cxy_again  = srch%minimize(irot_again, sh_rot=.false., xy_in=START)
+        call assert_true(irot_again == irot_free .and. all(transfer(cxy_again,0,3) == transfer(cxy_free,0,3)), &
+            &'a cleared prior leaves the search bit for bit as it was')
+        ! the factor identity at the prior's own result
+        call srch%set_shift_prior(1., temp)
+        irot = 1
+        cxy  = srch%minimize(irot, sh_rot=.false., xy_in=START)
+        call assert_true(irot > 0, 'the search with a unit prior moves')
+        call srch%select_best_discrete_angle(cxy(2:3), irot2, corr_prior)
+        call srch%clear_shift_prior
+        call srch%select_best_discrete_angle(cxy(2:3), irot3, corr_raw)
+        w = 1.d0 / (2.d0 * 1.d0 * real(temp,dp))
+        g = exp(-w * sum((real(cxy(2:3),dp) - real(START,dp))**2))
+        call assert_int(irot3, irot2, 'the prior leaves the in-plane choice at a shift unchanged')
+        call assert_true(abs(real(corr_prior,dp) - real(corr_raw,dp) * g) <= 1.d-5, &
+            &'the reported correlation is the raw one times the prior factor')
+        call assert_true(abs(cxy(1) - corr_prior) <= 1.e-5, 'and minimize returns that correlation')
+        ! a wide prior changes nothing that matters, a narrow one pins the start
+        call srch%set_shift_prior(sigma2_weak, temp)
+        irot = 1
+        cxy  = srch%minimize(irot, sh_rot=.false., xy_in=START)
+        call assert_true(irot > 0 .and. abs(cxy(1) - cxy_free(1)) <= 1.e-4 .and. norm2(cxy(2:3) - cxy_free(2:3)) < 0.25, &
+            &'a prior far wider than the move leaves the free search''s objective, the shift within a quarter pixel')
+        call srch%set_shift_prior(sigma2_strong, temp)
+        irot = 1
+        cxy  = srch%minimize(irot, sh_rot=.false., xy_in=START)
+        call assert_true(irot == 0 .or. norm2(cxy(2:3) - START) < 0.1, &
+            &'a prior far narrower than the move pins the search at its start')
+        call srch%kill
+        ! the joint route (the polish of the committed pose): the prior is the same loss term; its initial cost
+        ! (the start re-scored) is untouched, a wide prior leaves the free polish's objective, a narrow one pins
+        ! the start. The seed cell is the discrete selection at the start, as the polish is seeded in production
+        allocate(scores(b%pftc%get_nrots()))
+        call b%pftc%gen_objfun_vals(1, 1, START, scores)
+        irot_seed = maxloc(scores, dim=1)
+        joint_lims(1:2,:) = limits
+        joint_lims(3,:)   = [1.-2., real(b%pftc%get_nrots())+2.]
+        call srch%new_joint(b, joint_lims, p%maxits_sh)
+        call srch%set_indices(1, 1)
+        cxy_free = srch%minimize_joint(irot_free, START, sh_rot=.false., rotind_frac=rotind_frac, &
+            &evaluation_valid=l_valid, improved=l_improved, initial_cost_out=cost_free, irot_in=irot_seed)
+        call assert_true(l_valid .and. l_improved, 'the free joint polish improves from the start')
+        call srch%set_shift_prior(sigma2_weak, temp)
+        cxy = srch%minimize_joint(irot, START, sh_rot=.false., rotind_frac=rotind_frac, &
+            &evaluation_valid=l_valid, improved=l_improved, initial_cost_out=cost_prior, irot_in=irot_seed)
+        call assert_true(cost_prior == cost_free, 'the joint prior leaves the cost at the start untouched')
+        call assert_true(l_valid .and. l_improved .and. abs(cxy(1) - cxy_free(1)) <= 1.e-4 .and. &
+            &norm2(cxy(2:3) - cxy_free(2:3)) < 0.25, &
+            &'a wide prior leaves the free joint polish''s objective, the shift within a quarter pixel')
+        call srch%set_shift_prior(sigma2_strong, temp)
+        cxy = srch%minimize_joint(irot, START, sh_rot=.false., rotind_frac=rotind_frac, &
+            &evaluation_valid=l_valid, improved=l_improved, irot_in=irot_seed)
+        call assert_true((.not. l_improved) .or. norm2(cxy(2:3) - START) < 0.1, &
+            &'a narrow prior pins the joint polish at its start')
+        call srch%kill
+        call kill_fixture(b)
+        ! the width from a field: five sampled particles with increments 2, 0, 4 and two never searched (zero,
+        ! which a particle record cannot tell from a search that kept its shift), one unsampled that must not count
+        call os%new(6, is_ptcl=.true.)
+        do i = 1,6
+            call os%set(i, 'sampled', 1.)
+        enddo
+        call os%set(6, 'sampled', 0.)
+        call os%set(1, 'shincarg', 2.)
+        call os%set(2, 'shincarg', 0.)
+        call os%set(3, 'shincarg', 4.)
+        call os%set(6, 'shincarg', 100.)
+        sigma2 = shift_prior_sigma2(os, 2.)
+        call assert_true(abs(sigma2 - 0.5 * (4. + 0. + 16.) / 5.) <= 1.e-5, &
+            &'the width is half the mean squared increment of the sampled particles')
+        sigma2 = shift_prior_sigma2(os, 40.)
+        call assert_true(abs(sigma2 - (SHIFT_PRIOR_LP_FRAC * 40.)**2) <= 1.e-4, &
+            &'and never below a quarter of the matching wavelength')
+        call os%set(1, 'shincarg', 0.5)
+        call os%set(3, 'shincarg', 0.5)
+        sigma2 = shift_prior_sigma2(os, 2.)
+        call assert_true(abs(sigma2 - SHIFT_PRIOR_SIGMA_MIN**2) <= 1.e-6, 'nor below a pixel')
+        call os%kill
+        deallocate(scores)
+    end subroutine test_shift_prior
 
     !> the alternating shift search (as the probabilistic tables run it) over 24 references and three start shifts,
     !! euclid and cc, at one thread and 20 times at every processor: every result bit for bit the same

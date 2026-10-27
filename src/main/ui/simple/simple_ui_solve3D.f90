@@ -139,6 +139,13 @@ contains
         &'the last five iterations, after which the stage ends (1 the physical posterior); 0 keeps prob_beta '//&
         &'throughout; solve3D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., &
         &group="search", visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
+        &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&
+        &'seed, with the previous iteration''s shift variance as its width and the particle''s temperature converting '//&
+        &'it to loss units; the row holds the MAP loss. An experiment against refinements that wander onto noise '//&
+        &'optima(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &

@@ -7,7 +7,7 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
@@ -251,6 +251,7 @@ contains
         real    :: lims(2,2), lims_init(2,2)
         real    :: dists_refs(self%nrefs,nthr_glob)
         logical :: l_sh_first, l_grid
+        real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo (single state)
         integer(int64) :: seed_builds, bank_ithr
         integer :: kfromto_loc(2)
@@ -266,6 +267,7 @@ contains
         ts_score  = 0.d0
         ts_refine = 0.d0
         rank_ithr = 0_int64
+        sigma2_prior = 0.
         self%seed_nrots = self%b_ptr%pftc%get_nrots()
         l_sh_first      = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
         ! the particle-frame grid and its quadratic step in the multi-state table, the particle-frame seed in the
@@ -309,6 +311,8 @@ contains
                 call grad_shsrch_obj(ithr)%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true., grid_fit=l_grid, grid_ptcl=l_grid)
             end do
+            ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
             if( l_sh_first )then
                 kfromto_loc = self%b_ptr%pftc%get_kfromto()
                 allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))
@@ -397,6 +401,9 @@ contains
             logical   :: l_bank_seed
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
             t0 = omp_get_wtime()
+            ! the shift prior at the particle's own temperature: the seed estimate and every refinement of the particle
+            if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             call estimate_shift_seed(iptcl_loc, ithr_loc, prev_state, prev_proj, o_prev_loc, shift_seed, irot_seed)
             ! the seed is one particle-frame shift from here on: the estimate converted at its rotation (a zero seed
             ! without the single-state seeding)
