@@ -495,7 +495,10 @@ histogram `refined argmin by decile of the cap`, item 11). With
 and seed estimates carry a Gaussian on the shift's distance from the
 search's start, width the previous iteration's shift variance per axis
 (`shift_prior_sigma2`, from the sampled particles' `shincarg`, floored at
-a pixel or a quarter of the matching wavelength) and the particle's
+a pixel or a quarter of the matching wavelength, both in the original
+sampling's pixels, `lp / smpd`, the unit of every search shift whatever the
+crop; the multi-state table's quadratic grid step re-scores its fitted
+shift with the same factor) and the particle's
 untempered temperature converting it
 to loss units; the search minimises and the row holds the MAP loss
 (`pftc_shsrch_grad%set_shift_prior`), and the `inpl_cont` polish of the

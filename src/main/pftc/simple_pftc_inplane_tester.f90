@@ -77,6 +77,7 @@ contains
         call test_loaded_reference()
         call test_posterior_threads()
         call test_shift_prior()
+        call test_shift_prior_grid_fit()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
 
@@ -1164,6 +1165,76 @@ contains
         call os%kill
         deallocate(scores)
     end subroutine test_shift_prior
+
+    !> The shift prior through the quadratic grid step (grid_fit, the multi-state table's search), whose exact
+    !! re-score at the fitted shift is its own evaluation, not the all-rotation objective's: on both lattices (the
+    !! reference frame and the particle frame) the correlation a search reports is the raw correlation at its shift
+    !! times the prior's factor exp(-w |s|^2) (centred at zero, a search without a start), whether the fit was kept
+    !! or fell back to the alternations; and the fixture keeps a fit on each lattice, so the step's re-score is
+    !! exercised. w = 0.01 per px^2 is weak on the noise-free phantom (the search moves as without it) but its
+    !! factor, 0.3% to 2% at the cases' shifts, is far above the tolerance
+    subroutine test_shift_prior_grid_fit()
+        real(sp), parameter :: TRUE_SHIFTS(2,3) = reshape([0.5, 0.3, 1.2, -0.8, 4.6, 0.0], [2,3])
+        real(dp), parameter :: W_PRIOR = 1.d-2 ! the prior's weight per px^2, in loss units
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(pftc_shsrch_grad)   :: srch
+        complex(sp), allocatable :: bank(:,:)
+        real,        allocatable :: vals(:)
+        integer(int64) :: counts(0:5)
+        real     :: limits(2,2), lims_init(2,2), cxy(3), temp, u(2)
+        real(dp) :: g, raw
+        integer  :: icase, ilat, irot, nkept(2), kfromto(2)
+        logical  :: l_ptcl, l_kept
+        write(*,'(A)') 'test_shift_prior_grid_fit'
+        limits(:,1)    = -TRS
+        limits(:,2)    =  TRS
+        lims_init(:,1) = -SHC_INPL_TRSHWDTH
+        lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        nkept = 0
+        do ilat = 1,2
+            l_ptcl = ilat == 2
+            do icase = 1,size(TRUE_SHIFTS,2)
+                call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUE_SHIFTS(:,icase), .false.)
+                kfromto = b%pftc%get_kfromto()
+                allocate(bank(b%pftc%get_pftsz()+1, kfromto(2)-kfromto(1)+1), vals(b%pftc%get_nrots()))
+                temp = posterior_temperature(b%pftc%wsqsum_ptcl_now(1), b%pftc%get_pftsz())
+                call srch%new_alternating(b, limits, lims_init=lims_init, maxits=60, coarse_init=.true., &
+                    &grid_fit=.true., grid_ptcl=l_ptcl)
+                call srch%set_indices(1, 1)
+                ! w = 1/(2 sigma2 T) = W_PRIOR
+                call srch%set_shift_prior(real(1.d0 / (2.d0 * W_PRIOR * real(temp,dp))), temp)
+                irot = 1
+                cxy  = srch%minimize(irot, sh_rot=.false.)
+                call srch%get_fit_profile(counts)
+                call assert_int(1, int(sum(counts)), 'each prior search takes exactly one fit decision')
+                l_kept = counts(0) == 1_int64
+                if( l_kept ) nkept(ilat) = nkept(ilat) + 1
+                if( irot > 0 )then
+                    ! the raw correlation at the reported shift by the kernel that scored it: a kept particle-frame
+                    ! fit through the shifted particle, every other result through the shifted reference
+                    if( l_kept .and. l_ptcl )then
+                        u = shift_ref2ptcl(cxy(2:3), b%pftc%get_rot(irot))
+                        call b%pftc%memoize_shifted_ptcl(1, u, bank)
+                        call b%pftc%gen_objfun_vals_bank(1, 1, bank, vals)
+                    else
+                        call b%pftc%gen_objfun_vals(1, 1, cxy(2:3), vals)
+                    endif
+                    raw = real(vals(irot),dp)
+                    g   = exp(-W_PRIOR * sum(real(cxy(2:3),dp)**2))
+                    call assert_true(abs(real(cxy(1),dp) - raw * g) <= 1.d-5, &
+                        &'the grid search reports the raw correlation at its shift times the prior factor')
+                endif
+                write(*,'(A,L1,A,I0,A,L1,A,I0,A,2F8.3)') '  particle frame ', l_ptcl, ', case ', icase, &
+                    &': fit kept ', l_kept, ', irot ', irot, ', shift ', cxy(2:3)
+                call srch%kill
+                deallocate(bank, vals)
+                call kill_fixture(b)
+            enddo
+        enddo
+        call assert_true(nkept(1) > 0, 'a kept fit on the reference-frame lattice exercises the step''s re-score')
+        call assert_true(nkept(2) > 0, 'a kept fit on the particle-frame lattice exercises the step''s re-score')
+    end subroutine test_shift_prior_grid_fit
 
     !> the alternating shift search (as the probabilistic tables run it) over 24 references and three start shifts,
     !! euclid and cc, at one thread and 20 times at every processor: every result bit for bit the same

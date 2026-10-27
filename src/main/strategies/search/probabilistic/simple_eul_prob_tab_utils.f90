@@ -22,9 +22,11 @@ private
 #include "simple_local_flags.inc"
 
 !> The floor of the shift prior's width: one pixel, or SHIFT_PRIOR_LP_FRAC of the matching wavelength when that
-!! is wider. Below a pixel the increments are the refinement's sub-pixel moves, which a prior that tight would
-!! only fight; and increments measured under the prior can never exceed it, so without a band-aware floor a
-!! coarse band's prior could pin the width wherever it started
+!! is wider, both in the pixels the shifts are measured in: the original sampling (smpd), whatever the crop, as
+!! the polar searches and the stored shifts and increments are. Below a pixel the increments are the
+!! refinement's sub-pixel moves, which a prior that tight would only fight; and increments measured under the
+!! prior can never exceed it, so without a band-aware floor a coarse band's prior could pin the width wherever it
+!! started
 real, parameter :: SHIFT_PRIOR_SIGMA_MIN = 1.0
 real, parameter :: SHIFT_PRIOR_LP_FRAC   = 0.25
 
@@ -340,8 +342,11 @@ contains
     !! particles made in their last search (shincarg, the increment's length, zero when the search kept the shift
     !! and zero for a particle never searched, which a particle record cannot tell apart: for a 2D Gaussian the
     !! mean square length is twice the variance per axis), floored at the square of max(SHIFT_PRIOR_SIGMA_MIN,
-    !! SHIFT_PRIOR_LP_FRAC x lp_pix), lp_pix the matching wavelength in pixels. A fresh field (no increments yet)
-    !! sits at the floor, so the prior holds a search within a quarter wavelength or a pixel of its seed
+    !! SHIFT_PRIOR_LP_FRAC x lp_pix), lp_pix the matching wavelength in the shifts' pixels: lp / smpd, the
+    !! original sampling, not lp / smpd_crop (the crop is tied to lp, so in its pixels the band term is a fixed
+    !! fraction of a pixel and the floor collapses to the one-pixel guard). A fresh field (no increments yet, or
+    !! only the zero increments of iterations that searched no shifts) sits at the floor, so the prior holds a
+    !! search within a quarter wavelength or a pixel of its seed
     real function shift_prior_sigma2( os, lp_pix ) result( sigma2 )
         class(oris), intent(in) :: os
         real,        intent(in) :: lp_pix

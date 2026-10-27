@@ -95,7 +95,7 @@ contains
         end select
         ! the shift prior's width for the committed pose's polish, as the tables' (shift_prior_sigma2)
         s3D%shift_prior_sigma2 = 0.
-        if( params%l_shift_prior .and. l_prob_mode ) s3D%shift_prior_sigma2 = shift_prior_sigma2(build%spproj_field, params%lp / params%smpd_crop)
+        if( params%l_shift_prior .and. l_prob_mode ) s3D%shift_prior_sigma2 = shift_prior_sigma2(build%spproj_field, params%lp / params%smpd)
         ! calculate peak thresholds for probabilistic searches
         if( allocated(s3D%smpl_inpl_athres) ) deallocate(s3D%smpl_inpl_athres)
         if( .not. l_prob_mode )then

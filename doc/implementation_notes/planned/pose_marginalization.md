@@ -1762,7 +1762,20 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    wavelength, whichever is wider: below a pixel the prior would only fight
    the sub-pixel moves, and since increments measured under the prior can
    never exceed it, a floor that ignored the band could pin the width at a
-   coarse stage for good. At stage 5's start on PorF the increments average 2 px, so a
+   coarse stage for good. Both are in the original sampling's pixels, the
+   unit of the search shifts and of `shincarg` (the polar kernels shift in
+   the full box's frequencies whatever the crop). Until 2026-10-27 the
+   wavelength was taken in cropped pixels, `lp / smpd_crop`, which solve3D's
+   lp-tied crop holds near 3, so the band term never beat the one-pixel
+   guard and sigma sat at one original pixel from the first shift stage on
+   (stage 3, after the two shift-free stages left zero increments); that
+   cost 3D, where stage 3 is the first correction of the shifts the class
+   averages handed over, and passed in 2D, which re-centres its classes.
+   The same day the multi-state table's quadratic grid step
+   (`try_grid_fit`) began re-scoring its fitted shift with the prior: it
+   had used the raw value, so a kept fit was accepted against a penalised
+   grid minimum and entered the row unpenalised beside penalised entries
+   (`test_shift_prior_grid_fit`). At stage 5's start on PorF the increments average 2 px, so a
    wrong reference wandering 2-3 sigma pays 2-4.5 nats, the size of the
    gain it was getting for free, and the true reference near its seed pays
    nothing. Hans's reading, and Cyril's on Tat and SLC: the shifts are the

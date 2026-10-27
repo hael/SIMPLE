@@ -909,6 +909,8 @@ contains
             self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
             call self%b_ptr%pftc%gen_objfun_vals_bank(self%reference, self%particle, &
                 &self%grid_bank(:,:,size(self%grid_bank,3)), corrs)
+            ! the prior's factor at the particle-frame shift, the frame the lattice's factors were taken in
+            if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor(real(fit_xy,dp)))
             irot_fit = maxloc(corrs, dim=1)
             if( .not. (corrs(irot_fit) > best_grid_corr) )then
                 self%profile_fit(FIT_VALUE) = self%profile_fit(FIT_VALUE) + 1_int64
@@ -930,6 +932,7 @@ contains
             fit_xy = real([fx,fy])
             self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
             call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, fit_xy, corrs)
+            if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor(real(fit_xy,dp)))
             irot_fit = maxloc(corrs, dim=1)
             if( .not. (corrs(irot_fit) > best_grid_corr) )then
                 self%profile_fit(FIT_VALUE) = self%profile_fit(FIT_VALUE) + 1_int64

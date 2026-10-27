@@ -306,7 +306,7 @@ contains
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
-            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
             call alloc_seed_bank2D(self, seed_bank)
             ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
             ! whole by one thread with its own search object, so only its random draws change
@@ -457,7 +457,7 @@ contains
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
-            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
             ! dynamic: the particles' shift searches differ in cost; each is processed whole by one thread with its
             ! own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(dynamic)

@@ -312,7 +312,7 @@ contains
                     &maxits=self%p_ptr%maxits_sh, coarse_init=.true., grid_fit=l_grid, grid_ptcl=l_grid)
             end do
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
-            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd_crop)
+            if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
             if( l_sh_first )then
                 kfromto_loc = self%b_ptr%pftc%get_kfromto()
                 allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))

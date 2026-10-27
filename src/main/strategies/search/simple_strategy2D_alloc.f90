@@ -69,7 +69,7 @@ contains
         ! the shift prior's width for the committed class's polish, as the 2D tables' (shift_prior_sigma2)
         s2D%shift_prior_sigma2 = 0.
         if( params%l_shift_prior .and. str_has_substr(params%refine, 'prob') ) &
-            &s2D%shift_prior_sigma2 = shift_prior_sigma2(spproj%os_ptcl2D, params%lp / params%smpd_crop)
+            &s2D%shift_prior_sigma2 = shift_prior_sigma2(spproj%os_ptcl2D, params%lp / params%smpd)
         ! gather class populations
         l_fresh_start = is_fresh_2D_start(params, params%which_iter)
         if( l_fresh_start )then
