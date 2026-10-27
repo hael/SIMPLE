@@ -2,7 +2,7 @@
 module simple_mic_subset_tester
 use simple_defs,          only: dp
 use simple_test_utils,    only: assert_true, assert_int, assert_double
-use simple_mic_subset,    only: select_mic_support, build_mic_support, apply_mic_subset
+use simple_mic_subset,    only: select_mic_support, build_mic_support, rank_mic_support, apply_mic_subset
 use simple_sp_project,    only: sp_project
 use simple_eo_partition,  only: eo_transaction
 implicit none
@@ -16,7 +16,113 @@ contains
         call test_global_search
         call test_exhaustive_oracle
         call test_project_mask
+        call test_shared_coverage
     end subroutine run_all_mic_subset_tests
+
+    subroutine test_shared_coverage()
+        use simple_oris,        only: oris
+        use simple_sym,         only: sym
+        use simple_ptcl_subset, only: select_ptcl_subset
+        class(sp_project), allocatable :: project
+        class(oris), allocatable :: directions
+        type(sym) :: symmetry
+        real(dp), allocatable :: support(:,:), full_support(:,:)
+        real(dp) :: expected(16,3)
+        integer, allocatable :: populations(:), particle_mic(:)
+        logical, allocatable :: eligible(:), selected(:)
+        logical :: changed
+        integer :: i, bin, cell, half, status, stack, target, best(16), halves(6)
+        character(len=512) :: message
+        allocate(project,directions)
+        call fixture(project)
+        call project%os_ptcl2D%set_all2single('state',1)
+        call project%os_ptcl3D%set_all2single('state',2)
+        call project%os_mic%set_all2single('state',1)
+        call project%os_stk%set_all2single('state',1)
+        call eo_transaction(project,changed)
+        call directions%new(8,is_ptcl=.false.)
+        call symmetry%new('c1')
+        call symmetry%build_refspiral(directions)
+        expected = 0._dp
+        best = 0
+        do i = 1,6
+            bin = mod(i-1,2)+1
+            call project%os_ptcl3D%set_euler(i,directions%get_euler(bin))
+            call project%os_ptcl3D%set(i,'corr',real(i))
+            half = project%os_ptcl3D%get_eo(i)
+            halves(i) = half
+            cell = 2*(bin-1)+half+1
+            stack = project%os_ptcl3D%get_int(i,'stkind')
+            expected(cell,stack) = expected(cell,stack) + real(i,dp)
+            best(cell) = i
+        enddo
+        call build_mic_support(project,'quality_coverage','corr',2,8,'c1',support,populations, &
+            eligible,particle_mic,status,message)
+        call assert_int(0,status,'shared coverage fixture builds micrograph support')
+        if( status == 0 )then
+            call assert_true(all(abs(support-expected)<1.e-12_dp), &
+                'micrograph support matches independently assigned directions, halves and scores')
+        endif
+        call select_ptcl_subset(project,4,8,'c1','corr',2,selected,status,message,rebalance_eo=.false.)
+        call assert_int(0,status,'same project supports particle coverage selection')
+        call assert_true(all(selected .eqv. [.false.,.false.,.true.,.true.,.true.,.true.]), &
+            'shared classification preserves original top-two-per-direction particle selection')
+        full_support = support
+        call rank_mic_support(project,2,8,'c1','corr',2,populations,eligible,particle_mic, &
+            support,target,status,message)
+        call assert_int(0,status,'micrograph ranking calls the original particle engine in both halves')
+        call assert_int(4,target,'six eligible particles times two of three micrographs gives target four')
+        expected = 0._dp
+        do cell = 1,16
+            i = best(cell)
+            if( i == 0 ) cycle
+            stack = project%os_ptcl3D%get_int(i,'stkind')
+            expected(cell,stack) = real(i,dp)
+        enddo
+        call assert_true(all(abs(support-expected)<1.e-12_dp), &
+            'half-specific engine recommendations match the independent best-per-cell oracle')
+        call assert_true(all(populations==2) .and. all(eligible),'recommendations preserve the full output eligibility pool')
+        do i = 1,6
+            call assert_int(halves(i),project%os_ptcl3D%get_eo(i),'engine calls preserve source 3D halves')
+            call assert_int(halves(i),project%os_ptcl2D%get_eo(i),'engine calls preserve source 2D halves')
+            call assert_int(2,project%os_ptcl3D%get_state(i),'engine calls preserve source state labels')
+            call assert_double(real(i,dp),real(project%os_ptcl3D%get(i,'corr'),dp),'engine calls preserve source scores')
+        enddo
+        call rank_mic_support(project,3,8,'c1','corr',2,populations,eligible,particle_mic, &
+            support,target,status,message)
+        call assert_int(0,status,'selecting all candidate micrographs succeeds')
+        call assert_int(6,target,'all micrographs recommend all eligible particles')
+        call assert_true(all(abs(support-full_support)<1.e-12_dp),'full target retains original raw support')
+        call rank_mic_support(project,1,8,'c1','none',2,populations,eligible,particle_mic, &
+            support,target,status,message)
+        call assert_int(0,status,'unweighted ranking adapts unit scores without modifying the particle engine')
+        call assert_int(2,target,'small budget reserves one recommendation per populated half')
+        call assert_double(1._dp,sum(support(1::2,:)),'one even-half unit recommendation')
+        call assert_double(1._dp,sum(support(2::2,:)),'one odd-half unit recommendation')
+        do i = 1,6
+            call assert_double(real(i,dp),real(project%os_ptcl3D%get(i,'corr'),dp),'unit ranking leaves source scores intact')
+        enddo
+        do i = 1,6
+            if( halves(i) == 0 ) cycle
+            call project%os_ptcl2D%set_state(i,0)
+            call project%os_ptcl3D%set_state(i,0)
+        enddo
+        call build_mic_support(project,'quality_coverage','none',2,8,'c1',support,populations, &
+            eligible,particle_mic,status,message)
+        call assert_int(0,status,'one populated half remains a valid candidate pool')
+        call rank_mic_support(project,1,8,'c1','none',2,populations,eligible,particle_mic, &
+            support,target,status,message)
+        call assert_int(0,status,'half quota transfers to the available half')
+        call assert_int(2,target,'one-half fixture derives two recommendations for one micrograph')
+        call assert_double(2._dp,sum(support(1::2,:)),'available half receives the full target')
+        call assert_double(0._dp,sum(support(2::2,:)),'engine never invents recommendations in an absent half')
+        call rank_mic_support(project,4,8,'c1','corr',2,populations,eligible,particle_mic, &
+            support,target,status,message)
+        call assert_true(status/=0,'micrograph ranking refuses a budget larger than the eligible pool')
+        call directions%kill
+        call symmetry%kill
+        call project%kill
+    end subroutine test_shared_coverage
 
     subroutine test_counts_and_refusals()
         real(dp) :: h(1,4), value, upper
@@ -38,6 +144,14 @@ contains
         h(1,1) = -1._dp
         call select_mic_support(h,1,.false.,1,chosen,value,upper,proven,nodes,status)
         call assert_true(status/=0,'reject negative support')
+        h = 0._dp
+        h(1,3) = 4._dp
+        call select_mic_support(h,2,.false.,100,chosen,value,upper,proven,nodes,status, &
+            candidate_mask=[.true.,.true.,.true.,.false.])
+        call assert_int(0,status,'zero-recommendation micrographs can fill the exact budget')
+        call assert_true(all(chosen .eqv. [.true.,.false.,.true.,.false.]), &
+            'fillers use original micrograph order and never revive ineligible micrographs')
+        call assert_true(proven,'zero-support filler objective is certified')
     end subroutine test_counts_and_refusals
 
     subroutine test_global_search()

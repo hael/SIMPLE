@@ -135,6 +135,13 @@ probabilities. `subset_score=none` gives each eligible particle unit support.
 Coverage selection requires updated particles with finite orientations and
 complete existing project half-set provenance. It never creates a new split.
 
+The particle recommendation target is the eligible particle count multiplied
+by `nmics / eligible_micrographs`, rounded to the nearest integer, with at least
+one recommendation per populated half. The unchanged particle selector ranks
+particles separately within each existing half. Unavailable half quotas are
+redistributed. The derived target appears in the log and micrograph report;
+it does not set the final particle count.
+
 The default output is `my_project_mic_subset.simple` beside the input. Use
 `outfile=another_subset.simple` for a different destination. The input and
 image stacks are not modified. Output keeps original row indices and retained
@@ -144,12 +151,15 @@ cleared, so reconstruct the selected particles before assessing map quality.
 
 The output project has accompanying `.micrographs.csv` and `.coverage.csv`
 reports containing selected micrographs, eligible particle counts, direction
-coordinates and support before/after selection. `nspace=64` controls the
+coordinates and recommendation support before/after selection. `nspace=64` controls the
 symmetry-aware direction grid and must be even. Set the correct molecular
 symmetry with `pgrp=`.
 
-The optimizer balances quality-weighted particle yield and directional support
-using a logarithmic objective. It starts with a deterministic greedy subset,
+The optimizer balances quality-weighted engine recommendations across separate
+direction/half cells using a logarithmic objective. All eligible particles in
+selected micrographs are retained, including those outside the recommendations.
+Micrographs with no recommendations can fill unused places to keep exactly
+`nmics`; ties use original micrograph order. It starts with a deterministic greedy subset,
 then searches globally. `subset_max_nodes=100000` limits search work. The log
 and micrograph report explicitly say whether the optimum of this objective
 was proved; otherwise the subset is the best solution found within that

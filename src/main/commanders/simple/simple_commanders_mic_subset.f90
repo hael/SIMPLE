@@ -16,7 +16,7 @@ contains
     subroutine exec_select_micrographs(self, cline)
         use simple_parameters, only: parameters
         use simple_sp_project, only: sp_project
-        use simple_mic_subset, only: build_mic_support, select_mic_support, apply_mic_subset
+        use simple_mic_subset, only: build_mic_support, rank_mic_support, select_mic_support, apply_mic_subset
         use simple_defs,       only: dp, logfhandle
         use simple_string,     only: string
         use simple_error,      only: simple_exception
@@ -34,7 +34,7 @@ contains
         type(string) :: output, mic_report, coverage_report, name, source_dir
         character(len=:), allocatable :: source_name
         character(len=512) :: message
-        integer :: status, nodes, i, unit, bin, half
+        integer :: status, nodes, i, unit, bin, half, particle_target
         real(dp) :: value, upper_bound, scale
         logical :: proven, output_supplied
         output_supplied = cline%defined('outfile')
@@ -69,8 +69,15 @@ contains
         call build_mic_support(project,trim(params%subset_mode),trim(params%subset_score),params%state, &
              params%nspace,trim(params%pgrp),support,populations,eligible,particle_mic,status,message,bin_eulers)
         if( status /= 0 ) call simple_exception(trim(message), __FILENAME__, __LINE__)
+        particle_target = 0
+        if( trim(params%subset_mode) == 'quality_coverage' )then
+            call rank_mic_support(project,params%nmics,params%nspace,trim(params%pgrp),trim(params%subset_score), &
+                params%state,populations,eligible,particle_mic,support,particle_target,status,message)
+            if( status /= 0 ) call simple_exception(trim(message), __FILENAME__, __LINE__)
+            write(logfhandle,'(A,I0)') '>>> DERIVED BALANCED PARTICLE TARGET: ',particle_target
+        endif
         call select_mic_support(support,params%nmics,trim(params%subset_mode)=='particles', &
-             params%subset_max_nodes,chosen,value,upper_bound,proven,nodes,status)
+             params%subset_max_nodes,chosen,value,upper_bound,proven,nodes,status,candidate_mask=populations>0)
         if( status /= 0 )then
             call simple_exception('nmics exceeds eligible micrographs or selection inputs are invalid', __FILENAME__, __LINE__)
         endif
@@ -79,19 +86,20 @@ contains
         scale = 1._dp
         if( trim(params%subset_mode) == 'quality_coverage' )then
             scale = max(tiny(1._dp),sum(support)*real(params%nmics,dp)/ &
-                real(count(sum(support,dim=1)>0._dp),dp)/real(size(support,1),dp))
+                real(count(populations>0),dp)/real(size(support,1),dp))
         endif
         call fopen(unit,mic_report,status='new',action='write')
         write(unit,'(A,A)') '# subset_mode=',trim(params%subset_mode)
         write(unit,'(A,A)') '# subset_score=',trim(params%subset_score)
         write(unit,'(A,I0)') '# state=',params%state
         write(unit,'(A,A)') '# pgrp=',trim(params%pgrp)
+        write(unit,'(A,I0)') '# derived_particle_target=',particle_target
         write(unit,'(A,ES24.16)') '# support_scale=',scale
         write(unit,'(A,L1)') '# proven_optimal=',proven
         write(unit,'(A,I0)') '# search_nodes=',nodes
         write(unit,'(A,ES24.16)') '# objective=',value
         write(unit,'(A,ES24.16)') '# upper_bound=',upper_bound
-        write(unit,'(A)') 'micrograph_index,selected,eligible_particles,support,micrograph'
+        write(unit,'(A)') 'micrograph_index,selected,eligible_particles,selection_support,micrograph'
         do i = 1,size(chosen)
             name = ''
             if( project%os_mic%isthere(i,'intg') ) name = project%os_mic%get_str(i,'intg')
@@ -100,7 +108,7 @@ contains
         enddo
         call fclose(unit)
         call fopen(unit,coverage_report,status='new',action='write')
-        write(unit,'(A)') 'direction_bin,particle_half,e1,e2,input_support,selected_support'
+        write(unit,'(A)') 'direction_bin,particle_half,e1,e2,candidate_selection_support,retained_selection_support'
         do i = 1,size(before)
             bin = (i+1)/2
             half = mod(i-1,2)

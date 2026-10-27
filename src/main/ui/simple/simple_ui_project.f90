@@ -655,7 +655,8 @@ subroutine new_export_relion( prgtab )
         call select_micrographs%new('select_micrographs', &
             'Select a micrograph subset from an existing project', &
             'Select exactly nmics micrographs into a separate project, retaining eligible particles in state. '// &
-            'quality_coverage balances existing positive particle scores across symmetry-aware viewing bins and particle halves. '// &
+            'quality_coverage calls the particle selector within each existing half using a target derived from nmics. '// &
+            'It balances support from those recommendations across symmetry-aware viewing bins and particle halves. '// &
             'particles exactly maximizes active particle count. Search limits are reported; image stacks and input stay unchanged.', &
             'simple_exec',.true.,visibility=UI_VIS_ADVANCED,display_name='Select Micrograph Subset')
         call select_micrographs%add_input(UI_FILE,projfile,visibility=UI_VIS_STANDARD)

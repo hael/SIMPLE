@@ -10,7 +10,7 @@ use simple_eo_partition, only: eo_partition_status, EO_COMPLETE
 use simple_srch_sort_loc, only: hpsort
 implicit none
 private
-public :: build_mic_support, select_mic_support, apply_mic_subset
+public :: build_mic_support, rank_mic_support, select_mic_support, apply_mic_subset
 
 contains
 
@@ -149,13 +149,116 @@ contains
         status = 0
     end subroutine build_mic_support
 
+    ! Reads project metadata; runs the unchanged particle engine on isolated half-specific candidate copies.
+    subroutine rank_mic_support(project, nselect, nspace, pgrp, score_key, state, populations, eligible, &
+                                particle_mic, support, particle_target, status, message)
+        use simple_ptcl_subset, only: select_ptcl_subset
+        class(sp_project), intent(inout) :: project
+        integer,          intent(in)    :: nselect, nspace, state
+        character(len=*), intent(in)    :: pgrp, score_key
+        integer,          intent(in)    :: populations(:), particle_mic(:)
+        logical,          intent(in)    :: eligible(:)
+        real(dp),         intent(inout) :: support(:,:)
+        integer,          intent(out)   :: particle_target, status
+        character(len=*), intent(out)   :: message
+        class(sp_project), allocatable :: candidates
+        class(oris), allocatable :: directions
+        type(sym) :: symmetry
+        type(ori) :: orientation
+        logical, allocatable :: selected(:), recommended(:)
+        character(len=9) :: engine_score
+        integer :: np, ncandidates, i, half, cell, half_pop(0:1), requests(0:1)
+        real :: weight
+        status = 1
+        particle_target = 0
+        message = ''
+        np = project%os_ptcl3D%get_noris()
+        ncandidates = count(populations>0)
+        if( nselect < 1 .or. nselect > ncandidates )then
+            message = 'nmics exceeds eligible micrographs or is not positive'; return
+        endif
+        if( size(eligible) /= np .or. size(particle_mic) /= np .or. size(support,2) /= size(populations) )then
+            message = 'inconsistent micrograph candidate arrays'; return
+        endif
+        allocate(candidates,directions)
+        if( nspace < 2 .or. mod(nspace,2) /= 0 )then
+            message = 'coverage requires a positive even nspace'; return
+        endif
+        if( .not.is_valid_pointgroup(pgrp) )then
+            message = 'invalid point-group symmetry'; return
+        endif
+        if( eo_partition_status(project,message) /= EO_COMPLETE ) return
+        call symmetry%new(pgrp)
+        call directions%new(nspace,is_ptcl=.false.)
+        call symmetry%build_refspiral(directions)
+        if( size(support,1) /= 2*directions%get_noris() )then
+            message = 'inconsistent micrograph direction/half cells'; return
+        endif
+        half_pop = 0
+        do i = 1,np
+            if( .not.eligible(i) ) cycle
+            if( particle_mic(i) < 1 .or. particle_mic(i) > size(populations) )then
+                message = 'invalid eligible particle micrograph mapping'; return
+            endif
+            half = project%os_ptcl3D%get_eo(i)
+            if( half < 0 .or. half > 1 )then
+                message = 'invalid eligible particle half'; return
+            endif
+            half_pop(half) = half_pop(half)+1
+        enddo
+        particle_target = max(count(half_pop>0),nint(real(count(eligible),dp)*real(nselect,dp)/real(ncandidates,dp)))
+        requests(0) = min(half_pop(0),(particle_target+1)/2)
+        requests(1) = min(half_pop(1),particle_target-requests(0))
+        requests(0) = min(half_pop(0),particle_target-requests(1))
+        candidates%os_stk = project%os_stk
+        candidates%os_ptcl2D = project%os_ptcl2D
+        candidates%os_ptcl3D = project%os_ptcl3D
+        engine_score = score_key
+        if( score_key == 'none' )then
+            engine_score = 'corr'
+            call candidates%os_ptcl3D%set_all2single('corr',1.)
+        endif
+        allocate(recommended(np),source=.false.)
+        do half = 0,1
+            if( requests(half) == 0 ) cycle
+            do i = 1,np
+                call candidates%os_ptcl2D%set_state(i,0)
+                call candidates%os_ptcl3D%set_state(i,0)
+                if( .not.eligible(i) ) cycle
+                if( project%os_ptcl3D%get_eo(i) /= half ) cycle
+                call candidates%os_ptcl2D%set_state(i,project%os_ptcl2D%get_state(i))
+                call candidates%os_ptcl3D%set_state(i,state)
+            enddo
+            call select_ptcl_subset(candidates,requests(half),nspace,pgrp,trim(engine_score),state, &
+                selected,status,message,rebalance_eo=.false.)
+            if( status /= 0 ) exit
+            recommended = recommended .or. selected
+        enddo
+        if( status == 0 )then
+            support = 0._dp
+            do i = 1,np
+                if( .not.recommended(i) ) cycle
+                weight = 1.
+                if( score_key /= 'none' ) weight = project%os_ptcl3D%get(i,score_key)
+                call project%os_ptcl3D%get_ori(i,orientation)
+                cell = 2*(symmetry%find_closest_proj(directions,orientation)-1) + &
+                    project%os_ptcl3D%get_eo(i) + 1
+                support(cell,particle_mic(i)) = support(cell,particle_mic(i)) + real(weight,dp)
+            enddo
+        endif
+        call orientation%kill
+        call candidates%kill
+        call directions%kill
+        call symmetry%kill
+    end subroutine rank_mic_support
+
     pure real(dp) function mic_subset_objective(total, scale) result(value)
         real(dp), intent(in) :: total(:), scale
         value = sum(log(1._dp + total/scale))
     end function mic_subset_objective
 
     subroutine select_mic_support(support, nselect, count_only, max_nodes, chosen, value, upper_bound, &
-                                  proven, nodes, status)
+                                  proven, nodes, status, candidate_mask)
         real(dp), intent(in) :: support(:,:)
         integer, intent(in) :: nselect, max_nodes
         logical, intent(in) :: count_only
@@ -163,6 +266,7 @@ contains
         real(dp), intent(out) :: value, upper_bound
         logical, intent(out) :: proven
         integer, intent(out) :: nodes, status
+        logical, optional, intent(in) :: candidate_mask(:)
         integer, allocatable :: indices(:), selected(:), best(:)
         real(dp), allocatable :: h(:,:), suffix(:,:), largest(:,:), total(:), masses(:)
         real(dp) :: scale, gain, best_gain, tolerance
@@ -173,9 +277,14 @@ contains
         if( nselect < 1 .or. max_nodes < 1 .or. size(support,1) < 1 ) return
         if( .not.all(ieee_is_finite(support)) ) return
         if( any(support < 0._dp) ) return
-        n = count(sum(support,dim=1) > 0._dp)
+        if( present(candidate_mask) )then
+            if( size(candidate_mask) /= size(support,2) ) return
+            indices = pack([(m,m=1,size(support,2))],candidate_mask)
+        else
+            indices = pack([(m,m=1,size(support,2))],sum(support,dim=1)>0._dp)
+        endif
+        n = size(indices)
         if( nselect > n ) return
-        indices = pack([(m,m=1,size(support,2))], sum(support,dim=1) > 0._dp)
         masses = sum(support,dim=1)
         call hpsort(indices, preferred)
         if( count_only )then
