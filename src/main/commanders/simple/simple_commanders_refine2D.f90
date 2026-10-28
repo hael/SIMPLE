@@ -34,7 +34,7 @@ contains
     subroutine exec_refine2D( self, cline )
         use simple_refine2D_strategy
         use simple_eul_prob_tab_utils, only: prob_beta_control_last, prob_beta_at
-        use simple_parameters,         only: PROB_BETA_TAIL
+        use simple_defs,               only: PROB_BETA_TAIL
         class(commander_refine2D), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(refine2D_strategy), allocatable     :: strategy

@@ -60,7 +60,8 @@ contains
     end subroutine print_iteration
 
     function check_conv2D( self, params, cline, os, ncls, msk ) result( converged )
-        use simple_parameters, only: parameters, PROB_BETA_TAIL
+        use simple_parameters, only: parameters
+        use simple_defs,       only: PROB_BETA_TAIL
         class(convergence), intent(inout) :: self
         class(parameters),  intent(inout) :: params
         class(cmdline),     intent(inout) :: cline
@@ -300,7 +301,8 @@ contains
     end subroutine print_verdict
 
     function check_conv3D( self, params, cline, os, msk ) result( converged )
-        use simple_parameters, only: parameters, PROB_BETA_TAIL
+        use simple_parameters, only: parameters
+        use simple_defs,       only: PROB_BETA_TAIL
         class(convergence), intent(inout) :: self
         class(parameters),  intent(inout) :: params
         class(cmdline),     intent(inout) :: cline

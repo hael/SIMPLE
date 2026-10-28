@@ -62,14 +62,22 @@ type :: pftc_shsrch_grad
     real                      :: vals_cache_xy(2) = 0.
     logical                   :: vals_cache_on    = .false. !< only within minimize: the pftc may change between calls
     logical                   :: vals_cache_valid = .false.
-    ! the shift prior (shift_prior=yes, the probability tables): a Gaussian on the shift's distance from the start
-    ! of the minimisation, folded into the objective as the factor exp(-prior_w |xy - prior_xy0|^2) on the
-    ! correlation exp(-L), so the search and the row hold the MAP loss L + |xy - xy0|^2 / (2 sigma^2 T);
+    ! the shift prior (shift_prior=yes, the probability tables): a Gaussian on the displacement of the STORED shift
+    ! from the start of the minimisation, folded into the objective as the factor exp(-prior_w |u - u0|^2) on the
+    ! correlation exp(-L), so the search and the row hold the MAP loss L + |u - u0|^2 / (2 sigma^2 T);
     ! prior_w = 1 / (2 sigma^2 T) with sigma^2 the previous iteration's shift variance per axis and T the
-    ! particle's temperature (set_shift_prior). 0: no prior. The joint route (the polish of the committed pose)
-    ! adds the same term to its raw Euclidean loss; cc has no loss scale for it
+    ! particle's temperature (set_shift_prior). 0: no prior. The frame: the optimizer's shift x at rotation irot
+    ! is the stored (particle-frame) shift u rotated into the reference's frame, x = R(irot) u (shift_ptcl2ref),
+    ! so the same x is a different stored shift at every rotation. The centre is therefore kept as the stored
+    ! shift u0 (set_prior_centre: the start converted back at the rotation it was expressed at) and the penalty
+    ! at rotation irot is |x - R(irot) u0|^2 = |u - u0|^2: a rotation change at a fixed x moves the stored shift
+    ! and pays for it, a rotation of x that keeps the stored shift pays nothing. (Until 2026-10-28 the centre was
+    ! the start x itself, which held only at the start's rotation: with a nonzero seed a rotation change moved
+    ! the stored shift unpenalised.) The joint route (the polish of the committed pose) adds the same term to
+    ! its raw Euclidean loss with the centre at its continuous angle; cc has no loss scale for it
     real(dp)                  :: prior_w          = 0.d0
-    real(dp)                  :: prior_xy0(2)     = 0.d0
+    real(dp)                  :: prior_u0(2)      = 0.d0 !< the centre: the start as a stored (particle-frame) shift
+    real(dp),     allocatable :: rot_cs(:,:)             !< cos and sin of every grid rotation (2, nrots): R(irot) u0
 contains
     procedure          :: new_alternating      => grad_shsrch_new_alternating
     procedure          :: new_fixed       => grad_shsrch_new_fixed
@@ -85,7 +93,15 @@ contains
     procedure          :: set_shift_prior
     procedure          :: clear_shift_prior
     procedure          :: has_shift_prior
+    procedure          :: set_prior_centre
+    procedure          :: shift_prior_penalty
+    procedure          :: shift_prior_penalty_ptcl
+    procedure, private :: prior_centre_rot
+    procedure, private :: prior_centre_angle
     procedure, private :: prior_factor
+    procedure, private :: prior_factors
+    procedure, private :: prior_factor_ptcl
+    procedure, private :: build_rot_table
     procedure, private :: coarse_search
     procedure, private :: coarse_search_opt_angle
     procedure          :: reset_profile     => grad_shsrch_reset_profile
@@ -151,6 +167,7 @@ contains
         call opt_fact%new(self%ospec, self%opt_obj)
         ! get # rotations
         self%nrots = self%b_ptr%pftc%get_nrots()
+        call self%build_rot_table
         ! the quadratic step reads the all-rotation grid of the alternating search
         self%grid_fit = .false.
         if( present(grid_fit) ) self%grid_fit = grid_fit .and. self%opt_angle .and. self%coarse_init
@@ -186,6 +203,7 @@ contains
         endif
         self%joint_cc       = self%b_ptr%pftc%is_cc_objfun()
         self%nrots          = self%b_ptr%pftc%get_nrots()
+        call self%build_rot_table
         self%maxits         = maxits
         self%opt_angle      = .false.
         self%search_mode     = SHSRCH_JOINT
@@ -216,7 +234,8 @@ contains
 
     !> The shift prior of the next minimisations: sigma2 the shift variance per axis (pixels^2, from the previous
     !! iteration's shift increments), temp the particle's temperature (posterior_temperature, untempered: the prior
-    !! is part of the loss the tempering acts on). Centred at each minimisation's start (minimize sets it).
+    !! is part of the loss the tempering acts on). Centred at each minimisation's start as a stored shift
+    !! (minimize and minimize_joint set it: set_prior_centre).
     subroutine set_shift_prior( self, sigma2, temp )
         class(pftc_shsrch_grad), intent(inout) :: self
         real,                    intent(in)    :: sigma2, temp
@@ -227,8 +246,8 @@ contains
 
     subroutine clear_shift_prior( self )
         class(pftc_shsrch_grad), intent(inout) :: self
-        self%prior_w   = 0.d0
-        self%prior_xy0 = 0.d0
+        self%prior_w  = 0.d0
+        self%prior_u0 = 0.d0
     end subroutine clear_shift_prior
 
     pure logical function has_shift_prior( self )
@@ -236,13 +255,113 @@ contains
         has_shift_prior = self%prior_w > 0.d0
     end function has_shift_prior
 
-    !> the prior's factor on the correlation at shift xy: exp(-prior_w |xy - xy0|^2), 1 without a prior
-    pure real(dp) function prior_factor( self, xy )
+    !> cos and sin of every grid rotation, for the prior's centre at a rotation (R(irot) u0)
+    subroutine build_rot_table( self )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real(dp) :: ang
+        integer  :: irot
+        if( allocated(self%rot_cs) ) deallocate(self%rot_cs)
+        allocate(self%rot_cs(2,max(1,self%nrots)), source=0.d0)
+        do irot = 1,self%nrots
+            ang = real(self%b_ptr%pftc%get_rot(irot),dp) * DPI / 180.d0
+            self%rot_cs(1,irot) = cos(ang)
+            self%rot_cs(2,irot) = sin(ang)
+        enddo
+    end subroutine build_rot_table
+
+    !> The prior's centre from a minimisation's start: xy_start the start in the optimizer's frame at grid rotation
+    !! irot (the rotation the caller converted its seed at: minimize's irot on entry, minimize_joint's irot_in),
+    !! kept as the stored shift u0 = R(irot)^T xy_start; irot outside the grid takes xy_start as the stored shift
+    !! itself (a zero start is the same in every frame). minimize and minimize_joint call it; public for the tests
+    subroutine set_prior_centre( self, xy_start, irot )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real(dp),                intent(in)    :: xy_start(2)
+        integer,                 intent(in)    :: irot
+        real(dp) :: c, s
+        self%prior_u0 = xy_start
+        if( irot < 1 .or. irot > self%nrots ) return
+        c = self%rot_cs(1,irot)
+        s = self%rot_cs(2,irot)
+        ! R = [[c, s], [-s, c]] (rotmat2d), u0 = R^T x
+        self%prior_u0(1) = c * xy_start(1) - s * xy_start(2)
+        self%prior_u0(2) = s * xy_start(1) + c * xy_start(2)
+    end subroutine set_prior_centre
+
+    !> the prior's centre in the optimizer's frame at grid rotation irot: R(irot) u0
+    pure function prior_centre_rot( self, irot ) result( xy0 )
+        class(pftc_shsrch_grad), intent(in) :: self
+        integer,                 intent(in) :: irot
+        real(dp) :: xy0(2)
+        xy0(1) =  self%rot_cs(1,irot) * self%prior_u0(1) + self%rot_cs(2,irot) * self%prior_u0(2)
+        xy0(2) = -self%rot_cs(2,irot) * self%prior_u0(1) + self%rot_cs(1,irot) * self%prior_u0(2)
+    end function prior_centre_rot
+
+    !> the prior's centre in the optimizer's frame at in-plane angle ang (degrees, continuous: the joint route),
+    !! c0 = R(ang) u0, and its derivative dc0 per unit of the rotation index (the joint optimizer's third variable,
+    !! one unit = dang degrees)
+    pure subroutine prior_centre_angle( self, ang, dang, c0, dc0 )
+        class(pftc_shsrch_grad), intent(in)  :: self
+        real(dp),                intent(in)  :: ang, dang
+        real(dp),                intent(out) :: c0(2), dc0(2)
+        real(dp) :: a, c, s
+        a = ang * DPI / 180.d0
+        c = cos(a)
+        s = sin(a)
+        c0(1)  =  c * self%prior_u0(1) + s * self%prior_u0(2)
+        c0(2)  = -s * self%prior_u0(1) + c * self%prior_u0(2)
+        ! d/da of R(a) u0, times da per rotation-index unit
+        dc0(1) = (-s * self%prior_u0(1) + c * self%prior_u0(2)) * dang * DPI / 180.d0
+        dc0(2) = (-c * self%prior_u0(1) - s * self%prior_u0(2)) * dang * DPI / 180.d0
+    end subroutine prior_centre_angle
+
+    !> the prior's factor on the correlation at the optimizer-frame shift xy evaluated at grid rotation irot:
+    !! exp(-prior_w |xy - R(irot) u0|^2), 1 without a prior
+    pure real(dp) function prior_factor( self, xy, irot )
         class(pftc_shsrch_grad), intent(in) :: self
         real(dp),                intent(in) :: xy(2)
+        integer,                 intent(in) :: irot
         prior_factor = 1.d0
-        if( self%prior_w > 0.d0 ) prior_factor = exp(-self%prior_w * sum((xy - self%prior_xy0)**2))
+        if( self%prior_w > 0.d0 ) prior_factor = exp(-self%prior_w * sum((xy - self%prior_centre_rot(irot))**2))
     end function prior_factor
+
+    !> the prior's factor at the optimizer-frame shift xy over every grid rotation
+    pure subroutine prior_factors( self, xy, f )
+        class(pftc_shsrch_grad), intent(in)  :: self
+        real(dp),                intent(in)  :: xy(2)
+        real,                    intent(out) :: f(self%nrots)
+        integer :: irot
+        f = 1.
+        if( .not. (self%prior_w > 0.d0) ) return
+        do irot = 1,self%nrots
+            f(irot) = real(exp(-self%prior_w * sum((xy - self%prior_centre_rot(irot))**2)))
+        enddo
+    end subroutine prior_factors
+
+    !> the prior's factor at a stored (particle-frame) shift u, the same at every rotation: exp(-prior_w |u - u0|^2)
+    pure real(dp) function prior_factor_ptcl( self, u )
+        class(pftc_shsrch_grad), intent(in) :: self
+        real(dp),                intent(in) :: u(2)
+        prior_factor_ptcl = 1.d0
+        if( self%prior_w > 0.d0 ) prior_factor_ptcl = exp(-self%prior_w * sum((u - self%prior_u0)**2))
+    end function prior_factor_ptcl
+
+    !> the prior's loss term, in nats, at the optimizer-frame shift xy evaluated at grid rotation irot:
+    !! prior_w |xy - R(irot) u0|^2 = prior_w |u - u0|^2 (0 without a prior)
+    pure real(dp) function shift_prior_penalty( self, xy, irot )
+        class(pftc_shsrch_grad), intent(in) :: self
+        real(dp),                intent(in) :: xy(2)
+        integer,                 intent(in) :: irot
+        shift_prior_penalty = 0.d0
+        if( self%prior_w > 0.d0 ) shift_prior_penalty = self%prior_w * sum((xy - self%prior_centre_rot(irot))**2)
+    end function shift_prior_penalty
+
+    !> the prior's loss term, in nats, at a stored (particle-frame) shift u: prior_w |u - u0|^2
+    pure real(dp) function shift_prior_penalty_ptcl( self, u )
+        class(pftc_shsrch_grad), intent(in) :: self
+        real(dp),                intent(in) :: u(2)
+        shift_prior_penalty_ptcl = 0.d0
+        if( self%prior_w > 0.d0 ) shift_prior_penalty_ptcl = self%prior_w * sum((u - self%prior_u0)**2)
+    end function shift_prior_penalty_ptcl
 
     ! Objective dispatch for the joint continuous route. Evaluators return a
     ! quantity to minimize: raw Euclidean loss or -cc.
@@ -250,6 +369,7 @@ contains
         class(pftc_shsrch_grad), intent(inout) :: self
         real(dp),                intent(in)    :: vec(3)
         real(dp),                intent(out)   :: cost, grad(3)
+        real(dp) :: c0(2), dc0(2), d(2), dang
         if( self%joint_cc )then
             call self%b_ptr%pftc%gen_corr_grad_at_angle(self%reference, self%particle, &
                 &vec(1:2), vec(3), cost, grad)
@@ -257,9 +377,14 @@ contains
             call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
                 &vec(1:2), vec(3), cost, grad)
             if( self%prior_w > 0.d0 )then
-                ! the MAP loss: L + w |xy - xy0|^2, its shift gradient + 2w (xy - xy0)
-                cost      = cost      + self%prior_w * sum((vec(1:2) - self%prior_xy0)**2)
-                grad(1:2) = grad(1:2) + 2.d0 * self%prior_w * (vec(1:2) - self%prior_xy0)
+                ! the MAP loss: L + w |xy - c0(ang)|^2 with c0 the stored centre at the continuous angle
+                ! ang = (vec(3) - 1) dang; its shift gradient + 2w (xy - c0), its angle gradient - 2w (xy - c0) . dc0
+                dang = real(self%b_ptr%pftc%get_dang(),dp)
+                call self%prior_centre_angle((vec(3) - 1.d0) * dang, dang, c0, dc0)
+                d         = vec(1:2) - c0
+                cost      = cost      + self%prior_w * sum(d**2)
+                grad(1:2) = grad(1:2) + 2.d0 * self%prior_w * d
+                grad(3)   = grad(3)   - 2.d0 * self%prior_w * sum(d * dc0)
             endif
         endif
     end subroutine joint_grad_at_angle
@@ -296,7 +421,7 @@ contains
                     endif
                 else
                     cost = - self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx)
-                    if( self%prior_w > 0.d0 ) cost = cost * self%prior_factor(vec(1:2))
+                    if( self%prior_w > 0.d0 ) cost = cost * self%prior_factor(vec(1:2), self%cur_inpl_idx)
                 endif
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
@@ -320,9 +445,9 @@ contains
                     call self%b_ptr%pftc%gen_corr_grad_for_rot_8_aln(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     grad = - corrs_grad
                     if( self%prior_w > 0.d0 )then
-                        ! d/dxy of -(c g): -(dc) g + c g 2w (xy - xy0)
-                        g    = self%prior_factor(vec(1:2))
-                        grad = grad * g + corrs * g * 2.d0 * self%prior_w * (vec(1:2) - self%prior_xy0)
+                        ! d/dxy of -(c g): -(dc) g + c g 2w (xy - xy0), xy0 the centre at this rotation
+                        g    = self%prior_factor(vec(1:2), self%cur_inpl_idx)
+                        grad = grad * g + corrs * g * 2.d0 * self%prior_w * (vec(1:2) - self%prior_centre_rot(self%cur_inpl_idx))
                     endif
                 endif
             class default
@@ -355,9 +480,9 @@ contains
                     f    = - corrs
                     grad = - corrs_grad
                     if( self%prior_w > 0.d0 )then
-                        g    = self%prior_factor(vec(1:2))
+                        g    = self%prior_factor(vec(1:2), self%cur_inpl_idx)
                         f    = f * g
-                        grad = grad * g + corrs * g * 2.d0 * self%prior_w * (vec(1:2) - self%prior_xy0)
+                        grad = grad * g + corrs * g * 2.d0 * self%prior_w * (vec(1:2) - self%prior_centre_rot(self%cur_inpl_idx))
                     endif
                 endif
             class default
@@ -391,6 +516,7 @@ contains
         class(pftc_shsrch_grad), intent(inout) :: self
         real,                    intent(in)    :: xy(2)
         real,                    intent(out)   :: vals(self%nrots)
+        real :: f(self%nrots)
         if( self%vals_cache_valid )then
             if( all(transfer(xy, 0, 2) == transfer(self%vals_cache_xy, 0, 2)) )then
                 vals = self%vals_cache
@@ -399,7 +525,11 @@ contains
         endif
         self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
         call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, xy, vals)
-        if( self%prior_w > 0.d0 ) vals = vals * real(self%prior_factor(real(xy,dp)))
+        if( self%prior_w > 0.d0 )then
+            ! the prior's factor per rotation: the same xy is a different stored shift at every rotation
+            call self%prior_factors(real(xy,dp), f)
+            vals = vals * f
+        endif
         if( self%vals_cache_on )then
             self%vals_cache       = vals
             self%vals_cache_xy    = xy
@@ -453,7 +583,9 @@ contains
             self%ospec%x     = [0.,0.]
         endif
         self%ospec%x_8 = dble(self%ospec%x)
-        self%prior_xy0 = self%ospec%x_8 ! the prior is centred at the start: the seed, or zero
+        ! the prior is centred at the start, the seed or zero, kept as the stored shift: xy_in is expressed at
+        ! irot on entry (the rotation the caller converted its seed at); a zero start is zero in every frame
+        call self%set_prior_centre(self%ospec%x_8, irot)
         found_better   = .false.
         self%profile_minimize_calls = self%profile_minimize_calls + 1_int64
         ! the objective's double-precision reference, copied once per minimisation
@@ -590,7 +722,9 @@ contains
         call self%set_limits(joint_lims)
         self%ospec%x = [xy_in, real(irot)]
         self%ospec%x_8 = dble(self%ospec%x)
-        self%prior_xy0 = self%ospec%x_8(1:2) ! the prior is centred at the start: the committed shift
+        ! the prior is centred at the start, the committed shift, kept as the stored shift (xy_in is expressed
+        ! at irot_in)
+        call self%set_prior_centre(self%ospec%x_8(1:2), irot_in)
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
@@ -707,7 +841,7 @@ contains
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_grid_points     = self%profile_grid_points + 1_int64
                 cost = -self%b_ptr%pftc%gen_corr_for_rot_8_aln(self%reference, self%particle, [x,y], self%cur_inpl_idx)
-                if( self%prior_w > 0.d0 ) cost = cost * self%prior_factor([x,y])
+                if( self%prior_w > 0.d0 ) cost = cost * self%prior_factor([x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
                     init_xy     = [x,y]
@@ -721,7 +855,7 @@ contains
         real(dp),                intent(out)   :: init_xy(2)
         integer,                 intent(out)   :: irot
         real(dp) :: x, y, stepx,stepy
-        real     :: corrs(self%nrots), lowest_cost, cost
+        real     :: corrs(self%nrots), f(self%nrots), lowest_cost, cost
         integer  :: loc, ix,iy
         init_xy = 0.d0
         irot    = 0
@@ -741,10 +875,16 @@ contains
                 if( self%grid_ptcl )then
                     call self%b_ptr%pftc%gen_objfun_vals_bank(self%reference, self%particle, &
                         &self%grid_bank(:,:,(ix-1)*coarse_num_steps+iy), corrs)
+                    ! the lattice point is a stored (particle-frame) shift: one factor for every rotation
+                    if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor_ptcl([x,y]))
                 else
                     call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, real([x,y]), corrs)
+                    ! the lattice point is an optimizer-frame shift: the factor per rotation
+                    if( self%prior_w > 0.d0 )then
+                        call self%prior_factors([x,y], f)
+                        corrs = corrs * f
+                    endif
                 endif
-                if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor([x,y]))
                 if( self%grid_fit ) self%grid_corrs(:,(ix-1)*coarse_num_steps+iy) = corrs
                 loc  = maxloc(corrs,dim=1)
                 cost = - corrs(loc)
@@ -863,7 +1003,7 @@ contains
         real,                    intent(out)   :: corrs(self%nrots)  !< objective over all rotations at the fitted shift
         logical,                 intent(out)   :: fitted
         real(dp) :: v(-1:1,-1:1), da, db, stepx, stepy, fx, fy
-        real     :: fit_xy(2), best_grid_corr
+        real     :: fit_xy(2), best_grid_corr, f(self%nrots)
         integer  :: ix, iy, ia, ib, irot_star, irot_fit, reason
         logical  :: l_euclid
         fitted = .false.
@@ -909,8 +1049,8 @@ contains
             self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
             call self%b_ptr%pftc%gen_objfun_vals_bank(self%reference, self%particle, &
                 &self%grid_bank(:,:,size(self%grid_bank,3)), corrs)
-            ! the prior's factor at the particle-frame shift, the frame the lattice's factors were taken in
-            if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor(real(fit_xy,dp)))
+            ! the prior's factor at the stored (particle-frame) shift, the frame the lattice's factors were taken in
+            if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor_ptcl(real(fit_xy,dp)))
             irot_fit = maxloc(corrs, dim=1)
             if( .not. (corrs(irot_fit) > best_grid_corr) )then
                 self%profile_fit(FIT_VALUE) = self%profile_fit(FIT_VALUE) + 1_int64
@@ -932,7 +1072,11 @@ contains
             fit_xy = real([fx,fy])
             self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
             call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, fit_xy, corrs)
-            if( self%prior_w > 0.d0 ) corrs = corrs * real(self%prior_factor(real(fit_xy,dp)))
+            ! the prior's factor per rotation at the optimizer-frame fitted shift
+            if( self%prior_w > 0.d0 )then
+                call self%prior_factors(real(fit_xy,dp), f)
+                corrs = corrs * f
+            endif
             irot_fit = maxloc(corrs, dim=1)
             if( .not. (corrs(irot_fit) > best_grid_corr) )then
                 self%profile_fit(FIT_VALUE) = self%profile_fit(FIT_VALUE) + 1_int64
@@ -1009,8 +1153,9 @@ contains
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         self%joint_cc = .false.
-        self%prior_w   = 0.d0
-        self%prior_xy0 = 0.d0
+        self%prior_w  = 0.d0
+        self%prior_u0 = 0.d0
+        if( allocated(self%rot_cs) ) deallocate(self%rot_cs)
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

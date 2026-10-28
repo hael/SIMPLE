@@ -1786,6 +1786,32 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    histogram's tail should stop being flat before the resolution shows
    anything; if it stays flat the prior is not doing what it is for and
    comes out again. `SHIFT INCR ARG` in the logs is sigma's own trace.
+   **The frame (Hans, 2026-10-28):** with a nonzero seed, changing rotation
+   could move the stored particle-frame shift without the intended
+   displacement penalty. Right: the optimizer's shift at rotation irot is
+   the stored shift rotated into the reference's frame, x = R(irot) u, and
+   the prior was centred at the start x itself, so at the start's rotation
+   the penalty was the stored displacement but at any other rotation the
+   same x is a different stored shift, moved by 2 |u0| sin(dtheta/2) for
+   nothing, while the x that kept the stored shift paid that amount; the
+   particle-frame lattice compared its stored-frame points against the
+   reference-frame centre outright. All of it vanishes at u0 = 0, which is
+   why the seed-estimate step and the re-centred 2D route never showed it
+   and the class-average seeds of stage 3 onward did. Fixed the same day:
+   the centre is the stored shift u0 = R(irot_in)^T x_start
+   (`set_prior_centre`) and the penalty at rotation irot is
+   |x - R(irot) u0|^2 = |u - u0|^2, per rotation in `objfun_vals` and the
+   coarse grids (a cos/sin table per object), at `cur_inpl_idx` in the cost
+   and gradient, on the stored shift directly for the particle-frame lattice
+   and its fitted point, and at the continuous angle on the joint route,
+   whose rotation gradient gains the term -2w (x - c0) . dc0/drho. Readouts
+   `shift_prior_penalty(x, irot)` and `shift_prior_penalty_ptcl(u)`;
+   `test_shift_prior_frame` checks the four cases (seed, same stored shift
+   at another rotation, same x at another rotation, zero seed) and that a
+   narrow prior keeps the stored shift at a nonzero seed whatever rotation
+   the search ends on; `test_shift_prior`'s factor identity became the
+   argmax of the raw objective times the rotation's factor. Every PorF and
+   exp_gate number above taken at `shift_prior=yes` predates the fix.
 
 ## 20. Annealing coupled to importance sampling (proposal, 2026-10-26)
 
@@ -1937,32 +1963,158 @@ The weighted insertion of 20.8 takes the MAP losses as the draw does,
 prior included, at the draw's beta: nothing to add. The 2D tables carry the
 prior the same way, so the 2D tail anneals the same row.
 
-### 20.3 The particle count: Rosenthal-Henderson, per stage
+**The regression of 2026-10-28 (`for_claude/prob_neff_regression`: ten
+restarts each of exp_gate, FlhB, 132k particles, and PorF, 37.5k, at
+`prob_neff=3 shift_prior=yes`, commit ad443249).** Streptavidin passed;
+exp_gate ended 6 of 10 at 4.01 A (cFAR 0.62-0.68) and 4 at 4.15-4.30 A
+(cFAR 0.40-0.49), PorF 3 of 10 at 4.5-4.9 A and 7 at 5.8-7.1 A, where ten of
+ten had been 4.6-5.1 A at `prob_beta=0.3`. Hans: the search is running too
+cold. The logs, stage by stage:
 
-The particles a stage needs are the ones that let the map resolve the band
-the stage searches at; more are spent for nothing at that band, fewer
-leave the band unresolved. The half-map SSNR is linear in the particle
-count (Rosenthal and Henderson 2003), so from the FSC of the current map
-at the next stage's limit and the population that map represents (the
-trailing reconstruction's M_k, which the population rule of
-`sampling_and_fractional_updates.md` keeps), the count at which FSC 0.5
-lands on that rung is
+- The control is not the stochastic element: the solved beta is the same
+  in the good and the bad restarts at every stage, to the second decimal.
+- The fate is sealed early. PorF separates during stage 2 and is decided by
+  the end of stage 3 (8.4-9.2 against 9.5-10.8 A, score 0.410 against
+  0.406-0.408, pose change 10.6-11.4 against 13-15 degrees), stages 4-8
+  never recover it; exp_gate splits at the stage 4-5 band jump (the good
+  runs 7.0 to 4.47 A in three iterations at the NU entry, the bad ones at
+  6-7 A for the stage). The tail works: the good runs still gain 4.38 to
+  4.01 A in it.
+- Against 0.3 the control is 2-5x colder exactly where 0.3 was hottest:
+  the shc stages (PorF stage 1 climbs 0.5 to 1.4 and stage 2 sits at
+  1.1-1.5; exp_gate stage 2 at 0.6-1.3) and the first iterations of every
+  new band (0.65-0.8 at the stage-3 entry, 0.52-0.69 at the stage-5 entry,
+  both data sets), relaxing to about 0.3 only by a stage's end. The
+  row-mode fraction sits at 0.70 throughout, where 19.7 had 0.22, 0.09 and
+  0.25 at the stage 3, 5 and 8 entries. The one place the control is hotter
+  than 0.3 is exp_gate's stage 1 (0.07-0.25: its physical n_eff is 1.08
+  already at 20 A, a large particle), and exp_gate's split is not there.
+  The within-stage trend is the control warming (beta falling) as the rows
+  sharpen with the map, and cooling again at each band jump, where the
+  rows are sharp for the wrong reason: T grew with the band and the new
+  shells are noise-ordered because the reference has no signal in them yet.
+  That is 20.6's risk as written, a cold draw on noise-ordered rows, at the
+  argmin's ratio (5 of 10 PfCRT restarts near 7 A in section 15).
+- Beside the point but in the logs: stages 1 and 2 reach their plateau
+  after about 8 of their 20 iterations (score flat, pose change flat at 33
+  degrees, the rest spent hopping at equilibrium); exp_gate restart 1
+  reported cFAR 0.0002 for nine consecutive stage-5 iterations, that run
+  only, a cFAR artefact to look at rather than a mechanism; stages 1-4 run
+  on the same best 10,000 particles by rank (`greedy_sampling=yes`,
+  `frac_best` 1.0, then 0.5 at stages 5-6 and 0.85 at 7-8), by design.
 
-```text
-N_next = M_k / SSNR_half(lp_next),    SSNR_half = FSC / (1 - FSC) of the halves,
-```
+Hans, the same day: all of this is too complicated; fix the in-plane
+`prob_beta` at 0.3 with a suitably placed constant while the annealing
+schedule of the projection directions is worked out. Built: `PROB_BETA_INPL`
+(0.3, `simple_defs`, beside `PROB_BETA_TAIL`, which moved there from the
+parameters module the same day: constants belong in a defs module) is the
+factor of every
+in-plane draw of the fills (`ptcl_posterior_temp`), on every path; neither
+`prob_beta`, the tail nor the control touches the in-plane temperature any
+more, and the handoff of the solved factor to the next iteration's
+`prob_beta` only feeds the control's fallback. The direction draws keep
+their schedule as the thing under study: `prob_beta` flat with the tail
+(`prob_neff=0`) or the control (`prob_neff`). A first version of the day
+had put the in-plane choice behind a key (`prob_neff_inpl`, with a tail
+ramp of its own) and added a solve3D `prob_neff_stage` for Hans's separate
+test of the established draws through stages 1-2; both were taken out the
+same day, the constant alone stays (the stages 1-2 test, if wanted, is a
+run with the control off on those stages, no key needed yet). Offered, not built: the sweep of N* on PorF (6
+and 10, with `prob_neff=0` as the control that pins the regression on the
+control rather than on the shift prior); and the statistic the control
+pins, the arithmetic mean of exp(H), which the broad rows dominate (70%
+delta rows and 30% broad average to 3 with the broad rows at about 8 and
+the deltas never moving), against the mean entropy (the geometric-mean
+n_eff), which the delta rows pull down and which therefore solves a hotter
+beta exactly where the rows are heterogeneous, the band entries, without a
+stage schedule; one line in `neff_control_mean_neff`.
 
-floored (a few thousand, below which the trailing average is too noisy to
-read), capped at the active set, and taken as the next stage's `nsample`;
-the full set once N_next passes the full-sampling switch
-(`solve3D_full_sample_switch_frac`). Few particles at 20 A, all of them by
-the NU stage, no schedule written down; the early iterations get cheap, so
-the early stages afford more of them, and the stage budget should then be
-counted in particle evaluations, not iterations (`MAXITS` becomes a
-consequence). Pose error early makes the FSC read low and N_next high, a
-safe direction: the count only falls once the poses are good enough for
-the map to show it. The trailing blend (`update_frac`, `ufrac_trec`) is
-the momentum of this scheme and is untouched.
+### 20.3 The particle count: the batch and the map's memory (rewritten 2026-10-27)
+
+**What `nsample` is.** Not the particles in the map. `nsample` is the
+batch: the particles searched and inserted fresh in one iteration,
+f = nsample / N of the active set (`update_frac`). The trailing
+reconstruction keeps the map at the mass of the whole updated population
+by the population rule, A_new = (u/f) A_current + (1 - u) A_previous with
+u = f, so after one sweep (N / nsample iterations, the count-tiered
+sampler visiting every particle once) the map represents all N particles
+and its half-map SSNR is theirs. The first draft of this subsection sized
+the stage's particle count by Rosenthal-Henderson from the map's FSC and
+called it `nsample`; Hans: that is excessive, `nsample` only controls how
+many particles are updated. Right. What the batch governs with u = f is
+the cost of an iteration and the map's memory: the map is an exponential
+average over the last ~1/f iterations of partials, each with the poses as
+they were then, so it lags the poses by N / nsample iterations.
+
+**The actual cost of a flat small batch**, then, is at the fine bands and
+it is lag, not resolution: N = 200k, `nsample` 10,000, a 12-iteration
+stage at 8 A ends with (1 - 0.05)^12 = 54% of its map's mass carrying the
+poses of the previous band. The stage's references cannot be better than
+the poses they average, more than half of which were found at 12 A, and
+the stage grinds its budget on a map that follows the poses at 5% per
+iteration. The same arithmetic is why the early stages cannot simply be
+made cheap by shrinking the batch under u = f: a batch of 2,000 moves the
+map at 1% per iteration, a hundred-iteration horizon, and the poses run
+away from it. cryoSPARC's early iterations are cheap *and* fresh because
+its momentum is independent of the batch: the map is an average over the
+last ~10 batches whatever their size, so early it represents a few
+thousand fresh particles, which is all 25 A needs, and the iterations cost
+a few thousand evaluations. SIMPLE has that knob already: `ufrac_trec`,
+the single-state override u > f (`importance_sampling_fractional_update_policy.md`
+section 6). With u > f the chain still carries mass N, but its information
+is the last ~1/u iterations' batches: a map of about nsample / u fresh
+particles up-weighted to the population, whose half-map FSC is that of
+nsample / u particles.
+
+**The schedule, two numbers per stage.** The batch nsample_k and the
+update weight u_k, tied by two conditions:
+
+1. *fresh*: u_k >= about 2.3 / J_k, J_k the stage's iteration allowance,
+   so that by the stage's exit at least 90% of the map's mass carries the
+   stage's own poses (1 - (1 - u)^J >= 0.9);
+2. *resolved*: nsample_k / u_k >= N_RH(lp_k), the particle count at which
+   the half maps put FSC 0.5 at the stage's band. This is where
+   Rosenthal-Henderson belongs: N_RH is read from the trailing map's FSC at
+   the next rung and the population it represents, N_RH(lp_next) =
+   M_k (1 - FSC) / FSC, floored (a few thousand) and capped at N.
+
+Early, N_RH is small and the two are met with a small batch at a large u:
+the cryoSPARC regime, cheap and fresh at low resolution. As the band
+tightens N_RH grows until nsample / u reaches N, where u = f and the
+population rule holds again: the map is the whole set, the batch is what
+freshness asks for, nsample_k = N u_k, and the full set once that passes
+the 90% switch. The cross-over is decided by the data (N_RH against N),
+not by a stage number. A stage that leaves on the resolution exit has FSC
+0.5 past the next rung, so N_RH there is below its own count and nothing
+grows: the exit and the growth are the same signal read two ways. Pose
+error early reads as a low FSC and a high N_RH, the safe direction.
+
+**A plausible run** (N = 200k, J = 20, 20, 17, 15, 12 ...; the ladder 25,
+20, 16, 12, 8 A, NU): stage 1 on a batch of 2,000 (a floor for the
+class-balanced units) at u 0.25, a map of ~8,000 fresh particles, 40,000
+evaluations for its 20 iterations against 200,000 today; stages 2-3 on
+2,000-3,000 at u 0.15-0.2; stage 4 (12 A, N_RH ~40,000) on ~6,000; stage 5
+(8 A, N_RH ~ N) is the cross-over: u = f >= 2.3/12 = 0.2, a batch of
+40,000; then the full set. Cheaper than today through the dense stages,
+dearer at the NU stage, and the NU stage's map is its own. Coverage: with
+batches of a few thousand through stages 1-3 most particles reach stage 4
+never updated and enter under 20.4 (the dense first scan and the draw),
+as cryoSPARC's do.
+
+**The budget** is then evaluations, as before: one constant per stage of
+about today's 200,000, iterations = B / nsample clamped by `minits` and a
+cap, with the resolution exit and the tail still ending stages early.
+
+**The ruling this needs.** The early regime deliberately breaks the
+map-equals-population property (u > f) that the trailing chain was built
+to keep, in the stages where the band cannot use the population anyway.
+`ufrac_trec` is today a manual single-state override; the schedule would
+set it per stage. Whether that is acceptable as the automatic early mode
+is the design question, ahead of any constant. Behind a key
+(`nsample_auto`), with the flat 10,000 as the control, the readout per
+stage: the batch and u the rule chose, N_RH as read, the fraction of the
+map carrying the stage's poses at its exit, evaluations and wall time,
+the stage-3 handover and the finals.
 
 ### 20.4 Particles entering with updatecnt 0
 
@@ -1989,8 +2141,12 @@ address the draw.
 - `prob_beta`: a consequence of N* and the row; gone as an input.
 - `prob_beta_end`: the end is the physical posterior; the key becomes the
   last stage's switch, which solve3D sets.
-- `nsample`: a consequence of the FSC and the stage's limit (20.3); the
-  user's `nsample` remains a cap.
+- `nsample`: the batch, a consequence of the stage's update weight and
+  the FSC at the band (20.3: nsample_k = u_k N_RH early, u_k N once the
+  band needs the population); the user's `nsample` remains a cap.
+- `ufrac_trec`: set per stage by the same rule (u above f in the early
+  regime, f once the band needs the population), no longer a manual
+  single-state override only.
 - `MAXITS` per stage: a budget in particle evaluations, the resolution
   exit and the tail end the stages before it.
 - `prob_beta_ini` (Cyril, 2026-10-26, commit f18ebb0f: a separate beta for
@@ -2024,9 +2180,10 @@ frontier's 0.21.
 1. 20.2 alone, everything else as it is: streptavidin ten restarts against
    the 19.7 tally (stages 1-2 alive and tightening, handover overlap, final
    numbers, wall time), then PfCRT ten against the acceptance bar.
-2. 20.8, the weighted insertion, behind a key: the one-stage comparison,
+2. 20.3, behind `nsample_auto`, after the ruling on u above f in the
+   early stages; with the budget in evaluations.
+3. 20.8, the weighted insertion, behind a key: the one-stage comparison,
    then the iteration counts in a full run.
-3. 20.3, with the budget in evaluations.
 4. The `snhc` first scan (20.4), one line.
 5. 20.8's second experiment, the two temperatures, one number.
 6. Then section 18 in its order.

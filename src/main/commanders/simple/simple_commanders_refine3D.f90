@@ -1955,7 +1955,7 @@ contains
         use simple_core_module_api
         use simple_refine3D_strategy
         use simple_eul_prob_tab_utils, only: prob_beta_at, prob_beta_control_last
-        use simple_parameters,         only: PROB_BETA_TAIL
+        use simple_defs,               only: PROB_BETA_TAIL
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy

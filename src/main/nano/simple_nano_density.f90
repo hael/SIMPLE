@@ -82,6 +82,7 @@ type :: transfer_kernels
 contains
     procedure :: new => new_kernels
     procedure :: is_plain
+    procedure :: ntab
     procedure :: halo_at
     procedure :: kernel_at
     procedure :: profile
@@ -354,6 +355,12 @@ contains
         is_plain = self%l_plain
     end function is_plain
 
+    ! the last radial index of the table: profile's rows are (0:ntab); 0 for the plain transfer
+    pure integer function ntab( self )
+        class(transfer_kernels), intent(in) :: self
+        ntab = self%ntr
+    end function ntab
+
     ! the table's rows at width bfac, interpolated linearly in ln B: h (prof), dh/d ln B (dprof), and the reach (A)
     subroutine profile( self, bfac, prof, dprof, rch )
         class(transfer_kernels), intent(in)  :: self
@@ -367,8 +374,11 @@ contains
             rch   = 0.
             return
         endif
-        x  = min(max((log(bfac) - self%lnb0) / self%dlnb, 0.), real(self%nb - 1) - 1.e-6)
-        j  = int(x) + 1
+        if( size(prof) /= self%ntr + 1 .or. size(dprof) /= self%ntr + 1 ) THROW_HARD('prof and dprof must have the table''s rows (0:ntab); profile')
+        ! the column pair (j, j+1) and the weight within it; the pair is clamped in the integer, not with an
+        ! epsilon on x (real(nb-1) - 1e-6 rounds back to nb-1 in single precision and j+1 ran off the table)
+        x  = min(max((log(bfac) - self%lnb0) / self%dlnb, 0.), real(self%nb - 1))
+        j  = min(int(x) + 1, self%nb - 1)
         wb = x - real(j - 1)
         prof  = (1. - wb) * self%htab(:,j)  + wb * self%htab(:,j+1)
         dprof = (1. - wb) * self%dhtab(:,j) + wb * self%dhtab(:,j+1)
@@ -403,8 +413,8 @@ contains
         integer :: j, i
         halo_at = 0.
         if( self%l_plain ) return
-        x  = min(max((log(bfac) - self%lnb0) / self%dlnb, 0.), real(self%nb - 1) - 1.e-6)
-        j  = int(x) + 1
+        x  = min(max((log(bfac) - self%lnb0) / self%dlnb, 0.), real(self%nb - 1))
+        j  = min(int(x) + 1, self%nb - 1) ! the pair (j, j+1) clamped in the integer, as profile
         wb = x - real(j - 1)
         r  = sqrt(r2)
         if( r > max(self%reach(j), self%reach(j+1)) ) return

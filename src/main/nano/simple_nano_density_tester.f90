@@ -107,7 +107,8 @@ contains
         call assert_true(.not. tk%is_plain(), 'the notch is not the plain transfer')
         err   = 0.
         errd  = 0.
-        allocate(prof(0:1000), dprof(0:1000))
+        ! the table's rows (0:ntab): TAB_R_MAX / (TAB_DR_VOX smpd), not a fixed count
+        allocate(prof(0:tk%ntab()), dprof(0:tk%ntab()))
         do ib = 1,3
             peak  = halo_kernel(0., BS(ib), HAMP, HBFAC)
             bh    = BS(ib) + HBFAC

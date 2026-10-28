@@ -53,7 +53,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_neigh): the particle temperature of '//&
-        &'every draw (in-plane, direction, class, neighbourhood) is multiplied by this factor, below one hotter; the '//&
+        &'every direction, class and neighbourhood draw is multiplied by this factor, below one hotter (the in-plane '//&
+        &'draws are fixed at 0.3); the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
         &'The factor the draws anneal to once the resolution stops gaining: a geometric ramp from prob_beta over the '//&
@@ -70,9 +71,8 @@ contains
         call refine3D%add_input(UI_SRCH, 'prob_neff', 'num', 'Posterior draw n_eff target (experimental)', &
         &'The n_eff control of the posterior draws: the tempering factor is solved every iteration so that the mean '//&
         &'effective number of candidates a particle draws among (exp entropy of its row posterior, over a subsample of '//&
-        &'rows) is this target, in place of prob_beta, which then sets the first iteration only; the solved factor '//&
-        &'is handed to the next iteration''s in-plane draws. 2-4; 0 off{0.0}', 'n_eff target{0.0}', .false., 0., &
-        &group="search", visibility=UI_VIS_ADVANCED)
+        &'rows) is this target, in place of prob_beta, which then sets the first iteration only. 2-4; 0 off{0.0}', &
+        &'n_eff target{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &

@@ -11,7 +11,8 @@ module simple_convergence_tester
 use simple_core_module_api, only: oris, del_file
 use simple_cmdline,         only: cmdline
 use simple_convergence,     only: convergence, cont_particle_stable
-use simple_parameters,      only: parameters, PROB_BETA_TAIL
+use simple_parameters,      only: parameters
+use simple_defs,            only: PROB_BETA_TAIL
 use simple_defs_fname,      only: STATS_FILE
 use simple_defs_conv,       only: CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A, CONT_CONV_FRAC
 use simple_cartft_pose_opt, only: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, &

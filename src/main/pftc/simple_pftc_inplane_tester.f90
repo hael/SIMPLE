@@ -77,6 +77,7 @@ contains
         call test_loaded_reference()
         call test_posterior_threads()
         call test_shift_prior()
+        call test_shift_prior_frame()
         call test_shift_prior_grid_fit()
         call del_file(PHANTOM_FILE)
     end subroutine run_all_pftc_inplane_tests
@@ -1044,20 +1045,22 @@ contains
 
     !> The shift prior of the probability tables' searches (shift_prior=yes): off, the search is the search
     !! (bitwise, also after a prior was set and cleared); on, the correlation a search reports is the raw
-    !! correlation at its shift times exp(-|s - s0|^2 / (2 sigma^2 T)) with s0 the start, the in-plane choice
-    !! unchanged; a prior far wider than the move leaves the free search's objective (its value, not its path:
-    !! a factor within L-BFGS-B's stopping tolerance can end an alternation elsewhere) and a prior far narrower
-    !! pins the search at its start, on the shift route and on the joint polish alike. And the width from a
-    !! field: half the mean squared increment of the sampled particles, floored by the band
+    !! correlation at its shift times exp(-|u - u0|^2 / (2 sigma^2 T)) with u0 the start as a stored shift and u the
+    !! candidate's stored shift at its rotation (the frame rule of test_shift_prior_frame), so the in-plane choice
+    !! is the argmax of the raw objective times the rotation's factor; a prior far wider than the move leaves the
+    !! free search's objective (its value, not its path: a factor within L-BFGS-B's stopping tolerance can end an
+    !! alternation elsewhere) and a prior far narrower pins the stored shift at its start, on the shift route and
+    !! on the joint polish alike. And the width from a field: half the mean squared increment of the sampled
+    !! particles, floored by the band
     subroutine test_shift_prior()
         real, parameter :: START(2) = [1.5, -1.0]
         type(builder),    target :: b
         type(parameters), target :: p
         type(pftc_shsrch_grad)   :: srch
         type(oris) :: os
-        real(dp) :: w, g, rotind_frac, cost_free, cost_prior
+        real(dp) :: w, g, rotind_frac, cost_free, cost_prior, best
         real     :: limits(2,2), lims_init(2,2), joint_lims(3,2), temp, cxy_free(3), cxy_again(3), cxy(3)
-        real     :: corr_prior, corr_raw, sigma2, sigma2_weak, sigma2_strong
+        real     :: corr_prior, sigma2, sigma2_weak, sigma2_strong, u0(2), u0_joint(2)
         real,    allocatable :: scores(:)
         integer  :: irot_free, irot_again, irot, irot2, irot3, irot_seed, i
         logical  :: l_valid, l_improved
@@ -1069,6 +1072,7 @@ contains
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         temp = posterior_temperature(b%pftc%wsqsum_ptcl_now(1), b%pftc%get_pftsz())
         call assert_true(temp > 0., 'the fixture particle has a temperature')
+        allocate(scores(b%pftc%get_nrots()))
         ! the widths in the fixture's own units: w = 1/(2 sigma2 T); weak: w (10 px)^2 < 1e-6 nats, strong:
         ! w (0.1 px)^2 > 5 nats
         sigma2_weak   = 1.e8 / temp
@@ -1088,21 +1092,31 @@ contains
         cxy_again  = srch%minimize(irot_again, sh_rot=.false., xy_in=START)
         call assert_true(irot_again == irot_free .and. all(transfer(cxy_again,0,3) == transfer(cxy_free,0,3)), &
             &'a cleared prior leaves the search bit for bit as it was')
-        ! the factor identity at the prior's own result
+        ! the factor identity at the prior's own result: the centre is START as a stored shift (expressed at
+        ! rotation 1 on entry), so at rotation i the factor is exp(-w |xy - R(i) u0|^2); the in-plane choice is
+        ! the argmax of the raw objective times that factor and the reported correlation is the product
         call srch%set_shift_prior(1., temp)
         irot = 1
         cxy  = srch%minimize(irot, sh_rot=.false., xy_in=START)
         call assert_true(irot > 0, 'the search with a unit prior moves')
         call srch%select_best_discrete_angle(cxy(2:3), irot2, corr_prior)
-        call srch%clear_shift_prior
-        call srch%select_best_discrete_angle(cxy(2:3), irot3, corr_raw)
-        w = 1.d0 / (2.d0 * 1.d0 * real(temp,dp))
-        g = exp(-w * sum((real(cxy(2:3),dp) - real(START,dp))**2))
-        call assert_int(irot3, irot2, 'the prior leaves the in-plane choice at a shift unchanged')
-        call assert_true(abs(real(corr_prior,dp) - real(corr_raw,dp) * g) <= 1.d-5, &
-            &'the reported correlation is the raw one times the prior factor')
+        call b%pftc%gen_objfun_vals(1, 1, cxy(2:3), scores)
+        w     = 1.d0 / (2.d0 * 1.d0 * real(temp,dp))
+        u0    = shift_ref2ptcl(START, b%pftc%get_rot(1))
+        best  = -huge(best)
+        irot3 = 0
+        do i = 1,b%pftc%get_nrots()
+            g = exp(-w * sum((real(cxy(2:3),dp) - real(shift_ptcl2ref(u0, b%pftc%get_rot(i)),dp))**2))
+            if( real(scores(i),dp) * g > best )then
+                best  = real(scores(i),dp) * g
+                irot3 = i
+            endif
+        enddo
+        call assert_int(irot3, irot2, 'the prior''s in-plane choice is the argmax of the raw objective times the rotation''s factor')
+        call assert_true(abs(real(corr_prior,dp) - best) <= 1.d-5, &
+            &'the reported correlation is the raw one times the prior factor at its rotation')
         call assert_true(abs(cxy(1) - corr_prior) <= 1.e-5, 'and minimize returns that correlation')
-        ! a wide prior changes nothing that matters, a narrow one pins the start
+        ! a wide prior changes nothing that matters, a narrow one pins the stored shift at the start
         call srch%set_shift_prior(sigma2_weak, temp)
         irot = 1
         cxy  = srch%minimize(irot, sh_rot=.false., xy_in=START)
@@ -1110,16 +1124,16 @@ contains
             &'a prior far wider than the move leaves the free search''s objective, the shift within a quarter pixel')
         call srch%set_shift_prior(sigma2_strong, temp)
         irot = 1
-        cxy  = srch%minimize(irot, sh_rot=.false., xy_in=START)
-        call assert_true(irot == 0 .or. norm2(cxy(2:3) - START) < 0.1, &
-            &'a prior far narrower than the move pins the search at its start')
+        cxy  = srch%minimize(irot, sh_rot=.true., xy_in=START)
+        call assert_true(irot == 0 .or. norm2(cxy(2:3) - u0) < 0.1, &
+            &'a prior far narrower than the move pins the stored shift at its start, whatever the rotation')
         call srch%kill
         ! the joint route (the polish of the committed pose): the prior is the same loss term; its initial cost
         ! (the start re-scored) is untouched, a wide prior leaves the free polish's objective, a narrow one pins
         ! the start. The seed cell is the discrete selection at the start, as the polish is seeded in production
-        allocate(scores(b%pftc%get_nrots()))
         call b%pftc%gen_objfun_vals(1, 1, START, scores)
         irot_seed = maxloc(scores, dim=1)
+        u0_joint  = shift_ref2ptcl(START, b%pftc%get_rot(irot_seed))
         joint_lims(1:2,:) = limits
         joint_lims(3,:)   = [1.-2., real(b%pftc%get_nrots())+2.]
         call srch%new_joint(b, joint_lims, p%maxits_sh)
@@ -1130,15 +1144,16 @@ contains
         call srch%set_shift_prior(sigma2_weak, temp)
         cxy = srch%minimize_joint(irot, START, sh_rot=.false., rotind_frac=rotind_frac, &
             &evaluation_valid=l_valid, improved=l_improved, initial_cost_out=cost_prior, irot_in=irot_seed)
-        call assert_true(cost_prior == cost_free, 'the joint prior leaves the cost at the start untouched')
+        call assert_true(abs(cost_prior - cost_free) <= 1.d-12 * max(1.d0, abs(cost_free)), &
+            &'the joint prior leaves the cost at the start untouched')
         call assert_true(l_valid .and. l_improved .and. abs(cxy(1) - cxy_free(1)) <= 1.e-4 .and. &
             &norm2(cxy(2:3) - cxy_free(2:3)) < 0.25, &
             &'a wide prior leaves the free joint polish''s objective, the shift within a quarter pixel')
         call srch%set_shift_prior(sigma2_strong, temp)
-        cxy = srch%minimize_joint(irot, START, sh_rot=.false., rotind_frac=rotind_frac, &
+        cxy = srch%minimize_joint(irot, START, sh_rot=.true., rotind_frac=rotind_frac, &
             &evaluation_valid=l_valid, improved=l_improved, irot_in=irot_seed)
-        call assert_true((.not. l_improved) .or. norm2(cxy(2:3) - START) < 0.1, &
-            &'a narrow prior pins the joint polish at its start')
+        call assert_true((.not. l_improved) .or. norm2(cxy(2:3) - u0_joint) < 0.1, &
+            &'a narrow prior pins the joint polish''s stored shift at its start')
         call srch%kill
         call kill_fixture(b)
         ! the width from a field: five sampled particles with increments 2, 0, 4 and two never searched (zero,
@@ -1165,6 +1180,71 @@ contains
         call os%kill
         deallocate(scores)
     end subroutine test_shift_prior
+
+    !> The frame of the shift prior (2026-10-28): the optimizer's shift x at rotation irot is the stored shift
+    !! rotated into the reference's frame, x = R(irot) u, so the prior's centre is kept as the stored shift u0 and
+    !! the penalty at rotation irot is w |x - R(irot) u0|^2 = w |u - u0|^2. With a nonzero seed u0 expressed at
+    !! irot_seed: no penalty at the seed; none at another rotation for the x that keeps the stored shift; the
+    !! stored displacement's cost, w (2 |u0| sin(dtheta/2))^2, for the seed's own x at another rotation (which
+    !! paid nothing before, the centre being x itself); the particle-frame penalty of that candidate's stored
+    !! shift is the same number; a zero seed is the same centre in every frame. And the search: a narrow prior
+    !! keeps the stored shift at the seed whatever rotation it ends on
+    subroutine test_shift_prior_frame()
+        real, parameter :: U0(2) = [2.0, -1.5]
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(pftc_shsrch_grad)   :: srch
+        real     :: limits(2,2), temp, xy_seed(2), xy_other(2), rot_seed, rot_other, cxy(3), sigma2_strong
+        real(dp) :: w, pen, expected, u(2), scale
+        integer  :: irot_seed, irot_other, irot, nrots
+        write(*,'(A)') 'test_shift_prior_frame'
+        limits(:,1) = -TRS
+        limits(:,2) =  TRS
+        call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
+        temp  = posterior_temperature(b%pftc%wsqsum_ptcl_now(1), b%pftc%get_pftsz())
+        nrots = b%pftc%get_nrots()
+        call srch%new_alternating(b, limits, maxits=p%maxits_sh)
+        call srch%set_indices(1, 1)
+        call srch%set_shift_prior(1., temp)
+        w     = 1.d0 / (2.d0 * real(temp,dp))
+        scale = w * sum(real(U0,dp)**2) ! the penalty's natural size
+        irot_seed  = 1 + nrots / 8
+        irot_other = 1 + nrots / 3
+        rot_seed   = b%pftc%get_rot(irot_seed)
+        rot_other  = b%pftc%get_rot(irot_other)
+        xy_seed    = shift_ptcl2ref(U0, rot_seed)   ! the seed as the caller passes it: expressed at its rotation
+        xy_other   = shift_ptcl2ref(U0, rot_other)  ! the same stored shift at another rotation
+        call srch%set_prior_centre(real(xy_seed,dp), irot_seed)
+        call assert_true(srch%shift_prior_penalty(real(xy_seed,dp), irot_seed) <= 1.d-5 * scale, &
+            &'no penalty at the seed')
+        call assert_true(srch%shift_prior_penalty(real(xy_other,dp), irot_other) <= 1.d-5 * scale, &
+            &'no penalty at another rotation for the shift that keeps the stored shift')
+        pen      = srch%shift_prior_penalty(real(xy_seed,dp), irot_other)
+        expected = w * (2.d0 * norm2(real(U0,dp)) * sin(0.5d0 * real(rot_other - rot_seed,dp) * DPI / 180.d0))**2
+        call assert_true(pen > 0.1d0 * scale, 'the seed''s own shift at another rotation pays: the stored shift moved')
+        call assert_true(abs(pen - expected) <= 1.d-5 * scale, 'and pays the stored displacement, 2 |u0| sin(dtheta/2)')
+        u = real(shift_ref2ptcl(xy_seed, rot_other), dp)
+        call assert_true(abs(srch%shift_prior_penalty_ptcl(u) - pen) <= 1.d-5 * scale, &
+            &'the particle-frame penalty of that candidate''s stored shift is the same number')
+        call assert_true(srch%shift_prior_penalty_ptcl(real(U0,dp)) <= 1.d-5 * scale, &
+            &'and zero at the seed''s stored shift')
+        call srch%set_prior_centre([0.d0, 0.d0], irot_seed)
+        call assert_true(srch%shift_prior_penalty([0.d0, 0.d0], irot_other) <= 1.d-12, &
+            &'a zero seed is the same centre at every rotation')
+        pen = srch%shift_prior_penalty(real(xy_seed,dp), irot_other)
+        call assert_true(abs(pen - w * sum(real(xy_seed,dp)**2)) <= 1.d-5 * scale, &
+            &'and its penalty is the plain squared shift')
+        ! the search from the seed with a narrow prior (w (0.1 px)^2 > 5 nats) keeps the stored shift at the seed,
+        ! whatever rotation it ends on (the returned shift is the stored one with sh_rot)
+        sigma2_strong = 1.e-3 / temp
+        call srch%set_shift_prior(sigma2_strong, temp)
+        irot = irot_seed
+        cxy  = srch%minimize(irot, sh_rot=.true., xy_in=xy_seed)
+        call assert_true(irot == 0 .or. norm2(cxy(2:3) - U0) < 0.1, &
+            &'a narrow prior keeps the stored shift at a nonzero seed whatever the rotation the search ends on')
+        call srch%kill
+        call kill_fixture(b)
+    end subroutine test_shift_prior_frame
 
     !> The shift prior through the quadratic grid step (grid_fit, the multi-state table's search), whose exact
     !! re-score at the fitted shift is its own evaluation, not the all-rotation objective's: on both lattices (the

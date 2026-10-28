@@ -504,14 +504,29 @@ to loss units; the search minimises and the row holds the MAP loss
 (`pftc_shsrch_grad%set_shift_prior`), and the `inpl_cont` polish of the
 committed pose carries the same term on its joint loss, centred at the
 committed shift (`prep4prob` arms it, `prep_strategy3D` measures the width).
-Every draw (in-plane, direction, class,
-neighbourhood)
-runs at `prob_beta` times the particle temperature
-(`pftc%ptcl_posterior_temp`; default 0.3, for small membrane proteins,
-section 19 of the note; below one hotter), so at `prob_beta` below one the
-draws are from the tempered posterior, p^beta, and from the posterior proper
-only at 1: the search's annealing knob, section 4.4, run-time since
-2026-10-23 after the run at the physical temperature froze. A refine3D run
+The distance is that of the stored shift (2026-10-28): the optimizer's shift
+at rotation `irot` is the stored shift rotated into the reference's frame,
+x = R(irot) u, so the centre is kept as the stored shift u0 (the start
+converted back at the rotation the caller expressed it at, `irot` on entry
+to `minimize`, `irot_in` to `minimize_joint`: `set_prior_centre`) and the
+penalty at any rotation is |x - R(irot) u0|^2 = |u - u0|^2, per rotation in
+the all-rotation objective and the coarse grids, at the continuous angle
+(with its gradient term) on the joint route, and on the stored shift
+directly for the particle-frame lattice. Until then the centre was the
+start x itself, which held only at the start's rotation: with a nonzero
+seed a rotation change moved the stored shift without the penalty, and a
+rotation that kept it paid (`test_shift_prior_frame`).
+Every direction, class and neighbourhood draw (the tables' assignments)
+runs at `prob_beta` times the particle temperature (default 0.3, for small
+membrane proteins, section 19 of the note; below one hotter), so at
+`prob_beta` below one the draws are from the tempered posterior, p^beta,
+and from the posterior proper only at 1: the search's annealing knob,
+section 4.4, run-time since 2026-10-23 after the run at the physical
+temperature froze. The fills' in-plane draws (`pftc%ptcl_posterior_temp`)
+run at the fixed factor `PROB_BETA_INPL` (0.3, `simple_defs`) since
+2026-10-28: the in-plane temperature is held constant while the annealing
+schedule of the direction draws is worked out (section 20.2 of the note),
+so neither `prob_beta`, the tail nor the n_eff control touches it. A refine3D run
 anneals when `prob_beta_end` is given: it searches flat at `prob_beta`
 until neither FSC 0.5 nor FSC 0.143 gained on the previous iteration
 (`check_conv3D`, the same gain test as the resolution exit, on the previous
@@ -551,9 +566,14 @@ pull the level of the rows where the choice is open); fewer than
 iteration (`prob_neff_control` in `simple_eul_prob_tab_utils`; every table,
 dense 3D, neighbourhood, dense and sparse 2D, applies it before its draws
 and logs `POSTERIOR DRAW CONTROL` with the solved factor, the mean n_eff at
-it and at beta 1). The solved factor is handed to the next iteration's fills
-as `prob_beta`, so the in-plane draws run one iteration behind the
-direction draws; `prob_beta` itself sets the first iteration only. On the
+it and at beta 1). The control tempers the direction draws (the tables'
+assignments); the in-plane draws are at `PROB_BETA_INPL` (until 2026-10-28
+the solved factor was handed to the next iteration's fills as `prob_beta`,
+the form the regression of that day ran under: exp_gate and PorF failed
+about half their restarts, the search 2-5x colder than 0.3 in the shc
+stages and at the band entries; section 20.2 of the note). The solved
+factor still goes to the next iteration as `prob_beta`, the control's
+fallback; `prob_beta` sets the direction draws' first iteration only. On the
 ladder the control comes out colder than 0.3 where the physical posterior
 is flat (the early bands) and hotter where it is sharp, with nothing set per
 stage. Under the control `prob_beta_end` is the annealing tail's switch

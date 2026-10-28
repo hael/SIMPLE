@@ -12,13 +12,9 @@ use simple_decay_funs
 use simple_parameters_registry, only: param_registry
 implicit none
 
-public :: parameters, PROB_BETA_TAIL
+public :: parameters
 private
 #include "simple_local_flags.inc"
-
-!> the annealing tail of a refine3D run with prob_beta_end: once the resolution stops gaining, the probability
-!! tables' draws ramp geometrically from prob_beta to prob_beta_end over this many iterations and the run ends
-integer, parameter :: PROB_BETA_TAIL = 5
 
 type :: parameters
     ! pointer 2 program UI
@@ -145,7 +141,7 @@ type :: parameters
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
-    character(len=3)          :: shift_prior='no'     !< the probability tables' shift searches carry a Gaussian prior on the shift's distance from the seed, width from the previous iteration's shift increments (an experiment, pose_marginalization.md section 19)(yes|no){no}
+    character(len=3)          :: shift_prior='no'     !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments (an experiment, pose_marginalization.md section 19)(yes|no){no}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
@@ -603,10 +599,10 @@ type :: parameters
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angular bound of the SHC strategies' in-plane samplers (refine=neigh, the 2D *_smpl modes) and of the dense table's refined set (projs_ns with the mean pose change); the tables' draws take no threshold
-    real    :: prob_beta=0.3       !< tempering factor on the particle temperature of every posterior draw of the probability tables (in-plane, direction, class, neighbourhood); T_eff = prob_beta x T, below one hotter, the search's annealing knob; 0.3 for small membrane proteins (pose_marginalization.md sections 4.4, 17){0.3}
+    real    :: prob_beta=0.3       !< tempering factor on the particle temperature of the probability tables' direction, class and neighbourhood draws; T_eff = prob_beta x T, below one hotter, the search's annealing knob; the in-plane draws are fixed at PROB_BETA_INPL; 0.3 for small membrane proteins (pose_marginalization.md sections 4.4, 17){0.3}
     real    :: prob_beta_ini=0.3   !< solve3D particle stages 1-2: explicit initial tempering factor; omitted = prob_beta, positive and capped at prob_beta{0.3}
     real    :: prob_beta_end=0.    !< the factor the run anneals to once its resolution stops gaining: a geometric ramp from prob_beta over the last PROB_BETA_TAIL iterations, then the run ends (1 = the physical posterior); 0 = prob_beta, no annealing; solve3D sets 1 on its last stage; under prob_neff any positive value switches the tail on and the ramp ends at 1{0.0}
-    real    :: prob_neff=0.        !< experimental: the n_eff control of the tables' posterior draws: the tempering factor is solved every iteration so that the mean effective number of candidates (exp entropy) over a subsample of rows is this target (2-4), in place of prob_beta; the solved factor is handed to the next iteration's fills as prob_beta; 0 = off (pose_marginalization.md section 20.2){0.0}
+    real    :: prob_neff=0.        !< experimental: the n_eff control of the tables' direction/class draws: the tempering factor is solved every iteration so that the mean effective number of candidates (exp entropy) over a subsample of rows is this target (2-4), in place of prob_beta; the in-plane draws stay at PROB_BETA_INPL; 0 = off (pose_marginalization.md section 20.2){0.0}
     real    :: prob_anneal_frac=0. !< internal: under prob_neff, the annealing tail's progress (0 none, (0,1] the ramp of the solved factor to 1); exec_refine3D sets it
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}

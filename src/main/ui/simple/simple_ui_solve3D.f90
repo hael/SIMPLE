@@ -132,7 +132,8 @@ contains
             &'last stage', .false., 8., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_neigh): the particle temperature of '//&
-        &'every draw (in-plane, direction, neighbourhood) is multiplied by this factor, below one hotter; the '//&
+        &'every direction and neighbourhood draw is multiplied by this factor, below one hotter (the in-plane draws '//&
+        &'are fixed at 0.3); the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'prob_beta_ini', 'num', 'Initial posterior draw tempering', &
@@ -149,9 +150,8 @@ contains
         call prg%add_input(UI_SRCH, 'prob_neff', 'num', 'Posterior draw n_eff target (experimental)', &
         &'The n_eff control of the posterior draws: the tempering factor is solved every iteration so that the mean '//&
         &'effective number of candidates a particle draws among (exp entropy of its row posterior, over a subsample of '//&
-        &'rows) is this target, in place of prob_beta, which then sets the first iteration only; the solved factor '//&
-        &'is handed to the next iteration''s in-plane draws. 2-4; 0 off{0.0}', 'n_eff target{0.0}', .false., 0., &
-        &group="search", visibility=UI_VIS_ADVANCED)
+        &'rows) is this target, in place of prob_beta, which then sets the first iteration only. 2-4; 0 off{0.0}', &
+        &'n_eff target{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&
         &'seed, with the previous iteration''s shift variance as its width and the particle''s temperature converting '//&

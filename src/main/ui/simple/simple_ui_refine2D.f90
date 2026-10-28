@@ -73,7 +73,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
-        &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
+        &'temperature of every class draw is multiplied by this factor, below one hotter (the in-plane draws are '//&
+        &'fixed at 0.3); the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The 2D tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from '//&
@@ -163,7 +164,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
-        &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
+        &'temperature of every class draw is multiplied by this factor, below one hotter (the in-plane draws are '//&
+        &'fixed at 0.3); the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
         &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
@@ -264,7 +266,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
         &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
-        &'temperature of every draw (in-plane, class) is multiplied by this factor, below one hotter; the '//&
+        &'temperature of every class draw is multiplied by this factor, below one hotter (the in-plane draws are '//&
+        &'fixed at 0.3); the '//&
         &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
         &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
