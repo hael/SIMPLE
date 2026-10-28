@@ -110,7 +110,7 @@ tester module (section 4.1).
 | `unit_cart_align3D` | local startup, Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator, flex cls_expansion, flex cls_expansion kernel |
 | `unit_parallel` | qsys control, qsys environment, test tools (the profile statistics, packing, identity rules and the registry of the suite runner) |
-| `unit_single` | atoms, cif2mrc, C-alpha finder, species |
+| `unit_single` | atoms, cif2mrc, C-alpha finder, species, density (the atomic density model of `detect_atoms`: kernels, the transfer's kernel table against the closed-form notch, per-atom fit, profiles, noise, the fit of rendered particles with the transfer known and measured) |
 | `unit_stream` | preprocessing, optics assignment, initial analysis, reference picking, particle sieving, pool 2D, pool 2D object, solve 3D (the steps of the stream stages, without a queue or waits), stream master, job sets, meta plots, stream watcher |
 
 `simple_test_exec test=units` runs all fifteen in one process. It is a
@@ -136,9 +136,9 @@ convenience and deliberately not a CTest entry.
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_local`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations; the positive NU-bundle handoff case also runs alone with `suite=nu_handoff`, checking staged constituents, first matching LP and source preservation |
 | `multistate_assignment` | highlevel | `refine3D nstates=3` with `refine=prob` and with `refine=prob_neigh` on 1 500 simulated particles of the three blob phantoms of the state fixture (populations 50, 30 and 20 %, SNR 2), from the truths low-passed to 20 A and random initial states, scored by correlation (`objfun=cc`, as production's state assignment), gated on the known state of every particle (adjusted Rand index, accuracy, each state's recall, the populations, no estimated state empty: a merge of two states fails), the maps (their mapping agreeing with the label mapping, their fit, their discrimination inside the difference mask) and the poses of the correctly assigned particles; the shuffled-label and duplicated-maps controls in both refinements; `suite=identical` runs the identical-states control by hand (labels only: identical truths leave nothing to discriminate) |
 | `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1), in four routes: `cavgs`, `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs` (owner ruling 2026-10-17); `shc`, `solve3D` from the particles; `states`, `refine3D_states` from the true poses and the consensus map; `consensus`, single-state `solve3D` in C1 followed by `refine3D_states`, the route used on real data (owner ruling 2026-10-18). Each is judged against the simulation truth: the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses, with the shuffled-label and duplicated-maps controls. The de novo routes `shc` and `cavgs` resolve every true state in only part of the runs (13 and 9 of 20 in the profile of 2026-10-19), a limitation of the method: whether they do is a `success` row, held by `test=profile` to 6 and 2 of 20 seeds, and their labels are reported; their path, checks and pose ceilings are gates. The `states` and `consensus` routes resolve every state in every run: that is checked, and their labels, populations, discrimination and poses are held to floors. The entry runs all four (1 913 s at eight threads alone); `suite=<route>` runs one, `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on), `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`), `suite=<route>_identical` (identical states) and `suite=hard_<route>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
-| `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection and statistics |
+| `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection (`detect_atoms`, species-free), the products of the atomic density model (`_FIT`, `_RES`, `_atoms.csv`, `_model.txt`, occupancy and width in `_ATMS.pdb`, the contact-score ceiling derived from the data, reported) and statistics (`atoms_stats` with the element) |
 | `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
-| `species_discovery` | highlevel | `detect_atoms` with a species list, with `discover_species=yes` and without an element, on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors (with and without half maps), judged against the generating models through `test_gate` (`metrics.tsv`); the present products must not change |
+| `species_discovery` | highlevel | the pair `detect_atoms`, then `detect_atomic_species` on its atoms (with a species list, with the class count free, with and without half maps) on simulated Pt, Pt/Ni and Pt/Al particles rendered with the five-Gaussian element kernels and surface B factors, judged against the generating models through `test_gate` (`metrics.tsv`): the weak atoms the residual recovery adds (read from `_atoms.csv`) and the class call (`_species` files, with each atom's posterior standard error and coordination spread); the species call must leave the products of `detect_atoms` unchanged, and on a particle of one species the weak atoms stay within the recovery's expected false count. Two cases run the atomic density model of `detect_atoms` (no element) on the Pt lattice rendered by the model with known profiles, transfer and noise at the real maps' level, against the floors of its unit tests |
 | `stream_preproc` | highlevel | five simulated movies through the stream's preprocessing stage and its worker jobs |
 | `flex_pca_blobs` | highlevel | `flex_pca` on a two-state blob dataset of the multi-state fixture (2 000 particles at their true poses, SNR 1) in shared memory and with two local workers, checked against the truth and against each other; `refine3D_auto state=X` on the truth-matched states, with the frozen weights and with the hard labels; `cls_expansion` and `refine3D_states_cavgs` on the fixture's three compositional beta-galactosidase states (3 600 particles in 60 exact views; ruling of 2026-10-18: not blob states that differ in a lobe of 6 % of the mass): the route's contract gated (projects, hand-back, maps), its state accuracy against the planted states (one-to-one mapping, with the shuffled-label null), the number of planted states its maps match and the poses of the sub-averages reported as a robustness profile, since its profile admits no floor (accuracy at the chance level) |
 
@@ -1123,8 +1123,8 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 
 **`single_atoms_stats` and its CdSe variants (`_cdsew`, `_cdsez`, `_cdser`)**
 
-- Claim: atom detection and statistics recover the atoms of simulated Pt and CdSe (wurtzite,
-  zincblende, rocksalt) nanoparticles.
+- Claim: atom detection (species-free, the contact ceiling from the data) and statistics (with the element)
+  recover the atoms of simulated Pt and CdSe (wurtzite, zincblende, rocksalt) nanoparticles.
 - Checks: recall and precision at least 0.90, position error at most 0.75 Å, density correlation
   at least 0.80, the coordination number of interior atoms and the fitted lattice constant within
   2 % (CdSe). Control: the atoms shifted by half a bond must fail.
@@ -1133,11 +1133,16 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 
 **`species_discovery`**
 
-- Claim: `detect_atoms` with a species list and with `discover_species=yes` recovers the elements of
-  simulated Pt, Pt/Ni and Pt/Al particles.
+- Claim: `detect_atoms` followed by `detect_atomic_species` (with a species list, or with the class count
+  free) recovers the elements of simulated Pt, Pt/Ni and Pt/Al particles.
 - Checks: Pt recall 0.98, all species 0.95, the second element 0.89 (aluminium 0.88), at most one
-  false atom, half-map label agreement 0.95. Control: `element=Pt` alone finds less than 0.90 of
-  the aluminium.
+  false atom, half-map label agreement 0.95; on the pure particle no more weak atoms than the
+  recovery's expected false count. Control: the level-1 (strong) atoms of `element=Pt` find less
+  than 0.90 of the aluminium, so the recovery is what finds it. The atomic density model on the Pt lattice rendered by the model, uniform width with
+  white noise and rising width with correlated noise, through the notch transfer 1 - 0.6 exp(-200 s^2/4):
+  `beta` within 0.005 (uniform) and 0.01 (gradient: at its seed the fixture gives 0.006 with the true transfer
+  given), the width rise from 12 to 5 neighbours within 1 A^2, and the transfer `detect_atoms` measures
+  (`_transfer.tsv`) within 0.05 of the notch where the atoms have power.
 - Profile (2026-10-18, its gate table identical on the merged code): the second element's recall
   median 0.977, worst 0.908.
 - Cost: 46 s at 8 threads (reserving 8 cores).
@@ -1296,7 +1301,7 @@ written as `sub-suite` (entry).
 | `corrs2weights`, `corrs2weights_test`, `rank_weights` | `statistics` (`unit_numerics`) |
 | `create_gain`, `search_gain_flips` | `motion gain` (`unit_motion`) |
 | `ctf`, `ctf_test` | `CTF` (`unit_image`) |
-| `detect_atoms`, `simulate_nanoparticle` | no test of their own; they run as stages of the high-level `single_atoms_stats` entries, `detect_atoms` also in `species_discovery`, and `simulate_nanoparticle` also in `single_workflow_fcc` and `single_workflow_wurtzite` |
+| `detect_atoms`, `detect_atomic_species`, `simulate_nanoparticle` | no test of their own; they run as stages of the high-level `single_atoms_stats` entries (`detect_atoms`), `detect_atoms` and `detect_atomic_species` in `species_discovery`, and `simulate_nanoparticle` also in `single_workflow_fcc` and `single_workflow_wurtzite` |
 | `detect_calpha` | `C-alpha finder` (`unit_single`) |
 | `detect_calpha_molecules` | deleted; quantitative synthetic coverage remains in `C-alpha finder` (`unit_single`) |
 | `diff_map_graphs` | `diffusion-map graphs` (`unit_numerics`) |

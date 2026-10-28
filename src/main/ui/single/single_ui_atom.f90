@@ -10,6 +10,7 @@ type(ui_program), target :: atoms_stats
 type(ui_program), target :: core_atoms_analysis
 type(ui_program), target :: crys_score
 type(ui_program), target :: detect_atoms
+type(ui_program), target :: detect_atomic_species
 type(ui_program), target :: simulate_nanoparticle
 
 contains
@@ -22,6 +23,7 @@ contains
         call new_core_atoms_analysis(prgtab)
         call new_crys_score(prgtab)
         call new_detect_atoms(prgtab)
+        call new_detect_atomic_species(prgtab)
         call new_simulate_nanoparticle(prgtab)
     end subroutine construct_single_atom_programs
 
@@ -208,8 +210,12 @@ subroutine new_atoms_register( prgtab )
         &'detect_atoms', &                                      ! name
         &'Identify atoms and connected regions in an atomic-resolution nanoparticle map',& ! summary
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map. '//&
-        &'element= may be a comma-separated list of the species the particle holds, brightest first (element=Pt,Ni): '//&
-        &'atoms are detected as with its first element, and discover_species=yes is implied with one class per listed element',& ! descr long
+        &'Each atom is then fitted as a Gaussian of its own intensity and width, seen through the transfer of the reconstruction, '//&
+        &'measured on the map as a radial curve; atoms the first detection misses are recovered from the residual map as weak atoms. '//&
+        &'_ATMS.pdb holds the atoms (chain A strong, B weak; occupancy the intensity over the particle scale, B the width), '//&
+        &'_SIM.mrc the atoms rendered from that model, _FIT.mrc the full model of the map, _RES.mrc its residual, '//&
+        &'_atoms.csv the per-atom table, _model.txt the particle parameters and _transfer.tsv the transfer by Fourier shell. '//&
+        &'Detection is species-free: the element belongs to atoms_stats (lattice analyses) and detect_atomic_species (species call)',& ! descr long
         &'single_exec',&                                        ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Detect Atoms') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -217,12 +223,6 @@ subroutine new_atoms_register( prgtab )
         call detect_atoms%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '', &
         &visibility=UI_VIS_STANDARD)
-        call detect_atoms%add_input(UI_IMG, 'vol_even', 'file', 'Even half map', &
-        &'Even half map, the noise reference of discover_species=yes together with vol_odd', 'vol_even.mrc file', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
-        call detect_atoms%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half map', &
-        &'Odd half map, the noise reference of discover_species=yes together with vol_even', 'vol_odd.mrc file', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call detect_atoms%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
@@ -231,17 +231,12 @@ subroutine new_atoms_register( prgtab )
         ! search controls
         ! <empty>
         ! filter controls
-        call detect_atoms%add_input(UI_FILT, element, required_override=.false., &
-        &visibility=UI_VIS_STANDARD)
-        ! experimental species discovery, diagnostic files only
-        call detect_atoms%add_input(UI_PARM, 'discover_species', 'binary', 'Discover species', &
-        &'Recover weak atoms from the residual map and call the species; writes diagnostic files only(yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call detect_atoms%add_input(UI_PARM, 'nspecies', 'num', 'Number of species', &
-        &'Number of species (intensity classes) for discover_species=yes, 0 = from the data{0}', '# species', .false., 0., &
-        &visibility=UI_VIS_ADVANCED)
-        call detect_atoms%add_input(UI_PARM, 'min_nbrs', 'num', 'Neighbours a recovered atom needs', &
-        &'Already found atoms within 1.15 nearest-neighbour distances that a weak atom recovered at the second residual stage of discover_species=yes needs, 0 = no requirement{3}', '# neighbours', .false., 3., &
+        ! <empty>
+        call detect_atoms%add_input(UI_PARM, 'transfer_tab', 'file', 'Transfer table', &
+        &'A known transfer (a _transfer.tsv) held instead of the one measured on the map; the unit tests hand a known transfer to the fit this way', &
+        &'e.g. map_transfer.tsv', .false., '', visibility=UI_VIS_DEVELOPER)
+        call detect_atoms%add_input(UI_PARM, 'min_nbrs', 'num', 'Neighbours a weak atom needs', &
+        &'Already found atoms within 1.15 nearest-neighbour distances that a weak atom of the second residual stage needs, 0 = no requirement{3}', '# neighbours', .false., 3., &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call detect_atoms%add_input(UI_MASK, mskdiam, required_override=.false., &
@@ -252,6 +247,51 @@ subroutine new_atoms_register( prgtab )
         ! add to ui_hash
         call add_ui_program('detect_atoms', detect_atoms, prgtab, UI_CATEGORY)
     end subroutine new_detect_atoms
+
+    subroutine new_detect_atomic_species( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call detect_atomic_species%new(&
+        &'detect_atomic_species', &                             ! name
+        &'Call the atomic species on the atoms detect_atoms found',& ! summary
+        &'is a program for calling the species of the atoms of an atomic-resolution nanoparticle map from the density model of '//&
+        &'detect_atoms (its _ATMS.pdb with the _atoms.csv and _model.txt beside it): intensity classes fitted on '//&
+        &'ln I = ln S_k + beta (c - 12), one beta for every class, each atom carrying its measurement variance and the '//&
+        &'coordination spread measured within the classes; _species.csv holds every atom with its class posteriors, their standard error and '//&
+        &'the coordination spread, _species.pdb the atoms by class, _species.txt the classes, _species_radial.csv their radial '//&
+        &'profiles. element= names the species brightest first (element=Pt,Ni), its length the class count',& ! descr long
+        &'single_exec',&                                        ! executable
+        &.false., visibility=UI_VIS_ADVANCED, display_name='Detect Atomic Species') ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call detect_atomic_species%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume detect_atoms analysed', &
+        & 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call detect_atomic_species%add_input(UI_FILE, 'pdbfile', 'file', 'Atoms', &
+        &'The _ATMS.pdb of detect_atoms; its _atoms.csv and _model.txt are read from beside it', 'e.g. vol_ATMS.pdb', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call detect_atomic_species%add_input(UI_IMG, 'vol_even', 'file', 'Even half map', &
+        &'Even half map: with vol_odd, the measurement variance of the intensities and the label agreement', 'vol_even.mrc file',&
+        &.false., '', visibility=UI_VIS_ADVANCED)
+        call detect_atomic_species%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half map', &
+        &'Odd half map: with vol_even, the measurement variance of the intensities and the label agreement', 'vol_odd.mrc file',&
+        &.false., '', visibility=UI_VIS_ADVANCED)
+        ! parameter input/output
+        call detect_atomic_species%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call detect_atomic_species%add_input(UI_PARM, 'nspecies', 'num', 'Number of species', &
+        &'Number of species (intensity classes), 0 = from the data{0}', '# species', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        ! filter controls
+        call detect_atomic_species%add_input(UI_FILT, 'element', 'str', 'Species', &
+        &'The species brightest first, comma-separated (e.g. Pt,Ni); their number is the class count', 'e.g. Pt,Ni', .false., '', &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call detect_atomic_species%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('detect_atomic_species', detect_atomic_species, prgtab, UI_CATEGORY)
+    end subroutine new_detect_atomic_species
 
     subroutine new_simulate_nanoparticle( prgtab )
         class(ui_hash), intent(inout) :: prgtab

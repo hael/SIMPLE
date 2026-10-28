@@ -29,6 +29,7 @@ contains
         call test_validation()
         call test_pseudo_symbols()
         call test_pseudo_density()
+        call test_pseudo_halo()
         call test_pseudo_pdb_roundtrip()
         call test_element_bfac()
         call test_parse_element_list()
@@ -335,6 +336,34 @@ contains
         call vol1%kill
         call vol2%kill
     end subroutine test_pseudo_density
+
+    ! a pseudo-atom through the halo transfer: its peak and its integral q (1 - a) against the closed forms, and
+    ! a zero halo amplitude leaves the plain pseudo-atom
+    subroutine test_pseudo_halo()
+        integer, parameter :: BX = 48
+        real,    parameter :: SMPD = 0.358, B1 = 25., Q1 = 1.5, HAMP = 0.6, HBFAC = 200.
+        type(atoms)        :: a1
+        type(image)        :: vol, vol0
+        real :: cutoff, peak
+        write(*,'(A)') 'test_pseudo_halo'
+        cutoff = 4. * sqrt((B1 + HBFAC) / (8. * PI**2))
+        call vol%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call vol0%new([BX,BX,BX], SMPD, wthreads=.false.)
+        call make_pseudo(a1, [24., 24., 24.] * SMPD, Q1, B1)
+        call a1%convolve(vol, cutoff, halo_amp=HAMP, halo_bfac=HBFAC)
+        peak = Q1 * ((4. * PI / B1)**1.5 - HAMP * (4. * PI / (B1 + HBFAC))**1.5)
+        call assert_real(peak, vol%get_rmat_at(25,25,25), 1.e-4 * peak, 'halo pseudo-atom peak is q [K(B) - a K(B + B_h)] at 0')
+        call make_pseudo(a1, [23.3, 24.6, 25.2] * SMPD, Q1, B1)
+        call a1%convolve(vol, cutoff, halo_amp=HAMP, halo_bfac=HBFAC)
+        call assert_real(Q1 * (1. - HAMP), sum(vol%get_rmat()) * SMPD**3, 0.01 * Q1 * (1. - HAMP),&
+            &'halo pseudo-atom integrates to q (1 - a), the transfer at zero frequency')
+        call a1%convolve(vol, cutoff, halo_amp=0., halo_bfac=HBFAC)
+        call a1%convolve(vol0, cutoff)
+        call assert_true(all(vol%get_rmat() == vol0%get_rmat()), 'a zero halo amplitude leaves the plain pseudo-atom')
+        call vol%kill
+        call vol0%kill
+        call a1%kill
+    end subroutine test_pseudo_halo
 
     subroutine make_pseudo( a, xyz, q, bfac )
         type(atoms), intent(inout) :: a

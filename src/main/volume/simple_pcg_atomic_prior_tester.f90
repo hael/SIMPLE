@@ -43,6 +43,7 @@ contains
         call test_apply_symmetric()
         call test_column_scaling()
         call test_fitted_model_projector()
+        call test_atom_widths_projector()
         call test_gram_solve()
         call test_width_fit()
         call test_reconstructor_zero_strength()
@@ -287,6 +288,68 @@ contains
         call p3%kill
         call p4%kill
     end subroutine test_fitted_model_projector
+
+    !> per-atom B alone shapes the kernels and leaves every amplitude free: any combination of the kernels is in the
+    !! active subspace (where the fitted model with the same B holds one direction only), the B factors change the
+    !! subspace, and equal B factors give the position-only prior built at that B
+    subroutine test_atom_widths_projector()
+        class(pcg_atomic_prior), allocatable :: pw, pw2, pfit, pu, pref
+        type(pcg_atomic_prior_stats) :: stats
+        real, allocatable :: pos(:,:), supp(:,:,:), b(:), b2(:), bu(:), q(:), inten(:)
+        real, allocatable :: model(:,:,:), amodel(:,:,:), probe(:,:,:), pp1(:,:,:), pp2(:,:,:), ppu(:,:,:), ppr(:,:,:)
+        real(dp), allocatable :: c(:)
+        real(dp) :: err_span, err_null, err_fit, err_b, err_uniform
+        integer :: i
+        write(*,'(A)') 'test_atom_widths_projector'
+        allocate(pw, pw2, pfit, pu, pref)
+        call build_atoms(NATOMS, ATOM_RAD, ATOM_DMIN, BOX, pos)
+        supp = sphere_support(BOX, SUPPORT_RAD)
+        allocate(b(NATOMS), b2(NATOMS), q(NATOMS), inten(NATOMS))
+        do i = 1, NATOMS
+            b(i)     = bfac_of_sigma(1.0 + 0.7 * modulo(real(i) * 0.414214, 1.), SMPD)
+            b2(i)    = bfac_of_sigma(1.0 + 0.7 * modulo(real(i) * 0.732051, 1.), SMPD)
+            q(i)     = 1.
+            inten(i) = 1.
+        enddo
+        allocate(bu(NATOMS), source=bfac_of_sigma(1.4, SMPD))
+        call pw%new(BOX, SMPD, pos, supp, bfacs=b)
+        call pw2%new(BOX, SMPD, pos, supp, bfacs=b2)
+        call pfit%new(BOX, SMPD, pos, supp, bfacs=b, occupancies=q, intensities=inten)
+        call pu%new(BOX, SMPD, pos, supp, bfacs=bu)
+        call pref%new(BOX, SMPD, pos, supp)
+        call pref%build(bu(1))
+        ! amplitudes of both signs and a spread of five: nothing ties them to a model
+        c = varied(NATOMS, -1., 4.)
+        model = pw%scatter(c)
+        err_span = normv(pw%project(model) - model) / normv(model)
+        allocate(amodel(BOX,BOX,BOX), source=0.)
+        call pw%apply(2.5, model, amodel)
+        err_null = normv(amodel) / (2.5_dp * normv(model))
+        err_fit  = normv(pfit%project(model) - model) / normv(model)
+        probe = probe_map(BOX, 11)
+        pp1 = pw%project(probe)
+        pp2 = pw2%project(probe)
+        ppu = pu%project(probe)
+        ppr = pref%project(probe)
+        err_b       = normv(pp2 - pp1) / normv(pp1)
+        err_uniform = normv(ppu - ppr) / normv(ppr)
+        stats = pw%get_stats()
+        write(*,'(A,5ES11.3)') '  span error, null error, fitted-model error, B effect, uniform-B error: ', &
+            &err_span, err_null, err_fit, err_b, err_uniform
+        call assert_true(.not. pw%uses_fitted_model(), 'per-atom widths alone leave the amplitudes free')
+        call assert_true(stats%atom_widths .and. .not. stats%fitted_model, 'the statistics name the per-atom widths')
+        call assert_true(stats%bfac_model_max > stats%bfac_model_min, 'the per-atom B range is retained')
+        call assert_true(err_span <= PROJ_TOL, 'any combination of the per-atom kernels is in the active subspace')
+        call assert_true(err_null <= PROJ_TOL, 'the prior vanishes on any combination of the per-atom kernels')
+        call assert_true(err_fit  > 1.e-3_dp, 'the fitted model with the same B holds one direction only')
+        call assert_true(err_b    > 1.e-3_dp, 'per-atom B factors change the active subspace')
+        call assert_true(err_uniform <= PROJ_TOL, 'equal B factors give the position-only prior built at that B')
+        call pw%kill
+        call pw2%kill
+        call pfit%kill
+        call pu%kill
+        call pref%kill
+    end subroutine test_atom_widths_projector
 
     !> the Gram solve returns a known solution of G^T G c = y
     subroutine test_gram_solve()

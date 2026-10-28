@@ -73,7 +73,7 @@ contains
         type(string) :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
         type(string) :: fname_recvol_base, fname_even_base, fname_odd_base, fname_res, fname_atmprior
         type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_sim
-        type(string) :: fname_species, fname_species_sim, fname_species_csv, fname_species_radial, fname_species_txt
+        type(string) :: fname_fit, fname_resmap, fname_atoms_csv, fname_model_txt, fname_extrema
         type(string) :: fname_cvags_vs_reprojs, fname_atoms_iter
         integer      :: i, iter, cnt, cnt2, funit, io_stat, ncavgs
         real         :: smpd
@@ -92,11 +92,18 @@ contains
         fname_atoms  = fbody//'_ATMS.pdb'
         fname_binary = fbody//'_BIN.mrc'
         fname_ccs    = fbody//'_CC.mrc'
-        fname_species        = fbody//'_species.pdb'
-        fname_species_sim    = fbody//'_species_SIM.mrc'
-        fname_species_csv    = fbody//'_species.csv'
-        fname_species_radial = fbody//'_species_radial.csv'
-        fname_species_txt    = fbody//'_species.txt'
+        ! the density model's products of detect_atoms (atomic_density_model.md, section 5)
+        fname_fit       = fbody//'_FIT.mrc'
+        fname_resmap    = fbody//'_RES.mrc'
+        fname_atoms_csv = fbody//'_atoms.csv'
+        fname_model_txt = fbody//'_model.txt'
+        fname_extrema   = fbody//'_resid_extrema.csv'
+        ! the loop is agnostic to the atomic species: every round's model is the density model of detect_atoms (every
+        ! atom with its own intensity and width, no element), and species are called afterwards on the final model
+        if( cline%defined('element') .or. cline%defined('nspecies') .or. cline%defined('min_nbrs') .or.&
+            &cline%defined('vol_even') .or. cline%defined('vol_odd') )then
+            THROW_HARD('autorefine3D_nano builds species-agnostic models: element, nspecies, min_nbrs, vol_even and vol_odd are not accepted; call the species on the final model with detect_atomic_species')
+        endif
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5)
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10)
@@ -134,23 +141,12 @@ contains
         call cline_refine3D_nano%set('keepvol',  'yes')
         call cline_refine3D_nano%set('maxits',   params%maxits_between) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
-        if( cline_refine3D_nano%defined('element')          ) call cline_refine3D_nano%delete('element')
-        if( cline_refine3D_nano%defined('discover_species') ) call cline_refine3D_nano%delete('discover_species')
-        if( cline_refine3D_nano%defined('nspecies')         ) call cline_refine3D_nano%delete('nspecies')
-        if( cline_refine3D_nano%defined('min_nbrs')         ) call cline_refine3D_nano%delete('min_nbrs')
-        if( cline_refine3D_nano%defined('pdbfile')          ) call cline_refine3D_nano%delete('pdbfile')
+        if( cline_refine3D_nano%defined('pdbfile') ) call cline_refine3D_nano%delete('pdbfile')
         call cline_refine3D_nano%set('atm_prior', 'no')
         if( params%l_atm_prior ) call cline_refine3D_nano%set('icm', 'no')
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('vol1', fname_recvol)
-        if( params%l_discover_species )then
-            call cline_detect_atms%set('vol_even', fname_even)
-            call cline_detect_atms%set('vol_odd',  fname_odd)
-        else
-            if( cline_detect_atms%defined('vol_even') ) call cline_detect_atms%delete('vol_even')
-            if( cline_detect_atms%defined('vol_odd')  ) call cline_detect_atms%delete('vol_odd')
-        endif
         if( cline_detect_atms%defined('pdbfile') ) call cline_detect_atms%delete('pdbfile')
         call cline_detect_atms%set('atm_prior', 'no')
         if( params%mskdiam_detect > 0. ) call cline_detect_atms%set('mskdiam', params%mskdiam_detect)
@@ -177,13 +173,11 @@ contains
             call simple_copy_file(fname_binary,      iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(fname_ccs,         iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_CC.mrc')
             call simple_copy_file(string(SPLITTED), iter_dir//fbody_split//'_iter'//int2str_pad(i,3)//'.mrc')
-            if( params%l_discover_species ) call copy_species_products(iter_dir, i)
+            call copy_model_products(iter_dir, i)
             if( l_atm_stage ) call copy_atomic_prior_products(iter_dir, i)
-            if( params%l_discover_species )then
-                fname_atoms_iter = iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_species.pdb'
-            else
-                fname_atoms_iter = iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_ATMS.pdb'
-            endif
+            ! the next reference is the model's render; with the prior the next reconstruction reads this round's
+            ! model, _ATMS.pdb with its per-atom table _atoms.csv (intensity and width of every strong and weak atom)
+            fname_atoms_iter = iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_ATMS.pdb'
             call cline_refine3D_nano%set('vol1', fname_simvol)
             if( params%l_atm_prior .and. i < params%maxits )then
                 call cline_refine3D_nano%set('atm_prior', 'yes')
@@ -195,7 +189,7 @@ contains
             call del_file(fname_atoms)
             call del_file(fname_binary)
             call del_file(fname_ccs)
-            if( params%l_discover_species ) call delete_species_products
+            call delete_model_products
             call del_file(SPLITTED)
             iter = iter + 1
         end do
@@ -211,7 +205,7 @@ contains
         call simple_copy_file(fname_binary,      string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_BIN.mrc')
         call simple_copy_file(fname_ccs,         string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_CC.mrc')
         call simple_copy_file(string(SPLITTED), string(FINAL_MAPS)//fbody_split//'_iter'//int2str_pad(iter,3)//'.mrc')
-        if( params%l_discover_species ) call copy_species_products(string(FINAL_MAPS), iter)
+        call copy_model_products(string(FINAL_MAPS), iter)
         if( l_atm_stage ) call copy_atomic_prior_products(string(FINAL_MAPS), iter)
         ! for visualization - generate three-view volume JPEGs
         call spproj%read_segment('out', params%projfile)
@@ -221,7 +215,7 @@ contains
         call del_file(fname_atoms)
         call del_file(fname_binary)
         call del_file(fname_ccs)
-        if( params%l_discover_species ) call delete_species_products
+        call delete_model_products
         call del_file(SPLITTED)
         ! Align existing 2D class averages from the project against the final 3D volume.
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
@@ -323,20 +317,13 @@ contains
 
       contains
 
+        !> atoms are detected on the prior-free map: after a prior'd stage that is the _base map
         subroutine set_detection_inputs( from_atomic_stage )
             logical, intent(in) :: from_atomic_stage
             if( from_atomic_stage )then
                 call cline_detect_atms%set('vol1', fname_recvol_base)
-                if( params%l_discover_species )then
-                    call cline_detect_atms%set('vol_even', fname_even_base)
-                    call cline_detect_atms%set('vol_odd',  fname_odd_base)
-                endif
             else
                 call cline_detect_atms%set('vol1', fname_recvol)
-                if( params%l_discover_species )then
-                    call cline_detect_atms%set('vol_even', fname_even)
-                    call cline_detect_atms%set('vol_odd',  fname_odd)
-                endif
             endif
         end subroutine set_detection_inputs
 
@@ -349,24 +336,20 @@ contains
             call simple_copy_file(base_stem//'_ATMS.pdb', fname_atoms)
             call simple_copy_file(base_stem//'_BIN.mrc', fname_binary)
             call simple_copy_file(base_stem//'_CC.mrc', fname_ccs)
-            if( params%l_discover_species )then
-                call simple_copy_file(base_stem//'_species.pdb',        fname_species)
-                call simple_copy_file(base_stem//'_species_SIM.mrc',    fname_species_sim)
-                call simple_copy_file(base_stem//'_species.csv',        fname_species_csv)
-                call simple_copy_file(base_stem//'_species_radial.csv', fname_species_radial)
-                call simple_copy_file(base_stem//'_species.txt',        fname_species_txt)
-            endif
+            call simple_copy_file(base_stem//'_FIT.mrc',           fname_fit)
+            call simple_copy_file(base_stem//'_RES.mrc',           fname_resmap)
+            call simple_copy_file(base_stem//'_atoms.csv',         fname_atoms_csv)
+            call simple_copy_file(base_stem//'_model.txt',         fname_model_txt)
+            call simple_copy_file(base_stem//'_resid_extrema.csv', fname_extrema)
             call del_file(base_stem//'_SIM.mrc')
             call del_file(base_stem//'_ATMS.pdb')
             call del_file(base_stem//'_BIN.mrc')
             call del_file(base_stem//'_CC.mrc')
-            if( params%l_discover_species )then
-                call del_file(base_stem//'_species.pdb')
-                call del_file(base_stem//'_species_SIM.mrc')
-                call del_file(base_stem//'_species.csv')
-                call del_file(base_stem//'_species_radial.csv')
-                call del_file(base_stem//'_species.txt')
-            endif
+            call del_file(base_stem//'_FIT.mrc')
+            call del_file(base_stem//'_RES.mrc')
+            call del_file(base_stem//'_atoms.csv')
+            call del_file(base_stem//'_model.txt')
+            call del_file(base_stem//'_resid_extrema.csv')
             call base_stem%kill
         end subroutine normalize_detection_products
 
@@ -383,26 +366,28 @@ contains
             call stem%kill
         end subroutine copy_atomic_prior_products
 
-        subroutine copy_species_products( destination, iteration )
+        !> the density model's products beside _ATMS.pdb and _SIM.mrc (atomic_density_model.md, section 5)
+        subroutine copy_model_products( destination, iteration )
             type(string), intent(in) :: destination
             integer,      intent(in) :: iteration
             type(string) :: stem
-            stem = destination//fbody//'_iter'//int2str_pad(iteration,3)//'_species'
-            call simple_copy_file(fname_species,        stem//'.pdb')
-            call simple_copy_file(fname_species_sim,    stem//'_SIM.mrc')
-            call simple_copy_file(fname_species_csv,    stem//'.csv')
-            call simple_copy_file(fname_species_radial, stem//'_radial.csv')
-            call simple_copy_file(fname_species_txt,    stem//'.txt')
+            stem = destination//fbody//'_iter'//int2str_pad(iteration,3)
+            call simple_copy_file(fname_fit,       stem//'_FIT.mrc')
+            call simple_copy_file(fname_resmap,    stem//'_RES.mrc')
+            call simple_copy_file(fname_atoms_csv, stem//'_atoms.csv')
+            call simple_copy_file(fname_model_txt, stem//'_model.txt')
+            call simple_copy_file(fname_extrema,   stem//'_resid_extrema.csv')
             call stem%kill
-        end subroutine copy_species_products
+        end subroutine copy_model_products
 
-        subroutine delete_species_products
-            call del_file(fname_species)
-            call del_file(fname_species_sim)
-            call del_file(fname_species_csv)
-            call del_file(fname_species_radial)
-            call del_file(fname_species_txt)
-        end subroutine delete_species_products
+        subroutine delete_model_products
+            call del_file(fname_fit)
+            call del_file(fname_resmap)
+            call del_file(fname_atoms_csv)
+            call del_file(fname_model_txt)
+            call del_file(fname_extrema)
+        end subroutine delete_model_products
+
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano( self, cline )

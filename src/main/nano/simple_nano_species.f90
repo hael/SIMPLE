@@ -1,16 +1,16 @@
-!@descr: species discovery numerics for SINGLE: intensity mixture and class choice, enclosed Gaussian fraction, detection-threshold calibration, Gaussian width fit, filters
+!@descr: species numerics for SINGLE: the class mixture with a shared coordination term and its posteriors, enclosed Gaussian fraction, detection-threshold calibration, Gaussian width fit, local maxima
 ! Array numerics with no image dependence; the design is doc/implementation_notes/completed/species_discovery_completed.md
 ! (sections 3.2 to 3.7).
 module simple_nano_species
 use simple_defs,          only: dp, DPI, DTINY
 use simple_error,         only: simple_exception
 use simple_srch_sort_loc, only: hpsort
-use simple_stat,          only: median
 use simple_xd_gmm,        only: xd_gmm
 implicit none
 
-public :: fit_species_mixture, class_separation, enclosed_fraction, maxima_shape, calibrate_threshold, expected_false_count
-public :: fit_gauss_width, gauss_filter3D, local_maxima, robust_spread
+public :: fit_species_mixture, class_posterior, class_separation, enclosed_fraction, maxima_shape, calibrate_threshold
+public :: expected_false_count
+public :: fit_gauss_width, local_maxima
 public :: MAX_NSPECIES, MIN_SEPARATION, MIN_CLASS_ATOMS, MIN_CLASS_FRAC
 private
 #include "simple_local_flags.inc"
@@ -34,18 +34,19 @@ real(dp), parameter :: TOL_SLOPE_FIN   = 1.d-6  ! EM tolerance of the class fit 
 
 contains
 
-    ! One-dimensional Gaussian mixture of the intensities x for K = 1..kmax, fitted as an extreme deconvolution
-    ! (simple_xd_gmm): every intensity is a class value plus measurement noise of spread s_meas, so the class
-    ! variances are the intrinsic spreads and the observed variance of a class is var_k + s_meas**2 (var returns
-    ! the observed one). Best of two deterministic starts, sorted quantiles and largest gaps. With nspecies_in
-    ! positive, kmax = K = nspecies_in; otherwise kmax = MAX_NSPECIES and K is the admissible K of lowest BIC.
-    ! Classes are numbered by decreasing mean; post(i,k) is the posterior. A K fixed by nspecies_in is taken even
-    ! when inadmissible, so a class may then hold no atom. bic and admissible are of size kmax.
-    ! With cov, every intensity carries one term slope * cov(i) shared by the classes (3.6): mu is then the class
-    ! value at cov = 0, the slope is fitted for each K and counts as one more parameter, and slope returns that of K.
-    subroutine fit_species_mixture( x, s_meas, nspecies_in, K, labels, post, mu, var, bic, admissible, cov, slope )
+    ! One-dimensional Gaussian mixture of the values x for K = 1..kmax, fitted as an extreme deconvolution
+    ! (simple_xd_gmm): every value is a class value plus noise of its own variance s2(i), so the class variances var
+    ! are the intrinsic spreads beyond it (a value's class likelihood has the variance var_k + s2(i)). Best of two
+    ! deterministic starts, sorted quantiles and largest gaps. With nspecies_in positive, kmax = K = nspecies_in;
+    ! otherwise kmax = MAX_NSPECIES and K is the admissible K of lowest BIC. Classes are numbered by decreasing mean;
+    ! post(i,k) is the posterior, w the class fractions. A K fixed by nspecies_in is taken even when inadmissible, so a
+    ! class may then hold no atom. bic and admissible are of size kmax. With cov, every value carries one term
+    ! slope * cov(i) shared by the classes (3.6): mu is then the class value at cov = 0, the slope is fitted for each K
+    ! and counts as one more parameter, and slope returns that of K. detect_atomic_species fits x = ln I with
+    ! cov = c - 12, the multiplicative form ln I = ln S_k + beta (c - 12) (atomic_density_model.md, section 2)
+    subroutine fit_species_mixture( x, s2, nspecies_in, K, labels, post, mu, var, bic, admissible, cov, slope, w )
         real,                           intent(in)  :: x(:)
-        real,                           intent(in)  :: s_meas
+        real,                           intent(in)  :: s2(:)
         integer,                        intent(in)  :: nspecies_in
         integer,                        intent(out) :: K
         integer,                        intent(out) :: labels(size(x))
@@ -54,6 +55,7 @@ contains
         logical, optional, allocatable, intent(out) :: admissible(:)
         real,    optional,              intent(in)  :: cov(:)
         real,    optional,              intent(out) :: slope
+        real,    optional, allocatable, intent(out) :: w(:)
         real(dp), allocatable :: mus(:,:), vars(:,:), ws(:,:), posts(:,:,:), bics(:), slopes(:)
         logical,  allocatable :: adm(:)
         real(dp) :: X1(size(x),1), R(1,1,size(x)), Nz(1,1,size(x)), lnl
@@ -62,13 +64,14 @@ contains
         if( n < 1 )               THROW_HARD('no intensities; fit_species_mixture')
         if( nspecies_in < 0 )     THROW_HARD('nspecies must be 0 (automatic) or positive; fit_species_mixture')
         if( nspecies_in > n )     THROW_HARD('fewer intensities than nspecies; fit_species_mixture')
-        if( s_meas <= 0. )        THROW_HARD('measurement spread must be positive; fit_species_mixture')
+        if( size(s2) /= n )       THROW_HARD('one noise variance per value; fit_species_mixture')
+        if( any(.not. s2 > 0.) )  THROW_HARD('noise variances must be positive; fit_species_mixture')
         if( present(cov) )then
             if( size(cov) /= n )  THROW_HARD('one covariate per intensity; fit_species_mixture')
         endif
         X1(:,1) = real(x, dp)
         R       = 1._dp
-        Nz      = real(s_meas, dp)**2
+        Nz(1,1,:) = real(s2, dp)
         if( nspecies_in > 0 )then
             kmax = nspecies_in
         else
@@ -88,7 +91,8 @@ contains
                 npar = 3 * kk - 1
             endif
             bics(kk) = -2._dp * lnl + real(npar, dp) * log(real(n, dp))
-            adm(kk)  = is_admissible(posts(:,:kk,kk), mus(:kk,kk), vars(:kk,kk))
+            ! admissibility on the observed spreads: the intrinsic one and the typical noise
+            adm(kk)  = is_admissible(posts(:,:kk,kk), mus(:kk,kk), vars(:kk,kk) + median_dp(Nz(1,1,:)))
         enddo
         if( nspecies_in > 0 )then
             K = nspecies_in
@@ -105,7 +109,36 @@ contains
         if( present(bic) )        bic        = real(min(bics, real(huge(1.), dp)))
         if( present(admissible) ) admissible = adm
         if( present(slope) )      slope      = real(slopes(K))
+        if( present(w) )          w          = real(ws(:K,K))
     end subroutine fit_species_mixture
+
+    ! the class posterior of one value x of noise variance nz under classes of means m (the shared covariate term
+    ! included), intrinsic variances var and fractions w: post(k) ~ w_k N(x; m_k, var_k + nz); and the standard error
+    ! of the posterior of the most probable class from the measurement noise v of x (part of nz), by propagation:
+    ! sd = sqrt(v) |dP_k/dx|, dP_k/dx = P_k (g_k - sum_j P_j g_j), g_j = (m_j - x) / (var_j + nz). For two classes of
+    ! one variance s2 this is P (1 - P) |m_1 - m_2| / s2 sqrt(v)
+    subroutine class_posterior( x, nz, v, m, var, w, post, label, sd_post )
+        real,    intent(in)  :: x, nz, v, m(:), var(:), w(:)
+        real,    intent(out) :: post(size(m)), sd_post
+        integer, intent(out) :: label
+        real(dp) :: lp(size(m)), g(size(m)), p(size(m)), s2k, gbar
+        integer  :: k
+        do k = 1,size(m)
+            s2k = real(var(k), dp) + real(nz, dp)
+            if( w(k) > 0. )then
+                lp(k) = log(real(w(k), dp)) - 0.5_dp * log(s2k) - 0.5_dp * (real(x, dp) - real(m(k), dp))**2 / s2k
+            else
+                lp(k) = -huge(1._dp)
+            endif
+            g(k) = (real(m(k), dp) - real(x, dp)) / s2k
+        enddo
+        p    = exp(lp - maxval(lp))
+        p    = p / sum(p)
+        post = real(p)
+        label = maxloc(p, dim=1)
+        gbar    = sum(p * g)
+        sd_post = real(sqrt(max(real(v, dp), 0._dp)) * abs(p(label) * (g(label) - gbar)))
+    end subroutine class_posterior
 
     ! D = |mu_a - mu_b| / sqrt((var_a + var_b) / 2)
     elemental real function class_separation( mu_a, var_a, mu_b, var_b )
@@ -250,59 +283,6 @@ contains
 
     end subroutine fit_gauss_width
 
-    ! b = a convolved with the normalised 3D Gaussian of standard deviation sigma_vox voxels, zero outside the box
-    subroutine gauss_filter3D( a, sigma_vox, b )
-        real, intent(in)  :: a(:,:,:)
-        real, intent(in)  :: sigma_vox
-        real, intent(out) :: b(:,:,:)
-        real, allocatable :: tmp(:,:,:), w(:)
-        integer :: n(3), hw, i, j, k, l
-        n  = shape(a)
-        hw = max(1, ceiling(4. * sigma_vox))
-        allocate(w(-hw:hw))
-        do l = -hw,hw
-            w(l) = exp(-0.5 * (real(l) / sigma_vox)**2)
-        enddo
-        w = w / sum(w)
-        allocate(tmp(n(1),n(2),n(3)))
-        !$omp parallel do default(shared) private(i,j,k,l) schedule(static) proc_bind(close)
-        do k = 1,n(3)
-            do j = 1,n(2)
-                do i = 1,n(1)
-                    b(i,j,k) = 0.
-                    do l = max(-hw, 1-i), min(hw, n(1)-i)
-                        b(i,j,k) = b(i,j,k) + w(l) * a(i+l,j,k)
-                    enddo
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        !$omp parallel do default(shared) private(i,j,k,l) schedule(static) proc_bind(close)
-        do k = 1,n(3)
-            do j = 1,n(2)
-                do i = 1,n(1)
-                    tmp(i,j,k) = 0.
-                    do l = max(-hw, 1-j), min(hw, n(2)-j)
-                        tmp(i,j,k) = tmp(i,j,k) + w(l) * b(i,j+l,k)
-                    enddo
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        !$omp parallel do default(shared) private(i,j,k,l) schedule(static) proc_bind(close)
-        do k = 1,n(3)
-            do j = 1,n(2)
-                do i = 1,n(1)
-                    b(i,j,k) = 0.
-                    do l = max(-hw, 1-k), min(hw, n(3)-k)
-                        b(i,j,k) = b(i,j,k) + w(l) * tmp(i,j,k+l)
-                    enddo
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine gauss_filter3D
-
     ! voxels of z inside mask that exceed all 26 neighbours and thres, with at least nmin_above neighbours
     ! above thres; ijk(3,n) and vals(n) by decreasing value
     subroutine local_maxima( z, mask, thres, nmin_above, ijk, vals )
@@ -353,18 +333,10 @@ contains
 
     end subroutine local_maxima
 
-    ! 1.4826 times the median absolute deviation from the median
-    real function robust_spread( x )
-        real, intent(in) :: x(:)
-        real :: med
-        med           = median(x)
-        robust_spread = 1.4826 * median(abs(x - med))
-    end function robust_spread
-
     ! PRIVATE
 
     ! Extreme-deconvolution fits of kk classes from the sorted-quantile and the largest-gap starts; the fit of
-    ! higher likelihood, by decreasing mean. var is the observed class variance, intrinsic plus the noise.
+    ! higher likelihood, by decreasing mean. var is the intrinsic class variance (the noise of each value apart).
     subroutine fit_k( X1, R, Nz, kk, mu, var, w, post, lnl, tol, mstart )
         real(dp),           intent(in)  :: X1(:,:), R(:,:,:), Nz(:,:,:)
         integer,            intent(in)  :: kk
@@ -437,7 +409,7 @@ contains
                 call g%posterior(X1, R, Nz, xhat, xcov, post_o)
                 call g%kill
                 mu_o  = m(1,:)
-                var_o = S(1,1,:) + Nz(1,1,1)
+                var_o = S(1,1,:)
             end subroutine fit_from
 
     end subroutine fit_k
@@ -452,9 +424,10 @@ contains
         real(dp), intent(in)  :: X1(:,:), cv(:), R(:,:,:), Nz(:,:,:)
         integer,  intent(in)  :: kk
         real(dp), intent(out) :: mu(kk), var(kk), w(kk), post(size(X1,1),kk), lnl, slope
-        real(dp) :: mu2(kk), var2(kk), w2(kk), post2(size(X1,1),kk), mstart(kk), lnl2, slope2, s0, xm, cm, sxx, smean
+        real(dp) :: mu2(kk), var2(kk), w2(kk), post2(size(X1,1),kk), mstart(kk), lnl2, slope2, s0, xm, cm, sxx, smean, nzm
         integer  :: n
         n     = size(X1,1)
+        nzm   = median_dp(Nz(1,1,:))
         xm    = sum(X1(:,1)) / real(n, dp)
         cm    = sum(cv) / real(n, dp)
         sxx   = sum((cv - cm)**2)
@@ -493,8 +466,8 @@ contains
                         if( wk < DTINY ) cycle
                         xb  = sum(post_o(:,k) * X1(:,1)) / wk
                         cb  = sum(post_o(:,k) * cv) / wk
-                        num = num + sum(post_o(:,k) * (X1(:,1) - xb) * (cv - cb)) / var_o(k)
-                        den = den + sum(post_o(:,k) * (cv - cb)**2) / var_o(k)
+                        num = num + sum(post_o(:,k) * (X1(:,1) - xb) * (cv - cb)) / (var_o(k) + nzm)
+                        den = den + sum(post_o(:,k) * (cv - cb)**2) / (var_o(k) + nzm)
                     enddo
                     snew = slope_o
                     if( den > DTINY ) snew = num / den
@@ -513,6 +486,19 @@ contains
             end function shifted
 
     end subroutine fit_k_cov
+
+    ! median of a vector
+    real(dp) function median_dp( v )
+        real(dp), intent(in) :: v(:)
+        real :: vs(size(v))
+        vs = real(v)
+        call hpsort(vs)
+        if( mod(size(vs), 2) == 0 )then
+            median_dp = 0.5_dp * real(vs(size(vs)/2) + vs(size(vs)/2 + 1), dp)
+        else
+            median_dp = real(vs(size(vs)/2 + 1), dp)
+        endif
+    end function median_dp
 
     ! permutation that sorts a short array into decreasing order
     function sort_desc( v ) result( p )

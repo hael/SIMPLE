@@ -13,26 +13,29 @@ with per-particle profiles in the coordination number. Option 1 of section 1a (m
 the refinement) is withdrawn; the products and the refinement loop of this note follow once
 that model fits the 66 real maps.
 
-`detect_atoms discover_species=yes` writes `_species_SIM.mrc`. This is the fitted Gaussian model
-on the experimental map's intensity scale: every atom carries the stage-2 B factor and its fitted
-amplitude, so the density represents the coupled species/occupancy intensity without assuming an
-atomic number. `_species.csv` also carries the fully occupied hard-class/environment intensity, the
-posterior-weighted intensity `Ibar_i = sum_k POST_ik I_ik`, and the atom's fitted integrated
-intensity relative to its hard-class model as occupancy. With
-`pdb_bfac=yes`, elemental rendering also scales each atom by its PDB occupancy as well as adding its
-B factor.
+Since the density model (`atomic_density_model.md`), every `detect_atoms` run writes `_SIM.mrc` as
+the fitted Gaussian model on the experimental map's intensity scale: every atom, strong or weak,
+carries its own width `B_i` and integrated intensity `I_i`, so the density represents the coupled
+species/occupancy intensity without assuming an atomic number; `_ATMS.pdb` carries `B_i` and the
+occupancy `I_i / S`, and `_atoms.csv` the full per-atom table. With `discover_species=yes`,
+`_species.csv` adds the fully occupied hard-class/environment intensity, the posterior-weighted
+intensity `Ibar_i = sum_k POST_ik I_ik`, and the atom's fitted intensity relative to its hard-class
+model as occupancy; `_species.pdb` carries that occupancy and `B_i`. With `pdb_bfac=yes`, elemental
+rendering also scales each atom by its PDB occupancy as well as adding its B factor.
 
-`autorefine3D_nano atm_prior=yes rec_backend=pcg` closes the reconstruction loop. Stage 1 is
-prior-free; the next PCG solve reads the `_species.pdb` and its same-stem CSV. Each atom kernel uses
-its fitted `B_i`, and its relative coefficient is
-`q_i Ibar_i (4 pi / B_i)^(3/2)`. Thus uncertain species assignments interpolate between their
-class/environment intensities instead of becoming a hard prior. The unpenalized subspace is the
-global scale of that complete fitted model, so the particle data still set one overall density scale
-instead of inheriting the preceding map's arbitrary scale. The next detection remains on the
-prior-free `_base` maps. Without the
-fitted-model CSV, the prior retains its previous position-only behavior: one fitted common width and
-free atom amplitudes. Sharing the five-Gaussian element kernels and acceptance testing of the new
-feedback remain open.
+`autorefine3D_nano atm_prior=yes rec_backend=pcg` closes the reconstruction loop, and the loop is
+agnostic to the atomic species (ruling of 2026-10-26): it takes no `element` and no species key,
+every round's `detect_atoms` runs species-free, and the next PCG solve reads `_ATMS.pdb` with
+`_atoms.csv`: every strong and weak atom at its position with a kernel of its fitted `B_i`, and a
+free amplitude per atom (ruling 4 of `atomic_density_model.md`, 2026-10-26). The fitted intensities
+`I_i` do not enter the loop's prior; the one-scale form that fixed them is kept for a standalone
+`reconstruct3D` with a `_species.csv`. The next detection remains on the prior-free `_base` maps. Species are
+called afterwards on the final model; `_species.pdb` with `_species.csv` (the posterior-weighted
+intensity `Ibar_i` and the occupancy relative to the class model) can be given to a standalone
+`reconstruct3D atm_prior=yes` in that fitted-model form, with the coefficient `q_i Ibar_i (4 pi / B_i)^(3/2)`.
+A PDB without a per-atom table (a model from elsewhere) keeps the position-only prior: one fitted
+common width and free atom amplitudes. Sharing the five-Gaussian element kernels and acceptance
+testing of the loop remain open.
 
 **Status, after the checks of section 1a: the fitting method is open.** Per-atom B factors
 fitted to a reconstructed map are not trustworthy yet, in any form tried. The rendering,
@@ -251,7 +254,9 @@ species fit's.
    occupancies within 0.1.
 3. **Fitted-model loop implemented.** `autorefine3D_nano` passes the detected species PDB and its
    table to the next PCG reconstruction and retains the base/residual/sidecar products. The prior
-   uses per-atom B, occupancy and posterior-weighted model intensity up to one fitted global scale.
+   uses per-atom B with a free amplitude per atom (ruling 4 of `atomic_density_model.md`); the form
+   with per-atom B, occupancy and posterior-weighted model intensity up to one fitted global scale
+   serves a standalone `reconstruct3D` with a `_species.csv`.
    Validation with the full `single_workflow` case of section 8 remains open. Exit: the floors of
    section 8.
 4. The real maps, inside the species validation run.

@@ -355,16 +355,19 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=Pt)
   # the same test on the CdSe wurtzite, zincblende and rocksalt lattices of the compound selectors, whose
   # lattice lookups took the cut symbol Cd (fcc) before the repair of the species-discovery plan (section 9):
-  # interior coordination and fitted lattice constant asserted
+  # interior coordination and fitted lattice constant asserted; detect_atoms runs without the element (its
+  # contact ceiling from the data), atoms_stats with it
   simple_add_test(single_atoms_stats_cdsew highlevel 3600 8 PROCESSORS 4
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeW)
   simple_add_test(single_atoms_stats_cdsez highlevel 3600 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeZ)
   simple_add_test(single_atoms_stats_cdser highlevel 3600 8 PROCESSORS 3
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_atoms_stats smpd=0.358 element=CdSeR)
-  # species discovery of detect_atoms (species list and discover_species=yes) on Pt, Pt/Ni and Pt/Al
+  # species discovery (detect_atoms, then detect_atomic_species with a species list or the class count
+  # free) on Pt, Pt/Ni and Pt/Al
   # particles rendered with the element kernels, judged against the generating models; its own entry by
-  # the plan doc/implementation_notes/completed/species_discovery_completed.md (sections 10.4 and 10.6)
+  # the plan doc/implementation_notes/completed/species_discovery_completed.md (sections 10.4 and 10.6);
+  # also the density model of detect_atoms on a Pt particle rendered by the model (atomic_density_model.md)
   simple_add_test(species_discovery highlevel 3600 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=species_discovery nthr=8)
   # stream preprocessing: five simulated movies through the stream's

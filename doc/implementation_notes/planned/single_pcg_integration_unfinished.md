@@ -61,16 +61,22 @@ the prior'd halves are never a noise reference (use the prior-free `_base` halve
    stage's atomic-prior reconstruction. The published map is the regularized solve; resolution,
    the next atom detection, and species discovery use the prior-free `_base` pair. Every stage
    retains `_base`, `_res`, and `_atmprior.txt` beside the existing products. ICM is rejected.
-   An element list such as `Pt,Ni` is passed only to `detect_atoms`, so the child refinement does
-   not parse a species selector. With discovery enabled, the next prior uses `_species.pdb`, which
-   includes residual-recovered weak sites, and all species products are retained per round. The
-   same-stem species table now supplies the fitted per-atom B, occupancy and species-posterior
-   expectation of the class/environment model intensity. Their Gaussian model defines the prior's
-   one-dimensional unpenalized subspace; only
-   its global scale stays free and is therefore set by the particle data. A PDB without this table
-   keeps the previous position-only, free-amplitude prior. Species-dependent TEM kernels still need
-   item 3. Standalone `refine3D_nano`, the full `single_workflow` acceptance trajectory and the
-   held-out image check remain open.
+   The loop is agnostic to the atomic species (ruling of 2026-10-26): `autorefine3D_nano` takes
+   no `element` and no species key, each round's `detect_atoms` runs species-free, and the next
+   prior uses `_ATMS.pdb` with its per-atom table `_atoms.csv` (the density model of
+   `atomic_density_model.md`: every strong and weak atom with its fitted intensity and width); the
+   model products are retained per round. The prior takes from that table the positions and the
+   per-atom widths (`BFAC`) and leaves every amplitude free: its unpenalized subspace is the span of
+   the atom kernels, each at its own width (ruling 4 of `atomic_density_model.md`, 2026-10-26; the
+   one-scale form pinned every atom's intensity to the last round's fit of an incomplete model).
+   Species are called afterwards on the final model. A PDB without a per-atom table (a model from
+   elsewhere) keeps the position-only, free-amplitude prior at one fitted width; `_species.pdb`
+   with `_species.csv` (a species-posterior intensity) gives a standalone `reconstruct3D
+   atm_prior=yes` the fitted-model form, whose one-dimensional subspace leaves only the global
+   scale free.
+   Species-dependent TEM kernels still need item 3. Standalone `refine3D_nano`, the full
+   `single_workflow` acceptance trajectory and the held-out image check remain open. The `fcc`
+   case of `single_workflow` runs the loop with `maxits_atm=2` and checks the products exist.
 5. **Per-atom amplitudes for species discovery.** Write the data-fitted amplitude
    `c = argmin || A G c - b ||^2` (solves `G^T H G c = G^T r` with the reconstructor's normal
    operator, by a small CG in atom space) and let `discover_species` use it instead of the aperture

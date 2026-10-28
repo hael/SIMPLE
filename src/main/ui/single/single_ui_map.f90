@@ -40,8 +40,7 @@ subroutine new_conv_atom_denoise( prgtab )
         ! search controls
         ! <empty>
         ! filter controls
-        call conv_atom_denoise%add_input(UI_FILT, element, &
-        &visibility=UI_VIS_STANDARD)
+        ! <empty>
         ! mask controls
         call conv_atom_denoise%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

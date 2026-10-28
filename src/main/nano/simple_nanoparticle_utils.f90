@@ -15,7 +15,7 @@ implicit none
 public :: thres_detect_conv_atom_denoised, phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: read_pdb2matrix, write_matrix2pdb, find_couples
 public :: dists_btw_common, remove_atoms, find_atoms_subset, find_rMax, atoms_register, Kabsch_algo, atm_rmsd_stats
-public :: est_nn_dist, lattice_cutoff, lattice_bond, binary_lattice
+public :: est_nn_dist, lattice_cutoff, lattice_bond, binary_lattice, contact_cutoff
 private
 #include "simple_local_flags.inc"
 
@@ -186,11 +186,11 @@ contains
     end subroutine Kabsch_algo
 
     ! FORMULA: phasecorr = ifft(fft(field).*conj(fft(reference)));
-    ! with bfac_ref the reference is a unit pseudo-atom of B factor bfac_ref instead of the element
-    subroutine phasecorr_one_atom( img, element, bfac_ref )
+    ! the map's phase correlation with one pseudo-atom, a Gaussian of B bfac_ref (A**2): the detection template,
+    ! the same for every species
+    subroutine phasecorr_one_atom( img, bfac_ref )
         class(image),     intent(inout) :: img
-        character(len=*), intent(in)    :: element
-        real, optional,   intent(in)    :: bfac_ref
+        real,             intent(in)    :: bfac_ref
         type(image) :: one_atom, img_copy
         type(atoms) :: atom
         real        :: cutoff, smpd
@@ -208,13 +208,9 @@ contains
         call one_atom%new(ldim, smpd)
         cutoff = 8.*smpd
         call atom%new(1)
-        if( present(bfac_ref) )then
-            call atom%set_element(1,'X1')
-            call atom%set_occupancy(1,1.)
-            call atom%set_beta(1,bfac_ref)
-        else
-            call atom%set_element(1,el_symbol(element))
-        endif
+        call atom%set_element(1,'X1')
+        call atom%set_occupancy(1,1.)
+        call atom%set_beta(1,bfac_ref)
         call atom%set_coord(1,smpd*(real(ldim)/2.)) ! DO NOT NEED THE +1
         call atom%convolve(one_atom, cutoff)
         call one_atom%fft()
@@ -267,21 +263,21 @@ contains
         est_nn_dist = median(nn)
     end function est_nn_dist
 
-    ! Identify the bound for defining the neighbourhood in
-    ! fit_lattice and strain_analysis routines below; with d_nn the close-packed cutoff RMAX_NN_FRAC * d_nn
-    function find_rMax( element, d_nn ) result( rMax )
+    ! the neighbour cutoff of the contact scores, from the measured nearest-neighbour distance (A): RMAX_NN_FRAC d_nn
+    real function contact_cutoff( d_nn )
+        real, intent(in) :: d_nn
+        contact_cutoff = RMAX_NN_FRAC * d_nn
+    end function contact_cutoff
+
+    ! the bound of the neighbourhood of the lattice analyses (fit_lattice, strain_analysis): the element's lattice
+    ! cutoff plus an error term; detection measures its own cutoff from the map (contact_cutoff)
+    function find_rMax( element ) result( rMax )
         character(len=*), intent(in) :: element
-        real, optional,   intent(in) :: d_nn
         character(len=5)  :: el_ucase
         character(len=10) :: crystal_system
         real, parameter   :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
         real    :: a_0(3), rMax, r, err
         integer :: Z
-        if( present(d_nn) )then
-            rMax = RMAX_NN_FRAC * d_nn
-            write(logfhandle,*) 'rMax identified as ', rMax
-            return
-        endif
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
         call get_element_Z_and_radius(uppercase(el_symbol(element)), Z, r)
@@ -548,18 +544,17 @@ contains
 
     ! COORDINATION NUMBER ANALYSIS
 
-    ! This function calculates the contact score for each atom
-    ! ATTENTION: input coords of model have to be in ANGSTROMS.
-    ! d_nn replaces the element's lattice in find_rMax
-    subroutine calc_contact_scores( element, model, contact_scores, d_nn )
-        character(len=*),  intent(in)    :: element
+    ! the contact score of each atom: its neighbours within contact_cutoff(d_nn), d_nn the measured nearest-neighbour
+    ! distance; coordinates and d_nn in ANGSTROMS
+    subroutine calc_contact_scores( model, contact_scores, d_nn )
         real, allocatable, intent(in)    :: model(:,:)
         integer,           intent(inout) :: contact_scores(size(model,2))
-        real, optional,    intent(in)    :: d_nn
+        real,              intent(in)    :: d_nn
         integer :: natoms, iatom, jatom, cnt
         real    :: dist, rMax
         ! init
-        rMax           = find_rMax(element, d_nn)
+        rMax           = contact_cutoff(d_nn)
+        write(logfhandle,*) 'rMax identified as ', rMax
         natoms         = size(model,2)
         contact_scores = 0
         do iatom = 1, natoms

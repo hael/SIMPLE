@@ -137,6 +137,7 @@ use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_nano_species_tester,              only: run_all_nano_species_tests
 use simple_commanders_volops_tester,         only: run_all_sharpvol_tests
+use simple_nano_density_tester,              only: run_all_nano_density_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
@@ -492,8 +493,8 @@ contains
         call add_suite(s, n, 'pose 1JYX recovery', run_all_strategy3D_cont_1jyx_tests)
     end subroutine suites_lib_cart_align3D
 
-    !> SINGLE (nanoparticles, atomic models): the atoms module, the C-alpha candidate search and the
-    !! species-discovery numerics
+    !> SINGLE (nanoparticles, atomic models): the atoms module, the C-alpha candidate search, the
+    !! species-discovery numerics and the atomic density model
     subroutine suites_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
@@ -501,6 +502,7 @@ contains
         call add_suite(s, n, 'cif2mrc',        run_all_cif2mrc_tests)
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
         call add_suite(s, n, 'species',        run_all_nano_species_tests)
+        call add_suite(s, n, 'density',        run_all_nano_density_tests)
     end subroutine suites_single
 
     !> nightly pdb2mrc coverage of the built-in 6VXX and 1JYX models

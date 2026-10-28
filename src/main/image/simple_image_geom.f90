@@ -229,12 +229,13 @@ contains
         end do
     end function win2arr
 
-    !>  \brief win2arr_rad extracts a small window into an array (circular indexing) with radial thres
+    !>  \brief win2arr_rad extracts the pixels within maxrad of (i,j,k) into pixels(1:npix_out), circular indexing;
+    !!  the window is the cube (or square) of half-width winsz around the centre and npix_in is pixels' size
     module subroutine win2arr_rad( self, i, j, k, winsz, npix_in, maxrad, npix_out, pixels )
         class(image), intent(in)    :: self
         integer,      intent(in)    :: i, j, k, winsz, npix_in
         real,         intent(in)    :: maxrad ! in pixels
-        integer,      intent(inout) :: npix_out
+        integer,      intent(out)   :: npix_out
         real,         intent(inout) :: pixels(npix_in)
         integer :: s, ss, t, tt, u, uu
         real    :: vec_cen(3), vec_displ(3), maxradsq
@@ -245,7 +246,7 @@ contains
             vec_cen = real([i,j,1])
         endif
         maxradsq = maxrad**2.
-        npix_out = 1
+        npix_out = 0
         do s = i - winsz,i + winsz
             ss = cyci_1d_static(self%ldim(1), s)
             do t = j - winsz, j + winsz
@@ -254,16 +255,18 @@ contains
                     do u = k - winsz, k + winsz
                         vec_displ = real([s,t,u]) - vec_cen
                         if( sum(vec_displ**2.) <= maxradsq )then
-                            uu               = cyci_1d_static(self%ldim(3), u)
+                            uu       = cyci_1d_static(self%ldim(3), u)
+                            npix_out = npix_out + 1
+                            if( npix_out > npix_in ) THROW_HARD('more pixels within maxrad than pixels holds; win2arr_rad')
                             pixels(npix_out) = self%rmat(ss,tt,uu)
-                            npix_out         = npix_out + 1
                         endif
                     end do
                 else
                     vec_displ = real([s,t,1]) - vec_cen
-                    if( sum(vec_displ(1:2))**2. <= maxradsq )then
+                    if( sum(vec_displ(1:2)**2.) <= maxradsq )then
+                        npix_out = npix_out + 1
+                        if( npix_out > npix_in ) THROW_HARD('more pixels within maxrad than pixels holds; win2arr_rad')
                         pixels(npix_out) = self%rmat(ss,tt,1)
-                        npix_out         = npix_out + 1
                     endif
                 endif
             end do

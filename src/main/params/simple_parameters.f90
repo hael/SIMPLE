@@ -49,7 +49,6 @@ type :: parameters
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: denoise='no'         !< whether to denoise images (yes|no){no}
-    character(len=3)          :: discover_species='no' !< detect_atoms: residual recovery and species call, diagnostics only(yes|no){no}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
@@ -225,6 +224,7 @@ type :: parameters
     type(string)              :: outvol               !< output volume{outvol.ext}
     type(string)              :: pdbfile              !< PDB file
     type(string)              :: pdbfile2             !< PDB file, another one
+    type(string)              :: transfer_tab         !< detect_atoms: the transfer table (_transfer.tsv) to use instead of measuring it
     type(string)              :: pdbfiles             !< list of PDB files
     type(string)              :: pdbout               !< PDB output file
     type(string)              :: pickrefs             !< picking references
@@ -284,7 +284,7 @@ type :: parameters
     character(len=STDLEN)     :: ctf_correct_mode='phaseflip' !< CTF correction operation(phaseflip|wiener)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN)     :: element=''           !< atom kind
-    character(len=2), allocatable :: species(:)       ! detect_atoms: species named by a list or compound selector, brightest first
+    character(len=2), allocatable :: species(:)       ! detect_atomic_species: species named by a list or compound selector, brightest first
     character(len=STDLEN)     :: filter='no'          !< filter type{no}
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
@@ -454,8 +454,8 @@ type :: parameters
     integer :: nsample_fine=0      !< # particles to sample in refinement with fractional update, fine search
     integer :: nsnapshots=0        !< # cumulative project snapshots
     integer :: nspace=2500         !< # projection directions
-    integer :: nspecies=0          !< detect_atoms: number of species, 0 = from the data{0}
-    integer :: min_nbrs=3          !< detect_atoms: already found neighbours a recovered atom needs, 0 = no requirement{3}
+    integer :: nspecies=0          !< detect_atomic_species: number of species, 0 = from the data{0}
+    integer :: min_nbrs=3          !< detect_atoms: already found neighbours a weak atom of the gated residual stage needs, 0 = no requirement{3}
     integer :: nspace_sub=500      !< # projection directions in subspace
     integer :: nspace_pickrefs=0   !< # reprojections of the stream's picking references (0: the initial analysis' default)
     integer :: nstages=8           !< # low-pass limit stages
@@ -671,9 +671,8 @@ type :: parameters
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
     logical :: l_neigh           = .false.
-    logical :: l_discover_species = .false.
     logical :: l_pdb_bfac        = .false.
-    logical :: l_species_list    = .false. !< element= is a comma-separated species list (detect_atoms)
+    logical :: l_species_list    = .false. !< element= is a comma-separated species list (detect_atomic_species)
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
     logical :: l_regpass         = .true.

@@ -5,8 +5,8 @@ module simple_nano_species_tester
 use simple_test_utils,   only: assert_true, assert_false, assert_int, assert_real, set_fixed_seed
 use simple_defs,         only: dp, DPI
 use simple_rnd,          only: gasdev
-use simple_nano_species, only: fit_species_mixture, class_separation, enclosed_fraction, maxima_shape,&
-    &calibrate_threshold, expected_false_count, fit_gauss_width, gauss_filter3D, local_maxima, robust_spread, MAX_NSPECIES
+use simple_nano_species, only: fit_species_mixture, class_posterior, class_separation, enclosed_fraction, maxima_shape,&
+    &calibrate_threshold, expected_false_count, fit_gauss_width, local_maxima, MAX_NSPECIES
 implicit none
 private
 public :: run_all_nano_species_tests
@@ -22,11 +22,11 @@ contains
         call test_three_classes()
         call test_four_classes()
         call test_coordination_term()
+        call test_multiplicative_classes()
+        call test_posterior_error()
         call test_calibration()
         call test_gauss_width()
-        call test_gauss_filter()
         call test_local_maxima()
-        call test_robust_spread()
     end subroutine run_all_nano_species_tests
 
     ! x(i0+1:i0+m) drawn from N(mean, sdev**2)
@@ -83,7 +83,7 @@ contains
         write(*,'(A)') 'test_one_class'
         call set_fixed_seed(20261001)
         call draw(x, 0, N, MU0, SD0)
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_int(1, K, 'one class: K = 1')
         call assert_true(all(labels == 1), 'one class: every atom in class 1')
         call assert_true(all(abs(post(:,1) - 1.) < 1.e-6), 'one class: posteriors are 1')
@@ -96,11 +96,89 @@ contains
         call assert_real(real(bic1), bic(1), 1.e-4 * abs(real(bic1)), 'one class: BIC(1) is the closed form -2 lnL + 2 ln N')
         call assert_true(bic(1) < bic(2) .and. bic(1) < bic(3), 'one class: K = 1 has the lowest BIC')
         call assert_true(adm(1), 'K = 1 is always admissible')
-        call fit_species_mixture(x, SD0, 2, K, labels, post, mu, var)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 2, K, labels, post, mu, var)
         call assert_int(2, K, 'nspecies = 2 fixes K')
         call assert_true(size(post,2) == 2 .and. mu(1) >= mu(2), 'nspecies = 2: two classes by decreasing mean')
         call assert_true(all(abs(sum(post, dim=2) - 1.) < 1.e-5), 'posteriors of an atom sum to 1')
     end subroutine test_one_class
+
+    ! the class fit of detect_atomic_species: x = ln I = ln S_k + beta (c - 12) + noise of variance tau(c)**2 + v_i per
+    ! atom, two classes (ln S 0 and ln 0.5, fractions 0.7 and 0.3), beta 0.05: K = 2, the class values and beta within four
+    ! standard errors of their weighted least-squares closed forms at the true labels, the labels right on 98% or more
+    subroutine test_multiplicative_classes()
+        integer,  parameter :: N = 400
+        real,     parameter :: BETA0 = 0.05, LNS(2) = [0., -0.6931472]
+        integer,  parameter :: CVALS(6) = [5, 7, 8, 9, 11, 12]
+        real, allocatable :: post(:,:), mu(:), var(:), w(:), bic(:)
+        logical, allocatable :: adm(:)
+        real     :: x(N), s2(N), c(N), tau, v, slope
+        integer  :: labels(N), truth(N), K, i, k_true, nright
+        real(dp) :: sw(2), swc, swcc, se_mu(2), se_beta, wt
+        write(*,'(A)') 'test_multiplicative_classes'
+        call set_fixed_seed(20261027)
+        do i = 1,N
+            truth(i) = 1
+            if( i > nint(0.7 * real(N)) ) truth(i) = 2
+            c(i) = real(CVALS(mod(i * 7, 6) + 1))
+            tau  = 0.06
+            if( nint(c(i)) == 12 ) tau = 0.03
+            v     = (0.02 + 0.04 * real(mod(i, 5)) / 4.)**2
+            s2(i) = tau**2 + v
+            x(i)  = LNS(truth(i)) + BETA0 * (c(i) - 12.) + gasdev(0., sqrt(s2(i)))
+        enddo
+        call fit_species_mixture(x, s2, 0, K, labels, post, mu, var, bic, adm, cov=c - 12., slope=slope, w=w)
+        ! the standard errors at the true labels: 1/sqrt(sum 1/s2) per class value, the slope's from the weighted spread
+        ! of the covariate about each class's weighted mean
+        sw = 0._dp; swc = 0._dp; swcc = 0._dp
+        do i = 1,N
+            wt = 1._dp / real(s2(i), dp)
+            sw(truth(i)) = sw(truth(i)) + wt
+        enddo
+        se_beta = 0._dp
+        do k_true = 1,2
+            swc = 0._dp; swcc = 0._dp
+            do i = 1,N
+                if( truth(i) /= k_true ) cycle
+                wt   = 1._dp / real(s2(i), dp)
+                swc  = swc  + wt * real(c(i), dp)
+                swcc = swcc + wt * real(c(i), dp)**2
+            enddo
+            se_beta = se_beta + (swcc - swc**2 / sw(k_true))
+        enddo
+        se_beta = 1._dp / sqrt(se_beta)
+        se_mu   = 1._dp / sqrt(sw)
+        call assert_int(2, K, 'multiplicative fit: two classes')
+        if( K == 2 )then
+            call assert_real(LNS(1), mu(1), 4. * real(se_mu(1) + 12. * se_beta), 'multiplicative fit: ln S of class 1')
+            call assert_real(LNS(2), mu(2), 4. * real(se_mu(2) + 12. * se_beta), 'multiplicative fit: ln S of class 2')
+            call assert_real(BETA0, slope, 4. * real(se_beta), 'multiplicative fit: beta shared by the classes')
+            nright = count(labels == truth)
+            call assert_true(real(nright) >= 0.98 * real(N), 'multiplicative fit: labels right on 98% or more')
+            call assert_real(0.7, w(1), 4. * sqrt(0.21 / real(N)), 'multiplicative fit: class fraction of class 1')
+        endif
+    end subroutine test_multiplicative_classes
+
+    ! the posterior of two classes of one variance s2 and equal fractions is the logistic of (x - (m1 + m2)/2)(m1 - m2)/s2,
+    ! and its standard error from the measurement noise v of x is P (1 - P) |m1 - m2| / s2 sqrt(v)
+    subroutine test_posterior_error()
+        real, parameter :: M(2) = [0., -0.7], S2 = 0.04, V = 0.02
+        real    :: post(2), sd, x, p_ref, sd_ref, err_p, err_sd
+        integer :: label, i
+        write(*,'(A)') 'test_posterior_error'
+        err_p  = 0.
+        err_sd = 0.
+        do i = 0,20
+            x = -1. + 0.06 * real(i)
+            call class_posterior(x, S2, V, M, [0., 0.], [0.5, 0.5], post, label, sd)
+            p_ref  = 1. / (1. + exp(-(x - 0.5 * (M(1) + M(2))) * (M(1) - M(2)) / S2))
+            if( label == 2 ) p_ref = 1. - p_ref
+            sd_ref = p_ref * (1. - p_ref) * abs(M(1) - M(2)) / S2 * sqrt(V)
+            err_p  = max(err_p,  abs(post(label) - p_ref))
+            err_sd = max(err_sd, abs(sd - sd_ref))
+        enddo
+        call assert_true(err_p  <= 1.e-5, 'class posterior of two equal classes is the logistic')
+        call assert_true(err_sd <= 1.e-5, 'posterior standard error is P (1 - P) |m1 - m2| / s2 sqrt(v)')
+    end subroutine test_posterior_error
 
     ! two classes of 200, spread SD0 each: at D = 2.5 the two-class fit is inadmissible and K = 1;
     ! at D = 4 K = 2 and the labels follow the generating classes up to the Bayes error (2.3%)
@@ -118,13 +196,13 @@ contains
         call set_fixed_seed(20261002)
         call draw(x,  0, NC, 1.,             SD0)
         call draw(x, NC, NC, 1. - 2.5 * SD0, SD0)
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_false(adm(2), 'D = 2.5: the two-class fit is inadmissible')
         call assert_int(1, K, 'D = 2.5: K = 1')
         call set_fixed_seed(20261003)
         call draw(x,  0, NC, 1.,           SD0)
         call draw(x, NC, NC, 1. - 4. * SD0, SD0)
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_true(adm(2), 'D = 4: the two-class fit is admissible')
         call assert_int(2, K, 'D = 4: K = 2')
         call assert_true(bic(2) < bic(1), 'D = 4: BIC(2) < BIC(1)')
@@ -132,7 +210,7 @@ contains
             call assert_true(count(labels == truth) >= nint(0.95 * N), 'D = 4: at least 95% of the labels are right')
             call assert_real(1.,           mu(1), 0.02, 'D = 4: the mean of class 1 is recovered')
             call assert_real(1. - 4. * SD0, mu(2), 0.02, 'D = 4: the mean of class 2 is recovered')
-            call assert_true(class_separation(mu(1), var(1), mu(2), var(2)) >= 3., 'D = 4: the fitted separation passes the floor')
+            call assert_true(class_separation(mu(1), var(1) + SD0**2, mu(2), var(2) + SD0**2) >= 3., 'D = 4: the fitted separation passes the floor')
         endif
     end subroutine test_separation
 
@@ -150,13 +228,13 @@ contains
         call set_fixed_seed(20261004)
         call draw(x,     0, N-5, 1.0, SD0)
         call draw(x, N-5,     5, 0.5, SD0)
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_false(adm(2), 'a class of 5 of 400 atoms is below the size floor')
         call assert_int(1, K, 'a class below the size floor gives K = 1')
         call set_fixed_seed(20261005)
         call draw(x,     0, N-8, 1.0, SD0)
         call draw(x, N-8,     8, 0.5, SD0)
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_true(adm(2), 'a class of 8 of 400 atoms meets the size floor')
         call assert_int(2, K, 'a class at the size floor gives K = 2')
         call assert_true(all(labels(1:N-8) == 1) .and. all(labels(N-7:N) == 2), 'a class at the size floor: every label right')
@@ -180,7 +258,7 @@ contains
         call set_fixed_seed(20261012)
         call draw(x, 0, N, 1., SD0)
         x = x + SLOPE0 * c
-        call fit_species_mixture(x, SD0, 1, K, labels, post, mu, var, cov=c, slope=slope)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 1, K, labels, post, mu, var, cov=c, slope=slope)
         call assert_int(1, K, 'one class under a slope: nspecies = 1 fixes K')
         call assert_real(SLOPE0, slope, 0.005, 'one class under a slope: the slope is recovered')
         call assert_real(1., mu(1), 0.015, 'one class under a slope: its value at 12 contacts')
@@ -190,7 +268,7 @@ contains
         call draw(x,    0, N-N2, 1.,   SD0)
         call draw(x, N-N2,   N2, 0.75, SD0)
         x = x + SLOPE0 * c
-        call fit_species_mixture(x, SD0, 2, K, labels, post, mu, var, bic, adm, cov=c, slope=slope)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 2, K, labels, post, mu, var, bic, adm, cov=c, slope=slope)
         call assert_int(2, K, 'two classes under a slope: nspecies = 2 fixes K')
         call assert_true(adm(2), 'two classes under a slope: the two-class fit is admissible')
         call assert_true(count(labels == truth) >= nint(0.98 * N), 'two classes under a slope: 98% of the labels right')
@@ -216,7 +294,7 @@ contains
         truth(1:N3)          = 3
         truth(N3+1:N3+N1)    = 1
         truth(N3+N1+1:N)     = 2
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_int(3, K, 'three classes: K = 3')
         call assert_true(adm(3) .and. bic(3) < bic(2) .and. bic(2) < bic(1), 'three classes: admissible, BIC(3) < BIC(2) < BIC(1)')
         if( K == 3 )then
@@ -242,7 +320,7 @@ contains
             call draw(x, (ic-1) * NC, NC, MUS(ORDER(ic)), SD0)
             truth((ic-1)*NC+1:ic*NC) = ORDER(ic)
         enddo
-        call fit_species_mixture(x, SD0, 4, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 4, K, labels, post, mu, var, bic, adm)
         call assert_int(4, K, 'four classes, nspecies = 4: K = 4')
         call assert_int(4, size(bic), 'four classes, nspecies = 4: a BIC per K up to 4')
         call assert_int(4, size(adm), 'four classes, nspecies = 4: an admissibility per K up to 4')
@@ -252,7 +330,7 @@ contains
             call assert_true(all(abs(mu - MUS) < 0.02), 'four classes: the class intensities are recovered within 0.02')
             call assert_true(adm(4), 'four classes: the four-class fit is admissible')
         endif
-        call fit_species_mixture(x, SD0, 0, K, labels, post, mu, var, bic, adm)
+        call fit_species_mixture(x, spread(SD0**2, 1, size(x)), 0, K, labels, post, mu, var, bic, adm)
         call assert_int(MAX_NSPECIES, K, 'four classes, automatic: K is the ceiling of the search')
         call assert_int(MAX_NSPECIES, size(bic), 'four classes, automatic: a BIC per K up to the ceiling')
     end subroutine test_four_classes
@@ -318,24 +396,6 @@ contains
         call assert_real(ic, amp * (bfac / (4. * real(DPI)))**1.5, 0.01 * ic, 'stage 2: the tie fixes the integral')
     end subroutine test_gauss_width
 
-    ! a unit impulse becomes the normalised separable Gaussian
-    subroutine test_gauss_filter()
-        integer, parameter :: N = 21, C = 11
-        real, parameter    :: SIG = 1.5
-        real    :: a(N,N,N), b(N,N,N), w(-6:6)
-        integer :: l
-        write(*,'(A)') 'test_gauss_filter'
-        a = 0.
-        a(C,C,C) = 1.
-        call gauss_filter3D(a, SIG, b)
-        do l = -6,6
-            w(l) = exp(-0.5 * (real(l) / SIG)**2)
-        enddo
-        w = w / sum(w)
-        call assert_real(1., sum(b), 1.e-5, 'gauss_filter3D preserves the sum')
-        call assert_real(w(2) * w(-1) * w(0), b(C+2,C-1,C), 1.e-7, 'gauss_filter3D is the separable normalised kernel')
-    end subroutine test_gauss_filter
-
     ! two isolated bumps above threshold and one below; a lone spike lacks neighbours above threshold
     subroutine test_local_maxima()
         integer, parameter :: N = 24
@@ -367,13 +427,5 @@ contains
         call local_maxima(z, mask, 2., 3, ijk, vals)
         call assert_int(1, size(vals), 'local_maxima: only maxima inside the mask')
     end subroutine test_local_maxima
-
-    subroutine test_robust_spread()
-        real :: x(9)
-        write(*,'(A)') 'test_robust_spread'
-        x = [1., 2., 3., 4., 5., 6., 7., 8., 100.]
-        ! median 5, absolute deviations 4 3 2 1 0 1 2 3 95, their median 2
-        call assert_real(1.4826 * 2., robust_spread(x), 1.e-5, 'robust_spread is 1.4826 MAD and ignores the outlier')
-    end subroutine test_robust_spread
 
 end module simple_nano_species_tester

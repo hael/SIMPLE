@@ -2,7 +2,8 @@
 module single_exec_atom
 use simple_cmdline,          only: cmdline
 use simple_commanders_atoms, only: commander_conv_atom_denoise, commander_atoms_stats, commander_atoms_register,&
-commander_crys_score, commander_atoms_rmsd, commander_core_atoms_analysis, commander_detect_atoms
+commander_crys_score, commander_atoms_rmsd, commander_core_atoms_analysis, commander_detect_atoms,&
+commander_detect_atomic_species
 use simple_commanders_sim,   only: commander_simulate_nanoparticle
 implicit none
 
@@ -15,6 +16,7 @@ type(commander_atoms_stats)           :: xatoms_stats
 type(commander_core_atoms_analysis)   :: xcore_atoms_analysis
 type(commander_crys_score)            :: xcrys_score
 type(commander_detect_atoms)          :: xdetect_atoms
+type(commander_detect_atomic_species) :: xdetect_atomic_species
 type(commander_simulate_nanoparticle) :: xsimulate_nanoparticle
 
 contains
@@ -44,6 +46,9 @@ contains
             case( 'detect_atoms' )
                 call cline%set('mkdir', 'no')
                 call xdetect_atoms%execute(cline)
+            case( 'detect_atomic_species' )
+                call cline%set('mkdir', 'no')
+                call xdetect_atomic_species%execute(cline)
             case( 'simulate_nanoparticle' )
                 call cline%set('mkdir', 'no')
                 call xsimulate_nanoparticle%execute(cline)

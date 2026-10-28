@@ -9,6 +9,31 @@ rulings and the record of phases 0 to 8 are in
 [`../completed/species_discovery_completed.md`](../completed/species_discovery_completed.md); the
 run reports are in [`../completed/species_discovery_report.md`](../completed/species_discovery_report.md).
 
+> **Moved, 2026-10-25 (the atomic density model, `atomic_density_model.md` and its report
+> `atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
+> `discover_species=yes`: it runs on every `detect_atoms` run, on the present path, and its atoms are
+> the weak atoms (chain B of `_ATMS.pdb`, label and recovery fields in `_atoms.csv`). Every atom is now
+> fitted by the density model (its own intensity and width, seen through the reconstruction's halo,
+> `src/main/nano/simple_nano_density.f90`). `discover_species=yes` is reduced to the class call on the
+> fitted intensities, with the coordination term, and writes the `_species` files as before;
+> `min_nbrs` applies to the present path. The numbers below are those of the species work.
+
+> **Moved again, 2026-10-27 (the second run of the atomic density model, `atomic_density_model.md` section 12 and the
+> second section of `atomic_density_model_report.md`).** The species call is its own program now,
+> `detect_atomic_species` (`single_exec`, category atoms; domain `src/main/nano/simple_atomic_species.f90`). It reads
+> the products of a `detect_atoms` run (`pdbfile=` its `_ATMS.pdb`, with the `_atoms.csv` and `_model.txt` beside it)
+> and the map (`vol1`, `smpd`), and takes the species keys: `element` (one name, or a list brightest first such as
+> `element=Pt,Ni`, whose length is the class count), `nspecies` (refused together with a list), and `vol_even` with
+> `vol_odd` (the half maps then give each atom's measurement variance and the label agreement). `detect_atoms` is
+> species-free: it refuses `element`, `nspecies`, `vol_even` and `vol_odd` with a message naming `atoms_stats` and
+> `detect_atomic_species`, and `discover_species` is no longer a key at all (release 4: no alias). The class fit is
+> multiplicative, `ln I = ln S_k + beta (c - 12)` with one `beta` for every class; each atom's posterior carries its
+> measurement variance and the coordination spread `tau_I(c)`, which the program measures within its classes per
+> coordination bin (the `tau_I` of `detect_atoms` is fitted under one species and holds the species' separation on a
+> mixed particle). `_species.csv` gains `SD_POSTERIOR` (the posterior's standard error, by the delta method) and
+> `TAU_COORD`. `species_discovery` tests the pair. On the 66 real Pt maps the program finds one class on every map,
+> and the forced `element=Pt,Ni` fit is inadmissible on every map.
+
 Terms. SINGLE is the cryo-EM-style workflow for nanoparticles. `detect_atoms` finds atoms in a
 3D map. A "species" here is an intensity class of atom (HAADF-STEM contrast rises with atomic
 number; the data can say there are two kinds of atom, not which elements they are). The
@@ -25,6 +50,14 @@ coordination term was added to absorb that trend. It has passed the synthetic te
 check on one real map; it has not run on the real maps.
 
 ## 1. Phase 9: the coordination term on the 66 real Pt maps (not run)
+
+> **Partly measured, 2026-10-27** (the second run of the atomic density model, its phase 9; tables in
+> `~/agent_runs/atomic_density_model_2/scratch/keep/validation_p9/`). With the final code (species-free `detect_atoms`,
+> the measured transfer, `detect_atomic_species` with the multiplicative coordination term), the class count free
+> gives one class on all 66 maps, and `element=Pt,Ni` gives an inadmissible two-class fit on all 66 (expectation 1,
+> at least 95 percent: met; the four maps that accepted `Pt,Ni` in phase 7 of the species work do not). The planting
+> (expectations 2 to 4) and the five-run comparison below were not run; they remain the open part of this section,
+> now as runs of `detect_atoms` followed by `detect_atomic_species`.
 
 A measurement only. No source change. It decides whether promotion goes ahead.
 

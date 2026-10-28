@@ -933,31 +933,38 @@ contains
         center(3) = sum(self%xyz(:,3)) / real(self%n)
     end function get_geom_center
 
-    ! simulate electrostatic potential from elastic scattering
-    ! Using 5-gaussian atomic scattering factors from Rullgard et al, J of Microscopy, 2011
-    ! and parametrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
-    ! A pseudo-atom (X1..X3) is q (4 pi / B)**1.5 exp(-4 pi**2 r**2 / B), q = occupancy, B = beta:
-    ! unit q integrates to one; lp does not blur it, its width is B
-    ! bfac_pdb: an element atom's occupancy scales its scattering amplitude and beta is its Debye-Waller B,
-    ! added to every b_j with the blur (default off)
-    subroutine convolve( self, vol, cutoff, lp, bfac_pdb )
+    ! electrostatic potential from the 5-Gaussian scattering factors (Rullgard 2011; Peng 1996, Table 1); bfac_pdb adds
+    ! an element atom's beta (Debye-Waller B) to every b_j and scales its amplitude by its occupancy. A pseudo-atom
+    ! (X1..X3) is q K(B), q = occupancy, B = beta, K the unit-integral Gaussian, unblurred by lp; halo_amp a and
+    ! halo_bfac B_h subtract a q K(B + B_h), the halo
+    subroutine convolve( self, vol, cutoff, lp, bfac_pdb, halo_amp, halo_bfac )
         use simple_image, only: image
         class(atoms),      intent(in)    :: self
         class(image),      intent(inout) :: vol
         real,              intent(in)    :: cutoff
         real,    optional, intent(in)    :: lp
         logical, optional, intent(in)    :: bfac_pdb
+        real,    optional, intent(in)    :: halo_amp, halo_bfac
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
         real,    allocatable :: rmat(:,:,:), atom_aterm(:,:), atom_b(:,:), atom_xyz(:,:), atom_scale(:)
         integer, allocatable :: atom_bbox(:,:,:)
         logical, allocatable :: atom_valid(:)
-        real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, scale
+        real    :: lp_here, a(5), b(5), aterm(5), xyz(3), smpd, r2, bfac, rjk2, cutoffsq, scale, h_amp, h_bfac
         integer :: bbox(3,2), ldim(3), pos(3), i, j, k, l, jj, kk, z, icutoff
-        logical :: l_bfac_pdb
+        logical :: l_bfac_pdb, l_halo
         if( .not. vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
         l_bfac_pdb = .false.
         if( present(bfac_pdb) ) l_bfac_pdb = bfac_pdb
+        if( present(halo_amp) .neqv. present(halo_bfac) ) THROW_HARD('give halo_amp and halo_bfac together; convolve')
+        l_halo = present(halo_amp)
+        h_amp  = 0.
+        h_bfac = 0.
+        if( l_halo )then
+            h_amp  = halo_amp
+            h_bfac = halo_bfac
+            if( h_amp < 0. .or. h_bfac <= 0. ) THROW_HARD('the halo needs halo_amp >= 0 and halo_bfac > 0; convolve')
+        endif
         smpd     = vol%get_smpd()
         ldim     = vol%get_ldim()
         lp_here  = 2.*smpd
@@ -1268,10 +1275,15 @@ contains
                 b     = 1.
                 a(1)  = self%occupancy(i) * (4.*PI)**1.5
                 b(1)  = self%beta(i)
+                if( l_halo )then
+                    a(2) = -h_amp * a(1)
+                    b(2) = self%beta(i) + h_bfac
+                endif
                 scale = 1.
             case DEFAULT
                 cycle
             end select
+            if( l_halo .and. (z < Z_PSEUDO_FIRST .or. z > Z_PSEUDO_LAST) ) THROW_HARD('the halo is for pseudo-atoms only; convolve')
             if( z < Z_PSEUDO_FIRST .or. z > Z_PSEUDO_LAST )then
                 b = b + bfac ! eq B.6
                 if( l_bfac_pdb )then

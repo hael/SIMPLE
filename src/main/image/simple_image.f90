@@ -2409,7 +2409,7 @@ interface
         class(image), intent(in)    :: self
         integer,      intent(in)    :: i, j, k, winsz, npix_in
         real,         intent(in)    :: maxrad ! in pixels
-        integer,      intent(inout) :: npix_out
+        integer,      intent(out)   :: npix_out
         real,         intent(inout) :: pixels(npix_in)
     end subroutine win2arr_rad
 

@@ -433,7 +433,7 @@ contains
         call single_atoms_stats%new(&
         &'single_atoms_stats',&
         &'SINGLE nanoparticle atom statistics',&
-        &'validates atom detection and statistics against a simulated nanoparticle',&
+        &'validates species-free atom detection, the products of the atomic density model and the statistics of atoms_stats with the element against a simulated nanoparticle',&
         &'simple_test_exec',&
         &.false., display_name='SINGLE Atom Statistics Test')
         call single_atoms_stats%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
@@ -448,7 +448,7 @@ contains
         call species_discovery%new(&
         &'species_discovery',&
         &'species discovery in atom detection',&
-        &'validates the species list and the residual recovery and species call of detect_atoms on Pt, Pt/Ni and Pt/Al nanoparticles rendered with element kernels and surface B factors',&
+        &'validates detect_atoms and then detect_atomic_species (the residual recovery of weak atoms, the species list and the class call) on Pt, Pt/Ni and Pt/Al nanoparticles rendered with element kernels and surface B factors, and the atomic density model of detect_atoms on a Pt particle rendered by the model',&
         &'simple_test_exec',&
         &.false., display_name='Species Discovery Test')
         call species_discovery%add_input(UI_COMP, nthr)

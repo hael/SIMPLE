@@ -50,6 +50,7 @@ contains
         call test_rotations_and_roavg()
         call test_masscen()
         call test_corr()
+        call test_win2arr_rad()
         call test_file_roundtrip()
         call test_file_roundtrip_sizes()
         call test_fproject()
@@ -720,6 +721,80 @@ contains
         call g2%kill
         call g3%kill
     end subroutine test_corr
+
+    ! win2arr_rad returns exactly the pixels within maxrad of the centre: their count is the ball's (closed form by
+    ! counting), the values are the image's, and nothing of an earlier call leaks in. Before 2026-10-26 the count was
+    ! one too many, so every per-atom valid_corr of detect_atoms carried one stale pixel
+    subroutine test_win2arr_rad()
+        integer, parameter :: B3 = 16, C = B3/2 + 1, WINSZ = 3
+        real,    parameter :: MAXRAD = 2.5
+        type(image)       :: vol, img
+        real, allocatable :: vmat(:,:,:), pix(:)
+        integer :: i, j, k, npix_in, npix_out, nball, ndisc, nmismatch
+        write(*,'(A)') 'test_win2arr_rad'
+        ! every voxel its own value, so a wrong pixel is seen
+        allocate(vmat(B3,B3,B3))
+        do k = 1,B3
+            do j = 1,B3
+                do i = 1,B3
+                    vmat(i,j,k) = real(i + B3 * (j - 1) + B3 * B3 * (k - 1))
+                end do
+            end do
+        end do
+        call vol%new([B3,B3,B3], SMPD, wthreads=.false.)
+        call vol%set_rmat(vmat, .false.)
+        npix_in = (2 * WINSZ + 1)**3
+        allocate(pix(npix_in), source=-1.)
+        ! the count of lattice points within MAXRAD of the centre, in the order win2arr_rad visits them
+        nball     = 0
+        nmismatch = 0
+        call vol%win2arr_rad(C, C, C, WINSZ, npix_in, MAXRAD, npix_out, pix)
+        do i = C-WINSZ,C+WINSZ
+            do j = C-WINSZ,C+WINSZ
+                do k = C-WINSZ,C+WINSZ
+                    if( real((i-C)**2 + (j-C)**2 + (k-C)**2) <= MAXRAD**2 )then
+                        nball = nball + 1
+                        if( nball <= npix_out )then
+                            if( abs(pix(nball) - vmat(i,j,k)) > 0. ) nmismatch = nmismatch + 1
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        call assert_int(nball, npix_out, 'win2arr_rad returns one pixel per lattice point within maxrad (3D)')
+        call assert_int(0, nmismatch,    'win2arr_rad returns the image values in its visiting order (3D)')
+        ! a second call at another centre overwrites every returned pixel: no stale value from the first call
+        call vol%win2arr_rad(C+1, C, C, WINSZ, npix_in, MAXRAD, npix_out, pix)
+        nmismatch = 0
+        nball     = 0
+        do i = C+1-WINSZ,C+1+WINSZ
+            do j = C-WINSZ,C+WINSZ
+                do k = C-WINSZ,C+WINSZ
+                    if( real((i-C-1)**2 + (j-C)**2 + (k-C)**2) <= MAXRAD**2 )then
+                        nball = nball + 1
+                        if( nball <= npix_out )then
+                            if( abs(pix(nball) - vmat(i,j,k)) > 0. ) nmismatch = nmismatch + 1
+                        endif
+                    endif
+                end do
+            end do
+        end do
+        call assert_int(nball, npix_out, 'win2arr_rad count at a shifted centre (3D)')
+        call assert_int(0, nmismatch,    'win2arr_rad values at a shifted centre, none from the earlier call (3D)')
+        ! 2D: the disc, with the squared distance (not the squared sum of displacements) as the test
+        call img%new([B3,B3,1], SMPD, wthreads=.false.)
+        call img%set_rmat(vmat(:,:,1:1), .false.)
+        call img%win2arr_rad(C, C, 1, WINSZ, npix_in, MAXRAD, npix_out, pix)
+        ndisc = 0
+        do i = C-WINSZ,C+WINSZ
+            do j = C-WINSZ,C+WINSZ
+                if( real((i-C)**2 + (j-C)**2) <= MAXRAD**2 ) ndisc = ndisc + 1
+            end do
+        end do
+        call assert_int(ndisc, npix_out, 'win2arr_rad returns one pixel per lattice point within maxrad (2D)')
+        call vol%kill
+        call img%kill
+    end subroutine test_win2arr_rad
 
     !---------------- file I/O ----------------
 

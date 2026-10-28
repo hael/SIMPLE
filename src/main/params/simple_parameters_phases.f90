@@ -1030,28 +1030,21 @@ contains
         self%l_bfac_data_fit = .not. cline%defined('bfac_data')
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
-        if( trim(self%discover_species) /= 'yes' .and. trim(self%discover_species) /= 'no' )then
-            THROW_HARD('discover_species must be yes or no')
-        endif
         if( self%nspecies < 0 .or. self%nspecies > 3 ) THROW_HARD('nspecies must be 0 (from the data) to 3')
         if( self%min_nbrs < 0 ) THROW_HARD('min_nbrs must be 0 (no requirement) or positive')
-        self%l_discover_species = trim(self%discover_species) == 'yes'
         if( cline%defined('element') )then
             if( index(self%element, ',') > 0 )then
-                ! a species list, brightest first: its length is the number of classes, level 1 runs on its first symbol
-                if( trim(self%prg%to_char()) /= 'detect_atoms' .and. &
-                    &trim(self%prg%to_char()) /= 'autorefine3D_nano' ) &
-                    &THROW_HARD('a list of elements is accepted by detect_atoms and autorefine3D_nano only')
+                ! a species list, brightest first: its length is the number of classes
+                if( trim(self%prg%to_char()) /= 'detect_atomic_species' ) THROW_HARD('a list of elements is accepted by detect_atomic_species only')
                 if( .not. parse_element_list(self%element, self%species, selector, errmsg) ) THROW_HARD(errmsg%to_char())
                 self%l_species_list     = .true.
-                self%l_discover_species = .true.
                 self%nspecies           = size(self%species)
                 self%element            = self%species(1)
             else
                 if( .not. atoms_obj%element_exists(self%element) )then
                     THROW_HARD('Element: '//trim(self%element)//' unsupported for now')
                 endif
-                if( self%l_discover_species )then
+                if( trim(self%prg%to_char()) == 'detect_atomic_species' )then
                     ! a compound selector names its two species
                     if( parse_element_list(self%element, symbols, selector, errmsg) )then
                         if( len_trim(selector) > 0 )then

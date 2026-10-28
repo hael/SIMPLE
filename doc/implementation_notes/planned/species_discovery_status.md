@@ -14,6 +14,31 @@ Three other documents hold the detail:
 - `atom_bfactor_model.md`: the follow-on work on per-atom B factors and
   occupancy.
 
+> **Moved, 2026-10-25 (the atomic density model, `atomic_density_model.md` and its report
+> `atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
+> `discover_species=yes`: it runs on every `detect_atoms` run, on the present path, and its atoms are
+> the weak atoms (chain B of `_ATMS.pdb`, label and recovery fields in `_atoms.csv`). Every atom is now
+> fitted by the density model (its own intensity and width, seen through the reconstruction's halo,
+> `src/main/nano/simple_nano_density.f90`). `discover_species=yes` is reduced to the class call on the
+> fitted intensities, with the coordination term, and writes the `_species` files as before;
+> `min_nbrs` applies to the present path. The numbers below are those of the species work.
+
+> **Moved again, 2026-10-27 (the second run of the atomic density model, `atomic_density_model.md` section 12 and the
+> second section of `atomic_density_model_report.md`).** The species call is its own program now,
+> `detect_atomic_species` (`single_exec`, category atoms; domain `src/main/nano/simple_atomic_species.f90`). It reads
+> the products of a `detect_atoms` run (`pdbfile=` its `_ATMS.pdb`, with the `_atoms.csv` and `_model.txt` beside it)
+> and the map (`vol1`, `smpd`), and takes the species keys: `element` (one name, or a list brightest first such as
+> `element=Pt,Ni`, whose length is the class count), `nspecies` (refused together with a list), and `vol_even` with
+> `vol_odd` (the half maps then give each atom's measurement variance and the label agreement). `detect_atoms` is
+> species-free: it refuses `element`, `nspecies`, `vol_even` and `vol_odd` with a message naming `atoms_stats` and
+> `detect_atomic_species`, and `discover_species` is no longer a key at all (release 4: no alias). The class fit is
+> multiplicative, `ln I = ln S_k + beta (c - 12)` with one `beta` for every class; each atom's posterior carries its
+> measurement variance and the coordination spread `tau_I(c)`, which the program measures within its classes per
+> coordination bin (the `tau_I` of `detect_atoms` is fitted under one species and holds the species' separation on a
+> mixed particle). `_species.csv` gains `SD_POSTERIOR` (the posterior's standard error, by the delta method) and
+> `TAU_COORD`. `species_discovery` tests the pair. On the 66 real Pt maps the program finds one class on every map,
+> and the forced `element=Pt,Ni` fit is inadmissible on every map.
+
 ## What exists
 
 `detect_atoms` (SINGLE) has an opt-in species discovery. A run without the
@@ -39,18 +64,19 @@ new keys behaves as before.
   linearly with the atom's coordination number (its number of neighbours),
   with one slope shared by all classes. The slope is fitted with the classes
   and written to `_species.txt` as `coord_slope`.
-- Discovery writes five extra files: `_species.csv` (one row per atom),
+- Discovery writes four extra files: `_species.csv` (one row per atom),
   `_species_radial.csv`, `_species.txt` (the summary) and `_species.pdb`
-  (class in the element column), plus `_species_SIM.mrc`, the fitted Gaussian
-  density with per-atom B and combined species/occupancy intensity. The table
-  ends with the fully occupied hard-class/environment intensity, its
-  species-posterior expectation for the reconstruction prior, and the fitted
-  occupancy; the PDB carries the hard label, occupancy and B. With
-  `autorefine3D_nano atm_prior=yes rec_backend=pcg`, the same-stem PDB and CSV
-  define the next reconstruction's fitted atomic prior. Otherwise they remain
-  diagnostics: the five
-  existing products, `_ATMS.pdb`, `_CC.mrc` and `_SIM.mrc` among them, are
-  identical with and without discovery.
+  (class in the element column). The table ends with the fully occupied
+  hard-class/environment intensity, its species-posterior expectation for
+  the reconstruction prior, and the fitted intensity over the former as
+  occupancy; the PDB carries the hard label, that occupancy and the model's
+  B. `autorefine3D_nano` is species-agnostic (ruling of 2026-10-26): its loop
+  never calls the species and its atomicity prior reads `_ATMS.pdb` with
+  `_atoms.csv`; `_species.pdb` with `_species.csv` can feed a standalone
+  `reconstruct3D atm_prior=yes` the same way. The fitted Gaussian density
+  itself is `_SIM.mrc` on every run since the density model. The species files
+  remain diagnostics: the present products, `_ATMS.pdb`, `_CC.mrc` and
+  `_SIM.mrc` among them, are identical with and without discovery.
 
 The same work also produced these changes:
 

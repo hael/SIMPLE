@@ -74,8 +74,7 @@ subroutine new_solve3D_nano( prgtab )
         ! parameter input/output
         call autorefine3D_nano%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
-        call autorefine3D_nano%add_input(UI_PARM, element, &
-        &visibility=UI_VIS_STANDARD)
+        ! no element: the loop builds species-agnostic models (atomic_density_model.md); species are called afterwards
         call autorefine3D_nano%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
         &'Reconstruction backend for each refinement stage; the detected-model loop requires PCG(gridding|pcg){gridding}', &
         &'', .false., 'gridding', choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &

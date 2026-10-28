@@ -42,9 +42,10 @@ loop. The development is a context and a bank, not a program.
 `simple_ui_params_common.f90`; the per-mode checks in `simple_parameters_phases.f90`). It differs from the
 cryo-EM contexts in three places.
 
-**Hard gates.** The class averages of `refine2D_nano` start as time chunks of `nptcls_per_cls` frames, so
-population carries no quality information, and the FRC "resolution" of a nanoparticle class is a statement
-about the lattice band, not a quality gate. `nano` keeps the validity gates only: invalid pixels; an empty
+**Hard gates.** The population gate of the cryo-EM contexts would reject the good classes: on the delivered
+labels the selected classes are the smaller ones (the lattice-free frames pile into large junk classes;
+section 5), and the FRC "resolution" of a nanoparticle class is quantized at a few shells and carries
+nothing. `nano` keeps the validity gates only: invalid pixels; an empty
 class (`pop <= 0`); both local variances at or below `EPS`. The foreground-geometry gates (Otsu after a
 30 A low-pass, centroid outside the mask, component outside the mask) are not applied: at 0.358 A per
 pixel in a 57 A box a 30 A low-pass leaves two shells, and the particle fills the mask.
@@ -107,15 +108,43 @@ takes from there instead of from `estimate_diam`.
 
 ## 5. Inputs and labels
 
-A labeled dataset is one `analysis2D_nano` run with the maintainer's selection: the project file (its
-`cls2D` with population, resolution, correlation, the class averages registered in `os_out`, the frame to
-class map in `ptcl2D`, the alignment) and the class-average stack, with the labels either as the `cls2D`
-`state` of the project or as a text file of `class, state` rows that the run applies to a copy of the
-project before `analyze` (the `oris` setters; the project is never modified in place). The maintainer is
-writing out the class labels for the trajectories he selected (2026-10-28); their location is given at
-launch in the run's prompt. Labeled datasets train and are evaluated leave-one-out; every other trajectory
-of `~/Processing/NanoX/NanoX_trajs` is a hold-out whose `analysis2D_nano` output the run makes itself if
-absent and scores for review.
+A labeled dataset is one `analysis2D_nano` run with the maintainer's selection. As delivered (2026-10-28,
+`~/Processing/NanoX/NanoX_trajs/<dataset>/<trajectory>/`), each holds `trajectory_denoised.mrcs` (the stack
+the 2D ran on; its header pixel size is wrong, 0.0358 A, so every import passes `smpd=0.358`),
+`subtr_frames.mrc` (the raw frames, not needed here), `trajectory_denoise_flex.txt`, and the two project
+fields written as `oris` text, one row per entry: `cls2D_field.txt` (`class pop res corr state`; the
+maintainer's selection is the `state`) and `ptcl2D_field.txt` (the full particle record per frame: `class`,
+the in-plane alignment `e3 x y`, `state`, `indstk`, `eo`, `corr`). No project file and no class-average
+stack are delivered; the run rebuilds both: `import_particles stk=trajectory_denoised.mrcs smpd=0.358
+ctf=no oritab=ptcl2D_field.txt` (the `oris` reader takes the text table), `make_cavgs ncls=<classes>
+refs=cavgs.mrc` from the stored assignment and alignment (which fills `cls2D` with population,
+resolution and correlation and registers the stack in `os_out`), then the class states from
+`cls2D_field.txt` through `selection oritype=cls2D infile=<the 0/1 column>`, checked against the
+delivered populations class by class. The regenerated averages are the originals up to the even/odd
+weighting of `make_cavgs`; if the original `cavgs_iter*.mrc` stacks become available they are used
+instead and the regenerated ones compared to them.
+
+Checked on delivery: `71-6/traj01` (684 classes, 425 selected, 13,662 frames) and `71-6/traj04` (684
+classes, 264 selected) are complete and consistent: every class's population equals its frame count in
+`ptcl2D`, every frame's state equals its class's state, the alignment is present on every frame,
+`indstk` is the row. The classes are not time chunks: `refine2D_nano` reassigns frames across the whole
+trajectory (a class's frames span a median of 11,600 frames; none is contiguous), and populations run
+from 0 to 50. `71-17/traj04` (649 classes, 185 selected) is missing its particle field: the delivered
+`ptcl2D_field.txt` is a byte copy of `cls2D_field.txt`; without it the class averages cannot be
+regenerated, so that dataset waits for a re-export. Two to four more labeled trajectories would make the
+leave-one-out evaluation meaningful; with two, the held-out dataset is the whole test.
+
+What the delivered `cls2D` fields already say, before any image is read (class-level AUC against the
+selection, empty classes excluded): the stored class correlation `corr` (the frames' mean correlation to
+their average, what the cryo-EM bank reads as `corr_frc_proxy`) 0.965, 0.907, 0.908 on the three sets;
+population 0.23, 0.44, 0.32, that is inverted: the selected classes are the smaller ones (median 15 to 19
+frames against 20 to 22), because the lattice-free frames pile into large junk classes; the FRC
+resolution 0.47 to 0.62, nothing (its values are quantized at a few shells). Two consequences are already
+fixed by this: the population hard gate of the cryo-EM contexts would reject the good classes and is off
+for `nano` (section 3), and the stored correlation alone is the baseline every model has to beat
+(section 6). Labeled datasets train and are evaluated leave-one-out; every other trajectory of
+`~/Processing/NanoX/NanoX_trajs` is a hold-out whose `analysis2D_nano` output the run makes itself and
+scores for review.
 
 ## 6. The study, before the Fortran
 
@@ -132,8 +161,10 @@ On the labeled datasets, in order:
    trajectory folder's `trajectory_focus_prototype/` are the references), the floor over classes, per-feature
    AUC against the labels, and the floor's separation per dataset;
 4. a numpy pairwise-logistic fit mirroring the learner, leave-one-dataset-out, with and without the lattice
-   family, against two baselines: the lattice floor alone (`lattice_peak` of the class at 4 floor sd) and
-   the relational feature alone.
+   family, against three baselines: the stored class correlation alone (AUC 0.91 to 0.97 on the delivered
+   labels, section 5: the bar), the lattice floor alone (`lattice_peak` of the class at 4 floor sd) and the
+   relational feature alone. If the stored correlation alone matches the fit, the honest product is a
+   per-project threshold on that one number with the floor as its reference, and the bank is diagnostic.
 
 Decision rules, written in the journal: a feature family enters the nano bank when its best member's
 leave-one-out AUC against the labels is at least 0.6 and the fit's class-level balanced accuracy drops by at
@@ -160,8 +191,8 @@ spread zero on more than half the datasets) is dropped from the nano list.
 ## 8. Acceptance and promotion
 
 The learned `nano` model is promoted when, on every held-out labeled dataset: its class-level agreement with
-the maintainer's labels (balanced accuracy at the model's threshold, and AUC) is not below the better of the
-two baselines of section 6, step 4; and, on at least one held-out trajectory, `autorefine3D_nano` from its
+the maintainer's labels (balanced accuracy at the model's threshold, and AUC) is not below the best of the
+three baselines of section 6, step 4 (the stored correlation alone being the one to beat); and, on at least one held-out trajectory, `autorefine3D_nano` from its
 selection gives a map and atomic model that match the hand selection's (the FSC bands outside the lattice
 band within the run-to-run spread, atoms within 1 A of the hand selection's model at the same fraction).
 A model that matches the baselines but does not beat them is promoted only if it beats them on the 3D

@@ -1,6 +1,7 @@
 !@descr: atomicity prior of PCG reconstruction, projected onto free atom kernels or a fitted per-atom density model
-! The fallback map model is x = G c + e. A fitted model supplies B, occupancy and intensity per atom and restricts
-! the unpenalized subspace to the global scale of that model. G^T G is sparse and solved in double precision.
+! The map model is x = G c + e with a free amplitude per atom; per-atom widths (B) may shape the kernels. A fitted
+! model supplies B, occupancy and intensity per atom and restricts the unpenalized subspace to the global scale of
+! that model. G^T G is sparse and solved in double precision.
 module simple_pcg_atomic_prior
 use simple_core_module_api, only: dp, PI, simple_exception
 use simple_pcg_solver,      only: pcg_operator
@@ -45,11 +46,12 @@ type :: pcg_atomic_prior_stats
     real    :: c2            = 0.  !< C^2, explained fraction of the signal
     real    :: lambda_rel_merged = 0. !< (N/S)/(1-C^2), the ratio for a solve of the merged data
     real    :: lambda_rel_est    = 0. !< the same with the half-map noise 2N, the ratio for a half solve
-    real    :: bfac_model_min    = 0. !< smallest fitted per-atom B (A^2), zero without a fitted model
-    real    :: bfac_model_mean   = 0. !< mean fitted per-atom B (A^2)
-    real    :: bfac_model_max    = 0. !< largest fitted per-atom B (A^2)
+    real    :: bfac_model_min    = 0. !< smallest per-atom B (A^2), zero without per-atom widths
+    real    :: bfac_model_mean   = 0. !< mean per-atom B (A^2)
+    real    :: bfac_model_max    = 0. !< largest per-atom B (A^2)
     real    :: occupancy_mean    = 0. !< mean fitted occupancy
     real    :: intensity_mean    = 0. !< mean posterior-weighted model intensity
+    logical :: atom_widths       = .false. !< every kernel has its atom's B (amplitudes free unless fitted_model)
     logical :: fitted_model      = .false. !< B, occupancy and intensity define the active one-vector subspace
 end type pcg_atomic_prior_stats
 
@@ -105,7 +107,9 @@ end type pcg_atomic_prior
 contains
 
     !> The model: atom positions in voxels (1-based, the solve box), the solve support (> 0) and optional
-    !! column scales; duplicates and atoms centred off the support are dropped. Kernels at B_min
+    !! column scales; duplicates and atoms centred off the support are dropped. Kernels at B_min, or at each
+    !! atom's B when bfacs is given: alone, the amplitudes stay free; with occupancies and intensities, the
+    !! fitted model fixes them up to one global scale
     subroutine new( self, box, smpd, pos_vox, support, amps, bfacs, occupancies, intensities )
         class(pcg_atomic_prior), intent(inout) :: self
         integer,                 intent(in)    :: box
@@ -117,25 +121,27 @@ contains
         logical, allocatable :: keep(:)
         integer :: n, a, b, iv(3)
         real    :: minsep2
-        logical :: l_model_fields
+        logical :: l_widths, l_model_fields
         call self%kill
         if( size(pos_vox,1) /= 3 ) THROW_HARD('atom positions are (3,natoms); new')
         if( any(shape(support) /= box) ) THROW_HARD('support dimensions differ from the box; new')
         if( smpd <= 0. ) THROW_HARD('sampling distance must be positive; new')
         n = size(pos_vox,2)
-        l_model_fields = present(bfacs)
-        if( present(occupancies) .neqv. l_model_fields ) THROW_HARD('B, occupancy and intensity must be supplied together; new')
-        if( present(intensities) .neqv. l_model_fields ) THROW_HARD('B, occupancy and intensity must be supplied together; new')
+        l_widths       = present(bfacs)
+        l_model_fields = present(intensities)
+        if( present(occupancies) .neqv. l_model_fields ) THROW_HARD('occupancy and intensity must be supplied together; new')
+        if( l_model_fields .and. .not. l_widths ) THROW_HARD('a fitted atomic model needs its B factors; new')
         if( present(amps) )then
             if( size(amps) /= n ) THROW_HARD('one column scale per atom; new')
             if( any(amps <= 0.) ) THROW_HARD('column scales must be positive; new')
         endif
+        if( l_widths )then
+            if( present(amps) ) THROW_HARD('column scales and per-atom widths are exclusive; new')
+            if( size(bfacs) /= n ) THROW_HARD('one B per atom; new')
+            if( any(bfacs <= 0.) ) THROW_HARD('atom B factors must be positive; new')
+        endif
         if( l_model_fields )then
-            if( present(amps) ) THROW_HARD('column scales and a fitted atomic model are exclusive; new')
-            if( size(bfacs) /= n .or. size(occupancies) /= n .or. size(intensities) /= n )then
-                THROW_HARD('one B, occupancy and intensity per atom; new')
-            endif
-            if( any(bfacs <= 0.) ) THROW_HARD('fitted atom B factors must be positive; new')
+            if( size(occupancies) /= n .or. size(intensities) /= n ) THROW_HARD('one occupancy and intensity per atom; new')
             if( any(occupancies < 0.) .or. any(occupancies > 1.) ) THROW_HARD('fitted atom occupancies must be in [0,1]; new')
             if( any(intensities <= 0.) ) THROW_HARD('fitted atom intensities must be positive; new')
             if( all(occupancies * intensities <= 0.) ) THROW_HARD('the fitted atomic model has zero intensity; new')
@@ -163,7 +169,8 @@ contains
         self%natoms = count(keep)
         if( self%natoms < 1 ) THROW_HARD('no atom of the model lies on the solve support; new')
         allocate(self%pos(3,self%natoms), self%amp(self%natoms))
-        if( l_model_fields ) allocate(self%bfac_atom(self%natoms), self%model_coeff(self%natoms))
+        if( l_widths       ) allocate(self%bfac_atom(self%natoms))
+        if( l_model_fields ) allocate(self%model_coeff(self%natoms))
         b = 0
         do a = 1, n
             if( .not. keep(a) ) cycle
@@ -171,19 +178,19 @@ contains
             self%pos(:,b) = pos_vox(:,a)
             self%amp(b)   = 1.
             if( present(amps) ) self%amp(b) = amps(a)
-            if( l_model_fields )then
-                self%bfac_atom(b)   = bfacs(a)
-                self%model_coeff(b) = real(occupancies(a) * intensities(a) * &
-                    &(4. * PI / bfacs(a))**1.5,dp)
-            endif
+            if( l_widths ) self%bfac_atom(b) = bfacs(a)
+            if( l_model_fields ) self%model_coeff(b) = real(occupancies(a) * intensities(a) * (4. * PI / bfacs(a))**1.5,dp)
         end do
         self%stats%natoms   = self%natoms
         self%stats%bfac_min = self%get_bfac_min()
-        if( l_model_fields )then
-            self%stats%fitted_model   = .true.
+        if( l_widths )then
+            self%stats%atom_widths     = .true.
             self%stats%bfac_model_min  = minval(self%bfac_atom)
             self%stats%bfac_model_mean = sum(self%bfac_atom) / real(self%natoms)
             self%stats%bfac_model_max  = maxval(self%bfac_atom)
+        endif
+        if( l_model_fields )then
+            self%stats%fitted_model   = .true.
             self%stats%occupancy_mean = sum(pack(occupancies, keep)) / real(self%natoms)
             self%stats%intensity_mean = sum(pack(intensities, keep)) / real(self%natoms)
         endif

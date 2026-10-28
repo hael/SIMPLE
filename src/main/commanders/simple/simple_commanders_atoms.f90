@@ -43,6 +43,11 @@ type, extends(commander_base) :: commander_detect_atoms
     procedure :: execute      => exec_detect_atoms
 end type commander_detect_atoms
 
+type, extends(commander_base) :: commander_detect_atomic_species
+  contains
+    procedure :: execute      => exec_detect_atomic_species
+end type commander_detect_atomic_species
+
 type, extends(commander_base) :: commander_detect_calpha
   contains
     procedure :: execute      => exec_detect_calpha
@@ -405,39 +410,24 @@ contains
     subroutine exec_detect_atoms( self, cline )
         class(commander_detect_atoms), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        character(len=*), parameter :: SPECIES_KEYS(4) = [character(len=16) :: 'element', 'nspecies', 'vol_even', 'vol_odd']
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        type(string)       :: vol_even, vol_odd, element
+        type(string)       :: errmsg
         real               :: a(3) ! lattice parameters
-        logical            :: l_discover, l_halves
-        ! a species list implies discover_species=yes and sets the number of classes
-        if( cline%defined('element') )then
-            element = cline%get_carg('element')
-            if( element%has_substr(',') )then
-                if( cline%defined('discover_species') )then
-                    if( cline%get_carg('discover_species') /= 'yes' ) THROW_HARD('a species list needs discover_species=yes, which it implies')
-                else
-                    call cline%set('discover_species', 'yes')
-                endif
-                if( cline%defined('nspecies') ) THROW_HARD('nspecies is the length of the species list, do not give it')
+        integer            :: ik
+        ! detection is species-free for every project: the element and the species keys belong to the programs that
+        ! take them (release 4 keeps no aliases; discover_species is no key any more, detect_atomic_species is the call)
+        do ik = 1,size(SPECIES_KEYS)
+            if( cline%defined(trim(SPECIES_KEYS(ik))) )then
+                errmsg = 'detect_atoms takes no '//trim(SPECIES_KEYS(ik))//': detection is species-free; '//&
+                    &'atoms_stats takes the element for the lattice analyses, detect_atomic_species the species call'
+                THROW_HARD(errmsg%to_char())
             endif
-        endif
-        ! the species-discovery keys need discover_species=yes; the half maps leave the command line
-        ! because parameters does not accept vol1 together with vol_even and vol_odd
-        l_discover = .false.
-        if( cline%defined('discover_species') ) l_discover = cline%get_carg('discover_species') == 'yes'
-        if( .not. l_discover )then
-            if( cline%defined('nspecies') ) THROW_HARD('nspecies needs discover_species=yes')
-            if( cline%defined('min_nbrs') ) THROW_HARD('min_nbrs needs discover_species=yes')
-            if( cline%defined('vol_even') .or. cline%defined('vol_odd') ) THROW_HARD('vol_even and vol_odd need discover_species=yes')
-        endif
-        if( cline%defined('vol_even') .neqv. cline%defined('vol_odd') ) THROW_HARD('give both vol_even and vol_odd or neither')
-        l_halves = cline%defined('vol_even')
-        if( l_halves )then
-            vol_even = cline%get_carg('vol_even')
-            vol_odd  = cline%get_carg('vol_odd')
-            call cline%delete('vol_even')
-            call cline%delete('vol_odd')
+        enddo
+        ! a transfer table to use instead of measuring the transfer on the map
+        if( cline%defined('transfer_tab') )then
+            if( .not. file_exists(cline%get_carg('transfer_tab')) ) THROW_HARD('transfer_tab: no such file')
         endif
         call params%new(cline)
         if( cline%defined('mskdiam') )then
@@ -445,7 +435,6 @@ contains
         else
             call nano%new(params, params%vols(1))
         endif
-        if( l_halves ) call nano%set_half_maps(vol_even, vol_odd)
         ! execute
         call nano%identify_atomic_pos(a, l_atom_thres=trim(params%atom_thres).eq.'yes')
         ! kill
@@ -453,6 +442,59 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    ! the species call on the atoms detect_atoms found: pdbfile is its _ATMS.pdb (the _atoms.csv and _model.txt beside
+    ! it carry the density model), vol1 the map; optional half maps, a species list (brightest first, its length the
+    ! class count) or nspecies
+    subroutine exec_detect_atomic_species( self, cline )
+        use simple_atomic_species, only: call_atomic_species
+        class(commander_detect_atomic_species), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(parameters) :: params
+        type(string)     :: vol_even, vol_odd, errmsg
+        character(len=2), allocatable :: names(:)
+        logical :: l_halves
+        if( .not. cline%defined('pdbfile') ) THROW_HARD('detect_atomic_species needs pdbfile, the _ATMS.pdb of detect_atoms')
+        errmsg = cline%get_carg('pdbfile')
+        if( .not. file_exists(errmsg) )then
+            errmsg = 'pdbfile: no such file '//errmsg%to_char()
+            THROW_HARD(errmsg%to_char())
+        endif
+        if( cline%defined('element') .and. cline%defined('nspecies') ) THROW_HARD('the species list sets the class count, do not give nspecies')
+        ! the half maps leave the command line, because parameters does not accept vol1 together with vol_even and vol_odd
+        if( cline%defined('vol_even') .neqv. cline%defined('vol_odd') ) THROW_HARD('give both vol_even and vol_odd or neither')
+        l_halves = cline%defined('vol_even')
+        if( l_halves )then
+            vol_even = cline%get_carg('vol_even')
+            vol_odd  = cline%get_carg('vol_odd')
+            if( .not. (file_exists(vol_even) .and. file_exists(vol_odd)) ) THROW_HARD('vol_even or vol_odd: no such file')
+            call cline%delete('vol_even')
+            call cline%delete('vol_odd')
+        endif
+        call params%new(cline)
+        ! the class names: the list or the compound selector's species, else the one element named
+        if( allocated(params%species) )then
+            names = params%species
+        else if( cline%defined('element') )then
+            names = [params%element(1:2)]
+        endif
+        if( allocated(names) )then
+            if( l_halves )then
+                call call_atomic_species(params%vols(1), params%pdbfile, params%smpd, params%nspecies, names=names,&
+                    &vol_even=vol_even, vol_odd=vol_odd)
+            else
+                call call_atomic_species(params%vols(1), params%pdbfile, params%smpd, params%nspecies, names=names)
+            endif
+        else
+            if( l_halves )then
+                call call_atomic_species(params%vols(1), params%pdbfile, params%smpd, params%nspecies,&
+                    &vol_even=vol_even, vol_odd=vol_odd)
+            else
+                call call_atomic_species(params%vols(1), params%pdbfile, params%smpd, params%nspecies)
+            endif
+        endif
+        call simple_end('**** SIMPLE_DETECT_ATOMIC_SPECIES NORMAL STOP ****')
+    end subroutine exec_detect_atomic_species
 
     subroutine exec_detect_calpha(self, cline)
         class(commander_detect_calpha), intent(inout) :: self
