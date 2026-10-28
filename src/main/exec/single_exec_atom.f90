@@ -44,7 +44,6 @@ contains
                 call cline%set('mkdir', 'no')
                 call xcrys_score%execute(cline)
             case( 'detect_atoms' )
-                call cline%set('mkdir', 'no')
                 call xdetect_atoms%execute(cline)
             case( 'detect_atomic_species' )
                 call cline%set('mkdir', 'no')

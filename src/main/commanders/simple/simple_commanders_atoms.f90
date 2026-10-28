@@ -428,7 +428,9 @@ contains
         ! a transfer table to use instead of measuring the transfer on the map
         if( cline%defined('transfer_tab') )then
             if( .not. file_exists(cline%get_carg('transfer_tab')) ) THROW_HARD('transfer_tab: no such file')
+            call cline%set('transfer_tab', simple_abspath(cline%get_carg('transfer_tab')))
         endif
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         if( cline%defined('mskdiam') )then
             call nano%new(params, params%vols(1), msk=params%msk)

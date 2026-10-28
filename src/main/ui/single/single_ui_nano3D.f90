@@ -63,7 +63,9 @@ subroutine new_solve3D_nano( prgtab )
         call autorefine3D_nano%new(&
         &'autorefine3D_nano',&                                                            ! name
         &'Automatically refine a metallic nanoparticle structure from particle images',&  ! summary
-        &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! help
+        &'automatically refines metallic nanoparticles by projection matching and atom detection. '//&
+        &'Each subsequent refinement stage uses the detected model''s _FIT.mrc, '//&
+        &'including the reconstruction transfer and background',& ! help
         &'single_exec',&                                                                  ! executable
         &.true., visibility=UI_VIS_STANDARD, display_name='Automated Nanoparticle Refinement') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

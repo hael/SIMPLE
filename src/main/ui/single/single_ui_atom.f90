@@ -215,7 +215,8 @@ subroutine new_atoms_register( prgtab )
         &'_ATMS.pdb holds the atoms (chain A strong, B weak; occupancy the intensity over the particle scale, B the width), '//&
         &'_SIM.mrc the atoms rendered from that model, _FIT.mrc the full model of the map, _RES.mrc its residual, '//&
         &'_atoms.csv the per-atom table, _model.txt the particle parameters and _transfer.tsv the transfer by Fourier shell. '//&
-        &'Detection is species-free: the element belongs to atoms_stats (lattice analyses) and detect_atomic_species (species call)',& ! descr long
+        &'Detection is species-free: the element belongs to atoms_stats (lattice analyses) and detect_atomic_species (species call). '//&
+        &'Outputs are gathered in a numbered execution directory by default; mkdir=no writes them in the current directory',& ! descr long
         &'single_exec',&                                        ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Detect Atoms') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

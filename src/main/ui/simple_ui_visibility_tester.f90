@@ -77,6 +77,14 @@ contains
         call param%set_param('walltime', 'num', 'Walltime', 'Maximum execution time in seconds', 'e.g. 1', .false., 1.)
         call assert_char('seconds', param%units%to_char(), 'time unit is inferred from descriptor text')
         call assert_char('e.g. 10 seconds', param%placeholder%to_char(), 'time placeholder includes its unit')
+        call param%set_param('min_nbrs', 'num', 'Neighbours a weak atom needs', &
+            &'Already found neighbours required in the second residual stage', '# neighbours', .false., 3.)
+        call param%set_generated_default('3', .true.)
+        call assert_char('', param%units%to_char(), 'an ordinal stage does not imply time units')
+        call assert_char('e.g. 3', param%placeholder%to_char(), 'neighbour-count example has no time unit')
+        cli_text = ui_cli_param_summary(param)
+        call assert_char('Neighbours a weak atom needs; e.g. 3', cli_text%to_char(), &
+            &'CLI neighbour-count summary retains the numeric default without seconds')
         call param%set_param('bfac', 'num', 'B-factor', 'B-factor in Angstroms^2', 'e.g. 1', .false., 1.)
         call assert_char('Angstroms^2', param%units%to_char(), 'squared Angstrom unit is inferred from descriptor text')
         call assert_char('e.g. 10 Angstroms^2', param%placeholder%to_char(), 'squared Angstrom placeholder includes its unit')

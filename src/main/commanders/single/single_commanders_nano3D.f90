@@ -72,7 +72,7 @@ contains
         logical,          allocatable :: state_mask(:)
         type(string) :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
         type(string) :: fname_recvol_base, fname_even_base, fname_odd_base, fname_res, fname_atmprior
-        type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_sim
+        type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_fit
         type(string) :: fname_fit, fname_resmap, fname_atoms_csv, fname_model_txt, fname_extrema
         type(string) :: fname_cvags_vs_reprojs, fname_atoms_iter
         integer      :: i, iter, cnt, cnt2, funit, io_stat, ncavgs
@@ -146,6 +146,7 @@ contains
         if( params%l_atm_prior ) call cline_refine3D_nano%set('icm', 'no')
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
+        call cline_detect_atms%set('mkdir', 'no')
         call cline_detect_atms%set('vol1', fname_recvol)
         if( cline_detect_atms%defined('pdbfile') ) call cline_detect_atms%delete('pdbfile')
         call cline_detect_atms%set('atm_prior', 'no')
@@ -175,10 +176,10 @@ contains
             call simple_copy_file(string(SPLITTED), iter_dir//fbody_split//'_iter'//int2str_pad(i,3)//'.mrc')
             call copy_model_products(iter_dir, i)
             if( l_atm_stage ) call copy_atomic_prior_products(iter_dir, i)
-            ! the next reference is the model's render; with the prior the next reconstruction reads this round's
-            ! model, _ATMS.pdb with its per-atom table _atoms.csv (intensity and width of every strong and weak atom)
+            ! Use the saved full fit as the next reference; the working model products are deleted below.
+            ! The atomic prior reads this round's _ATMS.pdb and _atoms.csv.
             fname_atoms_iter = iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_ATMS.pdb'
-            call cline_refine3D_nano%set('vol1', fname_simvol)
+            call cline_refine3D_nano%set('vol1', iter_dir//fbody//'_iter'//int2str_pad(i,3)//'_FIT.mrc')
             if( params%l_atm_prior .and. i < params%maxits )then
                 call cline_refine3D_nano%set('atm_prior', 'yes')
                 call cline_refine3D_nano%set('pdbfile', fname_atoms_iter)
@@ -249,8 +250,8 @@ contains
             call cline_reproject%set('pgrp',   params%pgrp)
             call cline_reproject%set('nthr',   params%nthr)
             call xreproject%execute(cline_reproject)
-            call cline_reproject%set('vol1',   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_SIM.mrc')
-            call cline_reproject%set('outstk', 'reprojs_SIM.mrc')
+            call cline_reproject%set('vol1',   string(FINAL_MAPS)//fbody//'_iter'//int2str_pad(iter,3)//'_FIT.mrc')
+            call cline_reproject%set('outstk', 'reprojs_FIT.mrc')
             ! re-project
             call xreproject%execute(cline_reproject)
             ! write cavgs & reprojections in triplets
@@ -261,15 +262,15 @@ contains
             cnt  = 0
             cnt2 = 1
             fname_reprojs          = 'reprojs_recvol.mrc'
-            fname_reprojs_sim      = 'reprojs_SIM.mrc'
-            fname_cvags_vs_reprojs = 'cavgs_vs_reprojections_rec_and_sim.mrc'
+            fname_reprojs_fit      = 'reprojs_FIT.mrc'
+            fname_cvags_vs_reprojs = 'cavgs_vs_reprojections_rec_and_fit.mrc'
             do i = 1,3*ncavgs,3
                 cnt = cnt + 1
                 if( rstates(cnt) > 0.5 )then
                     state_mask(cnt) = .true.
                     call imgs(1)%read(cavgs_stk,         cnt)
                     call imgs(2)%read(fname_reprojs,     cnt)
-                    call imgs(3)%read(fname_reprojs_sim, cnt)
+                    call imgs(3)%read(fname_reprojs_fit, cnt)
                     call imgs(1)%norm
                     call imgs(2)%norm
                     call imgs(3)%norm
