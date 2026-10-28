@@ -27,7 +27,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
+             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -51,6 +51,23 @@ jobs:
       - name: Build SIMPLE GUI  (Linux/MacOS)
         run: |
              ./compile_gui.sh
+
+  Build_bundled_numerics:
+    name: Build SIMPLE with bundled BLAS/LAPACK/ARPACK
+    runs-on: ubuntu-26.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies except BLAS/LAPACK/ARPACK
+        run: |
+             sudo apt-get update
+             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 libcurl4-openssl-dev
+
+      - name: Build SIMPLE with CMake-provided numerical libraries
+        run: |
+             cmake -S . -B build-bundled-numerics -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=OFF -DSIMPLE_FORCE_BUNDLED_NUMERICS=ON
+             cmake --build build-bundled-numerics --parallel 4
 
   Build_coarray:
     name: Build SIMPLE with coarrays

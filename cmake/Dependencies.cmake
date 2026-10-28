@@ -99,12 +99,9 @@ endif()
 # SIMPLE uses the standard LP64 Fortran ABI for these libraries. If you point
 # CMake at an ILP64 vendor build, integer sizes will not match the current code.
 
-set(SIMPLE_OPENBLAS_VERSION "0.3.27" CACHE STRING "OpenBLAS version used for the bundled BLAS/LAPACK build")
-set(SIMPLE_ARPACK_NG_VERSION "3.9.1" CACHE STRING "ARPACK-NG version used for the bundled ARPACK build")
-set(SIMPLE_NUMERICS_INSTALL_PREFIX
-    "${CMAKE_BINARY_DIR}/_deps/numerics/install"
-    CACHE PATH "Install prefix for BLAS/LAPACK/ARPACK built in the CMake build folder"
-)
+set(SIMPLE_OPENBLAS_VERSION "0.3.34")
+set(SIMPLE_ARPACK_NG_VERSION "3.9.1")
+set(SIMPLE_NUMERICS_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/_deps/numerics/install")
 
 set(SIMPLE_BLAS_STATUS "system")
 set(SIMPLE_LAPACK_STATUS "system")
@@ -123,6 +120,8 @@ set(SIMPLE_NUMERICS_BUNDLED_LINK_DIRS "")
 # (Accelerate), other compilers, cross-compiling and -DSIMPLE_BLAS_OPENMP=OFF keep the system BLAS as found.
 option(SIMPLE_BLAS_OPENMP
     "Linux/GNU: link a BLAS that threads with OpenMP (a system OpenMP OpenBLAS, else the bundled build)" ON)
+option(SIMPLE_FORCE_BUNDLED_NUMERICS
+    "Download and build bundled BLAS/LAPACK/ARPACK even when system libraries are available (validation)" OFF)
 set(SIMPLE_BLAS_POLICY OFF)
 if(SIMPLE_BLAS_OPENMP AND USE_OPENMP AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING
    AND CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_Fortran_COMPILER_ID STREQUAL "GNU"
@@ -268,10 +267,10 @@ else()
     list(APPEND SIMPLE_NUMERICS_MISSING "ARPACK")
 endif()
 
-if(NOT BLAS_FOUND OR NOT LAPACK_FOUND)
+if(SIMPLE_FORCE_BUNDLED_NUMERICS OR NOT BLAS_FOUND OR NOT LAPACK_FOUND)
     set(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS ON)
 endif()
-if(NOT ARPACK_LIBRARY)
+if(SIMPLE_FORCE_BUNDLED_NUMERICS OR NOT ARPACK_LIBRARY)
     set(SIMPLE_NUMERICS_BUILD_ARPACK ON)
 endif()
 if(SIMPLE_BLAS_POLICY_BUNDLED)
@@ -313,7 +312,20 @@ if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS OR SIMPLE_NUMERICS_BUILD_ARPACK)
             "  SIMPLE builds the OpenMP OpenBLAS (-DSIMPLE_BLAS_OPENMP=OFF keeps the system BLAS).\n"
         )
     endif()
-    if(NOT SIMPLE_NUMERICS_MISSING AND SIMPLE_BLAS_POLICY_BUNDLED)
+    if(SIMPLE_FORCE_BUNDLED_NUMERICS)
+        message(WARNING
+            "================================================================================\n"
+            "  Bundled BLAS / LAPACK / ARPACK explicitly requested\n"
+            "================================================================================\n"
+            "  SIMPLE downloads and compiles during the build step, once per build folder:\n"
+            "    ${SIMPLE_NUMERICS_BUNDLED_TEXT}\n"
+            "  Build/download location:\n"
+            "    ${CMAKE_BINARY_DIR}/_deps\n"
+            "  Bundled install prefix:\n"
+            "    ${SIMPLE_NUMERICS_INSTALL_PREFIX}\n"
+            "================================================================================\n"
+        )
+    elseif(NOT SIMPLE_NUMERICS_MISSING AND SIMPLE_BLAS_POLICY_BUNDLED)
         message(WARNING
             "================================================================================\n"
             "  BLAS: building the OpenMP OpenBLAS\n"
@@ -397,9 +409,6 @@ if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
     set(SIMPLE_OPENBLAS_LIBRARY
         "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}openblas${CMAKE_STATIC_LIBRARY_SUFFIX}"
     )
-    set(SIMPLE_OPENBLAS_URL
-        "https://github.com/OpenMathLib/OpenBLAS/releases/download/v${SIMPLE_OPENBLAS_VERSION}/OpenBLAS-${SIMPLE_OPENBLAS_VERSION}.tar.gz"
-    )
     set(SIMPLE_OPENBLAS_MAKE_ARGS
         "CC=${CMAKE_C_COMPILER}"
         "FC=${CMAKE_Fortran_COMPILER}"
@@ -407,12 +416,14 @@ if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
         "USE_OPENMP=${SIMPLE_OPENBLAS_USE_OPENMP}"
         "NO_SHARED=1"
         "NO_LAPACK=0"
+        "NO_LAPACKE=1"
         "INTERFACE64=0"
     )
 
     # its own build folder per flavour, so a build tree configured before rebuilds the library
     ExternalProject_Add(simple_openblas_ep
-        URL "${SIMPLE_OPENBLAS_URL}"
+        URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v${SIMPLE_OPENBLAS_VERSION}/OpenBLAS-${SIMPLE_OPENBLAS_VERSION}.tar.gz"
+        URL_HASH "SHA256=cd7e129868320cc2d033afa920e31202dfe0b8066a5b66661900ccc0f197dfed"
         PREFIX "${SIMPLE_OPENBLAS_PREFIX}"
         DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/downloads"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
@@ -451,9 +462,6 @@ endif()
 if(SIMPLE_NUMERICS_BUILD_ARPACK)
     set(SIMPLE_ARPACK_LIBRARY
         "${SIMPLE_NUMERICS_INSTALL_PREFIX}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}arpack${CMAKE_STATIC_LIBRARY_SUFFIX}"
-    )
-    set(SIMPLE_ARPACK_NG_URL
-        "https://github.com/opencollab/arpack-ng/archive/refs/tags/${SIMPLE_ARPACK_NG_VERSION}.tar.gz"
     )
     if(SIMPLE_NUMERICS_USE_BUNDLED_OPENBLAS)
         set(SIMPLE_ARPACK_BLAS_LIBRARIES "${SIMPLE_OPENBLAS_LIBRARY}")
@@ -497,7 +505,8 @@ if(SIMPLE_NUMERICS_BUILD_ARPACK)
     endif()
 
     ExternalProject_Add(simple_arpack_ep
-        URL "${SIMPLE_ARPACK_NG_URL}"
+        URL "https://github.com/opencollab/arpack-ng/archive/refs/tags/${SIMPLE_ARPACK_NG_VERSION}.tar.gz"
+        URL_HASH "SHA256=f6641deb07fa69165b7815de9008af3ea47eb39b2bb97521fbf74c97aba6e844"
         PREFIX "${CMAKE_BINARY_DIR}/_deps/arpack-ng"
         DOWNLOAD_DIR "${CMAKE_BINARY_DIR}/_deps/downloads"
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
