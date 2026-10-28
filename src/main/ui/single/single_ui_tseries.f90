@@ -4,7 +4,7 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('tseries', 'Time-series Pre-processing', 10)
-type(ui_program), target :: track_particles
+type(ui_program), target :: tseries_track_particles
 type(ui_program), target :: tseries_import
 type(ui_program), target :: tseries_make_pickavg
 type(ui_program), target :: tseries_motion_correct
@@ -15,7 +15,7 @@ contains
 
     subroutine construct_single_tseries_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_track_particles(prgtab)
+        call new_tseries_track_particles(prgtab)
         call new_tseries_import(prgtab)
         call new_tseries_make_pickavg(prgtab)
         call new_tseries_motion_correct(prgtab)
@@ -23,11 +23,11 @@ contains
         call new_tseries_extractor(prgtab)
     end subroutine construct_single_tseries_programs
 
-subroutine new_track_particles( prgtab )
+subroutine new_tseries_track_particles( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call track_particles%new(&
-        &'track_particles',&                                                     ! name
+        call tseries_track_particles%new(&
+        &'tseries_track_particles',&                                                     ! name
         &'Track particle positions through a nanoparticle time series',&         ! summary
         &'is a distributed workflow for particle tracking in time-series data',& ! help
         &'single_exec',&                                                         ! executable
@@ -36,53 +36,53 @@ subroutine new_track_particles( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call track_particles%add_input(UI_PARM, 'fbody', 'string', 'Template output tracked series',&
+        call tseries_track_particles%add_input(UI_PARM, 'fbody', 'string', 'Template output tracked series',&
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '', &
         &visibility=UI_VIS_STANDARD)
-        call track_particles%add_input(UI_FILE, 'boxfile', 'file', 'List of particle coordinates',&
+        call tseries_track_particles%add_input(UI_FILE, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '', &
         &visibility=UI_VIS_STANDARD)
-        call track_particles%add_input(UI_PARM, neg, &
+        call tseries_track_particles%add_input(UI_PARM, neg, &
         &visibility=UI_VIS_ADVANCED)
-        call track_particles%add_input(UI_PARM, 'tester', 'multi', 'Write periodic tester-mode outputs',&
+        call tseries_track_particles%add_input(UI_PARM, 'tester', 'multi', 'Write periodic tester-mode outputs',&
         &'Periodically write masked reference images and registered particle chunks for debugging(no|yes){no}','', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'no', 'yes']), &
         &visibility=UI_VIS_ADVANCED)
-        call track_particles%add_input(UI_PARM, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0., &
+        call tseries_track_particles%add_input(UI_PARM, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0., &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call track_particles%add_input(UI_SRCH, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
+        call tseries_track_particles%add_input(UI_SRCH, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'pixels window halfwidth{20}', .false., 20., &
         &visibility=UI_VIS_ADVANCED)
-        call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{50}', '{50}', .false., 50., &
+        call tseries_track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{50}', '{50}', .false., 50., &
         &visibility=UI_VIS_ADVANCED)
         ! <empty>
         ! filter controls
-        call track_particles%add_input(UI_FILT, lp_track, &
+        call tseries_track_particles%add_input(UI_FILT, lp_track, &
         &visibility=UI_VIS_ADVANCED)
-        call track_particles%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call tseries_track_particles%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5., &
         &visibility=UI_VIS_ADVANCED)
-        call track_particles%add_input(UI_FILT, 'filter', 'multi','Alternative filter for particle tracking',&
+        call tseries_track_particles%add_input(UI_FILT, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){nlmean}','', .false., 'nlmean', &
         &choices=ui_choices([character(len=6) :: 'no', 'tv', 'nlmean']), &
         &visibility=UI_VIS_ADVANCED)
-        call track_particles%add_input(UI_FILT, hp, &
+        call tseries_track_particles%add_input(UI_FILT, hp, &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call track_particles%add_input(UI_COMP, 'ncunits', 'num', 'Concurrent particle trackers',&
+        call tseries_track_particles%add_input(UI_COMP, 'ncunits', 'num', 'Concurrent particle trackers',&
         &'Maximum number of independent particle tracking jobs to run at once',&
         &'# simultaneous trackers', .true., 1., &
         &visibility=UI_VIS_STANDARD)
-        call track_particles%add_input(UI_COMP, nthr, &
+        call tseries_track_particles%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('track_particles', track_particles, prgtab, UI_CATEGORY)
-    end subroutine new_track_particles
+        call add_ui_program('tseries_track_particles', tseries_track_particles, prgtab, UI_CATEGORY)
+    end subroutine new_tseries_track_particles
 
     subroutine new_tseries_import( prgtab )
         class(ui_hash), intent(inout) :: prgtab

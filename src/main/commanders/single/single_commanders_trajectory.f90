@@ -4,30 +4,30 @@ use simple_commanders_api
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_track_particles_distr
+type, extends(commander_base) :: commander_tseries_track_particles_distr
   contains
-    procedure :: execute      => exec_track_particles_distr
-end type commander_track_particles_distr
+    procedure :: execute      => exec_tseries_track_particles_distr
+end type commander_tseries_track_particles_distr
 
-type, extends(commander_base) :: commander_track_particles
+type, extends(commander_base) :: commander_tseries_track_particles
   contains
-    procedure :: execute      => exec_track_particles
-end type commander_track_particles
+    procedure :: execute      => exec_tseries_track_particles
+end type commander_tseries_track_particles
 
 type, extends(commander_base) :: commander_trajectory_backgr_subtr
   contains
     procedure :: execute      => exec_trajectory_backgr_subtr
 end type commander_trajectory_backgr_subtr
 
-type, extends(commander_base) :: commander_graphene_subtr
+type, extends(commander_base) :: commander_trajectory_graphene_subtr
   contains
-    procedure :: execute      => exec_graphene_subtr
-end type commander_graphene_subtr
+    procedure :: execute      => exec_trajectory_graphene_subtr
+end type commander_trajectory_graphene_subtr
 
-type, extends(commander_base) :: commander_import_trajectory
+type, extends(commander_base) :: commander_trajectory_import
   contains
-    procedure :: execute      => exec_import_trajectory
-end type commander_import_trajectory
+    procedure :: execute      => exec_trajectory_import
+end type commander_trajectory_import
 
 type, extends(commander_base) :: commander_trajectory_denoise
   contains
@@ -39,15 +39,15 @@ type, extends(commander_base) :: commander_trajectory_swap_stack
     procedure :: execute      => exec_trajectory_swap_stack
 end type commander_trajectory_swap_stack
 
-type, extends(commander_base) :: commander_extract_substk
+type, extends(commander_base) :: commander_trajectory_extract_substk
   contains
-    procedure :: execute      => exec_extract_substk
-end type commander_extract_substk
+    procedure :: execute      => exec_trajectory_extract_substk
+end type commander_trajectory_extract_substk
 
 contains
 
-    subroutine exec_track_particles_distr( self, cline )
-        class(commander_track_particles_distr), intent(inout) :: self
+    subroutine exec_tseries_track_particles_distr( self, cline )
+        class(commander_tseries_track_particles_distr), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)              :: params
         type(qsys_env)                :: qenv
@@ -62,8 +62,8 @@ contains
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',   50)
         if( .not. cline%defined('filter'))     call cline%set('filter', 'nlmean')
         if( .not. cline%defined('offset'))     call cline%set('offset',      20.)
-        if( cline%defined('nparts') ) THROW_HARD('track_particles: nparts is number of particles; use ncunits')
-        if( .not. cline%defined('ncunits') ) THROW_HARD('track_particles requires ncunits as the concurrent tracker count')
+        if( cline%defined('nparts') ) THROW_HARD('tseries_track_particles: nparts is number of particles; use ncunits')
+        if( .not. cline%defined('ncunits') ) THROW_HARD('tseries_track_particles requires ncunits as the concurrent tracker count')
         call cline%set('oritype','mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
@@ -83,11 +83,11 @@ contains
                 endif
             end do
         else
-            THROW_HARD('inputted boxfile is empty; exec_track_particles')
+            THROW_HARD('inputted boxfile is empty; exec_tseries_track_particles')
         endif
         call boxfile%kill
         params%nptcls  = ndatlines
-        if( params%ncunits < 1 ) THROW_HARD('ncunits must be >= 1 for track_particles')
+        if( params%ncunits < 1 ) THROW_HARD('ncunits must be >= 1 for tseries_track_particles')
         nactive        = min(params%ncunits, params%nptcls)
         params%nparts  = params%nptcls
         params%ncunits = nactive
@@ -119,11 +119,11 @@ contains
         call qsys_cleanup(params)
         ! end gracefully
         call simple_end('**** single_tseries_tracker NORMAL STOP ****')
-    end subroutine exec_track_particles_distr
+    end subroutine exec_tseries_track_particles_distr
 
-    subroutine exec_track_particles( self, cline )
+    subroutine exec_tseries_track_particles( self, cline )
         use single_tseries_tracker
-        class(commander_track_particles), intent(inout) :: self
+        class(commander_tseries_track_particles), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(sp_project)          :: spproj
         type(parameters)          :: params
@@ -137,12 +137,12 @@ contains
         orig_box = params%box
         ! coordinates input
         if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
-            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_track_particles')
+            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_tseries_track_particles')
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(params%xcoord)
             boxdata(1,2) = real(params%ycoord)
         else
-            THROW_HARD('need xcoord/ycoord to be part of command line; exec_track_particles')
+            THROW_HARD('need xcoord/ycoord to be part of command line; exec_tseries_track_particles')
         endif
         ! frames input
         call spproj%read(params%projfile)
@@ -182,10 +182,10 @@ contains
         ! clean tracker
         call kill_tracker
         ! end gracefully
-        call qsys_declare_part_finished(params, string('single_commanders_trajectory :: exec_track_particles'))
+        call qsys_declare_part_finished(params, string('single_commanders_trajectory :: exec_tseries_track_particles'))
         call spproj%kill
         call simple_end('**** single_tseries_tracker NORMAL STOP ****')
-    end subroutine exec_track_particles
+    end subroutine exec_tseries_track_particles
 
     subroutine exec_trajectory_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
@@ -246,9 +246,9 @@ contains
         call simple_end('**** SIMPLE_BACKGR_SUBTR NORMAL STOP ****')
     end subroutine exec_trajectory_backgr_subtr
 
-    subroutine exec_graphene_subtr( self, cline )
+    subroutine exec_trajectory_graphene_subtr( self, cline )
         use simple_tseries_graphene_subtr
-        class(commander_graphene_subtr), intent(inout) :: self
+        class(commander_trajectory_graphene_subtr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)   :: params
         type(builder)      :: build
@@ -334,10 +334,10 @@ contains
         call ave_post%kill
         ! end gracefully
         call simple_end('**** SIMPLE_GRAPHENE_SUBTR NORMAL STOP ****')
-    end subroutine exec_graphene_subtr
+    end subroutine exec_trajectory_graphene_subtr
 
-    subroutine exec_import_trajectory( self, cline )
-        class(commander_import_trajectory), intent(inout) :: self
+    subroutine exec_trajectory_import( self, cline )
+        class(commander_trajectory_import), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -366,8 +366,8 @@ contains
         call spproj%add_single_stk(params%stk, ctfvars, os)
         call spproj%write
         ! end gracefully
-        call simple_end('**** import_trajectory NORMAL STOP ****')
-    end subroutine exec_import_trajectory
+        call simple_end('**** trajectory_import NORMAL STOP ****')
+    end subroutine exec_trajectory_import
 
     subroutine exec_trajectory_denoise( self, cline )
         use simple_commanders_imgops, only: commander_ppca_denoise
@@ -581,8 +581,8 @@ contains
         call simple_end('**** SINGLE_trajectory_swap_stack NORMAL STOP ****')
     end subroutine exec_trajectory_swap_stack
 
-    subroutine exec_extract_substk( self, cline )
-        class(commander_extract_substk), intent(inout) :: self
+    subroutine exec_trajectory_extract_substk( self, cline )
+        class(commander_trajectory_extract_substk), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -618,6 +618,6 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SINGLE_EXTRACT_SUBSTK NORMAL STOP ****')
-    end subroutine exec_extract_substk
+    end subroutine exec_trajectory_extract_substk
 
 end module single_commanders_trajectory

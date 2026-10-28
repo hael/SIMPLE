@@ -253,7 +253,7 @@ contains
         type(commander_prune_project)           :: xprune_project
         type(commander_scale_project)           :: xscale_project
         ! TIME-SERIES ANALYSIS PROGRAMS
-        type(commander_track_particles)         :: xtrack_particles
+        type(commander_tseries_track_particles)         :: xtseries_track_particles
         type(commander_tseries_motion_correct)  :: xtseries_mcorr
         ! PARALLEL PROCESSING PROGRAMS
         type(commander_split)                   :: xsplit
@@ -381,8 +381,8 @@ contains
             ! TIME-SERIES ANALYSIS PROGRAMS
             case( 'tseries_motion_correct' )
                 call xtseries_mcorr%execute(cline)
-            case( 'track_particles' )
-                call xtrack_particles%execute(cline)
+            case( 'tseries_track_particles' )
+                call xtseries_track_particles%execute(cline)
             ! PARALLEL PROCESSING PROGRAMS
             case( 'split' )
                 call xsplit%execute(cline)

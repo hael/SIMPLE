@@ -35,6 +35,7 @@ without modifying the project (`quality_mode=analyze`, `evaluate`).
 - `src/main/cavg_quality/simple_cavg_quality_model.f90`: built-in presets, model file I/O, scoring, promotion snippets.
 - `src/main/cavg_quality/simple_cavg_quality_analysis.f90`: evaluation, hard-gate-only evaluation, training and feature tables.
 - `src/main/cavg_quality/simple_cavg_quality_learn.f90`: learn/evaluate model fitting and reports.
+- `src/main/quality/simple_quality_logistic.f90`: the bank-free core the learner calls (the logistic problem and its L-BFGS-B fit, dataset roles and class weights, the lambda and threshold grids, the robust macro score), the second client of which is the planned `nano` context (`doc/implementation_notes/planned/nano_cavgs_rejection.md`). A change to it must keep the class-average `learn` output byte-identical; its tests are `simple_test_exec test=unit_numerics suite=quality_logistic`.
 - `src/main/cavg_quality/simple_cavg_quality_selection.f90`: `score_project_cavgs` and `write_cavg_selection_stacks`, shared by every caller.
 - `src/main/cavg_quality/simple_cavg_quality_stats.f90`, `_helpers.f90`, `_types.f90`: metrics, helpers, shared types and constants.
 - `doc/policies/sieving_and_rejection/model_cavgs_rejection.md`: current modes, contexts, hard gates, feature bank, built-ins, learning and promotion.

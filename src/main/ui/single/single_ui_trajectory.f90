@@ -4,9 +4,9 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('trajectory', 'Trajectory Analysis', 20)
-type(ui_program), target :: extract_substk
-type(ui_program), target :: graphene_subtr
-type(ui_program), target :: import_trajectory
+type(ui_program), target :: trajectory_extract_substk
+type(ui_program), target :: trajectory_graphene_subtr
+type(ui_program), target :: trajectory_import
 type(ui_program), target :: trajectory_denoise
 type(ui_program), target :: trajectory_make_projavgs
 type(ui_program), target :: trajectory_reconstruct3D
@@ -16,20 +16,20 @@ contains
 
     subroutine construct_single_trajectory_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_extract_substk(prgtab)
-        call new_graphene_subtr(prgtab)
-        call new_import_trajectory(prgtab)
+        call new_trajectory_extract_substk(prgtab)
+        call new_trajectory_graphene_subtr(prgtab)
+        call new_trajectory_import(prgtab)
         call new_trajectory_denoise(prgtab)
         call new_trajectory_make_projavgs(prgtab)
         call new_trajectory_reconstruct3D(prgtab)
         call new_trajectory_swap_stack(prgtab)
     end subroutine construct_single_trajectory_programs
 
-subroutine new_extract_substk( prgtab )
+subroutine new_trajectory_extract_substk( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call extract_substk%new(&
-        &'extract_substk',&                                                                                            ! name
+        call trajectory_extract_substk%new(&
+        &'trajectory_extract_substk',&                                                                                            ! name
         &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! summary
         &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! help
         &'single_exec',&                                                                                               ! executable
@@ -39,13 +39,13 @@ subroutine new_extract_substk( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call extract_substk%add_input(UI_FILE, projfile, &
+        call trajectory_extract_substk%add_input(UI_FILE, projfile, &
         &visibility=UI_VIS_STANDARD)
-        call extract_substk%add_input(UI_PARM, 'fromp', 'num', 'From index', 'Start index for stack copy', 'start index', .false., 1.0, &
+        call trajectory_extract_substk%add_input(UI_PARM, 'fromp', 'num', 'From index', 'Start index for stack copy', 'start index', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call extract_substk%add_input(UI_PARM, 'top',   'num', 'To index', 'Stop index for stack copy', 'stop index', .false., 1.0, &
+        call trajectory_extract_substk%add_input(UI_PARM, 'top',   'num', 'To index', 'Stop index for stack copy', 'stop index', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call extract_substk%add_input(UI_PARM, 'state', 'num', 'State index', 'Only particles with this state are extracted{1}', 'state index', .false., 1.0, &
+        call trajectory_extract_substk%add_input(UI_PARM, 'state', 'num', 'State index', 'Only particles with this state are extracted{1}', 'state index', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
@@ -58,28 +58,28 @@ subroutine new_extract_substk( prgtab )
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('extract_substk', extract_substk, prgtab, UI_CATEGORY)
-    end subroutine new_extract_substk
+        call add_ui_program('trajectory_extract_substk', trajectory_extract_substk, prgtab, UI_CATEGORY)
+    end subroutine new_trajectory_extract_substk
 
-    subroutine new_graphene_subtr( prgtab )
+    subroutine new_trajectory_graphene_subtr( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call graphene_subtr%new(&
-        &'graphene_subtr',&                                  ! name
+        call trajectory_graphene_subtr%new(&
+        &'trajectory_graphene_subtr',&                                  ! name
         &'Suppress graphene Fourier peaks in nanoparticle time-series images',& ! summary
         &'Removes graphene Fourier peaks in time-series',&   ! help
         &'single_exec',&                                     ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Remove Graphene Signal') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call graphene_subtr%add_input(UI_IMG, stk_traj, &
+        call trajectory_graphene_subtr%add_input(UI_IMG, stk_traj, &
         &visibility=UI_VIS_STANDARD)
-        call graphene_subtr%add_input(UI_IMG, stk_backgr, &
+        call trajectory_graphene_subtr%add_input(UI_IMG, stk_backgr, &
         &visibility=UI_VIS_STANDARD)
-        call graphene_subtr%add_input(UI_IMG, outstk, &
+        call trajectory_graphene_subtr%add_input(UI_IMG, outstk, &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call graphene_subtr%add_input(UI_PARM, smpd, &
+        call trajectory_graphene_subtr%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
         ! <empty>
         ! <no additional inputs>
@@ -91,29 +91,29 @@ subroutine new_extract_substk( prgtab )
         ! mask controls
         ! <empty>
         ! computer controls
-        call graphene_subtr%add_input(UI_COMP, nthr, &
+        call trajectory_graphene_subtr%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('graphene_subtr', graphene_subtr, prgtab, UI_CATEGORY)
-    end subroutine new_graphene_subtr
+        call add_ui_program('trajectory_graphene_subtr', trajectory_graphene_subtr, prgtab, UI_CATEGORY)
+    end subroutine new_trajectory_graphene_subtr
 
-    subroutine new_import_trajectory( prgtab )
+    subroutine new_trajectory_import( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call import_trajectory%new(&
-        &'import_trajectory',&                    ! name
+        call trajectory_import%new(&
+        &'trajectory_import',&                    ! name
         &'Import particle-image time-series data for trajectory analysis',& ! summary
         &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
         &.true., visibility=UI_VIS_STANDARD, display_name='Import Particle Time Series') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call import_trajectory%add_input(UI_IMG, stk, required_override=.true., &
+        call trajectory_import%add_input(UI_IMG, stk, required_override=.true., &
         &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call import_trajectory%add_input(UI_PARM, smpd, &
+        call trajectory_import%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
-        call import_trajectory%add_input(UI_FILE, deftab, &
+        call trajectory_import%add_input(UI_FILE, deftab, &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
@@ -126,8 +126,8 @@ subroutine new_extract_substk( prgtab )
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('import_trajectory', import_trajectory, prgtab, UI_CATEGORY)
-    end subroutine new_import_trajectory
+        call add_ui_program('trajectory_import', trajectory_import, prgtab, UI_CATEGORY)
+    end subroutine new_trajectory_import
 
     subroutine new_trajectory_denoise( prgtab )
         class(ui_hash), intent(inout) :: prgtab

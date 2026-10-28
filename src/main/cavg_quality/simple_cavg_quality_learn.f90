@@ -8,15 +8,15 @@ use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_fea
     I_NEG_LOCVAR_FG, I_CC_AREA_FRAC, I_BP40_100_CENTER_EDGE_VAR
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, CAVG_QUALITY_TRAINING_VERSION, EPS, &
+use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_TRAINING_VERSION, EPS, &
     CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, &
     CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME
-use simple_srch_sort_loc,      only: hpsort
-use simple_optimizer,          only: optimizer
-use simple_opt_factory,        only: opt_factory
-use simple_opt_spec,           only: opt_spec
+use simple_quality_logistic,   only: quality_logistic_problem, logistic_dataset_class_weights, robust_macro_score, &
+    logistic_role => dataset_learn_role, LEARN_ROLE_SKIP, LEARN_ROLE_BALANCED, LEARN_ROLE_RECALL_ONLY, &
+    LEARN_ROLE_SPECIFICITY_ONLY, LOGISTIC_LAMBDAS, LOGISTIC_THRESHOLDS, LEARN_ROBUST_TAIL_FRAC, &
+    LEARN_ROBUST_TAIL_WEIGHT, LEARN_BALANCED_GOOD_LOSS_WEIGHT, LEARN_BALANCED_BAD_LOSS_WEIGHT
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -26,18 +26,10 @@ public :: evaluate_cavg_quality_model
 public :: evaluate_cavg_quality_result
 
 integer, parameter :: CAVG_QUALITY_LEARN_N_STANDARD_POLICIES = 4
-integer, parameter :: LEARN_ROLE_SKIP               = 0
-integer, parameter :: LEARN_ROLE_BALANCED           = 1
-integer, parameter :: LEARN_ROLE_RECALL_ONLY        = 2
-integer, parameter :: LEARN_ROLE_SPECIFICITY_ONLY   = 3
 real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
 real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
 real,    parameter :: LEARN_BALANCED_FN_TOLERANCE_FRAC = 0.02
 real,    parameter :: LEARN_BALANCED_FN_RATE_PENALTY = 10.0
-real,    parameter :: LEARN_ROBUST_TAIL_FRAC         = 0.25
-real,    parameter :: LEARN_ROBUST_TAIL_WEIGHT       = 0.50
-real,    parameter :: LEARN_BALANCED_GOOD_LOSS_WEIGHT = 0.65
-real,    parameter :: LEARN_BALANCED_BAD_LOSS_WEIGHT  = 1.0 - LEARN_BALANCED_GOOD_LOSS_WEIGHT
 real,    parameter :: LEARN_BAD_OVERFIT_LOSS_MULT     = 1.50
 real,    parameter :: LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE = 0.00
 real,    parameter :: LEARN_BAD_OVERFIT_LOWVAR_FG_MIN = 0.0
@@ -46,34 +38,6 @@ real,    parameter :: LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC = 0.20
 real,    parameter :: LEARN_OVERFIT_FP_ACCEPT_RATE_TARGET = 0.20
 real,    parameter :: LEARN_OVERFIT_FP_EXCESS_RATE_PENALTY = 8.0
 real,    parameter :: LEARN_OVERFIT_FP_BP_Z_MAX       = 0.0
-real,    parameter :: LOGISTIC_LAMBDAS(7)           = [1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3, &
-                                                       1.0e-2, 3.0e-2, 1.0e-1]
-real,    parameter :: LOGISTIC_THRESHOLDS(20)       = [0.02, 0.05, 0.075, 0.10, 0.15, 0.20, &
-                                                       0.25, 0.30, 0.35, 0.40, 0.45, 0.50, &
-                                                       0.55, 0.60, 0.65, 0.70, 0.75, 0.80, &
-                                                       0.85, 0.90]
-real,    parameter :: LOGISTIC_COEFF_ABS_BOUND      = 20.0
-
-type :: cavg_quality_logistic_problem
-    integer :: nobs           = 0
-    integer :: ndim           = 0
-    integer :: n_linear       = 0
-    integer :: n_interactions = 0
-    integer :: linear_features(CAVG_QUALITY_NFEATS) = 0
-    integer :: interaction_terms(CAVG_QUALITY_MAX_INTERACTIONS,2) = 0
-    logical :: has_relational = .false.
-    integer :: relational_knn = 0
-    real    :: relational_corr_hp = 0.0
-    real    :: relational_corr_lp = 0.0
-    real    :: relational_corr_trs = 0.0
-    real(kind=8) :: lambda       = 0.0d0
-    real(kind=8) :: total_weight = 0.0d0
-    real(kind=8), allocatable :: design(:,:)
-    real(kind=8), allocatable :: labels(:)
-    real(kind=8), allocatable :: weights(:)
-contains
-    procedure :: kill => kill_logistic_problem
-end type cavg_quality_logistic_problem
 
 contains
 
@@ -89,7 +53,7 @@ contains
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
-        type(cavg_quality_logistic_problem) :: problem
+        type(quality_logistic_problem) :: problem
         type(cavg_quality_model) :: candidate, best_model
         type(cavg_quality_model_spec) :: spec
         real(kind=8), allocatable :: solution(:)
@@ -107,8 +71,8 @@ contains
         do ipol = 1, n_feature_policies()
             do ilambda = 1, size(LOGISTIC_LAMBDAS)
                 call build_logistic_problem(dsets, ipol, LOGISTIC_LAMBDAS(ilambda), problem)
-                call fit_logistic_problem(problem, solution, objective)
-                call logistic_solution_to_model(solution, problem, feature_policy_name(ipol), candidate)
+                call problem%fit(solution, objective)
+                call logistic_solution_to_model(solution, problem, dsets(1), feature_policy_name(ipol), candidate)
                 do ithresh = 1, size(LOGISTIC_THRESHOLDS)
                     spec = candidate%get_spec()
                     spec%context = trim(quality_context)
@@ -188,40 +152,21 @@ contains
         type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
         integer,                             intent(in)    :: ipolicy
         real,                                intent(in)    :: lambda
-        type(cavg_quality_logistic_problem), intent(inout) :: problem
-        integer :: ids, irow, iobs, ifeat, jfeat, ilinear, jlinear, iterm
-        integer :: role, nfit, ngood, nbad
+        type(quality_logistic_problem),      intent(inout) :: problem
+        integer :: ids, irow, iobs, nobs, role, ngood, nbad, n_linear, linear_features(CAVG_QUALITY_NFEATS)
+        logical :: has_relational
         real(kind=8) :: good_weight, bad_weight, focus_bad_loss_mult
-        call problem%kill()
-        call feature_policy_indices(ipolicy, problem%linear_features, problem%n_linear)
-        if( problem%n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
-        problem%n_interactions = 0
-        do ilinear = 1, problem%n_linear - 1
-            do jlinear = ilinear + 1, problem%n_linear
-                problem%n_interactions = problem%n_interactions + 1
-                problem%interaction_terms(problem%n_interactions,1) = problem%linear_features(ilinear)
-                problem%interaction_terms(problem%n_interactions,2) = problem%linear_features(jlinear)
-            end do
-        end do
-        problem%has_relational = allocated(dsets(1)%relational_feature)
-        if( problem%has_relational )then
-            problem%relational_knn      = dsets(1)%relational_knn
-            problem%relational_corr_hp  = dsets(1)%relational_corr_hp
-            problem%relational_corr_lp  = dsets(1)%relational_corr_lp
-            problem%relational_corr_trs = dsets(1)%relational_corr_trs
-        end if
-        problem%ndim = 1 + problem%n_linear + problem%n_interactions + merge(1, 0, problem%has_relational)
-        problem%lambda = real(lambda, kind=8)
-        problem%nobs = 0
+        call feature_policy_indices(ipolicy, linear_features, n_linear)
+        if( n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
+        has_relational = allocated(dsets(1)%relational_feature)
+        nobs = 0
         do ids = 1, size(dsets)
             role = dataset_learn_role(dsets(ids))
             if( role == LEARN_ROLE_SKIP ) cycle
-            problem%nobs = problem%nobs + count_trainable_classes(dsets(ids))
+            nobs = nobs + count_trainable_classes(dsets(ids))
         end do
-        if( problem%nobs == 0 ) THROW_HARD('build_logistic_problem: no trainable class averages')
-        allocate(problem%design(problem%nobs, problem%ndim), source=0.0d0)
-        allocate(problem%labels(problem%nobs), source=0.0d0)
-        allocate(problem%weights(problem%nobs), source=0.0d0)
+        if( nobs == 0 ) THROW_HARD('build_logistic_problem: no trainable class averages')
+        call problem%new(linear_features(1:n_linear), nobs, has_relational, lambda)
         iobs = 0
         do ids = 1, size(dsets)
             role = dataset_learn_role(dsets(ids))
@@ -233,55 +178,29 @@ contains
             do irow = 1, dsets(ids)%ncls
                 if( dsets(ids)%hard_reject(irow) ) cycle
                 iobs = iobs + 1
-                problem%design(iobs,1) = 1.0d0
-                do ilinear = 1, problem%n_linear
-                    ifeat = problem%linear_features(ilinear)
-                    problem%design(iobs, 1 + ilinear) = real(dsets(ids)%features(irow, ifeat), kind=8)
-                end do
-                do iterm = 1, problem%n_interactions
-                    ifeat = problem%interaction_terms(iterm,1)
-                    jfeat = problem%interaction_terms(iterm,2)
-                    problem%design(iobs, 1 + problem%n_linear + iterm) = &
-                        real(dsets(ids)%features(irow, ifeat) * dsets(ids)%features(irow, jfeat), kind=8)
-                end do
-                if( problem%has_relational ) problem%design(iobs,problem%ndim) = &
-                    real(dsets(ids)%relational_feature(irow), kind=8)
                 if( dsets(ids)%manual_states(irow) > 0 )then
-                    problem%labels(iobs)  = 1.0d0
-                    problem%weights(iobs) = good_weight
+                    call set_row(good_weight)
                 else
-                    problem%labels(iobs)  = 0.0d0
-                    problem%weights(iobs) = bad_weight * logistic_bad_example_loss_multiplier( &
-                        dsets(ids)%features(irow,:), focus_bad_loss_mult)
+                    call set_row(bad_weight * logistic_bad_example_loss_multiplier( &
+                        dsets(ids)%features(irow,:), focus_bad_loss_mult))
                 endif
             end do
-            nfit = count_trainable_classes(dsets(ids))
-            if( nfit > 0 .and. iobs > problem%nobs ) THROW_HARD('build_logistic_problem: row overflow')
         end do
-        problem%total_weight = sum(problem%weights)
-        if( problem%total_weight <= 0.0d0 ) THROW_HARD('build_logistic_problem: nonpositive total weight')
-    end subroutine build_logistic_problem
+        call problem%finalize()
 
-    subroutine logistic_dataset_class_weights( role, ngood, nbad, good_weight, bad_weight )
-        integer,      intent(in)  :: role, ngood, nbad
-        real(kind=8), intent(out) :: good_weight, bad_weight
-        good_weight = 0.0d0
-        bad_weight  = 0.0d0
-        select case(role)
-        case(LEARN_ROLE_BALANCED)
-            if( ngood <= 0 .or. nbad <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid balanced dataset')
-            good_weight = real(LEARN_BALANCED_GOOD_LOSS_WEIGHT, kind=8) / real(ngood, kind=8)
-            bad_weight  = real(LEARN_BALANCED_BAD_LOSS_WEIGHT,  kind=8) / real(nbad,  kind=8)
-        case(LEARN_ROLE_RECALL_ONLY)
-            if( ngood <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid recall-only dataset')
-            good_weight = 1.0d0 / real(ngood, kind=8)
-        case(LEARN_ROLE_SPECIFICITY_ONLY)
-            if( nbad <= 0 ) THROW_HARD('logistic_dataset_class_weights: invalid specificity-only dataset')
-            bad_weight = 1.0d0 / real(nbad, kind=8)
-        case default
-            THROW_HARD('logistic_dataset_class_weights: unsupported dataset role')
-        end select
-    end subroutine logistic_dataset_class_weights
+        contains
+
+            subroutine set_row( weight )
+                real(kind=8), intent(in) :: weight
+                if( has_relational )then
+                    call problem%set_row(iobs, dsets(ids)%features(irow,:), dsets(ids)%manual_states(irow) > 0, &
+                        weight, dsets(ids)%relational_feature(irow))
+                else
+                    call problem%set_row(iobs, dsets(ids)%features(irow,:), dsets(ids)%manual_states(irow) > 0, weight)
+                endif
+            end subroutine set_row
+
+    end subroutine build_logistic_problem
 
     real(kind=8) function logistic_bad_example_loss_multiplier( z_features, focus_bad_loss_mult )
         real,         intent(in) :: z_features(:)
@@ -311,47 +230,11 @@ contains
             real(LEARN_OVERFIT_FOCUS_BAD_LOSS_SCALE * signature_frac, kind=8)
     end function logistic_overfit_focus_bad_loss_multiplier
 
-    subroutine fit_logistic_problem( problem, solution, objective )
-        type(cavg_quality_logistic_problem), intent(inout) :: problem
-        real(kind=8), allocatable,           intent(inout) :: solution(:)
-        real,                                intent(out)   :: objective
-        type(opt_factory)         :: ofac
-        type(opt_spec)            :: ospec
-        class(optimizer), pointer :: opt_obj
-        real, allocatable         :: limits(:,:)
-        real(kind=8)              :: pos_weight, neg_weight
-        integer :: i
-        if( allocated(solution) ) deallocate(solution)
-        allocate(solution(problem%ndim), source=0.0d0)
-        allocate(limits(problem%ndim,2), source=0.0)
-        limits(:,1) = -LOGISTIC_COEFF_ABS_BOUND
-        limits(:,2) =  LOGISTIC_COEFF_ABS_BOUND
-        pos_weight = sum(problem%weights, mask=problem%labels > 0.5d0)
-        neg_weight = sum(problem%weights, mask=problem%labels <= 0.5d0)
-        solution(1) = log(max(pos_weight, 1.0d-12) / max(neg_weight, 1.0d-12))
-        opt_obj => null()
-        call ospec%specify('lbfgsb', problem%ndim, ftol=1e-7, gtol=1e-7, maxits=250, &
-            factr=1.0d+7, pgtol=1.0d-5, limits=limits)
-        call ofac%new(ospec, opt_obj)
-        call ospec%set_costfun_8(logistic_cost_wrapper)
-        call ospec%set_gcostfun_8(logistic_gradient_wrapper)
-        call ospec%set_fdfcostfun_8(logistic_fdf_wrapper)
-        ospec%x   = real(solution)
-        ospec%x_8 = solution
-        call opt_obj%minimize(ospec, problem, objective)
-        do i = 1, problem%ndim
-            solution(i) = ospec%x_8(i)
-        end do
-        call opt_obj%kill()
-        deallocate(opt_obj)
-        call ospec%kill()
-        deallocate(limits)
-    end subroutine fit_logistic_problem
-
-    subroutine logistic_solution_to_model( solution, problem, feature_policy, model )
-        real(kind=8),                      intent(in)    :: solution(:)
-        type(cavg_quality_logistic_problem), intent(in)  :: problem
-        character(len=*),                  intent(in)    :: feature_policy
+    subroutine logistic_solution_to_model( solution, problem, dset, feature_policy, model )
+        real(kind=8),                        intent(in)    :: solution(:)
+        type(quality_logistic_problem),      intent(in)    :: problem
+        type(cavg_quality_training_dataset), intent(in)    :: dset    !< the relational policy of the training files
+        character(len=*),                    intent(in)    :: feature_policy
         type(cavg_quality_model),          intent(inout) :: model
         type(cavg_quality_model_spec) :: spec
         integer :: ilinear, iterm, ifeat
@@ -373,12 +256,12 @@ contains
             spec%interaction_terms(iterm,:) = problem%interaction_terms(iterm,:)
             spec%interaction_coefficients(iterm) = real(solution(1 + problem%n_linear + iterm))
         end do
-        if( problem%has_relational )then
+        if( problem%has_extra )then
             spec%relational_feature_schema = CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
-            spec%relational_knn             = problem%relational_knn
-            spec%relational_corr_hp         = problem%relational_corr_hp
-            spec%relational_corr_lp         = problem%relational_corr_lp
-            spec%relational_corr_trs        = problem%relational_corr_trs
+            spec%relational_knn             = dset%relational_knn
+            spec%relational_corr_hp         = dset%relational_corr_hp
+            spec%relational_corr_lp         = dset%relational_corr_lp
+            spec%relational_corr_trs        = dset%relational_corr_trs
             spec%relational_coefficient     = real(solution(problem%ndim))
         end if
         spec%prob_threshold          = 0.5
@@ -386,112 +269,6 @@ contains
         spec%calibration_temperature = 1.0
         call model%init_spec(spec)
     end subroutine logistic_solution_to_model
-
-    function logistic_cost_wrapper( fun_self, vec, D ) result( cost )
-        class(*),     intent(inout) :: fun_self
-        integer,      intent(in)    :: D
-        real(kind=8), intent(in)    :: vec(D)
-        real(kind=8)                :: cost
-        real(kind=8) :: grad(D)
-        select type(problem => fun_self)
-        type is(cavg_quality_logistic_problem)
-            call logistic_problem_fdf(problem, vec, cost, grad, D)
-        class default
-            THROW_HARD('logistic_cost_wrapper: invalid optimization context')
-        end select
-    end function logistic_cost_wrapper
-
-    subroutine logistic_gradient_wrapper( fun_self, vec, grad, D )
-        class(*),     intent(inout) :: fun_self
-        integer,      intent(in)    :: D
-        real(kind=8), intent(inout) :: vec(D)
-        real(kind=8), intent(out)   :: grad(D)
-        real(kind=8) :: cost
-        select type(problem => fun_self)
-        type is(cavg_quality_logistic_problem)
-            call logistic_problem_fdf(problem, vec, cost, grad, D)
-        class default
-            THROW_HARD('logistic_gradient_wrapper: invalid optimization context')
-        end select
-    end subroutine logistic_gradient_wrapper
-
-    subroutine logistic_fdf_wrapper( fun_self, vec, f, grad, D )
-        class(*),     intent(inout) :: fun_self
-        integer,      intent(in)    :: D
-        real(kind=8), intent(inout) :: vec(D)
-        real(kind=8), intent(out)   :: f, grad(D)
-        select type(problem => fun_self)
-        type is(cavg_quality_logistic_problem)
-            call logistic_problem_fdf(problem, vec, f, grad, D)
-        class default
-            THROW_HARD('logistic_fdf_wrapper: invalid optimization context')
-        end select
-    end subroutine logistic_fdf_wrapper
-
-    subroutine logistic_problem_fdf( problem, vec, f, grad, D )
-        type(cavg_quality_logistic_problem), intent(in) :: problem
-        integer,                             intent(in) :: D
-        real(kind=8),                        intent(in) :: vec(D)
-        real(kind=8),                        intent(out):: f, grad(D)
-        integer :: iobs, idim
-        real(kind=8) :: eta, prob, resid, loss
-        if( D /= problem%ndim ) THROW_HARD('logistic_problem_fdf: dimension mismatch')
-        if( problem%total_weight <= 0.0d0 ) THROW_HARD('logistic_problem_fdf: nonpositive total weight')
-        f    = 0.0d0
-        grad = 0.0d0
-        do iobs = 1, problem%nobs
-            eta  = dot_product(vec, problem%design(iobs,:))
-            prob = stable_sigmoid_8(eta)
-            if( eta >= 0.0d0 )then
-                loss = (1.0d0 - problem%labels(iobs)) * eta + log(1.0d0 + exp(-min(eta, 80.0d0)))
-            else
-                loss = -problem%labels(iobs) * eta + log(1.0d0 + exp(max(eta, -80.0d0)))
-            endif
-            f = f + problem%weights(iobs) * loss
-            resid = problem%weights(iobs) * (prob - problem%labels(iobs))
-            do idim = 1, D
-                grad(idim) = grad(idim) + resid * problem%design(iobs,idim)
-            end do
-        end do
-        f    = f    / problem%total_weight
-        grad = grad / problem%total_weight
-        do idim = 2, D
-            f = f + 0.5d0 * problem%lambda * vec(idim)**2
-            grad(idim) = grad(idim) + problem%lambda * vec(idim)
-        end do
-    end subroutine logistic_problem_fdf
-
-    real(kind=8) function stable_sigmoid_8( eta )
-        real(kind=8), intent(in) :: eta
-        real(kind=8) :: z
-        if( eta >= 0.0d0 )then
-            z = exp(-min(eta, 80.0d0))
-            stable_sigmoid_8 = 1.0d0 / (1.0d0 + z)
-        else
-            z = exp(max(eta, -80.0d0))
-            stable_sigmoid_8 = z / (1.0d0 + z)
-        endif
-    end function stable_sigmoid_8
-
-    subroutine kill_logistic_problem( self )
-        class(cavg_quality_logistic_problem), intent(inout) :: self
-        if( allocated(self%design)  ) deallocate(self%design)
-        if( allocated(self%labels)  ) deallocate(self%labels)
-        if( allocated(self%weights) ) deallocate(self%weights)
-        self%nobs              = 0
-        self%ndim              = 0
-        self%n_linear          = 0
-        self%n_interactions    = 0
-        self%linear_features   = 0
-        self%interaction_terms = 0
-        self%has_relational     = .false.
-        self%relational_knn     = 0
-        self%relational_corr_hp = 0.0
-        self%relational_corr_lp = 0.0
-        self%relational_corr_trs = 0.0
-        self%lambda            = 0.0d0
-        self%total_weight      = 0.0d0
-    end subroutine kill_logistic_problem
 
     subroutine evaluate_cavg_quality_model( analysis_files, model, report_fname )
         class(string),            intent(in) :: analysis_files(:)
@@ -857,18 +634,8 @@ contains
 
     integer function dataset_learn_role( dset )
         type(cavg_quality_training_dataset), intent(in) :: dset
-        integer :: ngood, nbad
-        ngood = count_trainable_manual_good(dset)
-        nbad  = count_trainable_manual_bad(dset)
-        if( ngood > 0 .and. nbad > 0 )then
-            dataset_learn_role = LEARN_ROLE_BALANCED
-        else if( ngood > 0 )then
-            dataset_learn_role = LEARN_ROLE_RECALL_ONLY
-        else if( nbad > 0 .and. count_hard_rejected_manual_good(dset) == 0 )then
-            dataset_learn_role = LEARN_ROLE_SPECIFICITY_ONLY
-        else
-            dataset_learn_role = LEARN_ROLE_SKIP
-        endif
+        dataset_learn_role = logistic_role(count_trainable_manual_good(dset), count_trainable_manual_bad(dset), &
+            count_hard_rejected_manual_good(dset))
     end function dataset_learn_role
 
     function dataset_learn_role_name( role ) result( name )
@@ -891,8 +658,7 @@ contains
         type(cavg_quality_model),            intent(in) :: model
         type(cavg_quality_result) :: quality
         integer :: ids, tp, fp, tn, fn, nused, role
-        integer :: tail_n
-        real :: balacc, mean_score, tail_score, role_scores(size(dsets))
+        real :: balacc, role_scores(size(dsets))
         macro_balacc_for_model = 0.0
         nused = 0
         do ids = 1, size(dsets)
@@ -906,12 +672,7 @@ contains
             call quality%kill()
         end do
         if( nused == 0 ) THROW_HARD('macro_balacc_for_model: no scoreable training datasets')
-        call sort_real_prefix_ascending(role_scores, nused)
-        mean_score = sum(role_scores(1:nused)) / real(nused)
-        tail_n     = max(1, min(nused, ceiling(LEARN_ROBUST_TAIL_FRAC * real(nused))))
-        tail_score = sum(role_scores(1:tail_n)) / real(tail_n)
-        macro_balacc_for_model = (1.0 - LEARN_ROBUST_TAIL_WEIGHT) * mean_score + &
-            LEARN_ROBUST_TAIL_WEIGHT * tail_score
+        macro_balacc_for_model = robust_macro_score(role_scores(1:nused))
     end function macro_balacc_for_model
 
     real function learn_balacc_from_confusion( tp, fp, tn, fn, role )
@@ -1023,23 +784,6 @@ contains
         poor_bandpass_localization = z_features(I_BP40_100_CENTER_EDGE_VAR) < LEARN_OVERFIT_FP_BP_Z_MAX
         bad_overfit_signature = poor_support .and. (low_local_variance .or. poor_bandpass_localization)
     end function bad_overfit_signature
-
-    subroutine sort_real_prefix_ascending( vals, nvals )
-        real,    intent(inout) :: vals(:)
-        integer, intent(in)    :: nvals
-        integer :: i, j
-        real :: tmp
-        if( nvals > size(vals) ) THROW_HARD('sort_real_prefix_ascending: invalid prefix size')
-        do i = 1, nvals - 1
-            do j = i + 1, nvals
-                if( vals(j) < vals(i) )then
-                    tmp = vals(i)
-                    vals(i) = vals(j)
-                    vals(j) = tmp
-                endif
-            end do
-        end do
-    end subroutine sort_real_prefix_ascending
 
     subroutine classify_training_dataset_detail( dset, model, quality, tp, fp, tn, fn )
         type(cavg_quality_training_dataset), intent(in)    :: dset
