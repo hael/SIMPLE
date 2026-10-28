@@ -31,11 +31,19 @@ type(strategy2D_alloc) :: s2D
 
 contains
 
-    logical function is_fresh_2D_start( params, which_iter )
+    !> a fresh 2D start discards any previous class assignment (random previous class, all classes populated,
+    !! shifts zeroed). A time series (tseries=yes) with a class assignment is not one: its assignment is the
+    !! time chunks of init_tseries_refs or the classes refine=inpl centres, and the search starts from it, so that
+    !! strategy2D_tseries keeps a frame among its neighbours in time; l_has_class says whether the assignment exists
+    logical function is_fresh_2D_start( params, which_iter, l_has_class )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: which_iter
+        logical, optional, intent(in) :: l_has_class
         is_fresh_2D_start = params%startit <= 1 .and. which_iter <= params%startit &
             &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
+        if( is_fresh_2D_start .and. trim(params%tseries) == 'yes' .and. present(l_has_class) )then
+            if( l_has_class ) is_fresh_2D_start = .false.
+        endif
     end function is_fresh_2D_start
 
     subroutine clean_strategy2D
@@ -71,7 +79,7 @@ contains
         if( params%l_shift_prior .and. str_has_substr(params%refine, 'prob') ) &
             &s2D%shift_prior_sigma2 = shift_prior_sigma2(spproj%os_ptcl2D, params%lp / params%smpd)
         ! gather class populations
-        l_fresh_start = is_fresh_2D_start(params, params%which_iter)
+        l_fresh_start = is_fresh_2D_start(params, params%which_iter, spproj%os_ptcl2D%isthere('class'))
         if( l_fresh_start )then
             ! A fresh run with freshly generated references must not inherit
             ! class populations from a previous/streamed 2D assignment.
@@ -137,7 +145,6 @@ contains
         integer        :: i,iptcl,prev_class
         logical        :: l_alloc, l_fresh_start
         l_alloc = .true.
-        l_fresh_start = is_fresh_2D_start(params, which_iter)
         if( allocated(s2D%do_inplsrch) )then
             l_alloc = size(s2D%do_inplsrch) /= nptcls
             if( l_alloc ) deallocate(s2D%do_inplsrch,s2D%srch_order)
@@ -151,6 +158,7 @@ contains
         do i = 1,nptcls
             iptcl = pinds(i)
             call rt%ne_ran_iarr(s2D%srch_order(:,i))
+            l_fresh_start = is_fresh_2D_start(params, which_iter, spproj%os_ptcl2D%isthere(iptcl,'class'))
             if( l_fresh_start )then
                 prev_class = 0
             else

@@ -683,14 +683,14 @@ subroutine set_ui_params
 
     call quality_context%set_param('quality_context', 'multi',  'Class-average quality context', &
                                    'Required analysis hard-gate context for class-average quality rejection'//&
-                                   '(chunk|pool|sieve)','', .false., 'chunk', &
-    &choices=ui_choices([character(len=5) :: 'chunk', 'pool', 'sieve']))
+                                   '(chunk|pool|sieve|nano)','', .false., 'chunk', &
+    &choices=ui_choices([character(len=5) :: 'chunk', 'pool', 'sieve', 'nano']))
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in class-average quality model preset'//&
-                                   '(chunk100mics|sieve|pool){chunk100mics}','', &
+                                   '(chunk100mics|sieve|pool|nano){chunk100mics}','', &
                                    .false., 'chunk100mics', &
-    &choices=ui_choices([character(len=12) :: 'chunk100mics', 'sieve', 'pool']))
+    &choices=ui_choices([character(len=12) :: 'chunk100mics', 'sieve', 'pool', 'nano']))
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
                                    'Queue system kind(local|coarray|slurm|pbs|lsf|sge)','', .false., 'local', &

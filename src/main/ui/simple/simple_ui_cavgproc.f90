@@ -97,6 +97,11 @@ subroutine new_cluster_cavgs( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_PARM, prune, &
         &visibility=UI_VIS_ADVANCED)
+        call model_cavgs_rejection%add_input(UI_PARM, 'thres', 'num', 'Lattice-peak threshold of the nano preset', &
+        &'Class averages whose lattice_peak (log10 of the strongest Fourier peak over its ring mean) is below this are rejected by quality_model=nano{0.65}', &
+        &'log10 peak over ring{0.65}', .false., 0.65, &
+        &activation=ui_activation_equals_any('quality_model', [character(len=4) :: 'nano']), &
+        &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_FILE, 'filetab', 'file', 'Analysis file table', &
         &'File table of canonical cavgs_quality_training.txt files for quality_mode=learn|evaluate', &
         &'e.g. cavgs_quality_training_filetab.txt', .false., '', &

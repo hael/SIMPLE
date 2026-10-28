@@ -16,6 +16,8 @@ The implementation lives in `src/main/cavg_quality`. The command entry point is 
 - `simple_cavg_quality_model.f90`: built-in presets, model file I/O, pairwise-logistic scoring, and promotion snippets.
 - `simple_cavg_quality_analysis.f90`: evaluation, analysis reports, and feature tables.
 - `simple_cavg_quality_learn.f90`: analysis-table reader, feature-policy search, model search, and learn reports.
+- `simple_cavg_quality_lattice.f90`: the lattice bank of the `nano` context and its lattice grade `LAT_PEAK_MIN`
+  (see The nano Context).
 
 ## Comparison with the Retired Microchunk Rejector
 
@@ -55,7 +57,8 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 
 ## Hard-Reject Comparison
 
-Hard rejects in `model_cavgs_rejection` are selected by the chunk, pool, or sieve context. Analyze mode requires an explicit `quality_context`; learned model artifacts store the consistent context inferred from their input tables, and application reads the context from the selected artifact.
+Hard rejects in `model_cavgs_rejection` are selected by the chunk, pool, sieve, or nano context (the nano gates are
+described under The nano Context). Analyze mode requires an explicit `quality_context`; learned model artifacts store the consistent context inferred from their input tables, and application reads the context from the selected artifact.
 
 The callers, with the preset and the context each applies:
 
@@ -167,6 +170,7 @@ For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk10
 - `chunk100mics`: default chunk/stream-style version-11 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`; it includes `corr_knn_signal_v1` relational evidence.
 - `sieve`: version-11 pairwise logistic model for small-chunk sieve class averages.
 - `pool`: version-11 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4` for pooled class averages before 3D refinement.
+- `nano`: the lattice gate for nanoparticle time series (context `nano`, a threshold on the raw `lattice_peak`, no relational term); see the nano section below.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -194,7 +198,10 @@ A model file may also name a built-in `preset`; its values are loaded first and 
 
 ## Feature Bank
 
-`CAVG_QUALITY_NFEATS` is 14. All feature directions are `higher_is_better`. The model consumes normalized `z_*` values; raw values are written for diagnostics.
+The feature bank is a property of the context. The chunk, pool and sieve contexts share the fourteen features
+below; `CAVG_QUALITY_NFEATS` (14) is the largest bank, and every bank array is indexed by position in the
+context's own list (`cavg_quality_bank_size(context)`). The nano context's six features are listed under The nano
+Context. All features below are `higher_is_better`. The model consumes normalized `z_*` values; raw values are written for diagnostics.
 
 | Index | Feature | Family | Source | Meaning |
 | --- | --- | --- | --- | --- |
@@ -406,8 +413,70 @@ metrics.
 ## Tests
 
 `simple_test_exec test=unit_numerics` runs the backend's sub-suites "cavg quality relations"
-(`simple_cavg_quality_relations_tester`) and "cavg quality selection"
-(`simple_cavg_quality_selection_tester`); one runs alone with `suite=`.
+(`simple_cavg_quality_relations_tester`), "cavg quality selection"
+(`simple_cavg_quality_selection_tester`) and "cavg quality nano" (`simple_cavg_quality_lattice_tester`: the
+lattice family on synthetic class averages, its normalization, the nano gates and preset, the diameter calibration,
+the bank by context, model-file and table round trips, team against one-thread identity); one runs alone with
+`suite=`.
+
+## The nano Context
+
+`quality_context=nano` selects the class averages of nanoparticle time series (`analysis2D_nano`), where an
+aligned average of about twenty frames shows atomic lattice fringes or does not. At 0.358 A per pixel in a box of
+43 to 57 A, the cryo-EM gates reject every class (the 100 to 40 A band is empty, the foreground geometry is
+constant), and the population gate rejects the good classes, which are the smaller ones.
+
+Gates: a class is hard rejected when it is empty (`pop <= 0`), has invalid pixels, has both local variances at or
+below `EPS`, or has no measurable spectrum. Nothing else is gated.
+
+Bank (the order of `simple_cavg_quality_lattice`). Each class average has its mean removed and is soft-masked at
+box/2 - 2. Its power spectrum is smoothed by a periodic 3 by 3 box, and each shell's smoothed power is divided by the
+shell mean. The band runs from 3 A to Nyquist, without the graphene shells.
+
+| Index | Feature | Direction | Meaning |
+| --- | --- | --- | --- |
+| 1 | `lattice_peak` | higher | log10 of the largest smoothed band power over its ring mean |
+| 2 | `spot_count` | higher | local maxima of that ratio of lattice grade (at least `LAT_PEAK_MIN`) |
+| 3 | `spot_arc` | lower | log10 of the strongest spot's extent across over along its radius |
+| 4 | `spot_diam` | none | projected-sphere diameter (A) fitted to the strongest spot: the particle size of the class |
+| 5 | `spot_snr` | higher | log10 of the fitted spot amplitude over its background |
+| 6 | `band_presence` | higher | log10 of band-passed energy in the central disc over the annulus, unmasked |
+
+Normalization. `lattice_peak` enters the bank raw: it is a log10 ratio of a peak to its own ring mean, already
+normalized, and its threshold is absolute (`LAT_PEAK_MIN`, 0.65). The other five enter by the median and MAD of
+the valid classes, as the cryo-EM bank does, clipped to `CLIP_Z`; hard-rejected rows sit at `-CLIP_Z`. The
+training table's header records the lattice grade and the median `spot_diam` of the accepted classes
+(`lattice_peak_min`, `spot_diam_median_accepted`). The project floor that the autonomous run fitted (a mixture over
+the classes' `lattice_peak`, with a guard) was retired on 2026-10-28: a trajectory with few out-of-focus stretches
+has no floor population, and on the labeled data the raw threshold is as good or better than the floor-relative one.
+
+The relational feature uses a nano band (high-pass 15 A, low-pass 1.5 A, shift 3 pixels), because the model schema
+requires the term. It carries no evidence on the labeled data. Learn mode has one feature policy, `lattice`.
+`apply` with a nano model writes `diam` (the class's `spot_diam`) on every scored `cls2D` row. It writes the median
+over the accepted classes as `diam` on the class-average entry of `os_out`, beside `mskdiam`.
+
+Preset `nano`: the lattice gate. A class is accepted when its `lattice_peak` is at least `LAT_PEAK_MIN` (0.65: a
+strongest smoothed Fourier peak 4.5 times its ring mean); the probability is `sigmoid((lattice_peak - 0.65) / 0.1)`
+at threshold 1/2. `thres=<log10 ratio>` moves the threshold for one run (`set_nano_threshold`; it is refused with
+any other model). There is no relational term (the only built-in allowed without one; its k-nearest-neighbour
+alignment carries no evidence on nanoparticle class averages). The threshold is set for recall, by the
+maintainer's ruling of 2026-10-28: for these time series losing useful frames costs more than carrying some junk
+into 3D. On three labeled platinum trajectories 0.65 keeps 98 to 99% of the selected classes and lets 27 to 56% of
+the rejected ones through; the balanced-accuracy optimum (0.90 to 0.95, 0.92 to 0.98) rejected faint-fringe
+classes the maintainer keeps. A learned nano model ranked the classes exactly as `lattice_peak` alone does
+(held-out AUC 0.973 to 0.991) and was not promoted; the gate is the preset. The evidence is in
+`doc/implementation_notes/planned/nano_cavgs_rejection_report.md`.
+
+The rejection of a nanoparticle time series, after `analysis2D_nano`:
+
+```bash
+simple_exec prg=model_cavgs_rejection quality_model=nano mskdiam=<particle diameter x 1.5, A> nthr=8   # prune=yes to drop the frames; thres= to move the gate
+```
+
+`mskdiam` sets the soft mask of the lattice spectrum; `mskdiam=0` falls back to the box, which is acceptable for
+the lattice features. `apply` writes the class diameter (`diam`, from the strongest Bragg spot) on every scored
+`cls2D` row and its median over the accepted classes, beside the mask diameter, on the class-average entry of
+`os_out`, for `simulate_nanoparticle` and `autorefine3D_nano`.
 
 ## Example Commands
 

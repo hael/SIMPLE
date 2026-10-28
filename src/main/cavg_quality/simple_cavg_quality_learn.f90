@@ -4,12 +4,12 @@ use simple_defs,               only: logfhandle, LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_string,             only: string
 use simple_string_utils,       only: str2int, str2real, str_is_true, csv_field
-use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_feature_family, &
+use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_feature_family, cavg_quality_bank_size, &
     I_NEG_LOCVAR_FG, I_CC_AREA_FRAC, I_BP40_100_CENTER_EDGE_VAR
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_TRAINING_VERSION, EPS, &
-    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, &
+    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO, &
     CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME
@@ -26,6 +26,7 @@ public :: evaluate_cavg_quality_model
 public :: evaluate_cavg_quality_result
 
 integer, parameter :: CAVG_QUALITY_LEARN_N_STANDARD_POLICIES = 4
+integer, parameter :: CAVG_QUALITY_LEARN_N_NANO_POLICIES     = 1
 real,    parameter :: LEARN_RECALL_ONLY_FLOOR        = 0.95
 real,    parameter :: LEARN_RECALL_ONLY_PENALTY      = 3.0
 real,    parameter :: LEARN_BALANCED_FN_TOLERANCE_FRAC = 0.02
@@ -68,11 +69,12 @@ contains
         best_score      = -huge(1.0)
         best_objective  = huge(1.0)
         n_candidates    = 0
-        do ipol = 1, n_feature_policies()
+        do ipol = 1, n_feature_policies(quality_context)
             do ilambda = 1, size(LOGISTIC_LAMBDAS)
-                call build_logistic_problem(dsets, ipol, LOGISTIC_LAMBDAS(ilambda), problem)
+                call build_logistic_problem(dsets, ipol, quality_context, LOGISTIC_LAMBDAS(ilambda), problem)
                 call problem%fit(solution, objective)
-                call logistic_solution_to_model(solution, problem, dsets(1), feature_policy_name(ipol), candidate)
+                call logistic_solution_to_model(solution, problem, dsets(1), &
+                    feature_policy_name(ipol, quality_context), candidate)
                 do ithresh = 1, size(LOGISTIC_THRESHOLDS)
                     spec = candidate%get_spec()
                     spec%context = trim(quality_context)
@@ -105,9 +107,9 @@ contains
     subroutine validate_quality_context( quality_context, caller )
         character(len=*), intent(in) :: quality_context, caller
         select case(trim(quality_context))
-            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO)
             case DEFAULT
-                THROW_HARD(trim(caller)//': quality_context must be chunk, pool, or sieve')
+                THROW_HARD(trim(caller)//': quality_context must be chunk, pool, sieve or nano')
         end select
     end subroutine validate_quality_context
 
@@ -148,15 +150,16 @@ contains
         endif
     end subroutine require_trainable_rows
 
-    subroutine build_logistic_problem( dsets, ipolicy, lambda, problem )
+    subroutine build_logistic_problem( dsets, ipolicy, context, lambda, problem )
         type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
         integer,                             intent(in)    :: ipolicy
+        character(len=*),                    intent(in)    :: context
         real,                                intent(in)    :: lambda
         type(quality_logistic_problem),      intent(inout) :: problem
         integer :: ids, irow, iobs, nobs, role, ngood, nbad, n_linear, linear_features(CAVG_QUALITY_NFEATS)
         logical :: has_relational
         real(kind=8) :: good_weight, bad_weight, focus_bad_loss_mult
-        call feature_policy_indices(ipolicy, linear_features, n_linear)
+        call feature_policy_indices(ipolicy, context, linear_features, n_linear)
         if( n_linear < 1 ) THROW_HARD('build_logistic_problem: empty feature policy')
         has_relational = allocated(dsets(1)%relational_feature)
         nobs = 0
@@ -182,7 +185,7 @@ contains
                     call set_row(good_weight)
                 else
                     call set_row(bad_weight * logistic_bad_example_loss_multiplier( &
-                        dsets(ids)%features(irow,:), focus_bad_loss_mult))
+                        dsets(ids), irow, focus_bad_loss_mult))
                 endif
             end do
         end do
@@ -202,13 +205,13 @@ contains
 
     end subroutine build_logistic_problem
 
-    real(kind=8) function logistic_bad_example_loss_multiplier( z_features, focus_bad_loss_mult )
-        real,         intent(in) :: z_features(:)
-        real(kind=8), intent(in) :: focus_bad_loss_mult
-        if( size(z_features) /= CAVG_QUALITY_NFEATS ) &
-            THROW_HARD('logistic_bad_example_loss_multiplier: invalid feature count')
+    real(kind=8) function logistic_bad_example_loss_multiplier( dset, irow, focus_bad_loss_mult )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        integer,                             intent(in) :: irow
+        real(kind=8),                        intent(in) :: focus_bad_loss_mult
         logistic_bad_example_loss_multiplier = 1.0d0
-        if( bad_overfit_signature(z_features) )then
+        if( .not. overfit_signature_applies(dset) ) return
+        if( bad_overfit_signature(dset%features(irow,:)) )then
             logistic_bad_example_loss_multiplier = real(LEARN_BAD_OVERFIT_LOSS_MULT, kind=8) * &
                 focus_bad_loss_mult
         endif
@@ -276,16 +279,24 @@ contains
         character(len=*),         intent(in) :: report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
         real :: eval_score
+        integer :: ids
         call load_quality_training_datasets(analysis_files, dsets)
+        do ids = 1, size(dsets)
+            if( (trim(dsets(ids)%quality_context) == CAVG_QUALITY_CONTEXT_NANO) .neqv. &
+                (trim(model%context) == CAVG_QUALITY_CONTEXT_NANO) ) &
+                THROW_HARD('evaluate: the model and the training files have different feature banks')
+        end do
         eval_score = macro_balacc_for_model(dsets, model)
         call write_cavg_quality_evaluate_report(report_fname, dsets, model, eval_score)
         call kill_training_datasets(dsets)
         deallocate(dsets)
     end subroutine evaluate_cavg_quality_model
 
-    subroutine evaluate_cavg_quality_result( quality, reference_states, model, dataset_id, report_fname )
+    subroutine evaluate_cavg_quality_result( quality, reference_states, relational_feature, model, dataset_id, &
+                                             report_fname )
         type(cavg_quality_result), intent(in) :: quality
         integer,                   intent(in) :: reference_states(:)
+        real,                      intent(in) :: relational_feature(:)
         type(cavg_quality_model),  intent(in) :: model
         character(len=*),          intent(in) :: dataset_id, report_fname
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
@@ -296,11 +307,14 @@ contains
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('evaluate_cavg_quality_result: missing hard-reject mask')
         if( size(quality%features, dim=1) /= ncls ) THROW_HARD('evaluate_cavg_quality_result: feature size mismatch')
         if( size(quality%hard_reject) /= ncls ) THROW_HARD('evaluate_cavg_quality_result: hard-reject size mismatch')
+        if( size(relational_feature) /= ncls ) THROW_HARD('evaluate_cavg_quality_result: relational feature size mismatch')
         allocate(dsets(1))
         dsets(1)%fname      = trim(dataset_id)
         dsets(1)%dataset_id = trim(dataset_id)
+        dsets(1)%quality_context = trim(model%context)
         dsets(1)%ncls       = ncls
         dsets(1)%features      = quality%features
+        dsets(1)%relational_feature = relational_feature
         dsets(1)%manual_states = reference_states
         dsets(1)%hard_reject   = quality%hard_reject
         eval_score = macro_balacc_for_model(dsets, model)
@@ -361,13 +375,28 @@ contains
     end subroutine require_relational_training_datasets
 
 
-    integer function n_feature_policies()
-        n_feature_policies = CAVG_QUALITY_LEARN_N_STANDARD_POLICIES
+    integer function n_feature_policies( context )
+        character(len=*), intent(in) :: context
+        if( trim(context) == CAVG_QUALITY_CONTEXT_NANO )then
+            n_feature_policies = CAVG_QUALITY_LEARN_N_NANO_POLICIES
+        else
+            n_feature_policies = CAVG_QUALITY_LEARN_N_STANDARD_POLICIES
+        endif
     end function n_feature_policies
 
-    function feature_policy_name( ipolicy ) result( name )
-        integer, intent(in) :: ipolicy
+    function feature_policy_name( ipolicy, context ) result( name )
+        integer,          intent(in) :: ipolicy
+        character(len=*), intent(in) :: context
         character(len=64) :: name
+        if( trim(context) == CAVG_QUALITY_CONTEXT_NANO )then
+            select case(ipolicy)
+                case(1)
+                    name = 'lattice'
+                case default
+                    THROW_HARD('feature_policy_name: invalid feature policy')
+            end select
+            return
+        endif
         select case(ipolicy)
             case(1)
                 name = 'microchunk'
@@ -382,48 +411,57 @@ contains
         end select
     end function feature_policy_name
 
-    subroutine feature_policy_mask( ipolicy, mask )
-        integer, intent(in)  :: ipolicy
-        logical, intent(out) :: mask(CAVG_QUALITY_NFEATS)
+    subroutine feature_policy_mask( ipolicy, context, mask )
+        integer,          intent(in)  :: ipolicy
+        character(len=*), intent(in)  :: context
+        logical,          intent(out) :: mask(:)
         mask = .false.
-        call append_feature_family(mask, 'microchunk')
-        call append_feature_family(mask, 'overfit')
+        if( trim(context) == CAVG_QUALITY_CONTEXT_NANO )then
+            if( ipolicy /= 1 ) THROW_HARD('feature_policy_mask: invalid feature policy')
+            call append_feature_family(mask, 'lattice', context)
+            if( count(mask) < 1 ) THROW_HARD('feature_policy_mask: empty feature policy')
+            return
+        endif
+        call append_feature_family(mask, 'microchunk', context)
+        call append_feature_family(mask, 'overfit', context)
         select case(ipolicy)
             case(1)
                 continue
             case(2)
-                call append_feature_family(mask, 'score')
+                call append_feature_family(mask, 'score', context)
             case(3)
-                call append_feature_family(mask, 'signal')
+                call append_feature_family(mask, 'signal', context)
             case(4)
-                call append_feature_family(mask, 'score')
-                call append_feature_family(mask, 'signal')
+                call append_feature_family(mask, 'score', context)
+                call append_feature_family(mask, 'signal', context)
             case default
                 THROW_HARD('feature_policy_mask: invalid feature policy')
         end select
         if( count(mask) < 1 ) THROW_HARD('feature_policy_mask: empty feature policy')
     end subroutine feature_policy_mask
 
-    subroutine append_feature_family( mask, family )
-        logical,          intent(inout) :: mask(CAVG_QUALITY_NFEATS)
-        character(len=*), intent(in)    :: family
+    subroutine append_feature_family( mask, family, context )
+        logical,          intent(inout) :: mask(:)
+        character(len=*), intent(in)    :: family, context
         integer :: ifeat
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( trim(cavg_quality_feature_family(ifeat)) == trim(family) ) mask(ifeat) = .true.
+        do ifeat = 1, cavg_quality_bank_size(context)
+            if( trim(cavg_quality_feature_family(ifeat, context)) == trim(family) ) mask(ifeat) = .true.
         end do
     end subroutine append_feature_family
 
 
-    subroutine feature_policy_indices( ipolicy, inds, ninds )
-        integer, intent(in)  :: ipolicy
-        integer, intent(out) :: inds(CAVG_QUALITY_NFEATS)
-        integer, intent(out) :: ninds
-        logical :: mask(CAVG_QUALITY_NFEATS)
+    subroutine feature_policy_indices( ipolicy, context, inds, ninds )
+        integer,          intent(in)  :: ipolicy
+        character(len=*), intent(in)  :: context
+        integer,          intent(out) :: inds(CAVG_QUALITY_NFEATS)
+        integer,          intent(out) :: ninds
+        logical, allocatable :: mask(:)
         integer :: ifeat
-        call feature_policy_mask(ipolicy, mask)
+        allocate(mask(cavg_quality_bank_size(context)))
+        call feature_policy_mask(ipolicy, context, mask)
         inds = 0
         ninds = 0
-        do ifeat = 1, CAVG_QUALITY_NFEATS
+        do ifeat = 1, size(mask)
             if( .not. mask(ifeat) ) cycle
             ninds = ninds + 1
             inds(ninds) = ifeat
@@ -435,9 +473,10 @@ contains
         type(cavg_quality_training_dataset), intent(inout) :: dset
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: field
-        integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS)
+        integer :: funit, ios, nrows, irow, ifeat, feat_col(CAVG_QUALITY_NFEATS), nfeats
         integer :: dataset_col, hard_reject_col, manual_state_col, relational_col
         logical :: have_feature_header
+        character(len=32) :: context
         dset%fname = trim(fname)
         open(newunit=funit, file=trim(fname), status='old', action='read', iostat=ios)
         if( ios /= 0 ) THROW_HARD('read_quality_training_dataset: failed to open '//trim(fname))
@@ -451,7 +490,12 @@ contains
         if( dset%training_version /= CAVG_QUALITY_TRAINING_VERSION ) &
             THROW_HARD('read_quality_training_dataset: cavg_quality_training_version=1 is required in '//trim(fname))
         if( nrows == 0 ) THROW_HARD('read_quality_training_dataset: no class rows in '//trim(fname))
-        allocate(dset%features(nrows, CAVG_QUALITY_NFEATS), source=0.0)
+        ! the columns of the context's bank; a file without a context is refused after loading
+        context = trim(dset%quality_context)
+        if( trim(context) == '' ) context = CAVG_QUALITY_CONTEXT_CHUNK
+        call validate_quality_context(context, 'read_quality_training_dataset')
+        nfeats = cavg_quality_bank_size(context)
+        allocate(dset%features(nrows, nfeats), source=0.0)
         allocate(dset%manual_states(nrows), source=0)
         allocate(dset%hard_reject(nrows), source=.false.)
         if( trim(dset%relational_feature_schema) /= CAVG_RELATIONAL_SCHEMA_NONE ) &
@@ -468,8 +512,9 @@ contains
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
             if( is_analysis_header_line(line) )then
-                call map_analysis_columns(line, dataset_col, hard_reject_col, manual_state_col, relational_col, feat_col)
-                call require_analysis_columns(dataset_col, hard_reject_col, manual_state_col, relational_col, &
+                call map_analysis_columns(line, context, dataset_col, hard_reject_col, manual_state_col, relational_col, &
+                    feat_col)
+                call require_analysis_columns(context, dataset_col, hard_reject_col, manual_state_col, relational_col, &
                     feat_col, dset%relational_feature_schema, trim(fname))
                 have_feature_header = .true.
                 cycle
@@ -484,7 +529,7 @@ contains
             dset%hard_reject(irow) = str_is_true(field)
             field = csv_field(line, manual_state_col)
             dset%manual_states(irow) = str2int(trim(field))
-            do ifeat = 1, CAVG_QUALITY_NFEATS
+            do ifeat = 1, nfeats
                 field = csv_field(line, feat_col(ifeat))
                 if( len_trim(field) > 0 ) dset%features(irow, ifeat) = str2real(trim(field))
             end do
@@ -550,8 +595,9 @@ contains
         is_analysis_header_line = index(tmp, 'dataset_id,') == 1
     end function is_analysis_header_line
 
-    subroutine map_analysis_columns( line, dataset_col, hard_reject_col, manual_state_col, relational_col, feat_col )
-        character(len=*), intent(in)  :: line
+    subroutine map_analysis_columns( line, context, dataset_col, hard_reject_col, manual_state_col, relational_col, &
+                                     feat_col )
+        character(len=*), intent(in)  :: line, context
         integer,          intent(out) :: dataset_col, hard_reject_col, manual_state_col, relational_col
         integer,          intent(out) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=LONGSTRLEN) :: field, name
@@ -577,8 +623,8 @@ contains
             if( len_trim(field) < 3 ) cycle
             if( field(1:2) /= 'z_' ) cycle
             name = adjustl(trim(field(3:)))
-            do ifeat = 1, CAVG_QUALITY_NFEATS
-                if( trim(name) == trim(cavg_quality_feature_name(ifeat)) )then
+            do ifeat = 1, cavg_quality_bank_size(context)
+                if( trim(name) == trim(cavg_quality_feature_name(ifeat, context)) )then
                     feat_col(ifeat) = icol
                     exit
                 endif
@@ -586,8 +632,9 @@ contains
         end do
     end subroutine map_analysis_columns
 
-    subroutine require_analysis_columns( dataset_col, hard_reject_col, manual_state_col, relational_col, feat_col, &
-                                         relational_schema, fname )
+    subroutine require_analysis_columns( context, dataset_col, hard_reject_col, manual_state_col, relational_col, &
+                                         feat_col, relational_schema, fname )
+        character(len=*), intent(in) :: context
         integer,          intent(in) :: dataset_col, hard_reject_col, manual_state_col, relational_col
         integer,          intent(in) :: feat_col(CAVG_QUALITY_NFEATS)
         character(len=*), intent(in) :: relational_schema, fname
@@ -600,9 +647,9 @@ contains
             THROW_HARD('read_quality_training_dataset: missing manual_state column in '//trim(fname))
         if( trim(relational_schema) /= CAVG_RELATIONAL_SCHEMA_NONE .and. relational_col == 0 ) &
             THROW_HARD('read_quality_training_dataset: missing promoted relational feature in '//trim(fname))
-        do ifeat = 1, CAVG_QUALITY_NFEATS
+        do ifeat = 1, cavg_quality_bank_size(context)
             if( feat_col(ifeat) == 0 )then
-                errmsg = 'read_quality_training_dataset: missing z_'//trim(cavg_quality_feature_name(ifeat))//&
+                errmsg = 'read_quality_training_dataset: missing z_'//trim(cavg_quality_feature_name(ifeat, context))//&
                     ' column in '//trim(fname)
                 THROW_HARD(trim(errmsg))
             endif
@@ -744,10 +791,17 @@ contains
         dataset_is_overfit_focus = real(nbad_overfit) / real(nfit) >= LEARN_OVERFIT_FP_FOCUS_MIN_TRAINABLE_FRAC
     end function dataset_is_overfit_focus
 
+    !> the fuzzy-ball signature is defined on the cryo-EM bank only
+    logical function overfit_signature_applies( dset )
+        type(cavg_quality_training_dataset), intent(in) :: dset
+        overfit_signature_applies = trim(dset%quality_context) /= CAVG_QUALITY_CONTEXT_NANO
+    end function overfit_signature_applies
+
     integer function count_trainable_bad_overfit_signature( dset )
         type(cavg_quality_training_dataset), intent(in) :: dset
         integer :: irow
         count_trainable_bad_overfit_signature = 0
+        if( .not. overfit_signature_applies(dset) ) return
         do irow = 1, dset%ncls
             if( dset%hard_reject(irow) ) cycle
             if( dset%manual_states(irow) > 0 ) cycle
@@ -765,6 +819,7 @@ contains
         if( size(quality%states) /= dset%ncls ) &
             THROW_HARD('count_accepted_bad_overfit_signature: state/dataset size mismatch')
         count_accepted_bad_overfit_signature = 0
+        if( .not. overfit_signature_applies(dset) ) return
         do irow = 1, dset%ncls
             if( dset%hard_reject(irow) ) cycle
             if( dset%manual_states(irow) > 0 ) cycle
@@ -846,7 +901,7 @@ contains
         write(funit,'(A)') 'note=overfit_focus_signature_fraction_loss_scale_is_reported_but_currently_neutral'
         write(funit,'(A)') 'note=trainable_good_only_datasets_contribute_recall_evidence'
         write(funit,'(A)') 'note=trainable_bad_only_datasets_contribute_specificity_evidence'
-        call write_feature_policy_grid(funit)
+        call write_feature_policy_grid(funit, learned_model%context)
         write(funit,'(A,ES14.6)') 'robust_score_tail_frac=', LEARN_ROBUST_TAIL_FRAC
         write(funit,'(A,ES14.6)') 'robust_score_tail_weight=', LEARN_ROBUST_TAIL_WEIGHT
         write(funit,'(A,ES14.6)') 'balanced_score_fn_tolerance_frac=', LEARN_BALANCED_FN_TOLERANCE_FRAC
@@ -882,10 +937,10 @@ contains
         write(funit,'(A)') ''
         write(funit,'(A)') 'logistic_coefficient_header=term,feature_a,feature_b,coefficient'
         write(funit,'(A,ES14.6)') 'logistic_coefficient,intercept,,,', model%intercept
-        do ifeat = 1, CAVG_QUALITY_NFEATS
+        do ifeat = 1, cavg_quality_bank_size(model%context)
             if( abs(model%linear_coefficients(ifeat)) <= EPS ) cycle
             write(funit,'(A,A,A,ES14.6)') 'logistic_coefficient,linear,', &
-                trim(cavg_quality_feature_name(ifeat)), ',,', model%linear_coefficients(ifeat)
+                trim(cavg_quality_feature_name(ifeat, model%context)), ',,', model%linear_coefficients(ifeat)
         end do
         if( model%supports_relational() ) write(funit,'(A,A,A,ES14.6)') &
             'logistic_coefficient,relational,', CAVG_RELATIONAL_FEATURE_NAME, ',,', &
@@ -893,8 +948,8 @@ contains
         do iterm = 1, model%n_interactions
             if( abs(model%interaction_coefficients(iterm)) <= EPS ) cycle
             write(funit,'(A,A,A,A,A,ES14.6)') 'logistic_coefficient,pairwise,', &
-                trim(cavg_quality_feature_name(model%interaction_terms(iterm,1))), ',', &
-                trim(cavg_quality_feature_name(model%interaction_terms(iterm,2))), ',', &
+                trim(cavg_quality_feature_name(model%interaction_terms(iterm,1), model%context)), ',', &
+                trim(cavg_quality_feature_name(model%interaction_terms(iterm,2), model%context)), ',', &
                 model%interaction_coefficients(iterm)
         end do
     end subroutine write_logistic_coefficient_table
@@ -940,17 +995,18 @@ contains
     subroutine write_fixed_model_summary( funit, model )
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
-        integer :: i
+        integer :: i, nfeats
+        nfeats = cavg_quality_bank_size(model%context)
         write(funit,'(A,A)') 'model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') 'model_feature_weights='
-        do i = 1, CAVG_QUALITY_NFEATS
+        do i = 1, nfeats
             if( i > 1 ) write(funit,'(A)', advance='no') ','
             write(funit,'(ES14.6)', advance='no') model%weights(i)
         end do
         write(funit,*)
         write(funit,'(A,ES14.6)') 'model_intercept=', model%intercept
             write(funit,'(A)', advance='no') 'model_linear_coefficients='
-            do i = 1, CAVG_QUALITY_NFEATS
+            do i = 1, nfeats
                 if( i > 1 ) write(funit,'(A)', advance='no') ','
                 write(funit,'(ES14.6)', advance='no') model%linear_coefficients(i)
             end do
@@ -959,8 +1015,8 @@ contains
             do i = 1, model%n_interactions
                 if( i > 1 ) write(funit,'(A)', advance='no') ','
                 write(funit,'(A,A,A)', advance='no') &
-                    trim(cavg_quality_feature_name(model%interaction_terms(i,1))), ':', &
-                    trim(cavg_quality_feature_name(model%interaction_terms(i,2)))
+                    trim(cavg_quality_feature_name(model%interaction_terms(i,1), model%context)), ':', &
+                    trim(cavg_quality_feature_name(model%interaction_terms(i,2), model%context))
             end do
             write(funit,*)
             write(funit,'(A)', advance='no') 'model_interaction_coefficients='
@@ -1102,13 +1158,14 @@ contains
         write(funit,*)
     end subroutine write_real_list
 
-    subroutine write_feature_policy_grid( funit )
-        integer, intent(in) :: funit
+    subroutine write_feature_policy_grid( funit, context )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: context
         integer :: ipol
         write(funit,'(A)', advance='no') 'grid_feature_policies='
-        do ipol = 1, n_feature_policies()
+        do ipol = 1, n_feature_policies(context)
             if( ipol > 1 ) write(funit,'(A)', advance='no') ','
-            write(funit,'(A)', advance='no') trim(feature_policy_name(ipol))
+            write(funit,'(A)', advance='no') trim(feature_policy_name(ipol, context))
         end do
         write(funit,*)
     end subroutine write_feature_policy_grid

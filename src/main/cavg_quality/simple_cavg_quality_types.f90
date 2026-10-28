@@ -14,9 +14,13 @@ public :: CAVG_RELATIONAL_DEFAULT_KNN
 public :: CAVG_RELATIONAL_DEFAULT_CORR_HP
 public :: CAVG_RELATIONAL_DEFAULT_CORR_LP
 public :: CAVG_RELATIONAL_DEFAULT_CORR_TRS
+public :: CAVG_RELATIONAL_NANO_CORR_HP
+public :: CAVG_RELATIONAL_NANO_CORR_LP
+public :: CAVG_RELATIONAL_NANO_CORR_TRS
 public :: CAVG_QUALITY_CONTEXT_CHUNK
 public :: CAVG_QUALITY_CONTEXT_SIEVE
 public :: CAVG_QUALITY_CONTEXT_POOL
+public :: CAVG_QUALITY_CONTEXT_NANO
 public :: CAVG_QUALITY_CONTEXT_HARD_GATES
 public :: CAVG_REJECT_REASON_NONE
 public :: CAVG_REJECT_REASON_POP
@@ -33,6 +37,7 @@ public :: cavg_quality_training_dataset
 public :: cavg_quality_learn_diagnostics
 public :: reset_cavg_quality_result
 
+! the largest bank of a context; bank arrays are indexed by position in the context's list
 integer, parameter :: CAVG_QUALITY_NFEATS  = 14
 integer, parameter :: CAVG_QUALITY_MAX_INTERACTIONS = (CAVG_QUALITY_NFEATS * (CAVG_QUALITY_NFEATS - 1)) / 2
 integer, parameter :: CAVG_QUALITY_TRAINING_VERSION = 1
@@ -44,15 +49,21 @@ integer,          parameter :: CAVG_RELATIONAL_DEFAULT_KNN             = 5
 real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_HP         = 100.0
 real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_LP         = 15.0
 real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_TRS        = 10.0
+! nano: high-pass below the particle, low-pass at the lattice, shift range in pixels
+real,             parameter :: CAVG_RELATIONAL_NANO_CORR_HP            = 15.0
+real,             parameter :: CAVG_RELATIONAL_NANO_CORR_LP            = 1.5
+real,             parameter :: CAVG_RELATIONAL_NANO_CORR_TRS           = 3.0
 
 ! Class-average quality contexts select the hard gates that run before the
 ! logistic model:
 ! - sieve: very small 2D chunks.
 ! - chunk: pre-cleaned 10-30k-particle chunks.
 ! - pool : highly cleaned merged chunk output before 3D.
+! - nano : nanoparticle time-series class averages (validity gates, lattice bank).
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK             = 'chunk'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_SIEVE             = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL              = 'pool'
+character(len=*), parameter :: CAVG_QUALITY_CONTEXT_NANO              = 'nano'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_HARD_GATES        = 'hard_gates'
 
 integer, parameter :: CAVG_REJECT_REASON_NONE                  = 0

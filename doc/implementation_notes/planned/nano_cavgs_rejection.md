@@ -307,4 +307,154 @@ that overruns is cut by the loop and the close reports where it stood.
 
 ## 14. Journal of decisions (written by the run)
 
-(empty)
+**Phase 0 (2026-10-28).**
+
+- The commit the worktree was made from (8e0ea79a9) does not build alone: it uses
+  `src/main/nano/simple_atomic_species.f90`, `simple_nano_density.f90` and `simple_nano_density_tester.f90`,
+  which exist only untracked in the maintainer's checkout. They were copied in verbatim, are not part of this
+  work, are never edited and are left out of `full.diff`. With them the Debug fast gate fails one entry,
+  `unit_single`, on a bounds error in `simple_nano_density.f90` (`profile`, line 373: `prof` 0:447 against a
+  1001-row table, in `test_transfer_kernels`); the Release fast gate passes 15 of 15. That failure is the
+  baseline the later phases are held to.
+- Ruled for the run, as the brief takes them: the lattice module is
+  `src/main/cavg_quality/simple_cavg_quality_lattice.f90`; `estimate_diam` is not retired; the scaled cryo-EM
+  features stay or go by the rule of section 6.
+- The three labeled datasets rebuild exactly by the recipe of section 5 (with `kv`, `cs`, `fraca` given to
+  `import_particles`, which requires them even with `ctf=no`, and `nparts=1` to `make_cavgs`): populations and
+  states equal class by class, the frames' class, alignment, state, `indstk` and `eo` equal, and even the
+  stored `corr` and `res` come back equal.
+- The scattered classes (section 5) have a cause in the code. On a fresh 2D start the search sets each frame's
+  previous class to zero and then to a random populated class (`prep4srch` in `simple_strategy2D_srch.f90`,
+  through `is_fresh_2D_start`), so the time-chunk assignment `init_tseries_refs` writes is never read, and
+  `strategy2D_tseries` lets each frame start from a random class and move only to that class's neighbours. The
+  previous run's `refine2D_nano` with `nptcls_per_cls=20` on the same trajectories scatters exactly as the
+  delivered runs do, and so does this build's `analysis2D_nano` (defaults, `element=Pt`) on the hold-out
+  71-6/traj03: 661 non-empty classes of 684, 0.40% of consecutive frames share a class, the frames of a class
+  are a median 329 frames apart and span 0.87 of the trajectory. The file is outside the table; this is
+  reported, not fixed. The plan goes on with scattered classes, the case it calls the easier one.
+- Project-backed `evaluate` fails at HEAD for every relational model ("model requires relational feature"):
+  `evaluate_cavg_quality_result` builds its dataset without the relational feature. To be fixed in Phase 2;
+  until then the byte gate leaves that run out.
+- The byte gate (`~/nano_cavgs_mac/scripts/cavg_gate.sh`): `learn`, `promote` and `evaluate` (the three presets
+  and the learned file) on five synthetic tables, since the repository has no class-average fixtures; `analyze`
+  in the chunk, pool and sieve contexts on a cryo-EM project with a manual selection (20 classes, 3 deselected)
+  and on the rebuilt nano 71-6/traj01. 49 files, reproducible byte for byte. The FFTW wisdom cache is left out
+  of the comparison. Every run starts from a pristine copy of the project, because each program appends its
+  command line to the `jobproc` segment, and checks that `cls2D`, `ptcl2D` and `out` come back unchanged.
+- In the chunk, pool and sieve contexts every nano class is hard rejected, as section 3 expects: the 100-40 A
+  band is empty in a 43 A box, and the geometry features are constant.
+
+**Phase 1 (2026-10-28): the study and the bank decision.** The record is `~/nano_cavgs_mac/study/DECISION.md`.
+
+- How it was measured. Step 2 was not a numpy reproduction. It ran the program itself on projects rebuilt at
+  `smpd = 0.358 f`: every extraction constant is in A and the mask in pixels, so that is the program with the
+  constants divided by f, exactly (pixels verified identical). The relational feature and the full bank of a
+  validity-only context came from a scratch copy of the source (outside the repository). There, the `sieve` gates
+  were replaced by the nano validity gates, because the cryo-EM contexts hard-reject every nano class, the
+  relational feature is computed only on surviving classes, and the population gate has no command-line switch.
+  The lattice family and the leave-one-dataset-out fits were done in numpy.
+- Lattice family: `lattice_peak` reaches AUC 0.990/0.975/0.983 and `spot_snr` 0.987/0.972/0.974, against the
+  stored correlation's 0.965/0.907/0.908.
+- The floor guard is changed from 4 to 3 floor sd for class averages. On 71-6/traj01 the deselected classes form
+  two modes, so the floor is wide and the separation is 3.7 sd. Under the 4-sd guard that dataset falls back to
+  median/MAD normalization on a different scale, and every lattice model fails there (balanced accuracy 0.50
+  at AUC 0.975). The weight guard stays at 5%. A separation of 6.7 sd was seen on the hold-out 71-6/traj03.
+- Scaled cryo-EM constants: at f = 8 or 16 the local variance and center/edge features become strong (AUC
+  0.95-0.97). At f = 8, `centered` and `cc_area_frac` are degenerate; at f = 16 nothing is.
+- The relational feature at a nano band (15 A to 1.5 A, 3 px) carries nothing (leave-one-out AUC 0.44).
+- Held-out balanced accuracy / AUC of the prototype fit: lattice family + relational 0.978/0.992, 0.933/0.971,
+  0.944/0.983. Against it:
+  - stored correlation alone at a learned threshold: 0.890/0.965, 0.756/0.907, 0.850/0.908;
+  - the stored correlation's best threshold on each project itself: 0.937, 0.880, 0.860;
+  - `lattice_peak` alone at a learned threshold: 0.960, 0.915, 0.940;
+  - the floor rule at 4 sd: 0.984, 0.640, 0.873.
+- Decision by the rule of section 6. Without the lattice family the balanced accuracy drops by 0.08-0.11; without
+  any other family (microchunk, signal, overfit at f = 4, 8, 16, the score, the relational feature) it changes
+  by less than 0.01.
+  - The nano bank is the six lattice features, and the policy is `lattice`.
+  - No scaling factor is fixed, because no scaled feature enters.
+  - The relational term stays, because the model schema requires it. It uses the nano band and a learned
+    coefficient.
+  - The other constants of section 3 are kept: the band, the mask at box/2 - 2, the floor mixture, the spot
+    threshold at 4 floor sd, the normalization and its minimum scales, and `CLIP_Z`.
+- Two defects found, both to be fixed in Phase 2:
+  - A model file that names a `preset` without restating its interaction terms is refused (`read_model`,
+    "interaction_coefficients count must match"), contrary to the policy document.
+  - Project-backed `evaluate` passes no relational feature (Phase 0).
+
+**Phase 2 (2026-10-28): the context and the bank.**
+
+- Files changed: the plan's table for Phase 2 (`simple_cavg_quality_{types,feats,model,analysis,learn}.f90`, the
+  commander, `simple_ui_params_common.f90`, `simple_parameters_phases.f90`, the test class and its UI). New:
+  `src/main/cavg_quality/simple_cavg_quality_lattice.f90` and `simple_cavg_quality_lattice_tester.f90`.
+  Deleted: `src/main/frame_quality/`.
+- The bank is indexed by position in the context's own list. The nano list (6) is shorter than the cryo-EM list
+  (14), so `CAVG_QUALITY_NFEATS`, the maximum, stays 14. `cavg_quality_bank_size(context)` and the names and
+  families by context drive everything that reads the bank: extraction, normalization, both training-table
+  writers and the reader, the policies, the model file (feature weights, coefficients, interaction terms by index
+  or name), scoring and the promotion snippet. The chunk, pool and sieve code paths, arrays and presets are
+  unchanged; the byte gate is identical on all 49 files.
+- The lattice module is a class (`cavg_quality_lattice`: `new`, `extract`, `fit_floor`, `kill`) plus the floor
+  normalization. Dropped as dead: the band maximum, the running median, the white-noise reference and the
+  per-frame table. On the labeled class averages its raw values equal the Phase 1 numpy reference within 1e-4.
+- Guard: a third condition. The upper component must lie at least 0.2 above the floor in log10 ratio. On a
+  64-class all-lattice synthetic project the mixture carved out a narrow lower component (weight 0.09, sd 0.004)
+  that passed both other conditions (gap 0.02). The real projects have gaps of 0.46-0.66. A guard on the larger
+  component sd was rejected, because it fails the hold-out 71-6/traj03, whose lattice population is broad.
+- Nano `analyze` without a nano model is the hard-gate-only decision. A coefficient-free nano model names the
+  context, the bank and the relational band (15 A to 1.5 A, 3 px) in the table. The table header records the
+  floor and the median `spot_diam` over the accepted classes. `apply` writes `diam` on every scored class row
+  and its median on the class-average entry of `os_out`.
+- Defects fixed:
+  - project-backed `evaluate` now passes the relational feature;
+  - `read_model` keeps a preset's interactions when the file restates none;
+  - `evaluate` refuses training files and a model of different banks.
+  - My own port bug, found by the tester before any use: an auto-allocated half-plane mask lost its lower
+    bound.
+- Commander test: a model learned on 71-17/traj04 and 71-6/traj04 was applied with `prune=yes` to a copy of the
+  71-6/traj01 project. It accepted 443 of 684 classes. Balanced accuracy against the labels was 0.903 (TPR 0.953,
+  TNR 0.852), before Phase 3's leave-one-out runs. The prune kept exactly the selected frames of the accepted
+  classes with `indstk` and order intact. `map_cavgs_selection` only deselects, so frames Hans had already
+  deselected stayed out.
+- Left: the `quality_context` comment in `simple_parameters.f90` still lists three contexts. That file is outside
+  the table.
+
+**Phase 3 (2026-10-28): learn and evaluate.** Tables: `~/nano_cavgs_mac/keep/phase_3/`. No source changed.
+
+- Leave one labeled dataset out: `learn` runs on two nano tables and project-backed `evaluate` on the third
+  project. The learned models use the `lattice` policy and pick thresholds of 0.20, 0.15 and 0.10.
+- Held-out agreement, AUC / balanced accuracy, the model at its threshold against the best baseline:
+
+  | held out | model | best baseline |
+  | --- | --- | --- |
+  | 71-17/traj04 | 0.991 / 0.916 | floor rule at 4 sd: 0.990 / 0.984 |
+  | 71-6/traj01 | 0.973 / 0.903 | `lattice_peak` at a learned threshold: 0.975 / 0.915 |
+  | 71-6/traj04 | 0.983 / 0.850 | `lattice_peak` at a learned threshold: 0.983 / 0.940 |
+
+  - The stored correlation at a learned threshold reaches 0.890, 0.756 and 0.850; with its best threshold on
+    each project, 0.937, 0.880 and 0.860. The relational feature alone stays near 0.5.
+- Decision: the model does not meet the agreement criterion of section 8 on any held-out dataset, so it is not
+  promoted on agreement. It ranks the classes exactly as `lattice_peak` alone does (AUC within 0.002). Its
+  thresholds come from the learner's objective, specificity under a 2% false-negative tolerance, which was built
+  for cryo-EM chunks; they keep recall at 0.95-0.99 and cost specificity (0.71-0.85). At its best threshold on each
+  project it reaches 0.985, 0.940 and 0.950, the same as `lattice_peak`. The gate by hand: `lattice_peak` at
+  least about 2 floor sd above the floor mean (2.09 pooled over the three sets, in sample, balanced accuracy
+  0.941). The labels sit well below the 4-sd floor rule.
+- Hold-outs (the model learned on all three, `apply` on copies with `prune=no`, stacks for review). The floor
+  guard passes on four of seven. It fails on 71-17/traj01 (2.6 sd), on 71-6/traj02 (2.9 sd), and on 71-17/traj03,
+  whose classes show no lattice population (gap 0.24). Where the guard fails, the lattice features fall back to
+  median/MAD and the model's decision is not calibrated. Where it passes, the model accepts every class at or above
+  the 2.09-sd gate, plus more. The class diameters (median over accepted) run from 20 to 32 A.
+- Phase 4 note: the hold-outs have no hand selection, so the 3D comparison of section 8 (model, hand selection,
+  floor) is run on a labeled dataset held out of the model's training: 71-6/traj01 with its leave-one-out model.
+
+**Phase 4 (2026-10-28): cancelled by ruling 1.** No 3D experiment. Of the five planned refinements, two (the hand
+selection and the leave-one-out model) had started and were stopped; none finished; their partial outputs were
+deleted. No `nano` preset is promoted.
+
+**Phase 5 (2026-10-28): close.** `doc/policies/sieving_and_rejection/model_cavgs_rejection.md` gains the nano
+context and the gate by hand (`analyze` in context nano, a filter of the table at 2.09 floor sd, `selection` of
+`cls2D` then of `ptcl2D state=1 prune=yes`; checked end to end on a copy of 71-6/traj01: 7244 frames, the frames
+of the 378 gated classes; `selection oritype=cls2D` alone does not prune). The skills `simple-cluster-cavgs-quality`
+and `simple-main-nano` updated. The report is `nano_cavgs_rejection_report.md`; `full.diff` leaves out the three
+copied files.

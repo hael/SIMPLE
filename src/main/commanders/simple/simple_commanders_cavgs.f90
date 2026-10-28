@@ -2,14 +2,16 @@
 module simple_commanders_cavgs
 use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_for_analysis, &
-    write_cavg_quality_training_table, write_cavg_quality_feature_table
+    evaluate_cavg_quality_hard_reject, write_cavg_quality_training_table, write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
 use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_BUILTIN_MODELS, &
-    cavg_quality_model, write_cavg_quality_model_builtin_code
+    cavg_quality_model, cavg_quality_model_spec, write_cavg_quality_model_builtin_code
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
 use simple_cavg_quality_selection, only: write_cavg_selection_stacks
 use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
-    CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
+    CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, CAVG_RELATIONAL_NANO_CORR_HP, &
+    CAVG_RELATIONAL_NANO_CORR_LP, CAVG_RELATIONAL_NANO_CORR_TRS, CAVG_QUALITY_CONTEXT_NANO, cavg_quality_result
+use simple_cavg_quality_lattice,  only: LAT_SPOT_DIAM
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr,&
                                &rank_cavgs_stk
@@ -433,7 +435,9 @@ contains
         integer                   :: quality_mode
         real                      :: smpd
         character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname, model_source
+        character(len=16)         :: thres_str
         character(len=32)         :: quality_context, context_source
+        logical                   :: l_nano
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',      'no')
         call cline%set('objfun',   'cc')
@@ -487,6 +491,12 @@ contains
             call model%read(params%infile%to_char())
             model_source = 'external file '//trim(params%infile%to_char())
         endif
+        if( cline%defined('thres') )then
+            ! the nano preset's lattice_peak threshold; set_nano_threshold refuses any other model
+            call model%set_nano_threshold(params%thres)
+            write(thres_str,'(F8.3)') params%thres
+            model_source = trim(model_source)//' at thres='//trim(adjustl(thres_str))
+        endif
         if( quality_mode == QUALITY_MODE_PROMOTE )then
             if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
             call log_quality_model_selection(model%context, 'model artifact')
@@ -519,6 +529,7 @@ contains
             quality_context = trim(model%context)
             context_source  = 'model artifact'
         endif
+        l_nano = trim(quality_context) == CAVG_QUALITY_CONTEXT_NANO
         if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires projfile')
         if( .not. cline%defined('mskdiam') ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires mskdiam')
         call spproj%read(params%projfile)
@@ -529,8 +540,15 @@ contains
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
         if( quality_mode == QUALITY_MODE_ANALYZE )then
-            call evaluate_cavg_quality_for_analysis(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, &
-                trim(quality_context), params, relation_analysis)
+            if( l_nano .and. trim(model%context) /= CAVG_QUALITY_CONTEXT_NANO )then
+                ! no nano model: the hard-gate-only decision, recorded with a coefficient-free nano model
+                call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, &
+                    CAVG_QUALITY_CONTEXT_NANO)
+                call set_nano_hard_gate_model()
+            else
+                call evaluate_cavg_quality_for_analysis(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, &
+                    trim(quality_context), params, relation_analysis)
+            endif
         else
             call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, params, &
                 relation_analysis)
@@ -547,17 +565,24 @@ contains
         if( quality_mode == QUALITY_MODE_ANALYZE .or. quality_mode == QUALITY_MODE_EVALUATE )then
             write(logfhandle,'(A,I6,A,I6)') '>>> MANUAL REFERENCE SELECTED / REJECTED : ', &
                 count(reference_states > 0), ' / ', count(reference_states <= 0)
-            if( quality_mode == QUALITY_MODE_EVALUATE )then
-                report_fname = 'cavgs_quality_evaluate_report.txt'
-                if( cline%defined('fname') ) report_fname = params%fname%to_char()
-                call evaluate_cavg_quality_result(quality, reference_states, model, &
-                    params%projfile%to_char(), trim(report_fname))
-                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
-            else
-                if( .not. allocated(relation_analysis%feature) ) &
+            ! the tables and the evaluation report carry the relational feature whether the model uses it or not
+            if( .not. allocated(relation_analysis%feature) )then
+                if( l_nano )then
+                    call relation_analysis%calculate(cavg_imgs, quality, params, CAVG_RELATIONAL_DEFAULT_KNN, &
+                        CAVG_RELATIONAL_NANO_CORR_HP, CAVG_RELATIONAL_NANO_CORR_LP, CAVG_RELATIONAL_NANO_CORR_TRS)
+                else
                     call relation_analysis%calculate(cavg_imgs, quality, params, CAVG_RELATIONAL_DEFAULT_KNN, &
                         CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
                         CAVG_RELATIONAL_DEFAULT_CORR_TRS)
+                endif
+            endif
+            if( quality_mode == QUALITY_MODE_EVALUATE )then
+                report_fname = 'cavgs_quality_evaluate_report.txt'
+                if( cline%defined('fname') ) report_fname = params%fname%to_char()
+                call evaluate_cavg_quality_result(quality, reference_states, relation_analysis%feature, model, &
+                    params%projfile%to_char(), trim(report_fname))
+                write(logfhandle,'(A,A)') '>>> WROTE CAVG QUALITY EVALUATION REPORT : ', trim(report_fname)
+            else
                 call write_cavg_quality_training_table(quality, reference_states, model, &
                     'cavgs_quality_training.txt', params%projfile%to_char(), quality_context, relation_analysis)
             endif
@@ -578,6 +603,7 @@ contains
         else
             call spproj%map_cavgs_selection(quality%states)
             call annotate_project()
+            if( l_nano ) call annotate_nano_diameters()
             if( trim(params%prune) == 'yes' ) call spproj%prune_particles
             call spproj%write(params%projfile)
         endif
@@ -695,6 +721,52 @@ contains
             call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION SCORE STATES NORMAL STOP ****', &
                 verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
         end subroutine score_cls3d_state_groups
+
+        !> the coefficient-free nano model of a hard-gate-only analysis: it names the context, the bank and the
+        !! relational band of the table
+        subroutine set_nano_hard_gate_model()
+            type(cavg_quality_model_spec) :: spec
+            spec = model%get_spec()
+            spec%name                     = 'standard_hard_gates'
+            spec%context                  = CAVG_QUALITY_CONTEXT_NANO
+            spec%feature_policy           = 'lattice'
+            spec%weights                  = 0.0
+            spec%intercept                = 0.0
+            spec%linear_coefficients      = 0.0
+            spec%n_interactions           = 0
+            spec%interaction_terms        = 0
+            spec%interaction_coefficients = 0.0
+            spec%relational_knn           = CAVG_RELATIONAL_DEFAULT_KNN
+            spec%relational_corr_hp       = CAVG_RELATIONAL_NANO_CORR_HP
+            spec%relational_corr_lp       = CAVG_RELATIONAL_NANO_CORR_LP
+            spec%relational_corr_trs      = CAVG_RELATIONAL_NANO_CORR_TRS
+            spec%relational_coefficient   = 0.0
+            call model%init_spec(spec)
+            model_source = 'standard hard gates (no nano model)'
+        end subroutine set_nano_hard_gate_model
+
+        !> nano: the particle diameter of every scored class and its median over the accepted ones, beside the mask
+        !! diameter of the class-average entry of the out segment
+        subroutine annotate_nano_diameters()
+            real, allocatable :: diams(:)
+            type(string) :: cavgs_stk
+            integer :: icls, ncls_stk, out_ind
+            real    :: smpd_stk, diam_median
+            do icls = 1, ncls
+                if( quality%hard_reject(icls) ) cycle
+                call spproj%os_cls2D%set(icls, 'diam', quality%raw(icls,LAT_SPOT_DIAM))
+            enddo
+            diams = pack(quality%raw(:,LAT_SPOT_DIAM), quality%states > 0 .and. .not. quality%hard_reject)
+            if( size(diams) == 0 )then
+                write(logfhandle,'(A)') '>>> CAVG QUALITY NOTE: no accepted class; no particle diameter recorded'
+                return
+            endif
+            diam_median = median(diams)
+            call spproj%get_cavgs_stk(cavgs_stk, ncls_stk, smpd_stk, out_ind=out_ind)
+            call spproj%os_out%set(out_ind, 'diam', diam_median)
+            write(logfhandle,'(A,F8.2)') '>>> PARTICLE DIAMETER (MEDIAN OVER ACCEPTED CLASSES, A): ', diam_median
+            deallocate(diams)
+        end subroutine annotate_nano_diameters
 
         subroutine annotate_project()
             integer :: icls, ncls3d

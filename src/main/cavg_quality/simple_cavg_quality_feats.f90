@@ -9,14 +9,17 @@ use simple_oris,               only: oris
 use simple_segmentation,       only: otsu_img
 use simple_stat,               only: median, mad_gau
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, EPS, CLIP_Z, CAVG_QUALITY_CONTEXT_CHUNK, &
-    CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, cavg_quality_feature_def, &
+    CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO, cavg_quality_feature_def, &
     cavg_quality_result, CAVG_REJECT_REASON_NONE, CAVG_REJECT_REASON_POP, &
     CAVG_REJECT_REASON_BAD_PIXELS, CAVG_REJECT_REASON_NO_COMPONENT, &
     CAVG_REJECT_REASON_MASK_GEOMETRY, CAVG_REJECT_REASON_MODEL
+use simple_cavg_quality_lattice, only: cavg_quality_lattice, LAT_NFEATS, LAT_LATTICE_PEAK
 implicit none
 private
 
 public :: CAVG_QUALITY_NFEATS
+public :: cavg_quality_bank_size
+public :: validate_quality_context
 public :: LOG_EPS
 public :: I_LOG_POP
 public :: I_NEG_LOG_RES
@@ -82,6 +85,7 @@ integer, parameter :: I_LOG_LOCVAR_FG_BG_RATIO   = 12
 integer, parameter :: I_BP40_100_CENTER_EDGE_VAR = 13
 integer, parameter :: I_FUZZY_BALL_SIGNAL        = 14
 
+! the bank of the cryo-EM contexts (chunk, pool, sieve)
 type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) = [ &
     cavg_quality_feature_def('log_pop', 'higher_is_better', &
         'log class population; larger classes have more particle support', 'microchunk'), &
@@ -112,44 +116,92 @@ type(cavg_quality_feature_def), parameter :: FEATURE_DEFS(CAVG_QUALITY_NFEATS) =
     cavg_quality_feature_def('fuzzy_ball_signal', 'higher_is_better', &
         'combined foreground texture, presence, and 100-40 A localization; low values flag fuzzy balls', 'overfit') ]
 
+! the bank of the nano context, in the order of simple_cavg_quality_lattice
+type(cavg_quality_feature_def), parameter :: FEATURE_DEFS_NANO(LAT_NFEATS) = [ &
+    cavg_quality_feature_def('lattice_peak', 'higher_is_better', &
+        'log10 of the largest smoothed band power over its ring mean; enters the bank raw', 'lattice'), &
+    cavg_quality_feature_def('spot_count', 'higher_is_better', &
+        'local maxima of the smoothed ratio of lattice grade (LAT_PEAK_MIN)', 'lattice'), &
+    cavg_quality_feature_def('spot_arc', 'lower_is_better', &
+        'log10 of the strongest spot extent across over along its radius', 'lattice'), &
+    cavg_quality_feature_def('spot_diam', 'none', &
+        'projected-sphere diameter (A) fitted to the strongest spot', 'lattice'), &
+    cavg_quality_feature_def('spot_snr', 'higher_is_better', &
+        'log10 of the fitted spot amplitude over its background', 'lattice'), &
+    cavg_quality_feature_def('band_presence', 'higher_is_better', &
+        'log10 of band-passed variance in the central disc over the annulus, unmasked', 'lattice') ]
+
 contains
 
-    function cavg_quality_feature_name( i ) result( name )
-        integer, intent(in) :: i
+    !> the number of features in the bank of a context
+    integer function cavg_quality_bank_size( context )
+        character(len=*), intent(in) :: context
+        call validate_quality_context(context)
+        if( trim(context) == CAVG_QUALITY_CONTEXT_NANO )then
+            cavg_quality_bank_size = LAT_NFEATS
+        else
+            cavg_quality_bank_size = CAVG_QUALITY_NFEATS
+        endif
+    end function cavg_quality_bank_size
+
+    function feature_def( i, context ) result( def )
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: context
+        type(cavg_quality_feature_def) :: def
+        if( i < 1 .or. i > cavg_quality_bank_size(context) ) THROW_HARD('invalid cavg quality feature index')
+        if( trim(context) == CAVG_QUALITY_CONTEXT_NANO )then
+            def = FEATURE_DEFS_NANO(i)
+        else
+            def = FEATURE_DEFS(i)
+        endif
+    end function feature_def
+
+    function cavg_quality_feature_name( i, context ) result( name )
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: context
         character(len=32)   :: name
-        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
-        name = FEATURE_DEFS(i)%name
+        type(cavg_quality_feature_def) :: def
+        def  = feature_def(i, context)
+        name = def%name
     end function cavg_quality_feature_name
 
-    function cavg_quality_feature_description( i ) result( description )
-        integer, intent(in) :: i
+    function cavg_quality_feature_description( i, context ) result( description )
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: context
         character(len=160)  :: description
-        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
-        description = FEATURE_DEFS(i)%description
+        type(cavg_quality_feature_def) :: def
+        def         = feature_def(i, context)
+        description = def%description
     end function cavg_quality_feature_description
 
-    function cavg_quality_feature_direction( i ) result( direction )
-        integer, intent(in) :: i
+    function cavg_quality_feature_direction( i, context ) result( direction )
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: context
         character(len=32)   :: direction
-        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
-        direction = FEATURE_DEFS(i)%direction
+        type(cavg_quality_feature_def) :: def
+        def       = feature_def(i, context)
+        direction = def%direction
     end function cavg_quality_feature_direction
 
-    function cavg_quality_feature_family( i ) result( family )
-        integer, intent(in) :: i
+    function cavg_quality_feature_family( i, context ) result( family )
+        integer,          intent(in) :: i
+        character(len=*), intent(in) :: context
         character(len=32)   :: family
-        if( i < 1 .or. i > CAVG_QUALITY_NFEATS ) THROW_HARD('invalid cavg quality feature index')
-        family = FEATURE_DEFS(i)%family
+        type(cavg_quality_feature_def) :: def
+        def    = feature_def(i, context)
+        family = def%family
     end function cavg_quality_feature_family
 
-    subroutine write_cavg_quality_feature_inventory( funit )
-        integer, intent(in) :: funit
+    subroutine write_cavg_quality_feature_inventory( funit, context )
+        integer,          intent(in) :: funit
+        character(len=*), intent(in) :: context
+        type(cavg_quality_feature_def) :: def
         integer :: i
         write(funit,'(A)') '# feature_inventory_header=index,name,direction,family,description'
-        do i = 1, CAVG_QUALITY_NFEATS
-            write(funit,'(A,I0,A,A,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(FEATURE_DEFS(i)%name), ',', &
-                trim(FEATURE_DEFS(i)%direction), ',', trim(FEATURE_DEFS(i)%family), ',', &
-                trim(FEATURE_DEFS(i)%description)
+        do i = 1, cavg_quality_bank_size(context)
+            def = feature_def(i, context)
+            write(funit,'(A,I0,A,A,A,A,A,A,A,A)') '# feature_inventory,', i, ',', trim(def%name), ',', &
+                trim(def%direction), ',', trim(def%family), ',', trim(def%description)
         end do
     end subroutine write_cavg_quality_feature_inventory
 
@@ -171,7 +223,9 @@ contains
         real              :: cc_area_frac
         real              :: center_edge_snr, presence_score, bp_center_edge_var
         integer           :: ithr
-        logical           :: no_component, mask_hard_reject, bad_pixels
+        logical           :: no_component, mask_hard_reject, bad_pixels, l_nano
+        type(cavg_quality_lattice) :: lattice
+        logical,          allocatable :: blank(:)
         ncls = size(imgs)
         if( ncls == 0                    ) THROW_HARD('extract_cavg_quality_features: no class averages')
         if( cls_oris%get_noris() /= ncls ) THROW_HARD('extract_cavg_quality_features: # cls oris /= # cavgs')
@@ -179,10 +233,11 @@ contains
         context = CAVG_QUALITY_CONTEXT_CHUNK
         if( present(quality_context) ) context = trim(quality_context)
         call validate_quality_context(context)
+        l_nano = trim(context) == CAVG_QUALITY_CONTEXT_NANO
         if( allocated(quality%raw)         ) deallocate(quality%raw)
         if( allocated(quality%hard_reject) ) deallocate(quality%hard_reject)
         if( allocated(quality%reasons)     ) deallocate(quality%reasons)
-        allocate(quality%raw(ncls, CAVG_QUALITY_NFEATS), source=0.0)
+        allocate(quality%raw(ncls, cavg_quality_bank_size(context)), source=0.0)
         allocate(quality%hard_reject(ncls),              source=.false.)
         allocate(quality%reasons(ncls),                  source=CAVG_REJECT_REASON_NONE)
         pop  = cls_oris%get_all_asint('pop')
@@ -244,11 +299,24 @@ contains
                 presence_score      = 0.0
                 bp_center_edge_var  = 0.0
             else
-                call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
-                                                      rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, &
-                                                      centroid_norm, cc_area_frac, no_component, mask_hard_reject)
+                if( l_nano )then
+                    ! the foreground geometry carries nothing at nanoparticle sampling and gates nothing
+                    centroid_norm    = 0.0
+                    cc_area_frac     = 0.0
+                    no_component     = .false.
+                    mask_hard_reject = .false.
+                else
+                    call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
+                                                          rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, &
+                                                          centroid_norm, cc_area_frac, no_component, mask_hard_reject)
+                endif
                 call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
                                                 presence_score, bp_center_edge_var)
+            endif
+            if( l_nano )then
+                ! the lattice bank is measured after the loop, on the classes that pass these gates
+                quality%hard_reject(i) = nano_hard_reject(pop(i), bad_pixels, locvar_fg, locvar_bg, quality%reasons(i))
+                cycle
             endif
             quality%raw(i, I_LOG_POP)                  = log(real(max(pop(i), 0)) + 1.0)
             quality%raw(i, I_NEG_LOG_RES)              = resolution_feature(res(i))
@@ -270,6 +338,18 @@ contains
                 locvar_fg, locvar_bg, bp_center_edge_var, quality%raw(i, I_FUZZY_BALL_SIGNAL),quality%reasons(i))
         end do
         !$omp end parallel do
+        if( l_nano )then
+            if( mod(ldim(1), 2) /= 0 ) THROW_HARD('extract_cavg_quality_features: the nano context needs an even box')
+            allocate(blank(ncls))
+            call lattice%new(ldim(1), smpd)
+            call lattice%extract(imgs, .not. quality%hard_reject, quality%raw, blank)
+            call lattice%kill
+            where( blank )
+                quality%hard_reject = .true.
+                quality%reasons     = CAVG_REJECT_REASON_BAD_PIXELS
+            end where
+            deallocate(blank)
+        endif
         do ithr = 1, nworkers
             call bin_img(ithr)%kill_bimg()
             call cc_img(ithr)%kill_bimg()
@@ -281,10 +361,10 @@ contains
     subroutine validate_quality_context( quality_context )
         character(len=*), intent(in) :: quality_context
         select case(trim(quality_context))
-            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO)
                 ! valid contexts
             case DEFAULT
-                THROW_HARD('extract_cavg_quality_features: quality_context must be chunk, pool, or sieve')
+                THROW_HARD('quality_context must be chunk, pool, sieve or nano')
         end select
     end subroutine validate_quality_context
 
@@ -343,7 +423,42 @@ contains
         end select
     end function cavg_hard_reject_for_context
 
-    subroutine normalize_cavg_quality_features( raw, hard_reject, features )
+    !> the nano context keeps the validity gates only: an empty class, invalid pixels, both local variances at EPS
+    logical function nano_hard_reject( pop, bad_pixels, locvar_fg, locvar_bg, reason )
+        integer, intent(in)  :: pop
+        logical, intent(in)  :: bad_pixels
+        real,    intent(in)  :: locvar_fg, locvar_bg
+        integer, intent(out) :: reason
+        reason = CAVG_REJECT_REASON_NONE
+        nano_hard_reject = .true.
+        if( pop <= 0 )then
+            reason = CAVG_REJECT_REASON_POP
+        else if( bad_pixels )then
+            reason = CAVG_REJECT_REASON_BAD_PIXELS
+        else if( locvar_fg <= EPS .and. locvar_bg <= EPS )then
+            reason = CAVG_REJECT_REASON_NO_COMPONENT
+        else
+            nano_hard_reject = .false.
+        endif
+    end function nano_hard_reject
+
+    !> normalized features of the context's bank: the median and MAD of the non-hard-rejected rows, except that the
+    !! nano context's lattice_peak, a log10 ratio normalized by its own ring, enters raw (its threshold is absolute)
+    subroutine normalize_cavg_quality_features( quality, context )
+        type(cavg_quality_result), intent(inout) :: quality
+        character(len=*),          intent(in)    :: context
+        if( .not. allocated(quality%raw) .or. .not. allocated(quality%hard_reject) ) &
+            THROW_HARD('normalize_cavg_quality_features: missing raw features')
+        if( size(quality%raw, dim=2) /= cavg_quality_bank_size(context) ) &
+            THROW_HARD('normalize_cavg_quality_features: invalid feature count')
+        call normalize_robust(quality%raw, quality%hard_reject, quality%features)
+        if( trim(context) == CAVG_QUALITY_CONTEXT_NANO )then
+            quality%features(:,LAT_LATTICE_PEAK) = quality%raw(:,LAT_LATTICE_PEAK)
+            where( quality%hard_reject ) quality%features(:,LAT_LATTICE_PEAK) = -CLIP_Z
+        endif
+    end subroutine normalize_cavg_quality_features
+
+    subroutine normalize_robust( raw, hard_reject, features )
         real,                 intent(in)    :: raw(:,:)
         logical,              intent(in)    :: hard_reject(:)
         real,    allocatable, intent(inout) :: features(:,:)
@@ -352,7 +467,6 @@ contains
         real              :: med, dev
         ncls   = size(raw, dim=1)
         nfeats = size(raw, dim=2)
-        if( nfeats /= CAVG_QUALITY_NFEATS ) THROW_HARD('normalize_cavg_quality_features: invalid feature count')
         if( size(hard_reject) /= ncls ) THROW_HARD('normalize_cavg_quality_features: invalid mask size')
         if( allocated(features) ) deallocate(features)
         allocate(features(ncls, nfeats), source=0.0)
@@ -372,7 +486,7 @@ contains
             end if
             where( hard_reject ) features(:,j) = -CLIP_Z
         end do
-    end subroutine normalize_cavg_quality_features
+    end subroutine normalize_robust
 
     subroutine measure_cavg_foreground_geometry( img, bin_img, cc_img, rmat_cc, rmat_disc, disc_area, rad_px, &
                                                  centroid_norm, cc_area_frac, no_component, mask_hard_reject )

@@ -23,6 +23,10 @@ This is the nanoparticle/SINGLE domain folder.
 - `simple_atoms` is not nanoparticle-specific: simulation, masking, the PCG atomic prior and tests use it too
 - Touches `image/`, `volume/`, `motion/` (`simple_motion_align_nano`), and time-series workflows
 - Tests: `simple_test_exec test=unit_single`; `lib_single` (pdb2mrc)
+- Class-average selection for nanoparticle time series is the `nano` context of `model_cavgs_rejection`
+  (`src/main/cavg_quality/`, lattice bank in `simple_cavg_quality_lattice.f90`); see
+  `doc/policies/sieving_and_rejection/model_cavgs_rejection.md`. The classes of `analysis2D_nano` are not time chunks:
+  a fresh 2D start draws a random previous class, so the `tseries` search never reads the chunk initialization
 
 ## Working Rule
 

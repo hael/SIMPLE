@@ -151,7 +151,7 @@ contains
             &call self%joint_inpl_optimizer%set_shift_prior(s2D%shift_prior_sigma2, &
             &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
         ! find previous discrete alignment parameters
-        self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
+        self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter, os%isthere(self%iptcl,'class'))
         if( self%l_fresh_start )then
             self%prev_class    = 0
             self%prev_class_mi = 0

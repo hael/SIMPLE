@@ -62,6 +62,7 @@ use simple_qsys_ctrl_tester,                 only: run_all_qsys_ctrl_tests
 use simple_qsys_env_tester,                  only: run_all_qsys_env_tests
 use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relations_tests
 use simple_cavg_quality_selection_tester,    only: run_all_cavg_quality_selection_tests
+use simple_cavg_quality_lattice_tester,      only: run_all_cavg_quality_lattice_tests
 use simple_quality_logistic_tester,          only: run_all_quality_logistic_tests
 use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
 use simple_sigma2_bootstrap_tester,          only: run_all_sigma2_bootstrap_tests
@@ -369,6 +370,7 @@ contains
         call add_suite(s, n, 'PCA',                     run_all_pca_tests)
         call add_suite(s, n, 'cavg quality relations',  run_all_cavg_quality_relations_tests)
         call add_suite(s, n, 'cavg quality selection',  run_all_cavg_quality_selection_tests)
+        call add_suite(s, n, 'cavg quality nano',       run_all_cavg_quality_lattice_tests)
         call add_suite(s, n, 'quality logistic',        run_all_quality_logistic_tests)
         call add_suite(s, n, 'diffusion-map graphs',    run_all_diff_map_graphs_tests)
         call add_suite(s, n, 'optimisers',              run_all_opt_tests)

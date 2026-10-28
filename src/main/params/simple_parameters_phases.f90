@@ -1167,7 +1167,7 @@ contains
                     if( cline%defined('fname') ) &
                         THROW_HARD('quality_mode=apply uses infile for model input; fname is output-only')
                     if( cline%defined('quality_context') ) &
-                        THROW_HARD('quality_mode=apply gets quality_context from the selected model')
+                        THROW_HARD('quality_mode=apply gets quality_context from the selected model: choose it with quality_model=chunk100mics|sieve|pool|nano (or infile=)')
                 case('analyze')
                     if( cline%defined('fname') ) &
                         THROW_HARD('quality_mode=analyze uses infile for model input; fname is output-only')
@@ -1190,9 +1190,9 @@ contains
                         THROW_HARD('quality_mode=promote preserves infile context; quality_context is unsupported')
             end select
             select case(trim(self%quality_context))
-                case('chunk','pool','sieve')
+                case('chunk','pool','sieve','nano')
                 case DEFAULT
-                    THROW_HARD('model_cavgs_rejection quality_context must be chunk, pool, or sieve')
+                    THROW_HARD('model_cavgs_rejection quality_context must be chunk, pool, sieve or nano')
             end select
         endif
         select case(trim(self%cache))

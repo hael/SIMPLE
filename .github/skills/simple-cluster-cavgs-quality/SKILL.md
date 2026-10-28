@@ -17,7 +17,7 @@ Flow:
 `simple_ui_cavgproc -> simple_exec_cavgproc -> commander_model_cavgs_rejection -> simple_cavg_quality_*`
 
 The application reads class averages from an input SIMPLE project, applies the
-hard gates of a context (`chunk`, `pool` or `sieve`), scores the survivors with
+hard gates of a context (`chunk`, `pool`, `sieve` or `nano`), scores the survivors with
 a pairwise-logistic model on normalized features plus one relational feature,
 writes selected/rejected class-average stacks, and either updates the project
 (`quality_mode=apply`) or compares against the current manual `cls2D` state
@@ -35,9 +35,11 @@ without modifying the project (`quality_mode=analyze`, `evaluate`).
 - `src/main/cavg_quality/simple_cavg_quality_model.f90`: built-in presets, model file I/O, scoring, promotion snippets.
 - `src/main/cavg_quality/simple_cavg_quality_analysis.f90`: evaluation, hard-gate-only evaluation, training and feature tables.
 - `src/main/cavg_quality/simple_cavg_quality_learn.f90`: learn/evaluate model fitting and reports.
-- `src/main/quality/simple_quality_logistic.f90`: the bank-free core the learner calls (the logistic problem and its L-BFGS-B fit, dataset roles and class weights, the lambda and threshold grids, the robust macro score), the second client of which is the planned `nano` context (`doc/implementation_notes/planned/nano_cavgs_rejection.md`). A change to it must keep the class-average `learn` output byte-identical; its tests are `simple_test_exec test=unit_numerics suite=quality_logistic`.
+- `src/main/quality/simple_quality_logistic.f90`: the bank-free core the learner calls (the logistic problem and its L-BFGS-B fit, dataset roles and class weights, the lambda and threshold grids, the robust macro score), the second client of which is the `nano` context's learn path (`doc/implementation_notes/planned/nano_cavgs_rejection.md`). A change to it must keep the class-average `learn` output byte-identical; its tests are `simple_test_exec test=unit_numerics suite=quality_logistic`.
 - `src/main/cavg_quality/simple_cavg_quality_selection.f90`: `score_project_cavgs` and `write_cavg_selection_stacks`, shared by every caller.
 - `src/main/cavg_quality/simple_cavg_quality_stats.f90`, `_helpers.f90`, `_types.f90`: metrics, helpers, shared types and constants.
+- `src/main/cavg_quality/simple_cavg_quality_lattice.f90`: the `nano` context's lattice bank (Fourier spot
+  measurements of a class average) and the lattice grade `LAT_PEAK_MIN`, the preset's threshold and `spot_count`'s bar.
 - `doc/policies/sieving_and_rejection/model_cavgs_rejection.md`: current modes, contexts, hard gates, feature bank, built-ins, learning and promotion.
 - `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`: how the stream particle sieve calls this backend.
 
@@ -48,8 +50,18 @@ without modifying the project (`quality_mode=analyze`, `evaluate`).
 - `quality_mode=learn`: fits a model from the `cavgs_quality_training.txt` files listed in `filetab` (all of one context); writes the model (`fname`) and `cavgs_quality_learn_report.txt`.
 - `quality_mode=evaluate`: scores a fixed model on `filetab` training files, or on one project against its manual `cls2D` state; writes `cavgs_quality_evaluate_report.txt`.
 - `quality_mode=promote`: emits a Fortran snippet for adding a model file (`infile`) as a built-in preset.
-- `quality_context=chunk|pool|sieve`: the hard gates; accepted only by `analyze`. Every other mode takes the context from the model artifact.
-- `quality_model`: built-ins `chunk100mics` (default), `sieve`, `pool` (`CAVG_QUALITY_MODEL_*_DEFAULT` in `simple_cavg_quality_model.f90`). `infile` is a complete external model and wins; `fname` is output-only.
+- `quality_context=chunk|pool|sieve|nano`: the hard gates and the feature bank; accepted only by `analyze`. Every other mode takes the context from the model artifact.
+
+## The bank by context
+
+`chunk`, `pool` and `sieve` share the fourteen-feature bank. `nano` has its own six lattice features
+(`lattice_peak`, `spot_count`, `spot_arc`, `spot_diam`, `spot_snr`, `band_presence`) and the validity gates only;
+`lattice_peak` enters raw (a log10 peak-over-ring ratio with an absolute threshold, `LAT_PEAK_MIN`), the rest by
+median/MAD like the cryo-EM bank. Every bank array is indexed by position in the context's list: use
+`cavg_quality_bank_size(context)` and `cavg_quality_feature_name(i, context)`, never `CAVG_QUALITY_NFEATS` (the largest
+bank) as a loop bound. A change to the cryo-EM contexts must keep `learn`, `evaluate` and `analyze` byte-identical.
+Without a nano model, `analyze quality_context=nano` is the hard-gate-only decision.
+- `quality_model`: built-ins `chunk100mics` (default), `sieve`, `pool`, `nano` (`CAVG_QUALITY_MODEL_*_DEFAULT` in `simple_cavg_quality_model.f90`; `nano` is the lattice gate `lattice_peak >= LAT_PEAK_MIN` (0.65, set for recall by ruling), `thres=` moves it for a run; `quality_model=nano` is how a nanoparticle time series is rejected). `infile` is a complete external model and wins; `fname` is output-only.
 - `score_states=yes`: diagnostic, `apply` only, no overrides or pruning: scores every built-in model by `cls3D` state into `cavgs_quality_state_scores.txt` and changes nothing.
 
 ## Analyze Outputs
@@ -111,5 +123,5 @@ Prefer small local changes:
 
 ## Tests
 
-`simple_test_exec test=unit_numerics` (sub-suite `cavg quality relations`);
+`simple_test_exec test=unit_numerics` (sub-suites `cavg quality relations`, `cavg quality selection`, `cavg quality nano`);
 for the commander, an `analyze` run on a manually selected project.

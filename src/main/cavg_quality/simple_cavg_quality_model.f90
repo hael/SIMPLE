@@ -4,12 +4,14 @@ use simple_defs,               only: LONGSTRLEN, XLONGSTRLEN
 use simple_error,              only: simple_exception
 use simple_string_utils,       only: lowercase, uppercase, fortran_symbol_from_string, fortran_quote
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, &
-    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_RELATIONAL_SCHEMA_NONE, &
+    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO, &
+    CAVG_RELATIONAL_SCHEMA_NONE, &
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
     CAVG_RELATIONAL_DEFAULT_CORR_TRS, &
     cavg_quality_model_spec, cavg_quality_result, CAVG_REJECT_REASON_MODEL
-use simple_cavg_quality_feats, only: cavg_quality_feature_name
+use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_bank_size
+use simple_cavg_quality_lattice, only: LAT_LATTICE_PEAK, LAT_PEAK_MIN
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -17,6 +19,7 @@ private
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_SIEVE_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
+public :: CAVG_QUALITY_MODEL_NANO_DEFAULT
 public :: CAVG_QUALITY_BUILTIN_MODELS
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
@@ -29,10 +32,19 @@ public :: write_cavg_quality_model_builtin_code
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk100mics'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_SIEVE_DEFAULT = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool'
-character(len=64), parameter :: CAVG_QUALITY_BUILTIN_MODELS(3) = [character(len=64) :: &
-    CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_SIEVE_DEFAULT, CAVG_QUALITY_MODEL_POOL_DEFAULT]
+character(len=*), parameter :: CAVG_QUALITY_MODEL_NANO_DEFAULT  = 'nano'
+character(len=64), parameter :: CAVG_QUALITY_BUILTIN_MODELS(4) = [character(len=64) :: &
+    CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_SIEVE_DEFAULT, CAVG_QUALITY_MODEL_POOL_DEFAULT, &
+    CAVG_QUALITY_MODEL_NANO_DEFAULT]
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT // '|' // &
-    CAVG_QUALITY_MODEL_SIEVE_DEFAULT // '|' // CAVG_QUALITY_MODEL_POOL_DEFAULT
+    CAVG_QUALITY_MODEL_SIEVE_DEFAULT // '|' // CAVG_QUALITY_MODEL_POOL_DEFAULT // '|' // CAVG_QUALITY_MODEL_NANO_DEFAULT
+!> the nano preset is a threshold on lattice_peak, the log10 ratio of the strongest smoothed Fourier peak in the
+!! 3 A-Nyquist band to its ring mean, which enters the nano bank raw: LAT_PEAK_MIN by default (set for recall, see
+!! its comment), the program's `thres` when given. The ratio is already normalized, so one threshold carries across
+!! datasets and needs no floor of lattice-free classes, which a trajectory with few out-of-focus stretches does not
+!! have. A learned nano model ranked the classes exactly as lattice_peak alone and was not promoted
+!! (nano_cavgs_rejection_report.md). The scale sets the probability's slope only: one tenth of a log10 unit.
+real, parameter :: NANO_LATTICE_PEAK_SCALE = 0.1
 
 
 ! Default chunk class-average quality model, promoted from the pairwise
@@ -66,6 +78,7 @@ type :: cavg_quality_model
     real              :: relational_coefficient    = 0.0
 contains
     procedure :: init_preset
+    procedure :: set_nano_threshold
     procedure :: init_spec
     procedure :: get_spec
     procedure :: normalize
@@ -99,6 +112,8 @@ contains
                 spec = sieve_model_spec()
             case(CAVG_QUALITY_MODEL_POOL_DEFAULT)
                 spec = pool_model_spec()
+            case(CAVG_QUALITY_MODEL_NANO_DEFAULT)
+                spec = nano_model_spec()
             case default
                 errmsg = 'unknown class-average quality model preset: '//trim(preset_name)//&
                          '; available presets: '//trim(builtin_names())
@@ -134,6 +149,16 @@ contains
         self%relational_coefficient  = spec%relational_coefficient
         call self%normalize()
     end subroutine init_spec
+
+    !> the nano preset's threshold on lattice_peak (log10 peak over ring), the program's `thres`
+    subroutine set_nano_threshold( self, lattice_peak_min )
+        class(cavg_quality_model), intent(inout) :: self
+        real,                      intent(in)    :: lattice_peak_min
+        if( trim(self%name) /= CAVG_QUALITY_MODEL_NANO_DEFAULT ) &
+            THROW_HARD('set_nano_threshold: thres applies to the nano preset only')
+        if( lattice_peak_min <= 0.0 ) THROW_HARD('set_nano_threshold: thres must be a positive log10 ratio')
+        self%intercept = -lattice_peak_min / NANO_LATTICE_PEAK_SCALE
+    end subroutine set_nano_threshold
 
     function get_spec( self ) result( spec )
         class(cavg_quality_model), intent(in) :: self
@@ -204,6 +229,33 @@ contains
         spec%relational_corr_trs     = CAVG_RELATIONAL_DEFAULT_CORR_TRS
         spec%relational_coefficient  = -3.941003E-01
     end function chunk100mics_model_spec
+
+    !> nano: the lattice gate, probability sigmoid((lattice_peak - LAT_PEAK_MIN) / NANO_LATTICE_PEAK_SCALE) at
+    !! threshold 1/2 (lattice_peak is raw in the nano bank); no relational term (the relational feature carries no
+    !! evidence on nanoparticle class averages and its k-nearest-neighbour alignment is not paid for)
+    function nano_model_spec() result( spec )
+        type(cavg_quality_model_spec) :: spec
+        spec%name                      = CAVG_QUALITY_MODEL_NANO_DEFAULT
+        spec%context                   = CAVG_QUALITY_CONTEXT_NANO
+        spec%feature_policy            = 'lattice'
+        spec%weights                   = 0.0
+        spec%weights(LAT_LATTICE_PEAK) = 1.0
+        spec%intercept                 = -LAT_PEAK_MIN / NANO_LATTICE_PEAK_SCALE
+        spec%linear_coefficients       = 0.0
+        spec%linear_coefficients(LAT_LATTICE_PEAK) = 1.0 / NANO_LATTICE_PEAK_SCALE
+        spec%n_interactions            = 0
+        spec%interaction_terms         = 0
+        spec%interaction_coefficients  = 0.0
+        spec%prob_threshold            = 0.5
+        spec%regularization_lambda     = 0.0
+        spec%calibration_temperature   = 1.0
+        spec%relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
+        spec%relational_knn            = 0
+        spec%relational_corr_hp        = 0.0
+        spec%relational_corr_lp        = 0.0
+        spec%relational_corr_trs       = 0.0
+        spec%relational_coefficient    = 0.0
+    end function nano_model_spec
 
     function pool_model_spec() result( spec )
         type(cavg_quality_model_spec) :: spec
@@ -635,11 +687,12 @@ contains
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
+        integer :: iterm, nfeats
         select case(trim(self%context))
-        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
+        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO)
             continue
         case default
-            THROW_HARD('normalize: model context must be chunk, pool, or sieve')
+            THROW_HARD('normalize: model context must be chunk, pool, sieve or nano')
         end select
         select case(trim(self%relational_feature_schema))
         case(CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1)
@@ -648,6 +701,12 @@ contains
                 self%relational_corr_hp < self%relational_corr_lp ) &
                 THROW_HARD('normalize: invalid relational correlation limits')
             if( self%relational_corr_trs < 0.0 ) THROW_HARD('normalize: relational shift range must be nonnegative')
+        case(CAVG_RELATIONAL_SCHEMA_NONE)
+            ! the nano context may do without the relational term (the nano preset); the cryo-EM contexts require it
+            if( trim(self%context) /= CAVG_QUALITY_CONTEXT_NANO ) &
+                THROW_HARD('normalize: relational_feature_schema=corr_knn_signal_v1 is required')
+            if( abs(self%relational_coefficient) > EPS ) &
+                THROW_HARD('normalize: a model without a relational schema cannot carry a relational coefficient')
         case default
             THROW_HARD('normalize: relational_feature_schema=corr_knn_signal_v1 is required')
         end select
@@ -655,6 +714,11 @@ contains
         self%calibration_temperature = max(EPS, self%calibration_temperature)
         if( self%n_interactions < 0 .or. self%n_interactions > CAVG_QUALITY_MAX_INTERACTIONS ) &
             THROW_HARD('normalize: invalid pairwise interaction count')
+        nfeats = cavg_quality_bank_size(self%context)
+        do iterm = 1, self%n_interactions
+            if( any(self%interaction_terms(iterm,:) < 1) .or. any(self%interaction_terms(iterm,:) > nfeats) ) &
+                THROW_HARD('normalize: an interaction term lies outside the context bank')
+        end do
     end subroutine normalize
 
     logical function supports_relational( self )
@@ -669,14 +733,19 @@ contains
         if( .not. allocated(quality%features)    ) THROW_HARD('classify: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('classify: missing hard-reject mask')
         quality%model_name     = self%name
-        if( .not. present(relational_feature) ) THROW_HARD('classify: missing relational feature')
-        call apply_pairwise_logistic(quality, self, relational_feature)
+        if( self%supports_relational() )then
+            if( .not. present(relational_feature) ) THROW_HARD('classify: missing relational feature')
+            call apply_pairwise_logistic(quality, self, relational_feature)
+        else
+            call apply_pairwise_logistic(quality, self)
+        endif
     end subroutine classify
 
     subroutine write_model( self, fname )
         class(cavg_quality_model), intent(in) :: self
         character(len=*),          intent(in) :: fname
-        integer :: funit, i
+        integer :: funit, i, nfeats
+        nfeats = cavg_quality_bank_size(self%context)
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A)') '# model_cavgs_rejection model'
         write(funit,'(A)') 'model_version=11'
@@ -684,13 +753,13 @@ contains
         write(funit,'(A,A)') 'context=', trim(self%context)
         write(funit,'(A,A)') 'feature_policy=', trim(self%feature_policy)
         write(funit,'(A)', advance='no') 'feature_weights='
-        do i = 1, CAVG_QUALITY_NFEATS
+        do i = 1, nfeats
             if( i > 1 ) write(funit,'(A)', advance='no') ','
             write(funit,'(ES14.6)', advance='no') self%weights(i)
         end do
         write(funit,*)
         write(funit,'(A,ES14.6)') 'intercept=', self%intercept
-        call write_model_real_list(funit, 'linear_coefficients=', self%linear_coefficients)
+        call write_model_real_list(funit, 'linear_coefficients=', self%linear_coefficients, nfeats)
         call write_interaction_terms(funit, self)
         call write_model_real_list(funit, 'interaction_coefficients=', self%interaction_coefficients, self%n_interactions)
         write(funit,'(A,ES14.6)') 'prob_threshold=', self%prob_threshold
@@ -750,7 +819,7 @@ contains
         write(funit,'(A,A)') '        spec%name                    = ', trim(const_name)
         write(funit,'(A,A)') '        spec%context                 = ', trim(fortran_quote(model%context))
         write(funit,'(A,A)') '        spec%feature_policy          = ', trim(fortran_quote(model%feature_policy))
-        call write_weights_assignment(funit, model%weights)
+        call write_weights_assignment(funit, model%weights(1:cavg_quality_bank_size(model%context)))
         call write_logistic_spec_assignments(funit, model)
         write(funit,'(A,A,A)') '    end function ', trim(func_name), ''
     end subroutine write_model_spec_function
@@ -758,10 +827,13 @@ contains
     subroutine write_logistic_spec_assignments( funit, model )
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
-        integer :: iterm
+        integer :: iterm, nfeats
+        character(len=64) :: lhs
+        nfeats = cavg_quality_bank_size(model%context)
         write(funit,'(A,ES14.6)') '        spec%intercept               = ', model%intercept
-        call write_real_array_assignment(funit, '        spec%linear_coefficients', &
-            model%linear_coefficients, CAVG_QUALITY_NFEATS)
+        lhs = '        spec%linear_coefficients'
+        if( nfeats < CAVG_QUALITY_NFEATS ) write(lhs,'(A,I0,A)') '        spec%linear_coefficients(1:', nfeats, ')'
+        call write_real_array_assignment(funit, trim(lhs), model%linear_coefficients, nfeats)
         write(funit,'(A,I0)') '        spec%n_interactions          = ', model%n_interactions
         write(funit,'(A)') '        spec%interaction_terms        = 0'
         write(funit,'(A)') '        spec%interaction_coefficients = 0.0'
@@ -787,7 +859,12 @@ contains
         integer, intent(in) :: funit
         real,    intent(in) :: weights(:)
         integer :: i
-        write(funit,'(A)') '        spec%weights                 = [ &'
+        if( size(weights) < CAVG_QUALITY_NFEATS )then
+            write(funit,'(A)') '        spec%weights                 = 0.0'
+            write(funit,'(A,I0,A)') '        spec%weights(1:', size(weights), ') = [ &'
+        else
+            write(funit,'(A)') '        spec%weights                 = [ &'
+        endif
         write(funit,'(A)', advance='no') '            '
         do i = 1, size(weights)
             write(funit,'(ES14.6)', advance='no') weights(i)
@@ -839,15 +916,16 @@ contains
     subroutine write_interaction_terms( funit, model )
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
-        integer :: i, ifeat, jfeat
+        integer :: i, ifeat, jfeat, nfeats
         if( model%n_interactions < 0 .or. model%n_interactions > CAVG_QUALITY_MAX_INTERACTIONS ) &
             THROW_HARD('write_interaction_terms: invalid n_interactions')
+        nfeats = cavg_quality_bank_size(model%context)
         write(funit,'(A)', advance='no') 'interaction_terms='
         do i = 1, model%n_interactions
             ifeat = model%interaction_terms(i,1)
             jfeat = model%interaction_terms(i,2)
-            if( ifeat < 1 .or. ifeat > CAVG_QUALITY_NFEATS .or. &
-                jfeat < 1 .or. jfeat > CAVG_QUALITY_NFEATS ) &
+            if( ifeat < 1 .or. ifeat > nfeats .or. &
+                jfeat < 1 .or. jfeat > nfeats ) &
                 THROW_HARD('write_interaction_terms: invalid interaction feature index')
             if( i > 1 ) write(funit,'(A)', advance='no') ','
             write(funit,'(I0,A,I0)', advance='no') ifeat, ':', jfeat
@@ -861,8 +939,9 @@ contains
         character(len=XLONGSTRLEN) :: line
         character(len=LONGSTRLEN)  :: key, preset_name
         character(len=XLONGSTRLEN) :: val
-        integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients
-        logical :: have_relational_schema, have_preset, ok_line
+        character(len=32)          :: file_context
+        integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients, nfeats
+        logical :: have_relational_schema, have_preset, ok_line, have_terms, have_coefficients
         ! Model files are complete model definitions. Start from chunk defaults,
         ! apply any preset found in the file, then apply explicit key overrides.
         call self%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
@@ -872,6 +951,7 @@ contains
         have_preset       = .false.
         model_version     = 0
         preset_name       = ''
+        file_context      = ''
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
@@ -885,13 +965,34 @@ contains
             case('preset')
                 preset_name = trim(val)
                 have_preset = .true.
+            case('context')
+                file_context = trim(val)
             end select
         end do
         if( have_preset ) call self%init_preset(trim(preset_name))
         if( model_version /= 11 .or. .not. have_relational_schema ) &
             THROW_HARD('read_model: relational logistic model_version=11 is required')
+        select case(trim(file_context))
+            case('')
+                file_context = self%context
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_NANO)
+            case DEFAULT
+                THROW_HARD('read_model: context must be chunk, pool, sieve or nano')
+        end select
+        ! a file of another bank than its starting model carries all of its coefficients
+        nfeats = cavg_quality_bank_size(file_context)
+        if( nfeats /= cavg_quality_bank_size(self%context) )then
+            self%weights                  = 0.0
+            self%linear_coefficients      = 0.0
+            self%n_interactions           = 0
+            self%interaction_terms        = 0
+            self%interaction_coefficients = 0.0
+        endif
+        self%context = trim(file_context)
         rewind(funit)
         n_interaction_coefficients = 0
+        have_terms        = .false.
+        have_coefficients = .false.
         do
             read(funit,'(A)',iostat=ios) line
             if( ios /= 0 ) exit
@@ -905,27 +1006,24 @@ contains
                 case('name')
                     self%name = trim(val)
                 case('context')
-                    select case(trim(val))
-                        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
-                            self%context = trim(val)
-                        case DEFAULT
-                            THROW_HARD('read_model: context must be chunk, pool, or sieve')
-                    end select
+                    cycle
                 case('feature_policy')
                     self%feature_policy = trim(val)
                 case('feature_weights')
-                    call read_feature_weights(val, self%weights)
+                    call read_feature_weights(val, self%weights, nfeats)
                 case('intercept')
                     read(val,*,iostat=parse_ios) self%intercept
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse intercept')
                 case('linear_coefficients')
-                    call read_real_values_keyed(val, self%linear_coefficients, CAVG_QUALITY_NFEATS, &
+                    call read_real_values_keyed(val, self%linear_coefficients, nfeats, &
                         'linear_coefficients')
                 case('interaction_terms')
-                    call read_interaction_terms(val, self%interaction_terms, self%n_interactions)
+                    call read_interaction_terms(val, self%interaction_terms, self%n_interactions, self%context)
+                    have_terms = .true.
                 case('interaction_coefficients')
                     call read_real_values_keyed(val, self%interaction_coefficients, CAVG_QUALITY_MAX_INTERACTIONS, &
                         'interaction_coefficients', n_interaction_coefficients)
+                    have_coefficients = .true.
                 case('prob_threshold')
                     read(val,*,iostat=parse_ios) self%prob_threshold
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse prob_threshold')
@@ -957,21 +1055,25 @@ contains
             end select
         end do
         close(funit)
-        if( n_interaction_coefficients /= self%n_interactions ) &
-            THROW_HARD('read_model: interaction_coefficients count must match interaction_terms count')
+        ! without either key the starting model's (a preset's) interactions stand
+        if( have_terms .or. have_coefficients )then
+            if( n_interaction_coefficients /= self%n_interactions ) &
+                THROW_HARD('read_model: interaction_coefficients count must match interaction_terms count')
+        endif
         call self%normalize()
     end subroutine read_model
 
-    subroutine read_feature_weights( val, weights )
+    subroutine read_feature_weights( val, weights, nfeats )
         character(len=*), intent(in)    :: val
         real,             intent(inout) :: weights(CAVG_QUALITY_NFEATS)
+        integer,          intent(in)    :: nfeats
         character(len=LONGSTRLEN) :: errmsg
         integer :: nvals
         real    :: parsed(CAVG_QUALITY_NFEATS)
         call parse_feature_weight_values(val, parsed, nvals)
         if( nvals == 0 ) THROW_HARD('read_model: feature_weights has no values')
-        if( nvals > CAVG_QUALITY_NFEATS )then
-            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected at most ', CAVG_QUALITY_NFEATS, &
+        if( nvals > nfeats )then
+            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected at most ', nfeats, &
                 ' values, got ', nvals
             THROW_HARD(trim(errmsg))
         endif
@@ -1024,8 +1126,8 @@ contains
         end do
     end subroutine parse_real_values
 
-    subroutine read_interaction_terms( val, terms, nterms )
-        character(len=*), intent(in)  :: val
+    subroutine read_interaction_terms( val, terms, nterms, context )
+        character(len=*), intent(in)  :: val, context
         integer,          intent(out) :: terms(CAVG_QUALITY_MAX_INTERACTIONS,2)
         integer,          intent(out) :: nterms
         character(len=XLONGSTRLEN) :: work, token
@@ -1053,8 +1155,8 @@ contains
                 THROW_HARD('read_model: interaction_terms entries must be feature_a:feature_b')
             lhs = token(1:icolon-1)
             rhs = token(icolon+1:)
-            ifeat = feature_index_from_token(lhs)
-            jfeat = feature_index_from_token(rhs)
+            ifeat = feature_index_from_token(lhs, context)
+            jfeat = feature_index_from_token(rhs, context)
             if( ifeat < 1 .or. jfeat < 1 )then
                 write(errmsg,'(A,A)') 'read_model: unknown interaction feature in ', trim(token)
                 THROW_HARD(trim(errmsg))
@@ -1067,20 +1169,21 @@ contains
         end do
     end subroutine read_interaction_terms
 
-    integer function feature_index_from_token( token )
-        character(len=*), intent(in) :: token
+    integer function feature_index_from_token( token, context )
+        character(len=*), intent(in) :: token, context
         character(len=LONGSTRLEN) :: work
-        integer :: ifeat, ios
+        integer :: ifeat, ios, nfeats
         feature_index_from_token = 0
+        nfeats = cavg_quality_bank_size(context)
         work = adjustl(trim(token))
         read(work,*,iostat=ios) ifeat
         if( ios == 0 )then
-            if( ifeat >= 1 .and. ifeat <= CAVG_QUALITY_NFEATS ) feature_index_from_token = ifeat
+            if( ifeat >= 1 .and. ifeat <= nfeats ) feature_index_from_token = ifeat
             return
         endif
         work = lowercase(trim(work))
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            if( trim(work) == trim(lowercase(cavg_quality_feature_name(ifeat))) )then
+        do ifeat = 1, nfeats
+            if( trim(work) == trim(lowercase(cavg_quality_feature_name(ifeat, context))) )then
                 feature_index_from_token = ifeat
                 return
             endif
@@ -1165,7 +1268,8 @@ contains
         real    :: prob
         if( .not. allocated(quality%features)    ) THROW_HARD('apply_pairwise_logistic: missing features')
         if( .not. allocated(quality%hard_reject) ) THROW_HARD('apply_pairwise_logistic: missing hard-reject mask')
-        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) THROW_HARD('apply_pairwise_logistic: invalid feature count')
+        if( size(quality%features, dim=2) /= cavg_quality_bank_size(model%context) ) &
+            THROW_HARD('apply_pairwise_logistic: the features are not the model context bank')
         ncls = size(quality%features, dim=1)
         if( size(quality%hard_reject) /= ncls ) THROW_HARD('apply_pairwise_logistic: invalid mask size')
         if( model%supports_relational() )then
@@ -1232,12 +1336,13 @@ contains
         class(cavg_quality_model), intent(in) :: model
         real,                      intent(in) :: feat(:)
         real, optional,            intent(in) :: relational_feature
-        integer :: iterm, ifeat, jfeat
+        integer :: iterm, ifeat, jfeat, nfeats
         real    :: eta
-        if( size(feat) /= CAVG_QUALITY_NFEATS ) THROW_HARD('pairwise_logistic_probability: invalid feature count')
+        nfeats = size(feat)
+        if( nfeats < 1 .or. nfeats > CAVG_QUALITY_NFEATS ) THROW_HARD('pairwise_logistic_probability: invalid feature count')
         if( model%n_interactions < 0 .or. model%n_interactions > CAVG_QUALITY_MAX_INTERACTIONS ) &
             THROW_HARD('pairwise_logistic_probability: invalid n_interactions')
-        eta = model%intercept + dot_product(model%linear_coefficients, feat)
+        eta = model%intercept + dot_product(model%linear_coefficients(1:nfeats), feat)
         if( model%supports_relational() )then
             if( .not. present(relational_feature) ) &
                 THROW_HARD('pairwise_logistic_probability: missing relational feature')
@@ -1246,8 +1351,7 @@ contains
         do iterm = 1, model%n_interactions
             ifeat = model%interaction_terms(iterm,1)
             jfeat = model%interaction_terms(iterm,2)
-            if( ifeat < 1 .or. ifeat > CAVG_QUALITY_NFEATS .or. &
-                jfeat < 1 .or. jfeat > CAVG_QUALITY_NFEATS ) &
+            if( ifeat < 1 .or. ifeat > nfeats .or. jfeat < 1 .or. jfeat > nfeats ) &
                 THROW_HARD('pairwise_logistic_probability: invalid interaction feature index')
             eta = eta + model%interaction_coefficients(iterm) * feat(ifeat) * feat(jfeat)
         end do

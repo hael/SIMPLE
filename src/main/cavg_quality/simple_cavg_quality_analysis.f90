@@ -5,15 +5,17 @@ use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_oris,               only: oris
 use simple_parameters,         only: parameters
-use simple_cavg_quality_feats, only: cavg_quality_feature_name, &
+use simple_cavg_quality_feats, only: cavg_quality_feature_name, cavg_quality_bank_size, &
     extract_cavg_quality_features, normalize_cavg_quality_features, &
     write_cavg_quality_feature_inventory
 use simple_cavg_quality_model, only: cavg_quality_model
 use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME, cavg_quality_relation_analysis
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values, &
     median_by_state, mad_by_state, safe_div
-use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_TRAINING_VERSION, EPS, CLIP_Z, &
-    CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, cavg_quality_result
+use simple_cavg_quality_types, only: CAVG_QUALITY_TRAINING_VERSION, EPS, CLIP_Z, &
+    CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, CAVG_QUALITY_CONTEXT_NANO, cavg_quality_result
+use simple_cavg_quality_lattice, only: LAT_SPOT_DIAM, LAT_PEAK_MIN
+use simple_stat,               only: median
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -39,7 +41,7 @@ contains
         context = 'chunk'
         if( present(quality_context) ) context = trim(quality_context)
         call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, trim(context), threshold_pop)
-        call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
+        call normalize_cavg_quality_features(quality, trim(context))
     end subroutine prepare_cavg_quality
 
     subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, relation_params, relation_result, threshold_pop )
@@ -108,14 +110,17 @@ contains
         character(len=*), optional,intent(in)    :: quality_context
         logical,                     allocatable :: standard_hard_reject(:)
         integer                                  :: icls, ncls
+        character(len=32)                        :: context
         call quality%kill()
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, quality_context)
-        call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
+        context = 'chunk'
+        if( present(quality_context) ) context = trim(quality_context)
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, trim(context))
+        call normalize_cavg_quality_features(quality, trim(context))
         if( .not. allocated(quality%features)    ) THROW_HARD('evaluate_cavg_quality_hard_reject: missing features')
         if( .not. allocated(quality%hard_reject) ) &
             THROW_HARD('evaluate_cavg_quality_hard_reject: missing hard-reject mask')
         ncls = size(quality%features, dim=1)
-        if( size(quality%features, dim=2) /= CAVG_QUALITY_NFEATS ) &
+        if( size(quality%features, dim=2) /= cavg_quality_bank_size(context) ) &
             THROW_HARD('evaluate_cavg_quality_hard_reject: invalid feature count')
         if( size(quality%hard_reject) /= ncls ) THROW_HARD('evaluate_cavg_quality_hard_reject: invalid mask size')
         allocate(standard_hard_reject(ncls), source=quality%hard_reject)
@@ -156,15 +161,18 @@ contains
         logical, allocatable :: auto(:), ref(:)
         real,    allocatable :: suggested_weights(:)
         character(len=LONGSTRLEN) :: dataset
-        integer :: ncls, ifeat, icls, tp, fp, tn, fn, ngood, nbad, funit
+        integer :: ncls, ifeat, icls, tp, fp, tn, fn, ngood, nbad, funit, nfeats
         real    :: precision, recall, specificity, f1, balacc, accuracy
         real    :: best_bal_thr, best_balacc, best_f1_thr, best_f1
         real    :: auc, med_good, med_bad, mad_good, mad_bad, sep
-        ncls = size(reference_states)
+        ncls   = size(reference_states)
+        nfeats = cavg_quality_bank_size(quality_context)
         if( size(quality%states) /= ncls ) THROW_HARD('write_cavg_quality_training_table: state size mismatch')
         if( size(quality%scores) /= ncls ) THROW_HARD('write_cavg_quality_training_table: score size mismatch')
-        if( size(quality%features, dim=1) /= ncls ) &
+        if( size(quality%features, dim=1) /= ncls .or. size(quality%features, dim=2) /= nfeats ) &
             THROW_HARD('write_cavg_quality_training_table: feature size mismatch')
+        if( cavg_quality_bank_size(model%context) /= nfeats ) &
+            THROW_HARD('write_cavg_quality_training_table: the model bank is not the context bank')
         if( .not. allocated(relation%raw) .or. .not. allocated(relation%feature) ) &
             THROW_HARD('write_cavg_quality_training_table: missing relational feature')
         if( size(relation%raw) /= ncls .or. size(relation%feature) /= ncls ) &
@@ -177,14 +185,14 @@ contains
         call calc_confusion(auto, ref, tp, fp, tn, fn)
         call calc_binary_metrics(tp, fp, tn, fn, precision, recall, specificity, f1, balacc, accuracy)
         call calc_best_thresholds(quality%scores, reference_states, best_bal_thr, best_balacc, best_f1_thr, best_f1)
-        allocate(suggested_weights(CAVG_QUALITY_NFEATS), source=0.0)
-        do ifeat = 1, CAVG_QUALITY_NFEATS
+        allocate(suggested_weights(nfeats), source=0.0)
+        do ifeat = 1, nfeats
             suggested_weights(ifeat) = max(0.0, auc_for_values(quality%features(:,ifeat), reference_states) - 0.5)
         end do
         if( sum(suggested_weights) > EPS ) then
             suggested_weights = suggested_weights / sum(suggested_weights)
         else
-            suggested_weights = model%weights
+            suggested_weights = model%weights(1:nfeats)
         end if
         open(newunit=funit, file=trim(fname), status='replace', action='write')
         write(funit,'(A,I0)') '# cavg_quality_training_version=', CAVG_QUALITY_TRAINING_VERSION
@@ -230,10 +238,11 @@ contains
         write(funit,'(A,F10.5)') '# best_balacc=', best_balacc
         write(funit,'(A,F10.5)') '# best_f1_threshold=', best_f1_thr
         write(funit,'(A,F10.5)') '# best_f1=', best_f1
+        if( trim(quality_context) == CAVG_QUALITY_CONTEXT_NANO ) call write_lattice_comments(funit, quality)
         call write_model_as_analysis_comments(funit, model)
-        call write_cavg_quality_feature_inventory(funit)
+        call write_cavg_quality_feature_inventory(funit, quality_context)
         write(funit,'(A)') '# feature_summary_header=feature,auc,median_manual_good,median_manual_bad,robust_separation,current_weight,suggested_weight'
-        do ifeat = 1, CAVG_QUALITY_NFEATS
+        do ifeat = 1, nfeats
             auc      = auc_for_values(quality%features(:,ifeat), reference_states)
             med_good = median_by_state(quality%features(:,ifeat), ref)
             med_bad  = median_by_state(quality%features(:,ifeat), .not. ref)
@@ -241,11 +250,11 @@ contains
             mad_bad  = mad_by_state(quality%features(:,ifeat), .not. ref, med_bad)
             sep      = safe_div(med_good - med_bad, 0.5 * (mad_good + mad_bad) + EPS)
             write(funit,'(A,A,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5,A,F10.5)') &
-                '# feature_summary,', trim(cavg_quality_feature_name(ifeat)), ',', auc, ',', med_good, ',', med_bad, &
+                '# feature_summary,', trim(cavg_quality_feature_name(ifeat, quality_context)), ',', auc, ',', med_good, ',', med_bad, &
                 ',', sep, ',', model%weights(ifeat), ',', suggested_weights(ifeat)
         end do
         call write_threshold_scan_comments(funit, quality%scores, reference_states)
-        call write_analysis_class_header(funit, .true.)
+        call write_analysis_class_header(funit, quality_context, .true.)
         do icls = 1, ncls
             call write_analysis_class_row(funit, trim(dataset), model, quality, reference_states, icls, &
                 relation%raw(icls), relation%feature(icls))
@@ -272,7 +281,7 @@ contains
             if( size(manual_states) /= ncls ) THROW_HARD('write_cavg_quality_feature_table: manual state size mismatch')
         endif
         open(newunit=funit, file=trim(fname), status='replace', action='write')
-        call write_analysis_class_header(funit)
+        call write_analysis_class_header(funit, model%context)
         do icls = 1, ncls
             if( have_manual )then
                 manual_state = manual_states(icls)
@@ -292,18 +301,19 @@ contains
     subroutine write_model_as_analysis_comments( funit, model )
         integer,                  intent(in) :: funit
         type(cavg_quality_model), intent(in) :: model
-        integer :: i
+        integer :: i, nfeats
+        nfeats = cavg_quality_bank_size(model%context)
         write(funit,'(A,A)') '# model_context=', trim(model%context)
         write(funit,'(A,A)') '# model_feature_policy=', trim(model%feature_policy)
         write(funit,'(A)', advance='no') '# model_feature_weights='
-        do i = 1, CAVG_QUALITY_NFEATS
+        do i = 1, nfeats
             if( i > 1 ) write(funit,'(A)', advance='no') ','
             write(funit,'(ES14.6)', advance='no') model%weights(i)
         end do
         write(funit,*)
         write(funit,'(A,ES14.6)') '# model_intercept=', model%intercept
         write(funit,'(A)', advance='no') '# model_linear_coefficients='
-        do i = 1, CAVG_QUALITY_NFEATS
+        do i = 1, nfeats
             if( i > 1 ) write(funit,'(A)', advance='no') ','
             write(funit,'(ES14.6)', advance='no') model%linear_coefficients(i)
         end do
@@ -312,8 +322,8 @@ contains
         do i = 1, model%n_interactions
             if( i > 1 ) write(funit,'(A)', advance='no') ','
             write(funit,'(A,A,A)', advance='no') &
-                trim(cavg_quality_feature_name(model%interaction_terms(i,1))), ':', &
-                trim(cavg_quality_feature_name(model%interaction_terms(i,2)))
+                trim(cavg_quality_feature_name(model%interaction_terms(i,1), model%context)), ':', &
+                trim(cavg_quality_feature_name(model%interaction_terms(i,2), model%context))
         end do
         write(funit,*)
         write(funit,'(A)', advance='no') '# model_interaction_coefficients='
@@ -329,8 +339,9 @@ contains
         write(funit,'(A,ES14.6)') '# model_relational_coefficient=', model%relational_coefficient
     end subroutine write_model_as_analysis_comments
 
-    subroutine write_analysis_class_header( funit, include_relation )
-        integer, intent(in) :: funit
+    subroutine write_analysis_class_header( funit, context, include_relation )
+        integer,           intent(in) :: funit
+        character(len=*),  intent(in) :: context
         logical, optional, intent(in) :: include_relation
         integer :: ifeat
         logical :: with_relation
@@ -339,9 +350,9 @@ contains
         write(funit,'(A)', advance='no') &
             'dataset_id,model_name,class,state,hard_reject,quality_cluster,quality_score,'//&
             'manual_state,auto_matches_manual'
-        do ifeat = 1, CAVG_QUALITY_NFEATS
-            write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat))// &
-                ',z_'//trim(cavg_quality_feature_name(ifeat))
+        do ifeat = 1, cavg_quality_bank_size(context)
+            write(funit,'(A)', advance='no') ',raw_'//trim(cavg_quality_feature_name(ifeat, context))// &
+                ',z_'//trim(cavg_quality_feature_name(ifeat, context))
         enddo
         if( with_relation ) write(funit,'(A)', advance='no') ',raw_'//CAVG_RELATIONAL_FEATURE_NAME// &
             ',z_'//CAVG_RELATIONAL_FEATURE_NAME
@@ -379,13 +390,27 @@ contains
             icls, ',', quality%states(icls), ',', &
             quality%hard_reject(icls), ',', quality%labels(icls), ',', quality%scores(icls), ',', manual_state, ',', &
             auto_match
-        do ifeat = 1, CAVG_QUALITY_NFEATS
+        do ifeat = 1, size(quality%features, dim=2)
             write(funit,'(A,ES14.6,A,ES14.6)', advance='no') ',', quality%raw(icls,ifeat), ',', quality%features(icls,ifeat)
         enddo
         if( present(relational_raw) .and. present(relational_feature) ) &
             write(funit,'(A,ES14.6,A,ES14.6)', advance='no') ',', relational_raw, ',', relational_feature
         write(funit,*)
     end subroutine write_feature_table_class_row
+
+    !> the lattice grade of a nano table and the median particle diameter over the accepted classes
+    subroutine write_lattice_comments( funit, quality )
+        integer,                   intent(in) :: funit
+        type(cavg_quality_result), intent(in) :: quality
+        real, allocatable :: diams(:)
+        write(funit,'(A,F10.5)') '# lattice_peak_min=', LAT_PEAK_MIN
+        diams = pack(quality%raw(:,LAT_SPOT_DIAM), quality%states > 0 .and. .not. quality%hard_reject)
+        if( size(diams) > 0 )then
+            write(funit,'(A,F10.3)') '# spot_diam_median_accepted=', median(diams)
+        else
+            write(funit,'(A)') '# spot_diam_median_accepted=NA'
+        endif
+    end subroutine write_lattice_comments
 
     subroutine write_threshold_scan_comments( funit, scores, reference_states )
         integer, intent(in) :: funit

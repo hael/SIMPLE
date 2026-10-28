@@ -362,7 +362,7 @@ contains
             integer, intent(in) :: iptcl, iptcl_batch
             logical :: first_or_unsearched, has_been_searched, l_fresh_start
             has_been_searched = b_ptr%spproj_field%has_been_searched(iptcl)
-            l_fresh_start     = is_fresh_2D_start(p_ptr, p_ptr%which_iter)
+            l_fresh_start     = is_fresh_2D_start(p_ptr, p_ptr%which_iter, b_ptr%spproj_field%isthere(iptcl,'class'))
             first_or_unsearched = l_fresh_start .or. (.not. has_been_searched)
             if( ctrl%l_prob_align )then
                 allocate(strategy2D_prob :: strategy2Dsrch(iptcl_batch)%ptr)

@@ -1,35 +1,49 @@
-!@descr: the per-frame Fourier measurements of the frame-quality bank: lattice peak, band maximum, spot list, spot shape and size, band presence
-! Per frame: mean removed; band presence on the unmasked frame; then the frame soft-masked (mask2D_soft geometry),
-! its full-plane power P = |F|^2 (F scaled 1/box^2), smoothed by a periodic 3 x 3 box (Ps), ring means of Ps on every
-! shell (mu), the smoothed ratio R = Ps / mu over the band (3 A to Nyquist minus the graphene shells). The reference
-! implementation of these definitions is the run's numpy frame_feats.py.
-module single_frame_quality_feats
+!@descr: the lattice family of the nano class-average bank: Fourier spot measurements of one class average
+! Per class average: mean removed; band presence on the unmasked image; then the image soft-masked (mask2D_soft geometry
+! at box/2 - 2), its full-plane power P = |F|^2, smoothed by a periodic 3 x 3 box (Ps), ring means of Ps on every shell
+! (mu), the smoothed ratio R = Ps / mu over the band (3 A to Nyquist minus the graphene shells). lattice_peak, the log10
+! of the largest R, is a normalized measurement and enters the bank raw; LAT_PEAK_MIN is the lattice grade
+! (doc/policies/sieving_and_rejection/model_cavgs_rejection.md, nano context).
+module simple_cavg_quality_lattice
 !$ use omp_lib
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_defs,               only: dp, GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHENE_BAND3, COSMSKHALFWIDTH, DPI
 use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_math_ft,            only: calc_graphene_mask
-use single_frame_quality_types, only: frame_quality_table, FQ_NLOC, FQ_SPOT_HALFWIN, FQ_BAND_LOW_RES, &
-    I_LATTICE_PEAK, I_BAND_MAX, I_SPOT_ARC, I_SPOT_DIAM, I_SPOT_SNR, I_BAND_PRESENCE
 implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: frame_quality_bank
+public :: cavg_quality_lattice
+public :: LAT_NFEATS, LAT_LATTICE_PEAK, LAT_SPOT_COUNT, LAT_SPOT_ARC, LAT_SPOT_DIAM, LAT_SPOT_SNR, LAT_BAND_PRESENCE
+public :: LAT_PEAK_MIN
 
-integer,  parameter :: NWIN    = (2 * FQ_SPOT_HALFWIN + 1)**2
-integer,  parameter :: ND      = 105        !< sphere diameters 8 to 60 A, step 0.5
-integer,  parameter :: NOFF    = 9          !< sub-pixel centre offsets -1 to 1 px, step 0.25
+! the six lattice features, in the order of the nano bank
+integer, parameter :: LAT_NFEATS = 6
+integer, parameter :: LAT_LATTICE_PEAK = 1, LAT_SPOT_COUNT = 2, LAT_SPOT_ARC = 3, LAT_SPOT_DIAM = 4, LAT_SPOT_SNR = 5
+integer, parameter :: LAT_BAND_PRESENCE = 6
+integer,  parameter :: NLOC          = 64        !< local maxima kept per class, strongest first (spot_count)
+integer,  parameter :: SPOT_HALFWIN  = 7         !< the 15 x 15 window about the strongest spot
+integer,  parameter :: NWIN          = (2 * SPOT_HALFWIN + 1)**2
+real,     parameter :: BAND_LOW_RES  = 3.        !< the band runs from this resolution (A) to Nyquist
+!> the lattice grade: a smoothed peak at least this far (log10) above its ring mean, 4.5 times the ring. The nano
+!! preset's threshold on lattice_peak and the bar a local maximum must clear to count in spot_count. Set for recall:
+!! on three labeled platinum trajectories 0.65 keeps 98-99% of the maintainer's selected classes and lets 27-56% of
+!! his rejected ones through, which is the trade wanted for these time series (losing useful frames costs more than
+!! carrying some junk into 3D); the balanced-accuracy optimum, 0.90-0.95, rejected faint-fringe classes the
+!! maintainer keeps (nano_cavgs_rejection_report.md)
+real,     parameter :: LAT_PEAK_MIN  = 0.65
+integer,  parameter :: ND   = 105                !< sphere diameters 8 to 60 A, step 0.5
+integer,  parameter :: NOFF = 9                  !< sub-pixel centre offsets -1 to 1 px, step 0.25
 real(dp), parameter :: D0 = 8._dp, DSTEP = 0.5_dp, OFF0 = -1._dp, OFFSTEP = 0.25_dp
 
-type :: frame_quality_bank
+type :: cavg_quality_lattice
     private
     integer :: box = 0, c = 0, shmax = 0
     real    :: smpd = 0.
-    integer, public :: sh_lo = 0, sh_hi = 0
     integer,  allocatable :: sh(:,:)          !< (-c:c-1,-c:c-1) shell of (h,k)
-    logical,  allocatable :: band(:,:), half(:,:), bandhalf(:,:)
+    logical,  allocatable :: band(:,:), bandhalf(:,:)
     integer,  allocatable :: shell_count(:)   !< (0:shmax)
     real(dp), allocatable :: mask(:,:)        !< (box,box) the soft mask
     logical,  allocatable :: disc(:,:), annulus(:,:)
@@ -40,31 +54,29 @@ contains
     procedure :: new
     procedure :: extract
     procedure, private :: measure
-    procedure :: white_noise
     procedure :: kill
-end type frame_quality_bank
+end type cavg_quality_lattice
 
 contains
 
-    !> the band, shells, mask and model bank for frames of size box at smpd; mskdiam (A) > 0 sets the mask radius,
-    !! else the box's inscribed circle (box/2 - 2) as trajectory_denoise uses it
-    subroutine new( self, box, smpd, mskdiam )
-        class(frame_quality_bank), intent(inout) :: self
-        integer,                   intent(in)    :: box
-        real,                      intent(in)    :: smpd
-        real, optional,            intent(in)    :: mskdiam
+    !> the band, shells, mask and sphere-model bank for class averages of size box at smpd
+    subroutine new( self, box, smpd )
+        class(cavg_quality_lattice), intent(inout) :: self
+        integer,                     intent(in)    :: box
+        real,                        intent(in)    :: smpd
         logical, allocatable :: gkeep(:)
+        logical, allocatable :: half(:,:)
         real(dp) :: rmsk, q, dq, x, dx, dy, mdl(NWIN)
         integer  :: h, k, i, j, s, id, jy, lx, im, e, iy, ix
         call self%kill
-        if( mod(box, 2) /= 0 ) THROW_HARD('even box required; frame_quality_bank%new')
+        if( mod(box, 2) /= 0 ) THROW_HARD('even box required; cavg_quality_lattice%new')
         self%box  = box
         self%smpd = smpd
         self%c    = box / 2
         allocate(self%sh(-self%c:self%c-1,-self%c:self%c-1))
         do k = -self%c, self%c - 1
             do h = -self%c, self%c - 1
-                self%sh(h,k) = shell_of(h, k)
+                self%sh(h,k) = nint(hypot(real(h, dp), real(k, dp)))
             end do
         end do
         self%shmax = maxval(self%sh)
@@ -75,26 +87,21 @@ contains
             end do
         end do
         ! the band: 3 A to Nyquist, minus the graphene shells of calc_graphene_mask (shells 1..box/2)
-        self%sh_lo = ceiling(real(box) * smpd / FQ_BAND_LOW_RES - 1.e-6)
-        self%sh_hi = self%c
         gkeep = calc_graphene_mask(box, smpd, [GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHENE_BAND3])
-        allocate(self%band(-self%c:self%c-1,-self%c:self%c-1), self%half(-self%c:self%c-1,-self%c:self%c-1), &
-            &self%bandhalf(-self%c:self%c-1,-self%c:self%c-1), source=.false.)
+        allocate(self%band(-self%c:self%c-1,-self%c:self%c-1), self%bandhalf(-self%c:self%c-1,-self%c:self%c-1), &
+            &half(-self%c:self%c-1,-self%c:self%c-1), source=.false.)
         do k = -self%c, self%c - 1
             do h = -self%c, self%c - 1
                 s = self%sh(h,k)
-                if( s >= self%sh_lo .and. s <= self%sh_hi )then
+                if( s >= ceiling(real(box) * smpd / BAND_LOW_RES - 1.e-6) .and. s <= self%c )then
                     if( s <= size(gkeep) ) self%band(h,k) = gkeep(s)
                 endif
-                self%half(h,k) = k > 0 .or. (k == 0 .and. h > 0)
+                half(h,k) = k > 0 .or. (k == 0 .and. h > 0)
             end do
         end do
-        self%bandhalf = self%band .and. self%half
+        self%bandhalf = self%band .and. half
         ! soft mask (mask2D_soft / cosedge_r2_2d geometry) and the real-space disc and annulus of band presence
         rmsk = real(box, dp) / 2._dp - 2._dp
-        if( present(mskdiam) )then
-            if( mskdiam > 0. ) rmsk = min(rmsk, 0.5_dp * real(mskdiam, dp) / real(smpd, dp))
-        endif
         allocate(self%mask(box,box), self%disc(box,box), self%annulus(box,box))
         do j = 1, box
             do i = 1, box
@@ -115,8 +122,8 @@ contains
                     dx = OFF0 + real(lx - 1, dp) * OFFSTEP
                     im = im + 1
                     e  = 0
-                    do iy = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
-                        do ix = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
+                    do iy = -SPOT_HALFWIN, SPOT_HALFWIN
+                        do ix = -SPOT_HALFWIN, SPOT_HALFWIN
                             e = e + 1
                             q = hypot(real(ix, dp) - dx, real(iy, dp) - dy) * dq
                             mdl(e) = sphere2(DPI * q * (D0 + real(id - 1, dp) * DSTEP))
@@ -131,87 +138,93 @@ contains
         self%exists = .true.
     end subroutine new
 
-    !> raw features of frames(:,:,i) into rows i0, i0+1, ... of tab (lattice_peak, band_max, spot_arc, spot_diam,
-    !! spot_snr, band_presence, the local maxima and the invalid flag); parallel over frames
-    subroutine extract( self, frames, tab, i0 )
-        class(frame_quality_bank), intent(in)    :: self
-        real,                      intent(in)    :: frames(:,:,:)
-        type(frame_quality_table), intent(inout) :: tab
-        integer,                   intent(in)    :: i0
-        type(image), allocatable :: imgs(:)
+    !> raw lattice features of the class averages (columns in the LAT_* order); a valid class without a measurable
+    !! spectrum (blank) is returned in blank(:). Parallel over classes.
+    subroutine extract( self, imgs, valid, raw, blank )
+        class(cavg_quality_lattice), intent(in)    :: self
+        class(image),                intent(inout) :: imgs(:)
+        logical,                     intent(in)    :: valid(:)
+        real,                        intent(inout) :: raw(:,:)
+        logical,                     intent(out)   :: blank(:)
+        type(image), allocatable :: fimgs(:)
         real(dp),    allocatable :: p(:,:), ps(:,:), r(:,:), mu(:), x(:,:)
-        real,        allocatable :: rbuf(:,:,:)
-        real    :: vals(6), locs(FQ_NLOC)
-        integer :: n, nthr, ithr, i, irow, shell
+        real,        allocatable :: rbuf(:,:,:), fbuf(:,:,:), locmax(:,:)
+        real    :: vals(5), locs(NLOC)
+        integer :: n, nthr, ithr, i, ldim(3)
         logical :: invalid
-        n = size(frames, 3)
-        if( .not. self%exists ) THROW_HARD('bank not made; frame_quality_bank%extract')
-        if( size(frames,1) /= self%box .or. size(frames,2) /= self%box ) THROW_HARD('frame size; frame_quality_bank%extract')
-        if( i0 < 1 .or. i0 + n - 1 > tab%n ) THROW_HARD('rows out of range; frame_quality_bank%extract')
+        n = size(imgs)
+        if( .not. self%exists ) THROW_HARD('bank not made; cavg_quality_lattice%extract')
+        if( size(valid) /= n .or. size(blank) /= n ) THROW_HARD('mask sizes; cavg_quality_lattice%extract')
+        if( size(raw,1) /= n .or. size(raw,2) /= LAT_NFEATS ) THROW_HARD('raw table shape; cavg_quality_lattice%extract')
+        ldim = imgs(1)%get_ldim()
+        if( ldim(1) /= self%box .or. ldim(2) /= self%box ) THROW_HARD('image size; cavg_quality_lattice%extract')
+        allocate(locmax(n,NLOC), source=0.)
+        raw   = 0.
+        blank = .false.
         ! one image (an FFTW plan) per thread of the team, made outside the region
         nthr = 1
         !$ nthr = omp_get_max_threads()
-        allocate(imgs(nthr))
+        allocate(fimgs(nthr))
         do ithr = 1, nthr
-            call imgs(ithr)%new([self%box,self%box,1], self%smpd, wthreads=.false.)
+            call fimgs(ithr)%new([self%box,self%box,1], self%smpd, wthreads=.false.)
         end do
-        !$omp parallel num_threads(nthr) default(shared) private(i,ithr,irow,p,ps,r,mu,x,rbuf,vals,locs,invalid,shell) &
+        !$omp parallel num_threads(nthr) default(shared) private(i,ithr,p,ps,r,mu,x,rbuf,fbuf,vals,locs,invalid) &
         !$omp& proc_bind(close)
         allocate(p(-self%c:self%c-1,-self%c:self%c-1), ps(-self%c:self%c-1,-self%c:self%c-1), &
             &r(-self%c:self%c-1,-self%c:self%c-1), mu(0:self%shmax), x(self%box,self%box), &
-            &rbuf(self%box,self%box,1))
+            &rbuf(self%box,self%box,1), fbuf(self%box,self%box,1))
         !$omp do schedule(static)
         do i = 1, n
+            if( .not. valid(i) ) cycle
             ithr = 1
             !$ ithr = omp_get_thread_num() + 1
-            call self%measure(frames(:,:,i), imgs(ithr), p, ps, r, mu, x, rbuf, invalid, vals, locs, shell)
-            irow = i0 + i - 1
-            tab%invalid(irow)             = invalid
-            tab%raw(irow,I_LATTICE_PEAK)  = vals(1)
-            tab%raw(irow,I_BAND_MAX)      = vals(2)
-            tab%raw(irow,I_BAND_PRESENCE) = vals(3)
-            tab%raw(irow,I_SPOT_ARC)      = vals(4)
-            tab%raw(irow,I_SPOT_DIAM)     = vals(5)
-            tab%raw(irow,I_SPOT_SNR)      = vals(6)
-            tab%locmax(irow,:)            = locs
-            tab%spot_shell(irow)          = shell
+            call imgs(i)%get_rmat_sub(fbuf)
+            call self%measure(fbuf(:,:,1), fimgs(ithr), p, ps, r, mu, x, rbuf, invalid, vals, locs)
+            blank(i) = invalid
+            raw(i,LAT_LATTICE_PEAK)  = vals(1)
+            raw(i,LAT_BAND_PRESENCE) = vals(2)
+            raw(i,LAT_SPOT_ARC)      = vals(3)
+            raw(i,LAT_SPOT_DIAM)     = vals(4)
+            raw(i,LAT_SPOT_SNR)      = vals(5)
+            locmax(i,:)              = locs
         end do
         !$omp end do
-        deallocate(p, ps, r, mu, x, rbuf)
+        deallocate(p, ps, r, mu, x, rbuf, fbuf)
         !$omp end parallel
         do ithr = 1, nthr
-            call imgs(ithr)%kill
+            call fimgs(ithr)%kill
         end do
-        deallocate(imgs)
+        deallocate(fimgs)
+        ! spot_count: the local maxima of lattice grade
+        do i = 1, n
+            if( valid(i) .and. .not. blank(i) ) raw(i,LAT_SPOT_COUNT) = real(count(locmax(i,:) > 10.**LAT_PEAK_MIN))
+        end do
     end subroutine extract
 
-    !> one frame; the work arrays are the calling thread's. vals: lattice_peak, band_max, band_presence, spot_arc,
-    !! spot_diam, spot_snr; locs the strongest local maxima of R; shell that of the strongest spot; invalid for
-    !! non-finite pixels or a blank frame
-    subroutine measure( self, frame, img, p, ps, r, mu, x, rbuf, invalid, vals, locs, shell )
-        class(frame_quality_bank), intent(in)    :: self
-        real,                      intent(in)    :: frame(:,:)
-        type(image),               intent(inout) :: img
-        real(dp),                  intent(inout) :: p(-self%c:,-self%c:), ps(-self%c:,-self%c:), r(-self%c:,-self%c:)
-        real(dp),                  intent(inout) :: mu(0:), x(:,:)
-        real,                      intent(inout) :: rbuf(:,:,:)
-        logical,                   intent(out)   :: invalid
-        real,                      intent(out)   :: vals(6), locs(FQ_NLOC)
-        integer,                   intent(out)   :: shell
+    !> one class average; the work arrays are the calling thread's. vals: lattice_peak, band_presence, spot_arc,
+    !! spot_diam, spot_snr; locs the strongest local maxima of R; invalid for non-finite pixels or a blank image
+    subroutine measure( self, frame, img, p, ps, r, mu, x, rbuf, invalid, vals, locs )
+        class(cavg_quality_lattice), intent(in)    :: self
+        real,                        intent(in)    :: frame(:,:)
+        type(image),                 intent(inout) :: img
+        real(dp),                    intent(inout) :: p(-self%c:,-self%c:), ps(-self%c:,-self%c:), r(-self%c:,-self%c:)
+        real(dp),                    intent(inout) :: mu(0:), x(:,:)
+        real,                        intent(inout) :: rbuf(:,:,:)
+        logical,                     intent(out)   :: invalid
+        real,                        intent(out)   :: vals(5), locs(NLOC)
         real,    pointer :: rmat(:,:,:)
         complex  :: cval
-        real(dp) :: rmax, bmax, mdisc, mann, v, ymean, a, bgr, best, res, yy
+        real(dp) :: rmax, mdisc, mann, v, ymean, a, bgr, best, res, yy
         real(dp) :: y(NWIN), w(NWIN), yc(NWIN), u(2), cx, cy, sw, vr, vt, along, across, offx, offy
         integer  :: h, k, dh, dk, nloc, g1h, g1k, e, iy, ix, ibest, im, nd_disc, nd_ann
         logical  :: found
         vals    = 0.
         locs    = 0.
-        shell   = 0
         invalid = .not. all(ieee_is_finite(frame))
         if( invalid ) return
         x = real(frame, dp)
         x = x - sum(x) / real(size(x), dp)
-        ! band presence: the unmasked frame band-passed, disc over annulus mean square
+        ! band presence: the unmasked image band-passed, disc over annulus mean square
         rbuf(:,:,1) = real(x)
         call img%set_rmat(rbuf, .false.)
         call img%fft
@@ -270,19 +283,17 @@ contains
         end do
         mu = mu / real(max(self%shell_count, 1), dp)
         rmax = 0._dp
-        bmax = 0._dp
         do k = -self%c, self%c - 1
             do h = -self%c, self%c - 1
                 r(h,k) = 0._dp
                 if( self%band(h,k) )then
                     r(h,k) = ps(h,k) / max(mu(self%sh(h,k)), 1.e-300_dp)
                     rmax   = max(rmax, r(h,k))
-                    bmax   = max(bmax, ps(h,k))
                 endif
             end do
         end do
         if( rmax <= 0._dp .or. mdisc <= 0._dp .or. mann <= 0._dp )then
-            invalid = .true.          ! a blank frame: nothing to measure
+            invalid = .true.          ! a blank image: nothing to measure
             return
         endif
         ! local maxima of R on the half plane (at least their 8 periodic neighbours), the strongest first; g1 is the
@@ -307,14 +318,12 @@ contains
             end do
         end do
         vals(1) = real(log10(rmax))
-        vals(2) = real(log10(bmax))
-        vals(3) = real(log10(mdisc / mann))
+        vals(2) = real(log10(mdisc / mann))
         if( .not. found ) return
-        shell = self%sh(g1h,g1k)
         ! the 15 x 15 window about g1: raw power for the fit, Ps minus the ring mean for the arc
         e = 0
-        do iy = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
-            do ix = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
+        do iy = -SPOT_HALFWIN, SPOT_HALFWIN
+            do ix = -SPOT_HALFWIN, SPOT_HALFWIN
                 e = e + 1
                 h = wrap(g1h + ix, self%c, self%box)
                 k = wrap(g1k + iy, self%c, self%box)
@@ -328,8 +337,8 @@ contains
             cx = 0._dp
             cy = 0._dp
             e  = 0
-            do iy = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
-                do ix = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
+            do iy = -SPOT_HALFWIN, SPOT_HALFWIN
+                do ix = -SPOT_HALFWIN, SPOT_HALFWIN
                     e  = e + 1
                     cx = cx + w(e) * real(ix, dp)
                     cy = cy + w(e) * real(iy, dp)
@@ -341,8 +350,8 @@ contains
             vr = 0._dp
             vt = 0._dp
             e  = 0
-            do iy = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
-                do ix = -FQ_SPOT_HALFWIN, FQ_SPOT_HALFWIN
+            do iy = -SPOT_HALFWIN, SPOT_HALFWIN
+                do ix = -SPOT_HALFWIN, SPOT_HALFWIN
                     e      = e + 1
                     offx   = real(ix, dp) - cx
                     offy   = real(iy, dp) - cy
@@ -352,7 +361,7 @@ contains
                     vt = vt + w(e) * across**2
                 end do
             end do
-            if( vr > 0._dp .and. vt > 0._dp ) vals(4) = real(0.5_dp * log10(vt / vr))
+            if( vr > 0._dp .and. vt > 0._dp ) vals(3) = real(0.5_dp * log10(vt / vr))
         endif
         ! spot_diam, spot_snr: least squares a * model + b, a >= 0, over the model bank
         ymean = sum(y) / real(NWIN, dp)
@@ -371,9 +380,24 @@ contains
             endif
         end do
         bgr     = ymean - a * self%mbar(ibest)
-        vals(5) = real(D0 + real((ibest - 1) / (NOFF * NOFF), dp) * DSTEP)
-        vals(6) = real(log10(max(a / max(bgr, 1.e-300_dp), 1.e-6_dp)))
+        vals(4) = real(D0 + real((ibest - 1) / (NOFF * NOFF), dp) * DSTEP)
+        vals(5) = real(log10(max(a / max(bgr, 1.e-300_dp), 1.e-6_dp)))
     end subroutine measure
+
+    subroutine kill( self )
+        class(cavg_quality_lattice), intent(inout) :: self
+        if( allocated(self%sh)          ) deallocate(self%sh)
+        if( allocated(self%band)        ) deallocate(self%band)
+        if( allocated(self%bandhalf)    ) deallocate(self%bandhalf)
+        if( allocated(self%shell_count) ) deallocate(self%shell_count)
+        if( allocated(self%mask)        ) deallocate(self%mask)
+        if( allocated(self%disc)        ) deallocate(self%disc)
+        if( allocated(self%annulus)     ) deallocate(self%annulus)
+        if( allocated(self%mc)          ) deallocate(self%mc)
+        if( allocated(self%mbar)        ) deallocate(self%mbar)
+        if( allocated(self%smm)         ) deallocate(self%smm)
+        self%exists = .false.
+    end subroutine kill
 
     !> R(h,k) at least as large as its 8 periodic neighbours
     pure logical function is_local_max( r, h, k, c, box )
@@ -415,60 +439,6 @@ contains
         wrap = modulo(i + c, box) - c
     end function wrap
 
-    !> median lattice_peak of nframes white Gaussian frames through the same pipeline (deterministic stream)
-    real function white_noise( self, nframes )
-        class(frame_quality_bank), intent(in) :: self
-        integer,                   intent(in) :: nframes
-        type(frame_quality_table) :: tab
-        real,    allocatable :: frames(:,:,:), lp(:)
-        integer(kind=8) :: state
-        integer :: i, j, l, m
-        real(dp) :: u1, u2
-        allocate(frames(self%box,self%box,nframes))
-        state = 20261027_8
-        do l = 1, nframes
-            do j = 1, self%box
-                do i = 1, self%box
-                    u1 = next_uniform(state)
-                    u2 = next_uniform(state)
-                    frames(i,j,l) = real(sqrt(-2._dp * log(u1)) * cos(2._dp * DPI * u2))
-                end do
-            end do
-        end do
-        call tab%new(nframes, self%box, self%smpd)
-        call self%extract(frames, tab, 1)
-        lp = pack(tab%raw(:,I_LATTICE_PEAK), .not. tab%invalid)
-        m  = size(lp)
-        call sort_real(lp)
-        if( mod(m, 2) == 1 )then
-            white_noise = lp(m/2 + 1)
-        else
-            white_noise = 0.5 * (lp(m/2) + lp(m/2 + 1))
-        endif
-        call tab%kill
-    end function white_noise
-
-    subroutine kill( self )
-        class(frame_quality_bank), intent(inout) :: self
-        if( allocated(self%sh)          ) deallocate(self%sh)
-        if( allocated(self%band)        ) deallocate(self%band)
-        if( allocated(self%half)        ) deallocate(self%half)
-        if( allocated(self%bandhalf)    ) deallocate(self%bandhalf)
-        if( allocated(self%shell_count) ) deallocate(self%shell_count)
-        if( allocated(self%mask)        ) deallocate(self%mask)
-        if( allocated(self%disc)        ) deallocate(self%disc)
-        if( allocated(self%annulus)     ) deallocate(self%annulus)
-        if( allocated(self%mc)          ) deallocate(self%mc)
-        if( allocated(self%mbar)        ) deallocate(self%mbar)
-        if( allocated(self%smm)         ) deallocate(self%smm)
-        self%exists = .false.
-    end subroutine kill
-
-    pure integer function shell_of( h, k )
-        integer, intent(in) :: h, k
-        shell_of = nint(hypot(real(h, dp), real(k, dp)))
-    end function shell_of
-
     !> cosedge_r2_2d with box and mskrad, as mask2D_soft applies it (unit where above 0.9999)
     pure real(dp) function soft_edge( r2, box, mskrad )
         real(dp), intent(in) :: r2, mskrad
@@ -499,26 +469,4 @@ contains
         endif
     end function sphere2
 
-    real(dp) function next_uniform( state )
-        integer(kind=8), intent(inout) :: state
-        state = modulo(state * 48271_8, 2147483647_8)
-        next_uniform = (real(state, dp) + 0.5_dp) / 2147483647._dp
-    end function next_uniform
-
-    subroutine sort_real( v )
-        real, intent(inout) :: v(:)
-        integer :: i, j
-        real    :: t
-        do i = 2, size(v)
-            t = v(i)
-            j = i - 1
-            do while( j >= 1 )
-                if( v(j) <= t ) exit
-                v(j+1) = v(j)
-                j = j - 1
-            end do
-            v(j+1) = t
-        end do
-    end subroutine sort_real
-
-end module single_frame_quality_feats
+end module simple_cavg_quality_lattice
