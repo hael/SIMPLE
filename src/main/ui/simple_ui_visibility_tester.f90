@@ -41,6 +41,7 @@ contains
         call test_registered_test_programs()
         call test_phshift_contract()
         call test_cont_surface_contract()
+        call test_solve3D_trs_contract()
     end subroutine run_all_ui_visibility_tests
 
     subroutine test_visibility_levels()
@@ -350,6 +351,32 @@ contains
         call assert_program_not_registered('refine3D_pose_cont')
         call choices%kill
     end subroutine test_cont_surface_contract
+
+    subroutine test_solve3D_trs_contract()
+        character(len=16), parameter :: OTHER_PROGRAMS(3) = &
+            &[character(len=16) :: 'solve3D_cavgs', 'solve3D_addon', 'solve3D_chunks']
+        character(len=16) :: default_value
+        logical :: found
+        integer :: i
+        write(*,'(A)') 'test_solve3D_trs_contract'
+        call make_ui
+        program_name = 'solve3D'
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), 'solve3D is registered')
+        if( associated(registered_prg) )then
+            call assert_true(program_has_key(registered_prg, 'trs'), 'solve3D offers the shift bound')
+        endif
+        call get_ui_default('simple_exec', 'solve3D', 'trs', found, default_value)
+        call assert_true(found, 'solve3D trs display default is resolved')
+        call assert_char('0.', trim(default_value), 'solve3D trs=0 keeps automatic stage limits')
+        do i = 1, size(OTHER_PROGRAMS)
+            program_name = trim(OTHER_PROGRAMS(i))
+            call get_prg_ptr(program_name, registered_prg)
+            call assert_true(associated(registered_prg), trim(OTHER_PROGRAMS(i))//' is registered')
+            if( associated(registered_prg) ) call assert_false(program_has_key(registered_prg, 'trs'), &
+                &trim(OTHER_PROGRAMS(i))//' does not offer the particle shift override')
+        enddo
+    end subroutine test_solve3D_trs_contract
 
     !> whether any input list of the program holds `key`
     logical function program_has_key( prg, key )

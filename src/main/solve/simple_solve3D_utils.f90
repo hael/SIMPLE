@@ -27,6 +27,7 @@ logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override   = .false.
 logical          :: l_refine3D_lp_override     = .false.
 logical          :: l_refine3D_lpstop_override = .false.
+logical          :: l_refine3D_trs_override    = .false. !< the user set a positive solve3D shift limit
 logical          :: l_prob_beta_ini_override   = .false. !< the user set solve3D's stages 1-2 beta
 logical          :: l_prob_beta_end_override   = .false. !< the user set prob_beta_end: the stages keep it
 logical          :: l_cavgs_mode = .false.
@@ -218,6 +219,7 @@ contains
         l_refine3D_mode_override   = cline%defined('refine')
         l_refine3D_lp_override     = cline%defined('lp')
         l_refine3D_lpstop_override = cline%defined('lpstop')
+        l_refine3D_trs_override    = cline%defined('trs') .and. params%trs >= 0.01
         l_prob_beta_ini_override   = cline%defined('prob_beta_ini')
         l_prob_beta_end_override   = cline%defined('prob_beta_end')
         if( l_refine3D_mode_override ) refine3D_mode_override = trim(params%refine)
@@ -492,8 +494,11 @@ contains
         type(class_frcs) :: clsfrcs
         real             :: lpfinal
         real             :: lpstart_bounds(2), lpstop_bounds(2)
+        real             :: trslim_override
         integer          :: filtsz, nstages, imarch
         l_cavgs_mode = l_cavgs
+        trslim_override = 0.
+        if( l_refine3D_trs_override .and. .not. l_cavgs ) trslim_override = params%trs
         nstages = active_lp_schedule_nstages()
         if( trim(params%force_lp_range).eq.'yes' )then
             if( .not.(present(lpstart) .and. present(lpstop)) )then
@@ -501,7 +506,8 @@ contains
             endif
             if( allocated(lpinfo) ) deallocate(lpinfo)
             allocate(lpinfo(nstages))
-            call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, force_lpstart=.true.)
+            call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, force_lpstart=.true., &
+                &trslim_override=trslim_override)
             return
         endif
         ! retrieve FRC info
@@ -522,10 +528,11 @@ contains
         if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
         if( present(lpstart) )then
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
-            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.true.)
+            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.true., trslim_override=trslim_override)
         else
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
-            &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
+            &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true., &
+            &trslim_override=trslim_override)
         endif
         if( .not. l_cavgs .and. params%l_freq_march_aggressive )then
             ! aggressive frequency marching (doc/policies/3D/solve3D_policy.md sec. 4): the global stages
@@ -537,7 +544,7 @@ contains
                 write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING FROM STAGE ', imarch, ': ', &
                     &solve3D_lpstart_aggressive(), ' -> ', lpfinal, ' A, rungs linear in spatial frequency'
                 call lpstages_aggressive(params%box, nstages, params%smpd, solve3D_lpstart_aggressive(), lpfinal, lpinfo, &
-                    &verbose=.true., first_stage=imarch)
+                    &verbose=.true., first_stage=imarch, trslim_override=trslim_override)
             else
                 write(logfhandle,'(A,I0,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING: no stage at or past ', imarch, &
                     &', the planned ladder stands'
@@ -568,14 +575,19 @@ contains
         real,              intent(in)    :: lpstart, lpstop
         integer, optional, intent(in)    :: first_stage
         integer :: nstages
+        real    :: trslim_override
         l_cavgs_mode = .false.
+        trslim_override = 0.
+        if( l_refine3D_trs_override ) trslim_override = params%trs
         nstages = active_lp_schedule_nstages()
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(nstages))
         if( present(first_stage) )then
-            call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, first_stage=first_stage)
+            call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, first_stage=first_stage, &
+                &trslim_override=trslim_override)
         else
-            call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
+            call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, &
+                &trslim_override=trslim_override)
         endif
     end subroutine set_lplims_from_input
 

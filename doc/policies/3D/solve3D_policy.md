@@ -214,6 +214,16 @@ every run seeds and owns its sigmas in its own directory.
 are derived from class FRCs by default, with `lpstart`/`lpstop` overrides and a
 `force_lp_range=yes` path that uses the requested range directly.
 
+The same ladder plans a stage-dependent residual translation-search half-width.
+On the main particle `solve3D` interface, an explicitly positive `trs` replaces
+`trslim` in every planned stage before the existing scale-information rows are
+printed; it has no separate planner banner. Omission and `trs=0` retain the
+automatic limits. The stage controller still emits `trs=0` for stages 1 and 2,
+which do not search shifts. The class-average and chunked interfaces do not
+expose the override. A run manifest records the planned per-stage half-width so
+an add-on replays the frozen solution's search policy without acquiring a
+separate public control.
+
 Where the ladder is planned by `lpstages` or `lpstages_fast`, stage 1 of
 `solve3D` never runs with a low-pass limit finer than 20 A: both apply this
 floor before generating the remaining low-pass and crop ladder, preserving

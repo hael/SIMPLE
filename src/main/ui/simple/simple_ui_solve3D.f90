@@ -108,6 +108,12 @@ contains
         if( l_include_nsample )then
             call prg%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
         endif
+        if( .not. l_stream_compatible )then
+            call prg%add_input(UI_SRCH, trs, &
+                &help_override='Translation-search half-width in pixels replacing the planned trslim for every stage; '//&
+                &'0 uses the automatic stage-dependent limits; particle stages 1 and 2 still do not search shifts', &
+                &group="search", visibility=UI_VIS_ADVANCED)
+        endif
         call prg%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
         &'Units every fractional-update sample is balanced over: none draws globally from the lowest update-count '//&
         &'particles; class gives every selected 2D class the same share; cavg first gives every group of similar '//&

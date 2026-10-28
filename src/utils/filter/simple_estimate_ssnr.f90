@@ -309,13 +309,14 @@ contains
         endif 
     end subroutine get_resolution_at_fsc
 
-    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, verbose )
+    subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, verbose, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: frcs_avg(:), smpd, lpstart_lb, lpstart_default, lpfinal
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical,           intent(in)  :: l_cavgs
         logical, optional, intent(in)  :: verbose
+        real,    optional, intent(in)  :: trslim_override
         real,    parameter :: FRCLIMS_PTCLS(2) = [0.65,0.03]
         real,    parameter :: FRCLIMS_CAVGS(2) = [0.80,0.05]
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
@@ -332,6 +333,7 @@ contains
             lpinfo(1)%lp      = max(lpfinal, lpstart_default_eff)
             lpinfo(1)%l_lpset = .true.
             call calc_scaleinfo(1)
+            call apply_trslim_override
             if( l_verbose )then
                 print *, '########## single stage'
                 call print_lpinfo
@@ -392,6 +394,7 @@ contains
             lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
             lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
         end do
+        call apply_trslim_override
         if( l_verbose )then
             print *, '########## scale info'
             call print_scaleinfo
@@ -434,14 +437,21 @@ contains
                 end do
             end subroutine print_scaleinfo
 
+            subroutine apply_trslim_override
+                if( present(trslim_override) )then
+                    if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
+                endif
+            end subroutine apply_trslim_override
+
     end subroutine lpstages
 
-    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart, verbose )
+    subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart, verbose, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: force_lpstart, verbose
+        real,    optional, intent(in)  :: trslim_override
         real,    parameter :: LP2SMPD_TARGET   = 0.4
         real,    parameter :: SMPD_TARGET_MIN  = 2.5
         integer :: i
@@ -463,6 +473,9 @@ contains
             endif
             call calc_scaleinfo(i)
         enddo
+        if( present(trslim_override) )then
+            if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
+        endif
         if( l_verbose )then
             do i = 1,nstages
                 print *, 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
@@ -482,13 +495,14 @@ contains
 
     end subroutine lpstages_fast
 
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage )
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
         logical, optional, intent(in)  :: verbose
         integer, optional, intent(in)  :: first_stage
+        real,    optional, intent(in)  :: trslim_override
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial, ifirst
@@ -531,6 +545,9 @@ contains
                 lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
             end do
         endif
+        if( present(trslim_override) )then
+            if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
+        endif
         if( l_verbose )then
             do i = ifirst, nstages
                 write(logfhandle,*) 'lpset lp box_crop smpd_crop trslim ', lpinfo(i)%l_lpset, lpinfo(i)%lp, lpinfo(i)%box_crop, &
@@ -547,13 +564,14 @@ contains
     !! marches backwards. Each march stage is cropped on its own at the particle-route target (smpd
     !! lp/3, at least 2 A, box at least 88), the same target as lpstages, and the crop never shrinks
     !! between stages (a kept rung may sit on lpstages' linear box ramp above what its own limit asks).
-    subroutine lpstages_aggressive( box, nstages, smpd, lpstart, lpfinal, lpinfo, verbose, first_stage )
+    subroutine lpstages_aggressive( box, nstages, smpd, lpstart, lpfinal, lpinfo, verbose, first_stage, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)    :: box, nstages
         real,              intent(in)    :: smpd, lpstart, lpfinal
         type(lp_crop_inf), intent(inout) :: lpinfo(nstages)
         logical, optional, intent(in)    :: verbose
         integer, optional, intent(in)    :: first_stage
+        real,    optional, intent(in)    :: trslim_override
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, ifirst, nmarch
@@ -594,6 +612,9 @@ contains
                 endif
             endif
         end do
+        if( present(trslim_override) )then
+            if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
+        endif
         if( l_verbose )then
             write(logfhandle,'(A,I0)') '########## aggressive frequency marching: rungs linear in spatial frequency from stage ', ifirst
             do i = ifirst,nstages

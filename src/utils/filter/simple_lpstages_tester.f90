@@ -48,6 +48,7 @@ contains
         call test_lpstages_flat_frc_fallback()
         call test_lpstages_fast()
         call test_lpstages_setlims()
+        call test_trslim_override()
         call test_lpstages_aggressive()
         call test_lpstages_aggressive_from_stage()
         call test_fsc_weightings()
@@ -296,6 +297,39 @@ contains
             end subroutine count_setlims_diagnostics
 
     end subroutine test_lpstages_setlims
+
+    subroutine test_trslim_override()
+        real, parameter :: TRSLIM = 15.
+        type(lp_crop_inf) :: info(8)
+        real    :: frc(FILTSZ)
+        integer :: i
+        write(*,'(A)') 'test_trslim_override'
+        frc = frc_curve(40.)
+        call lpstages(BOX, 8, frc, SMPD, LPSTART_LB, LPSTART_DEFAULT, LPFINAL, info, &
+            &l_cavgs=.false., verbose=.false., trslim_override=TRSLIM)
+        do i = 1,8
+            call assert_real(TRSLIM, info(i)%trslim, TOL, &
+                &'FRC schedule: explicit shift limit replaces stage '//int2str(i))
+        end do
+        call lpstages_fast(BOX, 8, SMPD, 20., LPFINAL, info, verbose=.false., trslim_override=TRSLIM)
+        do i = 1,8
+            call assert_real(TRSLIM, info(i)%trslim, TOL, &
+                &'fast schedule: explicit shift limit replaces stage '//int2str(i))
+        end do
+        call lpstages_setlims(BOX, 8, SMPD, 20., LPFINAL, info, verbose=.false., trslim_override=TRSLIM)
+        do i = 1,8
+            call assert_real(TRSLIM, info(i)%trslim, TOL, &
+                &'fixed-limit schedule: explicit shift limit replaces stage '//int2str(i))
+        end do
+        call lpstages_aggressive(BOX, 8, SMPD, 12., LPFINAL, info, verbose=.false., trslim_override=TRSLIM)
+        do i = 1,8
+            call assert_real(TRSLIM, info(i)%trslim, TOL, &
+                &'aggressive schedule: explicit shift limit replaces stage '//int2str(i))
+        end do
+        call lpstages_fast(BOX, 1, SMPD, 20., LPFINAL, info(1:1), verbose=.false., trslim_override=0.)
+        call assert_real(min(8., max(2., 12.0/info(1)%smpd_crop)), info(1)%trslim, TOL, &
+            &'zero shift limit keeps the automatic plan')
+    end subroutine test_trslim_override
 
     !---------------- lpstages_aggressive ----------------
 
