@@ -124,15 +124,23 @@ delivered populations class by class. The regenerated averages are the originals
 weighting of `make_cavgs`; if the original `cavgs_iter*.mrc` stacks become available they are used
 instead and the regenerated ones compared to them.
 
-Checked on delivery: `71-6/traj01` (684 classes, 425 selected, 13,662 frames) and `71-6/traj04` (684
-classes, 264 selected) are complete and consistent: every class's population equals its frame count in
-`ptcl2D`, every frame's state equals its class's state, the alignment is present on every frame,
-`indstk` is the row. The classes are not time chunks: `refine2D_nano` reassigns frames across the whole
-trajectory (a class's frames span a median of 11,600 frames; none is contiguous), and populations run
-from 0 to 50. `71-17/traj04` (649 classes, 185 selected) is missing its particle field: the delivered
-`ptcl2D_field.txt` is a byte copy of `cls2D_field.txt`; without it the class averages cannot be
-regenerated, so that dataset waits for a re-export. Two to four more labeled trajectories would make the
-leave-one-out evaluation meaningful; with two, the held-out dataset is the whole test.
+Checked on delivery (2026-10-28): all three are complete and consistent: `71-17/traj04` (649 classes,
+185 selected, 12,971 frames), `71-6/traj01` (684 classes, 425 selected, 13,662 frames) and `71-6/traj04`
+(684 classes, 264 selected): every class's population equals its frame count in `ptcl2D`, every frame's
+state equals its class's state, the alignment is present on every frame, `indstk` is the row,
+populations run from 0 to 50 (two empty classes in each `71-6` set). The classes are not time chunks:
+only 0.5% of consecutive frames share a class, the frames of one class are a median of 270 to 300 frames
+apart and span most of the trajectory. That is not what the code reads as doing: `refine2D_nano` sets
+`tseries=yes` and `nptcls_per_cls=20`, the class assignment starts as consecutive chunks
+(`init_tseries_refs`), and with `nptcls_per_cls` defined the greedy search is `strategy2D_tseries`, which
+lets a frame move only to the nearest populated class before or after its own per iteration, so after
+the 15 iterations of the run (`updatecnt`) a class should hold frames from within a few hundred frames of
+its chunk, not from everywhere. Either the labeled runs were made with other settings or an earlier
+build, or the constraint does not hold in practice; Phase 0 settles it with one `analysis2D_nano` on a
+hold-out trajectory and the same statistic. For this plan the scattered assignment is the easier case:
+a class is then a group of alike frames from the whole trajectory, as a cryo-EM class is, and its average
+is a cleaner object than a 20-frame time chunk. Three labeled trajectories are the minimum for
+leave-one-out; more make the held-out numbers mean more.
 
 What the delivered `cls2D` fields already say, before any image is read (class-level AUC against the
 selection, empty classes excluded): the stored class correlation `corr` (the frames' mean correlation to
