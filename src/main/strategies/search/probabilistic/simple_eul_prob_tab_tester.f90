@@ -13,9 +13,11 @@ use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_extras, prob_beta_at, prob_neff_readout, &
-    &prob_insert_table, prob_insert_pose, prob_insert_poses, &
+    &prob_insert_table, prob_insert_pose, prob_insert_poses, prob_insert_cone, &
     &PROB_NEFF_MIN_ROWS
 use simple_rnd,                only: seed_rnd_fixed
+use simple_sym,                only: sym
+use simple_oris,               only: oris
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
@@ -48,6 +50,8 @@ contains
         call test_draw_posterior_row()
         write(*,'(A)') 'test_draw_posterior_extras'
         call test_draw_posterior_extras()
+        write(*,'(A)') 'test_insert_cone'
+        call test_insert_cone()
         write(*,'(A)') 'test_insert_table_round_trip'
         call test_insert_table_round_trip()
         write(*,'(A)') 'test_insert_extras_multistate'
@@ -581,6 +585,7 @@ contains
         type(eul_prob_tab)      :: master
         type(prob_insert_table) :: back
         type(prob_insert_pose)  :: pose, pose_a
+        type(prob_insert_cone)  :: cone
         type(prob_dense_entry), allocatable :: rows(:,:)
         real,                   allocatable :: shifts(:,:,:), seeds(:,:)
         logical,                allocatable :: refined(:,:)
@@ -594,6 +599,29 @@ contains
         call master%new(params, build, pinds)
         call master%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_MS, 1)
         master%temps = 1. ! hot rows: extras occur
+        ! no cone set: no extra pose, the committed weight 1 everywhere
+        call seed_rnd_fixed(SEED_DRAW)
+        call master%ref_assign
+        nextra_tot = 0
+        do i = 1,NPTCLS_MS
+            nextra_tot = nextra_tot + master%insert_tab%get_nextra(i)
+            if( master%insert_tab%get_committed_weight(i) /= 1. ) nextra_tot = nextra_tot + 1
+        enddo
+        call assert_int(0, nextra_tot, 'no insertion cone: no extra pose and the committed weight 1 everywhere')
+        ! a cone of a ten-thousandth of an Angstrom: no pose but the committed one passes, so no extra pose
+        call cone%new([1.e-4, 1.e-4], 100., 1.)
+        call master%set_insert_cone(cone)
+        call seed_rnd_fixed(SEED_DRAW)
+        call master%ref_assign
+        nextra_tot = 0
+        do i = 1,NPTCLS_MS
+            nextra_tot = nextra_tot + master%insert_tab%get_nextra(i)
+        enddo
+        call assert_int(0, nextra_tot, 'a cone of the committed pose alone: no extra pose')
+        ! a resolution past the rim: the whole sphere, every in-plane angle and shift pass, the extras are the state's
+        ! refined entries
+        call cone%new([1000., 1000.], 100., 1.)
+        call master%set_insert_cone(cone)
         call seed_rnd_fixed(SEED_DRAW)
         call master%ref_assign
         nextra_tot = 0; nwrong_state = 0; nwrong_refined = 0; nwrong_committed = 0; nwrong_weight = 0; nwrong_dup = 0
@@ -653,8 +681,70 @@ contains
         enddo
         call assert_int(0, nextra_tot, 'topk 1: no extra pose and the committed weight 1 everywhere')
         call master%kill
+        call cone%kill
         call kill_round_trip_parts(params, build, NPARTS_MS)
     end subroutine test_insert_extras_multistate
+
+    !> The insertion cone: the half-angle whose arc at the rim of a particle of diameter diam is the resolution (10 A
+    !! at 100 A: 0.2 rad, 11.46 degrees) and the shift bound in pixels; no resolution gives no cone; a resolution past
+    !! the rim's half-circumference the whole sphere. On a 1000-direction C1 spiral with a 36-step rotation grid a
+    !! neighbour within the half-angle at the same in-plane angle and shift is within, a far direction is not, the
+    !! same direction a half-turn away in-plane is not (one step of 10 degrees is), a shift past the bound is not.
+    !! Modulo C4, equatorial azimuths 1 and 89 degrees are 2 degrees apart and pass a 3-degree cone that C1 rejects
+    subroutine test_insert_cone()
+        type(prob_insert_cone) :: cone
+        type(oris)             :: eul, eul2
+        type(sym), target      :: se1, se4
+        real    :: e1(3), e2(3), esym(3), euldist, inpldist
+        integer :: i, inear, ifar
+        call cone%new([10.], 100., 1.)
+        call assert_real(11.459156, cone%get_angle(1), 1.e-3, 'insertion cone: 10 A at a 100 A particle is 11.46 degrees')
+        call assert_true(cone%is_open(), 'insertion cone: open')
+        call cone%new([0.], 100., 1.)
+        call assert_true(.not. cone%is_open() .and. cone%get_angle(1) < 0., 'insertion cone: no resolution, no cone')
+        call cone%new([1000.], 100., 1.)
+        call assert_real(180., cone%get_angle(1), 1.e-3, 'insertion cone: a resolution past the rim is the whole sphere')
+        ! the C1 spiral
+        call se1%new('c1')
+        call eul%new(1000, is_ptcl=.false.)
+        call se1%build_refspiral(eul)
+        call cone%new([10.], 100., 1.)
+        call cone%set_space(eul, se1, 36)
+        call assert_true(cone%has_space(), 'insertion cone: the space is set')
+        inear = 0
+        ifar  = 0
+        e1    = eul%get_euler(1)
+        do i = 2,1000
+            e2 = eul%get_euler(i)
+            call se1%sym_dists(e1, e2, esym, euldist, inpldist)
+            if( inear == 0 .and. euldist > 3. .and. euldist < 11. ) inear = i
+            if( ifar  == 0 .and. euldist > 20. ) ifar = i
+            if( inear > 0 .and. ifar > 0 ) exit
+        enddo
+        call assert_true(inear > 0 .and. ifar > 0, 'insertion cone: a near and a far direction found on the spiral')
+        call assert_true(cone%within(1, 1, 1, [0.,0.], inear, 1, [0.,0.]), 'insertion cone: a direction within the half-angle is within')
+        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], ifar, 1, [0.,0.]), 'insertion cone: a far direction is not')
+        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], 1, 19, [0.,0.]), 'insertion cone: the same direction a half-turn away in-plane is another pose')
+        call assert_true(cone%within(1, 1, 1, [0.,0.], 1, 2, [0.,0.]), 'insertion cone: one rotation step (10 degrees) is within')
+        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], inear, 1, [11.,0.]), 'insertion cone: a shift past the bound is another pose')
+        call assert_true(cone%within(1, 1, 1, [0.,0.], inear, 1, [6.,6.]), 'insertion cone: a shift within the bound is within')
+        call assert_true(.not. cone%within(2, 1, 1, [0.,0.], inear, 1, [0.,0.]), 'insertion cone: a state without a cone admits nothing')
+        ! modulo C4: azimuths 1 and 89 degrees on the equator
+        call eul2%new(2, is_ptcl=.false.)
+        call eul2%set_euler(1, [1., 90., 0.])
+        call eul2%set_euler(2, [89., 90., 0.])
+        call cone%new([2.618], 100., 1.)   ! 3 degrees
+        call cone%set_space(eul2, se1, 36)
+        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], 2, 1, [0.,0.]), 'insertion cone: 88 degrees apart in C1')
+        call se4%new('c4')
+        call cone%set_space(eul2, se4, 36)
+        call assert_true(cone%within(1, 1, 1, [0.,0.], 2, 1, [0.,0.]), 'insertion cone: 2 degrees apart modulo C4')
+        call cone%kill
+        call eul%kill
+        call eul2%kill
+        call se1%kill
+        call se4%kill
+    end subroutine test_insert_cone
 
     !> The extra poses of the weighted insertion (draw_posterior_extras): kmax = 1 keeps the committed entry
     !! alone at weight 1 and leaves the random stream untouched; the extras are drawn without replacement from
@@ -1080,6 +1170,10 @@ contains
         params%nstates     = nstates
         params%prob_athres = 10.
         params%l_doshift   = .true.
+        ! the point group and the direction space, as the assignment's masters build them (build_eulspace): the
+        ! weighted insertion measures its candidates' poses in the direction space
+        call build%pgrpsyms%new(trim(params%pgrp))
+        call build%build_eulspace(params)
         call seed_rnd_fixed(SEED_TAB)
         allocate(build%spproj_field)
         call build%spproj_field%new(nptcls, is_ptcl=.true.)
@@ -1135,6 +1229,8 @@ contains
         enddo
         call build%spproj_field%kill
         deallocate(build%spproj_field)
+        call build%eulspace%kill
+        call build%pgrpsyms%kill
         deallocate(params, build)
     end subroutine kill_round_trip_parts
 

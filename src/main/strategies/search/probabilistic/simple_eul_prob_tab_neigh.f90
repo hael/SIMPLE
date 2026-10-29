@@ -709,6 +709,7 @@ contains
             integer, allocatable :: pos_c(:), kinds(:)
             logical, allocatable :: eligible(:)
             integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, nkept, istate_best, kmax, k, nk, nk_kept, r_loc
+            integer :: proj_r
             real    :: temp, dist
             logical :: l_extras
             maxcand = 0
@@ -726,6 +727,13 @@ contains
                 case DEFAULT
                     l_extras = kmax > 1
             end select
+            ! the insertion cone's geometry: the direction space, the point group and the rotation grid of the table
+            l_extras = l_extras .and. self%insert_cone%is_open()
+            if( l_extras )then
+                if( self%b_ptr%eulspace%get_noris() /= self%p_ptr%nspace ) THROW_HARD('the direction space is not built; the weighted insertion needs it; ref_assign_neigh')
+                if( self%seed_nrots < 1 ) THROW_HARD('the table carries no rotation grid; the weighted insertion needs it; ref_assign_neigh')
+                call self%insert_cone%set_space(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%seed_nrots)
+            endif
             call self%insert_tab%new(self%nptcls, self%pinds, merge(kmax, 1, l_extras))
             if( l_extras ) allocate(kinds(kmax), kw(kmax), cands(kmax), eligible(max(1,maxcand)))
             ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
@@ -759,11 +767,20 @@ contains
                 call record_seed_shift(self%assgn_map(i_loc), self%seed_shifts(:,i_loc), self%seed_has_sh(i_loc),&
                     &self%p_ptr%l_doshift)
                 self%assgn_map(i_loc)%frac = search_frac(i_loc)
-                ! the extras for the weighted insertion, without replacement from the refined candidates of the row,
-                ! drawn and weighted at the particle's own temperature, not the search's tempered one
+                ! the extras for the weighted insertion, without replacement from the refined candidates of the row
+                ! whose pose lies within the insertion cone of the committed one (rotation modulo the point group and
+                ! shift within what the map's resolution cannot tell apart at the particle's rim), drawn and weighted
+                ! at the particle's own temperature: the draw decides the hypothesis, the extras only spread the
+                ! particle over the poses the map resolves alike
                 if( l_extras )then
                     do r_loc = 1,n_loc
                         eligible(r_loc) = self%candidate_store%candidates(pos_c(r_loc))%has_sh
+                        if( .not. eligible(r_loc) ) cycle
+                        proj_r = modulo(self%candidate_store%candidates(pos_c(r_loc))%iref - 1, self%p_ptr%nspace) + 1
+                        eligible(r_loc) = self%insert_cone%within(istate_best, self%assgn_map(i_loc)%iproj, &
+                            &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], proj_r, &
+                            &self%candidate_store%candidates(pos_c(r_loc))%inpl, &
+                            &[self%candidate_store%candidates(pos_c(r_loc))%x, self%candidate_store%candidates(pos_c(r_loc))%y])
                     enddo
                     call draw_posterior_extras(n_loc, dists_c(1:n_loc), merge(self%temps(i_loc), huge(temp), self%temps(i_loc) > 0.), eligible(1:n_loc), &
                         &which, kmax, PROB_INSERT_WMIN, w, nk_kept, kinds, kw)

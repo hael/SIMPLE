@@ -53,9 +53,9 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'topk', 'num', 'Poses per particle in the reconstruction', &
         &'Probabilistic modes (refine=prob|prob_neigh): the poses a particle enters the reconstruction at, its committed '//&
-        &'draw and up to topk-1 extras sampled without replacement from the refined entries of its row, each with its '//&
-        &'share of the posterior at the particle''s own temperature over the sampled set, the data''s pose uncertainty and '//&
-        &'not the search''s tempered one (an extra below 1% is not inserted); 1 is the committed '//&
+        &'draw and up to topk-1 extras sampled without replacement from the refined entries of its row within the angle '//&
+        &'the map''s resolution cannot tell apart at the mask''s rim, each with its share of the posterior at the '//&
+        &'particle''s own temperature (an extra below 1% is not inserted); 1 is the committed '//&
         &'pose alone, the search unchanged; gridding backend{1}', 'poses{1}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&

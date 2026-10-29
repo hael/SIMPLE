@@ -2420,15 +2420,66 @@ the draws it discards cost a row scan each. A first thought of taking the
 per-iteration draw count from the n_eff readout at beta 1 was withdrawn
 the same day: it would decide globally what the mass rule already decides
 locally, for the price of a coupling between a diagnostic and the sampler.
-Hans's intent, "set topk=10 and let the process decide", is therefore the
-current tree; the dangers of running it so are the FSC-based stage exits
-and the tail's stall test, which Rao-Blackwellized half-maps trip more
-readily the more poses are kept (the shell knife edge above), the
-insertion cost at the hot stage entries (8-9 insertions per particle for
-two or three iterations, bounded by `topk`), and that at the cap the
-sampling takes the whole refined set, which is then the posterior
-expectation over it and fine. The readout: PfCRT at `topk=1`, `3` and
-`10` on the current code.
+Hans's intent, "set topk=10 and let the process decide", was therefore
+run as it stood; the dangers named beforehand were the FSC-based stage
+exits and the tail's stall test, the insertion cost at the hot stage
+entries, and that at the cap the sampling takes the whole refined set.
+
+**The `topk=10` readout (Hans, 2026-10-29, logs in
+`~/for_claude/topk_tests/topk10_latest`): every stage-3 map too bad;
+streptavidin 1 of 10 failed, which had not happened for a while, the nine
+better than anything from that set; exp_gate's finals extremely good;
+PorF and PfCRT unsatisfactory (PorF 5.2 and 6.0 A against the control's
+4.5-4.9).** The logs: at stage 3's first iteration the committed pose has
+0.09-0.22 of its particle (`PROB_TAB_INSERT`: 8 insertions per particle on
+PfCRT, n_eff 8 at beta 1), 0.6-0.7 three iterations later, 0.75-0.8 by the
+stage's end; the search statistics cool a little faster than the control's
+(PorF row-mode fraction 0.60 against 0.51 at the stage's third iteration,
+0.76 against 0.71 at its end) and end where the control ends; PorF's
+stage-3 resolution is a shell worse than the control's at the same pose
+statistics (10.4-10.8 A against 9.2-9.5); PfCRT's stage 3 again exits at
+its second iteration, this time because the first Rao-Blackwellized map
+overshoots (FSC 0.5 at 12.42 A, eight poses per particle) and the second,
+with the posterior sharpened to four, falls back to 12.94 and reads as "not
+gaining". So the second build was wrong in the other direction. Weighting
+at the particle's own temperature made the map the posterior expectation
+under the current model from the stage's first iteration: a map colder
+than the search, which no longer carried the draws' randomness (the hot
+committed pose had a tenth of its particle), so stage 3, which under the
+single draw re-derives the poses from a hot stochastic map, ran on a near
+argmax map of the stage-2 model with its errors, while the late stages,
+whose model is right, took the variance reduction as pure gain (the
+finals). The prediction of the paragraph above, "lock-in unlikely because
+the search still commits hot draws", missed that the search's exploration
+reaches the next iteration only through the map, and the weights had
+taken it out of the map. **The synthesis is Hans's criterion, as a
+neighbourhood rather than a count (built the same day):** the extras of a
+particle are drawn from the refined entries within the insertion cone of
+its committed pose (`prob_insert_cone`): the rotation between the two
+poses modulo the point group (`sym_dists`), direction and in-plane part
+alike, within the half-angle whose arc at the mask's rim is the map's
+FSC=0.5 resolution, and the shifts within that resolution in pixels (two
+such poses move the rim by less than the map resolves, so averaging over
+them smears nothing the map has), weighted by the posterior at the
+particle's own temperature renormalised within the cone; beyond the cone
+a pose is another hypothesis, which the draw decides, as under the single
+draw. (The first cut of the cone compared projection normals alone and
+without the point group, and read the direction space on the dense
+master, whose toolbox has none: 20.10's review caught all three the same
+day; the pose test, the symmetry and `builder%build_eulspace` are the
+answer.) The map keeps the draws'
+randomness at the level of the hypothesis and gains the sub-resolution
+averaging within it; the count follows from the three quantities Hans
+named (resolution, grid spacing, diameter: on the stage ladder, whose
+nspace tracks the low-pass limit, the cone holds the first two rings of
+the grid at every stage) and from the row (a hot draw far from the mode
+has no refined neighbour in its cone and enters alone, as in the control;
+a draw at the mode has the mode's refined neighbours), with `topk` the
+cap and the 1% rule the floor. The master measures the cone per state
+from the FSC on disk before the assignment (`insert_cone_from_fsc` in
+`prob_align_exec`, logged as `PROB_TAB_INSERT CONE`); no FSC, no cone, the
+committed pose alone. The readout: the four sets at `topk=10`, stage-3
+maps and finals against the control.
 
 ### 20.9 Review of the `prob_neff=3 shift_prior=yes` regression (2026-10-28)
 
@@ -2538,6 +2589,142 @@ comparison of 20.2 (prob_neff=0 against 3 on PorF and exp_gate, built at
 so findings 1 and 3 fall with the control. Finding 2, the prior's frame, was
 confirmed and fixed in 62ffd592 (19.11): the penalty follows the stored
 particle-frame shift at every rotation.
+
+### 20.10 Cone-restraint code review (2026-10-29)
+
+Reviewed the uncommitted cone changes over `d569d43ee` in
+`SIMPLE-for-codex`; production source was left unchanged. The split is
+appropriate: the alignment strategy reads the per-state FSC, a pure
+utility converts resolution and diameter to an angle, and the dense and
+neighbourhood tables filter extra reconstruction candidates. The new
+state is instance-owned and released in `kill`; `topk=1` bypasses the new
+work. The native and cropped grids have the same physical box size, so
+using native shell resolutions for a cropped FSC is consistent with the
+existing crop contract. The method is a local reconstruction regularizer;
+its geometric bound does not establish blur-free posterior marginalization.
+
+Findings, in priority order:
+
+1. **P1: the dense shared-memory path has no direction space.**
+   `run_prob_align` initializes its builder with `do3d=.false.`;
+   `new_common` does not create `eulspace`. The new unconditional normal
+   cache for `topk>1` calls `get_normal(1)` on that empty collection,
+   even with no FSC/cone. The existing `test_insert_extras_multistate`
+   fixture has the same missing dependency and now aborts. Establish the
+   direction-space dependency in the owning setup, without constructing
+   unnecessary volume objects; test the shared-memory entry as well as
+   direct table calls.
+2. **P2: direction proximity does not bound full-pose proximity.**
+   Both masks compare only projection normals. Candidates carry separately
+   sampled in-plane angles and separately refined shifts, and
+   `candidate_pose` inserts those actual values. Nearby directions with
+   an in-plane difference near 180 degrees, or a large shift difference,
+   still pass. A claim of local, sub-resolution averaging requires a bound
+   on the actual rotation and displacement in a common frame, accounting
+   for symmetry, or an explicit decision to marginalize those other modes.
+3. **P2: `2*res/diam` is not a no-blur criterion.**
+   It permits a rim displacement of about one whole spatial period at
+   frequency `1/res`; intermediate allowed separations can cancel that
+   frequency. A closed-form example with diameter 100 A and resolution
+   10 A gives an 11.459-degree half-angle. Two equal insertions separated
+   by 5.730 degrees can move a rim feature 4.992 A, reducing its Fourier
+   amplitude at 1/10 A to about 0.00262. This is a geometric counterexample,
+   not an end-to-end SIMPLE reconstruction measurement. Define an allowed
+   attenuation or phase-error budget, calibrate the angular bound against
+   it, and describe the present bound as a heuristic if retained. Angular
+   uncertainty produces frequency-dependent attenuation, consistent with
+   Russo and Passmore (2014), section 3.4:
+   https://pmc.ncbi.nlm.nih.gov/articles/PMC4136738/ .
+4. **P2: the normal dot products omit point-group equivalence.**
+   Near asymmetric-unit seams the current masks reject physical neighbours.
+   For C4, equatorial azimuths 1 and 89 degrees are 88 degrees apart in
+   the stored representatives but only 2 degrees apart modulo symmetry.
+   This makes the extra-pose support depend on the representative chosen.
+   Reuse the symmetry domain's neighbour/distance operations; cache the
+   reusable geometry outside the particle loop.
+
+Observed Mac validation: incremental existing-tree debug build
+(`make -C build -j8`) passed with no compiler warnings; registry, FLEX DAG,
+source-boundary checks and `git diff --check` passed. The focused
+`test=unit_pftc_align2D3D suite=3d_probability_table` run exited 2 at
+`simple_oris_getters.f90:234` (index 1 above upper bound 0). The full fast
+gate passed 14/15 in 27.9 s; only `unit_pftc_align2D3D` failed, with the
+same error. No install was performed after the failed gate. Logs are in
+`/private/tmp/simple-cone-review-{build,probability,fast-gate}.log`.
+Outstanding: the setup correction and rerun; finite nontrivial cone tests
+in both table families, symmetry seams, in-plane/shift ambiguity, FSC
+handoff and missing-FSC fallback; matched real-data stage-3/final map
+comparisons and synthetic truth/attenuation tests. No Linux/BOX run,
+commit or push was performed.
+
+*Answered the same day (2026-10-29).* Finding 1: the dense master builds
+the direction space itself (`builder%build_eulspace`, the part of the
+general toolbox's 3D build that the probabilistic masters need, called by
+`run_prob_align`); both tables verify it (`eulspace` of `nspace`
+directions, a rotation grid in the table) before setting the cone's
+geometry, and the round-trip fixture builds it as the masters do.
+Findings 2 and 4: the cone is a type (`prob_insert_cone`) whose `within`
+test takes the full pose, the rotation modulo the point group through
+`sym_dists` (direction part and in-plane part each within the half-angle)
+and the stored-frame shifts within the resolution in pixels, with the
+directions' Euler angles cached once per assignment and the point group a
+pointer to the builder's; both tables call it. `test_insert_cone` covers
+the angle and bound, a near and a far direction on a C1 spiral, the
+half-turn in-plane and the one-step in-plane, the shift bound, a state
+without a cone, and the C4 seam (1 and 89 degrees, 2 apart modulo
+symmetry). Finding 3 is noted in the policy as what the bound is, a
+heuristic at which the edge of the cone is a full period of the
+resolution's frequency; Hans's criterion is kept as stated and the
+real-data readout decides whether it needs halving.
+
+### 20.11 Cone-restraint re-review (2026-10-29)
+
+Reviewed the revised uncommitted implementation over `d569d43ee`.
+The direction-space setup is now explicit in `builder%build_eulspace` and
+`run_prob_align`; the no-FSC path avoids geometry access. Both table
+families share `prob_insert_cone`, which owns its state and caches its
+Euler space, borrows the builder's live symmetry object, and checks
+stored-frame shift differences. This is an appropriate ownership split.
+The ordinary C4 seam case is now covered. Production source was unchanged
+by this re-review.
+
+**Remaining P2: the new rotation test is not a full-pose distance.**
+`insert_cone_within` calls the Euler-triplet overload of `sym_dists`, whose
+`euler_inplrotdist` compares just the two psi coordinates. Together with
+the direction distance this is not invariant to Euler representation near
+a pole. In C1, directions `[1,1,0]` and `[181,1,0]` at the same rotation
+index have a 2-degree direction difference and a zero psi difference,
+so they pass an 11.459-degree cone despite their actual rotation matrices
+being 180 degrees apart. Changing the second psi to 180 degrees reverses
+the outcome: the matrices are only 2 degrees apart but the cone rejects
+them. A 36-step table supplies these psi values at indices 1 and 19
+(the code uses 360 rather than 0 at index 1, which is equivalent).
+These values were checked with an independent rotation-matrix emulation
+of SIMPLE's `Rz(psi) Ry(theta) Rz(phi)` convention. The existing tests do
+not cover these polar cases. Compare actual rotation matrices with a
+geodesic angle, minimized over the point group, and add both acceptance
+and rejection regressions. `ori%geodesic_dist_trace` already owns the
+single-pair geodesic calculation; `sym%apply` provides group equivalents.
+
+The resolution-sized displacement remains an empirical regularizer,
+which the added implementation note acknowledges. It does not establish
+negligible attenuation; the policy/source wording claiming that nothing
+resolved is smeared remains stronger than the bound supports. Independent
+bounds on rotation components and translation also do not constitute a
+single bound on total point displacement. Validate the retained scale
+against synthetic truth and matched real-data maps rather than FSC alone.
+
+Observed validation: another process was already running the full debug
+build, so no competing build was launched. Its fresh executable and
+completed fast-gate output were inspected: **15/15 passed, 27.42 s**.
+The independently rerun focused selector
+`test=unit_pftc_align2D3D suite=3d_probability_table` passed all **457**
+assertions (exit 0); log:
+`/private/tmp/simple-cone-rereview-probability.log`. Registry, FLEX DAG,
+source-boundary and whitespace checks passed. The build script installed
+the fresh executable. No implementation edits, Linux/BOX run, commit or
+push were performed by this review. Outstanding: correct and test the
+rotation metric; end-to-end cone handoff and scientific map validation.
 
 ## 21. Rulings of 2026-10-26, and the calibration on real data
 

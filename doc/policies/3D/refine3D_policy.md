@@ -583,15 +583,36 @@ emulation (`test_neff_readout`).
 In the probabilistic modes a particle may enter the reconstruction at more
 than its committed pose: with `topk` above 1 (default 1) the assignment
 draws, beside the committed pose, up to `topk - 1` extra entries of the
-particle's row WITHOUT replacement from the posterior at the particle's
-own temperature (untempered: the data's pose uncertainty, not the search's;
-the first build drew and weighted them at the search's factor 0.3, and on
-PfCRT that blur capped the resolution a stage early, 2026-10-29), from the
-refined entries only (the ones whose shift is their own; an unrefined
-entry's shift is the seed's, section 19.10 of the note), each draw from the
-remainder renormalised, the weights that posterior renormalised over the
-committed entry and the extras, and an extra whose weight falls below
-`PROB_INSERT_WMIN` (0.01) dropped (`draw_posterior_extras`). The committed pose is the single draw as before
+particle's row WITHOUT replacement from the refined entries (the ones whose
+shift is their own; an unrefined entry's shift is the seed's, section 19.10
+of the note) whose pose lies within the insertion cone of the committed
+one (`prob_insert_cone`): the rotation between the two poses, taken modulo
+the point group (`sym_dists`, the symmetry-equivalent of the candidate
+closest to the committed pose), no larger in its direction part nor in its
+in-plane part than the half-angle whose arc at the mask's rim is the state
+map's FSC=0.5 resolution, and the two stored-frame shifts no farther apart
+than that resolution in pixels. The master reads each state's FSC on disk
+before the assignment (`insert_cone_from_fsc`, logged as
+`PROB_TAB_INSERT CONE`; no FSC, no cone, the committed pose alone), and the
+table sets the cone's geometry at the assignment from the direction space,
+the point group and its rotation grid (`set_space`; the dense master,
+whose general toolbox has no 3D part, builds the direction space itself,
+`builder%build_eulspace`). Two poses within the cone move the particle's
+rim by less than the resolution, so averaging over them smears nothing the
+map resolves (a heuristic bound: at the cone's edge the displacement is a
+full period of the resolution's frequency); a pose beyond it is another
+hypothesis, which the draw decides as under the single draw. The draws and weights are the posterior at the
+particle's own temperature renormalised within the cone, and an extra
+whose weight falls below `PROB_INSERT_WMIN` (0.01) is dropped
+(`draw_posterior_extras`). The two builds before the cone (2026-10-29)
+failed in opposite directions: extras over the whole row at the search's
+factor 0.3 blurred the map and capped the resolution (PfCRT 5/10); over
+the whole row at the particle's own temperature they made the map the
+posterior expectation under the current model from a stage's first
+iteration, colder than the search and without the draws' randomness, so
+stage 3 could not re-derive the poses (every stage-3 map bad, PorF and
+PfCRT unsatisfactory) while the late stages gained (exp_gate, streptavidin
+finals). The committed pose is the single draw as before
 and keeps the search, its seeds, the shift prior and the convergence
 statistics unchanged; `topk=1` draws no random number, so the search and
 the reconstruction are bit for bit the single-draw run's. The master writes

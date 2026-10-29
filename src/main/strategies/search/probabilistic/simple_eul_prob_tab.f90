@@ -8,7 +8,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2, &
-    &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, draw_posterior_extras, prob_insert_table
+    &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, draw_posterior_extras, prob_insert_table, prob_insert_cone
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
@@ -68,6 +68,7 @@ type :: eul_prob_tab
     integer                     :: nrefs           !< reference number
     type(prob_fill_profile)     :: fill_profile    !< accumulated cost record of fill_tab_range (bench file)
     type(prob_insert_table)     :: insert_tab      !< the weighted insertion's extra poses of the assignment (topk > 1)
+    type(prob_insert_cone)      :: insert_cone     !< the weighted insertion's cone about the committed pose (set_insert_cone; unset: no extras)
     contains
     ! CONSTRUCTOR
     procedure :: new => new_global
@@ -92,6 +93,7 @@ type :: eul_prob_tab
     procedure :: ref_assign
     procedure, private :: warn_invalid_and_flat
     procedure :: write_assignment
+    procedure :: set_insert_cone
     procedure :: write_insert_table
     procedure :: read_insert_table
     ! REFERENCE INDEX MAPPING
@@ -899,7 +901,9 @@ contains
         real,    allocatable :: score_best(:), w(:), kw(:)
         logical, allocatable :: eligible(:)
         integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing, j, k, nkept, kmax
+        integer :: istate
         real    :: score, dist, temp, invalid_dist
+        logical :: l_cone
         invalid_dist = 0.1 * huge(invalid_dist)
         call self%warn_invalid_and_flat
         ! the state label: each particle's closest reference over all states, references outside in blocks
@@ -924,6 +928,13 @@ contains
         ! the weighted insertion's extras (topk > 1): drawn beside the committed draw from the refined entries of the row
         kmax = max(1, self%p_ptr%topk)
         call self%insert_tab%new(self%nptcls, self%pinds, kmax)
+        ! the insertion cone's geometry: the direction space, the point group and the rotation grid of the table
+        l_cone = kmax > 1 .and. self%insert_cone%is_open()
+        if( l_cone )then
+            if( self%b_ptr%eulspace%get_noris() /= self%p_ptr%nspace ) THROW_HARD('the direction space is not built; the weighted insertion needs it; ref_assign')
+            if( self%seed_nrots < 1 ) THROW_HARD('the table carries no rotation grid; the weighted insertion needs it; ref_assign')
+            call self%insert_cone%set_space(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%seed_nrots)
+        endif
         if( kmax > 1 ) allocate(kinds(kmax), kw(kmax), cands(kmax), eligible(self%nrefs))
         ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
         call neff%new(self%nptcls, PROB_NEFF_ROWS, PROB_NEFF_NMIN)
@@ -960,13 +971,20 @@ contains
             call self%assign_candidate(i, self%dense_candidate(assigned_iref, i))
             call record_seed_shift(self%assgn_map(i), self%seed_shifts(:,i), self%seed_has_sh(i), self%p_ptr%l_doshift)
             self%assgn_map(i)%frac = 100.
-            ! the extras for the weighted insertion: up to kmax - 1 further entries without replacement from the row
-            ! over its refined entries (the only ones whose shift is their own), drawn and weighted at the particle's
-            ! own temperature, not the search's tempered one: the map carries the data's pose uncertainty
-            if( kmax > 1 .and. which > 0 )then
+            ! the extras for the weighted insertion: up to kmax - 1 further entries without replacement from the row's
+            ! refined entries (the only ones whose shift is their own) whose pose lies within the insertion cone of
+            ! the committed one (rotation modulo the point group and shift within what the map's resolution cannot
+            ! tell apart at the particle's rim), drawn and weighted at the particle's own temperature: the draw
+            ! decides the hypothesis, the extras only spread the particle over the poses the map resolves alike
+            if( l_cone .and. which > 0 )then
+                istate = self%ssinds(si)
                 eligible(1:nblock) = .false.
                 do j = self%refined_offsets(i), self%refined_offsets(i+1) - 1
-                    if( self%refined(j)%ri >= ifirst .and. self%refined(j)%ri <= ilast ) eligible(self%refined(j)%ri - ifirst + 1) = .true.
+                    if( self%refined(j)%ri < ifirst .or. self%refined(j)%ri > ilast ) cycle
+                    k = self%refined(j)%ri - ifirst + 1
+                    eligible(k) = self%insert_cone%within(istate, self%assgn_map(i)%iproj, self%assgn_map(i)%inpl, &
+                        &[self%assgn_map(i)%x, self%assgn_map(i)%y], k, self%inpls(i,self%refined(j)%ri), &
+                        &[self%refined(j)%x, self%refined(j)%y])
                 enddo
                 call draw_posterior_extras(nblock, self%dists(i,ifirst:ilast), merge(self%temps(i), huge(temp), self%temps(i) > 0.), eligible(1:nblock), &
                     &which, kmax, PROB_INSERT_WMIN, w, nkept, kinds, kw)
@@ -1417,6 +1435,15 @@ contains
     end subroutine write_assignment
 
     !> the weighted insertion's extra poses of the assignment (topk > 1) to a binary file the workers read
+    !> the weighted insertion's cone about the committed pose (per state: the state map's resolution at the mask's
+    !! rim, the shift bound); unset, no extra pose is drawn. The geometry (direction space, point group, rotation
+    !! grid) is this table's and is set at the assignment
+    subroutine set_insert_cone( self, cone )
+        class(eul_prob_tab),     intent(inout) :: self
+        class(prob_insert_cone), intent(in)    :: cone
+        self%insert_cone = cone
+    end subroutine set_insert_cone
+
     subroutine write_insert_table( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         class(string),       intent(in) :: binfname
@@ -1491,6 +1518,7 @@ contains
         if( allocated(self%refined_offsets) ) deallocate(self%refined_offsets)
         if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)
         call self%insert_tab%kill
+        call self%insert_cone%kill
         if( allocated(self%seed_shifts)  ) deallocate(self%seed_shifts)
         if( allocated(self%seed_has_sh)  ) deallocate(self%seed_has_sh)
         if( allocated(self%temps)        ) deallocate(self%temps)

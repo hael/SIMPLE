@@ -2,10 +2,12 @@
 module simple_eul_prob_tab_utils
 use, intrinsic :: iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_defs,      only: TINY, dp, DPI, logfhandle
+use simple_defs,      only: TINY, dp, DPI, PI, logfhandle
+use simple_linalg,    only: rad2deg
 use simple_error,     only: simple_exception
 use simple_math,      only: hpsort
 use simple_oris,      only: oris
+use simple_sym,       only: sym
 use simple_rnd,       only: ran3
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 use simple_string,    only: string
@@ -23,7 +25,7 @@ public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_extras
 public :: prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
-public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files
+public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
 private
 #include "simple_local_flags.inc"
 
@@ -126,6 +128,35 @@ contains
     procedure :: has   => insert_poses_has
     procedure :: kill  => insert_poses_kill
 end type prob_insert_poses
+
+!> The weighted insertion's cone: per state, the half-angle whose arc at the mask's rim is the state map's FSC=0.5
+!! resolution and a shift bound of the same displacement, with the geometry the test needs (the directions' Euler
+!! angles, the rotation grid, the point group; set_space, once per assignment). A candidate pose is within the cone
+!! of the committed one when the rotation between them, taken modulo the point group (sym_dists: the
+!! symmetry-equivalent of the candidate closest to the committed pose), is no larger than the half-angle in its
+!! direction and in its in-plane part alike, and the two shifts are no farther apart than the bound: three
+!! displacements of the particle's rim that the map cannot resolve, so a particle averaged over such poses is smeared
+!! by nothing the map has. Beyond the cone a pose is another hypothesis, which the search's draw decides: the first
+!! builds of the insertion averaged over the whole row, at the search's temperature (a blur that capped the
+!! resolution) and then at the particle's own (a map colder than the search, which no longer carried the draws'
+!! exploration, so stage 3 could not re-derive the poses), 2026-10-29. A state without a resolution has no cone and
+!! its particles enter at the committed pose alone
+type :: prob_insert_cone
+    private
+    real,    allocatable :: ang(:)     !< (nstates) the half-angle, degrees; below zero: no cone
+    real,    allocatable :: shmax(:)   !< (nstates) the shift bound, pixels of the stored shifts
+    real,    allocatable :: euls(:,:)  !< (3,nspace) the directions' Euler angles, e3 zero
+    class(sym),  pointer :: se => null()
+    integer :: nspace = 0, nrots = 0
+contains
+    procedure :: new       => insert_cone_new
+    procedure :: set_space => insert_cone_set_space
+    procedure :: is_open   => insert_cone_is_open
+    procedure :: has_space => insert_cone_has_space
+    procedure :: get_angle => insert_cone_get_angle
+    procedure :: within    => insert_cone_within
+    procedure :: kill      => insert_cone_kill
+end type prob_insert_cone
 
 ! One entry of the dense table, a particle and a reference: the distance and the in-plane index. No default values:
 ! the fill and the read write every entry.
@@ -902,6 +933,99 @@ contains
         if( which == 0 ) which = imin ! rounding at the top of the cumulative sum
         dist = dists(which)
     end subroutine draw_posterior_row
+
+    ! ---- the weighted insertion's cone ------------------------------------------------------------------------
+
+    !> per state the half-angle whose arc at the rim of a particle of diameter diam is the resolution res(s) (FSC 0.5,
+    !! Angstrom; 2 res / diam radians, capped at the half-turn) and the shift bound res(s) / smpd (pixels); a state
+    !! with res <= 0, or no diameter, has no cone
+    subroutine insert_cone_new( self, res, diam, smpd )
+        class(prob_insert_cone), intent(inout) :: self
+        real,                    intent(in)    :: res(:), diam, smpd
+        integer :: s
+        call self%kill
+        allocate(self%ang(size(res)), source=-1.)
+        allocate(self%shmax(size(res)), source=0.)
+        do s = 1,size(res)
+            if( .not. (res(s) > 0. .and. diam > 0. .and. smpd > 0.) ) cycle
+            self%ang(s)   = rad2deg(min(2. * res(s) / diam, PI))
+            self%shmax(s) = res(s) / smpd
+        enddo
+    end subroutine insert_cone_new
+
+    !> the geometry of the test: the directions' Euler angles (eulspace, copied once), the point group (a pointer to
+    !! the caller's, which outlives this object) and the rotation grid's size (the in-plane index i is the angle
+    !! (i - 1) 360 / nrots)
+    subroutine insert_cone_set_space( self, eulspace, se, nrots )
+        class(prob_insert_cone),   intent(inout) :: self
+        class(oris),               intent(in)    :: eulspace
+        class(sym), target,        intent(in)    :: se
+        integer,                   intent(in)    :: nrots
+        integer :: i
+        if( allocated(self%euls) ) deallocate(self%euls)
+        self%nspace = eulspace%get_noris()
+        self%nrots  = nrots
+        allocate(self%euls(3,max(1,self%nspace)), source=0.)
+        do i = 1,self%nspace
+            self%euls(:,i) = eulspace%get_euler(i)
+            self%euls(3,i) = 0.
+        enddo
+        self%se => se
+    end subroutine insert_cone_set_space
+
+    !> whether any state has a cone
+    pure logical function insert_cone_is_open( self )
+        class(prob_insert_cone), intent(in) :: self
+        insert_cone_is_open = .false.
+        if( allocated(self%ang) ) insert_cone_is_open = any(self%ang >= 0.)
+    end function insert_cone_is_open
+
+    pure logical function insert_cone_has_space( self )
+        class(prob_insert_cone), intent(in) :: self
+        insert_cone_has_space = self%nspace > 0 .and. self%nrots > 0 .and. associated(self%se)
+    end function insert_cone_has_space
+
+    !> the half-angle of state istate's cone, degrees (below zero: none)
+    pure real function insert_cone_get_angle( self, istate )
+        class(prob_insert_cone), intent(in) :: self
+        integer,                 intent(in) :: istate
+        insert_cone_get_angle = -1.
+        if( .not. allocated(self%ang) ) return
+        if( istate < 1 .or. istate > size(self%ang) ) return
+        insert_cone_get_angle = self%ang(istate)
+    end function insert_cone_get_angle
+
+    !> whether the pose (direction proj_r, in-plane index inpl_r, stored-frame shift sh_r) lies within state
+    !! istate's cone of the committed pose (proj_c, inpl_c, sh_c): shifts within the bound; the rotation between
+    !! the two poses, modulo the point group, within the half-angle in its direction part and its in-plane part
+    logical function insert_cone_within( self, istate, proj_c, inpl_c, sh_c, proj_r, inpl_r, sh_r ) result( l_in )
+        class(prob_insert_cone), intent(in) :: self
+        integer,                 intent(in) :: istate, proj_c, inpl_c, proj_r, inpl_r
+        real,                    intent(in) :: sh_c(2), sh_r(2)
+        real :: e_c(3), e_r(3), e_sym(3), euldist, inpldist, ang
+        l_in = .false.
+        ang  = self%get_angle(istate)
+        if( ang < 0. .or. .not. self%has_space() ) return
+        if( proj_c < 1 .or. proj_c > self%nspace .or. proj_r < 1 .or. proj_r > self%nspace ) return
+        if( inpl_c < 1 .or. inpl_c > self%nrots  .or. inpl_r < 1 .or. inpl_r > self%nrots  ) return
+        if( hypot(sh_r(1) - sh_c(1), sh_r(2) - sh_c(2)) > self%shmax(istate) ) return
+        e_c    = self%euls(:,proj_c)
+        e_c(3) = 360. - real(inpl_c - 1) * 360. / real(self%nrots)
+        e_r    = self%euls(:,proj_r)
+        e_r(3) = 360. - real(inpl_r - 1) * 360. / real(self%nrots)
+        call self%se%sym_dists(e_c, e_r, e_sym, euldist, inpldist)
+        l_in = euldist <= ang .and. inpldist <= ang
+    end function insert_cone_within
+
+    subroutine insert_cone_kill( self )
+        class(prob_insert_cone), intent(inout) :: self
+        if( allocated(self%ang)   ) deallocate(self%ang)
+        if( allocated(self%shmax) ) deallocate(self%shmax)
+        if( allocated(self%euls)  ) deallocate(self%euls)
+        self%se => null()
+        self%nspace = 0
+        self%nrots  = 0
+    end subroutine insert_cone_kill
 
     !> Extra poses for the weighted insertion (topk > 1): up to kmax - 1 further entries of a row, drawn WITHOUT
     !! replacement from the posterior p_r proportional to exp(-temp (dist_r - dist_min)) over the eligible entries

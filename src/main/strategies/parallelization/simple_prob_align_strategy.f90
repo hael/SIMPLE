@@ -16,6 +16,42 @@ public :: write_prob_align_bench
 
 contains
 
+    !> The weighted insertion's cone, from each state's FSC on disk (the previous iteration's half-maps, or the
+    !! previous stage's at a stage's first iteration): the half-angle whose arc at the mask's rim is the FSC=0.5
+    !! resolution and a shift bound of the same displacement (prob_insert_cone). A state without an FSC gets no
+    !! cone, so its particles enter at their committed pose alone. The resolution per shell is the box's physical
+    !! size over the shell index, the same at every crop, so the FSC of a previous crop reads correctly against the
+    !! uncropped grid. Logged per state
+    function insert_cone_from_fsc( params ) result( cone )
+        use simple_refine3D_fnames,    only: refine3D_fsc_fname
+        use simple_eul_prob_tab_utils, only: prob_insert_cone
+        class(parameters), intent(in) :: params
+        type(prob_insert_cone) :: cone
+        real, allocatable :: res05(:), fsc(:), res(:)
+        type(string) :: fname
+        real    :: fsc05, fsc0143
+        integer :: s
+        allocate(res05(params%nstates), source=0.)
+        res = get_resarr(params%box, params%smpd)
+        do s = 1,params%nstates
+            fname = refine3D_fsc_fname(s)
+            if( .not. file_exists(fname) ) cycle
+            fsc = file2rarr(fname)
+            if( size(fsc) < 1 .or. size(fsc) > size(res) ) cycle
+            call get_resolution(fsc, res(:size(fsc)), fsc05, fsc0143)
+            res05(s) = fsc05
+            deallocate(fsc)
+        enddo
+        call cone%new(res05, params%mskdiam, params%smpd)
+        do s = 1,params%nstates
+            if( cone%get_angle(s) < 0. ) cycle
+            write(logfhandle,'(A,I0,A,F7.2,A,F6.2,A,F5.2,A)') '>>> PROB_TAB_INSERT CONE: state ', s, ', FSC=0.5 at ', &
+                &res05(s), ' A: half-angle ', cone%get_angle(s), ' degrees and shift bound ', res05(s) / params%smpd, &
+                &' pixels about the committed pose'
+        enddo
+        call fname%kill
+    end function insert_cone_from_fsc
+
     !> prob_align on its own parameters and builder, built from cline: samples the particles to update, fills the dense
     !! probability table (in process through the caller's table commander xprob_tab, or on nparts partitions), assigns
     !! and writes the assignment
@@ -31,6 +67,9 @@ contains
         call cline%set('mkdir',  'no')
         call cline%set('stream', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        ! the direction space, which the general toolbox without 3D leaves unbuilt: the weighted insertion's cone
+        ! measures its candidates' poses in it
+        call build%build_eulspace(params)
         if( L_BENCH_GLOB ) rt_setup = toc(t_setup)
         call prob_align_exec(params, build, cline, params%nthr, xprob_tab=xprob_tab, rt_setup=rt_setup)
         call build%kill_general_tbox
@@ -115,6 +154,7 @@ contains
             rt_read = toc(t)
             t       = tic()
         endif
+        if( params%topk > 1 ) call eulprob_obj_glob%set_insert_cone(insert_cone_from_fsc(params))
         call eulprob_obj_glob%ref_assign
         if( L_BENCH_GLOB )then
             rt_assign = toc(t)
@@ -225,6 +265,7 @@ contains
             rt_read = toc(t)
             t       = tic()
         endif
+        if( params%topk > 1 ) call eulprob_obj_glob_neigh%set_insert_cone(insert_cone_from_fsc(params))
         call eulprob_obj_glob_neigh%ref_assign
         if( L_BENCH_GLOB )then
             rt_assign = toc(t)

@@ -62,6 +62,7 @@ type :: builder
     ! LOW-LEVEL BUILDERS
     procedure                           :: build_spproj
     procedure                           :: build_general_tbox
+    procedure                           :: build_eulspace
     procedure                           :: new_vols
     procedure                           :: kill_general_tbox
     procedure                           :: build_strategy3D_tbox
@@ -264,8 +265,7 @@ contains
         if( ddo3d )then
             select case(trim(params%refine))
                 case DEFAULT
-                    call self%eulspace%new(params%nspace, is_ptcl=.false.)
-                    call self%pgrpsyms%build_refspiral(self%eulspace)
+                    call self%build_eulspace(params)
                     if( params%l_neigh .and. (.not. l_direct_prob_neigh) )then
                         call eulspace_sub%new(params%nspace_sub, is_ptcl=.false.)
                         call self%pgrpsyms%build_refspiral(eulspace_sub)
@@ -312,6 +312,17 @@ contains
         self%general_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
+
+    !> the discrete projection direction space: nspace directions, the point group's spiral; the general toolbox
+    !! builds it with its 3D part, and the probabilistic alignment's masters, which build the toolbox without 3D,
+    !! build it on their own since the weighted insertion measures its candidates' poses in it
+    subroutine build_eulspace( self, params )
+        class(builder),    intent(inout) :: self
+        class(parameters), intent(in)    :: params
+        if( self%pgrpsyms%get_nsym() < 1 ) THROW_HARD('the point group is not built; build_eulspace')
+        call self%eulspace%new(params%nspace, is_ptcl=.false.)
+        call self%pgrpsyms%build_refspiral(self%eulspace)
+    end subroutine build_eulspace
 
     !> the general toolbox's volumes at box_crop, made again after a reprojection model's clean-up released them
     subroutine new_vols( self, params )
