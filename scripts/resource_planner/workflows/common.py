@@ -65,36 +65,41 @@ class ImageAdapter:
 
 
 def export_shared(adapter, ctx, plan, records):
-    expected={(size,nthr,repeat) for size in adapter.cases(ctx.args)
-              for nthr,_ in adapter.candidates(ctx.args) for repeat in range(plan['repetitions']+1)}
-    actual=[(r['size'],r['nthr'],r['repeat']) for r in records]
+    expected={(size,nthr,workers,repeat) for size in adapter.cases(ctx.args)
+              for nthr,workers in adapter.candidates(ctx.args) for repeat in range(plan['repetitions']+1)}
+    actual=[(r['size'],r['nthr'],r.get('workers', 1),r['repeat']) for r in records]
     if set(actual)!=expected or len(actual)!=len(expected):raise ValueError('incomplete/duplicate calibration observations')
     summary=[]
     for size in adapter.cases(ctx.args):
-        for nthr,_ in adapter.candidates(ctx.args):
-            rows=[r for r in records if r['size']==size and r['nthr']==nthr and not r['warmup']]
+        for nthr,workers in adapter.candidates(ctx.args):
+            rows=[r for r in records if r['size']==size and r['nthr']==nthr and r.get('workers', 1)==workers and not r['warmup']]
             if len(rows)!=plan['repetitions']:raise ValueError('incomplete calibration observations')
-            summary.append({'size':size,'nthr':nthr,'nparts':1,'ncunits':1,
+            summary.append({'size':size,'nthr':nthr,'nparts':workers,'ncunits':workers,
                 'median_wall_seconds':statistics.median(r['wall_seconds'] for r in rows),
+                'min_wall_seconds':min(r['wall_seconds'] for r in rows),
+                'max_wall_seconds':max(r['wall_seconds'] for r in rows),
+                'timing_cv':(statistics.stdev(r['wall_seconds'] for r in rows) / statistics.mean(r['wall_seconds'] for r in rows)) if len(rows)>1 else None,
                 'max_rss_mib':max(r['peak_rss_mib'] for r in rows),
                 'quality_qualified':all(r['validation']['quality_qualified'] for r in rows)})
     (ctx.root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
-    if plan['repetitions']<3 or not all(r['passed'] and r['validation']['quality_qualified'] for r in records):return None
+    if not all(r['passed'] and r['validation']['quality_qualified'] for r in records):return None
     for path,digest in plan['binaries'].items():
         if file_hash(Path(path))!=digest:raise ValueError('executable changed during calibration')
     settings={}
     for size in adapter.cases(ctx.args):
         rows=[r for r in summary if r['size']==size]
         fastest=min(r['median_wall_seconds'] for r in rows)
-        selected=min((r for r in rows if r['median_wall_seconds']<=fastest*1.05),key=lambda r:r['nthr'])
-        settings[str(size)]={'nthr':selected['nthr'],'nparts':1,'ncunits':1,
+        selected=min((r for r in rows if r['median_wall_seconds']<=fastest*1.05),key=lambda r:(r['nthr']*r['ncunits'], r['nthr']))
+        settings[str(size)]={'nthr':selected['nthr'],'nparts':selected['nparts'],'ncunits':selected['ncunits'],
             'job_memory_per_task_mib':max(1024,math.ceil(selected['max_rss_mib']*1.5/256)*256),
-            'median_wall_seconds':selected['median_wall_seconds']}
+            'median_wall_seconds':selected['median_wall_seconds'],
+            'timing_cv':selected['timing_cv'], 'measured_repetitions':plan['repetitions']}
     profile={'schema_version':1,'profile_type':'simple_resource_profile','commander':adapter.name,
         'auto_apply':False,'qualification':adapter.qualification,'hardware':plan['hardware'],
         'cpu_ids':plan['cpus'],'binary_sha256':plan['binaries'],'workload':plan['workload'],
         'sizes':settings,'evidence':str(ctx.root),'seed':20261015,
-        'resource_policy':{'execution_mode':'shared','partition_policy_measured':False,
+        'resource_policy':{'execution_mode':'shared','partition_policy_measured':any(r['ncunits']>1 for r in summary),
+            'memory_scope':'conservative process-peak bound, including master and children for molecular runs',
             'reserve_memory_min_mib':4096,'reserve_memory_fraction':0.1,
             'explicit_job_parameters_take_precedence':True}}
     path=ctx.root/'desktop_profile.json'

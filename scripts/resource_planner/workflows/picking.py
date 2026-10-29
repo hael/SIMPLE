@@ -38,7 +38,7 @@ class PickAdapter(SpatialAdapter):
     def cases(self,args):return args.sizes
 
     def science(self,args):
-        return {'picker':'new','moldiam':args.box*0.6*1.3,'pcontrast':'black',
+        return {'picker':'segdiam','moldiam_max':args.box*0.6*1.3,'pcontrast':'black',
                 'pick_roi':'no','backgr_subtr':'no','lp':20,'ndev':2.0,'thres':0}
 
     def metadata(self,args):

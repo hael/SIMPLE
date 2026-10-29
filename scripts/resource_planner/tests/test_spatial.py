@@ -109,5 +109,24 @@ class SpatialChecks(unittest.TestCase):
             self.assertFalse(saved['auto_apply'])
             with self.assertRaises(ValueError):export_shared(adapter,ctx,plan,records[:-1])
 
+    def test_worker_sweep_exports_selected_partition_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ctx = FakeContext(root)
+            adapter = PickAdapter()
+            adapter.candidates = lambda args: [(4, 1), (4, 2)]
+            plan = {'repetitions': 1, 'binaries': {}, 'hardware': {},
+                    'cpus': list(range(8)), 'workload': {}}
+            records = [{'size':4096, 'nthr':4, 'workers':workers, 'repeat':i,
+                        'warmup':i == 0, 'wall_seconds':10/workers,
+                        'peak_rss_mib':800*workers, 'passed':True,
+                        'validation':{'quality_qualified':True}}
+                       for workers in (1, 2) for i in (0, 1)]
+            saved = json.loads(export_shared(adapter, ctx, plan, records).read_text())
+            self.assertEqual(saved['sizes']['4096']['nparts'], 2)
+            self.assertEqual(saved['sizes']['4096']['ncunits'], 2)
+            self.assertTrue(saved['resource_policy']['partition_policy_measured'])
+            self.assertIsNone(saved['sizes']['4096']['timing_cv'])
+
 
 if __name__=='__main__':unittest.main()

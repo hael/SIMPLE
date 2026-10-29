@@ -18,7 +18,7 @@ class WorkflowChecks(unittest.TestCase):
         parser = argparse.ArgumentParser()
         add_options(parser)
         for flags, expected in [([], (180, 1800)),
-                                (['--full'], (600, 1800)),
+                                (['--full'], (3600, 21600)),
                                 (['--timeout', '700'], (700, 700)),
                                 (['--timeout', '700', '--solve3d-timeout', '1200'], (700, 1200))]:
             args = parser.parse_args(flags)
@@ -44,6 +44,7 @@ class WorkflowChecks(unittest.TestCase):
         args.particles, args.box, args.sizes, args.threads = 500, 128, [4096], [2,4]
         args.extr_lim, args.nits_per_stage = 4, 1
         args.simple_exec = Path('/installed/simple_exec')
+        args.fixture_python = 'python3'
         args._simulation_cache = {}
         return args
 
@@ -52,6 +53,9 @@ class WorkflowChecks(unittest.TestCase):
         self.assertEqual(args.fixture_source, 'simulated-workflow')
         adapters = adapters_for(args)
         for name, adapter in adapters.items():
+            if name in ('pick', 'solve2D'):
+                self.assertNotIsInstance(adapter, WorkflowAdapter)
+                continue
             self.assertIsInstance(adapter, WorkflowAdapter)
             self.assertEqual(adapter.seed, 20260923)
             self.assertEqual(adapter.candidates(args), [(2,1),(4,1)])
@@ -117,6 +121,9 @@ class WorkflowChecks(unittest.TestCase):
             native = [a for a in ctx.calls if a[1].startswith('prg=')]
             self.assertEqual([a[1] for a in native], ['prg=new_project', 'prg=import_particles'])
             self.assertIn('ctf=no', native[-1])
+            for option in ('kv=300', 'cs=2.7', 'fraca=0.1'):
+                self.assertIn(option, native[-1])
+            self.assertEqual(simulation.snapshot('solve3D'), simulation.snapshots['solve2D'])
             self.assertIn('stk='+str(simulation.root/'particles.mrcs'), native[-1])
             self.assertEqual(len((simulation.root/'halves.txt').read_text().splitlines()), 500)
             self.assertEqual(simulation.truth['particle_stack'], str(simulation.root/'particles.mrcs'))
@@ -208,6 +215,52 @@ with tempfile.TemporaryDirectory() as directory:
 '''
         result = subprocess.run([python,'-c',code,helper_dir],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
+
+    def test_quick_and_full_3d_have_explicit_different_scope(self):
+        args = self.args()
+        args.full = False
+        self.assertEqual(science('solve3D', args)['nstages'], 4)
+        args.full = True
+        self.assertNotIn('nstages', science('solve3D', args))
+
+    def test_ctf_consumed_input_is_restored_between_candidates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            class Context:
+                args = self.args()
+                def command(self, argv, work, label, timeout=60):
+                    if label == 'validate':
+                        (work/'workflow_validation.json').write_text('{"passed":true,"quality_qualified":true}')
+            ctx = Context()
+            ctx.root = root/'ctf'
+            simulation = Simulation(ctx, 4096)
+            simulation.root = root/'simulation'
+            simulation.root.mkdir()
+            project = simulation.root/'calibration.simple'
+            project.write_bytes(b'project')
+            consumed = simulation.root/'movie_000_forctf.mrc'
+            consumed.write_bytes(b'identical CTF input')
+            fixture = {'project':project, 'simulation':simulation}
+            adapter = WorkflowAdapter('ctf_estimate')
+            for index in range(2):
+                work = root/str(index)
+                work.mkdir()
+                adapter.jobs(ctx, fixture, work, 4, 1)
+                consumed.unlink()  # Native CTF estimation consumes this file.
+                self.assertTrue(adapter.validate(ctx, fixture, work)['quality_qualified'])
+                self.assertEqual(consumed.read_bytes(), b'identical CTF input')
+                self.assertFalse(list(work.glob('*.backup')))
+
+    def test_full_partitions_fit_input_and_cpu_budget(self):
+        args = self.args()
+        args.full = True
+        args.particles = 2000
+        args.sizes = [4096, 8192]
+        args.threads = [1, 2, 4, 8, 16]
+        candidates = WorkflowAdapter('motion_correct').candidates(args)
+        self.assertIn((4, 4), candidates)
+        self.assertNotIn((8, 4), candidates)
+        self.assertEqual(WorkflowAdapter('solve3D').candidates(args), [(t, 1) for t in args.threads])
 
 
 if __name__=='__main__':

@@ -19,10 +19,15 @@ def header(box, count, smpd):
 
 
 def shape(x,y,label):
-    # Distinct radial frequency bands are rotation invariant and avoid near-identical
-    # class templates in the lightweight restart benchmark.
-    radius=np.sqrt(x*x+y*y)
-    return np.exp(-(radius/0.55)**4)*np.cos((label+2)*np.pi*radius/0.7)
+    # Fixed asymmetric low-frequency shapes exercise alignment without ambiguous
+    # rotationally symmetric rings or nearly identical frequency bands.
+    rng = np.random.RandomState(8200 + label)
+    data = np.zeros_like(x)
+    for index in range(6):
+        cx, cy = rng.uniform(-0.4, 0.4, 2)
+        width = rng.uniform(0.06, 0.12)
+        data += rng.uniform(0.5, 1.5) * np.exp(-((x-cx)**2+(y-cy)**2)/(2*width**2))
+    return data
 
 
 
@@ -54,7 +59,7 @@ def generate(root, count, box):
     rows=['class=%d state=1 e3=0 eo=%d'%(int(label)+1,i%2) for i,label in enumerate(seed_labels)]
     (root/'seed.txt').write_text('\n'.join(rows)+'\n')
     (root/'truth.json').write_text(json.dumps({'nptcls':count,'box':box,'ncls':8,
-        'smpd':1.3,'noise_sigma':0.03,'fixture_version':4,'seed':20261015,'numpy_version':np.__version__,
+        'smpd':1.3,'noise_sigma':0.03,'fixture_version':5,'seed':20261015,'numpy_version':np.__version__,
         'labels':(labels+1).tolist(),'seed_labels':(seed_labels+1).tolist(),'ctf':'no','shifts':'none','rotations':'none'},indent=2)+'\n')
 
 

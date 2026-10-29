@@ -34,7 +34,11 @@ def science(name, args):
         return {**common, 'mskdiam': 180, 'ncls': 8, 'extr_lim': args.extr_lim,
                 'nits_per_stage': args.nits_per_stage}
     pgrp = 'c3' if args.molecule == '6vxx' else 'd2'
-    return {**common, 'mskdiam': 180, 'pgrp': pgrp, 'pgrp_start': pgrp}
+    settings = {**common, 'mskdiam': 180, 'pgrp': pgrp, 'pgrp_start': pgrp}
+    if not getattr(args, 'full', False):
+        settings.update(nstages=4, balance='none', nsample=args.particles,
+                        filt_mode='none', automsk='no', force_lp_range='yes', lpstart=30, lpstop=15)
+    return settings
 
 
 def command(ctx, name, project, nthr):
@@ -88,8 +92,10 @@ class Simulation:
             self.native('new_project', self.root, 'new_project', projname='calibration', qsys_name='local')
             project = self.root / 'calibration/calibration.simple'
             self.native('import_particles', project.parent, 'import', projfile=project,
-                        stk=stack, smpd=smpd, ctf='no', oritab=halves, oritype='ptcl2D')
+                        stk=stack, smpd=smpd, ctf='no', kv=300, cs=2.7, fraca=0.1, oritab=halves, oritype='ptcl2D')
             self.snapshots['solve2D'] = project
+            if not getattr(args, 'full', False):
+                self.snapshots['solve3D'] = project
             return
         # Limit occupied area to 10%, keeping random non-overlapping placement cheap.
         per_movie = max(1, int(self.size**2 * 0.10 / args.box**2))
@@ -166,8 +172,8 @@ class WorkflowAdapter:
 
     def __init__(self, name):
         self.name = name
-        self.qualification = ('provisional molecular simulated_workflow; local one-partition command; '
-                              'real data and distributed scaling unqualified')
+        self.qualification = ('provisional molecular simulated_workflow; single-node master; '
+                              'real data and multi-node scaling unqualified')
         if name == 'solve2D':
             self.qualification += '; structural class-output checks only, classification accuracy unqualified'
 
@@ -175,16 +181,25 @@ class WorkflowAdapter:
         return args.sizes if self.name in STAGES[:3] else [args.box]
 
     def candidates(self, args):
+        if getattr(args, '_nodes', None):
+            return [(t, 1) for t in args.threads]
+        if args.full and self.name in ('motion_correct', 'ctf_estimate'):
+            import math
+            per_movie = max(1, int(max(args.sizes)**2 * 0.10 / args.box**2))
+            movies = math.ceil(args.particles / per_movie)
+            return [(t, w) for t in args.threads for w in (1, 2, 4)
+                    if w <= movies and t*w <= getattr(args, '_cpu_budget', max(args.threads))]
         return [(t, 1) for t in args.threads]
 
     def metadata(self, args):
-        return {'threads': args.threads, 'workload': {'fixture_source': 'simulated_workflow',
+        return {'threads': args.threads, 'tested_candidates': self.candidates(args), 'workload': {'fixture_source': 'simulated_workflow',
             'fixture_generator': 'external_python_equal_weight_atoms', 'fixture_version': 3,
             'molecule': args.molecule, 'seed': SEED, 'box': args.box, 'smpd': sampling(args),
             'particles_requested': args.particles, 'frames': 8, 'sizes': self.cases(args),
             'particle_input': 'direct clean molecular projections, ctf=no' if self.name in STAGES[3:] else None,
-            'initialization': 'de_novo' if self.name in STAGES[3:] else 'previous_serial_stage',
-            'execution_scope': 'local master, nparts=1 where supported; one job at a time',
+            'initialization': ('known_volume_single_stage' if self.name == 'solve3D' and not args.full
+                               else 'de_novo' if self.name in STAGES[3:] else 'previous_serial_stage'),
+            'execution_scope': 'single-node master; full image workflows sweep local worker/partition counts',
             **science(self.name, args)}}
 
     def prepare(self, ctx, size):
@@ -202,10 +217,26 @@ class WorkflowAdapter:
 
     def jobs(self, ctx, fixture, directory, nthr, workers):
         project = copy_snapshot(fixture['project'], directory)
-        return [(command(ctx, self.name, project, nthr), directory)]
+        argv = command(ctx, self.name, project, nthr)
+        if workers > 1:
+            argv = [a for a in argv if not a.startswith('nparts=')]
+            argv += [f'nparts={workers}', f'ncunits={workers}']
+        if self.name == 'solve3D' and not ctx.args.full:
+            argv += ['vol1=' + str(fixture['simulation'].root / 'truth.mrc'), f'nthr_ini3D={nthr}']
+        if self.name == 'ctf_estimate':
+            fixture['consumables'] = {}
+            for path in fixture['simulation'].root.rglob('*_forctf.mrc'):
+                backup = directory / (path.name + '.backup')
+                shutil.copy2(path, backup)
+                fixture['consumables'][path] = backup
+        return [(argv, directory)]
 
     def validate(self, ctx, fixture, work):
         simulation = fixture['simulation']
+        for path, backup in fixture.get('consumables', {}).items():
+            if not path.exists():
+                shutil.copy2(backup, path)
+            backup.unlink()
         # Validation and project inspection are deliberately outside the timed command.
         oritype = 'ptcl3D' if self.name == 'solve3D' else 'ptcl2D' if self.name == 'solve2D' else 'mic'
         ctx.command([str(ctx.args.simple_exec), 'prg=print_project_field',

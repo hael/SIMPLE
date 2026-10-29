@@ -54,13 +54,16 @@ class CalibrationChecks(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        mount = patch('resource_planner.calibration.os.statvfs')
+        mount.start().return_value.f_flag = 0
+        self.addCleanup(mount.stop)
 
     def args(self, workflows='fake'):
         parser = argparse.ArgumentParser()
         add_options(parser)
         return parser.parse_args(['--output', str(self.root / 'profile.json'), '--workdir', str(self.root / 'evidence'),
                                   '--workflows', workflows, '--simple-exec', sys.executable,
-                                  '--private-exec', sys.executable, '--threads', '1', '--candidates', '1x1', '--execute'])
+                                  '--private-exec', sys.executable, '--threads', '1', '--candidates', '1x1', '--repeats', '3', '--execute'])
 
     def test_standard_full_and_explicit_workloads(self):
         parser = argparse.ArgumentParser()
@@ -69,16 +72,16 @@ class CalibrationChecks(unittest.TestCase):
             standard = parser.parse_args([])
             configure(standard)
             self.assertEqual(standard.sizes, [4096])
-            self.assertEqual(standard.particles, 500)
+            self.assertEqual(standard.particles, 100)
             self.assertEqual(standard.candidates, [(4,1), (8,1), (4,2)])
             self.assertEqual(standard.threads, [4,8])
-            self.assertEqual((standard.extr_lim, standard.nits_per_stage, standard.repeats), (4,1,3))
+            self.assertEqual((standard.extr_lim, standard.nits_per_stage, standard.repeats), (4,1,1))
             full = parser.parse_args(['--full'])
             configure(full)
             self.assertEqual(full.sizes, [4096,8192])
             self.assertEqual(full.particles, 2000)
             self.assertEqual(len(full.candidates), 5)
-            self.assertEqual(full.threads, [4,8,16])
+            self.assertEqual(full.threads, [1,2,4,8,16,32])
             custom = parser.parse_args(['--full','--sizes','4096','--particles','800','--threads','2',
                                         '--candidates','2x1','--timeout','90'])
             configure(custom)
@@ -145,6 +148,8 @@ class CalibrationChecks(unittest.TestCase):
             args = self.args()
             self.assertNotEqual(calibrate(args), 0)
         self.assertFalse((args.workdir / 'fake/desktop_profile.json').exists())
+        result = json.loads(args.output.read_text())['workflows']['fake']
+        self.assertEqual(len(result['measurements']), 8)
 
     def test_unqualified_keeps_evidence_without_recommendation(self):
         class Unqualified(FakeAdapter):
@@ -179,6 +184,21 @@ class CalibrationChecks(unittest.TestCase):
         workflows = json.loads(args.output.read_text())['workflows']
         self.assertEqual(workflows['broken']['status'], 'failed')
         self.assertEqual(workflows['fake']['status'], 'provisional')
+
+    def test_reported_failure_returns_nonzero_without_exception(self):
+        with patch.dict(ADAPTERS, {'fake': FakeAdapter()}):
+            args = self.args()
+            with patch('resource_planner.calibration.run_workflow', return_value={
+                    'status': 'failed', 'reason': 'placement failed', 'profile': None, 'measurements': []}):
+                self.assertEqual(calibrate(args), 2)
+
+    def test_partial_node_failure_returns_nonzero(self):
+        with patch.dict(ADAPTERS, {'fake': FakeAdapter()}):
+            args = self.args()
+            with patch('resource_planner.calibration.run_workflow', return_value={
+                    'status': 'initial', 'profile': None, 'measurements': [],
+                    'node_comparison': {'2': {'status': 'failed', 'reason': 'placement failed'}}}):
+                self.assertEqual(calibrate(args), 2)
 
     def test_solve_adapter_prepares_each_project_separately(self):
         prepared = []

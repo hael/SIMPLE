@@ -38,3 +38,16 @@ class ReportingChecks(unittest.TestCase):
             print_results(collection, 'result.json')
         self.assertIn('Created JSON profile:', stream.getvalue())
         self.assertIn('does not read/apply', stream.getvalue())
+
+    def test_initial_profile_shows_settings_and_partial_measurements(self):
+        settings = {'nthr': 4, 'ncunits': 1, 'nparts': 1, 'job_memory_per_task_mib': 1024}
+        collection = {'workflows': {'pick': {'status': 'initial',
+            'profile': {'sizes': {'4096': settings}}, 'measurements': [{
+                'size': 4096, 'nthr': 4, 'workers': 1, 'warmup': False,
+                'wall_seconds': 3.25, 'peak_rss_mib': 400,
+                'validation': {'quality_qualified': True}}]}}}
+        with contextlib.redirect_stdout(io.StringIO()) as stream:
+            print_results(collection, 'initial.json')
+        self.assertIn('1024', stream.getvalue())
+        self.assertIn('3.250', stream.getvalue())
+        self.assertIn('Initial =', stream.getvalue())

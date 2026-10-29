@@ -55,3 +55,4 @@ __pycache__
 # Generated resource calibration runs (relative to the launch directory).
 /output/resource_calibration/
 /scripts/output/resource_calibration/
+/scripts/output/calibration-*/

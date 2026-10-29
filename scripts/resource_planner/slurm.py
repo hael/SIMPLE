@@ -8,10 +8,11 @@ import sys
 
 
 def add_options(parser):
+    parser.add_argument('--node-counts', type=int, nargs='+', help='compare 1 2 (full Slurm default), optionally 1 2 4; quick default: 1')
     parser.add_argument('--slurm', metavar='PARTITION', help='submit calibration to this Slurm partition')
     parser.add_argument('--slurm-cpus', type=int, default=16, help='CPUs allocated to one calibration task')
     parser.add_argument('--slurm-memory', type=int, default=65536, metavar='MIB', help='allocation memory in MiB')
-    parser.add_argument('--slurm-time', default='01:00:00', help='Slurm wall-time limit')
+    parser.add_argument('--slurm-time', help='Slurm wall-time limit (standard: 01:00:00; full: 2-00:00:00)')
     parser.add_argument('--slurm-account', help='optional Slurm account')
     parser.add_argument('--slurm-worker', action='store_true', help=__import__('argparse').SUPPRESS)
 
@@ -25,10 +26,17 @@ def allocation():
             'cpus_per_task': os.environ.get('SLURM_CPUS_PER_TASK'),
             'memory_per_node_mib': os.environ.get('SLURM_MEM_PER_NODE'),
             'memory_per_cpu_mib': os.environ.get('SLURM_MEM_PER_CPU'),
-            'scope': 'single-node calibration; distributed scaling unmeasured'}
+            'scope': 'allocation inventory; measured node usage is recorded per candidate'}
 
 
 def submit(args):
+    if args.node_counts is None:
+        args.node_counts = [1, 2] if args.full else [1]
+    if args.node_counts != sorted(set(args.node_counts)) or args.node_counts[0] != 1 or any(n not in (1, 2, 4) for n in args.node_counts):
+        raise ValueError('node counts must start at 1, followed by 2 and optionally 4')
+    nodes = max(args.node_counts)
+    if args.slurm_time is None:
+        args.slurm_time = '2-00:00:00' if args.full else '01:00:00'
     if args.slurm_cpus < 1 or args.slurm_memory < 1:
         raise ValueError('Slurm CPU and memory requests must be positive')
     if args.slurm_worker or os.environ.get('SLURM_JOB_ID'):
@@ -48,10 +56,13 @@ def submit(args):
             continue
         values = value if isinstance(value, list) else [value]
         command.extend(str(v.absolute() if isinstance(v, Path) else v) for v in values)
+    command += ['--slurm-cpus', str(args.slurm_cpus)]
     # srun establishes an allocation-bound affinity before resource discovery.
     script = '#!/bin/bash\nset -euo pipefail\nexec ' + shlex.join([
         'srun', '--ntasks=1', '--cpu-bind=cores', f'--cpus-per-task={args.slurm_cpus}', *command]) + '\n'
-    argv = ['sbatch', '--parsable', '--nodes=1', '--ntasks=1', f'--cpus-per-task={args.slurm_cpus}',
+    if nodes > 1:
+        script = '#!/bin/bash\nset -euo pipefail\nexec ' + shlex.join(command) + '\n'
+    argv = ['sbatch', '--parsable', f'--nodes={nodes}', '--ntasks-per-node=1', f'--cpus-per-task={args.slurm_cpus}',
             f'--mem={args.slurm_memory}M', f'--time={args.slurm_time}', f'--partition={args.slurm}',
             '--export=ALL', '--job-name=simple-calibration', f'--chdir={Path.cwd()}',
             f'--output={args.output.absolute()}.slurm-%j.log']

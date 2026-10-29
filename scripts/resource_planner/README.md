@@ -1,102 +1,109 @@
 # SIMPLE resource planner
 
-The public entry point is `scripts/hardware_resource_planner.py`. Run it in
-the shell where SIMPLE is installed and available through `PATH` and
-`SIMPLE_PATH`; no build directory is required. The launcher requires Python
-3.9 or newer and can select an installed newer interpreter if `python3` is
-older. Fixture generation requires NumPy; use `--fixture-python` when it is
-installed in a separate interpreter.
-
-From the repository root:
+Run in a shell with installed SIMPLE available through `PATH` and `SIMPLE_PATH`.
+Python 3.9+ and NumPy are required; the launcher discovers installed interpreters.
+Use `--fixture-python` if NumPy is in a separate interpreter. No build is required.
 
 ```bash
-./scripts/hardware_resource_planner.py discover
+./scripts/hardware_resource_planner.py                      # Run quick calibration
 ./scripts/hardware_resource_planner.py calibrate            # Preview only
-./scripts/hardware_resource_planner.py                      # Execute standard calibration
+./scripts/hardware_resource_planner.py calibrate --full --execute
 ./scripts/hardware_resource_planner.py calibrate --help
 ```
 
-The standard workflows are motion correction, CTF estimation, picking,
-solve2D and solve3D. Particle workflows import Python-generated clean molecular
-projection stacks directly (`ctf=no`); solve3D additionally prepares a serial
-solve2D result. They do not run motion correction, CTF estimation or picking
-as prerequisites. Inputs use fixed seeds and bundled
-molecular coordinates. Parallel solver output and timings need not be bitwise
-identical. Optional older analytic fixtures use `--fixture-source analytic`.
+Both presets cover motion correction, CTF estimation, picking, solve2D and solve3D.
 
-## Selecting a run
+| Preset | Workload | Measured repetitions | Thread candidates |
+| --- | --- | --- | --- |
+| Quick | 4K movies, 100 particles, 128-pixel boxes | 1 | 4 and 8 where available |
+| Full | 4K/8K movies, 2,000 particles, 128-pixel boxes | 5 | Powers of two plus usable CPU limit |
+
+Each configuration also has a warmup. Quick solve3D starts from a supplied volume;
+full solve3D runs de novo and uses a longer schedule. Full runs can take hours.
+Single-node full motion/CTF runs also test 1/2/4 workers where CPU and input counts
+allow. Fixed-seed synthetic inputs support scientific checks; parallel results and
+timings are not bitwise deterministic. Recommendations remain synthetic estimates.
+
+## Run options and output
 
 ```bash
-./scripts/hardware_resource_planner.py calibrate \
+./scripts/hardware_resource_planner.py calibrate --execute \
   --workflows motion_correct ctf_estimate --threads 4 8 \
-  --workdir output/resource_calibration/desktop/measurements \
-  --output output/resource_calibration/desktop/profile.json --execute
+  --workdir /usr/local/cache/simple-calibration/measurements \
+  --output /usr/local/cache/simple-calibration/profile.json
 ```
 
-Default output is `output/resource_calibration/standard/`, relative to the
-launch directory. `profile.json` contains workflow status and qualified
-settings; `measurements/` contains plans, individual run logs, validations
-and timing evidence. Existing work directories and profile files are refused
-to preserve earlier runs. Choose a new run directory for another calibration.
-These generated files are not source code and should not be committed.
+Defaults write to `output/resource_calibration/standard/` relative to the current
+directory. Choose fresh output paths: existing profiles and work directories are
+refused. The work filesystem must allow execution of generated worker scripts.
 
-The solve3D candidate limit defaults to 1800 seconds. Use
-`--solve3d-timeout SECONDS` to override it. An explicit `--timeout` applies
-to solve3D too unless its dedicated override is supplied. One full desktop
-solve3D run took about 17 minutes in the observed fixture; warm-ups and
-repetitions can make a full campaign take hours. Preparation and validation
-are excluded from the reported commander timings.
+The console and JSON report settings, timings, quality status and failures.
+`measurements/` retains commands, logs and validation evidence. Preparation and
+validation are excluded from commander timings. Repeated image outputs are removed
+by default; use `--no-discard-images` to keep them. Generated results should not be
+committed. See `--help` for workload, timeout and disk-budget overrides.
+
+SIMPLE does **not** read or apply the JSON automatically (`auto_apply=false`).
+Only runs passing scientific checks produce recommendations. Distributed memory
+estimates conservatively sum process peaks, rather than measuring concurrent RSS.
 
 ## Slurm
 
-Log into the desired cluster, load SIMPLE there, and run the same entry point:
+Log into the cluster, load SIMPLE, and specify its partition:
 
 ```bash
-./scripts/hardware_resource_planner.py calibrate \
-  --workflows motion_correct ctf_estimate \
+./scripts/hardware_resource_planner.py calibrate --full --execute \
   --slurm csbdevel --slurm-cpus 16 --slurm-memory 65536 \
-  --slurm-time 01:00:00 --execute
+  --workdir ./cluster-calibration --output ./cluster-profile.json
 ```
 
-The tool submits from the current machine; it does not select an SSH host.
-The administrator supplies the partition and, when needed, `--slurm-account`.
-Discovery occurs inside a single-node allocation. Request a larger Slurm
-wall-time limit for full solve3D sweeps. Multi-node scaling is not qualified.
+The tool submits from the current host; it does not choose an SSH login host.
+CPU and memory requests apply per node (memory in MiB). Optional flags include
+`--slurm-account` and `--slurm-time`; default wall limits are one hour for quick
+runs and two days for full runs.
 
-## Package layout
+Full Slurm runs compare one and two nodes. `--node-counts 1` limits the sweep to
+one node; `--node-counts 1 2 4` also tests four. Shared executable storage is
+required. Native workers run inside the allocation and the master merges results.
+Each trial uses one worker per node and a fixed partition count equal to the
+largest requested node count. Picking stays single-node.
 
-- `cli.py`: parsing and command dispatch.
-- `hardware.py`: host inventory and usable CPU selection.
-- `calibration.py`: preparation, candidate sweeps and evidence collection.
-- `execution.py`, `supervise.py`: process execution, limits and cleanup.
-- `slurm.py`: allocation metadata and batch submission.
-- `profiles.py`, `reporting.py`: JSON profiles and console output.
-- `campaign.py`, `adapters.py`: explicit custom campaigns and command contracts.
-- `workflows/`: per-workflow adapters, shared mechanics and molecular preparation.
-- `fixtures/`: independently executable NumPy helpers, validation and bundled data.
-- `examples/campaign.json`: custom campaign template; supply installed executable
-  paths and your own fixture directory and preparation/validation scripts.
-- `tests/`: Python-only checks with fake native commands.
+Recommendations require successful worker placement and scientific output checks.
+Placement uses Slurm node identities, which may differ from OS hostnames. JSON
+includes per-node results, speedup, efficiency and node-hours. Failed node trials
+return a nonzero exit status even if other trials succeed. Bounded one/two-node
+runs have been validated; full-workload and four-node scaling remain unqualified.
 
-Keep the package beside the entry point when copying the tool. The analytic
-motion fixture also imports the existing `scripts/memory/` helpers; include
-that directory when copying the scripts. The retired desktop wrappers are no
-longer public commands. Use `calibrate --workflows ...` instead.
-
-## Validation and current limits
+## Optional storage comparison
 
 ```bash
-PYTHONPATH=scripts python3 -m unittest discover \
-  -s scripts/resource_planner/tests -p 'test_*.py'
-# Optional separate NumPy interpreter for the fixture replay check:
-SIMPLE_FIXTURE_PYTHON=/usr/bin/python3.6 PYTHONPATH=scripts python3 -m unittest \
-  discover -s scripts/resource_planner/tests -p 'test_*.py'
+./scripts/hardware_resource_planner.py calibrate --execute \
+  --io-dirs /usr/local/data /usr/local/cache
 ```
 
-The JSON is evidence for future SIMPLE integration: `auto_apply=false`.
-SIMPLE does not currently read it automatically. Synthetic quality gates
-must pass before recommendations are exported. Current observed limitations
-include CTF profile export losing a temporary input, picking accuracy, and
-solve2D/solve3D scientific qualification. Reorganization does not fix these.
-See the living design record in
-[`hardware_resource_planning_completed.md`](../../doc/implementation_notes/completed/hardware_resource_planning_completed.md).
+Defaults: 256 MiB sequential data, 128 files of 64 KiB, three repetitions per
+directory. Override with `--io-size-mib`, `--io-small-files` and `--io-repeats`.
+Directories must exist and have sufficient free space. Probes remove only their
+own temporary files; forced termination may leave a `.simple-io-*` directory.
+
+The table and JSON include seconds, MiB/s and variability. Writes include file and
+directory `fsync`; reads include checksum verification. First reads request cache
+eviction, but cold reads are not guaranteed. Payload blocks repeat after 16 MiB,
+so deduplication can affect results. These probes do not measure SIMPLE workflow
+speedups or automatically choose scratch storage. On Slurm they run only on the
+coordinator node and do not establish whether paths are shared. Failed directories
+are reported while remaining probes continue; failures produce a nonzero exit.
+
+## Development
+
+Keep `resource_planner/`, `memory/`, and the memory-estimator scripts beside the
+entry point when copying the tool. Workflow adapters live in `workflows/`, input
+generators in `fixtures/`, and Python tests in `tests/`.
+
+```bash
+PYTHONPATH=scripts python3 -m unittest discover -s scripts/resource_planner/tests
+```
+
+Set `SIMPLE_FIXTURE_PYTHON` to a NumPy-capable interpreter for fixture replay tests.
+See [remaining work](../../doc/implementation_notes/planned/hardware_resource_planning_unfinished.md)
+for qualification limits and future native integration.

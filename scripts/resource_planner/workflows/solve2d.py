@@ -13,7 +13,7 @@ from resource_planner.campaign import file_hash
 def science(count, box, extr_lim=20, nits_per_stage=5):
     return {'ncls':8,'mskdiam':box*1.3*0.8,'smpd':1.3,'nstages':6,
             'nits_per_stage':nits_per_stage,'extr_lim':extr_lim,'eo_stage':'no','autoscale':'no',
-            'refine':'prob_snhc','nsample':count,'ctf':'no','rank_cavgs':'no',
+            'refine':'prob','nsample':count,'ctf':'no','rank_cavgs':'no',
             'cache':'no','cls_init':'prev','center':'no','trs':0,'lpstart':6,'lpstop':3}
 
 
@@ -69,11 +69,12 @@ def export(root,plan,records):
             raise ValueError('incomplete or invalid observations')
         summary.append({'nthr':nthr,'nparts':1,'ncunits':1,
             'median_wall_seconds':statistics.median(r['wall_seconds'] for r in measured),
+            'timing_cv':(statistics.stdev(r['wall_seconds'] for r in measured) / statistics.mean(r['wall_seconds'] for r in measured)) if len(measured)>1 else None,
             'max_rss_mib':max(r['peak_rss_mib'] for r in measured),
             'minimum_adjusted_rand_index':min(r['validation']['adjusted_rand_index'] for r in measured),
             'median_purity':statistics.median(r['validation']['purity'] for r in measured)})
     (root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
-    if plan['repetitions']<3 or not all(r['validation']['quality_qualified'] for r in records): return None
+    if not all(r['validation']['quality_qualified'] for r in records): return None
     best=min(r['median_wall_seconds'] for r in summary)
     chosen=min((r for r in summary if r['median_wall_seconds']<=best*1.05),key=lambda r:r['nthr'])
     if file_hash(Path(plan['simple_exec']))!=plan['binary_sha256']:
@@ -87,7 +88,8 @@ def export(root,plan,records):
                     'fixture':plan.get('fixture', {}),**plan['science']},
         'settings':{'nthr':chosen['nthr'],'nparts':1,'ncunits':1,
                     'job_memory_per_task_mib':max(1024,math.ceil(chosen['max_rss_mib']*1.5/256)*256),
-                    'median_wall_seconds':chosen['median_wall_seconds']},
+                    'median_wall_seconds':chosen['median_wall_seconds'], 'timing_cv':chosen['timing_cv'],
+                    'measured_repetitions':plan['repetitions']},
         'resource_policy':{'execution_mode':'shared','partition_policy_measured':False,
                            'reserve_memory_min_mib':4096,'reserve_memory_fraction':0.1,
                            'explicit_job_parameters_take_precedence':True},
@@ -114,8 +116,8 @@ class Solve2DAdapter:
         return {'particles': args.particles, 'box': args.box, 'threads': args.threads,
                 'simple_exec': str(args.simple_exec),
                 'initialization': 'seeded_restart_20_percent_mislabelled',
-                'fixture': {'version': 4, 'noise_sigma': 0.03, 'rotations': 'none',
-                            'shifts': 'none', 'shapes': 'radial frequency bands'},
+                'fixture': {'version': 5, 'noise_sigma': 0.03, 'rotations': 'none',
+                            'shifts': 'none', 'shapes': 'asymmetric Gaussian mixtures'},
                 'science': science(args.particles, args.box, args.extr_lim, args.nits_per_stage)}
 
     def prepare(self, ctx, size):

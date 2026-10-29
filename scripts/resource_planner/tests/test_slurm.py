@@ -98,5 +98,5 @@ class SlurmChecks(unittest.TestCase):
         parser = argparse.ArgumentParser()
         add_options(parser)
         args = parser.parse_args(['--slurm-worker', '--workdir', '/unused', '--output', '/unused.json'])
-        with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, 'single-node'):
+        with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, 'allocated nodes'):
             calibrate(args)
