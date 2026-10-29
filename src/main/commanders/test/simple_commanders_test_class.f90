@@ -138,7 +138,7 @@ use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_nano_species_tester,              only: run_all_nano_species_tests
 use simple_commanders_volops_tester,         only: run_all_sharpvol_tests
-use simple_nano_density_tester,              only: run_all_nano_density_tests
+use simple_nano_density_tester,              only: run_all_nano_density_tests, run_all_nano_density_lib_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
@@ -507,11 +507,12 @@ contains
         call add_suite(s, n, 'density',        run_all_nano_density_tests)
     end subroutine suites_single
 
-    !> nightly pdb2mrc coverage of the built-in 6VXX and 1JYX models
+    !> nightly molecular maps and full-particle atomic density fits
     subroutine suites_lib_single( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'pdb2mrc', run_all_pdb2mrc_tests)
+        call add_suite(s, n, 'density particles', run_all_nano_density_lib_tests)
     end subroutine suites_lib_single
 
     !> STREAM stages (src/main/stream/stages), step by step without a queue or waits:

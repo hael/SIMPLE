@@ -1,4 +1,4 @@
-!@descr: unit tests for simple_nano_density: kernels and the transfer table, rendering, per-atom fit, profile regression, noise, the fit of rendered particles with the transfer known and measured, the moved filters
+!@descr: unit tests of atomic density kernels and fitting primitives; library tests of rendered particles with known and measured transfer
 ! Expected values are closed forms (kernel integrals, the transfer at zero frequency, the Gaussian convolution identity,
 ! the notch transfer 1 - a exp(-B_h s**2/4) whose kernel is K(B) - a K(B + B_h)) or the parameters a particle was
 ! rendered with: a 147-atom cuboctahedral fcc cluster, d_NN 2.75 A at 0.358 A, whose coordination numbers follow from
@@ -13,7 +13,7 @@ use simple_nano_density, only: nano_density, transfer_kernels, gauss_kernel, hal
 !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
-public :: run_all_nano_density_tests, rendered_transfer
+public :: run_all_nano_density_tests, run_all_nano_density_lib_tests, rendered_transfer
 #include "simple_local_flags.inc"
 
 integer, parameter :: BOX      = 88      ! the particle box, 31.5 A
@@ -55,9 +55,13 @@ contains
         call test_gauss_filter()
         call test_robust_spread()
         call test_atom_set()
+    end subroutine run_all_nano_density_tests
+
+    subroutine run_all_nano_density_lib_tests()
+        write(*,'(A)') '**** running all nano density library tests ****'
         call test_particle_uniform()
         call test_particle_gradient()
-    end subroutine run_all_nano_density_tests
+    end subroutine run_all_nano_density_lib_tests
 
     ! the kernels integrate to 1 and to 1 - a, the transfer at zero frequency (Riemann sums on fine grids)
     subroutine test_kernels()

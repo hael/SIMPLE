@@ -243,7 +243,7 @@ contains
         call unit_single%new(&
         &'unit_single',&
         &'unit tests: SINGLE (nanoparticles, atomic models)',&
-        &'is the fast-gate unit suite for SINGLE: the atoms module, the C-alpha candidate search on a synthetic three-residue map, the species-discovery numerics and the atomic density model',&
+        &'is the fast-gate unit suite for SINGLE: the atoms module, the C-alpha candidate search on a synthetic three-residue map, the species-discovery numerics and the atomic density fitting primitives',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: SINGLE')
         call unit_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
@@ -255,12 +255,12 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call lib_single%new(&
         &'lib_single',&
-        &'library tests: SINGLE molecular models',&
-        &'is the nightly library suite for pdb2mrc coverage of the built-in 6VXX and 1JYX models',&
+        &'library tests: SINGLE molecular models and density fits',&
+        &'is the nightly library suite for pdb2mrc coverage of the built-in 6VXX and 1JYX models and rendered nanoparticle density fits with known and measured transfer',&
         &'simple_test_exec',&
         &.false., display_name='Library Tests: SINGLE')
         call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pdb2mrc)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pdb2mrc, density_particles)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
     

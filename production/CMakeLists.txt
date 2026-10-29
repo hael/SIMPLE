@@ -261,7 +261,7 @@ if(BUILD_TESTS)
   # Review verdict 2026-09-23 (plan, section 9.7, heterogeneity).
   simple_add_test(lib_heterogeneity library 3600 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_heterogeneity)
-  # lib_single: in-process pdb2mrc coverage of the built-in molecular models.
+  # lib_single: molecular pdb2mrc coverage and full-particle atomic density fits.
   # The longer nanoparticle atom-statistics pipeline is an explicit highlevel entry.
   simple_add_test(lib_single library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_single)

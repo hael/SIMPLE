@@ -2255,6 +2255,107 @@ argmin runs warn about, so it is not to be guessed: once the weighted
 insertion exists it is one number, a second key for the insertion's beta
 (or its own N*), the same tally.
 
+### 20.9 Review of the `prob_neff=3 shift_prior=yes` regression (2026-10-28)
+
+**Evidence.** Reviewed the implementations at `04f6f0cb7` and the twenty
+supplied Linux restart logs (PorF and exp_gate, ten each, built at
+`ad443249`, which includes the original-pixel prior-floor correction).
+Every run ends normally. Every control line keeps 1000 rows and reaches
+the target; no fallback, bracket saturation or invalid/flat-row warning
+appears. This is a reconstruction-quality regression, not a failed entropy
+solve. The logs alone do not establish the correctness of a map or isolate
+the two switches, which were enabled together.
+
+The maintainer subsequently reports that shift_prior alone works, with
+only 1-2 failed runs. This makes the added n_eff policy the stronger
+regression suspect. That comparison is user-reported; prior-only logs
+were not supplied in this review. The prior-frame finding below remains
+a separate correctness issue and is not established as the cause of the
+new failure rate.
+
+| Dataset | Final FSC=0.143 resolutions by restart, A |
+| --- | --- |
+| PorF | 6.37, 5.78, 4.46, 6.50, 4.88, 7.09, 7.09, 6.12, 6.50, 4.80 |
+| exp_gate | 4.23, 4.01, 4.01, 4.30, 4.01, 4.01, 4.23, 4.15, 4.01, 4.01 |
+
+The PorF split precedes the final tail. At the end of stage 4, restarts
+3/5/10 are at 8.21/8.67/8.67 A, and the others at 8.91-10.40 A. Final
+tails finish in every log. Neither a missing tail nor the too-few-rows
+branch explains these runs.
+
+**Search-policy concern, supported by the logs but not isolated causally.**
+The premise of 20.2 needs calibration on 3D. Holding mean direction
+entropy at three permits a substantially colder early search than the
+previous beta 0.3. PorF's median last beta is 1.4075 in stage 1 and
+1.4063 in stage 2; the mean last row-mode fractions are 0.704 and 0.668.
+The preceding direction beta also controls the next fill's in-plane
+draws (`polarft_calc%ptcl_posterior_temp`), although the control measures
+direction entropy, not in-plane or joint-pose entropy. Thus this changes
+both searches, and the direction target does not constrain the latter's
+breadth. exp_gate's median last stage-1 beta is only 0.2500: the same
+target does not imply the same exploration relative to the old setting.
+Early trapping is a leading hypothesis, not a demonstrated sole cause.
+
+**Implementation findings.**
+
+1. `prob_beta_last_solved` is process-wide, with no reset or run/stage
+   identity. Both refine commanders read it before their first iteration,
+   overriding a newly configured starting beta. This leaks between stages
+   and between independent 2D/3D invocations in one process. At PorF's
+   stage-3 entry the previous beta is 1.343-1.501, while the newly solved
+   direction beta is 0.629-0.693. The first fill therefore uses a coefficient
+   from the preceding band and candidate policy. Own the feedback explicitly
+   in the invocation and define/reset the stage-entry value. The documented
+   one-iteration lag also leaves the last fill at the preceding tail beta
+   (0.753-0.788 on PorF), although the final direction assignment uses 1.
+   A physical endpoint for both draws requires handling the fill too.
+
+2. The prior is a Gaussian on reference-coordinate optimizer displacement,
+   not consistently on the stored particle-frame shift displacement when
+   the seed is nonzero and the in-plane angle changes. The dense fill
+   converts the seed at the sampled angle; `minimize` saves that reference
+   vector as `prior_xy0`, then rescans all angles with one scalar prior
+   factor. Returning the shift rotates it at the new angle. For a
+   particle-frame seed (3,0), holding the reference vector (3,0) while
+   changing angle from 0 to 180 degrees returns (-3,0) with zero current
+   penalty; a Gaussian about the particle-frame seed with sigma=1 charges
+   18 nats. Conversely, preserving the physical shift can incur a penalty.
+   This is an analytic frame counterexample, not a measured contribution
+   to the supplied failures. Zero-centered searches are unaffected by this
+   discrepancy. The existing prior tests verify its factor in optimizer
+   coordinates and do not test this invariant. Correcting it requires
+   carrying the seed in a common frame through angle scoring and gradients.
+
+3. The too-few-rows branch of `neff_control_apply` skips the annealing ramp:
+   fewer than 50 rows, beta_flat=0.3 and anneal_frac=1 return 0.3, not 1.
+   This is a separate correctness defect, absent from these twenty logs.
+
+The additive loss, its shift derivative, the untempered T in the prior
+weight, and the corrected `lp/smpd` floor are internally consistent for
+the stated optimizer-coordinate prior. The entropy bisection is monotone
+on fixed valid rows. A separate robustness edge remains: 995 resolved rows
+and five flat rows of 500 candidates have a minimum mean n_eff of 3.495;
+target 3 drives beta to 1000 and makes the resolved rows greedy. It did
+not occur in the supplied logs.
+
+**Next comparison.** Retain the working prior-only configuration as the
+control, on the same input, build and matched initializations, judging
+the maps as well as the stage trajectories. First isolate direction-to-
+in-plane feedback: keep the fills at the established beta 0.3 while
+solving n_eff=3 for direction assignment only. Separately test whether
+retaining the established early-stage draws and enabling the control only
+after stages 1-2 restores robustness. Neither separation is an existing
+CLI option. Do not change the prior and the exploration policy in the
+same attribution experiment. Add regressions for independent
+invocations/stage entry, the final fill's beta, the nonzero-seed angle
+invariant, and fallback annealing before accepting fixes.
+
+**Validation observed here.** Mac Release `make -C build -j8`, the complete
+fast gate (15/15, 47.80 s, including polar alignment, entropy-control,
+prior and convergence checks), and installation passed. No production
+source was changed. The twenty Linux logs were inspected; no new Linux
+or real-particle run was executed locally.
+
 ## 21. Rulings of 2026-10-26, and the calibration on real data
 
 ### 21.1 Rulings
