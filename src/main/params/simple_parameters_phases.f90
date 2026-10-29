@@ -732,12 +732,8 @@ contains
         else
             self%prob_beta_ini = self%prob_beta
         endif
-        ! the n_eff control (prob_neff > 0): prob_beta is the first iteration's factor only, and prob_beta_end is the
-        ! switch of the annealing tail (any positive value: the solved factor ramps to 1), left at 0 when unset
-        if( self%prob_neff < 0. ) THROW_HARD('prob_neff must be 0 (off) or a target above 1')
-        if( self%prob_neff > 0. .and. .not. (self%prob_neff > 1.) ) THROW_HARD('prob_neff must be above 1: the effective number of candidates a particle draws among')
-        if( self%prob_anneal_frac < 0. .or. self%prob_anneal_frac > 1. ) THROW_HARD('prob_anneal_frac must be in [0,1]')
-        if( .not. (self%prob_beta_end > 0.) .and. .not. (self%prob_neff > 0.) ) self%prob_beta_end = self%prob_beta
+        if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
+        if( self%topk < 1 ) THROW_HARD('topk must be 1 (the committed pose alone) or more')
         select case(trim(self%freq_march_aggressive))
             case('yes')
                 self%l_freq_march_aggressive = .true.

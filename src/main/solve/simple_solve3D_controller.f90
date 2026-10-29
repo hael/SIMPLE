@@ -733,7 +733,7 @@ contains
         if( l_set_prob_beta ) call cline_refine3D%set('prob_beta', prob_beta_eff)
         ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its
         ! resolution stops gaining (the tail of PROB_BETA_TAIL iterations, then the stage ends); the other stages
-        ! run flat at prob_beta, unless the user set the end (pose_marginalization.md sections 17 and 19)
+        ! run flat at prob_beta, unless the user set the end
         if( .not. l_prob_beta_end_override )then
             if( istage == active_refine3D_nstages() )then
                 call cline_refine3D%set('prob_beta_end',  1.)

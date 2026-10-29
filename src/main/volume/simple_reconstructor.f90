@@ -1292,7 +1292,7 @@ contains
     !! against an absolute TINY with the ridge then capped at 1e3 left every shell of zero FSC unregularized when
     !! tau2 = 0.001 sig2 fell under 1e-10 (PfCRT, 2026-10-25: the final map's power beyond the FSC=0.143 cutoff was
     !! 6.7 times the power of its 10 A to cutoff band, pure noise that the postprocess sharpened and the Butterworth
-    !! let through as grain; doc/implementation_notes/planned/pose_marginalization.md section 19)
+    !! let through as grain)
     pure real function wiener_ridge( tau2, fudge, rho ) result( invtau2 )
         real, intent(in) :: tau2, fudge, rho
         if( tau2 > 0. )then

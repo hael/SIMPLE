@@ -997,7 +997,9 @@ contains
 
     !> Quadratic step from the coarse grid minimum: the 3x3 stencil of the grid loss at its rotation, -log(objective)
     !! for Euclid (the objective is exp(-loss)), -objective otherwise. A failed guard counts its reason and leaves the
-    !! state untouched; see doc/policies/3D/refine3D_policy.md.
+    !! state untouched (the reasons, profile_fit: the minimum on the grid's edge, a Hessian not positive definite or
+    !! ill conditioned, a step leaving the centre cell, a fitted shift outside the limits, an exact value at the
+    !! fitted shift that does not beat the grid minimum).
     subroutine try_grid_fit( self, corrs, fitted )
         class(pftc_shsrch_grad), intent(inout) :: self
         real,                    intent(out)   :: corrs(self%nrots)  !< objective over all rotations at the fitted shift

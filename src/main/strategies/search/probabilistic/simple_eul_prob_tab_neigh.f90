@@ -8,9 +8,10 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
-    &draw_posterior_row, shift_prior_sigma2, prob_neff_control, PROB_NEFF_ROWS
+    &draw_posterior_row, shift_prior_sigma2, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, draw_posterior_extras
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
+use simple_defs,               only: PROB_INSERT_WMIN
 use simple_polarft_calc,       only: SHERRSQ
 use simple_ori,                only: ori
 implicit none
@@ -327,7 +328,7 @@ contains
             endif
             ! the current pose is a candidate: the posterior draw over the store is then an acceptance step over
             ! the proposals and the incumbent, not a forced move (the stop rule above leaves a set of references
-            ! worse than the current pose plus the one that beat it; 2026-10-24, the note, section 19)
+            ! worse than the current pose plus the one that beat it; 2026-10-24)
             if( prev_full_ref_loc > 0 .and. .not. l_prev_scored )then
                 ri_loc = eval_work%fullref_to_sparse_ref(prev_full_ref_loc)
                 if( ri_loc > 0 )then
@@ -677,7 +678,7 @@ contains
     !> ptcl -> (proj, state) assignment over the candidate store: a particle without a valid candidate is re-seeded
     !! at its previous orientation, then every particle draws one of its own candidates from its tempered posterior.
     !! Particles are assigned to references; no reference is forced to be populated (the reference-balanced frontier
-    !! was deleted 2026-10-24, doc/implementation_notes/planned/pose_marginalization.md section 19)
+    !! was deleted 2026-10-24: if every image shows one direction, every image is assigned to it)
     subroutine ref_assign_neigh( self )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer :: i, candidate_pos
@@ -692,39 +693,51 @@ contains
     contains
 
         !> ptcl -> (proj, state) by one draw per particle from its tempered posterior over its evaluated candidates
-        !! (doc/implementation_notes/planned/pose_marginalization.md section 4.5). The particle's state is the
+        !! The particle's state is the
         !! state of its closest valid candidate over all states (an active reference with an in-plane index; ties
         !! to the first in store order), as the dense table labels it; within that state p_c proportional to
         !! exp(-T_i (L_c - L_min)) over the valid candidates, T_i the particle's temperature from the fill (temps)
-        !! scaled by prob_beta, or by the factor the n_eff control solves for this iteration when prob_neff is set
-        !! (pose_marginalization.md section 20.2). The drawn candidate is committed with its shift, the seed shift recorded, frac the
+        !! scaled by prob_beta; the mean n_eff of a subsample of the rows at the draw's factor and at beta 1 is
+        !! logged (prob_neff_readout). The drawn candidate is committed with its shift, the seed shift recorded, frac the
         !! evaluated fraction; no reference is forced to be populated. A particle without a valid candidate (a
         !! state emptied mid-run) keeps its orientation; one without a temperature (none expected) takes its
         !! argmin with a warning. The draws run in particle order on the master's random stream.
         subroutine assign_particles_posterior()
-            type(prob_neff_control) :: ctrl
-            real,    allocatable :: w(:), dists_c(:)
-            integer, allocatable :: pos_c(:)
-            integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, nkept, istate_best
-            real    :: temp, dist, beta_eff
+            type(prob_neff_readout) :: neff
+            type(prob_candidate), allocatable :: cands(:)
+            real,    allocatable :: w(:), dists_c(:), kw(:)
+            integer, allocatable :: pos_c(:), kinds(:)
+            logical, allocatable :: eligible(:)
+            integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, nkept, istate_best, kmax, k, nk, nk_kept, r_loc
+            real    :: temp, dist
+            logical :: l_extras
             maxcand = 0
             do i_loc = 1,self%nptcls
                 maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
             enddo
             allocate(w(max(1,maxcand)), dists_c(max(1,maxcand)), pos_c(max(1,maxcand)))
-            ! the n_eff control: the iteration's tempering factor from a subsample of the rows the draws are from
-            beta_eff = self%p_ptr%prob_beta
-            if( self%p_ptr%prob_neff > 0. )then
-                call ctrl%new(self%nptcls, PROB_NEFF_ROWS, ceiling(2. * self%p_ptr%prob_neff))
-                do i_loc = 1,self%nptcls
-                    if( .not. ctrl%wanted(i_loc) ) cycle
-                    call gather_state_row(i_loc, dists_c, pos_c, n_loc, ibest, istate_best)
-                    if( istate_best == 0 ) cycle
-                    call ctrl%offer(n_loc, dists_c(1:n_loc), self%temps(i_loc))
-                enddo
-                call ctrl%apply(self%p_ptr%prob_neff, self%p_ptr%prob_beta, self%p_ptr%prob_anneal_frac, beta_eff)
-                call ctrl%kill
-            endif
+            ! the weighted insertion's extras (topk > 1): from the refined candidates of the state's row, in the
+            ! modes whose candidates are shift-refined (state, geom); the shc/snhc neighbourhoods of the early
+            ! stages insert the committed pose alone, their candidates being the hill climb's unrefined proposals
+            kmax = max(1, self%p_ptr%topk)
+            select case(trim(self%p_ptr%prob_neigh_mode))
+                case('shc','snhc')
+                    l_extras = .false.
+                case DEFAULT
+                    l_extras = kmax > 1
+            end select
+            call self%insert_tab%new(self%nptcls, self%pinds, merge(kmax, 1, l_extras))
+            if( l_extras ) allocate(kinds(kmax), kw(kmax), cands(kmax), eligible(max(1,maxcand)))
+            ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
+            call neff%new(self%nptcls, PROB_NEFF_ROWS, PROB_NEFF_NMIN)
+            do i_loc = 1,self%nptcls
+                if( .not. neff%wanted(i_loc) ) cycle
+                call gather_state_row(i_loc, dists_c, pos_c, n_loc, ibest, istate_best)
+                if( istate_best == 0 ) cycle
+                call neff%offer(n_loc, dists_c(1:n_loc), self%temps(i_loc))
+            enddo
+            call neff%report(self%p_ptr%prob_beta)
+            call neff%kill
             nmode         = 0
             ntemp_missing = 0
             nkept         = 0
@@ -734,7 +747,7 @@ contains
                     nkept = nkept + 1
                     cycle
                 endif
-                temp = beta_eff * self%temps(i_loc)
+                temp = self%p_ptr%prob_beta * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     ntemp_missing = ntemp_missing + 1
                     temp = huge(temp)
@@ -746,7 +759,21 @@ contains
                 call record_seed_shift(self%assgn_map(i_loc), self%seed_shifts(:,i_loc), self%seed_has_sh(i_loc),&
                     &self%p_ptr%l_doshift)
                 self%assgn_map(i_loc)%frac = search_frac(i_loc)
+                ! the extras for the weighted insertion, without replacement from the refined candidates of the row
+                if( l_extras )then
+                    do r_loc = 1,n_loc
+                        eligible(r_loc) = self%candidate_store%candidates(pos_c(r_loc))%has_sh
+                    enddo
+                    call draw_posterior_extras(n_loc, dists_c(1:n_loc), temp, eligible(1:n_loc), which, kmax, &
+                        &PROB_INSERT_WMIN, w, nk_kept, kinds, kw)
+                    nk = nk_kept - 1
+                    do k = 1,nk
+                        cands(k) = self%candidate_store%candidates(pos_c(kinds(k+1)))
+                    enddo
+                    call self%insert_tab%add(i_loc, kw(1), nk, cands(1:max(1,nk)), kw(2:max(2,nk+1)))
+                endif
             enddo
+            if( l_extras ) call self%insert_tab%report
             write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: neighbourhood posterior draw at the particle temperature, ',&
                 &self%nptcls - nkept, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ',&
                 &real(nmode) / real(max(1, self%nptcls - nkept))
@@ -756,6 +783,7 @@ contains
                 &'WARNING: particles without a temperature in the neighbourhood part files, assigned to their argmin: ', ntemp_missing
             call flush(logfhandle)
             deallocate(w, dists_c, pos_c)
+            if( allocated(kinds) ) deallocate(kinds, kw, cands, eligible)
         end subroutine assign_particles_posterior
 
         !> the particle's row: its state (the closest valid candidate over all states; 0 without one) and,

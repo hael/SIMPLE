@@ -120,9 +120,10 @@ contains
             rt_assign = toc(t)
             t         = tic()
         endif
-        ! write the iptcl->(iref,istate) assignment
+        ! write the iptcl->(iref,istate) assignment, and the weighted insertion's extra poses (topk > 1)
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
+        if( params%topk > 1 ) call eulprob_obj_glob%write_insert_table(string(INSERT_FBODY)//'.dat')
         if( L_BENCH_GLOB ) rt_write = toc(t)
         call eulprob_obj_glob%kill
         ! cleanup
@@ -229,9 +230,10 @@ contains
             rt_assign = toc(t)
             t         = tic()
         endif
-        ! write the iptcl->(iref,istate) assignment
+        ! write the iptcl->(iref,istate) assignment, and the weighted insertion's extra poses (topk > 1)
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob_neigh%write_assignment(fname)
+        if( params%topk > 1 ) call eulprob_obj_glob_neigh%write_insert_table(string(INSERT_FBODY)//'.dat')
         if( L_BENCH_GLOB ) rt_write = toc(t)
         call eulprob_obj_glob_neigh%kill
         ! cleanup

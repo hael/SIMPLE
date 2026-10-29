@@ -65,7 +65,7 @@ contains
     !! under the n_eff control any positive prob_beta_end is the switch; a flat run has no tail and converges as before
     subroutine test_posterior_anneal_tail2D()
         class(parameters), allocatable :: params
-        type(convergence) :: conv, conv_short, conv_ctrl, conv_flat
+        type(convergence) :: conv, conv_short, conv_flat
         type(cmdline)     :: cline
         type(oris)        :: os
         logical :: conv_at(10)
@@ -110,25 +110,11 @@ contains
         enddo
         call assert_true(.not. any(conv_at(1:params%maxits-1)), '2D: a short budget does not converge before its last iteration')
         call assert_true(conv_at(params%maxits), '2D: a short budget anneals to its last iteration')
-        ! the n_eff control: prob_beta_end is the switch, whatever its value
-        call del_file(STATS_FILE)
-        conv_ctrl = convergence()
-        params%minits        = 3
-        params%maxits        = 25
-        params%prob_neff     = 3.
-        params%prob_beta_end = params%prob_beta
-        do it = 1, 3
-            params%which_iter = it
-            call converged_field(os)
-            conv_at(it) = conv_ctrl%check_conv2D(params, cline, os, 10, 40.)
-            call os%kill
-        enddo
-        call assert_int(4, conv_ctrl%anneal_tail_start(), '2D: under the n_eff control prob_beta_end = prob_beta still starts the tail')
-        call assert_true(.not. any(conv_at(1:3)), '2D: under the n_eff control the run does not end on the overlap')
         ! no tail: the overlap rule converges as before
         call del_file(STATS_FILE)
         conv_flat = convergence()
-        params%prob_neff     = 0.
+        params%minits        = 3
+        params%maxits        = 25
         params%prob_beta_end = params%prob_beta
         do it = 1, 3
             params%which_iter = it
@@ -167,7 +153,7 @@ contains
 
     end subroutine test_posterior_anneal_tail2D
 
-    !> the annealing tail (pose_marginalization.md 19): a refine=prob run with prob_beta_end above prob_beta
+    !> the annealing tail: a refine=prob run with prob_beta_end above prob_beta
     !! searches flat while the resolution gains (FSC 0.5 or 0.143 finer than the previous iteration), starts the
     !! tail at the first iteration where neither gained (tail_start = the next iteration), and converges at the
     !! tail's last iteration, PROB_BETA_TAIL after its start; a run without prob_beta_end never starts a tail
@@ -258,7 +244,7 @@ contains
 
     end subroutine test_posterior_anneal_tail
 
-    !> the probability tables' posterior draws (pose_marginalization.md 10.3): a frozen assignment (full scan,
+    !> the probability tables' posterior draws: a frozen assignment (full scan,
     !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)
     !! nor on the neighbourhood table (refine=prob_neigh, every neighbourhood mode), whose committed pose is a
     !! draw; the lpexit rule still ends the stage (a stalled 7.5 A past lpexit 8 at the stage's second iteration)

@@ -13,6 +13,7 @@ use simple_sym,             only: sym
 use simple_memoize_ft_maps, only: forget_ft_maps, memoize_ft_maps
 use simple_type_defs,       only: CTFFLAG_NO, ctfparams, fplane_type
 use simple_reconstructor,   only: reconstructor, wiener_ridge
+use simple_math_ft,         only: fplane_shift
 use simple_test_utils
 implicit none
 private
@@ -29,9 +30,89 @@ contains
     subroutine run_all_reconstructor_tests()
         write(*,'(A)') '**** running all reconstructor tests ****'
         call test_weighted_insertion_linearity()
+        write(*,'(A)') 'test_fplane_shift'
+        call test_fplane_shift()
         write(*,'(A)') 'test_wiener_ridge_scale_free'
         call test_wiener_ridge_scale_free()
     end subroutine run_all_reconstructor_tests
+
+    !> The re-shift of a reconstruction plane (fplane_shift, the weighted insertion's extra poses): the plane
+    !! generated at shift s1 and re-shifted by s2 - s1 is the plane generated at s2, to round-off, its CTF^2 plane
+    !! the same bit for bit; a zero re-shift is the identity; and inserting the re-shifted plane equals inserting
+    !! the plane generated at s2
+    subroutine test_fplane_shift()
+        real, parameter :: S1(2) = [0.7, -1.3], S2(2) = [2.1, 0.4]
+        type(parameters), target :: params
+        type(sp_project)         :: project
+        type(reconstructor)      :: ra, rb
+        type(ori)                :: o
+        type(sym)                :: c1sym
+        type(ctfparams)          :: ctfparms
+        type(fplane_type)        :: fpl1, fpl2, fpl12, fpl0
+        type(fplane_grid)        :: grid
+        type(image)              :: obs, obs_pad
+        complex, allocatable     :: ca(:,:,:), cb(:,:,:)
+        real,    allocatable     :: img(:,:,:), da(:,:,:), db(:,:,:)
+        real    :: r, cerr, derr
+        integer :: j, k
+        params%box        = BOX
+        params%box_crop   = BOX
+        params%box_croppd = OSMPL_PAD_FAC * BOX
+        params%smpd_crop  = SMPD
+        params%nstates    = 1
+        params%numlen     = 1
+        params%oritype    = 'cls3D'
+        call obs%new([BOX,BOX,1], SMPD, wthreads=.false.)
+        call obs_pad%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD, wthreads=.false.)
+        call grid%new(OSMPL_PAD_FAC*BOX)
+        call o%new(.false.)
+        call o%set_euler([37., 64., 112.])
+        call c1sym%new('c1')
+        call memoize_ft_maps([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], SMPD)
+        ctfparms%smpd    = SMPD
+        ctfparms%ctfflag = CTFFLAG_NO
+        call set_fixed_seed(SEED + 1)
+        allocate(img(BOX,BOX,1))
+        do k = 1, BOX
+            do j = 1, BOX
+                call random_number(r)
+                img(j,k,1) = r - 0.5
+            enddo
+        enddo
+        call obs%set_rmat(img, .false.)
+        call obs%pad(obs_pad, backgr=0., antialiasing=.false.)
+        call obs_pad%fft()
+        call obs_pad%gen_fplane4rec(SMPD, ctfparms, S1, fpl1, grid)
+        call obs_pad%gen_fplane4rec(SMPD, ctfparms, S2, fpl2, grid)
+        call fplane_shift(fpl1, S2 - S1, OSMPL_PAD_FAC, fpl12)
+        cerr = maxval(abs(fpl12%cmplx_plane - fpl2%cmplx_plane)) / max(maxval(abs(fpl2%cmplx_plane)), tiny(1.))
+        call assert_true(cerr < 1.e-5, 'the plane re-shifted by s2 - s1 is the plane generated at s2')
+        call assert_true(all(fpl12%ctfsq_plane == fpl2%ctfsq_plane), 'the CTF^2 plane is shift-free, copied bit for bit')
+        call assert_true(all(fpl12%frlims == fpl2%frlims) .and. fpl12%nyq == fpl2%nyq, 'the limits and the Nyquist index are the plane''s')
+        call fplane_shift(fpl1, [0.,0.], OSMPL_PAD_FAC, fpl0)
+        call assert_true(all(fpl0%cmplx_plane == fpl1%cmplx_plane), 'a zero re-shift is the identity')
+        ! the insertion of the re-shifted plane equals the insertion of the plane generated at s2
+        call ra%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call rb%new_accumulator(params, project, expand=.true., wthreads=.false.)
+        call ra%insert_plane_oversamp(c1sym, o, fpl12, w=0.4)
+        call rb%insert_plane_oversamp(c1sym, o, fpl2,  w=0.4)
+        call ra%compress_exp()
+        call rb%compress_exp()
+        ca = ra%get_cmat()
+        cb = rb%get_cmat()
+        call ra%get_rho_copy(da)
+        call rb%get_rho_copy(db)
+        cerr = maxval(abs(ca - cb)) / max(maxval(abs(cb)), tiny(1.))
+        derr = maxval(abs(da - db)) / max(maxval(abs(db)), tiny(1.))
+        call assert_true(cerr < 1.e-5 .and. derr < RELTOL, 'inserting the re-shifted plane equals inserting the plane at s2')
+        call ra%kill
+        call rb%kill
+        call forget_ft_maps()
+        call c1sym%kill()
+        call o%kill()
+        call obs%kill()
+        call obs_pad%kill()
+    end subroutine test_fplane_shift
 
     !> the ML regularization's ridge (wiener_ridge): the shrinkage rho / (rho + ridge) a shell of FSC at the floor
     !! (SSNR 0.001, tau2 = 0.001 sig2 with sig2 = 1/rho) gets is about 1/1001 whatever the scale of rho, from a

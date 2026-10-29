@@ -12,8 +12,9 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row, prob_beta_at, prob_neff_control, &
-    &prob_beta_control_last, PROB_NEFF_MIN_ROWS
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_extras, prob_beta_at, prob_neff_readout, &
+    &prob_insert_table, prob_insert_pose, prob_insert_poses, &
+    &PROB_NEFF_MIN_ROWS
 use simple_rnd,                only: seed_rnd_fixed
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -45,106 +46,95 @@ contains
         call test_posterior_row_stats()
         write(*,'(A)') 'test_draw_posterior_row'
         call test_draw_posterior_row()
+        write(*,'(A)') 'test_draw_posterior_extras'
+        call test_draw_posterior_extras()
+        write(*,'(A)') 'test_insert_table_round_trip'
+        call test_insert_table_round_trip()
+        write(*,'(A)') 'test_insert_extras_multistate'
+        call test_insert_extras_multistate()
         write(*,'(A)') 'test_ref_assign_posterior'
         call test_ref_assign_posterior()
         write(*,'(A)') 'test_prob_beta_at'
         call test_prob_beta_at()
         write(*,'(A)') 'test_ref_assign_neigh_posterior'
         call test_ref_assign_neigh_posterior()
-        write(*,'(A)') 'test_neff_control'
-        call test_neff_control()
+        write(*,'(A)') 'test_neff_readout'
+        call test_neff_readout()
     end subroutine run_all_eul_prob_tab_tests
 
-    !> The n_eff control (prob_neff): 200 rows of 50 distances k s_r (k = 0..49, s_r = 0.01 r) at temperature 2,
-    !! so row r's posterior at factor beta is geometric with ratio exp(-2 beta s_r). Reference values from
-    !! neff_control_ref.py (numpy): one row at a = 0.5 has exp(H) = 5.493135; the mean over the rows is 49.9721
-    !! at beta 0.001, 6.023447 at 0.5, 3.582882 at 1 and 2.243834 at 2, so the factor for a mean of 3 is
-    !! 1.282899. Doubling the temperatures halves it. Rows with fewer valid distances than nmin, a non-positive
-    !! temperature or outside the stride are not kept, invalid distances are dropped; fewer than
-    !! PROB_NEFF_MIN_ROWS rows fall back to the flat factor; the annealing tail ramps the solved factor to 1
-    subroutine test_neff_control()
+    !> The n_eff readout: 200 rows of 50 distances k s_r (k = 0..49, s_r = 0.01 r) at temperature 2, so row r's
+    !! posterior at factor beta is geometric with ratio exp(-2 beta s_r). Reference values from neff_control_ref.py
+    !! (numpy): one row at a = 0.5 has exp(H) = 5.493135; the mean over the rows is 49.9721 at beta 0.001, 6.023447
+    !! at 0.5, 3.582882 at 1 and 2.243834 at 2, falling monotonically with the factor. Rows with fewer valid
+    !! distances than nmin, a non-positive temperature or outside the stride are not kept, invalid distances are
+    !! dropped
+    subroutine test_neff_readout()
         integer, parameter :: NROWS_NC = 200, NCAND_NC = 50
-        type(prob_neff_control) :: ctrl
-        real    :: row(NCAND_NC), beta, neff_at, neff_phys, beta2, prev, neff
+        type(prob_neff_readout) :: neff_ro
+        real    :: row(NCAND_NC), prev, neff
         integer :: r, k, nwanted
         logical :: l_monotone
         ! one row
-        call ctrl%new(1, 1, 2)
+        call neff_ro%new(1, 1, 2)
         row = [(0.25 * real(k - 1), k = 1,NCAND_NC)]   ! a = 2 * 0.25 = 0.5 at beta 1
-        call ctrl%offer(NCAND_NC, row, 2.)
-        call assert_int(1, ctrl%nkept(), 'n_eff control: one row kept')
-        call assert_real(5.493135, ctrl%mean_neff(1.), 1.e-4, 'n_eff control: exp(entropy) of a geometric row (numpy)')
-        call assert_real(real(NCAND_NC), ctrl%mean_neff(1.e-6), 1.e-2, 'n_eff control: a cold factor of 1e-6 is the uniform row')
-        call assert_real(1., ctrl%mean_neff(1.e3), 1.e-4, 'n_eff control: a huge factor is the argmin')
-        call ctrl%kill
+        call neff_ro%offer(NCAND_NC, row, 2.)
+        call assert_int(1, neff_ro%nkept(), 'n_eff readout: one row kept')
+        call assert_real(5.493135, neff_ro%mean_neff(1.), 1.e-4, 'n_eff readout: exp(entropy) of a geometric row (numpy)')
+        call assert_real(real(NCAND_NC), neff_ro%mean_neff(1.e-6), 1.e-2, 'n_eff readout: a cold factor of 1e-6 is the uniform row')
+        call assert_real(1., neff_ro%mean_neff(1.e3), 1.e-4, 'n_eff readout: a huge factor is the argmin')
+        call neff_ro%kill
         ! the 200 rows, all wanted (stride 1)
-        call ctrl%new(NROWS_NC, NROWS_NC, 6)
+        call neff_ro%new(NROWS_NC, NROWS_NC, 6)
         do r = 1,NROWS_NC
-            call assert_true(ctrl%wanted(r), 'n_eff control: every row wanted at stride 1')
+            call assert_true(neff_ro%wanted(r), 'n_eff readout: every row wanted at stride 1')
             row = [(0.01 * real(r) * real(k - 1), k = 1,NCAND_NC)]
-            call ctrl%offer(NCAND_NC, row, 2.)
+            call neff_ro%offer(NCAND_NC, row, 2.)
         enddo
-        call assert_int(NROWS_NC, ctrl%nkept(), 'n_eff control: 200 rows kept')
-        call assert_real(49.9721,  ctrl%mean_neff(1.e-3), 1.e-2, 'n_eff control: mean n_eff at 0.001 (numpy)')
-        call assert_real(6.023447, ctrl%mean_neff(0.5),   1.e-3, 'n_eff control: mean n_eff at 0.5 (numpy)')
-        call assert_real(3.582882, ctrl%mean_neff(1.),    1.e-3, 'n_eff control: mean n_eff at 1 (numpy)')
-        call assert_real(2.243834, ctrl%mean_neff(2.),    1.e-3, 'n_eff control: mean n_eff at 2 (numpy)')
+        call assert_int(NROWS_NC, neff_ro%nkept(), 'n_eff readout: 200 rows kept')
+        call assert_real(49.9721,  neff_ro%mean_neff(1.e-3), 1.e-2, 'n_eff readout: mean n_eff at 0.001 (numpy)')
+        call assert_real(6.023447, neff_ro%mean_neff(0.5),   1.e-3, 'n_eff readout: mean n_eff at 0.5 (numpy)')
+        call assert_real(3.582882, neff_ro%mean_neff(1.),    1.e-3, 'n_eff readout: mean n_eff at 1 (numpy)')
+        call assert_real(2.243834, neff_ro%mean_neff(2.),    1.e-3, 'n_eff readout: mean n_eff at 2 (numpy)')
         l_monotone = .true.
         prev       = huge(prev)
         do k = -30,30
-            neff = ctrl%mean_neff(10.**(real(k)/10.))
+            neff = neff_ro%mean_neff(10.**(real(k)/10.))
             if( neff > prev ) l_monotone = .false.
             prev = neff
         enddo
-        call assert_true(l_monotone, 'n_eff control: the mean n_eff falls monotonically with the factor')
-        call ctrl%solve(3., beta, neff_at, neff_phys)
-        call assert_real(1.282899, beta,      1.e-3, 'n_eff control: the factor for a mean n_eff of 3 (numpy)')
-        call assert_real(3.,       neff_at,   1.e-3, 'n_eff control: the mean n_eff at the solution')
-        call assert_real(3.582882, neff_phys, 1.e-3, 'n_eff control: the mean n_eff at the physical posterior')
-        call ctrl%solve(100., beta2, neff_at, neff_phys)
-        call assert_real(1.e-3, beta2, 1.e-9, 'n_eff control: an unreachable hot target returns the bracket''s low end')
-        call ctrl%solve(1., beta2, neff_at, neff_phys)
-        call assert_real(1.e3, beta2, 1.e-3, 'n_eff control: a target of 1 (the argmin) returns the bracket''s high end')
-        ! apply: the solved factor; the tail's ramp to 1
-        call ctrl%apply(3., 0.3, 0., beta2)
-        call assert_real(beta, beta2, 1.e-5, 'n_eff control: apply returns the solved factor outside the tail')
-        call assert_real(beta, prob_beta_control_last(), 1.e-5, 'n_eff control: the last factor is kept for the commander')
-        call ctrl%apply(3., 0.3, 0.5, beta2)
-        call assert_real(sqrt(beta), beta2, 1.e-5, 'n_eff control: halfway through the tail, the geometric midpoint to 1')
-        call ctrl%apply(3., 0.3, 1., beta2)
-        call assert_real(1., beta2, 1.e-6, 'n_eff control: the end of the tail is the physical posterior')
-        call ctrl%kill
-        ! doubling the temperatures halves the factor
-        call ctrl%new(NROWS_NC, NROWS_NC, 6)
+        call assert_true(l_monotone, 'n_eff readout: the mean n_eff falls monotonically with the factor')
+        call neff_ro%report(0.3) ! the log line, over 200 rows
+        call neff_ro%kill
+        ! doubling the temperatures halves the factor at which a mean is met: the mean at beta 0.5 and T 4 is
+        ! the mean at beta 1 and T 2
+        call neff_ro%new(NROWS_NC, NROWS_NC, 6)
         do r = 1,NROWS_NC
             row = [(0.01 * real(r) * real(k - 1), k = 1,NCAND_NC)]
-            call ctrl%offer(NCAND_NC, row, 4.)
+            call neff_ro%offer(NCAND_NC, row, 4.)
         enddo
-        call ctrl%solve(3., beta2, neff_at, neff_phys)
-        call assert_real(0.5 * beta, beta2, 1.e-3, 'n_eff control: the factor scales inversely with the temperature')
-        call ctrl%kill
+        call assert_real(3.582882, neff_ro%mean_neff(0.5), 1.e-3, 'n_eff readout: the mean scales with beta times the temperature')
+        call neff_ro%kill
         ! the stride, the minimum row size, the temperature, invalid distances
-        call ctrl%new(1000, 100, 6)
+        call neff_ro%new(1000, 100, 6)
         nwanted = 0
         do r = 1,1000
-            if( ctrl%wanted(r) ) nwanted = nwanted + 1
+            if( neff_ro%wanted(r) ) nwanted = nwanted + 1
         enddo
-        call assert_int(100, nwanted, 'n_eff control: 100 of 1000 rows wanted at stride 10')
-        call assert_true(ctrl%wanted(1) .and. ctrl%wanted(11) .and. .not. ctrl%wanted(2), 'n_eff control: the stride starts at row 1')
+        call assert_int(100, nwanted, 'n_eff readout: 100 of 1000 rows wanted at stride 10')
+        call assert_true(neff_ro%wanted(1) .and. neff_ro%wanted(11) .and. .not. neff_ro%wanted(2), 'n_eff readout: the stride starts at row 1')
         row = [(0.25 * real(k - 1), k = 1,NCAND_NC)]
-        call ctrl%offer(5, row(1:5), 2.)
-        call assert_int(0, ctrl%nkept(), 'n_eff control: a row of five candidates is not kept at nmin 6')
-        call ctrl%offer(NCAND_NC, row, 0.)
-        call assert_int(0, ctrl%nkept(), 'n_eff control: a row without a temperature is not kept')
+        call neff_ro%offer(5, row(1:5), 2.)
+        call assert_int(0, neff_ro%nkept(), 'n_eff readout: a row of five candidates is not kept at nmin 6')
+        call neff_ro%offer(NCAND_NC, row, 0.)
+        call assert_int(0, neff_ro%nkept(), 'n_eff readout: a row without a temperature is not kept')
         row(7:NCAND_NC) = huge(1.)
-        call ctrl%offer(NCAND_NC, row, 2.)
-        call assert_int(1, ctrl%nkept(), 'n_eff control: six valid distances among invalid ones are kept')
-        call assert_real(6., ctrl%mean_neff(1.e-6), 1.e-3, 'n_eff control: the invalid distances are dropped')
-        call ctrl%apply(3., 0.3, 0., beta2)
-        call assert_real(0.3, beta2, 1.e-6, 'n_eff control: fewer rows than PROB_NEFF_MIN_ROWS fall back to the flat factor')
-        call assert_true(PROB_NEFF_MIN_ROWS > 1, 'n_eff control: the fallback threshold is above one row')
-        call ctrl%kill
-    end subroutine test_neff_control
+        call neff_ro%offer(NCAND_NC, row, 2.)
+        call assert_int(1, neff_ro%nkept(), 'n_eff readout: six valid distances among invalid ones are kept')
+        call assert_real(6., neff_ro%mean_neff(1.e-6), 1.e-3, 'n_eff readout: the invalid distances are dropped')
+        call assert_true(PROB_NEFF_MIN_ROWS > 1, 'n_eff readout: nothing is reported below PROB_NEFF_MIN_ROWS rows')
+        call neff_ro%report(0.3) ! below the minimum: silent
+        call neff_ro%kill
+    end subroutine test_neff_readout
 
     !> The tempering ramp (prob_beta_at): beta0 at the first iteration, beta1 at the last, the geometric
     !! midpoint halfway (0.1 to 1 over 25 iterations: sqrt(0.1) at the 13th), the same factor every step;
@@ -171,7 +161,7 @@ contains
         call assert_real(1.0, prob_beta_at(30, 25, 0.1, 1.), 1.e-6, 'an iteration past the run is clamped to the end')
     end subroutine test_prob_beta_at
 
-    !> the neighbourhood table's posterior assignment (ref_assign_neigh, section 4.5; the same draw on every
+    !> the neighbourhood table's posterior assignment (ref_assign_neigh; the same draw on every
     !! neighbourhood mode): a synthetic candidate store of 150 particles over 3 states x 20 directions (1 to 12
     !! candidates each, some without an in-plane index; every particle has a valid one, since a particle without one
     !! is re-seeded through the calculator, which this test has not). At a huge temperature every particle takes the
@@ -385,10 +375,7 @@ contains
         type(eul_prob_tab) :: tab
         real,    allocatable :: dists(:,:)
         integer, allocatable :: pinds(:), iref_argmin(:), iref_run1(:), iref_run2(:), iref_run3(:)
-        real,    allocatable :: w_c(:)
-        integer, allocatable :: inds_c(:)
-        integer :: nrefs, i, iref, nsame, nstate_ok, nmoved, si_c, imin_c, k99_c, nvalid_c, nkept_c
-        real    :: beta_c, neff_mean, pmax_c, neff_c
+        integer :: nrefs, i, iref, nsame, nstate_ok, nmoved
         character(len=64) :: label
         write(label,'(A,I0,A,I0)') 'nspace ', nspace, ', nstates ', nstates
         nrefs = nspace * nstates
@@ -437,7 +424,6 @@ contains
                 call set_dist(tab, iref, i, dists(iref,i))
             enddo
         enddo
-        allocate(w_c(nspace), inds_c(nspace))
         ! a huge temperature: the argmin wherever the row minimum is unique (every row but the flat particle 1)
         tab%temps = huge(1.)
         call seed_rnd_fixed(SEED_DRAW)
@@ -499,36 +485,6 @@ contains
                 iref_run3(i) = assigned_ref(tab, i, nspace)
             enddo
             call assert_true(any(iref_run1 /= iref_run3), 'another seed gives another assignment ('//trim(label)//')')
-            ! the n_eff control: the factor solved on the rows (every particle: 150 rows at stride 1, the invalid
-            ! one not kept) gives the target as the mean exp(entropy) over the kept rows at that factor
-            params%prob_neff = 3.
-            call seed_rnd_fixed(SEED_DRAW)
-            call tab%ref_assign
-            beta_c = prob_beta_control_last()
-            call assert_true(beta_c > 0., 'n_eff control on the dense table: a factor was solved ('//trim(label)//')')
-            neff_mean = 0.
-            nkept_c   = 0
-            do i = 1,NPTCLS_TAB
-                si_c = (iref_argmin(i) - 1) / nspace
-                call posterior_row_stats(nspace, dists(si_c*nspace+1:(si_c+1)*nspace, i), beta_c * tab%temps(i), &
-                    &w_c, inds_c, imin_c, pmax_c, neff_c, k99_c, nvalid_c)
-                if( nvalid_c < 6 ) cycle
-                nkept_c   = nkept_c + 1
-                neff_mean = neff_mean + neff_c
-            enddo
-            call assert_int(NPTCLS_TAB - 1, nkept_c, 'n_eff control on the dense table: every valid row kept ('//trim(label)//')')
-            call assert_real(3., neff_mean / real(nkept_c), 2.e-3, &
-                &'n_eff control on the dense table: the mean n_eff at the solved factor is the target ('//trim(label)//')')
-            do i = 1,NPTCLS_TAB
-                iref_run2(i) = assigned_ref(tab, i, nspace)
-            enddo
-            call seed_rnd_fixed(SEED_DRAW)
-            call tab%ref_assign
-            do i = 1,NPTCLS_TAB
-                iref_run3(i) = assigned_ref(tab, i, nspace)
-            enddo
-            call assert_true(all(iref_run2 == iref_run3), 'n_eff control on the dense table: the same seed gives the same assignment ('//trim(label)//')')
-            params%prob_neff = 0.
         endif
         call tab%kill
         call build%spproj_field%kill
@@ -542,6 +498,244 @@ contains
         integer,            intent(in) :: i, nspace
         iref = (tab%assgn_map(i)%istate - 1) * nspace + tab%assgn_map(i)%iproj
     end function assigned_ref
+
+    !> The weighted insertion's table: a particle without extras keeps weight 1; add records the committed weight
+    !! and the extras in order; the file round trip returns every field; the readout line prints; the part's
+    !! subset keeps the part's particles in its order with their entries; the resolved-poses layout follows the
+    !! subset (slots, counts, committed weights, zero weights until filled)
+    subroutine test_insert_table_round_trip()
+        type(prob_insert_table) :: tab, back, part
+        type(prob_insert_poses) :: poses
+        type(prob_insert_pose)  :: pose
+        type(prob_candidate)    :: cands(2)
+        type(string) :: fname
+        integer :: i
+        call tab%new(4, [11, 12, 13, 14], 3)
+        cands(1) = prob_candidate(101, 7, 0.4, 0.5, 1.5, .true.)
+        cands(2) = prob_candidate(102, 8, 0.6, -1.0, 2.0, .true.)
+        call tab%add(2, 0.6, 2, cands, [0.3, 0.1])
+        cands(1) = prob_candidate(103, 9, 0.2, 0.25, 0.0, .true.)
+        call tab%add(4, 0.9, 1, cands(1:1), [0.1])
+        call assert_int(4, tab%get_nptcls(), 'insert table: four particles')
+        call assert_int(3, tab%get_kmax(),   'insert table: kmax 3')
+        call assert_real(1., tab%get_committed_weight(1), 0., 'insert table: a particle without extras keeps weight 1')
+        call assert_int(0, tab%get_nextra(1), 'insert table: and no extras')
+        call assert_real(0.6, tab%get_committed_weight(2), 0., 'insert table: the committed weight recorded')
+        call assert_int(2, tab%get_nextra(2), 'insert table: two extras recorded')
+        pose = tab%get_extra(2, 2)
+        call assert_true(pose%iref == 102 .and. pose%inpl == 8 .and. pose%x == -1.0 .and. pose%y == 2.0 .and. pose%w == 0.1, &
+            &'insert table: the second extra of particle 2')
+        call tab%report
+        fname = string('prob_insert_table_test.dat')
+        call tab%write(fname)
+        call back%read(fname)
+        call assert_int(4, back%get_nptcls(), 'insert table round trip: the particle count')
+        call assert_int(3, back%get_kmax(),   'insert table round trip: kmax')
+        do i = 1,4
+            call assert_int(tab%get_pind(i), back%get_pind(i), 'insert table round trip: the particle index')
+            call assert_real(tab%get_committed_weight(i), back%get_committed_weight(i), 0., 'insert table round trip: the committed weight')
+            call assert_int(tab%get_nextra(i), back%get_nextra(i), 'insert table round trip: the extra count')
+        enddo
+        pose = back%get_extra(4, 1)
+        call assert_true(pose%iref == 103 .and. pose%inpl == 9 .and. pose%x == 0.25 .and. pose%y == 0.0 .and. pose%w == 0.1, &
+            &'insert table round trip: the extra of particle 4')
+        pose = back%get_extra(2, 1)
+        call assert_true(pose%iref == 101 .and. pose%inpl == 7 .and. pose%w == 0.3, 'insert table round trip: the first extra of particle 2')
+        call del_file(fname)
+        ! a part holding particles 14, 12 and 20 (the last unknown to the master's table), in that order
+        call part%subset(tab, [14, 12, 20])
+        call assert_int(3, part%get_nptcls(), 'insert table subset: the part''s particle count')
+        call assert_int(14, part%get_pind(1), 'insert table subset: the part''s order')
+        call assert_int(1, part%get_nextra(1), 'insert table subset: particle 14''s one extra')
+        call assert_int(2, part%get_nextra(2), 'insert table subset: particle 12''s two extras')
+        call assert_int(0, part%get_nextra(3), 'insert table subset: an unknown particle has no extra')
+        call assert_real(0.9, part%get_committed_weight(1), 0., 'insert table subset: particle 14''s committed weight')
+        call assert_real(1.0, part%get_committed_weight(3), 0., 'insert table subset: an unknown particle keeps weight 1')
+        pose = part%get_extra(2, 2)
+        call assert_true(pose%iref == 102 .and. pose%w == 0.1, 'insert table subset: particle 12''s second extra')
+        ! the resolved-poses layout from the part's table
+        call poses%setup(part, [14, 12, 20])
+        call assert_int(3, poses%npose, 'insert poses: three slots')
+        call assert_true(poses%has(14) .and. poses%has(12) .and. poses%has(20) .and. .not. poses%has(13), &
+            &'insert poses: the part''s particles have entries, others do not')
+        call assert_int(1, poses%first(1), 'insert poses: particle 14''s slot')
+        call assert_int(2, poses%first(2), 'insert poses: particle 12''s slots follow')
+        call assert_int(2, poses%loc(12),  'insert poses: the global index maps to the local one')
+        call assert_real(0.6, poses%wc(2), 0., 'insert poses: the committed weight')
+        call assert_true(all(poses%w == 0.), 'insert poses: the slots'' weights are zero until the search fills them')
+        call poses%kill
+        call part%kill
+        call tab%kill
+        call back%kill
+    end subroutine test_insert_table_round_trip
+
+    !> The weighted insertion's extras on a two-state dense table (the round-trip parts: 50 directions, 2 states,
+    !! 40 particles, a tenth of the entries refined): every extra lies in the committed state's block, is a refined
+    !! entry and is not the committed reference; a particle's weights sum to 1 and no extra is below
+    !! PROB_INSERT_WMIN; extras do occur at a hot temperature; the master's table round-trips through the file the
+    !! workers read; topk = 1 records no extra and weight 1 everywhere
+    subroutine test_insert_extras_multistate()
+        integer, parameter :: NSPACE_MS = 50, NSTATES_MS = 2, NPTCLS_MS = 40, NPARTS_MS = 2
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab)      :: master
+        type(prob_insert_table) :: back
+        type(prob_insert_pose)  :: pose, pose_a
+        type(prob_dense_entry), allocatable :: rows(:,:)
+        real,                   allocatable :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable :: refined(:,:)
+        integer,                allocatable :: pinds(:)
+        type(string) :: fname
+        integer :: i, k, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed, istate
+        real    :: wsum
+        call make_round_trip_parts(params, build, NSPACE_MS, NSTATES_MS, NPTCLS_MS, NPARTS_MS, rows, shifts, refined, seeds)
+        pinds = [(i, i=NPTCLS_MS,1,-1)]
+        params%topk = 3
+        call master%new(params, build, pinds)
+        call master%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_MS, 1)
+        master%temps = 1. ! hot rows: extras occur
+        call seed_rnd_fixed(SEED_DRAW)
+        call master%ref_assign
+        nextra_tot = 0; nwrong_state = 0; nwrong_refined = 0; nwrong_committed = 0; nwrong_weight = 0; nwrong_dup = 0
+        do i = 1,NPTCLS_MS
+            istate         = master%assgn_map(i)%istate
+            iref_committed = (istate - 1) * NSPACE_MS + master%assgn_map(i)%iproj
+            wsum           = master%insert_tab%get_committed_weight(i)
+            do k = 1,master%insert_tab%get_nextra(i)
+                pose       = master%insert_tab%get_extra(i, k)
+                nextra_tot = nextra_tot + 1
+                wsum       = wsum + pose%w
+                if( (pose%iref - 1) / NSPACE_MS + 1 /= istate )  nwrong_state     = nwrong_state + 1
+                if( .not. refined(pose%iref, pinds(i)) )          nwrong_refined   = nwrong_refined + 1
+                if( pose%iref == iref_committed )                 nwrong_committed = nwrong_committed + 1
+                if( pose%w < 0.01 - 1.e-6 )                       nwrong_weight    = nwrong_weight + 1
+                if( k == 2 )then
+                    pose_a = master%insert_tab%get_extra(i, 1)
+                    if( pose%iref == pose_a%iref ) nwrong_dup = nwrong_dup + 1
+                endif
+            enddo
+            if( abs(wsum - 1.) > 1.e-5 ) nwrong_weight = nwrong_weight + 1
+            if( master%insert_tab%get_nextra(i) > 2 ) nwrong_weight = nwrong_weight + 1
+        enddo
+        call assert_true(nextra_tot > 0, 'multi-state extras: hot rows give extra poses')
+        call assert_int(0, nwrong_state,     'multi-state extras: every extra is in the committed state''s block')
+        call assert_int(0, nwrong_refined,   'multi-state extras: every extra is a refined entry')
+        call assert_int(0, nwrong_committed, 'multi-state extras: no extra is the committed reference')
+        call assert_int(0, nwrong_dup,       'multi-state extras: the extras of a particle are distinct')
+        call assert_int(0, nwrong_weight,    'multi-state extras: weights sum to 1, no extra below 1%, at most topk - 1 extras')
+        ! the file the workers read
+        fname = string('prob_insert_multistate_test.dat')
+        call master%write_insert_table(fname)
+        call back%read(fname)
+        nwrong_weight = 0
+        do i = 1,NPTCLS_MS
+            if( back%get_pind(i) /= pinds(i) ) nwrong_weight = nwrong_weight + 1
+            if( back%get_committed_weight(i) /= master%insert_tab%get_committed_weight(i) ) nwrong_weight = nwrong_weight + 1
+            if( back%get_nextra(i) /= master%insert_tab%get_nextra(i) ) nwrong_weight = nwrong_weight + 1
+            do k = 1,back%get_nextra(i)
+                pose   = back%get_extra(i, k)
+                pose_a = master%insert_tab%get_extra(i, k)
+                if( pose%iref /= pose_a%iref .or. pose%inpl /= pose_a%inpl .or. pose%x /= pose_a%x .or. pose%y /= pose_a%y &
+                    &.or. pose%w /= pose_a%w ) nwrong_weight = nwrong_weight + 1
+            enddo
+        enddo
+        call assert_int(0, nwrong_weight, 'multi-state extras: the table round-trips through the file')
+        call del_file(fname)
+        call back%kill
+        ! topk 1: the committed pose alone
+        params%topk = 1
+        call seed_rnd_fixed(SEED_DRAW)
+        call master%ref_assign
+        nextra_tot = 0
+        do i = 1,NPTCLS_MS
+            nextra_tot = nextra_tot + master%insert_tab%get_nextra(i)
+            if( master%insert_tab%get_committed_weight(i) /= 1. ) nextra_tot = nextra_tot + 1
+        enddo
+        call assert_int(0, nextra_tot, 'topk 1: no extra pose and the committed weight 1 everywhere')
+        call master%kill
+        call kill_round_trip_parts(params, build, NPARTS_MS)
+    end subroutine test_insert_extras_multistate
+
+    !> The extra poses of the weighted insertion (draw_posterior_extras): kmax = 1 keeps the committed entry
+    !! alone at weight 1 and leaves the random stream untouched; the extras are drawn without replacement from
+    !! the eligible entries only, never the committed one, with the weights the tempered posterior over the kept
+    !! set summing to 1; an extra below wmin is dropped; the committed entry is kept whatever its share; over many
+    !! draws an extra is included with the probability of the remainder's renormalised posterior
+    subroutine test_draw_posterior_extras()
+        integer, parameter :: NDRAWS = 20000
+        real    :: dists(6), work(6), w(3), dist, wrow(6)
+        integer :: inds(3), nkept, i, k, nsecond, ndropped, seq1(20), seq2(20)
+        logical :: mask(6), l_ok
+        ! T = 1 on [0, 1, 2, 3, huge, 0.5], all eligible; the committed entry the mode
+        dists = [0., 1., 2., 3., huge(1.), 0.5]
+        mask  = .true.
+        call seed_rnd_fixed(20261029)
+        do i = 1,20
+            call draw_posterior_row(3, [0., 1., 2.], 1., wrow, seq1(i), dist)
+        enddo
+        call seed_rnd_fixed(20261029)
+        do i = 1,20
+            call draw_posterior_extras(6, dists, 1., mask, 1, 1, 0.01, work, nkept, inds, w)
+            call assert_int(1, nkept, 'kmax 1 keeps the committed entry alone')
+            call assert_int(1, inds(1), 'kmax 1 keeps the committed entry')
+            call assert_real(1., w(1), 0., 'kmax 1 gives the committed entry weight 1')
+            call draw_posterior_row(3, [0., 1., 2.], 1., wrow, seq2(i), dist)
+        enddo
+        call assert_true(all(seq1 == seq2), 'kmax 1 draws no random number: the stream is the single draw''s')
+        ! kmax 3: three distinct kept entries, the committed first, valid and eligible, weights summing to 1
+        l_ok = .true.
+        do i = 1,200
+            call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
+            l_ok = l_ok .and. nkept == 3 .and. inds(1) == 1 .and. inds(2) /= 1 .and. inds(3) /= 1 .and. inds(2) /= inds(3) &
+                &.and. inds(2) /= 5 .and. inds(3) /= 5 .and. abs(sum(w(1:3)) - 1.) < 1.e-5
+        enddo
+        call assert_true(l_ok, 'kmax 3 keeps three distinct valid entries, the committed first, weights summing to 1')
+        ! the weights are the tempered posterior over the kept set: with entries {1 (d 0), 6 (d 0.5), 2 (d 1)} kept
+        ! they are proportional to 1, e^-0.5, e^-1
+        do i = 1,500
+            call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
+            if( nkept == 3 .and. ((inds(2) == 6 .and. inds(3) == 2) .or. (inds(2) == 2 .and. inds(3) == 6)) ) exit
+        enddo
+        call assert_true(i <= 500, 'the pair {6, 2} of extras comes up within 500 draws')
+        do k = 2,3
+            if( inds(k) == 6 ) call assert_real(exp(-0.5) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 6 is its tempered share of the kept set')
+            if( inds(k) == 2 ) call assert_real(exp(-1.0) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 2 is its tempered share of the kept set')
+        enddo
+        call assert_real(1. / (1. + exp(-0.5) + exp(-1.)), w(1), 1.e-5, 'the committed entry''s weight is its tempered share of the kept set')
+        ! eligibility: only entry 6 eligible, so one extra at most, and it is entry 6
+        mask = .false.
+        mask(6) = .true.
+        call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
+        call assert_int(2, nkept, 'with one eligible entry there is one extra')
+        call assert_int(6, inds(2), 'and it is the eligible entry')
+        ! the committed entry itself ineligible changes nothing about its being kept first
+        mask = .true.
+        mask(1) = .false.
+        call draw_posterior_extras(6, dists, 1., mask, 1, 2, 1.e-6, work, nkept, inds, w)
+        call assert_true(nkept == 2 .and. inds(1) == 1 .and. inds(2) /= 1, 'the committed entry is kept first whatever its eligibility')
+        ! the mass rule: a near-delta row at a cold temperature keeps the committed entry alone
+        mask = .true.
+        ndropped = 0
+        do i = 1,100
+            call draw_posterior_extras(6, dists, 10., mask, 1, 3, 0.01, work, nkept, inds, w)
+            if( nkept == 1 ) ndropped = ndropped + 1
+        enddo
+        call assert_int(100, ndropped, 'at T = 10 every extra falls below 1% and is dropped: the committed entry alone')
+        ! inclusion frequency: three entries at T = 1, p = (0.665, 0.245, 0.090); given the committed entry 1, the
+        ! single extra is entry 2 with probability 0.245 / (0.245 + 0.090) = 0.731
+        nsecond = 0
+        do i = 1,NDRAWS
+            call draw_posterior_extras(3, [0., 1., 2.], 1., [.true., .true., .true.], 1, 2, 1.e-6, work, nkept, inds, w)
+            if( nkept == 2 .and. inds(2) == 2 ) nsecond = nsecond + 1
+        enddo
+        call assert_true(abs(real(nsecond) / NDRAWS - 0.731059) < 0.02, 'an extra is drawn from the remainder''s renormalised posterior')
+        ! a committed entry 80 nats above the minimum: its weight underflows, the kept set is the committed entry alone
+        call draw_posterior_extras(3, [0., 100., 2.], 1., [.true., .true., .true.], 2, 3, 0.01, work, nkept, inds, w)
+        call assert_true(nkept >= 1 .and. inds(1) == 2 .and. abs(sum(w(1:nkept)) - 1.) < 1.e-5, 'a committed entry of no mass is still kept first, the weights still sum to 1')
+        ! no valid distance: the committed entry alone
+        call draw_posterior_extras(3, [huge(1.), huge(1.), huge(1.)], 1., [.true., .true., .true.], 1, 3, 0.01, work, nkept, inds, w)
+        call assert_int(1, nkept, 'a row without a valid distance keeps the committed entry alone')
+    end subroutine test_draw_posterior_extras
 
     !> The pose posterior over a table row: T = pi wsqsum / (2 pftsz) (15.707963 for 1000 and 100); at T = 1000
     !! the row [0, 0.001, 0.002, 0.5, invalid, 0.4] gives p = [e^0, e^-1, e^-2, ~0, 0, ~0]/Z = [0.665241,

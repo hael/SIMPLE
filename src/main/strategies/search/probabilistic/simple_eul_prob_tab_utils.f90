@@ -8,6 +8,10 @@ use simple_math,      only: hpsort
 use simple_oris,      only: oris
 use simple_rnd,       only: ran3
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
+use simple_string,    only: string
+use simple_fileio,    only: fopen, fclose, fileiochk, del_file, del_files
+use simple_syslib,    only: file_exists
+use simple_defs_fname, only: DIST_FBODY, ASSIGNMENT_FBODY, INSERT_FBODY
 implicit none
 
 public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
@@ -16,9 +20,10 @@ public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
-public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row
+public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_extras
 public :: prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
-public :: prob_neff_control, prob_beta_control_last, PROB_NEFF_ROWS, PROB_NEFF_MIN_ROWS
+public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
+public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files
 private
 #include "simple_local_flags.inc"
 
@@ -40,37 +45,87 @@ type :: prob_candidate
     logical :: has_sh = .false.
 end type prob_candidate
 
-!> The n_eff control of the tables' posterior draws (prob_neff > 0; doc/implementation_notes/planned/
-!! pose_marginalization.md section 20.2): one tempering factor per iteration, solved so that the mean effective
-!! number of candidates exp(entropy) over a subsample of rows equals the target. The tables offer their rows in
-!! particle order before the draws: every stride-th particle whose row holds at least nmin valid distances is
-!! kept, up to nmax rows, packed as distances above the row minimum with the particle's temperature. Rows with
-!! fewer candidates than nmin are drawn at the solved factor but do not set it: a row of two candidates lands
-!! on one of its best two at any factor, and would pull the level of the rows where the choice is open. Below
-!! PROB_NEFF_MIN_ROWS kept rows the control falls back to the flat factor. The last factor applied is kept for
-!! the commander (prob_beta_control_last), which hands it to the next iteration's fills as prob_beta.
+!> The n_eff readout of the tables' posterior draws: the mean effective number of candidates exp(entropy) over a subsample of rows, at the draw's
+!! tempering factor and at beta 1 (the physical posterior), logged every iteration as POSTERIOR DRAW N_EFF. The
+!! tables offer their rows in particle order before the draws: every stride-th particle whose row holds at least
+!! PROB_NEFF_NMIN valid distances is kept, up to PROB_NEFF_ROWS rows, packed as distances above the row minimum
+!! with the particle's temperature; a row of two candidates lands on one of its best two at any factor and would
+!! pull the level of the rows where the choice is open. Until 2026-10-29 the same object solved the factor so that
+!! the mean n_eff met a target (prob_neff, the control); pinning n_eff cancelled the data's own annealing at the
+!! band entries and failed PorF 7 of 10, so the schedule is prob_beta flat with the tail, and n_eff is a readout
 integer, parameter :: PROB_NEFF_ROWS     = 1000  !< rows of the subsample
-integer, parameter :: PROB_NEFF_MIN_ROWS = 50    !< below which the control falls back to prob_beta
-real,    parameter :: PROB_NEFF_BETA_LO  = 1.e-3 !< the bracket of the solve, in beta
-real,    parameter :: PROB_NEFF_BETA_HI  = 1.e3
-integer, parameter :: PROB_NEFF_BISECT   = 40    !< bisections in log beta (a factor 1e6 bracket to 1e-6)
-real               :: prob_beta_last_solved = 0. !< the factor the last control applied (0: none this process)
+integer, parameter :: PROB_NEFF_NMIN     = 6     !< valid candidates a row needs to be kept
+integer, parameter :: PROB_NEFF_MIN_ROWS = 50    !< below which nothing is reported
 
-type :: prob_neff_control
+type :: prob_neff_readout
     private
     integer :: stride = 1, nmax = 0, nmin = 2, nrows = 0, nvals = 0
     integer, allocatable :: offs(:)
     real,    allocatable :: dists(:), temps(:)
 contains
-    procedure :: new       => neff_control_new
-    procedure :: wanted    => neff_control_wanted
-    procedure :: offer     => neff_control_offer
-    procedure :: nkept     => neff_control_nkept
-    procedure :: mean_neff => neff_control_mean_neff
-    procedure :: solve     => neff_control_solve
-    procedure :: apply     => neff_control_apply
-    procedure :: kill      => neff_control_kill
-end type prob_neff_control
+    procedure :: new       => neff_readout_new
+    procedure :: wanted    => neff_readout_wanted
+    procedure :: offer     => neff_readout_offer
+    procedure :: nkept     => neff_readout_nkept
+    procedure :: mean_neff => neff_readout_mean_neff
+    procedure :: report    => neff_readout_report
+    procedure :: kill      => neff_readout_kill
+end type prob_neff_readout
+
+!> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
+!! refined shift in the stored frame and its weight. The committed pose is the project's, with the weight the
+!! table keeps per particle
+type :: prob_insert_pose
+    integer :: iref = 0, inpl = 0
+    real    :: x = 0., y = 0., w = 0.
+end type prob_insert_pose
+
+!> The weighted insertion's table of one iteration: per particle (the global table's order) the committed pose's
+!! weight and its extra poses, drawn by the assignment (draw_posterior_extras) and written by the master beside
+!! the assignment (INSERT_FBODY); the workers read it with the particle indices and insert each particle at its
+!! committed pose with its weight and at its extras with theirs, every particle's weights summing to 1
+type :: prob_insert_table
+    private
+    integer :: nptcls = 0, kmax = 1, npose = 0
+    integer,                allocatable :: pinds(:), nextra(:), first(:)
+    real,                   allocatable :: wc(:)
+    type(prob_insert_pose), allocatable :: poses(:)
+contains
+    procedure :: new    => insert_table_new
+    procedure :: add    => insert_table_add
+    procedure :: subset => insert_table_subset
+    procedure :: write  => insert_table_write
+    procedure :: read   => insert_table_read
+    procedure :: report => insert_table_report
+    procedure :: get_nptcls   => insert_table_get_nptcls
+    procedure :: get_kmax     => insert_table_get_kmax
+    procedure :: get_pind     => insert_table_get_pind
+    procedure :: get_committed_weight => insert_table_get_committed_weight
+    procedure :: get_nextra   => insert_table_get_nextra
+    procedure :: get_extra    => insert_table_get_extra
+    procedure :: kill   => insert_table_kill
+end type prob_insert_table
+
+!> The weighted insertion's poses of one part's particles, resolved: per particle (by global index through loc)
+!! the committed pose's weight and its extra poses as Euler triplets, absolute stored shifts and weights. setup
+!! lays the structure out from the part's table (counts, weights, slots); the search fills a particle's slots
+!! when it commits the particle's pose (strategy3D_prob, through candidate_pose, the rule the committed pose is
+!! converted by); calc_3Drec inserts. The weights of a particle sum to 1, so the reconstruction's mass is the
+!! particle count as without the extras
+type :: prob_insert_poses
+    integer              :: nptcls = 0, npose = 0
+    integer, allocatable :: loc(:)       !< global particle index -> local index (0: no entry)
+    real,    allocatable :: wc(:)        !< (nptcls) the committed pose's weight
+    integer, allocatable :: nextra(:)    !< (nptcls)
+    integer, allocatable :: first(:)     !< (nptcls) first extra in euler/shift/w
+    real,    allocatable :: euler(:,:)   !< (3,npose)
+    real,    allocatable :: shift(:,:)   !< (2,npose) absolute stored shifts
+    real,    allocatable :: w(:)         !< (npose), 0 until the search fills the slot
+contains
+    procedure :: setup => insert_poses_setup
+    procedure :: has   => insert_poses_has
+    procedure :: kill  => insert_poses_kill
+end type prob_insert_poses
 
 ! One entry of the dense table, a particle and a reference: the distance and the in-plane index. No default values:
 ! the fill and the read write every entry.
@@ -155,7 +210,7 @@ type :: prob_fill_profile
     !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
     !! of the refined count projs_ns (rank 1 is in decile 1); (11) an unrefined entry below every refined one. Mass
     !! in the top deciles says the truth lands near the cap and more refinements would help; mass at rank 1 says
-    !! the cap is slack (pose_marginalization.md section 19, item 10)
+    !! the cap is slack
     integer(int64) :: rank_counts(0:11) = 0_int64
 end type prob_fill_profile
 
@@ -420,7 +475,7 @@ contains
 
     !> The tempering factor of iteration iter of a run of niters (the tables' posterior draws): a geometric ramp from
     !! beta0 at the first iteration to beta1 at the last, so every iteration cools by the same factor (0.1 to 1
-    !! over 25 iterations is x1.1 per iteration; pose_marginalization.md section 17). beta0 = beta1 is a flat
+    !! over 25 iterations is x1.1 per iteration). beta0 = beta1 is a flat
     !! run; a run of one iteration is at beta1, the factor the map is weighted at
     pure real function prob_beta_at( iter, niters, beta0, beta1 ) result( beta )
         integer, intent(in) :: iter, niters
@@ -434,11 +489,11 @@ contains
         beta = beta0 * (beta1 / beta0)**frac
     end function prob_beta_at
 
-    ! ---- the n_eff control ------------------------------------------------------------------------------------
+    ! ---- the n_eff readout -----------------------------------------------------------------------------------
 
     !> nptcls rows will be offered; keep up to nmax of them, each with at least nmin valid distances
-    subroutine neff_control_new( self, nptcls, nmax, nmin )
-        class(prob_neff_control), intent(inout) :: self
+    subroutine neff_readout_new( self, nptcls, nmax, nmin )
+        class(prob_neff_readout), intent(inout) :: self
         integer,                  intent(in)    :: nptcls, nmax, nmin
         call self%kill
         self%nmax   = max(1, nmax)
@@ -448,19 +503,19 @@ contains
         self%nvals  = 0
         allocate(self%offs(self%nmax + 1), self%temps(self%nmax), self%dists(64 * self%nmax))
         self%offs(1) = 1
-    end subroutine neff_control_new
+    end subroutine neff_readout_new
 
     !> is particle i's row wanted (its turn in the stride, room left)? the caller skips building the rest
-    pure logical function neff_control_wanted( self, i ) result( l_wanted )
-        class(prob_neff_control), intent(in) :: self
+    pure logical function neff_readout_wanted( self, i ) result( l_wanted )
+        class(prob_neff_readout), intent(in) :: self
         integer,                  intent(in) :: i
         l_wanted = self%nrows < self%nmax .and. mod(i - 1, self%stride) == 0
-    end function neff_control_wanted
+    end function neff_readout_wanted
 
     !> offer a row: its valid distances (finite, below the invalid marker) are packed above their minimum when
     !! there are at least nmin of them and the temperature is positive
-    subroutine neff_control_offer( self, n, dists, temp )
-        class(prob_neff_control), intent(inout) :: self
+    subroutine neff_readout_offer( self, n, dists, temp )
+        class(prob_neff_readout), intent(inout) :: self
         integer,                  intent(in)    :: n
         real,                     intent(in)    :: dists(n), temp
         real, allocatable :: tmp(:)
@@ -493,18 +548,18 @@ contains
         self%nrows             = self%nrows + 1
         self%temps(self%nrows) = temp
         self%offs(self%nrows + 1) = self%nvals + 1
-    end subroutine neff_control_offer
+    end subroutine neff_readout_offer
 
-    pure integer function neff_control_nkept( self ) result( nrows )
-        class(prob_neff_control), intent(in) :: self
+    pure integer function neff_readout_nkept( self ) result( nrows )
+        class(prob_neff_readout), intent(in) :: self
         nrows = self%nrows
-    end function neff_control_nkept
+    end function neff_readout_nkept
 
     !> the mean over the kept rows of exp(entropy) of the row posterior at tempering factor beta:
     !! p_r proportional to exp(-beta T d_r), d_r the distance above the row minimum; in one pass per row,
     !! H = log z + beta T <d>_p with z the partition sum
-    real function neff_control_mean_neff( self, beta ) result( neff )
-        class(prob_neff_control), intent(in) :: self
+    real function neff_readout_mean_neff( self, beta ) result( neff )
+        class(prob_neff_readout), intent(in) :: self
         real,                     intent(in) :: beta
         real(dp) :: z, s, acc, a, e
         integer  :: irow, k
@@ -526,92 +581,272 @@ contains
         !$omp end parallel do
         neff = 0.
         if( self%nrows > 0 ) neff = real(acc / real(self%nrows,dp))
-    end function neff_control_mean_neff
+    end function neff_readout_mean_neff
 
-    !> the factor at which the mean n_eff of the kept rows is the target: a bisection in log beta over
-    !! [PROB_NEFF_BETA_LO, PROB_NEFF_BETA_HI] (the mean n_eff falls monotonically with beta: the entropy of
-    !! each tempered row does, dH/dbeta = -beta Var(T d)); an unreachable target returns the bracket's end.
-    !! neff_at is the mean at the solution, neff_phys the mean at beta 1 (the physical posterior)
-    subroutine neff_control_solve( self, target, beta, neff_at, neff_phys )
-        class(prob_neff_control), intent(in)  :: self
-        real,                     intent(in)  :: target
-        real,                     intent(out) :: beta, neff_at, neff_phys
-        real    :: lo, hi, mid, neff_lo, neff_hi
-        integer :: it
-        neff_phys = self%mean_neff(1.)
-        lo        = log(PROB_NEFF_BETA_LO)
-        hi        = log(PROB_NEFF_BETA_HI)
-        neff_lo   = self%mean_neff(PROB_NEFF_BETA_LO)
-        neff_hi   = self%mean_neff(PROB_NEFF_BETA_HI)
-        if( neff_lo <= target )then
-            beta    = PROB_NEFF_BETA_LO
-            neff_at = neff_lo
-            return
-        endif
-        if( neff_hi >= target )then
-            beta    = PROB_NEFF_BETA_HI
-            neff_at = neff_hi
-            return
-        endif
-        do it = 1,PROB_NEFF_BISECT
-            mid     = 0.5 * (lo + hi)
-            neff_at = self%mean_neff(exp(mid))
-            if( neff_at > target )then
-                lo = mid
-            else
-                hi = mid
-            endif
-        enddo
-        beta    = exp(0.5 * (lo + hi))
-        neff_at = self%mean_neff(beta)
-    end subroutine neff_control_solve
-
-    !> the control of one assignment: the factor the draws use. The solved factor when enough rows were kept,
-    !! the flat factor beta_flat otherwise; in the annealing tail (anneal_frac in (0,1]) the factor ramps
-    !! geometrically from the solved value to 1, the physical posterior, so the tail of section 19.8 keeps its
-    !! shape from wherever the control sits. Logs one line; keeps the factor for the commander
-    subroutine neff_control_apply( self, target, beta_flat, anneal_frac, beta )
-        class(prob_neff_control), intent(in)  :: self
-        real,                     intent(in)  :: target, beta_flat, anneal_frac
-        real,                     intent(out) :: beta
-        real :: neff_at, neff_phys, frac
-        if( self%nrows < PROB_NEFF_MIN_ROWS )then
-            beta = beta_flat
-            write(logfhandle,'(A,I0,A,I0,A,F9.4)') '>>> POSTERIOR DRAW CONTROL: ', self%nrows, &
-                &' rows with at least ', self%nmin, ' candidates, fewer than needed; the flat factor ', beta
-        else
-            call self%solve(target, beta, neff_at, neff_phys)
-            frac = min(1., max(0., anneal_frac))
-            if( frac > 0. .and. beta > 0. )then
-                beta = beta**(1. - frac)
-                write(logfhandle,'(A,F9.4,A,F6.2,A,F8.2,A,I0,A,F8.2,A,F4.2,A)') '>>> POSTERIOR DRAW CONTROL: BETA ', beta, &
-                    &' (solved for n_eff ', target, ': ', neff_at, ' over ', self%nrows, ' rows; at beta 1: ', neff_phys, &
-                    &'; annealing tail, frac ', frac, ' to 1)'
-            else
-                write(logfhandle,'(A,F9.4,A,F6.2,A,F8.2,A,I0,A,F8.2,A)') '>>> POSTERIOR DRAW CONTROL: BETA ', beta, &
-                    &' FOR N_EFF ', target, ' (', neff_at, ' over ', self%nrows, ' rows; n_eff at beta 1: ', neff_phys, ')'
-            endif
-        endif
-        prob_beta_last_solved = beta
+    !> the readout of one assignment: the mean n_eff at the draw's factor beta_draw and at beta 1 (the physical
+    !! posterior), over the kept rows; nothing below PROB_NEFF_MIN_ROWS rows
+    subroutine neff_readout_report( self, beta_draw )
+        class(prob_neff_readout), intent(in) :: self
+        real,                     intent(in) :: beta_draw
+        if( self%nrows < PROB_NEFF_MIN_ROWS ) return
+        write(logfhandle,'(A,F8.2,A,F7.4,A,F8.2,A,I0,A)') '>>> POSTERIOR DRAW N_EFF: ', self%mean_neff(beta_draw), &
+            &' at beta ', beta_draw, ';', self%mean_neff(1.), ' at beta 1 (over ', self%nrows, ' rows)'
         call flush(logfhandle)
-    end subroutine neff_control_apply
+    end subroutine neff_readout_report
 
-    subroutine neff_control_kill( self )
-        class(prob_neff_control), intent(inout) :: self
+    subroutine neff_readout_kill( self )
+        class(prob_neff_readout), intent(inout) :: self
         if( allocated(self%offs)  ) deallocate(self%offs)
         if( allocated(self%dists) ) deallocate(self%dists)
         if( allocated(self%temps) ) deallocate(self%temps)
         self%nrows = 0
         self%nvals = 0
-    end subroutine neff_control_kill
+    end subroutine neff_readout_kill
 
-    !> the factor the last n_eff control of this process applied; 0 when none ran
-    real function prob_beta_control_last() result( beta )
-        beta = prob_beta_last_solved
-    end function prob_beta_control_last
+    ! ---- the weighted insertion's table ------------------------------------------------------------------------
 
-    !> One draw from the posterior over a table row at temperature temp (the tables' assignment,
-    !! doc/implementation_notes/planned/pose_marginalization.md section 4.1): p_r proportional to
+    !> nptcls particles (the global table's), every one at its committed pose with weight 1 until add says otherwise
+    subroutine insert_table_new( self, nptcls, pinds, kmax )
+        class(prob_insert_table), intent(inout) :: self
+        integer,                  intent(in)    :: nptcls, pinds(nptcls), kmax
+        call self%kill
+        self%nptcls = nptcls
+        self%kmax   = max(1, kmax)
+        self%npose  = 0
+        allocate(self%pinds(nptcls), source=pinds)
+        allocate(self%nextra(nptcls), self%first(nptcls), source=0)
+        allocate(self%wc(nptcls), source=1.)
+        allocate(self%poses(max(1, nptcls * (self%kmax - 1))))
+    end subroutine insert_table_new
+
+    !> particle i's weights: the committed pose's wc and its nextra extra poses, the candidates cands with weights w
+    !! (reference, in-plane index and refined shift from the candidate); a particle's extras are added once
+    subroutine insert_table_add( self, i, wc, nextra, cands, w )
+        class(prob_insert_table), intent(inout) :: self
+        integer,                  intent(in)    :: i, nextra
+        real,                     intent(in)    :: wc
+        type(prob_candidate),     intent(in)    :: cands(:)
+        real,                     intent(in)    :: w(:)
+        type(prob_insert_pose), allocatable :: tmp(:)
+        integer :: k
+        if( i < 1 .or. i > self%nptcls ) THROW_HARD('particle index out of range; insert_table_add')
+        if( self%nextra(i) > 0 ) THROW_HARD('a particle''s extra poses are added once; insert_table_add')
+        self%wc(i) = wc
+        if( nextra < 1 ) return
+        if( self%npose + nextra > size(self%poses) )then
+            allocate(tmp(2 * size(self%poses) + nextra))
+            tmp(1:self%npose) = self%poses(1:self%npose)
+            call move_alloc(tmp, self%poses)
+        endif
+        self%first(i)  = self%npose + 1
+        self%nextra(i) = nextra
+        do k = 1,nextra
+            self%npose = self%npose + 1
+            self%poses(self%npose)%iref = cands(k)%iref
+            self%poses(self%npose)%inpl = cands(k)%inpl
+            self%poses(self%npose)%x    = cands(k)%x
+            self%poses(self%npose)%y    = cands(k)%y
+            self%poses(self%npose)%w    = w(k)
+        enddo
+    end subroutine insert_table_add
+
+    !> this table as the part of glob that holds the particles loc_pinds, in their order: a particle glob has no
+    !! entry for keeps weight 1 and no extras
+    subroutine insert_table_subset( self, glob, loc_pinds )
+        class(prob_insert_table), intent(inout) :: self
+        class(prob_insert_table), intent(in)    :: glob
+        integer,                  intent(in)    :: loc_pinds(:)
+        integer, allocatable :: pind2glob(:)
+        integer :: max_pind, i_loc, i_glob, pind, k, n
+        call self%new(size(loc_pinds), loc_pinds, glob%kmax)
+        if( glob%nptcls < 1 ) return
+        call build_pind_lookup(glob%pinds(1:glob%nptcls), loc_pinds, pind2glob, max_pind)
+        if( max_pind < 1 ) return
+        do i_loc = 1,size(loc_pinds)
+            pind = loc_pinds(i_loc)
+            if( pind < 1 .or. pind > max_pind ) cycle
+            i_glob = pind2glob(pind)
+            if( i_glob < 1 ) cycle
+            n = glob%nextra(i_glob)
+            self%wc(i_loc) = glob%wc(i_glob)
+            if( n < 1 ) cycle
+            if( self%npose + n > size(self%poses) )then
+                block
+                    type(prob_insert_pose), allocatable :: tmp(:)
+                    allocate(tmp(2 * size(self%poses) + n))
+                    tmp(1:self%npose) = self%poses(1:self%npose)
+                    call move_alloc(tmp, self%poses)
+                end block
+            endif
+            self%first(i_loc)  = self%npose + 1
+            self%nextra(i_loc) = n
+            do k = 1,n
+                self%npose = self%npose + 1
+                self%poses(self%npose) = glob%poses(glob%first(i_glob) + k - 1)
+            enddo
+        enddo
+        deallocate(pind2glob)
+    end subroutine insert_table_subset
+
+    !> the table to a binary file: nptcls, kmax, npose; pinds, wc, nextra, first; the poses
+    subroutine insert_table_write( self, fname )
+        class(prob_insert_table), intent(in) :: self
+        class(string),            intent(in) :: fname
+        integer :: funit, io_stat
+        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('insert_table_write; file: '//fname%to_char(), io_stat)
+        write(unit=funit) self%nptcls, self%kmax, self%npose
+        if( self%nptcls > 0 )then
+            write(unit=funit) self%pinds(1:self%nptcls), self%wc(1:self%nptcls), self%nextra(1:self%nptcls), &
+                &self%first(1:self%nptcls)
+        endif
+        if( self%npose > 0 ) write(unit=funit) self%poses(1:self%npose)
+        call fclose(funit)
+    end subroutine insert_table_write
+
+    subroutine insert_table_read( self, fname )
+        class(prob_insert_table), intent(inout) :: self
+        class(string),            intent(in)    :: fname
+        integer :: funit, io_stat, nptcls, kmax, npose
+        call self%kill
+        if( .not. file_exists(fname) ) THROW_HARD('file '//fname%to_char()//' does not exist; insert_table_read')
+        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('insert_table_read; file: '//fname%to_char(), io_stat)
+        read(unit=funit) nptcls, kmax, npose
+        self%nptcls = nptcls
+        self%kmax   = kmax
+        self%npose  = npose
+        allocate(self%pinds(max(1,nptcls)), self%nextra(max(1,nptcls)), self%first(max(1,nptcls)), source=0)
+        allocate(self%wc(max(1,nptcls)), source=1.)
+        allocate(self%poses(max(1,npose)))
+        if( nptcls > 0 ) read(unit=funit) self%pinds(1:nptcls), self%wc(1:nptcls), self%nextra(1:nptcls), self%first(1:nptcls)
+        if( npose  > 0 ) read(unit=funit) self%poses(1:npose)
+        call fclose(funit)
+    end subroutine insert_table_read
+
+    !> the log line: insertions per particle and the committed pose's mean weight
+    subroutine insert_table_report( self )
+        class(prob_insert_table), intent(in) :: self
+        if( self%nptcls < 1 ) return
+        write(logfhandle,'(A,I0,A,F6.3,A,F6.3)') '>>> PROB_TAB_INSERT: topk ', self%kmax, '; insertions per particle ', &
+            &1. + real(self%npose) / real(self%nptcls), '; mean weight of the committed pose ', &
+            &sum(self%wc(1:self%nptcls)) / real(self%nptcls)
+        call flush(logfhandle)
+    end subroutine insert_table_report
+
+    pure integer function insert_table_get_nptcls( self )
+        class(prob_insert_table), intent(in) :: self
+        insert_table_get_nptcls = self%nptcls
+    end function insert_table_get_nptcls
+
+    pure integer function insert_table_get_kmax( self )
+        class(prob_insert_table), intent(in) :: self
+        insert_table_get_kmax = self%kmax
+    end function insert_table_get_kmax
+
+    pure integer function insert_table_get_pind( self, i )
+        class(prob_insert_table), intent(in) :: self
+        integer,                  intent(in) :: i
+        insert_table_get_pind = self%pinds(i)
+    end function insert_table_get_pind
+
+    pure real function insert_table_get_committed_weight( self, i )
+        class(prob_insert_table), intent(in) :: self
+        integer,                  intent(in) :: i
+        insert_table_get_committed_weight = self%wc(i)
+    end function insert_table_get_committed_weight
+
+    pure integer function insert_table_get_nextra( self, i )
+        class(prob_insert_table), intent(in) :: self
+        integer,                  intent(in) :: i
+        insert_table_get_nextra = self%nextra(i)
+    end function insert_table_get_nextra
+
+    !> particle i's k-th extra pose
+    pure function insert_table_get_extra( self, i, k ) result( pose )
+        class(prob_insert_table), intent(in) :: self
+        integer,                  intent(in) :: i, k
+        type(prob_insert_pose) :: pose
+        pose = self%poses(self%first(i) + k - 1)
+    end function insert_table_get_extra
+
+    subroutine insert_table_kill( self )
+        class(prob_insert_table), intent(inout) :: self
+        if( allocated(self%pinds)  ) deallocate(self%pinds)
+        if( allocated(self%nextra) ) deallocate(self%nextra)
+        if( allocated(self%first)  ) deallocate(self%first)
+        if( allocated(self%wc)     ) deallocate(self%wc)
+        if( allocated(self%poses)  ) deallocate(self%poses)
+        self%nptcls = 0
+        self%kmax   = 1
+        self%npose  = 0
+    end subroutine insert_table_kill
+
+    ! ---- the resolved poses of a part -----------------------------------------------------------------------------
+
+    !> the layout from the part's table tab (its particles in the order of pinds, tab's order): counts, committed
+    !! weights and slots; the slots' poses are zero (weight 0, which the insertion skips) until the search fills them
+    subroutine insert_poses_setup( self, tab, pinds )
+        class(prob_insert_poses), intent(inout) :: self
+        class(prob_insert_table), intent(in)    :: tab
+        integer,                  intent(in)    :: pinds(:)
+        integer :: i, ipose, max_pind
+        call self%kill
+        if( tab%nptcls /= size(pinds) ) THROW_HARD('the table is not the part''s; insert_poses_setup')
+        self%nptcls = tab%nptcls
+        self%npose  = tab%npose
+        max_pind    = 0
+        if( size(pinds) > 0 ) max_pind = maxval(pinds)
+        allocate(self%loc(max(1,max_pind)), self%nextra(max(1,self%nptcls)), self%first(max(1,self%nptcls)), source=0)
+        allocate(self%wc(max(1,self%nptcls)), source=1.)
+        allocate(self%euler(3,max(1,self%npose)), self%shift(2,max(1,self%npose)), source=0.)
+        allocate(self%w(max(1,self%npose)), source=0.)
+        ipose = 0
+        do i = 1,self%nptcls
+            if( tab%pinds(i) /= pinds(i) ) THROW_HARD('the table''s particles are not the part''s; insert_poses_setup')
+            if( pinds(i) > 0 ) self%loc(pinds(i)) = i
+            self%wc(i)     = tab%wc(i)
+            self%nextra(i) = tab%nextra(i)
+            self%first(i)  = ipose + 1
+            ipose = ipose + tab%nextra(i)
+        enddo
+    end subroutine insert_poses_setup
+
+    !> whether particle iptcl has an entry
+    pure logical function insert_poses_has( self, iptcl )
+        class(prob_insert_poses), intent(in) :: self
+        integer,                  intent(in) :: iptcl
+        insert_poses_has = .false.
+        if( .not. allocated(self%loc) ) return
+        if( iptcl < 1 .or. iptcl > size(self%loc) ) return
+        insert_poses_has = self%loc(iptcl) > 0
+    end function insert_poses_has
+
+    subroutine insert_poses_kill( self )
+        class(prob_insert_poses), intent(inout) :: self
+        if( allocated(self%loc)    ) deallocate(self%loc)
+        if( allocated(self%wc)     ) deallocate(self%wc)
+        if( allocated(self%nextra) ) deallocate(self%nextra)
+        if( allocated(self%first)  ) deallocate(self%first)
+        if( allocated(self%euler)  ) deallocate(self%euler)
+        if( allocated(self%shift)  ) deallocate(self%shift)
+        if( allocated(self%w)      ) deallocate(self%w)
+        self%nptcls = 0
+        self%npose  = 0
+    end subroutine insert_poses_kill
+
+    !> the files the probabilistic alignment of an iteration leaves in the run directory: the tables' parts, the
+    !! assignment and the weighted insertion's extra poses; one place for the four workflows that remove them
+    subroutine del_prob_align_files( nparts )
+        integer, intent(in) :: nparts
+        call del_files(DIST_FBODY,       nparts, ext='.dat')
+        call del_files(ASSIGNMENT_FBODY, nparts, ext='.dat')
+        call del_file(DIST_FBODY//'.dat')
+        call del_file(ASSIGNMENT_FBODY//'.dat')
+        call del_file(INSERT_FBODY//'.dat')
+    end subroutine del_prob_align_files
+
+    !> One draw from the posterior over a table row at temperature temp (the tables' assignment): p_r proportional to
     !! exp(-temp (dist_r - dist_min)) over the valid distances (finite, below the invalid marker), zero
     !! elsewhere. which is the drawn index and dist its distance; which = 0 when no distance is valid.
     !! temp = 0 draws uniformly over the valid distances; a huge temp returns the argmin when the minimum
@@ -667,6 +902,91 @@ contains
         if( which == 0 ) which = imin ! rounding at the top of the cumulative sum
         dist = dists(which)
     end subroutine draw_posterior_row
+
+    !> Extra poses for the weighted insertion (topk > 1): up to kmax - 1 further entries of a row, drawn WITHOUT replacement from the tempered posterior
+    !! p_r proportional to exp(-temp (dist_r - dist_min)) over the eligible entries (mask: the refined ones) other
+    !! than the committed draw ifirst, each draw from the remainder renormalised. The weights are the tempered
+    !! posterior renormalised over the committed entry and the extras, and an extra whose weight falls below wmin
+    !! is dropped (the rest renormalised again), so no pose enters the reconstruction with less than that share of
+    !! its particle; the committed entry is always kept, so kmax = 1 keeps it alone at weight 1 and draws no random
+    !! number: the single draw's stream and reconstruction, bit for bit. On return nkept entries, the committed
+    !! first, with their row indices inds and weights w summing to 1. work is a work array of size >= n
+    subroutine draw_posterior_extras( n, dists, temp, mask, ifirst, kmax, wmin, work, nkept, inds, w )
+        integer, intent(in)    :: n, ifirst, kmax
+        real,    intent(in)    :: dists(n), temp, wmin
+        logical, intent(in)    :: mask(n)
+        real,    intent(inout) :: work(:)
+        integer, intent(out)   :: nkept
+        integer, intent(out)   :: inds(:)
+        real,    intent(out)   :: w(:)
+        real(dp) :: wsum, csum, tgt, arg, tot
+        real     :: dmin, invalid
+        integer  :: r, k, m
+        nkept   = 1
+        inds(1) = ifirst
+        w(1)    = 1.
+        if( kmax <= 1 ) return
+        invalid = 0.1 * huge(invalid)
+        dmin    = huge(dmin)
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid ) dmin = min(dmin, dists(r))
+        enddo
+        if( dmin >= invalid ) return
+        ! the unnormalised posterior of the committed entry and of the eligible others
+        w(1) = 0.
+        if( ieee_is_finite(dists(ifirst)) .and. dists(ifirst) < invalid )then
+            arg = real(max(0.,temp),dp) * real(dists(ifirst) - dmin,dp)
+            if( arg < 80.d0 ) w(1) = real(exp(-arg))
+        endif
+        wsum = 0.d0
+        do r = 1,n
+            work(r) = 0.
+            if( r == ifirst .or. .not. mask(r) ) cycle
+            if( .not. (ieee_is_finite(dists(r)) .and. dists(r) < invalid) ) cycle
+            arg = real(max(0.,temp),dp) * real(dists(r) - dmin,dp)
+            if( arg < 80.d0 )then
+                work(r) = real(exp(-arg))
+                wsum    = wsum + real(work(r),dp)
+            endif
+        enddo
+        ! the extras, without replacement, each from the remainder
+        do k = 2,kmax
+            if( .not. (wsum > 0.d0) ) exit
+            tgt  = real(ran3(),dp) * wsum
+            csum = 0.d0
+            m    = 0
+            do r = 1,n
+                if( work(r) <= 0. ) cycle
+                csum = csum + real(work(r),dp)
+                m    = r
+                if( csum >= tgt ) exit
+            enddo
+            if( m == 0 ) exit
+            nkept       = nkept + 1
+            inds(nkept) = m
+            w(nkept)    = work(m)
+            wsum        = wsum - real(work(m),dp)
+            work(m)     = 0.
+        enddo
+        ! the weights over the kept set; extras below wmin dropped, the committed entry kept whatever its share
+        tot = sum(real(w(1:nkept),dp))
+        if( .not. (tot > 0.d0) )then
+            nkept = 1
+            w(1)  = 1.
+            return
+        endif
+        w(1:nkept) = real(real(w(1:nkept),dp) / tot)
+        m = 1
+        do k = 2,nkept
+            if( w(k) < wmin ) cycle
+            m       = m + 1
+            inds(m) = inds(k)
+            w(m)    = w(k)
+        enddo
+        nkept = m
+        tot   = sum(real(w(1:nkept),dp))
+        w(1:nkept) = real(real(w(1:nkept),dp) / tot)
+    end subroutine draw_posterior_extras
 
     !> The posterior over one table row at temperature temp: p_r proportional to exp(-temp (dist_r - dist_min))
     !! over the valid distances (finite and below the invalid marker, as ref_assign counts them), zero

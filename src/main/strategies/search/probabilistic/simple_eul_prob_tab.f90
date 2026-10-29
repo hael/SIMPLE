@@ -8,8 +8,9 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2, &
-    &prob_neff_control, PROB_NEFF_ROWS
+    &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, draw_posterior_extras, prob_insert_table
 use simple_type_defs,          only: OBJFUN_EUCLID
+use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_polarft_calc,       only: SHERRSQ
 implicit none
@@ -66,6 +67,7 @@ type :: eul_prob_tab
     integer                     :: nstates         !< states number
     integer                     :: nrefs           !< reference number
     type(prob_fill_profile)     :: fill_profile    !< accumulated cost record of fill_tab_range (bench file)
+    type(prob_insert_table)     :: insert_tab      !< the weighted insertion's extra poses of the assignment (topk > 1)
     contains
     ! CONSTRUCTOR
     procedure :: new => new_global
@@ -90,6 +92,8 @@ type :: eul_prob_tab
     procedure :: ref_assign
     procedure, private :: warn_invalid_and_flat
     procedure :: write_assignment
+    procedure :: write_insert_table
+    procedure :: read_insert_table
     ! REFERENCE INDEX MAPPING
     procedure :: ref_state
     procedure :: ref_proj
@@ -456,8 +460,7 @@ contains
         !> The pose posterior over the particle's finished production row (posterior-drawn in-plane,
         !! the best projs_ns shift-refined) at the temperature of its weighted power, with the angular
         !! spread of the references holding 99% of the mass about the mode (the mode's state, across the
-        !! symmetry operations). Then the controls (doc/implementation_notes/planned/pose_marginalization.md
-        !! sections 5 and 11): the identical-pose null test, the kernel re-scored at the production mode's
+        !! symmetry operations). Then the controls: the identical-pose null test, the kernel re-scored at the production mode's
         !! exact (reference, shift, grid rotation) against the stored loss, with the kernel the stored value
         !! came from (the shift search's shifted-reference kernel at the frame-converted stored shift, or the
         !! seed bank); the deterministic row on the matcher's references (best grid rotation at the
@@ -702,8 +705,7 @@ contains
 
         !> one reference's row entry: the in-plane rotation drawn from the row posterior at the particle's
         !! temperature over every grid rotation (gen_posterior_val; the uniform draw within an angular window it
-        !! replaced was the search's exploration, doc/implementation_notes/planned/pose_marginalization.md
-        !! sections 14-17, now the tempered posterior's)
+        !! replaced was the search's exploration, now the tempered posterior's)
         subroutine score_ref( ri_loc, iptcl_loc, shift_xy, dist_loc, irot_loc )
             integer, intent(in)  :: ri_loc, iptcl_loc
             real,    intent(in)  :: shift_xy(2)
@@ -877,25 +879,27 @@ contains
         deallocate(min_dist, max_dist, nvalid)
     end subroutine warn_invalid_and_flat
 
-    !> ptcl -> (proj, state) assignment by one draw per particle from its row posterior
-    !! (doc/implementation_notes/planned/pose_marginalization.md sections 4 and 10). The particle's state is the state
+    !> ptcl -> (proj, state) assignment by one draw per particle from its row posterior. The particle's state is the state
     !! of its closest reference over all states (ties to the lowest reference index); its direction is drawn within
     !! that state's block of the row with p proportional to
-    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps; prob_beta on it, or the factor
-    !! the n_eff control solves for this iteration when prob_neff is set: pose_marginalization.md section 20.2)
-    !! and L the row's values as the fill left them (sampled in-plane, the top set refined). No reference is
+    !! exp(-T_i (L - L_min)), T_i the particle's temperature from the fill (temps) times prob_beta, and L the row's
+    !! values as the fill left them (sampled in-plane, the top set refined). The mean n_eff of a subsample of the
+    !! rows at the draw's factor and at beta 1 is logged (prob_neff_readout). No reference is
     !! forced to be populated. The committed candidate is the drawn reference's dense_candidate (its in-plane,
     !! its refined shift when refined), the seed shift recorded, frac 100. A particle without a valid distance
     !! takes reference 1. The draws run in particle order on the master's random stream, so shared-memory and
     !! distributed runs draw alike. The reference-balanced frontier this replaced (every reference drawing its
-    !! closest free particle) was removed on 2026-10-24 (note, section 19).
+    !! closest free particle) was removed on 2026-10-24: if every image shows one direction, every image is
+    !! assigned to it.
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
-        type(prob_neff_control) :: ctrl
-        integer, allocatable :: iref_best(:)
-        real,    allocatable :: score_best(:), w(:)
-        integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing
-        real    :: score, dist, temp, invalid_dist, beta_eff
+        type(prob_neff_readout) :: neff
+        type(prob_candidate), allocatable :: cands(:)
+        integer, allocatable :: iref_best(:), kinds(:)
+        real,    allocatable :: score_best(:), w(:), kw(:)
+        logical, allocatable :: eligible(:)
+        integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing, j, k, nkept, kmax
+        real    :: score, dist, temp, invalid_dist
         invalid_dist = 0.1 * huge(invalid_dist)
         call self%warn_invalid_and_flat
         ! the state label: each particle's closest reference over all states, references outside in blocks
@@ -917,20 +921,21 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! the n_eff control: the iteration's tempering factor from a subsample of the rows the draws are from
-        beta_eff = self%p_ptr%prob_beta
-        if( self%p_ptr%prob_neff > 0. )then
-            call ctrl%new(self%nptcls, PROB_NEFF_ROWS, ceiling(2. * self%p_ptr%prob_neff))
-            do i = 1,self%nptcls
-                if( .not. ctrl%wanted(i) ) cycle
-                si     = self%state_to_active_rank(self%ref_state(iref_best(i)))
-                ifirst = (si - 1) * self%p_ptr%nspace + 1
-                ilast  = si * self%p_ptr%nspace
-                call ctrl%offer(ilast - ifirst + 1, self%dists(i,ifirst:ilast), self%temps(i))
-            enddo
-            call ctrl%apply(self%p_ptr%prob_neff, self%p_ptr%prob_beta, self%p_ptr%prob_anneal_frac, beta_eff)
-            call ctrl%kill
-        endif
+        ! the weighted insertion's extras (topk > 1): drawn beside the committed draw from the refined entries of the row
+        kmax = max(1, self%p_ptr%topk)
+        call self%insert_tab%new(self%nptcls, self%pinds, kmax)
+        if( kmax > 1 ) allocate(kinds(kmax), kw(kmax), cands(kmax), eligible(self%nrefs))
+        ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
+        call neff%new(self%nptcls, PROB_NEFF_ROWS, PROB_NEFF_NMIN)
+        do i = 1,self%nptcls
+            if( .not. neff%wanted(i) ) cycle
+            si     = self%state_to_active_rank(self%ref_state(iref_best(i)))
+            ifirst = (si - 1) * self%p_ptr%nspace + 1
+            ilast  = si * self%p_ptr%nspace
+            call neff%offer(ilast - ifirst + 1, self%dists(i,ifirst:ilast), self%temps(i))
+        enddo
+        call neff%report(self%p_ptr%prob_beta)
+        call neff%kill
         ! the draw within the state's block, in particle order on the master's stream
         nmode         = 0
         ntemp_missing = 0
@@ -939,7 +944,7 @@ contains
             ifirst = (si - 1) * self%p_ptr%nspace + 1
             ilast  = si * self%p_ptr%nspace
             nblock = ilast - ifirst + 1
-            temp   = beta_eff * self%temps(i)
+            temp   = self%p_ptr%prob_beta * self%temps(i)
             if( .not. (temp > 0.) )then
                 ! no temperature from the fill: the argmin, as the particle has no scale to draw at
                 ntemp_missing = ntemp_missing + 1
@@ -955,13 +960,30 @@ contains
             call self%assign_candidate(i, self%dense_candidate(assigned_iref, i))
             call record_seed_shift(self%assgn_map(i), self%seed_shifts(:,i), self%seed_has_sh(i), self%p_ptr%l_doshift)
             self%assgn_map(i)%frac = 100.
+            ! the extras for the weighted insertion: up to kmax - 1 further entries without replacement from the
+            ! tempered row over its refined entries (the only ones whose shift is their own), at the draw's
+            ! temperature; the weights the tempered posterior over the kept set
+            if( kmax > 1 .and. which > 0 )then
+                eligible(1:nblock) = .false.
+                do j = self%refined_offsets(i), self%refined_offsets(i+1) - 1
+                    if( self%refined(j)%ri >= ifirst .and. self%refined(j)%ri <= ilast ) eligible(self%refined(j)%ri - ifirst + 1) = .true.
+                enddo
+                call draw_posterior_extras(nblock, self%dists(i,ifirst:ilast), temp, eligible(1:nblock), which, kmax, &
+                    &PROB_INSERT_WMIN, w, nkept, kinds, kw)
+                do k = 2,nkept
+                    cands(k-1) = self%dense_candidate(ifirst - 1 + kinds(k), i)
+                enddo
+                call self%insert_tab%add(i, kw(1), nkept - 1, cands(1:max(1,nkept-1)), kw(2:max(2,nkept)))
+            endif
         enddo
+        if( kmax > 1 ) call self%insert_tab%report
         write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: posterior draw at the particle temperature, ', &
             &self%nptcls, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ', &
             &real(nmode) / real(max(1,self%nptcls))
         if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
             &'WARNING: particles without a temperature in the dense part files, assigned to their argmin: ', ntemp_missing
         deallocate(score_best, iref_best, w)
+        if( allocated(kinds) ) deallocate(kinds, kw, cands, eligible)
 
     contains
 
@@ -1394,6 +1416,23 @@ contains
         call fclose(funit)
     end subroutine write_assignment
 
+    !> the weighted insertion's extra poses of the assignment (topk > 1) to a binary file the workers read
+    subroutine write_insert_table( self, binfname )
+        class(eul_prob_tab), intent(in) :: self
+        class(string),       intent(in) :: binfname
+        call self%insert_tab%write(binfname)
+    end subroutine write_insert_table
+
+    !> the master's table of extra poses, kept for this part's particles (as read_assignment keeps the assignment)
+    subroutine read_insert_table( self, binfname )
+        class(eul_prob_tab), intent(inout) :: self
+        class(string),       intent(in)    :: binfname
+        type(prob_insert_table) :: glob
+        call glob%read(binfname)
+        call self%insert_tab%subset(glob, self%pinds)
+        call glob%kill
+    end subroutine read_insert_table
+
     ! read from the global assignment map to local partition for shift search and further refinement
     subroutine read_assignment( self, binfname )
         class(eul_prob_tab), intent(inout) :: self
@@ -1451,6 +1490,7 @@ contains
         if( allocated(self%refined)         ) deallocate(self%refined)
         if( allocated(self%refined_offsets) ) deallocate(self%refined_offsets)
         if( allocated(self%assgn_map)    ) deallocate(self%assgn_map)
+        call self%insert_tab%kill
         if( allocated(self%seed_shifts)  ) deallocate(self%seed_shifts)
         if( allocated(self%seed_has_sh)  ) deallocate(self%seed_has_sh)
         if( allocated(self%temps)        ) deallocate(self%temps)

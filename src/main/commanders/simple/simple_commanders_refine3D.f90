@@ -1829,6 +1829,7 @@ contains
         end subroutine validate_input_volumes
 
         subroutine run_classify3D_refs()
+            use simple_eul_prob_tab_utils, only: del_prob_align_files
             integer, parameter  :: STEP_IT = 3
             type(refine3D_stage_plan_entry), allocatable :: stages(:)
             integer :: startit, lastit, stage
@@ -1866,10 +1867,7 @@ contains
                 iter_glob = lastit
                 call cline%delete('endit')
             enddo
-            call del_files(DIST_FBODY,       params%nparts, ext='.dat')
-            call del_files(ASSIGNMENT_FBODY, params%nparts, ext='.dat')
-            call del_file(DIST_FBODY//'.dat')
-            call del_file(ASSIGNMENT_FBODY//'.dat')
+            call del_prob_align_files(params%nparts)
             write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' EXITING FREQUENCY MARCHING AT ITERATION ', iter_glob
             deallocate(stages)
         end subroutine run_classify3D_refs
@@ -1954,7 +1952,7 @@ contains
     subroutine exec_refine3D( self, cline )
         use simple_core_module_api
         use simple_refine3D_strategy
-        use simple_eul_prob_tab_utils, only: prob_beta_at, prob_beta_control_last
+        use simple_eul_prob_tab_utils, only: prob_beta_at
         use simple_defs,               only: PROB_BETA_TAIL
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -1963,9 +1961,9 @@ contains
         type(builder)    :: build
         type(string)     :: filt_mode_arg, refine_arg
         character(len=STDLEN) :: errmsg
-        logical          :: converged, l_anneal, l_control
+        logical          :: converged, l_anneal
         integer          :: niters, it_tail
-        real             :: beta_start, beta_last
+        real             :: beta_start
         ! the modes the 3D matcher implements, refused here so that a distributed master never
         ! waits for workers that stop on an unknown mode
         if( cline%defined('refine') )then
@@ -2021,13 +2019,7 @@ contains
             params%extr_iter = params%startit - 1
         endif
         beta_start = params%prob_beta
-        l_control  = params%l_prob_align_mode .and. params%prob_neff > 0.
-        if( l_control )then
-            ! the n_eff control (pose_marginalization.md section 20.2): prob_beta_end is the tail's switch
-            l_anneal = params%prob_beta_end > TINY
-        else
-            l_anneal = params%l_prob_align_mode .and. abs(params%prob_beta_end - beta_start) > TINY
-        endif
+        l_anneal   = params%l_prob_align_mode .and. abs(params%prob_beta_end - beta_start) > TINY
         do
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
@@ -2036,22 +2028,9 @@ contains
             ! workers (check_conv3D reports it in its settings box). A run with prob_beta_end searches flat at
             ! prob_beta until its resolution stops gaining or its budget nears its end (check_conv3D starts the
             ! tail and keeps its first iteration), then ramps geometrically to prob_beta_end over the PROB_BETA_TAIL
-            ! iterations of the tail and ends (pose_marginalization.md sections 17, 19)
+            ! iterations of the tail and ends
             if( params%l_prob_align_mode )then
-                if( l_control )then
-                    ! the n_eff control: the tables solve the factor at assignment time; the previous iteration's
-                    ! factor goes to this iteration's fills (the in-plane draws) as prob_beta, and the tail's
-                    ! progress to the ramp of the solved factor to 1
-                    beta_last = prob_beta_control_last()
-                    if( beta_last > 0. ) params%prob_beta = beta_last
-                    params%prob_anneal_frac = 0.
-                    if( l_anneal )then
-                        it_tail = strategy%anneal_tail_start()
-                        if( it_tail > 0 ) params%prob_anneal_frac = real(min(PROB_BETA_TAIL, &
-                            &max(1, params%which_iter - it_tail + 1)) - 1) / real(max(1, PROB_BETA_TAIL - 1))
-                    endif
-                    call cline%set('prob_anneal_frac', params%prob_anneal_frac)
-                else if( l_anneal )then
+                if( l_anneal )then
                     it_tail = strategy%anneal_tail_start()
                     if( it_tail > 0 )then
                         params%prob_beta = prob_beta_at(params%which_iter - it_tail + 1, PROB_BETA_TAIL,&

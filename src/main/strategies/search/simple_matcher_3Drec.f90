@@ -12,6 +12,8 @@ use simple_parameters,      only: parameters
 use simple_reconstructor,   only: reconstructor
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody
 use simple_state_weight_set, only: state_weight_set
+use simple_math_ft,          only: fplane_shift
+use simple_eul_prob_tab_utils, only: prob_insert_poses
 implicit none
 
 public :: init_rec, prep_imgs4rec, gen_rec_plane, cleanup_rec_buffers, write_state_half_partial, calc_3Drec
@@ -26,7 +28,7 @@ contains
     !! assembles them (volassemble) and names the output volumes. With a state weight set, or a
     !! caller's weight table wtab(nptcls,nstates) aligned with pinds, a particle enters every state it
     !! weighs into (weight above zero), with that weight.
-    subroutine calc_3Drec( params, build, nptcls, pinds, wset, wtab )
+    subroutine calc_3Drec( params, build, nptcls, pinds, wset, wtab, extra )
         use simple_image,        only: image
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters), target,         intent(inout) :: params
@@ -35,13 +37,15 @@ contains
         integer,                           intent(in)    :: pinds(nptcls)
         class(state_weight_set), optional, intent(inout) :: wset
         real,                    optional, intent(in)    :: wtab(:,:)
+        type(prob_insert_poses), optional, intent(in)    :: extra  !< the weighted insertion's poses (topk > 1)
         type(fplane_type), allocatable   :: fpls(:)
         type(image),       allocatable   :: crop_imgs(:)
         type(reconstructor) :: recvol
         integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
         real,    allocatable :: grouped_w(:)
         integer :: batchlims(2), ibatch, batchsz, state, eo, group
-        logical :: l_records
+        real    :: shift_scale
+        logical :: l_records, l_extra
         type(ptcl_read_counts)  :: reads0
         type(ptcl_read_session) :: reads
         integer(timer_int_kind) :: t, t0
@@ -68,6 +72,11 @@ contains
         endif
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call reads%new(params)
+        ! the extra poses' shifts are in the original pixels, the planes' in the cropped ones when cropped
+        l_extra     = .false.
+        shift_scale = 1.
+        if( present(extra) ) l_extra = extra%npose > 0 .or. extra%nptcls > 0
+        if( l_extra .and. params%box_crop < params%box ) shift_scale = real(params%box_crop) / real(params%box)
         if( L_BENCH_GLOB )then
             rt_init = toc(t)
             rt_prep = 0.
@@ -96,7 +105,17 @@ contains
                         rt_prep = rt_prep + toc(t)
                         t       = tic()
                     endif
-                    if( allocated(grouped_w) )then
+                    if( l_extra )then
+                        if( allocated(grouped_w) )then
+                            call update_state_half_rec(state, eo, build, batchsz, &
+                                &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), recvol, &
+                                &weights=grouped_w(batchlims(1):batchlims(2)), extra=extra, shift_scale=shift_scale)
+                        else
+                            call update_state_half_rec(state, eo, build, batchsz, &
+                                &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), recvol, &
+                                &extra=extra, shift_scale=shift_scale)
+                        endif
+                    else if( allocated(grouped_w) )then
                         call update_state_half_rec(state, eo, build, batchsz, &
                             &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), recvol, &
                             &grouped_w(batchlims(1):batchlims(2)))
@@ -315,14 +334,25 @@ contains
 
     !> Insert a state/even-odd homogeneous particle batch into one half-map. With weights the batch
     !! is the state's weighted membership (labels need not match) and every plane enters with its weight.
-    subroutine update_state_half_rec( state, eo, build, nptcls, pinds, fplanes, recvol, weights )
-        integer,              intent(in)    :: state, eo, nptcls, pinds(nptcls)
-        class(builder),       intent(inout) :: build
-        type(fplane_type),    intent(inout) :: fplanes(nptcls)
-        class(reconstructor), intent(inout) :: recvol
-        real, optional,       intent(in)    :: weights(nptcls)
+    !! With extra (the weighted insertion, topk > 1) a particle with an entry enters at its committed pose
+    !! with its committed weight and at each extra pose from its plane re-shifted by the pose's shift minus
+    !! the committed one (fplane_shift: a phase ramp, no second read or transform), with the extra's weight;
+    !! a particle without an entry enters as without extra, so topk = 1 is this routine's plain path bit for bit
+    subroutine update_state_half_rec( state, eo, build, nptcls, pinds, fplanes, recvol, weights, extra, shift_scale )
+        integer,                           intent(in)    :: state, eo, nptcls, pinds(nptcls)
+        class(builder),                    intent(inout) :: build
+        type(fplane_type),                 intent(inout) :: fplanes(nptcls)
+        class(reconstructor),              intent(inout) :: recvol
+        real,                    optional, intent(in)    :: weights(nptcls)
+        type(prob_insert_poses), optional, intent(in)    :: extra
+        real,                    optional, intent(in)    :: shift_scale  !< the planes' pixels per stored-shift pixel
+        type(fplane_type) :: fpl_shifted
         type(ori) :: orientation
-        integer :: iptcl, i
+        real    :: wbase, scale
+        integer :: iptcl, i, iloc
+        logical :: l_entry
+        scale = 1.
+        if( present(shift_scale) ) scale = shift_scale
         do i = 1,nptcls
             iptcl = pinds(i)
             call build%spproj_field%get_ori(iptcl, orientation)
@@ -334,14 +364,55 @@ contains
             if( normalized_eo(orientation%get_eo()) /= eo )then
                 THROW_HARD('non-homogeneous even-odd reconstruction batch; update_state_half_rec')
             endif
-            if( present(weights) )then
+            l_entry = .false.
+            if( present(extra) ) l_entry = extra%has(iptcl)
+            if( l_entry )then
+                iloc  = extra%loc(iptcl)
+                wbase = 1.
+                if( present(weights) ) wbase = weights(i)
+                call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, fplanes(i), w=wbase * extra%wc(iloc))
+                call insert_extra_poses(build, orientation, fplanes(i), recvol, extra, iloc, wbase, scale, fpl_shifted)
+            else if( present(weights) )then
                 call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, fplanes(i), w=weights(i))
             else
                 call recvol%insert_plane_oversamp(build%pgrpsyms, orientation, fplanes(i))
             endif
         enddo
+        if( allocated(fpl_shifted%cmplx_plane)    ) deallocate(fpl_shifted%cmplx_plane)
+        if( allocated(fpl_shifted%ctfsq_plane)    ) deallocate(fpl_shifted%ctfsq_plane)
+        if( allocated(fpl_shifted%transfer_plane) ) deallocate(fpl_shifted%transfer_plane)
         call orientation%kill
     end subroutine update_state_half_rec
+
+    !> A particle's extra poses into the half-map: each from the committed plane fplane re-shifted by the pose's
+    !! shift minus the committed one (fplane_shift into the scratch plane fpl_shifted: a phase ramp, no second read
+    !! or transform), at the pose's Euler triplet, with wbase (the state weight, 1 otherwise) times the pose's
+    !! weight; a slot the search left unfilled (weight 0: a particle without a valid assignment) is skipped
+    subroutine insert_extra_poses( build, orientation, fplane, recvol, extra, iloc, wbase, scale, fpl_shifted )
+        class(builder),          intent(inout) :: build
+        class(ori),              intent(in)    :: orientation
+        type(fplane_type),       intent(in)    :: fplane
+        class(reconstructor),    intent(inout) :: recvol
+        type(prob_insert_poses), intent(in)    :: extra
+        integer,                 intent(in)    :: iloc
+        real,                    intent(in)    :: wbase, scale
+        type(fplane_type),       intent(inout) :: fpl_shifted
+        type(ori) :: o_extra
+        real    :: sh_committed(2), dshift(2)
+        integer :: k, ipose
+        if( extra%nextra(iloc) < 1 ) return
+        sh_committed = orientation%get_2Dshift()
+        o_extra      = orientation
+        do k = 1,extra%nextra(iloc)
+            ipose = extra%first(iloc) + k - 1
+            if( .not. (extra%w(ipose) > 0.) ) cycle
+            dshift = (extra%shift(:,ipose) - sh_committed) * scale
+            call fplane_shift(fplane, dshift, OSMPL_PAD_FAC, fpl_shifted)
+            call o_extra%set_euler(extra%euler(:,ipose))
+            call recvol%insert_plane_oversamp(build%pgrpsyms, o_extra, fpl_shifted, w=wbase * extra%w(ipose))
+        enddo
+        call o_extra%kill
+    end subroutine insert_extra_poses
 
     !> Write one half-map partial in the existing Cartesian volume/rho format.
     subroutine write_state_half_partial( params, recvol, state, eo )

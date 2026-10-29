@@ -626,6 +626,7 @@ contains
     end function active_lp_schedule_nstages
 
     subroutine exec_refine3D( params, istage, xrefine3D )
+        use simple_eul_prob_tab_utils, only: del_prob_align_files
         class(parameters),     intent(inout) :: params
         integer,               intent(in)    :: istage
         class(commander_base), intent(inout) :: xrefine3D
@@ -634,10 +635,7 @@ contains
         real         :: lp_snapshot
         call cline_refine3D%delete('endit')
         call xrefine3D%execute(cline_refine3D)
-        call del_files(DIST_FBODY,      params%nparts,ext='.dat')
-        call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
-        call del_file(DIST_FBODY//'.dat')
-        call del_file(ASSIGNMENT_FBODY//'.dat')
+        call del_prob_align_files(params%nparts)
         stage = '_stage'//int2str_pad(istage,2)
         do state = 1, params%nstates
             vol_name  = refine3D_state_vol_fname(state)

@@ -10,11 +10,12 @@ use simple_builder,                    only: builder
 use simple_eo_partition,               only: ensure_field_halves
 use simple_eul_prob_tab,               only: eul_prob_tab
 use simple_matcher_3Drec,              only: calc_3Drec
+use simple_eul_prob_tab_utils,         only: prob_insert_poses
 use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims,    only: sample_ptcls4iter3D, master_draws_sample3D
 use simple_qsys_funs,                  only: qsys_declare_part_finished
 use simple_bench_io,                   only: open_bench_report
-use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes, get_node_mem_in_use_bytes
+use simple_syslib,                     only: get_peak_rss_bytes, get_current_rss_bytes, get_node_mem_in_use_bytes, file_exists
 use simple_matcher_ptcl_io,            only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
     &write_ptcl_read_bench_context, ptcl_read_session, ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, &
     &pass_buffer_status_name, pass_buffer_bytes, open_record_buffer, seal_record_buffer
@@ -61,6 +62,7 @@ contains
         class(parameters), pointer :: p_ptr => null()
         class(builder),    pointer :: b_ptr => null()
         type(eul_prob_tab), target :: eulprob_obj_part
+        type(prob_insert_poses), target :: extra_poses  !< the weighted insertion's poses of this part (topk > 1)
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr => null()
         end type strategy3D_per_ptcl
@@ -184,6 +186,16 @@ contains
         if( ctrl%do_prob_align )then
             call eulprob_obj_part%new_assignment(p_ptr, b_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
+            ! the weighted insertion's extra poses (topk > 1): the part's share of the master's table, laid out for
+            ! the search to fill as it commits each particle's pose (strategy3D_prob) and calc_3Drec to insert
+            if( p_ptr%topk > 1 .and. file_exists(string(INSERT_FBODY)//'.dat') )then
+                if( trim(p_ptr%rec_backend) == 'pcg' )then
+                    write(logfhandle,'(A)') 'WARNING: topk > 1 applies to the gridding insertion only; the PCG backend reconstructs from the committed poses'
+                else
+                    call eulprob_obj_part%read_insert_table(string(INSERT_FBODY)//'.dat')
+                    call extra_poses%setup(eulprob_obj_part%insert_tab, pinds)
+                endif
+            endif
         endif
         if( ctrl%do_bench )then
             rt_prep_orisrch     = toc(t_prep_orisrch)
@@ -241,7 +253,10 @@ contains
                 cnt_all(ithr) = cnt_all(ithr) + 1
                 strategy3Dspecs(iptcl_batch)%iptcl     = iptcl
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
-                if( ctrl%do_prob_align ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
+                if( ctrl%do_prob_align )then
+                    strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
+                    if( extra_poses%nptcls > 0 ) strategy3Dspecs(iptcl_batch)%extra_poses => extra_poses
+                endif
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
                 if( ctrl%do_emit_sigma .and. .not. p_ptr%l_cart_refine )then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
@@ -297,12 +312,13 @@ contains
                 t_rec  = tic()
                 reads0 = ptcl_read_counts_now()
             endif
-            call write_partial_recs(params, build, cline, nptcls2update, pinds)
+            call write_partial_recs(params, build, cline, nptcls2update, pinds, extra_poses)
             if( ctrl%do_bench )then
                 rt_rec_write = rt_rec_write + toc(t_rec)
                 reads_rec    = ptcl_read_counts_since(reads0)
             endif
         endif
+        call extra_poses%kill
         call release_pass_buffer
         call b_ptr%esig%kill
         if( ctrl%do_bench ) rss_after_reconstruction = get_current_rss_bytes()
@@ -545,6 +561,8 @@ contains
             endif
         end subroutine choose_and_run_strategy
 
+
+
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return
             if( ctrl%do_bench ) t_projio = tic()
@@ -582,26 +600,27 @@ contains
 
     !> This part's partial reconstructions of the updated particles: by hard state labels, or with
     !! m_estimator=flex by the frozen weights of the project's state weight set
-    subroutine write_partial_recs( params, build, cline, nptcls, pinds )
+    subroutine write_partial_recs( params, build, cline, nptcls, pinds, extra )
         use simple_state_weight_set, only: state_weight_set
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: nptcls, pinds(:)
+        class(parameters),               intent(inout) :: params
+        class(builder),                  intent(inout) :: build
+        class(cmdline),                  intent(inout) :: cline
+        integer,                         intent(in)    :: nptcls, pinds(:)
+        type(prob_insert_poses), optional, intent(in)  :: extra  !< the weighted insertion's poses (topk > 1, gridding)
         type(state_weight_set) :: wset
         if( params%l_m_estimator_flex )then
             call wset%new(build%spproj, build%spproj_field)
             if( trim(params%rec_backend) == 'pcg' )then
                 call execute_rec3D_pcg_worker(params, build, cline, pinds, wset)
             else
-                call calc_3Drec(params, build, nptcls, pinds, wset)
+                call calc_3Drec(params, build, nptcls, pinds, wset, extra=extra)
             endif
             call wset%kill
         else
             if( trim(params%rec_backend) == 'pcg' )then
                 call execute_rec3D_pcg_worker(params, build, cline, pinds)
             else
-                call calc_3Drec(params, build, nptcls, pinds)
+                call calc_3Drec(params, build, nptcls, pinds, extra=extra)
             endif
         endif
     end subroutine write_partial_recs

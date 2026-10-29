@@ -551,41 +551,82 @@ stability from a stage's first iterations, so the overlap rule cannot tell a
 frozen assignment from convergence) but on the resolution exit (`lpexit`),
 its annealing tail, or its iteration budget.
 
-**The n_eff control (`prob_neff`, experimental, 2026-10-27; section 20.2 of
-the note).** With `prob_neff` set (a target above 1, 2-4 meant) the
-tempering factor is not an input but is solved every iteration, at
-assignment time on the master, so that the mean effective number of
+**The n_eff readout (`POSTERIOR DRAW N_EFF`, 2026-10-29; section 20.2 of
+the note).** Every table logs, per iteration, the mean effective number of
 candidates a particle draws among, exp(entropy) of its tempered row
-posterior, over a subsample of the rows the draws are from, equals the
-target: one global factor, a bisection in log beta on up to
-`PROB_NEFF_ROWS` (1000) rows taken at a fixed stride through the particles,
-each with at least twice the target in valid candidates (a row of two
-candidates lands on one of its best two at any factor and would otherwise
-pull the level of the rows where the choice is open); fewer than
-`PROB_NEFF_MIN_ROWS` (50) such rows fall back to `prob_beta` for that
-iteration (`prob_neff_control` in `simple_eul_prob_tab_utils`; every table,
-dense 3D, neighbourhood, dense and sparse 2D, applies it before its draws
-and logs `POSTERIOR DRAW CONTROL` with the solved factor, the mean n_eff at
-it and at beta 1). The control tempers the direction draws (the tables'
-assignments); the in-plane draws are at `PROB_BETA_INPL` (until 2026-10-28
-the solved factor was handed to the next iteration's fills as `prob_beta`,
-the form the regression of that day ran under: exp_gate and PorF failed
-about half their restarts, the search 2-5x colder than 0.3 in the shc
-stages and at the band entries; section 20.2 of the note). The solved
-factor still goes to the next iteration as `prob_beta`, the control's
-fallback; `prob_beta` sets the direction draws' first iteration only. On the
-ladder the control comes out colder than 0.3 where the physical posterior
-is flat (the early bands) and hotter where it is sharp, with nothing set per
-stage. Under the control `prob_beta_end` is the annealing tail's switch
-alone: any positive value starts the tail of section 19.8 once the
-resolution stops gaining, and the factor ramps geometrically from the
-solved value to 1 over the tail (`prob_anneal_frac`, the tail's progress,
-internal, set by `exec_refine3D`); `prob_beta_end=0` leaves the run under
-the control throughout. `prob_neff=0` (the default) is the flat `prob_beta`
-path, unchanged. Unit-tested on synthetic rows against a numpy emulation
-(`test_neff_control`) and on the dense table's assignment. The 2D route has
-the control and, since the same day, the same tail keyed on its class
-overlap (`solve2D_policy.md`).
+posterior, at the draw's factor (`prob_beta`, or the tail's) and at beta 1
+(the physical posterior), over a subsample of the rows the draws are from:
+up to `PROB_NEFF_ROWS` (1000) rows at a fixed stride through the particles,
+each with at least `PROB_NEFF_NMIN` (6) valid candidates (a row of two lands
+on one of its best two at any factor and would pull the level of the rows
+where the choice is open), nothing below `PROB_NEFF_MIN_ROWS` (50) rows
+(`prob_neff_readout` in `simple_eul_prob_tab_utils`, dense 3D,
+neighbourhood, dense and sparse 2D). It is a readout, not a control: from
+2026-10-27 to 2026-10-29 the same object solved the factor every iteration
+so that the mean n_eff met a target (`prob_neff`, N* = 3), and on the
+controlled comparison of 2026-10-28 (in-plane draws fixed, the prior's
+frame fixed, `shift_prior=yes`) that failed PorF 7 of 10 and exp_gate 2 of
+10 against 10 of 10 and the best exp_gate maps to date at `prob_beta=0.3`
+flat with the tail. The width of the physical posterior at a stage entry is
+the model's own estimate of how far the poses should be re-searched
+against the current map (the first dense stage enters at a row-mode
+fraction of 0.14-0.23 and cools to 0.7 by its end; the NU entry at 0.46),
+and pinning n_eff cancelled exactly that; the flat factor keeps it. The
+schedule is therefore `prob_beta` flat with the tail to 1, and the readout
+is how it is watched. Unit-tested on synthetic rows against a numpy
+emulation (`test_neff_readout`).
+
+**The weighted insertion (`topk`, 2026-10-29; section 20.8 of the note).**
+In the probabilistic modes a particle may enter the reconstruction at more
+than its committed pose: with `topk` above 1 (default 1) the assignment
+draws, beside the committed pose, up to `topk - 1` extra entries of the
+particle's row WITHOUT replacement from the tempered posterior at the
+draw's temperature, from the refined entries only (the ones whose shift is
+their own; an unrefined entry's shift is the seed's, section 19.10 of the
+note), each draw from the remainder renormalised, the weights the tempered
+posterior renormalised over the committed entry and the extras, and an
+extra whose weight falls below `PROB_INSERT_WMIN` (0.01) dropped
+(`draw_posterior_extras`). The committed pose is the single draw as before
+and keeps the search, its seeds, the shift prior and the convergence
+statistics unchanged; `topk=1` draws no random number, so the search and
+the reconstruction are bit for bit the single-draw run's. The master writes
+the extras beside the assignment (`INSERT_FBODY`: per particle the
+committed weight and the extras as reference, in-plane index, refined
+shift and weight; `prob_insert_table`) and logs `PROB_TAB_INSERT` with the
+insertions per particle and the mean committed weight. The worker reads
+the table after the assignment into the part's layout (`prob_insert_poses`,
+one slot per extra, handed to the search through `strategy3D_spec`), and
+the probabilistic strategy resolves a particle's extras in its `srch` just
+before it commits the draw (`strategy3D_prob%resolve_extra_poses`), through
+the same conversion rule as the committed pose (`candidate_pose`: the
+reference's Euler pair, the in-plane index's angle, the stored shift as the
+particle's plus the increment), so the extras and the committed pose can
+never disagree on a frame; `calc_3Drec` then inserts the committed plane with its weight
+and each extra pose from the committed plane re-shifted by the pose
+difference (`fplane_shift`: a phase ramp over the stored lattice, no second
+read or transform; the CTF^2 plane is shift-free), so the cost of an extra
+pose is one gridding insertion. The weights of a particle sum to 1, so the
+trailing reconstruction's population accounting is unchanged. Gridding
+backend only: the PCG master and the final and bootstrap reconstructions
+use the committed poses (a warning under `rec_backend=pcg`). The shc and
+snhc neighbourhood modes of solve3D's stages 1-2 insert the committed pose
+alone, their candidates being the hill climb's unrefined proposals; the 2D
+route is untouched. The assignment's companion files (the distance and
+assignment parts, the merged assignment and the extras' table) have one
+deleter, `del_prob_align_files`, which every site that clears the
+alignment's files calls. State assignment stays hard: the extras are drawn from
+the committed state's block alone (the dense table's block, the
+neighbourhood table's state row) and enter that state's half-map, and a
+particle never enters another state's map through the insertion; soft
+state membership is `m_estimator=flex`'s, whose state weight multiplies the
+pose weights as it multiplies the committed pose's. Unit tests: the sampler (`test_draw_posterior_extras`:
+`topk=1` leaves the stream untouched, the extras are distinct, eligible and
+never the committed entry, the weights are the tempered shares over the
+kept set, the mass rule, the inclusion frequency against the remainder's
+posterior), the table's round trip, and the plane re-shift against a plane
+generated at the new shift (`test_fplane_shift`, with the insertion). The
+first comparison is PorF, `topk=1` against `topk=3`, on iterations to
+resolution and the REC3D bench's gridding time.
 
 ### Neighbourhood-table assignment (`ref_assign_neigh`)
 

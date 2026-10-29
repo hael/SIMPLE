@@ -180,7 +180,7 @@ contains
         call set_refine2D_stage_search_policy( cfg, params, istage, size(stage_parms) )
         ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its class
         ! overlap converges (the tail of PROB_BETA_TAIL iterations, then the stage ends), as solve3D's last stage;
-        ! the other stages run flat, unless the user set the end (pose_marginalization.md section 19.8)
+        ! the other stages run flat, unless the user set the end
         cfg%l_prob_beta_end_user = cline%defined('prob_beta_end')
         cfg%l_anneal_tail        = istage == size(stage_parms) .and. istage >= PROBREFINE_STAGE
     end subroutine build_refine2D_stage_cfg

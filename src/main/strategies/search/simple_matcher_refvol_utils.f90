@@ -129,7 +129,8 @@ contains
     !! model otherwise. With diag_halves (the dense table workers under prob_post_diag=yes) and
     !! the diagnostic's model of the real halves on disk, the polar object holds twice the
     !! references: the matcher's in 1..nrefs, the real even/odd sections of the same directions
-    !! in nrefs+1..2*nrefs (doc/implementation_notes/planned/pose_marginalization.md section 5).
+    !! in nrefs+1..2*nrefs, so that the diagnostic can re-score a pose against the half the particle
+    !! did not enter.
     subroutine read_reprojection_model( params, build, batchsz, diag_halves )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build

@@ -1,7 +1,8 @@
 !@descr: 3D strategy for probabilistic projection matching
 module simple_strategy3D_prob
 use simple_core_module_api
-use simple_strategy3D_utils, only: assign_ori
+use simple_strategy3D_utils, only: assign_ori, candidate_pose
+use simple_eul_prob_tab_utils, only: prob_insert_pose
 use simple_parameters,      only: parameters
 use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
@@ -21,6 +22,7 @@ contains
     procedure :: kill        => kill_prob
     procedure :: oris_assign => oris_assign_prob
     procedure :: has_valid_assignment
+    procedure, private :: resolve_extra_poses
 end type strategy3D_prob
 
 contains
@@ -70,6 +72,11 @@ contains
                 sh = [self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
                     & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y]
             endif
+            ! the weighted insertion's extra poses of this particle (topk > 1), converted by the rule the committed
+            ! pose is converted by, now, while prev_shvec is the shift the table's increments refer to
+            if( associated(self%spec%extra_poses) )then
+                if( self%spec%extra_poses%has(self%s%iptcl) ) call self%resolve_extra_poses(iptcl_map)
+            endif
             if( self%s%uses_continuous_refinement() )then
                 call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
                     &inpl_coord, inpl_valid)
@@ -83,6 +90,26 @@ contains
             call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
+
+    !> The particle's extra poses for the weighted insertion: the part's table entries (reference, in-plane index,
+    !! shift increment, weight) as Euler triplets and absolute stored shifts through candidate_pose, into the
+    !! particle's slots of the part's structure (disjoint slots per particle: safe across the search's threads)
+    subroutine resolve_extra_poses( self, iptcl_map )
+        class(strategy3D_prob), intent(inout) :: self
+        integer,                intent(in)    :: iptcl_map
+        type(prob_insert_pose) :: pose
+        integer :: iloc, k, ipose
+        real    :: euler(3), shvec(2)
+        iloc = self%spec%extra_poses%loc(self%s%iptcl)
+        do k = 1,self%spec%extra_poses%nextra(iloc)
+            pose  = self%spec%eulprob_obj_part%insert_tab%get_extra(iptcl_map, k)
+            ipose = self%spec%extra_poses%first(iloc) + k - 1
+            call candidate_pose(self%s, pose%iref, pose%inpl, [pose%x, pose%y], euler, shvec)
+            self%spec%extra_poses%euler(:,ipose) = euler
+            self%spec%extra_poses%shift(:,ipose) = shvec
+            self%spec%extra_poses%w(ipose)       = pose%w
+        enddo
+    end subroutine resolve_extra_poses
 
     !> True only when this search committed a valid probabilistic assignment.
     !! A missing assignment must not seed a later local pose refinement from

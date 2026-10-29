@@ -85,13 +85,7 @@ contains
         call refine2D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
         &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
         &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout; '//&
-        &'under prob_neff any positive value switches the tail on and the solved factor ramps to 1; solve2D sets 1 '//&
-        &'on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, 'prob_neff', 'num', 'Posterior draw n_eff target (experimental)', &
-        &'The n_eff control of the posterior draws: the tempering factor is solved every iteration so that the mean '//&
-        &'effective number of classes a particle draws among (exp entropy of its row posterior, over a subsample of '//&
-        &'rows) is this target, in place of prob_beta, which then sets the first iteration only. 2-4; 0 off{0.0}', &
-        &'n_eff target{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        &'solve2D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
@@ -170,13 +164,7 @@ contains
         call program%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
         &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
         &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout; '//&
-        &'under prob_neff any positive value switches the tail on and the solved factor ramps to 1; solve2D sets 1 '//&
-        &'on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'prob_neff', 'num', 'Posterior draw n_eff target (experimental)', &
-        &'The n_eff control of the posterior draws: the tempering factor is solved every iteration so that the mean '//&
-        &'effective number of classes a particle draws among (exp entropy of its row posterior, over a subsample of '//&
-        &'rows) is this target, in place of prob_beta, which then sets the first iteration only. 2-4; 0 off{0.0}', &
-        &'n_eff target{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        &'solve2D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
@@ -272,13 +260,7 @@ contains
         call solve2D_chunks%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
         &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
         &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout; '//&
-        &'under prob_neff any positive value switches the tail on and the solved factor ramps to 1; solve2D sets 1 '//&
-        &'on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="cluster 2D", visibility=UI_VIS_ADVANCED)
-        call solve2D_chunks%add_input(UI_SRCH, 'prob_neff', 'num', 'Posterior draw n_eff target (experimental)', &
-        &'The n_eff control of the posterior draws: the tempering factor is solved every iteration so that the mean '//&
-        &'effective number of classes a particle draws among (exp entropy of its row posterior, over a subsample of '//&
-        &'rows) is this target, in place of prob_beta, which then sets the first iteration only. 2-4; 0 off{0.0}', &
-        &'n_eff target{0.0}', .false., 0., group="cluster 2D", visibility=UI_VIS_ADVANCED)
+        &'solve2D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)

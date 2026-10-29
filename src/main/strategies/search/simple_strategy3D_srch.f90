@@ -6,7 +6,7 @@ use simple_strategy3D_alloc, only: prep_strategy3D_thread, s3D, &
     &seed_continuous_inplane_candidate
 use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: posterior_temperature
+use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses
 use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 implicit none
@@ -21,7 +21,8 @@ private
 #include "simple_local_flags.inc"
 
 type strategy3D_spec
-    type(eul_prob_tab), pointer :: eulprob_obj_part
+    type(eul_prob_tab),       pointer :: eulprob_obj_part
+    type(prob_insert_poses),  pointer :: extra_poses => null() !< the weighted insertion's poses of the part (topk > 1), filled by the prob strategy
     integer :: iptcl=0, iptcl_map=0
 end type strategy3D_spec
 

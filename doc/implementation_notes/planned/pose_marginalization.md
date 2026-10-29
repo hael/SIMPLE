@@ -2029,6 +2029,47 @@ n_eff), which the delta rows pull down and which therefore solves a hotter
 beta exactly where the rows are heterogeneous, the band entries, without a
 stage schedule; one line in `neff_control_mean_neff`.
 
+**The controlled comparison (2026-10-28 evening, commit 62ffd592: in-plane
+at `PROB_BETA_INPL`, the prior's frame fixed, `shift_prior=yes`; logs in
+`for_claude/prob_neff_regression/{PorF,exp_gate}/prob_neff{0,3}`).**
+`prob_neff=0`: PorF 10 of 10 (one weaker, 6.6 A, the rest 4.5-4.9),
+exp_gate 9 of 9 finished at 4.01 A, cFAR 0.63-0.70, in 76-99 iterations,
+Hans: the best maps seen for that data set at this stage (restart 10 died
+on a project-file I/O error, not the algorithm). `prob_neff=3`: PorF 3 of
+10, exp_gate 8 of 10. Read side by side in the row-mode fraction, the one
+readout both print: under 0.3 the shc stages are hot (PorF 0.39-0.52,
+pose change 53-78 degrees, overlap 0.10-0.14; exp_gate's stage 1 is cold,
+0.92 to 0.75, and its stage 2 hot at 0.38) and establish the shape at low
+resolution (Hans, 2026-10-29: after stage 2 the shape of PfCRT, exp_gate and
+PorF is essentially fully established; the pose statistics churn at the
+grid level, not the shape), stage 3 enters at 0.14-0.23 (pose change
+54-75 degrees) and re-derives the poses against that shape on the denser
+grid with shifts, cooling to 0.71-0.73 by its end as the model sharpens;
+the later entries are moderately hot (0.46-0.48 at stage 5, 0.47-0.52 at
+stage 7) and cool to 0.6-0.7. The within-stage annealing is real and
+data-driven: the entry heat is set by how poor the model is relative to the
+new band, the cooling by its improvement. Under N* = 3 the mode fraction
+is 0.68-0.73 in every stage and at every entry; stages 1-2 reach a sharper
+map (PorF stage 2 ends at 11.1-12.0 A against 13.0-14.2) with the poses in
+consensus (overlap 0.33, pose change 17 degrees) and stage 3 enters at
+0.68 instead of 0.23 and cannot re-search them; whether that consensus is
+a wrong shape some of the time or the right shape with poses the shc grid
+cannot resolve, the logs cannot say (the stage-2 volumes of the failed
+control restarts can). Either way the thermostat removes the signal that
+carries the ladder's own annealing (20.1): the width of the physical
+posterior at a stage entry is the model's estimate of how far to re-search.
+
+**Rulings of 2026-10-29 (Hans).** The control is retired; `prob_beta=0.3`
+flat with the tail is the schedule. What N* = 3 was attractive for, a
+handle on how many times a particle enters the reconstruction with weights
+(20.8) without overcooking the compute, is a cap, not a thermostat: it
+survives as `topk` on the insertion and never touches the draw. The n_eff
+machinery stays as a readout: every table logs `POSTERIOR DRAW N_EFF`, the
+mean n_eff at the draw's factor and at beta 1 over the sampled rows
+(`prob_neff_readout`), which is the band-independent trajectory of every
+stage that the first batch lacked. The `prob_neff` key, `prob_anneal_frac`,
+the solve, the handoff and the control's tail are deleted.
+
 ### 20.3 The particle count: the batch and the map's memory (rewritten 2026-10-27)
 
 **What `nsample` is.** Not the particles in the map. `nsample` is the
@@ -2255,6 +2296,49 @@ argmin runs warn about, so it is not to be guessed: once the weighted
 insertion exists it is one number, a second key for the insertion's beta
 (or its own N*), the same tally.
 
+**Built 2026-10-29, behind `topk` (default 1: the committed pose alone,
+bit for bit the single-draw run, its random stream included).** Hans's
+rulings on the form: 3D only (2D out, "that I am sure of"); refined rows
+only; the extra poses SAMPLED WITHOUT REPLACEMENT from the tempered row at
+the draw's temperature rather than the top K, which would be the argmin's
+cousin; weights the tempered posterior renormalised over the sampled set;
+an extra under 1% of its particle's weight not inserted
+(`PROB_INSERT_WMIN`); the committed pose always inserted. Performance
+rules: no second read or transform of a particle, the extra poses are
+inserted from the committed plane re-shifted by the pose difference (a
+phase ramp over the stored lattice, `fplane_shift`), so an extra costs one
+gridding insertion in a step that is a tenth of the iteration; the fill is
+untouched; the master writes the extras beside the assignment
+(`INSERT_FBODY`, `prob_insert_table`: per particle the committed weight and
+the extras as reference, in-plane index, refined shift and weight) and logs
+`PROB_TAB_INSERT` (insertions per particle, mean committed weight); the
+worker reads the table after `read_assignment` into the part's layout
+(`prob_insert_poses`, passed to the search through `strategy3D_spec`), the
+prob strategy resolves a particle's extras in its `srch` just before it
+commits the draw (`resolve_extra_poses`), through the one conversion rule
+the committed pose uses (`candidate_pose` in `simple_strategy3D_utils`:
+reference Euler pair, in-plane index's angle, stored shift = particle's +
+increment), and `calc_3Drec` inserts (`update_state_half_rec`,
+`insert_extra_poses`). The companion files of the alignment have one
+deleter, `del_prob_align_files`. The shc/snhc neighbourhoods
+of stages 1-2 insert the committed pose alone (their candidates are the
+hill climb's unrefined proposals), so stages 1-2 are unaffected; gridding
+backend only (a warning under `rec_backend=pcg`); the final and bootstrap
+reconstructions use the committed poses. Unit tests: the sampler
+(`test_draw_posterior_extras`), the table's round trip, the plane re-shift
+against a plane generated at the new shift with the insertion
+(`test_fplane_shift`), and a two-state table (`test_insert_extras_multistate`:
+every extra in the committed state's block, refined, not the committed
+reference, weights summing to 1, the file round trip, `topk=1` recording
+nothing). **Multi-state (Hans, 2026-10-29): state assignment stays hard.**
+The extras are poses within the committed state, drawn from its block
+alone and inserted into its half-map; a particle never enters another
+state's map through the insertion. Soft state membership is `flex`'s
+(`m_estimator=flex`, the state weight set), whose weight multiplies the
+pose weights as it multiplies the committed pose's. The readout: PorF ten
+restarts at `topk=1` against `topk=3`, iterations to resolution and the
+REC3D bench's gridding time; then exp_gate.
+
 ### 20.9 Review of the `prob_neff=3 shift_prior=yes` regression (2026-10-28)
 
 **Evidence.** Reviewed the implementations at `04f6f0cb7` and the twenty
@@ -2355,6 +2439,14 @@ fast gate (15/15, 47.80 s, including polar alignment, entropy-control,
 prior and convergence checks), and installation passed. No production
 source was changed. The twenty Linux logs were inspected; no new Linux
 or real-particle run was executed locally.
+
+*2026-10-29: superseded.* The control was retired after the controlled
+comparison of 20.2 (prob_neff=0 against 3 on PorF and exp_gate, built at
+62ffd592 with the in-plane factor fixed and the prior frame corrected):
+`prob_beta=0.3` flat with the tail is the schedule and n_eff is a readout,
+so findings 1 and 3 fall with the control. Finding 2, the prior's frame, was
+confirmed and fixed in 62ffd592 (19.11): the penalty follows the stored
+particle-frame shift at every rotation.
 
 ## 21. Rulings of 2026-10-26, and the calibration on real data
 

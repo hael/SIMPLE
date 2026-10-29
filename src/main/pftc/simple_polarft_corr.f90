@@ -470,9 +470,9 @@ contains
     !> The temperature every in-plane posterior draw of particle iptcl runs at (the probability tables' fills): the
     !! Gaussian noise model's pi wsqsum / (2 pftsz) from the memoized self-term under the current sigma2
     !! (posterior_temperature) times the fixed in-plane tempering factor PROB_BETA_INPL (T_eff = beta T, below one
-    !! hotter). The direction/class draws of the assignments run at prob_beta, or at the factor the n_eff control
-    !! solves (prob_neff); the in-plane factor is held constant while that schedule is worked out
-    !! (pose_marginalization.md section 20.2). The table workers write the untempered value into their part files
+    !! hotter). The direction/class draws of the assignments run at prob_beta (with its annealing tail); the
+    !! in-plane factor is held constant, so that the schedule tempers the direction search alone. The table workers write the
+    !! untempered value into their part files
     module real function ptcl_posterior_temp( self, iptcl )
         use simple_defs, only: PROB_BETA_INPL
         class(polarft_calc), intent(in) :: self
@@ -655,8 +655,8 @@ contains
     end subroutine gen_euclid_dists_bank
 
     !> One in-plane rotation drawn from the posterior over the nrots Euclidean losses of reference iref against
-    !! the particle shifted by shift (the shifted-reference kernel) at temperature temp (the probability tables' fill,
-    !! doc/implementation_notes/planned/pose_marginalization.md sections 4 and 16): p_r proportional to
+    !! the particle shifted by shift (the shifted-reference kernel) at temperature temp (the probability tables'
+    !! fill): p_r proportional to
     !! exp(-temp (L_r - L_min)) over every grid rotation, no angular threshold and no truncation to a best subset.
     !! dist is the drawn rotation's loss. objfun=euclid only: the temperature is the Gaussian noise model's
     !! (posterior_temperature).
