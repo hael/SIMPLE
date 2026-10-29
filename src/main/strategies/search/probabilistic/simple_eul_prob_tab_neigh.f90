@@ -759,13 +759,14 @@ contains
                 call record_seed_shift(self%assgn_map(i_loc), self%seed_shifts(:,i_loc), self%seed_has_sh(i_loc),&
                     &self%p_ptr%l_doshift)
                 self%assgn_map(i_loc)%frac = search_frac(i_loc)
-                ! the extras for the weighted insertion, without replacement from the refined candidates of the row
+                ! the extras for the weighted insertion, without replacement from the refined candidates of the row,
+                ! drawn and weighted at the particle's own temperature, not the search's tempered one
                 if( l_extras )then
                     do r_loc = 1,n_loc
                         eligible(r_loc) = self%candidate_store%candidates(pos_c(r_loc))%has_sh
                     enddo
-                    call draw_posterior_extras(n_loc, dists_c(1:n_loc), temp, eligible(1:n_loc), which, kmax, &
-                        &PROB_INSERT_WMIN, w, nk_kept, kinds, kw)
+                    call draw_posterior_extras(n_loc, dists_c(1:n_loc), merge(self%temps(i_loc), huge(temp), self%temps(i_loc) > 0.), eligible(1:n_loc), &
+                        &which, kmax, PROB_INSERT_WMIN, w, nk_kept, kinds, kw)
                     nk = nk_kept - 1
                     do k = 1,nk
                         cands(k) = self%candidate_store%candidates(pos_c(kinds(k+1)))

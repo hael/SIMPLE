@@ -960,16 +960,16 @@ contains
             call self%assign_candidate(i, self%dense_candidate(assigned_iref, i))
             call record_seed_shift(self%assgn_map(i), self%seed_shifts(:,i), self%seed_has_sh(i), self%p_ptr%l_doshift)
             self%assgn_map(i)%frac = 100.
-            ! the extras for the weighted insertion: up to kmax - 1 further entries without replacement from the
-            ! tempered row over its refined entries (the only ones whose shift is their own), at the draw's
-            ! temperature; the weights the tempered posterior over the kept set
+            ! the extras for the weighted insertion: up to kmax - 1 further entries without replacement from the row
+            ! over its refined entries (the only ones whose shift is their own), drawn and weighted at the particle's
+            ! own temperature, not the search's tempered one: the map carries the data's pose uncertainty
             if( kmax > 1 .and. which > 0 )then
                 eligible(1:nblock) = .false.
                 do j = self%refined_offsets(i), self%refined_offsets(i+1) - 1
                     if( self%refined(j)%ri >= ifirst .and. self%refined(j)%ri <= ilast ) eligible(self%refined(j)%ri - ifirst + 1) = .true.
                 enddo
-                call draw_posterior_extras(nblock, self%dists(i,ifirst:ilast), temp, eligible(1:nblock), which, kmax, &
-                    &PROB_INSERT_WMIN, w, nkept, kinds, kw)
+                call draw_posterior_extras(nblock, self%dists(i,ifirst:ilast), merge(self%temps(i), huge(temp), self%temps(i) > 0.), eligible(1:nblock), &
+                    &which, kmax, PROB_INSERT_WMIN, w, nkept, kinds, kw)
                 do k = 2,nkept
                     cands(k-1) = self%dense_candidate(ifirst - 1 + kinds(k), i)
                 enddo

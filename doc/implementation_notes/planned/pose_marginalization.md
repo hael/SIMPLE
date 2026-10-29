@@ -2321,10 +2321,11 @@ insertion exists it is one number, a second key for the insertion's beta
 **Built 2026-10-29, behind `topk` (default 1: the committed pose alone,
 bit for bit the single-draw run, its random stream included).** Hans's
 rulings on the form: 3D only (2D out, "that I am sure of"); refined rows
-only; the extra poses SAMPLED WITHOUT REPLACEMENT from the tempered row at
-the draw's temperature rather than the top K, which would be the argmin's
-cousin; weights the tempered posterior renormalised over the sampled set;
-an extra under 1% of its particle's weight not inserted
+only; the extra poses SAMPLED WITHOUT REPLACEMENT from the row rather than
+the top K, which would be the argmin's cousin (at the draw's tempered
+temperature in the first build; at the particle's own, untempered, since
+the PfCRT readout below); weights that posterior renormalised over the
+sampled set; an extra under 1% of its particle's weight not inserted
 (`PROB_INSERT_WMIN`); the committed pose always inserted. Performance
 rules: no second read or transform of a particle, the extra poses are
 inserted from the committed plane re-shifted by the pose difference (a
@@ -2360,6 +2361,74 @@ state's map through the insertion. Soft state membership is `flex`'s
 pose weights as it multiplies the committed pose's. The readout: PorF ten
 restarts at `topk=1` against `topk=3`, iterations to resolution and the
 REC3D bench's gridding time; then exp_gate.
+
+**First readout (Hans, 2026-10-29, `topk=3` against the `prob_neff=0` runs
+of 20.2 as the control).** exp_gate "loves life": faster convergence, good
+maps. PorF 8 of 10 as good as ever, the two failures not disastrous. PfCRT
+5 of 10 at 4.03 A against 7 of 7 for the control (the control's R8 died
+in stage 3 on a project-file I/O error, as exp_gate's R10 had); the five failures end at 5.3-6.1 A
+with cFAR 0.47-0.64 (logs in `~/for_claude/topk_tests/{prob_neff0,topk3}`).
+Stage by stage, with the readout script: (i) the two runs are in the same
+search state at stage 3's first iteration (row-mode fraction 0.105,
+overlap 0.013, identical pose change), yet the weighted insertion's
+half-maps are one shell more consistent there, FSC 0.5 at 12.94 A against
+13.50, FSC 0.143 at 10.7 against 11.5-11.9; the next stage's limit is
+12.938 A, so the stage's resolution exit (FSC 0.5 past the limit and not
+gaining) fires at the stage's second or third iteration in eight of ten
+restarts (the control exits there in three of seven, after five or six),
+stage 4 is omitted, and stage 5 enters from a stage-2 pose set (overlap
+0.06); three of the eight still make 4.03 A. (ii) In stage 5 and the last
+stage the failures stall: the FSC plateaus at a shell for two iterations
+while the climb is under way, the stage exit or the tail's stall test
+fires, and the run ends at 5.3-6.1 A; in every failure the resolution kept
+gaining through the tail (R8 6.09 to 5.35 A over the five iterations) as
+beta went to 1 and the weights sharpened, which is the signature of a map
+held back by its own weights. The numbers: in stages 5 and 8 the readout
+has n_eff 3-6 at the draw's 0.3 and 1.4-1.7 at beta 1, and
+`PROB_TAB_INSERT` has the committed pose at 0.5-0.65 of its particle. The
+extras were drawn from and weighted by the tempered row, p^0.3, so each
+particle spread a third to a half of itself over two poses the data gave a
+fifth of that: the map carried the search's temperature as blur, the
+half-maps agreed on the blur (hence the consistent FSC early) and the
+resolution was capped by it (hence the stall). Rao-Blackwellization is of
+the distribution one samples; the search's tempered row is the wrong one
+for the map. **Fix, built the same day:** the extras are drawn from and
+weighted by the posterior at the particle's own temperature (`temps(i)`,
+untempered; `draw_posterior_extras` is called with it in both tables), the
+committed pose alone remaining the search's tempered draw. The expected
+consequences: the committed weight rises to the physical mode's share
+(0.7 and above from stage 5 on), the 1% rule drops most second extras at
+the sharp late posteriors (fewer insertions, the compute falls by itself),
+and at the hot stage-3 entry (n_eff 8 at beta 1) the three poses still
+carry real mass. Untouched for attribution's sake: the stage exits' shell
+knife edge (12.937 against the limit 12.938) and the two-iteration stall
+test, both of which the first build's blur tripped; whether they need a
+margin is to be read off the rerun. **Hans's question the same day: derive
+`topk` as before from the FSC 0.5 resolution, the angular spacing of the
+search space and the mask diameter?** The geometry (`resang`: the angle
+whose rim arc is the resolution, `find_angres` about 223/sqrt(nspace)
+degrees) gives the directions a map at that resolution cannot tell apart,
+about 15-30 at every stage here since the stage ladder's nspace tracks its
+low-pass limit, where the particles' own posteriors hold 1.4-8 effective
+poses: geometry says how many grid directions share the map's information,
+the posterior says how many a given image can tell apart, and the second
+is the one that should weight the image, noise included. So no derived
+count: with the weights at the particle's own temperature the 1% rule
+decides the count per particle (a sharp row keeps one pose, a broad one at
+a stage entry keeps eight, in the same iteration), `topk` is the cap, and
+the draws it discards cost a row scan each. A first thought of taking the
+per-iteration draw count from the n_eff readout at beta 1 was withdrawn
+the same day: it would decide globally what the mass rule already decides
+locally, for the price of a coupling between a diagnostic and the sampler.
+Hans's intent, "set topk=10 and let the process decide", is therefore the
+current tree; the dangers of running it so are the FSC-based stage exits
+and the tail's stall test, which Rao-Blackwellized half-maps trip more
+readily the more poses are kept (the shell knife edge above), the
+insertion cost at the hot stage entries (8-9 insertions per particle for
+two or three iterations, bounded by `topk`), and that at the cap the
+sampling takes the whole refined set, which is then the posterior
+expectation over it and fine. The readout: PfCRT at `topk=1`, `3` and
+`10` on the current code.
 
 ### 20.9 Review of the `prob_neff=3 shift_prior=yes` regression (2026-10-28)
 

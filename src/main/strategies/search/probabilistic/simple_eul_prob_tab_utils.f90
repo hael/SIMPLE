@@ -903,14 +903,20 @@ contains
         dist = dists(which)
     end subroutine draw_posterior_row
 
-    !> Extra poses for the weighted insertion (topk > 1): up to kmax - 1 further entries of a row, drawn WITHOUT replacement from the tempered posterior
-    !! p_r proportional to exp(-temp (dist_r - dist_min)) over the eligible entries (mask: the refined ones) other
-    !! than the committed draw ifirst, each draw from the remainder renormalised. The weights are the tempered
-    !! posterior renormalised over the committed entry and the extras, and an extra whose weight falls below wmin
-    !! is dropped (the rest renormalised again), so no pose enters the reconstruction with less than that share of
-    !! its particle; the committed entry is always kept, so kmax = 1 keeps it alone at weight 1 and draws no random
-    !! number: the single draw's stream and reconstruction, bit for bit. On return nkept entries, the committed
-    !! first, with their row indices inds and weights w summing to 1. work is a work array of size >= n
+    !> Extra poses for the weighted insertion (topk > 1): up to kmax - 1 further entries of a row, drawn WITHOUT
+    !! replacement from the posterior p_r proportional to exp(-temp (dist_r - dist_min)) over the eligible entries
+    !! (mask: the refined ones) other than the committed draw ifirst, each draw from the remainder renormalised,
+    !! with the weights that posterior renormalised over the committed entry and the extras. temp is the
+    !! particle's own temperature, untempered: the committed pose is the search's draw from the tempered row, hot
+    !! so that the search explores, but the map is weighted by what the data say of each pose, so the
+    !! reconstruction carries the data's pose uncertainty and not the search's (on PfCRT, extras drawn and
+    !! weighted at the search's factor 0.3 left the committed pose 0.5-0.65 of its particle where the untempered
+    !! posterior held about 1.4 effective poses: a blur that capped the resolution a stage early, 2026-10-29). An
+    !! extra whose weight falls below wmin is dropped (the rest renormalised again), so no pose enters the
+    !! reconstruction with less than that share of its particle; the committed entry is always kept, so kmax = 1
+    !! keeps it alone at weight 1 and draws no random number: the single draw's stream and reconstruction, bit for
+    !! bit. On return nkept entries, the committed first, with their row indices inds and weights w summing to 1.
+    !! work is a work array of size >= n
     subroutine draw_posterior_extras( n, dists, temp, mask, ifirst, kmax, wmin, work, nkept, inds, w )
         integer, intent(in)    :: n, ifirst, kmax
         real,    intent(in)    :: dists(n), temp, wmin

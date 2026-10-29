@@ -583,13 +583,15 @@ emulation (`test_neff_readout`).
 In the probabilistic modes a particle may enter the reconstruction at more
 than its committed pose: with `topk` above 1 (default 1) the assignment
 draws, beside the committed pose, up to `topk - 1` extra entries of the
-particle's row WITHOUT replacement from the tempered posterior at the
-draw's temperature, from the refined entries only (the ones whose shift is
-their own; an unrefined entry's shift is the seed's, section 19.10 of the
-note), each draw from the remainder renormalised, the weights the tempered
-posterior renormalised over the committed entry and the extras, and an
-extra whose weight falls below `PROB_INSERT_WMIN` (0.01) dropped
-(`draw_posterior_extras`). The committed pose is the single draw as before
+particle's row WITHOUT replacement from the posterior at the particle's
+own temperature (untempered: the data's pose uncertainty, not the search's;
+the first build drew and weighted them at the search's factor 0.3, and on
+PfCRT that blur capped the resolution a stage early, 2026-10-29), from the
+refined entries only (the ones whose shift is their own; an unrefined
+entry's shift is the seed's, section 19.10 of the note), each draw from the
+remainder renormalised, the weights that posterior renormalised over the
+committed entry and the extras, and an extra whose weight falls below
+`PROB_INSERT_WMIN` (0.01) dropped (`draw_posterior_extras`). The committed pose is the single draw as before
 and keeps the search, its seeds, the shift prior and the convergence
 statistics unchanged; `topk=1` draws no random number, so the search and
 the reconstruction are bit for bit the single-draw run's. The master writes

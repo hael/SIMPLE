@@ -488,7 +488,7 @@ type :: parameters
     integer :: stepsz=1            !< size of step{1}
     integer :: tofny=0
     integer :: top=1
-    integer :: topk=1              !< refine3D/solve3D prob modes: poses a particle enters the reconstruction at, the committed draw and up to topk-1 extras sampled without replacement from its refined row, weighted by the tempered posterior over the sampled set; 1 = the committed pose alone, the single-draw run bit for bit{1}
+    integer :: topk=1              !< refine3D/solve3D prob modes: poses a particle enters the reconstruction at, the committed draw and up to topk-1 extras sampled without replacement from its refined row, drawn and weighted at the particle's own temperature (the data's pose uncertainty, not the search's tempered one) over the sampled set; 1 = the committed pose alone, the single-draw run bit for bit{1}
     integer :: tof=0               !< end index
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management

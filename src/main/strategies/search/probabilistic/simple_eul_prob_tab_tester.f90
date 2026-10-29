@@ -658,7 +658,7 @@ contains
 
     !> The extra poses of the weighted insertion (draw_posterior_extras): kmax = 1 keeps the committed entry
     !! alone at weight 1 and leaves the random stream untouched; the extras are drawn without replacement from
-    !! the eligible entries only, never the committed one, with the weights the tempered posterior over the kept
+    !! the eligible entries only, never the committed one, with the weights the posterior at the given temperature over the kept
     !! set summing to 1; an extra below wmin is dropped; the committed entry is kept whatever its share; over many
     !! draws an extra is included with the probability of the remainder's renormalised posterior
     subroutine test_draw_posterior_extras()
@@ -690,7 +690,7 @@ contains
                 &.and. inds(2) /= 5 .and. inds(3) /= 5 .and. abs(sum(w(1:3)) - 1.) < 1.e-5
         enddo
         call assert_true(l_ok, 'kmax 3 keeps three distinct valid entries, the committed first, weights summing to 1')
-        ! the weights are the tempered posterior over the kept set: with entries {1 (d 0), 6 (d 0.5), 2 (d 1)} kept
+        ! the weights are the posterior at the given temperature over the kept set: with entries {1 (d 0), 6 (d 0.5), 2 (d 1)} kept
         ! they are proportional to 1, e^-0.5, e^-1
         do i = 1,500
             call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
@@ -698,10 +698,10 @@ contains
         enddo
         call assert_true(i <= 500, 'the pair {6, 2} of extras comes up within 500 draws')
         do k = 2,3
-            if( inds(k) == 6 ) call assert_real(exp(-0.5) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 6 is its tempered share of the kept set')
-            if( inds(k) == 2 ) call assert_real(exp(-1.0) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 2 is its tempered share of the kept set')
+            if( inds(k) == 6 ) call assert_real(exp(-0.5) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 6 is its share of the kept set')
+            if( inds(k) == 2 ) call assert_real(exp(-1.0) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 2 is its share of the kept set')
         enddo
-        call assert_real(1. / (1. + exp(-0.5) + exp(-1.)), w(1), 1.e-5, 'the committed entry''s weight is its tempered share of the kept set')
+        call assert_real(1. / (1. + exp(-0.5) + exp(-1.)), w(1), 1.e-5, 'the committed entry''s weight is its share of the kept set')
         ! eligibility: only entry 6 eligible, so one extra at most, and it is entry 6
         mask = .false.
         mask(6) = .true.
