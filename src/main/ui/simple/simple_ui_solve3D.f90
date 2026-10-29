@@ -130,22 +130,6 @@ contains
             &'Last solve3D stage to run; default is 5 for nstates>1 and 8 otherwise; &
             &a multi-state run writes final volumes at its last stage',&
             &'last stage', .false., 8., group="search", visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_neigh): the particle temperature of '//&
-        &'every direction and neighbourhood draw is multiplied by this factor, below one hotter (the in-plane draws '//&
-        &'are fixed at 0.3); the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
-        if( .not. l_stream_compatible )then
-            call prg%add_input(UI_SRCH, 'prob_beta_ini', 'num', 'Initial posterior draw tempering', &
-            &'Optional tempering for particle stages 1 and 2. When omitted, these stages keep prob_beta. An explicit '//&
-            &'value must be positive and is capped at prob_beta, so it can make the early draws only as hot or hotter', &
-            &'e.g. 0.3', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
-        endif
-        call prg%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of a stage', &
-        &'The factor the draws anneal to once a stage''s resolution stops gaining: a geometric ramp from prob_beta over '//&
-        &'the last five iterations, after which the stage ends (1 the physical posterior); 0 keeps prob_beta '//&
-        &'throughout; solve3D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., &
-        &group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'topk', 'num', 'Poses per particle in the reconstruction', &
         &'Probabilistic modes (refine=prob|prob_neigh): the poses a particle enters the reconstruction at, its committed '//&
         &'draw and up to topk-1 extras sampled without replacement from the refined entries of its row, each with its '//&
@@ -154,8 +138,8 @@ contains
         call prg%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&
         &'seed, with the previous iteration''s shift variance as its width and the particle''s temperature converting '//&
-        &'it to loss units; the row holds the MAP loss. An experiment against refinements that wander onto noise '//&
-        &'optima(yes|no){no}', '', .false., 'no', group="search", &
+        &'it to loss units; the row holds the MAP loss, so a refinement does not wander onto a noise optimum far '//&
+        &'from its seed(yes|no){yes}', '', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)

@@ -343,12 +343,13 @@ classes). A particle without a valid distance takes the first active class
 with a warning. The draws run in particle order on the master's random
 stream, so shared-memory and distributed runs draw alike; the log reports the
 fraction of particles drawn at their row mode. The tempering factor
-`prob_beta` (default 0.3, for small membrane proteins; below one hotter)
-multiplies the temperature of the class draws as of the 3D direction draws,
-so below one they draw from the tempered posterior p^beta; the in-plane
-draws of the fills are at the fixed `PROB_BETA_INPL` (0.3) since 2026-10-28
-(`refine3D_policy.md`). `prob_beta` is an
-advanced search input of `refine2D`, `solve2D` and `solve2D_chunks`. The 2D
+`PROB_BETA` (0.3, `simple_defs`; for small membrane proteins; below one
+hotter) multiplies the temperature of every draw, the fills' in-plane draws
+and the class draws as of the 3D direction draws, so below one they draw
+from the tempered posterior p^beta (`refine3D_policy.md`). The workflows
+carry the iteration's value as `prob_beta` and the tail moves it; since
+2026-10-29 neither `prob_beta` nor `prob_beta_end` is a UI input of
+`refine2D`, `solve2D` or `solve2D_chunks`. The 2D
 tables log the n_eff readout of the 3D ones (`POSTERIOR DRAW N_EFF`, the mean
 effective number of classes a particle draws among at the draw's factor and
 at beta 1; `refine3D_policy.md`); the n_eff control that briefly replaced

@@ -491,7 +491,7 @@ refinement is what re-ranks it; raising the cap (20, 40 degrees) did not
 help either, since refining more candidates hands more particles to a
 wrong reference whose shift search found a noise optimum (the bench
 histogram `refined argmin by decile of the cap`, item 11). With
-`shift_prior=yes` (an experiment, default `no`) the tables' shift searches
+`shift_prior=yes` (the default since 2026-10-29; `no` turns it off) the tables' shift searches
 and seed estimates carry a Gaussian on the shift's distance from the
 search's start, width the previous iteration's shift variance per axis
 (`shift_prior_sigma2`, from the sampled particles' `shincarg`, floored at
@@ -516,18 +516,19 @@ directly for the particle-frame lattice. Until then the centre was the
 start x itself, which held only at the start's rotation: with a nonzero
 seed a rotation change moved the stored shift without the penalty, and a
 rotation that kept it paid (`test_shift_prior_frame`).
-Every direction, class and neighbourhood draw (the tables' assignments)
-runs at `prob_beta` times the particle temperature (default 0.3, for small
-membrane proteins, section 19 of the note; below one hotter), so at
-`prob_beta` below one the draws are from the tempered posterior, p^beta,
-and from the posterior proper only at 1: the search's annealing knob,
-section 4.4, run-time since 2026-10-23 after the run at the physical
-temperature froze. The fills' in-plane draws (`pftc%ptcl_posterior_temp`)
-run at the fixed factor `PROB_BETA_INPL` (0.3, `simple_defs`) since
-2026-10-28: the in-plane temperature is held constant while the annealing
-schedule of the direction draws is worked out (section 20.2 of the note),
-so neither `prob_beta`, the tail nor the n_eff control touches it. A refine3D run
-anneals when `prob_beta_end` is given: it searches flat at `prob_beta`
+Every posterior draw of the tables, the fills' in-plane draws
+(`pftc%ptcl_posterior_temp`) and the assignments' direction, class and
+neighbourhood draws alike, runs at one tempering factor times the particle
+temperature: `PROB_BETA` (0.3, `simple_defs`; for small membrane proteins,
+section 19 of the note; below one hotter), so below one the draws are from
+the tempered posterior, p^beta, and from the posterior proper only at 1: the
+search's annealing knob, section 4.4, run-time since 2026-10-23 after the run
+at the physical temperature froze. The workflows carry the iteration's value
+as `prob_beta` (its default is the constant) and the annealing tail moves it,
+so the tail cools the in-plane draws with the direction draws (2026-10-29;
+between 2026-10-28 and then the in-plane factor was pinned at a separate
+constant while the n_eff control, since retired, moved the direction factor).
+A refine3D run anneals when `prob_beta_end` is given: it searches flat at `prob_beta`
 until neither FSC 0.5 nor FSC 0.143 gained on the previous iteration
 (`check_conv3D`, the same gain test as the resolution exit, on the previous
 iteration's STATS_FILE record), then ramps geometrically from `prob_beta` to
@@ -539,9 +540,11 @@ and ends when the tail is complete; a budget too short for a stall
 anneals over its last five iterations regardless. `prob_beta_end=0` (the
 default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
 unless the user set it, so the stages search hot and the final map is
-weighted at the physical posterior; the other stages run flat at their
-starting beta. That is normally `prob_beta`; an explicit solve3D
-`prob_beta_ini` replaces it on particle stages 1-2 only. The tail replaced a
+weighted at the physical posterior; the other stages run flat at
+`prob_beta`. Neither `prob_beta` nor `prob_beta_end` is a UI input
+(2026-10-29): the workflows set them (the solve controllers on their stage
+commands, the refine commanders per iteration for the workers); the keys stay
+command-line keys for that internal passing only. The tail replaced a
 ramp spread over the stage's whole budget
 on 2026-10-24: on streptavidin the last stage ran its 25 iterations with the
 resolution reached at the second (section 19 of the note). A `refine=prob`
@@ -665,9 +668,9 @@ now scores the previous reference too when the stop rule left it out
 the proposals and the incumbent. Whether that alone revives the early
 stages, or their small temperature (T about 33 at stage 1, where it is
 hundreds from stage 3 on) also needs a colder draw than `prob_beta` gives,
-is the open measurement. By default the stages run at `prob_beta` like the
-others; `prob_beta_ini` exposes a solve3D-only experiment with an equal or
-hotter initial draw because it is capped at `prob_beta`.
+is the open measurement. The stages run at `prob_beta` like the others
+(`prob_beta_ini`, a solve3D-only override of stages 1-2, was removed on
+2026-10-29 with the other tempering inputs).
 
 The posterior sampling is the probability tables' (`refine=prob|prob_neigh`,
 and the 2D tables, `solve2D_policy.md`): the search strategies of the other

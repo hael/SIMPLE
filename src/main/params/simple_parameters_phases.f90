@@ -726,12 +726,6 @@ contains
         ! the probability tables' posterior draws: their tempering factor, and no ramp unless an end is given (the
         ! run stays at prob_beta)
         if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
-        if( cline%defined('prob_beta_ini') )then
-            if( .not. (self%prob_beta_ini > 0.) ) THROW_HARD('prob_beta_ini must be positive')
-            self%prob_beta_ini = min(self%prob_beta_ini, self%prob_beta)
-        else
-            self%prob_beta_ini = self%prob_beta
-        endif
         if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
         if( self%topk < 1 ) THROW_HARD('topk must be 1 (the committed pose alone) or more')
         select case(trim(self%freq_march_aggressive))

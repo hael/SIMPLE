@@ -193,10 +193,8 @@ cooling schedule. In ten streptavidin restarts at beta 0.3, with the current
 pose missing from the shc neighbourhood's candidates, stages 1-2 did nothing
 and stage 3 solved the structure from scratch (the note, section 19); the
 incumbent is a candidate since, and whether the early stages also need a
-colder draw is the open measurement. `solve3D prob_beta_ini` can explicitly
-make particle stages 1-2 equal or hotter than `prob_beta`; omission leaves
-them unchanged, and the cap at `prob_beta` excludes a colder initial draw.
-`prob_beta` is the
+colder draw is the open measurement (the `prob_beta_ini` override of stages
+1-2 was removed 2026-10-29 with the other tempering inputs). `prob_beta` is the
 search's annealing knob, since at the physical temperature the posterior
 over directions is a delta once the map has any resolution (n_eff 1.0-1.2)
 and the map-pose alternation then stops at the nearest fixed point (section

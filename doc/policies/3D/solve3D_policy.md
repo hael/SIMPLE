@@ -80,11 +80,10 @@ Stage policy includes:
     (`PROB_NEIGH_REFINE_STAGE`, the single-state switch), so the default
     five-stage multi-state run uses no `prob_neigh`; the class-average route
     switches at the same stage (section 6)
-- an explicitly supplied `prob_beta_ini` replaces `prob_beta` on particle
-  stages 1-2 only; it must be positive and is capped at `prob_beta`. Omission
-  leaves the stage command lines unchanged, and stage 3 restores `prob_beta`.
-  The class-average, supplied-volume, continuation and add-on routes do not use
-  the initial factor
+- the tempering of the draws is not a user input: every stage searches at
+  `prob_beta` (the parameter's default, the stage command does not carry the
+  key) and the last stage anneals to `prob_beta_end=1`, which the controller
+  sets (`prob_beta_ini`, the stages 1-2 override, was removed 2026-10-29)
 - the multi-state direction cap: with `nstates > 1` no stage exceeds 2,500
   directions, so stages 7 and 8 (5,000 in single state) run at 2,500
 - the multi-state stage-2 exit: stage 2 of a multi-state particle run (`shc`)

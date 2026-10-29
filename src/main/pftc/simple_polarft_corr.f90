@@ -469,15 +469,13 @@ contains
 
     !> The temperature every in-plane posterior draw of particle iptcl runs at (the probability tables' fills): the
     !! Gaussian noise model's pi wsqsum / (2 pftsz) from the memoized self-term under the current sigma2
-    !! (posterior_temperature) times the fixed in-plane tempering factor PROB_BETA_INPL (T_eff = beta T, below one
-    !! hotter). The direction/class draws of the assignments run at prob_beta (with its annealing tail); the
-    !! in-plane factor is held constant, so that the schedule tempers the direction search alone. The table workers write the
-    !! untempered value into their part files
+    !! (posterior_temperature) times the iteration's tempering factor prob_beta (T_eff = beta T, below one hotter),
+    !! the one factor every draw of the tables runs at, so the annealing tail cools the in-plane draws with the
+    !! direction and class draws. The table workers write the untempered value into their part files
     module real function ptcl_posterior_temp( self, iptcl )
-        use simple_defs, only: PROB_BETA_INPL
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
-        ptcl_posterior_temp = PROB_BETA_INPL * posterior_temperature(self%wsqsum_ptcl_now(iptcl), self%pftsz)
+        ptcl_posterior_temp = self%p_ptr%prob_beta * posterior_temperature(self%wsqsum_ptcl_now(iptcl), self%pftsz)
     end function ptcl_posterior_temp
 
     module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )

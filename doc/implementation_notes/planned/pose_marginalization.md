@@ -1812,6 +1812,12 @@ results ever came from commit 43de9b34, 2026-10-18, 74 commits back):
    the search ends on; `test_shift_prior`'s factor identity became the
    argmax of the raw objective times the rotation's factor. Every PorF and
    exp_gate number above taken at `shift_prior=yes` predates the fix.
+   **Default (Hans, 2026-10-29): `shift_prior=yes`**, after the controlled
+   comparison of 20.2 ran with it on (PorF 10/10, exp_gate 9/9 at
+   prob_neff=0); `shift_prior=no` turns it off. The same day the tempering
+   keys left the UI: `prob_beta` and `prob_beta_end` are set by the
+   workflows (the solve controllers per stage, the refine commanders per
+   iteration) and `prob_beta_ini` was removed.
 
 ## 20. Annealing coupled to importance sampling (proposal, 2026-10-26)
 
@@ -2069,6 +2075,22 @@ mean n_eff at the draw's factor and at beta 1 over the sampled rows
 (`prob_neff_readout`), which is the band-independent trajectory of every
 stage that the first batch lacked. The `prob_neff` key, `prob_anneal_frac`,
 the solve, the handoff and the control's tail are deleted.
+
+**One factor again (Hans, later the same day: tidy the in-plane constant
+against the directions' schedule, keeping the last stage's annealing).**
+With the control gone the in-plane constant had nothing left to be
+separate from, so `PROB_BETA_INPL` is gone too: `PROB_BETA` (0.3,
+`simple_defs`) is the one tempering factor of every draw of the tables,
+in-plane, direction, class and neighbourhood; `parameters%prob_beta`
+defaults to it and is the iteration's value the workflows carry (the refine
+commanders put it on the workers' lines during the tail), and
+`ptcl_posterior_temp` is `prob_beta` times the particle temperature again,
+as before 2026-10-28. The one behavioural difference from the comparison
+runs of 20.2: in the tail the fills' in-plane draws cool to 1 with the
+direction draws instead of staying at 0.3; since a refined entry's rotation
+is the shift search's argmax, this touches the unrefined entries and the
+refined set's membership only. `prob_beta`, `prob_beta_end` left the UI the
+same day (set by the workflows) and `prob_beta_ini` was deleted.
 
 ### 20.3 The particle count: the batch and the map's memory (rewritten 2026-10-27)
 

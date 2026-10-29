@@ -3,9 +3,7 @@
 ! class averages; no volume or job. The symmetry randomization test writes one small project file.
 module simple_solve3D_reseed_tester
 use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage, solve3D_stage_skipping, &
-    &solve3D_stage_prob_beta, symmetry_randomize_poses
-use simple_parameters,    only: parameters
-use simple_cmdline,       only: cmdline
+    &symmetry_randomize_poses
 use simple_test_utils
 implicit none
 private
@@ -17,8 +15,6 @@ contains
         write(*,'(A)') '**** running all solve3D_cavgs stage rule tests ****'
         call test_symsrch_stage()
         call test_stage_skipping()
-        call test_stage_prob_beta()
-        call test_prob_beta_ini_normalization()
         call test_symmetry_randomize()
         call test_no_weak_state()
         call test_one_empty_state()
@@ -41,57 +37,6 @@ contains
         call assert_false(solve3D_stage_skipping(2),       'two states: no stage skipped')
         call assert_false(solve3D_stage_skipping(4),       'four states: no stage skipped')
     end subroutine test_stage_skipping
-
-    subroutine test_stage_prob_beta()
-        real    :: beta
-        logical :: l_apply
-        write(*,'(A)') 'test_stage_prob_beta'
-        call solve3D_stage_prob_beta(0.3, 0.1, 1, .false., .false., l_apply, beta)
-        call assert_false(l_apply, 'omitted prob_beta_ini leaves the stage command unchanged')
-        call solve3D_stage_prob_beta(0.3, 0.1, 1, .true., .true., l_apply, beta)
-        call assert_false(l_apply, 'solve3D_cavgs does not use prob_beta_ini')
-        call solve3D_stage_prob_beta(0.3, 0.1, 1, .true., .false., l_apply, beta)
-        call assert_true(l_apply, 'particle stage 1 applies prob_beta_ini')
-        call assert_real(0.1, beta, 1.e-6, 'particle stage 1 uses prob_beta_ini')
-        call solve3D_stage_prob_beta(0.3, 0.1, 2, .true., .false., l_apply, beta)
-        call assert_real(0.1, beta, 1.e-6, 'particle stage 2 uses prob_beta_ini')
-        call solve3D_stage_prob_beta(0.3, 0.1, 3, .true., .false., l_apply, beta)
-        call assert_real(0.3, beta, 1.e-6, 'particle stage 3 restores prob_beta')
-        call solve3D_stage_prob_beta(0.3, 0.1, 8, .true., .false., l_apply, beta)
-        call assert_real(0.3, beta, 1.e-6, 'late particle stages keep prob_beta')
-    end subroutine test_stage_prob_beta
-
-    subroutine test_prob_beta_ini_normalization()
-        class(parameters), allocatable :: params
-        type(cmdline) :: cline
-        write(*,'(A)') 'test_prob_beta_ini_normalization'
-        call cline%set('prg',       'solve3D_beta_tester')
-        call cline%set('mkdir',     'no')
-        call cline%set('box',       32)
-        call cline%set('smpd',      1.5)
-        call cline%set('mskdiam',   36.)
-        call cline%set('nptcls',    1)
-        call cline%set('nthr',      1)
-        call cline%set('ctf',       'no')
-        call cline%set('objfun',    'cc')
-        call cline%set('prob_beta', 0.6)
-        allocate(params)
-        call params%new(cline, silent=.true.)
-        call assert_real(0.6, params%prob_beta_ini, 1.e-6, 'omitted prob_beta_ini follows prob_beta')
-        call assert_false(cline%defined('prob_beta_ini'), 'dynamic default does not turn omission into an override')
-        deallocate(params)
-        call cline%set('prob_beta_ini', 0.8)
-        allocate(params)
-        call params%new(cline, silent=.true.)
-        call assert_real(0.6, params%prob_beta_ini, 1.e-6, 'prob_beta_ini is capped at prob_beta')
-        deallocate(params)
-        call cline%set('prob_beta_ini', 0.2)
-        allocate(params)
-        call params%new(cline, silent=.true.)
-        call assert_real(0.2, params%prob_beta_ini, 1.e-6, 'positive prob_beta_ini below the cap is preserved')
-        deallocate(params)
-        call cline%kill
-    end subroutine test_prob_beta_ini_normalization
 
     !> the randomization acts on the poses the stage wrote into the project file, not on the in-memory
     !! copy of the previous stage: every pose in the file ends as itself or its c2 mate

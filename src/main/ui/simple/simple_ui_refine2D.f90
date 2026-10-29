@@ -71,21 +71,12 @@ contains
         &.false., 'snhc_smpl', group="search", &
         &choices=ui_choices([character(len=9) :: 'snhc_smpl', 'snhc', 'prob', 'prob_snhc']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
-        &'temperature of every class draw is multiplied by this factor, below one hotter (the in-plane draws are '//&
-        &'fixed at 0.3); the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The 2D tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from '//&
         &'the seed, with the previous iteration''s shift variance as its width and the particle''s temperature '//&
-        &'converting it to loss units (an experiment)(yes|no){no}', '', .false., 'no', group="search", &
+        &'converting it to loss units; the row holds the MAP loss(yes|no){yes}', '', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
-        &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
-        &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout; '//&
-        &'solve2D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
@@ -156,15 +147,6 @@ contains
         &.false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
-        &'temperature of every class draw is multiplied by this factor, below one hotter (the in-plane draws are '//&
-        &'fixed at 0.3); the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="search", visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
-        &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
-        &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout; '//&
-        &'solve2D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
@@ -252,15 +234,6 @@ contains
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="cluster 2D", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call solve2D_chunks%add_input(UI_SRCH, 'prob_beta', 'num', 'Posterior draw tempering', &
-        &'Tempering of the probability tables'' posterior draws (refine=prob|prob_snhc, objfun=euclid): the particle '//&
-        &'temperature of every class draw is multiplied by this factor, below one hotter (the in-plane draws are '//&
-        &'fixed at 0.3); the '//&
-        &'search''s annealing knob, 1 the physical posterior{0.3}', 'factor on T{0.3}', .false., 0.3, group="cluster 2D", visibility=UI_VIS_ADVANCED)
-        call solve2D_chunks%add_input(UI_SRCH, 'prob_beta_end', 'num', 'Posterior draw tempering at the end of the run', &
-        &'The factor the draws anneal to once the class overlap converges: a geometric ramp from prob_beta over the '//&
-        &'last five iterations, after which the run ends (1 the physical posterior); 0 keeps prob_beta throughout; '//&
-        &'solve2D sets 1 on its last stage unless given{0.0}', 'factor on T{0.0}', .false., 0., group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)
