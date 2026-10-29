@@ -84,6 +84,7 @@ use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_
 use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
 use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
+use simple_halfmap_enhancer_tester,          only: run_all_halfmap_enhancer_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
@@ -137,7 +138,7 @@ use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
 use simple_nano_species_tester,              only: run_all_nano_species_tests
-use simple_commanders_volops_tester,         only: run_all_sharpvol_tests
+use simple_commanders_volops_tester,         only: run_all_sharpen_pdb_tests
 use simple_nano_density_tester,              only: run_all_nano_density_tests, run_all_nano_density_lib_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
@@ -447,6 +448,7 @@ contains
         call add_suite(s, n, 'weighted insertion',        run_all_reconstructor_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
+        call add_suite(s, n, 'half-map sharpening',       run_all_halfmap_enhancer_tests)
         call add_suite(s, n, 'solve3D_cavgs stage rules', run_all_solve3D_reseed_tests)
         call add_suite(s, n, 'state assignment rules',    run_all_state_assignment_tests)
         call add_suite(s, n, 'atomic prior',              run_all_pcg_atomic_prior_tests)
@@ -592,7 +594,7 @@ contains
         call add_suite(s, n, 'PCG sparse sampling',  run_all_pcg_sparse_tests)
         call add_suite(s, n, 'addon report docking', run_all_solve3D_addon_dock_tests)
         call add_suite(s, n, 'truth map docking', run_all_truth_docking_tests)
-        call add_suite(s, n, 'sharpvol', run_all_sharpvol_tests)
+        call add_suite(s, n, 'sharpen_pdb', run_all_sharpen_pdb_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
         call add_suite(s, n, 'wave reconstruction',  run_all_rec3D_wave_lib_tests)
     end subroutine suites_lib_reconstruction

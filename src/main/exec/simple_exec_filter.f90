@@ -4,6 +4,7 @@ use simple_cmdline,             only: cmdline
 use simple_commanders_resolest, only: commander_uniform_filter2D, commander_uniform_filter3D, commander_nu_filt3D
 use simple_commanders_imgops,   only: commander_filter
 use simple_commanders_postprocess_nu, only: commander_postprocess_nu
+use simple_commanders_halfmap_sharpen, only: commander_sharpen
 implicit none
 
 public :: exec_filter_commander
@@ -14,6 +15,7 @@ type(commander_uniform_filter2D) :: xuniform_filter2D
 type(commander_uniform_filter3D) :: xuniform_filter3D
 type(commander_nu_filt3D):: xnu_filt3D
 type(commander_postprocess_nu)   :: xpostprocess_nu
+type(commander_sharpen)          :: xsharpen
 
 contains
 
@@ -36,6 +38,8 @@ contains
                 call xnu_filt3D%execute(cline)
             case( 'postprocess_nu' )
                 call xpostprocess_nu%execute(cline)
+            case( 'sharpen' )
+                call xsharpen%execute(cline)
             case default
                 l_did_execute = .false.
         end select

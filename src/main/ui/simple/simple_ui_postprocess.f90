@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = &
     category_descriptor('postprocess', 'Post-processing', 69)
 type(ui_program), target :: postprocess
 type(ui_program), target :: postprocess_nu
+type(ui_program), target :: sharpen
 
 contains
 
@@ -14,6 +15,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_postprocess(prgtab)
         call new_postprocess_nu(prgtab)
+        call new_sharpen(prgtab)
     end subroutine construct_postprocess_programs
 
     subroutine new_postprocess( prgtab )
@@ -98,5 +100,32 @@ contains
         ! add to ui_hash
         call add_ui_program('postprocess_nu', postprocess_nu, prgtab, UI_CATEGORY)
     end subroutine new_postprocess_nu
+
+    subroutine new_sharpen( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call sharpen%new(&
+        &'sharpen',&
+        &'Enhance unprocessed half-maps with local Wiener sharpening',&
+        &'is a deterministic, model-free half-map postprocessor. It estimates outer-shell noise and a conservative '//&
+        &'molecular envelope, derives local FSC support in overlapping tapered windows, applies FSC-derived Wiener '//&
+        &'suppression and bounded local Guinier sharpening, and overlap-adds the windows. It writes outvol plus '//&
+        &'matching _confidence, _locres and _envelope maps. All outputs are interpretation products; only the input '//&
+        &'half-maps retain resolution authority',&
+        &'simple_exec',&
+        &.false., visibility=UI_VIS_STANDARD, display_name='Sharpen Half-maps')
+        call sharpen%add_input(UI_IMG, 'vol_even', 'file', 'Even half-map', &
+            &'Unprocessed even half-map with independent noise', 'even_half.mrc file', .true., '', &
+            &visibility=UI_VIS_STANDARD)
+        call sharpen%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half-map', &
+            &'Unprocessed odd half-map with independent noise', 'odd_half.mrc file', .true., '', &
+            &visibility=UI_VIS_STANDARD)
+        call sharpen%add_input(UI_IMG, outvol, required_override=.true., &
+            &visibility=UI_VIS_STANDARD)
+        call sharpen%add_input(UI_PARM, smpd, required_override=.false., &
+            &visibility=UI_VIS_ADVANCED)
+        call sharpen%add_input(UI_COMP, nthr, &
+            &visibility=UI_VIS_STANDARD)
+        call add_ui_program('sharpen', sharpen, prgtab, UI_CATEGORY)
+    end subroutine new_sharpen
 
 end module simple_ui_postprocess

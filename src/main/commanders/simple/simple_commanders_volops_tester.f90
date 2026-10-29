@@ -8,11 +8,11 @@ use simple_exec_volume,       only: exec_volume_commander
 use simple_test_utils,        only: assert_true, assert_real, assert_int
 implicit none
 private
-public :: run_all_sharpvol_tests
+public :: run_all_sharpen_pdb_tests
 
 contains
 
-    subroutine run_all_sharpvol_tests()
+    subroutine run_all_sharpen_pdb_tests()
         integer, parameter :: BOX=64
         real, parameter :: SMPD=2.
         type(atoms) :: model
@@ -23,8 +23,8 @@ contains
         real, pointer :: rmat(:,:,:)
         real :: coords(3,4), positive_peak
         integer :: i
-        character(len=*), parameter :: STEM='tmp_sharpvol'
-        write(*,'(A)') '**** running sharpvol half-map FSC tests ****'
+        character(len=*), parameter :: STEM='tmp_sharpen_pdb'
+        write(*,'(A)') '**** running sharpen_pdb half-map FSC tests ****'
         coords = reshape([40.,50.,60., 76.,44.,58., 56.,82.,66., 60.,60.,88.], [3,4])
         call model%new(4, dummy=.true.)
         do i=1,4
@@ -43,7 +43,7 @@ contains
         call vol%write(string(STEM//'_even.mrc'))
         call vol%write(string(STEM//'_odd.mrc'))
         allocate(cline)
-        call cline%set('prg', 'sharpvol')
+        call cline%set('prg', 'sharpen_pdb')
         call cline%set('vol1', STEM//'.mrc')
         call cline%set('pdbfile', STEM//'.pdb')
         call cline%set('smpd', SMPD)
@@ -53,8 +53,8 @@ contains
         call cline%set('bfac', 0.)
         ! No FSC or low-pass input: the half-maps alone supply the filter.
         did_execute = .false.
-        call exec_volume_commander('sharpvol', cline, silent, did_execute)
-        call assert_true(did_execute, 'volume router executes sharpvol')
+        call exec_volume_commander('sharpen_pdb', cline, silent, did_execute)
+        call assert_true(did_execute, 'volume router executes sharpen_pdb')
         fsc = file2rarr(string(STEM//'_fsc.bin'))
         call assert_int(BOX/2, size(fsc), 'FSC has one value per Fourier shell')
         call assert_real(0., maxval(abs(fsc-1.)), 1.e-5, 'identical halves have FSC one')
@@ -68,8 +68,8 @@ contains
         call vol%mul(-1.)
         call vol%write(string(STEM//'_odd.mrc'))
         did_execute = .false.
-        call exec_volume_commander('sharpvol', cline, silent, did_execute)
-        call assert_true(did_execute, 'volume router executes sharpvol')
+        call exec_volume_commander('sharpen_pdb', cline, silent, did_execute)
+        call assert_true(did_execute, 'volume router executes sharpen_pdb')
         fsc = file2rarr(string(STEM//'_fsc.bin'))
         call assert_real(0., maxval(abs(fsc+1.)), 1.e-5, 'opposite halves replace the FSC with minus one')
         call result%read(string(STEM//'_pproc.mrc'))
@@ -91,6 +91,6 @@ contains
         call del_file(STEM//'_fsc.bin')
         call del_file(STEM//'_lp.mrc')
         call del_file(STEM//'_pproc.mrc')
-    end subroutine run_all_sharpvol_tests
+    end subroutine run_all_sharpen_pdb_tests
 
 end module simple_commanders_volops_tester

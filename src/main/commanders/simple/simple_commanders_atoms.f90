@@ -221,8 +221,7 @@ contains
         type(atoms)      :: molecule
         call params%new(cline)
         params%pdbfile = get_fbody(params%ciffile,'cif')//'.pdb'
-        call molecule%new(params%ciffile)
-        call molecule%writepdb(params%pdbfile)
+        call molecule%cif2pdb(params%ciffile, params%pdbfile)
         call molecule%kill
         ! end gracefully
         call simple_end('**** SIMPLE_CIF2PDB NORMAL STOP ****')
@@ -606,25 +605,25 @@ contains
     end subroutine exec_model_validate
 
     subroutine exec_model_validate_eo( self, cline )
-        use simple_commanders_volops, only: commander_sharpvol
+        use simple_commanders_volops, only: commander_sharpen_pdb
         class(commander_model_validate_eo), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(commander_sharpvol) :: xsharpvol
-        type(cmdline)    :: cline_sharpvol1, cline_sharpvol2
+        type(commander_sharpen_pdb) :: xsharpen_pdb
+        type(cmdline)    :: cline_sharpen_pdb1, cline_sharpen_pdb2
         type(parameters) :: params
         type(atoms)      :: molecule
         call params%new(cline)
         ! sharpening even/odd volume pairs prior to comparison
-        call cline_sharpvol1%set('vol1', params%vols(2))
-        call cline_sharpvol1%set('pdbfile', params%pdbfile)
-        call cline_sharpvol1%set('smpd', params%pdbfile)
-        call cline_sharpvol1%set('nthr', params%nthr)
-        call xsharpvol%execute(cline_sharpvol1)
-        call cline_sharpvol2%set('vol1', params%vols(3))
-        call cline_sharpvol2%set('pdbfile', params%pdbfile)
-        call cline_sharpvol2%set('smpd', params%pdbfile)
-        call cline_sharpvol2%set('nthr', params%nthr)
-        call xsharpvol%execute(cline_sharpvol2)
+        call cline_sharpen_pdb1%set('vol1', params%vols(2))
+        call cline_sharpen_pdb1%set('pdbfile', params%pdbfile)
+        call cline_sharpen_pdb1%set('smpd', params%pdbfile)
+        call cline_sharpen_pdb1%set('nthr', params%nthr)
+        call xsharpen_pdb%execute(cline_sharpen_pdb1)
+        call cline_sharpen_pdb2%set('vol1', params%vols(3))
+        call cline_sharpen_pdb2%set('pdbfile', params%pdbfile)
+        call cline_sharpen_pdb2%set('smpd', params%pdbfile)
+        call cline_sharpen_pdb2%set('nthr', params%nthr)
+        call xsharpen_pdb%execute(cline_sharpen_pdb2)
         params%vols(2) =  basename(add2fbody(params%vols(2), params%ext, PPROC_SUFFIX))
         params%vols(3) =  basename(add2fbody(params%vols(3), params%ext, PPROC_SUFFIX))
         call molecule%new(params%pdbfile)
