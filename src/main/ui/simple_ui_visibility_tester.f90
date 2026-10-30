@@ -377,6 +377,8 @@ contains
         if( associated(registered_prg) )then
             call assert_true(program_has_key(registered_prg, 'trs'), 'solve3D offers the shift bound')
         endif
+        call assert_registered_search_cli_summary('solve3D', 'balance', &
+            &'Fractional-update sampling units (none|class|cavg){cavg}')
         call get_ui_default('simple_exec', 'solve3D', 'trs', found, default_value)
         call assert_true(found, 'solve3D trs display default is resolved')
         call assert_char('0.', trim(default_value), 'solve3D trs=0 keeps automatic stage limits')
@@ -387,6 +389,8 @@ contains
             if( associated(registered_prg) ) call assert_false(program_has_key(registered_prg, 'trs'), &
                 &trim(OTHER_PROGRAMS(i))//' does not offer the particle shift override')
         enddo
+        call assert_registered_search_cli_summary('solve3D_chunks', 'balance', &
+            &'Fractional-update sampling units (none|class|cavg){cavg}')
     end subroutine test_solve3D_trs_contract
 
     !> whether any input list of the program holds `key`

@@ -120,7 +120,7 @@ contains
         &'class averages the same share, then every class inside a group, so a preferred view spread over many '//&
         &'classes no longer dominates the sample and classes of one view keep equal footing(none|class|cavg){cavg}', &
         &'', .false., 'cavg', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
-        &visibility=UI_VIS_ADVANCED)
+        &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         call prg%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
         &'Number of groups of similar class averages formed with balance=cavg, by average linkage on their aligned '//&
         &'correlation; with no more selected classes than this, every class is its own group{20}', '# groups{20}', &
