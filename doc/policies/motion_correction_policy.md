@@ -16,10 +16,11 @@ This policy governs `motion_correct` and the motion-correction stage of
 that stage. It defines the scientific and data contracts that changes must
 preserve. Current implementation limitations are identified separately below.
 
-`refine_motion_model` is a separate, reference-based workflow. Particle
-extraction from saved motion models consumes these outputs; it is not
-reference-free motion estimation. These consumers must respect the producer's
-metadata conventions without changing this workflow's objective.
+`refine_motion_model` consumes these outputs for saved-model particle
+re-extraction and interval reconstruction using existing particle poses. Its
+[own policy](refine_motion_model_policy.md) governs that workflow; it does not
+estimate new motion against particle or volume references. Consumers must
+respect this producer's metadata conventions without changing its objective.
 
 The [algorithm description](../algorithms/motion_correction.md) explains the
 alignment method. This policy owns its execution, representation, output, and

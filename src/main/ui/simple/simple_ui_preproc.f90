@@ -168,8 +168,9 @@ contains
         ! PROGRAM SPECIFICATION
         call refine_motion_model%new(&
         &'refine_motion_model', &                                                         ! name
-        &'Perform reference based refinement of the model derived from blind motion correction',& ! summary
-        &'is a program for refining a motion model',& ! descr long
+        &'Re-extract particle fractions with saved motion and reconstruct each interval in 3D',& ! summary
+        &'Re-extract non-dose-weighted particle fractions using the saved motion model, then reconstruct each interval&
+        & in 3D using the existing particle orientations',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true., &
         &visibility=UI_VIS_STANDARD, display_name='Refine Motion Model') ! requires sp_project
@@ -182,23 +183,23 @@ contains
         call refine_motion_model%add_input(UI_PARM, pcontrast, &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
-        & 'Starting movie frame for particle re-extraction', 'frame index{1}', .false., 1.0, &
+        & 'Starting movie frame for particle re-extraction', 'frame index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
-        & 'Final movie frame for particle re-extraction(0=all)', 'frame index{0}', .false., 0.0, &
+        & 'Final movie frame for particle re-extraction(0=all)', 'frame index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, 'stepf', 'num', 'Incremental frame step size', &
-        & 'Frames per output stack; the final block ends at tof and overlaps if needed', 'frame increment{5}', .false., 5.0, &
+        & 'Frames per output stack; the final block ends at tof and overlaps if needed', '', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, wfloat16, group="refine3D", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        ! <empty>
+        call refine_motion_model%add_input(UI_SRCH, pgrp, visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        ! <empty>
+        call refine_motion_model%add_input(UI_MASK, mskdiam, visibility=UI_VIS_STANDARD)
         ! computer controls
         call refine_motion_model%add_input(UI_COMP, nparts, &
         &visibility=UI_VIS_STANDARD)

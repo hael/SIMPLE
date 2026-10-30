@@ -1,10 +1,12 @@
 !@descr: Strategy pattern for refine_motion_model
 module simple_refine_motion_model_strategy
-use simple_commanders_api
+use simple_core_module_api
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
 use simple_qsys_env,   only: qsys_env
+use simple_qsys_funs,  only: qsys_cleanup, qsys_declare_part_finished
 use simple_sp_project, only: sp_project
+use simple_stack_io,   only: stack_io
 use simple_builder,    only: builder
 implicit none
 
@@ -20,7 +22,6 @@ private
 ! --------------------------------------------------------------------
 type, abstract :: refine_motion_model_strategy
 contains
-    procedure :: apply_defaults => strategy_apply_defaults
     procedure(init_interface),           deferred :: initialize
     procedure(exec_interface),           deferred :: execute
     procedure(finalize_interface),       deferred :: finalize_run
@@ -93,13 +94,6 @@ end interface
 
 contains
 
-    subroutine strategy_apply_defaults(self, cline)
-        class(refine_motion_model_strategy), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        call validate_refine_motion_model_cline(cline)
-        call set_refine_motion_model_defaults(cline)
-    end subroutine strategy_apply_defaults
-
     ! --------------------------------------------------------------------
     ! Factory
     ! --------------------------------------------------------------------
@@ -118,24 +112,6 @@ contains
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> REFINE_MOTION_MODEL (WORKER / SHARED-MEMORY)'
         endif
     end function create_refine_motion_model_strategy
-
-    ! --------------------------------------------------------------------
-    ! Shared defaults + early validation (private; no common module)
-    ! --------------------------------------------------------------------
-    subroutine validate_refine_motion_model_cline(cline)
-        class(cmdline), intent(inout) :: cline
-    end subroutine validate_refine_motion_model_cline
-
-    subroutine set_refine_motion_model_defaults(cline)
-        class(cmdline), intent(inout) :: cline
-        if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl3D')
-        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',          'yes')
-        if( .not. cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('wfloat16')     ) call cline%set('wfloat16',        'no')
-        if( .not.cline%defined('fromf')         ) call cline%set('fromf',              1)
-        if( .not.cline%defined('tof')           ) call cline%set('tof',                0)
-        if( .not.cline%defined('stepf')         ) call cline%set('stepf',              5)
-    end subroutine set_refine_motion_model_defaults
 
     subroutine validate_fraction_range( fromf, tof, stepf )
         integer, intent(in) :: fromf, tof, stepf
@@ -469,6 +445,7 @@ contains
 
     subroutine distr_initialize(self, params, cline)
         use simple_motion_model, only: motion_model
+        use simple_eo_partition, only: ensure_field_halves
         class(refine_motion_model_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         class(cmdline),                  intent(inout) :: cline
@@ -518,6 +495,7 @@ contains
             call o_mov%kill
         else
             call validate_fraction_range(params%fromf, params%tof, params%stepf)
+            call ensure_field_halves(self%spproj, 'ptcl3D', params%projfile)
             ! build explicit fromp/top for each partition
             self%parts = split_nobjs_even(self%nmovies, params%nparts)
             allocate(self%part_params(params%nparts))
@@ -532,16 +510,13 @@ contains
     end subroutine distr_initialize
 
     subroutine distr_execute(self, params, cline)
-        use simple_oris, only: oris
         class(refine_motion_model_distr_strategy), intent(inout) :: self
         type(parameters),                          intent(inout) :: params
         class(cmdline),                            intent(inout) :: cline
-        type(sp_project), allocatable :: spproj_parts(:)
-        type(string),     allocatable :: stktab(:)
-        type(oris)   :: os_stk
-        type(string) :: ptcl_project, mic_project, frame_project, stk_project, range, frame_dir
-        integer      :: numlen, ffromto(2), ipart, imic, istk, ind, nfractioned_stacks
-        integer      :: nmovs, cnt, nstks, nptcls, i, stkind
+        type(string), allocatable :: frame_projects(:)
+        integer,      allocatable :: frame_ranges(:,:)
+        type(string) :: frame_dir
+        integer      :: ffromto(2), ind, nfractioned_stacks
         if( self%skip_run ) return
         call validate_fraction_range(params%fromf, params%tof, params%stepf)
         nfractioned_stacks = count_fractioned_stacks(params%fromf, params%tof, params%stepf)
@@ -553,7 +528,29 @@ contains
         ! schedule & run
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), &
             &part_params=self%part_params, array=L_USE_SLURM_ARR, extra_params=params)
-        ! ASSEMBLY
+        call assemble_motion_fractions(self, params, frame_projects, frame_ranges)
+        if( self%spproj%os_ptcl3D%get_noris() > 0 )then
+            call reconstruct_motion_fractions(params, cline, frame_projects, frame_ranges)
+        else
+            THROW_WARN('No extracted particles available for interval reconstruction')
+        endif
+    end subroutine distr_execute
+
+    !> Read extraction part projects; write interval projects and remove consumed stack-table parts.
+    subroutine assemble_motion_fractions(self, params, frame_projects, frame_ranges)
+        use simple_oris, only: oris
+        class(refine_motion_model_distr_strategy), intent(inout) :: self
+        type(parameters),                          intent(in)    :: params
+        type(string), allocatable,                 intent(out)   :: frame_projects(:)
+        integer,      allocatable,                 intent(out)   :: frame_ranges(:,:)
+        type(sp_project), allocatable :: spproj_parts(:)
+        type(string),     allocatable :: stktab(:)
+        type(oris)   :: os_stk
+        type(string) :: ptcl_project, mic_project, frame_project, stk_project, range, frame_dir
+        integer      :: numlen, ffromto(2), ipart, imic, istk, ind, nfractioned_stacks
+        integer      :: nmovs, cnt, nstks, nptcls, i, stkind
+        nfractioned_stacks = count_fractioned_stacks(params%fromf, params%tof, params%stepf)
+        allocate(frame_projects(nfractioned_stacks), frame_ranges(2,nfractioned_stacks))
         allocate(spproj_parts(params%nparts))
         numlen = len(int2str(params%nparts))
         do ind = 1, nfractioned_stacks
@@ -632,6 +629,8 @@ contains
                 &get_fbody(basename(params%projfile), METADATA_EXT, separator=.false.))
             call self%spproj%projinfo%set(1, 'projfile', simple_abspath(frame_project, check_exists=.false.))
             call self%spproj%write(frame_project)
+            frame_projects(ind) = simple_abspath(frame_project)
+            frame_ranges(:,ind) = ffromto
             ! Remove per-part fraction projects
             do ipart = 1, params%nparts
                 range = int2str(ffromto(1))//'-'//int2str(ffromto(2))//'_part'//int2str(ipart)
@@ -640,7 +639,122 @@ contains
             enddo
         enddo
         if( allocated(spproj_parts) ) deallocate(spproj_parts)
-    end subroutine distr_execute
+    end subroutine assemble_motion_fractions
+
+    !> Each interval: prepare the copied project, run the reconstruct3D program on it, register delivered maps/FSCs.
+    subroutine reconstruct_motion_fractions(params, cline, frame_projects, frame_ranges)
+        use simple_commanders_rec,  only: commander_rec3D
+        use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_fsc_fname
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+        type(parameters),          intent(in)    :: params
+        class(cmdline),            intent(inout) :: cline
+        type(string),              intent(in)    :: frame_projects(:)
+        integer,                   intent(in)    :: frame_ranges(:,:)
+        type(commander_rec3D) :: xrec3D
+        type(sp_project)      :: spproj
+        type(cmdline)         :: cline_rec
+        type(string)          :: cwd_saved, rec_dir, rec_project, volname, fscname
+        integer, allocatable  :: pinds(:), selected(:), halves(:), current_halves(:)
+        integer :: i, j, state, nselected, nptcls, nstates, old_out_states, nregistered
+        integer :: saved_threads, saved_nthr_glob
+        if( size(frame_ranges,1) /= 2 ) THROW_HARD('Fraction ranges must have two endpoints')
+        if( size(frame_ranges,2) /= size(frame_projects) ) THROW_HARD('Fraction project/range count mismatch')
+        if( size(frame_projects) == 0 ) return
+        if( params%cc_objfun /= OBJFUN_CC ) THROW_HARD('Fraction reconstruction requires objfun=cc')
+        if( params%l_ml_reg ) THROW_HARD('Fraction reconstruction requires ml_reg=no')
+        if( params%cc_emit_sigma /= 'no' ) THROW_HARD('Fraction reconstruction cannot emit sigma2')
+        call simple_getcwd(cwd_saved)
+        saved_nthr_glob = nthr_glob
+        saved_threads   = nthr_glob
+        !$ saved_threads = omp_get_max_threads()
+        do i = 1, size(frame_projects)
+            rec_dir = filepath(cwd_saved, 'rec_frames_'//int2str_pad(frame_ranges(1,i),2)//'-'// &
+                &int2str_pad(frame_ranges(2,i),2))
+            if( dir_exists(rec_dir) ) THROW_HARD('Reconstruction directory already exists: '//rec_dir%to_char())
+            call simple_mkdir(rec_dir)
+            rec_project = filepath(rec_dir, basename(frame_projects(i)))
+            call simple_copy_file(frame_projects(i), rec_project)
+            ! prepare and verify the copied project; the master owns it until the program runs
+            call spproj%read(rec_project)
+            call spproj%update_projinfo(rec_project)
+            if( spproj%get_box() /= params%box ) THROW_HARD('Fraction reconstruction box mismatch')
+            if( .not.is_equal(spproj%get_smpd(),params%smpd) ) THROW_HARD('Fraction reconstruction sampling mismatch')
+            nptcls  = spproj%os_ptcl3D%get_noris()
+            nstates = spproj%os_ptcl3D%get_n('state')
+            call spproj%os_ptcl3D%sample4rec([1,nptcls], nselected, pinds)
+            if( .not.spproj%os_ptcl3D%isthere('eo') ) THROW_HARD('Fraction particles have no half-set labels')
+            allocate(current_halves(nselected))
+            do j = 1, nselected
+                current_halves(j) = spproj%os_ptcl3D%get_eo(pinds(j))
+            enddo
+            if( any(current_halves < 0) .or. any(current_halves > 1) ) THROW_HARD('Invalid fraction half-set labels')
+            if( allocated(selected) )then
+                if( size(selected) /= nselected ) THROW_HARD('Fraction reconstruction particle count changed')
+                if( any(selected /= pinds) ) THROW_HARD('Fraction reconstruction particle selection changed')
+                if( any(halves /= current_halves) ) THROW_HARD('Fraction reconstruction half-set labels changed')
+            else
+                selected = pinds
+                halves   = current_halves
+            endif
+            deallocate(current_halves)
+            old_out_states = spproj%os_out%get_n('state')
+            do state = 1, max(old_out_states,nstates)
+                call spproj%remove_state_artifacts_from_osout(state)
+            enddo
+            call spproj%write(rec_project)
+            call spproj%kill
+            write(logfhandle,'(A,2(I0,1X),A,I0)') '>>> RECONSTRUCTING FRACTIONS ', frame_ranges(:,i), &
+                &'PARTICLES: ', nselected
+            if( nselected > 0 )then
+                ! a nested, complete reconstruct3D run on its own parameters and builder
+                call cline_rec%set('prg',           'reconstruct3D')
+                call cline_rec%set('projfile',      rec_project)
+                call cline_rec%set('mkdir',         'no')
+                call cline_rec%set('oritype',       'ptcl3D')
+                call cline_rec%set('objfun',        'cc')
+                call cline_rec%set('ml_reg',        'no')
+                call cline_rec%set('cc_emit_sigma', 'no')
+                call cline_rec%set('rec_backend',   'gridding')
+                call cline_rec%set('filt_mode',     'none')
+                call cline_rec%set('automsk',       'no')
+                call cline_rec%set('postprocess',   'no')
+                call cline_rec%set('m_estimator',   'no')
+                call cline_rec%set('update_frac',   1.)
+                call cline_rec%set('trail_rec',     'no')
+                call cline_rec%set('pgrp',    trim(params%pgrp))
+                call cline_rec%set('mskdiam', params%mskdiam)
+                call cline_rec%set('trs',     5.)
+                call cline_rec%set('nthr',    params%nthr)
+                call cline_rec%set('nstates', nstates)
+                if( params%nparts > 1 ) call cline_rec%set('nparts', params%nparts)
+                if( cline%defined('qsys_name') ) call cline_rec%set('qsys_name', trim(params%qsys_name))
+                call simple_chdir(rec_dir)
+                CWD_GLOB = rec_dir%to_char()
+                call xrec3D%execute(cline_rec)
+                ! register artefacts generated by the reconstruction
+                call spproj%read_segment('out',rec_project)
+                nregistered = 0
+                do state = 1, nstates
+                    volname = refine3D_state_vol_fname(state)
+                    fscname = refine3D_fsc_fname(state)
+                    if( .not.file_exists(volname) ) cycle
+                    if( .not.file_exists(fscname) ) cycle
+                    call spproj%add_vol2os_out(simple_abspath(volname), params%smpd, state, 'vol')
+                    call spproj%add_fsc2os_out(simple_abspath(fscname), state, params%box)
+                    nregistered = nregistered + 1
+                enddo
+                if( nregistered > 0 ) call spproj%write_segment_inside('out', rec_project)
+                call spproj%kill
+                call simple_chdir(cwd_saved)
+                CWD_GLOB = cwd_saved%to_char()
+                nthr_glob = saved_nthr_glob
+                !$ call omp_set_num_threads(saved_threads)
+            else
+                THROW_WARN('No particles selected for fraction reconstruction')
+            endif
+            call cline_rec%kill
+        enddo
+    end subroutine reconstruct_motion_fractions
 
     subroutine distr_finalize_run(self, params, cline)
         class(refine_motion_model_distr_strategy), intent(inout) :: self

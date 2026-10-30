@@ -58,6 +58,7 @@ validation, says so in its first lines.
 | Policy | Read before changing |
 |---|---|
 | [motion_correction_policy.md](motion_correction_policy.md) | reference-free motion correction |
+| [refine_motion_model_policy.md](refine_motion_model_policy.md) | saved-motion particle re-extraction, fraction-project assembly and per-interval CC reconstruction |
 | [motion_gain_analysis_policy.md](motion_gain_analysis_policy.md) | gain-orientation analysis and gain generation (used by the stream's preprocessing stage) |
 | [phase_shift_ctf_policy.md](phase_shift_ctf_policy.md) | phase-shift CTF modelling |
 | [microscope_parameters_policy.md](microscope_parameters_policy.md) | `kv`, `cs`, `fraca` and the optics model |

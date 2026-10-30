@@ -42,6 +42,7 @@ contains
         call test_phshift_contract()
         call test_cont_surface_contract()
         call test_solve3D_trs_contract()
+        call test_refine_motion_model_contract()
     end subroutine run_all_ui_visibility_tests
 
     subroutine test_visibility_levels()
@@ -392,6 +393,28 @@ contains
         call assert_registered_search_cli_summary('solve3D_chunks', 'balance', &
             &'Fractional-update sampling units (none|class|cavg){cavg}')
     end subroutine test_solve3D_trs_contract
+
+    subroutine test_refine_motion_model_contract()
+        character(len=16) :: default_value
+        logical :: found
+        write(*,'(A)') 'test_refine_motion_model_contract'
+        call make_ui
+        program_name = 'refine_motion_model'
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), 'refine_motion_model is registered')
+        if( .not. associated(registered_prg) ) return
+        call assert_ui_param(registered_prg%parm_ios, 'stepf', 'refine_motion_model', expected_type='num')
+        call assert_input_placeholder(registered_prg%parm_ios, 'stepf', 'e.g. 3')
+        call assert_ui_param(registered_prg%srch_ctrls, 'pgrp', 'refine_motion_model', expected_type='str')
+        call assert_input_visibility(registered_prg%srch_ctrls, 'pgrp', UI_VIS_STANDARD)
+        call assert_ui_param(registered_prg%mask_ctrls, 'mskdiam', 'refine_motion_model', expected_type='num')
+        call assert_input_visibility(registered_prg%mask_ctrls, 'mskdiam', UI_VIS_STANDARD)
+        call get_ui_default('simple_exec', 'refine_motion_model', 'stepf', found, default_value)
+        call assert_true(found, 'refine_motion_model fraction-width display default is resolved')
+        call assert_char('3', trim(default_value), 'refine_motion_model defaults to three fractions per interval')
+        call assert_registered_required_keys('refine_motion_model', &
+            &[character(len=7) :: 'pgrp', 'mskdiam', 'nparts', 'nthr'])
+    end subroutine test_refine_motion_model_contract
 
     !> whether any input list of the program holds `key`
     logical function program_has_key( prg, key )
