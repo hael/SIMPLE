@@ -1,7 +1,7 @@
 # Local 3D Refinement Policy
 
 The command boundary and startup/fractional source paths are implemented.
-Compilation and runtime validation for the current changes are pending on Linux.
+Validation evidence and remaining scope are recorded in the linked workflow plan.
 
 `simple_exec prg=refine3D_local projfile=<aligned.simple> mskdiam=<A>`
 continues single-state Euclidean refinement from stored particle poses using
@@ -34,7 +34,16 @@ without merging reference halves. Local controls include `athres_cont`, `trs`, `
 `cont_conv_frac`, `nsample`, iteration limits and the existing backend controls.
 An explicit `trs` is retained; an absent value uses the existing derived bound.
 
-The commands share one workflow body and one UI input builder. Local captures
+The commands share startup preparation through `refine3D_workflow_controller`
+and genuinely common UI inputs. Their UI constructors add command-specific
+controls. The commander retains defaults, CLI validation, parameter construction,
+sampling/grid/low-pass policy, child execution and final reconstruction. It also
+prepares state-specific work projects through the selection child. The controller
+owns source preflight before parameter initialization, ordinary project loading
+and publication, and startup staging. A validated provenance object carries named
+identity fields and reference constituents from preflight into staging without
+rehashing the same files. Reference, sigma and chain staging use the in-memory
+work project. Local captures
 source paths before run-directory creation, stages the saved map pair, reuses a
 committed sigma file only after validation against the selected work-project
 rows and its producer record, and delegates a missing or incompatible sigma state to the existing
@@ -46,11 +55,15 @@ run. Missing or incompatible derivatives use the existing logged FSC-filtered
 fallback; volume assembly writes updated FSC, mask and NU products.
 
 A compatible complete trailing chain is copied as a set with its manifest last.
+The manifest owns the compatibility predicate shared by local startup and
+gridding assembly; each caller retains its rejection and cleanup behavior.
 Without one, local makes iteration 1 a full update and seeds the chain; later
-iterations use the configured fraction. Shared and distributed strategies use
-the same first-update transition. The shared `calc_final_rec` ending remains in
+iterations use the configured fraction. `refine3D_startup` represents ordinary
+startup, chain reuse or chain seeding and owns the first-update transition for
+both execution strategies. Its temporary sampling settings are restored after
+the seed iteration. The shared `calc_final_rec` ending remains in
 place. Local defaults to `autoscale=no` (native sampling); auto retains
 `autoscale=yes`. Explicit settings take precedence.
 
-The remaining design and Linux acceptance checks are in the living
+The current source design, historical evidence and pending Linux checks are in the living
 [local-workflow plan](../../refactoring_notes/planned/refine3d_local_workflow.md).

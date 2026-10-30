@@ -38,6 +38,7 @@ contains
     end subroutine new
 
     module subroutine setup_execution_context(self, cline, silent)
+        use simple_syslib, only: resolve_project_files
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         logical,           intent(in)    :: silent
@@ -69,19 +70,15 @@ contains
         call get_prg_ptr(self%prg, self%ptr2prg)
         if( .not.associated(self%ptr2prg) ) call get_test_prg_ptr(self%prg, self%ptr2prg)
         call self%last_prev_dir%kill
-        idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
         if( .not. cline%defined('projfile') )then
-            if( self%last_prev_dir%is_allocated() )then
-                call simple_list_files(self%last_prev_dir%to_char()//'/*.simple', sp_files)
-            else
-                call simple_list_files('*.simple', sp_files)
-            endif
+            call resolve_project_files(self%cwd, self%last_prev_dir, idir, sp_files)
             if( allocated(sp_files) )then
                 nsp_files = size(sp_files)
             else
                 nsp_files = 0
             endif
         else
+            idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
             nsp_files = 0
         endif
         if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('private') )then

@@ -16,9 +16,29 @@ contains
 
     subroutine run_all_trail_chain_manifest_tests()
         write(*,'(A)') '**** running all trailing chain identity tests ****'
+        call test_compatibility()
         call test_gridding_manifest()
         call test_pcg_chain_header()
     end subroutine run_all_trail_chain_manifest_tests
+
+    subroutine test_compatibility()
+        type(trail_chain_manifest) :: man
+        integer(kind=8), parameter :: sizes(4) = [10_8,20_8,30_8,40_8], weights(2) = [2_8,3_8]
+        character(len=256) :: message
+        write(*,'(A)') 'test_compatibility'
+        call man%new(16, 2., 100, 3, 2, 1, sizes, 80., 80, weights)
+        call assert_true(man%compatible(100,3,2,16,2.,sizes,weights,message), 'chain: identical identity is reusable')
+        call assert_true(man%compatible(100,3,2,32,1.,sizes,weights,message), 'chain: same-extent padding is allowed')
+        call assert_false(man%compatible(101,3,2,16,2.,sizes,weights,message), 'chain: changed population is rejected')
+        call assert_false(man%compatible(100,2,2,16,2.,sizes,weights,message), 'chain: changed state count is rejected')
+        call assert_false(man%compatible(100,3,1,16,2.,sizes,weights,message), 'chain: changed state index is rejected')
+        call assert_false(man%compatible(100,3,2,16,2.,sizes,[0_8,0_8],message), 'chain: changed weights are rejected')
+        call assert_false(man%compatible(100,3,2,8,4.,sizes,weights,message), 'chain: larger prior grid is rejected')
+        call assert_false(man%compatible(100,3,2,16,3.,sizes,weights,message), 'chain: changed physical extent is rejected')
+        call assert_false(man%compatible(100,3,2,16,2.,[10_8,21_8],weights,message), 'chain: changed bytes are rejected')
+        call man%kill
+        call assert_false(man%compatible(100,3,2,16,2.,sizes,weights,message), 'chain: empty manifest is rejected')
+    end subroutine test_compatibility
 
     subroutine test_gridding_manifest()
         type(trail_chain_manifest) :: man, back

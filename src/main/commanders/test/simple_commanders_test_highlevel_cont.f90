@@ -509,8 +509,9 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         use, intrinsic :: iso_fortran_env, only: int64
         use simple_defs_fname, only: NUFILT_SUFFIX, NULOCRES_SUFFIX
         use simple_refine3D_fnames, only: refine3D_startvol_fname
-        use simple_refine3D_provenance, only: validate_reference_set, provenance_file, local_import_marker, REFSET_OK
+        use simple_refine3D_provenance, only: refine3D_provenance, provenance_file, local_import_marker, REFSET_OK
         use simple_sigma2_state_file, only: sigma2_state_digest_file
+        type(refine3D_provenance) :: source_reference
         type(string) :: source_files(12), staged_files(4), staged_base, producer_dir
         integer(int64) :: digests(12)
         integer :: j, ref_status, vol_box, halves(NPTCLS)
@@ -528,7 +529,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         source_files(2) = simple_abspath(source_files(2))
         source_files(3) = add2fbody(source_files(2), MRC_EXT, '_even')
         source_files(4) = add2fbody(source_files(2), MRC_EXT, '_odd')
-        ref_status = validate_reference_set(source_files(2), source_files(5), support_verified, message)
+        call source_reference%new(source_files(2), 'reference', message)
+        ref_status = source_reference%validate_reference_set(source_files(5), support_verified, message)
         call gate%check('nu_handoff_producer_reference_set', ref_status == REFSET_OK)
         if( ref_status /= REFSET_OK ) return
         source_files(6) = provenance_file(source_files(2))
@@ -598,8 +600,10 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
             call gate%check('nu_handoff_source_preserved_'//int2str(j), &
                 &sigma2_state_digest_file(source_files(j)) == digests(j))
         enddo
-        ref_status = validate_reference_set(source_files(2), source_files(5), support_verified, message)
+        call source_reference%new(source_files(2), 'reference', message)
+        ref_status = source_reference%validate_reference_set(source_files(5), support_verified, message)
         call gate%check('nu_handoff_source_record_still_valid', ref_status == REFSET_OK)
+        call source_reference%kill
         call simple_chdir(gate_root, status)
     end subroutine run_nu_handoff
 

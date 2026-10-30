@@ -19,12 +19,15 @@ use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
 use simple_strategy3D_cont,     only: check_cont_seeds
+use simple_refine3D_startup,    only: refine3D_startup
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
 public :: create_refine3D_strategy
 public :: strip_refine3D_search_only_args
-public :: stage_refine3D_local_references, stage_refine3D_local_chain
+public :: stage_refine3D_local_references, stage_refine3D_local_chain, stage_refine3D_local_sigma2
+public :: stage_reference_derivatives, select_refine3D_state_rows
+public :: adopt_refine3D_reference
 
 private
 #include "simple_local_flags.inc"
@@ -33,6 +36,7 @@ integer, parameter :: PROB_MULTISTATE_MIN_POP = 5
 
 !> Minimal strategy interface - only divergent operations
 type, abstract :: refine3D_strategy
+    type(refine3D_startup), private :: startup
 contains
     procedure(init_interface),          deferred :: initialize
     procedure(exec_iter_interface),     deferred :: execute_iteration
@@ -164,24 +168,130 @@ end interface
 
 contains
 
-    ! Stages reference files and updates the caller's out/particle fields; no project-file I/O.
-    subroutine stage_refine3D_local_references( params, project, source_vol, source_fsc_fname, &
-        &support_verified, reused_derivatives )
-        use simple_refine3D_fnames, only: refine3D_startvol_fname
-        use simple_imghead, only: find_ldim_nptcls, find_img_smpd
-        use simple_halfmap_diagnostics, only: copy_support_provenance, remove_support_provenance, write_base_halfmap_fsc
-        use simple_refine3D_provenance, only: provenance_file, local_import_marker, stage_reference_derivatives
-        class(parameters), intent(in) :: params
+    !> Adopt an assembled reference triplet; no project or map files are written.
+    subroutine adopt_refine3D_reference( params, cline, state, volume )
+        class(parameters), intent(inout) :: params
+        class(cmdline),    intent(inout) :: cline
+        integer,           intent(in)    :: state
+        class(string),     intent(in)   :: volume
+        type(string) :: even, odd
+        even = add2fbody(volume, MRC_EXT, '_even')
+        odd  = add2fbody(volume, MRC_EXT, '_odd')
+        if( .not. file_exists(volume) .or. .not. file_exists(even) .or. .not. file_exists(odd) )then
+            THROW_HARD('assembled reference triplet is incomplete')
+        endif
+        ! The master prepares the next model from parameters without reparsing cline.
+        params%vols(state)      = volume
+        params%vols_even(state) = even
+        params%vols_odd(state)  = odd
+        call cline%delete('vol_even')
+        call cline%delete('vol_odd')
+        call cline%set('vol'//int2str(state), volume)
+    end subroutine adopt_refine3D_reference
+
+    ! Select rows by hard labels or frozen applied state weights; no project-file writes.
+    subroutine select_refine3D_state_rows( project, state, use_flex, selected, weights )
+        use, intrinsic :: iso_fortran_env, only: real32
+        use simple_state_weight_set,       only: state_weight_set
+        use simple_sp_project,             only: sp_project
+        use simple_error,                  only: simple_exception
+        class(sp_project), intent(in)          :: project
+        integer, intent(in)                    :: state
+        logical, intent(in)                    :: use_flex
+        logical, allocatable, intent(out)      :: selected(:)
+        class(state_weight_set), intent(inout) :: weights
+        real(real32), allocatable :: column(:)
+        integer                   :: i
+        allocate(selected(project%os_ptcl3D%get_noris()))
+        if( use_flex )then
+            call weights%new(project, project%os_ptcl3D)
+            if( state > weights%get_nstates() ) THROW_HARD('Requested state is outside the frozen weight set')
+            call weights%get_applied_weights(state, 0., column)
+            selected = column > 0._real32
+        else
+            do i = 1, size(selected)
+                selected(i) = project%os_ptcl3D%get_state(i) == state
+            enddo
+        endif
+        if( .not. any(selected) ) THROW_HARD('No particle is selected for the requested state')
+    end subroutine select_refine3D_state_rows
+
+    ! Stage only a committed store validated against the selected work-project rows.
+    ! The controller publishes the updated projinfo.
+    subroutine stage_refine3D_local_sigma2( params, project, source_sigma_state )
+        use simple_syslib,              only: simple_abspath, file_exists, del_file
+        use simple_fileio,              only: basename, simple_copy_file
+        use simple_oris,                only: oris
+        use simple_sigma2_files,        only: canonical_sigma2_consumable
+        use simple_refine3D_provenance, only: reuse_provenance_matches, provenance_file, provenance_pending_file
+        class(parameters), intent(in)    :: params
+        class(string), intent(in)        :: source_sigma_state
         class(sp_project), intent(inout) :: project
-        type(string), intent(inout) :: source_vol
-        type(string), intent(in) :: source_fsc_fname
-        logical, intent(in) :: support_verified
-        logical, intent(out) :: reused_derivatives
-        type(string) :: source_even, source_odd, staged_vol, staged_even, staged_odd
-        type(string) :: fsc_source, stale, bases(3)
-        real :: source_smpd, align_lp
+        type(string)          :: state_path, staged_path, source_record, staged_record
+        class(oris), pointer  :: os
+        logical               :: valid
         character(len=STDLEN) :: message
-        integer :: fsc_box, fsc_bytes, n, dims(3), i
+
+        ! Remove inherited registration so a rejected store cannot bypass the bootstrap gate.
+        call project%projinfo%delete_entry(1, 'sigma2_state')
+        if( .not. source_sigma_state%is_allocated() )then
+            write(logfhandle,'(A)') '>>> REFINE3D_LOCAL HAS NO COMPATIBLE SOURCE SIGMA2; PARTICLE-POWER BOOTSTRAP WILL RUN'
+            return
+        endif
+        ! Keep the array-constructor element nonpolymorphic for compiler lowering.
+        state_path = source_sigma_state
+        call project%set_sigma2_state_path(source_sigma_state)
+        call project%ptr2oritype('ptcl3D', os)
+        valid = canonical_sigma2_consumable(project, os, params%box, params%smpd, message)
+        if( valid ) valid = reuse_provenance_matches(params, project, os, 'sigma', &
+            &source_sigma_state, [state_path], message)
+        if( valid )then
+            staged_path = basename(state_path)
+            if( simple_abspath(state_path) /= simple_abspath(staged_path, check_exists=.false.) ) &
+                &call simple_copy_file(state_path, staged_path)
+            source_record = provenance_file(state_path)
+            staged_record = provenance_file(staged_path)
+            if( simple_abspath(source_record) /= simple_abspath(staged_record, check_exists=.false.) ) &
+                &call simple_copy_file(source_record, staged_record)
+            staged_record = provenance_pending_file(staged_path)
+            if( file_exists(staged_record) ) call del_file(staged_record)
+            call project%set_sigma2_state_path(staged_path)
+            valid = canonical_sigma2_consumable(project, os, params%box, params%smpd, message)
+            if( valid ) valid = reuse_provenance_matches(params, project, os, 'sigma', &
+                &staged_path, [staged_path], message)
+        endif
+        if( valid )then
+            write(logfhandle,'(A)') '>>> REFINE3D_LOCAL REUSING A STAGED COMMITTED SIGMA2 STATE'
+        else
+            call project%projinfo%delete_entry(1, 'sigma2_state')
+            write(logfhandle,'(A)') '>>> REFINE3D_LOCAL SIGMA2 REUSE REJECTED: '//trim(message)
+            write(logfhandle,'(A)') '>>> REFINE3D_LOCAL PARTICLE-POWER BOOTSTRAP WILL RUN'
+        endif
+        nullify(os)
+        call state_path%kill
+        call staged_path%kill
+    end subroutine stage_refine3D_local_sigma2
+
+    ! Stages reference files and updates the caller's out/particle fields; no project-file I/O.
+    subroutine stage_refine3D_local_references( params, project, reference, source_fsc_fname, &
+        &support_verified, staged_vol, reused_derivatives )
+        use simple_refine3D_fnames,     only: refine3D_startvol_fname
+        use simple_imghead,             only: find_ldim_nptcls, find_img_smpd
+        use simple_halfmap_diagnostics, only: copy_support_provenance, remove_support_provenance, write_base_halfmap_fsc
+        use simple_refine3D_provenance, only: provenance_file, provenance_pending_file, local_import_marker, refine3D_provenance
+        class(parameters), intent(in)          :: params
+        class(sp_project), intent(inout)       :: project
+        class(refine3D_provenance), intent(in) :: reference
+        class(string), intent(in)              :: source_fsc_fname
+        logical, intent(in)                    :: support_verified
+        type(string), intent(out)              :: staged_vol
+        logical, intent(out)                   :: reused_derivatives
+        type(string)          :: source_vol, source_even, source_odd, staged_even, staged_odd
+        type(string)          :: staged_fsc, stale, bases(3)
+        real                  :: source_smpd, align_lp
+        character(len=STDLEN) :: message
+        integer               :: fsc_box, fsc_bytes, n, dims(3), i
+        source_vol = reference%get_anchor()
         source_even = add2fbody(source_vol, MRC_EXT, '_even')
         source_odd  = add2fbody(source_vol, MRC_EXT, '_odd')
         staged_vol  = refine3D_startvol_fname(1)
@@ -211,11 +321,11 @@ contains
         if( file_exists(stale) ) call del_file(stale)
         stale = provenance_file(staged_vol)
         if( file_exists(stale) ) call del_file(stale)
-        stale = stale//'.pending'
+        stale = provenance_pending_file(staged_vol)
         if( file_exists(stale) ) call del_file(stale)
         stale = local_import_marker(staged_vol)
         if( file_exists(stale) ) call del_file(stale)
-        reused_derivatives = stage_reference_derivatives(params, source_vol, staged_vol, align_lp, message)
+        reused_derivatives = stage_reference_derivatives(params, reference, staged_vol, align_lp, message)
         if( reused_derivatives )then
             call project%os_ptcl3D%set_all2single('lp', align_lp)
             call project%os_ptcl3D%set_all2single('lp_est', align_lp)
@@ -226,51 +336,116 @@ contains
         endif
         call find_ldim_nptcls(source_vol, dims, n)
         source_smpd = find_img_smpd(source_vol)
-        fsc_source = refine3D_fsc_fname(1)
+        staged_fsc = refine3D_fsc_fname(1)
         fsc_box = dims(1)
         fsc_bytes = 0
         if( file_exists(source_fsc_fname) ) inquire(file=source_fsc_fname%to_char(), size=fsc_bytes)
         if( fsc_bytes > 0 )then
             ! An in-place continuation already owns this FSC; replacing it would truncate the source.
-            if( simple_abspath(source_fsc_fname) /= simple_abspath(fsc_source, check_exists=.false.) ) &
-                &call simple_copy_file(source_fsc_fname, fsc_source)
+            if( simple_abspath(source_fsc_fname) /= simple_abspath(staged_fsc, check_exists=.false.) ) &
+                &call simple_copy_file(source_fsc_fname, staged_fsc)
         else
-            call write_base_halfmap_fsc(source_even, source_odd, dims, source_smpd, fsc_source)
+            call write_base_halfmap_fsc(source_even, source_odd, dims, source_smpd, staged_fsc)
         endif
         call project%add_vol2os_out(staged_vol, source_smpd, 1, 'vol', box=dims(1))
-        call project%add_fsc2os_out(fsc_source, 1, fsc_box)
-        source_vol = staged_vol
+        call project%add_fsc2os_out(staged_fsc, 1, fsc_box)
         call source_even%kill
         call source_odd%kill
         call staged_even%kill
         call staged_odd%kill
-        call fsc_source%kill
-        call staged_vol%kill
+        call staged_fsc%kill
     end subroutine stage_refine3D_local_references
+
+    ! Only recorded, compatible derivatives travel; embedded NU support needs no matcher remasking.
+    logical function stage_reference_derivatives( params, reference, staged, align_lp, message ) result(reused)
+        use simple_refine3D_provenance, only: refine3D_provenance
+        use simple_parameters,          only: parameters
+        use simple_string,              only: string
+        use simple_defs_fname,          only: MRC_EXT, NUFILT_SUFFIX, NULOCRES_SUFFIX, AUTOMASK_FBODY, NU_ENVMASK_FBODY
+        use simple_fileio,              only: add2fbody, get_fpath, simple_copy_file
+        use simple_syslib,              only: file_exists, del_file, simple_abspath
+        class(parameters), intent(in)          :: params
+        class(refine3D_provenance), intent(in) :: reference
+        class(string), intent(in)              :: staged
+        real,             intent(out)          :: align_lp
+        character(len=*), intent(out)          :: message
+        type(string) :: volume, sources(6), destinations(6), bases(3), targets(3), name, dir
+        integer      :: producer_state, i, n
+        logical      :: valid
+        reused = .false.
+        align_lp = 0.
+        message = 'NU reference bundle is not requested'
+        if( .not. params%l_nonuniform ) return
+        valid = reference%reference_derivatives_match(params, producer_state, align_lp, message)
+        if( .not. valid ) return
+        volume = reference%get_anchor()
+        bases(1) = volume
+        bases(2) = add2fbody(volume, MRC_EXT, '_even')
+        bases(3) = add2fbody(volume, MRC_EXT, '_odd')
+        targets(1) = staged
+        targets(2) = add2fbody(staged, MRC_EXT, '_even')
+        targets(3) = add2fbody(staged, MRC_EXT, '_odd')
+        n = 4
+        do i = 1,3
+            sources(i) = add2fbody(bases(i), MRC_EXT, NUFILT_SUFFIX)
+            destinations(i) = add2fbody(targets(i), MRC_EXT, NUFILT_SUFFIX)
+        enddo
+        sources(4) = add2fbody(volume, MRC_EXT, NULOCRES_SUFFIX)
+        destinations(4) = add2fbody(staged, MRC_EXT, NULOCRES_SUFFIX)
+        message = 'NU reference constituents are not recorded'
+        do i = 1,n
+            if( .not. reference%contains_file(sources(i)) ) return
+        enddo
+        dir = get_fpath(volume)
+        if( .not. dir%is_allocated() ) dir = './'
+        name = dir//AUTOMASK_FBODY//int2str_pad(producer_state,2)//MRC_EXT
+        if( reference%contains_file(name) )then
+            n = n + 1
+            sources(n) = name
+            destinations(n) = AUTOMASK_FBODY//'01'//MRC_EXT
+        else
+            name = AUTOMASK_FBODY//'01'//MRC_EXT
+            if( file_exists(name) ) call del_file(name)
+        endif
+        name = dir//NU_ENVMASK_FBODY//int2str_pad(producer_state,2)//MRC_EXT
+        if( reference%contains_file(name) )then
+            n = n + 1
+            sources(n) = name
+            destinations(n) = NU_ENVMASK_FBODY//'01'//MRC_EXT
+        else
+            name = NU_ENVMASK_FBODY//'01'//MRC_EXT
+            if( file_exists(name) ) call del_file(name)
+        endif
+        do i = 1,n
+            if( simple_abspath(sources(i)) /= simple_abspath(destinations(i), check_exists=.false.) ) &
+                &call simple_copy_file(sources(i), destinations(i))
+        enddo
+        message = ''
+        reused = .true.
+    end function stage_reference_derivatives
 
     ! Validates/stages accumulator files using the caller's project; no project-file I/O.
     logical function stage_refine3D_local_chain( params, project, source_vol, box_crop, smpd_crop ) result(valid)
-        use simple_refine3D_fnames, only: refine3D_trail_rec_fname, refine3D_trail_rho_fname, &
+        use simple_refine3D_fnames,      only: refine3D_trail_rec_fname, refine3D_trail_rho_fname, &
             &refine3D_trail_manifest_fname, refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
-        use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK
-        use simple_state_weight_set, only: state_weight_set
-        use simple_refine3D_provenance, only: reuse_provenance_matches, provenance_file
+        use simple_trail_chain_manifest,   only: trail_chain_manifest, TRAIL_MANIFEST_OK
+        use simple_state_weight_set,       only: state_weight_set
+        use simple_refine3D_provenance,    only: reuse_provenance_matches, provenance_file, provenance_pending_file
         use, intrinsic :: iso_fortran_env, only: int64
-        class(parameters), intent(in) :: params
+        class(parameters), intent(in)            :: params
         class(sp_project), target, intent(inout) :: project
-        type(string), intent(in) :: source_vol
-        integer, intent(in) :: box_crop
-        real, intent(in) :: smpd_crop
-        class(oris), pointer :: os
+        type(string), intent(in)                 :: source_vol
+        integer, intent(in)                      :: box_crop
+        real, intent(in)                         :: smpd_crop
+        class(oris), pointer                 :: os
         class(state_weight_set), allocatable :: weights
-        type(trail_chain_manifest) :: manifest
-        type(string) :: source_dir, src_manifest, dst_manifest, source_file
-        type(string) :: components(4), files(5), src_record, dst_record
-        integer(int64) :: expected_sizes(4), actual_size
-        integer(int64) :: wset_id(2)
-        integer :: ncomponents, i, status
-        real :: source_extent, current_extent
-        character(len=STDLEN) :: message
+        type(trail_chain_manifest)           :: manifest
+        type(string)                         :: source_dir, src_manifest, dst_manifest, source_file
+        type(string)                         :: components(4), files(5), src_record, dst_record
+        integer(int64)                       :: actual_sizes(4), actual_size
+        integer(int64)                       :: wset_id(2)
+        integer                              :: ncomponents, i, status
+        character(len=STDLEN)                :: message
         valid = .false.
         if( .not. params%l_update_frac .or. .not. params%l_trail_rec ) return
         call project%ptr2oritype('ptcl3D', os)
@@ -306,25 +481,15 @@ contains
             valid = status == TRAIL_MANIFEST_OK
         endif
         if( valid )then
-            valid = manifest%get_nptcls() == project%os_ptcl3D%get_noris() .and. &
-                &manifest%get_nstates() == 1 .and. manifest%get_state() == 1
-            if( valid )then
-                expected_sizes = 0_int64
-                do i = 1, ncomponents
-                    source_file = source_dir//basename(components(i))
-                    actual_size = -1_int64
-                    if( file_exists(source_file) ) inquire(file=source_file%to_char(), size=actual_size)
-                    expected_sizes(i) = actual_size
-                enddo
-                do i = 1, ncomponents
-                    if( manifest%get_size(i) /= expected_sizes(i) ) valid = .false.
-                enddo
-                source_extent  = real(manifest%get_box()) * manifest%get_smpd()
-                current_extent = real(box_crop) * smpd_crop
-                if( manifest%get_box() > box_crop .or. &
-                    &abs(source_extent - current_extent) > 0.01 * current_extent ) valid = .false.
-                if( any(manifest%get_wset_id() /= wset_id) ) valid = .false.
-            endif
+            actual_sizes = 0_int64
+            do i = 1,ncomponents
+                source_file = source_dir//basename(components(i))
+                actual_size = -1_int64
+                if( file_exists(source_file) ) inquire(file=source_file%to_char(), size=actual_size)
+                actual_sizes(i) = actual_size
+            enddo
+            valid = manifest%compatible(project%os_ptcl3D%get_noris(), 1, 1, box_crop, smpd_crop, &
+                &actual_sizes(:ncomponents), wset_id, message)
         endif
         if( valid )then
             files(1) = src_manifest
@@ -346,7 +511,7 @@ contains
                 &call simple_copy_file(src_record, dst_record)
             if( simple_abspath(src_manifest) /= simple_abspath(dst_manifest, check_exists=.false.) ) &
                 &call simple_copy_file(src_manifest, dst_manifest)
-            dst_record = dst_record//'.pending'
+            dst_record = provenance_pending_file(dst_manifest)
             if( file_exists(dst_record) ) call del_file(dst_record)
             files(1) = dst_manifest
             files(2:ncomponents+1) = components(:ncomponents)
@@ -403,7 +568,7 @@ contains
 
     !> Strategy selection based on command-line shape.
     function create_refine3D_strategy(cline) result(strategy)
-        class(cmdline), intent(in) :: cline
+        class(cmdline), intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy
         if( cline%defined('nparts') .and. (.not. cline%defined('part')) )then
             allocate(refine3D_distr_strategy :: strategy)
@@ -412,6 +577,7 @@ contains
             allocate(refine3D_inmem_strategy :: strategy)
             if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY EXECUTION'
         endif
+        call strategy%startup%read_cline(cline)
     end function create_refine3D_strategy
 
     subroutine prepare_assembly_cline( cline, params, nthr, cline_assembly )
@@ -936,7 +1102,7 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         integer                               :: startit
-        logical                               :: l_proj_dirty, l_preserve_chain_history
+        logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
         ! the execution directory exists now: every iteration rebuilds its parameters from cline,
@@ -947,15 +1113,13 @@ contains
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         l_proj_dirty = .false.
-        l_preserve_chain_history = .false.
-        if( cline%defined('trail_seed') ) l_preserve_chain_history = cline%get_carg('trail_seed') == 'no'
         ! Some refine modes manage sampling/updatecnt internally
         if( params%l_prob_align_mode )then
             ! random sampling and updatecnt dealt with in prob_align
         else if( trim(params%refine) == 'sigma' )then
             ! a residual-only sigma2 pass leaves the update history as it is
         else
-            if( startit == 1 .and. .not. l_preserve_chain_history )then
+            if( startit == 1 .and. .not. self%startup%preserves_history() )then
                 call build%spproj_field%clean_entry('updatecnt', 'sampled')
                 l_proj_dirty = .true.
             endif
@@ -1025,7 +1189,6 @@ contains
         integer                           :: state, iter, extr_iter
         logical                           :: l_prob_neigh_mode
         logical                           :: l_write_partial_recs, l_polish, l_force_full_first
-        real                              :: requested_update_frac
         type(string)                      :: volname
         601 format(A,1X,F12.3)
         if( L_BENCH_GLOB )then
@@ -1035,10 +1198,7 @@ contains
         endif
         iter      = params%which_iter
         extr_iter = params%extr_iter
-        requested_update_frac = params%update_frac
-        l_force_full_first = iter == params%startit .and. params%l_update_frac .and. cline%defined('trail_seed')
-        if( l_force_full_first ) l_force_full_first = cline%get_carg('trail_seed') == 'yes'
-        if( l_force_full_first ) call cline%set('update_frac', 1.0)
+        l_force_full_first = self%startup%begin_iteration(params, cline)
         call self%conv%print_iteration(params%which_iter)
         ! In shared-memory mode, rebuild the toolbox from the settled
         ! per-iteration settings. Keep the stage startit in params so
@@ -1164,8 +1324,8 @@ contains
             if( trim(params%volrec) .eq. 'yes' )then
                 do state = 1, params%nstates
                     volname = refine3D_state_vol_fname(state)
-                    params%vols(state) = volname
-                    call cline%set('vol'//int2str(state), volname)
+                    if( .not. file_exists(volname) ) cycle
+                    call adopt_refine3D_reference(params, cline, state, volname)
                 end do
             endif
         endif
@@ -1192,10 +1352,7 @@ contains
             if( L_BENCH_GLOB ) call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
                 &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
         endif
-        if( l_force_full_first )then
-            call cline%set('update_frac', requested_update_frac)
-            call cline%delete('trail_seed')
-        endif
+        if( l_force_full_first ) call self%startup%finish_iteration(params, cline)
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine inmem_execute_iteration
 
@@ -1291,6 +1448,7 @@ contains
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         if( allocated(self%params_polish) ) deallocate(self%params_polish)
+        call self%startup%kill
     end subroutine inmem_cleanup
 
     ! ======================================================================
@@ -1298,8 +1456,8 @@ contains
     ! ======================================================================
 
     subroutine distr_initialize(self, params, build, cline)
-        use simple_exec_helpers,      only: set_master_num_threads
-        use simple_commanders_rec,    only: commander_rec3D
+        use simple_exec_helpers,   only: set_master_num_threads
+        use simple_commanders_rec, only: commander_rec3D
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1518,7 +1676,7 @@ contains
         use simple_commanders_volops,    only: commander_postprocess
         use simple_prob_align_strategy,  only: prob_align_exec, prob_align_neigh_exec
         !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
-        use simple_fsc,                  only: plot_fsc
+        use simple_fsc,                     only: plot_fsc
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
@@ -1536,8 +1694,7 @@ contains
         logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
         integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
-        logical :: l_prob_neigh_mode, l_polish, l_force_full_first, l_requested_update_frac, l_requested_trail_rec
-        real    :: requested_update_frac
+        logical :: l_prob_neigh_mode, l_polish, l_force_full_first
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -1545,18 +1702,8 @@ contains
         endif
         601 format(A,1X,F12.3)
         iter     = params%which_iter
-        requested_update_frac = params%update_frac
-        l_requested_update_frac = params%l_update_frac
-        l_requested_trail_rec   = params%l_trail_rec
-        l_force_full_first = iter == params%startit .and. params%l_update_frac .and. cline%defined('trail_seed')
-        if( l_force_full_first ) l_force_full_first = cline%get_carg('trail_seed') == 'yes'
-        if( l_force_full_first )then
-            params%update_frac   = 1.0
-            params%l_update_frac = .false.
-            params%l_trail_rec   = .false.
-            call cline%set('update_frac', 1.0)
-            call self%job_descr%set('update_frac', real2str(1.0))
-        endif
+        l_force_full_first = self%startup%begin_iteration(params, cline)
+        if( l_force_full_first ) call self%job_descr%set('update_frac', real2str(params%update_frac))
         call self%conv%print_iteration(iter)
         ! annealing
         if( params%l_noise_reg )then
@@ -1701,10 +1848,6 @@ contains
                                 vol_iter = refine3D_state_vol_fname(state)
                                 if( .not. file_exists(vol_iter) ) &
                                     &THROW_HARD('carried-forward state volume is missing for state '//int2str(state))
-                                vol = 'vol'//int2str(state)
-                                params%vols(state) = vol_iter
-                                call cline%set(vol, vol_iter)
-                                call self%job_descr%set(vol, vol_iter)
                             else
                                 vol_iter  = refine3D_state_vol_fname(state)
                                 fsc_file  = refine3D_fsc_fname(state)
@@ -1731,10 +1874,12 @@ contains
                                 else
                                     call build%spproj%add_vol2os_out(vol_iter, params%smpd_crop, state, 'vol')
                                 endif
-                                vol = 'vol'//int2str(state)
-                                call self%job_descr%set( vol, vol_iter )
-                                call cline%set(vol, vol_iter)
                             endif
+                            call adopt_refine3D_reference(params, cline, state, vol_iter)
+                            vol = 'vol'//int2str(state)
+                            call self%job_descr%delete('vol_even')
+                            call self%job_descr%delete('vol_odd')
+                            call self%job_descr%set(vol, vol_iter)
                         enddo
                         call build%spproj%write_segment_inside('out')
                         ! per-state postprocess (and optional automask)
@@ -1846,12 +1991,8 @@ contains
         ! the iteration's particle field, once (its out segment went to the file before postprocessing)
         call build%spproj%write_segment_inside(params%oritype)
         if( l_force_full_first )then
-            params%update_frac   = requested_update_frac
-            params%l_update_frac = l_requested_update_frac
-            params%l_trail_rec   = l_requested_trail_rec
-            call cline%set('update_frac', requested_update_frac)
-            call cline%delete('trail_seed')
-            call self%job_descr%set('update_frac', real2str(requested_update_frac))
+            call self%startup%finish_iteration(params, cline)
+            call self%job_descr%set('update_frac', real2str(params%update_frac))
         endif
         if( L_BENCH_GLOB ) self%bench%rt_tot = toc(self%bench%t_tot)
     end subroutine distr_execute_iteration
@@ -1903,6 +2044,7 @@ contains
         call qsys_cleanup(params)
         call self%job_descr%kill
         self%l_master_tbox = .false.
+        call self%startup%kill
     end subroutine distr_cleanup
 
     !> one line per iteration with the master reconstruction wall time, its

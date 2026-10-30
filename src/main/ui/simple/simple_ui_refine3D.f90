@@ -191,7 +191,40 @@ contains
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='Automated 3D Refinement')
-        call add_refine3D_workflow_inputs(refine3D_auto, .false.)
+        call add_refine3D_workflow_inputs(refine3D_auto)
+        call refine3D_auto%add_input(UI_SRCH, 'ref_pose_init', 'multi', 'External-reference pose initialization', &
+        &'When vol1 has independent provenance, run one fixed-reference CC pose-initialization pass at 15 Angstroms &
+        &before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &
+        &choices=ui_choices([character(len=4) :: 'cc', 'none']), visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'pose_cont', 'multi', 'Continuous pose refinement', &
+        &'Run a continuous Cartesian polishing pass after each discrete iteration(no|yes){no}', '', .false., 'no', &
+        &group='search', choices=ui_choices([character(len=3) :: 'no', 'yes']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
+        &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', &
+        &'', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'regpass', 'binary', 'Global registration pass', &
+        &'One global (refine=greedy) registration pass of all particles against the masked startup references, &
+        &band-limited at the FSC=regpass_fsc resolution of the startup pair, before the neighbourhood iterations(yes|no){yes}', &
+        &'', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'regpass_fsc', 'num', 'Registration-pass FSC criterion', &
+        &'FSC value of the startup pair whose resolution band-limits the registration pass', &
+        &'FSC value in (0,1){0.143}', .false., 0.143, group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+        &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}','', .false., 'nonuniform', group="filter", &
+        &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_FILT, combine_eo, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call add_ui_program('refine3D_auto', refine3D_auto, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_auto
 
@@ -202,13 +235,33 @@ contains
         &'Continue single-state 3D refinement from stored particle poses', &
         &'uses bounded continuous Cartesian pose refinement with existing poses and even/odd references', &
         &'simple_exec', .true., visibility=UI_VIS_STANDARD, display_name='Local 3D Refinement')
-        call add_refine3D_workflow_inputs(refine3D_local, .true.)
+        call add_refine3D_workflow_inputs(refine3D_local)
+        call refine3D_local%add_input(UI_SRCH, trs, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
+        &'A continuous pose (refine3D_local) is stable when it moved by at most this rotation since its last pose', &
+        &'in degrees{0.5}', .false., 0.5, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_conv_shift', 'num', 'Continuous pose convergence shift', &
+        &'A continuous pose (refine3D_local) is stable when it moved by at most this shift since its last pose', &
+        &'in Angstroms{1.0}', .false., 1.0, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_conv_frac', 'num', 'Continuous pose convergence fraction', &
+        &'Continuous refinement converges when this fraction of every state is stable, over iterations that '// &
+        &'together sampled this fraction of the particles', '(0,1]{0.9}', .false., 0.9, group='search', &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){no}','', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_FILT, 'lpstop', 'num', 'Matching resolution cap', &
+        &'Cap the matching band while keeping separate even/odd references', 'resolution in Angstroms', &
+        &.false., 1., group='filter', visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+        &'Half-specific filtering mode(none|nonuniform){nonuniform}', '', .false., 'nonuniform', group='filter', &
+        &choices=ui_choices([character(len=10) :: 'none', 'nonuniform']), visibility=UI_VIS_ADVANCED)
         call add_ui_program('refine3D_local', refine3D_local, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_local
 
-    subroutine add_refine3D_workflow_inputs( prg, l_local )
+    subroutine add_refine3D_workflow_inputs( prg )
         type(ui_program), intent(inout) :: prg
-        logical, intent(in) :: l_local
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call prg%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
@@ -239,61 +292,11 @@ contains
         call prg%add_input(UI_SRCH, 'nsample', 'num', 'Particle samples', &
         &'Number of particles sampled per refinement iteration', 'number of samples', .false., 25000., &
         &group="search", visibility=UI_VIS_DEVELOPER)
-        if( .not. l_local )then
-            call prg%add_input(UI_SRCH, 'ref_pose_init', 'multi', 'External-reference pose initialization', &
-            &'When vol1 has independent provenance, run one fixed-reference CC pose-initialization pass at 15 Angstroms &
-            &before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &
-            &choices=ui_choices([character(len=4) :: 'cc', 'none']), visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_SRCH, 'pose_cont', 'multi', 'Continuous pose refinement', &
-            &'Run a continuous Cartesian polishing pass after each discrete iteration(no|yes){no}', '', .false., 'no', &
-            &group='search', choices=ui_choices([character(len=3) :: 'no', 'yes']), &
-            &visibility=UI_VIS_ADVANCED)
-        endif
         call prg%add_input(UI_SRCH, 'athres_cont', 'num', 'Continuous pose rotation bound', &
         &'Halfwidth of the total rotation a continuous Cartesian pose solve (local refinement or pose_cont=yes) may '// &
         &'move a particle from its seed: the capture range for wrongly assigned orientations', &
         &'in degrees{10}', .false., 10., group='search', visibility=UI_VIS_ADVANCED)
-        if( l_local )then
-            call prg%add_input(UI_SRCH, trs, group='search', visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
-            &'A continuous pose (refine3D_local) is stable when it moved by at most this rotation since its last pose', &
-            &'in degrees{0.5}', .false., 0.5, group='search', visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_SRCH, 'cont_conv_shift', 'num', 'Continuous pose convergence shift', &
-            &'A continuous pose (refine3D_local) is stable when it moved by at most this shift since its last pose', &
-            &'in Angstroms{1.0}', .false., 1.0, group='search', visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_SRCH, 'cont_conv_frac', 'num', 'Continuous pose convergence fraction', &
-            &'Continuous refinement converges when this fraction of every state is stable, over iterations that '// &
-            &'together sampled this fraction of the particles', '(0,1]{0.9}', .false., 0.9, group='search', &
-            &visibility=UI_VIS_ADVANCED)
-        endif
         call prg%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
-        if( .not. l_local )then
-            call prg%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
-            &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-            &visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_SRCH, 'regpass', 'binary', 'Global registration pass', &
-            &'One global (refine=prob) registration pass of all particles against the masked startup references, &
-            &band-limited at the FSC=regpass_fsc resolution of the startup pair, before the neighbourhood iterations(yes|no){yes}', &
-            &'', .false., 'yes', group="search", &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-            &visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_SRCH, 'regpass_fsc', 'num', 'Registration-pass FSC criterion', &
-            &'FSC value of the startup pair whose resolution band-limits the registration pass', &
-            &'FSC value in (0,1){0.143}', .false., 0.143, group="search", &
-            &visibility=UI_VIS_ADVANCED)
-        endif
-        if( l_local )then
-            call prg%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-            &for accelerated computation(yes|no){no}','', .false., 'no', group="search", &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-            &visibility=UI_VIS_ADVANCED)
-        else
-            call prg%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-            &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-            &visibility=UI_VIS_ADVANCED)
-        endif
         call prg%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false.,&
         &'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -303,19 +306,6 @@ contains
         & 'Low-pass limit for NU evidence envelope generation in Angstroms', &
         &'low-pass limit in Angstroms', .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        if( l_local )then
-            call prg%add_input(UI_FILT, 'lpstop', 'num', 'Matching resolution cap', &
-            &'Cap the matching band while keeping separate even/odd references', 'resolution in Angstroms', &
-            &.false., 1., group='filter', visibility=UI_VIS_ADVANCED)
-            call prg%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-            &'Half-specific filtering mode(none|nonuniform){nonuniform}', '', .false., 'nonuniform', group='filter', &
-            &choices=ui_choices([character(len=10) :: 'none', 'nonuniform']), visibility=UI_VIS_ADVANCED)
-        else
-            call prg%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-            &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}','', .false., 'nonuniform', group="filter", &
-            &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']), &
-            &visibility=UI_VIS_ADVANCED)
-        endif
         call prg%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations during refinement; the cold original-sampling final reconstruction uses at least 5', &
         &'iterations{2}', &
@@ -344,10 +334,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, envmsklp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        if( .not. l_local )then
-            call prg%add_input(UI_FILT, combine_eo, group="filter", &
-            &visibility=UI_VIS_ADVANCED)
-        endif
         call prg%add_input(UI_FILT, 'res_target', 'num', 'Resolution target (in A)',&
         & 'Resolution target in Angstroms', 'Resolution target in Angstroms', .false., 3., group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -361,8 +347,5 @@ contains
         call prg%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
     end subroutine add_refine3D_workflow_inputs
-
-
-
 
 end module simple_ui_refine3D

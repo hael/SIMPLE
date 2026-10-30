@@ -353,7 +353,8 @@ contains
             type(trail_chain_manifest) :: man
             type(string) :: manifest
             integer      :: status, ifile
-            real         :: extent_chain, extent_cur
+            integer(kind=8) :: actual_sizes(4)
+            character(len=256) :: message
             l_valid  = .false.
             manifest = refine3D_trail_manifest_fname(state)
             call man%read(manifest, status)
@@ -367,35 +368,14 @@ contains
                     call discard_trail_chain_set('unreadable or corrupt manifest')
                     return
             end select
-            if( man%get_nptcls() /= build%spproj_field%get_noris() )then
-                call discard_trail_chain_set('particle population mismatch')
-                return
-            endif
-            if( man%get_nstates() /= params%nstates .or. man%get_state() /= state )then
-                call discard_trail_chain_set('state layout mismatch')
-                return
-            endif
-            ! the weights are frozen for a chain: another weight set identity re-seeds, never blends
-            if( any(man%get_wset_id() /= wset_id) )then
-                call discard_trail_chain_set('state weight set identity mismatch')
-                return
-            endif
-            if( man%get_box() > params%box_crop )then
-                call discard_trail_chain_set('larger grid than current reconstruction')
-                return
-            endif
-            extent_chain = real(man%get_box())   * man%get_smpd()
-            extent_cur   = real(params%box_crop) * params%smpd_crop
-            if( abs(extent_chain - extent_cur) > 0.01 * extent_cur )then
-                call discard_trail_chain_set('physical extent mismatch')
-                return
-            endif
             do ifile = 1, 4
-                if( trail_chain_file_size(trail_chain_component(ifile)) /= man%get_size(ifile) )then
-                    call discard_trail_chain_set('component size mismatch (mixed generations)')
-                    return
-                endif
+                actual_sizes(ifile) = trail_chain_file_size(trail_chain_component(ifile))
             enddo
+            if( .not. man%compatible(build%spproj_field%get_noris(), params%nstates, state, &
+                &params%box_crop, params%smpd_crop, actual_sizes, wset_id, message) )then
+                call discard_trail_chain_set(trim(message))
+                return
+            endif
             ! a discarded chain leaves generation and mass at zero: its re-seed starts at generation one
             trail_chain_gen  = man%get_gen()
             trail_chain_mrep = man%get_mrep()

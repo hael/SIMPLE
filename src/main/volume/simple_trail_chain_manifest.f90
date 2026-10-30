@@ -1,10 +1,8 @@
 !@descr: manifest of a trailing-reconstruction chain (gridding or PCG): provenance, generation, component sizes and represented mass
-! A chain's components (gridding: even/odd Fourier sums and densities; PCG: the even/odd raw pair)
-! are one artifact set; its manifest is deleted first and written last. It records the crop box and
-! sampling, the project row count, the state layout, a generation counter, the component byte sizes
-! (unused ones zero), M, the applied mass the chain represents (population_blend_weights), the
-! contributor count and the state weight set identity (zero under hard labels). A chain of another
-! identity or version is discarded and re-seeded, never blended; the owners validate.
+! Gridding sums/densities or the PCG raw even/odd pair form one set: delete its manifest first, publish it last.
+! Record box/sampling, particle/state layout, generation, component sizes (unused slots zero), represented
+! applied mass M (population_blend_weights), contributor count and weight-set identity (zero for hard labels).
+! Owners reject incompatible identities or versions and re-seed instead of blending.
 module simple_trail_chain_manifest
 use simple_core_module_api
 implicit none
@@ -36,6 +34,7 @@ type :: trail_chain_manifest
     procedure :: new
     procedure :: write
     procedure :: read
+    procedure :: compatible
     procedure :: get_box
     procedure :: get_smpd
     procedure :: get_nptcls
@@ -115,6 +114,40 @@ contains
         self%exists = .true.
         status      = TRAIL_MANIFEST_OK
     end subroutine read
+
+    ! Compare identity and geometry only; each caller owns rejection and cleanup.
+    logical function compatible( self, nptcls, nstates, state, box, smpd, sizes, wset_id, message ) result(valid)
+        class(trail_chain_manifest), intent(in) :: self
+        integer, intent(in)                     :: nptcls, nstates, state, box
+        real, intent(in)                        :: smpd
+        integer(kind=8), intent(in)             :: sizes(:), wset_id(2)
+        character(len=*), intent(out)           :: message
+        real    :: extent_chain, extent_current
+        integer :: i
+        valid = .false.
+        message = 'missing chain manifest'
+        if( .not. self%exists ) return
+        message = 'particle population mismatch'
+        if( self%nptcls /= nptcls ) return
+        message = 'state layout mismatch'
+        if( self%nstates /= nstates .or. self%state /= state ) return
+        message = 'state weight set identity mismatch'
+        ! Frozen weights: another weight-set identity requires reseeding, never blending.
+        if( any(self%wset_id /= wset_id) ) return
+        message = 'larger grid than current reconstruction'
+        if( self%box > box ) return
+        extent_chain = real(self%box) * self%smpd
+        extent_current = real(box) * smpd
+        message = 'physical extent mismatch'
+        if( abs(extent_chain - extent_current) > 0.01 * extent_current ) return
+        message = 'component size mismatch (mixed generations)'
+        if( size(sizes) < 1 .or. size(sizes) > size(self%sizes) ) return
+        do i = 1,size(sizes)
+            if( self%sizes(i) /= sizes(i) ) return
+        enddo
+        message = ''
+        valid = .true.
+    end function compatible
 
     integer function get_box( self )
         class(trail_chain_manifest), intent(in) :: self

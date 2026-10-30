@@ -36,12 +36,50 @@ contains
         call test_get_current_rss_bytes()
         call test_syslib_c2fortran_string()
         call test_find_next_int_dir_prefix()
+        call test_project_discovery()
         call test_print_slurm_env_smoke()
         call teardown_test_env()
         ! call report_summary()
     end subroutine run_all_syslib_tests
 
     !---------------- test environment helpers ----------------
+
+    subroutine test_project_discovery()
+        type(string) :: saved, fixture, previous
+        type(string), allocatable :: projects(:)
+        integer :: next_dir, nfail0
+        write(*,'(A)') 'test_project_discovery'
+        nfail0 = tests_failed
+        call enter_fixture('project_discovery', saved, fixture)
+        call resolve_project_files(string('.'), previous, next_dir, projects)
+        call assert_true(allocated(projects), 'project discovery: empty candidate list is returned')
+        if( allocated(projects) ) call assert_int(0,size(projects), 'project discovery: no project in an empty directory')
+        call simple_touch(string('root.simple'))
+        call resolve_project_files(string('.'), previous, next_dir, projects)
+        call assert_true(allocated(projects), 'project discovery: current directory project is found')
+        if( allocated(projects) ) call assert_int(1,size(projects), 'project discovery: one current project')
+        call simple_touch(string('other.simple'))
+        call resolve_project_files(string('.'), previous, next_dir, projects)
+        if( allocated(projects) ) call assert_int(2,size(projects), 'project discovery: ambiguity is retained for the caller')
+        call simple_mkdir(string('1_refine'))
+        call simple_touch(string('1_refine/latest.simple'))
+        call resolve_project_files(string('.'), previous, next_dir, projects)
+        call assert_true(allocated(projects), 'project discovery: previous-run project is found')
+        if( allocated(projects) )then
+            call assert_int(1,size(projects), 'project discovery: previous run takes precedence')
+            if( size(projects) == 1 )then
+                call assert_true(projects(1)%has_substr('latest.simple'), 'project discovery: selected previous project')
+            endif
+        endif
+        call simple_mkdir(string('2_refine'))
+        call resolve_project_files(string('.'), previous, next_dir, projects)
+        call assert_int(3,next_dir, 'project discovery: next directory number is retained')
+        call assert_true(allocated(projects), 'project discovery: empty latest-run list is returned')
+        if( allocated(projects) )then
+            call assert_int(0,size(projects), 'project discovery: empty latest run does not fall back to older projects')
+        endif
+        call leave_fixture(saved, fixture, nfail0)
+    end subroutine test_project_discovery
 
     subroutine setup_test_env()
         type(string) :: cwd

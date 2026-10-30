@@ -1030,6 +1030,20 @@ contains
         if(l>0) str(l:)=' '
     end subroutine syslib_c2fortran_string
 
+    ! Read-only discovery: an existing numbered run takes precedence over the current directory.
+    subroutine resolve_project_files( directory, previous_dir, next_dir, projects )
+        class(string), intent(in)              :: directory
+        type(string), intent(out)              :: previous_dir
+        integer, intent(out)                   :: next_dir
+        type(string), allocatable, intent(out) :: projects(:)
+        next_dir = find_next_int_dir_prefix(directory, previous_dir)
+        if( previous_dir%is_allocated() )then
+            call simple_list_files(previous_dir%to_char()//'/*.simple', projects)
+        else
+            call simple_list_files(directory%to_char()//'/*.simple', projects)
+        endif
+    end subroutine resolve_project_files
+
     function find_next_int_dir_prefix( dir2list, last_prev_dir ) result( next_int_dir_prefix )
         class(string),           intent(in)  :: dir2list
         class(string), optional, intent(out) :: last_prev_dir

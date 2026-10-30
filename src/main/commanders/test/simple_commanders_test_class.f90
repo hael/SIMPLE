@@ -1,7 +1,7 @@
 !@descr: the unit-test suites: the build's fast gate (test=unit_<area>), its umbrella (test=units) and the platform-tier forked-process suite
 module simple_commanders_test_class
 use simple_commanders_api
-use simple_test_utils,                       only: begin_test_suite, end_test_suite, reset_test_report, report_summary, &
+use simple_test_utils, only: begin_test_suite, end_test_suite, reset_test_report, report_summary, &
     &set_fixed_seed
 ! core library tester modules
 use simple_ansi_ctrls_tester,                only: run_all_ansi_ctrls_tests
@@ -98,6 +98,7 @@ use simple_simulator_tester,                 only: run_all_simulator_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_refine3D_local_tester, only: run_all_refine3D_local_tests
+use simple_refine3D_startup_tester,              only: run_all_refine3D_startup_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
 use simple_convergence_tester,               only: run_all_convergence_tests
 use simple_strategy3D_cont_1jyx_tester,      only: run_all_strategy3D_cont_1jyx_tests
@@ -148,20 +149,23 @@ use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
-use simple_stream_chain_tester,              only: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
-use simple_stream_stage_preprocess_tester,   only: run_all_stream_stage_preprocess_tests
-use simple_stream_stage_optics_tester,       only: run_all_stream_stage_optics_tests
+use simple_stream_chain_tester,                  only: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
+use simple_stream_stage_preprocess_tester,       only: run_all_stream_stage_preprocess_tests
+use simple_stream_stage_optics_tester,           only: run_all_stream_stage_optics_tests
 use simple_stream_stage_initial_analysis_tester, only: run_all_stream_stage_initial_analysis_tests
-use simple_stream_stage_refpick_tester,      only: run_all_stream_stage_refpick_tests
-use simple_stream_stage_sieve_tester,        only: run_all_stream_stage_sieve_tests
-use simple_stream_stage_pool2D_tester,       only: run_all_stream_stage_pool2D_tests
-use simple_stream_pool2D_tester,             only: run_all_stream_pool2D_tests
-use simple_stream_stage_solve3D_tester,   only: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
-use simple_stream_master_tester,             only: run_all_stream_master_tests, run_stream_heartbeat_tests
-use simple_stream_job_sets_tester,           only: run_all_stream_job_sets_tests
-use simple_stream_meta_plots_tester,         only: run_all_stream_meta_plots_tests
-use simple_stream_watcher_tester,            only: run_all_stream_watcher_tests
-use simple_ui,                               only: validate_ui_json
+use simple_stream_stage_refpick_tester,          only: run_all_stream_stage_refpick_tests
+use simple_stream_stage_sieve_tester,            only: run_all_stream_stage_sieve_tests
+use simple_stream_stage_pool2D_tester,           only: run_all_stream_stage_pool2D_tests
+use simple_stream_pool2D_tester,                 only: run_all_stream_pool2D_tests
+use simple_stream_stage_solve3D_tester,          only: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
+use simple_stream_master_tester,                 only: run_all_stream_master_tests, run_stream_heartbeat_tests
+use simple_stream_job_sets_tester,               only: run_all_stream_job_sets_tests
+use simple_stream_meta_plots_tester,             only: run_all_stream_meta_plots_tests
+use simple_stream_watcher_tester,                only: run_all_stream_watcher_tests
+use simple_ui,                                   only: validate_ui_json
+use simple_refine3D_provenance_tester,           only: run_all_refine3D_provenance_tests
+use simple_refine3D_strategy_tester,             only: run_all_refine3D_staging_tests
+use simple_parameters_tester,                    only: run_all_parameters_tests
 implicit none
 #include "simple_local_flags.inc"
 
@@ -322,6 +326,7 @@ contains
         call add_suite(s, n, 'linked list',          run_all_list_tests)
         call add_suite(s, n, 'record list',          run_all_rec_list_tests)
         call add_suite(s, n, 'command line',         run_all_cmdline_tests)
+        call add_suite(s, n, 'parameters',           run_all_parameters_tests)
     end subroutine suites_core
 
     subroutine suites_ori( s, n )
@@ -444,6 +449,7 @@ contains
         call add_suite(s, n, 'observation noise',         run_all_gauran_tests)
         call add_suite(s, n, 'class-average carry-over',  run_all_cavg_sums_tests)
         call add_suite(s, n, 'trailing chain identity',   run_all_trail_chain_manifest_tests)
+        call add_suite(s, n, 'refine3D provenance',        run_all_refine3D_provenance_tests)
         call add_suite(s, n, 'frozen accumulator',        run_all_frozen_accum_tests)
         call add_suite(s, n, 'weighted insertion',        run_all_reconstructor_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
@@ -481,7 +487,9 @@ contains
     subroutine suites_cart_align3D( s, n )
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
-        call add_suite(s, n, 'local startup', run_all_refine3D_local_tests)
+        call add_suite(s, n, 'local startup',   run_all_refine3D_local_tests)
+        call add_suite(s, n, 'local staging',   run_all_refine3D_staging_tests)
+        call add_suite(s, n, 'startup state', run_all_refine3D_startup_tests)
         call add_suite(s, n, 'Cartesian Fourier', run_all_cartesian_fourier_tests)
         call add_suite(s, n, 'cart calculator',   run_all_cartft_calc_tests)
         call add_suite(s, n, 'pose optimizer',    run_all_cartft_pose_opt_tests)
@@ -731,7 +739,7 @@ contains
     end subroutine exec_test_unit_reconstruction
 
     subroutine exec_test_unit_pftc_align2D3D( self, cline )
-        class(commander_test_unit_pftc_align2D3D), intent(inout) :: self
+        class(commander_test_unit_pftc_align2D3D), intent(inout)        :: self
         class(cmdline),                                   intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
         integer :: n
@@ -741,7 +749,7 @@ contains
     end subroutine exec_test_unit_pftc_align2D3D
 
     subroutine exec_test_unit_cart_align3D( self, cline )
-        class(commander_test_unit_cart_align3D), intent(inout) :: self
+        class(commander_test_unit_cart_align3D), intent(inout)        :: self
         class(cmdline),                                 intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
         integer :: n
@@ -751,7 +759,7 @@ contains
     end subroutine exec_test_unit_cart_align3D
 
     subroutine exec_test_lib_cart_align3D( self, cline )
-        class(commander_test_lib_cart_align3D), intent(inout) :: self
+        class(commander_test_lib_cart_align3D), intent(inout)        :: self
         class(cmdline),                                intent(inout) :: cline
         type(unit_suite) :: s(MAX_SUITES)
         integer :: n
