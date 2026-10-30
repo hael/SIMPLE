@@ -8,6 +8,7 @@ use simple_error,     only: simple_exception
 use simple_math,      only: hpsort
 use simple_oris,      only: oris
 use simple_sym,       only: sym
+use simple_ori_utils, only: euler2m
 use simple_rnd,       only: ran3
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 use simple_string,    only: string
@@ -22,8 +23,8 @@ public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
 public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
-public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_extras
-public :: prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
+public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
+public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
 private
@@ -47,14 +48,14 @@ type :: prob_candidate
     logical :: has_sh = .false.
 end type prob_candidate
 
-!> The n_eff readout of the tables' posterior draws: the mean effective number of candidates exp(entropy) over a subsample of rows, at the draw's
-!! tempering factor and at beta 1 (the physical posterior), logged every iteration as POSTERIOR DRAW N_EFF. The
-!! tables offer their rows in particle order before the draws: every stride-th particle whose row holds at least
-!! PROB_NEFF_NMIN valid distances is kept, up to PROB_NEFF_ROWS rows, packed as distances above the row minimum
-!! with the particle's temperature; a row of two candidates lands on one of its best two at any factor and would
-!! pull the level of the rows where the choice is open. Until 2026-10-29 the same object solved the factor so that
-!! the mean n_eff met a target (prob_neff, the control); pinning n_eff cancelled the data's own annealing at the
-!! band entries and failed PorF 7 of 10, so the schedule is prob_beta flat with the tail, and n_eff is a readout
+!> The n_eff readout of the tables' posterior draws: the mean effective number of candidates exp(entropy) over a
+!! subsample of rows, at the draw's tempering factor and at beta 1 (the physical posterior), logged every iteration
+!! as POSTERIOR DRAW N_EFF. The tables offer their rows in particle order before the draws: every stride-th particle
+!! whose row holds at least PROB_NEFF_NMIN valid distances is kept, up to PROB_NEFF_ROWS rows, packed as distances
+!! above the row minimum with the particle's temperature; a row of two candidates lands on one of its best two at
+!! any factor and would pull the level of the rows where the choice is open. A readout, not a control: a factor
+!! solved to pin n_eff cancels the data's own annealing at the band entries (the schedule is prob_beta flat with
+!! the tail)
 integer, parameter :: PROB_NEFF_ROWS     = 1000  !< rows of the subsample
 integer, parameter :: PROB_NEFF_NMIN     = 6     !< valid candidates a row needs to be kept
 integer, parameter :: PROB_NEFF_MIN_ROWS = 50    !< below which nothing is reported
@@ -83,12 +84,15 @@ type :: prob_insert_pose
 end type prob_insert_pose
 
 !> The weighted insertion's table of one iteration: per particle (the global table's order) the committed pose's
-!! weight and its extra poses, drawn by the assignment (draw_posterior_extras) and written by the master beside
+!! weight and its extra poses, selected by the assignment (top_posterior_extras) and written by the master beside
 !! the assignment (INSERT_FBODY); the workers read it with the particle indices and insert each particle at its
-!! committed pose with its weight and at its extras with theirs, every particle's weights summing to 1
+!! committed pose with its weight and at its extras with theirs, every particle's weights summing to 1. The master
+!! also counts the cone's occupancy (the eligible entries per particle and the particles with more of them than
+!! the cap kmax - 1 admits) for the PROB_TAB_INSERT line; the counts are not written
 type :: prob_insert_table
     private
-    integer :: nptcls = 0, kmax = 1, npose = 0
+    integer :: nptcls = 0, kmax = 1, npose = 0, ncapped = 0
+    integer(int64) :: nelig_sum = 0_int64
     integer,                allocatable :: pinds(:), nextra(:), first(:)
     real,                   allocatable :: wc(:)
     type(prob_insert_pose), allocatable :: poses(:)
@@ -105,6 +109,8 @@ contains
     procedure :: get_committed_weight => insert_table_get_committed_weight
     procedure :: get_nextra   => insert_table_get_nextra
     procedure :: get_extra    => insert_table_get_extra
+    procedure :: get_mean_eligible => insert_table_get_mean_eligible
+    procedure :: get_frac_capped   => insert_table_get_frac_capped
     procedure :: kill   => insert_table_kill
 end type prob_insert_table
 
@@ -129,25 +135,25 @@ contains
     procedure :: kill  => insert_poses_kill
 end type prob_insert_poses
 
-!> The weighted insertion's cone: per state, the half-angle whose arc at the mask's rim is the state map's FSC=0.5
-!! resolution and a shift bound of the same displacement, with the geometry the test needs (the directions' Euler
-!! angles, the rotation grid, the point group; set_space, once per assignment). A candidate pose is within the cone
-!! of the committed one when the rotation between them, taken modulo the point group (sym_dists: the
-!! symmetry-equivalent of the candidate closest to the committed pose), is no larger than the half-angle in its
-!! direction and in its in-plane part alike, and the two shifts are no farther apart than the bound: three
-!! displacements of the particle's rim that the map cannot resolve, so a particle averaged over such poses is smeared
-!! by nothing the map has. Beyond the cone a pose is another hypothesis, which the search's draw decides: the first
-!! builds of the insertion averaged over the whole row, at the search's temperature (a blur that capped the
-!! resolution) and then at the particle's own (a map colder than the search, which no longer carried the draws'
-!! exploration, so stage 3 could not re-derive the poses), 2026-10-29. A state without a resolution has no cone and
-!! its particles enter at the committed pose alone
+!> The weighted insertion's cone: per state the resolution (the state map's FSC=0.5, Angstrom) that bounds how far
+!! a pose may move the particle's rim from the committed pose, with the geometry the test needs (set_space, once
+!! per assignment: the rotation matrices of the directions, of the rotation grid and of the point group). A pose is
+!! within the cone of the committed one when the rotation between the two, the smallest over the point group's
+!! equivalents of the candidate, taken as a displacement over the mask's radius, plus the distance between the two
+!! stored shifts, is at most the resolution: a particle averaged over such poses is moved by no more than the map
+!! resolves at its rim (a heuristic scale: at the cone's edge the displacement is one period of the resolution's
+!! frequency; within it the weights at the particle's own temperature decide). Beyond the cone a pose is another
+!! hypothesis, which the search's draw decides. A state without a resolution has no cone and its particles enter
+!! at the committed pose alone
 type :: prob_insert_cone
     private
-    real,    allocatable :: ang(:)     !< (nstates) the half-angle, degrees; below zero: no cone
-    real,    allocatable :: shmax(:)   !< (nstates) the shift bound, pixels of the stored shifts
-    real,    allocatable :: euls(:,:)  !< (3,nspace) the directions' Euler angles, e3 zero
-    class(sym),  pointer :: se => null()
-    integer :: nspace = 0, nrots = 0
+    real, allocatable :: res(:)       !< (nstates) the resolution, Angstrom; not positive: no cone
+    real, allocatable :: dmat(:,:,:)  !< (3,3,nspace) the directions' rotation matrices, in-plane angle zero
+    real, allocatable :: rz(:,:,:)    !< (3,3,nrots) the rotation grid's in-plane matrices
+    real, allocatable :: rsym(:,:,:)  !< (3,3,nsym) the point group's matrices
+    real    :: diam = 0.              !< the mask diameter, Angstrom
+    real    :: smpd = 0.              !< the sampling distance the stored shifts are measured in, Angstrom per pixel
+    integer :: nspace = 0, nrots = 0, nsym = 0
 contains
     procedure :: new       => insert_cone_new
     procedure :: set_space => insert_cone_set_space
@@ -651,10 +657,11 @@ contains
     end subroutine insert_table_new
 
     !> particle i's weights: the committed pose's wc and its nextra extra poses, the candidates cands with weights w
-    !! (reference, in-plane index and refined shift from the candidate); a particle's extras are added once
-    subroutine insert_table_add( self, i, wc, nextra, cands, w )
+    !! (reference, in-plane index and refined shift from the candidate), nelig the eligible entries its extras were
+    !! selected among (the cone's occupancy); a particle's extras are added once
+    subroutine insert_table_add( self, i, wc, nextra, cands, w, nelig )
         class(prob_insert_table), intent(inout) :: self
-        integer,                  intent(in)    :: i, nextra
+        integer,                  intent(in)    :: i, nextra, nelig
         real,                     intent(in)    :: wc
         type(prob_candidate),     intent(in)    :: cands(:)
         real,                     intent(in)    :: w(:)
@@ -662,7 +669,9 @@ contains
         integer :: k
         if( i < 1 .or. i > self%nptcls ) THROW_HARD('particle index out of range; insert_table_add')
         if( self%nextra(i) > 0 ) THROW_HARD('a particle''s extra poses are added once; insert_table_add')
-        self%wc(i) = wc
+        self%wc(i)     = wc
+        self%nelig_sum = self%nelig_sum + int(max(0, nelig),int64)
+        if( nelig > self%kmax - 1 ) self%ncapped = self%ncapped + 1
         if( nextra < 1 ) return
         if( self%npose + nextra > size(self%poses) )then
             allocate(tmp(2 * size(self%poses) + nextra))
@@ -755,15 +764,33 @@ contains
         call fclose(funit)
     end subroutine insert_table_read
 
-    !> the log line: insertions per particle and the committed pose's mean weight
+    !> the log line: insertions per particle, the committed pose's mean weight, and the cone's occupancy (the
+    !! eligible entries per particle and the fraction of particles with more of them than the cap admits: at a
+    !! fraction near zero the insertion is the full average within the cone, above it topk is binding)
     subroutine insert_table_report( self )
         class(prob_insert_table), intent(in) :: self
         if( self%nptcls < 1 ) return
-        write(logfhandle,'(A,I0,A,F6.3,A,F6.3)') '>>> PROB_TAB_INSERT: topk ', self%kmax, '; insertions per particle ', &
-            &1. + real(self%npose) / real(self%nptcls), '; mean weight of the committed pose ', &
-            &sum(self%wc(1:self%nptcls)) / real(self%nptcls)
+        write(logfhandle,'(A,I0,A,F6.3,A,F6.3,A,F7.2,A,F6.3)') '>>> PROB_TAB_INSERT: topk ', self%kmax, &
+            &'; insertions per particle ', 1. + real(self%npose) / real(self%nptcls), &
+            &'; mean weight of the committed pose ', sum(self%wc(1:self%nptcls)) / real(self%nptcls), &
+            &'; eligible entries per particle ', self%get_mean_eligible(), &
+            &'; fraction of particles above the cap ', self%get_frac_capped()
         call flush(logfhandle)
     end subroutine insert_table_report
+
+    !> the eligible entries per particle, over the particles added
+    pure real function insert_table_get_mean_eligible( self )
+        class(prob_insert_table), intent(in) :: self
+        insert_table_get_mean_eligible = 0.
+        if( self%nptcls > 0 ) insert_table_get_mean_eligible = real(self%nelig_sum) / real(self%nptcls)
+    end function insert_table_get_mean_eligible
+
+    !> the fraction of particles with more eligible entries than kmax - 1
+    pure real function insert_table_get_frac_capped( self )
+        class(prob_insert_table), intent(in) :: self
+        insert_table_get_frac_capped = 0.
+        if( self%nptcls > 0 ) insert_table_get_frac_capped = real(self%ncapped) / real(self%nptcls)
+    end function insert_table_get_frac_capped
 
     pure integer function insert_table_get_nptcls( self )
         class(prob_insert_table), intent(in) :: self
@@ -808,9 +835,11 @@ contains
         if( allocated(self%first)  ) deallocate(self%first)
         if( allocated(self%wc)     ) deallocate(self%wc)
         if( allocated(self%poses)  ) deallocate(self%poses)
-        self%nptcls = 0
-        self%kmax   = 1
-        self%npose  = 0
+        self%nptcls    = 0
+        self%kmax      = 1
+        self%npose     = 0
+        self%ncapped   = 0
+        self%nelig_sum = 0_int64
     end subroutine insert_table_kill
 
     ! ---- the resolved poses of a part -----------------------------------------------------------------------------
@@ -936,169 +965,196 @@ contains
 
     ! ---- the weighted insertion's cone ------------------------------------------------------------------------
 
-    !> per state the half-angle whose arc at the rim of a particle of diameter diam is the resolution res(s) (FSC 0.5,
-    !! Angstrom; 2 res / diam radians, capped at the half-turn) and the shift bound res(s) / smpd (pixels); a state
-    !! with res <= 0, or no diameter, has no cone
+    !> per state the resolution res(s) (FSC 0.5, Angstrom) the rim displacement is bounded by, for a particle of
+    !! mask diameter diam whose stored shifts are in pixels of smpd; a state with res <= 0 has no cone, and without
+    !! a diameter or a sampling distance no state has
     subroutine insert_cone_new( self, res, diam, smpd )
         class(prob_insert_cone), intent(inout) :: self
         real,                    intent(in)    :: res(:), diam, smpd
-        integer :: s
         call self%kill
-        allocate(self%ang(size(res)), source=-1.)
-        allocate(self%shmax(size(res)), source=0.)
-        do s = 1,size(res)
-            if( .not. (res(s) > 0. .and. diam > 0. .and. smpd > 0.) ) cycle
-            self%ang(s)   = rad2deg(min(2. * res(s) / diam, PI))
-            self%shmax(s) = res(s) / smpd
-        enddo
+        allocate(self%res(size(res)), source=res)
+        if( diam > 0. .and. smpd > 0. )then
+            self%diam = diam
+            self%smpd = smpd
+        else
+            self%res = -1.
+        endif
     end subroutine insert_cone_new
 
-    !> the geometry of the test: the directions' Euler angles (eulspace, copied once), the point group (a pointer to
-    !! the caller's, which outlives this object) and the rotation grid's size (the in-plane index i is the angle
-    !! (i - 1) 360 / nrots)
+    !> the geometry of the test, as rotation matrices: the directions' (eulspace, in-plane angle zero), the rotation
+    !! grid's (the in-plane index i is the Euler angle 360 - (i - 1) 360 / nrots, as the committed pose is converted)
+    !! and the point group's
     subroutine insert_cone_set_space( self, eulspace, se, nrots )
-        class(prob_insert_cone),   intent(inout) :: self
-        class(oris),               intent(in)    :: eulspace
-        class(sym), target,        intent(in)    :: se
-        integer,                   intent(in)    :: nrots
+        class(prob_insert_cone), intent(inout) :: self
+        class(oris),             intent(in)    :: eulspace
+        class(sym),              intent(in)    :: se
+        integer,                 intent(in)    :: nrots
+        real    :: e(3)
         integer :: i
-        if( allocated(self%euls) ) deallocate(self%euls)
+        if( allocated(self%dmat) ) deallocate(self%dmat)
+        if( allocated(self%rz)   ) deallocate(self%rz)
+        if( allocated(self%rsym) ) deallocate(self%rsym)
         self%nspace = eulspace%get_noris()
         self%nrots  = nrots
-        allocate(self%euls(3,max(1,self%nspace)), source=0.)
+        self%nsym   = se%get_nsym()
+        allocate(self%dmat(3,3,max(1,self%nspace)), self%rz(3,3,max(1,self%nrots)), self%rsym(3,3,max(1,self%nsym)), source=0.)
         do i = 1,self%nspace
-            self%euls(:,i) = eulspace%get_euler(i)
-            self%euls(3,i) = 0.
+            e    = eulspace%get_euler(i)
+            e(3) = 0.
+            self%dmat(:,:,i) = euler2m(e)
         enddo
-        self%se => se
+        do i = 1,self%nrots
+            self%rz(:,:,i) = euler2m([0., 0., 360. - real(i - 1) * 360. / real(self%nrots)])
+        enddo
+        do i = 1,self%nsym
+            call se%get_sym_rmat(i, self%rsym(:,:,i))
+        enddo
     end subroutine insert_cone_set_space
 
     !> whether any state has a cone
     pure logical function insert_cone_is_open( self )
         class(prob_insert_cone), intent(in) :: self
         insert_cone_is_open = .false.
-        if( allocated(self%ang) ) insert_cone_is_open = any(self%ang >= 0.)
+        if( allocated(self%res) ) insert_cone_is_open = any(self%res > 0.)
     end function insert_cone_is_open
 
     pure logical function insert_cone_has_space( self )
         class(prob_insert_cone), intent(in) :: self
-        insert_cone_has_space = self%nspace > 0 .and. self%nrots > 0 .and. associated(self%se)
+        insert_cone_has_space = self%nspace > 0 .and. self%nrots > 0 .and. self%nsym > 0
     end function insert_cone_has_space
 
-    !> the half-angle of state istate's cone, degrees (below zero: none)
+    !> the half-angle of state istate's cone at equal shifts, degrees (the rotation whose displacement over the
+    !! mask's radius is the resolution, capped at the half-turn; below zero: no cone)
     pure real function insert_cone_get_angle( self, istate )
         class(prob_insert_cone), intent(in) :: self
         integer,                 intent(in) :: istate
         insert_cone_get_angle = -1.
-        if( .not. allocated(self%ang) ) return
-        if( istate < 1 .or. istate > size(self%ang) ) return
-        insert_cone_get_angle = self%ang(istate)
+        if( .not. allocated(self%res) ) return
+        if( istate < 1 .or. istate > size(self%res) ) return
+        if( .not. (self%res(istate) > 0.) ) return
+        insert_cone_get_angle = rad2deg(min(2. * self%res(istate) / self%diam, PI))
     end function insert_cone_get_angle
 
-    !> whether the pose (direction proj_r, in-plane index inpl_r, stored-frame shift sh_r) lies within state
-    !! istate's cone of the committed pose (proj_c, inpl_c, sh_c): shifts within the bound; the rotation between
-    !! the two poses, modulo the point group, within the half-angle in its direction part and its in-plane part
+    !> whether the pose (direction proj_r, in-plane index inpl_r, stored-frame shift sh_r) lies within state istate's
+    !! cone of the committed pose (proj_c, inpl_c, sh_c): the angle of the rotation between the two poses, the
+    !! smallest over the point group's equivalents of the candidate (R_r R_g, as the group is applied to a pose),
+    !! times the mask's radius, plus the distance between the shifts, at most the resolution. A rotation by alpha
+    !! moves a point at the rim by at most 2 r sin(alpha/2) <= r alpha, a shift moves every point by its length
     logical function insert_cone_within( self, istate, proj_c, inpl_c, sh_c, proj_r, inpl_r, sh_r ) result( l_in )
         class(prob_insert_cone), intent(in) :: self
         integer,                 intent(in) :: istate, proj_c, inpl_c, proj_r, inpl_r
         real,                    intent(in) :: sh_c(2), sh_r(2)
-        real :: e_c(3), e_r(3), e_sym(3), euldist, inpldist, ang
+        real    :: rc(3,3), rr(3,3), m(3,3), ds, trmax, tr, alpha
+        integer :: g
         l_in = .false.
-        ang  = self%get_angle(istate)
-        if( ang < 0. .or. .not. self%has_space() ) return
+        if( .not. self%has_space() ) return
+        if( istate < 1 .or. istate > size(self%res) ) return
+        if( .not. (self%res(istate) > 0.) ) return
         if( proj_c < 1 .or. proj_c > self%nspace .or. proj_r < 1 .or. proj_r > self%nspace ) return
         if( inpl_c < 1 .or. inpl_c > self%nrots  .or. inpl_r < 1 .or. inpl_r > self%nrots  ) return
-        if( hypot(sh_r(1) - sh_c(1), sh_r(2) - sh_c(2)) > self%shmax(istate) ) return
-        e_c    = self%euls(:,proj_c)
-        e_c(3) = 360. - real(inpl_c - 1) * 360. / real(self%nrots)
-        e_r    = self%euls(:,proj_r)
-        e_r(3) = 360. - real(inpl_r - 1) * 360. / real(self%nrots)
-        call self%se%sym_dists(e_c, e_r, e_sym, euldist, inpldist)
-        l_in = euldist <= ang .and. inpldist <= ang
+        ds = self%smpd * hypot(sh_r(1) - sh_c(1), sh_r(2) - sh_c(2))
+        if( ds > self%res(istate) ) return
+        rc    = matmul(self%rz(:,:,inpl_c), self%dmat(:,:,proj_c))
+        rr    = matmul(self%rz(:,:,inpl_r), self%dmat(:,:,proj_r))
+        m     = matmul(transpose(rc), rr)
+        trmax = -huge(trmax)
+        do g = 1,self%nsym
+            ! the trace of R_g M: the cosine of the angle between the committed pose and the candidate's equivalent
+            tr    = sum(self%rsym(:,:,g) * transpose(m))
+            trmax = max(trmax, tr)
+        enddo
+        alpha = acos(max(-1., min(1., 0.5 * (trmax - 1.))))
+        l_in  = 0.5 * self%diam * alpha + ds <= self%res(istate)
     end function insert_cone_within
 
     subroutine insert_cone_kill( self )
         class(prob_insert_cone), intent(inout) :: self
-        if( allocated(self%ang)   ) deallocate(self%ang)
-        if( allocated(self%shmax) ) deallocate(self%shmax)
-        if( allocated(self%euls)  ) deallocate(self%euls)
-        self%se => null()
+        if( allocated(self%res)  ) deallocate(self%res)
+        if( allocated(self%dmat) ) deallocate(self%dmat)
+        if( allocated(self%rz)   ) deallocate(self%rz)
+        if( allocated(self%rsym) ) deallocate(self%rsym)
+        self%diam   = 0.
+        self%smpd   = 0.
         self%nspace = 0
         self%nrots  = 0
+        self%nsym   = 0
     end subroutine insert_cone_kill
 
-    !> Extra poses for the weighted insertion (topk > 1): up to kmax - 1 further entries of a row, drawn WITHOUT
-    !! replacement from the posterior p_r proportional to exp(-temp (dist_r - dist_min)) over the eligible entries
-    !! (mask: the refined ones) other than the committed draw ifirst, each draw from the remainder renormalised,
-    !! with the weights that posterior renormalised over the committed entry and the extras. temp is the
-    !! particle's own temperature, untempered: the committed pose is the search's draw from the tempered row, hot
-    !! so that the search explores, but the map is weighted by what the data say of each pose, so the
-    !! reconstruction carries the data's pose uncertainty and not the search's (on PfCRT, extras drawn and
-    !! weighted at the search's factor 0.3 left the committed pose 0.5-0.65 of its particle where the untempered
-    !! posterior held about 1.4 effective poses: a blur that capped the resolution a stage early, 2026-10-29). An
-    !! extra whose weight falls below wmin is dropped (the rest renormalised again), so no pose enters the
-    !! reconstruction with less than that share of its particle; the committed entry is always kept, so kmax = 1
-    !! keeps it alone at weight 1 and draws no random number: the single draw's stream and reconstruction, bit for
-    !! bit. On return nkept entries, the committed first, with their row indices inds and weights w summing to 1.
-    !! work is a work array of size >= n
-    subroutine draw_posterior_extras( n, dists, temp, mask, ifirst, kmax, wmin, work, nkept, inds, w )
-        integer, intent(in)    :: n, ifirst, kmax
-        real,    intent(in)    :: dists(n), temp, wmin
-        logical, intent(in)    :: mask(n)
-        real,    intent(inout) :: work(:)
-        integer, intent(out)   :: nkept
-        integer, intent(out)   :: inds(:)
-        real,    intent(out)   :: w(:)
-        real(dp) :: wsum, csum, tgt, arg, tot
-        real     :: dmin, invalid
-        integer  :: r, k, m
+    !> The extra poses of the weighted insertion (topk > 1): the kmax - 1 eligible entries of a row (mask: the refined
+    !! ones within the cone) of highest posterior p_r proportional to exp(-temp (dist_r - dist_min)), other than the
+    !! committed entry ifirst, with the weights that posterior renormalised over the committed entry and the extras
+    !! (the committed entry's weight is its own share, whatever its rank). temp is the particle's own temperature,
+    !! untempered: the committed pose is the search's draw from the tempered row, hot so that the search explores;
+    !! the map is weighted by what the data say of each pose, so the reconstruction carries the data's pose
+    !! uncertainty and not the search's. An extra whose weight falls below wmin is dropped (the rest renormalised
+    !! again), so no pose enters the reconstruction with less than that share of its particle; the committed entry
+    !! is always kept, so kmax = 1 keeps it alone at weight 1. The selection is deterministic (the top entries, no
+    !! draw), so topk touches no random stream. On return nkept entries, the committed first and the extras in
+    !! descending weight, with their row indices inds and weights w summing to 1, and nelig the eligible entries
+    !! with a valid distance other than the committed one: the cone's occupancy, which above kmax - 1 the cap cuts
+    subroutine top_posterior_extras( n, dists, temp, mask, ifirst, kmax, wmin, nkept, inds, w, nelig )
+        integer, intent(in)  :: n, ifirst, kmax
+        real,    intent(in)  :: dists(n), temp, wmin
+        logical, intent(in)  :: mask(n)
+        integer, intent(out) :: nkept, inds(:), nelig
+        real,    intent(out) :: w(:)
+        real(dp) :: arg, tot
+        real     :: dmin, invalid, wr
+        integer  :: r, k, m, nsel
         nkept   = 1
         inds(1) = ifirst
         w(1)    = 1.
-        if( kmax <= 1 ) return
+        nelig   = 0
         invalid = 0.1 * huge(invalid)
         dmin    = huge(dmin)
         do r = 1,n
             if( ieee_is_finite(dists(r)) .and. dists(r) < invalid ) dmin = min(dmin, dists(r))
         enddo
         if( dmin >= invalid ) return
-        ! the unnormalised posterior of the committed entry and of the eligible others
+        do r = 1,n
+            if( r == ifirst .or. .not. mask(r) ) cycle
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid ) nelig = nelig + 1
+        enddo
+        if( kmax <= 1 .or. nelig < 1 ) return
+        ! the unnormalised posterior of the committed entry
         w(1) = 0.
         if( ieee_is_finite(dists(ifirst)) .and. dists(ifirst) < invalid )then
             arg = real(max(0.,temp),dp) * real(dists(ifirst) - dmin,dp)
             if( arg < 80.d0 ) w(1) = real(exp(-arg))
         endif
-        wsum = 0.d0
+        ! the kmax - 1 eligible entries of highest weight, kept in descending order in inds(2:) and w(2:); weights
+        ! below exp(-80) are zero (not exp'd: a single-precision underflow would flag) and never selected; on a tie
+        ! the earlier entry stays
+        nsel = 0
         do r = 1,n
-            work(r) = 0.
             if( r == ifirst .or. .not. mask(r) ) cycle
             if( .not. (ieee_is_finite(dists(r)) .and. dists(r) < invalid) ) cycle
             arg = real(max(0.,temp),dp) * real(dists(r) - dmin,dp)
-            if( arg < 80.d0 )then
-                work(r) = real(exp(-arg))
-                wsum    = wsum + real(work(r),dp)
+            if( .not. (arg < 80.d0) ) cycle
+            wr = real(exp(-arg))
+            if( nsel == kmax - 1 )then
+                if( .not. (wr > w(nsel + 1)) ) cycle
+                k = nsel + 1
+            else
+                nsel = nsel + 1
+                k    = nsel + 1
             endif
-        enddo
-        ! the extras, without replacement, each from the remainder
-        do k = 2,kmax
-            if( .not. (wsum > 0.d0) ) exit
-            tgt  = real(ran3(),dp) * wsum
-            csum = 0.d0
-            m    = 0
-            do r = 1,n
-                if( work(r) <= 0. ) cycle
-                csum = csum + real(work(r),dp)
-                m    = r
-                if( csum >= tgt ) exit
+            inds(k) = r
+            w(k)    = wr
+            do while( k > 2 )
+                if( .not. (w(k) > w(k - 1)) ) exit
+                m         = inds(k - 1)
+                inds(k-1) = inds(k)
+                inds(k)   = m
+                wr        = w(k - 1)
+                w(k-1)    = w(k)
+                w(k)      = wr
+                k         = k - 1
             enddo
-            if( m == 0 ) exit
-            nkept       = nkept + 1
-            inds(nkept) = m
-            w(nkept)    = work(m)
-            wsum        = wsum - real(work(m),dp)
-            work(m)     = 0.
         enddo
-        ! the weights over the kept set; extras below wmin dropped, the committed entry kept whatever its share
+        nkept = 1 + nsel
+        ! the weights over the kept set; extras below wmin dropped (the tail of the descending order), the committed
+        ! entry kept whatever its share
         tot = sum(real(w(1:nkept),dp))
         if( .not. (tot > 0.d0) )then
             nkept = 1
@@ -1108,15 +1164,20 @@ contains
         w(1:nkept) = real(real(w(1:nkept),dp) / tot)
         m = 1
         do k = 2,nkept
-            if( w(k) < wmin ) cycle
-            m       = m + 1
-            inds(m) = inds(k)
-            w(m)    = w(k)
+            if( w(k) < wmin ) exit
+            m = k
         enddo
         nkept = m
         tot   = sum(real(w(1:nkept),dp))
         w(1:nkept) = real(real(w(1:nkept),dp) / tot)
-    end subroutine draw_posterior_extras
+    end subroutine top_posterior_extras
+
+    !> the temperature a row is weighted at: the particle's own, or, without one from the fill, a huge one so that
+    !! only the row's minimum carries weight (the argmin: the particle has no scale)
+    pure real function temperature_or_argmin( temp ) result( t )
+        real, intent(in) :: temp
+        t = merge(temp, huge(temp), temp > 0.)
+    end function temperature_or_argmin
 
     !> The posterior over one table row at temperature temp: p_r proportional to exp(-temp (dist_r - dist_min))
     !! over the valid distances (finite and below the invalid marker, as ref_assign counts them), zero

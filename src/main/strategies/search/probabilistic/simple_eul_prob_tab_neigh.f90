@@ -8,7 +8,8 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
-    &draw_posterior_row, shift_prior_sigma2, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, draw_posterior_extras
+    &draw_posterior_row, shift_prior_sigma2, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, &
+    &temperature_or_argmin
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_defs,               only: PROB_INSERT_WMIN
@@ -704,12 +705,10 @@ contains
         !! argmin with a warning. The draws run in particle order on the master's random stream.
         subroutine assign_particles_posterior()
             type(prob_neff_readout) :: neff
-            type(prob_candidate), allocatable :: cands(:)
-            real,    allocatable :: w(:), dists_c(:), kw(:)
-            integer, allocatable :: pos_c(:), kinds(:)
-            logical, allocatable :: eligible(:)
-            integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, nkept, istate_best, kmax, k, nk, nk_kept, r_loc
-            integer :: proj_r
+            real,    allocatable :: w(:), dists_c(:)
+            integer, allocatable :: pos_c(:), which_pos(:)
+            logical, allocatable :: l_refined(:)
+            integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, nkept, istate_best, kmax
             real    :: temp, dist
             logical :: l_extras
             maxcand = 0
@@ -733,9 +732,10 @@ contains
                 if( self%b_ptr%eulspace%get_noris() /= self%p_ptr%nspace ) THROW_HARD('the direction space is not built; the weighted insertion needs it; ref_assign_neigh')
                 if( self%seed_nrots < 1 ) THROW_HARD('the table carries no rotation grid; the weighted insertion needs it; ref_assign_neigh')
                 call self%insert_cone%set_space(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%seed_nrots)
+                allocate(l_refined(self%nptcls), source=.false.)
+                allocate(which_pos(self%nptcls), source=0)
             endif
             call self%insert_tab%new(self%nptcls, self%pinds, merge(kmax, 1, l_extras))
-            if( l_extras ) allocate(kinds(kmax), kw(kmax), cands(kmax), eligible(max(1,maxcand)))
             ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
             call neff%new(self%nptcls, PROB_NEFF_ROWS, PROB_NEFF_NMIN)
             do i_loc = 1,self%nptcls
@@ -764,34 +764,22 @@ contains
                 if( which < 1 ) which = ibest
                 if( which == ibest ) nmode = nmode + 1
                 call self%assign_candidate(i_loc, self%candidate_store%candidates(pos_c(which)))
+                if( l_extras )then
+                    ! the extras of the weighted insertion are weighed against the committed candidate's distance,
+                    ! so the committed candidate must be a refined one too (an unrefined one's distance is at the
+                    ! seed shift); its position in the row's gathered order is kept for the selection
+                    l_refined(i_loc) = self%candidate_store%candidates(pos_c(which))%has_sh
+                    which_pos(i_loc) = which
+                endif
                 call record_seed_shift(self%assgn_map(i_loc), self%seed_shifts(:,i_loc), self%seed_has_sh(i_loc),&
                     &self%p_ptr%l_doshift)
                 self%assgn_map(i_loc)%frac = search_frac(i_loc)
-                ! the extras for the weighted insertion, without replacement from the refined candidates of the row
-                ! whose pose lies within the insertion cone of the committed one (rotation modulo the point group and
-                ! shift within what the map's resolution cannot tell apart at the particle's rim), drawn and weighted
-                ! at the particle's own temperature: the draw decides the hypothesis, the extras only spread the
-                ! particle over the poses the map resolves alike
-                if( l_extras )then
-                    do r_loc = 1,n_loc
-                        eligible(r_loc) = self%candidate_store%candidates(pos_c(r_loc))%has_sh
-                        if( .not. eligible(r_loc) ) cycle
-                        proj_r = modulo(self%candidate_store%candidates(pos_c(r_loc))%iref - 1, self%p_ptr%nspace) + 1
-                        eligible(r_loc) = self%insert_cone%within(istate_best, self%assgn_map(i_loc)%iproj, &
-                            &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], proj_r, &
-                            &self%candidate_store%candidates(pos_c(r_loc))%inpl, &
-                            &[self%candidate_store%candidates(pos_c(r_loc))%x, self%candidate_store%candidates(pos_c(r_loc))%y])
-                    enddo
-                    call draw_posterior_extras(n_loc, dists_c(1:n_loc), merge(self%temps(i_loc), huge(temp), self%temps(i_loc) > 0.), eligible(1:n_loc), &
-                        &which, kmax, PROB_INSERT_WMIN, w, nk_kept, kinds, kw)
-                    nk = nk_kept - 1
-                    do k = 1,nk
-                        cands(k) = self%candidate_store%candidates(pos_c(kinds(k+1)))
-                    enddo
-                    call self%insert_tab%add(i_loc, kw(1), nk, cands(1:max(1,nk)), kw(2:max(2,nk+1)))
-                endif
             enddo
-            if( l_extras ) call self%insert_tab%report
+            if( l_extras )then
+                call select_extras(kmax, l_refined, which_pos, maxcand)
+            else if( kmax > 1 .and. .not. self%insert_cone%is_open() )then
+                write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
+            endif
             write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: neighbourhood posterior draw at the particle temperature, ',&
                 &self%nptcls - nkept, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ',&
                 &real(nmode) / real(max(1, self%nptcls - nkept))
@@ -801,8 +789,67 @@ contains
                 &'WARNING: particles without a temperature in the neighbourhood part files, assigned to their argmin: ', ntemp_missing
             call flush(logfhandle)
             deallocate(w, dists_c, pos_c)
-            if( allocated(kinds) ) deallocate(kinds, kw, cands, eligible)
+            if( allocated(l_refined) ) deallocate(l_refined, which_pos)
         end subroutine assign_particles_posterior
+
+        !> the extras of the weighted insertion: for every particle whose committed candidate is refined, the refined
+        !! candidates of its state's row whose pose lies within the insertion cone of the committed one (the rotation
+        !! modulo the point group and the shift together moving the rim by less than the map resolves), the kmax - 1 of
+        !! highest posterior at the particle's own temperature, with the weights that posterior renormalised over the
+        !! kept set (top_posterior_extras): the draw decides the hypothesis, the extras only spread the particle over
+        !! the poses the map resolves alike. Deterministic given the committed poses, so the particles run in parallel
+        !! after the draws, each thread gathering the row again on its own arrays; the table takes the result in
+        !! particle order
+        subroutine select_extras( kmax, l_refined, which_pos, maxcand )
+            integer, intent(in) :: kmax, which_pos(:), maxcand
+            logical, intent(in) :: l_refined(:)
+            type(prob_candidate) :: cands(kmax)
+            integer, allocatable :: kpos(:,:), kinds(:,:), nkept(:), nelig(:), pos_c(:,:)
+            real,    allocatable :: kw(:,:), dists_c(:,:)
+            logical, allocatable :: eligible(:,:)
+            integer :: i_loc, n_loc, ibest, istate_best, r_loc, proj_r, k, ithr
+            allocate(kpos(kmax,self%nptcls), nkept(self%nptcls), nelig(self%nptcls), source=0)
+            allocate(kw(kmax,self%nptcls), source=0.)
+            allocate(pos_c(max(1,maxcand),nthr_glob), kinds(kmax,nthr_glob), source=0)
+            allocate(dists_c(max(1,maxcand),nthr_glob), source=0.)
+            allocate(eligible(max(1,maxcand),nthr_glob), source=.false.)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) &
+            !$omp private(i_loc,n_loc,ibest,istate_best,r_loc,proj_r,k,ithr)
+            do i_loc = 1,self%nptcls
+                nkept(i_loc) = 1
+                kw(1,i_loc)  = 1.
+                if( .not. l_refined(i_loc) ) cycle
+                ithr = omp_get_thread_num() + 1
+                call gather_state_row(i_loc, dists_c(:,ithr), pos_c(:,ithr), n_loc, ibest, istate_best)
+                if( istate_best == 0 ) cycle
+                do r_loc = 1,n_loc
+                    eligible(r_loc,ithr) = self%candidate_store%candidates(pos_c(r_loc,ithr))%has_sh
+                    if( .not. eligible(r_loc,ithr) ) cycle
+                    proj_r = modulo(self%candidate_store%candidates(pos_c(r_loc,ithr))%iref - 1, self%p_ptr%nspace) + 1
+                    eligible(r_loc,ithr) = self%insert_cone%within(istate_best, self%assgn_map(i_loc)%iproj, &
+                        &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], proj_r, &
+                        &self%candidate_store%candidates(pos_c(r_loc,ithr))%inpl, &
+                        &[self%candidate_store%candidates(pos_c(r_loc,ithr))%x, self%candidate_store%candidates(pos_c(r_loc,ithr))%y])
+                enddo
+                call top_posterior_extras(n_loc, dists_c(1:n_loc,ithr), temperature_or_argmin(self%temps(i_loc)), &
+                    &eligible(1:n_loc,ithr), which_pos(i_loc), kmax, PROB_INSERT_WMIN, nkept(i_loc), kinds(:,ithr), &
+                    &kw(:,i_loc), nelig(i_loc))
+                ! the extras as store positions, which the serial pass reads without gathering the row again
+                do k = 2,nkept(i_loc)
+                    kpos(k,i_loc) = pos_c(kinds(k,ithr),ithr)
+                enddo
+            enddo
+            !$omp end parallel do
+            do i_loc = 1,self%nptcls
+                do k = 2,nkept(i_loc)
+                    cands(k-1) = self%candidate_store%candidates(kpos(k,i_loc))
+                enddo
+                call self%insert_tab%add(i_loc, kw(1,i_loc), nkept(i_loc) - 1, cands(1:nkept(i_loc)-1), &
+                    &kw(2:nkept(i_loc),i_loc), nelig(i_loc))
+            enddo
+            call self%insert_tab%report
+            deallocate(kpos, kinds, nkept, nelig, pos_c, kw, dists_c, eligible)
+        end subroutine select_extras
 
         !> the particle's row: its state (the closest valid candidate over all states; 0 without one) and,
         !! into dists_row/pos_row, its valid candidates of that state with the position of the best

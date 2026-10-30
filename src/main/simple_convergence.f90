@@ -34,6 +34,9 @@ type convergence
     real    :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
     real    :: progress               = 0. !< progress estimation
     integer :: prob_beta_tail_start   = 0  !< the probability tables' annealing tail to prob_beta_end: its first iteration (0: the run still searches at prob_beta); set when the resolution stops gaining or at the budget's end
+    integer :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
+    real    :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
+    real    :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
   contains
     procedure :: check_conv2D
     procedure, nopass :: print_verdict
@@ -46,6 +49,8 @@ type convergence
     procedure :: check_cont_conv
     procedure :: get
     procedure :: anneal_tail_start
+    procedure, private :: res_two_back
+    procedure, private :: record_res
 end type convergence
 
 contains
@@ -309,8 +314,8 @@ contains
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         character(len=96) :: beta_str
-        real    :: res05_now, res05_prev, res143_now, res143_prev
-        logical :: converged, cont_stats_available, pose_stats_available, l_stalled
+        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff
+        logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
@@ -452,6 +457,9 @@ contains
         res143_now = 0.
         if( any(res05_state_avg > TINY) ) res05_now  = minval(res05_state_avg, mask=res05_state_avg > TINY)
         if( any(res_state_avg   > TINY) ) res143_now = minval(res_state_avg,   mask=res_state_avg   > TINY)
+        ! the weighted insertion's margin on the resolution-based exits (the stall test of the annealing tail
+        ! and the stage resolution exit): a shell and an iteration more than the single draw's
+        l_margin = params%l_prob_align_mode .and. params%topk > 1
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
@@ -611,6 +619,13 @@ contains
                         res143_prev = prev_iter_res(params, 'RESOLUTION_STATE')
                         l_stalled   = res05_prev > TINY .and. res143_prev > TINY .and. &
                             &res05_now >= res05_prev - TINY .and. res143_now >= res143_prev - TINY
+                        ! the weighted insertion (topk > 1) makes the halves agree a shell earlier than the single
+                        ! draw's noise allows, so a stall is two iterations without gain, not one (l_margin)
+                        if( l_stalled .and. l_margin )then
+                            call self%res_two_back(params, res05_prev2, res143_prev2)
+                            l_stalled = res05_prev2 > TINY .and. res143_prev2 > TINY .and. &
+                                &res05_prev >= res05_prev2 - TINY .and. res143_prev >= res143_prev2 - TINY
+                        endif
                     endif
                     if( l_stalled )then
                         self%prob_beta_tail_start = params%which_iter + 1
@@ -633,17 +648,29 @@ contains
         ! exit also requires the gain to have stopped: on PfCRT latest9 every restart left
         ! the NU stage mid-climb and the two that left coarsest gave the two worst maps.
         ! The comparison is within the stage, so never at its first iteration.
-        ! Only ever adds convergence.
+        ! Only ever adds convergence. Under the weighted insertion (topk > 1, l_margin) the
+        ! halves agree a shell earlier (the draw's noise is averaged out of each half while
+        ! both are matched against the same reference in solve3D's stages), so the exit
+        ! wants the FSC a shell past the limit and no gain over two iterations, not one
         if( params%lpexit > TINY .and. .not.converged .and. res05_now > TINY )then
-            if( res05_now < params%lpexit .and. params%which_iter > params%startit )then
+            lpexit_eff = params%lpexit
+            if( l_margin ) lpexit_eff = calc_lowpass_lim(calc_fourier_index(params%lpexit, params%box, params%smpd) + 1, &
+                &params%box, params%smpd)
+            if( res05_now < lpexit_eff .and. params%which_iter > params%startit )then
                 res05_prev = prev_iter_res(params, 'RESOLUTION_FSC05_STATE')
-                if( res05_prev > TINY .and. res05_now >= res05_prev - TINY )then
+                l_stalled  = res05_prev > TINY .and. res05_now >= res05_prev - TINY
+                if( l_stalled .and. l_margin )then
+                    call self%res_two_back(params, res05_prev2, res143_prev2)
+                    l_stalled = res05_prev2 > TINY .and. res05_prev >= res05_prev2 - TINY
+                endif
+                if( l_stalled )then
                     write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
-                        &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', params%lpexit, ' A) AND NO LONGER GAINING'
+                        &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', lpexit_eff, ' A) AND NO LONGER GAINING'
                     converged = .true.
                 endif
             endif
         endif
+        call self%record_res(params, res05_now, res143_now)
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &
@@ -724,6 +751,41 @@ contains
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D
+
+    !> the resolutions of the iteration two before this one, from this object's history of its last two checks
+    !! (record_res), the same quantities prev_iter_res reads for the previous one; 0. when the history does not
+    !! reach that iteration of this stage (the object is the strategy's and lives through the run's iterations)
+    subroutine res_two_back( self, params, res05_prev2, res143_prev2 )
+        use simple_parameters, only: parameters
+        class(convergence), intent(in)  :: self
+        class(parameters),  intent(in)  :: params
+        real,               intent(out) :: res05_prev2, res143_prev2
+        integer :: k
+        res05_prev2  = 0.
+        res143_prev2 = 0.
+        do k = 1,2
+            if( self%res_hist_iter(k) /= params%which_iter - 2 ) cycle
+            if( self%res_hist_iter(k) < params%startit ) cycle
+            res05_prev2  = self%res05_hist(k)
+            res143_prev2 = self%res143_hist(k)
+            return
+        enddo
+    end subroutine res_two_back
+
+    !> this check's iteration and resolutions into the history, the latest first
+    subroutine record_res( self, params, res05_now, res143_now )
+        use simple_parameters, only: parameters
+        class(convergence), intent(inout) :: self
+        class(parameters),  intent(in)    :: params
+        real,               intent(in)    :: res05_now, res143_now
+        if( self%res_hist_iter(1) == params%which_iter ) return ! the same iteration checked twice: the first stands
+        self%res_hist_iter(2) = self%res_hist_iter(1)
+        self%res05_hist(2)    = self%res05_hist(1)
+        self%res143_hist(2)   = self%res143_hist(1)
+        self%res_hist_iter(1) = params%which_iter
+        self%res05_hist(1)    = res05_now
+        self%res143_hist(1)   = res143_now
+    end subroutine record_res
 
     !> the previous iteration's best populated state's resolution in STATS_FILE (key_prefix RESOLUTION_FSC05_STATE
     !! for FSC=0.5, RESOLUTION_STATE for FSC=0.143), read

@@ -187,11 +187,15 @@ contains
             call eulprob_obj_part%new_assignment(p_ptr, b_ptr, pinds)
             call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
             ! the weighted insertion's extra poses (topk > 1): the part's share of the master's table, laid out for
-            ! the search to fill as it commits each particle's pose (strategy3D_prob) and calc_3Drec to insert
-            if( p_ptr%topk > 1 .and. file_exists(string(INSERT_FBODY)//'.dat') )then
+            ! the search to fill as it commits each particle's pose (strategy3D_prob) and calc_3Drec to insert; the
+            ! master writes the table whenever topk > 1, so its absence is a broken handoff, not a case
+            if( p_ptr%topk > 1 )then
                 if( trim(p_ptr%rec_backend) == 'pcg' )then
                     write(logfhandle,'(A)') 'WARNING: topk > 1 applies to the gridding insertion only; the PCG backend reconstructs from the committed poses'
                 else
+                    if( .not. file_exists(string(INSERT_FBODY)//'.dat') )then
+                        THROW_HARD('topk > 1 but the weighted insertion''s table '//INSERT_FBODY//'.dat is missing; refine3D_exec')
+                    endif
                     call eulprob_obj_part%read_insert_table(string(INSERT_FBODY)//'.dat')
                     call extra_poses%setup(eulprob_obj_part%insert_tab, pinds)
                 endif

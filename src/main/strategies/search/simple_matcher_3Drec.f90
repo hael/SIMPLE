@@ -75,7 +75,7 @@ contains
         ! the extra poses' shifts are in the original pixels, the planes' in the cropped ones when cropped
         l_extra     = .false.
         shift_scale = 1.
-        if( present(extra) ) l_extra = extra%npose > 0 .or. extra%nptcls > 0
+        if( present(extra) ) l_extra = extra%nptcls > 0
         if( l_extra .and. params%box_crop < params%box ) shift_scale = real(params%box_crop) / real(params%box)
         if( L_BENCH_GLOB )then
             rt_init = toc(t)

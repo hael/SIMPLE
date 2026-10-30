@@ -8,7 +8,8 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2, &
-    &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, draw_posterior_extras, prob_insert_table, prob_insert_cone
+    &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, temperature_or_argmin, &
+    &prob_insert_table, prob_insert_cone
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
@@ -892,18 +893,18 @@ contains
     !! takes reference 1. The draws run in particle order on the master's random stream, so shared-memory and
     !! distributed runs draw alike. The reference-balanced frontier this replaced (every reference drawing its
     !! closest free particle) was removed on 2026-10-24: if every image shows one direction, every image is
-    !! assigned to it.
+    !! assigned to it. With topk > 1 and an insertion cone the extras of the weighted insertion follow the draws
+    !! (select_extras) and go into insert_tab
     subroutine ref_assign( self )
         class(eul_prob_tab), intent(inout) :: self
         type(prob_neff_readout) :: neff
-        type(prob_candidate), allocatable :: cands(:)
-        integer, allocatable :: iref_best(:), kinds(:)
-        real,    allocatable :: score_best(:), w(:), kw(:)
-        logical, allocatable :: eligible(:)
-        integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing, j, k, nkept, kmax
-        integer :: istate
+        type(prob_candidate)    :: candidate
+        integer, allocatable :: iref_best(:)
+        real,    allocatable :: score_best(:), w(:)
+        logical, allocatable :: l_refined(:)
+        integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing, kmax
         real    :: score, dist, temp, invalid_dist
-        logical :: l_cone
+        logical :: l_extras
         invalid_dist = 0.1 * huge(invalid_dist)
         call self%warn_invalid_and_flat
         ! the state label: each particle's closest reference over all states, references outside in blocks
@@ -925,17 +926,17 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! the weighted insertion's extras (topk > 1): drawn beside the committed draw from the refined entries of the row
+        ! the weighted insertion's extras (topk > 1): beside the committed draw, from the refined entries of the row
+        ! within the insertion cone, whose geometry is the direction space, the point group and the table's rotation grid
         kmax = max(1, self%p_ptr%topk)
         call self%insert_tab%new(self%nptcls, self%pinds, kmax)
-        ! the insertion cone's geometry: the direction space, the point group and the rotation grid of the table
-        l_cone = kmax > 1 .and. self%insert_cone%is_open()
-        if( l_cone )then
+        l_extras = kmax > 1 .and. self%insert_cone%is_open()
+        if( l_extras )then
             if( self%b_ptr%eulspace%get_noris() /= self%p_ptr%nspace ) THROW_HARD('the direction space is not built; the weighted insertion needs it; ref_assign')
             if( self%seed_nrots < 1 ) THROW_HARD('the table carries no rotation grid; the weighted insertion needs it; ref_assign')
             call self%insert_cone%set_space(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%seed_nrots)
+            allocate(l_refined(self%nptcls), source=.false.)
         endif
-        if( kmax > 1 ) allocate(kinds(kmax), kw(kmax), cands(kmax), eligible(self%nrefs))
         ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
         call neff%new(self%nptcls, PROB_NEFF_ROWS, PROB_NEFF_NMIN)
         do i = 1,self%nptcls
@@ -968,40 +969,26 @@ contains
                 assigned_iref = ifirst - 1 + which
             endif
             if( assigned_iref == iref_best(i) ) nmode = nmode + 1
-            call self%assign_candidate(i, self%dense_candidate(assigned_iref, i))
+            candidate = self%dense_candidate(assigned_iref, i)
+            ! the extras of the weighted insertion are weighed against the committed entry's distance, so the
+            ! committed entry must be a refined one too (an unrefined entry's distance is at the seed shift)
+            if( l_extras ) l_refined(i) = which > 0 .and. candidate%has_sh
+            call self%assign_candidate(i, candidate)
             call record_seed_shift(self%assgn_map(i), self%seed_shifts(:,i), self%seed_has_sh(i), self%p_ptr%l_doshift)
             self%assgn_map(i)%frac = 100.
-            ! the extras for the weighted insertion: up to kmax - 1 further entries without replacement from the row's
-            ! refined entries (the only ones whose shift is their own) whose pose lies within the insertion cone of
-            ! the committed one (rotation modulo the point group and shift within what the map's resolution cannot
-            ! tell apart at the particle's rim), drawn and weighted at the particle's own temperature: the draw
-            ! decides the hypothesis, the extras only spread the particle over the poses the map resolves alike
-            if( l_cone .and. which > 0 )then
-                istate = self%ssinds(si)
-                eligible(1:nblock) = .false.
-                do j = self%refined_offsets(i), self%refined_offsets(i+1) - 1
-                    if( self%refined(j)%ri < ifirst .or. self%refined(j)%ri > ilast ) cycle
-                    k = self%refined(j)%ri - ifirst + 1
-                    eligible(k) = self%insert_cone%within(istate, self%assgn_map(i)%iproj, self%assgn_map(i)%inpl, &
-                        &[self%assgn_map(i)%x, self%assgn_map(i)%y], k, self%inpls(i,self%refined(j)%ri), &
-                        &[self%refined(j)%x, self%refined(j)%y])
-                enddo
-                call draw_posterior_extras(nblock, self%dists(i,ifirst:ilast), merge(self%temps(i), huge(temp), self%temps(i) > 0.), eligible(1:nblock), &
-                    &which, kmax, PROB_INSERT_WMIN, w, nkept, kinds, kw)
-                do k = 2,nkept
-                    cands(k-1) = self%dense_candidate(ifirst - 1 + kinds(k), i)
-                enddo
-                call self%insert_tab%add(i, kw(1), nkept - 1, cands(1:max(1,nkept-1)), kw(2:max(2,nkept)))
-            endif
         enddo
-        if( kmax > 1 ) call self%insert_tab%report
+        if( l_extras )then
+            call select_extras
+        else if( kmax > 1 )then
+            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
+        endif
         write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: posterior draw at the particle temperature, ', &
             &self%nptcls, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ', &
             &real(nmode) / real(max(1,self%nptcls))
         if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
             &'WARNING: particles without a temperature in the dense part files, assigned to their argmin: ', ntemp_missing
         deallocate(score_best, iref_best, w)
-        if( allocated(kinds) ) deallocate(kinds, kw, cands, eligible)
+        if( allocated(l_refined) ) deallocate(l_refined)
 
     contains
 
@@ -1011,6 +998,59 @@ contains
             score = self%dists(iptcl_loc,iref_loc)
             if( .not.(ieee_is_finite(score) .and. score < invalid_dist) ) score = invalid_dist
         end function valid_score
+
+        !> the extras of the weighted insertion: for every particle whose committed entry is refined, the refined
+        !! entries of its state's block whose pose lies within the insertion cone of the committed one (the rotation
+        !! modulo the point group and the shift together moving the rim by less than the map resolves), the kmax - 1 of
+        !! highest posterior at the particle's own temperature, with the weights that posterior renormalised over the
+        !! kept set (top_posterior_extras): the draw decides the hypothesis, the extras only spread the particle over
+        !! the poses the map resolves alike. Deterministic given the committed poses, so the particles run in parallel
+        !! after the draws, each thread on its own eligibility mask; the table takes the result in particle order
+        subroutine select_extras
+            type(prob_candidate) :: cands(kmax)
+            integer, allocatable :: kinds(:,:), nkept(:), nelig(:)
+            real,    allocatable :: kw(:,:)
+            logical, allocatable :: eligible(:,:)
+            integer :: i_loc, si_loc, ifirst_loc, ilast_loc, istate_loc, j, k, ithr
+            allocate(kinds(kmax,self%nptcls), nkept(self%nptcls), nelig(self%nptcls), source=0)
+            allocate(kw(kmax,self%nptcls), source=0.)
+            allocate(eligible(self%p_ptr%nspace,nthr_glob), source=.false.)
+            !$omp parallel do default(shared) proc_bind(close) schedule(static) &
+            !$omp private(i_loc,si_loc,ifirst_loc,ilast_loc,istate_loc,j,k,ithr)
+            do i_loc = 1,self%nptcls
+                nkept(i_loc) = 1
+                kw(1,i_loc)  = 1.
+                if( .not. l_refined(i_loc) ) cycle
+                ithr       = omp_get_thread_num() + 1
+                istate_loc = self%assgn_map(i_loc)%istate
+                si_loc     = self%state_to_active_rank(istate_loc)
+                ifirst_loc = (si_loc - 1) * self%p_ptr%nspace + 1
+                ilast_loc  = si_loc * self%p_ptr%nspace
+                eligible(:,ithr) = .false.
+                do j = self%refined_offsets(i_loc), self%refined_offsets(i_loc+1) - 1
+                    if( self%refined(j)%ri < ifirst_loc .or. self%refined(j)%ri > ilast_loc ) cycle
+                    k = self%refined(j)%ri - ifirst_loc + 1
+                    eligible(k,ithr) = self%insert_cone%within(istate_loc, self%assgn_map(i_loc)%iproj, &
+                        &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], &
+                        &k, self%inpls(i_loc,self%refined(j)%ri), [self%refined(j)%x, self%refined(j)%y])
+                enddo
+                call top_posterior_extras(self%p_ptr%nspace, self%dists(i_loc,ifirst_loc:ilast_loc), &
+                    &temperature_or_argmin(self%temps(i_loc)), eligible(:,ithr), self%assgn_map(i_loc)%iproj, kmax, &
+                    &PROB_INSERT_WMIN, nkept(i_loc), kinds(:,i_loc), kw(:,i_loc), nelig(i_loc))
+            enddo
+            !$omp end parallel do
+            do i_loc = 1,self%nptcls
+                si_loc     = self%state_to_active_rank(self%assgn_map(i_loc)%istate)
+                ifirst_loc = (si_loc - 1) * self%p_ptr%nspace + 1
+                do k = 2,nkept(i_loc)
+                    cands(k-1) = self%dense_candidate(ifirst_loc - 1 + kinds(k,i_loc), i_loc)
+                enddo
+                call self%insert_tab%add(i_loc, kw(1,i_loc), nkept(i_loc) - 1, cands(1:nkept(i_loc)-1), &
+                    &kw(2:nkept(i_loc),i_loc), nelig(i_loc))
+            enddo
+            call self%insert_tab%report
+            deallocate(kinds, nkept, nelig, kw, eligible)
+        end subroutine select_extras
 
     end subroutine ref_assign
 
@@ -1434,16 +1474,16 @@ contains
         call fclose(funit)
     end subroutine write_assignment
 
-    !> the weighted insertion's extra poses of the assignment (topk > 1) to a binary file the workers read
-    !> the weighted insertion's cone about the committed pose (per state: the state map's resolution at the mask's
-    !! rim, the shift bound); unset, no extra pose is drawn. The geometry (direction space, point group, rotation
-    !! grid) is this table's and is set at the assignment
+    !> the weighted insertion's cone about the committed pose (per state the resolution that bounds the rim
+    !! displacement); unset, no extra pose is selected. The geometry (direction space, point group, rotation grid)
+    !! is this table's and is set at the assignment
     subroutine set_insert_cone( self, cone )
         class(eul_prob_tab),     intent(inout) :: self
         class(prob_insert_cone), intent(in)    :: cone
         self%insert_cone = cone
     end subroutine set_insert_cone
 
+    !> the weighted insertion's extra poses of the assignment (topk > 1) to a binary file the workers read
     subroutine write_insert_table( self, binfname )
         class(eul_prob_tab), intent(in) :: self
         class(string),       intent(in) :: binfname

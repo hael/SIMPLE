@@ -52,11 +52,12 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'topk', 'num', 'Poses per particle in the reconstruction', &
-        &'Probabilistic modes (refine=prob|prob_neigh): the poses a particle enters the reconstruction at, its committed '//&
-        &'draw and up to topk-1 extras sampled without replacement from the refined entries of its row within the angle '//&
-        &'the map''s resolution cannot tell apart at the mask''s rim, each with its share of the posterior at the '//&
-        &'particle''s own temperature (an extra below 1% is not inserted); 1 is the committed '//&
-        &'pose alone, the search unchanged; gridding backend{1}', 'poses{1}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'Probabilistic modes (refine=prob|prob_neigh): the poses a particle enters each iteration''s reconstruction at, '//&
+        &'its committed draw and up to topk-1 extras, the refined entries of its row of highest posterior at the '//&
+        &'particle''s own temperature within the cone about the committed pose where a rotation and shift move the '//&
+        &'rim by less than the map''s FSC=0.5 resolution, each with its share of that posterior (an extra below 1% is '//&
+        &'not inserted); the search and the final reconstruction use the committed pose alone; 1 is the committed '//&
+        &'pose alone, the single-draw run; gridding backend{1}', 'poses{1}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from the '//&
         &'seed, with the previous iteration''s shift variance as its width and the particle''s temperature converting '//&

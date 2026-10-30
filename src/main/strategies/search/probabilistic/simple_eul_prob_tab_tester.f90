@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table, the n_eff control
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the dense part files, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table, the weighted insertion (the top extras, the cone, the table), the n_eff readout
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! ref_assign draws every particle's reference from its tempered row posterior on synthetic dense tables of one and
@@ -12,7 +12,7 @@ use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
-    &posterior_temperature, posterior_row_stats, draw_posterior_row, draw_posterior_extras, prob_beta_at, prob_neff_readout, &
+    &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_pose, prob_insert_poses, prob_insert_cone, &
     &PROB_NEFF_MIN_ROWS
 use simple_rnd,                only: seed_rnd_fixed
@@ -48,8 +48,8 @@ contains
         call test_posterior_row_stats()
         write(*,'(A)') 'test_draw_posterior_row'
         call test_draw_posterior_row()
-        write(*,'(A)') 'test_draw_posterior_extras'
-        call test_draw_posterior_extras()
+        write(*,'(A)') 'test_top_posterior_extras'
+        call test_top_posterior_extras()
         write(*,'(A)') 'test_insert_cone'
         call test_insert_cone()
         write(*,'(A)') 'test_insert_table_round_trip'
@@ -67,8 +67,8 @@ contains
     end subroutine run_all_eul_prob_tab_tests
 
     !> The n_eff readout: 200 rows of 50 distances k s_r (k = 0..49, s_r = 0.01 r) at temperature 2, so row r's
-    !! posterior at factor beta is geometric with ratio exp(-2 beta s_r). Reference values from neff_control_ref.py
-    !! (numpy): one row at a = 0.5 has exp(H) = 5.493135; the mean over the rows is 49.9721 at beta 0.001, 6.023447
+    !! posterior at factor beta is geometric with ratio exp(-2 beta s_r). Reference values from a numpy emulation:
+    !! one row at a = 0.5 has exp(H) = 5.493135; the mean over the rows is 49.9721 at beta 0.001, 6.023447
     !! at 0.5, 3.582882 at 1 and 2.243834 at 2, falling monotonically with the factor. Rows with fewer valid
     !! distances than nmin, a non-positive temperature or outside the stride are not kept, invalid distances are
     !! dropped
@@ -504,9 +504,11 @@ contains
     end function assigned_ref
 
     !> The weighted insertion's table: a particle without extras keeps weight 1; add records the committed weight
-    !! and the extras in order; the file round trip returns every field; the readout line prints; the part's
-    !! subset keeps the part's particles in its order with their entries; the resolved-poses layout follows the
-    !! subset (slots, counts, committed weights, zero weights until filled)
+    !! and the extras in order, and counts the cone's occupancy (particle 2 had 5 eligible entries, above the cap
+    !! of 2; particle 4 had 1; the mean over the four particles added is 1.5 and a quarter of them were capped);
+    !! the file round trip returns every field; the readout line prints; the part's subset keeps the part's
+    !! particles in its order with their entries; the resolved-poses layout follows the subset (slots, counts,
+    !! committed weights, zero weights until filled)
     subroutine test_insert_table_round_trip()
         type(prob_insert_table) :: tab, back, part
         type(prob_insert_poses) :: poses
@@ -517,11 +519,15 @@ contains
         call tab%new(4, [11, 12, 13, 14], 3)
         cands(1) = prob_candidate(101, 7, 0.4, 0.5, 1.5, .true.)
         cands(2) = prob_candidate(102, 8, 0.6, -1.0, 2.0, .true.)
-        call tab%add(2, 0.6, 2, cands, [0.3, 0.1])
+        call tab%add(2, 0.6, 2, cands, [0.3, 0.1], 5)
         cands(1) = prob_candidate(103, 9, 0.2, 0.25, 0.0, .true.)
-        call tab%add(4, 0.9, 1, cands(1:1), [0.1])
+        call tab%add(4, 0.9, 1, cands(1:1), [0.1], 1)
+        call tab%add(1, 1.0, 0, cands(1:0), [real ::], 0)
+        call tab%add(3, 1.0, 0, cands(1:0), [real ::], 0)
         call assert_int(4, tab%get_nptcls(), 'insert table: four particles')
         call assert_int(3, tab%get_kmax(),   'insert table: kmax 3')
+        call assert_real(1.5,  tab%get_mean_eligible(), 1.e-6, 'insert table: the eligible entries per particle')
+        call assert_real(0.25, tab%get_frac_capped(),   1.e-6, 'insert table: the fraction of particles above the cap')
         call assert_real(1., tab%get_committed_weight(1), 0., 'insert table: a particle without extras keeps weight 1')
         call assert_int(0, tab%get_nextra(1), 'insert table: and no extras')
         call assert_real(0.6, tab%get_committed_weight(2), 0., 'insert table: the committed weight recorded')
@@ -574,9 +580,11 @@ contains
     end subroutine test_insert_table_round_trip
 
     !> The weighted insertion's extras on a two-state dense table (the round-trip parts: 50 directions, 2 states,
-    !! 40 particles, a tenth of the entries refined): every extra lies in the committed state's block, is a refined
-    !! entry and is not the committed reference; a particle's weights sum to 1 and no extra is below
-    !! PROB_INSERT_WMIN; extras do occur at a hot temperature; the master's table round-trips through the file the
+    !! 40 particles, a tenth of the entries refined, their distances lowered by 50 so that the committed draw lands
+    !! on a refined entry, the condition for extras): every extra lies in the committed state's block, is a refined
+    !! entry and is not the committed reference; a particle's weights sum to 1, its extras come in descending
+    !! weight and none is below PROB_INSERT_WMIN; extras do occur at a hot temperature; a second assignment gives
+    !! the same extras (the selection is deterministic); the master's table round-trips through the file the
     !! workers read; topk = 1 records no extra and weight 1 everywhere
     subroutine test_insert_extras_multistate()
         integer, parameter :: NSPACE_MS = 50, NSTATES_MS = 2, NPTCLS_MS = 40, NPARTS_MS = 2
@@ -589,9 +597,10 @@ contains
         type(prob_dense_entry), allocatable :: rows(:,:)
         real,                   allocatable :: shifts(:,:,:), seeds(:,:)
         logical,                allocatable :: refined(:,:)
-        integer,                allocatable :: pinds(:)
+        integer,                allocatable :: pinds(:), nextra_first(:)
         type(string) :: fname
-        integer :: i, k, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed, istate
+        integer :: i, k, ri, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed
+        integer :: istate, nwrong_order, nwrong_again
         real    :: wsum
         call make_round_trip_parts(params, build, NSPACE_MS, NSTATES_MS, NPTCLS_MS, NPARTS_MS, rows, shifts, refined, seeds)
         pinds = [(i, i=NPTCLS_MS,1,-1)]
@@ -599,6 +608,11 @@ contains
         call master%new(params, build, pinds)
         call master%read_tabs_to_glob(string('prob_tab_tester_part'), NPARTS_MS, 1)
         master%temps = 1. ! hot rows: extras occur
+        do i = 1,NPTCLS_MS
+            do ri = 1,NSPACE_MS * NSTATES_MS
+                if( refined(ri, pinds(i)) ) master%dists(i,ri) = master%dists(i,ri) - 50.
+            enddo
+        enddo
         ! no cone set: no extra pose, the committed weight 1 everywhere
         call seed_rnd_fixed(SEED_DRAW)
         call master%ref_assign
@@ -625,10 +639,13 @@ contains
         call seed_rnd_fixed(SEED_DRAW)
         call master%ref_assign
         nextra_tot = 0; nwrong_state = 0; nwrong_refined = 0; nwrong_committed = 0; nwrong_weight = 0; nwrong_dup = 0
+        nwrong_order = 0
+        allocate(nextra_first(NPTCLS_MS), source=0)
         do i = 1,NPTCLS_MS
-            istate         = master%assgn_map(i)%istate
-            iref_committed = (istate - 1) * NSPACE_MS + master%assgn_map(i)%iproj
-            wsum           = master%insert_tab%get_committed_weight(i)
+            istate          = master%assgn_map(i)%istate
+            iref_committed  = (istate - 1) * NSPACE_MS + master%assgn_map(i)%iproj
+            wsum            = master%insert_tab%get_committed_weight(i)
+            nextra_first(i) = master%insert_tab%get_nextra(i)
             do k = 1,master%insert_tab%get_nextra(i)
                 pose       = master%insert_tab%get_extra(i, k)
                 nextra_tot = nextra_tot + 1
@@ -639,7 +656,8 @@ contains
                 if( pose%w < 0.01 - 1.e-6 )                       nwrong_weight    = nwrong_weight + 1
                 if( k == 2 )then
                     pose_a = master%insert_tab%get_extra(i, 1)
-                    if( pose%iref == pose_a%iref ) nwrong_dup = nwrong_dup + 1
+                    if( pose%iref == pose_a%iref ) nwrong_dup   = nwrong_dup + 1
+                    if( pose%w    >  pose_a%w    ) nwrong_order = nwrong_order + 1
                 endif
             enddo
             if( abs(wsum - 1.) > 1.e-5 ) nwrong_weight = nwrong_weight + 1
@@ -650,7 +668,18 @@ contains
         call assert_int(0, nwrong_refined,   'multi-state extras: every extra is a refined entry')
         call assert_int(0, nwrong_committed, 'multi-state extras: no extra is the committed reference')
         call assert_int(0, nwrong_dup,       'multi-state extras: the extras of a particle are distinct')
+        call assert_int(0, nwrong_order,     'multi-state extras: the extras of a particle come in descending weight')
         call assert_int(0, nwrong_weight,    'multi-state extras: weights sum to 1, no extra below 1%, at most topk - 1 extras')
+        call assert_true(master%insert_tab%get_mean_eligible() > 0., 'multi-state extras: the cone''s occupancy is counted')
+        ! the same assignment again: the same extras (the selection is deterministic, the draws reseeded)
+        call seed_rnd_fixed(SEED_DRAW)
+        call master%ref_assign
+        nwrong_again = 0
+        do i = 1,NPTCLS_MS
+            if( master%insert_tab%get_nextra(i) /= nextra_first(i) ) nwrong_again = nwrong_again + 1
+        enddo
+        call assert_int(0, nwrong_again, 'multi-state extras: a second assignment selects the same extras')
+        deallocate(nextra_first)
         ! the file the workers read
         fname = string('prob_insert_multistate_test.dat')
         call master%write_insert_table(fname)
@@ -685,18 +714,25 @@ contains
         call kill_round_trip_parts(params, build, NPARTS_MS)
     end subroutine test_insert_extras_multistate
 
-    !> The insertion cone: the half-angle whose arc at the rim of a particle of diameter diam is the resolution (10 A
-    !! at 100 A: 0.2 rad, 11.46 degrees) and the shift bound in pixels; no resolution gives no cone; a resolution past
-    !! the rim's half-circumference the whole sphere. On a 1000-direction C1 spiral with a 36-step rotation grid a
-    !! neighbour within the half-angle at the same in-plane angle and shift is within, a far direction is not, the
-    !! same direction a half-turn away in-plane is not (one step of 10 degrees is), a shift past the bound is not.
-    !! Modulo C4, equatorial azimuths 1 and 89 degrees are 2 degrees apart and pass a 3-degree cone that C1 rejects
+    !> The insertion cone: a rotation by alpha and a shift ds between two poses move the rim of a particle of
+    !! diameter diam by at most diam alpha / 2 + ds, which the cone bounds by the resolution (10 A at 100 A: the
+    !! half-angle at equal shifts is 0.2 rad, 11.46 degrees; the shift bound at equal rotations 10 pixels at 1 A);
+    !! no resolution gives no cone; a resolution past the rim's half-circumference the whole sphere. On a
+    !! 1000-direction C1 spiral with a 36-step rotation grid, from an equatorial direction: a direction whose
+    !! rotation at the same in-plane angle and shift is within the half-angle is within, a far one is not, the same
+    !! direction a half-turn away in-plane is not (one step of 10 degrees, 8.7 A at the rim, is), a shift past the
+    !! bound is not, one within it is, and the rotation step plus a 2-pixel shift (10.7 A) is not while plus 1 pixel
+    !! (9.7 A) it is. The rotation is the geodesic angle, not the direction and psi angles apart: at the pole, the
+    !! directions [1,1,0] and [181,1,0] at the same in-plane index are 2 degrees apart by their normals and the same
+    !! in psi, yet half a turn apart as rotations, so not within; with the second's in-plane angle a half-turn away
+    !! they are 2 degrees apart as rotations, so within. Modulo C4, equatorial azimuths 1 and 89 degrees are 2
+    !! degrees apart and pass a 3-degree cone that C1 rejects
     subroutine test_insert_cone()
         type(prob_insert_cone) :: cone
         type(oris)             :: eul, eul2
-        type(sym), target      :: se1, se4
-        real    :: e1(3), e2(3), esym(3), euldist, inpldist
-        integer :: i, inear, ifar
+        type(sym)              :: se1, se4
+        real    :: e1(3), e2(3), geo
+        integer :: i, ic, inear, ifar
         call cone%new([10.], 100., 1.)
         call assert_real(11.459156, cone%get_angle(1), 1.e-3, 'insertion cone: 10 A at a 100 A particle is 11.46 degrees')
         call assert_true(cone%is_open(), 'insertion cone: open')
@@ -704,33 +740,53 @@ contains
         call assert_true(.not. cone%is_open() .and. cone%get_angle(1) < 0., 'insertion cone: no resolution, no cone')
         call cone%new([1000.], 100., 1.)
         call assert_real(180., cone%get_angle(1), 1.e-3, 'insertion cone: a resolution past the rim is the whole sphere')
-        ! the C1 spiral
+        ! the C1 spiral, from the direction nearest the equator
         call se1%new('c1')
         call eul%new(1000, is_ptcl=.false.)
         call se1%build_refspiral(eul)
         call cone%new([10.], 100., 1.)
         call cone%set_space(eul, se1, 36)
         call assert_true(cone%has_space(), 'insertion cone: the space is set')
-        inear = 0
-        ifar  = 0
-        e1    = eul%get_euler(1)
+        ic = 1
+        e1 = eul%get_euler(ic)
         do i = 2,1000
             e2 = eul%get_euler(i)
-            call se1%sym_dists(e1, e2, esym, euldist, inpldist)
-            if( inear == 0 .and. euldist > 3. .and. euldist < 11. ) inear = i
-            if( ifar  == 0 .and. euldist > 20. ) ifar = i
+            if( abs(e2(2) - 90.) < abs(e1(2) - 90.) )then
+                ic = i
+                e1 = e2
+            endif
+        enddo
+        e1(3) = 360.
+        inear = 0
+        ifar  = 0
+        do i = 1,1000
+            if( i == ic ) cycle
+            e2    = eul%get_euler(i)
+            e2(3) = 360.
+            geo   = geodesic_deg(e1, e2)
+            if( inear == 0 .and. geo > 3.  .and. geo < 11. ) inear = i
+            if( ifar  == 0 .and. geo > 20. ) ifar = i
             if( inear > 0 .and. ifar > 0 ) exit
         enddo
         call assert_true(inear > 0 .and. ifar > 0, 'insertion cone: a near and a far direction found on the spiral')
-        call assert_true(cone%within(1, 1, 1, [0.,0.], inear, 1, [0.,0.]), 'insertion cone: a direction within the half-angle is within')
-        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], ifar, 1, [0.,0.]), 'insertion cone: a far direction is not')
-        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], 1, 19, [0.,0.]), 'insertion cone: the same direction a half-turn away in-plane is another pose')
-        call assert_true(cone%within(1, 1, 1, [0.,0.], 1, 2, [0.,0.]), 'insertion cone: one rotation step (10 degrees) is within')
-        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], inear, 1, [11.,0.]), 'insertion cone: a shift past the bound is another pose')
-        call assert_true(cone%within(1, 1, 1, [0.,0.], inear, 1, [6.,6.]), 'insertion cone: a shift within the bound is within')
-        call assert_true(.not. cone%within(2, 1, 1, [0.,0.], inear, 1, [0.,0.]), 'insertion cone: a state without a cone admits nothing')
-        ! modulo C4: azimuths 1 and 89 degrees on the equator
+        call assert_true(cone%within(1, ic, 1, [0.,0.], inear, 1, [0.,0.]), 'insertion cone: a rotation within the half-angle is within')
+        call assert_true(.not. cone%within(1, ic, 1, [0.,0.], ifar, 1, [0.,0.]), 'insertion cone: a far direction is not')
+        call assert_true(.not. cone%within(1, ic, 1, [0.,0.], ic, 19, [0.,0.]), 'insertion cone: the same direction a half-turn away in-plane is another pose')
+        call assert_true(cone%within(1, ic, 1, [0.,0.], ic, 2, [0.,0.]), 'insertion cone: one rotation step (10 degrees, 8.7 A at the rim) is within')
+        call assert_true(.not. cone%within(1, ic, 1, [0.,0.], ic, 1, [11.,0.]), 'insertion cone: a shift past the bound is another pose')
+        call assert_true(cone%within(1, ic, 1, [0.,0.], ic, 1, [6.,6.]), 'insertion cone: a shift within the bound is within')
+        call assert_true(.not. cone%within(1, ic, 1, [0.,0.], ic, 2, [2.,0.]), 'insertion cone: the rotation step plus a 2-pixel shift (10.7 A) is another pose')
+        call assert_true(cone%within(1, ic, 1, [0.,0.], ic, 2, [1.,0.]), 'insertion cone: the rotation step plus a 1-pixel shift (9.7 A) is within')
+        call assert_true(.not. cone%within(2, ic, 1, [0.,0.], inear, 1, [0.,0.]), 'insertion cone: a state without a cone admits nothing')
+        ! the polar pair: 2 degrees apart by their normals, half a turn apart as rotations
         call eul2%new(2, is_ptcl=.false.)
+        call eul2%set_euler(1, [1.,   1., 0.])
+        call eul2%set_euler(2, [181., 1., 0.])
+        call cone%new([10.], 100., 1.)
+        call cone%set_space(eul2, se1, 36)
+        call assert_true(.not. cone%within(1, 1, 1, [0.,0.], 2, 1, [0.,0.]), 'insertion cone: the polar pair at the same in-plane index is half a turn apart')
+        call assert_true(cone%within(1, 1, 1, [0.,0.], 2, 19, [0.,0.]), 'insertion cone: the polar pair with the in-plane angle a half-turn away is 2 degrees apart')
+        ! modulo C4: azimuths 1 and 89 degrees on the equator
         call eul2%set_euler(1, [1., 90., 0.])
         call eul2%set_euler(2, [89., 90., 0.])
         call cone%new([2.618], 100., 1.)   ! 3 degrees
@@ -744,18 +800,29 @@ contains
         call eul2%kill
         call se1%kill
         call se4%kill
+
+    contains
+
+        !> the angle between two poses as rotations, degrees
+        real function geodesic_deg( ea, eb )
+            real, intent(in) :: ea(3), eb(3)
+            real :: m(3,3)
+            m = matmul(euler2m(ea), transpose(euler2m(eb)))
+            geodesic_deg = rad2deg(acos(max(-1., min(1., 0.5 * (m(1,1) + m(2,2) + m(3,3) - 1.)))))
+        end function geodesic_deg
+
     end subroutine test_insert_cone
 
-    !> The extra poses of the weighted insertion (draw_posterior_extras): kmax = 1 keeps the committed entry
-    !! alone at weight 1 and leaves the random stream untouched; the extras are drawn without replacement from
-    !! the eligible entries only, never the committed one, with the weights the posterior at the given temperature over the kept
-    !! set summing to 1; an extra below wmin is dropped; the committed entry is kept whatever its share; over many
-    !! draws an extra is included with the probability of the remainder's renormalised posterior
-    subroutine test_draw_posterior_extras()
-        integer, parameter :: NDRAWS = 20000
-        real    :: dists(6), work(6), w(3), dist, wrow(6)
-        integer :: inds(3), nkept, i, k, nsecond, ndropped, seq1(20), seq2(20)
-        logical :: mask(6), l_ok
+    !> The extra poses of the weighted insertion (top_posterior_extras): kmax = 1 keeps the committed entry alone at
+    !! weight 1; no random number is drawn at any kmax, so the stream is the single draw's; the extras are the
+    !! eligible entries of highest posterior at the given temperature, in descending order, never the committed
+    !! entry nor an invalid one, with the weights the posterior over the kept set summing to 1 (the committed
+    !! entry's its own share, zero when it has no mass); an extra below wmin is dropped with every lighter one; on a
+    !! tie the earlier entry stays; nelig counts the eligible valid entries other than the committed one
+    subroutine test_top_posterior_extras()
+        real    :: dists(6), w(5), dist, wrow(6), z
+        integer :: inds(5), nkept, nelig, i, seq1(20), seq2(20)
+        logical :: mask(6)
         ! T = 1 on [0, 1, 2, 3, huge, 0.5], all eligible; the committed entry the mode
         dists = [0., 1., 2., 3., huge(1.), 0.5]
         mask  = .true.
@@ -765,67 +832,59 @@ contains
         enddo
         call seed_rnd_fixed(20261029)
         do i = 1,20
-            call draw_posterior_extras(6, dists, 1., mask, 1, 1, 0.01, work, nkept, inds, w)
+            call top_posterior_extras(6, dists, 1., mask, 1, 1, 0.01, nkept, inds, w, nelig)
             call assert_int(1, nkept, 'kmax 1 keeps the committed entry alone')
             call assert_int(1, inds(1), 'kmax 1 keeps the committed entry')
             call assert_real(1., w(1), 0., 'kmax 1 gives the committed entry weight 1')
+            call assert_int(4, nelig, 'kmax 1 still counts the eligible valid entries other than the committed one')
+            call top_posterior_extras(6, dists, 1., mask, 1, 3, 0.01, nkept, inds, w, nelig)
             call draw_posterior_row(3, [0., 1., 2.], 1., wrow, seq2(i), dist)
         enddo
-        call assert_true(all(seq1 == seq2), 'kmax 1 draws no random number: the stream is the single draw''s')
-        ! kmax 3: three distinct kept entries, the committed first, valid and eligible, weights summing to 1
-        l_ok = .true.
-        do i = 1,200
-            call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
-            l_ok = l_ok .and. nkept == 3 .and. inds(1) == 1 .and. inds(2) /= 1 .and. inds(3) /= 1 .and. inds(2) /= inds(3) &
-                &.and. inds(2) /= 5 .and. inds(3) /= 5 .and. abs(sum(w(1:3)) - 1.) < 1.e-5
-        enddo
-        call assert_true(l_ok, 'kmax 3 keeps three distinct valid entries, the committed first, weights summing to 1')
-        ! the weights are the posterior at the given temperature over the kept set: with entries {1 (d 0), 6 (d 0.5), 2 (d 1)} kept
-        ! they are proportional to 1, e^-0.5, e^-1
-        do i = 1,500
-            call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
-            if( nkept == 3 .and. ((inds(2) == 6 .and. inds(3) == 2) .or. (inds(2) == 2 .and. inds(3) == 6)) ) exit
-        enddo
-        call assert_true(i <= 500, 'the pair {6, 2} of extras comes up within 500 draws')
-        do k = 2,3
-            if( inds(k) == 6 ) call assert_real(exp(-0.5) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 6 is its share of the kept set')
-            if( inds(k) == 2 ) call assert_real(exp(-1.0) / (1. + exp(-0.5) + exp(-1.)), w(k), 1.e-5, 'the weight of entry 2 is its share of the kept set')
-        enddo
-        call assert_real(1. / (1. + exp(-0.5) + exp(-1.)), w(1), 1.e-5, 'the committed entry''s weight is its share of the kept set')
+        call assert_true(all(seq1 == seq2), 'the selection draws no random number: the stream is the single draw''s at any kmax')
+        ! kmax 3: the two eligible entries of highest weight, 6 (d 0.5) then 2 (d 1), the committed first, the weights
+        ! their shares of the kept set, the invalid entry never selected
+        call top_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, nkept, inds, w, nelig)
+        z = 1. + exp(-0.5) + exp(-1.)
+        call assert_int(3, nkept, 'kmax 3 keeps the committed entry and two extras')
+        call assert_true(inds(1) == 1 .and. inds(2) == 6 .and. inds(3) == 2, 'the extras are the entries of highest weight in descending order')
+        call assert_real(1. / z,        w(1), 1.e-5, 'the committed entry''s weight is its share of the kept set')
+        call assert_real(exp(-0.5) / z, w(2), 1.e-5, 'the weight of entry 6 is its share of the kept set')
+        call assert_real(exp(-1.0) / z, w(3), 1.e-5, 'the weight of entry 2 is its share of the kept set')
+        call assert_int(4, nelig, 'four eligible valid entries other than the committed one')
+        ! a cap above the eligible count takes them all
+        call top_posterior_extras(3, [0., 1., 2.], 1., [.true., .true., .true.], 1, 5, 1.e-6, nkept, inds, w, nelig)
+        call assert_true(nkept == 3 .and. nelig == 2 .and. inds(2) == 2 .and. inds(3) == 3, 'a cap above the eligible count takes every eligible entry')
+        ! the order is by weight, not by index
+        call top_posterior_extras(5, [0., 3., 1., 2., 0.5], 1., [.true., .true., .true., .true., .true.], 1, 4, 1.e-6, nkept, inds, w, nelig)
+        call assert_true(nkept == 4 .and. inds(2) == 5 .and. inds(3) == 3 .and. inds(4) == 4, 'the extras come in descending weight whatever their row order')
+        ! a tie keeps the earlier entries
+        call top_posterior_extras(4, [0., 1., 1., 1.], 1., [.true., .true., .true., .true.], 1, 3, 1.e-6, nkept, inds, w, nelig)
+        call assert_true(nkept == 3 .and. inds(2) == 2 .and. inds(3) == 3, 'equal weights keep the earlier entries')
         ! eligibility: only entry 6 eligible, so one extra at most, and it is entry 6
         mask = .false.
         mask(6) = .true.
-        call draw_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, work, nkept, inds, w)
+        call top_posterior_extras(6, dists, 1., mask, 1, 3, 1.e-6, nkept, inds, w, nelig)
         call assert_int(2, nkept, 'with one eligible entry there is one extra')
         call assert_int(6, inds(2), 'and it is the eligible entry')
+        call assert_int(1, nelig, 'and the occupancy is one')
         ! the committed entry itself ineligible changes nothing about its being kept first
         mask = .true.
         mask(1) = .false.
-        call draw_posterior_extras(6, dists, 1., mask, 1, 2, 1.e-6, work, nkept, inds, w)
-        call assert_true(nkept == 2 .and. inds(1) == 1 .and. inds(2) /= 1, 'the committed entry is kept first whatever its eligibility')
+        call top_posterior_extras(6, dists, 1., mask, 1, 2, 1.e-6, nkept, inds, w, nelig)
+        call assert_true(nkept == 2 .and. inds(1) == 1 .and. inds(2) == 6, 'the committed entry is kept first whatever its eligibility')
         ! the mass rule: a near-delta row at a cold temperature keeps the committed entry alone
         mask = .true.
-        ndropped = 0
-        do i = 1,100
-            call draw_posterior_extras(6, dists, 10., mask, 1, 3, 0.01, work, nkept, inds, w)
-            if( nkept == 1 ) ndropped = ndropped + 1
-        enddo
-        call assert_int(100, ndropped, 'at T = 10 every extra falls below 1% and is dropped: the committed entry alone')
-        ! inclusion frequency: three entries at T = 1, p = (0.665, 0.245, 0.090); given the committed entry 1, the
-        ! single extra is entry 2 with probability 0.245 / (0.245 + 0.090) = 0.731
-        nsecond = 0
-        do i = 1,NDRAWS
-            call draw_posterior_extras(3, [0., 1., 2.], 1., [.true., .true., .true.], 1, 2, 1.e-6, work, nkept, inds, w)
-            if( nkept == 2 .and. inds(2) == 2 ) nsecond = nsecond + 1
-        enddo
-        call assert_true(abs(real(nsecond) / NDRAWS - 0.731059) < 0.02, 'an extra is drawn from the remainder''s renormalised posterior')
-        ! a committed entry 80 nats above the minimum: its weight underflows, the kept set is the committed entry alone
-        call draw_posterior_extras(3, [0., 100., 2.], 1., [.true., .true., .true.], 2, 3, 0.01, work, nkept, inds, w)
-        call assert_true(nkept >= 1 .and. inds(1) == 2 .and. abs(sum(w(1:nkept)) - 1.) < 1.e-5, 'a committed entry of no mass is still kept first, the weights still sum to 1')
+        call top_posterior_extras(6, dists, 10., mask, 1, 3, 0.01, nkept, inds, w, nelig)
+        call assert_true(nkept == 1 .and. w(1) == 1., 'at T = 10 every extra falls below 1% and is dropped: the committed entry alone')
+        ! a committed entry 100 nats above the minimum: its weight underflows to zero, it is still kept first, and the
+        ! particle's mass is on its extras, the weights summing to 1
+        call top_posterior_extras(3, [0., 100., 2.], 1., [.true., .true., .true.], 2, 3, 0.01, nkept, inds, w, nelig)
+        call assert_true(nkept == 3 .and. inds(1) == 2 .and. inds(2) == 1 .and. inds(3) == 3, 'a committed entry of no mass is kept first, its extras after it')
+        call assert_true(w(1) == 0. .and. abs(sum(w(1:3)) - 1.) < 1.e-5, 'the committed entry of no mass has weight zero and the weights sum to 1')
         ! no valid distance: the committed entry alone
-        call draw_posterior_extras(3, [huge(1.), huge(1.), huge(1.)], 1., [.true., .true., .true.], 1, 3, 0.01, work, nkept, inds, w)
-        call assert_int(1, nkept, 'a row without a valid distance keeps the committed entry alone')
-    end subroutine test_draw_posterior_extras
+        call top_posterior_extras(3, [huge(1.), huge(1.), huge(1.)], 1., [.true., .true., .true.], 1, 3, 0.01, nkept, inds, w, nelig)
+        call assert_true(nkept == 1 .and. nelig == 0, 'a row without a valid distance keeps the committed entry alone')
+    end subroutine test_top_posterior_extras
 
     !> The pose posterior over a table row: T = pi wsqsum / (2 pftsz) (15.707963 for 1000 and 100); at T = 1000
     !! the row [0, 0.001, 0.002, 0.5, invalid, 0.4] gives p = [e^0, e^-1, e^-2, ~0, 0, ~0]/Z = [0.665241,

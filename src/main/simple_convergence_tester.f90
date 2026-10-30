@@ -55,6 +55,8 @@ contains
         call test_posterior_anneal_tail()
         write(*,'(A)') 'test_posterior_anneal_tail2D'
         call test_posterior_anneal_tail2D()
+        write(*,'(A)') 'test_posterior_exits_weighted_insertion'
+        call test_posterior_exits_weighted_insertion()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
 
@@ -62,7 +64,7 @@ contains
     !! prob_beta whose class overlap converges starts the tail at the first converged iteration past minits (tail_start
     !! = the next iteration) and converges at the tail's last iteration, PROB_BETA_TAIL after its start; a budget too
     !! short for that starts the tail so that it completes at maxits (the absolute end iteration of the 2D rule);
-    !! under the n_eff control any positive prob_beta_end is the switch; a flat run has no tail and converges as before
+    !! a flat run has no tail and converges as before
     subroutine test_posterior_anneal_tail2D()
         class(parameters), allocatable :: params
         type(convergence) :: conv, conv_short, conv_flat
@@ -221,28 +223,103 @@ contains
         call cline%kill
         deallocate(params)
         call del_file(STATS_FILE)
+    end subroutine test_posterior_anneal_tail
+
+    !> NPTCLS frozen particles (full scan, overlap 1) at the given FSC=0.5 and FSC=0.143 resolutions
+    subroutine frozen_field( os_loc, r05, r143 )
+        type(oris), intent(inout) :: os_loc
+        real,       intent(in)    :: r05, r143
+        integer :: i
+        call os_loc%new(NPTCLS, is_ptcl=.true.)
+        do i = 1, NPTCLS
+            call os_loc%set_state(i, 1)
+            call os_loc%set(i, 'updatecnt', 1.)
+            call os_loc%set(i, 'sampled',   1.)
+            call os_loc%set(i, 'frac',      100.)
+            call os_loc%set(i, 'mi_proj',   1.)
+            call os_loc%set(i, 'corr',      0.5)
+            call os_loc%set(i, 'res05',     r05)
+            call os_loc%set(i, 'res',       r143)
+        end do
+    end subroutine frozen_field
+
+    !> the weighted insertion's margin on the resolution exits (topk > 1): with a box of 100 pixels at 1 A the
+    !! shells are 100/k A, so lpexit 8 A (shell 13) becomes 7.143 A (shell 14), and no gain means none over two
+    !! iterations. A stage at 7.5, 7.0, 7.0, 7.0 A exits at its third iteration under the single draw and at its
+    !! fourth under topk 2; a stage settling at 7.2 A, past the limit but not past the next shell, exits under the
+    !! single draw and never under topk 2; the annealing tail's stall test (FSC 0.5 and 0.143 both flat) starts the
+    !! tail at the fourth iteration under the single draw and at the fifth under topk 2
+    subroutine test_posterior_exits_weighted_insertion()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv1, conv2, conv_shell1, conv_shell2, tail1, tail2
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        real    :: res05(6), res143(6)
+        logical :: at1(6), at2(6)
+        integer :: it
+        call del_file(STATS_FILE)
+        allocate(params)
+        params%nstates           = 1
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 0.3
+        params%startit           = 1
+        params%maxits            = 25
+        params%box               = 100
+        params%smpd              = 1.
+        params%lpexit            = 8.
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        ! the stage resolution exit: past the limit and no longer gaining
+        res05  = [7.5, 7.0, 7.0, 7.0, 7.0, 7.0]
+        res143 = [6.5, 6.0, 6.0, 6.0, 6.0, 6.0]
+        params%topk = 1
+        call run_stage(conv1, at1)
+        params%topk = 2
+        call run_stage(conv2, at2)
+        call assert_true(.not. at1(1) .and. .not. at1(2) .and. at1(3), 'the single draw exits at the third iteration, the first without gain')
+        call assert_true(.not. any(at2(1:3)) .and. at2(4), 'topk 2 exits at the fourth iteration, the second without gain')
+        ! past the limit but not past the next shell: no exit under the margin
+        res05  = [7.5, 7.2, 7.2, 7.2, 7.2, 7.2]
+        params%topk = 1
+        call run_stage(conv_shell1, at1)
+        params%topk = 2
+        call run_stage(conv_shell2, at2)
+        call assert_true(at1(3), 'the single draw exits at 7.2 A against the 8 A limit')
+        call assert_true(.not. any(at2), 'topk 2 wants the FSC a shell past the limit (7.143 A) and never exits at 7.2 A')
+        ! the annealing tail's stall test
+        params%lpexit        = 0.
+        params%prob_beta_end = 1.
+        res05  = [7.5, 7.0, 7.0, 7.0, 7.0, 7.0]
+        params%topk = 1
+        call run_stage(tail1, at1)
+        params%topk = 2
+        call run_stage(tail2, at2)
+        call assert_int(4, tail1%anneal_tail_start(), 'the single draw starts the tail after the first iteration without gain')
+        call assert_int(5, tail2%anneal_tail_start(), 'topk 2 starts the tail after the second iteration without gain')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
 
     contains
 
-        !> NPTCLS frozen particles (full scan, overlap 1) at the given FSC=0.5 and FSC=0.143 resolutions
-        subroutine frozen_field( os_loc, r05, r143 )
-            type(oris), intent(inout) :: os_loc
-            real,       intent(in)    :: r05, r143
-            integer :: i
-            call os_loc%new(NPTCLS, is_ptcl=.true.)
-            do i = 1, NPTCLS
-                call os_loc%set_state(i, 1)
-                call os_loc%set(i, 'updatecnt', 1.)
-                call os_loc%set(i, 'sampled',   1.)
-                call os_loc%set(i, 'frac',      100.)
-                call os_loc%set(i, 'mi_proj',   1.)
-                call os_loc%set(i, 'corr',      0.5)
-                call os_loc%set(i, 'res05',     r05)
-                call os_loc%set(i, 'res',       r143)
-            end do
-        end subroutine frozen_field
+        !> six iterations of a stage from a fresh stats file, the verdicts in at
+        subroutine run_stage( conv, at )
+            type(convergence), intent(inout) :: conv
+            logical,           intent(out)   :: at(6)
+            call del_file(STATS_FILE)
+            do it = 1, 6
+                params%which_iter = it
+                call frozen_field(os, res05(it), res143(it))
+                at(it) = conv%check_conv3D(params, cline, os, 40.)
+                call os%kill
+            enddo
+        end subroutine run_stage
 
-    end subroutine test_posterior_anneal_tail
+    end subroutine test_posterior_exits_weighted_insertion
 
     !> the probability tables' posterior draws: a frozen assignment (full scan,
     !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)

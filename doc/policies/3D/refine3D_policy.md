@@ -579,80 +579,112 @@ schedule is therefore `prob_beta` flat with the tail to 1, and the readout
 is how it is watched. Unit-tested on synthetic rows against a numpy
 emulation (`test_neff_readout`).
 
-**The weighted insertion (`topk`, 2026-10-29; section 20.8 of the note).**
-In the probabilistic modes a particle may enter the reconstruction at more
-than its committed pose: with `topk` above 1 (default 1) the assignment
-draws, beside the committed pose, up to `topk - 1` extra entries of the
-particle's row WITHOUT replacement from the refined entries (the ones whose
-shift is their own; an unrefined entry's shift is the seed's, section 19.10
-of the note) whose pose lies within the insertion cone of the committed
-one (`prob_insert_cone`): the rotation between the two poses, taken modulo
-the point group (`sym_dists`, the symmetry-equivalent of the candidate
-closest to the committed pose), no larger in its direction part nor in its
-in-plane part than the half-angle whose arc at the mask's rim is the state
-map's FSC=0.5 resolution, and the two stored-frame shifts no farther apart
-than that resolution in pixels. The master reads each state's FSC on disk
-before the assignment (`insert_cone_from_fsc`, logged as
-`PROB_TAB_INSERT CONE`; no FSC, no cone, the committed pose alone), and the
-table sets the cone's geometry at the assignment from the direction space,
-the point group and its rotation grid (`set_space`; the dense master,
+**The weighted insertion (`topk`, 2026-10-29, revised 2026-10-30; sections
+20.8 and 20.12 of the note).** In the probabilistic modes a particle may
+enter the iteration's reconstruction at more than its committed pose: with
+`topk` above 1 (default 1) the assignment adds, beside the committed pose,
+up to `topk - 1` extra entries of the particle's row: the refined entries
+(the ones whose shift is their own; an unrefined entry's shift is the
+seed's, section 19.10 of the note) whose pose lies within the insertion cone
+of the committed one (`prob_insert_cone`), the `topk - 1` of them of highest
+posterior at the particle's own temperature, each with its share of that
+posterior renormalised over the committed entry and the extras, an extra
+under `PROB_INSERT_WMIN` (0.01) of the particle dropped
+(`top_posterior_extras`). The selection is deterministic (the top entries,
+not a sample: within the cone the extras exist to reduce the variance of
+the one-pose insertion, and the hypothesis is the committed draw's), so
+`topk` touches no random stream, and it is made only when the committed
+entry is itself refined, so that every distance weighed is a refined one
+(an unrefined committed entry's distance is at the seed shift and would be
+weighed low against its shift-refined neighbours for a reason the data do
+not give; such a particle enters at its committed pose alone, as under the
+single draw). The cone: a pose is within it when the angle of the rotation
+between the two poses, the smallest over the point group's equivalents of
+the candidate (the geodesic angle of `R_c^T R_r R_g`), times the mask's
+radius, plus the distance between the two stored-frame shifts, is at most
+the state map's FSC=0.5 resolution: a rotation by `alpha` moves a point of
+the rim by at most `r alpha`, a shift moves every point by its length, so
+the particle averaged over such poses is displaced by no more than the map
+resolves (a heuristic scale, not a no-blur guarantee: at the cone's edge
+the displacement is a full period of the resolution's frequency, and the
+blur within the cone is whatever the weights at the particle's own
+temperature put there, which is the data's pose uncertainty when the
+temperature is calibrated). The master reads each state's FSC on disk
+before the assignment (`insert_cone_from_fsc`, logged as `PROB_TAB_INSERT
+CONE`; no FSC, no cone, the committed pose alone), and the table sets the
+cone's geometry at the assignment from the direction space, the point group
+and its rotation grid as rotation matrices (`set_space`; the dense master,
 whose general toolbox has no 3D part, builds the direction space itself,
-`builder%build_eulspace`). Two poses within the cone move the particle's
-rim by less than the resolution, so averaging over them smears nothing the
-map resolves (a heuristic bound: at the cone's edge the displacement is a
-full period of the resolution's frequency); a pose beyond it is another
-hypothesis, which the draw decides as under the single draw. The draws and weights are the posterior at the
-particle's own temperature renormalised within the cone, and an extra
-whose weight falls below `PROB_INSERT_WMIN` (0.01) is dropped
-(`draw_posterior_extras`). The two builds before the cone (2026-10-29)
-failed in opposite directions: extras over the whole row at the search's
-factor 0.3 blurred the map and capped the resolution (PfCRT 5/10); over
-the whole row at the particle's own temperature they made the map the
-posterior expectation under the current model from a stage's first
-iteration, colder than the search and without the draws' randomness, so
-stage 3 could not re-derive the poses (every stage-3 map bad, PorF and
-PfCRT unsatisfactory) while the late stages gained (exp_gate, streptavidin
-finals). The committed pose is the single draw as before
-and keeps the search, its seeds, the shift prior and the convergence
-statistics unchanged; `topk=1` draws no random number, so the search and
-the reconstruction are bit for bit the single-draw run's. The master writes
-the extras beside the assignment (`INSERT_FBODY`: per particle the
-committed weight and the extras as reference, in-plane index, refined
-shift and weight; `prob_insert_table`) and logs `PROB_TAB_INSERT` with the
-insertions per particle and the mean committed weight. The worker reads
-the table after the assignment into the part's layout (`prob_insert_poses`,
-one slot per extra, handed to the search through `strategy3D_spec`), and
-the probabilistic strategy resolves a particle's extras in its `srch` just
-before it commits the draw (`strategy3D_prob%resolve_extra_poses`), through
-the same conversion rule as the committed pose (`candidate_pose`: the
-reference's Euler pair, the in-plane index's angle, the stored shift as the
-particle's plus the increment), so the extras and the committed pose can
-never disagree on a frame; `calc_3Drec` then inserts the committed plane with its weight
-and each extra pose from the committed plane re-shifted by the pose
-difference (`fplane_shift`: a phase ramp over the stored lattice, no second
-read or transform; the CTF^2 plane is shift-free), so the cost of an extra
-pose is one gridding insertion. The weights of a particle sum to 1, so the
-trailing reconstruction's population accounting is unchanged. Gridding
-backend only: the PCG master and the final and bootstrap reconstructions
-use the committed poses (a warning under `rec_backend=pcg`). The shc and
-snhc neighbourhood modes of solve3D's stages 1-2 insert the committed pose
-alone, their candidates being the hill climb's unrefined proposals; the 2D
-route is untouched. The assignment's companion files (the distance and
-assignment parts, the merged assignment and the extras' table) have one
-deleter, `del_prob_align_files`, which every site that clears the
-alignment's files calls. State assignment stays hard: the extras are drawn from
-the committed state's block alone (the dense table's block, the
-neighbourhood table's state row) and enter that state's half-map, and a
-particle never enters another state's map through the insertion; soft
-state membership is `m_estimator=flex`'s, whose state weight multiplies the
-pose weights as it multiplies the committed pose's. Unit tests: the sampler (`test_draw_posterior_extras`:
-`topk=1` leaves the stream untouched, the extras are distinct, eligible and
-never the committed entry, the weights are the tempered shares over the
-kept set, the mass rule, the inclusion frequency against the remainder's
-posterior), the table's round trip, and the plane re-shift against a plane
-generated at the new shift (`test_fplane_shift`, with the insertion). The
-first comparison is PorF, `topk=1` against `topk=3`, on iterations to
-resolution and the REC3D bench's gridding time.
+`builder%build_eulspace`). The extras are computed in a parallel pass after
+the serial draws (`select_extras` in both tables), each thread on its own
+eligibility mask, and enter the table in particle order. The two builds
+before the cone (2026-10-29) failed in opposite directions: extras over the
+whole row at the search's factor 0.3 blurred the map and capped the
+resolution (PfCRT 5/10); over the whole row at the particle's own
+temperature they made the map the posterior expectation under the current
+model from a stage's first iteration, colder than the search and without
+the draws' randomness, so stage 3 could not re-derive the poses (every
+stage-3 map bad, PorF and PfCRT unsatisfactory) while the late stages
+gained (exp_gate, streptavidin finals). The committed pose is the single
+draw as before and keeps the search, its seeds, the shift prior and the
+convergence statistics unchanged; `topk=1` is bit for bit the single-draw
+run. The master writes the extras beside the assignment (`INSERT_FBODY`:
+per particle the committed weight and the extras as reference, in-plane
+index, refined shift and weight; `prob_insert_table`) and logs
+`PROB_TAB_INSERT` with the insertions per particle, the mean committed
+weight, the eligible entries per particle (the cone's occupancy) and the
+fraction of particles with more eligible entries than `topk - 1`: near zero
+the insertion is the full average within the cone, above it `topk` is
+binding. The worker reads the table after the assignment into the part's
+layout (`prob_insert_poses`, one slot per extra, handed to the search
+through `strategy3D_spec`; a missing table under `topk > 1` is an error,
+the master always writes it), and the probabilistic strategy resolves a
+particle's extras in its `srch` just before it commits the draw
+(`strategy3D_prob%resolve_extra_poses`), through the same conversion rule
+as the committed pose (`candidate_pose`: the reference's Euler pair, the
+in-plane index's angle, the stored shift as the particle's plus the
+increment), so the extras and the committed pose can never disagree on a
+frame; `calc_3Drec` then inserts the committed plane with its weight and
+each extra pose from the committed plane re-shifted by the pose difference
+(`fplane_shift`: a phase ramp over the stored lattice, no second read or
+transform; the CTF^2 plane is shift-free), so the cost of an extra pose is
+one gridding insertion. The weights of a particle sum to 1, so the trailing
+reconstruction's population accounting is unchanged. Gridding backend only:
+the PCG master and the final and bootstrap reconstructions use the
+committed poses (a warning under `rec_backend=pcg`), so the last
+iteration's map and a `reconstruct3D` from the project differ under
+`topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
+insert the committed pose alone, their candidates being the hill climb's
+unrefined proposals; the 2D route is untouched. The assignment's companion
+files (the distance and assignment parts, the merged assignment and the
+extras' table) have one deleter, `del_prob_align_files`, which every site
+that clears the alignment's files calls. State assignment stays hard: the
+extras are drawn from the committed state's block alone (the dense table's
+block, the neighbourhood table's state row) and enter that state's
+half-map, and a particle never enters another state's map through the
+insertion; soft state membership is `m_estimator=flex`'s, whose state
+weight multiplies the pose weights as it multiplies the committed pose's.
+The resolution exits read differently under the insertion: the half-maps
+agree a shell earlier, since the draw's noise is averaged out of each half
+while, in solve3D's stages (`lp` set), both halves are matched against the
+same reference, so with `topk > 1` the stage resolution exit wants the
+FSC=0.5 resolution a shell past the next stage's limit and no gain over two
+iterations rather than one, and the annealing tail's stall test likewise
+two iterations without gain (`check_conv3D`, the object's history of its
+last two checks; `topk=1` keeps the single draw's rules). Unit tests: the
+selection (`test_top_posterior_extras`: `topk=1` keeps the committed entry
+alone and no random number is drawn at any `topk`, the extras are the
+eligible entries of highest weight in descending order, never the committed
+entry, the weights are the shares over the kept set, the mass rule, the
+occupancy count), the cone (`test_insert_cone`: the half-angle, the joint
+rotation-and-shift bound, a near and a far direction on a C1 spiral, the
+half-turn and the one-step in-plane, the polar pair that the direction and
+psi angles alone misjudge, the C4 seam), the table's round trip with its
+occupancy counters, the two-state assignment, the plane re-shift against a
+plane generated at the new shift (`test_fplane_shift`, with the insertion),
+and the exits' margin (`test_posterior_exits_weighted_insertion`). The
+readout: the four sets at `topk=10`, stage-3 maps and finals against the
+control, with the cone's occupancy line read beside them.
 
 ### Neighbourhood-table assignment (`ref_assign_neigh`)
 

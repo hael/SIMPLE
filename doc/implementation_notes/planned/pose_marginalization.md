@@ -2726,6 +2726,79 @@ the fresh executable. No implementation edits, Linux/BOX run, commit or
 push were performed by this review. Outstanding: correct and test the
 rotation metric; end-to-end cone handoff and scientific map validation.
 
+### 20.12 Top-K within the cone, the geodesic cone, the exits' margin (2026-10-30)
+
+A full review of the development at `topk=5` (theory, architecture, cost,
+readability; the review document is outside the repository) found the
+construction sound in its limits and well built, and four things to change.
+Hans, 2026-10-30: "happy to change to topk within the cone rather than
+sampling without replacement. That seems to be what needs to be done from
+what we are seeing in the search. Also, apply all your other suggestions."
+Built the same day, uncompiled here:
+
+- *The extras are the top `topk - 1` by posterior weight within the cone*,
+  not a sample without replacement (`top_posterior_extras`). The objection
+  to the top K ("the argmin's cousin") was made for the whole row, where the
+  choice of entries is the hypothesis; within the cone the hypothesis is
+  the committed draw's and the extras exist for variance reduction alone,
+  for which the deterministic top set omits the least mass and adds no draw
+  noise. `topk` now touches no random stream at all.
+- *The cone's rotation test is the geodesic angle of the relative rotation,
+  minimised over the point group*, with the shift folded into one rim
+  displacement bound: `(mskdiam/2) alpha + |ds| <= res`. The previous test
+  compared the direction angle and the plain psi difference separately
+  (`sym_dists`); a `phi` change at fixed `psi` is a rotation about lab z
+  whose in-plane component `dphi cos(theta)` the psi test never sees, so
+  near the poles it accepted half-turns and rejected the legitimate
+  neighbours (an emulation on a 1000-direction sphere at an 11.46-degree
+  cone: 56% of the accepted pairs beyond the bound, the worst 179.9 degrees
+  at `theta` 2.6; 812 true neighbours rejected, all polar). The harm was
+  self-limiting (a half-turn-off entry fits badly and carries no weight)
+  but the test was not the stated criterion. The new test is also cheaper:
+  the directions', the rotation grid's and the group's matrices are cached
+  once per assignment and a pair costs two 3x3 products and one 9-term dot
+  product per group element.
+- *Extras only when the committed entry is itself refined.* An unrefined
+  committed entry's distance is at the seed shift while its cone neighbours'
+  are shift-optimised, so it was weighed low by the refinement's gain (about
+  `log K` nats of noise fitting over `K` refined entries, the 2026-10-26
+  histogram) for a reason the data do not give. Such a particle now enters
+  at its committed pose alone, as under the single draw: the hot draws that
+  leave the refined set keep their exploration whole.
+- *The cone's occupancy is logged* (`PROB_TAB_INSERT`: eligible entries per
+  particle and the fraction of particles with more of them than `topk - 1`),
+  which says per iteration whether the insertion is the full average within
+  the cone or whether `topk` binds.
+- *The resolution exits get a margin under `topk > 1`.* In solve3D's stages
+  (`lp` set) both halves are matched against one merged reference, so the
+  half-map FSC was never gold standard there, and the weighted insertion
+  removes the independent draw noise that lowered it honestly: the halves
+  agree a shell earlier (the PfCRT stage-3 exit at its second iteration,
+  12.937 against 12.938 A). With `topk > 1` the stage resolution exit wants
+  the FSC=0.5 resolution a shell past the next stage's limit and no gain
+  over two iterations, and the tail's stall test two iterations without
+  gain; the object keeps the resolutions of its last two checks for the
+  second comparison. `topk=1` keeps the single draw's rules.
+- *The extras are computed in a parallel pass after the serial draws* (they
+  no longer touch the stream), each thread on its own eligibility mask, the
+  table filled in particle order; the dense master builds its direction
+  space only when `topk > 1`; a missing extras table under `topk > 1` is an
+  error on the worker rather than a silent single draw; the policy, the
+  type comment and the UI string no longer claim that the cone smears
+  nothing (it is the hypothesis scale; the blur within it is the weights').
+  The name `topk` stays: with the top set it says what it does.
+
+Not changed: the cone's scale `2 res / mskdiam`. The Crowther spacing
+`res / mskdiam` (half the opening, about a quarter of the directions, the
+nearest neighbours only at a stage entry) was offered as an experiment;
+Hans, 2026-10-30: "I think the cone is good as it is", so the scale stands
+and the experiment is closed. The PCG warning stays where it is.
+
+Readout: the four sets at `topk=10` as before, stage-3 maps and finals
+against the control, with the occupancy line and the exits' new timing read
+beside them; then `topk=5`, which the occupancy line will say is or is not
+the full average within the cone at each stage.
+
 ## 21. Rulings of 2026-10-26, and the calibration on real data
 
 ### 21.1 Rulings
