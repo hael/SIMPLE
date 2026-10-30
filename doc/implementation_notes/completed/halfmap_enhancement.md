@@ -1,8 +1,8 @@
-# Half-map local Wiener sharpening
+# Half-map local enhancement
 
 ## Contract
 
-`simple_exec prg=sharpen` consumes two independent, unprocessed 3D
+`simple_exec prg=enhance` consumes two independent, unprocessed 3D
 half-maps on the same grid and writes four interpretation-only maps:
 
 - the enhanced merged map requested by `outvol`;
@@ -56,7 +56,7 @@ the enhanced-map correlation with the truth increased from 0.3897 to 0.8062.
 - `python3 scripts/check_flex_dag.py . --verbose`: passed.
 - `git diff --check`: passed.
 - Incremental Release build: passed.
-- `simple_test_exec test=unit_reconstruction suite=half_map_sharpening`:
+- `simple_test_exec test=unit_reconstruction suite=half_map_enhancement`:
   17/17 assertions passed, including correlated-background regression.
 - `simple_test_exec test=unit_ui suite=ui_visibility`: 357/357 assertions
   passed.

@@ -185,7 +185,7 @@ contains
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, &
             &trailing_chain_identity, refine3d_provenance, frozen_accumulator, weighted_insertion, volume_pair_metrics, &
-            &nonuniform_filtering, half_map_sharpening, solve3d_cavgs_stage_rules, state_assignment_rules, atomic_prior, pcg_lattice, &
+            &nonuniform_filtering, half_map_enhancement, solve3d_cavgs_stage_rules, state_assignment_rules, atomic_prior, pcg_lattice, &
             &wave_field, wave_imaging, wave_multislice, wave_projector, wave_simulation)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_unit_reconstruction
@@ -199,7 +199,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, sharpen_pdb, fractional_reconstruction, wave_reconstruction)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, postprocess_pdb, fractional_reconstruction, wave_reconstruction)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 

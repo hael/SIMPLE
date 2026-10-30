@@ -28,10 +28,10 @@ type, extends(commander_base) :: commander_postprocess
    procedure :: execute      => exec_postprocess
 end type commander_postprocess
 
-type, extends(commander_base) :: commander_sharpen_pdb
+type, extends(commander_base) :: commander_postprocess_pdb
   contains
-    procedure :: execute      => exec_sharpen_pdb
-end type commander_sharpen_pdb
+    procedure :: execute      => exec_postprocess_pdb
+end type commander_postprocess_pdb
 
 type, extends(commander_base) :: commander_symaxis_search
   contains
@@ -153,13 +153,13 @@ contains
         call simple_end('**** SIMPLE_CENTER NORMAL STOP ****')
     end subroutine exec_centervol
 
-    ! PDB-assisted sharpening protocol for raw volumes using even/odd volume pairs
-    subroutine exec_sharpen_pdb( self, cline )
+    ! PDB-envelope postprocessing for raw volumes with even/odd volume pairs
+    subroutine exec_postprocess_pdb( self, cline )
         use simple_imghead,      only: find_img_smpd
         use simple_atoms,        only: atoms
         use simple_segmentation, only: otsu_img
-        class(commander_sharpen_pdb), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+        class(commander_postprocess_pdb), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
         real,             allocatable :: fsc(:), optlp(:), res(:)
         type(string)          :: fname_vol, fname_even, fname_odd, fname_pdb, fname_pdb_docked
         type(string)          :: fname_pproc, fname_lp, fname_mirr, pdbout_fname, fname_fsc
@@ -203,14 +203,14 @@ contains
         call vol_bfac%new(ldim, params%smpd)
         call vol_bfac%read(fname_vol)
         call find_ldim_nptcls(fname_even, ldim_half, ifoo)
-        if( any(ldim_half /= ldim) ) THROW_HARD('Even half-map dimensions differ from the input map; exec_sharpen_pdb')
+        if( any(ldim_half /= ldim) ) THROW_HARD('Even half-map dimensions differ from the input map; exec_postprocess_pdb')
         call find_ldim_nptcls(fname_odd, ldim_half, ifoo)
-        if( any(ldim_half /= ldim) ) THROW_HARD('Odd half-map dimensions differ from the input map; exec_sharpen_pdb')
+        if( any(ldim_half /= ldim) ) THROW_HARD('Odd half-map dimensions differ from the input map; exec_postprocess_pdb')
         if( abs(find_img_smpd(fname_even) - params%smpd) > 1.e-3 )then
-            THROW_HARD('Even half-map sampling differs from the input map; exec_sharpen_pdb')
+            THROW_HARD('Even half-map sampling differs from the input map; exec_postprocess_pdb')
         endif
         if( abs(find_img_smpd(fname_odd) - params%smpd) > 1.e-3 )then
-            THROW_HARD('Odd half-map sampling differs from the input map; exec_sharpen_pdb')
+            THROW_HARD('Odd half-map sampling differs from the input map; exec_postprocess_pdb')
         endif
         call vol_even%new(ldim, params%smpd)
         call vol_odd%new(ldim, params%smpd)
@@ -297,8 +297,8 @@ contains
         call cos_img%kill
         call vol_pdbin%kill_bimg
         call vol_no_bfac%kill
-        call simple_end('**** SIMPLE_SHARPEN_PDB NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_sharpen_pdb
+        call simple_end('**** SIMPLE_POSTPROCESS_PDB NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_postprocess_pdb
 
     !> Isotropic postprocess: cutoff = FSC=0.143 (FSC file, else the _unfil pair); Guinier B (lp < 5 A) from
     !! the _unfil pair average, capped at the cutoff shell; sqrt(2FSC/(1+FSC)) unless provenance says ML-shrunk;

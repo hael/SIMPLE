@@ -605,25 +605,25 @@ contains
     end subroutine exec_model_validate
 
     subroutine exec_model_validate_eo( self, cline )
-        use simple_commanders_volops, only: commander_sharpen_pdb
+        use simple_commanders_volops, only: commander_postprocess_pdb
         class(commander_model_validate_eo), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(commander_sharpen_pdb) :: xsharpen_pdb
-        type(cmdline)    :: cline_sharpen_pdb1, cline_sharpen_pdb2
+        type(commander_postprocess_pdb) :: xpostprocess_pdb
+        type(cmdline)    :: cline_postprocess_pdb1, cline_postprocess_pdb2
         type(parameters) :: params
         type(atoms)      :: molecule
         call params%new(cline)
-        ! sharpening even/odd volume pairs prior to comparison
-        call cline_sharpen_pdb1%set('vol1', params%vols(2))
-        call cline_sharpen_pdb1%set('pdbfile', params%pdbfile)
-        call cline_sharpen_pdb1%set('smpd', params%pdbfile)
-        call cline_sharpen_pdb1%set('nthr', params%nthr)
-        call xsharpen_pdb%execute(cline_sharpen_pdb1)
-        call cline_sharpen_pdb2%set('vol1', params%vols(3))
-        call cline_sharpen_pdb2%set('pdbfile', params%pdbfile)
-        call cline_sharpen_pdb2%set('smpd', params%pdbfile)
-        call cline_sharpen_pdb2%set('nthr', params%nthr)
-        call xsharpen_pdb%execute(cline_sharpen_pdb2)
+        ! postprocess even/odd volume pairs prior to comparison
+        call cline_postprocess_pdb1%set('vol1', params%vols(2))
+        call cline_postprocess_pdb1%set('pdbfile', params%pdbfile)
+        call cline_postprocess_pdb1%set('smpd', params%pdbfile)
+        call cline_postprocess_pdb1%set('nthr', params%nthr)
+        call xpostprocess_pdb%execute(cline_postprocess_pdb1)
+        call cline_postprocess_pdb2%set('vol1', params%vols(3))
+        call cline_postprocess_pdb2%set('pdbfile', params%pdbfile)
+        call cline_postprocess_pdb2%set('smpd', params%pdbfile)
+        call cline_postprocess_pdb2%set('nthr', params%nthr)
+        call xpostprocess_pdb%execute(cline_postprocess_pdb2)
         params%vols(2) =  basename(add2fbody(params%vols(2), params%ext, PPROC_SUFFIX))
         params%vols(3) =  basename(add2fbody(params%vols(3), params%ext, PPROC_SUFFIX))
         call molecule%new(params%pdbfile)

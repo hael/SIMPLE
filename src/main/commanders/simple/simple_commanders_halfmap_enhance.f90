@@ -1,5 +1,5 @@
-!@descr: standalone commander for model-free local Wiener sharpening of independent half-maps
-module simple_commanders_halfmap_sharpen
+!@descr: standalone commander for model-free local enhancement of independent half-maps
+module simple_commanders_halfmap_enhance
 use simple_defs,             only: logfhandle
 use simple_commander_base,   only: commander_base
 use simple_cmdline,          only: cmdline
@@ -15,18 +15,18 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: commander_sharpen
+public :: commander_enhance
 
-type, extends(commander_base) :: commander_sharpen
+type, extends(commander_base) :: commander_enhance
   contains
-    procedure :: execute => exec_sharpen
-end type commander_sharpen
+    procedure :: execute => exec_enhance
+end type commander_enhance
 
 contains
 
-    subroutine exec_sharpen( self, cline )
-        class(commander_sharpen), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+    subroutine exec_enhance( self, cline )
+        class(commander_enhance), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(image) :: even, odd, enhanced, confidence, local_resolution, envelope
         type(halfmap_enhancer) :: enhancer
@@ -39,17 +39,17 @@ contains
         call params%new(cline)
         call find_ldim_nptcls(params%vol_even, ldim_even, nsections)
         call find_ldim_nptcls(params%vol_odd,  ldim_odd,  nsections)
-        if( any(ldim_even /= ldim_odd) ) THROW_HARD('half-map dimensions differ; sharpen')
-        if( ldim_even(3) < 2 ) THROW_HARD('sharpen requires 3D volumes')
+        if( any(ldim_even /= ldim_odd) ) THROW_HARD('half-map dimensions differ; enhance')
+        if( ldim_even(3) < 2 ) THROW_HARD('enhance requires 3D volumes')
         smpd_even = find_img_smpd(params%vol_even)
         smpd_odd  = find_img_smpd(params%vol_odd)
         if( smpd_override )then
             smpd = params%smpd
         else
             if( smpd_even <= 0. .or. smpd_odd <= 0. ) &
-                &THROW_HARD('half-map headers lack sampling; provide smpd; sharpen')
+                &THROW_HARD('half-map headers lack sampling; provide smpd; enhance')
             if( abs(smpd_even - smpd_odd) > 1.e-3 ) &
-                &THROW_HARD('half-map sampling distances differ; sharpen')
+                &THROW_HARD('half-map sampling distances differ; enhance')
             smpd = smpd_even
         endif
         call even%new(ldim_even, smpd)
@@ -60,7 +60,7 @@ contains
         call enhancer%enhance(even, odd, enhanced, confidence, local_resolution, envelope)
         call enhancer%get_noise_stats(noise_mean, noise_sdev)
         ext = fname2ext(params%outvol)
-        if( ext .eq. '' ) THROW_HARD('outvol needs an image-file extension; sharpen')
+        if( ext .eq. '' ) THROW_HARD('outvol needs an image-file extension; enhance')
         ext = '.'//ext%to_char()
         confidence_file = add2fbody(params%outvol, ext, '_confidence')
         locres_file     = add2fbody(params%outvol, ext, '_locres')
@@ -73,7 +73,7 @@ contains
         call wait_for_closure(confidence_file)
         call wait_for_closure(locres_file)
         call wait_for_closure(envelope_file)
-        write(logfhandle,'(A,I0,A,I0,A,F7.3)') '>>> HALF-MAP SHARPENING: box ', ldim_even(1), &
+        write(logfhandle,'(A,I0,A,I0,A,F7.3)') '>>> HALF-MAP ENHANCEMENT: box ', ldim_even(1), &
             &', local window ', enhancer%get_window(), ', smpd ', smpd
         write(logfhandle,'(A,ES12.4,A,ES12.4)') '>>> OUTER-SHELL NOISE: mean ', noise_mean, ', merged-map sdev ', noise_sdev
         write(logfhandle,'(A)') '>>> ENHANCED MAP: '//params%outvol%to_char()
@@ -92,7 +92,7 @@ contains
         call confidence_file%kill()
         call locres_file%kill()
         call envelope_file%kill()
-        call simple_end('**** SIMPLE_SHARPEN NORMAL STOP ****')
-    end subroutine exec_sharpen
+        call simple_end('**** SIMPLE_ENHANCE NORMAL STOP ****')
+    end subroutine exec_enhance
 
-end module simple_commanders_halfmap_sharpen
+end module simple_commanders_halfmap_enhance

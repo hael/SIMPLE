@@ -1,7 +1,7 @@
 !@descr: execution of volume manipulation commanders
 module simple_exec_volume
 use simple_cmdline,           only: cmdline
-use simple_commanders_volops,    only: commander_centervol, commander_volops, commander_sharpen_pdb
+use simple_commanders_volops,    only: commander_centervol, commander_volops
 use simple_commanders_reproject, only: commander_reproject
 use simple_commanders_atoms,     only: commander_detect_calpha
 implicit none
@@ -13,7 +13,6 @@ type(commander_centervol)         :: xcenter
 type(commander_detect_calpha)     :: xdetect_calpha
 type(commander_reproject)         :: xreproject
 type(commander_volops)            :: xvolops
-type(commander_sharpen_pdb)       :: xsharpen_pdb
 
 contains
 
@@ -32,8 +31,6 @@ contains
                 call xdetect_calpha%execute(cline)
             case( 'reproject' )
                 call xreproject%execute(cline)
-            case( 'sharpen_pdb' )
-                call xsharpen_pdb%execute(cline)
             case( 'volops' )
                 call xvolops%execute(cline)
             case default

@@ -7,7 +7,8 @@ type(category_descriptor), parameter :: UI_CATEGORY = &
     category_descriptor('postprocess', 'Post-processing', 69)
 type(ui_program), target :: postprocess
 type(ui_program), target :: postprocess_nu
-type(ui_program), target :: sharpen
+type(ui_program), target :: postprocess_pdb
+type(ui_program), target :: enhance
 
 contains
 
@@ -15,7 +16,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_postprocess(prgtab)
         call new_postprocess_nu(prgtab)
-        call new_sharpen(prgtab)
+        call new_postprocess_pdb(prgtab)
+        call new_enhance(prgtab)
     end subroutine construct_postprocess_programs
 
     subroutine new_postprocess( prgtab )
@@ -101,31 +103,68 @@ contains
         call add_ui_program('postprocess_nu', postprocess_nu, prgtab, UI_CATEGORY)
     end subroutine new_postprocess_nu
 
-    subroutine new_sharpen( prgtab )
+    subroutine new_enhance( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call sharpen%new(&
-        &'sharpen',&
-        &'Enhance unprocessed half-maps with local Wiener sharpening',&
+        call enhance%new(&
+        &'enhance',&
+        &'Enhance unprocessed half-maps with local agreement filtering and bounded sharpening',&
         &'is a deterministic, model-free half-map postprocessor. It estimates outer-shell noise and a conservative '//&
         &'molecular envelope, derives local FSC support in overlapping tapered windows, applies FSC-derived Wiener '//&
         &'suppression and bounded local Guinier sharpening, and overlap-adds the windows. It writes outvol plus '//&
         &'matching _confidence, _locres and _envelope maps. All outputs are interpretation products; only the input '//&
         &'half-maps retain resolution authority',&
         &'simple_exec',&
-        &.false., visibility=UI_VIS_STANDARD, display_name='Sharpen Half-maps')
-        call sharpen%add_input(UI_IMG, 'vol_even', 'file', 'Even half-map', &
+        &.false., visibility=UI_VIS_STANDARD, display_name='Enhance Half-maps')
+        call enhance%add_input(UI_IMG, 'vol_even', 'file', 'Even half-map', &
             &'Unprocessed even half-map with independent noise', 'even_half.mrc file', .true., '', &
             &visibility=UI_VIS_STANDARD)
-        call sharpen%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half-map', &
+        call enhance%add_input(UI_IMG, 'vol_odd', 'file', 'Odd half-map', &
             &'Unprocessed odd half-map with independent noise', 'odd_half.mrc file', .true., '', &
             &visibility=UI_VIS_STANDARD)
-        call sharpen%add_input(UI_IMG, outvol, required_override=.true., &
+        call enhance%add_input(UI_IMG, outvol, required_override=.true., &
             &visibility=UI_VIS_STANDARD)
-        call sharpen%add_input(UI_PARM, smpd, required_override=.false., &
+        call enhance%add_input(UI_PARM, smpd, required_override=.false., &
             &visibility=UI_VIS_ADVANCED)
-        call sharpen%add_input(UI_COMP, nthr, &
+        call enhance%add_input(UI_COMP, nthr, &
             &visibility=UI_VIS_STANDARD)
-        call add_ui_program('sharpen', sharpen, prgtab, UI_CATEGORY)
-    end subroutine new_sharpen
+        call add_ui_program('enhance', enhance, prgtab, UI_CATEGORY)
+    end subroutine new_enhance
+
+    subroutine new_postprocess_pdb( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call postprocess_pdb%new(&
+        &'postprocess_pdb',&
+        &'Post-process a density map inside a docked atomic-model envelope',&
+        &'docks PDB-derived density to the input map over 100-20 Angstroms, builds a soft envelope with a '//&
+        &'six-pixel cosine edge, and applies half-map FSC weighting, low-pass filtering and global B-factor '//&
+        &'sharpening. Requires matching <map>_even and <map>_odd half-maps beside the input volume. Their unmasked '//&
+        &'FSC determines the filter and FSC=0.143 cutoff. Writes <map>_lp, <map>_pproc, the simulated and docked '//&
+        &'model densities, and a binary FSC curve.',&
+        &'simple_exec',&
+        &.false., visibility=UI_VIS_STANDARD, display_name='Post-process with Atomic-Model Envelope')
+        call postprocess_pdb%add_input(UI_IMG, 'vol1', 'file', 'Volume', &
+        &'Input density map with matching _even and _odd half-maps in the same directory', &
+        &'e.g. map.mrc', .true., '', visibility=UI_VIS_STANDARD)
+        call postprocess_pdb%add_input(UI_FILE, 'pdbfile', 'file', 'Atomic model', &
+        &'PDB coordinates used to generate and dock the masking envelope', &
+        &'e.g. model.pdb', .true., '', visibility=UI_VIS_STANDARD)
+        call postprocess_pdb%add_input(UI_PARM, smpd, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call postprocess_pdb%add_input(UI_PARM, center_pdb, visibility=UI_VIS_ADVANCED)
+        call postprocess_pdb%add_input(UI_FILE, 'fsc', 'file', 'FSC output', &
+        &'Output binary FSC curve, recalculated from the half-maps; overwrites this path when supplied. '//&
+        &'Otherwise writes <map>_fsc.bin in the execution directory', &
+        &'e.g. map_fsc.bin', .false., '', visibility=UI_VIS_ADVANCED)
+        call postprocess_pdb%add_input(UI_FILT, bfac, &
+        &help_override='B-factor in Angstroms^2; when omitted, estimated by a Guinier fit if the FSC cutoff is '//&
+        &'better than 5 Angstroms, otherwise zero', visibility=UI_VIS_ADVANCED)
+        call postprocess_pdb%add_input(UI_PARM, mirr, &
+        &help_override='Write an additional x-mirrored postprocessed map; mirr=no disables this output', &
+        &visibility=UI_VIS_ADVANCED)
+        call postprocess_pdb%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call postprocess_pdb%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call add_ui_program('postprocess_pdb', postprocess_pdb, prgtab, UI_CATEGORY)
+    end subroutine new_postprocess_pdb
 
 end module simple_ui_postprocess

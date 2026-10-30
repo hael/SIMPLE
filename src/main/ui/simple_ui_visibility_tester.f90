@@ -214,12 +214,12 @@ contains
         call assert_int(3, count_prgs_in_category('reconstruct3d'), 'reconstruct3d program count')
         call assert_registered_category('postprocess', 'postprocess', 'Post-processing', 69)
         call assert_registered_category('postprocess_nu', 'postprocess', 'Post-processing', 69)
-        call assert_registered_category('sharpen', 'postprocess', 'Post-processing', 69)
-        call assert_registered_required_keys('sharpen', &
+        call assert_registered_category('enhance', 'postprocess', 'Post-processing', 69)
+        call assert_registered_required_keys('enhance', &
             &[character(len=15) :: 'vol_even', 'vol_odd', 'outvol', 'nthr'])
-        call assert_int(3, count_prgs_in_category('postprocess'), 'postprocess program count')
-        call assert_registered_category('sharpen_pdb', 'volume', 'Volume Processing', 180)
-        call assert_registered_required_keys('sharpen_pdb', [character(len=7) :: 'vol1', 'pdbfile', 'nthr'])
+        call assert_registered_category('postprocess_pdb', 'postprocess', 'Post-processing', 69)
+        call assert_registered_required_keys('postprocess_pdb', [character(len=7) :: 'vol1', 'pdbfile', 'nthr'])
+        call assert_int(4, count_prgs_in_category('postprocess'), 'postprocess program count')
         call assert_registered_category('automask', 'mask', 'Masking', 100)
         call assert_registered_category('cls_expansion', 'refine2d', 'Refine 2D Workflows', 30)
         call assert_registered_category('reimport_particles', 'project', 'Project Management', 10)
