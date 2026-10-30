@@ -2799,6 +2799,64 @@ against the control, with the occupancy line and the exits' new timing read
 beside them; then `topk=5`, which the occupancy line will say is or is not
 the full average within the cone at each stage.
 
+### 20.13 The `topk=5` readout and the stage entries' cone (2026-10-30)
+
+**Hans: at `topk=5` the current code works as well as it ever has on
+exp_gate, streptavidin and PfCRT; PorF is the outlier, a mix of very good
+and very poor reconstructions** (logs in
+`~/for_claude/topk_tests/topk5_latest/PorF`: R1, R3, R4, R7 at 4.73-4.80 A,
+R2, R5, R6 at 5.5, 5.2 and 6.8 A, R8 unfinished; the control of 20.2 is
+ten of ten at 4.5-4.9 with one weaker at 6.6).
+
+The split is decided in stage 3 and visible in the map, not in the search:
+every restart has the same pose statistics through the stage (overlap
+0.59-0.63 and row-mode fraction 0.72-0.74 at its end, the control's
+values), but the good ones end the stage with FSC 0.5 at 11.56 A and FSC
+0.143 at 8.7-9.5 while the poor ones sit a shell behind, 12.0 and
+10.1-10.4, and the later stages never close the gap (stage 5 ends at
+6.9-7.8 against 5.0-5.1). The control shows the same marker: its two
+restarts that ended stage 3 at 12.0 A gave its weak final (R2, 6.6 A) and
+its one late recovery (R3, 10.8 at the stage's end, 4.6 A final). So the
+weighted insertion has made the stage-3 miss a little more frequent (three
+of seven against two of ten) and taken away the recovery (none of three
+against one of two). Where it acts is the stage entries. The cone is
+measured from the FSC on disk, which at a stage's first iteration is the
+previous band's and coarse: PorF enters stage 3 with FSC 0.5 at 22.3 A for
+a 12 A search, a cone of 15 degrees and 17 pixels, and the occupancy line
+says what that admits: 5.65 eligible entries per particle, 72% of the
+particles above the cap, 3.1 insertions per particle, the committed pose at
+0.38 of its particle. That is the top of the row's posterior within two
+rings and a particle diameter of shift, the near-full expectation of the
+`topk=10` readout, at the one moment the hot draw is supposed to carry the
+map; two iterations later the FSC has caught up with the band (12 A, a cone
+of 8 degrees), the committed pose holds 0.85-0.95 and the extras are the
+first ring. The same happens at every later entry (stage 5: 2.0-2.1
+insertions, committed 0.60-0.64; stages 7 and 8: 1.9-2.0, 0.63-0.68), which
+is where the control's recovery lived. The good restarts, meanwhile, are
+ahead of the control from the stage's third iteration (FSC 0.143 at 9.75
+and 10.07 against 10.8-11.6): the insertion pays when the hypothesis is
+right and costs when it is not, and the entry is where it is least likely
+to be right.
+
+**Built (uncompiled): the cone is the finer of the FSC=0.5 resolution and
+the matching low-pass limit**, `min(res05, lp)` in `insert_cone_from_fsc`
+(logged as such). A stage's search cannot leave poses undecided at a scale
+coarser than its own matching limit, so the cone never exceeds it: PorF's
+stage 3 enters at 12 A instead of 22 (8 degrees and 9 pixels: the first
+ring at the same shift, 1-2 eligible entries), stage 5 at 10.1 instead of
+10.8, stage 8 at 4.5 instead of 7.6 (3 degrees and 3.5 pixels at a 3.2
+degree grid, which switches the insertion nearly off in the last stage; at
+`topk=5` the finals are as the control's, so nothing visible is lost
+there). Within a stage, once the FSC has caught up with the band, nothing
+changes. On the distributed master `params%lp` is the stage's limit as
+solve3D sets it; a run without one (`lp` 0) keeps the FSC cone alone. The
+alternative, the FSC=0.143 resolution in place of 0.5 (12.5-13.6 A at
+PorF's stage-3 entry, 4.7-4.9 at stage 8's), tightens the cone everywhere
+by a third rather than at the entries only; the low-pass bound was chosen
+because the diagnosis points at the entries. The readout: PorF ten
+restarts at `topk=5`, stage-3 end FSC 0.5 (11.56 against 12.0) and the
+finals, against the ten of the control; then the other three sets.
+
 ## 21. Rulings of 2026-10-26, and the calibration on real data
 
 ### 21.1 Rulings

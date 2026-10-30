@@ -17,11 +17,17 @@ public :: write_prob_align_bench
 contains
 
     !> The weighted insertion's cone, from each state's FSC on disk (the previous iteration's half-maps, or the
-    !! previous stage's at a stage's first iteration): the FSC=0.5 resolution bounds the rim displacement, over the
-    !! mask's radius, of the rotation and shift between an extra pose and the committed one (prob_insert_cone). A
-    !! state without an FSC gets no cone, so its particles enter at their committed pose alone. The resolution per
-    !! shell is the box's physical size over the shell index, the same at every crop, so the FSC of a previous crop
-    !! reads correctly against the uncropped grid. Logged per state
+    !! previous stage's at a stage's first iteration): the finer of the FSC=0.5 resolution and the matching low-pass
+    !! limit bounds the rim displacement, over the mask's radius, of the rotation and shift between an extra pose and
+    !! the committed one (prob_insert_cone). The low-pass bound is for the stage entries: there the FSC is the
+    !! previous band's and coarse (PorF stage 3 enters at 22 A for a 12 A search), and a cone that wide holds most of
+    !! the refined set, so the first iterations of the stage, where the search re-derives the poses from a hot entry,
+    !! inserted the top of the row's posterior rather than the draw (three of seven PorF restarts ended stage 3 a
+    !! shell behind and never recovered, 2026-10-30); the search cannot leave poses undecided at a scale coarser than
+    !! its own matching limit, so the cone never exceeds it. A state without an FSC gets no cone, so its particles
+    !! enter at their committed pose alone. The resolution per shell is the box's physical size over the shell index,
+    !! the same at every crop, so the FSC of a previous crop reads correctly against the uncropped grid. Logged per
+    !! state
     function insert_cone_from_fsc( params ) result( cone )
         use simple_refine3D_fnames,    only: refine3D_fsc_fname
         use simple_eul_prob_tab_utils, only: prob_insert_cone
@@ -40,13 +46,15 @@ contains
             if( size(fsc) < 1 .or. size(fsc) > size(res) ) cycle
             call get_resolution(fsc, res(:size(fsc)), fsc05, fsc0143)
             res05(s) = fsc05
+            if( params%lp > 0. ) res05(s) = min(res05(s), params%lp)
             deallocate(fsc)
         enddo
         call cone%new(res05, params%mskdiam, params%smpd)
         do s = 1,params%nstates
             if( cone%get_angle(s) < 0. ) cycle
-            write(logfhandle,'(A,I0,A,F7.2,A,F6.2,A,F5.2,A)') '>>> PROB_TAB_INSERT CONE: state ', s, ', FSC=0.5 at ', &
-                &res05(s), ' A: a rim displacement of at most that about the committed pose (half-angle ', &
+            write(logfhandle,'(A,I0,A,F7.2,A,F6.2,A,F5.2,A)') '>>> PROB_TAB_INSERT CONE: state ', s, &
+                &', the finer of FSC=0.5 and the matching low-pass limit at ', res05(s), &
+                &' A: a rim displacement of at most that about the committed pose (half-angle ', &
                 &cone%get_angle(s), ' degrees at equal shifts, ', res05(s) / params%smpd, ' pixels at equal rotations)'
         enddo
         call fname%kill

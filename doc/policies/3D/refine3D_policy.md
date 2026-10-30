@@ -602,16 +602,23 @@ single draw). The cone: a pose is within it when the angle of the rotation
 between the two poses, the smallest over the point group's equivalents of
 the candidate (the geodesic angle of `R_c^T R_r R_g`), times the mask's
 radius, plus the distance between the two stored-frame shifts, is at most
-the state map's FSC=0.5 resolution: a rotation by `alpha` moves a point of
-the rim by at most `r alpha`, a shift moves every point by its length, so
-the particle averaged over such poses is displaced by no more than the map
-resolves (a heuristic scale, not a no-blur guarantee: at the cone's edge
-the displacement is a full period of the resolution's frequency, and the
-blur within the cone is whatever the weights at the particle's own
-temperature put there, which is the data's pose uncertainty when the
-temperature is calibrated). The master reads each state's FSC on disk
-before the assignment (`insert_cone_from_fsc`, logged as `PROB_TAB_INSERT
-CONE`; no FSC, no cone, the committed pose alone), and the table sets the
+the finer of the state map's FSC=0.5 resolution and the matching low-pass
+limit: a rotation by `alpha` moves a point of the rim by at most `r alpha`,
+a shift moves every point by its length, so the particle averaged over such
+poses is displaced by no more than the map resolves (a heuristic scale, not
+a no-blur guarantee: at the cone's edge the displacement is a full period
+of the resolution's frequency, and the blur within the cone is whatever the
+weights at the particle's own temperature put there, which is the data's
+pose uncertainty when the temperature is calibrated). The low-pass bound
+holds the cone at a stage's entry, where the FSC on disk is the previous
+band's and coarse (PorF enters stage 3 at 22 A for a 12 A search; a cone
+that wide admitted most of the refined set and the first iterations of the
+stage inserted the top of the row's posterior rather than the hot draw,
+three of seven restarts ending the stage a shell behind, 2026-10-30): the
+search cannot leave poses undecided at a scale coarser than its own
+matching limit. The master reads each state's FSC on disk before the
+assignment (`insert_cone_from_fsc`, logged as `PROB_TAB_INSERT CONE`; no
+FSC, no cone, the committed pose alone), and the table sets the
 cone's geometry at the assignment from the direction space, the point group
 and its rotation grid as rotation matrices (`set_space`; the dense master,
 whose general toolbox has no 3D part, builds the direction space itself,
