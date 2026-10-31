@@ -73,7 +73,7 @@ contains
         type(string) :: fbody, fbody_split, fname_recvol, fname_even, fname_odd, fname_simvol
         type(string) :: fname_recvol_base, fname_even_base, fname_odd_base, fname_res, fname_atmprior
         type(string) :: fname_atoms, fname_binary, fname_ccs, fname_reprojs, fname_reprojs_fit
-        type(string) :: fname_fit, fname_resmap, fname_atoms_csv, fname_model_txt, fname_extrema
+        type(string) :: fname_fit, fname_resmap, fname_atoms_csv, fname_model_txt, fname_extrema, fname_transfer
         type(string) :: fname_cvags_vs_reprojs, fname_atoms_iter
         integer      :: i, iter, cnt, cnt2, funit, io_stat, ncavgs
         real         :: smpd
@@ -98,6 +98,7 @@ contains
         fname_atoms_csv = fbody//'_atoms.csv'
         fname_model_txt = fbody//'_model.txt'
         fname_extrema   = fbody//'_resid_extrema.csv'
+        fname_transfer  = fbody//'_transfer.tsv'
         ! the loop is agnostic to the atomic species: every round's model is the density model of detect_atoms (every
         ! atom with its own intensity and width, no element), and species are called afterwards on the final model
         if( cline%defined('element') .or. cline%defined('nspecies') .or. cline%defined('min_nbrs') .or.&
@@ -342,6 +343,7 @@ contains
             call simple_copy_file(base_stem//'_atoms.csv',         fname_atoms_csv)
             call simple_copy_file(base_stem//'_model.txt',         fname_model_txt)
             call simple_copy_file(base_stem//'_resid_extrema.csv', fname_extrema)
+            call simple_copy_file(base_stem//'_transfer.tsv',      fname_transfer)
             call del_file(base_stem//'_SIM.mrc')
             call del_file(base_stem//'_ATMS.pdb')
             call del_file(base_stem//'_BIN.mrc')
@@ -351,6 +353,7 @@ contains
             call del_file(base_stem//'_atoms.csv')
             call del_file(base_stem//'_model.txt')
             call del_file(base_stem//'_resid_extrema.csv')
+            call del_file(base_stem//'_transfer.tsv')
             call base_stem%kill
         end subroutine normalize_detection_products
 
@@ -378,6 +381,7 @@ contains
             call simple_copy_file(fname_atoms_csv, stem//'_atoms.csv')
             call simple_copy_file(fname_model_txt, stem//'_model.txt')
             call simple_copy_file(fname_extrema,   stem//'_resid_extrema.csv')
+            call simple_copy_file(fname_transfer,  stem//'_transfer.tsv')
             call stem%kill
         end subroutine copy_model_products
 
@@ -387,6 +391,7 @@ contains
             call del_file(fname_atoms_csv)
             call del_file(fname_model_txt)
             call del_file(fname_extrema)
+            call del_file(fname_transfer)
         end subroutine delete_model_products
 
     end subroutine exec_autorefine3D_nano

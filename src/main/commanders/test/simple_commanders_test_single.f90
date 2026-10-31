@@ -1963,6 +1963,9 @@ subroutine exec_test_single_workflow( self, cline )
             &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//'_atmprior.txt')
         if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: atomic-loop sidecar is missing')
     endif
+    atomic_product = filepath(filepath(autorefine_dir, 'final_results'), &
+        &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//'_transfer.tsv')
+    if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the transfer table is missing')
     call validate_reconstructed_volume(simulated_vol, final_volume, params%smpd, BOX, 0.001, real(MOLDIAM), &
         &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, 'autorefine3D_nano', volume_corr, volume_fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)

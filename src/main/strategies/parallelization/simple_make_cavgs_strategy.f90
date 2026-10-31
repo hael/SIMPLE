@@ -211,7 +211,8 @@ contains
                 THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
             endif
             call build%spproj_field%ini_tseries(params%ncls, 'class')
-            call build%spproj_field%partition_eo
+            ! existing halves are kept: after a prune the row parity no longer matches them, nor ptcl3D's
+            if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         else if( params%proj_is_class .eq. 'yes' )then
             call build%spproj_field%proj2class
         endif
