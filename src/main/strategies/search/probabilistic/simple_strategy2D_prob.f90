@@ -2,6 +2,7 @@
 module simple_strategy2D_prob
 use simple_pftc_srch_api
 use simple_eul_prob_tab_utils, only: eulprob_corr_switch
+use simple_pftc_shsrch_grad,   only: shift_ref2ptcl
 use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
@@ -56,7 +57,20 @@ contains
                 self%s%best_shvec = [self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%x, &
                                   self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%y]
             endif
-            call self%s%refine_selected_continuously
+            if( self%s%p_ptr%l_shift_map )then
+                ! the map's draw is the pose and is not polished: the cell's shift (the optimizer's frame at the drawn
+                ! rotation) becomes the particle-frame increment, the objective at the pose its score; the row's
+                ! distance is the class's evidence, not this pose's loss
+                if( self%s%p_ptr%l_doshift .and. self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%has_sh )then
+                    corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(icls, self%s%iptcl, real(self%s%best_shvec, dp), inpl))
+                    self%s%best_shvec = shift_ref2ptcl(self%s%best_shvec, self%s%b_ptr%pftc%get_rot(inpl))
+                else
+                    corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(icls, self%s%iptcl, [0.d0, 0.d0], inpl))
+                endif
+                self%s%best_corr = corr
+            else
+                call self%s%refine_selected_continuously
+            endif
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)
             call os%set(self%s%iptcl, 'frac', frac)

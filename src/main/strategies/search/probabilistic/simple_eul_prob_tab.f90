@@ -13,7 +13,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
-use simple_polarft_calc,       only: SHERRSQ
+use simple_polarft_calc,       only: SHERRSQ, SHIFTMAP_FULL, SHIFTMAP_SCREEN
 implicit none
 
 public :: eul_prob_tab
@@ -267,6 +267,10 @@ contains
         integer(int64) :: rank_ithr(0:11,nthr_glob)  !< per thread: the refined argmin's unrefined rank (bench, prob_fill_profile%rank_counts)
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
         integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
+        integer(int64) :: nmaps_thr(nthr_glob), nscreens_thr(nthr_glob)
+        real(dp)       :: prior_w
+        integer        :: kscreen, npool
+        logical        :: l_map
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
             THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_range')
         endif
@@ -282,6 +286,12 @@ contains
         ! seeded single-state table
         l_grid          = self%p_ptr%nstates > 1
         seed_builds     = 0_int64
+        nmaps_thr       = 0_int64
+        nscreens_thr    = 0_int64
+        l_map           = self%p_ptr%l_doshift .and. self%p_ptr%l_shift_map
+        prior_w         = 0.d0
+        kscreen         = 0
+        npool           = 0
         call seed_rnd
         projs_ns = 0
         do si = 1, self%nstates
@@ -324,6 +334,13 @@ contains
             if( l_sh_first )then
                 kfromto_loc = self%b_ptr%pftc%get_kfromto()
                 allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))
+            endif
+            ! the polar shift maps (shift_sigma > 0): the candidates come from the screen over a pool of the best
+            ! references at the stored shift, their shifts from the full map's posterior draw
+            if( l_map )then
+                if( .not. (self%p_ptr%prob_beta > 0.) ) THROW_HARD('the shift map draws at prob_beta x T: prob_beta must be positive')
+                call self%b_ptr%pftc%setup_shiftmaps(real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp), prior_w, kscreen)
+                npool = min(self%nrefs, 4 * projs_ns)
             endif
             ! fill the table
             t_region = omp_get_wtime()
@@ -375,6 +392,8 @@ contains
             self%fill_profile%fit_counts      = self%fill_profile%fit_counts      + fit_ithr
         end do
         self%fill_profile%bank_builds = self%fill_profile%bank_builds + seed_builds
+        self%fill_profile%maps        = self%fill_profile%maps    + sum(nmaps_thr)
+        self%fill_profile%screens     = self%fill_profile%screens + sum(nscreens_thr)
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -408,6 +427,11 @@ contains
             real(dp)  :: t0
             logical   :: l_bank_seed
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
+            if( l_map )then
+                call process_particle_with_map(i_loc, iptcl_loc, ithr_loc)
+                call o_prev_loc%kill
+                return
+            endif
             t0 = omp_get_wtime()
             ! the shift prior at the particle's own temperature: the seed estimate and every refinement of the particle
             if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
@@ -444,6 +468,91 @@ contains
             if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3), l_bank_seed)
             call o_prev_loc%kill
         end subroutine process_particle_with_shift
+
+        !> The map's path (shift_sigma > 0): the seed is the stored shift the sections already carry; every reference
+        !! is scored at it and its row holds the evidence there (the in-plane marginal times the origin's prior
+        !! mass, as an effective loss at prob_beta x T); the screen ranks a pool of the best of them by the coarse
+        !! map's evidence over the disk; the projs_ns best get the full map, their row its evidence and the drawn
+        !! cell's shift and rotation
+        subroutine process_particle_with_map( i_loc, iptcl_loc, ithr_loc )
+            integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
+            integer, allocatable :: pool(:)
+            real,    allocatable :: screen_dist(:)
+            real(dp) :: t0, u_prev(2), lse_prior, logp0, lse_screen, logp0_screen, temp_i, temp_s, logz, xcell(2)
+            real     :: evid, loss_cell, dist_loc, dbest
+            integer  :: ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, nbest, jbest
+            t0 = omp_get_wtime()
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+            u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl_loc), dp)
+            temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
+            temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
+                &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
+            call self%b_ptr%pftc%shiftmap_prior(SHIFTMAP_FULL,   prior_w, u_prev, lse_prior,  logp0)
+            call self%b_ptr%pftc%shiftmap_prior(SHIFTMAP_SCREEN, prior_w, u_prev, lse_screen, logp0_screen)
+            self%seed_shifts(:,i_loc) = 0.
+            self%seed_has_sh(i_loc)   = .true.
+            ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
+            t0 = omp_get_wtime()
+            do ri_loc = 1,self%nrefs
+                call self%b_ptr%pftc%gen_posterior_evid(self%ref_full(ri_loc), iptcl_loc, [0.,0.], real(temp_i), dist_loc,&
+                    &irot_loc, evid)
+                dist_loc = evid - real(logp0 / temp_i)
+                rows_batch(ri_loc,i_loc)    = prob_dense_entry(dist_loc, irot_loc)
+                dists_refs(ri_loc,ithr_loc) = dist_loc
+                inpl_refs(ri_loc,ithr_loc)  = irot_loc
+            enddo
+            ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
+            t0 = omp_get_wtime()
+            ! the screen over the pool of the best at the stored shift
+            pool = minnloc(dists_refs(:,ithr_loc), npool)
+            allocate(screen_dist(npool), source=huge(1.0))
+            do k_loc = 1, npool
+                ri_loc = pool(k_loc)
+                if( ri_loc < 1 ) cycle
+                call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_SCREEN, self%ref_full(ri_loc), iptcl_loc)
+                call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_SCREEN, temp_s, prior_w, u_prev, lse_screen, .true.,&
+                    &logz, irot_loc, irho_loc, ialpha_loc, loss_cell)
+                screen_dist(k_loc) = real(-logz)
+                nscreens_thr(ithr_loc) = nscreens_thr(ithr_loc) + 1_int64
+            enddo
+            ! the full map on the best of the screen
+            nbest = min(projs_ns, npool)
+            locn(:,ithr_loc) = 0
+            locn(1:nbest,ithr_loc) = minnloc(screen_dist, nbest)
+            do j_loc = 1, nbest
+                k_loc = locn(j_loc,ithr_loc)
+                if( k_loc < 1 ) cycle
+                ri_loc = pool(k_loc)
+                locn(j_loc,ithr_loc) = ri_loc
+                call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_FULL, self%ref_full(ri_loc), iptcl_loc)
+                call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_FULL, temp_i, prior_w, u_prev, lse_prior,&
+                    &self%p_ptr%l_shift_greedy, logz, irot_loc, irho_loc, ialpha_loc, loss_cell)
+                nmaps_thr(ithr_loc) = nmaps_thr(ithr_loc) + 1_int64
+                xcell = self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_FULL, irho_loc, ialpha_loc)
+                rows_batch(ri_loc,i_loc) = prob_dense_entry(real(-logz / temp_i), irot_loc)
+                nrefined_batch(i_loc)    = nrefined_batch(i_loc) + 1
+                refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc, real(xcell(1)), real(xcell(2)))
+            enddo
+            ! the bench record of whether the budget binds, as in refine_best_refs
+            jbest = 0
+            dbest = huge(dbest)
+            do j_loc = 1, nbest
+                if( locn(j_loc,ithr_loc) < 1 ) cycle
+                if( rows_batch(locn(j_loc,ithr_loc),i_loc)%dist < dbest )then
+                    dbest = rows_batch(locn(j_loc,ithr_loc),i_loc)%dist
+                    jbest = j_loc
+                endif
+            enddo
+            if( jbest < 1 .or. minval(rows_batch(:,i_loc)%dist) < dbest )then
+                rank_ithr(11,ithr_loc) = rank_ithr(11,ithr_loc) + 1_int64
+            else
+                if( jbest == 1 ) rank_ithr(0,ithr_loc) = rank_ithr(0,ithr_loc) + 1_int64
+                j_loc = min(10, (jbest - 1) * 10 / max(1, nbest) + 1)
+                rank_ithr(j_loc,ithr_loc) = rank_ithr(j_loc,ithr_loc) + 1_int64
+            endif
+            deallocate(pool, screen_dist)
+            ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
+        end subroutine process_particle_with_map
 
         subroutine process_particle_without_shift( i_loc, iptcl_loc, ithr_loc )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc

@@ -245,6 +245,10 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
    therefore reports the shift histogram per class as well as overall, since a view-dependent bias shows as
    a per-class offset and the frame question of ruling 6 then matters for those classes.
 2. The centring frame (ruling 6), after reading cavger.
+3. The weighted insertion's extra poses in 3D (topk > 1): `resolve_extra_poses` hands the table's shift increment
+   to `candidate_pose`, which adds it to the stored shift without the reference-to-native conversion the committed
+   pose receives from its polish (and, under the key, from the strategy). Found 2026-10-31 while fixing the map's
+   3D frame; pre-existing, not touched. For Hans: is the extras' frame right?
 
 ## Review findings and their disposition
 
@@ -255,12 +259,12 @@ construction and the cost. Its findings and what the plan does with them:
 |---|---|
 | P1 equal weights on the polar grid are the wrong measure (section 2) | kernel: `shiftmap_cell_area` (2026-10-31); Phase 2a: the sampler's log cell area in every cell's log mass |
 | P1 a pose draw per class, then the class from that pose's loss, is not a joint draw (section 3) | Phase 2a requirement: the class is drawn from the evidence log Z_c = logsumexp over the candidate's map of (-beta T L - prior + log pi_c + log area), one conditional pose kept per candidate; evidence and the sampled loss in separate fields |
-| P1 L-BFGS after the draw changes the distribution (section 4) | for Hans: the polish stays the deterministic arm (initialiser, comparison); the posterior draw is the grid's, refined where the mass concentrates, not optimised |
-| P1 screening the candidates at the current shift can exclude the right class (section 5) | Phase 2a requirement: translation-aware coverage (a low-resolution map against every class, or exploration candidates); Phase 3 measures retained mass against the exhaustive joint evaluation on a subset |
+| P1 L-BFGS after the draw changes the distribution (section 4) | ruled (Hans, 2026-10-31): the existing table paths keep their polish; the new path is strict, the drawn pose is not polished; the coupling to continuous pose search is a later question |
+| P1 screening the candidates at the current shift can exclude the right class (section 5) | ruled (Hans, 2026-10-31): a low-resolution map against every class as the screen; exploration candidates kept as the alternative; Phase 3 measures retained mass against the exhaustive joint evaluation on a subset |
 | P1 the submodule missing from a2c1b1f86 (section 7) | committed in 9c2fcdaf9 |
 | P2 the cost must count the mapped references (section 8) | the kernel's optimisation (ruling 12); Phase 2a's cost record counts candidates; 55 references per particle at a 10 degree bound in 3D is the figure to beat |
 | P2 prior, frame, precision, calibration (section 6) | kernel: the data term only, the error reported in the sampler's units (T dL); fixture with angular CTF, distinct halves and spectra (2026-10-31); frame and crop validation in Phase 2a |
-| sigma 10 A is a modelling choice; a 20 A mean radius implies sigma about 16 A | for Hans: sigma becomes the parameter of the switch, so the choice is a setting, not a constant |
+| sigma 10 A is a modelling choice; a 20 A mean radius implies sigma about 16 A | sigma is the parameter of the switch (ruling 11), a setting, not a constant |
 
 ## Phases
 
@@ -287,7 +291,7 @@ to 1e-6 relative at random poses (cc and euclid), thread identity at 1 and 4 thr
 
 Exit: identity and timing table in Progress; `unit_pftc_align2D3D` and the gate pass.
 
-### Phase 2: the switch in refine2D/refine3D, then the controllers (after open decision 2)
+### Phase 2: the switch in refine2D/refine3D, then the controllers (after open decision 2; 2a in progress, Progress below)
 
 Phase 2a, behind the switch of ruling 11, no controller change. `pftc_shsrch_grad`: the map replaces
 `coarse_search_opt_angle` when the radius exceeds the window; the L-BFGS limits become the magnitude step
@@ -486,3 +490,138 @@ Phase 2's UI files are added to the table with the ruling that names the key.
 - The first c2r attempt returned the map with both indices negated; the zero-magnitude row caught it (a
   sign-convention bug is a reflection of the rotation axis). A folded-direction test that normalised by a value
   it was checking was replaced by the direct comparison against the calculator.
+
+### 2026-10-31: Phase 2a, the switch and the sampler in the 2D tables (Claude, agent kit runs 34-119)
+
+- The key `shift_sigma` (A, `simple_parameters.f90`, parsed, derived into `l_shift_map` after `l_doshift`, which it
+  requires; refine2D's UI). The sampler on the calculator: `shiftmap_prior` (the Gaussian on the absolute
+  displacement |u_prev + R(irot)^T x| times the cell's area over every cell, its log normaliser and the origin's
+  log mass) and `shiftmap_draw` (the log masses -temp L - prior + log area, their maximum, the evidence as the
+  log-sum-exp over the normaliser, one cumulative draw or the greedy cell, the data term at the cell). Tests: at
+  temperature zero the draws follow the prior under the polar measure (mean radius 12.19 against the discrete
+  prior's 12.28 and the continuous 12.30 of the review), the evidence is 0, the origin's mass is the central
+  disk's share, a stored shift centres the draws on the pick; at the particle's temperature the evidence is the
+  direct sum over the grid (4e-6) and the greedy draw its maximum. `gen_posterior_evid` gives the in-plane
+  marginal of a class at the stored shift as an effective loss.
+- The 2D tables, dense and sparse fills alike, with the key on: the seed is the stored shift the sections already
+  carry (no L-BFGS seed); every class is scored at it by the posterior in-plane draw and its row holds the
+  evidence, the in-plane marginal times the origin's prior mass, as an effective loss at prob_beta x T; the
+  refined candidates get their map, their row the disk's evidence -log Z / (prob_beta T) and the drawn cell's
+  shift and rotation. The master's class draw is unchanged and is therefore from the evidence (review, section
+  3), every class on one scale. `strategy2D_prob` applies the drawn cell as the particle-frame increment
+  (shift_ref2ptcl at the drawn rotation), scores the pose with the objective at the pose, and does not polish
+  it (ruling, 2026-10-31). With the key off nothing changes: the gate's table, in-plane and strategy tests pass
+  on both builds (Debug run 36, Release run 37). The 3D table and the controllers are not touched.
+- Recovery on simulated particles (the 6VXX map of the simulate_particles test at 1.3 A/px, box 248, 400
+  particles over five fixed views, in-plane angles random, Gaussian shifts of sigma 7 px clipped at 16 px: mean
+  8.8 px, 11.5 A, largest 20.8 px; SNR 0.1, no CTF; refine2D refine=prob objfun=euclid ncls=5 lp=12 center=no
+  minits=maxits=12 from the five true reprojections as references; recovered against truth in native pixels,
+  the basin lp/4 = 2.3 px):
+
+  | variant | within the basin | mean, median, 90th pct error (px) | class purity | iterations to settle |
+  |---|---|---|---|---|
+  | map, sigma 10 A, trs 5 | 88.8 % | 2.10, 0.73, 11.6 | 89 % | 2 (8.4 px of motion in the first) |
+  | window trs 5 | 79.0 % | 2.47, 0.48, 10.8 | 79 % | 4 (5.1, 2.8, 0.9 px) |
+  | window trs 16 | 82.5 % | 1.82, 0.25, 7.4 | 82 % | 3 |
+  | no recovery (zero shifts) | 5 % | 8.8, 8.4, 15.0 | | |
+
+  Every particle outside the basin is a misclassified one, in all three variants: the shift search never fails
+  on a correctly classified particle, and the map's joint search classifies more of them. The map's median error
+  is the grid's quantisation (the drawn cell is not polished); the windows' is the L-BFGS's. Misclassification
+  grows with the true shift (map: 100, 87, 86, 79 % within the basin at |s| 0-5, 5-10, 10-15, 15-25 px): the
+  class ranking at the stored shift excludes the right class for the particles that are far off, the review's
+  section 5, which the translation-aware screen (the next 2a step) is for. The runs took 14.1 s (map) against
+  15.9 and 15.7 s (windows), twelve iterations on 8 threads. The in-plane angles of the correctly classified
+  are recovered to a median 0.35 degrees.
+- What the fixture taught: random references with 400 random views over the sphere do not classify in twelve
+  iterations (class purity 50 %, every variant at the null), and standalone refine2D calls its convergence
+  after two iterations unless `minits` holds it; the recovery statistic needs per-class offsets removed when
+  `center=no` (they were below 1 px here). The kit's runs needed the runtime environment CTest gives the tests
+  (SIMPLE_QSYS, SIMPLE_PATH, the tree's bin on PATH, now exported by the kit's project file) and `mkdir=no` so
+  the programs update the given project in place. The chain is `~/agent_work/SIMPLE/scripts/e2e_shiftmap.sh`,
+  the statistics `compare_shifts.py` beside it.
+- Left in 2a after this entry: the screen (next entry), the greedy test key, the 3D table, the fill's cost
+  record, the in-plane tester's identity of the deterministic coarse path, and the frame/crop validation beyond
+  this run (which went through SIMPLE_SCALE's downscaling with the shifts in native pixels and recovered them).
+
+### 2026-10-31: the translation-aware screen (Claude, agent kit runs 121-134)
+
+- The calculator holds two shift maps (`SHIFTMAP_FULL`, `SHIFTMAP_SCREEN`; every map routine takes the index):
+  the screen's is built over the lower half of the band (`kscreen = max(kfromto(1)+1, kfromto(2)/2)`) with its
+  own grid, magnitudes a quarter of that band's wavelength apart out to the same disk and a direction count
+  resolving its ring, so its orders, magnitudes and directions are all about half the full map's; its losses
+  and temperature are the band's (`wsqsum_ptcl_band`). Identity: the screen's map is the mechanics over its
+  band to 3e-9 of scale (65 checks, both gates).
+- In both fills, with the key on, the screen runs against every class scored (greedy, the evidence only) and
+  its evidence over the disk ranks the classes the full map then refines; the rows keep the full-band
+  quantities (the origin evidence of every class, the disk evidence of the refined ones), so the class draw's
+  scale is unchanged. The candidate choice is therefore translation-aware (review, section 5).
+- Recovery, the same fixture and references as the previous entry (five views, 400 particles, shifts of mean
+  8.8 px, lp 12 A, twelve iterations):
+
+  | variant | within the basin | mean, median, 90th pct error (px) | class populations | settled after |
+  |---|---|---|---|---|
+  | map + screen, sigma 10 A | 100.0 % | 0.75, 0.74, 1.18 | 80 80 80 80 80 | 1 iteration (8.7 px, then 0.5) |
+  | window trs 5 | 79.0 % | 2.47, 0.47, 11.0 | 159 59 49 51 82 | 3-4 |
+  | window trs 16 | 82.8 % | 1.81, 0.25, 7.4 | 149 72 50 54 75 | 3 |
+
+  Every particle classified correctly and every shift recovered to the grid's quantisation (0.75 px at a
+  2.3 px step: the drawn cell is not polished), after one iteration, in 15.5 s against 16.0 and 15.8 s for the
+  windows. Misclassification was the whole of the previous entry's tail; the screen removes it on this fixture.
+  The windows are unchanged, as the gate's identity requires.
+- Left in 2a after this entry: the greedy test key, the fill's cost record and the 3D table (next entry), the
+  in-plane tester's identity of the deterministic coarse path, and Phase 3's measurements at lower SNR and from
+  random references (the centring stage's real start).
+
+### 2026-10-31: the 3D table, the greedy key and the cost record (Claude, agent kit runs 136-228)
+
+- `shift_draw=yes|no` (refine2D and refine3D UI, developer level): `no` takes the map's cell of largest mass, the
+  comparison arm of Phase 3. The fill's cost record counts the maps and the screens (`maps`, `screens` of
+  `prob_fill_profile`, printed by the bench writer). The calculator builds both maps from the prior's width
+  (`setup_shiftmaps`), which both tables call.
+- The 3D table (`eul_prob_tab`), with the key on: as in 2D, the seed is the stored shift, every reference is
+  scored at it with the origin evidence in its row, the screen ranks a pool of the best 4 projs_ns of them by
+  the coarse map's evidence, and the projs_ns best get the full map, their row its evidence and the drawn
+  cell. `strategy3D_prob` applies the drawn cell without polish, scored by the objective at the pose, converted
+  to the native frame as the polish converts it: the first run without that conversion moved every particle by
+  the right amount in the wrong direction (17 % within the basin), which is how the frame contract was pinned.
+- Recovery in 3D (the random-view stack of 400 particles, shifts uniform to 12 px per axis, mean 8.8 px; refine3D
+  refine=prob from the true volume, nspace 500, lp 12 A, two iterations so the window cannot walk the distance):
+
+  | variant | within the basin | mean, median, 90th pct error (px) | motion per iteration (px) | time |
+  |---|---|---|---|---|
+  | map + screen, sigma 10 A | 100.0 % | 0.88, 0.91, 1.43 | 9.0, 0.4 | 23.4 s |
+  | window trs 5 | 91.8 % | 1.00, 0.70, 1.85 | 5.8, 3.1 | 14.9 s |
+  | window trs 16 | 99.5 % | 0.60, 0.60, 0.84 | 9.2, 0.3 | 15.3 s |
+
+  The map's error is the grid's quantisation; the windows' is the L-BFGS's. With six iterations every variant
+  reaches about 99 % here (the window walks), so the iteration count is the discriminating quantity on this
+  fixture, as in 2D. The map run costs 8 s more: the screen over the pool of 220 references and the 55 full
+  maps per particle (the counts are in the bench record), the review's cost question made concrete, to be
+  reduced with the pool and the screen's band.
+- Both gates pass on both builds (Debug run 191, Release runs 192 and 217; the Debug gate of the final tree
+  below). The UI registry validation caught two description mistakes: a binary input declares its two choices
+  explicitly, and the parser does not read them from the help text.
+- Left in 2a: the in-plane tester's identity of the deterministic coarse path; the pool and band of the 3D
+  screen against its cost; Phase 3 at lower SNR and from random references.
+
+### 2026-10-31: the random start (Claude, agent kit runs 231-241)
+
+- The same five-view 2D fixture and twelve iterations, but from random references (refine2D's own start: five
+  random images), the centring stage's real situation:
+
+  | variant | class purity | classes (view counts) | shift error, mean (px) | within the basin |
+  |---|---|---|---|---|
+  | map + screen, sigma 10 A | 60 % | views 1+3 merged, views 0+4 merged, view 2 split in three | 5.0 | 1.5 % |
+  | window trs 5 | 47 % | mixtures | 8.3 | 0 % |
+  | window trs 16 | 52 % | mixtures | 7.4 | 0.2 % |
+  | no recovery | | | 8.8 | 5 % |
+
+  The map produces clean merged classes (two views each, 160 particles) and halves the error; the windows
+  produce mixtures and recover nothing. With the key the shifts lock after one iteration (9.8 px, then 0.6):
+  once the classes have formed, wrong or not, every member's shift is consistent with its class average, and
+  nothing in a standalone refine2D from random images separates merged views. This is solve2D's stage-1
+  problem (the sticky sampling, the Gaussian-regularised references, the class count above the view count and
+  the recentring are its machinery), so the next measurement is through solve2D itself with the key handed to
+  its stages: Phase 2b, the controllers.
+- Phase 2a is complete in the working tree (17 files, both gates on both builds, Debug run 230).

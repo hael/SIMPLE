@@ -8,7 +8,7 @@ module simple_polar_shiftmap_tester
 use simple_core_module_api
 use simple_cmdline,         only: cmdline
 use simple_parameters,      only: parameters
-use simple_polarft_calc,    only: polarft_calc
+use simple_polarft_calc,    only: polarft_calc, SHIFTMAP_FULL, SHIFTMAP_SCREEN
 use simple_polar_shiftmap,  only: polar_shiftmap, shiftmap_ndirections
 use simple_timer,           only: tic, toc, timer_int_kind
 use simple_test_utils
@@ -28,6 +28,7 @@ contains
         call test_kernel_identity('euclid')
         call test_cell_areas()
         call test_kernel_threads()
+        call test_kernel_draw()
         call test_kernel_timing()
     end subroutine run_all_polar_shiftmap_tests
 
@@ -406,7 +407,7 @@ contains
     subroutine test_kernel_identity( objfun )
         use simple_eul_prob_tab_utils, only: posterior_temperature
         character(len=*), intent(in) :: objfun
-        integer,  parameter :: NALPHA = 20, NRHO = 5, NTRIALS = 60, NALPHA_FOLD = 7
+        integer,  parameter :: NALPHA = 20, NRHO = 5, NTRIALS = 60, NALPHA_FOLD = 7, KSCREEN = 6
         real(dp), parameter :: RHOS(NRHO) = [0.d0, 1.5d0, 4.d0, 9.d0, 15.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
@@ -425,9 +426,9 @@ contains
         call make_pftc_kernel(p, pftc, objfun, 1, 64, 1.0, 48.0, 6.0, 48, 2, 1, sigma2, refs, ptcls, ctfs, kfromto)
         pftsz = pftc%get_pftsz()
         nrots = pftc%get_nrots()
-        call pftc%new_shiftmap(RHOS, NALPHA)
-        call assert_true(pftc%has_shiftmap(), 'the calculator holds a shift map')
-        call pftc%shiftmap_dims(nrho_c, nalpha_c)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
+        call assert_true(pftc%has_shiftmap(SHIFTMAP_FULL), 'the calculator holds a shift map')
+        call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho_c, nalpha_c)
         call assert_int(NRHO,   nrho_c,   'the calculator holds the grid magnitudes')
         call assert_int(NALPHA, nalpha_c, 'the calculator holds the grid directions')
         call sm%new(pftsz, kfromto, 64, RHOS, NALPHA)
@@ -448,8 +449,8 @@ contains
         enddo
         temp = 0.d0
         if( trim(objfun) == 'euclid' ) temp = real(posterior_temperature(pftc%wsqsum_ptcl_now(1), pftsz), dp)
-        call pftc%gen_shiftmap(2, 1)
-        call pftc%shiftmap_objfun_grid(vals)
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
         branch_rots = [1, pftsz, pftsz + 1, nrots]
         err_mech = 0.d0
         err_grid = 0.d0
@@ -469,9 +470,9 @@ contains
                 &ctfs(:,kfromto(1):kfromto(2),1), irot, Q)
             call sm%coeffs(Q, w, A)
             c_mech   = sm%eval(A, ir, alpha)
-            c_kern   = pftc%shiftmap_cross(irot, ir, alpha)
+            c_kern   = pftc%shiftmap_cross(SHIFTMAP_FULL, irot, ir, alpha)
             err_mech = max(err_mech, abs(c_kern - c_mech))
-            s       = pftc%shiftmap_shift(ir, j)
+            s       = pftc%shiftmap_shift(SHIFTMAP_FULL, ir, j)
             val_ref = pftc%gen_corr_for_rot_8(2, 1, s, irot)
             if( trim(objfun) == 'cc' )then
                 val_map = real(vals(j,irot,ir), dp)
@@ -501,22 +502,43 @@ contains
         ! fewer directions than orders: the folded transform is exact on its own directions (the grid against the
         ! calculator's shifted, rotated objective at the grid's shifts, as above; cc)
         if( trim(objfun) == 'cc' )then
-            call pftc%new_shiftmap(RHOS, NALPHA_FOLD)
+            call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA_FOLD, kfromto(2))
             deallocate(vals)
             allocate(vals(NALPHA_FOLD,nrots,NRHO))
-            call pftc%gen_shiftmap(2, 1)
-            call pftc%shiftmap_objfun_grid(vals)
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+            call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
             err_fold = 0.d0
             do itrial = 1, 24
                 irot    = min(nrots, 1 + int(ran3() * real(nrots)))
                 ir      = NRHO - mod(itrial, 2)
                 j       = 1 + mod(itrial, NALPHA_FOLD)
-                s       = pftc%shiftmap_shift(ir, j)
+                s       = pftc%shiftmap_shift(SHIFTMAP_FULL, ir, j)
                 val_ref = pftc%gen_corr_for_rot_8(2, 1, s, irot)
                 err_fold = max(err_fold, abs(real(vals(j,irot,ir), dp) - val_ref))
             enddo
             write(*,'(A,I2,A,ES10.2)') '  ', NALPHA_FOLD, ' directions, orders folded: max |grid - gen_corr_for_rot_8| ', err_fold
             call assert_true(err_fold <= 1.d-6, 'a grid with fewer directions than orders is exact on its directions')
+            ! the screen: a second map over the lower half of the band is the mechanics over that band
+            call pftc%new_shiftmap(SHIFTMAP_SCREEN, RHOS, NALPHA, KSCREEN)
+            call sm%kill
+            call sm%new(pftsz, [kfromto(1), KSCREEN], 64, RHOS, NALPHA)
+            nmax = sm%get_nharm_max()
+            deallocate(A, Q)
+            allocate(A(-nmax:nmax,NRHO), Q(pftsz,kfromto(1):KSCREEN))
+            call pftc%gen_shiftmap(SHIFTMAP_SCREEN, 2, 1)
+            err_fold = 0.d0
+            do itrial = 1, 24
+                irot  = min(nrots, 1 + int(ran3() * real(nrots)))
+                ir    = min(NRHO,  1 + int(ran3() * real(NRHO)))
+                alpha = real(ran3(),dp) * DTWOPI
+                call sm%cross_spectrum(refs(:,kfromto(1):KSCREEN,2,2), ptcls(:,kfromto(1):KSCREEN,1),&
+                    &ctfs(:,kfromto(1):KSCREEN,1), irot, Q)
+                call sm%coeffs(Q, w(kfromto(1):KSCREEN), A)
+                err_fold = max(err_fold, abs(pftc%shiftmap_cross(SHIFTMAP_SCREEN, irot, ir, alpha) - sm%eval(A, ir, alpha)))
+            enddo
+            write(*,'(A,I2,A,ES10.2)') '  the screen over shells 2-', KSCREEN, ': max |kernel - mechanics| ', err_fold
+            call assert_true(err_fold <= 1.d-6 * scale, 'the screen''s map is the mechanics over its band')
+            call assert_true(pftc%has_shiftmap(SHIFTMAP_FULL) .and. pftc%has_shiftmap(SHIFTMAP_SCREEN), 'both maps exist')
         endif
         call sm%kill
         call pftc%kill
@@ -573,20 +595,20 @@ contains
         allocate(p, pftc)
         call make_pftc_kernel(p, pftc, 'euclid', NTHR, 64, 1.0, 48.0, 6.0, 48, 1, NPTCLS, sigma2, refs, ptcls, ctfs, kfromto)
         nrots = pftc%get_nrots()
-        call pftc%new_shiftmap(RHOS, NALPHA)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
         allocate(vals_serial(NALPHA,nrots,NRHO,NPTCLS), vals_par(NALPHA,nrots,NRHO,NPTCLS))
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()
         !$ call omp_set_num_threads(1)
         do ip = 1, NPTCLS
-            call pftc%gen_shiftmap(1, ip)
-            call pftc%shiftmap_objfun_grid(vals_serial(:,:,:,ip))
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
+            call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_serial(:,:,:,ip))
         enddo
         !$ call omp_set_num_threads(NTHR)
         !$omp parallel do default(shared) private(ip) schedule(static)
         do ip = 1, NPTCLS
-            call pftc%gen_shiftmap(1, ip)
-            call pftc%shiftmap_objfun_grid(vals_par(:,:,:,ip))
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
+            call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_par(:,:,:,ip))
         enddo
         !$omp end parallel do
         !$ call omp_set_num_threads(nthr_prev)
@@ -596,6 +618,127 @@ contains
         deallocate(refs, ptcls, ctfs, vals_serial, vals_par, p, pftc)
         if( allocated(sigma2) ) deallocate(sigma2)
     end subroutine test_kernel_threads
+
+    !> The sampler on the kernel's fixture (euclid, box 64 at 1 A/px, a 30 px disk for sigma 10 px). At temperature
+    !! zero the draw is the prior under the polar measure: the mean radius of 1500 draws is the discrete prior's
+    !! expectation, which sits by the continuous truncated Gaussian's (12.30 for sigma 10 and a 30 disk, the review's
+    !! figure) within the grid's step, and the evidence is 0; with a stored shift the mean total displacement of the
+    !! draws is the pick; the origin's prior mass is the central disk's share; at the particle's temperature the
+    !! evidence equals the direct log-sum-exp over shiftmap_objfun_grid's losses with the same weights, and the greedy
+    !! draw is the cell of the largest mass.
+    subroutine test_kernel_draw()
+        use simple_eul_prob_tab_utils, only: posterior_temperature
+        integer,  parameter :: NDRAWS = 1500
+        real(dp), parameter :: SIGMA = 10.d0, RADIUS = 30.d0, EXPECTED_MEAN = 12.30d0
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,        allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:)
+        real(dp),    allocatable :: rhos(:)
+        real(dp) :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w, x(2), u_prev(2), tot(2)
+        real(dp) :: lmax, s, lse, pen, loga, rho, temp, c, sn, ang
+        real(sp) :: loss
+        integer  :: kfromto(2), nrots, nrho, nalpha, idraw, irot, irho, ialpha, ir, j, ro, imax(3)
+        write(*,'(A)') 'test_kernel_draw'
+        call set_fixed_seed(20261105)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, 1, 1, sigma2, refs, ptcls, ctfs, kfromto)
+        nrots   = pftc%get_nrots()
+        step    = 64.d0 / real(kfromto(2),dp) / 4.d0
+        call magnitudes(RADIUS, step, rhos)
+        nalpha  = shiftmap_ndirections(2 * ceiling(DTWOPI * real(kfromto(2),dp) * rhos(size(rhos)) / 64.d0) + 3)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, rhos, nalpha, kfromto(2))
+        call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, nalpha)
+        prior_w = 1.d0 / (2.d0 * SIGMA**2)
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 1)
+        ! (1) temperature 0, no stored shift: the prior under the polar measure
+        u_prev = 0.d0
+        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, u_prev, lse_prior, logp0)
+        disc_mean = 0.d0
+        wsum      = 0.d0
+        do ir = 1, nrho
+            w  = exp(-prior_w * rhos(ir)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir) * real(nalpha,dp)
+            wr = w * rhos(ir)
+            wsum      = wsum + w
+            disc_mean = disc_mean + wr
+        enddo
+        disc_mean = disc_mean / wsum
+        mean_rho  = 0.d0
+        do idraw = 1, NDRAWS
+            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, u_prev, lse_prior, .false., logz, irot, irho, ialpha, loss)
+            mean_rho = mean_rho + rhos(irho)
+            if( idraw == 1 ) call assert_true(abs(logz) <= 1.d-6, 'at temperature 0 the evidence is 0: the prior is normalised')
+        enddo
+        mean_rho = mean_rho / real(NDRAWS,dp)
+        write(*,'(A,F7.3,A,F7.3,A,F7.3)') '  mean radius of the draws ', mean_rho, ', of the discrete prior ', disc_mean,&
+            &', continuous ', EXPECTED_MEAN
+        call assert_true(abs(mean_rho - disc_mean) <= 0.06d0 * disc_mean, 'at temperature 0 the draws follow the prior under the polar measure')
+        call assert_true(abs(disc_mean - EXPECTED_MEAN) <= step, 'the discrete prior''s mean radius is the truncated Gaussian''s within a step')
+        ! the origin's mass: the central disk's share of the prior, at one rotation
+        w = exp(logp0) * real(nrots,dp)
+        call assert_true(abs(w - exp(-prior_w * rhos(1)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, 1) * real(nalpha,dp) / wsum) <= 1.d-9,&
+            &'the origin''s prior mass is the central disk''s share')
+        ! (2) a stored shift: the prior is on the total displacement, so the draws centre on the pick
+        u_prev = [4.d0, -3.d0]
+        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, u_prev, lse_prior, logp0)
+        tot = 0.d0
+        do idraw = 1, NDRAWS
+            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, u_prev, lse_prior, .false., logz, irot, irho, ialpha, loss)
+            x   = pftc%shiftmap_shift(SHIFTMAP_FULL, irho, ialpha)
+            ang = real(pftc%get_rot(irot),dp) * DPI / 180.d0
+            c   = cos(ang)
+            sn  = sin(ang)
+            ! u = R(irot)^T x, R = [[c, s], [-s, c]]
+            tot = tot + u_prev + [c * x(1) - sn * x(2), sn * x(1) + c * x(2)]
+        enddo
+        tot = tot / real(NDRAWS,dp)
+        write(*,'(A,2F8.3)') '  mean total displacement with a stored shift of (4, -3): ', tot
+        call assert_true(all(abs(tot) <= 0.9d0), 'with a stored shift the draws centre on the pick')
+        ! (3) the particle's temperature: the evidence against the direct sum over the grid, the greedy cell
+        u_prev = 0.d0
+        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, u_prev, lse_prior, logp0)
+        temp = real(posterior_temperature(pftc%wsqsum_ptcl_now(1), pftc%get_pftsz()), dp)
+        allocate(vals(nalpha,nrots,nrho))
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+        lmax = -huge(lmax)
+        imax = 1
+        do ir = 1, nrho
+            rho  = rhos(ir)
+            loga = log(pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir))
+            pen  = prior_w * rho * rho
+            do ro = 1, nrots
+                do j = 1, nalpha
+                    s = -temp * real(vals(j,ro,ir),dp) - pen + loga
+                    if( s > lmax )then
+                        lmax = s
+                        imax = [j, ro, ir]
+                    endif
+                enddo
+            enddo
+        enddo
+        s = 0.d0
+        do ir = 1, nrho
+            pen  = prior_w * rhos(ir)**2
+            loga = log(pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir))
+            do ro = 1, nrots
+                do j = 1, nalpha
+                    s = s + exp(-temp * real(vals(j,ro,ir),dp) - pen + loga - lmax)
+                enddo
+            enddo
+        enddo
+        lse = lmax + log(s) - lse_prior
+        call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, prior_w, u_prev, lse_prior, .true., logz, irot, irho, ialpha, loss)
+        write(*,'(A,ES10.2,A,F10.4)') '  |evidence - direct sum| ', abs(logz - lse), ' at log Z ', lse
+        call assert_true(abs(logz - lse) <= 1.d-3 * max(1.d0, abs(lse)), 'the evidence is the log-sum-exp over the grid')
+        call assert_int(imax(1), ialpha, 'the greedy draw is the cell of the largest mass (direction)')
+        call assert_int(imax(2), irot,   'the greedy draw is the cell of the largest mass (rotation)')
+        call assert_int(imax(3), irho,   'the greedy draw is the cell of the largest mass (magnitude)')
+        call assert_true(abs(real(loss,dp) - real(vals(ialpha,irot,irho),dp)) <= 1.d-6, 'the returned loss is the cell''s')
+        call pftc%kill
+        deallocate(refs, ptcls, ctfs, vals, rhos, p, pftc)
+        if( allocated(sigma2) ) deallocate(sigma2)
+    end subroutine test_kernel_draw
 
     !> the magnitudes 0, step, 2 step, ... up to radius
     subroutine magnitudes( radius, step, rhos )
@@ -615,6 +758,7 @@ contains
     !! radius (5 px, step lp/4, 2 z_max + 3 directions rounded up to an FFT-friendly count) and, at lp 8, at the
     !! centring disk (30 A). Printed, not asserted.
     subroutine test_kernel_timing()
+        use simple_eul_prob_tab_utils, only: posterior_temperature
         integer, parameter :: NLP = 2
         real,    parameter :: LPS(NLP) = [8.0, 2.7], SMPD = 1.3, WINDOW = 5.0, DISK_A = 30.0
         class(parameters),   allocatable, target :: p
@@ -624,9 +768,9 @@ contains
         real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:), corrs(:)
         real(dp),    allocatable :: rhos(:)
         integer(timer_int_kind)  :: t0
-        real(dp) :: t_coarse, t_win, t_disk, step
-        real     :: x, y
-        integer  :: kfromto(2), nrots, ilp, irep, ix, iy, nrho, nalpha, nrep
+        real(dp) :: t_coarse, t_win, t_disk, t_draw, step, lse_prior, logp0, temp, logz
+        real     :: x, y, loss
+        integer  :: kfromto(2), nrots, ilp, irep, ix, iy, nrho, nalpha, nrep, irot, irho, ialpha
         write(*,'(A)') 'test_kernel_timing'
         write(*,'(A)') '  per pair, ms: the coarse 5x5 lattice | the map at the 5 px window | the map at the 30 A disk'
         do ilp = 1, NLP
@@ -650,13 +794,13 @@ contains
             step = real(LPS(ilp) / SMPD, dp) / 4.d0
             call magnitudes(real(WINDOW,dp), step, rhos)
             nalpha = shiftmap_ndirections(2 * ceiling(DTWOPI * real(kfromto(2),dp) * rhos(size(rhos)) / 64.d0) + 3)
-            call pftc%new_shiftmap(rhos, nalpha)
-            call pftc%shiftmap_dims(nrho, nalpha)
+            call pftc%new_shiftmap(SHIFTMAP_FULL, rhos, nalpha, kfromto(2))
+            call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, nalpha)
             allocate(vals(nalpha,nrots,nrho))
             t0 = tic()
             do irep = 1, nrep
-                call pftc%gen_shiftmap(1, 1)
-                call pftc%shiftmap_objfun_grid(vals)
+                call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 1)
+                call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
             enddo
             t_win = 1.d3 * real(toc(t0),dp) / real(nrep,dp)
             write(*,'(A,F5.1,A,I4,A,I3,A,I3,A,I4,A,F9.3,A,F9.3)') '  lp ', LPS(ilp), ' A: nrots ', nrots, ', shells ',&
@@ -665,16 +809,25 @@ contains
             if( ilp == 1 )then
                 call magnitudes(real(DISK_A / SMPD,dp), step, rhos)
                 nalpha = shiftmap_ndirections(2 * ceiling(DTWOPI * real(kfromto(2),dp) * rhos(size(rhos)) / 64.d0) + 3)
-                call pftc%new_shiftmap(rhos, nalpha)
-                call pftc%shiftmap_dims(nrho, nalpha)
+                call pftc%new_shiftmap(SHIFTMAP_FULL, rhos, nalpha, kfromto(2))
+                call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, nalpha)
                 allocate(vals(nalpha,nrots,nrho))
                 t0 = tic()
                 do irep = 1, nrep
-                    call pftc%gen_shiftmap(1, 1)
-                    call pftc%shiftmap_objfun_grid(vals)
+                    call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 1)
+                    call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
                 enddo
                 t_disk = 1.d3 * real(toc(t0),dp) / real(nrep,dp)
-                write(*,'(A,I3,A,I4,A,F9.3)') '           disk grid ', nrho, ' x ', nalpha, ' | disk ', t_disk
+                call pftc%shiftmap_prior(SHIFTMAP_FULL, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), [0.d0, 0.d0], lse_prior, logp0)
+                temp = real(posterior_temperature(pftc%wsqsum_ptcl_now(1), pftc%get_pftsz()), dp)
+                t0 = tic()
+                do irep = 1, nrep
+                    call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), [0.d0, 0.d0], lse_prior, .false.,&
+                        &logz, irot, irho, ialpha, loss)
+                enddo
+                t_draw = 1.d3 * real(toc(t0),dp) / real(nrep,dp)
+                write(*,'(A,I3,A,I4,A,F9.3,A,F9.3)') '           disk grid ', nrho, ' x ', nalpha, ' | disk ', t_disk,&
+                    &' | + draw ', t_draw
                 deallocate(vals, rhos)
             endif
             call pftc%kill

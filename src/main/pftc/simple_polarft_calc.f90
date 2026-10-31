@@ -6,7 +6,7 @@ implicit none
 
 public :: polarft_calc
 public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
-public :: SHERRSQ
+public :: SHERRSQ, SHIFTMAP_FULL, SHIFTMAP_SCREEN, NSHIFTMAPS
 private
 #include "simple_local_flags.inc"
 
@@ -14,6 +14,8 @@ integer, parameter :: REF_EVEN = 1
 integer, parameter :: REF_ODD  = 2
 integer, parameter :: N_REF_PARITIES = 2
 real,    parameter :: SHERRSQ = 0.00001 !< squared shift below which the memoised unshifted terms are used
+! the calculator's shift maps: the full band's, and the screen's over a coarser band and grid (the candidates' choice)
+integer, parameter :: SHIFTMAP_FULL = 1, SHIFTMAP_SCREEN = 2, NSHIFTMAPS = 2
 
 type fftw_drvec
     type(c_ptr)                  :: p
@@ -67,6 +69,7 @@ type shiftmap_work
     type(c_ptr)              :: gout_p  = c_null_ptr !< its output: the cross term on the grid
     complex(kind=c_float_complex), pointer :: ghalf(:,:,:) => null() !< (nalpha/2+1, nrots, nrho) view
     real(kind=c_float),            pointer :: gout(:,:,:)  => null() !< (nalpha, nrots, nrho) view
+    real(sp),    allocatable :: lw(:,:,:)   !< the sampler's log masses over the grid (nalpha, nrots, nrho)
     real(dp)                 :: ptclpow = 0.d0 !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
     integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
 end type shiftmap_work
@@ -125,9 +128,9 @@ type :: polarft_calc
     type(heap_vars),               allocatable :: heap_vars(:)
     type(fftw_drvec),              allocatable :: drvec(:)
     ! the polar shift map: the Fourier-Bessel tables of the shift grid and the per-thread work (simple_polarft_shiftmap.f90)
-    type(polar_shiftmap),          allocatable :: shiftmap
-    type(shiftmap_work),           allocatable :: smwork(:)
-    type(c_ptr)                                :: plan_shiftmap = c_null_ptr !< the batched 2D transform of the shift map
+    type(polar_shiftmap),          allocatable :: shiftmap(:)  !< (NSHIFTMAPS), built by new_shiftmap
+    type(shiftmap_work),           allocatable :: smwork(:,:)  !< (nthr_glob, NSHIFTMAPS)
+    type(c_ptr)                                :: plan_shiftmap(NSHIFTMAPS) = c_null_ptr !< the batched 2D transforms
     ! Others
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
@@ -212,6 +215,7 @@ type :: polarft_calc
     procedure          :: gen_euclid_dists_bank
     procedure          :: gen_posterior_val
     procedure          :: gen_posterior_val_bank
+    procedure          :: gen_posterior_evid
     procedure          :: gen_best_objfun_val
     procedure          :: gen_prob_objfun_val
     procedure          :: gen_prob_power_objfun_val
@@ -246,15 +250,20 @@ type :: polarft_calc
     procedure          :: gen_many2many_euclids_cufft
     ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
     procedure          :: new_shiftmap
+    procedure          :: setup_shiftmaps
     procedure          :: kill_shiftmap
+    procedure, private :: kill_one_shiftmap
     procedure          :: has_shiftmap
     procedure          :: shiftmap_dims
     procedure          :: shiftmap_shift
     procedure          :: shiftmap_cell_area
+    procedure          :: wsqsum_ptcl_band
     procedure          :: gen_shiftmap
     procedure          :: shiftmap_cross
     procedure          :: shiftmap_objfun_grid
     procedure          :: shiftmap_peak
+    procedure          :: shiftmap_prior
+    procedure          :: shiftmap_draw
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -702,6 +711,14 @@ interface
         integer,             intent(out)   :: irot
     end subroutine gen_posterior_val_bank
 
+    module subroutine gen_posterior_evid(self, iref, iptcl, shift, temp, dist, irot, evid)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2), temp
+        real(sp),                    intent(out)   :: dist, evid
+        integer,                     intent(out)   :: irot
+    end subroutine gen_posterior_evid
+
     module subroutine gen_best_objfun_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
@@ -966,60 +983,100 @@ interface
 
     ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
 
-    module subroutine new_shiftmap( self, rho, nalpha )
+    module subroutine new_shiftmap( self, imap, rho, nalpha, kstop )
         class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: imap
         real(dp),            intent(in)    :: rho(:)
-        integer,             intent(in)    :: nalpha
+        integer,             intent(in)    :: nalpha, kstop
     end subroutine new_shiftmap
+
+    module subroutine setup_shiftmaps( self, sigma_px, prior_w, kscreen )
+        class(polarft_calc), intent(inout) :: self
+        real(dp),            intent(in)    :: sigma_px
+        real(dp),            intent(out)   :: prior_w
+        integer,             intent(out)   :: kscreen
+    end subroutine setup_shiftmaps
 
     module subroutine kill_shiftmap( self )
         class(polarft_calc), intent(inout) :: self
     end subroutine kill_shiftmap
 
-    module logical function has_shiftmap( self )
+    module subroutine kill_one_shiftmap( self, imap )
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: imap
+    end subroutine kill_one_shiftmap
+
+    module logical function has_shiftmap( self, imap )
         class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: imap
     end function has_shiftmap
 
-    module subroutine shiftmap_dims( self, nrho, nalpha )
+    module subroutine shiftmap_dims( self, imap, nrho, nalpha )
         class(polarft_calc), intent(in)  :: self
+        integer,             intent(in)  :: imap
         integer,             intent(out) :: nrho, nalpha
     end subroutine shiftmap_dims
 
-    module function shiftmap_shift( self, irho, ialpha ) result( s )
+    module function shiftmap_shift( self, imap, irho, ialpha ) result( s )
         class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: irho, ialpha
+        integer,             intent(in) :: imap, irho, ialpha
         real(dp) :: s(2)
     end function shiftmap_shift
 
-    module real(dp) function shiftmap_cell_area( self, irho )
+    module real(dp) function shiftmap_cell_area( self, imap, irho )
         class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: irho
+        integer,             intent(in) :: imap, irho
     end function shiftmap_cell_area
 
-    module subroutine gen_shiftmap( self, iref, iptcl )
+    module function wsqsum_ptcl_band( self, iptcl, kstop ) result( wsq )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl, kstop
+        real(dp) :: wsq
+    end function wsqsum_ptcl_band
+
+    module subroutine gen_shiftmap( self, imap, iref, iptcl )
         class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
+        integer,                     intent(in)    :: imap, iref, iptcl
     end subroutine gen_shiftmap
 
-    module real(dp) function shiftmap_cross( self, irot, irho, alpha )
+    module real(dp) function shiftmap_cross( self, imap, irot, irho, alpha )
         class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: irot, irho
+        integer,             intent(in) :: imap, irot, irho
         real(dp),            intent(in) :: alpha
     end function shiftmap_cross
 
-    module subroutine shiftmap_objfun_grid( self, vals )
+    module subroutine shiftmap_objfun_grid( self, imap, vals )
         class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: imap
         real(sp),                    intent(out)   :: vals(:,:,:)
     end subroutine shiftmap_objfun_grid
 
-    module subroutine shiftmap_peak( self, vals, irot, xy, val, irho, ialpha )
+    module subroutine shiftmap_peak( self, imap, vals, irot, xy, val, irho, ialpha )
         class(polarft_calc), intent(in)  :: self
+        integer,             intent(in)  :: imap
         real(sp),            intent(in)  :: vals(:,:,:)
         integer,             intent(out) :: irot
         real(dp),            intent(out) :: xy(2)
         real(sp),            intent(out) :: val
         integer,             intent(out) :: irho, ialpha
     end subroutine shiftmap_peak
+
+    module subroutine shiftmap_prior( self, imap, prior_w, u_prev, lse_prior, logp0 )
+        class(polarft_calc), intent(in)  :: self
+        integer,             intent(in)  :: imap
+        real(dp),            intent(in)  :: prior_w, u_prev(2)
+        real(dp),            intent(out) :: lse_prior, logp0
+    end subroutine shiftmap_prior
+
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: imap
+        real(dp),                    intent(in)    :: temp, prior_w, u_prev(2), lse_prior
+        logical,                     intent(in)    :: l_greedy
+        real(dp),                    intent(out)   :: logz
+        integer,                     intent(out)   :: irot, irho, ialpha
+        real(sp),                    intent(out)   :: loss
+    end subroutine shiftmap_draw
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

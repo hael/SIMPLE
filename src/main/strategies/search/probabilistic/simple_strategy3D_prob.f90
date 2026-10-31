@@ -3,6 +3,7 @@ module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_utils, only: assign_ori, candidate_pose
 use simple_eul_prob_tab_utils, only: prob_insert_pose
+use simple_pftc_shsrch_grad,   only: shift_ref2ptcl
 use simple_parameters,      only: parameters
 use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
@@ -77,7 +78,14 @@ contains
             if( associated(self%spec%extra_poses) )then
                 if( self%spec%extra_poses%has(self%s%iptcl) ) call self%resolve_extra_poses(iptcl_map)
             endif
-            if( self%s%uses_continuous_refinement() )then
+            if( self%s%p_ptr%l_shift_map )then
+                ! the map's draw is the pose and is not polished; the row's distance is the reference's evidence, so
+                ! the score is the objective at the pose; the cell's shift, in the optimizer's frame at the drawn
+                ! rotation, becomes the native increment the pose is stored with (as the polish converts it)
+                corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(iref, self%s%iptcl, real(sh, dp), irot))
+                sh   = shift_ref2ptcl(sh, self%s%b_ptr%pftc%get_rot(irot))
+                call assign_ori(self%s, iref, irot, corr, sh)
+            else if( self%s%uses_continuous_refinement() )then
                 call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
                     &inpl_coord, inpl_valid)
                 call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid)

@@ -31,7 +31,7 @@ type :: polar_shiftmap
     real(dp),    allocatable :: jn(:,:,:)      !< J_n(2 pi k rho / box): (0:nharm_max, kfromto(1):kfromto(2), nrho)
     complex(dp), allocatable :: tw(:,:)        !< exp(i n theta_p): (pftsz, 0:nharm_max)
     complex(dp), allocatable :: ea(:,:)        !< exp(-i n alpha_j): (nalpha, 0:nharm_max)
-    logical                  :: exists = .false.
+    logical                  :: exists_flag = .false.
   contains
     procedure :: new
     procedure :: kill
@@ -39,6 +39,8 @@ type :: polar_shiftmap
     procedure :: get_nalpha
     procedure :: get_nharm_max
     procedure :: get_nharm
+    procedure :: get_kfromto
+    procedure :: exists
     procedure :: get_rho
     procedure :: get_alpha
     procedure :: get_shift
@@ -130,7 +132,7 @@ contains
             enddo
         enddo
         call self%cell_areas
-        self%exists = .true.
+        self%exists_flag = .true.
     end subroutine new
 
     !> The translation area of one cell at each magnitude: the ring between the midpoints to the neighbouring
@@ -190,7 +192,7 @@ contains
 
     subroutine kill( self )
         class(polar_shiftmap), intent(inout) :: self
-        if( self%exists )then
+        if( self%exists_flag )then
             deallocate(self%rho, self%alpha, self%area, self%nharm, self%jn, self%tw, self%ea)
             self%pftsz     = 0
             self%nrots     = 0
@@ -199,7 +201,7 @@ contains
             self%nrho      = 0
             self%nalpha    = 0
             self%nharm_max = 0
-            self%exists    = .false.
+            self%exists_flag = .false.
         endif
     end subroutine kill
 
@@ -223,6 +225,17 @@ contains
         integer,               intent(in) :: irho
         get_nharm = self%nharm(irho)
     end function get_nharm
+
+    pure logical function exists( self )
+        class(polar_shiftmap), intent(in) :: self
+        exists = self%exists_flag
+    end function exists
+
+    pure function get_kfromto( self ) result( k )
+        class(polar_shiftmap), intent(in) :: self
+        integer :: k(2)
+        k = self%kfromto
+    end function get_kfromto
 
     pure real(dp) function get_rho( self, irho )
         class(polar_shiftmap), intent(in) :: self

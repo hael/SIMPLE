@@ -77,6 +77,16 @@ contains
         &'converting it to loss units; the row holds the MAP loss(yes|no){yes}', '', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
+        &'probability tables search the shifts of their refined candidates over a disk of 3 sigma with the polar shift '//&
+        &'map and draw the pose from the tempered posterior instead of refining a window; 0 is the window search{0}', &
+        &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        call refine2D%add_input(UI_SRCH, 'shift_draw', 'binary', 'Polar shift map draw', &
+        &'The polar shift map''s pose is drawn from the tempered posterior over the disk, or is its cell of largest '//&
+        &'mass, the comparison arm of the tests(yes|no){yes}', '', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)

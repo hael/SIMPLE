@@ -141,6 +141,7 @@ type :: parameters
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
+    character(len=3)          :: shift_draw='yes'     !< the polar shift map's pose: drawn from the tempered posterior over the disk, or its cell of largest mass (the comparison arm)(yes|no){yes}
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments (yes|no){yes}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
@@ -616,6 +617,7 @@ type :: parameters
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
+    real    :: shift_sigma=0.      !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables then search the shifts of their refined candidates over a disk of 3 sigma and draw the pose from the tempered posterior(0: the window search){0}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
@@ -680,6 +682,8 @@ type :: parameters
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
     logical :: l_shift_prior     = .false. !< shift_prior=yes
+    logical :: l_shift_map       = .false. !< shift_sigma > 0: the polar shift map replaces the window search of the probability tables
+    logical :: l_shift_greedy    = .false. !< shift_draw=no: the map's cell of largest mass instead of the draw
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

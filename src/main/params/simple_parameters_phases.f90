@@ -715,6 +715,14 @@ contains
             case DEFAULT
                 THROW_HARD('shift_prior must be yes or no')
         end select
+        select case(trim(self%shift_draw))
+            case('yes')
+                self%l_shift_greedy = .false.
+            case('no')
+                self%l_shift_greedy = .true.
+            case DEFAULT
+                THROW_HARD('shift_draw must be yes or no')
+        end select
         ! the probability tables' posterior draws: their tempering factor, and no ramp unless an end is given (the
         ! run stays at prob_beta)
         if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
@@ -1123,6 +1131,9 @@ contains
             self%trs = 0.
             self%l_doshift = .false.
         endif
+        ! the polar shift map: a positive prior width turns it on; it replaces the window, so the window must be on
+        self%l_shift_map = self%shift_sigma > 0.01
+        if( self%l_shift_map .and. .not. self%l_doshift ) THROW_HARD('shift_sigma needs a shift search: set trs > 0')
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch <= 1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

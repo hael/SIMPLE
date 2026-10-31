@@ -458,6 +458,8 @@ contains
                 endif
             endif
             write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls
+            if( fill%maps > 0 )    write(fnr,'(a,i0)') 'prob_tab shift maps (all)           : ', fill%maps
+            if( fill%screens > 0 ) write(fnr,'(a,i0)') 'prob_tab screen maps (all)          : ', fill%screens
             write(fnr,'(a,i0)') 'prob_tab alternations               : ', fill%alternations
             write(fnr,'(a,i0)') 'prob_tab grid evaluations           : ', fill%grid_points
             write(fnr,'(a,i0)') 'prob_tab objective evaluations      : ', fill%objective_evals

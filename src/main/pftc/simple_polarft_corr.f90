@@ -671,6 +671,40 @@ contains
         call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
     end subroutine gen_posterior_val
 
+    !> gen_posterior_val and, at the same temperature, the row's evidence at this shift as an effective loss:
+    !! exp(-temp evid) = sum_r exp(-temp L_r) over the valid rotations, the in-plane marginal the tables' class draw
+    !! uses with the polar shift map
+    module subroutine gen_posterior_evid( self, iref, iptcl, shift, temp, dist, irot, evid )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2), temp
+        real(sp),                    intent(out)   :: dist, evid
+        integer,                     intent(out)   :: irot
+        real(dp) :: norm, lmin, s
+        real(sp) :: invalid
+        integer  :: ithr, r
+        if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_evid requires objfun=euclid')
+        if( .not. (temp > 0.) ) THROW_HARD('gen_posterior_evid needs a positive temperature')
+        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
+        call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
+        invalid = 0.1 * huge(invalid)
+        lmin    = huge(lmin)
+        do r = 1, self%nrots
+            if( self%heap_vars(ithr)%rot_dists(r) < invalid ) lmin = min(lmin, real(self%heap_vars(ithr)%rot_dists(r), dp))
+        enddo
+        if( lmin >= real(invalid, dp) )then
+            evid = huge(evid)
+            return
+        endif
+        s = 0.d0
+        do r = 1, self%nrots
+            if( self%heap_vars(ithr)%rot_dists(r) < invalid )then
+                s = s + exp(-real(temp, dp) * (real(self%heap_vars(ithr)%rot_dists(r), dp) - lmin))
+            endif
+        enddo
+        evid = real(lmin - log(s) / real(temp, dp), sp)
+    end subroutine gen_posterior_evid
+
     !> gen_posterior_val for a bank entry (the particle shifted once by its seed, with the angular Nyquist bin)
     module subroutine gen_posterior_val_bank( self, iref, iptcl, bank, temp, dist, irot )
         class(polarft_calc), intent(inout) :: self

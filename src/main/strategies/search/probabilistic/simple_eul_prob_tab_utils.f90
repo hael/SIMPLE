@@ -242,6 +242,8 @@ type :: prob_fill_profile
     integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
     integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
     integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
+    integer(int64) :: maps            = 0_int64 !< polar shift maps built, the refined candidates' (shift_sigma > 0)
+    integer(int64) :: screens         = 0_int64 !< screen maps built, the candidates' choice (shift_sigma > 0)
     integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
     !> Is the refinement budget binding? Per particle of the dense fill, the rank in the unrefined row of the entry
     !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
