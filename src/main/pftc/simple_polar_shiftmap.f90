@@ -46,6 +46,9 @@ type :: polar_shiftmap
     procedure :: eval
     procedure :: map
     procedure :: peak
+    procedure :: shell_weights
+    procedure :: eval_rotcoeffs
+    procedure :: map_rotcoeffs
 end type polar_shiftmap
 
 contains
@@ -287,5 +290,51 @@ contains
         irho   = loc(2)
         val    = cmap(ialpha, irho)
     end subroutine peak
+
+    !> the Bessel-weighted shell weights of order n at magnitude rho(irho): wj(k) = w(k) J_n(2 pi k rho / box)
+    pure subroutine shell_weights( self, w, n, irho, wj )
+        class(polar_shiftmap), intent(in)  :: self
+        real(dp),              intent(in)  :: w(self%kfromto(1):self%kfromto(2))
+        integer,               intent(in)  :: n, irho
+        real(dp),              intent(out) :: wj(self%kfromto(1):self%kfromto(2))
+        wj = w * self%jn(n,:,irho)
+    end subroutine shell_weights
+
+    !> the cross term from the one-sided coefficients of the all-rotation kernel at one rotation, a(n) = a_n(irot, rho)
+    !! for n = 0..nharm(irho) (full-ring harmonics: the negative orders are the conjugates, the full ring is twice the
+    !! half ring), at magnitude rho(irho) and any direction alpha: C = Re(a_0)/2 + sum_n Re(exp(-i n alpha) a_n)
+    pure real(dp) function eval_rotcoeffs( self, a, irho, alpha )
+        class(polar_shiftmap), intent(in) :: self
+        complex(sp),           intent(in) :: a(0:self%nharm_max)
+        integer,               intent(in) :: irho
+        real(dp),              intent(in) :: alpha
+        complex(dp) :: e, en
+        integer     :: n
+        e  = cmplx(cos(alpha), -sin(alpha), kind=dp)
+        en = cmplx(1.d0, 0.d0, kind=dp)
+        eval_rotcoeffs = 0.5d0 * real(a(0), dp)
+        do n = 1, self%nharm(irho)
+            en = en * e
+            eval_rotcoeffs = eval_rotcoeffs + real(cmplx(a(n),kind=dp) * en, dp)
+        enddo
+    end function eval_rotcoeffs
+
+    !> the cross term at magnitude rho(irho) on the grid's directions for every rotation, from the one-sided
+    !! coefficients a(irot, n) of the all-rotation kernel: cmap(irot, ialpha)
+    pure subroutine map_rotcoeffs( self, a, irho, cmap )
+        class(polar_shiftmap), intent(in)  :: self
+        complex(sp),           intent(in)  :: a(self%nrots, 0:self%nharm_max)
+        integer,               intent(in)  :: irho
+        real(dp),              intent(out) :: cmap(self%nrots, self%nalpha)
+        integer :: n, j
+        do j = 1, self%nalpha
+            cmap(:,j) = 0.5d0 * real(a(:,0), dp)
+        enddo
+        do n = 1, self%nharm(irho)
+            do j = 1, self%nalpha
+                cmap(:,j) = cmap(:,j) + real(cmplx(a(:,n),kind=dp) * self%ea(j,n), dp)
+            enddo
+        enddo
+    end subroutine map_rotcoeffs
 
 end module simple_polar_shiftmap

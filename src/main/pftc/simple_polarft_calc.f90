@@ -1,6 +1,7 @@
 !@descr: polarft class complete interface
 module simple_polarft_calc
 use simple_pftc_api
+use simple_polar_shiftmap, only: polar_shiftmap
 implicit none
 
 public :: polarft_calc
@@ -52,6 +53,21 @@ type heap_vars
     ! cache arrays for batched computations
     complex(sp), pointer :: joint_coeffs(:,:)   => null()  ! objective/dsx/dsy angular coefficients
 end type heap_vars
+
+! the shift map's per-thread work: gen_shiftmap fills it, the shiftmap_* evaluators read it on the same thread
+type shiftmap_work
+    complex(sp), allocatable :: rhat(:,:)   !< the reference's full-ring spectra (nrots, shells)
+    complex(sp), allocatable :: yhat(:,:)   !< conjugate full-ring spectra of the CTF-modulated particle (nrots, shells)
+    complex(dp), allocatable :: prod(:,:)   !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
+    complex(dp), allocatable :: gvec(:)     !< the shell sum of one (order, magnitude) before its transform (nrots)
+    complex(sp), allocatable :: a(:,:,:)    !< the coefficients a_n(irot, rho): (nrots, 0:nharm_max, nrho)
+    real(dp),    allocatable :: w(:), wj(:) !< the objective's shell weights and their Bessel-weighted form (shells)
+    real(dp),    allocatable :: refpow(:)   !< the weighted reference power under the rotated CTF per rotation (nrots)
+    real(dp),    allocatable :: cmap(:,:)   !< the cross term at one magnitude (nrots, nalpha)
+    integer,     allocatable :: pend(:,:)   !< (order, magnitude) of the batched transforms in flight (2, shells)
+    real(dp)                 :: ptclpow = 0.d0 !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
+    integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
+end type shiftmap_work
 
 type :: polarft_calc
     private
@@ -106,6 +122,9 @@ type :: polarft_calc
     ! Convenience vectors, thread memoization
     type(heap_vars),               allocatable :: heap_vars(:)
     type(fftw_drvec),              allocatable :: drvec(:)
+    ! the polar shift map: the Fourier-Bessel tables of the shift grid and the per-thread work (simple_polarft_shiftmap.f90)
+    type(polar_shiftmap),          allocatable :: shiftmap
+    type(shiftmap_work),           allocatable :: smwork(:)
     ! Others
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
@@ -221,6 +240,17 @@ type :: polarft_calc
     procedure          :: gen_many_euclids
     procedure          :: gen_many_euclids_gpu
     procedure          :: gen_many2many_euclids_cufft
+    ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
+    procedure          :: new_shiftmap
+    procedure          :: kill_shiftmap
+    procedure          :: has_shiftmap
+    procedure          :: shiftmap_dims
+    procedure          :: shiftmap_shift
+    procedure          :: gen_shiftmap
+    procedure          :: shiftmap_cross
+    procedure          :: shiftmap_objfun_grid
+    procedure          :: shiftmap_peak
+    procedure, private :: shiftmap_fft_batch
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -923,6 +953,64 @@ interface
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: pfromto(2)
     end subroutine gen_many2many_euclids_cufft
+
+    ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
+
+    module subroutine new_shiftmap( self, rho, nalpha )
+        class(polarft_calc), intent(inout) :: self
+        real(dp),            intent(in)    :: rho(:)
+        integer,             intent(in)    :: nalpha
+    end subroutine new_shiftmap
+
+    module subroutine kill_shiftmap( self )
+        class(polarft_calc), intent(inout) :: self
+    end subroutine kill_shiftmap
+
+    module logical function has_shiftmap( self )
+        class(polarft_calc), intent(in) :: self
+    end function has_shiftmap
+
+    module subroutine shiftmap_dims( self, nrho, nalpha )
+        class(polarft_calc), intent(in)  :: self
+        integer,             intent(out) :: nrho, nalpha
+    end subroutine shiftmap_dims
+
+    module function shiftmap_shift( self, irho, ialpha ) result( s )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: irho, ialpha
+        real(dp) :: s(2)
+    end function shiftmap_shift
+
+    module subroutine gen_shiftmap( self, iref, iptcl )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+    end subroutine gen_shiftmap
+
+    module subroutine shiftmap_fft_batch( self, ithr, ncol )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: ithr, ncol
+    end subroutine shiftmap_fft_batch
+
+    module real(dp) function shiftmap_cross( self, irot, irho, alpha )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: irot, irho
+        real(dp),            intent(in) :: alpha
+    end function shiftmap_cross
+
+    module subroutine shiftmap_objfun_grid( self, vals, prior_w, u0 )
+        class(polarft_calc), target, intent(inout) :: self
+        real(sp),                    intent(out)   :: vals(:,:,:)
+        real(dp),          optional, intent(in)    :: prior_w, u0(2)
+    end subroutine shiftmap_objfun_grid
+
+    module subroutine shiftmap_peak( self, vals, irot, xy, val, irho, ialpha )
+        class(polarft_calc), intent(in)  :: self
+        real(sp),            intent(in)  :: vals(:,:,:)
+        integer,             intent(out) :: irot
+        real(dp),            intent(out) :: xy(2)
+        real(sp),            intent(out) :: val
+        integer,             intent(out) :: irho, ialpha
+    end subroutine shiftmap_peak
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

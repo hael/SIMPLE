@@ -147,6 +147,7 @@ contains
             call self%kill_memo_ptcls
             call self%kill_memo_refs
             call self%kill_memo_workspace
+            call self%kill_shiftmap
             nullify(self%sigma2_noise)
             if( allocated(self%sigma2_wk)  ) deallocate(self%sigma2_wk)
             if( allocated(self%sigma2_wk8) ) deallocate(self%sigma2_wk8)

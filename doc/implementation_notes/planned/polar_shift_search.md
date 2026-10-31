@@ -136,35 +136,110 @@ tester's construction follows the calculator's conventions.
 - The shift prior is added on the grid (it is quadratic in s and a per-rotation factor, `prior_factors`), so
   the grid maximum is the MAP of the same posterior the L-BFGS polishes; that is also what keeps a disk of
   several hundred hypotheses honest at low SNR.
-- The map runs on the refined candidates of a particle (<= prob_athres references in 3D, the 2D refined set)
-  as the coarse initializer of their shift search, before the windowed L-BFGS, not inside the table fill. A
-  picking offset is a property of the particle, not of the (reference, rotation) hypothesis: the shift found
-  on the committed candidate at one iteration is the stored shift every entry of the next iteration is scored
-  at, so a mis-centred particle is scored wrongly for one iteration and then correctly.
+- Where the map runs (ruling 12). On the refined candidates of a particle, where the L-BFGS runs today (<=
+  prob_athres references in 3D, the 2D refined set), in the centring stage as in every other: the global search
+  of their shifts before the windowed L-BFGS, never against every class. A picking offset is a property of the
+  particle, not of the (reference, rotation) hypothesis: the shift found on the committed candidate is the stored
+  shift every entry of the next iteration is scored at, so a mis-centred particle is scored wrongly for one
+  iteration and then correctly. Phase 1's timing table decided it: the map at the disk costs about 150 times one
+  per-class score of the fill.
 - The L-BFGS window after the map is the magnitude step about the grid maximum (the basin), not the search
   radius.
 - Same mechanics for 2D and 3D (one calculator).
 
-## Decisions for the maintainer
+## Rulings (2026-10-30)
 
-1. The radius. Options: a new parameter (picking-error scale in Å, converted at the search sampling), or `trs`
-   reinterpreted as the radius of the map with the L-BFGS window derived from lp. Recommendation: one
-   quantity; tie the radius to the prior's width where the prior is on (radius = 3 sigma), which makes the
-   global search and the windowed search one mechanism.
-2. The prior's centre. The present prior is centred on the start (a random-walk prior: it restrains each step,
-   not the walk). With a global search the picked position is the natural centre (an absolute prior, sigma at
-   the picking-error scale), and it is the prior knowledge cryoSPARC's discrete search leans on in its first
-   iterations. Recommendation: absolute centre when the map is on; measure both.
-3. Masks and extraction. A particle 30 Å off centre inside a mask of radius mskdiam/2 is clipped and no
-   correlation operator recovers what the mask removed. The centring stage needs the particle mask radius
-   grown by the radius (or box taper only), and once centres are established the particles should be
-   re-extracted (`reextract`), as cryoSPARC users do. Decide whether the centring stage is the first stage of
-   solve2D/solve3D or a dedicated step before them.
-4. The diagnostic before building further: on the benchmarked sets, is the 20 Å average the mean vector or the
-   mean magnitude? A mean vector that large is a systematic origin offset (cryoSPARC recentres the volume on its
-   centre of mass each iteration; SIMPLE's origin is the box centre) and needs no per-particle search; a
-   near-zero mean with a 20 Å spread is picking error, the case this fixes. And SIMPLE's shift histogram on the
-   same particles: pile-up at +-trs is the truncation signature.
+Hans's rulings on the maintainer's decisions, from the design discussion of 2026-10-30, with the schedule
+facts read from the code the same day.
+
+1. The radius is the prior's: radius = 3 sigma, one quantity, no separate switch. sigma = 10 Å from the
+   benchmark (a Gaussian whose 3 sigma is the 30 Å maximum recovered), so the disk is 30 Å; the grid step
+   is lp/4 (5 Å at lp 20 Å, six magnitudes); the L-BFGS limits are +-one magnitude step about the grid
+   start, the basin, never the disk.
+2. The prior is absolute: a Gaussian centred on the pick with sigma 10 Å, applied on the grid as the
+   per-rotation factor so grid and L-BFGS score one posterior. The present random-walk prior on the
+   increments (`shift_prior_sigma2`) stays in the stages the map does not run in.
+3. One objective for both levels (Decisions fixed). The grid is joint in rotation and shift: the map gives
+   (irot, rho, alpha) for every rotation at once, no alternation and no rotation at the wrong shift. The
+   direction is a trigonometric polynomial, so the sub-grid start is Newton in alpha and a three-point
+   parabola in rho at no objective evaluation. Where the map runs, this replaces `grid_fit` and the
+   particle-frame seed bank.
+4. Superseded by ruling 12. The first form, the map inside the fill against every class at the cheap stage, was
+   a cost claim; Phase 1's timing table (Progress, 2026-10-30) put the map at the disk at about 150 times one
+   per-class score of today's fill, above 30 after the obvious optimisations.
+5. The in-plane choice is a draw over the three in-plane degrees of freedom (ruled 2026-10-30). The first
+   ruling, the greedy best (irot, shift) per class with the draw over classes only, was reopened the same
+   day: the tempered in-plane draw has been the mechanism that diversifies the search and converges the hard
+   particles, and a greedy shift would make that draw conditional on one shift hypothesis. Today
+   `gen_posterior_val` draws the rotation from p_r proportional to exp(-T (L_r - L_min)) over all nrots
+   rotations at the stored shift, with T = prob_beta x pi wsqsum / (2 pftsz) (`posterior_temperature`,
+   `draw_posterior_row`), the class is drawn from the row posterior, and the shift is local and
+   deterministic. The map gives the same normalised loss on the whole (irot, rho, alpha) grid,
+   L(irot, s) = const(irot) - 2 C(irot, s) / wsqsum (a shift preserves the reference's power per shell), so
+   one `draw_posterior_row` over the flattened grid, prior included, is the joint draw; its cost is the
+   map's, the draw itself one cumulative sum. Two conditions: the prior is not tempered, p proportional to
+   exp(-beta T (L - L_min)) x prior(s), because tempering it at beta 0.1 widens sigma by 1/sqrt(beta) and the
+   disk becomes uniform; and the anneal tail (`l_anneal_tail`, prob_beta_end = 1) ends at the physical
+   posterior, where a sharpened class average narrows the shift posterior below the grid step and the draw
+   is deterministic in effect. Early draws then spread at the 10 Å scale, inside the band of lp 20-30 Å; this
+   is the single-sample form of RELION's marginalisation over psi and the translations under its Gaussian
+   translational prior. The greedy choice is the same draw at infinite temperature on the shift degrees and
+   stays as the comparison arm of Phase 3 behind the switch (ruling 11). To measure: the entropy of a grid of
+   some 45,000 points against today's 300 (more diffuse draws at equal beta; the untempered prior bounds
+   it), and the fill cost (ruling 4).
+6. The class-centring rule and the prior agree on the frame: cavger's centre-of-mass recentring of the
+   class averages (members shifted accordingly) and the absolute prior on the particle are expressed in one
+   frame, and the automask mass-centre shift and the cavg centring are one thing, not two. Settled after
+   reading cavger, before Phase 2.
+7. Masks. The centring stage runs with the widest mask, the mskdiam = 0 effect of `derive_image_settings`
+   ((box - COSMSKHALFWIDTH) smpd), which also puts the 2D limits at lpstart 20, lpstop 8 and lpcen 30 Å and
+   grows pftsz; a user mskdiam is ignored in that stage. At its exit a mask diameter is estimated from the
+   class averages (automask2D's diameters, population-weighted, empty and junk classes excluded, a high
+   quantile rather than the maximum) and becomes the next stage's parameter through `automask2D_mskdiam`;
+   a user mskdiam is honoured from that stage on. No mid-run mask change: the stage boundary builds a new
+   calculator anyway.
+8. The centring stage exits on the shift statistics in addition to its usual criteria: the median
+   per-iteration shift change over the sampled particles below lp/4 for two iterations.
+9. Re-extraction (`reextract` with the recovered centres, shifts reset, the prior re-anchored) and Joe's
+   data are later questions, after a working implementation.
+10. Where the centring stage sits. Shifts are never searched against random or noise-initialised
+    references. Today solve2D (six stages) sets trs = 0, center = no and Gaussian-regularised references in
+    stage 1 and opens its window at stage 2 under snhc_smpl, one stage before prob at stage 3
+    (`simple_solve2D_controller.f90`, `set_refine2D_stage_reference_policy`; the window
+    `min(5, max(2, AHELIX_WIDTH / smpd_crop))` cropped pixels, about 12 Å, set in
+    `simple_commanders_solve2D.f90`). solve3D (eight stages) sets trs = 0 in stages 1-2 and opens its window
+    at stage 3 together with prob (`simple_solve3D_controller.f90`, `build_refine3D_stage_cfg`;
+    `min(8, ...)` in `simple_estimate_ssnr.f90`). Neither window reaches the 20-30 Å the benchmark found.
+    The centring stage is therefore solve2D's stage 2 and solve3D's stage 3: the map opens the 30 Å disk
+    where the 12 Å window opens today, against references one stage old.
+
+11. Under a switch (Hans, 2026-10-30), so the integration point is tested, not guessed. The map is off by
+    default and every existing path is unchanged when it is off (identity on the `simulated_workflow`
+    entries). One key, the prior's sigma in Å (working name `shift_sigma`; 0 or absent = the present window
+    search), turns it on in whatever program carries it: radius 3 sigma, the absolute prior, the joint draw
+    in the fill, the map as the coarse initializer at the window's radius elsewhere. refine2D and refine3D
+    honour it on their command lines first (Phase 2a), so a stage is tested by handing the key to that stage
+    alone; the solve2D/solve3D controllers adopt it as a stage parameter (Phase 2b) once Phase 3's synthetic
+    recovery says which stage. The greedy arm of the comparison is a second, test-level key, not a user
+    setting.
+
+12. The map runs as the L-BFGS runs today, on the sampled subset of classes or projections (the refined
+    candidates), in the centring stage too (Hans, 2026-10-30, on Phase 1's timing). The kernel is optimised first,
+    as fast as it can be made, before Phase 2a builds on it; its exactness is kept (the identity tests), its
+    speed measured against the Phase 1 kernel built from its commit (`tree`) on the same fixture.
+
+What Phase 3 measures, in order: the fraction of particles that leave rejected classes for good ones; the
+shift histogram against the Gaussian cryoSPARC measured, sigma included; class quality; after re-extraction,
+the downstream solve3D. The synthetic recovery test against magnitude and SNR runs alongside.
+
+## Open decisions
+
+1. Closed (Hans, 2026-10-30): the 20 Å average is a mean magnitude, so a spread of picking errors, the case
+   this fixes, not a systematic origin offset. Not every particle has a large shift: the large ones are
+   probably the side views of the membrane protein, which the picker places with a systematic bias. Phase 3
+   therefore reports the shift histogram per class as well as overall, since a view-dependent bias shows as
+   a per-class offset and the frame question of ruling 6 then matters for those classes.
+2. The centring frame (ruling 6), after reading cavger.
 
 ## Phases
 
@@ -179,7 +254,7 @@ tests print.
 
 Exit: the sub-suite, the area suite and the fast gate pass on the Debug and Release builds.
 
-### Phase 1: the all-rotation kernel from the memo
+### Phase 1: the all-rotation kernel from the memo (done 2026-10-30, Progress below)
 
 In a new submodule of the calculator, `src/main/pftc/simple_polarft_shiftmap.f90`: the all-rotation form from
 `ft_ref` and `ft_ptcl_ctf` (full spectra by the twisted symmetry), per-thread work arrays sized by the team,
@@ -191,18 +266,28 @@ to 1e-6 relative at random poses (cc and euclid), thread identity at 1 and 4 thr
 
 Exit: identity and timing table in Progress; `unit_pftc_align2D3D` and the gate pass.
 
-### Phase 2: the coarse initializer (after rulings 1-2)
+### Phase 2: the switch in refine2D/refine3D, then the controllers (after open decision 2)
 
-`pftc_shsrch_grad`: the map replaces `coarse_search_opt_angle` when the radius exceeds the window; the L-BFGS
-limits become the magnitude step about the grid maximum; the prior per ruling 2. Identity test: with the
-radius equal to `trs` the new path and the old path give the same pose on the in-plane tester's fixtures
-(same objective, finer grid: equal or better value, same final L-BFGS pose to 0.01 px). Strategies: the
-switch and the radius plumbed through `parameters` and the 2D/3D search objects; UI entries for the key.
+Phase 2a, behind the switch of ruling 11, no controller change. `pftc_shsrch_grad`: the map replaces
+`coarse_search_opt_angle` when the radius exceeds the window; the L-BFGS limits become the magnitude step
+about the grid start; the prior per ruling 2. Identity test: with the radius equal to `trs` the new path and
+the old path give the same pose on the in-plane tester's fixtures (same objective, finer grid: equal or
+better value, same final L-BFGS pose to 0.01 px). The tables (`eul_prob_tab2D`, `eul_prob_tab`): the fill scores every class at the stored shift as today and refines
+the candidates; with the key on, each refined candidate's shift search starts from the map's joint draw of ruling
+5 over its whole (irot, rho, alpha) grid (greedy on the test key), prior untempered, and the row holds the drawn
+pose and its loss; the class draw over the rows is unchanged. Exit 2a adds the per-candidate cost of the map to
+the fill's cost record (`record_fill_profile`).
 
-Exit: the in-plane and strategy testers pass; refine2D/refine3D on `simulated_workflow` entries unchanged
-when the radius equals the window.
+Phase 2b, after Phase 3's synthetic part. solve2D's stage 2 and solve3D's stage 3, or whichever stage the
+recovery test names, become the centring stage (ruling 10): the disk of 3 sigma, the absolute prior, the
+box-wide mask, the shift-stabilisation exit and, in 2D, the automatic mask diameter handed to the next stage
+(rulings 7-8). The later stages run the map at the window's radius on the refined candidates.
 
-### Phase 3: recovery on data (after rulings 3-4)
+Exit 2a: the in-plane, table and strategy testers pass, the Phase 1 timing table extended to the fill, the
+identity with the key off. Exit 2b: the controllers' testers pass; the synthetic recovery per stage in
+Progress.
+
+### Phase 3: recovery on data
 
 Synthetic: particles simulated with picking errors drawn up to 30 Å (uniform direction, magnitudes 0-30 Å),
 solve2D and solve3D with the map on, the recovered shifts against the truth per stage (the histogram, the
@@ -217,19 +302,25 @@ Exit: the report; the ruling on masks and re-extraction recorded.
 | file | why | phase |
 |---|---|---|
 | `doc/implementation_notes/planned/polar_shift_search.md` | this note: progress, rulings as they are applied | each |
-| `src/main/pftc/simple_polar_shiftmap.f90` | the mechanics class | 0 1 |
+| `src/main/pftc/simple_polar_shiftmap.f90` | the mechanics class; phase 1 adds the table accessors of the all-rotation kernel | 0 1 |
 | `src/main/pftc/simple_polar_shiftmap_tester.f90` | its unit tests; phase 1 adds the kernel's identity and timing | 0 1 2 |
 | `src/main/commanders/test/simple_commanders_test_class.f90` | sub-suite registration (done); phase 2 if a strategy sub-suite is added | 0 2 |
 | `src/main/ui/simple_test/simple_test_ui_class.f90` | suite help list (done) | 0 2 |
 | `doc/policies/test_environment_policy.md` | the area table (done) | 0 2 |
-| `src/main/pftc/simple_polarft_calc.f90` | the kernel's interface | 1 2 |
+| `src/main/pftc/simple_polarft_calc.f90` | the kernel's interface, the shift map and its per-thread work as components | 1 2 |
 | `src/main/pftc/simple_polarft_shiftmap.f90` | the all-rotation kernel (new submodule) | 1 2 |
+| `src/main/pftc/simple_polarft_core.f90` | `kill` releases the shift map | 1 |
 | `src/main/pftc/simple_polarft_memo.f90` | only if the memo must keep what the kernel needs | 1 |
 | `src/main/pftc/simple_pftc_shsrch_grad.f90` | the coarse initializer | 2 |
 | `src/main/pftc/simple_pftc_inplane_tester.f90` | the identity of the new and old coarse paths | 2 |
 | `src/main/params/simple_parameters.f90` | the radius / switch | 2 |
 | `src/main/strategies/search/simple_strategy2D_srch.f90` | plumbing | 2 |
 | `src/main/strategies/search/simple_strategy3D_srch.f90` | plumbing | 2 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90` | the joint draw in the fill of the centring stage | 2 |
+| `src/main/pftc/simple_polarft_corr.f90` | `gen_posterior_val` over the map's grid | 2 |
+| `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage: mask, prior, exit, mskdiam at exit | 2 |
+| `src/main/solve/simple_solve3D_controller.f90` | stage 3: the disk in place of the window | 2 |
+| `src/main/commanders/simple/simple_commanders_solve2D.f90` | the stage window | 2 |
 | `doc/policies/3D/refine3D_policy.md` | the shift search paragraph | 2 3 |
 | `doc/policies/2D/solve2D_policy.md` | the shift search paragraph | 2 3 |
 
@@ -276,3 +367,62 @@ Phase 2's UI files are added to the table with the ruling that names the key.
   The tolerance is 1e-6 with the reason in the tester; the contract is unchanged.
 - The area suite: PASS, 10 sub-suites, 1303 assertions; the fast gate: 15/15, 43 s*proc. Debug build not run
   (it would replace the Release tree); to be run by the maintainer or the arun run before Phase 1.
+
+### 2026-10-30: rulings, the stage schedule and the Debug gate (Claude, FWM-S116118, agent kit)
+
+- Debug build of 519c67d2a through the agent kit (`~/agent_kit/agent_cycle.sh SIMPLE debug`, run 2, log in
+  `~/agent_work/SIMPLE`): configure, build, parallel install and the fast gate 15/15 in about two minutes on 24
+  cores. This closes Phase 0's open Debug item. The kit builds outside the checkout; `build/` is the
+  maintainer's.
+- Rulings 1-10 recorded from the design discussion; Decisions fixed amended for ruling 4 (the fill form in
+  the centring stage); Phase 2 rewritten as the centring stage; the greedy ruling reopened with the
+  three-degree draw proposal (open decision 1).
+- The stage schedule read from the controllers (ruling 10): shifts open at solve2D stage 2 and solve3D
+  stage 3, both windows about 12 Å.
+- Hans agreed to the three-degree draw (ruling 5) and asked for a switch (ruling 11); open decision 1
+  closed, Phase 2 split into 2a (refine2D/refine3D, the switch) and 2b (the controllers, after the synthetic
+  recovery names the stage).
+- Open decision 1 closed: mean magnitude (picking error, probably biased side views); Phase 3 adds the
+  per-class shift histogram. Go for Phase 1 (Hans).
+
+### 2026-10-30: Phase 1 done (Claude, agent kit runs 5-8, Debug and Release, gfortran 16.2.0)
+
+- The kernel: `src/main/pftc/simple_polarft_shiftmap.f90`, a submodule of the calculator, with the shift map and
+  its per-thread work as allocatable components (`new_shiftmap`, `kill_shiftmap`, `gen_shiftmap`,
+  `shiftmap_cross`, `shiftmap_objfun_grid` with the optional prior, `shiftmap_peak`, `shiftmap_dims`,
+  `shiftmap_shift`). The full-ring spectra come from the memoised half spectra by F[-m] = (-1)^m conj(F[m]);
+  the shell products of each order in double precision, the Bessel-weighted shell sums per magnitude cast to
+  single and transformed in batches of nk through the memo workspace's batched plan; the reference power per
+  rotation from the memoised CTF2 and REF2 spectra as the Euclidean kernels form it. The mechanics class gained
+  the table accessors the kernel needs (`shell_weights`, `eval_rotcoeffs`, `map_rotcoeffs`; the one-sided
+  full-ring coefficients, C = Re(a_0)/2 + sum_{n>=1} Re(exp(-i n alpha) a_n)). No change to any existing path.
+- Identity (box 64, pftsz 48, shells 2-11, 64 poses incl. the four rotation branches, random directions): the
+  kernel's cross term against the mechanics class 9.3e-5 at scale 6.0e3 for cc and 7.0e-5 at 4.9e3 for euclid,
+  1.5e-8 relative (tolerance 1e-6 of the Cauchy-Schwarz scale; the spectra are single precision); the grid's
+  objective against `gen_corr_for_rot_8` 4.0e-8 (cc) and 1.9e-8 (euclid, as exp(-L)); the zero-magnitude row
+  against the unshifted objective at every rotation 1.5e-8 (tolerance 1e-6). Four threads against one, eight
+  particles: bit for bit. Sub-suite 41 checks, 0.15 s Release; the area suite and the fast gate 15/15 on both
+  builds (Debug run 5, Release run 7).
+- Timing (Release, box 64, 1.3 A/px, mask 60 A, euclid, one thread, ms per pair; the coarse grid is the 5 x 5
+  lattice of `coarse_search_opt_angle` over +-5 px, 25 all-rotation evaluations of a shifted reference; the map's
+  directions 2 z_max + 3):
+
+  | lp (A) | nrots | shells | coarse 5x5 | map at the 5 px window (grid) | map at the 30 A disk (grid) |
+  |---|---|---|---|---|---|
+  | 8.0 | 144 | 9 | 0.178 | 0.096 (4 x 13) | 1.093 (15 x 47) |
+  | 2.7 | 144 | 30 | 0.479 | 0.938 (10 x 33) | not a use case |
+
+  Per grid point (every rotation included): coarse 7.1 and 19 us, the map 1.8 and 2.8 us at the window, 1.6 us at
+  the disk, 4-7 times cheaper per point rather than the 10-20 estimated in Cost. The direction sums dominate
+  (nalpha x nrots x sum over magnitudes of nharm): an inverse FFT over the directions and fewer directions at
+  the inner magnitudes (spacing proportional to rho) would take most of it; not done, the exactness was the
+  point of this phase.
+- The cost claim of ruling 4, read from the table: the map at the disk costs about 1.1 ms per pair at this size
+  against about 7 us for one per-class score of today's fill (one all-rotation evaluation at the stored shift),
+  150 times; the obvious optimisations leave it above 30 times. Against every class the centring stage's fill
+  would therefore cost 100 times today's; against the committed or a few candidate classes per particle it is
+  negligible (200,000 particles x 1 ms / 24 threads = 8 s per iteration). Phase 2a's first decision is the
+  class set the map runs on in the centring stage: every class, the top-k of the stored-shift posterior, or
+  the drawn class alone (the picking offset is the particle's, not the class hypothesis's).
+- Rulings 12 (Hans): the map runs on the sampled subset, as the L-BFGS does today; the kernel is optimised
+  before Phase 2a. The Phase 1 state is the checkpoint the optimisation is measured against.
