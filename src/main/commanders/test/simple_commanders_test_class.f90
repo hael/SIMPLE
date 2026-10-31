@@ -146,6 +146,7 @@ use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
 use simple_cavgs_state_match_tester,         only: run_all_cavgs_state_match_tests
 use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
+use simple_polar_shiftmap_tester,            only: run_all_polar_shiftmap_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
@@ -471,6 +472,7 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'polar correlation',        run_all_polarft_corr_tests)
+        call add_suite(s, n, 'polar shift map',          run_all_polar_shiftmap_tests)
         call add_suite(s, n, 'continuous in-plane',      run_all_pftc_inplane_tests)
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
         call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
