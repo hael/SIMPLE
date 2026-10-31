@@ -133,9 +133,12 @@ tester's construction follows the calculator's conventions.
   k/sigma2 for euclid), no per-coefficient whitening. Per-coefficient phase normalisation amplifies every shell
   whose per-coefficient SNR is below one, which for a single particle is most of them; the peak width is set
   by the band limit, not by whitening.
-- The shift prior is added on the grid (it is quadratic in s and a per-rotation factor, `prior_factors`), so
-  the grid maximum is the MAP of the same posterior the L-BFGS polishes; that is also what keeps a disk of
-  several hundred hypotheses honest at low SNR.
+- The kernel is the data term only. The sampler assembles the untempered prior and the polar cell measure itself
+  (review, sections 2 and 6, adopted 2026-10-31): the shift search's prior in normalised loss units,
+  1 / (2 sigma^2 T), is tempered along with the loss when the row is exponentiated at beta T, so the map's grid
+  does not carry it. The grid gives the loss (or correlation), the shift of every cell in the optimizer's frame
+  (`shiftmap_shift`) and the cell's translation area (`shiftmap_cell_area`: rings between the midpoints of the
+  magnitudes, the central disk divided across the directions that all name the origin).
 - Where the map runs (ruling 12). On the refined candidates of a particle, where the L-BFGS runs today (<=
   prob_athres references in 3D, the 2D refined set), in the centring stage as in every other: the global search
   of their shifts before the windowed L-BFGS, never against every class. A picking offset is a property of the
@@ -226,7 +229,9 @@ facts read from the code the same day.
 12. The map runs as the L-BFGS runs today, on the sampled subset of classes or projections (the refined
     candidates), in the centring stage too (Hans, 2026-10-30, on Phase 1's timing). The kernel is optimised first,
     as fast as it can be made, before Phase 2a builds on it; its exactness is kept (the identity tests), its
-    speed measured against the Phase 1 kernel built from its commit (`tree`) on the same fixture.
+    speed measured against the Phase 1 kernel built from its commit (`tree`) on the same fixture. Done 2026-10-31
+    (Progress): 2.3 times at the disk, 1.9 at the windows, about ten times cheaper per grid point than the coarse
+    lattice.
 
 What Phase 3 measures, in order: the fraction of particles that leave rejected classes for good ones; the
 shift histogram against the Gaussian cryoSPARC measured, sigma included; class quality; after re-extraction,
@@ -240,6 +245,22 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
    therefore reports the shift histogram per class as well as overall, since a view-dependent bias shows as
    a per-class offset and the frame question of ruling 6 then matters for those classes.
 2. The centring frame (ruling 6), after reading cavger.
+
+## Review findings and their disposition
+
+`polar_shift_search_review.md` (2026-10-30, commit 00dc4ec55) reviewed the mathematics, the posterior
+construction and the cost. Its findings and what the plan does with them:
+
+| finding | disposition |
+|---|---|
+| P1 equal weights on the polar grid are the wrong measure (section 2) | kernel: `shiftmap_cell_area` (2026-10-31); Phase 2a: the sampler's log cell area in every cell's log mass |
+| P1 a pose draw per class, then the class from that pose's loss, is not a joint draw (section 3) | Phase 2a requirement: the class is drawn from the evidence log Z_c = logsumexp over the candidate's map of (-beta T L - prior + log pi_c + log area), one conditional pose kept per candidate; evidence and the sampled loss in separate fields |
+| P1 L-BFGS after the draw changes the distribution (section 4) | for Hans: the polish stays the deterministic arm (initialiser, comparison); the posterior draw is the grid's, refined where the mass concentrates, not optimised |
+| P1 screening the candidates at the current shift can exclude the right class (section 5) | Phase 2a requirement: translation-aware coverage (a low-resolution map against every class, or exploration candidates); Phase 3 measures retained mass against the exhaustive joint evaluation on a subset |
+| P1 the submodule missing from a2c1b1f86 (section 7) | committed in 9c2fcdaf9 |
+| P2 the cost must count the mapped references (section 8) | the kernel's optimisation (ruling 12); Phase 2a's cost record counts candidates; 55 references per particle at a 10 degree bound in 3D is the figure to beat |
+| P2 prior, frame, precision, calibration (section 6) | kernel: the data term only, the error reported in the sampler's units (T dL); fixture with angular CTF, distinct halves and spectra (2026-10-31); frame and crop validation in Phase 2a |
+| sigma 10 A is a modelling choice; a 20 A mean radius implies sigma about 16 A | for Hans: sigma becomes the parameter of the switch, so the choice is a setting, not a constant |
 
 ## Phases
 
@@ -273,10 +294,13 @@ Phase 2a, behind the switch of ruling 11, no controller change. `pftc_shsrch_gra
 about the grid start; the prior per ruling 2. Identity test: with the radius equal to `trs` the new path and
 the old path give the same pose on the in-plane tester's fixtures (same objective, finer grid: equal or
 better value, same final L-BFGS pose to 0.01 px). The tables (`eul_prob_tab2D`, `eul_prob_tab`): the fill scores every class at the stored shift as today and refines
-the candidates; with the key on, each refined candidate's shift search starts from the map's joint draw of ruling
-5 over its whole (irot, rho, alpha) grid (greedy on the test key), prior untempered, and the row holds the drawn
-pose and its loss; the class draw over the rows is unchanged. Exit 2a adds the per-candidate cost of the map to
-the fill's cost record (`record_fill_profile`).
+the candidates; with the key on, each refined candidate gets its map, and from it, in one pass, its evidence
+log Z_c = logsumexp over the grid of (-beta T L - |u|^2 / (2 sigma^2) + log area) with the untempered prior on the
+absolute displacement from the pick and the cell measure, and one conditional pose draw of ruling 5 (greedy on
+the test key). The row holds the evidence, the drawn pose and the drawn pose's loss in separate fields; the class
+draw is from the evidence (review, section 3), the candidates' coverage of large offsets is established (review,
+section 5), and the drawn pose is not polished (review, section 4; the polish is the deterministic arm). Exit 2a
+adds the per-candidate cost of the map to the fill's cost record (`record_fill_profile`).
 
 Phase 2b, after Phase 3's synthetic part. solve2D's stage 2 and solve3D's stage 3, or whichever stage the
 recovery test names, become the centring stage (ruling 10): the disk of 3 sigma, the absolute prior, the
@@ -426,3 +450,39 @@ Phase 2's UI files are added to the table with the ruling that names the key.
   the drawn class alone (the picking offset is the particle's, not the class hypothesis's).
 - Rulings 12 (Hans): the map runs on the sampled subset, as the L-BFGS does today; the kernel is optimised
   before Phase 2a. The Phase 1 state is the checkpoint the optimisation is measured against.
+
+### 2026-10-31: the kernel optimised (Claude, agent kit runs 9-33; baseline `tree phase1` = 9c2fcdaf9)
+
+- What changed. The direction synthesis and the transform over the ring are one batched 2D transform per
+  magnitude of the shell sums G_n[m, rho] over (order, ring position), the orders folded modulo nalpha onto the
+  direction axis (exact on the sampled directions for any count); since only the real part is used and the real
+  part of a forward transform is the forward transform of the Hermitian half X_h = (X + conj(X[-n,-m]))/2, it is
+  one complex-to-real transform of half the size (fed conj(X_h): FFTW's c2r is the backward transform). The
+  shell products come from two contiguous slices instead of a modulo index; the shell sums are single precision
+  like the spectra (the identity is unchanged: the spectra set the floor); the transform's input keeps its zero
+  rows across pairs; the per-rotation normalisation is applied once per rotation. `shiftmap_ndirections(nmin)`
+  gives the smallest 7-smooth count >= nmin: a prime direction count (47 at the disk) made the transform slower
+  than the sums it replaced. Review-driven: the kernel is the data term only (no prior; the sampler assembles the
+  untempered prior and the measure), `shiftmap_cell_area` gives the polar cell measure, `set_ptcl_ctfmat` lets a
+  test set a per-particle angular CTF, and the grid layout is vals(ialpha, irot, irho).
+- Identity (Release, box 64, pftsz 48, shells 2-11, two distinct reference halves, particle 1 odd with an
+  angularly varying CTF, euclid with two sigma2 spectra): kernel against the mechanics 1.6e-8 (cc) and 1.3e-8
+  (euclid) of the Cauchy-Schwarz scale; the grid against `gen_corr_for_rot_8` 5.2e-8 (cc) and 4.8e-8 (euclid,
+  as exp(-L)); in the sampler's units the euclid error is 4.3e-5 nats, T |dL| at the particle's temperature; the
+  zero-magnitude row 1.5e-8 and 3.7e-8; a 7-direction grid with 30 orders folded 2.8e-8; four threads bit for
+  bit; cell areas sum to the disk. 53 checks, 0.15 s; both gates 15/15 (Debug run 30, Release run 32).
+- Timing (Release, the fixture of the 2026-10-30 table, FFT-friendly direction counts, ms per pair):
+
+  | lp (A) | coarse 5x5 | map at the window: before -> after (grid) | map at the disk: before -> after (grid) |
+  |---|---|---|---|
+  | 8.0 | 0.170 | 0.096 -> 0.051 (4 x 14) | 1.119 -> 0.487 (15 x 48) |
+  | 2.7 | 0.474 | 0.923 -> 0.499 (10 x 35) | not a use case |
+
+  Per grid point with every rotation included: 0.7 us at the disk and 1.4 us at the lp 2.7 window against 6.8
+  and 19 us for the lattice, ten times cheaper, the low end of the Cost section's estimate. What is left: the
+  c2r transform (about half), the shell sums, the symmetrisation pass. Measured plans (FFTW_MEASURE, what a
+  production run without a fixed seed gets) would take more off the transform; fewer directions on the inner
+  rings and the sampler's choice of counts are the remaining levers, both the sampler's business.
+- The first c2r attempt returned the map with both indices negated; the zero-magnitude row caught it (a
+  sign-convention bug is a reflection of the rotation axis). A folded-direction test that normalised by a value
+  it was checking was replaced by the direct comparison against the calculator.

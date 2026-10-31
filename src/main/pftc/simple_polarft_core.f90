@@ -216,6 +216,16 @@ contains
         call self%memoize_sqsum_ptcl(iptcl)
     end subroutine set_ptcl_pft
 
+    !> one particle's |CTF| on the polar grid (the tests' angularly varying CTF; production fills every particle's
+    !! from the project, create_polar_absctfmats); turns the CTF on
+    module subroutine set_ptcl_ctfmat(self, iptcl, ctfmat)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: ctfmat(self%pftsz,self%kfromto(1):self%interpklim)
+        self%ctfmats(:,:,self%pinds(iptcl)) = ctfmat
+        self%with_ctf = .true.
+    end subroutine set_ptcl_ctfmat
+
     module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
         class(polarft_calc), intent(inout) :: self
         class(image),        intent(in)    :: img

@@ -9,7 +9,7 @@ use simple_defs,  only: sp, dp, DTWOPI
 use simple_error, only: simple_exception
 implicit none
 
-public :: polar_shiftmap
+public :: polar_shiftmap, shiftmap_ndirections
 private
 #include "simple_local_flags.inc"
 
@@ -26,6 +26,7 @@ type :: polar_shiftmap
     integer                  :: nharm_max  = 0 !< highest harmonic order kept at any magnitude
     real(dp),    allocatable :: rho(:)         !< the magnitudes (pixels)
     real(dp),    allocatable :: alpha(:)       !< the directions (radians)
+    real(dp),    allocatable :: area(:)        !< the translation area of one cell at each magnitude (pixels^2)
     integer,     allocatable :: nharm(:)       !< highest harmonic order kept at each magnitude
     real(dp),    allocatable :: jn(:,:,:)      !< J_n(2 pi k rho / box): (0:nharm_max, kfromto(1):kfromto(2), nrho)
     complex(dp), allocatable :: tw(:,:)        !< exp(i n theta_p): (pftsz, 0:nharm_max)
@@ -41,6 +42,7 @@ type :: polar_shiftmap
     procedure :: get_rho
     procedure :: get_alpha
     procedure :: get_shift
+    procedure :: get_cell_area
     procedure :: cross_spectrum
     procedure :: coeffs
     procedure :: eval
@@ -48,10 +50,35 @@ type :: polar_shiftmap
     procedure :: peak
     procedure :: shell_weights
     procedure :: eval_rotcoeffs
-    procedure :: map_rotcoeffs
+    procedure, private :: cell_areas
 end type polar_shiftmap
 
 contains
+
+    !> the smallest direction count >= nmin whose prime factors are 2, 3, 5 and 7: the lengths FFTW transforms fast
+    !! (a prime count makes the map's transform several times slower)
+    pure integer function shiftmap_ndirections( nmin ) result( n )
+        integer, intent(in) :: nmin
+        integer :: r
+        n = max(1, nmin)
+        do
+            r = n
+            do while( mod(r,2) == 0 )
+                r = r / 2
+            enddo
+            do while( mod(r,3) == 0 )
+                r = r / 3
+            enddo
+            do while( mod(r,5) == 0 )
+                r = r / 5
+            enddo
+            do while( mod(r,7) == 0 )
+                r = r / 7
+            enddo
+            if( r == 1 ) exit
+            n = n + 1
+        enddo
+    end function shiftmap_ndirections
 
     !> the tables for a polar geometry (half ring pftsz, shells kfromto, box) and a shift grid: magnitudes rho
     !! (pixels, any order, zero allowed) by nalpha directions (uniform over the turn)
@@ -102,8 +129,52 @@ contains
                 self%ea(j,n) = cmplx(cos(real(n,dp)*self%alpha(j)), -sin(real(n,dp)*self%alpha(j)), kind=dp)
             enddo
         enddo
+        call self%cell_areas
         self%exists = .true.
     end subroutine new
+
+    !> The translation area of one cell at each magnitude: the ring between the midpoints to the neighbouring
+    !! magnitudes (the edges half a step beyond the smallest and largest, never below zero), divided by the
+    !! directions. At zero magnitude every direction names the origin, so the central disk's area is divided across
+    !! them; the cells of a grid sum to the disk out to the outer edge
+    subroutine cell_areas( self )
+        class(polar_shiftmap), intent(inout) :: self
+        integer  :: order(self%nrho), i, j, k, s
+        real(dp) :: lo, hi, step
+        if( allocated(self%area) ) deallocate(self%area)
+        allocate(self%area(self%nrho))
+        order = [(i, i = 1, self%nrho)]
+        do i = 2, self%nrho
+            k = order(i)
+            j = i - 1
+            do while( j >= 1 )
+                if( self%rho(order(j)) <= self%rho(k) ) exit
+                order(j+1) = order(j)
+                j = j - 1
+            enddo
+            order(j+1) = k
+        enddo
+        do s = 1, self%nrho
+            if( self%nrho == 1 )then
+                step = max(self%rho(order(1)), 1.d0)
+            else if( s == 1 )then
+                step = self%rho(order(2)) - self%rho(order(1))
+            else
+                step = self%rho(order(s)) - self%rho(order(s-1))
+            endif
+            if( s == 1 )then
+                lo = max(0.d0, self%rho(order(1)) - 0.5d0 * step)
+            else
+                lo = 0.5d0 * (self%rho(order(s-1)) + self%rho(order(s)))
+            endif
+            if( s == self%nrho )then
+                hi = self%rho(order(s)) + 0.5d0 * step
+            else
+                hi = 0.5d0 * (self%rho(order(s)) + self%rho(order(s+1)))
+            endif
+            self%area(order(s)) = 0.5d0 * DTWOPI * (hi * hi - lo * lo) / real(self%nalpha, dp)
+        enddo
+    end subroutine cell_areas
 
     !> the highest order kept at argument z: J_n(z) is positive and decreasing in n past z, so the orders from
     !! the first one below SHIFTMAP_JTOL on are dropped
@@ -120,7 +191,7 @@ contains
     subroutine kill( self )
         class(polar_shiftmap), intent(inout) :: self
         if( self%exists )then
-            deallocate(self%rho, self%alpha, self%nharm, self%jn, self%tw, self%ea)
+            deallocate(self%rho, self%alpha, self%area, self%nharm, self%jn, self%tw, self%ea)
             self%pftsz     = 0
             self%nrots     = 0
             self%kfromto   = 0
@@ -164,6 +235,12 @@ contains
         integer,               intent(in) :: ialpha
         get_alpha = self%alpha(ialpha)
     end function get_alpha
+
+    pure real(dp) function get_cell_area( self, irho )
+        class(polar_shiftmap), intent(in) :: self
+        integer,               intent(in) :: irho
+        get_cell_area = self%area(irho)
+    end function get_cell_area
 
     !> the shift of a grid point, in pixels, in the frame the shift matrix acts in (the reference's own)
     pure function get_shift( self, irho, ialpha ) result( s )
@@ -318,23 +395,5 @@ contains
             eval_rotcoeffs = eval_rotcoeffs + real(cmplx(a(n),kind=dp) * en, dp)
         enddo
     end function eval_rotcoeffs
-
-    !> the cross term at magnitude rho(irho) on the grid's directions for every rotation, from the one-sided
-    !! coefficients a(irot, n) of the all-rotation kernel: cmap(irot, ialpha)
-    pure subroutine map_rotcoeffs( self, a, irho, cmap )
-        class(polar_shiftmap), intent(in)  :: self
-        complex(sp),           intent(in)  :: a(self%nrots, 0:self%nharm_max)
-        integer,               intent(in)  :: irho
-        real(dp),              intent(out) :: cmap(self%nrots, self%nalpha)
-        integer :: n, j
-        do j = 1, self%nalpha
-            cmap(:,j) = 0.5d0 * real(a(:,0), dp)
-        enddo
-        do n = 1, self%nharm(irho)
-            do j = 1, self%nalpha
-                cmap(:,j) = cmap(:,j) + real(cmplx(a(:,n),kind=dp) * self%ea(j,n), dp)
-            enddo
-        enddo
-    end subroutine map_rotcoeffs
 
 end module simple_polar_shiftmap

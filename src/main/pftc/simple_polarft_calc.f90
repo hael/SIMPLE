@@ -54,17 +54,19 @@ type heap_vars
     complex(sp), pointer :: joint_coeffs(:,:)   => null()  ! objective/dsx/dsy angular coefficients
 end type heap_vars
 
-! the shift map's per-thread work: gen_shiftmap fills it, the shiftmap_* evaluators read it on the same thread
+! the shift map's per-thread work: gen_shiftmap fills it, shiftmap_objfun_grid and shiftmap_cross read it on the same thread
 type shiftmap_work
     complex(sp), allocatable :: rhat(:,:)   !< the reference's full-ring spectra (nrots, shells)
     complex(sp), allocatable :: yhat(:,:)   !< conjugate full-ring spectra of the CTF-modulated particle (nrots, shells)
-    complex(dp), allocatable :: prod(:,:)   !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
-    complex(dp), allocatable :: gvec(:)     !< the shell sum of one (order, magnitude) before its transform (nrots)
-    complex(sp), allocatable :: a(:,:,:)    !< the coefficients a_n(irot, rho): (nrots, 0:nharm_max, nrho)
-    real(dp),    allocatable :: w(:), wj(:) !< the objective's shell weights and their Bessel-weighted form (shells)
+    complex(sp), allocatable :: prod(:,:)   !< R^[m-n] conj(Y^[m]) at the order in hand (nrots, shells)
+    complex(sp), allocatable :: gsum(:,:,:) !< the shell sums G_n[m, rho]: (nrots, 0:nharm_max, nrho)
+    real(sp),    allocatable :: wj(:,:,:)   !< the objective's shell weights times J_n: (shells, nrho, 0:nharm_max)
     real(dp),    allocatable :: refpow(:)   !< the weighted reference power under the rotated CTF per rotation (nrots)
-    real(dp),    allocatable :: cmap(:,:)   !< the cross term at one magnitude (nrots, nalpha)
-    integer,     allocatable :: pend(:,:)   !< (order, magnitude) of the batched transforms in flight (2, shells)
+    complex(sp), allocatable :: gin(:,:,:)  !< the folded orders over (direction order, ring position, magnitude), zero elsewhere, kept across pairs
+    type(c_ptr)              :: ghalf_p = c_null_ptr !< the Hermitian half of gin, the complex-to-real transform's input
+    type(c_ptr)              :: gout_p  = c_null_ptr !< its output: the cross term on the grid
+    complex(kind=c_float_complex), pointer :: ghalf(:,:,:) => null() !< (nalpha/2+1, nrots, nrho) view
+    real(kind=c_float),            pointer :: gout(:,:,:)  => null() !< (nalpha, nrots, nrho) view
     real(dp)                 :: ptclpow = 0.d0 !< the particle's weighted power: ksqsum for cc, wsqsum for euclid
     integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
 end type shiftmap_work
@@ -125,6 +127,7 @@ type :: polarft_calc
     ! the polar shift map: the Fourier-Bessel tables of the shift grid and the per-thread work (simple_polarft_shiftmap.f90)
     type(polar_shiftmap),          allocatable :: shiftmap
     type(shiftmap_work),           allocatable :: smwork(:)
+    type(c_ptr)                                :: plan_shiftmap = c_null_ptr !< the batched 2D transform of the shift map
     ! Others
     ! Others
     logical, allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
@@ -142,6 +145,7 @@ type :: polarft_calc
     procedure          :: reallocate_ptcls
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
+    procedure          :: set_ptcl_ctfmat
     procedure          :: polarize_ref_pft
     procedure          :: polarize_ptcl_pft
     procedure          :: set_ref_fcomp
@@ -246,11 +250,11 @@ type :: polarft_calc
     procedure          :: has_shiftmap
     procedure          :: shiftmap_dims
     procedure          :: shiftmap_shift
+    procedure          :: shiftmap_cell_area
     procedure          :: gen_shiftmap
     procedure          :: shiftmap_cross
     procedure          :: shiftmap_objfun_grid
     procedure          :: shiftmap_peak
-    procedure, private :: shiftmap_fft_batch
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -292,6 +296,12 @@ interface
         integer,             intent(in)    :: iptcl
         complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
     end subroutine set_ptcl_pft
+
+    module subroutine set_ptcl_ctfmat(self, iptcl, ctfmat)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: ctfmat(self%pftsz,self%kfromto(1):self%interpklim)
+    end subroutine set_ptcl_ctfmat
 
     module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
         class(polarft_calc), intent(inout) :: self
@@ -981,15 +991,15 @@ interface
         real(dp) :: s(2)
     end function shiftmap_shift
 
+    module real(dp) function shiftmap_cell_area( self, irho )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: irho
+    end function shiftmap_cell_area
+
     module subroutine gen_shiftmap( self, iref, iptcl )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
     end subroutine gen_shiftmap
-
-    module subroutine shiftmap_fft_batch( self, ithr, ncol )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: ithr, ncol
-    end subroutine shiftmap_fft_batch
 
     module real(dp) function shiftmap_cross( self, irot, irho, alpha )
         class(polarft_calc), intent(in) :: self
@@ -997,10 +1007,9 @@ interface
         real(dp),            intent(in) :: alpha
     end function shiftmap_cross
 
-    module subroutine shiftmap_objfun_grid( self, vals, prior_w, u0 )
+    module subroutine shiftmap_objfun_grid( self, vals )
         class(polarft_calc), target, intent(inout) :: self
         real(sp),                    intent(out)   :: vals(:,:,:)
-        real(dp),          optional, intent(in)    :: prior_w, u0(2)
     end subroutine shiftmap_objfun_grid
 
     module subroutine shiftmap_peak( self, vals, irot, xy, val, irho, ialpha )
