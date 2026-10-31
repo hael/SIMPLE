@@ -311,6 +311,9 @@ if(BUILD_TESTS)
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=simulated_workflow suite=1jxy)
   # The FCC Pt and wurtzite CdSe fixtures are independent crystal-system
   # workflows and therefore receive isolated working directories and verdicts.
+  # fcc runs trajectory_solve3D and checks that its gates lose at most 5% of the
+  # frames; wurtzite runs the stages by hand with
+  # the atomicity-prior refinement, so both forms stay covered.
   simple_add_test(single_workflow_fcc highlevel 7200 1 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=single_workflow suite=fcc smpd=0.358)
   simple_add_test(single_workflow_wurtzite highlevel 7200 1 PROCESSORS 2

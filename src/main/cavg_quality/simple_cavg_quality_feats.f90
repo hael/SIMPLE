@@ -300,18 +300,22 @@ contains
                 bp_center_edge_var  = 0.0
             else
                 if( l_nano )then
-                    ! the foreground geometry carries nothing at nanoparticle sampling and gates nothing
+                    ! the foreground geometry carries nothing at nanoparticle sampling and gates nothing; the flatness
+                    ! of the validity gate is measured on the class average itself, not after the cryo-EM low-pass:
+                    ! averages of raw graphene-subtracted frames hold almost nothing below SIGNAL_METRIC_LP and read
+                    ! as flat there although their lattice fringes stand out
                     centroid_norm    = 0.0
                     cc_area_frac     = 0.0
                     no_component     = .false.
                     mask_hard_reject = .false.
+                    call measure_nano_locvar(imgs(i), locvar_fg, locvar_bg)
                 else
                     call measure_cavg_foreground_geometry(imgs(i), bin_img(ithr), cc_img(ithr), rmat_cc(:,:,:,ithr), &
                                                           rmat_disc(:,:,:,ithr), disc_area(ithr), rad_px, &
                                                           centroid_norm, cc_area_frac, no_component, mask_hard_reject)
+                    call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
+                                                    presence_score, bp_center_edge_var)
                 endif
-                call measure_cavg_image_metrics(imgs(i), rad_px, locvar_fg, locvar_bg, center_edge_snr, &
-                                                presence_score, bp_center_edge_var)
             endif
             if( l_nano )then
                 ! the lattice bank is measured after the loop, on the classes that pass these gates
@@ -588,6 +592,29 @@ contains
         call img_bin%kill()
         call img_bp%kill()
     end subroutine measure_cavg_image_metrics
+
+    !> nano validity: the local variances (LOCVAR_WINDOW) inside and outside the Otsu mask of the unfiltered class
+    !! average, its edge mean removed
+    subroutine measure_nano_locvar( img_src, locvar_fg, locvar_bg )
+        class(image), intent(inout) :: img_src
+        real,         intent(out)   :: locvar_fg, locvar_bg
+        type(image)       :: img, img_bin
+        real, allocatable :: bin_mask(:,:,:)
+        integer           :: ldim(3)
+        ldim = img_src%get_ldim()
+        call img%new(ldim, img_src%get_smpd(), wthreads=.false.)
+        call img%copy_fast(img_src)
+        call img%zero_edgeavg()
+        call img_bin%new(ldim, img_src%get_smpd(), wthreads=.false.)
+        call img_bin%copy_fast(img)
+        call otsu_img(img_bin)
+        allocate(bin_mask(ldim(1), ldim(2), ldim(3)))
+        call img_bin%get_rmat_sub(bin_mask)
+        call img%loc_var_masked(bin_mask(:,:,1), LOCVAR_WINDOW, locvar_fg, locvar_bg)
+        deallocate(bin_mask)
+        call img%kill()
+        call img_bin%kill()
+    end subroutine measure_nano_locvar
 
     real function resolution_feature( res )
         real, intent(in) :: res

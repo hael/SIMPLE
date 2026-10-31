@@ -460,7 +460,9 @@ contains
         call single_workflow%new(&
         &'single_workflow',&
         &'validate SINGLE reconstruction for FCC Pt and wurtzite CdSe',&
-        &'runs focused Pt and CdSeW nanoparticle suites and validates each final map against its known truth',&
+        &'runs focused Pt and CdSeW nanoparticle suites and validates each final map against its known truth; fcc runs '//&
+        &'trajectory_solve3D and checks that its gates lose at most 5% of the frames, '//&
+        &'wurtzite runs the stages by hand with the atomicity-prior refinement',&
         &'simple_test_exec',&
         &.false., display_name='SINGLE Workflow Validation')
         call single_workflow%add_input(UI_PARM, 'suite', 'multi', 'Nanoparticle suite', &

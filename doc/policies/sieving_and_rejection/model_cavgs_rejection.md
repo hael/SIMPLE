@@ -16,8 +16,9 @@ The implementation lives in `src/main/cavg_quality`. The command entry point is 
 - `simple_cavg_quality_model.f90`: built-in presets, model file I/O, pairwise-logistic scoring, and promotion snippets.
 - `simple_cavg_quality_analysis.f90`: evaluation, analysis reports, and feature tables.
 - `simple_cavg_quality_learn.f90`: analysis-table reader, feature-policy search, model search, and learn reports.
-- `simple_cavg_quality_lattice.f90`: the lattice bank of the `nano` context and its lattice grade `LAT_PEAK_MIN`
-  (see The nano Context).
+- `simple_cavg_quality_lattice.f90`: the lattice bank of the `nano` context and its lattice grades `LAT_PEAK_MIN`
+  (denoised class averages) and `LAT_PEAK_MIN_RAW` (raw ones), and the model gate of `trajectory_solve3D` with its
+  constant `K_MODEL` (see The nano Context).
 
 ## Comparison with the Retired Microchunk Rejector
 
@@ -415,8 +416,8 @@ metrics.
 `simple_test_exec test=unit_numerics` runs the backend's sub-suites "cavg quality relations"
 (`simple_cavg_quality_relations_tester`), "cavg quality selection"
 (`simple_cavg_quality_selection_tester`) and "cavg quality nano" (`simple_cavg_quality_lattice_tester`: the
-lattice family on synthetic class averages, its normalization, the nano gates and preset, the diameter calibration,
-the bank by context, model-file and table round trips, team against one-thread identity); one runs alone with
+lattice family on synthetic class averages, its normalization, the nano gates and preset, the model gate's cut in
+closed form, the diameter calibration, the bank by context, model-file and table round trips, team against one-thread identity); one runs alone with
 `suite=`.
 
 ## The nano Context
@@ -477,6 +478,50 @@ simple_exec prg=model_cavgs_rejection quality_model=nano mskdiam=<particle diame
 the lattice features. `apply` writes the class diameter (`diam`, from the strongest Bragg spot) on every scored
 `cls2D` row and its median over the accepted classes, beside the mask diameter, on the class-average entry of
 `os_out`, for `simulate_nanoparticle` and `autorefine3D_nano`.
+
+### The two gates of `trajectory_solve3D` (raw class averages)
+
+`single_exec prg=trajectory_solve3D` gates before it denoises, because the flex denoiser turns a frame without a
+particle, or a latticeless blob, into a pooled particle image (measured twice in `trajectory_solve3D.md`, phase 1).
+The order is: the raw frames centred (`center2D_nano`); the diameter estimated on the centred chunk averages; the
+start model; `refine2D_nano` on the raw frames; and then the two gates, coupled on its class averages. A class is
+kept only if both keep it. Then the prune; only the kept frames are denoised before 3D.
+
+- The lattice gate is this preset at a second grade, `LAT_PEAK_MIN_RAW = 0.52`, which the program passes as
+  `thres`. Class averages of raw graphene-subtracted frames have lower lattice peaks than denoised ones, and the
+  same rule that set 0.65 (the strictest threshold keeping at least 98% of the maintainer's selected classes on
+  each labelled trajectory) gives 0.52 on the labelled classes rebuilt on the raw frames. That keeps 0.995, 0.995
+  and 0.985 of the selected classes and removes 0.22, 0.20 and 0.37 of the rejected ones; 0.65 would keep only
+  0.984, 0.962 and 0.939. The lattice peak still ranks the raw averages (area under the curve 0.990, 0.971, 0.971;
+  pooled 0.978).
+- The validity gates' flatness is measured on the unfiltered class average. Raw averages hold almost nothing
+  below the cryo-EM low-pass of 10 Å and were hard-rejected there, including classes the maintainer selected.
+- The model gate aligns the class averages the lattice gate kept to the start model, the face-centred cubic
+  particle `simulate_nanoparticle` builds for the estimated diameter (`refine3D_nano oritype=cls3D maxits=1 lp=1.0
+  trs=10`, the pass `autorefine3D_nano` runs against its final map: a global search over directions, in-plane
+  angles and shifts). The correlation is `corr` of `cls3D`, the best correlation to a reprojection in the band 3
+  to 1 Å. A class is rejected when it lies below `median - K_MODEL x 1.4826 x MAD` of the lattice gate's
+  survivors (median absolute deviation, MAD).
+- The rule is `model_gate_states`, and `K_MODEL = 3`, both in `simple_cavg_quality_lattice.f90`.
+  `model_gate_nsd=<robust spreads>` moves the cut for one run; the program checks it on its command line, as it
+  checks its other keys (program-specific checks live in the commander, never in the parameter class). `K_MODEL` comes
+  from ruling 2's rule (the smallest of 1.5, 2, 2.5, 3, 4 keeping at least 98% of the selected classes with the
+  lattice gate in front), which gave 3 on denoised averages behind 0.65 (phase 0). On the raw tables behind 0.52
+  every value keeps the same recall, so the rule cannot choose. A gate set for recall breaks that tie toward the
+  permissive end, so 3 stays (ruling 9). The strictest value, 1.5, removed two of 13 classes of a clean
+  simulated trajectory, while any K above about 1.9 removes nothing there.
+- What the model gate does is little, and that is the result. The correlation ranks the lattice gate's survivors
+  well (area under the curve 0.993, 0.966, 0.967 on the raw sets), but at 98% recall a cut relative to the
+  survivors' median and spread has no room. Behind 0.52, at 3, it removes another 0.02, 0.00 and 0.00 of the rejected
+  classes, and on 71-17/traj01 it removed nothing in the denoised-first order. The correlation level to the
+  simulated particle differs between trajectories, so an absolute floor set on one would be wrong on another; a
+  gate relative to the upper mode of the correlations is the form to try next.
+- Products: the model-gate stage writes the class table `model_gate_classes.tsv` (class, population, lattice
+  peak, lattice-gate state, correlation, best orientation and shift, model-gate state) and class-average/
+  reprojection pairs of the rejected classes and of twenty kept ones. `apply` writes the raw lattice peak as
+  `lattice_peak` on every scored `cls2D` row beside `diam`.
+- The workflow test (`single_workflow`, suite `fcc`) runs the program on a simulated trajectory without planted
+  junk and asserts that the gates lose at most 5% of its frames, beside the map's floors and the pose checks.
 
 ## Example Commands
 

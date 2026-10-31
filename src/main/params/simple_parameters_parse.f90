@@ -559,6 +559,7 @@ contains
         call reg%add_real('lpstop_fine', self%lpstop_fine)
         call reg%add_real('lpthres', self%lpthres)
         call reg%add_real('max_dose', self%max_dose)
+        call reg%add_real('model_gate_nsd', self%model_gate_nsd)
         call reg%add_real('moldiam', self%moldiam)
         call reg%add_real('moldiam_max', self%moldiam_max)
         call reg%add_real('moldiam_refine', self%moldiam_refine)

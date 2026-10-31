@@ -11,6 +11,7 @@ type(ui_program), target :: trajectory_denoise
 type(ui_program), target :: trajectory_make_projavgs
 type(ui_program), target :: trajectory_reconstruct3D
 type(ui_program), target :: trajectory_swap_stack
+type(ui_program), target :: trajectory_solve3D
 
 contains
 
@@ -23,6 +24,7 @@ contains
         call new_trajectory_make_projavgs(prgtab)
         call new_trajectory_reconstruct3D(prgtab)
         call new_trajectory_swap_stack(prgtab)
+        call new_trajectory_solve3D(prgtab)
     end subroutine construct_single_trajectory_programs
 
 subroutine new_trajectory_extract_substk( prgtab )
@@ -307,5 +309,79 @@ subroutine new_trajectory_extract_substk( prgtab )
         ! add to ui_hash
         call add_ui_program('trajectory_swap_stack', trajectory_swap_stack, prgtab, UI_CATEGORY)
     end subroutine new_trajectory_swap_stack
+
+    subroutine new_trajectory_solve3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call trajectory_solve3D%new(&
+        &'trajectory_solve3D',&                                                                               ! name
+        &'De novo time-integrated map of a tracked nanoparticle from its graphene-subtracted frames',&      ! summary
+        &'is a shared-memory workflow from the graphene-subtracted frames of one tracked particle to its time-integrated '//&
+        &'map. On the raw frames: import, center2D_nano on ten time-chunk averages, the diameter on the centred averages, '//&
+        &'the start model simulated from it, refine2D_nano from the centering''s shifts, then two coupled gates on its '//&
+        &'class averages (the lattice gate, and the model gate: the class averages aligned to the start model, the ones '//&
+        &'far below the median correlation rejected) and the prune. Only the kept frames are then denoised (flex) and '//&
+        &'refined in 3D by autorefine3D_nano. One numbered subdirectory per stage; '//&
+        &'trajectory_solve3D.txt records each stage. Rerun with mkdir=no in the execution directory to resume after '//&
+        &'the last finished stage',&                                                                          ! help
+        &'single_exec',&                                                                                      ! executable
+        &.true., visibility=UI_VIS_STANDARD, display_name='Solve a Nanoparticle Trajectory') ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call trajectory_solve3D%add_input(UI_IMG, 'stk', 'file', 'Graphene-subtracted frames', &
+        &'Graphene-subtracted frames of the tracked particle', 'e.g. subtr_frames.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        ! parameter input/output
+        call trajectory_solve3D%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call trajectory_solve3D%add_input(UI_PARM, element, required_override=.false., &
+        &help_override='Atom kind of the simulated start model{Pt}', visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_PARM, 'moldiam', 'num', 'Particle diameter of the start model', &
+        &'Particle diameter (A) of the simulated start model; default the smallest diameter estimated on the centred '//&
+        &'time-chunk averages', 'diameter in A', .false., 0., visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_PARM, 'thres', 'num', 'Lattice-peak threshold of the lattice gate', &
+        &'Class averages whose lattice_peak (log10 of the strongest Fourier peak over its ring mean) is below this are '//&
+        &'rejected by the lattice gate; the default is the grade set for averages of raw frames{0.52}', &
+        &'log10 peak over ring{0.52}', .false., 0.52, visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_PARM, 'model_gate_nsd', 'num', 'Model-gate cut in robust spreads', &
+        &'The model gate rejects a class average whose correlation to its best reprojection of the start model lies '//&
+        &'more than this many robust spreads (1.4826 x MAD) below the median of the lattice gate''s survivors{3}', &
+        &'robust spreads{3}', .false., 3., visibility=UI_VIS_ADVANCED)
+        ! search controls
+        call trajectory_solve3D%add_input(UI_SRCH, nspace, &
+        &visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_SRCH, 'maxits', 'num', 'Max 3D refinement rounds', &
+        &'Rounds of refinement and atom detection of autorefine3D_nano', 'Max # rounds{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_SRCH, 'maxits_between', 'num', 'Max iterations per 3D round', &
+        &'Refinement iterations between two atom detections of autorefine3D_nano', 'Max # iterations{10}', .false., 10., &
+        &visibility=UI_VIS_ADVANCED)
+        ! filter controls
+        call trajectory_solve3D%add_input(UI_FILT, 'lp', 'num', 'Initial 3D low-pass limit', &
+        &'Initial low-pass limit of autorefine3D_nano', 'low-pass limit in Angstroms{1.5}', .false., 1.5, &
+        &visibility=UI_VIS_STANDARD)
+        call trajectory_solve3D%add_input(UI_FILT, 'pca_mode', 'multi', 'Denoising method', &
+        &'Denoising method of trajectory_denoise(flex|diffusion_maps|ppca|ppca_kpca_resid|pca_svd|kpca){flex}', '', .false., &
+        &'flex', choices=ui_choices([character(len=15) :: 'flex', 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', &
+        &'kpca']), visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_FILT, 'halfwin', 'num', 'Denoising window half-width in frames', &
+        &'pca_mode=flex: frames pool only within this many frames of their block; 0 => the whole trajectory (default 0)', &
+        &'# frames', .false., 0.0, visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_FILT, 'neigs', 'num', 'Denoising components', &
+        &'pca_mode=flex: the largest latent rank the cross-validation may choose (default 32)', '# eigenvecs', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call trajectory_solve3D%add_input(UI_FILT, 'eo_pool', 'binary', 'Denoise by row parity', &
+        &'pca_mode=flex: a frame pools only frames of its own row parity(yes|no){yes}', '', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call trajectory_solve3D%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &help_override='Mask diameter in A of every stage after the centering; default 1.5 x the largest diameter '//&
+        &'estimated on the centred time-chunk averages', visibility=UI_VIS_ADVANCED)
+        ! computer controls
+        call trajectory_solve3D%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('trajectory_solve3D', trajectory_solve3D, prgtab, UI_CATEGORY)
+    end subroutine new_trajectory_solve3D
 
 end module single_ui_trajectory

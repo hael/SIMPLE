@@ -113,8 +113,10 @@ contains
         call cline%set('objfun', 'cc') ! avoids a missing sigma2_it_10.star file
         if( .not. cline%defined('trail_rec')      ) call cline%set('trail_rec',   'yes') 
         if( .not. cline%defined('ufrac_trec')     ) call cline%set('ufrac_trec',    0.5)
-        call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
-        call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
+        ! by default the directory X_autorefine3D_nano with a copy of the project; a workflow that gives mkdir=no (trajectory_solve3D)
+        ! runs it in its own stage directory on its own copy
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)         ! the parameters class manages directory creation and project file copying
         if( params%l_atm_prior )then
             if( params%maxits < 2 ) THROW_HARD('autorefine3D_nano atm_prior=yes requires maxits of at least 2')
             if( params%l_icm ) THROW_HARD('autorefine3D_nano atm_prior=yes is incompatible with icm=yes')

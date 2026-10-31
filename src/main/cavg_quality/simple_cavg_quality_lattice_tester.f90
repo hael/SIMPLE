@@ -13,7 +13,7 @@ use simple_cavg_quality_types,     only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_CONTE
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, CAVG_RELATIONAL_NANO_CORR_HP, CAVG_RELATIONAL_NANO_CORR_LP, &
     CAVG_RELATIONAL_NANO_CORR_TRS, CLIP_Z, cavg_quality_result
 use simple_cavg_quality_lattice,   only: cavg_quality_lattice, LAT_NFEATS, LAT_LATTICE_PEAK, LAT_SPOT_COUNT, &
-    LAT_SPOT_ARC, LAT_SPOT_DIAM, LAT_BAND_PRESENCE, LAT_PEAK_MIN
+    LAT_SPOT_ARC, LAT_SPOT_DIAM, LAT_BAND_PRESENCE, LAT_PEAK_MIN, K_MODEL, model_gate_states
 use simple_cavg_quality_feats,     only: cavg_quality_bank_size, cavg_quality_feature_name, cavg_quality_feature_family
 use simple_cavg_quality_analysis,  only: evaluate_cavg_quality_hard_reject, write_cavg_quality_training_table
 use simple_cavg_quality_model,     only: cavg_quality_model, cavg_quality_model_spec, write_cavg_quality_model_builtin_code
@@ -38,6 +38,7 @@ contains
         call test_normalization()
         call test_nano_preset()
         call test_nano_gates()
+        call test_model_gate()
         call test_diameter_calibration()
         call test_spot_arc_straight_bent()
         call test_band_presence_unmasked()
@@ -265,12 +266,40 @@ contains
         call assert_true(q%hard_reject(5), 'empty class rejected')
         call assert_true(q%hard_reject(6), 'flat class rejected')
         call assert_true(all(q%features(5:6,:) <= -CLIP_Z + 1.e-6), 'rejected rows at -CLIP_Z')
+        ! an average of raw graphene-subtracted frames: lattice fringes, nothing below 5 A; not flat
+        call imgs(4)%kill
+        call make_cavg(imgs(4), KIND_LATTICE, 55., 0.3)
+        call imgs(4)%bp(5., 0.)
+        call evaluate_cavg_quality_hard_reject(imgs, os, 0., q, CAVG_QUALITY_CONTEXT_NANO)
+        call assert_false(q%hard_reject(4), 'a lattice average without low frequencies passes the validity gates')
         call evaluate_cavg_quality_hard_reject(imgs, os, 0., q, CAVG_QUALITY_CONTEXT_CHUNK)
         call assert_int(CAVG_QUALITY_NFEATS, size(q%features, dim=2), 'chunk features')
         call q%kill
         call os%kill
         call kill_imgs(imgs)
     end subroutine test_nano_gates
+
+    !> the model gate in closed form. Survivors' correlations 0.1, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0: median 0.7, absolute
+    !! deviations 0.6, 0.2, 0.1, 0, 0.1, 0.2, 0.3, MAD 0.2, robust spread 0.29652. At 1 spread the cut is 0.40348 and
+    !! removes the class at 0.1; at K_MODEL (3) it is -0.18956 and removes nothing. Classes gate 1 rejected (state 0)
+    !! stay rejected whatever their correlation, a survivor's state is returned as given, no survivor changes nothing
+    subroutine test_model_gate()
+        real,    parameter :: CORRS(9)  = [0.1, 0.05, 0.5, 0.6, 0.7, 0.95, 0.8, 0.9, 1.0]
+        integer, parameter :: STATES(9) = [1,   0,    1,   2,   1,   0,    1,   1,   1]
+        integer :: sout(9)
+        real    :: med, sd, cut
+        write(*,'(A)') 'test_model_gate'
+        call model_gate_states(CORRS, STATES, 1.0, sout, med, sd, cut)
+        call assert_real(0.7,     med, 1.e-6, 'model gate: median of the survivors')
+        call assert_real(0.29652, sd,  1.e-5, 'model gate: robust spread 1.4826 x MAD')
+        call assert_real(0.40348, cut, 1.e-5, 'model gate: cut at one spread')
+        call assert_true(all(sout == [0, 0, 1, 2, 1, 0, 1, 1, 1]), 'model gate: one spread removes the class at 0.1 only')
+        call model_gate_states(CORRS, STATES, K_MODEL, sout, med, sd, cut)
+        call assert_real(-0.18956, cut, 1.e-5, 'model gate: cut at K_MODEL')
+        call assert_true(all(sout == STATES), 'model gate: K_MODEL removes nothing here')
+        call model_gate_states(CORRS, [0, 0, 0, 0, 0, 0, 0, 0, 0], K_MODEL, sout, med, sd, cut)
+        call assert_true(all(sout == 0) .and. med == 0. .and. cut == 0., 'model gate: no survivor, nothing changes')
+    end subroutine test_model_gate
 
     !> the projected-sphere fit of the strongest spot recovers the diameter of a lattice-filled sphere and,
     !! less closely, of a lattice-filled disc (25 A)

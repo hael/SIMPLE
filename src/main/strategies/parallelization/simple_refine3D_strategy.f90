@@ -1096,6 +1096,18 @@ contains
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
 
+    !> oritype=cls3D refines the class-average field: it must hold one entry per class average registered in out
+    subroutine check_cls3D_field( params, build )
+        type(parameters), intent(in) :: params
+        type(builder),    intent(in) :: build
+        type(string) :: errmsg
+        if( trim(params%oritype) /= 'cls3D' ) return
+        if( build%spproj%os_cls3D%get_noris() == params%nptcls ) return
+        errmsg = 'refine3D oritype=cls3D: the cls3D field holds '//int2str(build%spproj%os_cls3D%get_noris())//&
+            &' entries for '//int2str(params%nptcls)//' class averages in '//params%projfile%to_char()
+        THROW_HARD(errmsg%to_char())
+    end subroutine check_cls3D_field
+
     subroutine inmem_initialize(self, params, build, cline)
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
@@ -1109,6 +1121,7 @@ contains
         ! which must not create (and enter) a nested one
         call cline%set('mkdir', 'no')
         call check_polish_request(params)
+        call check_cls3D_field(params, build)
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -1486,6 +1499,7 @@ contains
                 write(logfhandle,*)'Unsupported ORITYPE; simple_refine3D_strategy :: distr_initialize'
         end select
         if( fall_over ) THROW_HARD('no particles found! refine3D distributed master')
+        call check_cls3D_field(params, build)
 
         if( .not. self%l_multistates .and. params%nstates > 1 )then
             THROW_HARD('nstates > 1 but refine mode is single')

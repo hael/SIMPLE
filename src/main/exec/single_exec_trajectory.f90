@@ -4,6 +4,7 @@ use simple_cmdline,                 only: cmdline
 use single_commanders_trajectory,   only: commander_trajectory_import, commander_trajectory_graphene_subtr,&
 &commander_trajectory_denoise, commander_trajectory_extract_substk, commander_trajectory_swap_stack
 use single_commanders_nano3D,       only: commander_trajectory_reconstruct3D_distr
+use single_commanders_trajectory_solve3D, only: commander_trajectory_solve3D
 use single_commanders_experimental, only: commander_trajectory_make_projavgs
 implicit none
 
@@ -17,6 +18,7 @@ type(commander_trajectory_denoise)             :: xden_traj
 type(commander_trajectory_make_projavgs)       :: xtrajectory_make_projavgs
 type(commander_trajectory_reconstruct3D_distr) :: xtrajectory_reconstruct3D
 type(commander_trajectory_swap_stack)          :: xtrajectory_swap_stack
+type(commander_trajectory_solve3D)             :: xtrajectory_solve3D
 
 contains
 
@@ -45,6 +47,8 @@ contains
                 call xtrajectory_reconstruct3D%execute(cline)
             case( 'trajectory_swap_stack' )
                 call xtrajectory_swap_stack%execute(cline)
+            case( 'trajectory_solve3D' )
+                call xtrajectory_solve3D%execute(cline)
             case default
                 l_did_execute = .false.
         end select

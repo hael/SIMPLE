@@ -129,7 +129,7 @@ convenience and deliberately not a CTest entry.
 | `pcg_frac_update` | library | the PCG fractional-update gates (additivity of the reconstruction sums, the continuation weighting, full-mass preservation, replay) on a project of 600 blob particles at their true poses that the multi-state fixture builds |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |
 | `simulated_workflow_6vxx`, `simulated_workflow_1jxy` | highlevel | simulated particles in movies (6vxx: 160 particles in 16 movies from 100 reprojections; 1jxy: 100 particles in 10 movies) through import, motion correction, CTF, picking, extraction, `solve2D`, `solve3D`; 1jxy then runs `solve3D` a second time from the same `solve2D` project with `nparts=2` (two local worker processes, the distributed strategy), in a directory of its own and checked against the same truth, so that the master's job scheduling and assembly between parts are covered (owner decision 2026-10-15); the test asserts that the distributed run wrote its second part's record. A control scores the result against the other molecule's truth. The map's correlation with its truth and its FSC are reported as a robustness profile: in the profile of 2026-10-19 `solve3D` missed the map, at the correlation of the other molecule, in 2 of 20 runs for 6vxx and in 1 of 20 for 1jxy in each of its two steps, so no floor is admissible. Both suites reseed the whole workflow with the root seed 20260923, printed in the log |
-| `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles; the poses are judged by their median rotation error against the truth after one docking of the `autorefine3D_nano` map, up to the rotations of the lattice's group (O for FCC, D6 for wurtzite), since these near-symmetric particles are posed only up to them |
+| `single_workflow_fcc`, `single_workflow_wurtzite` | highlevel | independent SINGLE pipelines on simulated FCC Pt and wurtzite CdSe nanoparticles (fcc through `trajectory_solve3D`, whose gates may lose at most 5% of the frames, wurtzite by hand with the atomicity-prior refinement); the poses are judged by their median rotation error against the truth after one docking of the `autorefine3D_nano` map, up to the rotations of the lattice's group (O for FCC, D6 for wurtzite), since these near-symmetric particles are posed only up to them |
 | `simulate_particles` | highlevel | `reproject` and `simulate_particles` on the embedded 6VXX volume; `simulate_particles` with three blob volumes and given populations (exact state counts, every image closest to the projection of its own state's volume at its true pose); 50 images without CTF, each correlating better with the reprojection at its own recorded pose than with one at another image's pose |
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
@@ -1011,13 +1011,20 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 **`single_workflow_fcc`, `single_workflow_wurtzite`**
 
 - Claim: a simulated Pt (face-centred cubic) or CdSe (wurtzite) nanoparticle goes through
-  reprojection, a trajectory, denoising, `analysis2D_nano`, `autorefine3D_nano`, `refine3D_nano
-  refine=cont` and the polish, and its map and poses match the truth.
-- Checks: the map's box and sampling, its correlation with the simulated map (floor 0.90) and FSC
+  reprojection and a trajectory, then a map, then `refine3D_nano refine=cont` and the polish, and its
+  map and poses match the truth. fcc makes the map with `trajectory_solve3D` (raw frames centred, 2D, the
+  lattice and model gates, then only the kept frames denoised and refined), and its gates may lose at most
+  5% of the 300 frames (`trajectory_solve3D.md`, ruling 8; no planted junk). wurtzite runs the stages by
+  hand: denoising, `analysis2D_nano`, and `autorefine3D_nano` with the atomicity-prior loop
+  (`rec_backend=pcg atm_prior=yes`), so both forms stay covered.
+- Checks: the fraction of frames the gates lose (fcc); the
+  products of the atomicity-prior loop (wurtzite); the transfer table; the map's box and sampling, its correlation with the simulated map (floor 0.90) and FSC
   (ceiling 5 Å); the median rotation error of the particles in the truth's frame, after one
   docking of the map to 2 Å and up to the lattice's group (O or D6) and the in-plane rotation by
   180° (both lattices are nearly centrosymmetric), reported for `autorefine3D_nano` and held for
-  `refine=cont` and the polish to at most 0.5° worse than the stage before.
+  `refine=cont` and the polish to at most 0.5° worse than the stage before; each particle is matched
+  to its frame of the trajectory (`trajectory_solve3D` records it as `frame` before it swaps in the denoised
+  kept frames).
 - Path: the stages' outputs. Identity: the declared outputs of a one-thread run (deterministic).
 - Profile: fcc 2026-10-18 (byte-identical on the merged code): rotation error median 4.9°,
   stage-to-stage excess worst +0.19°. wurtzite 2026-10-19 (the merged code no longer clamps the

@@ -11,7 +11,7 @@ use simple_cavg_quality_selection, only: write_cavg_selection_stacks
 use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, CAVG_RELATIONAL_NANO_CORR_HP, &
     CAVG_RELATIONAL_NANO_CORR_LP, CAVG_RELATIONAL_NANO_CORR_TRS, CAVG_QUALITY_CONTEXT_NANO, cavg_quality_result
-use simple_cavg_quality_lattice,  only: LAT_SPOT_DIAM
+use simple_cavg_quality_lattice,  only: LAT_SPOT_DIAM, LAT_LATTICE_PEAK
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr,&
                                &rank_cavgs_stk
@@ -745,8 +745,8 @@ contains
             model_source = 'standard hard gates (no nano model)'
         end subroutine set_nano_hard_gate_model
 
-        !> nano: the particle diameter of every scored class and its median over the accepted ones, beside the mask
-        !! diameter of the class-average entry of the out segment
+        !> nano: the particle diameter and the raw lattice peak of every scored class, the diameter's median over the accepted ones
+        !! beside the mask diameter of the class-average entry of the out segment
         subroutine annotate_nano_diameters()
             real, allocatable :: diams(:)
             type(string) :: cavgs_stk
@@ -754,7 +754,8 @@ contains
             real    :: smpd_stk, diam_median
             do icls = 1, ncls
                 if( quality%hard_reject(icls) ) cycle
-                call spproj%os_cls2D%set(icls, 'diam', quality%raw(icls,LAT_SPOT_DIAM))
+                call spproj%os_cls2D%set(icls, 'diam',         quality%raw(icls,LAT_SPOT_DIAM))
+                call spproj%os_cls2D%set(icls, 'lattice_peak', quality%raw(icls,LAT_LATTICE_PEAK))
             enddo
             diams = pack(quality%raw(:,LAT_SPOT_DIAM), quality%states > 0 .and. .not. quality%hard_reject)
             if( size(diams) == 0 )then

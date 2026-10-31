@@ -583,6 +583,7 @@ type :: parameters
     real    :: moldiam_max=500.    !< upper bound molecular diameter(in A)
     real    :: moldiam_refine=0.   !< upper bound molecular diameter(in A)
     real    :: moldiam_ring=0.     !< ring picker diameter(in A)
+    real    :: model_gate_nsd=0.   !< trajectory_solve3D model gate: cut in robust spreads below the median (0 = K_MODEL)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)

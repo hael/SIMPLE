@@ -1747,6 +1747,7 @@ subroutine exec_test_single_workflow( self, cline )
     use simple_commanders_project_ptcl, only: commander_import_particles
     use simple_commanders_project_core, only: commander_new_project
     use single_commanders_nano3D,       only: commander_autorefine3D_nano, commander_refine3D_nano
+    use single_commanders_trajectory_solve3D, only: commander_trajectory_solve3D
     use simple_test_truth_metrics,      only: dock_both_hands, carry_pose, group_errors, group_operators
     use simple_test_utils,              only: set_fixed_seed, offset_seed
     use simple_test_gate,               only: test_gate
@@ -1765,6 +1766,7 @@ subroutine exec_test_single_workflow( self, cline )
     type(commander_analysis2D_nano)       :: xan2Dnano
     type(commander_autorefine3D_nano)     :: xaref3Dnano
     type(commander_refine3D_nano)         :: xref3Dnano
+    type(commander_trajectory_solve3D)    :: xtsolve3D
     type(cmdline)                         :: cline_cont
     type(sp_project)                      :: run_proj
     type(oris)                            :: truth_oris
@@ -1788,6 +1790,10 @@ subroutine exec_test_single_workflow( self, cline )
     character(len=*), parameter           :: IMPORT_DIR        = '5_import_particles'
     character(len=*), parameter           :: ANALYSIS2D_DIR    = '6_analysis2D_nano'
     character(len=*), parameter           :: CONT_DIR          = '8_refine3D_nano_cont'
+    character(len=*), parameter           :: TSOLVE3D_STAGE    = '4_trajectory_solve3D'
+    ! trajectory_solve3D's stage directories read by the checks: the pruned project after its two gates, the 3D
+    character(len=*), parameter           :: TSOLVE3D_GATED    = '7_refine3D_nano'
+    character(len=*), parameter           :: TSOLVE3D_AUTOREFINE = '11_autorefine3D_nano'
     character(len=*), parameter           :: NOPOLISH_DIR      = '9_refine3D_nano_nopolish'
     character(len=*), parameter           :: POLISH_DIR        = '10_refine3D_nano_polish'
     ! N29, Phase 9 (declared before the first run): refine3D_nano pose_cont=yes and pose_cont=no
@@ -1817,6 +1823,9 @@ subroutine exec_test_single_workflow( self, cline )
     integer,          parameter           :: NSPACE = 5000, NITERS_BETWEEN = 4
     integer,          parameter           :: TEST_SEED = 20260923
     integer,          parameter           :: NFRAMES_PER_GROUP = 10
+    ! fcc (trajectory_solve3D.md, ruling 8): trajectory_solve3D on the simulated trajectory as it is; its two gates
+    ! may lose at most MAX_FRAMES_LOST of the frames
+    real,             parameter           :: MAX_FRAMES_LOST = 0.05
     integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
     real,             parameter           :: MIN_VOL_CORR      = 0.90
@@ -1827,6 +1836,10 @@ subroutine exec_test_single_workflow( self, cline )
     ! 5 A the fcc median rotation error read 20 deg against 5 deg, the wurtzite one 2.9 against 1.6)
     real,             parameter           :: POSE_DOCK_LP      = 2.0
     real                               :: volume_corr, volume_fsc0143
+    type(string)                       :: tsolve3D_dir, gated_projfile
+    integer                            :: nptcls_run
+    real                               :: frames_lost
+    logical                            :: l_gates_ok
     real                               :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     logical                            :: volume_ok
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
@@ -1903,58 +1916,64 @@ subroutine exec_test_single_workflow( self, cline )
     call xtrajectory%execute(cline_trajectory)
     call return_to_project_dir
 
-    call enter_workflow_stage(DENOISE_DIR, projfile)
-    call cline_denoise%set('prg',              'trajectory_denoise')
-    call cline_denoise%set('mkdir',                            'no')
-    call cline_denoise%set('stk',              trajectory%to_char())
-    call cline_denoise%set('outstk',                   DENOISED_STK)
-    call cline_denoise%set('smpd',                      params%smpd)
-    call cline_denoise%set('nthr',                      params%nthr)
-    call xdenoise%execute(cline_denoise)
-    call return_to_project_dir
-
-    call enter_workflow_stage(IMPORT_DIR, projfile)
-    call cline_imptcls%set('prg',                'import_particles')
-    call cline_imptcls%set('nthr',                     params%nthr)
-    call cline_imptcls%set('mkdir',                            'no')
-    call cline_imptcls%set('projfile',           projfile%to_char())
-    call cline_imptcls%set('stk',     denoised_trajectory%to_char())
-    call cline_imptcls%set('smpd',                      params%smpd)
-    call cline_imptcls%set('ctf',                              'no')
-    call ximptcls%execute(cline_imptcls)
-    call return_to_project_dir
-
-    call enter_workflow_stage(ANALYSIS2D_DIR, projfile)
-    call cline_an2Dnano%set('prg',                'analysis2D_nano')
-    call cline_an2Dnano%set('mkdir',                           'no')
-    call cline_an2Dnano%set('projfile',          projfile%to_char())
-    call cline_an2Dnano%set('element',               params%element)
-    call cline_an2Dnano%set('nthr',                     params%nthr)
-    call xan2Dnano%execute(cline_an2Dnano)
-    if( .not. file_exists(startvol) ) THROW_HARD('analysis2D_nano did not generate '//startvol%to_char())
-    call return_to_project_dir
-
-    call cline_aref3Dnano%set('prg',            'autorefine3D_nano')
-    call cline_aref3Dnano%set('projfile',        projfile%to_char())
-    call cline_aref3Dnano%set('vol1',            startvol%to_char())
-    call cline_aref3Dnano%set('smpd',                   params%smpd)
-    call cline_aref3Dnano%set('nthr',                   params%nthr)
-    call cline_aref3Dnano%set('pgrp',                          'c1')
-    call cline_aref3Dnano%set('lp',                             1.5)  
-    call cline_aref3Dnano%set('mskdiam',                   MASKDIAM)
-    call cline_aref3Dnano%set('maxits',               NREFINE_ITERS)
-    call cline_aref3Dnano%set('maxits_between',     NITERS_BETWEEN)
-    call cline_aref3Dnano%set('nspace',                     NSPACE)
+    l_gates_ok = .true.
     if( suite_name == 'fcc' )then
+        call run_trajectory_solve3D
+    else
+        nptcls_run = NREPROJS
+        call enter_workflow_stage(DENOISE_DIR, projfile)
+        call cline_denoise%set('prg',              'trajectory_denoise')
+        call cline_denoise%set('mkdir',                            'no')
+        call cline_denoise%set('stk',              trajectory%to_char())
+        call cline_denoise%set('outstk',                   DENOISED_STK)
+        call cline_denoise%set('smpd',                      params%smpd)
+        call cline_denoise%set('nthr',                      params%nthr)
+        call xdenoise%execute(cline_denoise)
+        call return_to_project_dir
+
+        call enter_workflow_stage(IMPORT_DIR, projfile)
+        call cline_imptcls%set('prg',                'import_particles')
+        call cline_imptcls%set('nthr',                     params%nthr)
+        call cline_imptcls%set('mkdir',                            'no')
+        call cline_imptcls%set('projfile',           projfile%to_char())
+        call cline_imptcls%set('stk',     denoised_trajectory%to_char())
+        call cline_imptcls%set('smpd',                      params%smpd)
+        call cline_imptcls%set('ctf',                              'no')
+        call ximptcls%execute(cline_imptcls)
+        call return_to_project_dir
+
+        call enter_workflow_stage(ANALYSIS2D_DIR, projfile)
+        call cline_an2Dnano%set('prg',                'analysis2D_nano')
+        call cline_an2Dnano%set('mkdir',                           'no')
+        call cline_an2Dnano%set('projfile',          projfile%to_char())
+        call cline_an2Dnano%set('element',               params%element)
+        call cline_an2Dnano%set('nthr',                     params%nthr)
+        call xan2Dnano%execute(cline_an2Dnano)
+        if( .not. file_exists(startvol) ) THROW_HARD('analysis2D_nano did not generate '//startvol%to_char())
+        call return_to_project_dir
+
+        call cline_aref3Dnano%set('prg',            'autorefine3D_nano')
+        call cline_aref3Dnano%set('projfile',        projfile%to_char())
+        call cline_aref3Dnano%set('vol1',            startvol%to_char())
+        call cline_aref3Dnano%set('smpd',                   params%smpd)
+        call cline_aref3Dnano%set('nthr',                   params%nthr)
+        call cline_aref3Dnano%set('pgrp',                          'c1')
+        call cline_aref3Dnano%set('lp',                             1.5)  
+        call cline_aref3Dnano%set('mskdiam',                   MASKDIAM)
+        call cline_aref3Dnano%set('maxits',               NREFINE_ITERS)
+        call cline_aref3Dnano%set('maxits_between',     NITERS_BETWEEN)
+        call cline_aref3Dnano%set('nspace',                     NSPACE)
+        ! the atomicity-prior loop of autorefine3D_nano is covered here: the fcc suite runs trajectory_solve3D, which
+        ! refines without it
         call cline_aref3Dnano%set('rec_backend', 'pcg')
         call cline_aref3Dnano%set('atm_prior',   'yes')
         call cline_aref3Dnano%set('maxits_atm',      2)
+        call xaref3Dnano%execute(cline_aref3Dnano)
+        call simple_getcwd(autorefine_dir)
+        final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
+            &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
     endif
-    call xaref3Dnano%execute(cline_aref3Dnano)
-    call simple_getcwd(autorefine_dir)
-    final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
-        &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
-    if( suite_name == 'fcc' )then
+    if( suite_name == 'wurtzite' )then
         atomic_product = add2fbody(final_volume, MRC_EXT, '_base')
         if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: atomic-loop base map is missing')
         atomic_product = add2fbody(final_volume, MRC_EXT, '_res')
@@ -1975,14 +1994,15 @@ subroutine exec_test_single_workflow( self, cline )
         &string('pose_dock_docked.mrc'), dock_cc_direct, dock_cc_mirror, dock_eul, dock_shift, dock_mirrored)
     call return_to_project_dir
     if( .not. volume_ok ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: final-volume validation failed')
+    if( .not. l_gates_ok ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the gates of trajectory_solve3D lost too many frames')
     ! N29: refine3D_nano refine=cont on the autorefine3D_nano project (projfile, the last stage's
     ! copy, which autorefine3D_nano updated in place)
     call truth_oris%new(NREPROJS, is_ptcl=.false.)
     call truth_oris%read(filepath(filepath(project_dir, REPROJECTION_DIR), TRAJECTORY_ORITAB), [1,NREPROJS])
     cont_projfile = projfile
     call run_proj%read(cont_projfile)
-    if( run_proj%os_ptcl3D%get_noris() /= NREPROJS )&
-        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the autorefine3D_nano project does not hold every particle')
+    if( run_proj%os_ptcl3D%get_noris() /= nptcls_run )&
+        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the autorefine3D_nano project does not hold the frames refined')
     pair_polar = group_pose_error()
     call enter_workflow_stage(CONT_DIR, cont_projfile)
     call cline_cont%set('prg',      'refine3D_nano')
@@ -2035,23 +2055,74 @@ contains
     !! (O for the face-centred cubic cluster, D6 for the wurtzite one; the clusters' exact symmetry is
     !! only C3 and C1) and, as both lattices are nearly centrosymmetric, the in-plane rotation by 180
     !! degrees. A pose off by one of them scores zero and a random one tens of degrees
+    !! The truth of a particle is that of its frame of the trajectory (a pruned project may hold fewer)
     real function group_pose_error() result( err )
         real, allocatable :: rc(:,:,:), rt(:,:,:), ops(:,:,:)
         real :: shc(2)
-        integer :: ip
-        allocate(rc(3,3,NREPROJS), rt(3,3,NREPROJS))
-        do ip = 1, NREPROJS
+        integer :: ip, iframe, np, n
+        np = run_proj%os_ptcl3D%get_noris()
+        allocate(rc(3,3,np), rt(3,3,np))
+        n = 0
+        do ip = 1, np
+            ! trajectory_solve3D records the frame before it swaps in the denoised kept frames; the hand chain keeps indstk
+            if( run_proj%os_ptcl3D%isthere(ip, 'frame') )then
+                iframe = run_proj%os_ptcl3D%get_int(ip, 'frame')
+            else
+                iframe = run_proj%os_ptcl3D%get_int(ip, 'indstk')
+            endif
+            if( iframe < 1 .or. iframe > NREPROJS ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: particle without its frame')
+            n = n + 1
             call carry_pose(run_proj%os_ptcl3D%get_mat(ip), run_proj%os_ptcl3D%get_2Dshift(ip), dock_mirrored, BOX, &
-                &euler2m(dock_eul), dock_shift, rc(:,:,ip), shc)
-            rt(:,:,ip) = truth_oris%get_mat(ip)
+                &euler2m(dock_eul), dock_shift, rc(:,:,n), shc)
+            rt(:,:,n) = truth_oris%get_mat(iframe)
         enddo
         if( suite_name == 'fcc' )then
             ops = group_operators('o')
         else
             ops = group_operators('d6')
         endif
-        err = median(group_errors(rc, rt, ops, projection_inversion=.true.))
+        err = median(group_errors(rc(:,:,1:n), rt(:,:,1:n), ops, projection_inversion=.true.))
     end function group_pose_error
+
+    !> fcc: the simulated trajectory through trajectory_solve3D in its own stage directory; the frames its two gates
+    !! remove (the pruned project of its model-gate stage) against MAX_FRAMES_LOST; the 3D checks then read its
+    !! autorefine3D_nano directory and project
+    subroutine run_trajectory_solve3D
+        type(cmdline)    :: cline_tsolve3D
+        type(sp_project) :: gated_proj
+        integer          :: nkept
+        call enter_workflow_stage(TSOLVE3D_STAGE, projfile)
+        call simple_getcwd(tsolve3D_dir)
+        call cline_tsolve3D%set('prg',            'trajectory_solve3D')
+        call cline_tsolve3D%set('mkdir',          'no')
+        call cline_tsolve3D%set('projfile',       projfile%to_char())
+        call cline_tsolve3D%set('stk',            trajectory%to_char())
+        call cline_tsolve3D%set('smpd',           params%smpd)
+        call cline_tsolve3D%set('element',        params%element)
+        call cline_tsolve3D%set('maxits',         NREFINE_ITERS)
+        call cline_tsolve3D%set('maxits_between', NITERS_BETWEEN)
+        call cline_tsolve3D%set('nspace',         NSPACE)
+        call cline_tsolve3D%set('nthr',           params%nthr)
+        call xtsolve3D%execute(cline_tsolve3D)
+        gated_projfile = filepath(filepath(tsolve3D_dir, TSOLVE3D_GATED), basename(projfile))
+        call gated_proj%read_segment('ptcl2D', gated_projfile)
+        nkept       = gated_proj%os_ptcl2D%get_noris()
+        frames_lost = real(NREPROJS - nkept) / real(NREPROJS)
+        write(logfhandle,'(a,i0,a,i0,a,f6.3)') 'single_workflow trajectory_solve3D gates: frames kept ', nkept, ' of ', &
+            &NREPROJS, ', lost ', frames_lost
+        call gate%metric('gates_frames_lost_frac', frames_lost, MAX_FRAMES_LOST, frames_lost <= MAX_FRAMES_LOST, upper=.true.)
+        l_gates_ok = frames_lost <= MAX_FRAMES_LOST
+        ! the 3D: autorefine3D_nano's own directory and project copy
+        autorefine_dir = filepath(tsolve3D_dir, TSOLVE3D_AUTOREFINE)
+        final_volume   = filepath(filepath(autorefine_dir, 'final_results'), &
+            &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
+        projfile       = filepath(autorefine_dir, basename(projfile))
+        call gated_proj%read_segment('ptcl3D', projfile)
+        nptcls_run = gated_proj%os_ptcl3D%get_noris()
+        call gated_proj%kill
+        call simple_chdir(autorefine_dir, chdir_status)
+        if( chdir_status /= 0 ) THROW_HARD('Could not enter the autorefine3D_nano directory of trajectory_solve3D')
+    end subroutine run_trajectory_solve3D
 
     !> NCONT_ITERS refine3D_nano iterations (refine=neigh, objfun=cc) from the autorefine3D_nano
     !! project with pose_cont, in their own stage directory; the median rotation error of the result

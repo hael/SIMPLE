@@ -1,9 +1,10 @@
-!@descr: the lattice family of the nano class-average bank: Fourier spot measurements of one class average
+!@descr: the lattice family of the nano class-average bank (Fourier spot measurements of one class average) and the model gate
 ! Per class average: mean removed; band presence on the unmasked image; then the image soft-masked (mask2D_soft geometry
 ! at box/2 - 2), its full-plane power P = |F|^2, smoothed by a periodic 3 x 3 box (Ps), ring means of Ps on every shell
 ! (mu), the smoothed ratio R = Ps / mu over the band (3 A to Nyquist minus the graphene shells). lattice_peak, the log10
 ! of the largest R, is a normalized measurement and enters the bank raw; LAT_PEAK_MIN is the lattice grade
-! (doc/policies/sieving_and_rejection/model_cavgs_rejection.md, nano context).
+! (doc/policies/sieving_and_rejection/model_cavgs_rejection.md, nano context). The model gate, trajectory_solve3D's
+! second rejection, cuts gate 1's survivors on their correlation to the simulated start model (K_MODEL).
 module simple_cavg_quality_lattice
 !$ use omp_lib
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -11,13 +12,15 @@ use simple_defs,               only: dp, GRAPHENE_BAND1, GRAPHENE_BAND2, GRAPHEN
 use simple_error,              only: simple_exception
 use simple_image,              only: image
 use simple_math_ft,            only: calc_graphene_mask
+use simple_stat,               only: median, mad_gau
 implicit none
 private
 #include "simple_local_flags.inc"
 
 public :: cavg_quality_lattice
 public :: LAT_NFEATS, LAT_LATTICE_PEAK, LAT_SPOT_COUNT, LAT_SPOT_ARC, LAT_SPOT_DIAM, LAT_SPOT_SNR, LAT_BAND_PRESENCE
-public :: LAT_PEAK_MIN
+public :: LAT_PEAK_MIN, LAT_PEAK_MIN_RAW, K_MODEL
+public :: model_gate_states
 
 ! the six lattice features, in the order of the nano bank
 integer, parameter :: LAT_NFEATS = 6
@@ -34,6 +37,20 @@ real,     parameter :: BAND_LOW_RES  = 3.        !< the band runs from this reso
 !! carrying some junk into 3D); the balanced-accuracy optimum, 0.90-0.95, rejected faint-fringe classes the
 !! maintainer keeps (nano_cavgs_rejection_report.md)
 real,     parameter :: LAT_PEAK_MIN  = 0.65
+!> the lattice grade of class averages of raw (not denoised) graphene-subtracted frames, which trajectory_solve3D
+!! gates before denoising: the same rule as LAT_PEAK_MIN (the strictest threshold that keeps at least 98% of the
+!! maintainer's selected classes on each of the three labeled trajectories, here rebuilt on the raw frames) gives
+!! 0.52 (recall 0.995, 0.995, 0.985; 0.53 gave 0.977 on 71-6/traj04), where 0.65 keeps 0.984, 0.962, 0.939
+!! (trajectory_solve3D.md, phase 1, ruling 6). The program passes it as thres
+real,     parameter :: LAT_PEAK_MIN_RAW = 0.52
+!> the model gate (gate 2 of trajectory_solve3D, model_gate_states): a class gate 1 kept is rejected when its
+!! correlation to its best reprojection of the simulated start model lies more than this many robust spreads
+!! (1.4826 x MAD) below the median of the kept classes. Set for recall on the three labeled platinum trajectories:
+!! the smallest of 1.5, 2, 2.5, 3, 4 that keeps at least 98% of the maintainer's selected classes on each with the
+!! lattice gate in front gave 3 on denoised averages (phase 0). On the raw averages the program judges, behind
+!! LAT_PEAK_MIN_RAW, every K keeps the same recall (0.995, 0.995, 0.985); a gate set for recall breaks that tie
+!! toward the permissive end, so 3 stays (ruling 9; 1.5 removed 2 of 13 classes of a clean simulated trajectory)
+real,     parameter :: K_MODEL       = 3.0
 integer,  parameter :: ND   = 105                !< sphere diameters 8 to 60 A, step 0.5
 integer,  parameter :: NOFF = 9                  !< sub-pixel centre offsets -1 to 1 px, step 0.25
 real(dp), parameter :: D0 = 8._dp, DSTEP = 0.5_dp, OFF0 = -1._dp, OFFSTEP = 0.25_dp
@@ -398,6 +415,29 @@ contains
         if( allocated(self%smm)         ) deallocate(self%smm)
         self%exists = .false.
     end subroutine kill
+
+    !> the model gate: among the classes with states_in > 0 (gate 1's survivors), the ones whose correlation to the
+    !! start model lies below med - nsd * sd (med and sd = 1.4826 x MAD over the survivors' correlations) get state 0;
+    !! every other state is returned as given. With no survivor nothing changes and med, sd and cut are 0
+    subroutine model_gate_states( corrs, states_in, nsd, states_out, med, sd, cut )
+        real,    intent(in)  :: corrs(:)
+        integer, intent(in)  :: states_in(:)
+        real,    intent(in)  :: nsd
+        integer, intent(out) :: states_out(size(states_in))
+        real,    intent(out) :: med, sd, cut
+        real, allocatable :: surv(:)
+        if( size(corrs) /= size(states_in) ) THROW_HARD('correlations and states differ in size; model_gate_states')
+        states_out = states_in
+        med = 0.
+        sd  = 0.
+        cut = 0.
+        surv = pack(corrs, states_in > 0)
+        if( size(surv) == 0 ) return
+        med = median(surv)
+        sd  = mad_gau(surv, med)
+        cut = med - nsd * sd
+        where( states_in > 0 .and. corrs < cut ) states_out = 0
+    end subroutine model_gate_states
 
     !> R(h,k) at least as large as its 8 periodic neighbours
     pure logical function is_local_max( r, h, k, c, box )

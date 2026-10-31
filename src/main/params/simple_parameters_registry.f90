@@ -280,7 +280,7 @@ contains
         class(cmdline),        intent(inout) :: cline
         integer, optional,     intent(inout) :: cntfile
         character(len=1), optional, intent(inout) :: checkupfile(:)
-        type(string)     :: str, abspath_name
+        type(string)     :: str, abspath_name, errmsg
         character(len=1) :: file_descr
         logical          :: raise_exception
         integer          :: i
@@ -328,9 +328,9 @@ contains
                     if( self%file_bindings(i)%not_allowed == file_descr ) raise_exception = .true.
                 endif
                 if( raise_exception )then
-                    write(logfhandle,*) 'This format: ', file_descr, ' is not allowed for this file: ', self%file_bindings(i)%var%to_char()
-                    write(logfhandle,*) 'flag:', trim(self%file_bindings(i)%key)
-                    stop
+                    errmsg = 'format '//file_descr//' is not allowed for '//self%file_bindings(i)%var%to_char()//&
+                        &' (key '//trim(self%file_bindings(i)%key)//')'
+                    THROW_HARD(errmsg%to_char())
                 endif
                 select case(file_descr)
                     case('I')

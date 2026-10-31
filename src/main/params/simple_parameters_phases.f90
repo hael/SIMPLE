@@ -274,8 +274,7 @@ contains
             if( file_exists(self%stk) )then
                 if( .not. cline%defined('nptcls') ) call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
             else
-                write(logfhandle,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', self%stk%to_char()
-                stop
+                THROW_HARD('input stack (stk) '//self%stk%to_char()//' does not exist')
             endif
         else if( self%oritab .ne. '' )then
             if( .not. cline%defined('nptcls') .and. self%oritab%has_substr('.txt') ) self%nptcls = nlines(self%oritab)
@@ -395,16 +394,12 @@ contains
                 vol = cline%get_carg(key%to_char())
                 if( vol%to_char([1,1]).eq.PATH_SEPARATOR )then
                     volname = vol
-                    if( .not. file_exists(volname) )then
-                        write(logfhandle,*) 'Input volume:', volname%to_char(), ' does not exist! 1'
-                        stop
-                    endif
+                    if( .not. file_exists(volname) ) THROW_HARD('input volume '//volname%to_char()//' does not exist')
                 else
                     if( self%mkdir .eq. 'yes' ) call cline%set(key%to_char(), PATH_PARENT//vol%to_char())
                     volname = cline%get_carg(key%to_char())
                     if( .not. file_exists(volname) )then
-                        write(logfhandle,*) 'Input volume:', volname%to_char(), ' does not exist! 2'
-                        stop
+                        THROW_HARD('input volume '//volname%to_char()//' does not exist')
                     else
                         call cline%set(key%to_char(), simple_abspath(volname, check_exists=.false.))
                     endif
