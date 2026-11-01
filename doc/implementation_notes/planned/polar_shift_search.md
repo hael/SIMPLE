@@ -273,6 +273,11 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     caller gets the default, the stream's initial analysis and the pyramid included. Development pauses until
     solve2D is tested on data with the drain reset in place (the earlier bench numbers predate that fix).
 
+18. The weighted insertion's extras take the continuous in-plane route with the committed pose (Hans, 2026-11-01:
+    "we ought to inpl_cont-refine all of them, or none of them"; "I do not think it will make a huge difference"):
+    each from its own cell and shift through the same local joint solve, the weights the table's, the route status
+    the committed pose's; under the key nothing is polished, as before (the Fourier-Bessel polish is Phase 5).
+
 The 2026-11-01 follow-up review is in `polar_shift_search_review.md`, section 13.
 It verifies the earlier frame, radius, polish-key and diagnostic fixes, but finds
 five active issues: the stage's `startit` skips the first `shincr` reset; map
@@ -479,6 +484,7 @@ iteration, the window stages' screens collapsing to about twice the refined coun
   kept when the polish loses, the window searches in the cost record, the retired mass diagnostic removed. Then
   ruling 17: solve2D defaults the key (`SHIFT_SIGMA_DEFAULT`), `shift_sigma=0` the control; Hans tests on data
   (bgal, TRPV1, a badly picked set; key against control, mask given against estimated) before further development.
+  Ruling 18 built the same day (`resolve_extra_poses` with the polish, `refine_extra_pose_continuously`).
 
 ### 2026-10-31: Phase 2c measured, Phase 2d's first stage measured, the re-review applied (Claude, runs 383-459)
 

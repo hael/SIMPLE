@@ -77,6 +77,7 @@ type strategy3D_srch
     procedure :: inpl_srch_peaks
     procedure :: refine_selected_continuously
     procedure :: refine_assignment_continuously
+    procedure :: refine_extra_pose_continuously
     procedure, private :: refine_selected_continuously_impl
     procedure, private :: refine_assignment_continuously_impl
     procedure, private :: write_continuous_route_status
@@ -426,6 +427,18 @@ contains
         call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid)
         call self%write_continuous_route_status
     end subroutine refine_assignment_continuously
+
+    !> The same local joint solve for one of the weighted insertion's extra poses, from the extra's own cell and
+    !! shift; the particle's route status stays the committed pose's
+    subroutine refine_extra_pose_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref
+        integer,                intent(inout) :: inpl
+        real,                   intent(inout) :: corr, sh(2)
+        real,                   intent(out)   :: inpl_coord
+        logical,                intent(out)   :: inpl_valid
+        call self%refine_assignment_continuously_impl(ref, inpl, corr, sh, inpl_coord, inpl_valid)
+    end subroutine refine_extra_pose_continuously
 
     subroutine refine_assignment_continuously_impl( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
         class(strategy3D_srch), intent(inout) :: self

@@ -1,7 +1,7 @@
 !@descr: 3D strategy for probabilistic projection matching
 module simple_strategy3D_prob
 use simple_core_module_api
-use simple_strategy3D_utils, only: assign_ori, candidate_pose
+use simple_strategy3D_utils, only: assign_ori, candidate_pose, resolve_inplane_e3
 use simple_eul_prob_tab_utils, only: prob_insert_pose
 use simple_pftc_shsrch_grad,   only: shift_ptcl2ref
 use simple_parameters,      only: parameters
@@ -74,9 +74,10 @@ contains
                     & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y]
             endif
             ! the weighted insertion's extra poses of this particle (topk > 1), now, while prev_shvec is the shift
-            ! the table's native increments refer to
+            ! the table's native increments refer to; they take the continuous in-plane route when the committed pose does
             if( associated(self%spec%extra_poses) )then
-                if( self%spec%extra_poses%has(self%s%iptcl) ) call self%resolve_extra_poses(iptcl_map)
+                if( self%spec%extra_poses%has(self%s%iptcl) ) call self%resolve_extra_poses(iptcl_map,&
+                    &.not. self%s%p_ptr%l_shift_map .and. self%s%uses_continuous_refinement())
             endif
             if( self%s%p_ptr%l_shift_map )then
                 ! the map's draw is the pose and is not polished; the row's distance is the reference's evidence, so
@@ -101,19 +102,32 @@ contains
 
     !> The particle's extra poses for the weighted insertion: the part's table entries (reference, in-plane index,
     !! native shift increment, weight) as Euler triplets and absolute stored shifts through candidate_pose, the
-    !! committed pose's route, into the
-    !! particle's slots of the part's structure (disjoint slots per particle: safe across the search's threads)
-    subroutine resolve_extra_poses( self, iptcl_map )
+    !! committed pose's route, into the particle's slots of the part's structure (disjoint slots per particle: safe
+    !! across the search's threads). With l_polish each extra first takes the continuous in-plane route from its own
+    !! cell and shift, as the committed pose does after it; its weight stays the table's
+    subroutine resolve_extra_poses( self, iptcl_map, l_polish )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: iptcl_map
+        logical,                intent(in)    :: l_polish
         type(prob_insert_pose) :: pose
-        integer :: iloc, k, ipose
-        real    :: euler(3), shvec(2)
+        integer :: iloc, k, ipose, inpl
+        real    :: euler(3), shvec(2), sh(2), corr, inpl_coord
+        logical :: inpl_valid
         iloc = self%spec%extra_poses%loc(self%s%iptcl)
         do k = 1,self%spec%extra_poses%nextra(iloc)
-            pose  = self%spec%eulprob_obj_part%insert_tab%get_extra(iptcl_map, k)
-            ipose = self%spec%extra_poses%first(iloc) + k - 1
-            call candidate_pose(self%s, pose%iref, pose%inpl, [pose%x, pose%y], euler, shvec)
+            pose       = self%spec%eulprob_obj_part%insert_tab%get_extra(iptcl_map, k)
+            ipose      = self%spec%extra_poses%first(iloc) + k - 1
+            inpl       = pose%inpl
+            sh         = [pose%x, pose%y]
+            inpl_coord = real(inpl)
+            inpl_valid = .false.
+            if( l_polish )then
+                corr = 0. ! re-scored by the solve, only its finiteness is checked
+                call self%s%refine_extra_pose_continuously(pose%iref, inpl, corr, sh, inpl_coord, inpl_valid)
+            endif
+            call candidate_pose(self%s, pose%iref, inpl, sh, euler, shvec)
+            if( l_polish ) euler(3) = resolve_inplane_e3(inpl, inpl_coord, inpl_valid,&
+                &self%s%uses_continuous_refinement(), self%s%b_ptr%pftc%get_dang())
             self%spec%extra_poses%euler(:,ipose) = euler
             self%spec%extra_poses%shift(:,ipose) = shvec
             self%spec%extra_poses%w(ipose)       = pose%w

@@ -682,8 +682,16 @@ particle's extras in its `srch` just before it commits the draw
 (`strategy3D_prob%resolve_extra_poses`), through the same conversion rule
 as the committed pose (`candidate_pose`: the reference's Euler pair, the
 in-plane index's angle, the stored shift as the particle's plus the
-increment), so the extras and the committed pose can never disagree on a
-frame; `calc_3Drec` then inserts the committed plane with its weight and
+increment), so the extras and the committed pose can never disagree on the
+axes. Where the committed pose takes the continuous in-plane route
+(`inpl_cont`, the window path) each extra takes it too, before it, from its
+own cell and shift through the same local joint solve and guards
+(`refine_extra_pose_continuously`; an invalid or non-improving solve retains
+the table's pose), so every inserted pose is at its local optimum in angle
+and shift and the direction is the only variable the insertion averages
+over; the weights stay the table's (the solve is local and bounded, so the
+losses move little and alike; Hans, 2026-11-01), and the particle's route
+status is the committed pose's. `calc_3Drec` then inserts the committed plane with its weight and
 each extra pose from the committed plane re-shifted by the pose difference
 (`fplane_shift`: a phase ramp over the stored lattice, no second read or
 transform; the CTF^2 plane is shift-free), so the cost of an extra pose is
