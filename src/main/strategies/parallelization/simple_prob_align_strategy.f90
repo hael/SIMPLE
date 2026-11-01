@@ -56,9 +56,9 @@ contains
             write(limit,'(F32.2)') res05(s)
             write(angle,'(F32.2)') cone%get_angle(s)
             write(shift,'(F32.2)') res05(s) / params%smpd
-            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT CONE: STATE ', s, &
-                &', rim limit '//trim(adjustl(limit))//' A (min(FSC=0.5, matching LP)); rotation-only '//&
-                &trim(adjustl(angle))//' deg, shift-only '//trim(adjustl(shift))//' px'
+            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT CONE (state ', s, &
+                &'): rim limit '//trim(adjustl(limit))//' A, i.e. '//trim(adjustl(angle))//' deg of rotation or '//&
+                &trim(adjustl(shift))//' px of shift'
         enddo
         call fname%kill
     end function insert_cone_from_fsc

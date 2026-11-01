@@ -2083,8 +2083,8 @@ contains
         write(thread_secs,'(F32.1)') secs*real(nthr)
         write(rss,'(F32.2)') peak_gib
         write(logfhandle,'(A,I0,A)') '>>> RECONSTRUCTION MASTER PHASE ('//trim(params%rec_backend)//'): '//&
-            &trim(adjustl(elapsed))//' s on ', nthr, ' threads = '//trim(adjustl(thread_secs))//&
-            &' thread-s, peak RSS '//trim(adjustl(rss))//' GiB'
+            &trim(adjustl(elapsed))//' s on ', nthr, ' threads ('//trim(adjustl(thread_secs))//&
+            &' thread-s), peak RSS '//trim(adjustl(rss))//' GiB'
     end subroutine report_rec_master_phase
 
     integer function inmem_anneal_tail_start(self) result(it)

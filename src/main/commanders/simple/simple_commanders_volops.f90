@@ -375,8 +375,8 @@ contains
             has_fsc = .true.
             write(res05_text,'(F32.2)') fsc05
             write(res143_text,'(F32.2)') fsc0143
-            write(logfhandle,'(A)') '>>> POSTPROCESS: FSC from '//params%fsc%to_char()//&
-                &', 0.5/0.143 at '//trim(adjustl(res05_text))//'/'//trim(adjustl(res143_text))//' A'
+            write(logfhandle,'(A)') '>>> POSTPROCESS: FSC 0.5/0.143 at '//trim(adjustl(res05_text))//'/'//&
+                &trim(adjustl(res143_text))//' A, from '//params%fsc%to_char()
         else if( l_unfil_pair )then
             call vol_unfil%fft()
             call vol_unfil_odd%fft()
@@ -473,8 +473,8 @@ contains
                 &' from shell ', lp_find, ' to Nyquist'
         endif
         if( has_fsc .and. l_ml_shrunk )then
-            write(logfhandle,'(A)') '>>> POSTPROCESS: ML-regularized map (solve_kind='//trim(prov_solve_kind)//&
-                &'); FSC weighting already applied by the prior'
+            write(logfhandle,'(A)') '>>> POSTPROCESS: ML-regularized map ('//trim(prov_solve_kind)//&
+                &'), FSC weighting carried by the prior'
             write(logfhandle,'(A)') '>>> POSTPROCESS: B-factor '//trim(adjustl(bfac_text))//&
                 &' A^2, Butterworth low-pass at '//trim(adjustl(cutoff_text))//' A'
         else if( has_fsc )then

@@ -596,11 +596,13 @@ schedule is therefore `prob_beta` flat with the tail to 1, and the readout
 is how it is watched. Unit-tested on synthetic rows against a numpy
 emulation (`test_neff_readout`).
 
-Terminal diagnostics use unpadded numbers with leading zeros. The insertion
-cone summary gives the joint rim-displacement limit `min(FSC=0.5, matching LP)`
-and its rotation-only and shift-only bounds; these are not independent allowances.
-The conical score is labelled `CONICAL FSC AREA RATIO (cFAR)`, with its state
-and ratio on one line. Stored FSC-mode provenance and diagnostic files are unchanged.
+Terminal diagnostics read `>>> LABEL (qualifiers): values`: the greppable
+label first, the state or topk in parentheses, then unpadded numbers with
+leading zeros, comma-separated with units. The insertion cone line gives the
+rim-displacement limit (the finer of FSC=0.5 and the matching LP) as degrees of
+rotation or pixels of shift; these are alternatives, not independent allowances.
+The conical score is labelled `CONICAL FSC AREA RATIO (cFAR, state N)`. Stored
+FSC-mode provenance and diagnostic files are unchanged.
 
 **The weighted insertion (`topk`, 2026-10-29, revised 2026-10-30; sections
 20.8 and 20.12 of the note).** In the probabilistic modes a particle may

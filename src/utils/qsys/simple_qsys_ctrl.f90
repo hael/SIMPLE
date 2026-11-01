@@ -1061,7 +1061,7 @@ contains
         if( self%phase_label%is_allocated() ) label = self%phase_label
         write(elapsed,'(F32.1)') seconds
         write(logfhandle,'(A,I0,A)') '>>> '//upperCase(label%to_char())//': ', n, &
-            &' PART(S) COMPLETED IN '//trim(adjustl(elapsed))//' s'
+            &trim(merge(' part ', ' parts', n == 1))//' completed in '//trim(adjustl(elapsed))//' s'
         call label%kill
     end subroutine report_phase_completion
 

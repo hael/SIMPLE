@@ -781,7 +781,7 @@ contains
             if( l_extras )then
                 call select_extras(kmax, l_refined, which_pos, maxcand)
             else if( kmax > 1 .and. .not. self%insert_cone%is_open() )then
-                write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
+                write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', kmax, '): no FSC yet, committed pose only'
             endif
             write(mode_pct,'(F32.1)') 100. * real(nmode) / real(max(1, self%nptcls - nkept))
             write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls - nkept, ' particles x ', self%nrefs,&

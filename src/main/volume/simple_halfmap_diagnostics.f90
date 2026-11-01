@@ -112,9 +112,9 @@ contains
         diagnostics%fsc_mode = 'backend='//trim(backend)//' support='//trim(support_kind_here)//&
             &' posthoc_mask='//trim(posthoc_kind)//&
             &' phase_randomization='//merge('yes', 'no ', l_phase_randomization)
-        write(logfhandle,'(A,I0,A)') '>>> FSC MODE: STATE ', state, ', backend='//trim(backend)//&
-            &', support='//trim(support_kind_here)//', posthoc_mask='//trim(posthoc_kind)//&
-            &', phase_randomization='//trim(merge('yes', 'no ', l_phase_randomization))
+        write(logfhandle,'(A,I0,A)') '>>> FSC MODE (state ', state, '): '//trim(backend)//', '//&
+            &trim(support_kind_here)//' support, post-hoc mask '//trim(posthoc_kind)//', phase randomization '//&
+            &trim(merge('yes', 'no ', l_phase_randomization))
         if( l_phase_randomization )then
             call phase_rand_fsc(even, odd, envmask_work, state, nyq, diagnostics%fsc, fsc_t, fsc_n)
             call work_even%copy(even)

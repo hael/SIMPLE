@@ -785,12 +785,15 @@ contains
     !! fraction near zero the insertion is the full average within the cone, above it topk is binding)
     subroutine insert_table_report( self )
         class(prob_insert_table), intent(in) :: self
+        character(len=32) :: ninsert, wcommit, nelig, pct_capped
         if( self%nptcls < 1 ) return
-        write(logfhandle,'(A,I0,A,F6.3,A,F6.3,A,F7.2,A,F6.3)') '>>> PROB_TAB_INSERT: topk ', self%kmax, &
-            &'; insertions per particle ', 1. + real(self%npose) / real(self%nptcls), &
-            &'; mean weight of the committed pose ', sum(self%wc(1:self%nptcls)) / real(self%nptcls), &
-            &'; eligible entries per particle ', self%get_mean_eligible(), &
-            &'; fraction of particles above the cap ', self%get_frac_capped()
+        write(ninsert,'(F32.2)') 1. + real(self%npose) / real(self%nptcls)
+        write(wcommit,'(F32.2)') sum(self%wc(1:self%nptcls)) / real(self%nptcls)
+        write(nelig,'(F32.2)') self%get_mean_eligible()
+        write(pct_capped,'(F32.1)') 100. * self%get_frac_capped()
+        write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', self%kmax, '): '//trim(adjustl(ninsert))//&
+            &' poses per particle, committed weight '//trim(adjustl(wcommit))//', '//trim(adjustl(nelig))//&
+            &' eligible per particle, '//trim(adjustl(pct_capped))//'% capped'
         call flush(logfhandle)
     end subroutine insert_table_report
 

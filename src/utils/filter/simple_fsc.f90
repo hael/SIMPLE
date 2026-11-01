@@ -667,7 +667,7 @@ contains
         endif
         write(ratio,'(F32.4)') self%cfar
         if( present(state) )then
-            write(logfhandle,'(A,I0,A)') '>>> CONICAL FSC AREA RATIO (cFAR): STATE ', state, ', '//trim(adjustl(ratio))
+            write(logfhandle,'(A,I0,A)') '>>> CONICAL FSC AREA RATIO (cFAR, state ', state, '): '//trim(adjustl(ratio))
         else
             write(logfhandle,'(A)') '>>> CONICAL FSC AREA RATIO (cFAR): '//trim(adjustl(ratio))
         endif
