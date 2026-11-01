@@ -451,12 +451,15 @@ contains
                             &eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun), irot,&
                             &cxy_prob(2), cxy_prob(3), .true.)
                     else if( l_disk )then
-                        ! nothing beat the coarse optimum: it is the pose, scored at full resolution
+                        ! the box's optimum did not beat the origin, minimize's baseline: the coarse optimum, scored at
+                        ! full resolution, is the pose if it beats the origin's row; else that row stands
                         irot = scr_irot(icls)
                         inpl_dist = eulprob_dist_switch(real(self%b_ptr%pftc%gen_corr_for_rot_8(icls, iptcl,&
                             &real(xy0, dp), irot)), self%p_ptr%cc_objfun)
-                        xy0 = shift_ref2ptcl(xy0, self%b_ptr%pftc%get_rot(irot))
-                        call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, xy0(1), xy0(2), .true.)
+                        if( inpl_dist < cls_dists(icls) )then
+                            xy0 = shift_ref2ptcl(xy0, self%b_ptr%pftc%get_rot(irot))
+                            call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, xy0(1), xy0(2), .true.)
+                        endif
                     endif
                     cls_dists_work(icls) = huge(1.0)
                 end do
@@ -483,7 +486,7 @@ contains
             !$omp end parallel do
         endif
         call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
-            &nscored, nbank, nrefined, ndisk, nscreens, i_to - i_from + 1, nactive, nhood_sz_loc)
+            &nscored, nbank, nrefined, ndisk, nscreens, i_to - i_from + 1, nactive, nhood_sz_loc, grad_win=grad_shsrch_win)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
             if( l_map ) call grad_shsrch_win(ithr)%kill
@@ -800,9 +803,10 @@ contains
     end function screen_pool_size
 
     subroutine record_fill_profile2D( self, grad_obj, wall, ts_seed, ts_score, ts_refine, nscored, nbank, nrefined, &
-            &ndisk, nscreens, nfilled, nrefs, nrefine )
+            &ndisk, nscreens, nfilled, nrefs, nrefine, grad_win )
         class(eul_prob_tab2D),  intent(inout) :: self
         type(pftc_shsrch_grad), intent(inout) :: grad_obj(:)
+        type(pftc_shsrch_grad), optional, intent(inout) :: grad_win(:) !< the window objects of the drained particles
         real(dp),               intent(in)    :: wall, ts_seed(:), ts_score(:), ts_refine(:)
         integer(int64),         intent(in)    :: nscored(:), nbank(:), nrefined(:), ndisk(:), nscreens(:)
         integer,                intent(in)    :: nfilled, nrefs, nrefine
@@ -824,12 +828,25 @@ contains
         self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, nrefine)
         do ithr = 1,size(grad_obj)
             call grad_obj(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
-            self%fill_profile%objective_evals = self%fill_profile%objective_evals + obj_ithr
-            self%fill_profile%gradient_evals  = self%fill_profile%gradient_evals  + grad_ithr
-            self%fill_profile%alternations    = self%fill_profile%alternations    + alt_ithr
-            self%fill_profile%grid_points     = self%fill_profile%grid_points     + grid_ithr
-            self%fill_profile%minimize_calls  = self%fill_profile%minimize_calls  + min_ithr
+            call add_counters
         enddo
+        if( present(grad_win) )then
+            do ithr = 1,size(grad_win)
+                call grad_win(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
+                call add_counters
+            enddo
+        endif
+
+        contains
+
+            subroutine add_counters
+                self%fill_profile%objective_evals = self%fill_profile%objective_evals + obj_ithr
+                self%fill_profile%gradient_evals  = self%fill_profile%gradient_evals  + grad_ithr
+                self%fill_profile%alternations    = self%fill_profile%alternations    + alt_ithr
+                self%fill_profile%grid_points     = self%fill_profile%grid_points     + grid_ithr
+                self%fill_profile%minimize_calls  = self%fill_profile%minimize_calls  + min_ithr
+            end subroutine add_counters
+
     end subroutine record_fill_profile2D
 
     subroutine record_sparse_eval( self, i, ithr, icls, dist, irot, x, y, has_sh )

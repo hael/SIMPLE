@@ -244,10 +244,10 @@ contains
                 else
                     self%shift_stable_its = 0
                 endif
-                if( self%shift_stable_its >= 2 )then
-                    write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
-                    converged = .true.
-                endif
+                ! the drain is the centring stage's convergence: the class verdict does not end it while the disk is
+                ! needed (the stage's budget does)
+                converged = self%shift_stable_its >= 2
+                if( converged ) write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
                 deallocate(shincr)
             endif
         endif

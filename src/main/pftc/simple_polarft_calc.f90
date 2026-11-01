@@ -1068,8 +1068,7 @@ interface
         real(dp),            intent(out) :: lse_prior, logp0
     end subroutine shiftmap_prior
 
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
-        &rho_out, mass_out, temp_mass )
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
         real(dp),                    intent(in)    :: temp, prior_w, u_prev(2), lse_prior
@@ -1077,9 +1076,6 @@ interface
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
-        real(dp), optional,          intent(in)    :: rho_out
-        real(dp), optional,          intent(out)   :: mass_out
-        real(dp), optional,          intent(in)    :: temp_mass
     end subroutine shiftmap_draw
 
     ! ===== I/O: simple_polarft_ops_io.f90

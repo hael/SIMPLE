@@ -266,6 +266,23 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     and its exit, the screen-posterior bound and the 2D draw are gone; the key reaches the centring stage alone.
     The 3D dense fill keeps the full map for now (its cost on data is the next measurement).
 
+The 2026-11-01 follow-up review is in `polar_shift_search_review.md`, section 13.
+It verifies the earlier frame, radius, polish-key and diagnostic fixes, but finds
+five active issues: the stage's `startit` skips the first `shincr` reset; map
+insertion losses omit the absolute prior; ordinary class convergence bypasses
+the drain; a non-improving-against-origin polish falls back to a worse coarse
+seed; and the cost record omits the window objects' work. The first, third
+and fifth were reproduced in shared/distributed solve2D probes. The original
+R3 evidence error is fixed, with the remaining prior issue recorded as S2.
+No production changes were made by the follow-up review.
+
+The maintainer's clarification of 2026-11-01: stage 1 is deliberately
+shift-free because shifts there cause class collapse. The current centring
+budget is the five iterations of stage 2 (global 6-10 in the default
+schedule). The follow-up's initializer finding concerns entry to stage 2;
+its convergence probes used three of those five iterations. Extending
+centring across stages 2 and 3 is under consideration, as Open decision 4.
+
 ## Open decisions
 
 1. Closed (Hans, 2026-10-30): the 20 Å average is a mean magnitude, so a spread of picking errors, the case
@@ -281,6 +298,18 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
    the extras' increments) had assumed the map's frame for the window path's entries too and double-rotated them;
    it is retired and `test_table_increment_axes` (the refine3D in-plane state suite) pins the contract through
    the optimizer itself. The weighted insertion (topk > 1) is refused under the key until R3 is done.
+4. Under consideration (Hans, 2026-11-01): extend the faster centring search
+   across stages 2 and 3, giving a nominal budget of ten centring iterations
+   (five per stage), with stage 1 remaining shift-free. This is a proposal,
+   not an adopted schedule. A coherent extension would select the dense
+   coarse-to-fine path in both stages, initialize `shincr` on entry to stage
+   2 and carry it into stage 3, preserving the drain instead of restarting
+   every particle's disk search. Both stages' `trs_window` must describe the
+   ordinary window after centring (stage 4), since stage 3 would itself have
+   the wide disk range. Keep the frequency ladder explicit and decide the
+   mask-estimate/adoption boundary across these stages. Compare the corrected
+   five-iteration baseline with this extension using paired seeds: shift
+   recovery, class populations/collapse, class quality and total wall time.
 
 ## Review findings and their disposition
 
@@ -310,6 +339,19 @@ tree) and the dispositions, all applied the same day:
 | R5 P2: the scheduled Cartesian polish inherits the key and hits the scope guard | the polish pass's command and job description drop `shift_sigma` |
 | R6 P2: `prob_post_diag=yes` under the map writes default rows | refused explicitly in the 3D fill |
 | the 3D screen's pool of 4 projs_ns cannot rescue a direction outside it | the measured breadth of Phase 2c (the rank quantile) goes to the 3D fill with its measures; the first iteration's pool stays bounded in 3D |
+
+The follow-up review of 2026-11-01 (the review's section 13, on `c980026e5` plus the consolidation) and the dispositions,
+applied the same day:
+
+| finding | disposition |
+|---|---|
+| S1 P1: the drain state (`shincr`) was reset only for runs starting at iteration 1; solve2D's centring stage starts at 6, so on entry every particle counted as done with the disk (the fixture: 0 disk searches at the first centring iteration, in both modes) | the refine2D master resets `shincr` at the start of every run under the key, whatever its first iteration's number, and writes the segment in the distributed mode; the master prints the disk set it is about to search (`DISK SEARCHED BY n OF m`); the bench re-measured with the disk searched at the entry |
+| S2 P1: the 3D insertion's pose loss was the drawn cell's data term alone, dropping the absolute prior | `prob_refined_entry%loss` under the map is the posterior loss, the data term with the absolute prior on the total displacement at the physical temperature |
+| S3 P2: the class-overlap verdict could end the centring stage while the disk was still needed | under the key the drain is the stage's convergence (the class verdict does not end it; the budget does); the convergence tester covers converged classes with a non-drained field |
+| S4 P2: when the box's optimum did not beat the optimizer's origin baseline, the coarse point overwrote a better origin row | the coarse optimum, scored at full resolution, is the pose only if it beats the origin's row; else that row stands |
+| S5 P2: the drained particles' window objects were not in the cost record | both object sets' counters reach the record (`grad_win`) |
+| latent: `temp_mass` in `shiftmap_draw` overwrote the draw's normaliser | the retired diagnostic (rho_out, mass_out, temp_mass) removed from the sampler and its test |
+| the origin-posterior screen quantile does not bound the posterior over translated candidates; retained mass and coarse-grid convergence unmeasured | open: the fixture's 95.8 % (its refined count of one) is the only measure so far |
 
 ## Phases
 

@@ -528,8 +528,10 @@ drawn rotation, so every table increment is native whatever the path (the window
 unconverted (`strategy3D_prob`, `candidate_pose`; `test_table_increment_axes`). The
 weighted insertion (`topk > 1`) weighs the refined poses by their own losses, which every
 refined entry carries (`prob_refined_entry%loss`: the row's distance under the window
-search, the drawn cell's data term under the map, whose row holds the reference's
-evidence), so it is one distribution on both paths. Only the dense table has the map: the
+search, which includes its shift prior; under the map the drawn cell's posterior loss, its
+data term with the absolute prior on the total displacement at the physical temperature,
+where the row holds the reference's evidence), so it is one distribution on both paths.
+Only the dense table has the map: the
 neighbourhood fill refuses the key (`fill_tab_neigh_range`), as does `prep_strategy3D`
 for every other `refine`, since the consumer's conversion applied to the window search's
 increments walked the shifts to the window's corner (solve3D stages 6-8, 2026-10-31).
@@ -618,8 +620,9 @@ posterior renormalised over the committed entry and the extras, an extra
 under `PROB_INSERT_WMIN` (0.01) of the particle dropped
 (`top_posterior_extras`); the distance weighed is the refined pose's own loss,
 carried beside the row (`prob_refined_entry%loss`), which under the polar
-shift map is the drawn cell's data term, not the reference's evidence the row
-holds (review R3). The selection is deterministic (the top entries,
+shift map is the drawn cell's posterior loss (the data term with the absolute
+prior at the physical temperature), not the reference's evidence the row holds
+(review R3, S2). The selection is deterministic (the top entries,
 not a sample: within the cone the extras exist to reduce the variance of
 the one-pose insertion, and the hypothesis is the committed draw's), so
 `topk` touches no random stream, and it is made only when the committed

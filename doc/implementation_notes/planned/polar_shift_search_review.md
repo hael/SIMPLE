@@ -1,7 +1,7 @@
 # Probabilistic in-plane search: mathematical and performance review
 
-**Latest review:** the 2026-10-31 integration re-review is in section 12,
-including the uncommitted changes. Sections 1-11 retain the earlier review.
+**Latest review:** the 2026-11-01 follow-up is in section 13. Section 12
+retains the previous integration review; sections 1-11 retain the original review.
 
 **Reviewed:** 2026-10-30, `master` at `a2c1b1f86`.
 **Scope:** commits `519c67d2a` and `a2c1b1f86`, the proposed integration into solve2D/solve3D, and the relevant existing probability-table and reconstruction contracts.
@@ -408,3 +408,208 @@ sampled-motion statistic need not measure posterior convergence.
   The completed workflow uses the earlier build. The 2D screen-rank cost
   instrumentation was inspected; the six findings above remain present.
 - No Linux/BOX run, real-data rerun, commit or push by this review.
+
+## 13. Follow-up review, 2026-11-01
+
+**Scope:** `master` at `c980026e5`, including all 19 files dirty at review
+start. That batch was committed as `f3cfb911c` during the review; all 845
+Fortran source hashes still match the reviewed/built snapshot. Rechecked
+the previous six findings against the current
+producers, consumers and tests, and reviewed the new coarse-to-fine 2D
+centring stage, its drain, convergence and part-file changes. The source
+snapshot contains 845 Fortran files. No production source or tests were
+edited by this review.
+
+**Stage contract clarified by the maintainer, 2026-11-01:** stage 1 is
+deliberately shift-free because introducing shifts there causes class
+collapse. Stage 2 owns the current centring budget of **five iterations**
+(global iterations 6-10 under the default schedule). S1 concerns initializing
+the centring state on entry to stage 2; it does not request shifts in stage 1.
+S3 concerns use of that five-iteration budget. Extending centring through
+stage 3 is a proposal for consideration, recorded in the living plan's
+Open decision 4; it has not been implemented or validated by this review.
+
+### Disposition of the previous findings
+
+- R1/R2: corrected. The map producer converts its cell into particle axes;
+  the window producer already returns those axes. The committed and extra
+  consumers add the increment directly, and the cone receives a common
+  frame. The new producer/consumer test exercises the optimizer itself.
+- R3: the original evidence-to-point-loss error is removed, but the new map
+  insertion loss omits the absolute prior; see S2 below.
+- R4: corrected. A disk below one radial step now uses its own rim. The
+  setup API is covered below, at and above the grid step.
+- R5: corrected in both execution modes. The continuous child command and
+  job description remove `shift_sigma`.
+- R6: corrected by an explicit refusal of map-mode posterior diagnostics.
+
+### S1 — P1: centring state is not initialized on entry to stage 2
+
+Both initializers in `simple_refine2D_strategy` reset `shincr` to -1 only
+inside the `startit == 1` block (shared line 179, distributed line 335).
+However, the solve2D controller numbers iterations across stages:
+`set_refine2D_stage_iteration_policy` takes the preceding `endit + 1` and
+passes it as the child's `startit`. After the deliberate five-iteration,
+shift-free stage 1, stage 2 starts at global iteration 6. Its centring state
+must be initialized at that stage boundary. The new named slot initially
+contains zero, which
+`fill_tab_range` interprets as a particle already done with the disk.
+
+Observed on the 400-particle five-view fixture, with current build binaries:
+
+| route | first centring iteration | particles searched | disk searches |
+|---|---:|---:|---:|
+| solve2D, shared memory | 6 | 400 | 0 |
+| solve2D, two parts | 6 | 200 + 200 | 0 + 0 |
+| standalone refine2D centring invocation, startit=1 | 1 | 400 | 400 |
+
+The standalone invocation is a control for the centring initializer,
+independent of solve2D's deliberately shift-free stage 1.
+
+The solve2D runs later search the disk only for particles whose preceding
+window move exceeds `trs_window`: shared iterations 7/8 had 141/103 disk
+particles; distributed had 134/101. Thus this does not disable every later
+disk search, but a badly offset particle trapped in a small window move
+can avoid the global search throughout. Reset the drain state when the
+master enters the centring stage, independently of global iteration
+numbering; distinguish that boundary from a deliberate continuation.
+Persist the distributed reset before its consumers run.
+
+Validation needed: enter solve2D stage 2 after a nonzero stage-1 `endit`
+and assert every first-time sampled particle takes the disk, in both
+execution modes. The current convergence and named-slot tests do not
+exercise stage initialization.
+
+### S2 — P1: map insertion weights drop the absolute shift prior
+
+The map fill now stores `loss_cell` in `prob_refined_entry%loss`
+(`simple_eul_prob_tab`, line 540), and `select_extras` correctly uses that
+field instead of marginal evidence. But `shiftmap_draw` defines this as
+the data term alone. `top_posterior_extras` receives no prior, so the new
+weights are proportional to `exp(-T L_data)` rather than the point
+posterior `exp(-T L_data - |u_prev + du|^2/(2 sigma_px^2))`.
+
+For equal data losses, sigma=2 px and absolute stored shifts of 0 and
+4 px, the current insertion weights are 0.5/0.5. The posterior weights
+are 0.880797/0.119203. Both shifts are inside the 3-sigma disk and can
+be inside the insertion cone. Drawing a cell under the prior does not
+make its separately renormalized point weights equal to this posterior.
+The window path's returned loss already includes its configured prior
+factor; the map's raw data loss does not.
+
+Keep the reference evidence separate, as now, but carry a physical
+posterior pose loss (including the absolute prior, scaled by the physical
+coefficient T) for insertion, or explicitly redefine and validate a
+likelihood-only insertion estimator. The present policy calls these
+posterior weights and claims one distribution on both paths. This matters
+by default now that topk is 3. The example is a closed-form counterexample,
+not a measured real-data map failure.
+
+### S3 — P2: class convergence shortens the five-iteration centring budget
+
+`check_conv2D` computes ordinary class-overlap convergence first, then the
+new drain code only sets `converged` to true when its streak reaches two.
+It never clears an already true class verdict while the disk is still
+needed (`simple_convergence`, lines 237-249). Lowering the stage's minits
+therefore permits the ordinary 0.8 class-overlap threshold to terminate it
+before the documented disk criterion or the iteration budget.
+
+Observed in the same probes: shared stage 2 ended at global iteration 8 with
+class overlap 0.825 and 11.50% still needing the disk; distributed ended
+at 8 with 6.25% still needing it. Neither printed `DISK EXHAUSTED`.
+Stage 2 had five available centring iterations, globally numbered 6-10
+(EXTR_LIM_LOCAL=20, PHASES(1)=4). These runs used **three of those five**,
+iterations 6-8. Global iteration 10 is the endpoint, not a ten-iteration
+centring budget. Both fractions exceed DISK_NEED_FRAC=0.02.
+
+Keep the five-iteration stage-2 budget explicit. If early stopping on the
+drain is retained, use that verdict as the centring stage's convergence
+condition, leaving the owning strategy's budget/coverage checks in force. Add a
+convergence case with stable classes but a non-drained shift field. The
+existing test deliberately gives the classes zero overlap and misses it.
+
+### S4 — P2: the hybrid fallback discards a locally improved pose
+
+The translated-box polish calls `minimize` without `xy_in`
+(`simple_eul_prob_tab2D`, line 442). That API initializes its acceptance
+baseline at zero shift (`simple_pftc_shsrch_grad`, lines 581-599), even
+when zero is outside the translated search box. It returns `irot=0` when
+the local optimum does not beat that origin baseline. The new caller
+interprets this as nothing beating the coarse seed and commits the
+unpolished coarse point (lines 453-459).
+
+For full-band losses origin=0.1, coarse seed=0.3, local optimum=0.2,
+the local optimization improved the seed but does not beat the origin.
+The caller stores 0.3, losing the valid 0.2 result. This can occur when
+the half-band coarse map and full-band likelihood disagree. It is also
+the case where the original full-band origin row was better than the
+coarse point now written over it.
+
+Make the seed and success contract explicit, preserve the best valid pose
+(including the origin when it wins), and distinguish invalid optimization
+from non-improvement against the origin. If the polish must compare against
+the coarse seed instead, expose that baseline deliberately: simply passing
+`xy_in` also disables this API's coarse lattice. The same fallback can force
+the coarse point when the optimizer actually returns the origin, since an
+equal-to-baseline result is not an improvement. Test translated boxes with
+the above ordering of three independent losses and with the origin on a bound.
+This finding is source-traced, not an observed fixture failure.
+
+### S5 — P2: the cost record omits the drained particles' window searches
+
+The new `grad_shsrch_win` objects perform the window path, but the fill
+passes only `grad_shsrch_obj` to `record_fill_profile2D` before killing
+both sets (`simple_eul_prob_tab2D`, lines 485-489). Their minimize,
+objective, gradient, grid and alternation counters are lost.
+
+The shared solve2D probe's iteration-6 record reports 400 refined entries
+but **zero shift searches/objective evaluations/gradient evaluations**:
+all work used the uncounted window objects. Every particle had at least
+one refinement minimization, plus any seed search. Later mixed iterations
+undercount the window subset. Wall timings remain recorded, but these
+counters cannot support the cost comparison. Reduce both objects' profiles
+before destruction without counting the particle/region totals twice.
+
+### Additional inactive API defect
+
+The old `temp_mass` diagnostic option remains in `shiftmap_draw` although
+the new 2D workflow no longer calls it. With `mass_out` and `temp_mass`,
+the diagnostic overwrites `s` with the rescaled-temperature normalizer;
+the subsequent stochastic draw uses that new normalizer with the original
+tempered cell weights. For two equal-area, zero-prior cells with log
+weights 0 and -1, temp=1 and temp_mass=2, the first-cell probability
+changes from 0.731059 to 0.880797 merely by requesting the diagnostic.
+The existing mass-out test uses a greedy draw without `temp_mass`.
+
+There is no current production caller of `temp_mass`, so this does not
+explain the observed solve2D behavior. Remove the retired diagnostic API
+or preserve the original draw normalizer and test diagnostic invariance
+under a fixed RNG seed. This is a latent kernel issue, separate from the
+five active findings above.
+
+### Validation and limits
+
+- Existing-tree Mac Release build (`make -C build -j8`): PASS; no compiler
+  warnings observed. Fortran source hashes unchanged through build and gate.
+- Full fast gate: PASS, 15/15, 34.30 s, including registry, descriptor and
+  FLEX-DAG checks. Polar suite: 1369 assertions, including 73 shift-map,
+  72 refine3D in-plane-state and 42 2D table-I/O assertions.
+- `make -C build install`: PASS.
+- Manual probes: shared solve2D, two-part distributed solve2D, and
+  standalone refine2D all finish normally. They establish the disk counts,
+  convergence behavior and missing profile counts above; they are not
+  registered tests and do not establish a map-quality regression rate.
+  Files/logs: `/private/tmp/simple_shift_rereview_20261101/`.
+- S2/S4 and the inactive API counterexamples are independent numeric/source
+  analyses. No new compiled regression tests were added by this review.
+- `simulated_workflow_1jxy`: PASS, 756.90 s, including shared-memory and
+  two-part distributed solve3D. Truth correlations 0.90010/0.89422; truth
+  FSC=0.143 at 4.30345/4.45714 A. Both wrong-truth controls and the
+  two-part worker check pass. The output confirms topk=3 with extra poses
+  actually used. It exercises the window path, not the map-insertion prior
+  in S2. All source hashes still match after completion.
+- The new origin-posterior screen quantile does not bound the posterior
+  over translated candidates. Its retained mass and coarse-grid convergence
+  remain scientific validation gaps. Earlier reported benchmark results
+  in the living plan were not rerun or claimed as this review's results.
+- No Linux/BOX run, production fix, commit or push by this review.

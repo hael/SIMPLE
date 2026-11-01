@@ -483,7 +483,7 @@ contains
             integer, allocatable :: pool(:)
             real,    allocatable :: screen_dist(:)
             real(dp) :: t0, u_prev(2), lse_prior, logp0, lse_screen, logp0_screen, temp_i, temp_s, logz, xcell(2)
-            real     :: evid, loss_cell, dist_loc, dbest
+            real     :: evid, loss_cell, loss_pose, dist_loc, dbest
             integer  :: ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, nbest, jbest
             t0 = omp_get_wtime()
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
@@ -537,7 +537,10 @@ contains
                 xcell = real(shift_ref2ptcl(real(xcell), self%b_ptr%pftc%get_rot(irot_loc)), dp)
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(real(-logz / temp_i), irot_loc)
                 nrefined_batch(i_loc)    = nrefined_batch(i_loc) + 1
-                refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc, real(xcell(1)), real(xcell(2)), loss_cell)
+                ! the pose's loss for the insertion: the data term with the absolute prior on the total displacement
+                ! at the physical temperature (the posterior exp(-T L - prior_w |u|^2) as a loss at T)
+                loss_pose = loss_cell + real(prior_w * sum((u_prev + xcell)**2) / real(self%temps(i_loc), dp))
+                refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc, real(xcell(1)), real(xcell(2)), loss_pose)
             enddo
             ! the bench record of whether the budget binds, as in refine_best_refs
             jbest = 0

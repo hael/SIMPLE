@@ -173,7 +173,8 @@ end type prob_dense_entry
 
 ! A refined entry of the dense table: the particle (part-local in a part file, the master's index on the master),
 ! the compact reference, the shift of its search and the loss at that pose (the row's distance under the window
-! search; the drawn cell's data term under the polar shift map, whose row holds the reference's evidence)
+! search; under the polar shift map the drawn cell's posterior loss, its data term with the absolute prior at the
+! physical temperature, where the row holds the reference's evidence)
 type :: prob_refined_entry
     integer :: i
     integer :: ri

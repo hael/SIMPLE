@@ -473,11 +473,7 @@ contains
     !! logz = log of the summed mass over the prior's normaliser (shiftmap_prior). l_greedy takes the cell of the
     !! largest mass instead. loss is the data term at the returned cell; the cell's shift in the optimizer's frame
     !! is shiftmap_shift(imap, irho, ialpha)
-    !> rho_out with mass_out: the posterior mass of the cells beyond magnitude rho_out (the window's radius: what
-    !! the disk still has to find), at temperature temp_mass when given (the physical posterior, beta 1: the draw's
-    !! tempering spreads the mass over the disk and would say the disk is always needed), else at temp
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
-        &rho_out, mass_out, temp_mass )
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss )
         use simple_rnd, only: ran3
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
@@ -486,13 +482,10 @@ contains
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
-        real(dp), optional,          intent(in)    :: rho_out
-        real(dp), optional,          intent(out)   :: mass_out
-        real(dp), optional,          intent(in)    :: temp_mass
         type(shiftmap_work), pointer :: wk
         real(dp) :: c1(self%nrots), c2(self%nrots)
         real(dp) :: ca(self%shiftmap(imap)%get_nalpha()), sa(self%shiftmap(imap)%get_nalpha())
-        real(dp) :: offs(self%nrots), scal(self%nrots), usq, rho, loga, lmax, s, tgt, l, pen, s_out, s_ring, tm, lm
+        real(dp) :: offs(self%nrots), scal(self%nrots), usq, rho, loga, lmax, s, tgt, l, pen, s_ring
         integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3)
         ithr =  omp_get_thread_num() + 1
         wk   => self%smwork(ithr,imap)
@@ -523,7 +516,6 @@ contains
             enddo
         enddo
         s     = 0.d0
-        s_out = 0.d0
         do ir = 1, nrho
             s_ring = 0.d0
             do ro = 1, self%nrots
@@ -533,47 +525,8 @@ contains
                 enddo
             enddo
             s = s + s_ring
-            if( present(rho_out) )then
-                if( self%shiftmap(imap)%get_rho(ir) > rho_out ) s_out = s_out + s_ring
-            endif
         enddo
         logz = lmax + log(s) - lse_prior
-        if( present(mass_out) )then
-            mass_out = s_out / s
-            if( present(temp_mass) )then
-                ! the mass beyond at the physical temperature: the data term rescaled by temp_mass / temp
-                tm = temp_mass / max(temp, 1.d-30)
-                lm = -huge(lm)
-                do ir = 1, nrho
-                    rho  = self%shiftmap(imap)%get_rho(ir)
-                    loga = log(self%shiftmap(imap)%get_cell_area(ir))
-                    do ro = 1, self%nrots
-                        do j = 1, nalpha
-                            pen = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
-                            l   = tm * (real(wk%lw(j,ro,ir), dp) + pen - loga) - pen + loga
-                            if( l > lm ) lm = l
-                        enddo
-                    enddo
-                enddo
-                s     = 0.d0
-                s_out = 0.d0
-                do ir = 1, nrho
-                    rho  = self%shiftmap(imap)%get_rho(ir)
-                    loga = log(self%shiftmap(imap)%get_cell_area(ir))
-                    s_ring = 0.d0
-                    do ro = 1, self%nrots
-                        do j = 1, nalpha
-                            pen = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
-                            l   = tm * (real(wk%lw(j,ro,ir), dp) + pen - loga) - pen + loga - lm
-                            if( l > -40.d0 ) s_ring = s_ring + exp(l)
-                        enddo
-                    enddo
-                    s = s + s_ring
-                    if( rho > rho_out ) s_out = s_out + s_ring
-                enddo
-                mass_out = s_out / s
-            endif
-        endif
         if( l_greedy )then
             ialpha = imax(1)
             irot   = imax(2)

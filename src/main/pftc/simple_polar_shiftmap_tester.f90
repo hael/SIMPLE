@@ -674,7 +674,7 @@ contains
         real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:)
         real(dp),    allocatable :: rhos(:)
         real(dp) :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w, x(2), u_prev(2), tot(2)
-        real(dp) :: lmax, s, lse, pen, loga, rho, temp, c, sn, ang, mout, wout
+        real(dp) :: lmax, s, lse, pen, loga, rho, temp, c, sn, ang
         real(sp) :: loss
         integer  :: kfromto(2), nrots, nrho, nalpha, idraw, irot, irho, ialpha, ir, j, ro, imax(3)
         write(*,'(A)') 'test_kernel_draw'
@@ -712,14 +712,6 @@ contains
             &', continuous ', EXPECTED_MEAN
         call assert_true(abs(mean_rho - disc_mean) <= 0.06d0 * disc_mean, 'at temperature 0 the draws follow the prior under the polar measure')
         call assert_true(abs(disc_mean - EXPECTED_MEAN) <= step, 'the discrete prior''s mean radius is the truncated Gaussian''s within a step')
-        ! the mass beyond a radius: the prior's beyond it, at temperature 0
-        call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, u_prev, lse_prior, .true., logz, irot, irho, ialpha, loss,&
-            &rho_out=rhos(2), mass_out=mout)
-        wout = 0.d0
-        do ir = 1, nrho
-            if( rhos(ir) > rhos(2) ) wout = wout + exp(-prior_w * rhos(ir)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir) * real(nalpha,dp)
-        enddo
-        call assert_true(abs(mout - wout / wsum) <= 1.d-9, 'the mass beyond a radius is the prior''s beyond it at temperature 0')
         ! the origin's mass: the central disk's share of the prior, at one rotation
         w = exp(logp0) * real(nrots,dp)
         call assert_true(abs(w - exp(-prior_w * rhos(1)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, 1) * real(nalpha,dp) / wsum) <= 1.d-9,&

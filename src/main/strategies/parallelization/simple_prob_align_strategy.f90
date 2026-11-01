@@ -343,7 +343,8 @@ contains
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
         type(prob_assign_profile2D) :: assign_profile
-        integer :: nptcls
+        real,          allocatable :: shincr(:)
+        integer :: nptcls, ndisk
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup_here, rt_sample, rt_sched, rt_read, rt_assign, rt_write
         rt_setup_here = 0.
@@ -364,6 +365,13 @@ contains
         ! by prob_tab2D/refine2D_exec; later iterations redraw it, except on a fresh start
         ! without fillin (startit=1), which keeps the subset it drew first.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
+        if( params%l_shift_map )then
+            ! the particles the fill searches the disk for: not yet searched in this run, or moved beyond the window
+            shincr = build%spproj_field%get_all('shincr')
+            ndisk  = count(shincr(pinds) < 0. .or. shincr(pinds) > params%trs_window)
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', ndisk, ' OF ', nptcls, ' SAMPLED PARTICLES'
+            deallocate(shincr)
+        endif
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
         ! Build the downscaled particle cache before the workers start, so they all

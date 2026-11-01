@@ -155,11 +155,19 @@ stage 2 the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`):
   stage's `trslim`, from the controller) searches that window from its stored
   shift in the later iterations (a second L-BFGS object with those bounds);
   the refine2D master sets `shincr` below zero for every particle at the start
-  of a run under the key, so every particle's first search is the disk
-- it ends when few particles still need the disk: `check_conv2D` ends the
-  stage once the fraction of sampled particles whose last move went beyond
-  `trs_window` has been below `DISK_NEED_FRAC` for two iterations
-  (`minits = iter + 1`), or at its budget
+  of every run under the key, whatever its first iteration's number (solve2D
+  numbers iterations across stages), so every particle's first search in the
+  stage is the disk; the master prints the disk set it is about to search.
+  The polish's box excludes the origin, which is the optimizer's acceptance
+  baseline: when the box's optimum does not beat it, the coarse optimum scored
+  at full resolution is the pose only if it beats the origin's row, else that
+  row stands
+- it ends when few particles still need the disk, and only then: under the key
+  the drain is the stage's convergence (`check_conv2D` converges once the
+  fraction of sampled particles whose last move went beyond `trs_window` has
+  been below `DISK_NEED_FRAC` for two iterations, `minits = iter + 1`; the
+  class-overlap verdict does not end the stage while the disk is needed), or
+  the stage's budget does
 - at its exit the mask diameter of the stages after it is estimated from its
   class averages (`solve2D_mskdiam_estimate`: automask2D's diameters of the
   populated classes, their population-weighted 90th percentile, taken as the

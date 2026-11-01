@@ -173,11 +173,10 @@ contains
         if( .not. cline%defined('part') ) call ensure_canonical_sigma2(params, build, cline)
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 )then
-            call build%spproj_field%clean_entry('updatecnt', 'sampled')
-            ! the centring stage (shift_sigma > 0): every particle needs the disk until its first search
-            if( params%l_shift_map ) call build%spproj_field%set_all2single('shincr', -1.)
-        endif
+        if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        ! the centring stage (shift_sigma > 0) is one refine2D run, whatever its first iteration's number: every
+        ! particle needs the disk until its first search in it
+        if( params%l_shift_map ) call build%spproj_field%set_all2single('shincr', -1.)
         ! once per refine2D invocation, before any iteration reads particles; may
         ! fall back to cache=no on cline, which child commands inherit via their copy
         call ptcl_cache_ensure(params, build, cline)
@@ -327,14 +326,12 @@ contains
         call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         call init_refine2D_refs(cline, params, build)
         call ensure_canonical_sigma2(params, build, cline)
-        if( params%startit == 1 )then
-            call build%spproj_field%clean_entry('updatecnt', 'sampled')
-            ! the centring stage (shift_sigma > 0): every particle needs the disk until its first search, which
-            ! the workers read from the project
-            if( params%l_shift_map )then
-                call build%spproj_field%set_all2single('shincr', -1.)
-                call build%spproj%write_segment_inside(params%oritype, params%projfile)
-            endif
+        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        ! the centring stage (shift_sigma > 0) is one refine2D run, whatever its first iteration's number: every
+        ! particle needs the disk until its first search in it, which the workers read from the project
+        if( params%l_shift_map )then
+            call build%spproj_field%set_all2single('shincr', -1.)
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         ! master-side, before any job is scheduled, so the workers find it ready;
         ! must precede gen_job_descr below so a fallback to cache=no reaches the

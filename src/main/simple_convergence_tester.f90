@@ -108,17 +108,35 @@ contains
             call os%kill
         enddo
         call assert_true(.not. any(conv_at(1:3)), 'shift exit: the key off never exits on the shifts')
+        ! stable classes do not end the stage while the disk is needed; drained, they do
+        params%l_shift_map = .true.
+        call shift_field(os, 8., mi_class=1.)
+        params%which_iter = 1
+        conv_at(1) = conv%check_conv2D(params, cline, os, 10, 40.)
+        call os%kill
+        call assert_true(.not. conv_at(1), 'shift exit: converged classes do not end the centring stage while the disk is needed')
+        do it = 2, 3
+            params%which_iter = it
+            call shift_field(os, 1., mi_class=1.)
+            conv_at(it) = conv%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+        enddo
+        call assert_true(conv_at(3), 'shift exit: converged classes end the stage once drained twice')
         call cline%kill
         deallocate(params)
         call del_file(STATS_FILE)
 
         contains
 
-            !> an unconverged field (the class overlap zero) whose every sampled particle last moved by shincr pixels
-            subroutine shift_field( os_loc, shincr )
-                type(oris), intent(inout) :: os_loc
-                real,       intent(in)    :: shincr
+            !> a field of class overlap mi_class (0 unless given) whose every sampled particle last moved by shincr pixels
+            subroutine shift_field( os_loc, shincr, mi_class )
+                type(oris),     intent(inout) :: os_loc
+                real,           intent(in)    :: shincr
+                real, optional, intent(in)    :: mi_class
+                real    :: mi
                 integer :: i
+                mi = 0.
+                if( present(mi_class) ) mi = mi_class
                 call os_loc%new(NPTCLS, is_ptcl=.true.)
                 do i = 1, NPTCLS
                     call os_loc%set_state(i, 1)
@@ -126,7 +144,7 @@ contains
                     call os_loc%set(i, 'sampled',   1.)
                     call os_loc%set(i, 'class',     real(i))
                     call os_loc%set(i, 'frac',      100.)
-                    call os_loc%set(i, 'mi_class',  0.)
+                    call os_loc%set(i, 'mi_class',  mi)
                     call os_loc%set(i, 'corr',      0.5)
                     call os_loc%set(i, 'dist_inpl', 0.1)
                     call os_loc%set(i, 'shincarg',  1.)
