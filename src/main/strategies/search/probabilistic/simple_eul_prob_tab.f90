@@ -1020,6 +1020,7 @@ contains
         integer :: ib, i, iref, si, ifirst, ilast, nblock, which, assigned_iref, nmode, ntemp_missing, kmax
         real    :: score, dist, temp, invalid_dist
         logical :: l_extras
+        character(len=32) :: mode_pct
         invalid_dist = 0.1 * huge(invalid_dist)
         call self%warn_invalid_and_flat
         ! the state label: each particle's closest reference over all states, references outside in blocks
@@ -1097,8 +1098,9 @@ contains
         else if( kmax > 1 )then
             write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
         endif
-        write(logfhandle,'(A,I0,A,I0,A,F0.1,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls, ' particles x ', self%nrefs,&
-            &' references, ', 100. * real(nmode) / real(max(1,self%nptcls)), ' % at the row mode'
+        write(mode_pct,'(F32.1)') 100. * real(nmode) / real(max(1,self%nptcls))
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls, ' particles x ', self%nrefs,&
+            &' references, '//trim(adjustl(mode_pct))//'% at the row mode'
         if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
             &'WARNING: particles without a temperature in the dense part files, assigned to their argmin: ', ntemp_missing
         deallocate(score_best, iref_best, w)

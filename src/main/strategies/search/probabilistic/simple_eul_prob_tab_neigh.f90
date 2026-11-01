@@ -713,6 +713,7 @@ contains
             integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, nkept, istate_best, kmax
             real    :: temp, dist
             logical :: l_extras
+            character(len=32) :: mode_pct
             maxcand = 0
             do i_loc = 1,self%nptcls
                 maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
@@ -782,8 +783,9 @@ contains
             else if( kmax > 1 .and. .not. self%insert_cone%is_open() )then
                 write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
             endif
-            write(logfhandle,'(A,I0,A,I0,A,F0.1,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls - nkept, ' particles x ', self%nrefs,&
-                &' references, ', 100. * real(nmode) / real(max(1, self%nptcls - nkept)), ' % at the row mode'
+            write(mode_pct,'(F32.1)') 100. * real(nmode) / real(max(1, self%nptcls - nkept))
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls - nkept, ' particles x ', self%nrefs,&
+                &' references, '//trim(adjustl(mode_pct))//'% at the row mode'
             if( nkept > 0 ) write(logfhandle,'(A,I0)') &
                 &'WARNING: particles without a valid neighbourhood candidate, orientation kept: ', nkept
             if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &

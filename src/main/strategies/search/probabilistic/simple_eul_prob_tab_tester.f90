@@ -64,7 +64,51 @@ contains
         call test_ref_assign_neigh_posterior()
         write(*,'(A)') 'test_neff_readout'
         call test_neff_readout()
+        call test_neff_report()
     end subroutine run_all_eul_prob_tab_tests
+
+    subroutine test_neff_report()
+        use, intrinsic :: iso_fortran_env, only: iostat_end
+        type(prob_neff_readout) :: neff_ro
+        real :: row(50)
+        character(len=256) :: line
+        integer :: r, saved_log, scratch_log, ios
+        write(*,'(A)') 'test_neff_report'
+        open(newunit=scratch_log, status='scratch', action='readwrite', iostat=ios)
+        call assert_int(0, ios, 'n_eff report: open capture')
+        if( ios /= 0 ) return
+        saved_log = logfhandle
+        row = 0.
+        call neff_ro%new(PROB_NEFF_MIN_ROWS, PROB_NEFF_MIN_ROWS, 6)
+        do r = 1,PROB_NEFF_MIN_ROWS
+            call neff_ro%offer(size(row), row, 1.)
+        enddo
+        logfhandle = scratch_log
+        call neff_ro%report(0.3)
+        logfhandle = saved_log
+        rewind(scratch_log)
+        read(scratch_log,'(A)',iostat=ios) line
+        call assert_int(0, ios, 'n_eff report: a line at the minimum row count')
+        if( ios == 0 ) call assert_char('>>> POSTERIOR DRAW N_EFF: 50.00 at beta 0.30, 50.00 at beta 1.00 ('//&
+            &int2str(PROB_NEFF_MIN_ROWS)//' rows)', trim(line), 'n_eff report: unpadded numbers with leading zeros')
+        call neff_ro%kill
+        close(scratch_log)
+        open(newunit=scratch_log, status='scratch', action='readwrite', iostat=ios)
+        call assert_int(0, ios, 'n_eff report: open below-threshold capture')
+        if( ios /= 0 ) return
+        call neff_ro%new(PROB_NEFF_MIN_ROWS - 1, PROB_NEFF_MIN_ROWS - 1, 6)
+        do r = 1,PROB_NEFF_MIN_ROWS - 1
+            call neff_ro%offer(size(row), row, 1.)
+        enddo
+        logfhandle = scratch_log
+        call neff_ro%report(0.3)
+        logfhandle = saved_log
+        rewind(scratch_log)
+        read(scratch_log,'(A)',iostat=ios) line
+        call assert_int(iostat_end, ios, 'n_eff report: silent below the minimum row count')
+        call neff_ro%kill
+        close(scratch_log)
+    end subroutine test_neff_report
 
     !> The n_eff readout: 200 rows of 50 distances k s_r (k = 0..49, s_r = 0.01 r) at temperature 2, so row r's
     !! posterior at factor beta is geometric with ratio exp(-2 beta s_r). Reference values from a numpy emulation:

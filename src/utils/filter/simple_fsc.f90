@@ -648,6 +648,7 @@ contains
         integer,            optional, intent(in)    :: state
         logical, parameter :: VERBOSE = .false.
         integer :: idir, loc(1)
+        character(len=32) :: ratio
         if( .not. even%is_ft() ) call even%fft()
         if( .not. odd%is_ft()  ) call odd%fft()
         call even%conical_fsc(odd, self%dirs, self%cone_half_angle_deg, self%min_count, self%cfsc, self%counts)
@@ -664,10 +665,11 @@ contains
         if( self%wauc_max > 0. )then
             self%cfar = self%wauc_min / self%wauc_max
         endif
+        write(ratio,'(F32.4)') self%cfar
         if( present(state) )then
-            write(logfhandle,'(A,I2,A,1X,F8.4)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO (cFAR) STATE ', state,':',self%cfar
+            write(logfhandle,'(A,I0,A)') '>>> CONICAL FSC AREA RATIO (cFAR): STATE ', state, ', '//trim(adjustl(ratio))
         else
-            write(logfhandle,'(A,1X,F8.4)') '>>> FSC AREA SCORE / CONICAL FSC AREA RATIO (cFAR):', self%cfar
+            write(logfhandle,'(A)') '>>> CONICAL FSC AREA RATIO (cFAR): '//trim(adjustl(ratio))
         endif
         if( VERBOSE )then
             write(logfhandle,'(A,1X,I0)')      '    Direction axes:', self%ndirs

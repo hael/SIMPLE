@@ -1064,6 +1064,7 @@ contains
             integer, allocatable :: pos_c(:)
             integer :: i_loc, n_loc, which, ibest, maxcand, nmode, ntemp_missing, npeaks_loc
             real    :: temp, dist
+            character(len=32) :: mode_pct
             maxcand = 0
             do i_loc = 1,self%nptcls
                 maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
@@ -1100,8 +1101,9 @@ contains
                     &100. * real(npeaks_loc) / real(self%nclasses), npeaks_loc)
                 nassigned = nassigned + 1
             enddo
-            write(logfhandle,'(A,I0,A,I0,A,F0.1,A)') '>>> PROB_TAB2D_ASSIGN: ', nassigned, ' particles x ', self%nclasses,&
-                &' classes, ', 100. * real(nmode) / real(max(1,nassigned)), ' % at the row mode'
+            write(mode_pct,'(F32.1)') 100. * real(nmode) / real(max(1,nassigned))
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB2D_ASSIGN: ', nassigned, ' particles x ', self%nclasses,&
+                &' classes, '//trim(adjustl(mode_pct))//'% at the row mode'
             if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
                 &'WARNING: particles without a temperature in the 2D part files, assigned to their best candidate: ', ntemp_missing
             call flush(logfhandle)
@@ -1201,6 +1203,7 @@ contains
             type(prob_neff_readout) :: neff
             real    :: w(nactive), dists_act(nactive), temp, dist, best_loc, invalid_loc
             integer :: i_loc, iact_loc, which, iact_best, assigned_loc, nmode, ntemp_missing
+            character(len=32) :: mode_pct
             invalid_loc   = 0.1 * huge(invalid_loc)
             ! the n_eff readout: the mean effective number of candidates over a subsample of the rows the draws are from
             call neff%new(self%nptcls, PROB_NEFF_ROWS, PROB_NEFF_NMIN)
@@ -1236,8 +1239,9 @@ contains
                 assigned_loc = active_cls(which)
                 call self%finalize_assignment(i_loc, assigned_loc, 100., 0)
             enddo
-            write(logfhandle,'(A,I0,A,I0,A,F0.1,A)') '>>> PROB_TAB2D_ASSIGN: ', self%nptcls, ' particles x ', self%nclasses,&
-                &' classes, ', 100. * real(nmode) / real(max(1,self%nptcls)), ' % at the row mode'
+            write(mode_pct,'(F32.1)') 100. * real(nmode) / real(max(1,self%nptcls))
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB2D_ASSIGN: ', self%nptcls, ' particles x ', self%nclasses,&
+                &' classes, '//trim(adjustl(mode_pct))//'% at the row mode'
             if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
                 &'WARNING: particles without a temperature in the 2D part files, assigned to their argmin: ', ntemp_missing
             call flush(logfhandle)

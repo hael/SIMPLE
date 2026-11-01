@@ -2074,13 +2074,17 @@ contains
         real           :: secs
         integer(int64) :: peak_rss
         real(real64)   :: peak_gib
+        character(len=32) :: elapsed, thread_secs, rss
         secs     = real(toc(t_start))
         peak_rss = get_peak_rss_bytes()
         peak_gib = -1.0_real64
         if( peak_rss >= 0_int64 ) peak_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
-        write(logfhandle,'(A,A,A,F6.1,A,I0,A,F8.1,A,F5.2,A)') '>>> RECONSTRUCTION MASTER PHASE (', &
-            &trim(params%rec_backend), '): ', secs, ' s on ', nthr, ' threads = ', secs*real(nthr), &
-            &' thread-s, peak RSS ', peak_gib, ' GiB'
+        write(elapsed,'(F32.1)') secs
+        write(thread_secs,'(F32.1)') secs*real(nthr)
+        write(rss,'(F32.2)') peak_gib
+        write(logfhandle,'(A,I0,A)') '>>> RECONSTRUCTION MASTER PHASE ('//trim(params%rec_backend)//'): '//&
+            &trim(adjustl(elapsed))//' s on ', nthr, ' threads = '//trim(adjustl(thread_secs))//&
+            &' thread-s, peak RSS '//trim(adjustl(rss))//' GiB'
     end subroutine report_rec_master_phase
 
     integer function inmem_anneal_tail_start(self) result(it)

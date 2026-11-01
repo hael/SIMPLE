@@ -596,6 +596,12 @@ schedule is therefore `prob_beta` flat with the tail to 1, and the readout
 is how it is watched. Unit-tested on synthetic rows against a numpy
 emulation (`test_neff_readout`).
 
+Terminal diagnostics use unpadded numbers with leading zeros. The insertion
+cone summary gives the joint rim-displacement limit `min(FSC=0.5, matching LP)`
+and its rotation-only and shift-only bounds; these are not independent allowances.
+The conical score is labelled `CONICAL FSC AREA RATIO (cFAR)`, with its state
+and ratio on one line. Stored FSC-mode provenance and diagnostic files are unchanged.
+
 **The weighted insertion (`topk`, 2026-10-29, revised 2026-10-30; sections
 20.8 and 20.12 of the note).** In the probabilistic modes a particle may
 enter the iteration's reconstruction at more than its committed pose: with
@@ -1497,6 +1503,9 @@ region into the fit) and that cutoff (never of the shipped regularized
 map: its prior's amplitude suppression steepens the slope, -150 on
 streptavidin against -77 to -83 from unregularized maps), sharpen, the
 FSC weighting exactly once, then the Butterworth low-pass at the cutoff.
+The terminal summary reports the actual B-factor in A^2 (including zero),
+whether FSC weighting is applied or already carried by the prior, and the
+Butterworth cutoff. The FSC-source line retains `0.5/0.143 at <res05>/<res143> A`.
 Exactly once (2026-09-26): an ML-regularized map (support-provenance
 `solve_kind=regularized`, or `gridding_regularized` from a gridding
 reconstruction with `ml_reg=yes`) already carries it -- its prior shrank

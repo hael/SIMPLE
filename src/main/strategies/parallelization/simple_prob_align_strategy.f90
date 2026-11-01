@@ -37,6 +37,7 @@ contains
         type(string) :: fname
         real    :: fsc05, fsc0143
         integer :: s
+        character(len=32) :: limit, angle, shift
         allocate(res05(params%nstates), source=0.)
         res = get_resarr(params%box, params%smpd)
         do s = 1,params%nstates
@@ -52,10 +53,12 @@ contains
         call cone%new(res05, params%mskdiam, params%smpd)
         do s = 1,params%nstates
             if( cone%get_angle(s) < 0. ) cycle
-            write(logfhandle,'(A,I0,A,F7.2,A,F6.2,A,F5.2,A)') '>>> PROB_TAB_INSERT CONE: state ', s, &
-                &', the finer of FSC=0.5 and the matching low-pass limit at ', res05(s), &
-                &' A: a rim displacement of at most that about the committed pose (half-angle ', &
-                &cone%get_angle(s), ' degrees at equal shifts, ', res05(s) / params%smpd, ' pixels at equal rotations)'
+            write(limit,'(F32.2)') res05(s)
+            write(angle,'(F32.2)') cone%get_angle(s)
+            write(shift,'(F32.2)') res05(s) / params%smpd
+            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT CONE: STATE ', s, &
+                &', rim limit '//trim(adjustl(limit))//' A (min(FSC=0.5, matching LP)); rotation-only '//&
+                &trim(adjustl(angle))//' deg, shift-only '//trim(adjustl(shift))//' px'
         enddo
         call fname%kill
     end function insert_cone_from_fsc

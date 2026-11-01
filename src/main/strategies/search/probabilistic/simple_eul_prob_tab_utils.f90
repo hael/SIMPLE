@@ -637,9 +637,13 @@ contains
     subroutine neff_readout_report( self, beta_draw )
         class(prob_neff_readout), intent(in) :: self
         real,                     intent(in) :: beta_draw
+        character(len=32) :: draw_neff, beta, physical_neff
         if( self%nrows < PROB_NEFF_MIN_ROWS ) return
-        write(logfhandle,'(A,F0.2,A,F0.2,A,F0.2,A,I0,A)') '>>> POSTERIOR DRAW N_EFF: ', self%mean_neff(beta_draw), &
-            &' at beta ', beta_draw, ', ', self%mean_neff(1.), ' at beta 1 (', self%nrows, ' rows)'
+        write(draw_neff,'(F32.2)') self%mean_neff(beta_draw)
+        write(beta,'(F32.2)') beta_draw
+        write(physical_neff,'(F32.2)') self%mean_neff(1.)
+        write(logfhandle,'(A,I0,A)') '>>> POSTERIOR DRAW N_EFF: '//trim(adjustl(draw_neff))//&
+            &' at beta '//trim(adjustl(beta))//', '//trim(adjustl(physical_neff))//' at beta 1.00 (', self%nrows, ' rows)'
         call flush(logfhandle)
     end subroutine neff_readout_report
 

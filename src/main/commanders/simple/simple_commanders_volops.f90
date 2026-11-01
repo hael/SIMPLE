@@ -325,6 +325,7 @@ contains
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
         logical :: l_support_at_source, l_prov_constrained, l_prov_found, l_prov_kind, l_ml_shrunk
         character(len=32) :: prov_solve_kind
+        character(len=32) :: res05_text, res143_text, cutoff_text, bfac_text, gain_text
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
@@ -372,8 +373,10 @@ contains
             fsc = file2rarr(params%fsc)
             call get_resolution(fsc, res, fsc05, fsc0143)
             has_fsc = .true.
-            write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: FSC from '//params%fsc%to_char()//&
-                &', 0.5/0.143 at ', fsc05, '/', fsc0143, ' A'
+            write(res05_text,'(F32.2)') fsc05
+            write(res143_text,'(F32.2)') fsc0143
+            write(logfhandle,'(A)') '>>> POSTPROCESS: FSC from '//params%fsc%to_char()//&
+                &', 0.5/0.143 at '//trim(adjustl(res05_text))//'/'//trim(adjustl(res143_text))//' A'
         else if( l_unfil_pair )then
             call vol_unfil%fft()
             call vol_unfil_odd%fft()
@@ -382,8 +385,10 @@ contains
             call vol_unfil_odd%ifft()
             call get_resolution(fsc, res, fsc05, fsc0143)
             has_fsc = .true.
-            write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> POSTPROCESS: no FSC file; FSC of the unfiltered pair, 0.5/0.143 at ', &
-                &fsc05, '/', fsc0143, ' A'
+            write(res05_text,'(F32.2)') fsc05
+            write(res143_text,'(F32.2)') fsc0143
+            write(logfhandle,'(A)') '>>> POSTPROCESS: no FSC file; FSC of the unfiltered pair, 0.5/0.143 at '//&
+                &trim(adjustl(res05_text))//'/'//trim(adjustl(res143_text))//' A'
         else
             THROW_WARN('FSC file: '//params%fsc%to_char()//' not found and no unfiltered pair beside the volume')
             if( .not. cline%defined('lp') )then
@@ -460,17 +465,24 @@ contains
         call vol_bfac%apply_filter(bwfilter)
         call vol_no_bfac%apply_filter(bwfilter)
         deallocate(bwfilter)
-        if( params%bfac < 0. ) write(logfhandle,'(A,F8.2,A,F6.2,A,I0,A)') '>>> POSTPROCESS: B ', params%bfac, &
-            &' capped at the cutoff shell: gain ', cap_gain, ' from shell ', lp_find, ' to Nyquist'
+        write(bfac_text,'(F32.2)') params%bfac
+        write(cutoff_text,'(F32.2)') lplim
+        if( params%bfac < 0. )then
+            write(gain_text,'(F32.2)') cap_gain
+            write(logfhandle,'(A,I0,A)') '>>> POSTPROCESS: sharpening gain capped at '//trim(adjustl(gain_text))//&
+                &' from shell ', lp_find, ' to Nyquist'
+        endif
         if( has_fsc .and. l_ml_shrunk )then
             write(logfhandle,'(A)') '>>> POSTPROCESS: ML-regularized map (solve_kind='//trim(prov_solve_kind)//&
-                &'), its prior already FSC-weighted it: no FSC weighting'
-            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
+                &'); FSC weighting already applied by the prior'
+            write(logfhandle,'(A)') '>>> POSTPROCESS: B-factor '//trim(adjustl(bfac_text))//&
+                &' A^2, Butterworth low-pass at '//trim(adjustl(cutoff_text))//' A'
         else if( has_fsc )then
-            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, FSC-weighted (sqrt(2FSC/(1+FSC))), '//&
-                &'Butterworth low-pass at ', lplim, ' A'
+            write(logfhandle,'(A)') '>>> POSTPROCESS: B-factor '//trim(adjustl(bfac_text))//&
+                &' A^2, FSC-weighted, Butterworth low-pass at '//trim(adjustl(cutoff_text))//' A'
         else
-            write(logfhandle,'(A,F6.2,A)') '>>> POSTPROCESS: B-sharpened, then Butterworth low-pass at ', lplim, ' A'
+            write(logfhandle,'(A)') '>>> POSTPROCESS: B-factor '//trim(adjustl(bfac_text))//&
+                &' A^2, Butterworth low-pass at '//trim(adjustl(cutoff_text))//' A'
         endif
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
