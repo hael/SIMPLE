@@ -130,7 +130,12 @@ coverage, as 3D does.
 
 `shift_sigma` (the width in A of the Gaussian prior on a particle's displacement
 from its pick, `doc/implementation_notes/planned/polar_shift_search.md`) makes
-stage 2 the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`):
+stage 2 the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`). It is
+solve2D's default (`SHIFT_SIGMA_DEFAULT` = 10 A, set by the commander like
+`refine`, so every solve2D caller has it, the stream's initial analysis and the
+pyramid included); `shift_sigma=0` is the window search in every stage, the
+control. The parameter's own default stays 0: a refine2D run outside solve2D
+runs the window search unless given the key with `refine=prob`.
 
 - it runs the dense probability table (`refine=prob`), the only fill with the
   map, and the key reaches no other stage (the later stages are the window

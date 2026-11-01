@@ -100,11 +100,12 @@ contains
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
         if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_snhc')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
-        ! the polar shift map (shift_sigma > 0): mskdiam=0 runs stage 1 under the box's mask and takes the mask
-        ! diameter of the stages after from the class averages at the exits of stage 1 and of the centring stage
-        ! (the centring stage itself runs under the box's mask), the low-pass ladder re-derived each time
+        ! the polar shift map is solve2D's default (shift_sigma=0 is the window search); mskdiam=0 under it runs
+        ! stage 1 under the box's mask and takes the mask diameter of the stages after from the class averages at
+        ! the exits of stage 1 and of the centring stage, the low-pass ladder re-derived each time
+        if( .not. cline%defined('shift_sigma')   ) call cline%set('shift_sigma',   SHIFT_SIGMA_DEFAULT)
         l_mskdiam_auto = .false.
-        if( cline%defined('shift_sigma') .and. cline%defined('mskdiam') )then
+        if( cline%defined('mskdiam') )then
             if( cline%get_rarg('shift_sigma') > 0.01 .and. cline%get_rarg('mskdiam') < 0.1 )then
                 call cline%delete('mskdiam')
                 l_mskdiam_auto = .true.

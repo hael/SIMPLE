@@ -165,8 +165,8 @@ contains
         &'with a coarse polar shift map under the box-wide mask and polishes from the map''s optimum, a particle whose '//&
         &'last move stayed inside the next stage''s window searching that window instead, and the stage ends once few '//&
         &'particles still need the disk; mskdiam=0 then takes the mask diameter of the later stages from the class '//&
-        &'averages{0}', &
-        &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        &'averages; 0 is the window search in every stage{10}', &
+        &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
         &to sample each iteration; every active particle when there are fewer{200000}', '# particles to sample{200000}', &
         &.false., 200000., group="search", visibility=UI_VIS_STANDARD, preserve_default=.true.)

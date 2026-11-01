@@ -266,6 +266,13 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     and its exit, the screen-posterior bound and the 2D draw are gone; the key reaches the centring stage alone.
     The 3D dense fill keeps the full map for now (its cost on data is the next measurement).
 
+17. solve2D runs the key by default for now (Hans, 2026-11-01, so the tests do not forget it): the commander sets
+    `shift_sigma` to `SHIFT_SIGMA_DEFAULT` (10 A) when none is given, like its `refine`; `shift_sigma=0` is the
+    control (the window search in every stage). The parameter's default stays 0: a refine2D outside solve2D (the
+    stream's pool, a standalone run) keeps the window search, since its sparse table refuses the key. Every solve2D
+    caller gets the default, the stream's initial analysis and the pyramid included. Development pauses until
+    solve2D is tested on data with the drain reset in place (the earlier bench numbers predate that fix).
+
 The 2026-11-01 follow-up review is in `polar_shift_search_review.md`, section 13.
 It verifies the earlier frame, radius, polish-key and diagnostic fixes, but finds
 five active issues: the stage's `startit` skips the first `shincr` reset; map
@@ -465,6 +472,13 @@ iteration, the window stages' screens collapsing to about twice the refined coun
   control's, 61 at the end against the control's 65), best class 4.29 A, 24 % at 6.5 A or better, 57 % at 8 A, the
   centring stage 20.8 s (fills 2.8-3.6 s against 12-13 s with the full map; the disk needed by 13, 19, 9, 4 % of the
   particles), the run 111.5 s against the control's 100.6 s. The 3D dense fill keeps the full map.
+- The follow-up review (section 13) applied the same day, the Debug gate 15/15 (run 579): the drain state reset at
+  the start of every run under the key (before, only at iteration 1, so solve2D's centring stage, starting at
+  iteration 6, searched no disk on entry: the bench numbers above were measured with the disk barely used), the
+  drain the centring stage's only exit under the key, the posterior pose loss in the 3D insertion, the origin row
+  kept when the polish loses, the window searches in the cost record, the retired mass diagnostic removed. Then
+  ruling 17: solve2D defaults the key (`SHIFT_SIGMA_DEFAULT`), `shift_sigma=0` the control; Hans tests on data
+  (bgal, TRPV1, a badly picked set; key against control, mask given against estimated) before further development.
 
 ### 2026-10-31: Phase 2c measured, Phase 2d's first stage measured, the re-review applied (Claude, runs 383-459)
 
