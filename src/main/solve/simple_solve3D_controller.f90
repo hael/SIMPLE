@@ -506,6 +506,9 @@ contains
             case(3,4,5,6)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
+                ! the polar shift map (shift_sigma > 0): the first stage with a shift search is the centring stage,
+                ! its table maps the disk of three sigma (native pixels, at least the window)
+                if( params%l_shift_map .and. istage == PROB_REFINE_STAGE ) cfg%trs = max(cfg%trs, 3. * params%shift_sigma / params%smpd)
                 cfg%ml_reg        = 'yes'
                 cfg%frac_best     = 1.0
                 if( params%nstates > 1 .and. istage >= stoch_stage )then
@@ -676,6 +679,13 @@ contains
         ! Early stopping applies in every stage (doc/policies/3D/solve3D_policy.md sec. 4).
         call cline_refine3D%delete('minits')
         call cline_refine3D%set('trs',                    cfg%trs)
+        ! the polar shift map's key goes to the dense-table stages with a shift search (the map lives in the dense
+        ! fill; the neighbourhood table refuses it); the tables bound its disk by trs
+        if( params%l_shift_map .and. cfg%trs > 0. .and. cfg%refine .eq. 'prob' )then
+            call cline_refine3D%set('shift_sigma',        params%shift_sigma)
+        else
+            call cline_refine3D%delete('shift_sigma')
+        endif
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
         call cline_refine3D%set('frac_best',              cfg%frac_best)

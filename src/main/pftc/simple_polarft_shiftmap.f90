@@ -70,16 +70,17 @@ contains
     !! full band's and the screen's over the lower half of the band (kscreen, at least two shells), each with
     !! magnitudes a quarter of its band's wavelength apart out to the disk of three sigma and an FFT-friendly
     !! direction count resolving its ring at the outer magnitude; prior_w is the prior's weight 1 / (2 sigma^2)
-    module subroutine setup_shiftmaps( self, sigma_px, prior_w, kscreen )
+    module subroutine setup_shiftmaps( self, sigma_px, radius_px, prior_w, kscreen )
         use simple_polar_shiftmap, only: shiftmap_ndirections
         class(polarft_calc), intent(inout) :: self
-        real(dp),            intent(in)    :: sigma_px
+        real(dp),            intent(in)    :: sigma_px, radius_px
         real(dp),            intent(out)   :: prior_w
         integer,             intent(out)   :: kscreen
         real(dp) :: radius
-        if( .not. (sigma_px > 0.d0) ) THROW_HARD('the prior needs a positive width; setup_shiftmaps')
+        if( .not. (sigma_px  > 0.d0) ) THROW_HARD('the prior needs a positive width; setup_shiftmaps')
+        if( .not. (radius_px > 0.d0) ) THROW_HARD('the disk needs a positive radius; setup_shiftmaps')
         prior_w = 1.d0 / (2.d0 * sigma_px**2)
-        radius  = 3.d0 * sigma_px
+        radius  = radius_px
         kscreen = max(self%kfromto(1) + 1, self%kfromto(2) / 2)
         call build_map(SHIFTMAP_FULL,   self%kfromto(2))
         call build_map(SHIFTMAP_SCREEN, kscreen)
@@ -92,7 +93,12 @@ contains
             real(dp) :: step
             integer  :: nrho, i, nalpha
             step = real(self%ldim(1), dp) / real(kstop, dp) / 4.d0
-            nrho = max(2, floor(radius / step) + 1)
+            nrho = floor(radius / step) + 1
+            if( nrho < 2 )then
+                ! a disk below one step: the origin and its rim
+                nrho = 2
+                step = radius
+            endif
             allocate(rhos(nrho))
             do i = 1, nrho
                 rhos(i) = real(i-1, dp) * step
@@ -467,7 +473,11 @@ contains
     !! logz = log of the summed mass over the prior's normaliser (shiftmap_prior). l_greedy takes the cell of the
     !! largest mass instead. loss is the data term at the returned cell; the cell's shift in the optimizer's frame
     !! is shiftmap_shift(imap, irho, ialpha)
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss )
+    !> rho_out with mass_out: the posterior mass of the cells beyond magnitude rho_out (the window's radius: what
+    !! the disk still has to find), at temperature temp_mass when given (the physical posterior, beta 1: the draw's
+    !! tempering spreads the mass over the disk and would say the disk is always needed), else at temp
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
+        &rho_out, mass_out, temp_mass )
         use simple_rnd, only: ran3
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
@@ -476,10 +486,13 @@ contains
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
+        real(dp), optional,          intent(in)    :: rho_out
+        real(dp), optional,          intent(out)   :: mass_out
+        real(dp), optional,          intent(in)    :: temp_mass
         type(shiftmap_work), pointer :: wk
         real(dp) :: c1(self%nrots), c2(self%nrots)
         real(dp) :: ca(self%shiftmap(imap)%get_nalpha()), sa(self%shiftmap(imap)%get_nalpha())
-        real(dp) :: offs(self%nrots), scal(self%nrots), usq, rho, loga, lmax, s, tgt, l, pen
+        real(dp) :: offs(self%nrots), scal(self%nrots), usq, rho, loga, lmax, s, tgt, l, pen, s_out, s_ring, tm, lm
         integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3)
         ithr =  omp_get_thread_num() + 1
         wk   => self%smwork(ithr,imap)
@@ -509,16 +522,58 @@ contains
                 enddo
             enddo
         enddo
-        s = 0.d0
+        s     = 0.d0
+        s_out = 0.d0
         do ir = 1, nrho
+            s_ring = 0.d0
             do ro = 1, self%nrots
                 do j = 1, nalpha
                     l = real(wk%lw(j,ro,ir), dp) - lmax
-                    if( l > -40.d0 ) s = s + exp(l)
+                    if( l > -40.d0 ) s_ring = s_ring + exp(l)
                 enddo
             enddo
+            s = s + s_ring
+            if( present(rho_out) )then
+                if( self%shiftmap(imap)%get_rho(ir) > rho_out ) s_out = s_out + s_ring
+            endif
         enddo
         logz = lmax + log(s) - lse_prior
+        if( present(mass_out) )then
+            mass_out = s_out / s
+            if( present(temp_mass) )then
+                ! the mass beyond at the physical temperature: the data term rescaled by temp_mass / temp
+                tm = temp_mass / max(temp, 1.d-30)
+                lm = -huge(lm)
+                do ir = 1, nrho
+                    rho  = self%shiftmap(imap)%get_rho(ir)
+                    loga = log(self%shiftmap(imap)%get_cell_area(ir))
+                    do ro = 1, self%nrots
+                        do j = 1, nalpha
+                            pen = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
+                            l   = tm * (real(wk%lw(j,ro,ir), dp) + pen - loga) - pen + loga
+                            if( l > lm ) lm = l
+                        enddo
+                    enddo
+                enddo
+                s     = 0.d0
+                s_out = 0.d0
+                do ir = 1, nrho
+                    rho  = self%shiftmap(imap)%get_rho(ir)
+                    loga = log(self%shiftmap(imap)%get_cell_area(ir))
+                    s_ring = 0.d0
+                    do ro = 1, self%nrots
+                        do j = 1, nalpha
+                            pen = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
+                            l   = tm * (real(wk%lw(j,ro,ir), dp) + pen - loga) - pen + loga - lm
+                            if( l > -40.d0 ) s_ring = s_ring + exp(l)
+                        enddo
+                    enddo
+                    s = s + s_ring
+                    if( rho > rho_out ) s_out = s_out + s_ring
+                enddo
+                mass_out = s_out / s
+            endif
+        endif
         if( l_greedy )then
             ialpha = imax(1)
             irot   = imax(2)

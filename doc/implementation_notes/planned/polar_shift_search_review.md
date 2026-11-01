@@ -1,5 +1,8 @@
 # Probabilistic in-plane search: mathematical and performance review
 
+**Latest review:** the 2026-10-31 integration re-review is in section 12,
+including the uncommitted changes. Sections 1-11 retain the earlier review.
+
 **Reviewed:** 2026-10-30, `master` at `a2c1b1f86`.
 **Scope:** commits `519c67d2a` and `a2c1b1f86`, the proposed integration into solve2D/solve3D, and the relevant existing probability-table and reconstruction contracts.
 **Status:** review findings and recommendations; no implementation changes made or recommendations adopted by this review.
@@ -234,3 +237,174 @@ Keep known-pose simulations as machinery/calibration tests. Finished-run poses a
 - Passed `python3 scripts/check_descr.py .`.
 
 No Fortran build, area suite, fast gate, Linux/BOX test, end-to-end recovery run or performance benchmark was executed in this review. This checkout had no `build/`, and the required Phase 1 submodule was absent. Historical results quoted from the implementation note remain historical evidence rather than newly verified results.
+
+## 12. Integration re-review, 2026-10-31
+
+**Scope:** `04f6f0cb7` through `4114f9f4a`, plus the 26 files with
+uncommitted changes at review start. This covers the stored-frame prior
+correction, retirement of the n_eff controller, tempering changes,
+weighted insertion and its cone, the optimized polar kernel, both 2D
+fills, the dense 3D fill, the stage controllers and centring/mask handoff.
+Unrelated trajectory, nanoparticle and hardware-planner developments are
+outside this shift-search review. Late infrastructure additions present
+at the final build snapshot (22:36 local) were also inspected. Further 2D
+implementation edits arrived during the final gate; they remain outside
+this closed review. No production source was edited by this review.
+
+### Improvements verified in the current source
+
+The missing calculator submodule is present. The kernel's identity checks
+now exercise angular CTF, distinct reference halves and noise spectra, and
+report errors in likelihood units. The sampler includes polar cell areas,
+normalizes the absolute prior separately from the tempered likelihood,
+and retains the origin's finite cell area. Refined map candidates carry
+integrated evidence for the reference draw, and the map's committed pose
+is not passed through the old in-plane optimizer. The original shift prior
+now follows the stored shift at each angle, including the joint angle
+derivative. The old n_eff solve and process-wide beta feedback are gone.
+
+The remaining issues are chiefly at the interfaces between these pieces.
+
+### R1 — P1: the extra-pose conversion double-rotates window-search entries
+
+`simple_strategy3D_utils::extra_pose` unconditionally calls
+`shift_ref2ptcl`. However, `refine_best_refs` and `refine_best_neighbors`
+call `minimize(sh_rot=.true.)` and write its returned shift directly to
+the table. That return already applies exactly `shift_ref2ptcl`:
+`cxy(2:) = matmul(cxy(2:), rotmat)`. The passed prior-frame tests also
+establish that this is the stored particle-frame shift.
+
+Consequently `topk>1`, gridding and `shift_sigma=0` now rotate an extra's
+increment twice. A native table increment (2,-1) at 90 degrees becomes
+(1,2), rather than remaining (2,-1). The map writes optimizer-frame cells,
+so its entries do need the conversion. One table now has two possible
+frame contracts, and the new helper assumes the map's for both. Normalize
+entries at the producer or distinguish the two consumers explicitly.
+
+The new `test_extra_pose_frame` does not catch this: it fabricates a
+reference-frame input and compares two consumers supplied with the same
+assumption, without passing through the window-search producer. Add a
+producer-to-consumer check for each mode, with nonzero shifts and angles.
+
+### R2 — P1: the map's cone test compares shifts from different frames
+
+The dense map fill records `xcell` in each candidate reference's frame.
+`select_extras` passes these vectors directly to `prob_insert_cone%within`,
+whose translation term assumes a common stored particle frame. Thus the
+cone can admit poses beyond its displacement bound or reject nearby ones.
+
+Independent numeric counterexample, C1: equal reference-frame increments
+(20,0) px, distinct directions two degrees apart in theta and in-plane
+angles 0 and 10 degrees, mask diameter 100 A, sampling 1.3 A/px and cone
+resolution 10 A. The geodesic rotation is 10.19754 degrees. The present
+test sees zero translation difference and accepts the 8.89903 A angular
+displacement. After conversion at each in-plane angle the translation
+difference is 4.53210 A; the required bound is 13.43113 A and rejects the
+pair. Convert the shifts before both cone eligibility and insertion; the
+previous stored shift is common to the particle and cancels in their
+difference.
+
+### R3 — P1: weighted insertion treats marginal evidence as a pose loss
+
+With the map, the row is `D_c = -log Z_c(beta)/(beta T)`. The unchanged
+`top_posterior_extras` receives that row at temperature T, giving weights
+proportional to `Z_c(beta)^(1/beta)`. Those are neither the posterior
+weights of the retained cell poses at T nor the integrated evidence at T.
+Even at beta=1, a reference's integrated evidence is not the likelihood
+of its particular sampled cell.
+
+For example, two retained cells can have equal pointwise likelihood and
+prior while their references' marginal evidences differ by a factor of
+ten because one reference has more supported cells. At beta=0.3 the
+current insertion ratio becomes 2154.43 rather than equal pose weights.
+The fill obtains `loss_cell` but discards it. Keep the sampled pose's loss
+and prior separately from the marginal reference score, and define and
+test the insertion distribution for the map path. The existing window
+path's row-loss interpretation cannot be reused unchanged.
+
+### R4 — P2: a small requested disk can produce cells outside its radius
+
+`setup_shiftmaps::build_map` sets `nrho=max(2,floor(radius/step)+1)` and
+then `rho(i)=(i-1)*step`. If radius<step, the outer point is step, outside
+both the requested radius and potentially `trs`. For box=64,
+kstop=4, radius=1 px, it builds magnitudes [0,4] px; kstop=8 gives [0,2].
+Such a map is accepted by the sampler without a later radius clamp.
+Use a one-radius origin grid or an endpoint inside the requested disk;
+test the setup API for radius below, equal to and just above a grid step.
+Current kernel tests construct their radii directly and miss this path.
+
+### R5 — P2: the new scope guard breaks the scheduled continuous polish
+
+`prep_strategy3D` rejects `l_shift_map` whenever refine is not `prob`,
+before its early return for a Cartesian pass. Both shared-memory and
+distributed iteration strategies copy the parent's command into the
+scheduled `pose_cont=yes` pass and change refine to `cont` without
+removing `shift_sigma`. Thus `refine3D refine=prob shift_sigma=10
+pose_cont=yes` reaches the new guard in its own internally scheduled
+polish and aborts. Strip the table-only key from that pass, or explicitly
+reject the combination before starting the iteration if preserving the
+strict posterior draw is the chosen contract. Do not launch workers with
+a combination the new guard necessarily refuses.
+
+### R6 — P2: map-mode posterior diagnostics silently write default rows
+
+With `prob_post_diag=yes` the dense fill allocates `post_batch` and writes
+it after processing every batch. `process_particle_with_shift` returns
+through `process_particle_with_map` before `posterior_diag`, and the map
+routine never fills these records. Their default particle index, mode,
+temperature and statistics are therefore written as zero. Implement the
+map diagnostic, or refuse this combination explicitly. Also distinguish
+the map's marginal-evidence row from pose-loss diagnostics and from an
+attempt to infer the beta=1 posterior by rescaling an evidence computed
+at another beta.
+
+### Coverage and scientific limits
+
+The complete current fast gate passes, but the 2D table tester covers
+part I/O, and the 3D table tester uses synthetic rows. Neither exercises
+the map fill through weighted insertion or the shift_sigma controller
+handoff. The 65 polar-map checks validate the kernel and sampler on their
+own; they cannot establish the frame or score semantics of these
+downstream consumers. No new registered tests were added by this review.
+
+The 2D screen evaluates its candidate classes over translations. The 3D
+screen still starts from only the best `4*projs_ns` references at the
+stored shift. It therefore cannot rescue a correct large-offset direction
+outside that pool. This is a remaining approximation and validation gap,
+not evidence that such an exclusion occurred in the supplied data. The
+exhaustive-subset retained-mass test from section 5 remains outstanding,
+as does posterior grid-refinement validation. The shift-stability exit
+also fires outside the centring stage; the plan already records that its
+sampled-motion statistic need not measure posterior convergence.
+
+### Validation observed in this re-review
+
+- Mac Release incremental build (`make -C build -j8`): PASS, no compiler
+  warnings observed.
+- Full fast gate: PASS, 15/15 in 35.14 s, including registry, descriptor
+  and FLEX-DAG checks. Polar alignment: 1390 assertions; pose statistics:
+  135 assertions. The sandbox denied the CPU-count sysctl, so CTest ran
+  serially; the kernel's explicit four-thread identity check still ran.
+- `make -C build install`: PASS.
+- Independent numeric counterexamples for R1/R2/R3 and the radius formula
+  in R4 reproduce the values above; these are not new compiled integration
+  tests. R5/R6 are source-traced findings, not observed runtime failures.
+- `simulated_workflow_1jxy`: PASS, 696.67 s. This includes solve2D and both
+  shared-memory and two-part distributed solve3D. Truth correlations were
+  0.90010 and 0.89485, with truth FSC=0.143 at 4.30345 and 4.62222 A;
+  both wrong-truth controls passed. This is the map-off workflow and does
+  not exercise the problematic map/topk combinations.
+- Final incremental build of the 22:36 local snapshot: PASS. It includes
+  the then-unused `nscreen`, `trs_window`, `mout` and mass-outside
+  definitions. A hash manifest of 845 Fortran sources remained unchanged
+  through that build. One `-Wuninitialized` warning was emitted at the
+  untouched `simple_commanders_cavgs.f90:760` (`diams = pack(...)`).
+- Final fast gate on that build: PASS, 15/15, 34.97 s. During this gate,
+  further live changes appeared in `simple_commanders_prob`,
+  `simple_eul_prob_tab2D` and `simple_eul_prob_tab_utils`, wiring the new
+  2D mass-outside/screen-pool development. Those ongoing edits are not
+  covered by this review or the passing results. An extra install attempt
+  was canceled during its consequent rebuild; the earlier install passed.
+  The completed workflow uses the earlier build. The 2D screen-rank cost
+  instrumentation was inspected; the six findings above remain present.
+- No Linux/BOX run, real-data rerun, commit or push by this review.

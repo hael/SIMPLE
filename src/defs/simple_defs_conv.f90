@@ -24,4 +24,8 @@ real, parameter :: AHELIX_WIDTH        = 12.0 ! alpha-helix width in A
 real, parameter :: CONT_CONV_ROT_DEG   = 0.5  ! rotation (degrees)
 real, parameter :: CONT_CONV_SHIFT_A   = 1.0  ! shift (A)
 real, parameter :: CONT_CONV_FRAC      = 0.9  ! stable fraction per state, and the coverage of the stable streak
+! the polar shift map's centring stage ends once the fraction of sampled particles whose posterior mass beyond the
+! window's radius exceeds MASSOUT_TOL has been below MASSOUT_FRAC for two iterations (the disk has nothing left)
+real, parameter :: MASSOUT_TOL         = 0.05
+real, parameter :: MASSOUT_FRAC        = 0.02
 end module simple_defs_conv

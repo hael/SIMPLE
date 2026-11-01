@@ -444,6 +444,7 @@ type :: parameters
     integer :: nrestarts_collapse=1   !< # of restarts for solve3D_cavgs when states collapse
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=0           !< # particles to sample in refinement with fractional update
+    integer :: nscreen=0           !< the polar shift map's screen breadth: the origin's best classes screened, set by the master from the last iteration's ranks (0: every class)
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update
     integer :: nsample_start=0     !< # particles to sample in refinement with fractional update, lower bound
     integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound
@@ -489,7 +490,7 @@ type :: parameters
     integer :: stepsz=1            !< size of step{1}
     integer :: tofny=0
     integer :: top=1
-    integer :: topk=1              !< refine3D/solve3D prob modes: poses a particle enters the iteration's reconstruction at, the committed draw and up to topk-1 extras, the refined entries of its row of highest posterior at the particle's own temperature within the insertion cone of the committed pose (rotation and shift moving the rim by less than the map's FSC=0.5 resolution), each with its share of that posterior; the search and the final reconstruction see the committed pose alone; 1 = the committed pose alone, the single-draw run bit for bit{1}
+    integer :: topk=3              !< refine3D/solve3D prob modes: poses a particle enters the iteration's reconstruction at, the committed draw and up to topk-1 extras, the refined entries of its row of highest posterior at the particle's own temperature within the insertion cone of the committed pose (rotation and shift moving the rim by less than the map's FSC=0.5 resolution), each with its share of that posterior; the search and the final reconstruction see the committed pose alone; 1 = the committed pose alone, the single-draw run bit for bit{3}
     integer :: tof=0               !< end index
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
@@ -617,7 +618,8 @@ type :: parameters
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
-    real    :: shift_sigma=0.      !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables then search the shifts of their refined candidates over a disk of 3 sigma and draw the pose from the tempered posterior(0: the window search){0}
+    real    :: shift_sigma=0.      !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables then search the shifts of their refined candidates over a disk of 3 sigma within trs and draw the pose from the tempered posterior; solve2D's stage 2 becomes the centring stage(0: the window search){0}
+    real    :: trs_window=0.       !< the polar shift map's centring stage: the window's radius (px) its posterior mass is measured beyond(0: not measured){0}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume

@@ -217,6 +217,7 @@ contains
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
+            call cline_prob_align%set('nscreen',    params%nscreen) ! the screen breadth the last iteration measured
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call run_prob_align2D(params, build, cline_prob_align, self%bench)
         endif
@@ -380,6 +381,7 @@ contains
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
+            call cline_prob_align%set('nscreen',    params%nscreen) ! the screen breadth the last iteration measured
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call prob_align2D_master(params, build, cline_prob_align, l_full_update, self%bench)
         endif

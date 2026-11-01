@@ -3,6 +3,7 @@ module simple_strategy3D_utils
 use simple_core_module_api
 use simple_strategy3D_alloc, only: s3D, ref_state_from_index, ref_proj_from_index
 use simple_strategy3D_srch, only: strategy3D_srch
+use simple_pftc_shsrch_grad, only: shift_ref2ptcl
 implicit none
 
 public :: extract_peak_ori, extract_peak_oris, assign_ori, resolve_inplane_e3, candidate_pose
@@ -27,11 +28,12 @@ contains
     end function resolve_inplane_e3
 
     !> The pose of a table candidate of the particle s searches: reference ref (the multi-state index) at in-plane
-    !! index inpl with the shift increment sh_incr, as the Euler triplet (the reference's direction, the grid angle
-    !! as e3) and the stored shift (the particle's previous shift plus the increment when shifts are searched;
-    !! sub-microshift values zeroed). The one place the conversion lives: assign_ori commits the particle's own
-    !! candidate through it, and the weighted insertion's extra poses take theirs from it at the same moment
-    !! (strategy3D_prob), so they can never drift from the committed pose's rule
+    !! index inpl with the shift increment sh_incr in the particle's own axes, as the Euler triplet (the
+    !! reference's direction, the grid angle as e3) and the stored shift (the particle's previous shift plus the
+    !! increment when shifts are searched; sub-microshift values zeroed). The one place the addition lives:
+    !! assign_ori commits the particle's own candidate through it with the increment its polish (or the map's
+    !! strategy) rotated into the particle's axes, and the weighted insertion's extra poses come through candidate_pose too,
+    !! which converts the table's increment the same way, so they can never drift from the committed pose's rule
     subroutine candidate_pose( s, ref, inpl, sh_incr, euler, shvec )
         class(strategy3D_srch), intent(in)  :: s
         integer,                intent(in)  :: ref, inpl
@@ -46,6 +48,7 @@ contains
         if( s%doshift ) shvec = shvec + sh_incr
         where( abs(shvec) < 1e-6 ) shvec = 0.
     end subroutine candidate_pose
+
 
     subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid )
         class(strategy3D_srch), intent(inout) :: s

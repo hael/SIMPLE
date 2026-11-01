@@ -1058,7 +1058,7 @@ contains
         if( n < 1 ) return
         label = 'distributed'
         if( self%phase_label%is_allocated() ) label = self%phase_label
-        write(logfhandle,'(A,I0,A,F8.1,A)') '>>> '//upperCase(label%to_char())//': ', n, &
+        write(logfhandle,'(A,I0,A,F0.1,A)') '>>> '//upperCase(label%to_char())//': ', n, &
             &' PART(S) COMPLETED IN ', seconds, ' s'
         call label%kill
     end subroutine report_phase_completion

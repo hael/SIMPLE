@@ -1206,7 +1206,8 @@ contains
             nwrong = nwrong + 1
         else
             nwrong = nwrong + count(a%refined(:)%i /= b%refined(:)%i) + count(a%refined(:)%ri /= b%refined(:)%ri) +&
-                &count(a%refined(:)%x /= b%refined(:)%x) + count(a%refined(:)%y /= b%refined(:)%y)
+                &count(a%refined(:)%x /= b%refined(:)%x) + count(a%refined(:)%y /= b%refined(:)%y) +&
+                &count(a%refined(:)%loss /= b%refined(:)%loss)
         endif
     end function count_differences
 
@@ -1267,7 +1268,7 @@ contains
                     do ri = 1,nrefs
                         if( .not. refined(ri,i) ) cycle
                         n = n + 1
-                        batch_refined(n) = prob_refined_entry(i_loc, ri, shifts(1,ri,i), shifts(2,ri,i))
+                        batch_refined(n) = prob_refined_entry(i_loc, ri, shifts(1,ri,i), shifts(2,ri,i), rows(ri,i)%dist)
                     enddo
                 enddo
                 call worker%write_rows(first, rows(:,parts(ipart,1)+first-1:parts(ipart,1)+last-1), batch_refined)

@@ -2,7 +2,7 @@
 module simple_strategy2D_prob
 use simple_pftc_srch_api
 use simple_eul_prob_tab_utils, only: eulprob_corr_switch
-use simple_pftc_shsrch_grad,   only: shift_ref2ptcl
+use simple_pftc_shsrch_grad,   only: shift_ptcl2ref
 use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_spec
@@ -58,16 +58,17 @@ contains
                                   self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%y]
             endif
             if( self%s%p_ptr%l_shift_map )then
-                ! the map's draw is the pose and is not polished: the cell's shift (the optimizer's frame at the drawn
-                ! rotation) becomes the particle-frame increment, the objective at the pose its score; the row's
-                ! distance is the class's evidence, not this pose's loss
+                ! the map's draw is the pose and is not polished: the table's increment is native (the fill converted
+                ! the drawn cell), the objective at the pose, in the reference's axes at the drawn rotation, its
+                ! score; the row's distance is the class's evidence, not this pose's loss
                 if( self%s%p_ptr%l_doshift .and. self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%has_sh )then
-                    corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(icls, self%s%iptcl, real(self%s%best_shvec, dp), inpl))
-                    self%s%best_shvec = shift_ref2ptcl(self%s%best_shvec, self%s%b_ptr%pftc%get_rot(inpl))
+                    corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(icls, self%s%iptcl,&
+                        &real(shift_ptcl2ref(self%s%best_shvec, self%s%b_ptr%pftc%get_rot(inpl)), dp), inpl))
                 else
                     corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(icls, self%s%iptcl, [0.d0, 0.d0], inpl))
                 endif
                 self%s%best_corr = corr
+                call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'shmassout', self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%mout)
             else
                 call self%s%refine_selected_continuously
             endif

@@ -178,25 +178,25 @@ contains
         call os3%kill
     end subroutine test_particle_segment_roundtrip
 
-    !> A particle holds the named slots 1-53 in memory; its record on disk is 64
-    !! reals, slots 54-64 being zero padding. The record round-trips the Cartesian diagnostic
+    !> A particle holds the named slots 1-54 in memory; its record on disk is 64
+    !! reals, slots 55-64 being zero padding. The record round-trips the Cartesian diagnostic
     !! slots; spare slots are never "there".
     subroutine test_cartesian_record_slots()
         type(binoris) :: bos
         type(oris)    :: os, os2
         integer :: i
         write(*,'(A)') 'test_cartesian_record_slots'
-        call assert_int(53, N_PTCL_ORIPARAMS, 'a resident particle holds the 53 named slots')
+        call assert_int(54, N_PTCL_ORIPARAMS, 'a resident particle holds the 54 named slots')
         call assert_int(64, N_PTCL_RECORD_REALS, 'the particle record on disk is 64 reals')
-        call assert_int(53, I_LAST_NAMED_ORIPARAM, 'the last named slot is 53')
+        call assert_int(54, I_LAST_NAMED_ORIPARAM, 'the last named slot is 54 (shmassout)')
         call assert_int(51, I_CORR_CART, 'corr_cart sits in slot 51 (O8)')
         call assert_int(52, I_POSE_CONT_IMPROVED, 'the improved flag sits in slot 52 (O8)')
         call assert_int(53, I_CFAR, 'cfar sits in slot 53')
         call assert_int(42, I_POSE_CONT_STATUS, 'the Cartesian transaction status sits in slot 42')
-        call assert_true(oriparam_is_spare(54) .and. oriparam_is_spare(64), 'the padding slots 54-64 are spare')
-        call assert_false(oriparam_is_spare(41) .or. oriparam_is_spare(42) .or. oriparam_is_spare(53), &
-            &'slots 41, 42 and 53 are named')
-        call assert_false(oriparam_isthere(54, 1.0) .or. oriparam_isthere(60, 1.0), 'a spare slot is never there')
+        call assert_true(oriparam_is_spare(55) .and. oriparam_is_spare(64), 'the padding slots 55-64 are spare')
+        call assert_false(oriparam_is_spare(41) .or. oriparam_is_spare(42) .or. oriparam_is_spare(54), &
+            &'slots 41, 42 and 54 are named')
+        call assert_false(oriparam_isthere(55, 1.0) .or. oriparam_isthere(60, 1.0), 'a spare slot is never there')
         call assert_true(oriparam_isthere(42, 4.0) .and. .not. oriparam_isthere(42, 0.0), &
             &'the status is there when a transaction ran')
         call make_ptcl_oris(os, NPTCLS)

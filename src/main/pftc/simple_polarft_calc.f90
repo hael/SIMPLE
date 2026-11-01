@@ -990,9 +990,9 @@ interface
         integer,             intent(in)    :: nalpha, kstop
     end subroutine new_shiftmap
 
-    module subroutine setup_shiftmaps( self, sigma_px, prior_w, kscreen )
+    module subroutine setup_shiftmaps( self, sigma_px, radius_px, prior_w, kscreen )
         class(polarft_calc), intent(inout) :: self
-        real(dp),            intent(in)    :: sigma_px
+        real(dp),            intent(in)    :: sigma_px, radius_px
         real(dp),            intent(out)   :: prior_w
         integer,             intent(out)   :: kscreen
     end subroutine setup_shiftmaps
@@ -1068,7 +1068,8 @@ interface
         real(dp),            intent(out) :: lse_prior, logp0
     end subroutine shiftmap_prior
 
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss )
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
+        &rho_out, mass_out, temp_mass )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
         real(dp),                    intent(in)    :: temp, prior_w, u_prev(2), lse_prior
@@ -1076,6 +1077,9 @@ interface
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
+        real(dp), optional,          intent(in)    :: rho_out
+        real(dp), optional,          intent(out)   :: mass_out
+        real(dp), optional,          intent(in)    :: temp_mass
     end subroutine shiftmap_draw
 
     ! ===== I/O: simple_polarft_ops_io.f90

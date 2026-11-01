@@ -34,6 +34,7 @@ type convergence
     real    :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
     real    :: progress               = 0. !< progress estimation
     integer :: prob_beta_tail_start   = 0  !< the probability tables' annealing tail to prob_beta_end: its first iteration (0: the run still searches at prob_beta); set when the resolution stops gaining or at the budget's end
+    integer :: shift_stable_its       = 0  !< the polar shift map's centring exit: consecutive iterations with few sampled particles carrying posterior mass beyond the window
     integer :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
     real    :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
     real    :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
@@ -79,7 +80,8 @@ contains
         logical, allocatable :: mask(:)
         character(len=96) :: beta_str
         integer :: n, nptcls, nsampled, nactive
-        real    :: overlap_lim, fracsrch_lim, realized_update_frac
+        real    :: overlap_lim, fracsrch_lim, realized_update_frac, frac_out
+        real,    allocatable :: mout(:)
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv, cont_stats_available, l_tail_run
         601 format(A,1X,F12.3)
@@ -228,6 +230,25 @@ contains
                 endif
             else
                 converged = self%dist_inpl%avg < 0.5
+            endif
+            ! the polar shift map's centring exit (shift_sigma > 0 with the window's radius): the disk is needed while
+            ! sampled particles carry posterior mass beyond the window; the stage ends once the fraction with mass
+            ! above MASSOUT_TOL has been below MASSOUT_FRAC for two iterations
+            if( params%l_shift_map .and. params%trs_window > 0. )then
+                mout     = os%get_all('shmassout')
+                frac_out = real(count(mask .and. mout > MASSOUT_TOL)) / real(max(1, count(mask)))
+                write(logfhandle,'(A,F6.2,A,F5.1,A)') '>>> DISK STILL NEEDED BY ', 100. * frac_out,&
+                    &' % OF THE SAMPLED PARTICLES (POSTERIOR MASS BEYOND THE WINDOW ABOVE ', 100. * MASSOUT_TOL, ' %)'
+                if( frac_out < MASSOUT_FRAC )then
+                    self%shift_stable_its = self%shift_stable_its + 1
+                else
+                    self%shift_stable_its = 0
+                endif
+                if( self%shift_stable_its >= 2 )then
+                    write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
+                    converged = .true.
+                endif
+                deallocate(mout)
             endif
         endif
         ! The annealing tail of the probability tables' posterior draws, as check_conv3D's: a run with prob_beta_end searches at prob_beta until its class overlap converges past

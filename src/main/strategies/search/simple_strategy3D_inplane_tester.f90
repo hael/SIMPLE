@@ -5,7 +5,8 @@
 ! under refine=cont, never a command-line key) and the stored shift as the search's previous
 ! shift (N10; a small phantom written to the run directory and removed).
 module simple_strategy3D_inplane_tester
-use simple_core_module_api,   only: dp
+use simple_core_module_api,   only: sp, dp
+use simple_rnd,               only: gasdev
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
 use simple_string,            only: string
@@ -19,7 +20,8 @@ use simple_builder,           only: builder
 use simple_image,             only: image
 use simple_syslib,            only: del_file
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_strategy3D_utils,  only: resolve_inplane_e3
+use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose
+use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl
 use simple_test_utils
 implicit none
 private
@@ -38,6 +40,7 @@ contains
         call test_inpl_cont_policy()
         call test_inpl_cont_derivation()
         call test_previous_shift_is_stored_shift()
+        call test_table_increment_axes()
     end subroutine run_all_strategy3D_inplane_tests
 
     !> nrefs candidates, one thread; the continuous arrays only on request
@@ -258,51 +261,14 @@ contains
     !! stored shift.
     subroutine test_previous_shift_is_stored_shift()
         character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
-        integer,          parameter :: BOX = 32
         real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75]
         type(builder),    target :: b
         type(parameters), target :: p
         type(cmdline)         :: cline
         type(strategy3D_srch) :: srch
         type(strategy3D_spec) :: spec
-        type(image)           :: vol
-        real, allocatable     :: rmat(:,:,:)
-        integer :: i, j, k
         write(*,'(A)') 'test_previous_shift_is_stored_shift'
-        allocate(rmat(BOX,BOX,BOX))
-        do k = 1, BOX
-            do j = 1, BOX
-                do i = 1, BOX
-                    rmat(i,j,k) = exp(-real((i-14)**2 + (j-18)**2 + (k-16)**2)/18.) + &
-                        &0.5*exp(-real((i-20)**2 + (j-13)**2 + (k-19)**2)/12.)
-                end do
-            end do
-        end do
-        call vol%new([BOX,BOX,BOX], 1.5)
-        call vol%set_rmat(rmat, .false.)
-        call vol%write(string(PHANTOM), del_if_exists=.true.)
-        call vol%kill
-        call cline%set('vol1',    PHANTOM)
-        call cline%set('mskdiam', 36.)
-        call cline%set('smpd',    1.5)
-        call cline%set('lp',      6.)
-        call cline%set('nptcls',  1.)
-        call cline%set('nspace',  2)
-        call cline%set('ctf',     'no')
-        call cline%set('objfun',  'cc')
-        call cline%check
-        call b%init_params_and_build_strategy3D_tbox(cline, p)
-        call set_bp_range3D(p, b, cline)
-        call b%pftc%new(p, p%nspace, [1,1], p%kfromto)
-        call b%spproj_field%set_euler(1, [31., 57., 113.])
-        call b%spproj_field%set_shift(1, STORED_SHIFT)
-        call b%spproj_field%set_state(1, 1)
-        call prep_strategy3D(p, b)
-        spec%iptcl     = 1
-        spec%iptcl_map = 1
-        call srch%new(p, spec, b)
-        srch%ithr = 1
-        call srch%prep4prob
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec)
         call assert_true(all(srch%prev_shvec == STORED_SHIFT), &
             &'the previous shift of the search object is not the shift stored in the project')
         call assert_true(all(b%spproj_field%get_2Dshift(1) == STORED_SHIFT), &
@@ -315,5 +281,143 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_previous_shift_is_stored_shift
+
+    !> a one-particle strategy3D toolbox on a small phantom (two directions), the particle at a stored shift, the
+    !! search object prepared for the probabilistic route
+    subroutine one_particle_fixture( phantom, stored_shift, b, p, cline, srch, spec )
+        character(len=*),              intent(in)    :: phantom
+        real,                          intent(in)    :: stored_shift(2)
+        type(builder),         target, intent(inout) :: b
+        type(parameters),      target, intent(inout) :: p
+        type(cmdline),                 intent(inout) :: cline
+        type(strategy3D_srch),         intent(inout) :: srch
+        type(strategy3D_spec),         intent(inout) :: spec
+        integer, parameter :: BOX = 32
+        type(image)        :: vol
+        real, allocatable  :: rmat(:,:,:)
+        integer :: i, j, k
+        allocate(rmat(BOX,BOX,BOX))
+        do k = 1, BOX
+            do j = 1, BOX
+                do i = 1, BOX
+                    rmat(i,j,k) = exp(-real((i-14)**2 + (j-18)**2 + (k-16)**2)/18.) + &
+                        &0.5*exp(-real((i-20)**2 + (j-13)**2 + (k-19)**2)/12.)
+                end do
+            end do
+        end do
+        call vol%new([BOX,BOX,BOX], 1.5)
+        call vol%set_rmat(rmat, .false.)
+        call vol%write(string(phantom), del_if_exists=.true.)
+        call vol%kill
+        call cline%set('vol1',    phantom)
+        call cline%set('mskdiam', 36.)
+        call cline%set('smpd',    1.5)
+        call cline%set('lp',      6.)
+        call cline%set('nptcls',  1.)
+        call cline%set('nspace',  2)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'cc')
+        call cline%check
+        call b%init_params_and_build_strategy3D_tbox(cline, p)
+        call set_bp_range3D(p, b, cline)
+        call b%pftc%new(p, p%nspace, [1,1], p%kfromto)
+        call b%spproj_field%set_euler(1, [31., 57., 113.])
+        call b%spproj_field%set_shift(1, stored_shift)
+        call b%spproj_field%set_state(1, 1)
+        call prep_strategy3D(p, b)
+        spec%iptcl     = 1
+        spec%iptcl_map = 1
+        call srch%new(p, spec, b)
+        srch%ithr = 1
+        call srch%prep4prob
+    end subroutine one_particle_fixture
+
+    !> One convention for the table's increments (review R1): every increment is in the particle's axes. The window
+    !! path writes minimize(sh_rot=.true.), the optimizer's shift rotated from the reference's axes at the rotation it
+    !! was found at; the map path writes the drawn cell rotated the same way; the consumer adds the increment to the
+    !! stored shift unconverted
+    subroutine test_table_increment_axes()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75], S_TRUE(2) = [1.5, -2.0], TRS = 5.
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)            :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        type(pftc_shsrch_grad)   :: grad_native, grad_ref
+        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
+        real    :: lims(2,2), cxy_native(3), cxy_ref(3), euler(3), shvec(2), u(2)
+        integer :: irot_n, irot_r, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp
+        write(*,'(A)') 'test_table_increment_axes'
+        call set_fixed_seed(20261031)
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec)
+        nrots   = b%pftc%get_nrots()
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim    = b%pftc%get_pdim_interp()
+        ! a white reference on the band; the particle is that reference rotated, then shifted by S_TRUE about its own axes
+        allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                ref(pp,k) = cmplx(gasdev(), gasdev())
+            enddo
+        enddo
+        call b%pftc%set_ref_pft(1, ref, iseven=.true.)
+        call b%pftc%set_eo(1, .true.)
+        call b%pftc%memoize_refs
+        lims(:,1) = -TRS
+        lims(:,2) =  TRS
+        call grad_native%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        call grad_ref%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        nchecked = 0
+        do inpl = 1, nrots, max(1, nrots / 5)
+            call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call b%pftc%set_ptcl_pft(1, ptcl)
+            call b%pftc%shift_ptcl(1, S_TRUE)
+            call b%pftc%memoize_ptcls
+            irot_n = inpl
+            irot_r = inpl
+            call grad_native%set_indices(1, 1)
+            cxy_native = grad_native%minimize(irot=irot_n, sh_rot=.true.)
+            call grad_ref%set_indices(1, 1)
+            cxy_ref    = grad_ref%minimize(irot=irot_r, sh_rot=.false.)
+            call assert_true(irot_n > 0 .and. irot_r > 0, 'the shift search found a better pose than the start')
+            if( irot_n < 1 .or. irot_r < 1 ) cycle
+            if( irot_n /= irot_r ) cycle
+            nchecked = nchecked + 1
+            call assert_true(abs(norm2(cxy_ref(2:3)) - norm2(S_TRUE)) <= 0.1, 'the shift search recovers the shift''s magnitude')
+            u = shift_ref2ptcl(cxy_ref(2:3), b%pftc%get_rot(irot_r))
+            call assert_true(all(abs(cxy_native(2:3) - u) <= 1.e-4), 'the window path''s table increment is the optimizer''s shift rotated into the particle''s axes')
+            call candidate_pose(srch, 1, irot_n, cxy_native(2:3), euler, shvec)
+            call assert_true(all(abs(shvec - (STORED_SHIFT + cxy_native(2:3))) <= 1.e-5), 'the consumer adds the native increment to the stored shift unconverted')
+        enddo
+        call assert_true(nchecked >= 3, 'the two searches agreed on the rotation at three starts or more')
+        call grad_native%kill
+        call grad_ref%kill
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_table_increment_axes
+
+    !> a polar section rotated by irot in the calculator's convention (the polar shift map tester's helper, checked there
+    !! against the calculator's own rotation)
+    pure subroutine rotate_half_ring( pftsz, nk, pft, irot, pft_rot )
+        integer,     intent(in)  :: pftsz, nk, irot
+        complex(sp), intent(in)  :: pft(pftsz,nk)
+        complex(sp), intent(out) :: pft_rot(pftsz,nk)
+        integer :: p, q
+        do p = 1, pftsz
+            q = modulo(p - irot, 2*pftsz) + 1
+            if( q <= pftsz )then
+                pft_rot(p,:) = pft(q,:)
+            else
+                pft_rot(p,:) = conjg(pft(q-pftsz,:))
+            endif
+        enddo
+    end subroutine rotate_half_ring
 
 end module simple_strategy3D_inplane_tester

@@ -2,6 +2,7 @@
 module simple_eul_prob_tab
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
+use omp_lib,                   only: omp_get_max_threads
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
@@ -268,7 +269,7 @@ contains
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
         integer(int64) :: obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr
         integer(int64) :: nmaps_thr(nthr_glob), nscreens_thr(nthr_glob)
-        real(dp)       :: prior_w
+        real(dp)       :: prior_w, sigma_px
         integer        :: kscreen, npool
         logical        :: l_map
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
@@ -336,10 +337,12 @@ contains
                 allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))
             endif
             ! the polar shift maps (shift_sigma > 0): the candidates come from the screen over a pool of the best
-            ! references at the stored shift, their shifts from the full map's posterior draw
+            ! references at the stored shift, their shifts from the full map's posterior draw over the disk of three
+            ! sigma bounded by trs
             if( l_map )then
                 if( .not. (self%p_ptr%prob_beta > 0.) ) THROW_HARD('the shift map draws at prob_beta x T: prob_beta must be positive')
-                call self%b_ptr%pftc%setup_shiftmaps(real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp), prior_w, kscreen)
+                sigma_px = real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp)
+                call self%b_ptr%pftc%setup_shiftmaps(sigma_px, min(3.d0 * sigma_px, real(self%p_ptr%trs, dp)), prior_w, kscreen)
                 npool = min(self%nrefs, 4 * projs_ns)
             endif
             ! fill the table
@@ -428,6 +431,7 @@ contains
             logical   :: l_bank_seed
             call get_particle_context(iptcl_loc, o_prev_loc, prev_state, prev_proj)
             if( l_map )then
+                if( l_post ) THROW_HARD('prob_post_diag=yes is not implemented for the polar shift map (shift_sigma)')
                 call process_particle_with_map(i_loc, iptcl_loc, ithr_loc)
                 call o_prev_loc%kill
                 return
@@ -528,10 +532,12 @@ contains
                 call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_FULL, temp_i, prior_w, u_prev, lse_prior,&
                     &self%p_ptr%l_shift_greedy, logz, irot_loc, irho_loc, ialpha_loc, loss_cell)
                 nmaps_thr(ithr_loc) = nmaps_thr(ithr_loc) + 1_int64
+                ! the cell is the optimizer's shift at the drawn rotation; the table holds native increments
                 xcell = self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_FULL, irho_loc, ialpha_loc)
+                xcell = real(shift_ref2ptcl(real(xcell), self%b_ptr%pftc%get_rot(irot_loc)), dp)
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(real(-logz / temp_i), irot_loc)
                 nrefined_batch(i_loc)    = nrefined_batch(i_loc) + 1
-                refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc, real(xcell(1)), real(xcell(2)))
+                refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc, real(xcell(1)), real(xcell(2)), loss_cell)
             enddo
             ! the bench record of whether the budget binds, as in refine_best_refs
             jbest = 0
@@ -862,7 +868,7 @@ contains
                         &self%p_ptr%cc_objfun), irot_loc)
                     nrefined_batch(i_loc) = nrefined_batch(i_loc) + 1
                     refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc,&
-                        &refined_shift(2), refined_shift(3))
+                        &refined_shift(2), refined_shift(3), rows_batch(ri_loc,i_loc)%dist)
                 endif
             enddo
             ! the bench record of whether the budget binds: the unrefined rank of the entry lowest after refinement
@@ -1091,9 +1097,8 @@ contains
         else if( kmax > 1 )then
             write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
         endif
-        write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: posterior draw at the particle temperature, ', &
-            &self%nptcls, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ', &
-            &real(nmode) / real(max(1,self%nptcls))
+        write(logfhandle,'(A,I0,A,I0,A,F0.1,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls, ' particles x ', self%nrefs,&
+            &' references, ', 100. * real(nmode) / real(max(1,self%nptcls)), ' % at the row mode'
         if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
             &'WARNING: particles without a temperature in the dense part files, assigned to their argmin: ', ntemp_missing
         deallocate(score_best, iref_best, w)
@@ -1111,19 +1116,23 @@ contains
         !> the extras of the weighted insertion: for every particle whose committed entry is refined, the refined
         !! entries of its state's block whose pose lies within the insertion cone of the committed one (the rotation
         !! modulo the point group and the shift together moving the rim by less than the map resolves), the kmax - 1 of
-        !! highest posterior at the particle's own temperature, with the weights that posterior renormalised over the
-        !! kept set (top_posterior_extras): the draw decides the hypothesis, the extras only spread the particle over
+        !! highest posterior at the particle's own temperature over the refined poses' own losses (the row's distance
+        !! under the window search, the drawn cell's data term under the map, whose row holds the evidence), with the
+        !! weights that posterior renormalised over the kept set (top_posterior_extras): the draw decides the
+        !! hypothesis, the extras only spread the particle over
         !! the poses the map resolves alike. Deterministic given the committed poses, so the particles run in parallel
         !! after the draws, each thread on its own eligibility mask; the table takes the result in particle order
         subroutine select_extras
             type(prob_candidate) :: cands(kmax)
             integer, allocatable :: kinds(:,:), nkept(:), nelig(:)
-            real,    allocatable :: kw(:,:)
+            real,    allocatable :: kw(:,:), pose_loss(:,:)
             logical, allocatable :: eligible(:,:)
-            integer :: i_loc, si_loc, ifirst_loc, ilast_loc, istate_loc, j, k, ithr
+            integer :: i_loc, si_loc, ifirst_loc, ilast_loc, istate_loc, j, k, ithr, nthr_team
+            nthr_team = omp_get_max_threads() ! the per-thread masks are sized by the team the region runs
             allocate(kinds(kmax,self%nptcls), nkept(self%nptcls), nelig(self%nptcls), source=0)
             allocate(kw(kmax,self%nptcls), source=0.)
-            allocate(eligible(self%p_ptr%nspace,nthr_glob), source=.false.)
+            allocate(eligible(self%p_ptr%nspace,nthr_team), source=.false.)
+            allocate(pose_loss(self%p_ptr%nspace,nthr_team), source=0.)
             !$omp parallel do default(shared) proc_bind(close) schedule(static) &
             !$omp private(i_loc,si_loc,ifirst_loc,ilast_loc,istate_loc,j,k,ithr)
             do i_loc = 1,self%nptcls
@@ -1135,15 +1144,17 @@ contains
                 si_loc     = self%state_to_active_rank(istate_loc)
                 ifirst_loc = (si_loc - 1) * self%p_ptr%nspace + 1
                 ilast_loc  = si_loc * self%p_ptr%nspace
-                eligible(:,ithr) = .false.
+                eligible(:,ithr)  = .false.
+                pose_loss(:,ithr) = self%dists(i_loc,ifirst_loc:ilast_loc)
                 do j = self%refined_offsets(i_loc), self%refined_offsets(i_loc+1) - 1
                     if( self%refined(j)%ri < ifirst_loc .or. self%refined(j)%ri > ilast_loc ) cycle
                     k = self%refined(j)%ri - ifirst_loc + 1
-                    eligible(k,ithr) = self%insert_cone%within(istate_loc, self%assgn_map(i_loc)%iproj, &
+                    pose_loss(k,ithr) = self%refined(j)%loss
+                    eligible(k,ithr)  = self%insert_cone%within(istate_loc, self%assgn_map(i_loc)%iproj, &
                         &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], &
                         &k, self%inpls(i_loc,self%refined(j)%ri), [self%refined(j)%x, self%refined(j)%y])
                 enddo
-                call top_posterior_extras(self%p_ptr%nspace, self%dists(i_loc,ifirst_loc:ilast_loc), &
+                call top_posterior_extras(self%p_ptr%nspace, pose_loss(:,ithr), &
                     &temperature_or_argmin(self%temps(i_loc)), eligible(:,ithr), self%assgn_map(i_loc)%iproj, kmax, &
                     &PROB_INSERT_WMIN, nkept(i_loc), kinds(:,i_loc), kw(:,i_loc), nelig(i_loc))
             enddo
@@ -1158,7 +1169,7 @@ contains
                     &kw(2:nkept(i_loc),i_loc), nelig(i_loc))
             enddo
             call self%insert_tab%report
-            deallocate(kinds, nkept, nelig, kw, eligible)
+            deallocate(kinds, nkept, nelig, kw, eligible, pose_loss)
         end subroutine select_extras
 
     end subroutine ref_assign

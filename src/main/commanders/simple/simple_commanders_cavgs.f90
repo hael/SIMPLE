@@ -757,7 +757,7 @@ contains
                 call spproj%os_cls2D%set(icls, 'diam',         quality%raw(icls,LAT_SPOT_DIAM))
                 call spproj%os_cls2D%set(icls, 'lattice_peak', quality%raw(icls,LAT_LATTICE_PEAK))
             enddo
-            diams = pack(quality%raw(:,LAT_SPOT_DIAM), quality%states > 0 .and. .not. quality%hard_reject)
+            allocate(diams, source=pack(quality%raw(:,LAT_SPOT_DIAM), quality%states > 0 .and. .not. quality%hard_reject))
             if( size(diams) == 0 )then
                 write(logfhandle,'(A)') '>>> CAVG QUALITY NOTE: no accepted class; no particle diameter recorded'
                 return

@@ -3,6 +3,7 @@ module simple_strategy3D_alloc
 use simple_pftc_srch_api
 use simple_builder, only: builder
 implicit none
+#include "simple_local_flags.inc"
 
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 public :: ref_state_from_index, ref_proj_from_index
@@ -40,6 +41,8 @@ contains
         integer :: istate, ithr, nrefs, nrefs_sub
         real    :: areal
         logical :: l_prob_mode
+        ! the polar shift map lives in the dense 3D table
+        if( params%l_shift_map .and. trim(params%refine) .ne. 'prob' ) THROW_HARD('shift_sigma needs the dense 3D table: refine=prob')
         ! clean all class arrays & types
         call clean_strategy3D()
         ! a Cartesian pass (l_cart_refine) searches no projection grid: no polar search state

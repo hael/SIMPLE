@@ -172,12 +172,14 @@ type :: prob_dense_entry
 end type prob_dense_entry
 
 ! A refined entry of the dense table: the particle (part-local in a part file, the master's index on the master),
-! the compact reference and the shift of its search
+! the compact reference, the shift of its search and the loss at that pose (the row's distance under the window
+! search; the drawn cell's data term under the polar shift map, whose row holds the reference's evidence)
 type :: prob_refined_entry
     integer :: i
     integer :: ri
     real    :: x
     real    :: y
+    real    :: loss
 end type prob_refined_entry
 
 !> Per-particle statistics of the pose posterior over a dense table row (prob_post_diag=yes): the mode
@@ -251,6 +253,14 @@ type :: prob_fill_profile
     !! in the top deciles says the truth lands near the cap and more refinements would help; mass at rank 1 says
     !! the cap is slack
     integer(int64) :: rank_counts(0:11) = 0_int64
+    !> The screen's choice against the origin ranking (shift_sigma > 0, the 2D fills): the origin rank of the class
+    !! the screen puts first, (0) rank 1, (1) within the refined count, (2) within twice it, (3) within four times,
+    !! (4) beyond; mass beyond says a pool of the origin's best would have missed the screen's choice
+    integer(int64) :: screen_rank_counts(0:4) = 0_int64
+    !> the posterior mass beyond the window under the best candidate's map, per particle (shift_sigma > 0): (0) at most
+    !! MASSOUT_TOL, (1) at most 0.2, (2) at most 0.5, (3) beyond; mass in the upper bins says the disk still has work
+    integer(int64) :: massout_counts(0:3) = 0_int64
+    integer        :: npool = 0 !< the screen's breadth of the fill (nscreen; 0: every class)
 end type prob_fill_profile
 
 ! Thread-owned append buffer used while candidate counts are not known in advance.
@@ -628,8 +638,8 @@ contains
         class(prob_neff_readout), intent(in) :: self
         real,                     intent(in) :: beta_draw
         if( self%nrows < PROB_NEFF_MIN_ROWS ) return
-        write(logfhandle,'(A,F8.2,A,F7.4,A,F8.2,A,I0,A)') '>>> POSTERIOR DRAW N_EFF: ', self%mean_neff(beta_draw), &
-            &' at beta ', beta_draw, ';', self%mean_neff(1.), ' at beta 1 (over ', self%nrows, ' rows)'
+        write(logfhandle,'(A,F0.2,A,F0.2,A,F0.2,A,I0,A)') '>>> POSTERIOR DRAW N_EFF: ', self%mean_neff(beta_draw), &
+            &' at beta ', beta_draw, ', ', self%mean_neff(1.), ' at beta 1 (', self%nrows, ' rows)'
         call flush(logfhandle)
     end subroutine neff_readout_report
 

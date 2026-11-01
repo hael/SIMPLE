@@ -76,7 +76,7 @@ contains
         integer :: start_stage, stop_stage, it_pass
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_refine2D, rt_final_cavgs, rt_tot
-        logical :: l_shmem, l_seeded
+        logical :: l_shmem, l_seeded, l_mskdiam_auto
         if( L_BENCH_GLOB )then
             rt_setup       = 0.
             rt_calc_pspec  = 0.
@@ -100,12 +100,23 @@ contains
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
         if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_snhc')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
+        ! the polar shift map (shift_sigma > 0): mskdiam=0 runs stage 1 under the box's mask and takes the mask
+        ! diameter of the stages after from the class averages at the exits of stage 1 and of the centring stage
+        ! (the centring stage itself runs under the box's mask), the low-pass ladder re-derived each time
+        l_mskdiam_auto = .false.
+        if( cline%defined('shift_sigma') .and. cline%defined('mskdiam') )then
+            if( cline%get_rarg('shift_sigma') > 0.01 .and. cline%get_rarg('mskdiam') < 0.1 )then
+                call cline%delete('mskdiam')
+                l_mskdiam_auto = .true.
+            endif
+        endif
         ! shared memory execution
         l_shmem = set_shmem_flag(cline)
         ! master parameters
         call params%new(cline)
         call gui_comm%new(params)
         if( params%l_nonuniform ) THROW_HARD('nonuniform filtering is not available in 2D; exec_solve2D')
+        if( params%l_shift_map .and. l_checkpoint ) THROW_HARD('shift_sigma is not supported with stream checkpointing; exec_solve2D')
         call cline%set('mkdir', 'no')
         call spproj%ptr2oritype(params%oritype, spproj_field)
         maxits = params%extr_lim
@@ -157,10 +168,11 @@ contains
         if( L_BENCH_GLOB ) rt_setup = toc(t_phase)
         ! summary
         do istage = 1,nstages
-            write(logfhandle,'(A,I2,A,L1,F6.1,I8,F7.3,2L2)')'>>> STAGE ', istage,' LPSET LP NPTCLS UFRAC ST FR: ',&
+            write(logfhandle,'(A,I2,A,L1,F6.1,I8,F7.3,2L2,F6.1,F7.1)')'>>> STAGE ', istage,' LPSET LP NPTCLS UFRAC ST FR TRS MSKDIAM: ',&
             &stage_parms(istage)%l_lpset,stage_parms(istage)%lp,&
             &stage_parms(istage)%nptcls, stage_parms(istage)%update_frac,&
-            &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore
+            &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore,&
+            &stage_parms(istage)%trslim, stage_parms(istage)%mskdiam
         end do
         ! prep particles field
         if( start_stage == 1 )then
@@ -197,6 +209,7 @@ contains
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('out',   params%projfile)
             call gui_comm%add_metadata(spproj, oritype='cls2D', stage=istage)
+            if( solve2D_centring_stage(params, istage) .or. (l_mskdiam_auto .and. istage < CENTRING_STAGE) ) call adopt_estimated_mskdiam
         enddo
         if( l_checkpoint .and. stop_stage < nstages )then
             last_iter = cline_refine2D%get_iarg('endit')
@@ -286,7 +299,60 @@ contains
             stage_parms(:)%smpd_crop = params%smpd_crop
             stage_parms(:)%trslim    = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
             if( cline%defined('trs') ) stage_parms(2:)%trslim = params%trs
+            ! the polar shift map (shift_sigma > 0): the centring stage searches the disk of three sigma under the
+            ! box's mask, the other stages the window under the user's mask or the centring stage's estimate
+            stage_parms(:)%mskdiam = 0.
+            if( params%l_shift_map )then
+                stage_parms(:)%mskdiam = params%mskdiam
+                if( size(stage_parms) >= CENTRING_STAGE )then
+                    stage_parms(CENTRING_STAGE)%trslim  = max(stage_parms(CENTRING_STAGE)%trslim, 3. * params%shift_sigma / params%smpd)
+                    stage_parms(CENTRING_STAGE)%mskdiam = (real(params%box) - COSMSKHALFWIDTH) * params%smpd
+                endif
+            endif
         end subroutine set_dims
+
+        ! the mask diameter estimated from the stage's class averages: printed at the centring stage's exit and, in an
+        ! automatic run (mskdiam=0), adopted for the stages after at the exits of the stages up to the centring stage,
+        ! their low-pass ladder re-derived
+        subroutine adopt_estimated_mskdiam
+            real :: mskdiam_est
+            last_iter = cline_refine2D%get_iarg('endit')
+            call solve2D_mskdiam_estimate(refine2D_cavgs_fname(last_iter, params%ext%to_char()), spproj%os_cls2D,&
+                &params%box_crop, params%smpd_crop, mskdiam_est)
+            write(logfhandle,'(A,I0,A,F7.1,A)') '>>> MASK DIAMETER ESTIMATED FROM THE STAGE ', istage, ' CLASS AVERAGES: ', mskdiam_est, ' A'
+            if( l_mskdiam_auto .and. istage < nstages )then
+                stage_parms(istage+1:)%mskdiam = mskdiam_est
+                call rederive_lplims(istage, mskdiam_est)
+                write(logfhandle,'(A)') '>>> THE STAGES THAT FOLLOW USE IT'
+            endif
+        end subroutine adopt_estimated_mskdiam
+
+        ! the low-pass ladder of the stages after from_stage from an adopted mask diameter: the march from that stage's
+        ! limit to the new hard limit, as set_lplims builds it; a user-set lp or lpstop stands
+        subroutine rederive_lplims( from_stage, mskdiam_new )
+            integer, intent(in) :: from_stage
+            real,    intent(in) :: mskdiam_new
+            real    :: lpstart, lpstop, cenlp
+            integer :: istg, last_march
+            if( cline%defined('lp') .or. cline%defined('lpstop') ) return
+            if( from_stage >= nstages ) return
+            call mskdiam2lplimits_refine2D(mskdiam_new, lpstart, lpstop, cenlp)
+            params%lpstop = max(lpstop, 2.*params%smpd_crop)
+            if( .not. cline%defined('cenlp') ) params%cenlp = max(cenlp, 2.*params%smpd_crop)
+            last_march = nstages
+            if( trim(params%eo_stage) == 'yes' ) last_march = nstages - 1
+            do istg = from_stage + 1, last_march
+                stage_parms(istg)%lp = stage_parms(istg-1)%lp - (stage_parms(istg-1)%lp - params%lpstop)/2.0
+            end do
+            stage_parms(max(last_march, from_stage+1):nstages)%lp = params%lpstop
+            write(logfhandle,'(A,*(F5.1,1X))') '>>> LOW-PASS LADDER OF THE STAGES THAT FOLLOW (IN A): ', stage_parms(from_stage+1:nstages)%lp
+        end subroutine rederive_lplims
+
+        ! the final class averages' mask diameter: the last stage's under the polar shift map
+        real function final_mskdiam()
+            final_mskdiam = params%mskdiam
+            if( stage_parms(nstages)%mskdiam > 0. ) final_mskdiam = stage_parms(nstages)%mskdiam
+        end function final_mskdiam
 
         ! Deals with initial references dimensions when *not* starting from random references
         subroutine inirefs
@@ -655,6 +721,7 @@ contains
             call cline_refine2D%set('extr_iter',      params%extr_lim + 1)
             call cline_refine2D%set('refine',         'greedy')
             call cline_refine2D%set('restore_cavgs', 'yes')
+            call cline_refine2D%delete('shift_sigma') ! the map lives in the tables
             if( present(terminal_policy) ) call terminal_policy(cline_refine2D)
             call cline_refine2D%delete('update_frac')
             call cline_refine2D%delete('fillin')
@@ -700,7 +767,7 @@ contains
             ! adding cavgs & FRCs to project
             call spproj%read_segment('out', params%projfile)
             call spproj%add_frcs2os_out( string(FRCS_FILE), 'frc2D')
-            call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg', mskdiam=params%mskdiam)
+            call spproj%add_cavgs2os_out(finalcavgs, params%smpd, imgkind='cavg', mskdiam=final_mskdiam())
             call spproj%write_segment_inside('out', params%projfile)
             ! rank based on gold-standard resolution estimates
             finalcavgs_ranked = refine2D_cavgs_ranked_fname(iter, params%ext%to_char())

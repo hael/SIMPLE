@@ -79,8 +79,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
-        &'probability tables search the shifts of their refined candidates over a disk of 3 sigma with the polar shift '//&
-        &'map and draw the pose from the tempered posterior instead of refining a window; 0 is the window search{0}', &
+        &'probability tables search the shifts of their refined candidates over a disk of 3 sigma within trs with the polar '//&
+        &'shift map and draw the pose from the tempered posterior instead of refining a window; 0 is the window search{0}', &
         &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_draw', 'binary', 'Polar shift map draw', &
         &'The polar shift map''s pose is drawn from the tempered posterior over the disk, or is its cell of largest '//&
@@ -159,6 +159,17 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call program%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, stage 2 '//&
+        &'is the centring stage: its probability table searches the shifts over a disk of 3 sigma with the polar shift '//&
+        &'map under the box-wide mask and the stage ends once the shifts stabilise, the later stages map their window; '//&
+        &'mskdiam=0 then takes the mask diameter of the later stages from the centring stage''s class averages{0}', &
+        &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        call program%add_input(UI_SRCH, 'shift_draw', 'binary', 'Polar shift map draw', &
+        &'The polar shift map''s pose is drawn from the tempered posterior over the disk, or is its cell of largest '//&
+        &'mass, the comparison arm of the tests(yes|no){yes}', '', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
         &to sample each iteration; every active particle when there are fewer{200000}', '# particles to sample{200000}', &
         &.false., 200000., group="search", visibility=UI_VIS_STANDARD, preserve_default=.true.)

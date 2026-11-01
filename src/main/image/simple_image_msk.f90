@@ -413,9 +413,11 @@ contains
         end if
         ! destruct
         do i = 1,n
-            call cc_img(i)%write(string('binarized_automask2D.mrc'), i)
+            if( l_write )then
+                call cc_img(i)%write(string('binarized_automask2D.mrc'), i)
+                call imgs(i)%write(string('masks_automask2D.mrc'), i)
+            endif
             call cc_img(i)%kill_bimg
-            call imgs(i)%write(string('masks_automask2D.mrc'), i)
         end do
         deallocate(cc_img)
     end subroutine automask2D_set

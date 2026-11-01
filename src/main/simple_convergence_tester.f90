@@ -57,8 +57,87 @@ contains
         call test_posterior_anneal_tail2D()
         write(*,'(A)') 'test_posterior_exits_weighted_insertion'
         call test_posterior_exits_weighted_insertion()
+        write(*,'(A)') 'test_shift_map_exit'
+        call test_shift_map_exit()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
+
+    !> the polar shift map's centring exit (shift_sigma > 0 with the window's radius): two consecutive iterations
+    !! with no sampled particle carrying posterior mass beyond the window converge an otherwise unconverged run, an
+    !! iteration where they all do resets the count, and the key off never exits on it
+    subroutine test_shift_map_exit()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv, conv_off
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        real, parameter   :: SHINC(5) = [0.01, 0.01, 0.3, 0.01, 0.01] ! the mass beyond the window; the tolerance is 0.05
+        logical :: conv_at(5)
+        integer :: it
+        call del_file(STATS_FILE)
+        allocate(params)
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%l_shift_map       = .true.
+        params%trs_window        = 5.
+        params%l_lpset           = .true.
+        params%lp                = 20.
+        params%smpd              = 2.
+        params%startit           = 1
+        params%minits            = 1
+        params%maxits            = 50
+        params%trs               = 5.
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        do it = 1, 5
+            params%which_iter = it
+            call shift_field(os, SHINC(it))
+            conv_at(it) = conv%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+        enddo
+        call assert_true(.not. conv_at(1), 'shift exit: one drained iteration does not exit')
+        call assert_true(conv_at(2),       'shift exit: two drained iterations exit')
+        call assert_true(.not. conv_at(3), 'shift exit: mass beyond the window resets the count')
+        call assert_true(.not. conv_at(4), 'shift exit: one stable iteration after the reset does not exit')
+        call assert_true(conv_at(5),       'shift exit: two stable iterations after the reset exit')
+        params%l_shift_map = .false.
+        do it = 1, 3
+            params%which_iter = it
+            call shift_field(os, 1.)
+            conv_at(it) = conv_off%check_conv2D(params, cline, os, 10, 40.)
+            call os%kill
+        enddo
+        call assert_true(.not. any(conv_at(1:3)), 'shift exit: the key off never exits on the shifts')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+
+        contains
+
+            !> an unconverged field (the class overlap zero) whose every sampled particle carries mass mout beyond the window
+            subroutine shift_field( os_loc, mout )
+                type(oris), intent(inout) :: os_loc
+                real,       intent(in)    :: mout
+                integer :: i
+                call os_loc%new(NPTCLS, is_ptcl=.true.)
+                do i = 1, NPTCLS
+                    call os_loc%set_state(i, 1)
+                    call os_loc%set(i, 'updatecnt', 1.)
+                    call os_loc%set(i, 'sampled',   1.)
+                    call os_loc%set(i, 'class',     real(i))
+                    call os_loc%set(i, 'frac',      100.)
+                    call os_loc%set(i, 'mi_class',  0.)
+                    call os_loc%set(i, 'corr',      0.5)
+                    call os_loc%set(i, 'dist_inpl', 0.1)
+                    call os_loc%set(i, 'shincarg',  1.)
+                    call os_loc%set(i, 'shmassout', mout)
+                    call os_loc%set(i, 'lp',        20.)
+                    call os_loc%set(i, 'lp_est',    20.)
+                    call os_loc%set(i, 'res',       20.)
+                end do
+            end subroutine shift_field
+
+    end subroutine test_shift_map_exit
 
     !> the 2D annealing tail (as the 3D one, keyed on the class overlap): a refine=prob run with prob_beta_end above
     !! prob_beta whose class overlap converges starts the tail at the first converged iteration past minits (tail_start
@@ -179,6 +258,7 @@ contains
         params%prob_beta_end    = 1.
         params%startit          = 1
         params%maxits           = 25
+        params%topk             = 1   ! the single draw's rules; the margin under topk > 1 has its own test
         call cline%set('trs',      5.)
         call cline%set('overlap',  0.99)
         call cline%set('fracsrch', 99.)

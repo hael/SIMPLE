@@ -29,6 +29,7 @@ contains
         call test_cell_areas()
         call test_kernel_threads()
         call test_kernel_draw()
+        call test_disk_within_radius()
         call test_kernel_timing()
     end subroutine run_all_polar_shiftmap_tests
 
@@ -626,6 +627,42 @@ contains
     !! draws is the pick; the origin's prior mass is the central disk's share; at the particle's temperature the
     !! evidence equals the direct log-sum-exp over shiftmap_objfun_grid's losses with the same weights, and the greedy
     !! draw is the cell of the largest mass.
+    !> the disk never reaches beyond its radius (review R4): below one grid step the grid is the origin and the
+    !! rim at the radius, at and above a step the outermost magnitude is within the radius
+    subroutine test_disk_within_radius()
+        class(parameters),   allocatable :: p
+        class(polarft_calc), allocatable :: pftc
+        real,        allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),    allocatable :: ctfs(:,:,:)
+        real(dp) :: step, prior_w, radius, x(2), rmax
+        integer  :: kfromto(2), nrho, nalpha, kscreen, icase, ir
+        write(*,'(A)') 'test_disk_within_radius'
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, 1, 1, sigma2, refs, ptcls, ctfs, kfromto)
+        step = 64.d0 / real(kfromto(2),dp) / 4.d0
+        do icase = 1, 3
+            select case(icase)
+                case(1); radius = 0.5d0 * step
+                case(2); radius = step
+                case(3); radius = 1.5d0 * step
+            end select
+            call pftc%setup_shiftmaps(10.d0, radius, prior_w, kscreen)
+            call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, nalpha)
+            rmax = 0.d0
+            do ir = 1, nrho
+                x    = pftc%shiftmap_shift(SHIFTMAP_FULL, ir, 1)
+                rmax = max(rmax, sqrt(sum(x**2)))
+            enddo
+            call assert_true(rmax <= radius + 1.d-9, 'the outermost magnitude is within the requested radius')
+            call assert_int(2, nrho, 'two magnitudes: the origin and one ring')
+            if( icase == 1 ) call assert_true(abs(rmax - radius) <= 1.d-9, 'below one step the ring is the rim at the radius')
+            call pftc%kill_shiftmap
+        enddo
+        call pftc%kill
+        deallocate(p, pftc, sigma2, refs, ptcls, ctfs)
+    end subroutine test_disk_within_radius
+
     subroutine test_kernel_draw()
         use simple_eul_prob_tab_utils, only: posterior_temperature
         integer,  parameter :: NDRAWS = 1500
@@ -637,7 +674,7 @@ contains
         real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:)
         real(dp),    allocatable :: rhos(:)
         real(dp) :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w, x(2), u_prev(2), tot(2)
-        real(dp) :: lmax, s, lse, pen, loga, rho, temp, c, sn, ang
+        real(dp) :: lmax, s, lse, pen, loga, rho, temp, c, sn, ang, mout, wout
         real(sp) :: loss
         integer  :: kfromto(2), nrots, nrho, nalpha, idraw, irot, irho, ialpha, ir, j, ro, imax(3)
         write(*,'(A)') 'test_kernel_draw'
@@ -675,6 +712,14 @@ contains
             &', continuous ', EXPECTED_MEAN
         call assert_true(abs(mean_rho - disc_mean) <= 0.06d0 * disc_mean, 'at temperature 0 the draws follow the prior under the polar measure')
         call assert_true(abs(disc_mean - EXPECTED_MEAN) <= step, 'the discrete prior''s mean radius is the truncated Gaussian''s within a step')
+        ! the mass beyond a radius: the prior's beyond it, at temperature 0
+        call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, u_prev, lse_prior, .true., logz, irot, irho, ialpha, loss,&
+            &rho_out=rhos(2), mass_out=mout)
+        wout = 0.d0
+        do ir = 1, nrho
+            if( rhos(ir) > rhos(2) ) wout = wout + exp(-prior_w * rhos(ir)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir) * real(nalpha,dp)
+        enddo
+        call assert_true(abs(mout - wout / wsum) <= 1.d-9, 'the mass beyond a radius is the prior''s beyond it at temperature 0')
         ! the origin's mass: the central disk's share of the prior, at one rotation
         w = exp(logp0) * real(nrots,dp)
         call assert_true(abs(w - exp(-prior_w * rhos(1)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, 1) * real(nalpha,dp) / wsum) <= 1.d-9,&

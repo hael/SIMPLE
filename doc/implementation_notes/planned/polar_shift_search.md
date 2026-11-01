@@ -233,9 +233,30 @@ facts read from the code the same day.
     (Progress): 2.3 times at the disk, 1.9 at the windows, about ten times cheaper per grid point than the coarse
     lattice.
 
+13. Measured, not hard-coded (Hans, 2026-10-31, on the cost plan): the centring stage's length and the screen's
+    breadth follow what the fill measures, not constants. Two quantities, both free in the fill: the posterior mass
+    beyond the window's radius under a particle's map (the disk is needed while sampled particles carry mass out
+    there; the stage ends when almost none do, within its budget: the exit ruling 8 reached for), and the origin
+    rank of the class the screen puts first (the screen's breadth for the next iteration is the measured rank
+    quantile of the last, every class at the first iteration; the tolerance, a confidence level, is the only
+    parameter). Phase 2c builds the measures into the fill and the cost record first, then the exit and the
+    adaptive breadth on them.
+14. The map initialises the classic search (Hans, 2026-10-31): the map's best cell over all rotations, refined
+    below the grid (Newton in alpha, a parabola in rho), is the L-BFGS start with the bounds one grid step about
+    it, in place of the lattice seed and the seed bank; every mode is reviewed for it, solve2D's stages, refine2D's
+    and refine3D's modes, solve3D's stages, single and multi-state alike (Phase 4, from an inventory of today's
+    shift initialisations). The polish in the Fourier-Bessel domain, on the map's harmonic correlations
+    T_n(k, irot) with analytic gradients in rho and alpha, about five times cheaper per evaluation, follows where
+    the map is built anyway (Phase 5).
+
 What Phase 3 measures, in order: the fraction of particles that leave rejected classes for good ones; the
 shift histogram against the Gaussian cryoSPARC measured, sigma included; class quality; after re-extraction,
 the downstream solve3D. The synthetic recovery test against magnitude and SNR runs alongside.
+
+15. `topk=3` by default (Hans, 2026-11-01, after the 3D sweep). The weighted insertion therefore runs under the key,
+    which closed R3: every refined entry carries its pose's own loss (`prob_refined_entry%loss`, the row's distance
+    under the window search and the drawn cell's data term under the map), and the extras are weighed by those
+    losses on both paths (`select_extras`); the refusal of the key with `topk > 1` is gone.
 
 ## Open decisions
 
@@ -245,10 +266,13 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
    therefore reports the shift histogram per class as well as overall, since a view-dependent bias shows as
    a per-class offset and the frame question of ruling 6 then matters for those classes.
 2. The centring frame (ruling 6), after reading cavger.
-3. The weighted insertion's extra poses in 3D (topk > 1): `resolve_extra_poses` hands the table's shift increment
-   to `candidate_pose`, which adds it to the stored shift without the reference-to-native conversion the committed
-   pose receives from its polish (and, under the key, from the strategy). Found 2026-10-31 while fixing the map's
-   3D frame; pre-existing, not touched. For Hans: is the extras' frame right?
+3. Closed (2026-10-31, revised by the re-review's R1 the same day): the table has one frame contract, every
+   increment native (the particle's frame). The window path's `minimize(sh_rot=.true.)` already returns that; the
+   map fills convert the drawn cell at the drawn rotation when they record it; every consumer adds the increment
+   unconverted and builds the optimizer-frame shift only for the objective. My morning fix (`extra_pose` converting
+   the extras' increments) had assumed the map's frame for the window path's entries too and double-rotated them;
+   it is retired and `test_table_increment_axes` (the refine3D in-plane state suite) pins the contract through
+   the optimizer itself. The weighted insertion (topk > 1) is refused under the key until R3 is done.
 
 ## Review findings and their disposition
 
@@ -265,6 +289,19 @@ construction and the cost. Its findings and what the plan does with them:
 | P2 the cost must count the mapped references (section 8) | the kernel's optimisation (ruling 12); Phase 2a's cost record counts candidates; 55 references per particle at a 10 degree bound in 3D is the figure to beat |
 | P2 prior, frame, precision, calibration (section 6) | kernel: the data term only, the error reported in the sampler's units (T dL); fixture with angular CTF, distinct halves and spectra (2026-10-31); frame and crop validation in Phase 2a |
 | sigma 10 A is a modelling choice; a 20 A mean radius implies sigma about 16 A | sigma is the parameter of the switch (ruling 11), a setting, not a constant |
+
+The integration re-review of 2026-10-31 (the review's section 12, on `04f6f0cb7`..`4114f9f4a` plus the uncommitted
+tree) and the dispositions, all applied the same day:
+
+| finding | disposition |
+|---|---|
+| R1 P1: `extra_pose` double-rotates the window path's entries, which `minimize(sh_rot=.true.)` already converts; the table had two frame contracts | one contract: every table increment is native. The map fills convert the drawn cell at the drawn rotation when they record it (2D dense and sparse, 3D dense); the consumers add it unconverted and score the pose in the optimizer's frame (`shift_ptcl2ref` for the objective only); `extra_pose` retired, the extras go through `candidate_pose`; `test_table_increment_axes` pins the producer's frame through the optimizer (sh_rot true against false converted at the found rotation) and the consumer's addition |
+| R2 P1: the cone compares the map's reference-frame cells as if native | follows from R1: the entries the cone sees are native |
+| R3 P1: the weighted insertion weighs the evidence row as a pose loss | done 2026-11-01 (ruling 15): every refined entry carries its pose's own loss beside the row; the extras are weighed by those losses on both paths; the refusal is gone |
+| R4 P2: a disk below one step reaches outside its radius | `build_map`: below one step the grid is the origin and the rim at the radius; `test_disk_within_radius` (below, at, above a step) |
+| R5 P2: the scheduled Cartesian polish inherits the key and hits the scope guard | the polish pass's command and job description drop `shift_sigma` |
+| R6 P2: `prob_post_diag=yes` under the map writes default rows | refused explicitly in the 3D fill |
+| the 3D screen's pool of 4 projs_ns cannot rescue a direction outside it | the measured breadth of Phase 2c (the rank quantile) goes to the 3D fill with its measures; the first iteration's pool stays bounded in 3D |
 
 ## Phases
 
@@ -306,7 +343,7 @@ draw is from the evidence (review, section 3), the candidates' coverage of large
 section 5), and the drawn pose is not polished (review, section 4; the polish is the deterministic arm). Exit 2a
 adds the per-candidate cost of the map to the fill's cost record (`record_fill_profile`).
 
-Phase 2b, after Phase 3's synthetic part. solve2D's stage 2 and solve3D's stage 3, or whichever stage the
+Phase 2b (done 2026-10-31, Progress: solve2D, then solve3D and the key's scope). solve2D's stage 2 and solve3D's stage 3, or whichever stage the
 recovery test names, become the centring stage (ruling 10): the disk of 3 sigma, the absolute prior, the
 box-wide mask, the shift-stabilisation exit and, in 2D, the automatic mask diameter handed to the next stage
 (rulings 7-8). The later stages run the map at the window's radius on the refined candidates.
@@ -314,6 +351,108 @@ box-wide mask, the shift-stabilisation exit and, in 2D, the automatic mask diame
 Exit 2a: the in-plane, table and strategy testers pass, the Phase 1 timing table extended to the fill, the
 identity with the key off. Exit 2b: the controllers' testers pass; the synthetic recovery per stage in
 Progress.
+
+### Phase 2c: the adaptive centring stage (ruling 13)
+
+The fill measures, per particle, the posterior mass beyond the window's radius under the map of the row's best
+candidate and the origin rank of the screen's choice; both travel in the table's refined entry to the master.
+The consumer writes the mass to the particle field; `check_conv2D` ends the centring stage once the fraction of
+sampled particles with mass beyond the window above a tolerance falls below a tolerance for two iterations. The
+master sets the next iteration's screen breadth from the rank quantile of the last (`nscreen`, an internal
+control: every class at the first iteration); the tables screen the origin's best that many. The window's radius
+reaches the table from the controller. The cost record prints both distributions. Exit: the fixtures' recovery
+unchanged, the beta-gal bench's centring stage ending by itself and its screens shrinking after the first
+iteration, the window stages' screens collapsing to about twice the refined count.
+
+### 2026-11-01: the re-review chain green, the automatic mask's estimators, topk=3 and the insertion under the map (Claude, runs 463-502)
+
+- The chain after the review fixes (the frame test rebuilt on a white reference and a rotated, shifted particle, the
+  calculator's rotation helper being private): Debug and Release gates 15/15; suites in-plane state 72, polar shift
+  map 73, 2D I/O 42, pose statistics 135; the frame contract on the fixtures: 2D map from true references 100 %
+  (0.75 px), 3D map3 100 % (0.90 px; the 5 px window 90.5 %, the 16 px window 99 %).
+- Bench with the user's mask and the evidence-based stage 1 (key2c): 239 s (stage 1 87 s, the centring stage 73 s),
+  best class 4.29 A, 67 % of the particles at 8 A or better, the best set so far, but in 38 populated classes of 90
+  (the control 65, the key with the stage-1 shift 57): the evidence draw concentrates the particles; Hans to judge on
+  heterogeneous data.
+- The automatic mask: the pre-estimate from the unaligned mean is unreliable, 110 A under Otsu and 119 A as the extent
+  above 3 sigma of the mean's noise for the 180 A molecule (the rotational average's tail is weak, the class averages'
+  edges are what automask2D measures), and stage 1 under that mask cost the run (4.66 A, 38-53 % at 8 A); a second
+  defect, the ladder was not re-derived when the estimate was adopted (stages 3-5 ran at 8.2/7.1/6.0 A from the 110 A
+  ladder). Now: no pre-estimate (stage 1 under the box's mask), the class-average estimate adopted at the exits of
+  stage 1 and of the centring stage with the ladder re-derived each time (`rederive_lplims`). Measured: stage 1 at
+  20 A under the box's mask, the estimates 165 and 183 A, the ladder 13.8 then 10.9/9.4/8.0 A; best class 5.63 A,
+  55 % at 8 A or better in 42 classes, 190 s, against 4.29 A and 67 % with `mskdiam=180`: the automatic mode works
+  but is not at parity, and the gap is stage 1's (20 A under the box's mask against 15 A under the molecule's);
+  an automatic run needs the mask before stage 1, which no estimate from unaligned particles gave. Give `mskdiam`
+  for the sweep.
+- Ruling 15: `topk=3` by default; R3 done (the pose loss beside the row, one insertion distribution). At the new
+  default the fixtures hold: 2D map 100 % (0.74 px), 3D map3 100 % (0.88 px; the 5 px window 91 %, 16 px 99 %), the
+  insertion active under the map from the second iteration (the cone at 9.5 A; on the fixture almost no second
+  refined entry falls inside it). The gates found two tester assumptions of the old default: the convergence tester's
+  single-draw tail test pins `topk=1` now, and the 2D part reader's refined-entry byte count follows the widened
+  record (20 bytes); the 3D table suite run standalone on the full team exposed a latent sizing bug in
+  `select_extras` (per-thread masks sized by `nthr_glob`, not the running team), fixed per the OpenMP rule.
+- Hans's bgal run on the pushed-candidate tree collapsed the classes at stage 2: the evidence-only stage 1 (no shift
+  assigned) is the cause (Phase 2d, revised above); the mode removed, stage 1 under the key assigns the drawn cell;
+  the bench re-measured in the next run (populated classes per iteration, the class quality).
+
+### 2026-10-31: Phase 2c measured, Phase 2d's first stage measured, the re-review applied (Claude, runs 383-459)
+
+- Phase 2c on the bench, the field through the particle record (slot 54, `shmassout`) and the mass at the physical
+  temperature: the disk-needed fraction (posterior mass beyond the 4.4 px window above 5 %) drains 80, 53, 35, 22,
+  15 % over the centring stage's five iterations (the fraction above 50 %: 75, 42, 25, 15, 8 %), so the stage ran
+  its budget under either tolerance; the screen breadth went 90, 90, 76, 58 in the centring stage and 18 (twice the
+  refined count) in every later stage, whose fills fell from 1.2 to 0.4 s and the dense stage's from 4 to 1.7 s; the
+  class quality was unchanged by the length of the stage (a two-iteration run on a zero field gave the same). Which
+  statistic ends the stage (the mass above a tolerance, the posterior's mode beyond the window, or either relative
+  to the first iteration) is Hans's ruling; all three run the stage to its budget on beta-gal.
+- Phase 2d, the first stage on the shift-marginalised evidence (every class mapped over the disk, no shift assigned):
+  stage-1 purity on the five-view fixture over four random starts 80, 60, 40, 60 % against 31, 20, 25, 33 % without
+  (`nstages=1`); two full fixture runs each inconclusive (the later stages' randomness dominates there); on the bench
+  65 % of the particles in classes at 8 A or better, best class 4.35 A, the best set so far, at 88 s for stage 1
+  (14 s per iteration: 0.7 ms per map at 15 A against the 0.4 estimated), 238 s for the run. The cost is the open
+  item: the evidence over the screen's band, or over a pool after the first iteration, are the candidates.
+- The automatic mask: Hans's full-bench pair with the estimator fixed still put the automatic run 1.4 A behind at
+  the top; the cause is the ladder and stage 1's mask from the box-wide default; an automatic run now measures its
+  first mask from the mean of up to 2000 unaligned particles (built, measured in the next chain).
+- The review's section 12 (six findings) applied the same day: the dispositions in the review table above. The frame
+  finding (R1) was mine from the morning: `extra_pose` had assumed the map's frame for the window path's native
+  entries; the table now has one contract, native increments, converted at the producer.
+
+### 2026-10-31: the automatic mask on the full bench (Hans's runs 4_solve2D, 5_solve2D; Claude's reading)
+
+- With the estimator fixed (183.5 A against 180) the automatic run is still worse: best class 5.63 A against 4.24,
+  six classes at 6.7 A or better against twelve, 169 s against 186. From stage 3 on the masks agree within 2 %;
+  what differs is before: without a mask on the command line the ladder is derived from the box-wide default
+  (stage 1 at 20 A, then 14, 11, 9.5, against 15, 11.5, 9.8, 8.9) and stage 1 runs under the box's mask. The gap
+  is visible at the end of stage 2 (best 8.0 A against 7.2). Built: an automatic run measures its first mask from
+  the mean of up to 2000 unaligned particles (the molecule blurred by the pick error, an overestimate by about the
+  picking spread), which sets stage 1's mask and the ladder; the centring stage's class averages refine it after.
+
+### Phase 2d: the shift-invariant first stage (Hans, 2026-10-31; the "no shift" part reverted 2026-11-01)
+
+Revised 2026-11-01 (Hans: "it collapses into too few classes when it hits stage 2"): stage 1 under the key runs the
+dense table over the disk like the centring stage, the class from the evidence and the drawn cell assigned; the
+`shift_assign=no` variant below left the particles at their picks, so stage 1's averages were blurred by the pick
+error and the centring stage, mapping the disk against them, collapsed the populated classes from 90 to 50 in its
+first iteration (38 at the end; 57 with the shift assigned, 65 for the control; the per-iteration counts from the
+runs' `clusters2D_iterNNN.star`). The marginalisation RELION applies is in the E-step; its M-step still places the
+particle at its posterior shifts, which the drawn cell is here. The mode and its key are gone. The variant with the
+drawn cell assigned still collapsed the classes at the centring stage's entry (Hans's run, 2026-11-01), so stage 1
+under the key is the plain SNHC window stage again, as in Phase 2b (79 populated at the centring stage's entry, 57 at
+the end, against 65 for the control; the pooled screen of 2c gives the same endpoint). Phase 2d is closed without a
+shift-invariant stage 1; the measured purity gain on the fixture did not carry to the bench's class populations.
+Original text:
+
+Stage 1 is shift-blind: at zero shift against random references a pick off by most of a period at 15 A matches
+nothing, and the fixture's class collapses happen there. The shift-invariant objective is the marginal evidence
+over the disk, which the map returns in one pass: under the key solve2D's first stage runs the dense table with
+every class mapped, draws the class from the evidence and assigns no shift (`shift_assign=no`, the particle stays
+at its pick), as RELION and cryoSPARC marginalise shifts in their expectation step. Cost about 0.4 ms per map at
+15-20 A, 7 s per iteration on the bench. Measured on the five-view fixture (stage-1 purity over random starts,
+`nstages=1`) and on the bench. 3D: the same evidence exists in the dense 3D fill, but the cost scales with the
+references scored (nspace 500-1000 in solve3D's early stages) and the first stage is noise-driven by design; the
+candidate is solve3D's stage 2 with the low-resolution map over a pool, after the neighbourhood table has the map.
 
 ### Phase 3: recovery on data
 
@@ -324,6 +463,51 @@ cryoSPARC's on the same particles. Report in Progress: the answer first (does th
 cryoSPARC finds, at what cost per iteration), then the tables.
 
 Exit: the report; the ruling on masks and re-extraction recorded.
+
+### Phase 4: the map initialises the classic search (ruling 14)
+
+An inventory first: where each mode seeds its shift search today (`estimate_shift_seed`, `seed_start`, the seed
+bank, `coarse_search_opt_angle`, `grid_fit`, the shift prior's centre), for refine2D (`snhc_smpl`, `prob`,
+`prob_snhc`), refine3D (`shc`, `neigh`, `greedy`, `prob`, `prob_neigh` in its modes, `cont`), solve2D's and
+solve3D's stages, single and multi-state. Then `pftc_shsrch_grad%minimize` takes the map's refined best cell as
+its start and one grid step as its bounds wherever a map exists for the pair, the lattice seed and the seed bank
+retire where the map replaces them, and the in-plane tester's identity pins the optimum against the old path.
+
+#### The inventory of today's shift initialisations (2026-10-31, read from the code)
+
+The optimizer `pftc_shsrch_grad%minimize`: with `coarse_init`, `coarse_search_opt_angle` scores a 5 by 5 lattice
+over the bounds (plus or minus `trs`) at every rotation and starts from the best (point, rotation); `grid_fit`
+adds a quadratic step from the lattice and `grid_ptcl` scores the lattice from a particle-frame bank (both only
+in the multi-state 3D table, `l_grid = nstates > 1`); with `xy_in` the lattice is skipped and the start is the
+seed. Then the L-BFGS-B alternations with the in-plane callback (`new_alternating`), or a fixed rotation
+(`new_fixed`: the 2D time series, the per-peak polish `grad_shsrch_obj2`). The shift prior, when on, is centred
+at the stored shift.
+
+| owner | seed of the shift search | start of each reference's search |
+|---|---|---|
+| 2D strategies (`snhc`, `snhc_smpl`, `greedy`, `greedy_smpl`, `inpl_smpl`; shifts from the third iteration, `do_inplsrch`) | `inpl_srch_first`: the lattice and L-BFGS at the previous class, converted to the particle frame (`xy_first`) | `xy_in = xy_first` at every class; the lattice when there is no seed |
+| 2D `tseries` | none | the lattice at the fixed rotation |
+| 2D tables (`prob`, `prob_snhc`) | the previous class's lattice and L-BFGS; the seed bank memoises the particle at it; every class scored at the seed | `seed_start`: the seed in the reference's frame, clamped to `trs`, as `xy_in`; under the key the map about the stored shift replaces all of it |
+| 3D strategies (`shc`, `greedy`, `greedy_sub`, `greedy_inpl`, `neigh`) | `inpl_srch_first` at the previous reference, single state only (`l_sh_first = doshift .and. nstates <= 1`) | the references scored at `xy_first`, the final `inpl_srch` from it; multi-state: the lattice at the best reference, no seed |
+| 3D `cont` | the Cartesian pose optimizer's own 5-parameter solve (`shift_first`) | not polar |
+| 3D dense table (`prob`) | `estimate_shift_seed`: the previous (state, projection)'s lattice and L-BFGS, single state only; multi-state: seed 0 with `grid_fit` and `grid_ptcl` instead; every reference scored at the seed (bank) | `refine_best_refs` from the seed as `xy_in`; under the key the map |
+| 3D neighbourhood table (`prob_neigh`) | modes `shc`/`snhc` (solve3D's early stages): the seed in `shc` mode only; modes `geom`/`state` (solve3D's late stages, multi-state): the seed single state only | the candidates' L-BFGS from the seed; no map |
+| solve2D | stage 1 `trs = 0`; stages 2-6 the window (the key: stage 2 the disk) | as the stage's mode |
+| solve3D | stages 1-2 `trs = 0`; 3-5 `prob`, 6-8 `prob_neigh` in `state` mode, multi-state `state` from stage 6 (`shc` before) | as the stage's mode |
+
+Three facts for Phase 4: multi-state runs have no previous-reference seed anywhere (the 3D search object, the dense
+table, the subspace modes), only the lattice; the neighbourhood table's `snhc`, `geom` and `state` modes seed
+nothing; and every lattice is a 25-point grid at all rotations, a cost comparable to one map at the window's radius,
+without the joint rotation. The map-initialised polish removes the asymmetry: one map per (reference, particle)
+gives the joint start for single and multi-state alike, the seed bank and the lattice retire where it runs, and
+the neighbourhood table gets the map it lacks.
+
+### Phase 5: the polish in the Fourier-Bessel domain (ruling 14)
+
+Where the map is built, keep its intermediate, the per-rotation harmonic correlations T_n(k, irot), and polish
+in (rho, alpha) on them: each evaluation a sum over shells and orders instead of shells by ring samples, the
+gradient analytic. Measured against the classic polish from the same start on the in-plane tester's fixtures
+(same optimum, the evaluation count and time) before it replaces anything.
 
 ### File disposition
 
@@ -346,11 +530,17 @@ Exit: the report; the ruling on masks and re-extraction recorded.
 | `src/main/strategies/search/simple_strategy3D_srch.f90` | plumbing | 2 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90` | the joint draw in the fill of the centring stage | 2 |
 | `src/main/pftc/simple_polarft_corr.f90` | `gen_posterior_val` over the map's grid | 2 |
-| `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage: mask, prior, exit, mskdiam at exit | 2 |
-| `src/main/solve/simple_solve3D_controller.f90` | stage 3: the disk in place of the window | 2 |
-| `src/main/commanders/simple/simple_commanders_solve2D.f90` | the stage window | 2 |
-| `doc/policies/3D/refine3D_policy.md` | the shift search paragraph | 2 3 |
-| `doc/policies/2D/solve2D_policy.md` | the shift search paragraph | 2 3 |
+| `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage (`CENTRING_STAGE`): the table, the disk, the box's mask, minits for the shift exit, the key per stage; the mask estimate at its exit (`solve2D_mskdiam_estimate`) | 2b (done 2026-10-31) |
+| `src/main/solve/simple_solve3D_controller.f90` | the key to the dense-table stages; stage 3 opens the disk | 2b (done 2026-10-31) |
+| `src/main/strategies/search/simple_strategy2D_alloc.f90`, `simple_strategy3D_alloc.f90`, `probabilistic/simple_eul_prob_tab_neigh.f90` | the key refused outside the tables that have the map | 2b |
+| `src/main/ui/simple/simple_ui_solve3D.f90` | the key on solve3D | 2b |
+| `doc/policies/3D/refine3D_policy.md`, `solve3D_policy.md` | the map's paragraph, the key's stage scope (done 2026-10-31) | 2b 3 |
+| `src/main/commanders/simple/simple_commanders_solve2D.f90` | the centring stage's trs and mask, mskdiam=0 as the automatic mask, the estimate's adoption | 2b (done 2026-10-31) |
+| `src/main/simple_convergence.f90`, `_tester.f90` | `check_conv2D`'s shift exit (ruling 8) and its test | 2b (done 2026-10-31) |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | the 3D table's maps, the disk bounded by trs | 2a 2b |
+| `src/main/ui/simple/simple_ui_refine2D.f90`, `simple_ui_refine3D.f90` | the key on refine2D, refine3D (2a) and solve2D (2b) | 2a 2b |
+| `src/main/image/simple_image_msk.f90` | `automask2D_set` writes its mask stacks only when asked (write2disk), as its flag intended; the estimate calls it silently | 2b |
+| `doc/policies/2D/solve2D_policy.md` | the centring stage's contract (done 2026-10-31) | 2b 3 |
 
 Phase 2's UI files are added to the table with the ruling that names the key.
 
@@ -625,3 +815,138 @@ Phase 2's UI files are added to the table with the ruling that names the key.
   the recentring are its machinery), so the next measurement is through solve2D itself with the key handed to
   its stages: Phase 2b, the controllers.
 - Phase 2a is complete in the working tree (17 files, both gates on both builds, Debug run 230).
+- The extras' frame (open decision 3) fixed and tested; the 3D map run with topk=3 unchanged at 100 % (run 248).
+
+### 2026-10-31: Phase 2b, solve2D's centring stage (Claude, agent kit runs 258-312)
+
+- Built, under the key: solve2D's stage 2 is the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`): it
+  runs the table of the stages that follow, its `trs` is 3 sigma in native pixels (at least the window) and its mask
+  the box's, its `minits` is its first iteration so that `check_conv2D`'s new shift exit (ruling 8: the median shift
+  change of the sampled particles below lp/4 for two iterations, `test_shift_map_exit`) can end it; at its exit the
+  mask diameter is estimated from its class averages (`solve2D_mskdiam_estimate`: automask2D's diameters of the
+  populated classes, their population-weighted 90th percentile, through `automask2D_mskdiam`), logged, and adopted by
+  the later stages under `mskdiam=0` (a positive mskdiam is honoured from stage 3 on). The later stages map their
+  window: `setup_shiftmaps` takes the disk radius as an argument and both tables pass min(3 sigma, trs). Stage 1 never
+  sees the key; the stream's checkpointing refuses it; `cls_init=prev` skips the centring stage. solve3D: the key
+  goes to its stages with a shift search and stage 3 (`PROB_REFINE_STAGE`) opens the disk the same way (measured
+  below when done). `automask2D_set` now writes its mask stacks only when asked (its `write2disk` was computed and
+  ignored). The policy: `doc/policies/2D/solve2D_policy.md`, the centring stage's subsection.
+- Gates: Debug (run 259) and Release (run 265) fast gates 15/15; the suites pose statistics 135, UI visibility 380,
+  masks 74, polar shift map 65, refine3D in-plane state 101 checks on Debug (runs 260-264).
+- The five-view fixture (400 particles, 80 per view, Gaussian shifts of sigma 7 px) through solve2D itself from its
+  random start, ncls 10, the six stages, 12-16 s per run on 8 threads (the key costs nothing measurable at this
+  size), four runs per variant; recovery = the fraction within lp/4 at lp 12 (2.3 px) after the per-class offset:
+
+  | variant | purity per run | recovery per run | mean error (px) |
+  |---|---|---|---|
+  | key, mskdiam=0 (the estimate, 187-232 A, for the later stages) | 60, 60, 80, 100 % | 37, 99.5, 100, 100 % | 2.4, 1.2, 1.1, 1.2 |
+  | key, mskdiam=180 | 100, 100, 20, 40 % | 100, 100, 49, 60 % | 1.2, 1.1, 4.8, 2.9 |
+  | key off, mskdiam=180 (today) | 58, 40, 61, 98 % | 47, 64, 59, 97 % | 3.6, 2.5, 2.1, 1.5 |
+
+- Readings. (a) With the key the recovery is complete whenever the classes are not degenerate, merged views included
+  (two views per class centre their members alike: purity 60 %, recovery 99.5 %); the window recovers in proportion
+  to the purity. (b) The classification from the random start is unstable in every variant on this fixture: the
+  collapse into one or two classes (purity 20-40 %) happens in stage 1, before any shift search (run 296: class
+  overlap 1.000 from stage 1's second iteration), and nothing later separates a collapsed class; it struck the key
+  twice and the window once in four runs each, so it is the fixture's (80 particles per view, ten classes), not the
+  key's. The box-wide first stage of the mask-free mode did not hurt. (c) The shift exit never ended the centring
+  stage: the tempered draws keep the median shift change above lp/4 while the stage runs (in the collapsed run the
+  increments spread over the whole disk, mean 12 px, max 22); it fires from stage 4 on, once the draws sit on one
+  cell (median change 0.00). Ruling 8's statistic measures the draw's spread, not the posterior's convergence; the
+  stage ran its five-iteration budget. A statistic of the posterior itself (the drawn cell's mass, or the map's
+  entropy averaged over the sampled particles) is the candidate for a real exit; left as it is until Phase 3 says
+  the budget is wrong. (d) The estimate of the mask diameter, 187-232 A for particles simulated under a 180 A mask
+  (molecular diameters 156-193 A times 1.2), is usable as the later stages' mask.
+
+### 2026-10-31: Phase 2b, solve3D and the key's scope (Claude, agent kit runs 314-357)
+
+- The key through solve3D's stages (stage 3, the first with a shift search, opens the disk: `trs` raised to 3 sigma
+  in native pixels; the stages after it map their window) on the random-view fixture (400 particles, shifts of mean
+  9.2 px) from solve3D's own random start, key against off, the recovery after the fit of the map's 3D offset
+  (`compare_shifts3D.py`): the first run with the key drifted in stages 6-8 (21.8 % within lp/4, mean error 14.6 px,
+  map 8.1 A; the window: 100 %, 0.56 px, 5.6 A). Stages 3-5 were healthy (stage 3's first iteration moves the
+  particles 4.9 px on average, 18 px at most, the disk's reach, against the window's 2.8 and 5.7; stage 5 ended at
+  5.8 A). The greedy cell and a narrow prior (sigma 4 A) drifted the same, so not the draw; in isolation from the
+  converged project at lp 7.5 A and trs 8 px (runs 332-338): `refine=prob` with the key 100 %, `prob_neigh` with the
+  key 71 % with increments growing to 11.3 px (the window's corner), `prob_neigh` without it 100 %. The cause: the
+  neighbourhood table has its own fill (`fill_tab_neigh_range`) without the map, while `strategy3D_prob` under the
+  key treated every row's increment as the map's cell (the frame conversion at the drawn rotation, the score at that
+  pose). Fixed by scope, not by a second implementation: the neighbourhood fill refuses the key, `prep_strategy3D`
+  refuses it for every `refine` but `prob`, `prep_strategy2D_glob` for every 2D `refine` without a table, and the
+  controllers hand it only to those stages (solve3D stages 3-5; solve2D's table stages, the terminal greedy pass
+  dropping it). Rebuilt (Debug run 341, Release 346, both gates 15/15; the four suites 135/65/101/380): solve3D
+  key 100 % (0.56 px, final map 5.5 A) and off 100 % (0.57 px, 6.2 A), 233 against 263 s. This fixture's shifts are
+  within the window's reach over solve3D's hundred iterations, so it shows the key harmless, not better; the disk's
+  case is Phase 3's data. The map in the neighbourhood table is the item to build when the later stages need it.
+- The policies: `doc/policies/3D/refine3D_policy.md` (the map's paragraph beside the shift prior's),
+  `solve3D_policy.md` (the key's stage scope), `solve2D_policy.md` (the refusal outside the tables).
+- Standalone refine2D/refine3D: the disk is min(3 sigma, trs), so the full disk needs `trs` of at least 3 sigma in
+  native pixels (the e2e scripts' map variants now use trs=24 at sigma 10 A and 1.3 A per pixel).
+
+### 2026-10-31: Phase 3, first data: the beta-gal bench (Hans's runs 8_solve2D and 9_solve2D, Claude's reading)
+
+- `solve2D ncls=90 mskdiam=0 nparts=4 shift_sigma=10` on the bench's 4463 particles after the class rejection (box
+  256 at 1.275 A, cropped to 120; stage 2 at trs 23.5 px under the box's mask, the estimate 261 A adopted) against
+  run 8 on the same particles (taken as the window control, settings to be confirmed) and the original run 2 on all
+  5513 particles. The picks are off by 8.3 px on average (10.6 A), 15 % by more than 13 px, 1 % by more than 22 px.
+- The shifts: the key run's and the control's agree per particle to 1.2 px median (80 % within 2 px), the same as
+  two window runs agree with each other (run 2 against 8: 1.1 px median), and the three distributions are the same
+  (mean 8.3-8.5 px, 90th percentile 14.9-15.2 px). On this set the window reaches every shift over its 27
+  iterations, so the disk changes nothing and the map reproduces the window's answer.
+- The class averages, same particles: key 55 populated classes, best 6.16 A, 7 % of the particles in classes at
+  6.5 A or better, 32 % at 8 A or better, population-weighted mean 10.57 A; control 54 classes, 5.63 A, 11 %, 39 %,
+  10.98 A. A weaker top end under the key, the mean the same; the 261 A mask against 180 (the class resolution is
+  an FRC under the mask) and the later stages' tempered shift draws (increments of 1.5 px on average through stages
+  3-5, 0.1 after the anneal; the window's polish does not jitter) are the two candidates, separable by a key run at
+  `mskdiam=180` and by `shift_draw=no`. Both runs are far below run 2 (84 classes, 4.29 A, 23 % at 6.5 A), which is
+  the particle set or the run, not the key, and is a question for Hans.
+- The log: the centring stage's shift exit never fired (median change 2.6-6 px against lp/4 of 2.75 px); it fired in
+  stages 3-5 without effect (minits is the budget there) and in stage 6; the table's cost at the disk 10 s per
+  iteration against 3 s at the window and 7.5 s dense, on 6 threads; the sparse stages' class overlap near zero
+  until the dense stage is the sparse draw's normal reporting (the fixture's window runs show it too).
+- Scripts: `~/agent_work/SIMPLE/scripts/shift_stats.py` (the magnitude histogram, per-class offsets), the fields in
+  `~/agent_work/SIMPLE/bgal_ptcl2D_*.txt`, `bgal_cls2D_*.txt`.
+
+### 2026-10-31: integration re-review
+
+The follow-up in `polar_shift_search_review.md`, section 12, reviews the
+kernel, sampler, controllers and the uncommitted integration batch present
+at review start. Its cutoff and the later live 2D edits are recorded there.
+Six issues remain open: the new extra-pose conversion double-rotates window
+entries (reopening the frame conclusion of Open decision 3); map entries
+reach the insertion cone in different reference frames; weighted insertion
+uses marginal evidence as a point-pose loss; a disk narrower than a grid
+step can exceed its requested radius; the scheduled continuous pass inherits
+a now-refused table-only key; and map-mode posterior diagnostics write
+default rows. The numerical counterexamples, source paths and validation
+are recorded in the review. No production changes were made by that review.
+
+### 2026-10-31: the cost on the beta-gal bench, the screen-rank record, the mask estimate fixed (Claude, runs 369-378)
+
+- Hans: the key doubles the run time on the sweep; the automatic mask hurts (his class docs: key with mskdiam=180
+  best class 4.35 A, eight at 5.4 A or better, as the original run; mskdiam=0, the estimate 261 A, best 5.5 A).
+- The estimate overshot because it went through `automask2D_mskdiam`, the picking box's rule (diameter + 2 soft
+  edges, times 1.2): the population-weighted 90th percentile of the class diameters was 185 A for beta-gal (user's
+  mskdiam 180). Fixed: the estimate is the diameter itself, capped at the box; it now prints 183-185 A.
+- The cost, same particles (4463, ncls 90, 4 parts x 6 threads, this Mac, load 15-20 from other jobs but within
+  5 % of Hans's idle records), per stage in seconds: window 8.6 / 13.0 / 17.5 / 17.5 / 17.8 / 23.3 = 100.6; key with
+  mskdiam=180: 8.0 / 72.8 / 19.5 / 20.2 / 8.3 / 33.2 = 165.5; key with mskdiam=0 (lp ladder from 20 A): 8.6 / 58.8 /
+  22.5 / 22.7 / 8.8 / 37.6 = 162.5. The centring stage is +60 of the +65 s; the later stages' maps are about
+  neutral (stage 6 +10, stage 5 -9 from fewer iterations).
+- Inside the centring stage (part 1, 1195 particles, per iteration at lp 11.5 A): fill 11-12 s wall, score loop
+  45-55 thread-s (the origin evidence and the screen map of every scanned class, about 70 per particle: 0.65 ms
+  each against 5.6 us for a plain score), the full maps 11-24 thread-s (9.6 to 4.3 per particle, 2.2 ms each). At
+  the window radius a map costs 0.24 ms, a classic L-BFGS minimisation 0.27 ms (9 evaluations over all rotations,
+  11 gradients, from a 25-point lattice seed), a screen 90 us: the screen over every class, not the map, is the
+  overhead of the later stages.
+- The screen-rank record (new in the 2D cost record: the origin rank of the class the screen puts first, bins
+  rank 1 / within the refined count / 2x / 4x / beyond): at the first centring iteration 5.9 % of the particles
+  beyond four times the refined count and 17 % beyond twice; 2.4 % beyond 4x at the second iteration, 1.1 % at
+  the fifth, 0.3 % from stage 3 on. A pool of the origin's best four times the refined count would halve the
+  screens and miss those.
+- Levers, with the expected saving on this bench: a cheaper screen (half the shells or rings, every class kept)
+  about -30 % of the stage; three centring iterations instead of five, -40 %; the pool, -30 % at the 6 % cost
+  above; the user's mask plus the disk in place of the box's, about -20 % (ruling 7); dropping the later stages'
+  maps, about -5 s. Awaiting Hans's choice.
+- Class quality of the three runs (single runs, the random start dominates): window best 4.24 A, 14 % of the
+  particles in classes at 6.5 A or better; key 180: 4.60 A, 23 %; key with the estimate (185 A): 4.41 A, 10 %.

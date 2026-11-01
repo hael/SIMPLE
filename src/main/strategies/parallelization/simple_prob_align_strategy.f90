@@ -398,6 +398,9 @@ contains
         endif
         ! global probabilistic class assignment
         call eulprob_obj_glob%ref_assign
+        ! the polar shift map's measures: the mass beyond the window to the consumers, the next screen breadth
+        call eulprob_obj_glob%apply_mass_out
+        params%nscreen = eulprob_obj_glob%next_nscreen()
         if( L_BENCH_GLOB )then
             rt_assign = toc(t)
             t         = tic()
@@ -405,9 +408,6 @@ contains
         ! write assignment to file
         fname = string(ASSIGNMENT_FBODY)//'.dat'
         call eulprob_obj_glob%write_assignment(fname)
-        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_ALIGN2D: ', nptcls, ' particles over ', params%nparts,&
-            &' part(s) assigned'
-        call flush(logfhandle)
         if( L_BENCH_GLOB ) rt_write = toc(t)
         assign_profile = eulprob_obj_glob%get_assign_profile()
         ! cleanup

@@ -144,6 +144,17 @@ contains
         &'from its seed(yes|no){yes}', '', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
+        &'first stage with a shift search is the centring stage: its probability table searches the shifts over a disk '//&
+        &'of 3 sigma with the polar shift map and draws the pose from the tempered posterior, the dense-table stages '//&
+        &'that follow map their window and the neighbourhood stages search it as before; 0 is the window search{0}', &
+        &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        call prg%add_input(UI_SRCH, 'shift_draw', 'binary', 'Polar shift map draw', &
+        &'The polar shift map''s pose is drawn from the tempered posterior over the disk, or is its cell of largest '//&
+        &'mass, the comparison arm of the tests(yes|no){yes}', '', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &

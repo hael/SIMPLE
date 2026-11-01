@@ -516,6 +516,23 @@ directly for the particle-frame lattice. Until then the centre was the
 start x itself, which held only at the start's rotation: with a nonzero
 seed a rotation change moved the stored shift without the penalty, and a
 rotation that kept it paid (`test_shift_prior_frame`).
+`shift_sigma` (the polar shift map, `doc/implementation_notes/planned/polar_shift_search.md`)
+replaces the dense table's window search by a draw over the disk of 3 sigma bounded by
+`trs`: the fill scores every reference at the stored shift, screens a pool of the best with
+a low-resolution map, maps the best `projs_ns` over the whole band and draws each one's
+pose from the tempered posterior under the absolute prior on the displacement from the
+pick (`process_particle_with_map`); the row holds the reference's evidence, the drawn cell
+is the pose, not polished, and the fill writes it rotated into the particle's axes at the
+drawn rotation, so every table increment is native whatever the path (the window path's
+`minimize(sh_rot=.true.)` already is), and the consumer adds it to the stored shift
+unconverted (`strategy3D_prob`, `candidate_pose`; `test_table_increment_axes`). The
+weighted insertion (`topk > 1`) weighs the refined poses by their own losses, which every
+refined entry carries (`prob_refined_entry%loss`: the row's distance under the window
+search, the drawn cell's data term under the map, whose row holds the reference's
+evidence), so it is one distribution on both paths. Only the dense table has the map: the
+neighbourhood fill refuses the key (`fill_tab_neigh_range`), as does `prep_strategy3D`
+for every other `refine`, since the consumer's conversion applied to the window search's
+increments walked the shifts to the window's corner (solve3D stages 6-8, 2026-10-31).
 Every posterior draw of the tables, the fills' in-plane draws
 (`pftc%ptcl_posterior_temp`) and the assignments' direction, class and
 neighbourhood draws alike, runs at one tempering factor times the particle
@@ -582,7 +599,8 @@ emulation (`test_neff_readout`).
 **The weighted insertion (`topk`, 2026-10-29, revised 2026-10-30; sections
 20.8 and 20.12 of the note).** In the probabilistic modes a particle may
 enter the iteration's reconstruction at more than its committed pose: with
-`topk` above 1 (default 1) the assignment adds, beside the committed pose,
+`topk` above 1 (default 3 since 2026-11-01, Hans's 3D sweep; 1 is the
+single-draw run bit for bit) the assignment adds, beside the committed pose,
 up to `topk - 1` extra entries of the particle's row: the refined entries
 (the ones whose shift is their own; an unrefined entry's shift is the
 seed's, section 19.10 of the note) whose pose lies within the insertion cone
@@ -590,7 +608,10 @@ of the committed one (`prob_insert_cone`), the `topk - 1` of them of highest
 posterior at the particle's own temperature, each with its share of that
 posterior renormalised over the committed entry and the extras, an extra
 under `PROB_INSERT_WMIN` (0.01) of the particle dropped
-(`top_posterior_extras`). The selection is deterministic (the top entries,
+(`top_posterior_extras`); the distance weighed is the refined pose's own loss,
+carried beside the row (`prob_refined_entry%loss`), which under the polar
+shift map is the drawn cell's data term, not the reference's evidence the row
+holds (review R3). The selection is deterministic (the top entries,
 not a sample: within the cone the extras exist to reduce the variance of
 the one-pose insertion, and the hypothesis is the committed draw's), so
 `topk` touches no random stream, and it is made only when the committed

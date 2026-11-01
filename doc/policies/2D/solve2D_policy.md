@@ -99,7 +99,7 @@ Six stages, in two phases (stages 1-4 and 5-6):
 
 | stage | search (`refine=prob_snhc`) | low-pass | references |
 | --- | --- | --- | --- |
-| 1 | `snhc_smpl` | `lpstart` | random, Gaussian-filtered (`gauref`), no centering, no shift search |
+| 1 | `snhc_smpl` (dense `prob` on the evidence over the disk under the polar shift map) | `lpstart` | random, Gaussian-filtered (`gauref`), no centering, no shift search |
 | 2 | `snhc_smpl` | ladder | the previous iteration's class averages, `ml_reg`, centering and shift search |
 | 3-4 | sparse `prob_snhc` table | ladder | as stage 2 |
 | 5 | sparse `prob_snhc` table | `lpstop` | as stage 2 |
@@ -108,7 +108,7 @@ Six stages, in two phases (stages 1-4 and 5-6):
 - The ladder halves the distance to `lpstop` at each stage.
 - `refine=prob` uses the dense table from stage 3 on; `refine=snhc_smpl` keeps
   the sparse table in the last stage too. Stages 1 and 2 are always
-  `snhc_smpl`.
+  `snhc_smpl`, except stage 2 under the polar shift map (below).
 - Phase 1 stages end at fixed iterations (`minits = maxits`), spread over
   `extr_lim`; phase 2 stages run up to `nits_per_stage` iterations and end on
   convergence from the second on; a sample that needs more than
@@ -125,6 +125,60 @@ E/O`) and its call (`>>> SOLVE2D ENTERING REFINE2D STAGE n`, `>>> SOLVE2D
 RETURNED FROM REFINE2D STAGE n`). Each iteration prints one `>>> CONVERGED:
 yes|no`, the decision after `minits`, `maxits` and the full-assignment
 coverage, as 3D does.
+
+#### The polar shift map's centring stage (`shift_sigma` > 0)
+
+`shift_sigma` (the width in A of the Gaussian prior on a particle's displacement
+from its pick, `doc/implementation_notes/planned/polar_shift_search.md`) makes
+stage 2 the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`):
+
+- it runs the probability table of the stages that follow (`prob_snhc`, or
+  `prob` under `refine=prob`), where the map lives: every refined candidate's
+  shift is drawn from the tempered posterior over the disk of 3 sigma
+  (`trs` = 3 sigma in native pixels, at least the window), under the absolute
+  prior; the drawn pose is not polished
+- its mask is the box's, `(box - COSMSKHALFWIDTH) * smpd`, whatever `mskdiam`
+  says; the low-pass ladder is unchanged
+- it ends when the disk has nothing left to find: the fill measures, per
+  particle, the posterior mass beyond the window's radius (`trs_window`, the
+  next stage's `trslim`, from the controller) under the best candidate's map;
+  the consumer writes it to the particle field (`shmassout`) and `check_conv2D`
+  ends the stage once the fraction of sampled particles with mass above
+  `MASSOUT_TOL` has been below `MASSOUT_FRAC` for two iterations
+  (`minits = iter + 1`), or at its budget
+- its screen's breadth follows the data: the fill records the origin rank of
+  the class the screen puts first, the master sets the next iteration's
+  `nscreen` (twice the 99th percentile of those ranks, at least twice the
+  refined count, every class at a stage's first iteration), and the tables
+  screen the origin's best that many; the cost record prints both
+  distributions
+- at its exit the mask diameter of the stages after it is estimated from its
+  class averages (`solve2D_mskdiam_estimate`: automask2D's diameters of the
+  populated classes, their population-weighted 90th percentile, taken as the
+  diameter itself) and logged; `mskdiam=0` on the command line adopts it, a
+  positive `mskdiam` is honoured from stage 3 on. An automatic run
+  (`mskdiam=0`) runs stage 1 under the box's mask and the box-derived ladder,
+  adopts the estimate from the class averages at the exits of stage 1 and of
+  the centring stage, and each adoption re-derives the low-pass ladder of the
+  stages after (`rederive_lplims`: the march from that stage's limit to the
+  new `lpstop`; a user-set `lp` or `lpstop` stands). An estimate before any
+  alignment, from the mean of 2000 unaligned particles, was measured and
+  dropped (2026-11-01): the blob's extent under Otsu or above its noise gave
+  110-119 A for beta-gal's 180 A, and stage 1 under that mask cost the run
+  more than the box's mask does
+
+Stage 1 is the plain SNHC window stage under the key too. Two dense-table
+variants of stage 1 over the disk of 3 sigma (the class from the evidence, the
+drawn cell assigned or not) were measured and dropped 2026-11-01: both made
+the centring stage collapse the populated classes at its entry (90 to 50 with
+no shift assigned, 38 at the end; the SNHC stage 1 gives 79 at the entry and
+57 at the end, the control 65), the per-iteration counts from the runs'
+`clusters2D_iterNNN.star`.
+The later stages receive the key too and map their window (`trslim`) with the
+same prior. The terminal greedy pass never sees the key: the map lives in the
+2D tables, and `prep_strategy2D_glob` refuses it under any other `refine`. `cls_init=prev` enters at stage 3 and runs no
+centring stage; the stream's checkpointing is refused with the key. With the
+key off every command line is as before.
 
 ### Seeded restart (`cls_init=prev`)
 

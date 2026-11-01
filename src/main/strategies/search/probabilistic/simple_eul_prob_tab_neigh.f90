@@ -135,6 +135,8 @@ contains
     subroutine fill_tab_neigh_range( self, i_first, i_last )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
+        ! the polar shift map lives in the dense fill; this fill's increments are the window search's
+        if( self%p_ptr%l_shift_map ) THROW_HARD('shift_sigma needs the dense table: refine=prob, not prob_neigh')
         ! Search paths
         select case(trim(self%p_ptr%prob_neigh_mode))
             case('shc','snhc')
@@ -780,9 +782,8 @@ contains
             else if( kmax > 1 .and. .not. self%insert_cone%is_open() )then
                 write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT: topk ', kmax, '; no insertion cone (no FSC yet): the committed pose alone'
             endif
-            write(logfhandle,'(A,I0,A,I0,A,F6.3)') '>>> PROB_TAB_ASSIGN: neighbourhood posterior draw at the particle temperature, ',&
-                &self%nptcls - nkept, ' particles x ', self%nrefs, ' references; fraction drawn at the row mode ',&
-                &real(nmode) / real(max(1, self%nptcls - nkept))
+            write(logfhandle,'(A,I0,A,I0,A,F0.1,A)') '>>> PROB_TAB_ASSIGN: ', self%nptcls - nkept, ' particles x ', self%nrefs,&
+                &' references, ', 100. * real(nmode) / real(max(1, self%nptcls - nkept)), ' % at the row mode'
             if( nkept > 0 ) write(logfhandle,'(A,I0)') &
                 &'WARNING: particles without a valid neighbourhood candidate, orientation kept: ', nkept
             if( ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
