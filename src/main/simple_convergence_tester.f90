@@ -70,7 +70,7 @@ contains
         type(convergence) :: conv, conv_off
         type(cmdline)     :: cline
         type(oris)        :: os
-        real, parameter   :: SHINC(5) = [0.01, 0.01, 0.3, 0.01, 0.01] ! the mass beyond the window; the tolerance is 0.05
+        real, parameter   :: SHINC(5) = [1., 1., 8., 1., 1.] ! the last move in pixels; the next window is 5
         logical :: conv_at(5)
         integer :: it
         call del_file(STATS_FILE)
@@ -97,7 +97,7 @@ contains
         enddo
         call assert_true(.not. conv_at(1), 'shift exit: one drained iteration does not exit')
         call assert_true(conv_at(2),       'shift exit: two drained iterations exit')
-        call assert_true(.not. conv_at(3), 'shift exit: mass beyond the window resets the count')
+        call assert_true(.not. conv_at(3), 'shift exit: a move beyond the window resets the count')
         call assert_true(.not. conv_at(4), 'shift exit: one stable iteration after the reset does not exit')
         call assert_true(conv_at(5),       'shift exit: two stable iterations after the reset exit')
         params%l_shift_map = .false.
@@ -114,10 +114,10 @@ contains
 
         contains
 
-            !> an unconverged field (the class overlap zero) whose every sampled particle carries mass mout beyond the window
-            subroutine shift_field( os_loc, mout )
+            !> an unconverged field (the class overlap zero) whose every sampled particle last moved by shincr pixels
+            subroutine shift_field( os_loc, shincr )
                 type(oris), intent(inout) :: os_loc
-                real,       intent(in)    :: mout
+                real,       intent(in)    :: shincr
                 integer :: i
                 call os_loc%new(NPTCLS, is_ptcl=.true.)
                 do i = 1, NPTCLS
@@ -130,7 +130,7 @@ contains
                     call os_loc%set(i, 'corr',      0.5)
                     call os_loc%set(i, 'dist_inpl', 0.1)
                     call os_loc%set(i, 'shincarg',  1.)
-                    call os_loc%set(i, 'shmassout', mout)
+                    call os_loc%set(i, 'shincr',    shincr)
                     call os_loc%set(i, 'lp',        20.)
                     call os_loc%set(i, 'lp_est',    20.)
                     call os_loc%set(i, 'res',       20.)

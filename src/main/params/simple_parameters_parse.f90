@@ -425,7 +425,6 @@ contains
         call reg%add_int('nrestarts', self%nrestarts)
         call reg%add_int('nrestarts_collapse', self%nrestarts_collapse)
         call reg%add_int('nsample', self%nsample)
-        call reg%add_int('nscreen', self%nscreen)
         call reg%add_int('nsample_max', self%nsample_max)
         call reg%add_int('nsample_start', self%nsample_start)
         call reg%add_int('nsample_stop', self%nsample_stop)

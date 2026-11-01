@@ -81,7 +81,7 @@ contains
         character(len=96) :: beta_str
         integer :: n, nptcls, nsampled, nactive
         real    :: overlap_lim, fracsrch_lim, realized_update_frac, frac_out
-        real,    allocatable :: mout(:)
+        real,    allocatable :: shincr(:)
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv, cont_stats_available, l_tail_run
         601 format(A,1X,F12.3)
@@ -231,15 +231,15 @@ contains
             else
                 converged = self%dist_inpl%avg < 0.5
             endif
-            ! the polar shift map's centring exit (shift_sigma > 0 with the window's radius): the disk is needed while
-            ! sampled particles carry posterior mass beyond the window; the stage ends once the fraction with mass
-            ! above MASSOUT_TOL has been below MASSOUT_FRAC for two iterations
+            ! the polar shift map's centring exit (shift_sigma > 0 with the next stage's window): a sampled particle
+            ! needs the disk again while its last move went beyond that window; the stage ends once the fraction
+            ! that does has been below DISK_NEED_FRAC for two iterations
             if( params%l_shift_map .and. params%trs_window > 0. )then
-                mout     = os%get_all('shmassout')
-                frac_out = real(count(mask .and. mout > MASSOUT_TOL)) / real(max(1, count(mask)))
-                write(logfhandle,'(A,F6.2,A,F5.1,A)') '>>> DISK STILL NEEDED BY ', 100. * frac_out,&
-                    &' % OF THE SAMPLED PARTICLES (POSTERIOR MASS BEYOND THE WINDOW ABOVE ', 100. * MASSOUT_TOL, ' %)'
-                if( frac_out < MASSOUT_FRAC )then
+                shincr   = os%get_all('shincr')
+                frac_out = real(count(mask .and. shincr > params%trs_window)) / real(max(1, count(mask)))
+                write(logfhandle,'(A,F6.2,A)') '>>> DISK STILL NEEDED BY ', 100. * frac_out,&
+                    &' % OF THE SAMPLED PARTICLES (THE LAST MOVE BEYOND THE NEXT WINDOW)'
+                if( frac_out < DISK_NEED_FRAC )then
                     self%shift_stable_its = self%shift_stable_its + 1
                 else
                     self%shift_stable_its = 0
@@ -248,7 +248,7 @@ contains
                     write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
                     converged = .true.
                 endif
-                deallocate(mout)
+                deallocate(shincr)
             endif
         endif
         ! The annealing tail of the probability tables' posterior draws, as check_conv3D's: a run with prob_beta_end searches at prob_beta until its class overlap converges past

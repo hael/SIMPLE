@@ -401,9 +401,6 @@ contains
         endif
         ! global probabilistic class assignment
         call eulprob_obj_glob%ref_assign
-        ! the polar shift map's measures: the mass beyond the window to the consumers, the next screen breadth
-        call eulprob_obj_glob%apply_mass_out
-        params%nscreen = eulprob_obj_glob%next_nscreen()
         if( L_BENCH_GLOB )then
             rt_assign = toc(t)
             t         = tic()

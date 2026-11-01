@@ -444,7 +444,6 @@ type :: parameters
     integer :: nrestarts_collapse=1   !< # of restarts for solve3D_cavgs when states collapse
     integer :: nrots=0             !< number of in-plane rotations in greedy Cartesian search
     integer :: nsample=0           !< # particles to sample in refinement with fractional update
-    integer :: nscreen=0           !< the polar shift map's screen breadth: the origin's best classes screened, set by the master from the last iteration's ranks (0: every class)
     integer :: nsample_max=0       !< maximum # particles to sample in refinement with fractional update
     integer :: nsample_start=0     !< # particles to sample in refinement with fractional update, lower bound
     integer :: nsample_stop=0      !< # particles to sample in refinement with fractional update, upper bound

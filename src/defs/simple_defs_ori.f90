@@ -56,7 +56,7 @@ enum, bind(c)
     enumerator :: I_CORR_CART           = 51 ! score of the last Cartesian pass (cc or exp(-L); C14, O8)
     enumerator :: I_POSE_CONT_IMPROVED  = 52 ! 1 when the last Cartesian pass improved the pose (O8)
     enumerator :: I_CFAR                = 53 ! conical FSC area ratio of the state's latest half-map pair
-    enumerator :: I_SHMASSOUT           = 54 ! polar shift map: posterior mass beyond the window under the assigned candidate's map
+    enumerator :: I_SHINCR              = 54 ! polar shift map: the magnitude of the last shift increment (below zero: not searched yet in the stage)
 end enum
 
 ! A particle carries the named slots 1-54 in memory (ori%pparms).
@@ -67,7 +67,7 @@ end enum
 ! (simple_binoris). A spare slot has no flag and is never "there".
 integer, parameter :: N_PTCL_ORIPARAMS      = 54
 integer, parameter :: N_PTCL_RECORD_REALS   = 64
-integer, parameter :: I_LAST_NAMED_ORIPARAM = I_SHMASSOUT
+integer, parameter :: I_LAST_NAMED_ORIPARAM = I_SHINCR
 
 contains
 
@@ -179,8 +179,8 @@ contains
                 get_oriparam_ind = I_POSE_CONT_IMPROVED
             case('pose_cont_status')
                 get_oriparam_ind = I_POSE_CONT_STATUS
-            case('shmassout')
-                get_oriparam_ind = I_SHMASSOUT
+            case('shincr')
+                get_oriparam_ind = I_SHINCR
         end select
     end function get_oriparam_ind
 
@@ -292,8 +292,8 @@ contains
                 flag = 'res05'
             case(I_CFAR)
                 flag = 'cfar'
-            case(I_SHMASSOUT)
-                flag = 'shmassout'
+            case(I_SHINCR)
+                flag = 'shincr'
             case DEFAULT
                 flag = 'unknown'
         end select

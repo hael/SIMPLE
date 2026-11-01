@@ -459,10 +459,8 @@ contains
             endif
             write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls
             if( fill%maps > 0 )    write(fnr,'(a,i0)') 'prob_tab shift maps (all)           : ', fill%maps
-            if( fill%screens > 0 ) write(fnr,'(a,i0)') 'prob_tab screen maps (all)          : ', fill%screens
-            if( fill%screens > 0 ) write(fnr,'(a,5(1x,i0))') 'prob_tab screen best at origin rank 1/refined/2x/4x/beyond:', fill%screen_rank_counts
-            if( fill%screens > 0 ) write(fnr,'(a,i0)')      'prob_tab screen pool (nscreen, 0 = all): ', fill%npool
-            if( fill%maps > 0 )    write(fnr,'(a,4(1x,i0))') 'prob_tab mass beyond the window <=tol/<=0.2/<=0.5/beyond:', fill%massout_counts
+            if( fill%screens > 0 ) write(fnr,'(a,i0)') 'prob_tab coarse disk maps (all)     : ', fill%screens
+            if( fill%disk_ptcls > 0 ) write(fnr,'(a,i0)') 'prob_tab particles on the disk      : ', fill%disk_ptcls
             write(fnr,'(a,i0)') 'prob_tab alternations               : ', fill%alternations
             write(fnr,'(a,i0)') 'prob_tab grid evaluations           : ', fill%grid_points
             write(fnr,'(a,i0)') 'prob_tab objective evaluations      : ', fill%objective_evals

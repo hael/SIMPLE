@@ -188,7 +188,7 @@ contains
         write(*,'(A)') 'test_cartesian_record_slots'
         call assert_int(54, N_PTCL_ORIPARAMS, 'a resident particle holds the 54 named slots')
         call assert_int(64, N_PTCL_RECORD_REALS, 'the particle record on disk is 64 reals')
-        call assert_int(54, I_LAST_NAMED_ORIPARAM, 'the last named slot is 54 (shmassout)')
+        call assert_int(54, I_LAST_NAMED_ORIPARAM, 'the last named slot is 54 (shincr)')
         call assert_int(51, I_CORR_CART, 'corr_cart sits in slot 51 (O8)')
         call assert_int(52, I_POSE_CONT_IMPROVED, 'the improved flag sits in slot 52 (O8)')
         call assert_int(53, I_CFAR, 'cfar sits in slot 53')

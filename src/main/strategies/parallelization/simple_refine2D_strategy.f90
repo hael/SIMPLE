@@ -175,6 +175,8 @@ contains
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            ! the centring stage (shift_sigma > 0): every particle needs the disk until its first search
+            if( params%l_shift_map ) call build%spproj_field%set_all2single('shincr', -1.)
         endif
         ! once per refine2D invocation, before any iteration reads particles; may
         ! fall back to cache=no on cline, which child commands inherit via their copy
@@ -217,7 +219,6 @@ contains
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
-            call cline_prob_align%set('nscreen',    params%nscreen) ! the screen breadth the last iteration measured
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call run_prob_align2D(params, build, cline_prob_align, self%bench)
         endif
@@ -328,6 +329,12 @@ contains
         call ensure_canonical_sigma2(params, build, cline)
         if( params%startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            ! the centring stage (shift_sigma > 0): every particle needs the disk until its first search, which
+            ! the workers read from the project
+            if( params%l_shift_map )then
+                call build%spproj_field%set_all2single('shincr', -1.)
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            endif
         endif
         ! master-side, before any job is scheduled, so the workers find it ready;
         ! must precede gen_job_descr below so a fallback to cache=no reaches the
@@ -381,7 +388,6 @@ contains
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
             call cline_prob_align%set('startit',    params%startit)
-            call cline_prob_align%set('nscreen',    params%nscreen) ! the screen breadth the last iteration measured
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call prob_align2D_master(params, build, cline_prob_align, l_full_update, self%bench)
         endif

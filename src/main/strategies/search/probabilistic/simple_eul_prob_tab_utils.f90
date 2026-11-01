@@ -244,8 +244,9 @@ type :: prob_fill_profile
     integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
     integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
     integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
-    integer(int64) :: maps            = 0_int64 !< polar shift maps built, the refined candidates' (shift_sigma > 0)
-    integer(int64) :: screens         = 0_int64 !< screen maps built, the candidates' choice (shift_sigma > 0)
+    integer(int64) :: maps            = 0_int64 !< polar shift maps built, the refined candidates' (shift_sigma > 0, 3D)
+    integer(int64) :: screens         = 0_int64 !< coarse maps over the disk built, the candidates' choice (shift_sigma > 0)
+    integer(int64) :: disk_ptcls      = 0_int64 !< particles that searched the disk (shift_sigma > 0, the 2D centring stage)
     integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
     !> Is the refinement budget binding? Per particle of the dense fill, the rank in the unrefined row of the entry
     !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
@@ -253,14 +254,6 @@ type :: prob_fill_profile
     !! in the top deciles says the truth lands near the cap and more refinements would help; mass at rank 1 says
     !! the cap is slack
     integer(int64) :: rank_counts(0:11) = 0_int64
-    !> The screen's choice against the origin ranking (shift_sigma > 0, the 2D fills): the origin rank of the class
-    !! the screen puts first, (0) rank 1, (1) within the refined count, (2) within twice it, (3) within four times,
-    !! (4) beyond; mass beyond says a pool of the origin's best would have missed the screen's choice
-    integer(int64) :: screen_rank_counts(0:4) = 0_int64
-    !> the posterior mass beyond the window under the best candidate's map, per particle (shift_sigma > 0): (0) at most
-    !! MASSOUT_TOL, (1) at most 0.2, (2) at most 0.5, (3) beyond; mass in the upper bins says the disk still has work
-    integer(int64) :: massout_counts(0:3) = 0_int64
-    integer        :: npool = 0 !< the screen's breadth of the fill (nscreen; 0: every class)
 end type prob_fill_profile
 
 ! Thread-owned append buffer used while candidate counts are not known in advance.

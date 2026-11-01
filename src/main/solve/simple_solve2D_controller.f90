@@ -323,8 +323,10 @@ contains
         type(refine2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage, nstages
-        ! the centring stage runs the table, where the map lives
-        if( istage < PROBREFINE_STAGE .and. .not. solve2D_centring_stage(params, istage) )then
+        ! the centring stage runs the dense table, the only fill with the map
+        if( solve2D_centring_stage(params, istage) )then
+            cfg%refine = 'prob'
+        else if( istage < PROBREFINE_STAGE )then
             cfg%refine = 'snhc_smpl'
         else if( trim(params%refine) == 'prob' )then
             cfg%refine = 'prob'
@@ -336,8 +338,8 @@ contains
     end subroutine set_refine2D_stage_search_policy
 
     !> the stage's mask and the polar shift map's key: the centring stage's mask is the box's, the others' the
-    !! stage's (the user's or the centring stage's estimate, set by the commander); the key goes to every table
-    !! stage with a shift search (the map lives in the 2D tables)
+    !! stage's (the user's or the centring stage's estimate, set by the commander); the key goes to the centring
+    !! stage alone (the dense table, where the map lives)
     subroutine set_refine2D_stage_mask_policy( cfg, params, stage_parms, istage )
         type(refine2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
@@ -346,7 +348,7 @@ contains
         cfg%mskdiam     = stage_parms(istage)%mskdiam
         cfg%shift_sigma = 0.
         cfg%trs_window  = 0.
-        if( params%l_shift_map .and. cfg%trs > 0. .and. cfg%refine .ne. 'snhc_smpl' ) cfg%shift_sigma = params%shift_sigma
+        if( solve2D_centring_stage(params, istage) ) cfg%shift_sigma = params%shift_sigma
         ! the centring stage measures its posterior mass beyond the window the next stage searches
         if( solve2D_centring_stage(params, istage) ) cfg%trs_window = stage_parms(min(istage + 1, size(stage_parms)))%trslim
     end subroutine set_refine2D_stage_mask_policy

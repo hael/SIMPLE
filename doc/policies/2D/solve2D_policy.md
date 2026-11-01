@@ -132,26 +132,34 @@ coverage, as 3D does.
 from its pick, `doc/implementation_notes/planned/polar_shift_search.md`) makes
 stage 2 the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`):
 
-- it runs the probability table of the stages that follow (`prob_snhc`, or
-  `prob` under `refine=prob`), where the map lives: every refined candidate's
-  shift is drawn from the tempered posterior over the disk of 3 sigma
-  (`trs` = 3 sigma in native pixels, at least the window), under the absolute
-  prior; the drawn pose is not polished
+- it runs the dense probability table (`refine=prob`), the only fill with the
+  map, and the key reaches no other stage (the later stages are the window
+  search as before). The stage is coarse-to-fine, consolidated 2026-11-01 after
+  the full-band disk map proved intrinsically too costly (TRPV1: 132 s an
+  iteration against 4.6 s for the window, every iteration): a particle that
+  needs the disk screens the origin's best classes holding 99 % of its
+  posterior there at the draw's temperature (a pick far off leaves that
+  posterior flat and keeps every class, `screen_pool_size`; at least twice the
+  refined count) with the coarse map over the disk of 3 sigma (`trs` = 3 sigma
+  in native pixels, the half-resolution band), keeps each class's coarse
+  optimum, and the refined count of best classes are polished at full
+  resolution by the L-BFGS from that optimum (the seed in the reference's axes
+  at its rotation; if nothing beats the seed it is the pose, scored at full
+  resolution). The rows are polished losses, as the window path's: no
+  evidence, no draw over the disk
 - its mask is the box's, `(box - COSMSKHALFWIDTH) * smpd`, whatever `mskdiam`
   says; the low-pass ladder is unchanged
-- it ends when the disk has nothing left to find: the fill measures, per
-  particle, the posterior mass beyond the window's radius (`trs_window`, the
-  next stage's `trslim`, from the controller) under the best candidate's map;
-  the consumer writes it to the particle field (`shmassout`) and `check_conv2D`
-  ends the stage once the fraction of sampled particles with mass above
-  `MASSOUT_TOL` has been below `MASSOUT_FRAC` for two iterations
+- it does not repeat the disk: the consumer writes each particle's move of the
+  iteration (`shincr`, the magnitude of the polished increment) and a particle
+  whose last move stayed inside the next stage's window (`trs_window`, the next
+  stage's `trslim`, from the controller) searches that window from its stored
+  shift in the later iterations (a second L-BFGS object with those bounds);
+  the refine2D master sets `shincr` below zero for every particle at the start
+  of a run under the key, so every particle's first search is the disk
+- it ends when few particles still need the disk: `check_conv2D` ends the
+  stage once the fraction of sampled particles whose last move went beyond
+  `trs_window` has been below `DISK_NEED_FRAC` for two iterations
   (`minits = iter + 1`), or at its budget
-- its screen's breadth follows the data: the fill records the origin rank of
-  the class the screen puts first, the master sets the next iteration's
-  `nscreen` (twice the 99th percentile of those ranks, at least twice the
-  refined count, every class at a stage's first iteration), and the tables
-  screen the origin's best that many; the cost record prints both
-  distributions
 - at its exit the mask diameter of the stages after it is estimated from its
   class averages (`solve2D_mskdiam_estimate`: automask2D's diameters of the
   populated classes, their population-weighted 90th percentile, taken as the

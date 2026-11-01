@@ -258,6 +258,14 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     under the window search and the drawn cell's data term under the map), and the extras are weighed by those
     losses on both paths (`select_extras`); the refusal of the key with `topk > 1` is gone.
 
+16. The consolidation (Hans, 2026-11-01: "hack after hack"; "go"): the 2D centring stage is coarse-to-fine, the coarse
+    map over the disk at a particle's likely classes (its posterior at the origin), the L-BFGS polish at full
+    resolution from the coarse optimum, no full-band disk map, rows the polished losses as the window path's (no
+    evidence-based draw); a particle whose last move stayed inside the next stage's window takes the window path
+    (`shincr`, slot 54), the stage ends when few still need the disk. The rank record, `nscreen`, the mass measure
+    and its exit, the screen-posterior bound and the 2D draw are gone; the key reaches the centring stage alone.
+    The 3D dense fill keeps the full map for now (its cost on data is the next measurement).
+
 ## Open decisions
 
 1. Closed (Hans, 2026-10-30): the 20 Å average is a mean magnitude, so a spread of picking errors, the case
@@ -395,6 +403,26 @@ iteration, the window stages' screens collapsing to about twice the refined coun
 - Hans's bgal run on the pushed-candidate tree collapsed the classes at stage 2: the evidence-only stage 1 (no shift
   assigned) is the cause (Phase 2d, revised above); the mode removed, stage 1 under the key assigns the drawn cell;
   the bench re-measured in the next run (populated classes per iteration, the class quality).
+- Hans on TRPV1: the centring stage's first iteration took 141 s against 4.6 s for the window iteration before it
+  (every class screened for every particle, the one breadth still hard-coded), the class averages much improved.
+  The second iteration cost the same (132 s): the rank quantile's breadth stays near every class while any particle
+  is still off. Now each particle's pool at every iteration is measured from its own origin posterior (the classes
+  holding SCREEN_QUANTILE = 0.99 of the mass at the draw's temperature, capped by the rank breadth when set, at least
+  twice the refined count), both 2D fills, and the full disk maps go to the screen's candidates holding that mass
+  of the screen's posterior, at most the refined count. Hans (2026-11-01): "the centring stage is VERY expensive
+  when the number of particles scale up"; "a grid/L-BFGS hybrid?"; "hack after hack"; "go" on the consolidation
+  (ruling 16). Built the same day: `simple_eul_prob_tab2D` rewritten (the dense fill coarse-to-fine with the drain,
+  the sparse fill without the map; the part files back to seed, flag and temperature per particle), `shincr` in
+  slot 54, `DISK_NEED_FRAC` the exit's constant, the refine2D master's reset of `shincr`, the key to the centring
+  stage alone, `nscreen`/`shmassout`/the profile's rank and mass counts removed, the 2D UI without `shift_draw` and
+  with `trs_window` for standalone runs. Validated (runs 562-577): Debug and Release gates 15/15; the 2D fixture from
+  true references 95.8 % within lp/4 at a median error of 0.21 px (the full map: 100 % at 0.74 px; the fixture's five
+  classes give a refined count of one, so the class is the coarse map's choice alone, and the 4 % are its misses,
+  which the polish in a lattice box about the coarse optimum did not change); the bench with `mskdiam=180`: no
+  collapse at the centring stage (90 populated through its four iterations, the decline from stage 3 as the
+  control's, 61 at the end against the control's 65), best class 4.29 A, 24 % at 6.5 A or better, 57 % at 8 A, the
+  centring stage 20.8 s (fills 2.8-3.6 s against 12-13 s with the full map; the disk needed by 13, 19, 9, 4 % of the
+  particles), the run 111.5 s against the control's 100.6 s. The 3D dense fill keeps the full map.
 
 ### 2026-10-31: Phase 2c measured, Phase 2d's first stage measured, the re-review applied (Claude, runs 383-459)
 
