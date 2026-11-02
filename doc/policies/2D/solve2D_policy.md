@@ -240,7 +240,10 @@ Design record:
   stream checkpoint resume, preceded by one seed pass: a single dense
   `refine=prob` `refine2D` iteration of every active particle
   (`update_frac`, `nsample` and `fillin` deleted, `extr_iter=extr_lim+1`)
-  at the low-pass limit of `PROBREFINE_STAGE`. The pass runs as the
+  at the low-pass limit of `PROBREFINE_STAGE`. It uses that stage's ordinary
+  shift window: `shift_sigma` and `trs_window` are deleted even when the
+  parent solve2D uses the default shift map, since seeded restarts skip the
+  centring stage. The pass runs as the
   iteration at which stage `PROBREFINE_STAGE-1` would have ended
   (`solve2D_seed_pass_iter`), so the stages from `PROBREFINE_STAGE` to
   the terminal greedy pass run exactly as on an unseeded run: same limits,

@@ -143,6 +143,9 @@ contains
         call cline_pass%delete('nsample')
         call cline_pass%delete('fillin')
         call cline_pass%delete('gaufreq')
+        ! Seeded restarts skip the centring stage and keep the ordinary shift window.
+        call cline_pass%delete('shift_sigma')
+        call cline_pass%delete('trs_window')
         if( stage_parms(istage)%l_lpset )then
             call cline_pass%set('lp', stage_parms(istage)%lp)
         else
