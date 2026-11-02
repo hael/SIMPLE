@@ -3,6 +3,7 @@ module simple_relion
 use simple_core_module_api
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
+use simple_syslib,     only: simple_rmfile
 use CPlot2D_wrapper_module
 use simple_starfile_wrappers
 use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
@@ -111,6 +112,8 @@ contains
                     lgstr = len(getstring%to_char())
                     inquire(file='movies/' // getstring_base%to_char() // ' ', exist=exists)
                     if(.NOT. exists) then
+                        call simple_rmfile('movies/'//getstring_base%to_char())
+                        getstring = simple_abspath(getstring, check_exists=.false.)
                         call syslib_symlink(getstring, string('movies/'//getstring_base%to_char()))
                     endif
                 endif

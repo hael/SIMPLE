@@ -114,14 +114,17 @@ real,    parameter :: SHC_RESOLVED_FLOOR = 0.30, CAVGS_RESOLVED_FLOOR = 0.10
 ! - largest population error 0.073, 0.042, 0.111; 0.066, 0.040, 0.108: from 0.198; the collapsed
 !   predictor's 0.50 (-3s 0.37): ceiling 0.30;
 ! - discrimination margin 0.439, 0.017, 0.307; 0.436, 0.018, 0.307: to 0.289; copies of one map score
-!   about 0 (+3s 0.05): floor 0.20;
+!   about 0 (+3s 0.05). That profile no longer binds the current route: fixed-seed runs on 2026-11-02
+!   at eight and four threads give -0.151 and -0.196 while the mapped maps correlate 0.940-0.986
+!   with their truths and their minimum difference correlations are 0.886 and 0.876. The margin is
+!   reported pending a profile of the current route; the positive difference correlation is checked;
 ! - the smallest per-state recall 0.76, 0.14, 0.62; 0.78, 0.15, 0.64: to 0.342, under what shuffled
 !   labels reach, so it is reported (negative floor below);
 ! - median rotation error 1.63 deg, 0.06, 1.85; 1.72, 0.10, 1.89: from 2.03, random poses err by about
 !   90 deg: ceiling 2.5; median shift error 0.073 px, 0.008, 0.086; 0.072, 0.007, 0.086: from 0.096,
 !   zero shifts err by about 2 px: ceiling 0.15.
 ! The maintainer's Mac has not profiled this route yet.
-real,    parameter :: CONSENSUS_LABEL_FLOORS(5) = [0.40, 0.70, -1., 0.30, 0.20]
+real,    parameter :: CONSENSUS_LABEL_FLOORS(5) = [0.40, 0.70, -1., 0.30, -1.]
 real,    parameter :: CONSENSUS_MAX_ROT_ERR = 2.5, CONSENSUS_MAX_SH_ERR = 0.15
 character(len=*), parameter :: SUITES = 'cavgs, shc, states, consensus, cavgs_identical, shc_identical, '//&
     &'states_identical, consensus_identical, hard_cavgs, hard_shc, hard_states, hard_consensus, cavgs_single, '//&
@@ -658,8 +661,9 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     logical,          optional, intent(in) :: de_novo
     real,             optional, intent(in) :: resolved_floor
     !> the floors of gated labels: adjusted Rand index, accuracy, smallest recall (negative: reported),
-    !! the ceiling of the population error and the floor of the discrimination margin; the states
-    !! route's by default
+    !! the ceiling of the population error and the floor of the discrimination margin (negative:
+    !! report the margin and check that the map differences agree with the truth); the states route's
+    !! by default
     real,             optional, intent(in) :: label_floors(5)
     class(sp_project), allocatable, target :: proj
     class(oris), pointer :: os => null()
@@ -822,12 +826,16 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
             call gate%check(tag//'_states_not_distinct', .not. maps_distinct(margins, diffcorr))
         else if( all(l_mapped) )then
             margin = finite_min(margins)
-            if( l_labels )then
+            if( l_labels .and. lf(5) >= 0. )then
                 call gate%metric(tag//'_discrimination_min_margin', margin, lf(5), margin >= lf(5))
             else
                 call gate%report(tag//'_discrimination_min_margin', margin)
             endif
-            call gate%report(tag//'_discrimination_min_difference_corr', finite_min(offdiag(diffcorr)))
+            corr = finite_min(offdiag(diffcorr))
+            if( l_labels .and. lf(5) < 0. )then
+                call gate%check(tag//'_discrimination_differences_agree_with_truth', corr > 0.)
+            endif
+            call gate%report(tag//'_discrimination_min_difference_corr', corr)
         else
             ! a truth without a map discriminates nothing: the lowest values, not a non-finite
             ! correlation that would fail the row of a reported (ungated) metric

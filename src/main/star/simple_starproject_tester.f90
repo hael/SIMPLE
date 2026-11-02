@@ -489,6 +489,7 @@ contains
         write(*,'(A)') "test_relion_write_corrected_micrographs_star"
         call proj%os_mic%new(2, .false.)
         do i=1,2
+            call write_textfile("mov"//int2str(i)//".eer", "dummy movie")
             call proj%os_mic%set(i,"intg","mic"//int2str(i)//".mrc")
             call proj%os_mic%set(i,"movie","mov"//int2str(i)//".eer")
             call proj%os_mic%set(i,"smpd",1.5)
@@ -504,6 +505,8 @@ contains
         if (file_exists(fname)) call del_file(fname)
         call rp%write_corrected_micrographs_star(cl,proj)
         call assert_true(file_exists(fname), "corrected micrographs star created")
+        call assert_true(file_exists("movies/mov1.eer"), "first exported movie link resolves")
+        call assert_true(file_exists("movies/mov2.eer"), "second exported movie link resolves")
         call starfile_table__new(checktbl)
         call starfile_table__read(checktbl,fname,"optics")
          ok = int(starfile_table__firstobject(checktbl))

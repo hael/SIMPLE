@@ -198,6 +198,17 @@ contains
         call assert_true(.not. file_exists(fname), 'rmfile: existing file removed')
         call simple_rmfile(fname, status=istat)
         call assert_int(0, istat, 'rmfile: missing file returns success')
+#if !defined(_WIN32)
+        call syslib_symlink('missing_symlink_target.txt', fname)
+        call assert_true(.not. file_exists(fname), 'rmfile: dangling link does not resolve')
+        call simple_rmfile(fname, status=istat)
+        call assert_int(0, istat, 'rmfile: remove dangling link status')
+        call simple_touch('missing_symlink_target.txt')
+        call syslib_symlink('missing_symlink_target.txt', fname)
+        call assert_true(file_exists(fname), 'rmfile: dangling link directory entry was removed')
+        call simple_rmfile(fname)
+        call del_file('missing_symlink_target.txt')
+#endif
     end subroutine test_simple_rmfile
 
     !---------------- syslib_symlink ----------------

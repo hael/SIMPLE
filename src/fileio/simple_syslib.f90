@@ -995,27 +995,28 @@ contains
         if (present(status)) status = 0
 #else
         character(kind=c_char,len=:), allocatable :: path
-        integer :: io_status
-        logical :: file_e
-        file_e    = .false.
+        integer :: io_status, err
         io_status = 0
         select type(f)
             type is(string)
-                inquire(file=f%to_char(), exist=file_e)
-                if( file_e ) allocate(path, source=f%to_char()//c_null_char)
+                allocate(path, source=f%to_char()//c_null_char)
             type is(character(*))
-                inquire(file=trim(adjustl(f)), exist=file_e)
-                if( file_e ) allocate(path, source=trim(adjustl(f))//c_null_char)
+                allocate(path, source=trim(adjustl(f))//c_null_char)
             class default
                 call simple_exception('Unsupported type', __FILENAME__ , __LINE__)
         end select
-        if( file_e ) then
-            io_status = unlink(trim(adjustl(path)))
-            if( io_status /= 0 ) then
+        ! inquire follows a symbolic link and therefore cannot see a dangling link or an ELOOP.
+        ! unlink the directory entry directly; a missing entry is the documented successful no-op.
+        io_status = unlink(trim(adjustl(path)))
+        if( io_status /= 0 ) then
+            err = int(IERRNO(), kind=4)
+            if( err == 2 )then ! POSIX ENOENT
+                io_status = 0
+            else
                 call simple_error_check(io_status, 'syslib:: simple_rmfile failed to remove '//trim(adjustl(path)))
-            end if
-            deallocate(path)
+            endif
         end if
+        deallocate(path)
         if( present(status) ) status = io_status
 #endif
     end subroutine simple_rmfile
