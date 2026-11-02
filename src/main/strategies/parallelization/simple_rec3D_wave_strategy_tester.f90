@@ -21,12 +21,13 @@ use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_commanders_sim, only: commander_simulate_scattering
 use simple_commanders_rec, only: commander_rec3D_wave
-use simple_test_utils,     only: assert_true, fix_test_seed, enter_fixture, leave_fixture, tests_failed
+use simple_test_utils,     only: assert_true, set_fixed_seed, enter_fixture, leave_fixture, tests_failed
 implicit none
 private
 public :: run_all_rec3D_wave_lib_tests
 
 integer, parameter :: BOX = 128, NPTCLS = 300, NATOMS = 150, NTHR = 4
+integer, parameter :: WAVE_SEED = 20260923 !< the test seed of simple_test_exec, so the draws stay those of the gate's profile
 real,    parameter :: SMPD = 1.0, KV = 100., CS = 2.7, FRACA = 0.07, MSKDIAM = 110., NOISE = 0.002
 real,    parameter :: ATOM_PEAK = 15., ATOM_SDEV = 0.7, RADIUS = 50.   !< volts, A, A
 real,    parameter :: BAND_LO = 2.72                                   !< sqrt(2 lambda D), A
@@ -39,7 +40,7 @@ contains
         integer :: nfail0
         write(*,'(A)') '**** running reconstruct3D_wave library tests ****'
         nfail0 = tests_failed
-        call fix_test_seed()
+        call set_fixed_seed(WAVE_SEED, propagate=.true.)
         call enter_fixture('rec3D_wave', cwd_saved, root)
         call make_data()
         call reconstruct('neg', fsc_neg, fsc_flat)
@@ -55,17 +56,18 @@ contains
     !> the phantom, its multislice images and the project of the particles with their truth
     subroutine make_data()
         type(commander_simulate_scattering) :: xsim
-        type(cmdline)     :: cline
+        class(cmdline), allocatable:: cline
         type(image)       :: vol
         class(oris),       allocatable :: os
         class(sp_project), allocatable :: project
         type(ori)         :: o
         type(ctfparams)   :: ctf
-        type(cmdline)     :: cline_compenv
+        class(cmdline), allocatable:: cline_compenv
         real, allocatable :: v(:,:,:)
         real    :: c(3,NATOMS), d2, r(5)
         integer :: i, j, k, a
         ! Gaussian atoms within the sphere
+        allocate(cline, cline_compenv)
         a = 0
         do while( a < NATOMS )
             call random_number(c(:,a+1))
@@ -169,9 +171,10 @@ contains
         real,             intent(out) :: fsc
         real, optional,   intent(out) :: fsc_flat
         type(commander_rec3D_wave) :: xwave
-        type(cmdline) :: cline
+        class(cmdline), allocatable:: cline
         type(string)  :: dir
         integer       :: status
+        allocate(cline)
         dir = 'rytov_'//trim(ewald)
         call simple_mkdir(dir)
         call simple_copy_file(string('wave.simple'), dir//'/wave.simple', status)

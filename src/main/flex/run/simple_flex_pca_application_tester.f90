@@ -8,8 +8,11 @@
 module simple_flex_pca_application_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int32, real32, real64
-use simple_core_module_api, only: ctfflag_yes, ctfparams, cwd_glob, file_exists, int32, logfhandle, oris, real32, &
-    &real64, simple_abspath, simple_chdir, simple_exception, simple_mkdir, stdlen, string, tic, timer_int_kind, toc
+use simple_defs,                only: CWD_GLOB, logfhandle, STDLEN
+use simple_error,               only: simple_exception
+use simple_string,              only: string
+use simple_syslib,              only: file_exists, simple_abspath, simple_chdir, simple_mkdir
+use simple_timer,               only: tic, timer_int_kind, toc
 use simple_cmdline,             only: cmdline
 use simple_commanders_flex_pca, only: commander_flex_pca
 use simple_commanders_sim,      only: commander_simulate_particles
@@ -18,7 +21,7 @@ use simple_image,               only: image
 use simple_oris,                only: oris
 use simple_sp_project,          only: sp_project
 use simple_test_truth_metrics,  only: add_gaussian_blob, compare_to_truth
-use simple_test_utils
+use simple_test_utils,          only: assert_int, assert_true, enter_fixture, leave_fixture, set_fixed_seed, tests_failed
 use simple_type_defs,           only: CTFFLAG_YES, ctfparams
 use simple_ui,                  only: make_ui
 implicit none
@@ -329,8 +332,9 @@ contains
         class(sp_project), allocatable :: project
         class(oris),       allocatable :: poses
         type(ctfparams) :: ctf
-        type(cmdline)   :: cline_compenv
+        class(cmdline), allocatable:: cline_compenv
         integer :: i, ipose, eo, nst, nv, nposes
+        allocate(cline_compenv)
         call phantom_layout(nst, nv, nposes, nptcls, nstates, nviews)
         allocate(project, poses)
         call poses%new(nposes, is_ptcl=.true.)
@@ -471,7 +475,7 @@ contains
         call project%read(string('phantom.simple'))
         field = project%os_ptcl3D
         call read_state_weight_table(project, field, result%nstates, weights, labels, status, message)
-        call assert_int(status, 0, trim(tag)//': delivered flex-weight set validates')
+        call assert_int(0, status, trim(tag)//': delivered flex-weight set validates')
         if( status /= 0 )then
             write(logfhandle,'(A,A)') '>>> FLEX_PCA PHANTOM weight-store failure: ', trim(message)
             call field%kill
@@ -502,9 +506,9 @@ contains
         result%label_accuracy = real(sum(maxval(truth_counts,dim=2))) / real(DEFAULT_NPTCLS)
         call assert_true(result%label_accuracy >= LABEL_ACCURACY_MIN, &
             &trim(tag)//': published state labels separate the two truth modes from chance')
-        call assert_int(nlabel_mismatch, 0, trim(tag)//': weight flags and project labels agree')
-        call assert_int(nweight_mismatch, 0, trim(tag)//': hard labels select the maximum kernel weight')
-        call assert_int(nselection_mismatch, 0, trim(tag)//': the weight set selects exactly the particles with state > 0')
+        call assert_int(0, nlabel_mismatch, trim(tag)//': weight flags and project labels agree')
+        call assert_int(0, nweight_mismatch, trim(tag)//': hard labels select the maximum kernel weight')
+        call assert_int(0, nselection_mismatch, trim(tag)//': the weight set selects exactly the particles with state > 0')
         result%pc_corr = leading_pc_correlation(tag, truth_diff)
         call assert_true(ieee_is_finite(result%pc_corr), trim(tag)//': leading eigenvolume correlation is finite')
         allocate(corr(result%nstates,2))

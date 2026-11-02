@@ -8,7 +8,10 @@
 ! The gate has passed when no check or metric failed.
 module simple_test_gate
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api
+use simple_defs,   only: logfhandle
+use simple_string, only: string
+use simple_fileio, only: fopen, fclose
+use simple_error,  only: simple_exception
 implicit none
 
 public :: test_gate, NO_FLOOR

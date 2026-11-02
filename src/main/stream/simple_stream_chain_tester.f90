@@ -26,16 +26,23 @@
 !     p04 with picking references reprojected from both truths, p05, p06, p07.
 !     Preprocessing is finalised once every movie is processed, so its
 !     finished marker ends the intake downstream.
-!
-!   NOT YET RUN: written on 5 October 2026 without a build; the first run may
-!   need its fixture or time limits adjusted.
 !==============================================================================
 module simple_stream_chain_tester
-use simple_core_module_api
+use simple_type_defs,                                only: ctfparams, CTFFLAG_YES
+use simple_defs,                                     only: CWD_GLOB
+use simple_defs_stream,                              only: DIR_STREAM_COMPLETED, STREAM_FINISHED_MARKER
+use simple_string_utils,                             only: int2str_pad
+use simple_defs_fname,                               only: METADATA_EXT, MRC_EXT, STREAM_MOLDIAM
+use simple_ori,                                      only: ori
+use simple_oris,                                     only: oris
+use simple_timer,                                    only: simple_gettime
+use simple_string,                                   only: string
+use simple_syslib,                                   only: file_exists, simple_abspath, simple_chdir, simple_mkdir, simple_rename
+use simple_fileio,                                   only: simple_touch
 use simple_cmdline,                                  only: cmdline
 use simple_sp_project,                               only: sp_project
 use simple_image,                                    only: image
-use simple_test_utils
+use simple_test_utils,                               only: assert_false, assert_true, enter_fixture, leave_fixture, set_fixed_seed, tests_failed
 use simple_ui,                                       only: make_ui
 use simple_commanders_sim,                           only: commander_simulate_particles, commander_simulate_movie
 use simple_commanders_reproject,                     only: commander_reproject
@@ -92,14 +99,15 @@ contains
     !! runs to its final iteration and publishes, and 3D completes its first run
     subroutine test_sieve_to_solve3D()
         integer, parameter :: NMICS = 40, NPTCLS_MIC = 30, NMICS_SET = 5, NPOSES_STATE = 12
-        type(stream_stage_sieve),   allocatable :: sieve
-        type(stream_stage_pool2D),  allocatable :: pool
-        type(stream_stage_solve3D), allocatable :: s3D
-        type(cmdline) :: cline
+        class(stream_stage_sieve),   allocatable :: sieve
+        class(stream_stage_pool2D),  allocatable :: pool
+        class(stream_stage_solve3D), allocatable :: s3D
+        class(cmdline), allocatable:: cline
         type(string)  :: cwd_saved, root, dir_refpick, dir_sieve, dir_pool, dir_3D
         type(string)  :: truth1, truth2, oritab, all_stk, stk1, stk2
         integer       :: nfail0, t0
         logical       :: l_done, l_cannot_start_3D
+        allocate(cline)
         write(*,'(A)') 'test_sieve_to_solve3D'
         nfail0 = tests_failed
         call enter_fixture('test_stream_chain_sieve', cwd_saved, root)
@@ -186,17 +194,18 @@ contains
     !! references reprojected from both truths), particle sieving, pool 2D and multistate 3D
     subroutine test_movies_to_solve3D()
         integer, parameter :: NMOVIES = 40, NPTCLS_MIC = 24, MIC_BOX = 512, NFRAMES = 8, NREFS = 20
-        type(stream_stage_preprocess), allocatable :: pre
-        type(stream_stage_optics),     allocatable :: optics
-        type(stream_stage_refpick),    allocatable :: refpick
-        type(stream_stage_sieve),      allocatable :: sieve
-        type(stream_stage_pool2D),     allocatable :: pool
-        type(stream_stage_solve3D),    allocatable :: s3D
-        type(cmdline) :: cline
+        class(stream_stage_preprocess), allocatable :: pre
+        class(stream_stage_optics),     allocatable :: optics
+        class(stream_stage_refpick),    allocatable :: refpick
+        class(stream_stage_sieve),      allocatable :: sieve
+        class(stream_stage_pool2D),     allocatable :: pool
+        class(stream_stage_solve3D),    allocatable :: s3D
+        class(cmdline), allocatable:: cline
         type(string)  :: cwd_saved, root, dir_movies, dir_pre, dir_optics, dir_refpick, dir_sieve, dir_pool, dir_3D
         type(string)  :: truth1, truth2, pickrefs, pickrefs1, pickrefs2, ptcl_stk, ptcl_stk1, ptcl_stk2
         integer       :: nfail0, t0, nprocessed
         logical       :: l_done, l_pre_active, l_cannot_start_3D
+        allocate(cline)
         write(*,'(A)') 'test_movies_to_solve3D'
         nfail0 = tests_failed
         call enter_fixture('test_stream_chain_movies', cwd_saved, root)
@@ -493,7 +502,8 @@ contains
         integer,       intent(in) :: nptcls
         type(string) :: stk
         type(commander_simulate_particles) :: xsim
-        type(cmdline) :: cline
+        class(cmdline), allocatable:: cline
+        allocate(cline)
         call cline%set('prg',      'simulate_particles')
         call cline%set('mkdir',    'no')
         call cline%set('vol1',     vol)
@@ -572,10 +582,11 @@ contains
         class(string), intent(in) :: all_stk, dir_refpick
         integer,       intent(in) :: nmics, nptcls_mic, nmics_set, box
         type(image)      :: img
-        type(sp_project) :: set
+        class(sp_project), allocatable:: set
         type(ctfparams)  :: ctfvars
         type(string)     :: stk, fname
         integer :: imic, iset, j, jmic, nsets
+        allocate(set)
         ctfvars%ctfflag = CTFFLAG_YES
         ctfvars%smpd    = SMPD
         ctfvars%kv      = KV
@@ -639,7 +650,8 @@ contains
         integer,       intent(in) :: n
         type(string) :: stk_abs
         type(commander_reproject) :: xreproject
-        type(cmdline) :: cline
+        class(cmdline), allocatable:: cline
+        allocate(cline)
         call cline%set('prg',     'reproject')
         call cline%set('mkdir',   'no')
         call cline%set('vol1',    vol)
@@ -661,9 +673,10 @@ contains
         integer,       intent(in) :: nmovies, mic_box, nframes
         character(len=*), parameter :: MOVIE_FILE = 'simulate_movie.mrc'
         type(commander_simulate_movie) :: xsim
-        type(cmdline) :: cline
+        class(cmdline), allocatable:: cline
         type(string)  :: simdir
         integer       :: i
+        allocate(cline)
         simdir = stage_dir(string(CWD_GLOB), 'simulate_movies')
         call enter(simdir)
         do i = 1,nmovies

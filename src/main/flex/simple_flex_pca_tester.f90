@@ -38,7 +38,7 @@ use simple_flex_pca_rounds,               only: flex_pca_rounds_shmem
 use simple_flex_pca_crossfsc,             only: COV_XFSC_FNAME
 use simple_flex_probe_fit,                only: flex_probe_fit, fit_estep_former_polar, write_probe_part, &
     &reduce_probe_parts, xfsc_paired_record, polar_ring_gram, polar_ring_selfpower
-use simple_test_utils
+use simple_test_utils,                    only: assert_false, assert_int, assert_real, assert_true, set_fixed_seed
 implicit none
 private
 public :: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
@@ -543,11 +543,13 @@ contains
         end do
         z0 = z
         call calibrate_noise_scale(zhalf, prec, prior, n, D, a, a_comp)
+        ! not derived
         call assert_true(abs(a - 1.d0) <= 0.15d0, trim(tag)//' the noise scale calibrates to 1 (within 0.15)')
         call deconvolve_latent(z, prec, prior, n, D, a, 4, k_out)
         call assert_int(2, k_out, trim(tag)//' the held-out rule picks K = 2')
         mse_z = sum((z0 - x)**2)/real(n*D,dp)
         mse_x = sum((z  - x)**2)/real(n*D,dp)
+        ! not derived; a numpy emulation (9 seeds, n = 4000) gave 0.33-0.35; n = 20000 is not recorded
         call assert_true(mse_x <= 0.6d0*mse_z, trim(tag)//' posterior means are closer to the truth than the raw latents')
         write(*,'(A,F8.4,A,F8.4,A,F6.3)') '  mse(z)=', mse_z, '  mse(xhat)=', mse_x, '  a=', a
 

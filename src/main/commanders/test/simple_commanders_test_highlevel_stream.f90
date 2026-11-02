@@ -1,5 +1,6 @@
 !@descr: end-to-end stream and particle-simulation tests of simple_commanders_test_highlevel
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_stream
+use simple_commanders_validate, only: commander_mini_stream
 implicit none
 #include "simple_local_flags.inc"
 
@@ -14,6 +15,7 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     use simple_ui,            only: make_ui
     use simple_test_gate,     only: test_gate
     use simple_bench_io,      only: bench_report_fname
+    use simple_test_truth_metrics, only: farthest_truth_error
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_mini_stream), intent(inout) :: self
     class(cmdline),                    intent(inout) :: cline
@@ -30,14 +32,18 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     ! scratch/keep/profiles/phase5/after_e; the Phase 1 profile of 2026-10-16 gave 0.10 um and pick
     ! floors 0.16 / 0.31, which this wider sample does not admit):
     ! - defocus error per micrograph: medians 0.002-0.003 um, worst 0.125 (6vxx micrograph 3: a rare
-    !   wrong fit), admissible from 0.127 (ceiling 0.13); the farthest other truth lies 0.3 um and more
-    !   away;
+    !   wrong fit), admissible from 0.127 (ceiling 0.13 until 2026-11-02); the farthest other truth lies
+    !   0.75 um and more away (the truths are 1.5 + 0.25 (i - 1) um);
+    ! - since each suite draws its own data (the seed propagated to the commanders, 2026-11-02), the
+    !   profile of 2026-11-02 (20 seed offsets, 8 threads) gives 6vxx medians 0.002-0.003 um, worst 0.144
+    !   (micrograph 4, s 0.0012), admissible from 0.146: ceiling 0.15; 1jxy holds every floor;
     ! - pick ratio: 6vxx median 0.333, s 0.093, worst 0.188, admissible up to 0.055 (floor 0.05);
     !   1jxy median 0.490, s 0.077, worst 0.396, admissible up to 0.258 (floor 0.25). The simulator
     !   saves no particle positions, so there is no control; the former 0.40 came from one unseeded run.
-    real,             parameter :: DEFOCUS_TOL     = 0.13
+    real,             parameter :: DEFOCUS_TOL     = 0.15
     real,             parameter :: PICK_RECALL_MIN_6VXX = 0.05
     real,             parameter :: PICK_RECALL_MIN_1JXY = 0.25
+    ! a sanity ceiling against over-picking (not derived); the profile of 2026-10-16 never came near it (worst 0.65)
     real,             parameter :: PICK_RATIO_MAX  = 1.50
     real,             parameter :: MAX_AREA_FRACTION = 0.30
     real,             parameter :: MSKDIAM         = 180.0
@@ -50,12 +56,12 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     type(commander_reproject)      :: xreproject
     type(commander_simulate_movie) :: xsim_movie
     type(commander_mini_stream)    :: xmini_stream
-    type(cmdline)                  :: cline_reproj, cline_sim, cline_mini
+    class(cmdline), allocatable    :: cline_reproj, cline_sim, cline_mini
     type(atoms)                    :: molecule
     type(molecule_data)            :: mol
     type(image)                    :: cavg
     type(oris)                     :: truth
-    type(sp_project)               :: result
+    class(sp_project), allocatable :: result
     type(test_gate)                :: gate
     type(string)                   :: cwd_saved, fixture_root, mini_dir
     type(string)                   :: particle_stack_path, filetab_path, project_path
@@ -69,8 +75,8 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     real                          :: pick_ratio, cavg_smpd, cavg_variance, area_fraction, pick_recall_min, wrong_error
     logical                       :: ok
 
+    allocate(cline_reproj, cline_sim, cline_mini, result)
     call make_ui
-    call set_fixed_seed(20260925)
     call simple_getcwd(cwd_saved)
     requested_suite = ''
     if( cline%defined('suite') )then
@@ -103,7 +109,8 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
         endif
         if( requested_suite%strlen_trim() > 0 .and. requested_suite /= system_name ) cycle
         write(logfhandle,'(a)') '---- TEST SUITE: mini_stream '//system_name%to_char()//' ----'
-        call set_fixed_seed(20260925 + isuite)
+        ! propagated: the commanders reseed from it, so each suite draws its own data
+        call set_fixed_seed(20260925 + isuite, propagate=.true.)
         fixture_root = filepath(cwd_saved, 'test_mini_stream_'//system_name%to_char()//'_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) THROW_HARD('TEST_MINI_STREAM FAILED: fixture directory already exists')
     call simple_mkdir(fixture_root)
@@ -132,13 +139,11 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     call xreproject%execute(cline_reproj)
     call cline_reproj%kill()
     particle_stack_path = simple_abspath(string('mini_stream_particles.mrcs'))
-    if( .not. file_exists(particle_stack_path) )&
-        &THROW_HARD('TEST_MINI_STREAM FAILED: molecular reprojections were not created')
+    call require('_reprojections_written', file_exists(particle_stack_path), 'molecular reprojections were not created')
     call find_ldim_nptcls(particle_stack_path, ldim, nimages)
-    if( nimages /= NPARTICLES )&
-        &THROW_HARD('TEST_MINI_STREAM FAILED: molecular reprojection count is incorrect')
-    if( any(ldim(1:2) /= [PARTICLE_BOX, PARTICLE_BOX]) )&
-        &THROW_HARD('TEST_MINI_STREAM FAILED: molecular reprojection dimensions are incorrect')
+    call require('_reprojection_count', nimages == NPARTICLES, 'molecular reprojection count is incorrect')
+    call require('_reprojection_dimensions', all(ldim(1:2) == [PARTICLE_BOX, PARTICLE_BOX]), &
+        &'molecular reprojection dimensions are incorrect')
     area_fraction = real(NPARTICLES * ldim(1) * ldim(2)) / real(micrograph_box * micrograph_box)
     write(logfhandle,'(a,f7.3,a,f7.3)') '>>> TEST_MINI_STREAM particle area fraction ', area_fraction, &
         &'; maximum ', MAX_AREA_FRACTION
@@ -202,7 +207,7 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     call xmini_stream%execute(cline_mini)
     call simple_getcwd(mini_dir)
     project_path = filepath(mini_dir, PROJFILE)
-    if( .not. file_exists(project_path) ) THROW_HARD('TEST_MINI_STREAM FAILED: project was not created')
+    call require('_project_written', file_exists(project_path), 'project was not created')
     call result%read(project_path)
 
     call require('_micrographs_in_project', result%os_mic%get_noris() == NMICROGRAPHS, &
@@ -210,7 +215,8 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     do i = 1, result%os_mic%get_noris()
         call result%os_mic%getter(i, 'intg', value)
         imic = find_simulation(value)
-        if( imic == 0 ) THROW_HARD('TEST_MINI_STREAM FAILED: micrograph cannot be matched to simulation truth')
+        call require('_micrograph'//int2str(i)//'_matched_to_its_truth', imic /= 0, &
+            &'micrograph cannot be matched to simulation truth')
         call truth%new(1, is_ptcl=.false.)
         call truth%read(params_paths(imic))
         dfx       = result%os_mic%get_dfx(i)
@@ -226,11 +232,11 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
         call gate%metric(system_name%to_char()//'_defocus_error_um_mic'//int2str(imic), defocus_error, DEFOCUS_TOL, &
             &defocus_error <= DEFOCUS_TOL, upper=.true.)
         if( .not. defocus_error <= DEFOCUS_TOL )&
-            &THROW_HARD('TEST_MINI_STREAM FAILED: CTF defocus error exceeds 0.13 um')
+            &THROW_HARD('TEST_MINI_STREAM FAILED: CTF defocus error exceeds its ceiling')
         call truth%kill
         ! the negative control: the fit against the truth of the other micrograph whose truth lies
         ! farthest from this one's (the neighbour's came within the ceiling in some runs)
-        wrong_error = farthest_truth_error(imic, truth_dfx, truth_dfy, dfx, dfy)
+        wrong_error = farthest_truth_error(imic, params_paths, truth_dfx, truth_dfy, dfx, dfy)
         call gate%check(system_name%to_char()//'_control_defocus_mic'//int2str(imic)//'_against_the_farthest_truth_fails', &
             &.not. (wrong_error <= DEFOCUS_TOL))
     enddo
@@ -305,6 +311,8 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
     write(logfhandle,'(a,a,a,i0,a,i0,a,i0,a)') 'PASS: mini_stream ', system_name%to_char(), ' validated ', &
         &NMICROGRAPHS, ' micrographs, ', npicked, ' particles, and ', nclasses, ' classes'
     enddo
+    ! the negative controls are gate rows only
+    if( .not. gate%passed() ) THROW_HARD('TEST_MINI_STREAM FAILED: a gate row failed (metrics.tsv)')
     call gate%kill
     call simple_end('**** SIMPLE_TEST_MINI_STREAM WORKFLOW NORMAL STOP ****')
 
@@ -321,32 +329,6 @@ module subroutine exec_test_mini_stream_quantitative( self, cline )
             THROW_HARD(msg)
         endif
     end subroutine require
-
-    !> the error of the fit (fdx, fdy) against the truth of the other micrograph whose truth lies
-    !! farthest from micrograph imic's (tdx, tdy), the astigmatic axes unordered as in the error itself
-    real function farthest_truth_error( imic, tdx, tdy, fdx, fdy ) result( err )
-        integer, intent(in) :: imic
-        real,    intent(in) :: tdx, tdy, fdx, fdy
-        type(oris) :: other
-        real    :: odx, ody, d, dmax
-        integer :: j
-        err  = 0.
-        dmax = -1.
-        do j = 1, NMICROGRAPHS
-            if( j == imic ) cycle
-            call other%new(1, is_ptcl=.false.)
-            call other%read(params_paths(j))
-            odx = other%get_dfx(1)
-            ody = other%get_dfy(1)
-            call other%kill
-            d = 0.5 * (odx + ody) - 0.5 * (tdx + tdy)
-            if( abs(d) > dmax )then
-                dmax = abs(d)
-                err  = min(max(abs(fdx - odx), abs(fdy - ody)), max(abs(fdx - ody), abs(fdy - odx)))
-            endif
-        enddo
-    end function farthest_truth_error
-
     !> the number of records in a benchmark record file (0 when it is absent)
     integer function nrecords( fname )
         type(string), intent(in) :: fname
@@ -404,8 +386,8 @@ module subroutine exec_test_simulate_particles( self, cline )
     real,    parameter                  :: SHIFT_LIMIT = 2.0
     integer, parameter                  :: NSPACE      = 100
     integer, parameter                  :: NPTCLS_SIM  = 200
-    type(cmdline)                       :: cline_reproj, cline_sim
-    type(parameters)                    :: params
+    class(cmdline), allocatable         :: cline_reproj, cline_sim
+    class(parameters), allocatable      :: params
     type(commander_reproject)           :: xreproject
     type(commander_simulate_particles)  :: xsim_ptcls
     type(atoms)                         :: molecule
@@ -416,7 +398,7 @@ module subroutine exec_test_simulate_particles( self, cline )
     integer                             :: ldim(3), nsections, status
     real                                :: smpd_vol, volume_variance
     logical                             :: all_ok, ok_before
-    call set_fixed_seed(20260925)
+    allocate(cline_reproj, cline_sim, params)
     call simple_getcwd(cwd_saved)
     call gate%new(filepath(cwd_saved, 'metrics.tsv'))
     fixture_root = filepath(cwd_saved, 'test_simulate_particles_'//int2str(get_process_id()))
@@ -425,6 +407,8 @@ module subroutine exec_test_simulate_particles( self, cline )
     call simple_chdir(fixture_root, status)
     if( status /= 0 ) THROW_HARD('TEST_SIMULATE_PARTICLES FAILED: could not enter fixture directory')
     call params%new(cline)
+    ! after params%new, which reseeds; propagated, so the commanders below reseed from it
+    call set_fixed_seed(20260925, propagate=.true.)
     all_ok   = .true.
     vol_file = '6VXX.mrc'
     ! ---- one volume from the embedded coordinates ----
@@ -513,10 +497,6 @@ module subroutine exec_test_simulate_particles( self, cline )
 
   contains
 
-    !> simulate_particles with three blob volumes (no CTF, no shift, high SNR) and the population
-    !! fractions pops: the state counts are exact (each fraction times n rounded, the remainder to
-    !! the largest fractions), and every image correlates best with the projection of its own
-    !! state's volume at its true pose
     !> 50 particles of the 6VXX map without CTF or shift at SNR 2: every image correlates better with
     !! the reprojection at its own recorded pose than with the reprojection at another particle's pose
     !! (the negative control, whose mean correlation is reported)
@@ -545,7 +525,7 @@ module subroutine exec_test_simulate_particles( self, cline )
         call cl%set('ctf',     'no')
         call cl%set('sherr',   0.)
         call cl%set('nthr',    params%nthr)
-        call set_fixed_seed(20261018)
+        call set_fixed_seed(20261018, propagate=.true.)
         call xsim_ptcls%execute(cl)
         call cl%kill
         deallocate(cl)
@@ -556,6 +536,8 @@ module subroutine exec_test_simulate_particles( self, cline )
         call vol%read(filepath(fixture_root, vol_file))
         projs = reproject(vol, os)
         perm  = [(i, i = 1, NIMG)]
+        ! the test's own draw, not the state the simulation left
+        call set_fixed_seed(20261018)
         call shuffle(perm)
         call img%new([ldimv(1), ldimv(2), 1], SMPD)
         nwrong    = 0
@@ -584,6 +566,10 @@ module subroutine exec_test_simulate_particles( self, cline )
         call simple_chdir(fixture_root)
     end subroutine check_images_against_projections
 
+    !> simulate_particles with three blob volumes (no CTF, no shift, high SNR) and the population
+    !! fractions pops: the state counts are exact (each fraction times n rounded, the remainder to
+    !! the largest fractions), and every image correlates best with the projection of its own
+    !! state's volume at its true pose
     subroutine check_mixture( pops, n, counts, tag )
         use simple_flex_pca_application_tester, only: write_phantom_truths
         use simple_simple_volinterp,            only: reproject
@@ -617,7 +603,7 @@ module subroutine exec_test_simulate_particles( self, cline )
         call cl%set('ctf',        'no')
         call cl%set('sherr',      0.)
         call cl%set('nthr',       params%nthr)
-        call set_fixed_seed(20261017)
+        call set_fixed_seed(20261017, propagate=.true.)
         call xsim_ptcls%execute(cl)
         call cl%kill
         deallocate(cl)
@@ -785,6 +771,7 @@ module subroutine exec_test_simulate_particles( self, cline )
                 write(logfhandle,'(a)') '    FAIL: Euler angles contain non-finite values'
                 all_ok = .false.
             endif
+            ! that the directions were drawn at all; the 10 deg is not derived
             call gate%metric(what//'_e2_range_deg', maxval(e2) - minval(e2), 10.0, &
                 &maxval(e2) - minval(e2) >= 10.0 .and. all(ieee_is_finite(e2)))
             if( .not. (maxval(e2) - minval(e2) >= 10.0) )then
@@ -806,6 +793,8 @@ module subroutine exec_test_simulate_particles( self, cline )
                 ! many uniform draws lies just inside the bound by construction, so these are checks,
                 ! not floors; the largest deviations are reported)
                 call gate%report(what//'_max_defocus_deviation_um', maxval(abs(dfx - DEFOCUS)))
+                ! 1.e-4 and the 0.01 below: round-off slack on bounds the simulator keeps by construction (not derived);
+                ! the 20-seed profile sat at 0.1992 against 0.2001 um
                 call gate%check(what//'_defocus_within_requested_interval', all(abs(dfx - DEFOCUS) <= DFERR + 1.e-4))
                 call gate%report(what//'_max_astigmatism_um', maxval(abs(dfy - dfx)))
                 call gate%check(what//'_astigmatism_within_requested_interval', all(abs(dfy - dfx) <= ASTIGERR + 1.e-4))

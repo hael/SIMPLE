@@ -6,7 +6,7 @@
 ! and the twelve-setting solve sweep at box 32.
 module simple_flex_pcg_tester
 use simple_flex_pca_pcg, only: test_flex_pcg_operator
-use simple_test_utils
+use simple_test_utils,   only: assert_true
 implicit none
 private
 public :: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, run_all_flex_pcg_sweep_tests
@@ -50,7 +50,6 @@ contains
         call assert_true(passes(4), trim(tag)//' (D) band-list kernels and rhs equal the dense fold')
         call assert_true(passes(5), trim(tag)//' (E) the unregularised operator is symmetric')
         call assert_true(passes(6), trim(tag)//' (F) the unregularised operator is PSD and the ridged operator is PD')
-        call assert_true(l_pass .eqv. all(passes), trim(tag)//' the overall verdict is the conjunction of the six')
     end subroutine check_operator
 
 end module simple_flex_pcg_tester

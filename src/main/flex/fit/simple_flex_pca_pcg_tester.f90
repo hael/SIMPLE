@@ -5,7 +5,8 @@
 ! asserts the six checks by name.
 submodule (simple_flex_pca_pcg) simple_flex_pca_pcg_tester
 use simple_core_module_api, only: KBWINSZ
-use simple_rnd,             only: gasdev, ran3, seed_rnd_fixed
+use simple_rnd,             only: gasdev, ran3
+use simple_test_utils,      only: set_fixed_seed
 use simple_ori_utils,       only: euler2m
 implicit none
 #include "simple_local_flags.inc"
@@ -54,7 +55,7 @@ contains
         c   = box/2 + 1
         twopi_n = 2.0_dp * PI / real(box,dp)
         allocate(locs(3,nsamples), wts(nsamples))
-        call seed_rnd_fixed(20260925)   ! reproducible sample positions, volume modulation and slices
+        call set_fixed_seed(20260925)   ! reproducible sample positions, volume modulation and slices
         do s = 1, nsamples
             locs(:,s) = (2.0*[ran3(), ran3(), ran3()] - 1.0) * (0.5*real(nyq))
             wts(s)    = 1.0
@@ -167,6 +168,7 @@ contains
             &max(1.d0, abs(xhx-xh0)), abs((yhy-yh0) - real(lam_save(1),dp)*ynorm*ynorm) / &
             &max(1.d0, abs(yhy-yh0)))
         pass_e = sym_rel <= sym_tol
+        ! sym_tol is derived (32 eps sqrt(box**3)); the factor 10 on the lift check below is not
         pass_f = xh0 >= -sym_tol*xnorm*h0xnorm .and. yh0 >= -sym_tol*ynorm*h0ynorm .and. &
             &lam_save(1) > 0.0 .and. xhx > 0.d0 .and. yhy > 0.d0 .and. lift_rel <= 10.d0*sym_tol
         write(logfhandle,'(A,ES10.3,A,ES10.3,A,L1)') &
@@ -179,6 +181,7 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,F8.5,A,F10.5,A,ES10.3,A,ES10.3)') '>>> FLEX PCG TEST (A) operator box=', box, &
             &' samples=', nsamples, '  kernel vs exact Gram: corr=', real(cc), '  LS scale=', real(scale), &
             &'  rel_resid=', real(err), '  |exact|=', real(na)
+        ! scale within 0.05 and residual below 0.1, here and for (B): not derived
         pass_a = abs(scale - 1.0_dp) < 0.05_dp .and. err < 0.1_dp
         ! ================= (B) right-hand side: 2x deposit of exact samples vs exact adjoint =================
         allocate(ysmp(nsamples), source=(0.0_dp,0.0_dp))
@@ -338,6 +341,7 @@ contains
                     &'>>> FLEX PCG TEST (C) sweep: mask=', mfrac, ' noise=', nlev, ' lam=', lamv, &
                     &'  iters=', out%iteration_count, '  its_to_1e-2=', out%iters_to_1e2, &
                     &'  final resid=', out%final_rel_residual, '  err full=', real(err), '  err inner=', real(cc)
+                ! not derived; the clean solves measured err 0.004-0.009 (first run, 2026-09-23)
                 if( nlev == 0.0 ) pass_c = pass_c .and. cc < 0.05_dp .and. out%final_rel_residual < 1.0e-2
                 deallocate(rpk)
             end do

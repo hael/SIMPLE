@@ -1,11 +1,13 @@
 !@descr: library tests of pdb2mrc (simple_atoms): density maps from the built-in 6VXX and 1JYX models
 ! Each model is converted with one and three threads; the resulting MRC files must be byte-identical.
 module simple_pdb2mrc_tester
-use iso_fortran_env,      only: int8, int64
-use simple_core_module_api
+use simple_string,        only: string
+use simple_syslib,        only: del_file, file_exists
+use simple_imghead,       only: find_img_smpd, find_ldim_nptcls
 use simple_atoms,         only: atoms
 use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
-use simple_test_utils
+use simple_fileio,        only: files_identical
+use simple_test_utils,    only: assert_real, assert_true
 !$ use omp_lib,           only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
@@ -44,7 +46,7 @@ contains
         call molecule%pdb2mrc(pdbfile=pdb_file, volfile=vol_file, smpd=SMPD)
         !$ call omp_set_num_threads(nthr_saved)
         call check_map(vol_file, code//' (three threads)')
-        call assert_true(binary_files_equal(string('molecule.mrc'), vol_file),&
+        call assert_true(files_identical(string('molecule.mrc'), vol_file),&
             &code//': pdb2mrc output is byte-identical with one or three threads')
         call molecule%kill
         call del_file(string('molecule.pdb'))
@@ -61,35 +63,8 @@ contains
         if( .not. file_exists(vol_file) ) return
         call find_ldim_nptcls(vol_file, ldim, nptcls)
         call assert_true(all(ldim >= 1), what//': the map has positive dimensions')
+        ! 0.01 A: slack on the header's sampling, not derived
         call assert_real(SMPD, find_img_smpd(vol_file), 0.01, what//': the map has the requested sampling')
     end subroutine check_map
-
-    logical function binary_files_equal( fname1, fname2 )
-        type(string), intent(in) :: fname1, fname2
-        integer(int64) :: nbytes1, nbytes2
-        integer :: unit1, unit2, ios
-        integer(int8), allocatable :: bytes1(:), bytes2(:)
-        binary_files_equal = .false.
-        inquire(file=fname1%to_char(), size=nbytes1, iostat=ios)
-        if( ios /= 0 ) return
-        inquire(file=fname2%to_char(), size=nbytes2, iostat=ios)
-        if( ios /= 0 .or. nbytes1 /= nbytes2 ) return
-        allocate(bytes1(nbytes1), bytes2(nbytes2))
-        open(newunit=unit1, file=fname1%to_char(), access='stream', form='unformatted',&
-            &status='old', action='read', iostat=ios)
-        if( ios /= 0 ) return
-        open(newunit=unit2, file=fname2%to_char(), access='stream', form='unformatted',&
-            &status='old', action='read', iostat=ios)
-        if( ios /= 0 )then
-            close(unit1)
-            return
-        endif
-        read(unit1) bytes1
-        read(unit2) bytes2
-        close(unit1)
-        close(unit2)
-        binary_files_equal = all(bytes1 == bytes2)
-        deallocate(bytes1, bytes2)
-    end function binary_files_equal
 
 end module simple_pdb2mrc_tester

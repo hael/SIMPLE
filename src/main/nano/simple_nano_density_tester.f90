@@ -465,17 +465,21 @@ contains
             call fit_measured(dens, map, xyz0, region, envelope)
             call dens%get_atoms(txyz, tints, tbfacs, tvi, tvb)
             !$ call omp_set_num_threads(nthr_saved)
+            ! one thread against all within the rounding of the threaded FFTs (atomic_density_model.md); 1e-3 is not derived
             call assert_true(maxval(abs(txyz - fxyz)) < 1.e-3 .and. maxval(abs(tints - fints) / fints) < 1.e-3 .and.&
                 &maxval(abs(tbfacs - fbfacs) / fbfacs) < 1.e-3, 'uniform: the fit on one thread is the fit on all threads')
         endif
         rms0 = sqrt(sum((xyz0 - xyz)**2) / real(size(cn))) * SMPD
         rms  = sqrt(sum((fxyz - xyz)**2) / real(size(cn))) * SMPD
+        ! the phase-1 result of atomic_density_model.md (positions back within 0.05 A from 0.17 A), not derived
         call assert_true(rms < 0.05 .and. rms < rms0 / 3., 'uniform: positions within 0.05 A and a third of the start error')
         call assert_true(all(dens%get_coordination() == cn), 'uniform: the coordination of the geometry')
         allocate(arr(BOX,BOX,BOX))
         call dens%render_sim(arr)
+        ! not derived
         call assert_real(sum(fints), sum(arr) * SMPD**3, 0.01 * sum(fints), 'uniform: the rendered atoms integrate to the sum of the intensities')
         call dens%render_fit(arr)
+        ! 15 % here and below: met in phase 1 (atomic_density_model.md), not derived
         call assert_real(sig, sqrt(sum((map - arr)**2, mask=envelope) / real(count(envelope))), 0.15 * sig,&
             &'uniform: the residual of the full model inside the particle is the noise')
         call dens%noise_from_residual(envelope)
@@ -540,11 +544,13 @@ contains
         write(*,'(A,A,3F9.4,2F9.2)') tag, ': beta, gamma, ln S, B_p, rise ', beta, gamma, ln_s, exp(ln_bp),&
             &width_rise(ln_bp, gamma)
         call assert_real(beta0, beta, beta_tol, tag//': beta within the fixture''s tolerance per neighbour')
+        ! the plan's floor (atomic_density_model.md, sections 6.1 and 10)
         call assert_real(width_rise(log(BP), gamma0), width_rise(ln_bp, gamma), 1., tag//': width rise from 12 to 5 neighbours within 1 A**2')
         if( present(scale_tol) )then
             call assert_real(0., ln_s, scale_tol, tag//': ln S within the tolerance of the measured transfer''s gauge')
             call assert_real(log(BP), ln_bp, scale_tol, tag//': ln B_p within the tolerance of the measured transfer''s gauge')
         else
+            ! the run's floor (atomic_density_model.md); 13 seeds gave ln S within 0.02
             call assert_real(0., ln_s, 0.03, tag//': intensity scale S within 3%')
         endif
     end subroutine check_profiles
@@ -578,7 +584,7 @@ contains
         call dens%get_rounds(fields, curves, kept, capped)
         nr = size(fields, 2)
         call assert_true(nr >= 1 .and. kept >= 1 .and. kept <= nr, tag//': the rounds ran and one was kept')
-        if( nr < 1 ) return
+        if( nr < 1 .or. kept < 1 .or. kept > nr ) return
         call rendered_transfer(xyz, ints, bfacs, BOX, SMPD, HAMP, HBFAC, DS_MEAS, size(curves, 1), t_ref, have)
         do ir = 1,nr
             err = 0.
@@ -623,6 +629,7 @@ contains
         enddo
         write(*,'(A,A,I0,A,F8.4,A,F8.4)') tag, ': shells with power ', nchk,&
             &', largest error of the measured transfer ', err, ', change on the final model ', t_change
+        ! not derived
         call assert_true(nchk >= 10, tag//': the atoms have power in ten shells or more')
         call assert_true(err <= T_TOL, tag//': the measured transfer is the rendered one within 0.06 where the atoms have power')
     end subroutine check_transfer
@@ -710,6 +717,7 @@ contains
         nf   = n / 5
         rise = sum(fbfacs(order(n-nf+1:n))) / real(nf) - sum(fbfacs(order(1:nf))) / real(nf)
         write(*,'(A,F8.3)') 'no halo term: width rise inner to outer fifth (A**2) ', rise
+        ! the species work's 4.4 A**2 artefact within a factor of two (atomic_density_model.md, sections 1 and 10); measured 2.76
         call assert_true(rise >= 2.2 .and. rise <= 8.8, 'without the halo term the fit reads a width rise of 4.4 A**2 within a factor of two')
     end subroutine check_artefact
 

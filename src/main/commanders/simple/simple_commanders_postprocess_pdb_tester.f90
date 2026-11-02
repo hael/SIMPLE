@@ -1,11 +1,13 @@
 !@descr: PDB-envelope postprocessing tests with closed-form half-map FSCs
 module simple_commanders_postprocess_pdb_tester
-use simple_core_module_api
-use simple_atoms,             only: atoms
-use simple_cmdline,           only: cmdline
-use simple_image,             only: image
-use simple_exec_filter,       only: exec_filter_commander
-use simple_test_utils,        only: assert_true, assert_real, assert_int
+use simple_syslib,      only: del_file
+use simple_string,      only: string
+use simple_fileio,      only: file2rarr
+use simple_atoms,       only: atoms
+use simple_cmdline,     only: cmdline
+use simple_image,       only: image
+use simple_exec_filter, only: exec_filter_commander
+use simple_test_utils,  only: assert_true, assert_real, assert_int
 implicit none
 private
 public :: run_all_postprocess_pdb_tests
@@ -57,6 +59,7 @@ contains
         call assert_true(did_execute, 'filter router executes postprocess_pdb')
         fsc = file2rarr(string(STEM//'_fsc.bin'))
         call assert_int(BOX/2, size(fsc), 'FSC has one value per Fourier shell')
+        ! the closed forms (+1, -1, a zeroed map) with round-off slack 1e-5 and 1e-6 (not derived)
         call assert_real(0., maxval(abs(fsc-1.)), 1.e-5, 'identical halves have FSC one')
         call result%new([BOX,BOX,BOX], SMPD)
         call result%read(string(STEM//'_pproc.mrc'))

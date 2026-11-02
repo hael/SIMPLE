@@ -14,7 +14,7 @@ module simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use json_module,                 only: json_core, json_value
-use simple_test_utils
+use simple_test_utils,                                only: assert_char, assert_false, assert_int, assert_real, assert_true, enter_fixture, leave_fixture, tests_failed
 use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT
 use simple_refine3D_fnames,                           only: refine3D_reprojs_fname
 use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
@@ -89,8 +89,8 @@ contains
     !! as an independently refined state in another frame and hand would be, are near-duplicates
     subroutine test_reference_docking()
         class(stream_stage_solve3D), allocatable :: stage
-        type(cmdline)    :: cline
-        type(sp_project) :: res
+        class(cmdline), allocatable:: cline
+        class(sp_project), allocatable:: res
         type(string)     :: cwd_saved, root
         real, parameter  :: TRIPOD(3,3)     = reshape([12., 0., 0.,  -12., 4., 0.,  0., -6., 10.], [3,3])
         real, parameter  :: TRIPOD_AMPS(3)  = [1.0, 0.6, 0.8], TRIPOD_SIGS(3) = [4.0, 2.5, 3.0]
@@ -98,6 +98,7 @@ contains
         real, parameter  :: CHAIN_AMPS(4)   = 1., CHAIN_SIGS(4) = 3.
         real    :: tripod_copy(3,3)
         integer :: nfail0, i
+        allocate(cline, res)
         allocate(stage)
         write(*,'(A)') 'test_reference_docking'
         nfail0 = tests_failed

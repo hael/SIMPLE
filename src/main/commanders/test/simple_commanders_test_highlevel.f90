@@ -1,17 +1,11 @@
 !@descr: for all highlevel tests
 module simple_commanders_test_highlevel
 use simple_commanders_api
-use simple_stream_api
 use simple_commanders_project_core, only: commander_new_project
-use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_reproject,    only: commander_reproject
-use simple_commanders_pick,         only: commander_pick, commander_extract
 use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
-use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct
-use simple_commanders_solve2D,      only: commander_solve2D
 use simple_commanders_solve3D,      only: commander_solve3D
 use simple_test_utils,              only: set_fixed_seed
-use simple_commanders_validate,     only: commander_mini_stream
 implicit none
 #include "simple_local_flags.inc"
 
@@ -99,12 +93,6 @@ type, extends(commander_base) :: commander_test_profile
     procedure :: execute      => exec_test_profile
 end type commander_test_profile
 
-!> multi-state refine3D against the known states of a blob phantom
-type, extends(commander_base) :: commander_test_multistate_assignment
-  contains
-    procedure :: execute      => exec_test_multistate_assignment
-end type commander_test_multistate_assignment
-
 !> the multi-state fixture: its modes, its cache and the declared point groups of its truths
 type, extends(commander_base) :: commander_test_state_fixture
   contains
@@ -134,11 +122,6 @@ interface
         class(commander_test_profile), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_profile
-
-    module subroutine exec_test_multistate_assignment( self, cline )
-        class(commander_test_multistate_assignment), intent(inout) :: self
-        class(cmdline), intent(inout) :: cline
-    end subroutine exec_test_multistate_assignment
 
     module subroutine exec_test_state_fixture( self, cline )
         class(commander_test_state_fixture), intent(inout) :: self

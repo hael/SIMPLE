@@ -1,5 +1,9 @@
 !@descr: simulated end-to-end workflow test of simple_commanders_test_highlevel
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_workflow
+use simple_commanders_project_mov, only: commander_import_movies
+use simple_commanders_pick,        only: commander_pick, commander_extract
+use simple_commanders_preprocess,  only: commander_ctf_estimate, commander_motion_correct
+use simple_commanders_solve2D,     only: commander_solve2D
 implicit none
 #include "simple_local_flags.inc"
 
@@ -68,9 +72,9 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: DOCK_HP        = 100.0
     real,             parameter :: DOCK_LP        = 20.0
     integer,          parameter :: NPARTS_DISTR   = 2
-    type(cmdline)                       :: cline_projection, cline_sim_mov, cline_new_project
-    type(cmdline)                       :: cline_import_movies, cline_mot_corr, cline_ctf_est
-    type(cmdline)                       :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
+    class(cmdline), allocatable         :: cline_projection, cline_sim_mov, cline_new_project
+    class(cmdline), allocatable         :: cline_import_movies, cline_mot_corr, cline_ctf_est
+    class(cmdline), allocatable         :: cline_pick, cline_extract, cline_solve2D, cline_solve3D
     type(commander_new_project)         :: xnew_project
     type(commander_reproject)           :: xreproject
     type(commander_simulate_movie)      :: xsimov
@@ -84,7 +88,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     type(molecule_data)                 :: mol
     type(atoms)                         :: molecule
     type(image)                         :: projection
-    type(sp_project)                    :: spproj
+    class(sp_project), allocatable      :: spproj
     type(test_gate)                     :: gate
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
     type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
@@ -101,10 +105,11 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real                                :: distr_corr, distr_fsc0143
     real                                :: distr_dock_direct, distr_dock_mirrored, distr_dock_selected
     integer                             :: rnd_defocus, test_seed
-    logical                             :: volume_ok, distr_ok
+    logical                             :: volume_ok, distr_ok, gate_ok
 
     ! The test executable initializes only the test UI.  Directly invoked SIMPLE
     ! commanders need the regular UI metadata to implement mkdir=yes correctly.
+    allocate(cline_projection, cline_sim_mov, cline_new_project, cline_import_movies, cline_mot_corr, cline_ctf_est, cline_pick, cline_extract, cline_solve2D, cline_solve3D, spproj)
     call make_ui
     if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=6vxx or suite=1jxy')
     system_name = cline%get_carg('suite')
@@ -202,7 +207,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call return_to_stage_root('reproject')
     reproj_path = simple_abspath(string(REPROJ_DIR//'/'//reproj_file%to_char()))
     call find_ldim_nptcls(reproj_path, ldim, nprojs_stk)
-    if( nprojs_stk /= NREPROJS ) THROW_HARD('Unexpected number of generated reprojections')
+    call require('reprojection_count', nprojs_stk == NREPROJS, 'Unexpected number of generated reprojections')
     reproj_box = ldim(1)
     ldim(3) = 1
     call projection%new(ldim, SMPD)
@@ -246,7 +251,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
         call cline_sim_mov%set('trs',                        2.0)
         call cline_sim_mov%set('nthr',                      NTHR)
         call xsimov%execute(cline_sim_mov)
-        if( .not. file_exists(MOVIE_FILE) ) THROW_HARD('Simulated movie was not generated')
+        call require('movie'//int2str(i)//'_simulated', file_exists(MOVIE_FILE), 'Simulated movie was not generated')
         movie_fname = string('simulate_movie_')//int2str_pad(i,3)//MRC_EXT
         subset_fname = string('random_reprojections_')//int2str_pad(i,3)//'.mrcs'
         optimal_fname = string('optimal_movie_average_')//int2str_pad(i,3)//MRC_EXT
@@ -331,19 +336,16 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call xpick%execute(cline_pick)
     call cline_pick%kill()
     if( workflow_picker%to_char() == 'new' )then
-        if( .not. file_exists(PICKREFS_FILE) ) THROW_HARD('Picking references were not generated')
+        call require('pickrefs_written', file_exists(PICKREFS_FILE), 'Picking references were not generated')
         call find_ldim_nptcls(string(PICKREFS_FILE), ldim, npickrefs)
         pickref_smpd = find_img_smpd(string(PICKREFS_FILE))
         pickref_width = real(ldim(1)) * pickref_smpd
-        if( ldim(1) /= ldim(2) .or. ldim(1) > reproj_box )then
-            THROW_HARD('Generated picking-reference dimensions are inconsistent with the reprojections')
-        endif
-        if( .not. (abs(pickref_smpd - SMPD) <= 0.01) )then
-            THROW_HARD('Generated picking-reference sampling distance is inconsistent with the micrographs')
-        endif
-        if( .not. (pickref_width >= 0.75 * MSKDIAM .and. pickref_width <= 1.25 * MSKDIAM) )then
-            THROW_HARD('Generated picking-reference physical size is inconsistent with the particle diameter')
-        endif
+        call require('pickrefs_dimensions', ldim(1) == ldim(2) .and. ldim(1) <= reproj_box, &
+            &'Generated picking-reference dimensions are inconsistent with the reprojections')
+        call require('pickrefs_sampling', abs(pickref_smpd - SMPD) <= 0.01, &
+            &'Generated picking-reference sampling distance is inconsistent with the micrographs')
+        call require('pickrefs_physical_size', pickref_width >= 0.75 * MSKDIAM .and. pickref_width <= 1.25 * MSKDIAM, &
+            &'Generated picking-reference physical size is inconsistent with the particle diameter')
         if( EXTRACT_BOX < ldim(1) )then
             THROW_HARD('Extraction box is smaller than the generated picking references')
         endif
@@ -404,11 +406,14 @@ module subroutine exec_test_simulated_workflow( self, cline )
             &distr_dock_direct, distr_dock_mirrored, distr_dock_selected)
     endif
 
+    gate_ok = gate%passed()
     call gate%kill
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('Could not restore the original working directory')
     if( .not. volume_ok ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: final-volume validation failed')
     if( .not. distr_ok  ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: distributed final-volume validation failed')
+    ! the parts record and the wrong-truth control are gate rows only
+    if( .not. gate_ok   ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: a gate row failed (metrics.tsv)')
     write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') 'PASS: simulated_workflow ', &
         &system_name%to_char(), ' docking correlation direct=', dock_corr_direct, ', mirrored=', dock_corr_mirrored, &
         &', selected=', dock_corr_selected, ', whole-volume correlation=', volume_corr, &
@@ -422,6 +427,14 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call simple_end('**** SIMPLE_TEST_SIMULATED_WORKFLOW NORMAL STOP ****')
 
   contains
+
+    !> a contract check: a gate row, then the stop when it fails
+    subroutine require( name, ok, what )
+        character(len=*), intent(in) :: name, what
+        logical,          intent(in) :: ok
+        call gate%check(name, ok)
+        if( .not. ok ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: '//what)
+    end subroutine require
 
     subroutine update_project_path
         if( file_exists(PROJFILE) ) project_path = simple_abspath(string(PROJFILE))

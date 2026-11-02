@@ -28,6 +28,7 @@ subroutine exec_test_stream_preproc( self, cline )
     use simple_commanders_stream_p01_preprocess,    only: commander_stream_p01_preprocess
     use simple_ui,                        only: make_ui
     use simple_test_gate,                 only: test_gate
+    use simple_test_truth_metrics,        only: farthest_truth_error
     use, intrinsic :: iso_c_binding,      only: C_long, C_double
     use, intrinsic :: ieee_arithmetic,    only: ieee_is_finite
     class(commander_test_stream_preproc), intent(inout) :: self
@@ -48,6 +49,9 @@ subroutine exec_test_stream_preproc( self, cline )
     ! 0.0065, worst 0.164 (a rare outlying fit), admissible from 0.17; the control, the neighbouring
     ! movie's truth 0.25 um away, lies above 0.23. The former 0.10 failed 15 % of the runs.
     real,             parameter :: DEFOCUS_TOL      = 0.20
+    ! the drift ceiling and the image floors date from the first version (not derived); the profile of
+    ! 2026-10-16 (20 seeds) admits them: drift median 0.06-0.11 px, worst 0.36; correlation median
+    ! 0.85-0.92, worst 0.82, against the wrong movie 0.001-0.010
     real,             parameter :: MOTION_TOL       = 0.50
     real,             parameter :: CORR_FLOOR       = 0.50
     real,             parameter :: CORR_MARGIN      = 0.05
@@ -57,10 +61,10 @@ subroutine exec_test_stream_preproc( self, cline )
     integer,          parameter :: NFRAMES          = 8
     type(commander_stream_p01_preprocess)  :: xpreproc
     type(commander_simulate_movie) :: xsimov
-    type(cmdline)                :: cline_preproc, cline_sim_mov
+    class(cmdline), allocatable  :: cline_preproc, cline_sim_mov
     type(image)                  :: particle, feature, integrated, optimal, wrong_optimal
     type(oris)                   :: simulation_truth
-    type(sp_project)             :: spproj
+    class(sp_project), allocatable:: spproj
     type(test_gate)              :: gate
     type(string)                 :: cwd_root, fixture_root, movies_dir, truth_dir, particle_stack_path
     type(string)                 :: project_path, movie_name, optimal_name, params_name, value
@@ -73,6 +77,7 @@ subroutine exec_test_stream_preproc( self, cline )
 
     ! simple_test_exec initializes only test-program metadata.  The movie
     ! simulator uses the production UI while constructing its parameters.
+    allocate(cline_preproc, cline_sim_mov, spproj)
     call make_ui
     call simple_getcwd(cwd_root)
     call gate%new(filepath(cwd_root, 'metrics.tsv'))
@@ -168,36 +173,36 @@ subroutine exec_test_stream_preproc( self, cline )
     project_path = cline_preproc%get_carg('projfile')
     call simple_chdir(fixture_root_path, status)
     if( status /= 0 ) THROW_HARD('TEST_PREPROC FAILED: could not leave preprocessing directory')
-    if( .not. file_exists(project_path) ) THROW_HARD('TEST_PREPROC FAILED: output project was not created')
+    call require('project_written', file_exists(project_path), 'output project was not created')
     call spproj%read_segment('mic', project_path)
-    if( spproj%os_mic%get_noris() /= STREAM_NMOVS_SET )&
-        &THROW_HARD('TEST_PREPROC FAILED: project does not contain five processed micrographs')
+    call require('five_micrographs_in_project', spproj%os_mic%get_noris() == STREAM_NMOVS_SET, &
+        &'project does not contain five processed micrographs')
 
     do i = 1, STREAM_NMOVS_SET
         call spproj%os_mic%getter(i, 'movie', value)
         imovie = find_simulation(value)
-        if( imovie == 0 ) THROW_HARD('TEST_PREPROC FAILED: output micrograph cannot be matched to simulation truth')
+        call require('micrograph'//int2str(i)//'_matched_to_its_truth', imovie /= 0, &
+            &'output micrograph cannot be matched to simulation truth')
         call spproj%os_mic%getter(i, 'imgkind', value)
-        if( trim(value%to_char()) /= 'mic' )&
-            &THROW_HARD('TEST_PREPROC FAILED: movie record was not converted to a micrograph')
+        call require('micrograph'//int2str(i)//'_is_a_micrograph', trim(value%to_char()) == 'mic', &
+            &'movie record was not converted to a micrograph')
         call assert_output_file(i, 'intg')
         call spproj%os_mic%getter(i, 'intg', value)
         call find_ldim_nptcls(value, ldim, nimages)
-        if( any(ldim(1:2) /= MOVIE_DIM) .or. nimages /= 1 )&
-            &THROW_HARD('TEST_PREPROC FAILED: integrated micrograph has unexpected dimensions')
+        call require('micrograph'//int2str(i)//'_dimensions', all(ldim(1:2) == MOVIE_DIM) .and. nimages == 1, &
+            &'integrated micrograph has unexpected dimensions')
         call assert_output_file(i, 'mc_starfile')
         call assert_output_file(i, 'ctfjpg')
-        if( .not. spproj%os_mic%isthere(i, 'dfx') .or. .not. spproj%os_mic%isthere(i, 'dfy') .or. &
-            &.not. spproj%os_mic%isthere(i, 'ctfres') )&
-            &THROW_HARD('TEST_PREPROC FAILED: CTF parameters are missing')
+        call require('micrograph'//int2str(i)//'_ctf_parameters_present', spproj%os_mic%isthere(i, 'dfx') .and. &
+            &spproj%os_mic%isthere(i, 'dfy') .and. spproj%os_mic%isthere(i, 'ctfres'), 'CTF parameters are missing')
         dfx    = spproj%os_mic%get(i, 'dfx')
         dfy    = spproj%os_mic%get(i, 'dfy')
         ctfres = spproj%os_mic%get(i, 'ctfres')
-        if( .not. ieee_is_finite(dfx) .or. .not. ieee_is_finite(dfy) .or. &
-            &.not. ieee_is_finite(ctfres) .or. dfx <= 0. .or. dfy <= 0. .or. ctfres <= 0. )&
-            &THROW_HARD('TEST_PREPROC FAILED: CTF parameters are not physically valid')
-        if( .not. (abs(spproj%os_mic%get(i, 'smpd') - SMPD) <= 0.01) )&
-            &THROW_HARD('TEST_PREPROC FAILED: micrograph sampling distance changed unexpectedly')
+        call require('micrograph'//int2str(i)//'_ctf_parameters_valid', ieee_is_finite(dfx) .and. &
+            &ieee_is_finite(dfy) .and. ieee_is_finite(ctfres) .and. dfx > 0. .and. dfy > 0. .and. ctfres > 0., &
+            &'CTF parameters are not physically valid')
+        call require('micrograph'//int2str(i)//'_sampling_kept', abs(spproj%os_mic%get(i, 'smpd') - SMPD) <= 0.01, &
+            &'micrograph sampling distance changed unexpectedly')
 
         ! The simulator writes the actual defocus values after its deliberate
         ! random perturbation, so this compares against truth rather than the
@@ -221,7 +226,7 @@ subroutine exec_test_stream_preproc( self, cline )
         ! the negative control: the fit against the truth of the other movie whose truth lies farthest
         ! from this one's fails the ceiling (the neighbour's, 0.25 um away nominally, came within it in
         ! 17 of 100 movie runs of the profile of 2026-10-18: the simulator perturbs each defocus)
-        wrong_error = farthest_truth_error(imovie, truth_dfx, truth_dfy, dfx, dfy)
+        wrong_error = farthest_truth_error(imovie, params_paths, truth_dfx, truth_dfy, dfx, dfy)
         call gate%report('control_defocus_error_um_movie'//int2str(imovie)//'_against_the_farthest_truth', wrong_error)
         call gate%check('control_defocus_movie'//int2str(imovie)//'_against_the_farthest_truth_fails', &
             &.not. (wrong_error <= DEFOCUS_TOL))
@@ -264,6 +269,8 @@ subroutine exec_test_stream_preproc( self, cline )
     call check_worker_jobs
     call spproj%kill
     call cline_preproc%kill
+    ! the negative controls are gate rows only
+    if( .not. gate%passed() ) THROW_HARD('TEST_PREPROC FAILED: a gate row failed (metrics.tsv)')
     call gate%kill
     call simple_chdir(cwd_root, status)
     if( status /= 0 ) THROW_HARD('TEST_PREPROC FAILED: could not restore the original directory')
@@ -272,32 +279,6 @@ subroutine exec_test_stream_preproc( self, cline )
     call simple_end('**** SIMPLE_TEST_PREPROC NORMAL STOP ****')
 
   contains
-
-    !> the error of the fit (fdx, fdy) against the truth of the other movie whose truth lies farthest
-    !! from movie imov's (tdx, tdy), the astigmatic axes unordered as in the error itself
-    real function farthest_truth_error( imov, tdx, tdy, fdx, fdy ) result( err )
-        integer, intent(in) :: imov
-        real,    intent(in) :: tdx, tdy, fdx, fdy
-        type(oris) :: other
-        real    :: odx, ody, d, dmax
-        integer :: j
-        err  = 0.
-        dmax = -1.
-        do j = 1, STREAM_NMOVS_SET
-            if( j == imov ) cycle
-            call other%new(1, is_ptcl=.false.)
-            call other%read(params_paths(j))
-            odx = other%get_dfx(1)
-            ody = other%get_dfy(1)
-            call other%kill
-            d = 0.5 * (odx + ody) - 0.5 * (tdx + tdy)
-            if( abs(d) > dmax )then
-                dmax = abs(d)
-                err  = min(max(abs(fdx - odx), abs(fdy - ody)), max(abs(fdx - ody), abs(fdy - odx)))
-            endif
-        enddo
-    end function farthest_truth_error
-
     !> The stage's worker jobs (the queue's files in its spprojs directory): at least one job
     !! finished, and every job's recorded exit status is 0
     subroutine check_worker_jobs
@@ -328,14 +309,26 @@ subroutine exec_test_stream_preproc( self, cline )
             &THROW_HARD('TEST_PREPROC FAILED: the stage did not run its work as worker jobs that finished cleanly')
     end subroutine check_worker_jobs
 
+    !> a contract check: a gate row, then the stop when it fails
+    subroutine require( name, ok, what )
+        character(len=*), intent(in) :: name, what
+        logical,          intent(in) :: ok
+        character(len=:), allocatable :: msg
+        call gate%check(name, ok)
+        if( .not. ok )then
+            msg = 'TEST_PREPROC FAILED: '//what
+            THROW_HARD(msg)
+        endif
+    end subroutine require
+
     subroutine assert_output_file( imic, key )
         integer,          intent(in) :: imic
         character(len=*), intent(in) :: key
         type(string) :: fname
-        if( .not. spproj%os_mic%isthere(imic, key) )&
-            &THROW_HARD('TEST_PREPROC FAILED: missing '//key//' project field')
+        call require('micrograph'//int2str(imic)//'_'//key//'_recorded', spproj%os_mic%isthere(imic, key), &
+            &'missing '//key//' project field')
         call spproj%os_mic%getter(imic, key, fname)
-        if( .not. file_exists(fname) ) THROW_HARD('TEST_PREPROC FAILED: missing '//key//' output file')
+        call require('micrograph'//int2str(imic)//'_'//key//'_written', file_exists(fname), 'missing '//key//' output file')
     end subroutine assert_output_file
 
     integer function find_simulation( movie_path ) result(ind)

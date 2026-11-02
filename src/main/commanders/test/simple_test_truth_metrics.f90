@@ -6,7 +6,15 @@
 ! The masked FSC is the production compare_volpair (simple_volpair_metrics).
 module simple_test_truth_metrics
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api
+use simple_defs,            only: dp, logfhandle
+use simple_error,           only: simple_exception
+use simple_string,          only: string
+use simple_linalg,          only: deg2rad, rad2deg
+use simple_srch_sort_loc,   only: hpsort
+use simple_stat,            only: median
+use simple_estimate_ssnr,   only: get_resolution
+use simple_syslib,          only: file_exists
+use simple_fileio,          only: simple_copy_file
 use simple_image,           only: image
 use simple_ori,             only: ori
 use simple_oris,            only: oris
@@ -20,11 +28,38 @@ implicit none
 public :: dock_both_hands, compare_to_truth, validate_reconstructed_volume, pair_pose_error, add_gaussian_blob
 public :: match_states, adjusted_rand_index, mapped_accuracy, accuracy_null, collapsed_accuracy, population_errors
 public :: match_maps, rot_angle, carry_pose, group_errors, group_operators, axis_operator, discrimination
-public :: finite_min, offdiag, maps_distinct, state_recalls
+public :: finite_min, offdiag, maps_distinct, state_recalls, farthest_truth_error
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    !> the error of the defocus fit (fdx, fdy) against the truth of the other item whose truth lies farthest
+    !! from item i's (tdx, tdy), each truth one record of truths, the astigmatic axes unordered as in the
+    !! error itself: the negative control of the defocus checks
+    real function farthest_truth_error( i, truths, tdx, tdy, fdx, fdy ) result( err )
+        integer,       intent(in) :: i
+        class(string), intent(in) :: truths(:)
+        real,          intent(in) :: tdx, tdy, fdx, fdy
+        type(oris) :: other
+        real    :: odx, ody, d, dmax
+        integer :: j
+        err  = 0.
+        dmax = -1.
+        do j = 1, size(truths)
+            if( j == i ) cycle
+            call other%new(1, is_ptcl=.false.)
+            call other%read(truths(j))
+            odx = other%get_dfx(1)
+            ody = other%get_dfy(1)
+            call other%kill
+            d = 0.5 * (odx + ody) - 0.5 * (tdx + tdy)
+            if( abs(d) > dmax )then
+                dmax = abs(d)
+                err  = min(max(abs(fdx - odx), abs(fdy - ody)), max(abs(fdx - ody), abs(fdy - odx)))
+            endif
+        enddo
+    end function farthest_truth_error
 
     !> Dock map_fname and its x-mirror onto ref_fname (band hp..lp, mask
     !! diameter mskdiam in A) and write the better of the two, in the

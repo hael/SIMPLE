@@ -1,6 +1,11 @@
 !@descr: unit tests for the truth metrics of the multi-state tests (simple_test_truth_metrics): state matching, adjusted Rand index, null accuracy, frame and pose conventions
 module simple_test_truth_metrics_tester
-use simple_core_module_api
+use simple_syslib,             only: del_file
+use simple_ori_utils,          only: euler2m, m2euler
+use simple_string_utils,       only: int2str
+use simple_stat,               only: median
+use simple_defs,               only: OSMPL_PAD_FAC
+use simple_string,             only: string
 use simple_image,              only: image
 use simple_ori,                only: ori
 use simple_oris,               only: oris
@@ -60,6 +65,7 @@ contains
         call dock_both_hands(string('tmp_truth_docking_truth.mrc'), string('tmp_truth_docking_map.mrc'), 56., 40., 6., &
             &'tmp_truth_docking', string('tmp_truth_docking_docked.mrc'), ccd, ccm, eul, shift, mirrored)
         call assert_true(mirrored, 'docking finds the mirrored hand')
+        ! 0.95 here and below: not derived
         call assert_true(ccm > 0.95 .and. ccm > ccd, 'the mirrored hand docks better')
         do i = 1, 3
             r  = euler2m([37.*real(i), 63.+10.*real(i), 112.-20.*real(i)])

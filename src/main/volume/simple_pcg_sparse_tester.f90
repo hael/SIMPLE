@@ -17,8 +17,10 @@ use simple_sym,               only: sym
 use simple_memoize_ft_maps,   only: forget_ft_maps, memoize_ft_maps
 use simple_type_defs,         only: CTFFLAG_NO, ctfparams, fplane_type
 use simple_test_utils,        only: assert_true
+use simple_error,             only: simple_exception
 use ieee_arithmetic,          only: ieee_is_finite
 implicit none
+#include "simple_local_flags.inc"
 private
 public :: run_all_pcg_sparse_tests
 
@@ -31,6 +33,8 @@ integer,  parameter :: NATOMS            = 75
 real,     parameter :: MSKRAD            = 13.
 real,     parameter :: CORR_RAD          = 11.    !< px: correlation with the truth inside this sphere
 integer,  parameter :: MAXITS            = 2      !< the production budget
+! from the box-64 emulation (pcg_sparse_sampling_fix.md): the fix trails gridding by 0.004-0.014 with 0.35 %
+! beyond Nyquist, the defect by 0.34-0.46 with 17 %
 real(dp), parameter :: SPARSE_CORR_SLACK = 0.05_dp
 real(dp), parameter :: DENSE_CORR_SLACK  = 0.02_dp
 real(dp), parameter :: BEYOND_NYQ_MAX    = 0.03_dp
@@ -137,7 +141,7 @@ contains
                 call os%new(400, .false.)
                 call os%spiral()
             case default
-                error stop 'build_view_set: unknown view set'
+                THROW_HARD('build_view_set: unknown view set')
         end select
     end subroutine build_view_set
 
@@ -227,6 +231,7 @@ contains
         if( allocated(fplane%ctfsq_plane)    ) deallocate(fplane%ctfsq_plane)
         if( allocated(fplane%transfer_plane) ) deallocate(fplane%transfer_plane)
         call forget_ft_maps()
+        call grid%kill
         call c1sym%kill()
         call o%kill()
         call restored%kill()

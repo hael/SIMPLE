@@ -6,10 +6,12 @@
 ! (lib_reconstruction); the rest of the report is unit-tested in
 ! simple_solve3D_addon_report_tester.
 module simple_solve3D_addon_dock_tester
-use simple_core_module_api
-use simple_image,                   only: image
+use simple_syslib,               only: del_file
+use simple_defs,                 only: logfhandle
+use simple_string,               only: string
+use simple_image,                only: image
 use simple_solve3D_addon_report, only: solve3D_addon_report
-use simple_test_utils
+use simple_test_utils,           only: assert_real, assert_true, set_fixed_seed
 implicit none
 
 public :: run_all_solve3D_addon_dock_tests
@@ -82,6 +84,7 @@ contains
         write(logfhandle,'(A)') '-- test_rotated_frame'
         call report%new(1, 8, SMPD, MSKDIAM)
         call report%compare_maps(1, string(F_MAP), string(F_ROT))
+        ! 0.9 is DOCK_CORR_FLOOR of simple_solve3D_addon_report (private there): below it the report docks; the 10 deg below is not derived
         call assert_true(report%get_corr(1) < 0.9, 'a rotated map does not correlate in the base frame')
         call assert_real(90., report%get_dock_angle(1), 10., 'docking recovers the 90 degree rotation')
         call report%kill

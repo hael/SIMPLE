@@ -42,6 +42,7 @@ integer, parameter :: CAVGS_NSTATES      = 3
 integer, parameter :: CAVGS_NVIEWS       = 60
 integer, parameter :: CAVGS_NSUB         = 3
 integer, parameter :: CAVGS_MINPOP       = 20
+! the route's own minimum (refine3D_states_cavgs policy, section 2): 200 rows for the 10 % floor of 20
 integer, parameter :: CAVGS_MIN_SUBAVGS  = 100
 integer, parameter :: CAVGS_NPAIRS       = 2000
 integer, parameter :: CAVGS_SEED         = 202610092
@@ -58,6 +59,7 @@ real,    parameter :: CAVGS_EXPANSION_LP = 12.0
 !! committed sub-averages keep their floor. The profile of the merged code (2026-10-19,
 !! scratch/keep/profiles/phase8/main) is the same: four runs of 20 delivered one state, the others a
 !! sub-average state accuracy of median 0.41 (0.35-0.69) against a null 99.9th percentile of 0.41.
+!! 90 was sized for the retired accuracy floor 0.60: chance reaches it with p < 27 exp(-2*90*0.267**2) < 1e-4
 integer, parameter :: CAVGS_MIN_COMMITTED      = 90
 
 !> the datasets come from the multi-state test fixture: two blob states at their true poses (known
@@ -133,20 +135,14 @@ subroutine run_flex_pca_blobs_gate( nthr, metrics_file, all_ok )
     CWD_GLOB = root%to_char()
     call gate%new(metrics_file)
     ! two blob states, equal populations, at their true poses without shifts
-    fix%family    = 'blob'
-    fix%mode      = FIX_KNOWN
-    fix%nstates   = 2
-    fix%pops(1:2) = [0.5, 0.5]
-    fix%nptcls    = FLEX_PHANTOM_NPTCLS
-    fix%snr       = PHANTOM_SNR
-    fix%sherr     = 0.
-    fix%nthr      = nthr
+    call fix%new('blob', FIX_KNOWN, 2, FLEX_PHANTOM_NPTCLS, PHANTOM_SNR, nthr, pops=[0.5, 0.5], sherr=0.)
     call fix%build
     phantom = fix%project_fname()
     truth_a = fix%truth_fname(1)
     truth_b = fix%truth_fname(2)
     call write_mean_and_difference([truth_a, truth_b], root, fix%box(), fix%smpd(), truth_mean, truth_diff)
     truth_states_ab = read_truth_states(fix%truth_doc(), fix%nptcls)
+    call fix%kill
     call run_flex_mode('shared', 1, nthr, root, truth_a, truth_b, truth_mean, truth_diff, phantom, gate, shared)
     call run_flex_mode('distributed', 2, nthr, root, truth_a, truth_b, truth_mean, truth_diff, phantom, gate, &
         &distributed)
@@ -695,15 +691,8 @@ subroutine prepare_states_cavgs_project( fixture, run_dir, nthr, truths, truth_m
     call simple_getcwd(cwd)
     call simple_chdir(fixture, status)
     if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not enter the states_cavgs fixture directory')
-    fix%family  = 'betagal'
-    fix%kind    = 'compositional'
-    fix%mode    = FIX_VIEWS
-    fix%nstates = CAVGS_NSTATES
-    fix%pops(1:CAVGS_NSTATES) = 1. / real(CAVGS_NSTATES)
-    fix%nptcls  = CAVGS_NPTCLS
-    fix%nviews  = CAVGS_NVIEWS
-    fix%snr     = PHANTOM_SNR
-    fix%nthr    = nthr
+    call fix%new('betagal', FIX_VIEWS, CAVGS_NSTATES, CAVGS_NPTCLS, PHANTOM_SNR, nthr, kind='compositional', &
+        &pops=spread(1. / real(CAVGS_NSTATES), 1, CAVGS_NSTATES), nviews=CAVGS_NVIEWS)
     call fix%build
     cavgs_box     = fix%box()
     cavgs_smpd    = fix%smpd()
@@ -716,6 +705,7 @@ subroutine prepare_states_cavgs_project( fixture, run_dir, nthr, truths, truth_m
     truth_doc_abc    = fix%truth_doc()
     projfile = run_dir//'/phantom.simple'
     call simple_copy_file(fix%project_fname(), projfile)
+    call fix%kill
     call simple_chdir(cwd, status)
     if( status /= 0 ) THROW_HARD('FLEX_PCA_BLOBS FAILED: could not leave the states_cavgs fixture directory')
     allocate(project)

@@ -676,13 +676,14 @@ contains
 
     !> the boxpd^3 work image, made on first use by the routines that transform (a worker that only
     !! accumulates never makes it); large lattices get measured FFTW plans, whose wisdom then serves
-    !! every later operator of the same size in the process
+    !! every later operator of the same size in the process, except under a fixed seed (exact replay)
     subroutine ensure_wimg( self )
+        use simple_rnd, only: has_global_seed
         class(reconstructor_pcg), intent(inout) :: self
         if( self%wimg_exists ) return
         call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], self%smpd, &
             &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads, &
-            &fft_measure=self%boxpd >= PCG_FFT_MEASURE_MIN_BOXPD)
+            &fft_measure=self%boxpd >= PCG_FFT_MEASURE_MIN_BOXPD .and. .not. has_global_seed())
         self%wimg_exists = .true.
     end subroutine ensure_wimg
 

@@ -130,8 +130,94 @@ contains
         call test_mask3D_semantics()
         call test_masks_parallel_equals_serial()
         call test_automask2D_mskdiam()
+        call test_density_support_envelope()
         call unmemoize_mask_coords ! leave no module state behind
     end subroutine run_all_mask_tests
+
+    !> the density support of the PCG solve (build_pcg_density_support: automask3D, not tight, low-passed at
+    !! envmsklp) on two Gaussian blobs off the centre of a 144 A box. The support reaches (binwidth + edge) *
+    !! smpd = 10.5 A beyond its binary core, 4.2 sigma of the wider blob, beyond which a 3D Gaussian keeps less
+    !! than 5e-4 of its mass: with the blob centres in the core it holds at least 0.999 of the phantom's mass.
+    !! Voxels beyond 4 sigma + envmsklp + 10.5 A of both centres are solvent. Negative control: built from the
+    !! phantom shifted by 60 A, 49 A clear of it, the support covers less than half of the unshifted phantom.
+    subroutine test_density_support_envelope()
+        integer, parameter :: BOX = 96, NB = 2
+        real,    parameter :: SMPD = 1.5
+        real,    parameter :: CTRS(3,NB) = reshape([-5., 3., 2., 6., -4., -3.], [3,NB]) !< A from the box centre
+        real,    parameter :: SIGS(NB) = [2.5, 2.0], AMPS(NB) = [1.0, 0.7]
+        real,    parameter :: SHIFT_X = 60.  !< A, the negative control's displacement
+        real,    parameter :: MASS_FLOOR = 0.999, CONTROL_CEIL = 0.5
+        class(parameters), allocatable :: params
+        type(image)       :: vol, core
+        type(image_msk)   :: msk
+        real, allocatable :: rho(:,:,:), sup(:,:,:), cor(:,:,:)
+        real    :: c0(3), rout, mass_tot, mass_in, mass_ctrl
+        integer :: i, j, k, b, ic(3)
+        logical :: centres_in, solvent_out
+        write(*,'(A)') 'test_density_support_envelope'
+        allocate(parameters :: params)
+        params%part = 1
+        c0 = real(BOX / 2 + 1)
+        call vol%new([BOX,BOX,BOX], SMPD)
+        rho = blobs(0.)
+        call vol%set_rmat(rho, .false.)
+        call msk%automask3D(params, vol, .false., lp_override=params%envmsklp, l_report=.false., core=core)
+        sup = msk%get_rmat()
+        cor = core%get_rmat()
+        centres_in = .true.
+        do b = 1, NB
+            ic = nint(c0 + CTRS(:,b) / SMPD)
+            centres_in = centres_in .and. cor(ic(1),ic(2),ic(3)) > 0.5
+        enddo
+        call assert_true(centres_in, 'density support: every blob centre lies in the binary core')
+        mass_tot = sum(rho)
+        mass_in  = sum(rho, mask=sup > 0.)
+        call assert_true(mass_in >= MASS_FLOOR * mass_tot, 'density support: it holds the phantom''s mass')
+        rout = 4. * maxval(SIGS) + params%envmsklp + real(params%binwidth + params%edge) * SMPD
+        solvent_out = .true.
+        do k = 1, BOX
+            do j = 1, BOX
+                do i = 1, BOX
+                    if( all([(norm2(([real(i), real(j), real(k)] - c0) * SMPD - CTRS(:,b)), b = 1, NB)] > rout) ) &
+                        &solvent_out = solvent_out .and. sup(i,j,k) <= 0.
+                enddo
+            enddo
+        enddo
+        call assert_true(solvent_out, 'density support: solvent far from the phantom is outside it')
+        ! the negative control: the support follows the density, it is no fixed sphere
+        call vol%set_rmat(blobs(SHIFT_X), .false.)
+        call msk%automask3D(params, vol, .false., lp_override=params%envmsklp, l_report=.false.)
+        sup = msk%get_rmat()
+        mass_ctrl = sum(rho, mask=sup > 0.)
+        call assert_true(mass_ctrl < CONTROL_CEIL * mass_tot, &
+            &'density support: built from the shifted phantom it does not cover the unshifted one')
+        call msk%kill
+        call core%kill
+        call vol%kill
+        deallocate(params)
+
+      contains
+
+        !> the phantom displaced by dx A along x
+        function blobs( dx ) result( r )
+            real, intent(in) :: dx
+            real :: r(BOX,BOX,BOX), p(3)
+            integer :: ii, jj, kk, bb
+            r = 0.
+            do kk = 1, BOX
+                do jj = 1, BOX
+                    do ii = 1, BOX
+                        p = ([real(ii), real(jj), real(kk)] - c0) * SMPD
+                        do bb = 1, NB
+                            r(ii,jj,kk) = r(ii,jj,kk) + AMPS(bb) * &
+                                &exp(-sum((p - CTRS(:,bb) - [dx, 0., 0.])**2) / (2. * SIGS(bb)**2))
+                        enddo
+                    enddo
+                enddo
+            enddo
+        end function blobs
+
+    end subroutine test_density_support_envelope
 
     !---------------- the threaded path ----------------
 

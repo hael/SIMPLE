@@ -16,6 +16,7 @@ private
 character(len=*), parameter :: MANIFEST_FNAME = 'solve3D_manifest.txt'
 character(len=*), parameter :: SIGMA2_FNAME   = 'sigma2_state.bin'
 character(len=*), parameter :: SIGMA2_MAGIC   = 'SIMPLE_SIGMA2_V2'
+character(len=*), parameter :: RUN_ID_KEY     = 'solve3D_run_id' !< projinfo's copy of the manifest's run_id
 integer,          parameter :: SIGMA2_DIGEST_BYTES(2) = [121, 128] !< after the 16-byte magic, word 14 of 8 bytes
 
 contains
@@ -276,7 +277,11 @@ contains
                 case(6);  os = p%os_ptcl3D
                 case(7);  os = p%os_out
                 case(8);  os = p%os_optics
-                case(9);  os = p%projinfo
+                case(9)
+                    os = p%projinfo
+                    if( os%get_noris() > 0 )then
+                        if( os%isthere(1, RUN_ID_KEY) ) call os%delete_entry(RUN_ID_KEY)
+                    endif
                 case(10); os = p%jobproc
                 case default; os = p%compenv
             end select

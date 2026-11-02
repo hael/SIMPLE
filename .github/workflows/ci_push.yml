@@ -1,0 +1,40 @@
+name: Build SIMPLE on push (Linux)
+
+# A build of every push to master that touches code: a clean checkout, the Release build and the
+# fast gate (compile_clean.sh), about 8 minutes. It catches a commit that leaves out a file the
+# local build compiled (the library globs its sources), compile errors under Ubuntu's gfortran,
+# and fast-gate failures, minutes after the push instead of at the nightly. The library and
+# high-level tiers stay nightly (ci_test.yml).
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'production/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'scripts/**'
+      - 'compile_clean.sh'
+  workflow_dispatch:
+
+# a newer push cancels the build of an older one still running
+concurrency:
+  group: ci-push-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  Build:
+    name: Build and fast gate (ubuntu-26.04)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+             sudo apt-get update
+             sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 libcurl4-openssl-dev libopenblas-openmp-dev libarpack2-dev
+
+      - name: Build SIMPLE and run the fast gate
+        run: |
+             ./compile_clean.sh

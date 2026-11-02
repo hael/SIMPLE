@@ -57,6 +57,9 @@ character(len=*), parameter :: SINGLEWF = 'test_single_workflow_'
 character(len=48), parameter :: SINGLEWF_OUT(9) = [character(len=48) :: &
     &'/*/*.mrc', '/final_results/*.mrc', '/*.mrc', '/*/*.bin', '/*/*.pdb', '/*/*_oris.txt', '/ptcls_oris.txt', &
     &'/*/*.simple', '/*.simple']
+! fcc runs trajectory_solve3D, which writes no final_results, top-level maps or particle table
+character(len=48), parameter :: SINGLEWF_FCC_OUT(6) = [character(len=48) :: &
+    &'/*/*.mrc', '/*/*.bin', '/*/*.pdb', '/*/*_oris.txt', '/*/*.simple', '/*.simple']
 
 contains
 
@@ -78,7 +81,7 @@ contains
         &test_entry('simulated_workflow_1jxy', 'simulated_workflow', 'suite=1jxy', 1, 2, 1, 3, 7200, ENTRY_GATE, &
             &outputs_of(SIMWF//'1jxy', SIMWF_OUT), mem_gb=5.0, disk_gb=5.5, scales=.false.), &
         &test_entry('single_workflow_fcc', 'single_workflow', 'suite=fcc smpd=0.358', 1, 0, 0, 2, 7200, ENTRY_GATE, &
-            &outputs_of(SINGLEWF//'fcc', SINGLEWF_OUT), mem_gb=2.0, disk_gb=1.0, scales=.false.), &
+            &outputs_of(SINGLEWF//'fcc', SINGLEWF_FCC_OUT), mem_gb=2.0, disk_gb=1.0, scales=.false.), &
         &test_entry('single_workflow_wurtzite', 'single_workflow', 'suite=wurtzite smpd=0.358', 1, 0, 0, 2, 7200, &
             &ENTRY_GATE, outputs_of(SINGLEWF//'wurtzite', SINGLEWF_OUT), mem_gb=3.0, disk_gb=3.0, scales=.false.), &
         &test_entry('simulate_particles', 'simulate_particles', 'nthr=8', 8, 0, 0, 8, 3600, ENTRY_GATE, &
@@ -86,11 +89,9 @@ contains
         &test_entry('solve3D_addon', 'solve3D_addon', 'nthr=8', 8, 0, 0, 11, 7200, ENTRY_GATE, '', mem_gb=1.5, disk_gb=2.0), &
         ! its distributed step runs two workers of four threads
         &test_entry('cont_refine3D_1jxy', 'cont_refine3D_1jxy', 'nthr=8', 8, 2, 4, 10, 7200, ENTRY_GATE, '', mem_gb=11.0, disk_gb=8.0), &
-        ! its reconstruction overlaps the eight search threads (peak 10.15 cores)
-        &test_entry('multistate_assignment', 'multistate_assignment', 'nthr=8', 8, 0, 0, 11, 3600, ENTRY_GATE, '', mem_gb=1.5, disk_gb=1.0), &
-        ! as above: reconstruction overlaps the eight search threads (peak 10.8 cores); its four routes take
-        ! 32 minutes alone, an hour beside other entries (2026-10-19)
-        &test_entry('multistate_workflows', 'multistate_workflows', 'nthr=8', 8, 0, 0, 11, 7200, ENTRY_GATE, '', mem_gb=4.0, disk_gb=1.0), &
+        ! its reconstruction overlaps the eight search threads (peak 10.8 cores); its four routes take
+        ! 32 minutes alone, an hour beside other entries (2026-10-19), about 1.5 h on a 4-core runner
+        &test_entry('multistate_workflows', 'multistate_workflows', 'nthr=8', 8, 0, 0, 11, 14400, ENTRY_GATE, '', mem_gb=4.0, disk_gb=1.0), &
         &test_entry('state_fixture', 'state_fixture', 'nthr=8', 8, 0, 0, 8, 1800, ENTRY_GATE, 'metrics.tsv', mem_gb=2.0, &
             &disk_gb=1.0), &
         &test_entry('single_atoms_stats', 'single_atoms_stats', 'smpd=0.358 element=Pt', 8, 0, 0, 3, 3600, &

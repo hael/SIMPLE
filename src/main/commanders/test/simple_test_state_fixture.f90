@@ -7,10 +7,17 @@
 ! truth.txt beside it.
 ! The project is written into the caller's working directory; the cache holds the rest.
 module simple_test_state_fixture
-use simple_core_module_api
-use simple_image,  only: image
-use simple_oris,   only: oris
-use simple_cmdline, only: cmdline
+use simple_error,              only: simple_exception
+use simple_string,             only: string
+use simple_string_utils,       only: int2str
+use simple_ori_utils,          only: m2euler
+use simple_syslib,             only: del_file, dir_exists, get_process_id, simple_chdir, simple_getcwd, simple_mkdir, simple_rmdir
+use simple_fileio,             only: simple_copy_file
+use simple_imghead,            only: find_img_smpd, find_ldim_nptcls
+use simple_image,              only: image
+use simple_oris,               only: oris
+use simple_cmdline,            only: cmdline
+use simple_test_truth_metrics, only: axis_operator
 implicit none
 
 public :: state_fixture, FIX_SEARCH, FIX_KNOWN, FIX_VIEWS, betagal_frame, point_group_check
@@ -47,6 +54,8 @@ type :: state_fixture
     character(len=4)    :: pgrps(8)   = ''         !< the declared point group of each truth
     logical             :: reused     = .false.    !< build found the dataset in the cache
   contains
+    procedure :: new
+    procedure :: kill
     procedure :: build
     procedure :: truth_fname
     procedure :: project_fname
@@ -60,6 +69,43 @@ type :: state_fixture
 end type state_fixture
 
 contains
+
+    !> describes the dataset to build; the rest keeps its defaults, and build sets dir, pgrps and reused
+    subroutine new( self, family, mode, nstates, nptcls, snr, nthr, kind, pops, nviews, state_classes, sherr, &
+        &conf_angle, seed )
+        class(state_fixture),       intent(inout) :: self
+        character(len=*),           intent(in)    :: family
+        integer,                    intent(in)    :: mode, nstates, nptcls, nthr
+        real,                       intent(in)    :: snr
+        character(len=*), optional, intent(in)    :: kind
+        real,             optional, intent(in)    :: pops(:)
+        integer,          optional, intent(in)    :: nviews, seed
+        logical,          optional, intent(in)    :: state_classes
+        real,             optional, intent(in)    :: sherr, conf_angle
+        call self%kill
+        self%family  = family
+        self%mode    = mode
+        self%nstates = nstates
+        self%nptcls  = nptcls
+        self%snr     = snr
+        self%nthr    = nthr
+        if( present(kind)          ) self%kind          = kind
+        if( present(pops)          ) self%pops(1:size(pops)) = pops
+        if( present(nviews)        ) self%nviews        = nviews
+        if( present(state_classes) ) self%state_classes = state_classes
+        if( present(sherr)         ) self%sherr         = sherr
+        if( present(conf_angle)    ) self%conf_angle    = conf_angle
+        if( present(seed)          ) self%seed          = seed
+    end subroutine new
+
+    !> back to the defaults of the type
+    subroutine kill( self )
+        class(state_fixture), intent(inout) :: self
+        select type(self)
+            type is(state_fixture)
+                self = state_fixture()
+        end select
+    end subroutine kill
 
     integer function box( self )
         class(state_fixture), intent(in) :: self
@@ -332,7 +378,7 @@ contains
                         dc    = [(sum(sub%xyz(:,i), mask=dmask), i = 1, 3)] / real(count(dmask))
                         axis  = 0.
                         axis(ilong) = 1.
-                        r = rotation(axis, real(k-1) * self%conf_angle)
+                        r = axis_operator(axis, real(k-1) * self%conf_angle)
                         do i = 1, sub%n
                             if( dmask(i) ) sub%xyz(i,:) = matmul(r, sub%xyz(i,:) - dc) + dc
                         enddo
@@ -358,18 +404,6 @@ contains
             if( any(m%xyz(1:m%n,:) < 0.) ) THROW_HARD('a beta-galactosidase state has a negative coordinate')
         end subroutine assert_in_frame
 
-        function rotation( u, ang ) result( rm )
-            real, intent(in) :: u(3), ang
-            real :: rm(3,3), c, s, kk(3,3)
-            integer :: j
-            c  = cos(deg2rad(ang))
-            s  = sin(deg2rad(ang))
-            kk = reshape([0., u(3), -u(2), -u(3), 0., u(1), u(2), -u(1), 0.], [3,3])
-            rm = s * kk + (1. - c) * matmul(kk, kk)
-            do j = 1, 3
-                rm(j,j) = rm(j,j) + 1.
-            enddo
-        end function rotation
 
     end subroutine make_betagal_truths
 
@@ -478,8 +512,9 @@ contains
         class(sp_project), allocatable :: proj
         type(oris)      :: truth
         type(ctfparams) :: ctf
-        type(cmdline)   :: cline_compenv
+        class(cmdline), allocatable:: cline_compenv
         integer :: i, nrep
+        allocate(cline_compenv)
         allocate(proj)
         call truth%new(self%nptcls, is_ptcl=.true.)
         call truth%read(self%truth_doc(), [1, self%nptcls])

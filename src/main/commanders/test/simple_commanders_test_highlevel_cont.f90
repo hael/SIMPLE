@@ -16,10 +16,11 @@ contains
 module subroutine exec_test_cont_refine3D_1jxy( self, cline )
     class(commander_test_cont_refine3D_1jxy), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
-    type(parameters) :: params
+    class(parameters), allocatable:: params
     type(string)     :: cwd_saved, fixture_root
     integer          :: status
     logical          :: all_ok, nu_handoff_only
+    allocate(params)
     call simple_getcwd(cwd_saved)
     fixture_root = filepath(cwd_saved, 'test_cont_refine3D_1jxy_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
@@ -175,11 +176,11 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     type(commander_refine3D)           :: xrefine3D
     type(commander_refine3D_auto)      :: xauto
     type(commander_refine3D_local)     :: xlocal
-    type(cmdline)       :: cl
+    class(cmdline), allocatable:: cl
     type(atoms)         :: molecule
     type(molecule_data) :: mol
     type(image)         :: vol
-    type(sp_project)    :: seeded, out_a, out_c, run_proj
+    class(sp_project), allocatable:: seeded, out_a, out_c, run_proj
     type(oris)          :: truth, shuffled, stats
     type(ori)           :: o_shuffled
     type(ctfparams)     :: ctfvars
@@ -190,9 +191,10 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     real    :: sym_seed, sym_before, sym_after, sym_nopolish, sym_polish, d2ops(3,3,4), o(3), f(3,3)
     real    :: corr_mean
     logical :: updated(NPTCLS), l_sample_ok, l_finite
-    type(sp_project) :: out_f
+    class(sp_project), allocatable:: out_f
     real    :: diffs(NPTCLS)
     integer :: i, status, fsc_bytes
+    allocate(cl, seeded, out_a, out_c, run_proj, out_f)
     call make_ui
     write(logfhandle,'(a)') '>>> TEST_CONT_REFINE3D_1JXY: refine=cont gate'
     call simple_getcwd(root)
@@ -333,6 +335,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     call stats%new(1, is_ptcl=.false.)
     call stats%read(string(STATS_FILE))
     call gate%check('e_ran_to_maxits', nint(stats%get(1, 'ITERATION')) == AUTO_MAXITS)
+    ! the 0.01 on an exact percentage is slack, not derived
     call gate%check('e_nsample_particles_per_iteration', &
         &abs(stats%get(1, 'PERCEN_PARTICLES_SAMPLED') - 100.*real(AUTO_NSAMPLE)/real(NPTCLS)) < 0.01)
     ! the refine=cont convergence rule's stable fraction of the last iteration (maxits sets minits here)
@@ -531,6 +534,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         source_files(4) = add2fbody(source_files(2), MRC_EXT, '_odd')
         call source_reference%new(source_files(2), 'reference', message)
         ref_status = source_reference%validate_reference_set(source_files(5), support_verified, message)
+        call source_reference%kill
         call gate%check('nu_handoff_producer_reference_set', ref_status == REFSET_OK)
         if( ref_status /= REFSET_OK ) return
         source_files(6) = provenance_file(source_files(2))
@@ -587,6 +591,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         call stats%read(string(STATS_FILE))
         used_lp = stats%get(1, 'LP_MATCHING')
         expected_lp = calc_lowpass_lim(calc_fourier_index(saved_lp, BOX, SMPD), BOX, SMPD)
+        ! 1.e-3: slack, not derived
         call gate%check('nu_handoff_first_matching_band', ieee_is_finite(used_lp) .and. abs(used_lp-expected_lp) < 1.e-3)
         call gate%check('nu_handoff_completed_one_local_iteration', nint(stats%get(1, 'ITERATION')) == 1)
         call gate%check('nu_handoff_continuous_work', nint(stats%get(1, 'POSE_CONT_ATTEMPTS')) == NPTCLS)
@@ -690,7 +695,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         use simple_syslib, only: simple_list_files
         character(len=*),  intent(in)    :: dir, objfun
         integer,           intent(in)    :: nparts
-        type(sp_project),  intent(inout) :: out
+        class(sp_project),  intent(inout) :: out
         logical, optional, intent(in)    :: l_production_route, l_nu_producer
         type(string), allocatable :: bench_parts(:)
         logical :: l_seam
@@ -740,7 +745,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !! (stage f); the last assembly must represent the N of the final project (C1 of the aftermath)
     subroutine run_refine3D_discrete( dir, pose_cont, out )
         character(len=*), intent(in)    :: dir, pose_cont
-        type(sp_project), intent(inout) :: out
+        class(sp_project), intent(inout) :: out
         type(trail_chain_manifest) :: manifest
         integer, allocatable :: nrep(:), nsmp(:)
         integer :: mstatus
@@ -777,7 +782,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !! control: the same poses against the shuffled truth fail the rotation and basin floors
     subroutine gate_e25( tag, out )
         character(len=*), intent(in)    :: tag
-        type(sp_project), intent(inout) :: out
+        class(sp_project), intent(inout) :: out
         call pose_errors(out%os_ptcl3D, med_rot, med_sh, basin)
         call gate%metric(tag//'_median_rotation_error_deg', med_rot, MAX_MED_ROT, med_rot <= MAX_MED_ROT, upper=.true.)
         call gate%metric(tag//'_median_shift_error_px',     med_sh,  MAX_MED_SH,  med_sh  <= MAX_MED_SH, upper=.true.)
@@ -794,7 +799,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     !! direction in every particle (a discrete pass would assign its own)
     subroutine check_no_polar( tag, out )
         character(len=*), intent(in) :: tag
-        type(sp_project), intent(in) :: out
+        class(sp_project), intent(in) :: out
         type(string), allocatable :: files(:)
         integer :: j, npolar
         logical :: l_seed_proj
@@ -910,16 +915,17 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     type(commander_new_project)        :: xnew_project
     type(commander_rec3D)              :: xrec
     type(commander_refine3D)           :: xrefine3D
-    type(cmdline)       :: cl
+    class(cmdline), allocatable:: cl
     type(atoms)         :: molecule
     type(molecule_data) :: mol
-    type(sp_project)    :: seeded, out
+    class(sp_project), allocatable:: seeded, out
     type(oris)          :: truth
     type(ctfparams)     :: ctfvars
     type(test_gate)     :: gate
     type(string)        :: bench_root, stk_abs, ref_abs
     real    :: smpd, med_rot, med_sh, basin
     integer :: i, status
+    allocate(cl, seeded, out)
     smpd = CONT_BENCH_EXTENT/real(CONT_BENCH_BOX)
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_BENCH: refine=cont benchmark'
     call simple_getcwd(bench_root)

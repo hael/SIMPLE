@@ -16,10 +16,11 @@ contains
 module subroutine exec_test_solve3D_addon( self, cline )
     class(commander_test_solve3D_addon), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    type(parameters) :: params
+    class(parameters), allocatable:: params
     type(string)     :: cwd_saved, fixture_root
     integer          :: status
     logical          :: all_ok
+    allocate(params)
     call simple_getcwd(cwd_saved)
     fixture_root = filepath(cwd_saved, 'test_solve3D_addon_'//int2str(get_process_id()))
     if( dir_exists(fixture_root) ) call simple_rmdir(fixture_root)
@@ -44,8 +45,8 @@ end subroutine exec_test_solve3D_addon
 module subroutine exec_generate_solve3D_addon_snapshots( self, cline )
     class(commander_generate_solve3D_addon_snapshots), intent(inout) :: self
     class(cmdline),                                        intent(inout) :: cline
-    type(parameters) :: params
-    type(sp_project) :: source, generated, snapshot
+    class(parameters), allocatable:: params
+    class(sp_project), allocatable:: source, generated, snapshot
     type(image)      :: img
     type(string)     :: source_stk, stack_fname, project_fname, project_name
     integer, allocatable :: chunk_first(:), chunk_last(:), chunk_stkind(:), chunk_snapshot(:), snapshot_last(:)
@@ -53,6 +54,7 @@ module subroutine exec_generate_solve3D_addon_snapshots( self, cline )
     integer :: nchunks, nchunks_snapshot, numlen
     integer :: iptcl, ind_in_stk, stkind, previous_stkind, isnapshot, previous_snapshot
     integer :: ichunk, local_ind
+    allocate(params, source, generated, snapshot)
     call cline%set('mkdir', 'no')
     call params%new(cline)
     call source%read(params%projfile)
@@ -224,6 +226,9 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     ! The maintainer's Mac measured 6.00 deg at one thread on the absolute excess this gate replaced
     ! (2026-10-17, against 5.0); the relative gate has not been profiled there yet.
     real,    parameter :: MAX_POSE_ERR_EXCESS  = 10.0 !< cohort-frozen above frozen-frozen
+    ! coverage and loss floors from five runs of 2026-09-26 (coverage 1.00, a correlation loss of at most 0.001,
+    ! the union FSC 4.83-5.03 A against the base 5.13-5.48 A), worst run plus a margin rather than the floor
+    ! rule; MIN_REPORT_CORR is the report's own DOCK_CORR_FLOOR, below which the report docks
     real,    parameter :: MIN_COVERAGE        = 0.9   !< cohort particles with updatecnt > 0
     real,    parameter :: MIN_UNION_CORR      = 0.9   !< docked union map vs truth
     real,    parameter :: MAX_CORR_LOSS       = 0.03  !< union map correlation below the base map's
@@ -234,14 +239,14 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     type(solve3D_addon_report)        :: addon_report
     type(commander_simulate_particles):: xsim
     type(commander_new_project)       :: xnew_project
-    type(cmdline)       :: cl
+    class(cmdline), allocatable:: cl
     type(atoms)         :: molecule
     type(molecule_data) :: mol
-    type(sp_project)    :: spproj, strict_proj, out_proj, frz_proj
+    class(sp_project), allocatable:: spproj, strict_proj, out_proj, frz_proj
     type(oris)          :: truth
     type(ctfparams)     :: ctfvars
     type(solve3D_manifest) :: man_base, man_out, man_pub, man_mid
-    type(sp_project)          :: pub_proj, mid_proj
+    class(sp_project), allocatable:: pub_proj, mid_proj
     type(carried_bundle)      :: bundle
     type(string)        :: root, stk_abs, stk_base_abs, stk_new1_abs, stk_new2_abs, full_proj, strict_proj_fname
     type(string)        :: frozen_run_proj, out_run_proj, mid_proj_fname, mid_run_dir, bundle_path
@@ -259,6 +264,7 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     real    :: r, smpd_vol, corr_addon, corr_base, fsc_addon, fsc_base, err_cf, err_ff, coverage, err_ctrl
     real    :: frac_ff, frac_cf
     logical :: found, l_same, l_pub, l_frz_row
+    allocate(cl, spproj, strict_proj, out_proj, frz_proj, pub_proj, mid_proj)
     call make_ui
     write(logfhandle,'(a)') '>>> TEST_SOLVE3D_ADDON: solve3D_addon gate'
     call simple_getcwd(root)
@@ -529,8 +535,7 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     else
         call gate%check('addon_report_written', .false.)
     endif
-    ! frozen rows (the first add-on's union) identical to the frozen project; cohort rows (the third set)
-    ! set included) posed
+    ! frozen rows (the first add-on's union) identical to the frozen project; cohort rows (the third set) posed
     nf = count(l_frozen)
     nc = NPTCLS - nf
     allocate(frozen_inds(0), cohort_inds(0))
@@ -539,6 +544,7 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     do i = 1, NPTCLS
         l_frz_row = i <= NMID
         if( l_frz_row ) l_frz_row = frz_proj%os_ptcl3D%get_state(i) > 0 .and. frz_proj%os_ptcl3D%get_updatecnt(i) > 0
+        ! the frozen rows are restored exactly (solve3D_addon policy); the 1.e-3 and 1.e-4 are round-off slack, not derived
         if( l_frz_row )then
             frozen_inds = [frozen_inds, i]
             l_same = l_same .and. all(abs(out_proj%os_ptcl3D%get_euler(i) - frz_proj%os_ptcl3D%get_euler(i)) < 1.e-3) &

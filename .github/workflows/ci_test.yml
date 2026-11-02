@@ -2,25 +2,53 @@ name: Build SIMPLE & Run Tests (Linux/MacOS)
 
 on:
   schedule:
-    # Runs at 00:00 UTC every day (Nightly)
+    # Runs at 00:00 America/New_York every day (Nightly)
     - cron: '0 0 * * *'
       timezone: 'America/New_York'
 
   # manually trigger for testing
   workflow_dispatch:
 
+# One night at a time: a run still going when the next is scheduled finishes first.
+concurrency:
+  group: ci-test-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   Build_and_Test:
-    name: Build SIMPLE & Run Tests
+    name: Test ${{ matrix.group }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 340
     strategy:
+      # Every platform and group finishes and reports, whatever the others do.
+      fail-fast: false
       matrix:
-        node-version: [24]
         os: [ubuntu-26.04, macos-latest]
+        # The nightly entries in groups that run as parallel jobs, each under its own time
+        # limit (one serial job took 3-5 h of the 6 h limit). `rest` takes every high-level
+        # entry the other groups do not name, so a new entry runs without a change here.
+        group: [library, workflows, rest, multistate_workflows]
+        include:
+          - group: library
+            label: 'platform|library'
+          - group: workflows
+            label: highlevel
+            regex: '^(simulated_workflow|single_workflow)_'
+          - group: rest
+            label: highlevel
+            skip: '^(simulated_workflow_|single_workflow_|multistate_workflows$)'
+          - group: multistate_workflows
+            label: highlevel
+            regex: '^multistate_workflows$'
+        exclude:
+          # multistate_workflows takes about 1.5 h on the 4-core Linux runner (deadline 4 h) and
+          # timed out on 4 of 5 macOS nights (3 cores): Linux only (owner decision, 2026-11-02;
+          # doc/refactoring_notes/planned/nightly_suite_triage_report.md).
+          - os: macos-latest
+            group: multistate_workflows
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-26.04'
@@ -39,22 +67,46 @@ jobs:
              brew install jbigkit
              brew install python@3.10
              brew install fftw
-             brew install curl 
-             brew install openblas 
+             brew install curl
+             brew install openblas
              brew install lapack
-             brew install arpack 
-             
+             brew install arpack
+
       - name: Install SIMPLE (Linux/MacOS)
+        id: build
         run: |
              ./compile_clean.sh
 
       - name: Test SIMPLE (Linux/MacOS)
+        if: steps.build.outcome == 'success'
+        # below the job limit, so that the reports are still uploaded
+        timeout-minutes: 320
+        env:
+          CTEST_LABEL: ${{ matrix.label }}
+          CTEST_REGEX: ${{ matrix.regex }}
+          CTEST_SKIP: ${{ matrix.skip }}
         run: |
              # the fast gate (ctest -L fast) already ran in the build step (compile_clean.sh)
              cd build
-             echo "-------------------- PLATFORM TESTS -------------------------"
-             ctest -L platform --no-tests=error --output-on-failure
-             echo "-------------------- LIBRARY TESTS --------------------------"
-             ctest -L library --no-tests=error --output-on-failure
-             echo "-------------------- HIGH-LEVEL TESTS -----------------------"
-             ctest -L highlevel --no-tests=error --output-on-failure
+             args=(-L "$CTEST_LABEL")
+             [ -n "$CTEST_REGEX" ] && args+=(-R "$CTEST_REGEX")
+             [ -n "$CTEST_SKIP" ] && args+=(-E "$CTEST_SKIP")
+             # entries pack by their PROCESSORS within the runner's cores (two one-thread workflows
+             # at a time on four); one that reserves more runs alone, a RUN_SERIAL one always alone
+             ncpu=$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+             echo "-------------------- ${{ matrix.group }}: ctest ${args[*]} on $ncpu cores --------------------"
+             ctest "${args[@]}" --parallel "$ncpu" --no-tests=error --output-on-failure --output-junit ctest_junit.xml
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.group }}-${{ matrix.os }}
+          path: |
+            build/ctest_junit.xml
+            build/Testing/Temporary/LastTest*.log
+            build/test_runs/ctest_fast.log*
+            build/test_runs/**/simple_test_*_report.txt
+            build/test_runs/**/metrics.tsv
+          if-no-files-found: warn
+          retention-days: 14

@@ -12,7 +12,6 @@ type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: cont_refine3D_bench
 type(ui_program), target :: polar_matching_bench
-type(ui_program), target :: multistate_assignment
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
 type(ui_program), target :: pcg_recon
@@ -40,7 +39,6 @@ contains
         call new_cont_refine3D_1jxy(tsttab)
         call new_cont_refine3D_bench(tsttab)
         call new_polar_matching_bench(tsttab)
-        call new_multistate_assignment(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
         call new_simulated_workflow(tsttab)
@@ -68,7 +66,6 @@ contains
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_bench%name%to_char()
         write(logfhandle,'(A)') polar_matching_bench%name%to_char()
-        write(logfhandle,'(A)') multistate_assignment%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
         write(logfhandle,'(A)') simulated_workflow%name%to_char()
@@ -240,26 +237,6 @@ contains
         ! add to ui_hash
         call add_ui_program('polar_matching_bench', polar_matching_bench, tsttab, UI_CATEGORY)
     end subroutine new_polar_matching_bench
-
-    subroutine new_multistate_assignment( tsttab )
-        class(ui_hash), intent(inout) :: tsttab
-        ! PROGRAM SPECIFICATION
-        call multistate_assignment%new(&
-        &'multistate_assignment',&                  ! name
-        &'validate multi-state refine3D against the known states of a simulated blob phantom',&
-        &'refine3D nstates=3 with refine=prob and with refine=prob_neigh on 1 500 simulated particles of three '//&
-        &'blob phantoms (populations 50, 30 and 20 %), from the truths low-passed to 20 A and random initial '//&
-        &'states, the state labels, maps and poses checked against the simulation truth, with shuffled-label and '//&
-        &'duplicated-maps controls in every refinement and an identical-states control on request',&
-        &'simple_test_exec',&                       ! executable
-        &.false., display_name='Multi-State Assignment Validation')                            ! requires sp_project
-        call multistate_assignment%add_input(UI_PARM, 'suite', 'str', 'Sub-suite', &
-            &'Run one case: prob, prob_neigh or identical (the identical-states control); list prints them. '//&
-            &'Default runs prob and prob_neigh', '', .false., '')
-        call multistate_assignment%add_input(UI_COMP, nthr, required_override=.false.)
-        ! add to ui_hash
-        call add_ui_program('multistate_assignment', multistate_assignment, tsttab, UI_CATEGORY)
-    end subroutine new_multistate_assignment
 
     subroutine new_multistate_workflows( tsttab )
         class(ui_hash), intent(inout) :: tsttab

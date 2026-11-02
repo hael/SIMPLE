@@ -227,6 +227,19 @@ source contains scheduled automation rather than a dedicated
 to be built. Acceptance of Actions as the replacement operational contract
 should be explicit.
 
+### Observed evidence (2026-11-01)
+
+The run of the standing plan [nightly_suite_triage.md](nightly_suite_triage.md)
+records the CI history of `ci_test.yml` from 2026-09-29 to 2026-11-01 (last green
+night 2026-10-01) and three complete local runs of every nightly entry on Linux
+(GCC 15.2, 24 cores), with per-entry verdicts, wall times, peak memory, gate
+values and the identity of the one-thread workflows:
+[nightly_suite_triage_report.md](nightly_suite_triage_report.md). It rewrote
+`ci_test.yml` (parallel groups per platform, `fail-fast: false`, reports uploaded
+as artifacts on every outcome, a concurrency group), which addresses the archive,
+overlap and total-time rows below once its first scheduled run confirms it. No
+macOS run and no run on the CI runners is part of that record.
+
 ### Original runner contract: remaining differences
 
 | Original requirement | Current disposition |

@@ -11,10 +11,12 @@ implicit none
 #include "simple_local_flags.inc"
 
 !> the declared group holds when the truth correlates with itself above this under its operators
+!! the test-suite truth plan's bar; measured 0.995 for the tetramer under D2 and 0.996 for the dimer under C2
 real, parameter :: MIN_CC_GROUP = 0.99
 !> the next larger group is broken when its extra operator lowers the self-correlation by at least
 !! this below the declared group's: relative, so that a state broken by a small rotation (whose
 !! self-correlation under the extra operator stays high) is still told from one that holds it
+!! not derived; the smallest measured drop is 0.044 (one chain turned by 10 deg)
 real, parameter :: MIN_CC_DROP  = 0.01
 
 contains
@@ -77,13 +79,7 @@ subroutine check_blob_modes( nthr, gate )
     logical :: ok
     allocate(proj)
     do imode = FIX_SEARCH, FIX_VIEWS
-        fix           = state_fixture()
-        fix%family    = 'blob'
-        fix%mode      = imode
-        fix%nptcls    = 300
-        fix%nviews    = 10
-        fix%pops(1:3) = [0.5, 0.3, 0.2]
-        fix%nthr      = nthr
+        call fix%new('blob', imode, 3, 300, 1., nthr, pops=[0.5, 0.3, 0.2], nviews=10)
         call fix%build
         call fix%build
         call gate%check('fixture blob '//trim(MODES(imode))//': the second build reads the cache', fix%reused)
@@ -124,6 +120,7 @@ subroutine check_blob_modes( nthr, gate )
                     &MIN_CC_DROP, ccg - ccl >= MIN_CC_DROP)
             enddo
         endif
+        call fix%kill
     enddo
     deallocate(proj)
 end subroutine check_blob_modes
@@ -138,12 +135,7 @@ subroutine check_betagal( kind, nstates, nptcls, nthr, gate )
     type(state_fixture) :: fix
     real    :: ccg, ccl, extra(3,3)
     integer :: k
-    fix         = state_fixture()
-    fix%family  = 'betagal'
-    fix%kind    = kind
-    fix%nstates = nstates
-    fix%nptcls  = nptcls
-    fix%nthr    = nthr
+    call fix%new('betagal', FIX_SEARCH, nstates, nptcls, 1., nthr, kind=kind)
     call fix%build
     do k = 1, fix%nstates
         select case(trim(fix%pgrps(k)))
@@ -156,6 +148,7 @@ subroutine check_betagal( kind, nstates, nptcls, nthr, gate )
         call gate%metric('fixture betagal '//kind//' truth '//int2str(k)//': the next larger group lowers it by', &
             &ccg - ccl, MIN_CC_DROP, ccg - ccl >= MIN_CC_DROP)
     enddo
+    call fix%kill
 end subroutine check_betagal
 
 end submodule simple_commanders_test_highlevel_fixture

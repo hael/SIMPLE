@@ -6,7 +6,7 @@ use simple_commanders_test_highlevel, only: commander_test_mini_stream, commande
                                             commander_test_pcg_frac_update, commander_test_rec3D_backends, &
                                             commander_test_solve3D_addon, commander_test_cont_refine3D_1jxy, &
                                             commander_test_cont_refine3D_bench, commander_test_polar_matching_bench, &
-                                            commander_test_multistate_assignment, commander_test_multistate_workflows, &
+                                            commander_test_multistate_workflows, &
                                             commander_test_state_fixture, &
                                             commander_generate_solve3D_addon_snapshots, &
                                             commander_test_flex_pca_blobs, &
@@ -26,7 +26,6 @@ type(commander_generate_solve3D_addon_snapshots) :: xaddon_snapshots
 type(commander_test_cont_refine3D_1jxy)          :: xcont_refine3D_1jxy
 type(commander_test_cont_refine3D_bench)         :: xcont_refine3D_bench
 type(commander_test_polar_matching_bench)        :: xpolar_matching_bench
-type(commander_test_multistate_assignment)       :: xmultistate_assignment
 type(commander_test_multistate_workflows)        :: xmultistate_workflows
 type(commander_test_state_fixture)               :: xstate_fixture
 type(commander_test_pcg_recon)                   :: xpcg_recon
@@ -64,8 +63,6 @@ contains
                 call xcont_refine3D_bench%execute(cline)
             case( 'polar_matching_bench' )
                 call xpolar_matching_bench%execute(cline)
-            case( 'multistate_assignment' )
-                call xmultistate_assignment%execute(cline)
             case( 'multistate_workflows' )
                 call xmultistate_workflows%execute(cline)
             case( 'state_fixture' )

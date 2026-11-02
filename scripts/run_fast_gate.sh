@@ -19,7 +19,9 @@
 #
 # Before ctest, the source-boundary/descriptor, registry and FLEX dependency-DAG
 # checks run; a mismatch, multi-unit source, upward dependency or cycle fails
-# the gate before any test runs.
+# the gate before any test runs. Source files under src/ and production/ that
+# git does not track are listed as a warning: the library globs its sources, so
+# such a file builds here and is missing from a commit of the tree.
 #
 # Called by every compile_*.sh between `make` and `make install` unless
 # --exclude-tests is given (a failed gate installs nothing), and by
@@ -37,6 +39,16 @@ jobs=$(( (ncpu + 1) / 2 )); [ "$jobs" -lt 1 ] && jobs=1
 python3 "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1
 python3 "$ROOT/scripts/check_descr.py" "$ROOT" || exit 1
 python3 "$ROOT/scripts/check_flex_dag.py" "$ROOT" || exit 1
+# The nightly build broke twice on commits that left out a new source file
+# (2026-10-28, 2026-10-31). Untracked work in progress is normal: warn, never fail.
+if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    untracked=$(git -C "$ROOT" ls-files --others --exclude-standard -- src production |
+        grep -E '\.([Ff](90|08)|c|cpp|h|hpp|inc)$')
+    if [ -n "$untracked" ]; then
+        echo "run_fast_gate: warning: $(echo "$untracked" | wc -l) source file(s) git does not track compiled into this build; a commit without them does not build:" >&2
+        echo "$untracked" | head -n 20 | sed 's/^/    /' >&2
+    fi
+fi
 mkdir -p "$BUILD/test_runs"
 LOG="$BUILD/test_runs/ctest_fast.log"
 # GATE_DECLARED went to yes in Phase 2 (2026-09-22): the fast area suites

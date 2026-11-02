@@ -15,21 +15,21 @@ module subroutine exec_test_pcg_frac_update( self, cline )
     use simple_test_state_fixture, only: state_fixture, FIX_KNOWN
     class(commander_test_pcg_frac_update), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    type(parameters)    :: params
-    type(builder)       :: build
+    class(parameters), allocatable:: params
+    class(builder), allocatable:: build
     type(state_fixture) :: fix
+    integer             :: nthr_fix
+    allocate(params, build)
     if( .not. cline%defined('projfile') )then
-        fix%family  = 'blob'
-        fix%mode    = FIX_KNOWN
-        fix%nstates = 1
-        fix%nptcls  = 600
-        fix%snr     = 2.
-        if( cline%defined('nthr') ) fix%nthr = cline%get_iarg('nthr')
+        nthr_fix = 1
+        if( cline%defined('nthr') ) nthr_fix = cline%get_iarg('nthr')
+        call fix%new('blob', FIX_KNOWN, 1, 600, 2., nthr_fix)
         call fix%build
         call cline%set('projfile', fix%project_fname())
         if( .not. cline%defined('objfun')  ) call cline%set('objfun',  'cc')
         if( .not. cline%defined('mskdiam') ) call cline%set('mskdiam', fix%mskdiam())
         if( .not. cline%defined('pgrp')    ) call cline%set('pgrp',    'c1')
+        call fix%kill
     endif
     if( .not. cline%defined('trs') ) call cline%set('trs', 5.)
     call cline%set('oritype', 'ptcl3D')
@@ -57,9 +57,11 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     use simple_matcher_ptcl_io,    only: prepimgbatch, ptcl_read_session, killimgbatch, prep_rec_observation
     use simple_sigma2_files,       only: load_sigma2
     use simple_euclid_sigma2,      only: sigma2_half
-    type(parameters), intent(inout) :: params
-    type(builder),    intent(inout) :: build
+    class(parameters), intent(inout) :: params
+    class(builder),    intent(inout) :: build
     class(cmdline),   intent(inout) :: cline
+    ! not derived: RAW_TOL where separately accumulated sums are compared, REPLAY_TOL where the same sums
+    ! are rescaled or read back
     real, parameter :: RAW_TOL = 2.0e-5, REPLAY_TOL = 2.0e-6
     integer, allocatable :: selected_pinds(:), state_pinds(:), state_subset1(:), state_subset2(:)
     integer, allocatable :: half_pinds(:), subset1(:), subset2(:)

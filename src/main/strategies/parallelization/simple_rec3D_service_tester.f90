@@ -11,7 +11,7 @@ use simple_defs,                        only: logfhandle
 use simple_string,                      only: string
 use simple_string_utils,                only: int2str_pad
 use simple_syslib,                      only: simple_mkdir, simple_chdir, simple_rename
-use simple_fileio,                      only: simple_copy_file
+use simple_fileio,                      only: files_identical, simple_copy_file
 use simple_image,                       only: image
 use simple_cmdline,                     only: cmdline
 use simple_sp_project,                  only: sp_project
@@ -23,14 +23,17 @@ use simple_refine3D_fnames,             only: refine3D_state_vol_fname, refine3D
 use simple_test_truth_metrics,          only: compare_to_truth
 use simple_flex_pca_application_tester, only: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, &
     &FLEX_PHANTOM_BOX, FLEX_PHANTOM_NPTCLS, FLEX_PHANTOM_SMPD, FLEX_PHANTOM_MSKDIAM
-use simple_test_utils
+use simple_error,                       only: simple_exception
+use simple_test_utils,                  only: assert_false, assert_int, assert_true, enter_fixture, leave_fixture, tests_failed
 implicit none
+#include "simple_local_flags.inc"
 private
 public :: run_all_rec3D_service_lib_tests
 
 integer, parameter :: NTHR       = 4
 integer, parameter :: NSTATES    = 2
 real,    parameter :: CORR_LP    = 8.0   !< same-frame low-pass of the map correlations (A)
+! the margin of the flex-on-SIMPLE plan, measured weighted minus hard -0.0001 to +0.0004; MASS_RELTOL is not derived
 real,    parameter :: CORR_MARGIN = 0.01
 real,    parameter :: MASS_RELTOL = 1.e-5
 
@@ -78,8 +81,9 @@ contains
     subroutine make_project( dir, labels )
         character(len=*), intent(in) :: dir
         integer,          intent(in) :: labels(FLEX_PHANTOM_NPTCLS)
-        type(sp_project) :: project
+        class(sp_project), allocatable:: project
         integer :: i
+        allocate(project)
         call simple_chdir(root)
         call simple_mkdir(string(dir))
         call build_flex_pca_phantom_project(root//'/'//dir//'/phantom.simple', stack, oritab)
@@ -95,9 +99,10 @@ contains
     subroutine publish_weights( weights, labels )
         real,    intent(in) :: weights(FLEX_PHANTOM_NPTCLS,NSTATES)
         integer, intent(in) :: labels(FLEX_PHANTOM_NPTCLS)
-        type(sp_project)       :: project
+        class(sp_project), allocatable:: project
         type(state_weight_set) :: wset
         integer :: i
+        allocate(project)
         call project%read(string('phantom.simple'))
         call wset%publish(project, project%os_ptcl3D, string('phantom.simple'), &
             &[(i, i = 1, FLEX_PHANTOM_NPTCLS)], weights, labels, 'tester')
@@ -111,8 +116,9 @@ contains
         logical,                    intent(in) :: l_weighted
         character(len=*), optional, intent(in) :: extra_key(:), extra_val(:)
         type(commander_rec3D) :: xrec3D
-        type(cmdline)         :: cline
+        class(cmdline), allocatable:: cline
         integer :: i
+        allocate(cline)
         call cline%set('prg',         'reconstruct3D')
         call cline%set('projfile',    'phantom.simple')
         call cline%set('mkdir',       'no')
@@ -162,7 +168,7 @@ contains
             do k = 1, size(SUFFIXES)
                 fname      = state_map_fname(s, trim(SUFFIXES(k)))
                 fname_hard = fname//'.hard'
-                l_equal = l_equal .and. same_bytes(fname, fname_hard)
+                l_equal = l_equal .and. files_identical(fname, fname_hard)
             enddo
         enddo
         call assert_true(l_equal, backend//': 0/1 weights equal to the labels reproduce the hard maps bit for bit')
@@ -174,10 +180,11 @@ contains
     !! run completes, the empty state's previous maps stay byte for byte, the other state is rewritten
     subroutine test_empty_state_carried()
         character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
-        type(sp_project) :: project
+        class(sp_project), allocatable:: project
         type(string)     :: fname, fname_prev
         integer :: truth_labels(FLEX_PHANTOM_NPTCLS), i, k, status
         logical :: l_kept
+        allocate(project)
         write(*,'(A)') 'test_empty_state_carried pcg'
         truth_labels = [(conformer(i), i = 1, FLEX_PHANTOM_NPTCLS)]
         call make_project('empty_pcg', truth_labels)
@@ -186,10 +193,12 @@ contains
             fname      = state_map_fname(2, trim(SUFFIXES(k)))
             fname_prev = fname//'.prev'
             call simple_copy_file(fname, fname_prev, status)
+            if( status /= 0 ) THROW_HARD('could not keep '//fname%to_char())
         enddo
         fname      = state_map_fname(1, '')
         fname_prev = fname//'.prev'
         call simple_copy_file(fname, fname_prev, status)
+        if( status /= 0 ) THROW_HARD('could not keep '//fname%to_char())
         ! every particle to state 1: state 2 has none
         call project%read(string('phantom.simple'))
         do i = 1, FLEX_PHANTOM_NPTCLS
@@ -202,12 +211,12 @@ contains
         do k = 1, size(SUFFIXES)
             fname      = state_map_fname(2, trim(SUFFIXES(k)))
             fname_prev = fname//'.prev'
-            l_kept = l_kept .and. same_bytes(fname, fname_prev)
+            l_kept = l_kept .and. files_identical(fname, fname_prev)
         enddo
         call assert_true(l_kept, 'pcg: the empty state keeps its previous maps byte for byte')
         fname      = state_map_fname(1, '')
         fname_prev = fname//'.prev'
-        call assert_false(same_bytes(fname, fname_prev), 'pcg: the populated state is reconstructed again')
+        call assert_false(files_identical(fname, fname_prev), 'pcg: the populated state is reconstructed again')
         call fname%kill
         call fname_prev%kill
     end subroutine test_empty_state_carried
@@ -218,25 +227,6 @@ contains
         type(string) :: fname
         fname = string('recvol_state')//int2str_pad(s,2)//suffix//'.mrc'
     end function state_map_fname
-
-    logical function same_bytes( fname1, fname2 ) result( l_same )
-        class(string), intent(in) :: fname1, fname2
-        character(len=1), allocatable :: b1(:), b2(:)
-        integer :: u1, u2, n1, n2
-        l_same = .false.
-        inquire(file=fname1%to_char(), size=n1)
-        inquire(file=fname2%to_char(), size=n2)
-        if( n1 <= 0 .or. n1 /= n2 ) return
-        allocate(b1(n1), b2(n2))
-        open(newunit=u1, file=fname1%to_char(), access='stream', form='unformatted', status='old', action='read')
-        open(newunit=u2, file=fname2%to_char(), access='stream', form='unformatted', status='old', action='read')
-        read(u1) b1
-        read(u2) b2
-        close(u1)
-        close(u2)
-        l_same = all(b1 == b2)
-        deallocate(b1, b2)
-    end function same_bytes
 
     !> per state: the weighted map against its expected mixture, the hard map against its truth
     subroutine test_fractional_phantom( backend )
@@ -358,8 +348,9 @@ contains
     subroutine fractional_update_then_new_generation( weights, labels )
         real,    intent(in) :: weights(FLEX_PHANTOM_NPTCLS,NSTATES)
         integer, intent(in) :: labels(FLEX_PHANTOM_NPTCLS)
-        type(sp_project) :: project
+        class(sp_project), allocatable:: project
         integer :: i
+        allocate(project)
         call project%read(string('phantom.simple'))
         do i = 1, FLEX_PHANTOM_NPTCLS
             call project%os_ptcl3D%set(i, 'updatecnt', 1.)

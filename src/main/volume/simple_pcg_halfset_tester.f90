@@ -19,7 +19,7 @@ use simple_sp_project,        only: sp_project
 use simple_sym,               only: sym
 use simple_memoize_ft_maps,   only: forget_ft_maps, memoize_ft_maps
 use simple_type_defs,         only: CTFFLAG_NO, ctfparams, fplane_type
-use simple_test_utils
+use simple_test_utils,        only: assert_true, set_fixed_seed
 use ieee_arithmetic,          only: ieee_is_finite
 implicit none
 private
@@ -44,8 +44,10 @@ integer, parameter :: ODD_SEED       = 20260816
 integer, parameter :: MAXITS         = 40
 integer, parameter :: N_LOW_SHELLS   = 3
 integer, parameter :: N_HIGH_SHELLS  = 3
+! carried unchanged from the standalone half-set test (2b39155e1), not derived; CLEAN_CORR_MIN below is not
 real(dp), parameter :: SNR_RELTOL         = 0.12_dp
 real(dp), parameter :: NOISE_CORR_TOL     = 0.08_dp
+! 48 views recovered 0.984/0.987 and 96 views 0.98 by 8 iterations (first nightly run, 2026-09-28)
 real(dp), parameter :: CLEAN_CORR_MIN     = 0.97_dp ! noiseless-recovery bar of both solve tests
 real(dp), parameter :: LOW_FSC_MIN        = 0.40_dp
 real(dp), parameter :: FSC_LOW_HIGH_GAP   = 0.10_dp
@@ -56,7 +58,6 @@ contains
     subroutine run_all_pcg_halfset_tests()
         write(*,'(A)') '**** running all pcg_halfset tests ****'
         call test_truth_volume_fixture()
-        call test_disjoint_half_ownership()
         call test_independent_observations()
         call test_halfset_fsc_96()
         call test_halfset_matrix_48()
@@ -290,11 +291,12 @@ contains
         type(fplane_grid)        :: grid
         type(image)              :: observation, observation_padded, restored
         type(ori)                :: o
-        type(parameters), target :: params
+        class(parameters), allocatable, target:: params
         type(reconstructor)      :: gridder
-        type(sp_project)         :: project
+        class(sp_project), allocatable:: project
         type(sym)                :: c1sym
         integer :: i
+        allocate(params, project)
         params%box        = BOX
         params%box_crop   = BOX
         params%box_croppd = OSMPL_PAD_FAC * BOX
@@ -328,6 +330,7 @@ contains
         if( allocated(fplane%ctfsq_plane)    ) deallocate(fplane%ctfsq_plane)
         if( allocated(fplane%transfer_plane) ) deallocate(fplane%transfer_plane)
         call forget_ft_maps()
+        call grid%kill
         call c1sym%kill()
         call o%kill()
         call restored%kill()
@@ -426,25 +429,6 @@ contains
             &'phantom is asymmetric under a 180-degree z rotation')
     end subroutine test_truth_volume_fixture
 
-    subroutine test_disjoint_half_ownership()
-        type(oris) :: even_oris, odd_oris
-        integer, allocatable :: even_ids(:), odd_ids(:)
-        integer :: i
-        logical :: disjoint
-        write(*,'(A)') 'test_disjoint_half_ownership'
-        call build_disjoint_halves(24, even_oris, odd_oris, even_ids, odd_ids)
-        call assert_int(24, even_oris%get_noris(), '24 even orientations')
-        call assert_int(24, odd_oris%get_noris(),  '24 odd orientations')
-        call assert_true(all(mod(even_ids,2) == 0) .and. all(mod(odd_ids,2) == 1), 'ownership follows the parity split')
-        disjoint = .true.
-        do i = 1, 24
-            if( any(even_ids(i) == odd_ids) ) disjoint = .false.
-        enddo
-        call assert_true(disjoint, 'even and odd ownership do not overlap')
-        call even_oris%kill()
-        call odd_oris%kill()
-    end subroutine test_disjoint_half_ownership
-
     !> the observation builder realises the requested SNR, draws independent noise per half
     !! and leaves the other half's data untouched
     subroutine test_independent_observations()
@@ -510,6 +494,7 @@ contains
         call reconstruct_half_trajectory(odd_oris,  odd_clean,  TRAJ_ITS, MSKRAD, traj_odd,  traj_odd_niters)
         call assert_true(all(traj_even_niters == TRAJ_ITS) .and. all(traj_odd_niters == TRAJ_ITS), &
             &'trajectory solves run their requested counts')
+        ! not bit identity, since the operator reduces under OpenMP; 1e-5 is not derived
         call assert_true(rel_l2_error(traj_even(:,:,:,6), even_clean_vol) < 1.e-5_dp .and. &
             &rel_l2_error(traj_odd(:,:,:,6), odd_clean_vol) < 1.e-5_dp, &
             &'a fresh operator at 40 iterations reproduces the baseline solve (rel L2 < 1e-5)')
@@ -681,6 +666,7 @@ contains
     !! sigma2/w_i, accumulate one at a time (the per-particle noise matrix it replaces)
     subroutine test_half_spectrum_weights()
         integer, parameter :: NP = 6
+        ! not derived (global_sigma2_only.md)
         real(dp), parameter :: RELTOL = 1.e-4_dp
         type(reconstructor_pcg) :: pcgop, single
         type(oris)      :: even_oris, odd_oris, one

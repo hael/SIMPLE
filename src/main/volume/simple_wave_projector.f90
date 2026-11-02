@@ -101,6 +101,7 @@ contains
     !! forced to 0 for projection); gain g = sqrt(dose a^2); osf the oversampling (2 unless measuring);
     !! bfac the lens B-factor (A^2, 0 by default)
     subroutine new( self, box, smpd, model, kappa, gain, osf, bfac, fft_nthreads, winsz )
+        use simple_rnd, only: has_global_seed
         class(wave_projector), intent(inout) :: self
         integer,               intent(in)    :: box, model, kappa
         real,                  intent(in)    :: smpd, gain
@@ -129,10 +130,11 @@ contains
         self%fft_nthreads = 1
         if( present(fft_nthreads) ) self%fft_nthreads = max(1, fft_nthreads)
         call self%new_lattice(box, smpd, winsz)
-        ! three padded transforms per NLCG iteration and one per line-search evaluation: measured plans
+        ! three padded transforms per NLCG iteration and one per line-search evaluation: measured plans,
+        ! except under a fixed seed (measured plans defeat exact replay)
         call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], smpd, &
             &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads, &
-            &fft_measure=self%boxpd >= PCG_FFT_MEASURE_MIN_BOXPD)
+            &fft_measure=self%boxpd >= PCG_FFT_MEASURE_MIN_BOXPD .and. .not. has_global_seed())
         ! the KB deapodisation of the native box, as the PCG backend's (separable, centred crop)
         call kb_stencil_centered_crop_inv_envelope_1d(self%kbwin, self%boxpd, self%box, inv1d)
         allocate(self%invenv(box,box,box))

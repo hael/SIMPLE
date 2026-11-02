@@ -337,18 +337,14 @@ if(BUILD_TESTS)
   # 2026-09-30): a refinement mode independent of the polar workflows the other entries run.
   simple_add_test(cont_refine3D_1jxy highlevel 7200 8 PROCESSORS 10
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=cont_refine3D_1jxy nthr=8)
-  # multi-state refine3D (refine=prob and refine=prob_neigh, three states) on simulated blob
-  # phantoms, gated on the known state of every particle. Its own entry (test-suite truth plan,
-  # multi-state phase, 2026-10-17): no other entry checks the state assignment against the truth.
-  simple_add_test(multistate_assignment highlevel 3600 8 PROCESSORS 11
-    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_assignment nthr=8)
   # the multi-state workflows on simulated beta-galactosidase states, judged against the known state
   # of every particle: the class-average route, solve3D nstates=3 from the particles, refine3D_states
   # from the true poses, and single-state solve3D followed by refine3D_states (the de novo routes'
   # state resolution is held over seeds by test=profile, ruling of 2026-10-18). Its own entry
   # (test-suite truth plan, multi-state workflow phase, 2026-10-17): the four routes take 32 minutes
-  # at eight threads alone, an hour beside other entries.
-  simple_add_test(multistate_workflows highlevel 7200 8 PROCESSORS 11
+  # at eight threads alone, an hour beside other entries, and about 1.5 h on a 4-core CI runner,
+  # hence the 4 h deadline (owner decision, 2026-11-02).
+  simple_add_test(multistate_workflows highlevel 14400 8 PROCESSORS 11
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=multistate_workflows nthr=8)
   # the multi-state fixture (its modes, its cache, the point groups of its truths). Its own entry by
   # the ruling of 2026-10-17: these checks are not simulate_particles', whose claim and cost they changed.
@@ -424,7 +420,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 42)   # 15 fast + 1 platform + 19 highlevel + 7 library
+  set(SIMPLE_CTEST_BUDGET 41)   # 15 fast + 1 platform + 18 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

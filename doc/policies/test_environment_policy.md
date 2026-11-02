@@ -32,7 +32,7 @@ labels.
 | --- | --- | --- | --- |
 | `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` and the PCG entries `pcg_recon` and `pcg_frac_update` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 19 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
+| `highlevel` | 18 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process` (with the test dispatcher's own tests), plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
@@ -47,7 +47,11 @@ runs `scripts/check_test_registry.py`, `scripts/check_descr.py` and
 fails the build when an entry fails and only warns when the gate takes more
 than 60 s of real time (`scripts/run_fast_gate.sh`, `scripts/ctest_budget.py`).
 A budget warning allows installation to continue. A failed gate installs nothing. The per-entry timings are kept in
-`build/test_runs/ctest_fast.log.timing.txt`. Tests are on by default in every compile script;
+`build/test_runs/ctest_fast.log.timing.txt`. The gate also lists, as a warning
+that never fails it, the source files under `src/` and `production/` that git
+does not track: the library globs its sources, so such a file builds locally
+and is missing from a commit of the tree (the nightly build broke twice that
+way, on 2026-10-28 and 2026-10-31). Tests are on by default in every compile script;
 `--exclude-tests` (`BUILD_TESTS=OFF`) builds the library and executables only
 and skips the gate, for when only the executables are needed.
 
@@ -78,8 +82,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 42: 15 fast,
-7 library, 19 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 41: 15 fast,
+7 library, 18 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -120,8 +124,8 @@ convenience and deliberately not a CTest entry.
 
 | entry | label | what it runs |
 | --- | --- | --- |
-| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame; PDB-masked sharpening: identical and opposite half-maps give FSC +1 and -1 and retain or suppress the output accordingly; fractional reconstruction; wave reconstruction: a phantom imaged by multislice at 100 kV and reconstructed by `reconstruct3D_wave` with Rytov, which must beat its flat start and the opposite curvature sign against the truth beyond the curvature limit (about five minutes) |
-| `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 15 degrees and 2 pixels, refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
+| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame; PDB-masked sharpening: identical and opposite half-maps give FSC +1 and -1 and retain or suppress the output accordingly; fractional reconstruction; wave reconstruction: a phantom imaged by multislice at 100 kV and reconstructed by `reconstruct3D_wave` with Rytov, which must beat its flat start and the opposite curvature sign against the truth beyond the curvature limit (about five minutes); volume programs: `symaxis_search` aligns a turned D2 phantom to a map invariant under D2, `dock_volpair` docks a turned and shifted copy back, `centervol` brings a displaced phantom's centre of mass back within a voxel (each with the unmoved input as its control) |
+| `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 10 degrees and 2 pixels (inside the 15° rotation bound), refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA on a two-state phantom, flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models; density particles (the full fit of rendered nanoparticles with known and measured transfer, uniform and varying widths, noise, profile recovery and repeat/thread identity) |
 | `lib_stream` | library | optics assignment, picking references, pick and extract, solve 3D reference docking, and the stream chains sieve to 3D and movies to 3D (they submit jobs to the local queue through the installed executables and take tens of minutes) |
@@ -134,7 +138,6 @@ convenience and deliberately not a CTest entry.
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_local`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations; the positive NU-bundle handoff case also runs alone with `suite=nu_handoff`, checking staged constituents, first matching LP and source preservation |
-| `multistate_assignment` | highlevel | `refine3D nstates=3` with `refine=prob` and with `refine=prob_neigh` on 1 500 simulated particles of the three blob phantoms of the state fixture (populations 50, 30 and 20 %, SNR 2), from the truths low-passed to 20 A and random initial states, scored by correlation (`objfun=cc`, as production's state assignment), gated on the known state of every particle (adjusted Rand index, accuracy, each state's recall, the populations, no estimated state empty: a merge of two states fails), the maps (their mapping agreeing with the label mapping, their fit, their discrimination inside the difference mask) and the poses of the correctly assigned particles; the shuffled-label and duplicated-maps controls in both refinements; `suite=identical` runs the identical-states control by hand (labels only: identical truths leave nothing to discriminate) |
 | `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1), in four routes: `cavgs`, `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs` (owner ruling 2026-10-17); `shc`, `solve3D` from the particles; `states`, `refine3D_states` from the true poses and the consensus map; `consensus`, single-state `solve3D` in C1 followed by `refine3D_states`, the route used on real data (owner ruling 2026-10-18). Each is judged against the simulation truth: the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses, with the shuffled-label and duplicated-maps controls. The de novo routes `shc` and `cavgs` resolve every true state in only part of the runs (13 and 9 of 20 in the profile of 2026-10-19), a limitation of the method: whether they do is a `success` row, held by `test=profile` to 6 and 2 of 20 seeds, and their labels are reported; their path, checks and pose ceilings are gates. The `states` and `consensus` routes resolve every state in every run: that is checked, and their labels, populations, discrimination and poses are held to floors. The entry runs all four (1 913 s at eight threads alone); `suite=<route>` runs one, `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on), `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`), `suite=<route>_identical` (identical states) and `suite=hard_<route>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection (`detect_atoms`, species-free), the products of the atomic density model (`_FIT`, `_RES`, `_atoms.csv`, `_model.txt`, occupancy and width in `_ATMS.pdb`, the contact-score ceiling derived from the data, reported) and statistics (`atoms_stats` with the element) |
 | `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
@@ -354,7 +357,9 @@ simple_test_exec test=identity target=<entry> dir1=<run directory> dir2=<run dir
   - in `sigma2_state.bin`, the layout digest (header word 14, bytes 121-128);
   - project files (`*.simple`) are compared record by record over every
     segment, and text files (`*.txt`) line by line, each with its run
-    directory's own path removed, since both hold absolute paths.
+    directory's own path removed, since both hold absolute paths; in a
+    project, `projinfo`'s `solve3D_run_id` (the manifest's `run_id`) is left
+    out.
   A declared pattern that selects no file in either directory fails. The
   `BENCH` timing files are not declared outputs. Identity is decided only by
   one-thread runs. An entry that works in a directory named by its process id
@@ -978,7 +983,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Claim: six micrographs simulated from the embedded model (8 particles each) go through CTF
   estimation, picking, extraction, `solve2D` and shape ranking, and the defocus and the picks agree
   with the simulation.
-- Checks: every micrograph's defocus against its truth (ceiling 0.13 µm); picked over placed
+- Checks: every micrograph's defocus against its truth (ceiling 0.15 µm); picked over placed
   particles (floors 0.05 for 6vxx and 0.25 for 1jxy, ceiling 1.5); at least one class; the
   project's micrographs, particle counts, class assignments and populations, shape ranks and class
   averages consistent (checks).
@@ -987,7 +992,9 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   fail the ceiling.
 - Profile (2026-10-18, still valid: byte-identical on the merged code): defocus error median
   0.002-0.003 µm, worst 0.125 (a rare wrong fit); pick ratio median 0.33 (6vxx, worst 0.19) and 0.49
-  (1jxy, worst 0.40). The simulator saves no particle positions, so the picks are judged by count
+  (1jxy, worst 0.40). Since each suite draws its own data (2026-11-02), 6vxx's defocus worst is
+  0.144 µm in 20 seeds, which moved the ceiling from 0.13 to 0.15 by the floor rule. The simulator
+  saves no particle positions, so the picks are judged by count
   only and have no control.
 - Cost: 6vxx 59 s at 8 threads (reserving 2 cores); 1jxy 66 s at 8 threads (reserving 3 cores); each commander one thread.
 
@@ -1086,20 +1093,13 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Cost: a median of 390 s at 8 threads with stages i and j (the 2026-10-20 profile; reserving 10
   cores), up to 11 GiB; about 37 minutes at one thread (2026-10-19, before stages i and j).
 
-**`multistate_assignment`**
+**`multistate_assignment`** (retired 2026-11-02)
 
-- Claim: `refine3D nstates=3` (`refine=prob` and `prob_neigh`) recovers the known states of three
-  blob phantoms (1 500 particles, populations 50/30/20 %, SNR 2) from the truths low-passed to 20 Å
-  and random initial states, scored by correlation.
-- Checks: adjusted Rand index (floors 0.89 / 0.80), accuracy (0.95 / 0.92), smallest per-state
-  recall (0.93 / 0.85), largest population error (ceilings 0.03 / 0.04), no estimated state empty,
-  the map mapping agreeing with the label mapping, the maps' discrimination margin (0.30), the
-  poses and shifts of the correctly assigned particles (6.0°, 0.40 px).
-- Controls: shuffled labels inside the accuracy's null; copies of one map and of the mean map not
-  distinct.
-- Profile (2026-10-19, eight threads and one thread): every state resolved in all 80 runs; the
-  `prob` adjusted Rand index at one thread (median 0.941, s 0.015) moved its floor from 0.90 to 0.89.
-- Cost: 78 s at 8 threads (reserving 11 cores); about 10 minutes at one thread.
+- Retired by owner decision: it ran multi-state `refine3D` under `cc`, which production never
+  uses, and since `811934ca5` (2026-10-24) the probability tables require `euclid`, under which
+  its start (truths low-passed, no noise model) merges states in every run. Production's
+  multi-state routes are `multistate_workflows`'. Its code is in git at `eefc7e1a1`
+  (`simple_commanders_test_highlevel_multistate.f90`), for a revival on the `euclid` route.
 
 **`multistate_workflows`**
 
@@ -1126,7 +1126,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   routes are the baseline of the planned annealed state draw.
 - By hand: `suite=cavgs_single`, `suite=cavgs_as_particles`, `suite=<route>_identical`,
   `suite=hard_<route>`.
-- Cost: 1809 s at 8 threads (reserving 11 cores) for the four routes; the consensus route alone about 70 minutes at one thread.
+- Cost: 1809 s at 8 threads (reserving 11 cores) for the four routes; the consensus route alone about 70 minutes at one thread. On a 4-core CI runner about 1.5 h (4 866 s on four pinned cores here, 2026-11-01), hence the 4 h deadline; CI runs it on Linux only (owner decision, 2026-11-02).
 
 **`single_atoms_stats` and its CdSe variants (`_cdsew`, `_cdsez`, `_cdser`)**
 
@@ -1149,7 +1149,9 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   white noise and rising width with correlated noise, through the notch transfer 1 - 0.6 exp(-200 s^2/4):
   `beta` within 0.005 (uniform) and 0.01 (gradient: at its seed the fixture gives 0.006 with the true transfer
   given), the width rise from 12 to 5 neighbours within 1 A^2, and the transfer `detect_atoms` measures
-  (`_transfer.tsv`) within 0.05 of the notch where the atoms have power.
+  (`_transfer.tsv`) within 0.06 (uniform) and 0.10 (gradient) of the notch where the atoms have power,
+  by the floor rule from the profile of 2026-11-02 (20 seeds; the section-12 value 0.05 sat inside both
+  distributions: 10 of 20 gradient runs above it, the uniform worst at 0.0497).
 - Profile (2026-10-18, its gate table identical on the merged code): the second element's recall
   median 0.977, worst 0.908.
 - Cost: 46 s at 8 threads (reserving 8 cores).

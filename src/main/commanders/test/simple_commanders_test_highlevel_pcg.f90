@@ -22,6 +22,8 @@ module subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
     real,             parameter :: CROP_SMPD = SMPD * real(BOX) / real(CROP_BOX)
     real,             parameter :: MASS_LAMBDA_REL = 1.0e-3
+    ! round-off tolerances on exact identities (not derived); the profile gives adjoint errors near 1e-9;
+    ! the phantom recovery measured 0.9998 against RECON_CORR_THRES (not derived)
     real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
     real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
     ! kernel interior tolerance: single-precision roundoff loosened for the kernel's
@@ -36,6 +38,7 @@ module subroutine exec_test_pcg_recon( self, cline )
     ! defect or manufacture a false failure.
     real,             parameter :: STREAM_ACCUM_RELTOL = 1.0e-6
     real,             parameter :: STREAM_SOLVE_RELTOL = 5.0e-4
+    ! not derived (MASS_SOLVE_RELTOL takes STREAM_SOLVE_RELTOL's value); CROP_RAW_RELTOL has no recorded origin
     real,             parameter :: MASS_SCALE_RELTOL   = 5.0e-6
     real,             parameter :: MASS_SOLVE_RELTOL   = 5.0e-4
     real,             parameter :: CROP_RAW_RELTOL     = 2.0e-5
@@ -53,6 +56,7 @@ module subroutine exec_test_pcg_recon( self, cline )
     integer,          parameter :: SUPPORT_ITS = 5, SUPPORT_NREP = 6
     real,             parameter :: SUPPORT_RTOL = 1.0e-4
     real,             parameter :: SUPPORT_BAND_LO = 0.15, SUPPORT_BAND_HI = 0.85
+    ! not derived
     real,             parameter :: SUPPORT_STABILITY_FRAC = 0.9
     real,             parameter :: CTRS(3,NBLOBS) = reshape([&
         &-5.0,-3.0, 2.0,&
@@ -414,6 +418,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,es14.6)') '    relative change after shift-only edit = ', kdiff
+        ! measured bit-identical (the shift cancels in |T|**2); 1e-5 is round-off slack
         call gate%metric('kernel_change_shifts_only', kdiff, 1.0e-5, .not. kdiff > 1.0e-5, upper=.true.)
         if( .not. (kdiff <= 1.0e-5) )then
             write(logfhandle,'(a)') '    FAIL: kernel changed when only shifts changed'
@@ -435,6 +440,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,es14.6)') '    relative change after CTF edit        = ', kdiff
+        ! a negative control: the change measures 0.44; 1e-4 only rules out none
         call gate%metric('kernel_change_ctf', kdiff, 1.0e-4, kdiff >= 1.0e-4)
         if( .not. (kdiff >= 1.0e-4) )then
             write(logfhandle,'(a)') '    FAIL: kernel did not change when the CTF changed'
@@ -743,6 +749,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         kdiff      = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         stream_err = sqrt(sum((b_str -b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
         write(logfhandle,'(a,es14.6,a,es14.6)') '    rel_err(Khat) = ', kdiff, '   rel_err(b) = ', stream_err
+        ! measured 1.3e-6 (kernel) and 1.3e-7 (rhs) when added; 5e-3 is a loose slack
         call gate%metric('symmetry_kernel_rel_diff', kdiff, 5.0e-3, .not. kdiff > 5.0e-3, upper=.true.)
         call gate%metric('symmetry_rhs_rel_diff', stream_err, 5.0e-3, .not. stream_err > 5.0e-3, upper=.true.)
         call gate%check('symmetry_kernel_not_trivially_zero', sqrt(sum(khat_a*khat_a)) > TINY)
@@ -1128,6 +1135,8 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcg_c%solve_accum(x_c, maxits=SUPPORT_ITS, rtol=SUPPORT_RTOL, outcome=solver_outcome)
         write(logfhandle,'(a,a,a,i0,a,es12.4)') '    constrained solve: ', trim(solver_outcome%stop_reason), &
             &' after ', solver_outcome%iteration_count, ' iterations, residual = ', solver_outcome%final_rel_residual
+        call gate%check('support_constrained_solve_positive_definite', &
+            &trim(solver_outcome%stop_reason) /= PCG_STOP_INDEFINITE)
         if( trim(solver_outcome%stop_reason) == PCG_STOP_INDEFINITE )then
             write(logfhandle,'(a)') '    FAIL: the constrained solve lost positive-definiteness'
             all_ok = .false.
