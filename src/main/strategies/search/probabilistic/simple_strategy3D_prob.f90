@@ -3,7 +3,6 @@ module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_utils, only: assign_ori, candidate_pose, resolve_inplane_e3
 use simple_eul_prob_tab_utils, only: prob_insert_pose
-use simple_pftc_shsrch_grad,   only: shift_ptcl2ref
 use simple_parameters,      only: parameters
 use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
@@ -77,22 +76,18 @@ contains
             ! the table's native increments refer to; they take the continuous in-plane route when the committed pose does
             if( associated(self%spec%extra_poses) )then
                 if( self%spec%extra_poses%has(self%s%iptcl) ) call self%resolve_extra_poses(iptcl_map,&
-                    &.not. self%s%p_ptr%l_shift_map .and. self%s%uses_continuous_refinement())
+                    &self%s%uses_continuous_refinement())
             endif
-            if( self%s%p_ptr%l_shift_map )then
-                ! the map's draw is the pose and is not polished; the row's distance is the reference's evidence, so
-                ! the score is the objective at the pose, in the reference's axes at the drawn rotation; the table's
-                ! increment is native (the fill converted the drawn cell), as the window path's
-                corr = real(self%s%b_ptr%pftc%gen_corr_for_rot_8(iref, self%s%iptcl,&
-                    &real(shift_ptcl2ref(sh, self%s%b_ptr%pftc%get_rot(irot)), dp), irot))
-                call assign_ori(self%s, iref, irot, corr, sh)
-            else if( self%s%uses_continuous_refinement() )then
+            if( self%s%uses_continuous_refinement() )then
                 call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
                     &inpl_coord, inpl_valid)
                 call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid)
             else
                 call assign_ori(self%s, iref, irot, corr, sh)
             endif
+            ! the centring stage's drain (shift_sigma > 0): the magnitude of this iteration's move (the disk again next
+            ! time if it went beyond the next stage's window)
+            if( self%s%p_ptr%l_shift_map ) call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'shincr', norm2(sh))
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
             self%assignment_valid = .true.
         else

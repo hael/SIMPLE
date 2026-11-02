@@ -41,8 +41,9 @@ contains
         integer :: istate, ithr, nrefs, nrefs_sub
         real    :: areal
         logical :: l_prob_mode
-        ! the polar shift map lives in the dense 3D table
-        if( params%l_shift_map .and. trim(params%refine) .ne. 'prob' ) THROW_HARD('shift_sigma needs the dense 3D table: refine=prob')
+        ! the polar shift map lives in the 3D tables
+        if( params%l_shift_map .and. .not. (trim(params%refine) == 'prob' .or. trim(params%refine) == 'prob_neigh') )&
+            &THROW_HARD('shift_sigma needs a 3D table: refine=prob or prob_neigh')
         ! clean all class arrays & types
         call clean_strategy3D()
         ! a Cartesian pass (l_cart_refine) searches no projection grid: no polar search state

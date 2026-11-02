@@ -90,6 +90,7 @@ contains
     procedure          :: does_opt_angle
     procedure          :: uses_joint_inplane
     procedure          :: set_limits
+    procedure          :: minimize_in_cell
     procedure          :: set_shift_prior
     procedure          :: clear_shift_prior
     procedure          :: has_shift_prior
@@ -231,6 +232,34 @@ contains
         real,                    intent(in)    :: lims(self%ospec%ndim,2) !< new limits
         call self%ospec%set_limits(lims)
     end subroutine set_limits
+
+    !> The polish from a coarse map's cell (the map initialises the search): the lattice and the L-BFGS in a box of
+    !! one map step about the cell's shift (in the reference's axes at irot), within the object's limits, from the
+    !! cell's rotation. cxy is (correlation, the shift rotated into the particle's axes); l_polished says the box's
+    !! optimum beat the origin, minimize's baseline, else cxy is the cell itself scored at full resolution and irot
+    !! the cell's rotation
+    subroutine minimize_in_cell( self, irot, xy_cell, step, cxy, l_polished )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        integer,                 intent(inout) :: irot
+        real,                    intent(in)    :: xy_cell(2), step
+        real,                    intent(out)   :: cxy(3)
+        logical,                 intent(out)   :: l_polished
+        real    :: lims_orig(2,2), lims_box(2,2)
+        integer :: irot_cell
+        if( self%search_mode /= SHSRCH_SHIFT ) THROW_HARD('the cell polish needs a shift search object; minimize_in_cell')
+        irot_cell     = irot
+        lims_orig     = self%ospec%limits(1:2,1:2)
+        lims_box(:,1) = max(lims_orig(:,1), xy_cell - step)
+        lims_box(:,2) = min(lims_orig(:,2), xy_cell + step)
+        call self%ospec%set_limits(lims_box)
+        cxy = self%minimize(irot=irot, sh_rot=.true.)
+        call self%ospec%set_limits(lims_orig)
+        l_polished = irot > 0
+        if( l_polished ) return
+        irot     = irot_cell
+        cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, real(xy_cell, dp), irot))
+        cxy(2:3) = shift_ref2ptcl(xy_cell, self%b_ptr%pftc%get_rot(irot))
+    end subroutine minimize_in_cell
 
     !> The shift prior of the next minimisations: sigma2 the shift variance per axis (pixels^2, from the previous
     !! iteration's shift increments), temp the particle's temperature (posterior_temperature, untempered: the prior

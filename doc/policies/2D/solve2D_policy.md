@@ -137,36 +137,34 @@ pyramid included); `shift_sigma=0` is the window search in every stage, the
 control. The parameter's own default stays 0: a refine2D run outside solve2D
 runs the window search unless given the key with `refine=prob`.
 
-- it runs the dense probability table (`refine=prob`), the only fill with the
-  map, and the key reaches no other stage (the later stages are the window
-  search as before). The stage is coarse-to-fine, consolidated 2026-11-01 after
-  the full-band disk map proved intrinsically too costly (TRPV1: 132 s an
-  iteration against 4.6 s for the window, every iteration): a particle that
-  needs the disk screens the origin's best classes holding 99 % of its
-  posterior there at the draw's temperature (a pick far off leaves that
-  posterior flat and keeps every class, `screen_pool_size`; at least twice the
-  refined count) with the coarse map over the disk of 3 sigma (`trs` = 3 sigma
-  in native pixels, the half-resolution band), keeps each class's coarse
-  optimum, and the refined count of best classes are polished at full
-  resolution by the L-BFGS from that optimum (the seed in the reference's axes
-  at its rotation; if nothing beats the seed it is the pose, scored at full
-  resolution). The rows are polished losses, as the window path's: no
-  evidence, no draw over the disk
+- it runs the dense probability table (`refine=prob`). The stage is
+  coarse-to-fine, consolidated 2026-11-01 after the full-band disk map proved
+  intrinsically too costly (TRPV1: 132 s an iteration against 4.6 s for the
+  window, every iteration): a particle that needs the disk screens the
+  origin's best classes holding 99 % of its posterior there at the draw's
+  temperature (a pick far off leaves that posterior flat and keeps every
+  class, `screen_pool_size`; at least twice the refined count) with the coarse
+  map over the disk of 3 sigma (`trs` = 3 sigma in native pixels, the
+  half-resolution band, `SHIFTMAP_SCREEN`) under the prior, keeps each class's
+  coarse optimum, and the refined count of best classes are polished at full
+  resolution in a box of one map step about that optimum
+  (`pftc_shsrch_grad%minimize_in_cell`: the lattice and the L-BFGS in the box,
+  from the cell's rotation; if the box's optimum does not beat the origin, the
+  optimizer's baseline, the cell scored at full resolution is the pose if it
+  beats the origin's row, else that row stands). The rows are polished losses,
+  as the window path's: no evidence, no draw over the disk
 - its mask is the box's, `(box - COSMSKHALFWIDTH) * smpd`, whatever `mskdiam`
   says; the low-pass ladder is unchanged
 - it does not repeat the disk: the consumer writes each particle's move of the
   iteration (`shincr`, the magnitude of the polished increment) and a particle
   whose last move stayed inside the next stage's window (`trs_window`, the next
-  stage's `trslim`, from the controller) searches that window from its stored
-  shift in the later iterations (a second L-BFGS object with those bounds);
+  stage's `trslim`, from the controller) searches that window in the later
+  iterations: the same screen and polish over the coarse window map
+  (`SHIFTMAP_WINDOW`, radius `trs_window`, no prior) from its stored shift;
   the refine2D master sets `shincr` below zero for every particle at the start
   of every run under the key, whatever its first iteration's number (solve2D
   numbers iterations across stages), so every particle's first search in the
-  stage is the disk; the master prints the disk set it is about to search.
-  The polish's box excludes the origin, which is the optimizer's acceptance
-  baseline: when the box's optimum does not beat it, the coarse optimum scored
-  at full resolution is the pose only if it beats the origin's row, else that
-  row stands
+  stage is the disk; the master prints the disk set it is about to search
 - it ends when few particles still need the disk, and only then: under the key
   the drain is the stage's convergence (`check_conv2D` converges once the
   fraction of sampled particles whose last move went beyond `trs_window` has
@@ -195,9 +193,16 @@ the centring stage collapse the populated classes at its entry (90 to 50 with
 no shift assigned, 38 at the end; the SNHC stage 1 gives 79 at the entry and
 57 at the end, the control 65), the per-iteration counts from the runs'
 `clusters2D_iterNNN.star`.
-The later stages receive the key too and map their window (`trslim`) with the
-same prior. The terminal greedy pass never sees the key: the map lives in the
-2D tables, and `prep_strategy2D_glob` refuses it under any other `refine`. `cls_init=prev` enters at stage 3 and runs no
+The later stages receive the key too (Phase 4 of the note, 2026-11-01: the map
+initialises the classic search): their tables, the dense one and the sparse
+`prob_snhc` fill alike, score the classes at the stored shift, without the
+previous class's seed and its shifted-particle bank, and polish each best class
+from the coarse window map's optimum over the stage's window (`trslim`, no
+prior, no drain) in a box of one map step, so the 5 x 5 lattice at every
+rotation and the seed retire wherever the key runs; `shift_sigma=0` keeps the
+seed and the lattice. The terminal greedy pass never sees the key: the map lives
+in the 2D tables, and `prep_strategy2D_glob` refuses it under any other
+`refine`. `cls_init=prev` enters at stage 3 and runs no
 centring stage; the stream's checkpointing is refused with the key. With the
 key off every command line is as before.
 

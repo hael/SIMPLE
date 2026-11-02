@@ -6,7 +6,7 @@ implicit none
 
 public :: polarft_calc
 public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
-public :: SHERRSQ, SHIFTMAP_FULL, SHIFTMAP_SCREEN, NSHIFTMAPS
+public :: SHERRSQ, SHIFTMAP_FULL, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
 private
 #include "simple_local_flags.inc"
 
@@ -15,7 +15,7 @@ integer, parameter :: REF_ODD  = 2
 integer, parameter :: N_REF_PARITIES = 2
 real,    parameter :: SHERRSQ = 0.00001 !< squared shift below which the memoised unshifted terms are used
 ! the calculator's shift maps: the full band's, and the screen's over a coarser band and grid (the candidates' choice)
-integer, parameter :: SHIFTMAP_FULL = 1, SHIFTMAP_SCREEN = 2, NSHIFTMAPS = 2
+integer, parameter :: SHIFTMAP_FULL = 1, SHIFTMAP_SCREEN = 2, SHIFTMAP_WINDOW = 3, NSHIFTMAPS = 3
 
 type fftw_drvec
     type(c_ptr)                  :: p
@@ -990,9 +990,9 @@ interface
         integer,             intent(in)    :: nalpha, kstop
     end subroutine new_shiftmap
 
-    module subroutine setup_shiftmaps( self, sigma_px, radius_px, prior_w, kscreen )
+    module subroutine setup_shiftmaps( self, sigma_px, radius_px, radius_win, prior_w, kscreen )
         class(polarft_calc), intent(inout) :: self
-        real(dp),            intent(in)    :: sigma_px, radius_px
+        real(dp),            intent(in)    :: sigma_px, radius_px, radius_win
         real(dp),            intent(out)   :: prior_w
         integer,             intent(out)   :: kscreen
     end subroutine setup_shiftmaps

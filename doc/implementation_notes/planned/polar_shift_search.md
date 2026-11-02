@@ -486,6 +486,73 @@ iteration, the window stages' screens collapsing to about twice the refined coun
   (bgal, TRPV1, a badly picked set; key against control, mask given against estimated) before further development.
   Ruling 18 built the same day (`resolve_extra_poses` with the polish, `refine_extra_pose_continuously`).
 
+### 2026-11-01: solve2D validated on data (Hans's runs; the approach adopted)
+
+- With the drain reset in place and the key solve2D's default, Hans ran the consolidated centring stage on the
+  export gate set, PfCRT and TRPV1: the classes gain resolution and visual quality on the first two, TRPV1 works
+  well, and the 2D harvests more useful particles than before. Hans: "I consider the approach validated and I am
+  ready to take the next steps in the dev plan." Phase 3's 2D question (does the map recover what the window
+  cannot, at a cost the data sets bear) is answered yes; the per-class shift histograms against cryoSPARC's on
+  the membrane-protein set, the mask ruling and re-extraction (Phase 3's exit) remain to be recorded.
+
+### 2026-11-01: the 3D consolidation and Phase 4 in the tables (Claude, autonomous run, agent kit runs 604-)
+
+Hans's bundle for an autonomous run: the 3D side of the consolidation, Phase 4, and the smaller items that fit.
+
+- The 3D dense fill is the 2D centring stage's design (`process_particle_with_map`): rows at the stored shift, the
+  screen pool by `screen_pool_size` (moved to the utils module, shared), the coarse map over the box, the polish in
+  a box of one map step about the cell (`pftc_shsrch_grad%minimize_in_cell`, the one home of the box polish and its
+  origin fallback, used by every table), the refined entries' loss the polished loss with the absolute prior at the
+  physical temperature. The drain: `strategy3D_prob` writes `shincr` after the polish (the extras and the committed
+  pose now take the continuous in-plane route under the key too, since the rows are polished losses like the
+  window's), both refine3D masters reset it at the start of every run under the key, `prob_align_exec` prints the
+  disk set, and `check_conv3D` makes the drain the centring stage's convergence (the pose rule, the annealing tail
+  and the resolution exit deferred while the disk is needed; `test_shift_map_exit3D`). solve3D: stage 3 is the
+  centring stage (`cfg%trs_window` the next stage's half-width). The full map (`SHIFTMAP_FULL`) is no longer built
+  by the fills; `shift_draw` and the fill's `maps` count retired. Debug gate 15/15 (run 604). The random-view
+  fixture (refine3D refine=prob from the true volume, 3 iterations, Debug tree, run 615): the disk searched by 400,
+  303, 16 of 400 particles, the drain 76, 4.0, 0.75 %, 99.8 % of the shifts within lp/4 at 0.54 px mean error (the
+  retired full map: 100 % at 0.56 px; the 5 px window: 99.2 % at 0.62 px).
+- Phase 4 as built: under the key every table's polish starts from a coarse map over its box. A third map geometry,
+  `SHIFTMAP_WINDOW` (the coarse band, radius the stage's window: `trs_window` in the centring stage, `trs`
+  elsewhere), is set up beside the disk's screen map (`setup_shiftmaps(sigma, radius_disk, radius_win, ...)`). In
+  the centring stage a drained particle takes the window map (no prior) through the same screen and polish as the
+  disk; in every later stage every particle does, in the 2D dense and sparse (`prob_snhc`) fills, the 3D dense fill
+  and the neighbourhood table's candidates (`refine_best_neighbors`), so the previous reference's seed, its
+  shifted-particle bank and the 5 x 5 lattice at every rotation retire wherever the key runs (`shift_sigma=0` keeps
+  them). The controllers pass the key to every stage with a shift search (solve2D stages 2-6, solve3D 3-8), the
+  window only to the centring stage; `prep_strategy3D` admits `prob_neigh`. The classic (non-table) strategies keep
+  their lattice: solve2D's stage 1 and solve3D's stages 1-2 search no shifts, so the key never reaches them in the
+  workflows. The pin: `test_map_initialised_polish` (the in-plane state suite) compares the map-initialised polish
+  with the lattice-initialised search on the white-reference fixture at five rotations.
+- Validated (Release, runs 620-668): the gate 15/15, the in-plane state suite 98/98 and the 3D table suite 496/496
+  at four threads; the 2D refine2D fixture from true references 99.8 % within lp/4 at 0.23 px mean (0.18 px median;
+  before this run 95.8 % at 0.21 px median: the window map's polish in the later iterations recovers the coarse
+  map's class misses); the 3D refine3D fixture from the true volume 100 % at 0.53 px (the 5 px window 86 %, the
+  16 px window 100 % at 0.53 px); the solve3D fixture de novo (400 random-view particles, no 2D solution): the key
+  78 % within lp/4 and 5.66 A against the window's 56.5 % and 6.58 A, the centring stage drained over six
+  iterations (30, 33, 14, 4.5, 0.25, 0 % still needing the disk) and ended by the drain; beta-gal solve3D from the
+  bench project's 2D solution (d2, 4463 particles): the key's centring stage drained 13, 2.0, 0.7, 0.2 % over four
+  iterations (the disk searched by 4463, 588, 91, 32), both runs end at 4.03 A, the key 1002 s against 815 s
+  (stage 3's four disk iterations). One defect found and fixed: the 2D controller gave the key to stage 1, whose
+  SNHC strategy has no table and refused it (the solve2D fixture and the beta-gal 2D key run stopped at stage 1);
+  the key now starts at the centring stage. The beta-gal 2D control (`shift_sigma=0`): 64 classes, best 4.29 A,
+  26 % at 6.5 A or better, 50 % at 8 A, 99.8 s.
+- After the fix (Release, runs 669-686): the solve2D fixture from the random start, the key 96.8 % within lp/4 at
+  1.62 px mean against the window's 78.0 % at 2.96 px; beta-gal solve2D with the key (the default): no collapse
+  (90 populated through the centring stage's five iterations, 57 at the end against the control's 64), best class
+  4.03 A against 4.29, 24 % at 6.5 A or better against 26 %, 58 % at 8 A against 50 %, 143 s against 99.8 s. The
+  centring stage drained 28, 23, 8.6, 3.1, 1.5 % over its five iterations (the disk searched by 4463, 1254, 1019,
+  384, 138) and ended on its budget, one iteration short of the drain's two-below-2 % rule; its table cost 5.7 then
+  4.0-4.3 s per part and iteration whatever the disk count, since the drained particles' window map costs about
+  what the disk does. The later sparse stages 0.5-0.6 s against 0.4 s; the last, dense stage 3.6-4.1 s against
+  1.3-1.4 s (the screen over every class, then the polish): the map-initialised window polish is the price of
+  Phase 4 in 2D, +43 s on beta-gal, to weigh against its gain on data. The base tree (HEAD before this run) on the
+  solve3D fixture: the window 1.5 % within lp/4 (2142 s), the key 13.2 % (1191 s), against this tree's 56.5 % and
+  78 %: the window path's code is the same on both trees, so the de novo fixture's run-to-run variance dominates
+  (as recorded for Phase 2d) and the solve3D fixture does not attribute; the refine3D fixture from the true volume
+  and the beta-gal 3D pair are the 3D evidence.
+
 ### 2026-10-31: Phase 2c measured, Phase 2d's first stage measured, the re-review applied (Claude, runs 383-459)
 
 - Phase 2c on the bench, the field through the particle record (slot 54, `shmassout`) and the mass at the physical
@@ -554,7 +621,7 @@ cryoSPARC finds, at what cost per iteration), then the tables.
 
 Exit: the report; the ruling on masks and re-extraction recorded.
 
-### Phase 4: the map initialises the classic search (ruling 14)
+### Phase 4: the map initialises the classic search (ruling 14; the tables done 2026-11-01, Progress below)
 
 An inventory first: where each mode seeds its shift search today (`estimate_shift_seed`, `seed_start`, the seed
 bank, `coarse_search_opt_angle`, `grid_fit`, the shift prior's centre), for refine2D (`snhc_smpl`, `prob`,
@@ -613,21 +680,24 @@ gradient analytic. Measured against the classic polish from the same start on th
 | `src/main/pftc/simple_polarft_shiftmap.f90` | the all-rotation kernel (new submodule) | 1 2 |
 | `src/main/pftc/simple_polarft_core.f90` | `kill` releases the shift map | 1 |
 | `src/main/pftc/simple_polarft_memo.f90` | only if the memo must keep what the kernel needs | 1 |
-| `src/main/pftc/simple_pftc_shsrch_grad.f90` | the coarse initializer | 2 |
-| `src/main/pftc/simple_pftc_inplane_tester.f90` | the identity of the new and old coarse paths | 2 |
+| `src/main/pftc/simple_pftc_shsrch_grad.f90` | `minimize_in_cell`: the polish in a box of one map step about a map's cell, with the origin fallback (every table's) | 4 (done 2026-11-01) |
+| `src/main/strategies/search/simple_strategy3D_inplane_tester.f90` | `test_map_initialised_polish`: the identity of the map-initialised and lattice-initialised optima | 4 (done 2026-11-01) |
 | `src/main/params/simple_parameters.f90` | the radius / switch | 2 |
 | `src/main/strategies/search/simple_strategy2D_srch.f90` | plumbing | 2 |
 | `src/main/strategies/search/simple_strategy3D_srch.f90` | plumbing | 2 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90` | the joint draw in the fill of the centring stage | 2 |
 | `src/main/pftc/simple_polarft_corr.f90` | `gen_posterior_val` over the map's grid | 2 |
 | `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage (`CENTRING_STAGE`): the table, the disk, the box's mask, minits for the shift exit, the key per stage; the mask estimate at its exit (`solve2D_mskdiam_estimate`) | 2b (done 2026-10-31) |
-| `src/main/solve/simple_solve3D_controller.f90` | the key to the dense-table stages; stage 3 opens the disk | 2b (done 2026-10-31) |
-| `src/main/strategies/search/simple_strategy2D_alloc.f90`, `simple_strategy3D_alloc.f90`, `probabilistic/simple_eul_prob_tab_neigh.f90` | the key refused outside the tables that have the map | 2b |
+| `src/main/solve/simple_solve3D_controller.f90` | stage 3 the centring stage (`trs_window`), the key to every stage with a shift search | 2b 4 (done 2026-11-01) |
+| `src/main/strategies/search/simple_strategy2D_alloc.f90`, `simple_strategy3D_alloc.f90` | the key refused outside the tables (`prob`, `prob_snhc`, `prob_neigh`) | 2b 4 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90` | the window map initialises the candidates' polish, no seed under the key | 4 (done 2026-11-01) |
 | `src/main/ui/simple/simple_ui_solve3D.f90` | the key on solve3D | 2b |
 | `doc/policies/3D/refine3D_policy.md`, `solve3D_policy.md` | the map's paragraph, the key's stage scope (done 2026-10-31) | 2b 3 |
 | `src/main/commanders/simple/simple_commanders_solve2D.f90` | the centring stage's trs and mask, mskdiam=0 as the automatic mask, the estimate's adoption | 2b (done 2026-10-31) |
 | `src/main/simple_convergence.f90`, `_tester.f90` | `check_conv2D`'s shift exit (ruling 8) and its test | 2b (done 2026-10-31) |
-| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | the 3D table's maps, the disk bounded by trs | 2a 2b |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | the 3D table consolidated (`process_particle_with_map`: the screen, the box polish, the drain), the window map in the later stages | 2a 2b 4 (done 2026-11-01) |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | `screen_pool_size`, `SCREEN_QUANTILE` shared by the tables | 4 |
+| `src/main/pftc/simple_polarft_calc.f90`, `simple_polarft_shiftmap.f90` | `SHIFTMAP_WINDOW`, `setup_shiftmaps` with the window's radius; the full map no longer built by the fills | 4 |
 | `src/main/ui/simple/simple_ui_refine2D.f90`, `simple_ui_refine3D.f90` | the key on refine2D, refine3D (2a) and solve2D (2b) | 2a 2b |
 | `src/main/image/simple_image_msk.f90` | `automask2D_set` writes its mask stacks only when asked (write2disk), as its flag intended; the estimate calls it silently | 2b |
 | `doc/policies/2D/solve2D_policy.md` | the centring stage's contract (done 2026-10-31) | 2b 3 |

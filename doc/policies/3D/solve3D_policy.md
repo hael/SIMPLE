@@ -220,10 +220,11 @@ printed; it has no separate planner banner. Omission and `trs=0` retain the
 automatic limits. The stage controller still emits `trs=0` for stages 1 and 2,
 which do not search shifts. The class-average and chunked interfaces do not
 expose the override. `shift_sigma` (the polar shift map, `refine3D_policy.md`)
-goes to the dense-table stages only: stage 3, the first with a shift search,
-opens the disk of 3 sigma (`trs` raised to 3 sigma in native pixels) and stages
-4-5 map their window; the neighbourhood stages 6-8 search the window as before
-(their table has no map and refuses the key). A run manifest records the planned per-stage half-width so
+goes to every stage with a shift search: stage 3, the first with one, is the
+centring stage (`trs` raised to 3 sigma in native pixels, `trs_window` the
+next stage's half-width, the drain its convergence) and stages 4-8, dense and
+neighbourhood tables alike, polish from the coarse window map over their own
+half-width. A run manifest records the planned per-stage half-width so
 an add-on replays the frozen solution's search policy without acquiring a
 separate public control.
 

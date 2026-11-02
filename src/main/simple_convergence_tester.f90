@@ -59,6 +59,8 @@ contains
         call test_posterior_exits_weighted_insertion()
         write(*,'(A)') 'test_shift_map_exit'
         call test_shift_map_exit()
+        write(*,'(A)') 'test_shift_map_exit3D'
+        call test_shift_map_exit3D()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
 
@@ -156,6 +158,76 @@ contains
             end subroutine shift_field
 
     end subroutine test_shift_map_exit
+
+    !> check_conv3D under the key: the drain is the centring stage's convergence (the pose rule is bypassed under the
+    !! posterior draw anyway); the key off never exits on the shifts
+    subroutine test_shift_map_exit3D()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv, conv_off
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        real, parameter   :: SHINC(5) = [1., 1., 8., 1., 1.] ! the last move in pixels; the next window is 5
+        logical :: conv_at(5)
+        integer :: it
+        call del_file(STATS_FILE)
+        allocate(params)
+        params%nstates           = 1
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%l_shift_map       = .true.
+        params%trs_window        = 5.
+        params%trs               = 5.
+        params%startit           = 1
+        params%minits            = 1
+        params%maxits            = 50
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        do it = 1, 5
+            params%which_iter = it
+            call shift_field3D(os, SHINC(it))
+            conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_true(.not. conv_at(1), 'shift exit 3D: one drained iteration does not exit')
+        call assert_true(conv_at(2),       'shift exit 3D: two drained iterations exit')
+        call assert_true(.not. conv_at(3), 'shift exit 3D: a move beyond the window resets the count')
+        call assert_true(.not. conv_at(4), 'shift exit 3D: one stable iteration after the reset does not exit')
+        call assert_true(conv_at(5),       'shift exit 3D: two stable iterations after the reset exit')
+        params%l_shift_map = .false.
+        do it = 1, 3
+            params%which_iter = it
+            call shift_field3D(os, 1.)
+            conv_at(it) = conv_off%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_true(.not. any(conv_at(1:3)), 'shift exit 3D: the key off never exits on the shifts')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+
+        contains
+
+            !> a frozen single-state field (frac 100, mi_proj 1) whose every sampled particle last moved by shincr pixels
+            subroutine shift_field3D( os_loc, shincr )
+                type(oris), intent(inout) :: os_loc
+                real,       intent(in)    :: shincr
+                integer :: i
+                call os_loc%new(NPTCLS, is_ptcl=.true.)
+                do i = 1, NPTCLS
+                    call os_loc%set_state(i, 1)
+                    call os_loc%set(i, 'updatecnt', 1.)
+                    call os_loc%set(i, 'sampled',   1.)
+                    call os_loc%set(i, 'frac',      100.)
+                    call os_loc%set(i, 'mi_proj',   1.)
+                    call os_loc%set(i, 'corr',      0.5)
+                    call os_loc%set(i, 'shincarg',  shincr)
+                    call os_loc%set(i, 'shincr',    shincr)
+                    call os_loc%set(i, 'res05',     7.5)
+                end do
+            end subroutine shift_field3D
+
+    end subroutine test_shift_map_exit3D
 
     !> the 2D annealing tail (as the 3D one, keyed on the class overlap): a refine=prob run with prob_beta_end above
     !! prob_beta whose class overlap converges starts the tail at the first converged iteration past minits (tail_start

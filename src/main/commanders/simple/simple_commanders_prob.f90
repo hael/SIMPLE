@@ -458,7 +458,6 @@ contains
                 endif
             endif
             write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls
-            if( fill%maps > 0 )    write(fnr,'(a,i0)') 'prob_tab shift maps (all)           : ', fill%maps
             if( fill%screens > 0 ) write(fnr,'(a,i0)') 'prob_tab coarse disk maps (all)     : ', fill%screens
             if( fill%disk_ptcls > 0 ) write(fnr,'(a,i0)') 'prob_tab particles on the disk      : ', fill%disk_ptcls
             write(fnr,'(a,i0)') 'prob_tab alternations               : ', fill%alternations

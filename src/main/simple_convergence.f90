@@ -335,7 +335,8 @@ contains
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         character(len=96) :: beta_str
-        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff
+        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, frac_out
+        real,    allocatable :: shincr(:)
         logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
@@ -686,6 +687,25 @@ contains
             endif
         endif
         call self%record_res(params, res05_now, res143_now)
+        ! the polar shift map's centring stage (shift_sigma > 0 with the next stage's window): the drain is its
+        ! convergence, as in 2D. A sampled particle needs the disk again while its last move went beyond that window;
+        ! the stage ends once the fraction that does has been below DISK_NEED_FRAC for two iterations. The pose rule,
+        ! the annealing tail and the resolution exit do not end it while the disk is needed (its budget does)
+        if( params%l_shift_map .and. params%trs_window > 0. )then
+            shincr   = os%get_all('shincr')
+            frac_out = real(count(mask .and. shincr > params%trs_window)) / real(max(1, count(mask)))
+            write(logfhandle,'(A,F6.2,A)') '>>> DISK STILL NEEDED BY ', 100. * frac_out,&
+                &' % OF THE SAMPLED PARTICLES (THE LAST MOVE BEYOND THE NEXT WINDOW)'
+            if( frac_out < DISK_NEED_FRAC )then
+                self%shift_stable_its = self%shift_stable_its + 1
+            else
+                self%shift_stable_its = 0
+            endif
+            if( converged .and. self%shift_stable_its < 2 ) write(logfhandle,'(A)') '>>> EXIT DEFERRED: THE DISK IS STILL NEEDED'
+            converged = self%shift_stable_its >= 2
+            if( converged ) write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
+            deallocate(shincr)
+        endif
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &

@@ -27,6 +27,7 @@ public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
+public :: screen_pool_size, SCREEN_QUANTILE
 private
 #include "simple_local_flags.inc"
 
@@ -38,6 +39,9 @@ private
 !! started
 real, parameter :: SHIFT_PRIOR_SIGMA_MIN = 1.0
 real, parameter :: SHIFT_PRIOR_LP_FRAC   = 0.25
+
+!> the screen pool (shift_sigma > 0): the quantile of a particle's origin posterior the coarse-mapped references hold
+real, parameter :: SCREEN_QUANTILE = 0.99
 
 type :: prob_candidate
     integer :: iref   = 0
@@ -245,9 +249,8 @@ type :: prob_fill_profile
     integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
     integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
     integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
-    integer(int64) :: maps            = 0_int64 !< polar shift maps built, the refined candidates' (shift_sigma > 0, 3D)
     integer(int64) :: screens         = 0_int64 !< coarse maps over the disk built, the candidates' choice (shift_sigma > 0)
-    integer(int64) :: disk_ptcls      = 0_int64 !< particles that searched the disk (shift_sigma > 0, the 2D centring stage)
+    integer(int64) :: disk_ptcls      = 0_int64 !< particles that searched the disk (shift_sigma > 0, the centring stage)
     integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
     !> Is the refinement budget binding? Per particle of the dense fill, the rank in the unrefined row of the entry
     !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
@@ -1472,5 +1475,31 @@ contains
             root = swap_i
         enddo
     end subroutine maxheap_sift_down
+
+    !> the size of a particle's own screen pool (shift_sigma > 0): the smallest leading set of the ascending origin
+    !! distances holding SCREEN_QUANTILE of the posterior at temperature temp (weights exp(-temp (d - d_min))); the
+    !! breadth the particle's own ambiguity at the origin asks for
+    pure integer function screen_pool_size( dists_sorted, n, temp )
+        real,     intent(in) :: dists_sorted(:)
+        integer,  intent(in) :: n
+        real(dp), intent(in) :: temp
+        real(dp) :: w(n), tot, acc
+        integer  :: k
+        screen_pool_size = n
+        if( n < 1 ) return
+        do k = 1, n
+            w(k) = exp(-max(0.d0, temp) * real(dists_sorted(k) - dists_sorted(1), dp))
+        enddo
+        tot = sum(w)
+        if( .not. (tot > 0.d0) ) return
+        acc = 0.d0
+        do k = 1, n
+            acc = acc + w(k)
+            if( acc >= real(SCREEN_QUANTILE, dp) * tot )then
+                screen_pool_size = k
+                return
+            endif
+        enddo
+    end function screen_pool_size
 
 end module simple_eul_prob_tab_utils

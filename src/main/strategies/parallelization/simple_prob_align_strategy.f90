@@ -102,12 +102,13 @@ contains
         class(commander_base), optional, intent(inout) :: xprob_tab
         real(timer_int_kind),  optional, intent(in)    :: rt_setup
         integer,     allocatable :: pinds(:)
+        real,        allocatable :: shincr(:)
         type(string)             :: fname
         type(eul_prob_tab)       :: eulprob_obj_glob
         type(cmdline)            :: cline_prob_tab
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
-        integer :: nptcls
+        integer :: nptcls, ndisk
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_sample, rt_sched, rt_read, rt_assign, rt_write
         real(timer_int_kind)    :: rt_setup_here
@@ -131,6 +132,13 @@ contains
             call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls, pinds)
         else
             call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
+        endif
+        if( params%l_shift_map .and. params%trs_window > 0. )then
+            ! the particles the fill searches the disk for: not yet searched in this run, or moved beyond the window
+            shincr = build%spproj_field%get_all('shincr')
+            ndisk  = count(shincr(pinds) < 0. .or. shincr(pinds) > params%trs_window)
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', ndisk, ' OF ', nptcls, ' SAMPLED PARTICLES'
+            deallocate(shincr)
         endif
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
@@ -365,7 +373,7 @@ contains
         ! by prob_tab2D/refine2D_exec; later iterations redraw it, except on a fresh start
         ! without fillin (startit=1), which keeps the subset it drew first.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
-        if( params%l_shift_map )then
+        if( params%l_shift_map .and. params%trs_window > 0. )then
             ! the particles the fill searches the disk for: not yet searched in this run, or moved beyond the window
             shincr = build%spproj_field%get_all('shincr')
             ndisk  = count(shincr(pinds) < 0. .or. shincr(pinds) > params%trs_window)

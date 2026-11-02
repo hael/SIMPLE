@@ -70,25 +70,28 @@ contains
     !! full band's and the screen's over the lower half of the band (kscreen, at least two shells), each with
     !! magnitudes a quarter of its band's wavelength apart out to the disk of three sigma and an FFT-friendly
     !! direction count resolving its ring at the outer magnitude; prior_w is the prior's weight 1 / (2 sigma^2)
-    module subroutine setup_shiftmaps( self, sigma_px, radius_px, prior_w, kscreen )
+    !> The tables' coarse maps (shift_sigma > 0): the screen over the disk of radius_px (the centring stage's,
+    !! under the prior of width sigma_px) and the window map of radius_win (the box of the polish everywhere else),
+    !! both on the coarse band ending at kscreen; prior_w the prior's weight on the squared displacement
+    module subroutine setup_shiftmaps( self, sigma_px, radius_px, radius_win, prior_w, kscreen )
         use simple_polar_shiftmap, only: shiftmap_ndirections
         class(polarft_calc), intent(inout) :: self
-        real(dp),            intent(in)    :: sigma_px, radius_px
+        real(dp),            intent(in)    :: sigma_px, radius_px, radius_win
         real(dp),            intent(out)   :: prior_w
         integer,             intent(out)   :: kscreen
-        real(dp) :: radius
-        if( .not. (sigma_px  > 0.d0) ) THROW_HARD('the prior needs a positive width; setup_shiftmaps')
-        if( .not. (radius_px > 0.d0) ) THROW_HARD('the disk needs a positive radius; setup_shiftmaps')
+        if( .not. (sigma_px   > 0.d0) ) THROW_HARD('the prior needs a positive width; setup_shiftmaps')
+        if( .not. (radius_px  > 0.d0) ) THROW_HARD('the disk needs a positive radius; setup_shiftmaps')
+        if( .not. (radius_win > 0.d0) ) THROW_HARD('the window needs a positive radius; setup_shiftmaps')
         prior_w = 1.d0 / (2.d0 * sigma_px**2)
-        radius  = radius_px
         kscreen = max(self%kfromto(1) + 1, self%kfromto(2) / 2)
-        call build_map(SHIFTMAP_FULL,   self%kfromto(2))
-        call build_map(SHIFTMAP_SCREEN, kscreen)
+        call build_map(SHIFTMAP_SCREEN, kscreen, radius_px)
+        call build_map(SHIFTMAP_WINDOW, kscreen, radius_win)
 
     contains
 
-        subroutine build_map( imap, kstop )
-            integer, intent(in) :: imap, kstop
+        subroutine build_map( imap, kstop, radius )
+            integer,  intent(in) :: imap, kstop
+            real(dp), intent(in) :: radius
             real(dp), allocatable :: rhos(:)
             real(dp) :: step
             integer  :: nrho, i, nalpha

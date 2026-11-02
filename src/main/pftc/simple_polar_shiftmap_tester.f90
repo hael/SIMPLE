@@ -640,18 +640,19 @@ contains
         write(*,'(A)') 'test_disk_within_radius'
         allocate(p, pftc)
         call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, 1, 1, sigma2, refs, ptcls, ctfs, kfromto)
-        step = 64.d0 / real(kfromto(2),dp) / 4.d0
+        ! the fills' disk map lives on the coarse band (kscreen = max(k1 + 1, k2 / 2)); its radial step
+        step = 64.d0 / real(max(kfromto(1) + 1, kfromto(2) / 2),dp) / 4.d0
         do icase = 1, 3
             select case(icase)
                 case(1); radius = 0.5d0 * step
                 case(2); radius = step
                 case(3); radius = 1.5d0 * step
             end select
-            call pftc%setup_shiftmaps(10.d0, radius, prior_w, kscreen)
-            call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, nalpha)
+            call pftc%setup_shiftmaps(10.d0, radius, radius, prior_w, kscreen)
+            call pftc%shiftmap_dims(SHIFTMAP_SCREEN, nrho, nalpha)
             rmax = 0.d0
             do ir = 1, nrho
-                x    = pftc%shiftmap_shift(SHIFTMAP_FULL, ir, 1)
+                x    = pftc%shiftmap_shift(SHIFTMAP_SCREEN, ir, 1)
                 rmax = max(rmax, sqrt(sum(x**2)))
             enddo
             call assert_true(rmax <= radius + 1.d-9, 'the outermost magnitude is within the requested radius')

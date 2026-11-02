@@ -525,24 +525,40 @@ start x itself, which held only at the start's rotation: with a nonzero
 seed a rotation change moved the stored shift without the penalty, and a
 rotation that kept it paid (`test_shift_prior_frame`).
 `shift_sigma` (the polar shift map, `doc/implementation_notes/planned/polar_shift_search.md`)
-replaces the dense table's window search by a draw over the disk of 3 sigma bounded by
-`trs`: the fill scores every reference at the stored shift, screens a pool of the best with
-a low-resolution map, maps the best `projs_ns` over the whole band and draws each one's
-pose from the tempered posterior under the absolute prior on the displacement from the
-pick (`process_particle_with_map`); the row holds the reference's evidence, the drawn cell
-is the pose, not polished, and the fill writes it rotated into the particle's axes at the
-drawn rotation, so every table increment is native whatever the path (the window path's
-`minimize(sh_rot=.true.)` already is), and the consumer adds it to the stored shift
-unconverted (`strategy3D_prob`, `candidate_pose`; `test_table_increment_axes`). The
-weighted insertion (`topk > 1`) weighs the refined poses by their own losses, which every
-refined entry carries (`prob_refined_entry%loss`: the row's distance under the window
-search, which includes its shift prior; under the map the drawn cell's posterior loss, its
-data term with the absolute prior on the total displacement at the physical temperature,
-where the row holds the reference's evidence), so it is one distribution on both paths.
-Only the dense table has the map: the
-neighbourhood fill refuses the key (`fill_tab_neigh_range`), as does `prep_strategy3D`
-for every other `refine`, since the consumer's conversion applied to the window search's
-increments walked the shifts to the window's corner (solve3D stages 6-8, 2026-10-31).
+makes the tables' shift search coarse-to-fine (consolidated in 3D 2026-11-01, as 2D's
+centring stage): the fill scores every reference at the stored shift, screens the
+references holding 99 % of the particle's posterior at the origin (at least twice the
+refined count, `screen_pool_size`) with a coarse polar map over the particle's box, keeps
+each one's coarse optimum, and polishes the best `projs_ns` at full resolution in a box of
+one map step about that optimum (`pftc_shsrch_grad%minimize_in_cell`: the lattice and the
+L-BFGS in the box from the cell's rotation; when the box's optimum does not beat the
+origin, the optimizer's baseline, the cell scored at full resolution is the pose if it
+beats the origin's row, else that row stands; `process_particle_with_map`). The rows are
+the polished losses, as the window path's. The box is the disk of 3 sigma bounded by `trs`
+under the absolute prior on the displacement from the pick (`SHIFTMAP_SCREEN`) in the
+centring stage (`trs_window` set: solve3D's stage 3, the first with a shift search) for a
+particle not yet searched in the run (`shincr` below zero, reset by both masters at the
+start of every run under the key) or whose last move (`shincr`, written by
+`strategy3D_prob`) went beyond the next stage's window, and that window (`SHIFTMAP_WINDOW`,
+no prior) for the others; the master prints the disk set it is about to search, and the
+drain is the centring stage's convergence (`check_conv3D`: the fraction of sampled
+particles whose last move went beyond `trs_window` below `DISK_NEED_FRAC` for two
+iterations; the pose rule, the annealing tail and the resolution exit do not end it while
+the disk is needed, its budget does). In every other stage with a shift search the box is
+the window of `trs` for every particle (Phase 4 of the note: the map initialises the
+classic search), so the previous reference's seed, its shifted-particle bank and the 5 x 5
+lattice at every rotation retire wherever the key runs, in the dense table and in the
+neighbourhood table's candidates alike (`refine_best_neighbors`); `shift_sigma=0` keeps
+them. Every table increment is native whatever the path (the polish's `minimize(sh_rot=.true.)`
+rotates the optimizer's shift into the particle's axes at its rotation), and the consumer
+adds it to the stored shift unconverted (`strategy3D_prob`, `candidate_pose`;
+`test_table_increment_axes`; `test_map_initialised_polish` pins the map-initialised
+optimum against the lattice-initialised one). The weighted insertion (`topk > 1`) weighs
+the refined poses by their own losses, which every refined entry carries
+(`prob_refined_entry%loss`: the row's distance under the window search, which includes its
+shift prior; under the key the polished loss with the absolute prior on the total
+displacement at the physical temperature), so it is one distribution on both paths.
+`prep_strategy3D` refuses the key under every `refine` but `prob` and `prob_neigh`.
 Every posterior draw of the tables, the fills' in-plane draws
 (`pftc%ptcl_posterior_temp`) and the assignments' direction, class and
 neighbourhood draws alike, runs at one tempering factor times the particle

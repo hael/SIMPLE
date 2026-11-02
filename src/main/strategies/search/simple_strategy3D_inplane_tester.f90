@@ -16,6 +16,7 @@ use simple_ui_program,        only: ui_program, ui_program_input
 use simple_refine3D_strategy, only: strip_refine3D_search_only_args
 use simple_strategy3D_alloc,  only: clean_strategy3D, prep_strategy3D, s3D, seed_continuous_inplane_candidate
 use simple_strategy3D_srch,   only: strategy3D_srch, strategy3D_spec
+use simple_polarft_calc,      only: SHIFTMAP_WINDOW
 use simple_builder,           only: builder
 use simple_image,             only: image
 use simple_syslib,            only: del_file
@@ -41,6 +42,7 @@ contains
         call test_inpl_cont_derivation()
         call test_previous_shift_is_stored_shift()
         call test_table_increment_axes()
+        call test_map_initialised_polish()
     end subroutine run_all_strategy3D_inplane_tests
 
     !> nrefs candidates, one thread; the continuous arrays only on request
@@ -402,6 +404,86 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_table_increment_axes
+
+    !> Phase 4's pin: the map-initialised polish (the coarse window map's cell, then the lattice and the L-BFGS in a
+    !! box of one map step about it, minimize_in_cell) reaches the lattice-initialised search's optimum on the
+    !! white-reference fixture, at the same rotation
+    subroutine test_map_initialised_polish()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [1.5, -2.0], TRS = 5.
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)            :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        type(pftc_shsrch_grad)   :: grad_lattice, grad_map
+        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
+        real(sp), allocatable :: vals(:,:,:)
+        real     :: lims(2,2), cxy_l(3), cxy_m(3), xy_cell(2), step, val
+        real(dp) :: prior_w, xy_dp(2)
+        integer  :: irot_l, irot_m, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp, kscreen, irho, ialpha
+        integer  :: nrho, nalpha
+        logical  :: l_polished
+        write(*,'(A)') 'test_map_initialised_polish'
+        call set_fixed_seed(20261101)
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec)
+        nrots   = b%pftc%get_nrots()
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim    = b%pftc%get_pdim_interp()
+        allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                ref(pp,k) = cmplx(gasdev(), gasdev())
+            enddo
+        enddo
+        call b%pftc%set_ref_pft(1, ref, iseven=.true.)
+        call b%pftc%set_eo(1, .true.)
+        call b%pftc%memoize_refs
+        lims(:,1) = -TRS
+        lims(:,2) =  TRS
+        call grad_lattice%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        call grad_map%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        call b%pftc%setup_shiftmaps(3.d0, real(TRS, dp), real(TRS, dp), prior_w, kscreen)
+        step = real(norm2(b%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 2, 1) - b%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 1, 1)))
+        call b%pftc%shiftmap_dims(SHIFTMAP_WINDOW, nrho, nalpha)
+        allocate(vals(nalpha, nrots, nrho))
+        nchecked = 0
+        do inpl = 1, nrots, max(1, nrots / 5)
+            call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call b%pftc%set_ptcl_pft(1, ptcl)
+            call b%pftc%shift_ptcl(1, S_TRUE)
+            call b%pftc%memoize_ptcls
+            irot_l = inpl
+            call grad_lattice%set_indices(1, 1)
+            cxy_l = grad_lattice%minimize(irot=irot_l, sh_rot=.true.)
+            ! the map's peak is the initialiser's cell (objective-agnostic, as the fills' greedy draw under euclid)
+            call b%pftc%gen_shiftmap(SHIFTMAP_WINDOW, 1, 1)
+            call b%pftc%shiftmap_objfun_grid(SHIFTMAP_WINDOW, vals)
+            call b%pftc%shiftmap_peak(SHIFTMAP_WINDOW, vals, irot_m, xy_dp, val, irho, ialpha)
+            xy_cell = real(xy_dp)
+            call grad_map%set_indices(1, 1)
+            call grad_map%minimize_in_cell(irot_m, xy_cell, step, cxy_m, l_polished)
+            call assert_true(irot_l > 0, 'the lattice-initialised search found a better pose than the start')
+            call assert_true(l_polished, 'the map-initialised polish beat the origin')
+            if( irot_l < 1 ) cycle
+            nchecked = nchecked + 1
+            call assert_true(abs(norm2(cxy_m(2:3)) - norm2(S_TRUE)) <= 0.15, 'the map-initialised polish recovers the shift''s magnitude')
+            call assert_true(all(abs(cxy_m(2:3) - cxy_l(2:3)) <= 0.15), 'the map-initialised polish reaches the lattice-initialised optimum')
+            call assert_true(irot_m == irot_l, 'the two starts agree on the rotation')
+        enddo
+        call assert_true(nchecked >= 3, 'the identity held at three starts or more')
+        call grad_lattice%kill
+        call grad_map%kill
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill_shiftmap
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_map_initialised_polish
 
     !> a polar section rotated by irot in the calculator's convention (the polar shift map tester's helper, checked there
     !! against the calculator's own rotation)

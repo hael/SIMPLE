@@ -67,14 +67,14 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
-        &'probability table searches the shifts of its refined candidates over a disk of 3 sigma within trs with the polar '//&
-        &'shift map and draws the pose from the tempered posterior instead of refining a window; 0 is the window search{0}', &
+        &'dense probability table (refine=prob) locates each particle''s likely projection directions over a disk of 3 '//&
+        &'sigma within trs with a coarse polar shift map and polishes from the map''s optimum; a particle whose last '//&
+        &'move stayed inside trs_window searches that window instead; 0 is the window search{0}', &
         &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'shift_draw', 'binary', 'Polar shift map draw', &
-        &'The polar shift map''s pose is drawn from the tempered posterior over the disk, or is its cell of largest '//&
-        &'mass, the comparison arm of the tests(yes|no){yes}', '', .false., 'yes', group="search", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_DEVELOPER)
+        call refine3D%add_input(UI_SRCH, 'trs_window', 'num', 'Window after the disk', &
+        &'With shift_sigma, the half-width (in pixels) of the window a particle searches once its last move stayed '//&
+        &'inside it; solve3D sets it to the next stage''s window{0}', 'window in pixels{0}', .false., 0., &
+        &group="search", visibility=UI_VIS_DEVELOPER)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
         &'Continuous pose polish', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &

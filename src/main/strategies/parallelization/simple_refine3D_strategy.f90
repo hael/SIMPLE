@@ -1145,6 +1145,12 @@ contains
             THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
+        ! the centring stage (shift_sigma > 0) is one refine3D run, whatever its first iteration's number: every
+        ! particle needs the disk until its first search in it
+        if( params%l_shift_map )then
+            call build%spproj_field%set_all2single('shincr', -1.)
+            l_proj_dirty = .true.
+        endif
         ! STATE LABEL INIT, as the distributed master: a fresh multi-state start (the first
         ! iteration) on a project whose particles are all in one state draws uniform labels (none in
         ! a pass that searches no state). A later stage of a workflow, whose states may have emptied,
@@ -1650,6 +1656,12 @@ contains
             if( sigma_update_enabled(params) )then
                 call self%cline_commit_sigma2%set('nthr', self%nthr_master)
             endif
+        endif
+        ! the centring stage (shift_sigma > 0) is one refine3D run, whatever its first iteration's number: every
+        ! particle needs the disk until its first search in it, which the workers read from the project
+        if( params%l_shift_map )then
+            call build%spproj_field%set_all2single('shincr', -1.)
+            call build%spproj%write_segment_inside(params%oritype)
         endif
         ! Particle caching is a 2D-only feature; fail loudly rather than silently
         ! ignoring a stray cache=yes so callers adopt the 2D-only contract.

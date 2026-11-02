@@ -13,7 +13,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eul
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_defs,               only: PROB_INSERT_WMIN
-use simple_polarft_calc,       only: SHERRSQ
+use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_WINDOW
 use simple_ori,                only: ori
 implicit none
 
@@ -136,7 +136,6 @@ contains
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i_first, i_last
         ! the polar shift map lives in the dense fill; this fill's increments are the window search's
-        if( self%p_ptr%l_shift_map ) THROW_HARD('shift_sigma needs the dense table: refine=prob, not prob_neigh')
         ! Search paths
         select case(trim(self%p_ptr%prob_neigh_mode))
             case('shc','snhc')
@@ -166,14 +165,22 @@ contains
         real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
         integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob)
+        logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first, l_bank(nthr_glob), l_map
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        real(dp)       :: prior_w
+        real           :: step_win
+        integer        :: kscreen
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         l_shc_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'shc')
         l_snhc_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'snhc')
-        l_seed_sh_first = self%p_ptr%l_doshift .and. l_shc_neigh
+        ! under the polar shift map's key the window map initialises every polish and there is no seed
+        l_map           = self%p_ptr%l_doshift .and. self%p_ptr%l_shift_map
+        l_seed_sh_first = self%p_ptr%l_doshift .and. l_shc_neigh .and. .not. l_map
+        prior_w         = 0.d0
+        kscreen         = 0
+        step_win        = 0.
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
@@ -206,6 +213,7 @@ contains
             end do
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
             if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
+            if( l_map ) call setup_shiftmap_neigh(self, prior_w, kscreen, step_win)
             ! dynamic: particles differ in cost (stopping rule, shift searches); each is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed)&
@@ -266,7 +274,7 @@ contains
             if( l_with_shift )then
                 t0 = omp_get_wtime()
                 call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
-                &i_loc, ithr_loc, iptcl_loc, shift_seed, neval_loc)
+                &i_loc, ithr_loc, iptcl_loc, shift_seed, neval_loc, l_map, kscreen, step_win)
                 ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             endif
             call o_prev%kill
@@ -387,16 +395,24 @@ contains
         real    :: sigma2_prior  !< the shift prior's variance per axis (shift_prior=yes)
         integer :: iptcl, i_from, i_to, nrots
         real    :: lims(2,2), lims_init(2,2), shift_seed(3)
-        logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first, l_bank(nthr_glob)
+        logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first, l_bank(nthr_glob), l_map
         real(dp)       :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region
+        real(dp)       :: prior_w
+        real           :: step_win
+        integer        :: kscreen
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob)
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
         l_geom_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'geom')
         l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
         ! Keep shift-first seeding single-state only. In multi-state runs this
-        ! can bias all states toward the same previous-state shift basin.
-        l_seed_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1
+        ! can bias all states toward the same previous-state shift basin. Under the polar shift map's key the
+        ! window map initialises every polish and there is no seed
+        l_map           = self%p_ptr%l_doshift .and. self%p_ptr%l_shift_map
+        l_seed_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. .not. l_map
+        prior_w         = 0.d0
+        kscreen         = 0
+        step_win        = 0.
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
@@ -427,6 +443,7 @@ contains
             end do
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
             if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
+            if( l_map ) call setup_shiftmap_neigh(self, prior_w, kscreen, step_win)
             ! dynamic: particles differ in cost (stopping rule, shift searches); each is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(dynamic)
@@ -490,7 +507,7 @@ contains
             if( l_with_shift )then
                 t0 = omp_get_wtime()
                 call refine_best_neighbors(self, eval_work, grad_shsrch_obj, l_seed_sh_first, max_refs_to_refine,&
-                    &i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval)
+                    &i_loc, ithr_loc, iptcl_loc, shift_seed_loc, neval, l_map, kscreen, step_win)
                 ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             endif
             call o_prev%kill
@@ -1322,6 +1339,22 @@ contains
 
     !> the per-thread memo of the particle shifted by its particle-frame seed, which every reference of the particle is
     !! scored against (a seed below SHERRSQ scores against the plain particle memo)
+    !> the window map of a fill (shift_sigma > 0): the coarse map over the window of trs that initialises every
+    !! polish, with its radial step, the box of the polish about a cell
+    subroutine setup_shiftmap_neigh( self, prior_w, kscreen, step_win )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        real(dp),                  intent(out)   :: prior_w
+        integer,                   intent(out)   :: kscreen
+        real,                      intent(out)   :: step_win
+        real(dp) :: sigma_px, radius
+        if( .not. (self%p_ptr%prob_beta > 0.) ) THROW_HARD('the shift map draws at prob_beta x T: prob_beta must be positive')
+        sigma_px = real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp)
+        radius   = real(self%p_ptr%trs, dp)
+        call self%b_ptr%pftc%setup_shiftmaps(sigma_px, radius, radius, prior_w, kscreen)
+        step_win = real(norm2(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 2, 1) -&
+            &self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 1, 1)))
+    end subroutine setup_shiftmap_neigh
+
     subroutine alloc_seed_bank( self, seed_bank )
         class(eul_prob_tab_neigh), intent(in)    :: self
         complex(sp), allocatable,  intent(inout) :: seed_bank(:,:,:)
@@ -1367,19 +1400,33 @@ contains
     end subroutine score_seeded_ref
 
     ! Optimizes shift & rotation on the top-npeaks_inpl references
+    !> the shifts of the best candidates per state: the windowed refinement from the seed, or under the key (l_map)
+    !! the polish in a box about the coarse window map's optimum (kept if it beat the origin, or the cell if it
+    !! beats the candidate's row)
     subroutine refine_best_neighbors( self, ew, grad_obj, l_seed_sh_first, max_refs_to_refine,&
-        &i, ithr, iptcl, shift_seed, neval)
+        &i, ithr, iptcl, shift_seed, neval, l_map, kscreen, step_win)
         class(eul_prob_tab_neigh), intent(inout) :: self
         type(eval_ws),             intent(inout) :: ew
         type(pftc_shsrch_grad),    intent(inout) :: grad_obj(:)
         logical,                   intent(in)    :: l_seed_sh_first
         integer,                   intent(in)    :: max_refs_to_refine, i, ithr, iptcl, neval
         real,                      intent(in)    :: shift_seed(3)
-        integer :: nrefs_to_refine, nstate_eval, j, eval_slot, ri, istate, iproj, irot
+        logical,                   intent(in)    :: l_map
+        integer,                   intent(in)    :: kscreen
+        real,                      intent(in)    :: step_win
+        integer :: nrefs_to_refine, nstate_eval, j, eval_slot, ri, istate, iproj, irot, irho, ialpha
         integer :: si, state_eval
-        real    :: refined_shift(3), xy_start(2)
+        real    :: refined_shift(3), xy_start(2), loss_cell, dist
+        real(dp) :: u_prev(2), lse_map, logp0, temp_s, logz
+        logical  :: l_polished
         ew%best_evals(:,ithr) = 0
         if( neval <= 0 ) return
+        if( l_map )then
+            u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl), dp)
+            temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
+                &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
+            call self%b_ptr%pftc%shiftmap_prior(SHIFTMAP_WINDOW, 0.d0, u_prev, lse_map, logp0)
+        endif
         do si = 1, self%nstates
             state_eval = self%ssinds(si)
             ew%state_eval_dists(1:neval,ithr) = huge(1.0)
@@ -1404,6 +1451,18 @@ contains
                 iproj  = self%ref_proj(ri)
                 call grad_obj(ithr)%set_indices(self%ref_full(ri), iptcl)
                 irot = self%candidate_buffers(ithr)%get_inpl(i, self%ref_full(ri))
+                if( l_map )then
+                    call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_WINDOW, self%ref_full(ri), iptcl)
+                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s, 0.d0, u_prev, lse_map, .true.,&
+                        &logz, irot, irho, ialpha, loss_cell)
+                    xy_start = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho, ialpha))
+                    call grad_obj(ithr)%minimize_in_cell(irot, xy_start, step_win, refined_shift, l_polished)
+                    dist = eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun)
+                    if( l_polished .or. dist < ew%evaluated_ref_dists(eval_slot,ithr) )then
+                        call record_sparse_eval(self, i, ithr, ri, dist, irot, refined_shift(2), refined_shift(3), .true.)
+                    endif
+                    cycle
+                endif
                 if( l_seed_sh_first )then
                     ! the particle-frame seed as the shift of this reference at the rotation it was scored at, in the box
                     xy_start = shift_seed(2:3)
