@@ -200,7 +200,7 @@ contains
         write(*,'(A)') 'test_registered_programs'
         call make_ui
         call assert_registered_requirement('binarize', 'input', 1, 1)
-        call assert_registered_category('icm2D', 'denoise', 'Denoising', 70)
+        call assert_registered_category('ppca_denoise', 'denoise', 'Denoising', 70)
         call assert_registered_category('refine3D', 'refine3d', 'Refine 3D Workflows', 60)
         call assert_registered_category('flex_pca', 'heterogeneity', 'Heterogeneity Analysis', 65)
         call assert_registered_category('refine3D_states', 'heterogeneity', 'Heterogeneity Analysis', 65)

@@ -33,16 +33,6 @@ type, extends(commander_base) :: commander_nu_filt3D
         procedure :: execute      => exec_nu_filt3D
 end type commander_nu_filt3D
 
-type, extends(commander_base) :: commander_icm3D
-  contains
-    procedure :: execute      => exec_icm3D
-end type commander_icm3D
-
-type, extends(commander_base) :: commander_icm2D
-  contains
-    procedure :: execute      => exec_icm2D
-end type commander_icm2D
-
 type, extends(commander_base) :: commander_estimate_lpstages
   contains
     procedure :: execute      => exec_estimate_lpstages
@@ -283,57 +273,6 @@ contains
         call simple_end('**** SIMPLE_nu_filt3D NORMAL STOP ****')
     end subroutine exec_nu_filt3D
 
-    subroutine exec_icm3D( self, cline )
-        class(commander_icm3D), intent(inout) :: self
-        class(cmdline),         intent(inout) :: cline
-        type(parameters)     :: params
-        type(image)          :: merged, even, odd, even_icm, odd_icm, avg, avg_icm
-        type(image_msk)      :: envmsk
-        logical, allocatable :: l_msk(:,:,:)
-        type(string) :: file_tag
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        call odd %new([params%box,params%box,params%box], params%smpd)
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd %read(params%vols(1))
-        call even%read(params%vols(2))
-        call avg%copy(even)
-        call avg%add(odd)
-        call avg%mul(0.5)
-        call even_icm%copy(even)
-        call odd_icm%copy(odd)
-        if( params%automsk.ne.'no' )then
-            call merged%copy(even)
-            call merged%add(odd)
-            call merged%mul(0.5)
-            call envmsk%automask3D(params, merged, params%automsk.eq.'tight')
-            call merged%kill
-            ! apply mask to volumes
-            call envmsk%apply_3Dmask(even_icm)
-            call envmsk%apply_3Dmask(odd_icm)
-            call envmsk%one_at_edge ! to expand before masking of reference internally
-            l_msk = envmsk%bin2logical()
-            call even_icm%ICM3D_eo(odd_icm, params%lambda, l_msk)
-            call envmsk%kill_bimg
-        else
-            call even_icm%ICM3D_eo(odd_icm, params%lambda)
-        endif
-        call avg_icm%copy(even_icm)
-        call avg_icm%add(odd_icm)
-        call avg_icm%mul(0.5)
-        file_tag = 'icm_3D_filter'
-        call even_icm%write(string('vol2_')//file_tag//'.mrc')
-        call odd_icm%write(string('vol1_')//file_tag//'.mrc')
-        call avg_icm%write(string('vol_avg_')//file_tag//'.mrc')
-        call even%kill
-        call odd%kill
-        call even_icm%kill
-        call odd_icm%kill
-        call avg%kill
-        call avg_icm%kill
-        call simple_end('**** SIMPLE_ICM3D NORMAL STOP ****')
-    end subroutine exec_icm3D
-
     subroutine exec_uniform_filter2D( self, cline )
         use simple_opt_filter, only: estimate_lplims2D
         class(commander_uniform_filter2D), intent(inout) :: self
@@ -367,52 +306,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER2D NORMAL STOP ****')
     end subroutine exec_uniform_filter2D
-
-    subroutine exec_icm2D( self, cline )
-        class(commander_icm2D), intent(inout) :: self
-        class(cmdline),         intent(inout) :: cline
-        type(image), allocatable :: odd(:), even(:)
-        logical,     allocatable :: mask(:)
-        type(string)     :: file_tag
-        type(parameters) :: params
-        real             :: minmax(2)
-        integer          :: iptcl
-        ! init
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
-        params%ldim(3) = 1 ! because we operate on stacks
-        file_tag = 'icm_2D_filter'
-        ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
-        ! construct & read
-        do iptcl = 1, params%nptcls
-            call odd  (iptcl)%new( params%ldim, params%smpd, .false.)
-            call odd  (iptcl)%read(params%stk,  iptcl)
-            call even (iptcl)%new( params%ldim, params%smpd, .false.)
-            call even (iptcl)%read(params%stk2, iptcl)
-            minmax      = even(iptcl)%minmax()
-            mask(iptcl) = .not.is_equal(minmax(2)-minmax(1),0.) ! empty image
-        enddo
-        ! filter
-        !$omp parallel do schedule(static) default(shared) private(iptcl) proc_bind(close)
-        do iptcl = 1, params%nptcls
-            if( mask(iptcl) ) call even(iptcl)%ICM2D_eo(odd(iptcl), params%lambda)
-        enddo
-        !$omp end parallel do
-        ! write output and destruct
-        do iptcl = 1, params%nptcls
-            call even (iptcl)%write(file_tag//'_even.mrc', iptcl)
-            call odd  (iptcl)%write(file_tag//'_odd.mrc',  iptcl)
-            call even (iptcl)%add(odd(iptcl))
-            call even (iptcl)%mul(0.5)
-            call even (iptcl)%write(file_tag//'_avg.mrc', iptcl)
-            call odd  (iptcl)%kill()
-            call even (iptcl)%kill()
-        end do
-        ! end gracefully
-        call simple_end('**** SIMPLE_ICM2D NORMAL STOP ****')
-    end subroutine exec_icm2D
 
     subroutine exec_estimate_lpstages( self, cline )
         class(commander_estimate_lpstages), intent(inout) :: self

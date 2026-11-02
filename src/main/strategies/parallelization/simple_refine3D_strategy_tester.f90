@@ -317,7 +317,6 @@ contains
         params%l_cart_refine     = .true.
         params%l_lpset           = .true.
         params%l_noise_reg       = .false.
-        params%l_icm             = .false.
         params%l_ml_reg          = .true.
         call build%spproj%os_ptcl3D%new(1, is_ptcl=.true.)
         call build%spproj%os_ptcl3D%set(1, 'state', 1.)

@@ -137,7 +137,7 @@ if ($detailed) {
        fsc143_avg fsc143_sdev fsc143_min fsc143_max
        score_avg score_sdev score_min score_max
        refinement_mode nspace gau_regularization ml_regularization ml_tau
-       icm_regularization icm_lambda automasking filter_mode
+       automasking filter_mode
        trailing_rec_update_fraction fillin_particle_sampling)
   );
   push @iter_header, @dynamic_state_cols;
@@ -424,8 +424,6 @@ sub new_record {
     gau_regularization => 'NA',
     ml_regularization => 'NA',
     ml_tau => 'NA',
-    icm_regularization => 'NA',
-    icm_lambda => 'NA',
     automasking => 'NA',
     filter_mode => 'NA',
     trailing_rec_update_fraction => 'NA',
@@ -952,9 +950,6 @@ sub parse_setting_line {
   } elsif ($norm eq 'ML REGULARIZATION') {
     if ($val =~ /^(on|off)\b/i) { $r->{ml_regularization} = lc($1); }
     if ($val =~ /TAU:\s*($NUM_RE)/i) { $r->{ml_tau} = $1; }
-  } elsif ($norm eq 'ICM REGULARIZATION') {
-    if ($val =~ /^(on|off)\b/i) { $r->{icm_regularization} = lc($1); }
-    if ($val =~ /LAMBDA:\s*($NUM_RE)/i) { $r->{icm_lambda} = $1; }
   } elsif ($norm eq 'AUTOMASKING') {
     $r->{automasking} = $val;
   } elsif ($norm eq 'FILTER MODE') {

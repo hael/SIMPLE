@@ -218,8 +218,6 @@ contains
                             call bs%kill
                         case('nlmean')
                             call build%vol%NLmean3D()
-                        case('icm')
-                            call build%vol%ICM3D(params%lambda)
                          case('tent')
                             if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for tent filter')
                             call build%vol%bartlett_reg_3D(nint(params%winsz))

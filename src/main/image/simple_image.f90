@@ -218,7 +218,7 @@ contains
     generic            :: apply_filter => apply_filter_1, apply_filter_2
     procedure          :: apply_filter_serial
     procedure          :: NLmean2D, NLmean2D_eo, NLmean3D, NLmean3D_eo
-    procedure          :: ICM2D, ICM2D_eo, ICM3D, ICM3D_eo
+    procedure          :: ICM2D
     procedure          :: GLCM
     procedure          :: bs_smooth
     procedure          :: bartlett_reg_3D
@@ -1411,23 +1411,6 @@ interface
         real,              intent(in)    :: lambda
         logical, optional, intent(in)    :: verbose
     end subroutine ICM2D
-
-    module subroutine ICM2D_eo( even, odd, lambda, verbose )
-        class(image),      intent(inout) :: even, odd
-        real,              intent(in)    :: lambda
-        logical, optional, intent(in)    :: verbose
-    end subroutine ICM2D_eo
-
-    module subroutine ICM3D( self, lambda )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: lambda
-    end subroutine ICM3D
-
-    module subroutine ICM3D_eo( even, odd, lambda, l_msk )
-        class(image),      intent(inout) :: even, odd
-        real,              intent(in)    :: lambda
-        logical, optional, intent(in)    :: l_msk(even%ldim(1),even%ldim(2),even%ldim(3))
-    end subroutine ICM3D_eo
 
     module subroutine GLCM( self, nquanta, pmat )
         class(image), intent(in)    :: self
@@ -2640,11 +2623,10 @@ interface
         class(image), intent(inout) :: self
     end subroutine inv_gain
 
-    module subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: nquanta
-        real,              intent(inout) :: transl_tab(nquanta)
-        logical, optional, intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3)) 
+    module subroutine quantize_fwd( self, nquanta, transl_tab )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: nquanta
+        real,         intent(inout) :: transl_tab(nquanta)
     end subroutine quantize_fwd
 
     module subroutine quantize_bwd( self, nquanta, transl_tab )

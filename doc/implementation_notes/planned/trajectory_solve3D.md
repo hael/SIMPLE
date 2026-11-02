@@ -19,8 +19,8 @@ poor class averages in most trajectories).
   first (as the lattice gate was: for these time series losing good frames costs more than carrying some junk),
   then fixed as a constant, with the same kind of override key the lattice gate has.
 - The stages otherwise as the previous run ran them: flex denoising with its defaults, `refine2D_nano`, the
-  lattice gate (`quality_model=nano`), `center2D_nano`, `autorefine3D_nano` without the atomicity prior and
-  with `icm=no`.
+  lattice gate (`quality_model=nano`), `center2D_nano`, `autorefine3D_nano` without the atomicity prior
+  on the denoised frames.
 - Bugs are fixed as they are found, in the phase that finds them. The maps are not judged by the run beyond
   the numbers it tables; the maintainer validates them.
 
@@ -63,7 +63,7 @@ project copy, as the SINGLE programs do, so that every intermediate is where the
 7. **Centering.** `center2D_nano ncls=10` on the pruned project.
 8. **Diameter, second estimate**, on the centred chunk averages; it sets `mskdiam` and `moldiam` for 3D (the
    start volume is simulated again if `moldiam` changed by more than 5 percent).
-9. **3D.** `autorefine3D_nano vol1=startvol.mrc pgrp=c1 mskdiam=<mskdiam> lp=1.5 icm=no`, its defaults
+9. **3D.** `autorefine3D_nano vol1=startvol.mrc pgrp=c1 mskdiam=<mskdiam> lp=1.5`, its defaults
    otherwise, no `atm_prior`. Its products as now (`final_results/`, the iterations' text products, the class
    averages aligned to the final map with their triplets, the per-frame correlations).
 
@@ -255,7 +255,7 @@ the lattice gate rejects them outright, and their correlation to a projection is
   `mskdiam = 1.5 x max` and `moldiam = min`.
 - Gate 1: `simple_exec prg=model_cavgs_rejection quality_model=nano mskdiam=<mskdiam>`, without prune.
 - Start model: `single_exec prg=simulate_nanoparticle element=Pt moldiam=<min> box=<box>`.
-- Gate 2's alignment: `single_exec prg=refine3D_nano oritype=cls3D maxits=1 lp=1.0 trs=10 icm=no volrec=no vol1=startvol.mrc pgrp=c1 mskdiam=<mskdiam>`,
+- Gate 2's alignment: `single_exec prg=refine3D_nano oritype=cls3D maxits=1 lp=1.0 trs=10 volrec=no vol1=startvol.mrc pgrp=c1 mskdiam=<mskdiam>`,
   on a copy of the rebuilt project. Every non-empty class is aligned, so that the cut can also be tabled
   without the lattice gate in front; the empty classes are first set to state 0
   (`simple_exec prg=selection oritype=cls3D deselfile=`). One pass takes 6 to 10 s.
@@ -384,7 +384,7 @@ need the test's bound or the gates' unit (class averages) to change, both fixed 
 here for the maintainer's decision. Everything else of the phase is done and passes: the program, its user
 interface, router, parameters, the gate rule with its tester case, the policy note and both test entries'
 other checks. Rulings 1 and 3 are applied here for the first time, as written: the new program by that name,
-and `autorefine3D_nano` without the atomicity prior with `icm=no` and `lp=1.5`.
+and `autorefine3D_nano` without the atomicity prior and with `lp=1.5`.
 
 **The program as built** (`single_commanders_nano3D.f90`, beside `autorefine3D_nano`).
 
@@ -403,7 +403,7 @@ and `autorefine3D_nano` without the atomicity prior with `icm=no` and `lp=1.5`.
   `>>> TRAJECTORY_SOLVE3D STAGE <n> <program>` and, where the program itself checks, in the error. A stage's
   failure inside the program it calls stops the process with that program's own message; Fortran has no way to
   catch it.
-- The model gate (stage 8, inside the commander): `refine3D_nano oritype=cls3D maxits=1 lp=1.0 trs=10 icm=no volrec=no`
+- The model gate (stage 8, inside the commander): `refine3D_nano oritype=cls3D maxits=1 lp=1.0 trs=10 volrec=no`
   against the start model. `volrec=no` skips a reconstruction from the class averages, which does not change the
   correlations, and the pass's 1.5 GB reprojection models are deleted afterwards. Then
   `model_gate_states(corr, states, K_MODEL)`, then `map_cavgs_selection`, then `prune_particles`. Products: the
@@ -640,7 +640,7 @@ The phase stopped a third time, on that last bound.
   8. `trajectory_extract_substk state=1`;
   9. `trajectory_denoise` (flex);
   10. `trajectory_swap_stack`;
-  11. `autorefine3D_nano` with the centred mask and `icm=no`.
+  11. `autorefine3D_nano` with the centred mask.
 
   Following `analysis2D_nano`, the refinement starts from the centering's project. The `frame` field is needed
   because `trajectory_swap_stack` renumbers the stack index; the test's pose checks read it, and phase 2's label

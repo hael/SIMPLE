@@ -411,6 +411,14 @@ The ordinary reference low-pass filter is not applied on top of a NU reference
 path. NU and ML-regularized references are treated as already filtered during
 volume assembly.
 
+3D ICM regularization is retired: the `icm` key, `icm3D` program and volume
+`filter=icm` path are removed. Nano refinement consumes images denoised by
+the FLEX trajectory workflow or outside SIMPLE and uses the ordinary
+reference-filtering path. The paired-stack `icm2D` command is also retired.
+The single-image ICM filter used by micrograph preprocessing, and the ICM
+algorithms for embedding rank selection and NU envelope labels, remain
+separate operations.
+
 ## 8. Probabilistic and Matcher Work
 
 The current workflow is probabilistic pre-alignment followed by hard particle

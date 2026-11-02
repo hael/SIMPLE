@@ -60,7 +60,7 @@ the prior'd halves are never a noise reference (use the prior-free `_base` halve
    now runs stage 1 prior-free, builds a model with `detect_atoms`, and passes that PDB to the next
    stage's atomic-prior reconstruction. The published map is the regularized solve; resolution,
    the next atom detection, and species discovery use the prior-free `_base` pair. Every stage
-   retains `_base`, `_res`, and `_atmprior.txt` beside the existing products. ICM is rejected.
+   retains `_base`, `_res`, and `_atmprior.txt` beside the existing products.
    The loop is agnostic to the atomic species (ruling of 2026-10-26): `autorefine3D_nano` takes
    no `element` and no species key, each round's `detect_atoms` runs species-free, and the next
    prior uses `_ATMS.pdb` with its per-atom table `_atoms.csv` (the density model of
@@ -116,7 +116,7 @@ Written down before the runs, from the design:
 
 ## 4. Rulings and rules that bind
 
-- No ICM step; version 1 has one prior and one strength.
+- Version 1 has one prior and one strength.
 - Tomography first, then SINGLE.
 - Rules every prior obeys: a symmetric positive semi-definite term; a linear operator frozen during
   a solve; nothing accumulated into the raw accumulators; attached only in deapodized kernel mode;

@@ -260,8 +260,8 @@ diag_halves=.true.)`, which runs `read_mask_filter_refvols` with the
 independent `vol_even`/`vol_odd` maps of every state (the `_nu_filt` halves
 under NU filtering, the raw halves otherwise) and the same masking,
 centering and filtering as the matcher's references but with the merged-map
-copies bypassed (the LP-set average, the merged NU reference, the ICM
-average), and writes `reprojection_model_diag_{even,odd}.bin`. No shift
+copies bypassed (the LP-set average and the merged NU reference), and writes
+`reprojection_model_diag_{even,odd}.bin`. No shift
 mapping, no band-limit estimation, no Cartesian volumes on that pass; the
 files are removed with the model's by `remove_ref_section_files`. The dense
 table workers (`exec_prob_tab`, `exec_prob_tab_neigh`) call

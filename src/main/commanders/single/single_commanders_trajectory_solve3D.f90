@@ -248,7 +248,7 @@ contains
             call record_frames(S_SWAP, recs%get_int(S_GATE2, 'frames_out'))
             call end_stage(S_SWAP)
         endif
-        ! 11. autorefine3D_nano on the denoised kept frames, without the atomicity prior, icm=no, the centred mask
+        ! 11. autorefine3D_nano on the denoised kept frames, without the atomicity prior, with the centred mask
         if( begin_stage(S_AUTOREFINE3D, .true., stage_proj(S_SWAP)) )then
             block
                 type(cmdline) :: cl
@@ -260,7 +260,6 @@ contains
                 call cl%set('pgrp',     'c1')
                 call cl%set('mskdiam',  mskdiam)
                 call cl%set('lp',       params%lp)
-                call cl%set('icm',      'no')
                 call cl%set('nthr',     params%nthr)
                 call cl%copy_arg(cline, 'maxits')
                 call cl%copy_arg(cline, 'maxits_between')
@@ -497,7 +496,6 @@ contains
             call cl%set('maxits',   1)
             call cl%set('lp',       1.0)
             call cl%set('trs',      10.0)
-            call cl%set('icm',      'no')
             call cl%set('volrec',   'no')
             call cl%set('nthr',     params%nthr)
             call xrefine3D_nano%execute(cl)

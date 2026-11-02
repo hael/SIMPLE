@@ -106,7 +106,6 @@ contains
         call reg%add_char('graphene_filt', self%graphene_filt)
         call reg%add_char('greedy_sampling', self%greedy_sampling)
         call reg%add_char('hist', self%hist)
-        call reg%add_char('icm', self%icm)
         call reg%add_char('preimage_auto', self%preimage_auto)
         call reg%add_char('rec_states', self%rec_states)
         call reg%add_char('imgkind', self%imgkind)

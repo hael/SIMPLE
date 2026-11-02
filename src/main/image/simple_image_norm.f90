@@ -199,19 +199,14 @@ contains
         !$omp end parallel workshare
     end subroutine inv_gain
 
-    module subroutine quantize_fwd( self, nquanta, transl_tab, l_msk )
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: nquanta
-        real,              intent(inout) :: transl_tab(nquanta)
-        logical, optional, intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3)) 
+    module subroutine quantize_fwd( self, nquanta, transl_tab )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: nquanta
+        real,         intent(inout) :: transl_tab(nquanta)
         real, allocatable :: pixvals(:)
         integer :: i, j, k, ind
         real    :: dist
-        if( present(l_msk) )then
-            pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=l_msk)
-        else
-            pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
-        endif
+        pixvals = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.true.)
         if( self%ldim(3) > 1 )then
             call quantize_vec(pixvals, nquanta, transl_tab)
             !$omp parallel do schedule(static) default(shared) private(k,j,i,ind,dist) collapse(3) proc_bind(close)

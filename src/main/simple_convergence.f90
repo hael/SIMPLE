@@ -513,12 +513,6 @@ contains
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
-        if( params%l_icm )then
-        numstr = string(params%lambda)
-        write(logfhandle,609) '>>> | ICM REGULARIZATION            | on, LAMBDA: '//numstr%to_char()
-        else
-        write(logfhandle,609) '>>> | ICM REGULARIZATION            | off'
-        endif
         if( trim(params%automsk).ne.'no' )then
         write(logfhandle,609) '>>> | AUTOMASKING                   | on, MODE: '//trim(params%automsk)
         else
@@ -752,10 +746,6 @@ contains
             call ostats%set(1,'ML_REGULARIZATION_TAU',         params%tau)
         else
             call ostats%set(1,'ML_REGULARIZATION',                    0.0)
-        endif
-        if( params%l_icm )then
-            call ostats%set(1,'ICM_REGULARIZATION',                   1.0)
-            call ostats%set(1,'ICM_REGULARIZATION_LAMBDA',  params%lambda)
         endif
         if( params%l_update_frac )then
             call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION', trail_rec_ufrac)

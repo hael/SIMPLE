@@ -119,7 +119,6 @@ contains
         call params%new(cline)         ! the parameters class manages directory creation and project file copying
         if( params%l_atm_prior )then
             if( params%maxits < 2 ) THROW_HARD('autorefine3D_nano atm_prior=yes requires maxits of at least 2')
-            if( params%l_icm ) THROW_HARD('autorefine3D_nano atm_prior=yes is incompatible with icm=yes')
         endif
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
@@ -146,7 +145,6 @@ contains
         call cline_refine3D_nano%delete('maxits_between')
         if( cline_refine3D_nano%defined('pdbfile') ) call cline_refine3D_nano%delete('pdbfile')
         call cline_refine3D_nano%set('atm_prior', 'no')
-        if( params%l_atm_prior ) call cline_refine3D_nano%set('icm', 'no')
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('mkdir', 'no')
@@ -420,8 +418,6 @@ contains
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
         call cline%set('objfun', 'cc') ! best objfun for this kind of data
         call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
-        if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
-        if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
         call xrefine3D%execute(cline)
     end subroutine exec_refine3D_nano
 

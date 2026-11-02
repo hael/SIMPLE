@@ -109,8 +109,6 @@ subroutine new_solve3D_nano( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call autorefine3D_nano%add_input(UI_FILT, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5, &
         &visibility=UI_VIS_STANDARD)
-        call autorefine3D_nano%add_input(UI_FILT, icm, &
-        &visibility=UI_VIS_ADVANCED)
         call autorefine3D_nano%add_input(UI_FILT, 'atm_prior', 'binary', 'Detected-atom reconstruction loop', &
         &'Run the first stage without a model, detect atoms, then use each detected model as the atomicity prior of the next PCG reconstruction; '//&
         &'atom detection and FSC continue to use the prior-free base half maps(yes|no){no}', '', .false., 'no', &
@@ -202,11 +200,6 @@ subroutine new_solve3D_nano( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D_nano%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', &
         &'Low-pass limit used to limit the resolution during refinement', 'low-pass limit in Angstroms{0.5}', .false., 0.5, &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D_nano%add_input(UI_FILT, icm, &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D_nano%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', &
-        &'Strength of noise reduction', '(0.01-3.0){0.1}', .false., 0.1, &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call refine3D_nano%add_input(UI_MASK, mskdiam, &

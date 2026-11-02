@@ -13,7 +13,7 @@ no claim about the maps beyond that the pipeline produced them and what its numb
   centering (`center2D_nano`); `autorefine3D_nano` as integrated with the species-free `detect_atoms`
   (each stage refines against the model's `_FIT.mrc`).
 - `autorefine3D_nano` runs without the atomicity prior in this first test (no `atm_prior`, no `rec_backend=pcg`)
-  and with the ICM regularization off (`icm=no`): the images are already denoised.
+  on images already denoised by the FLEX workflow.
 - The maps are not judged here. It is sufficient that they are generated; the maintainer validates them
   afterwards. The run collects what that validation will need and the numbers each stage prints.
 - Bugs are fixed as they are found, in the phase that finds them, in any file of the chain (section 7), with
@@ -66,7 +66,7 @@ of phase 0 records what the headers say):
    moldiam=<moldiam> box=<box> nthr=24` (the element here is the lattice of the reference, as in
    `analysis2D_nano`; detection is species-free).
 10. **3D.** `single_exec prg=autorefine3D_nano projfile=<p> vol1=startvol.mrc smpd=0.358 pgrp=c1
-    mskdiam=<mskdiam> icm=no nthr=24`: its defaults otherwise (`maxits=5` stages of `maxits_between=10`
+    mskdiam=<mskdiam> nthr=24`: its defaults otherwise (`maxits=5` stages of `maxits_between=10`
     iterations, `lp` of the first stage from the program, `trail_rec=yes`). No `atm_prior`, no `rec_backend`.
     Products: `final_results/` (the map, its halves, `_SIM`, `_FIT`, `_RES`, `_ATMS.pdb`, `_atoms.csv`,
     `_model.txt`, `_transfer.tsv`, `_resid_extrema.csv`), the per-iteration text products
@@ -190,7 +190,7 @@ driver without intervention. The chain needed two fixes. First, `center2D_nano` 
 because the chunk averages it makes re-labelled the even/odd halves of the frames by row. Second,
 `autorefine3D_nano` dropped the transfer table of the atom detection. Four commands needed a different key or
 program from the one the plan gives. Rulings 1 to 3 were applied as written: every trajectory runs,
-`autorefine3D_nano` runs without the atomicity prior and with `icm=no`, and the maps are reported with their
+`autorefine3D_nano` runs without the atomicity prior, and the maps are reported with their
 numbers but not judged.
 
 **Build.** Release build with tests (`./compile_clean.sh`), using the gfortran 15.2.1 of gcc-toolset-15
@@ -229,7 +229,7 @@ project, in `01_denoise/`. Where the plan's command was refused, the code decide
    from the command line.
 8. `estimate_diam` as in step 4, on `6_center2D_nano/cavgs_iter<last>.mrc`, in `7_estimate_diam/`.
 9. `single_exec prg=simulate_nanoparticle outvol=startvol.mrc smpd=0.358 element=Pt moldiam=<min diameter> box=<box> nthr=24`, as planned.
-10. `single_exec prg=autorefine3D_nano projfile=6_center2D_nano/<t>.simple vol1=8_simulate_nanoparticle/startvol.mrc smpd=0.358 pgrp=c1 mskdiam=<mskdiam 3D> lp=1.5 icm=no nthr=24`.
+10. `single_exec prg=autorefine3D_nano projfile=6_center2D_nano/<t>.simple vol1=8_simulate_nanoparticle/startvol.mrc smpd=0.358 pgrp=c1 mskdiam=<mskdiam 3D> lp=1.5 nthr=24`.
     The UI makes `lp` required, with a documented default of 1.5 Å (the SINGLE workflow test uses the same
     value). The first stage matches at 1.507 Å and the program's later stages at 1.005 Å.
 11. For the table, `simple_exec prg=fsc vol1=<final _even> vol2=<final _odd> smpd=0.358 mskdiam=<mskdiam 3D> nthr=24`
@@ -346,7 +346,7 @@ one after the other at 24 threads, between 13:20 and 15:33 (`scratch/keep/queue_
 Every log is free of errors, and the only warning is the expected one from the stages that start without a
 mask (`estimate_diam` and the inner 2D run of `center2D_nano`, both with `mskdiam=0`). No repository file
 changed in this phase apart from this note. The commands are those of the phase 0 entry. Rulings 1 to 3 hold
-as there: no atomicity prior, `icm=no`, and no judgement of the maps.
+as there: no atomicity prior and no judgement of the maps.
 
 **What the numbers say, per stage, over the four** (rows in `scratch/keep/pipeline/table.tsv`):
 - **Denoise.** 78 to 104 s; the 200-pixel `traj06` was the slowest. On every trajectory the cross-validation

@@ -50,7 +50,6 @@ type(ui_param) :: gainref
 type(ui_param) :: graphene_filt
 type(ui_param) :: hp
 type(ui_param) :: icefracthreshold
-type(ui_param) :: icm
 type(ui_param) :: job_memory_per_task
 type(ui_param) :: kv
 type(ui_param) :: lp
@@ -368,10 +367,6 @@ subroutine set_ui_params
     call icefracthreshold%set_param('icefracthreshold','num',   'Ice Fraction rejection threshold', &
                                     'Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}', &
                                     'Ice fraction threshold{1.0}', .false., 1.0)
-
-    call icm%set_param(            'icm',             'binary', 'Whether to perform ICM filtering of reference(s)', &
-                                   'Whether to perform ICM filtering of reference(s)(yes|no){no}','', .false., 'no', &
-    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call job_memory_per_task%set_param('job_memory_per_task','str', 'Memory per computing node', &
                                        'Memory in MB per part/computing node in distributed execution{16000}', &

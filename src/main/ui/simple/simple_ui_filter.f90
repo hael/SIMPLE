@@ -154,10 +154,6 @@ subroutine new_filter( prgtab )
         &visibility=UI_VIS_STANDARD)
         call uniform_filter3D%add_input(UI_FILT, 'lpstop',  'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .true., -1., &
         &visibility=UI_VIS_STANDARD)
-        call uniform_filter3D%add_input(UI_FILT, icm, &
-        &visibility=UI_VIS_ADVANCED)
-        call uniform_filter3D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0, &
-        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call uniform_filter3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

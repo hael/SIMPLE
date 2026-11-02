@@ -588,7 +588,6 @@ contains
         endif
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
-        if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('preimage_auto') ) self%l_preimage_auto = (trim(self%preimage_auto).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         if( self%wcrit .ne. 'no' )then

@@ -4,8 +4,6 @@ use simple_ui_modules
 implicit none
 
 type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('denoise', 'Denoising', 70)
-type(ui_program), target :: icm2D
-type(ui_program), target :: icm3D
 type(ui_program), target :: ppca_denoise
 type(ui_program), target :: ppca_denoise_classes
 
@@ -13,84 +11,9 @@ contains
 
     subroutine construct_denoise_programs(prgtab)
         class(ui_hash), intent(inout) :: prgtab
-        call new_icm2D(prgtab)
-        call new_icm3D(prgtab)
         call new_ppca_denoise(prgtab)
         call new_ppca_denoise_classes(prgtab)
     end subroutine construct_denoise_programs
-
-    subroutine new_icm2D( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call icm2D%new(&
-        &'icm2D',&                                                                  ! name
-        &'Denoise paired 2D image stacks with ICM',& ! summary
-        &'is a program for 2D ICM denoising of even/odd image stacks',&             ! help
-        &'simple_exec',&                                                            ! executable
-        &.false., &
-        &visibility=UI_VIS_ADVANCED, &
-        &display_name='Denoise 2D Images with ICM') ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call icm2D%add_input(UI_IMG, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call icm2D%add_input(UI_IMG, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        ! parameter input/output
-        call icm2D%add_input(UI_PARM, smpd, &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call icm2D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0, &
-        &visibility=UI_VIS_ADVANCED)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call icm2D%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('icm2D', icm2D, prgtab, UI_CATEGORY)
-    end subroutine new_icm2D
-
-    subroutine new_icm3D( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call icm3D%new(&
-        &'icm3D',&                                                                  ! name
-        &'Denoise a 3D volume with nonuniform ICM filtering',& ! summary
-        &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! help
-        &'simple_exec',&                                                            ! executable
-        &.false., &
-        &visibility=UI_VIS_ADVANCED, &
-        &display_name='Denoise a Volume with ICM') ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call icm3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call icm3D%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        ! parameter input/output
-        call icm3D%add_input(UI_PARM, smpd, &
-        &visibility=UI_VIS_STANDARD)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call icm3D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0, &
-        &visibility=UI_VIS_ADVANCED)
-        ! mask controls
-        ! call icm3D%set_input('mask_ctrls', 1, mskdiam)
-        ! call icm3D%set_input('mask_ctrls', 2, mskfile)
-        ! computer controls
-        call icm3D%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('icm3D', icm3D, prgtab, UI_CATEGORY)
-    end subroutine new_icm3D
 
     subroutine new_ppca_denoise( prgtab )
         class(ui_hash), intent(inout) :: prgtab
