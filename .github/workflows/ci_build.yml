@@ -64,10 +64,25 @@ jobs:
              sudo apt-get update
              sudo apt-get -y install gcc gfortran cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 libcurl4-openssl-dev
 
-      - name: Build SIMPLE with CMake-provided numerical libraries
+      - name: Configure SIMPLE with bundled numerical libraries and tests
         run: |
-             cmake -S . -B build-bundled-numerics -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=OFF -DSIMPLE_FORCE_BUNDLED_NUMERICS=ON
-             cmake --build build-bundled-numerics --parallel 4
+             cmake -S . -B build-bundled-numerics -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DSIMPLE_FORCE_BUNDLED_NUMERICS=ON
+
+      - name: Build bundled BLAS/LAPACK/ARPACK
+        run: |
+             cmake --build build-bundled-numerics --target simple_arpack_ep --parallel 4
+
+      - name: Build SIMPLE library, executables, and tests against bundled numerics
+        run: |
+             cmake --build build-bundled-numerics --target all --parallel 4
+
+      - name: Run SIMPLE fast gate with bundled numerics
+        run: |
+             scripts/run_fast_gate.sh build-bundled-numerics
+
+      - name: Install SIMPLE
+        run: |
+             cmake --install build-bundled-numerics
 
   Build_coarray:
     name: Build SIMPLE with coarrays
