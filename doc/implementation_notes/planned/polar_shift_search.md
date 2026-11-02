@@ -272,6 +272,10 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     stream's pool, a standalone run) keeps the window search, since its sparse table refuses the key. Every solve2D
     caller gets the default, the stream's initial analysis and the pyramid included. Development pauses until
     solve2D is tested on data with the drain reset in place (the earlier bench numbers predate that fix).
+    Extended 2026-11-02 (Hans, after the beta-gal 3D test: "shift_sigma=10 by default across the board, including
+    solve3D_cavgs"): the parameter's own default is 10 A; the key is on wherever a mode can carry it (a probability
+    table with a shift search under objfun=euclid) and silently off elsewhere, where an explicit key is refused;
+    the commanders set no default of their own.
 
 18. The weighted insertion's extras take the continuous in-plane route with the committed pose (Hans, 2026-11-01:
     "we ought to inpl_cont-refine all of them, or none of them"; "I do not think it will make a huge difference"):

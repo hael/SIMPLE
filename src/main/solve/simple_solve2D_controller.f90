@@ -8,7 +8,7 @@ implicit none
 public :: stage_params, determine_solve2D_stages, mskdiam2lplimits_refine2D, set_cline_refine2D_stage
 public :: set_solve2D_sampling_policy, solve2D_seed_pass_iter, set_cline_refine2D_seed_pass
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
-public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, CENTRING_STAGE, SHIFT_SIGMA_DEFAULT
+public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, CENTRING_STAGE
 public :: solve2D_centring_stage, solve2D_mskdiam_estimate
 private
 #include "simple_local_flags.inc"
@@ -26,7 +26,6 @@ integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch fr
 integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
 integer,          parameter :: CENTRING_STAGE     = 2                ! the polar shift map's centring stage (shift_sigma > 0)
-real,             parameter :: SHIFT_SIGMA_DEFAULT = 10.             ! solve2D's shift_sigma when none is given (A); 0 = the window search
 integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'

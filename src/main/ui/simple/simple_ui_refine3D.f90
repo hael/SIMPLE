@@ -69,8 +69,8 @@ contains
         &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
         &'dense probability table (refine=prob) locates each particle''s likely projection directions over a disk of 3 '//&
         &'sigma within trs with a coarse polar shift map and polishes from the map''s optimum; a particle whose last '//&
-        &'move stayed inside trs_window searches that window instead; 0 is the window search{0}', &
-        &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        &'move stayed inside trs_window searches that window instead; 0 is the window search; off under a mode without a table{10}', &
+        &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'trs_window', 'num', 'Window after the disk', &
         &'With shift_sigma, the half-width (in pixels) of the window a particle searches once its last move stayed '//&
         &'inside it; solve3D sets it to the next stage''s window{0}', 'window in pixels{0}', .false., 0., &

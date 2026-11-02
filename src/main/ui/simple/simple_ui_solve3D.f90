@@ -149,9 +149,9 @@ contains
         &'first stage with a shift search is the centring stage: its probability table locates each particle''s likely '//&
         &'projection directions over a disk of 3 sigma with a coarse polar shift map and polishes from the map''s '//&
         &'optimum, a particle whose last move stayed inside the next stage''s window searching that window instead, '//&
-        &'and the stage ends once few particles still need the disk; the stages after search their window as before; '//&
-        &'0 is the window search{0}', &
-        &'sigma in A{0}', .false., 0., group="search", visibility=UI_VIS_ADVANCED)
+        &'and the stage ends once few particles still need the disk; the stages after polish from the map over their '//&
+        &'own window; 0 is the window search in every stage{10}', &
+        &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then
             call prg%add_input(UI_SRCH, 'state', 'num', 'Continuation state label', &

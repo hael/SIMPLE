@@ -3,7 +3,7 @@ module simple_commanders_solve2D
 use simple_commanders_api
 use simple_commanders_cavgs
 use simple_commanders_refine2D
-use simple_solve2D_controller 
+use simple_solve2D_controller
 use simple_gui_communicator,       only: gui_communicator
 use simple_eo_partition,           only: ensure_field_halves
 use simple_refine2D_fnames,        only: refine2D_cavgs_fname, refine2D_cavgs_ranked_fname
@@ -76,7 +76,7 @@ contains
         integer :: start_stage, stop_stage, it_pass
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_refine2D, rt_final_cavgs, rt_tot
-        logical :: l_shmem, l_seeded, l_mskdiam_auto
+        logical :: l_shmem, l_seeded, l_mskdiam_auto, l_key
         if( L_BENCH_GLOB )then
             rt_setup       = 0.
             rt_calc_pspec  = 0.
@@ -100,13 +100,14 @@ contains
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
         if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_snhc')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
-        ! the polar shift map is solve2D's default (shift_sigma=0 is the window search); mskdiam=0 under it runs
-        ! stage 1 under the box's mask and takes the mask diameter of the stages after from the class averages at
-        ! the exits of stage 1 and of the centring stage, the low-pass ladder re-derived each time
-        if( .not. cline%defined('shift_sigma')   ) call cline%set('shift_sigma',   SHIFT_SIGMA_DEFAULT)
+        ! the polar shift map is on by default (the parameter's; shift_sigma=0 is the window search); mskdiam=0 under
+        ! it runs stage 1 under the box's mask and takes the mask diameter of the stages after from the class averages
+        ! at the exits of stage 1 and of the centring stage, the low-pass ladder re-derived each time
         l_mskdiam_auto = .false.
         if( cline%defined('mskdiam') )then
-            if( cline%get_rarg('shift_sigma') > 0.01 .and. cline%get_rarg('mskdiam') < 0.1 )then
+            l_key = .true.
+            if( cline%defined('shift_sigma') ) l_key = cline%get_rarg('shift_sigma') > 0.01
+            if( l_key .and. cline%get_rarg('mskdiam') < 0.1 )then
                 call cline%delete('mskdiam')
                 l_mskdiam_auto = .true.
             endif

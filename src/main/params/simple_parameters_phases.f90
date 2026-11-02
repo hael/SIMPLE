@@ -659,6 +659,7 @@ contains
         character(len=2), allocatable :: symbols(:)
         character(len=5)              :: selector
         integer                       :: binwidth_min
+        logical                       :: l_shift_map_ok
         if( self%prg == 'select_micrographs' )then
             if( self%nmics < 1 .or. self%state < 1 .or. self%nspace < 1 .or. self%subset_max_nodes < 1 )then
                 THROW_HARD('select_micrographs requires positive nmics, state, nspace and subset_max_nodes')
@@ -1122,10 +1123,21 @@ contains
             self%trs = 0.
             self%l_doshift = .false.
         endif
-        ! the polar shift map: a positive prior width turns it on; it replaces the window, so the window must be on
+        ! the polar shift map: a positive prior width turns it on (the default): the tables' modes with a shift search
+        ! under the Euclidean objective carry it; elsewhere the default is silently off and an explicit key refused
         self%l_shift_map = self%shift_sigma > 0.01
-        if( self%l_shift_map .and. .not. self%l_doshift ) THROW_HARD('shift_sigma needs a shift search: set trs > 0')
-        if( self%l_shift_map .and. self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('shift_sigma needs objfun=euclid: the map draws the tempered posterior')
+        if( self%l_shift_map )then
+            l_shift_map_ok = self%l_doshift .and. self%cc_objfun == OBJFUN_EUCLID .and. &
+                &(trim(self%refine) == 'prob' .or. trim(self%refine) == 'prob_snhc' .or. trim(self%refine) == 'prob_neigh')
+            if( .not. l_shift_map_ok )then
+                if( cline%defined('shift_sigma') )then
+                    if( .not. self%l_doshift ) THROW_HARD('shift_sigma needs a shift search: set trs > 0')
+                    if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('shift_sigma needs objfun=euclid: the map draws the tempered posterior')
+                    THROW_HARD('shift_sigma needs a probability table: refine=prob, prob_snhc or prob_neigh')
+                endif
+                self%l_shift_map = .false.
+            endif
+        endif
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch <= 1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

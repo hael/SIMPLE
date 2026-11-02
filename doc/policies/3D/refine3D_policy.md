@@ -558,7 +558,7 @@ the refined poses by their own losses, which every refined entry carries
 (`prob_refined_entry%loss`: the row's distance under the window search, which includes its
 shift prior; under the key the polished loss with the absolute prior on the total
 displacement at the physical temperature), so it is one distribution on both paths.
-`prep_strategy3D` refuses the key under every `refine` but `prob` and `prob_neigh`.
+The parameter's default is 10 A (2026-11-02, across the board): on under `prob` and `prob_neigh` with a shift search and objfun=euclid, silently off elsewhere, where an explicit key is refused (`validate_parameter_consistency`; `prep_strategy3D` guards the same).
 Every posterior draw of the tables, the fills' in-plane draws
 (`pftc%ptcl_posterior_temp`) and the assignments' direction, class and
 neighbourhood draws alike, runs at one tempering factor times the particle

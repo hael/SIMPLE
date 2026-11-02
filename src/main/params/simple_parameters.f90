@@ -597,7 +597,7 @@ type :: parameters
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
-    real    :: shift_sigma=0.      !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables then search the shifts of their refined candidates over a disk of 3 sigma within trs and draw the pose from the tempered posterior; solve2D's stage 2 becomes the centring stage(0: the window search){0}
+    real    :: shift_sigma=10.     !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables locate the likely references over a disk of 3 sigma with a coarse map and polish from its optimum (solve2D's stage 2 and solve3D's stage 3 are the centring stages), and the map initialises every table's polish; off where the mode has no table (prob, prob_snhc, prob_neigh), no shift search or objfun=cc, which refuse an explicit key(0: the window search){10}
     real    :: trs_window=0.       !< the polar shift map's centring stage: the window's radius (px) its posterior mass is measured beyond(0: not measured){0}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted

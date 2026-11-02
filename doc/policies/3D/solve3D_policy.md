@@ -220,7 +220,10 @@ printed; it has no separate planner banner. Omission and `trs=0` retain the
 automatic limits. The stage controller still emits `trs=0` for stages 1 and 2,
 which do not search shifts. The class-average and chunked interfaces do not
 expose the override. `shift_sigma` (the polar shift map, `refine3D_policy.md`)
-goes to every stage with a shift search: stage 3, the first with one, is the
+is on by default (the parameter's 10 A; `shift_sigma=0` is the window search
+in every stage) for solve3D and for solve3D_cavgs, solve3D_addon,
+solve3D_chunks and solve3D_pyramid alike, and goes to every stage with a shift
+search: stage 3, the first with one, is the
 centring stage (`trs` raised to 3 sigma in native pixels, `trs_window` the
 next stage's half-width, the drain its convergence) and stages 4-8, dense and
 neighbourhood tables alike, polish from the coarse window map over their own
