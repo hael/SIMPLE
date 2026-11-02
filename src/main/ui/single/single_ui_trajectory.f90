@@ -136,8 +136,9 @@ subroutine new_trajectory_extract_substk( prgtab )
         ! PROGRAM SPECIFICATION
         call trajectory_denoise%new(&
         &'trajectory_denoise',&                                       ! name
-        &'Denoise time-series particle images with diffusion-map analysis',& ! summary
-        &'is a program for diffusion-map denoising of an image stack',& ! help
+        &'Denoise time-series particle images',&                      ! summary
+        &'is a program for denoising a particle trajectory: every frame becomes the kernel pre-image of the frames '//&
+        &'that look like it, without alignment',&                     ! help
         &'single_exec',&                                              ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Denoise Particle Trajectories') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -154,43 +155,20 @@ subroutine new_trajectory_extract_substk( prgtab )
         ! search controls
         ! <empty>
         ! filter controls
-        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of components (0 => auto; default 0; pca_mode=flex: the largest latent rank, default 32)', &
-        &'Number of components (0 => auto; default 0; pca_mode=flex: the largest latent rank the cross-validation may choose, default 32)', '# eigenvecs', .false., 0.0, &
+        call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Largest latent rank (0 => 32; default 32)', &
+        &'The largest latent rank the cross-validation may choose (0 => 32; default 32)', '# eigenvecs', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'Denoising method: flex (default; every frame the kernel pre-image of the '//&
-        &'frames that look like it, no alignment), diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA or kernel PCA', &
-        &'Denoising method(flex|diffusion_maps|ppca|ppca_kpca_resid|pca_svd|kpca){flex}','', .false., 'flex', &
-        &choices=ui_choices([character(len=15) :: 'flex', 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca']), &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'halfwin', 'num', 'Window half-width in frames (pca_mode=flex; 0 => the whole trajectory)', &
-        &'pca_mode=flex: frames pool only within this many frames of their block; 0 => every frame may pool with every frame (default 0)', &
+        call trajectory_denoise%add_input(UI_FILT, 'halfwin', 'num', 'Window half-width in frames (0 => the whole trajectory)', &
+        &'Frames pool only within this many frames of their block; 0 => every frame may pool with every frame (default 0)', &
         &'# frames', .false., 0.0, visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'eo_pool', 'binary', 'Pool by row parity (pca_mode=flex)', &
-        &'pca_mode=flex: a frame pools only frames of its own row parity, so the even/odd halves stay independent(yes|no){yes}', '', .false., 'yes', &
+        call trajectory_denoise%add_input(UI_FILT, 'eo_pool', 'binary', 'Pool by row parity', &
+        &'A frame pools only frames of its own row parity, so the even/odd halves stay independent(yes|no){yes}', '', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}','', .false., 'rbf', &
-        &choices=ui_choices([character(len=6) :: 'rbf', 'cosine']), &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}','', .false., 'nystrom', &
-        &choices=ui_choices([character(len=7) :: 'exact', 'nystrom']), &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5, &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call trajectory_denoise%add_input(UI_FILT, hp, &
-        &visibility=UI_VIS_ADVANCED)
         call trajectory_denoise%add_input(UI_FILT, lp, &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call trajectory_denoise%add_input(UI_MASK, mskdiam, required_override=.false., &
-        &help_override='Mask diameter in A (pca_mode=flex: shapes the frame similarity only, the output is unmasked; '//&
+        &help_override='Mask diameter in A (shapes the frame similarity only, the output is unmasked; '//&
         &'default the inscribed circle)', visibility=UI_VIS_ADVANCED)
         ! computer controls
         call trajectory_denoise%add_input(UI_COMP, nthr, &
@@ -360,18 +338,14 @@ subroutine new_trajectory_extract_substk( prgtab )
         call trajectory_solve3D%add_input(UI_FILT, 'lp', 'num', 'Initial 3D low-pass limit', &
         &'Initial low-pass limit of autorefine3D_nano', 'low-pass limit in Angstroms{1.5}', .false., 1.5, &
         &visibility=UI_VIS_STANDARD)
-        call trajectory_solve3D%add_input(UI_FILT, 'pca_mode', 'multi', 'Denoising method', &
-        &'Denoising method of trajectory_denoise(flex|diffusion_maps|ppca|ppca_kpca_resid|pca_svd|kpca){flex}', '', .false., &
-        &'flex', choices=ui_choices([character(len=15) :: 'flex', 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', &
-        &'kpca']), visibility=UI_VIS_ADVANCED)
         call trajectory_solve3D%add_input(UI_FILT, 'halfwin', 'num', 'Denoising window half-width in frames', &
-        &'pca_mode=flex: frames pool only within this many frames of their block; 0 => the whole trajectory (default 0)', &
+        &'Frames pool only within this many frames of their block; 0 => the whole trajectory (default 0)', &
         &'# frames', .false., 0.0, visibility=UI_VIS_ADVANCED)
         call trajectory_solve3D%add_input(UI_FILT, 'neigs', 'num', 'Denoising components', &
-        &'pca_mode=flex: the largest latent rank the cross-validation may choose (default 32)', '# eigenvecs', .false., 0.0, &
+        &'The largest latent rank the denoiser''s cross-validation may choose (default 32)', '# eigenvecs', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call trajectory_solve3D%add_input(UI_FILT, 'eo_pool', 'binary', 'Denoise by row parity', &
-        &'pca_mode=flex: a frame pools only frames of its own row parity(yes|no){yes}', '', .false., 'yes', &
+        &'A frame pools only frames of its own row parity(yes|no){yes}', '', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         ! mask controls
         call trajectory_solve3D%add_input(UI_MASK, mskdiam, required_override=.false., &

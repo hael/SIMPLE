@@ -65,19 +65,6 @@ contains
         end do
     end function extract_imgarr
 
-    function copy_imgarr( imgarr_in ) result( imgarr_copy )
-        class(image), intent(in) :: imgarr_in(:)
-        type(image), allocatable :: imgarr_copy(:)
-        integer :: n, i 
-        n = size(imgarr_in)
-        allocate(imgarr_copy(n))
-        !$omp parallel do schedule(static) proc_bind(close) private(i) default(shared)
-        do i = 1, n
-            call imgarr_copy(i)%copy(imgarr_in(i))
-        end do
-        !$omp end parallel do
-    end function copy_imgarr
-
     function join_imgarrs( imgs1, imgs2 ) result( imgs_joined )
         class(image), intent(in) :: imgs1(:), imgs2(:)
         type(image), allocatable :: imgs_joined(:)

@@ -1,19 +1,15 @@
 !@descr: execution of denoising commanders
 module simple_exec_denoise
 use simple_cmdline,              only: cmdline
-use simple_commanders_refine2D, only: commander_ppca_denoise_classes
 use simple_commanders_denoise,   only: commander_cls_expansion
 use simple_commanders_flex_pca,  only: commander_flex_pca
-use simple_commanders_imgops,    only: commander_ppca_denoise
 implicit none
 
 public :: exec_denoise_commander
 private
 
-type(commander_ppca_denoise)              :: xppca_denoise
-type(commander_ppca_denoise_classes)      :: xppca_denoise_classes
-type(commander_cls_expansion)                 :: xcls_expansion
-type(commander_flex_pca)                  :: xflex_pca
+type(commander_cls_expansion) :: xcls_expansion
+type(commander_flex_pca)      :: xflex_pca
 
 contains
 
@@ -26,10 +22,6 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(which))
-            case( 'ppca_denoise' )
-                call xppca_denoise%execute(cline)
-            case( 'ppca_denoise_classes' )
-                call xppca_denoise_classes%execute(cline)
             case( 'cls_expansion' )
                 call xcls_expansion%execute(cline)
             case( 'flex_pca' )

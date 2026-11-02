@@ -225,7 +225,6 @@ contains
                 call cl%set('stk',   filepath(stage_dirs(S_EXTRACT), KEPT))
                 call cl%set('smpd',  params%smpd)
                 call cl%set('nthr',  params%nthr)
-                call cl%copy_arg(cline, 'pca_mode')
                 call cl%copy_arg(cline, 'halfwin')
                 call cl%copy_arg(cline, 'neigs')
                 call cl%copy_arg(cline, 'eo_pool')

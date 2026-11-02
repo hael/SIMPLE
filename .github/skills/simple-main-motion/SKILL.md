@@ -1,6 +1,6 @@
 ---
 name: simple-main-motion
-description: Use when working in SIMPLE's src/main/motion subsystem, including hybrid global/local motion correction, patched alignment, the polynomial motion model, iterative correction, gain-reference analysis (gain flip), movie denoising, nano-specific motion paths, and helper utilities for movie alignment workflows.
+description: Use when working in SIMPLE's src/main/motion subsystem, including hybrid global/local motion correction, patched alignment, the polynomial motion model, iterative correction, gain-reference analysis (gain flip), nano-specific motion paths, and helper utilities for movie alignment workflows.
 ---
 
 # SIMPLE `src/main/motion`

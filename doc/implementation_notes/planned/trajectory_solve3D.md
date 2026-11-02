@@ -38,7 +38,7 @@ integrated map is what `autorefine3D_nano` refines from the kept frames. The lab
 
 `single_exec prg=trajectory_solve3D projfile=<p> stk=<subtr_frames.mrc> smpd=0.358 nthr=24`, on a project made
 by `new_project`. Optional: `mskdiam` and `moldiam` (else estimated), `lp` for the 3D (default 1.5), `thres`
-for the lattice gate, the second gate's override key, `pca_mode`, `halfwin`, `neigs`, `eo_pool` for the
+for the lattice gate, the second gate's override key, `halfwin`, `neigs`, `eo_pool` for the
 denoiser. The program runs, in its execution directory, each stage in its own numbered subdirectory with its own
 project copy, as the SINGLE programs do, so that every intermediate is where the previous run left it:
 

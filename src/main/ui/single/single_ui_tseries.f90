@@ -8,8 +8,6 @@ type(ui_program), target :: tseries_track_particles
 type(ui_program), target :: tseries_import
 type(ui_program), target :: tseries_make_pickavg
 type(ui_program), target :: tseries_motion_correct
-type(ui_program), target :: tseries_prep4tracking
-type(ui_program), target :: tseries_extractor
 
 contains
 
@@ -19,8 +17,6 @@ contains
         call new_tseries_import(prgtab)
         call new_tseries_make_pickavg(prgtab)
         call new_tseries_motion_correct(prgtab)
-        call new_tseries_prep4tracking(prgtab)
-        call new_tseries_extractor(prgtab)
     end subroutine construct_single_tseries_programs
 
 subroutine new_tseries_track_particles( prgtab )
@@ -222,74 +218,5 @@ subroutine new_tseries_track_particles( prgtab )
         ! add to ui_hash
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab, UI_CATEGORY)
     end subroutine new_tseries_motion_correct
-
-    subroutine new_tseries_prep4tracking( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call tseries_prep4tracking%new(&
-        &'tseries_prep4tracking',&                                                        ! name
-        &'Prepare time-series for particle tracking',&                                    ! summary
-        &'is a program for preparing time-series for preparing particle tracking',&       ! help
-        &'single_exec',&                                                                  ! executable
-        &.true., visibility=UI_VIS_DEVELOPER, &
-        &display_name='Prepare Time Series for Tracking')                                                    ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_prep4tracking%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab, UI_CATEGORY)
-    end subroutine new_tseries_prep4tracking
-
-    subroutine new_tseries_extractor( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call tseries_extractor%new(&
-        &'tseries_extractor',&                                                           ! name
-        &'Extract particle trajectories from time-series',&                              ! summary
-        &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! help
-        &'single_exec',&                                                                  ! executable
-        &.true., visibility=UI_VIS_DEVELOPER, &
-        &display_name='Extract Particle Trajectories')                                                    ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call tseries_extractor%add_input(UI_FILE, 'infile', 'file', 'Selected particle trajectory', 'Text file (.txt) containing particle coordinates per frame',&
-        &'e.g. trajectory.txt', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call tseries_extractor%add_input(UI_PARM, box_extract, required_override=.true., &
-        &visibility=UI_VIS_STANDARD)
-        call tseries_extractor%add_input(UI_PARM, neg, &
-        &visibility=UI_VIS_ADVANCED)
-        call tseries_extractor%add_input(UI_PARM, 'fbody', 'string', 'Output file body', &
-        &'File body for extracted trajectory outputs', 'file body{trajectory}', .false., 'trajectory', &
-        &visibility=UI_VIS_ADVANCED)
-        ! <no additional inputs>
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_extractor%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('tseries_extractor', tseries_extractor, prgtab, UI_CATEGORY)
-    end subroutine new_tseries_extractor
 
 end module single_ui_tseries

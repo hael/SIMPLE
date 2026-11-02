@@ -15,7 +15,7 @@ This is the nanoparticle/SINGLE domain folder.
 - `simple_atoms.f90`: atomic models, PDB/CIF I/O and density simulation
 - `simple_calpha_finder.f90`: C-alpha candidates in density maps
 - `simple_molecule_data.f90`
-- `single_tseries_tracker.f90`, `single_tseries_extractor.f90`, `simple_tseries_graphene_subtr.f90`
+- `single_tseries_tracker.f90`, `simple_tseries_graphene_subtr.f90`
 
 ## Connections
 

@@ -494,16 +494,6 @@ contains
         end do
     end subroutine zero_shifts
 
-    module subroutine zero_inpl( self )
-        class(oris), intent(inout) :: self
-        integer :: i
-        do i=1,self%n
-            call self%o(i)%e3set(0.)
-            call self%o(i)%set('x', 0.)
-            call self%o(i)%set('y', 0.)
-        end do
-    end subroutine zero_inpl
-
     module subroutine mul_shifts( self, mul )
         class(oris), intent(inout) :: self
         real,        intent(in)    :: mul

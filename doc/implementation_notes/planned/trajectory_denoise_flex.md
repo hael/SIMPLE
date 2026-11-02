@@ -8,7 +8,10 @@ as implemented, section 4 the toy behind the choices, section 5 how to run and t
 validation and open points. The toy is a numpy script outside the repository (claude.ai project SIMPLE,
 `claude/trajectory_denoise_flex_toy.py`).
 
-    single_exec prg=trajectory_denoise stk=traj.mrcs smpd=0.358 nthr=16 [pca_mode=flex] \
+Since 2026-11-02 the only behaviour of `trajectory_denoise`: `pca_mode` and the PPCA, kernel PCA and diffusion-map
+modes were retired with `src/main/pca`. The comparisons with `ppca` below are a record; `ppca` can no longer be run.
+
+    single_exec prg=trajectory_denoise stk=traj.mrcs smpd=0.358 nthr=16 \
         [neigs=32] [halfwin=0] [eo_pool=yes] [lp=<A>] [mskdiam=<A>] [outstk=trajectory_denoised.mrcs]
 
 ## 1. Why
@@ -51,8 +54,8 @@ weighted average of the data of those frames.
 ## 3. Method as implemented
 
 Files: `src/main/flex/simple_flex_traj_denoise.f90` (new, arrays in and out, outside the FLEX-PCA layering like
-the cls kernel); `exec_trajectory_denoise` routes `pca_mode=flex` to `trajectory_denoise_flex` in
-`single_commanders_trajectory.f90` (stack I/O); keys `halfwin`, `eo_pool` (`simple_parameters*.f90`, the UI).
+the cls kernel); `exec_trajectory_denoise` in `single_commanders_trajectory.f90` does the stack I/O; keys
+`halfwin`, `eo_pool` (`simple_parameters*.f90`, the UI).
 
 1. **Planes.** Each frame minus its mean, Fourier transformed on the half-plane lattice of `flex_class_planes`
    (shells 1..nyq, `wq = 2`; `c = 1`), twice: unmasked (`yu`, what the pre-images average) and soft-masked
@@ -154,8 +157,7 @@ bandwidth is in prior units, the code's in noise units.
 
 ## 5. Running it on real data
 
-Start with the defaults; compare against `pca_mode=ppca` on the same stack (montage of frames; then
-`analysis2D_nano`). Then, guided by the log:
+Start with the defaults (montage of frames; then `analysis2D_nano`). Then, guided by the log:
 
 | look at | meaning | adjust |
 |---|---|---|

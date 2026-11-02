@@ -271,24 +271,6 @@ contains
         get_proj = self%o(i)%get_proj()
     end function get_proj
 
-    module function get_label_inds( self, label ) result( inds )
-        class(oris),      intent(in) :: self
-        character(len=*), intent(in) :: label
-        integer :: i, icls, icls_max
-        integer, allocatable :: inds(:), inds_all(:)
-        logical, allocatable :: isthere(:)
-        icls_max = self%get_n(label)
-        inds_all = (/(i,i=1,icls_max)/)
-        allocate(isthere(icls_max), source=.false.)
-        do i = 1, self%n
-            if( self%o(i)%isstatezero() ) cycle ! excluded
-            icls = self%get_class(i)
-            if( icls < 1 ) cycle                ! has not been classified
-            isthere(icls) = .true.
-        end do
-        inds = pack(inds_all, mask=isthere)
-    end function get_label_inds
-
     module pure function get_eo( self, i )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i

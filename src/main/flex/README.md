@@ -10,9 +10,9 @@ simple_exec prg=flex_pca ...        # projection-aware low-rank covariance (PCA)
 The `flex_analysis` diffusion-map pipeline that used to live here was removed;
 its embedding never produced usable states, and so was the diffusion-map
 `cls_expansion` (2026-10-01: it split on background and density, not structure).
-The shared diffusion-map engines (`../pca/simple_diff_map_graphs.f90`,
-`../pca/simple_diff_map_denoise.f90`, `../pca/simple_diffusion_maps.f90`)
-remain, because `denoise_project` and other applications still depend on them.
+The shared diffusion-map engines and the rest of `src/main/pca` followed on
+2026-11-02, with their last users (`ppca_denoise`, `ppca_denoise_classes`, the
+non-flex modes of `trajectory_denoise`, `tseries_prep4tracking`).
 
 ## Layout
 
@@ -41,7 +41,7 @@ the production-module layers, and runs before the fast test gate.
 There are 44 source files: 32 production modules, the probe fit's four
 submodule files, the self-test submodules of the PCG operator and of the
 `cls_expansion` kernel route, three testers, `cls_expansion` with its kernel
-route (`simple_flex_cls_kernel`) and `trajectory_denoise pca_mode=flex`
+route (`simple_flex_cls_kernel`) and `trajectory_denoise`
 (`simple_flex_traj_denoise`), the last three outside the layering. `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and
 cycles. CMake discovers `src/main` through a recursive glob without
@@ -228,7 +228,7 @@ writes; the commander (`../commanders/simple/simple_commanders_denoise.f90`) run
 Method and
 benchmarks: `doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md`.
 
-## `trajectory_denoise pca_mode=flex` (the default mode)
+## `trajectory_denoise`
 
 `simple_flex_traj_denoise.f90`: every frame of a trajectory the kernel pre-image of the frames that
 look like it (the latents of class models on the fit band's two coefficient sets) and lie near it in

@@ -369,36 +369,17 @@ contains
         call simple_end('**** trajectory_import NORMAL STOP ****')
     end subroutine exec_trajectory_import
 
-    subroutine exec_trajectory_denoise( self, cline )
-        use simple_commanders_imgops, only: commander_ppca_denoise
-        class(commander_trajectory_denoise), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(commander_ppca_denoise) :: xkpca_den
-        type(string) :: pca_mode
-        if( .not. cline%defined('pca_mode')                ) call cline%set('pca_mode',            'flex')
-        pca_mode = cline%get_carg('pca_mode')
-        if( pca_mode%to_char() == 'flex' )then
-            call trajectory_denoise_flex(cline)
-            return
-        endif
-        if( .not. cline%defined('neigs')                   ) call cline%set('neigs',                  200)
-        if( .not. cline%defined('kpca_nystrom_npts')       ) call cline%set('kpca_nystrom_npts',      512)
-        if( .not. cline%defined('kpca_nystrom_local_nbrs') ) call cline%set('kpca_nystrom_local_nbrs', 96)
-        if( .not. cline%defined('kpca_ker')                ) call cline%set('kpca_ker',             'rbf')
-        if( .not. cline%defined('k_nn')                    ) call cline%set('k_nn',                     5)
-        call xkpca_den%execute(cline)
-    end subroutine exec_trajectory_denoise
-
-    !> pca_mode=flex: every frame the kernel pre-image of the frames that look like it and lie near it in time
+    !> every frame the kernel pre-image of the frames that look like it and lie near it in time
     !! (simple_flex_traj_denoise). Frames as given: no shift, rotation or interpolation; each frame's mean removed and
     !! restored in the output. The mask (mskdiam when given, else the box's inscribed circle) shapes the similarity
     !! only: the weights compare soft-masked frames and average the frames themselves, so the output is the whole box,
     !! unmasked. Writes outstk (same rows, box and sampling) and trajectory_denoise_flex.txt (per frame: Kish
     !! population of its weights, the CV's rank, tau, h)
-    subroutine trajectory_denoise_flex( cline )
+    subroutine exec_trajectory_denoise( self, cline )
         use simple_flex_traj_denoise, only: flex_traj_denoise
         use simple_memoize_ft_maps,   only: memoize_ft_maps, forget_ft_maps, ft_map_lims, ft_map_phys_addrh, ft_map_phys_addrk
-        class(cmdline), intent(inout) :: cline
+        class(commander_trajectory_denoise), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
         integer, parameter :: SEED = 20261026
         integer, parameter :: BATCH = 256      !< frames read (written) one by one, then processed in parallel
         type(parameters) :: params
@@ -413,20 +394,20 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'no')
         if( .not. cline%defined('outstk')  ) call cline%set('outstk',  'trajectory_denoised'//STK_EXT)
         if( .not. cline%defined('neigs')   ) call cline%set('neigs',   32)
-        if( cline%get_iarg('neigs') <= 0   ) call cline%set('neigs',   32)   ! 0 => auto, as the other modes
+        if( cline%get_iarg('neigs') <= 0   ) call cline%set('neigs',   32)   ! 0 => auto
         if( .not. cline%defined('halfwin') ) call cline%set('halfwin', 0)
         if( .not. cline%defined('eo_pool') ) call cline%set('eo_pool', 'yes')
         call params%new(cline)
-        if( .not. file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk); trajectory_denoise_flex')
+        if( .not. file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk); trajectory_denoise')
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1
-        if( ldim(1) /= ldim(2) ) THROW_HARD('square frames only; trajectory_denoise_flex')
+        if( ldim(1) /= ldim(2) ) THROW_HARD('square frames only; trajectory_denoise')
         ! the similarity mask: mskdiam when given, at most the inscribed circle. A tighter mask correlates the Fourier
         ! coefficients over a wider neighbourhood (~ box / radius pixels), so the blocks of the coefficient split grow
         ! with it (4 pixels at the inscribed circle)
         rmsk = real(ldim(1)) / 2. - 2.
         if( cline%defined('mskdiam') ) rmsk = min(rmsk, 0.5 * params%mskdiam / params%smpd)
-        if( rmsk < 4. ) THROW_HARD('mask radius below 4 pixels, check mskdiam; trajectory_denoise_flex')
+        if( rmsk < 4. ) THROW_HARD('mask radius below 4 pixels, check mskdiam; trajectory_denoise')
         nblk = min(16, max(4, nint(2. * real(ldim(1)) / rmsk)))
         ! the half-plane lattice, shells 1..nyq
         call memoize_ft_maps(ldim, params%smpd)
@@ -538,7 +519,7 @@ contains
         write(logfhandle,'(A,F10.2,A,F10.2,A,F10.2,A,I4)') '>>> TRAJECTORY_DENOISE FLEX: neff min/median/max ', minval(ess), &
             &' / ', median(ess), ' / ', maxval(ess), '; fit band shells 1-', kband
         call simple_end('**** TRAJECTORY_DENOISE NORMAL STOP ****')
-    end subroutine trajectory_denoise_flex
+    end subroutine exec_trajectory_denoise
 
     subroutine exec_trajectory_swap_stack( self, cline )
         class(commander_trajectory_swap_stack), intent(inout) :: self

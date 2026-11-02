@@ -8,7 +8,7 @@ no claim about the maps beyond that the pipeline produced them and what its numb
 
 ## 1. What the maintainer fixed (2026-10-29)
 
-- The four stages to exercise, in this order: `trajectory_denoise` with the new default `pca_mode=flex`;
+- The four stages to exercise, in this order: `trajectory_denoise` with the new flex default;
   the automatic class-average rejection (`model_cavgs_rejection quality_model=nano`, the raw lattice gate);
   centering (`center2D_nano`); `autorefine3D_nano` as integrated with the species-free `detect_atoms`
   (each stage refines against the model's `_FIT.mrc`).
@@ -36,7 +36,7 @@ of phase 0 records what the headers say):
 
 1. **Project.** `single_exec prg=new_project projname=<trajectory>`.
 2. **Denoise.** `single_exec prg=trajectory_denoise stk=<data>/subtr_frames.mrc smpd=0.358 nthr=24`, the
-   defaults (`pca_mode=flex`, `neigs=32`, `halfwin=0`, `eo_pool=yes`, the inscribed-circle similarity mask).
+   defaults (`neigs=32`, `halfwin=0`, `eo_pool=yes`, the inscribed-circle similarity mask).
    Products: `trajectory_denoised.mrcs`, `trajectory_denoise_flex.txt` (per frame: Kish population of the
    weights, the rank, `tau`, `h`), and the log's cross-validation lines (`CV by temporal bandwidth`,
    `CV by latent rank`, fit band, z), which the table keeps.

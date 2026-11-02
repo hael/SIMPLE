@@ -104,7 +104,7 @@ tester module (section 4.1).
 | `unit_core` | ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line, parameter construction |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
-| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, PCA, cavg quality relations, cavg quality selection, diffusion-map graphs, optimisers, nonlinear conjugate gradient (the engine of `reconstruct3D_wave` on analytic objectives), low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
+| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, cavg quality relations, cavg quality selection, optimisers, nonlinear conjugate gradient (the engine of `reconstruct3D_wave` on analytic objectives), low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
 | `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, micrograph subset, particle subset, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D chunks plan, state weight set, cavgs work project, eo partition |
 | `unit_motion` | motion gain, motion model, particle extractor |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
@@ -1313,7 +1313,7 @@ written as `sub-suite` (entry).
 | `detect_atoms`, `detect_atomic_species`, `simulate_nanoparticle` | no test of their own; they run as stages of the high-level `single_atoms_stats` entries (`detect_atoms`), `detect_atoms` and `detect_atomic_species` in `species_discovery`, and `simulate_nanoparticle` also in `single_workflow_fcc` and `single_workflow_wurtzite` |
 | `detect_calpha` | `C-alpha finder` (`unit_single`) |
 | `detect_calpha_molecules` | deleted; quantitative synthetic coverage remains in `C-alpha finder` (`unit_single`) |
-| `diff_map_graphs` | `diffusion-map graphs` (`unit_numerics`) |
+| `diff_map_graphs` | `diffusion-map graphs` (`unit_numerics`); deleted 2026-11-02 with the diffusion-map code |
 | `discrete_stack_io`, `stack_io` | `stack I/O` (`unit_core`) |
 | `eigh`, `eigh_test` | `linear algebra` (`unit_numerics`) |
 | `eo_diff`, `opt_lp` | deleted (needed refine3D volumes or a download; asserted nothing) |
@@ -1349,7 +1349,7 @@ written as `sub-suite` (entry).
 | `ori`, `ori_test` | `orientation` (`unit_ori`) |
 | `oris`, `oris_test` | `orientation collection` (`unit_ori`) |
 | `otsu`, `otsu_test`, `peak_thres_fdr` | `segmentation` (`unit_image`) |
-| `pca_all`, `pca_imgvar` | `PCA` (`unit_numerics`) |
+| `pca_all`, `pca_imgvar` | `PCA` (`unit_numerics`); deleted 2026-11-02 with `src/main/pca` |
 | `pcg_frac_update` | the library entry `pcg_frac_update` |
 | `rec3D_backends` | by hand, `simple_test_exec test=rec3D_backends` |
 | `pcg_recon` | the library entry `pcg_recon` |

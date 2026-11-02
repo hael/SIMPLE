@@ -11,7 +11,6 @@ use simple_ui_refine3D,  only: construct_refine3D_programs
 use simple_ui_heterogeneity, only: construct_heterogeneity_programs
 use simple_ui_reconstruct3D, only: construct_reconstruct3D_programs
 use simple_ui_postprocess, only: construct_postprocess_programs
-use simple_ui_denoise,   only: construct_denoise_programs
 use simple_ui_filter,    only: construct_filter_programs
 use simple_ui_image,     only: construct_image_programs
 use simple_ui_mask,      only: construct_mask_programs
@@ -43,7 +42,6 @@ contains
         call construct_heterogeneity_programs(prgtab)
         call construct_reconstruct3D_programs(prgtab)
         call construct_postprocess_programs(prgtab)
-        call construct_denoise_programs(prgtab)
         call construct_filter_programs(prgtab)
         call construct_image_programs(prgtab)
         call construct_mask_programs(prgtab)

@@ -1003,7 +1003,6 @@ contains
         call os%set_all('x', [1.0,2.0,3.0])
         call os%zero_shifts()
         call assert_real(0.0, os%get(1,'x'), 1.0e-6, 'zero_shifts() (x field zeroed)')
-        call os%zero_inpl()
         call os%zero('corr')
         ! revshsgn / revorisgn
         call os%set_all('x', [1.0,2.0,3.0])

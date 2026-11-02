@@ -9,9 +9,9 @@ SIMPLE calls BLAS in two ways:
 
 - from serial code, expecting the library to use the cores: the picker's correlation products
   (`simple_pickref_corr_batch`, `gemm_tn`), LAPACK eigen/SVD/inverse in `simple_linalg`, the wide products of
-  `trajectory_denoise pca_mode=flex` when the BLAS threads;
+  `trajectory_denoise` when the BLAS threads;
 - inside its own OpenMP teams, expecting the library to stay on the calling thread: the flex probe E-step
-  (`sgemv`, `dgemv`, `ssyrk`), the per-thread products of `trajectory_denoise pca_mode=flex`.
+  (`sgemv`, `dgemv`, `ssyrk`), the per-thread products of `trajectory_denoise`.
 
 A serial BLAS (RHEL's plain `libopenblas`, reference BLAS) runs the first kind on one core; a pthreads OpenBLAS
 (Ubuntu's default `libopenblas0-pthread`, the bundled build until now) oversubscribes the cores in the second kind
@@ -49,5 +49,5 @@ the serial system BLAS kept; re-configure gives the same result.
 
 - A real configure and build on Linux (the maintainer's RHEL-type box: expect `libopenblaso` to be picked if
   `openblas-devel` is installed) and on macOS (unchanged path).
-- A run of the picker and of `trajectory_denoise pca_mode=flex` with the new BLAS, watching core use.
+- A run of the picker and of `trajectory_denoise` with the new BLAS, watching core use.
 - Whether to also use `SIMPLE_BLAS_TEAM_SAFE` elsewhere (the flex E-step already relies on it implicitly).

@@ -1,5 +1,5 @@
 !@descr: unit test routines for simple_linalg (eigensolvers, SVD, inversion, Cholesky, least-squares fits, vector helpers)
-! Symmetric eigensolvers (dense, sparse, Jacobi), SVD, inversion, the double-precision Cholesky family,
+! Symmetric eigensolvers (dense, Jacobi), SVD, inversion, the double-precision Cholesky family,
 ! least-squares fits and the small vector helpers, pinned on matrices with independently computed answers.
 module simple_linalg_tester
 use simple_test_utils    ! assertions etc.
@@ -21,18 +21,12 @@ real, parameter :: INV_ROW4(N)    = [ 0.37958447, -0.04844234, -0.04165620,  0.2
 real, parameter :: INV_ROW5(N)    = [-0.15761941,  0.02416600, -0.10759382,  0.02720249,  0.34720798]
 real, parameter :: TRACE_REF      = 17.16
 
-! context handed through sparse_eigh's class(*) argument: a dense matrix behind the matvec callback
-type :: dense_ctx
-    real :: mat(N,N)
-end type dense_ctx
-
 contains
 
     subroutine run_all_linalg_tests()
         write(*,'(A)') '**** running all linalg tests ****'
         call test_eigh_largest()
         call test_eigh_smallest()
-        call test_sparse_eigh()
         call test_svdcmp()
         call test_matinv()
         call test_jacobi_eigsrt()
@@ -66,18 +60,6 @@ contains
         inv(4,:) = INV_ROW4
         inv(5,:) = INV_ROW5
     end function example_inverse
-
-    subroutine dense_matvec( ctx, x, y )
-        class(*), intent(in)  :: ctx
-        real,     intent(in)  :: x(:)
-        real,     intent(out) :: y(:)
-        select type(ctx)
-            type is(dense_ctx)
-                y = matmul(ctx%mat, x)
-            class default
-                y = 0.
-        end select
-    end subroutine dense_matvec
 
     ! eigenpairs of the example matrix: unit columns, mutually orthogonal, A v = lambda v
     subroutine assert_eigenpairs( mat, eigvals, eigvecs, label )
@@ -126,23 +108,6 @@ contains
         enddo
         call assert_eigenpairs(mat, eigvals, eigvecs, 'eigh smallest')
     end subroutine test_eigh_smallest
-
-    ! the ARPACK path agrees with the dense one when the operator is the same matrix
-    subroutine test_sparse_eigh()
-        integer, parameter :: NEIGS = 3
-        type(dense_ctx) :: ctx
-        real    :: eigvals(NEIGS), eigvecs(N,NEIGS)
-        integer :: info, i
-        write(*,'(A)') 'test_sparse_eigh'
-        ctx%mat = example_matrix()
-        info    = -1
-        call sparse_eigh(dense_matvec, ctx, N, NEIGS, eigvals, eigvecs, tol=1.e-6, max_basis=N, info=info)
-        call assert_int(0, info, 'sparse_eigh: info is zero')
-        do i = 1,NEIGS
-            call assert_real(EIGVALS_ASC(N-NEIGS+i), eigvals(i), TOL, 'sparse_eigh: largest eigenvalues in ascending order, '//int2str(i))
-        enddo
-        call assert_eigenpairs(ctx%mat, eigvals, eigvecs, 'sparse_eigh')
-    end subroutine test_sparse_eigh
 
     subroutine test_jacobi_eigsrt()
         real    :: a(N,N), mat(N,N), d(N), v(N,N)

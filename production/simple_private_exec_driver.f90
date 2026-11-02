@@ -241,7 +241,6 @@ contains
         ! GENERAL IMAGE PROCESSING PROGRAMS
         type(commander_scale)                   :: xscale
         type(commander_binarize)                :: xbinarize
-        type(commander_ppca_denoise)            :: xppca_denoise
         ! MISCELLANOUS PROGRAMS
         type(commander_aggregate_chunks)        :: xaggregate_chunks
         type(commander_kstest)                  :: xkstst
@@ -358,8 +357,6 @@ contains
                 call xscale%execute(cline)
             case( 'binarize' )
                 call xbinarize%execute(cline)
-            case( 'ppca_denoise' )
-                call xppca_denoise%execute(cline)
             ! MISCELLANOUS PROGRAMS
             case( 'aggregate_chunks' )
                 call xaggregate_chunks%execute(cline)

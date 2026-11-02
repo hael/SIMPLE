@@ -18,7 +18,7 @@ name + description stay in context; the skill body loads on demand.
   `simple-frac-update-trailing`, `simple-nonuniform-regularization`.
 - Subsystem skills: `simple-main-*` for `ui`, `root`, `commanders`,
   `strategies`, `project`, `ori`, `pftc`, `image`, `params`, `nu-filt`,
-  `volume`, `ctf`, `motion`, `opt`, `pca`, `pick`, `star`, `stream`, `nano`,
+  `volume`, `ctf`, `motion`, `opt`, `pick`, `star`, `stream`, `nano`,
   and related modules.
 
 Routing:

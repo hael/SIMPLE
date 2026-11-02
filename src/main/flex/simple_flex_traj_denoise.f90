@@ -1,4 +1,4 @@
-!@descr: trajectory_denoise pca_mode=flex: every frame the kernel pre-image of the frames that look like it in the latent of a flex class model and lie near it in time, rank and bandwidths by coefficient-split cross-validation; arrays in, arrays out
+!@descr: trajectory_denoise: every frame the kernel pre-image of the frames that look like it in the latent of a flex class model and lie near it in time, rank and bandwidths by coefficient-split cross-validation; arrays in, arrays out
 ! Frames as given (no alignment, no interpolation). Without CTF and with one noise spectrum every frame's ML latent
 ! has the same covariance, so the kernel is Euclidean in noise-whitened latents and the CV and the pre-images are
 ! matrix products. The pre-images use the weights the CV scored: the fit band's two coefficient sets each averaged

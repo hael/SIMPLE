@@ -200,7 +200,6 @@ contains
         write(*,'(A)') 'test_registered_programs'
         call make_ui
         call assert_registered_requirement('binarize', 'input', 1, 1)
-        call assert_registered_category('ppca_denoise', 'denoise', 'Denoising', 70)
         call assert_registered_category('refine3D', 'refine3d', 'Refine 3D Workflows', 60)
         call assert_registered_category('flex_pca', 'heterogeneity', 'Heterogeneity Analysis', 65)
         call assert_registered_category('refine3D_states', 'heterogeneity', 'Heterogeneity Analysis', 65)
@@ -233,6 +232,10 @@ contains
         call assert_registered_category('measure_projspace_angres', 'ori', 'Orientation Processing', 110)
         call assert_program_not_registered('ppca_volvar')
         call assert_program_not_registered('export_manifoldem_starproject')
+        call assert_program_not_registered('ppca_denoise')
+        call assert_program_not_registered('ppca_denoise_classes')
+        call assert_program_not_registered('tseries_prep4tracking')
+        call assert_program_not_registered('tseries_extractor')
         call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
         call assert_registered_category('pool2D', 'stream', 'Stream Workflows', 10)
         call assert_registered_category('solve2D', 'refine2d', 'Refine 2D Workflows', 30)

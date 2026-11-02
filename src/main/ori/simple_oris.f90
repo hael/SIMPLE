@@ -50,7 +50,6 @@ type :: oris
     procedure          :: get_state
     procedure          :: get_class
     procedure          :: get_proj
-    procedure          :: get_label_inds
     procedure          :: get_eo
     procedure          :: get_fromp, get_top
     procedure          :: get_sampled
@@ -142,7 +141,6 @@ type :: oris
     procedure          :: zero
     procedure          :: zero_projs
     procedure          :: zero_shifts
-    procedure          :: zero_inpl
     procedure          :: mul_shifts
     procedure          :: rnd_oris
     procedure          :: gau_rnd_shifts
@@ -487,12 +485,6 @@ interface
         integer,     intent(in) :: i
         integer :: get_proj
     end function get_proj
-
-    module function get_label_inds( self, label ) result( inds )
-        class(oris),      intent(in) :: self
-        character(len=*), intent(in) :: label
-        integer, allocatable :: inds(:)
-    end function get_label_inds
 
     module pure function get_eo( self, i )
         class(oris), intent(in) :: self
@@ -1080,10 +1072,6 @@ interface
     module subroutine zero_shifts( self )
         class(oris), intent(inout) :: self
     end subroutine zero_shifts
-
-    module subroutine zero_inpl( self )
-        class(oris), intent(inout) :: self
-    end subroutine zero_inpl
 
     module subroutine mul_shifts( self, mul )
         class(oris), intent(inout) :: self

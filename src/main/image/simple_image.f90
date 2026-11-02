@@ -184,10 +184,8 @@ contains
     procedure          :: is_wthreads
     procedure          :: set_ft
     ! Serialization / misc
-    procedure, private :: serialize_1, serialize_2, serialize_3
-    generic            :: serialize => serialize_1, serialize_2, serialize_3
-    procedure          :: unserialize
-    procedure          :: winserialize
+    procedure, private :: serialize_2, serialize_3
+    generic            :: serialize => serialize_2, serialize_3
     ! CHECKS, file: simple_image_checks.f90
     procedure          :: exists
     procedure          :: is_2d
@@ -1222,12 +1220,6 @@ interface
 
     !--- Serialization / misc ---!
 
-    module function serialize_1( self ) result( vec )
-        class(image), intent(in) :: self
-        real,    allocatable :: vec(:)
-        complex, allocatable :: cvec(:)
-    end function serialize_1
-
     module function serialize_2( self, l_msk )result( pcavec )
         class(image), intent(in) :: self
         logical,      intent(in) :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -1239,18 +1231,6 @@ interface
         real,         intent(in) :: thres
         real, allocatable :: vec(:)
     end function serialize_3
-
-    module subroutine unserialize( self, pcavec, l_msk )
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: pcavec(:)
-        logical, optional, intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
-    end subroutine unserialize
-
-    module subroutine winserialize( self, coord, winsz, pcavec )
-        class(image),      intent(inout) :: self
-        real, allocatable, intent(inout) :: pcavec(:)
-        integer,           intent(in)    :: coord(:), winsz
-    end subroutine winserialize
 
     ! ===== check procedure interfaces =====
 

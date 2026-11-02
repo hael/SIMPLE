@@ -44,7 +44,6 @@ type :: parameters
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)          :: denoise='no'         !< whether to denoise images (yes|no){no}
     character(len=3)          :: doprint='no'
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
@@ -94,7 +93,6 @@ type :: parameters
     character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
-    character(len=3)          :: neigs_per='no'       !< using neigs as percentage of the total dimension(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
@@ -104,13 +102,10 @@ type :: parameters
     character(len=3)          :: pad='no'
     character(len=3)          :: pdb_bfac='no'        !< simulate_nanoparticle pdbfile=: the B column broadens the element kernels(yes|no){no}
     character(len=3)          :: partition='no'       !< selection: states are partitions of classes, written to cls2D cluster(yes|no){no}
-    character(len=3)          :: pca_img_ori='no'     !< original (no rotation/shifting within classes) ptcl stack to pca(yes|no){no}
-    character(len=3)          :: pca_ori_stk='no'     !< output denoised particle stack in the original order and shifted/rotated back(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)          :: pick_roi='yes'
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
-    character(len=3)          :: pre_norm='no'        !< pre-normalize images for PCA analysis
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: addon_diag='no'      !< solve3D_addon cohort-only diagnostic reconstruction(yes|no){no}
@@ -128,7 +123,6 @@ type :: parameters
     character(len=3)          :: restore_cavgs='yes'  !< Whether to restore images to class averages after orientation search (yes|no){yes}
     character(len=3)          :: ring='no'            !< whether to use ring in interactive stream pick
     character(len=3)          :: roavg='no'           !< rotationally average images in stack
-    character(len=3)          :: transp_pca='no'
     character(len=3)          :: trust_header='no'    !< whether to trust the header information in the input files(yes|no){no}
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
     character(len=3)          :: score_states='no'    !< report quality-model scores grouped by cls3D state(yes|no){no}
@@ -285,7 +279,6 @@ type :: parameters
     character(len=STDLEN)     :: flag='dummy'         !< convenience flag for testing purpose
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
     character(len=STDLEN)     :: graph='euc'          !< class split graph metric(euc|ori){euc}
-    character(len=STDLEN)     :: bandwidth_mode='median' !< diffusion-map bandwidth mode(median|ferguson){median}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -295,9 +288,6 @@ type :: parameters
     character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement; internal, not a command-line key (no only under refine=cont)
     character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose polishing(no|yes){no}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
-    character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps|flex){ppca}; trajectory_denoise: {flex}
-    character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
-    character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
     character(len=STDLEN)     :: m_estimator='no'     !< reconstruction M-estimator: flex weighs particles by the project's state weight set(no|flex){no}
     character(len=STDLEN)     :: rec_states_backend='gridding' !< flex_pca final state-map backend; independent of rec_backend, which governs the M-step(gridding|pcg){gridding}
@@ -402,9 +392,6 @@ type :: parameters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: neigs=0             !< # of eigenvectors {0=>auto for Nyström kPCA}
-    integer :: kpca_nystrom_npts=512 !< # of Nyström landmarks
-    integer :: kpca_nystrom_local_nbrs=96 !< max extra local support neighbors for Nyström reconstruction
-    integer :: k_nn=5               !< local nearest-neighbor count for graph-based diffusion splitting
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
@@ -514,8 +501,6 @@ type :: parameters
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
-    real    :: bandwidth_tune=1.0  !< linear multiplier of the Ferguson-optimal bandwidth used when bandwidth_mode=ferguson(1.0=optimum){1.0}
-    real    :: dm_alpha=0.0        !< diffusion-map Coifman-Lafon density normalization exponent(0=graph Laplacian|0.5=Fokker-Planck|1=Laplace-Beltrami){0.0}
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cont_conv_frac=CONT_CONV_FRAC    !< refine=cont convergence: stable fraction per state and streak coverage{0.9}
     real    :: cont_conv_rot=CONT_CONV_ROT_DEG  !< refine=cont convergence: largest rotation of a stable particle(in degrees){0.5}
@@ -551,9 +536,6 @@ type :: parameters
     real    :: hp_ctf_estimate=HP_CTF_ESTIMATE !< high-pass limit 4 ctf_estimate(in A)
     real    :: icefracthreshold=ICEFRAC_THRESHOLD !< ice fraction threshold{1.0}
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
-    real    :: kpca_cosine_weight_power=1.5 !< cosine local-weight sharpening power
-    real    :: kpca_rbf_gamma=0.   !< RBF gamma (0=>auto)
-    real    :: ppca_kpca_resid_alpha=0.5 !< damping for residual kPCA correction on top of PPCA
     real    :: lambda=1.0
     real    :: lam_bounds(2) = [0.05,1.0]
     real    :: lp=20.              !< low-pass limit(in A)

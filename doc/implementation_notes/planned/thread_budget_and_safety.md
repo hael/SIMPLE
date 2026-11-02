@@ -103,7 +103,7 @@ budget needs the maintainer's rulings, mostly for clusters.
 | 3D and 2D search | the particle batch's work arrays, the reference-volume slots | the 3D and 2D search objects (`simple_strategy3D_alloc.f90`, `simple_strategy2D_alloc.f90`), the 3D matcher's counters, the particle images of a batch, the module-level scratch images (`simple_image_geom.f90`), the 2D utilities, the correlation matrix |
 | class averaging and reconstruction | the PCG reconstructor's per-thread sums | the class averager's padded images and stacks (`simple_classaverager_restore.f90`), the padded image heap of the 3D reconstruction, the volume interpolation's images, the symmetry search, the power-spectrum sums |
 | image and FFT | rotational averaging and the stack reader (both pinned with `num_threads`), FFT plans (nothing indexed) | the non-local-means filters, vector quantisation |
-| preprocessing, extraction, FLEX, PCA, clustering | kernel PCA, difference-map graphs, the Gaussian mixture, the FLEX embedding, basis and probe fit | CTF estimation, motion correction, micrograph processing, power spectra, class-average quality features, nanoparticle utilities, the particle extractor, the FLEX PCG pool |
+| preprocessing, extraction, FLEX, clustering | the Gaussian mixture, the FLEX embedding, basis and probe fit | CTF estimation, motion correction, micrograph processing, power spectra, class-average quality features, nanoparticle utilities, the particle extractor, the FLEX PCG pool |
 
 The three windows in which the team and `nthr_glob` differ in production:
 
