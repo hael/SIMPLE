@@ -8,6 +8,7 @@ use simple_ansi_ctrls_tester,                only: run_all_ansi_ctrls_tests
 use simple_string_tester,                    only: run_all_string_tests
 use simple_syslib_tester,                    only: run_all_syslib_tests
 use simple_fileio_tester,                    only: run_all_fileio_tests
+use simple_epu_xml_tester,                   only: run_all_epu_xml_tests
 use simple_stack_io_tester,                  only: run_all_stack_io_tests
 use simple_class_sample_io_tester,           only: run_all_class_sample_io_tests
 use simple_chash_tester,                     only: run_all_chash_tests
@@ -318,6 +319,7 @@ contains
         call add_suite(s, n, 'string',               run_all_string_tests)
         call add_suite(s, n, 'syslib',               run_all_syslib_tests)
         call add_suite(s, n, 'fileio',               run_all_fileio_tests)
+        call add_suite(s, n, 'EPU XML',              run_all_epu_xml_tests)
         call add_suite(s, n, 'stack I/O',            run_all_stack_io_tests)
         call add_suite(s, n, 'class sample I/O',     run_all_class_sample_io_tests)
         call add_suite(s, n, 'character hash',       run_all_chash_tests)

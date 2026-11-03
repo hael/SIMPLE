@@ -101,7 +101,7 @@ tester module (section 4.1).
 
 | suite | sub-suites |
 | --- | --- |
-| `unit_core` | ANSI formatting, string, syslib, fileio, stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line, parameter construction |
+| `unit_core` | ANSI formatting, string, syslib, fileio, EPU XML (the beam shift of EPU metadata), stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line, parameter construction |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
 | `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, search/sort/locate, decay schedules, cavg quality relations, cavg quality selection, optimisers, nonlinear conjugate gradient (the engine of `reconstruct3D_wave` on analytic objectives), low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
@@ -613,8 +613,10 @@ A unit test is a subroutine in a tester module next to the code it tests.
 ### 4.2 Fixtures
 
 - Generate them in the test: images from `gauran`, `gauimg`, `square`;
-  molecules from the embedded models (`simple_molecule_data`, `pdb2mrc`);
-  particles and movies from the simulation commanders.
+  molecules from the two committed PDB entries (`testdata/pdb/1jyx.pdb` and `6vxx.pdb`, read by
+  `simple_molecule_data` from the source tree; then `pdb2mrc`); particles and movies from the
+  simulation commanders. The two PDB files (4.8 MB) are the one committed fixture that is not small;
+  they replaced 6.5 MB of array constructors compiled into the library (2026-11-02).
 - Seed every draw with `set_fixed_seed(<n>)`. Call it **after**
   `parameters%new`, which reseeds.
 - Keep them small and in memory. Write files only when file I/O is what the

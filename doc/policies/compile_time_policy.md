@@ -99,9 +99,10 @@ code; they cost nothing at run time.
   a module it imports whole (`simple_defs`, for example) also widens it with
   every public name that module gains.
 - **Import only the names a third-party module provides that you use.** A bare
-  `use FoX_dom`, for example, brought in its own `len`, which caused a warning,
-  and its `//` for joining text and integers, which code had come to rely on
-  instead of `int2str`. Name the procedures and types you call.
+  `use FoX_dom` (the XML library, removed 2026-11-02), for example, brought in
+  its own `len`, which caused a warning, and its `//` for joining text and
+  integers, which code had come to rely on instead of `int2str`. Name the
+  procedures and types you call.
 
 ### Build configuration
 

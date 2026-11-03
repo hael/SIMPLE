@@ -77,7 +77,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Core')
         call unit_core%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (ansi_formatting, string, syslib, fileio, stack_io, &
+            &'One sub-suite of this area to run alone (ansi_formatting, string, syslib, fileio, epu_xml, stack_io, &
             &class_sample_io, character_hash, hash, value_reference_hash, linked_list, record_list, &
             &command_line, parameters)', '', .false., '')
         call add_ui_program('unit_core', unit_core, tsttab, UI_CATEGORY)

@@ -6,7 +6,7 @@ use simple_cmdline,    only: cmdline
 use simple_syslib,     only: simple_rmfile
 use CPlot2D_wrapper_module
 use simple_starfile_wrappers
-use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
+use simple_epu_xml,    only: read_epu_beamshift
 implicit none
 private
 public :: relion_project
@@ -542,11 +542,11 @@ contains
         character(len=20), allocatable :: tiltgroups(:)
         integer              :: i,j
         type(string)         :: tiltname, tmpname, fname, fname_eps, xmlloc_file
-        type(Node), pointer  :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
         type(string)         :: title
         type(CPlot2D_type)   :: plot2D
         type(CDataSet_type)  :: dataSet
         real                 :: beamtiltx, beamtilty, threshold
+        logical              :: l_beamshift
         real,    allocatable :: tilts(:,:), centroids(:,:)
         integer, allocatable :: populations(:) 
         integer              :: pos
@@ -588,15 +588,10 @@ contains
                 tilts(i,1) = 0.0
                 tilts(i,2) = 0.0
             else
-                xmldoc => parseFile(fname%to_char())
-                beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0)
-                beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                beamtiltx = str2real(getTextContent(beamtiltnodex))
-                beamtilty = str2real(getTextContent(beamtiltnodey))
+                call read_epu_beamshift(fname%to_char(), beamtiltx, beamtilty, l_beamshift)
+                if( .not. l_beamshift ) write(logfhandle, *) fname%to_char() // ' holds no BeamShift. Ignoring'
                 tilts(i,1) = beamtiltx
                 tilts(i,2) = beamtilty
-                call destroy(xmldoc)
             endif  
             if(index(self%movienames(1)%to_char(), 'FoilHole') .ne. 0) then
                 tiltname = self%movienames(i)

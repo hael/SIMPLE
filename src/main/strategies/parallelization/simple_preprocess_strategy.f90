@@ -169,7 +169,7 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, cline)
-        use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
+        use simple_epu_xml,             only: read_epu_beamshift
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         use simple_binoris_io,          only: binwrite_oritab
@@ -182,14 +182,14 @@ contains
         type(motion_correct_iter)     :: mciter
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
-        type(Node), pointer           :: xmldoc, beamshiftnode, beamshiftnodex, beamshiftnodey
         type(string) :: imgkind, moviename, fbody
         type(string) :: moviename_forctf, output_dir_motion_correct
         type(string) :: output_dir_ctf_estimate, output_dir_inipick_preproc, micname_intg
         type(string) :: eputiltgroup, str_meta
         type(string) :: cwd, gain_thumb_abspath
         integer      :: nmovies, fromto(2), imovie, ntot, frame_counter
-        logical      :: l_del_forctf, l_gen_thumb
+        real         :: shiftx, shifty
+        logical      :: l_del_forctf, l_gen_thumb, l_beamshift
         ! gain reference thumbnail
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
@@ -302,13 +302,13 @@ contains
             if(o_mov%isthere('meta'))then
                 str_meta = o_mov%get_str('meta')
                 if( file_exists(str_meta) ) then
-                    xmldoc => parseFile(str_meta%to_char())
-                    beamshiftnode  => item(getElementsByTagname(xmldoc, "BeamShift"),   0)
-                    beamshiftnodex => item(getElementsByTagname(beamshiftnode, "a:_x"), 0)
-                    beamshiftnodey => item(getElementsByTagname(beamshiftnode, "a:_y"), 0)
-                    call o_mov%set("shiftx", str2real(getTextContent(beamshiftnodex)))
-                    call o_mov%set("shifty", str2real(getTextContent(beamshiftnodey)))
-                    call destroy(xmldoc)
+                    call read_epu_beamshift(str_meta%to_char(), shiftx, shifty, l_beamshift)
+                    if( l_beamshift )then
+                        call o_mov%set("shiftx", shiftx)
+                        call o_mov%set("shifty", shifty)
+                    else
+                        write(logfhandle,'(A)') str_meta%to_char()//' holds no BeamShift; beam shift not set'
+                    endif
                 endif
             end if
             ! Assign beamtilt if EPU

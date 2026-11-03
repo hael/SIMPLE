@@ -82,7 +82,6 @@ if(NOT WIN32)
     list(APPEND UNIX_src "extlibs/unix/src/unix_macro.c")
 endif()
 file(GLOB CURL_src               "extlibs/curl/src/*.[Ff][90][08]" "extlibs/curl/src/*.c")
-file(GLOB XML_src                "extlibs/xml/*/*.[Ff][90][08]")
 file(GLOB CPLOT2D_src            "extlibs/CPlot2D/*.cpp" "extlibs/CPlot2D/*.[Ff][90][08]")
 file(GLOB_RECURSE UTILS_src      "utils/*.[Ff][90][08]")
 file(GLOB FILEIO_src             "fileio/*.[Ff][90][08]")
@@ -112,7 +111,6 @@ set(SIMPLE_VENDOR_SOURCES
     ${STARFILE_src}
     ${UNIX_src}
     ${CURL_src}
-    ${XML_src}
     ${CPLOT2D_src}
     ${JPG_src}
 )

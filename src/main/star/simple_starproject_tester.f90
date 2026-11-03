@@ -792,7 +792,7 @@ contains
     end subroutine test_optics_clustering_basic
 
     !-----------------------------------------------------------------------
-    !  PART 4.4 — XML TILT FILE HANDLING (FoX)
+    !  PART 4.4 — XML TILT FILE HANDLING (EPU BeamShift)
     !-----------------------------------------------------------------------
     subroutine test_xml_tiltinfo()
         type(starproject) :: sp

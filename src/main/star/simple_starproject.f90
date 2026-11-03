@@ -7,7 +7,7 @@ use simple_starproject_utils
 use simple_refine2D_fnames, only: refine2D_cavgs_fname
 use CPlot2D_wrapper_module
 use simple_rnd
-use FoX_dom, only: Node, parseFile, item, getElementsByTagname, getTextContent, destroy
+use simple_epu_xml, only: read_epu_beamshift
 implicit none
 
 public :: starproject
@@ -909,19 +909,22 @@ contains
     subroutine assign_xml_tiltinfo(self, xmldir)
         class(starproject), target, intent(inout) :: self
         class(string),              intent(in)    :: xmldir
-        type(Node), pointer :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
-        integer             :: i
+        type(string) :: xmlname
+        real         :: tiltx, tilty
+        integer      :: i
+        logical      :: l_beamshift
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "reading tilt info from metadata ... "
         do i = 1,size(self%tiltinfo)
-            if(file_exists(xmldir%to_char() // '/' // self%tiltinfo(i)%basename%to_char() // '.xml')) then
-                xmldoc => parseFile(xmldir%to_char() // '/' // self%tiltinfo(i)%basename%to_char() // '.xml')
-                beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0)
-                beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                self%tiltinfo(i)%tiltx = str2real(getTextContent(beamtiltnodex))
-                self%tiltinfo(i)%tilty = str2real(getTextContent(beamtiltnodey))
-                call destroy(xmldoc)
+            xmlname = xmldir%to_char() // '/' // self%tiltinfo(i)%basename%to_char() // '.xml'
+            if(file_exists(xmlname)) then
+                call read_epu_beamshift(xmlname%to_char(), tiltx, tilty, l_beamshift)
+                if( l_beamshift )then
+                    self%tiltinfo(i)%tiltx = tiltx
+                    self%tiltinfo(i)%tilty = tilty
+                else
+                    if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), xmlname%to_char() // ' holds no BeamShift. Ignoring'
+                endif
             else
                 if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), xmldir%to_char() // '/' // self%tiltinfo(i)%basename%to_char() // '.xml does not exist. Ignoring'
             end if

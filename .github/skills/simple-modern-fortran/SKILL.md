@@ -125,7 +125,7 @@ everywhere they are declared.
 - Module-level `use` lines are build-order edges for every importer: import with
   `only:` and only what the module itself needs; put procedure-only imports in the
   procedure or its submodule. Do not add umbrella modules or re-exports.
-- With a third-party module, name the entities you use (`use FoX_dom, only: ...`).
+- With a third-party module, name the entities you use (`use json_module, only: json_core, json_value`).
 - Fix warnings in code; SIMPLE-owned sources take no per-file compile options and
   no new CMake targets.
 
