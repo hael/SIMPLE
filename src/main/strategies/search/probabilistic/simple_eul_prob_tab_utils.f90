@@ -28,7 +28,7 @@ public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_S
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
 public :: screen_pool_size, SCREEN_QUANTILE
-public :: shift_needs_disk, disk_radius_px, next_shift_width, record_shift_state
+public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state
 private
 #include "simple_local_flags.inc"
 
@@ -1519,6 +1519,14 @@ contains
         disk_radius_px = min(3. * shift_sigma / smpd, 0.5 * real(box) - 1.)
     end function disk_radius_px
 
+    !> the radius of the box a particle's search covers: the disk when it needs one, else the window
+    pure real function shift_box_radius( shsig, shift_sigma, smpd, box, trs )
+        real,    intent(in) :: shsig, shift_sigma, smpd, trs
+        integer, intent(in) :: box
+        shift_box_radius = trs
+        if( shift_needs_disk(shsig, trs) ) shift_box_radius = disk_radius_px(shift_sigma, smpd, box)
+    end function shift_box_radius
+
     !> The particle's prior width for its next search: the posterior width sdev of this one (the previous width
     !! when the assigned pose carries none), at least the radius r searched when the move d reached that radius's
     !! bound (within a tenth of it, or half a map step where the map is finer): a posterior truncated at the bound
@@ -1538,8 +1546,7 @@ contains
         real,        intent(in)    :: d, sdev, shift_sigma, smpd, trs
         real :: sig_prev, r, step
         sig_prev = os%get(iptcl, 'shsig')
-        r = trs
-        if( shift_needs_disk(sig_prev, trs) ) r = disk_radius_px(shift_sigma, smpd, box)
+        r        = shift_box_radius(sig_prev, shift_sigma, smpd, box, trs)
         ! the coarse map's radial step (setup_shiftmaps: the box over four times the coarse band's last shell)
         step = real(box) / (4. * real(max(kfromto(1) + 1, kfromto(2) / 2)))
         call os%set(iptcl, 'shincr', d)

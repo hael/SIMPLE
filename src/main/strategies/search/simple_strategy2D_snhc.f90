@@ -61,6 +61,11 @@ contains
                 else
                     call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         corrs)
                 endif
+                ! under the key every scored class at its best rotation: the screen picks its pool from them
+                if( self%s%l_map )then
+                    inpl_ind = maxloc(corrs, dim=1)
+                    call self%s%store_solution(iref, inpl_ind, corrs(inpl_ind))
+                endif
                 inpl_ind = shcloc(self%s%nrots, corrs, self%s%prev_corr)
                 if( inpl_ind == 0 )then
                     ! update inpl_ind & inpl_corr to greedy best

@@ -43,6 +43,7 @@ contains
         call test_previous_shift_is_stored_shift()
         call test_table_increment_axes()
         call test_map_initialised_polish()
+        call test_continuous_seed_beyond_window()
     end subroutine run_all_strategy3D_inplane_tests
 
     !> nrefs candidates, one thread; the continuous arrays only on request
@@ -285,8 +286,8 @@ contains
     end subroutine test_previous_shift_is_stored_shift
 
     !> a one-particle strategy3D toolbox on a small phantom (two directions), the particle at a stored shift, the
-    !! search object prepared for the probabilistic route
-    subroutine one_particle_fixture( phantom, stored_shift, b, p, cline, srch, spec )
+    !! search object prepared for the probabilistic route; trs a shift search's window (none by default)
+    subroutine one_particle_fixture( phantom, stored_shift, b, p, cline, srch, spec, trs )
         character(len=*),              intent(in)    :: phantom
         real,                          intent(in)    :: stored_shift(2)
         type(builder),         target, intent(inout) :: b
@@ -294,6 +295,7 @@ contains
         type(cmdline),                 intent(inout) :: cline
         type(strategy3D_srch),         intent(inout) :: srch
         type(strategy3D_spec),         intent(inout) :: spec
+        real,                optional, intent(in)    :: trs
         integer, parameter :: BOX = 32
         type(image)        :: vol
         real, allocatable  :: rmat(:,:,:)
@@ -319,6 +321,7 @@ contains
         call cline%set('nspace',  2)
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
+        if( present(trs) ) call cline%set('trs', trs)
         call cline%check
         call b%init_params_and_build_strategy3D_tbox(cline, p)
         call set_bp_range3D(p, b, cline)
@@ -405,8 +408,8 @@ contains
         call del_file(PHANTOM)
     end subroutine test_table_increment_axes
 
-    !> Phase 4's pin: the map-initialised polish (the coarse window map's cell, then the lattice and the L-BFGS in a
-    !! box of one map step about it, minimize_in_cell) reaches the lattice-initialised search's optimum on the
+    !> Phase 4's pin: the map-initialised polish (the coarse window map's cell, then the L-BFGS from it in a box of
+    !! one map step about it, minimize_in_cell) reaches the lattice-initialised search's optimum on the
     !! white-reference fixture, at the same rotation
     subroutine test_map_initialised_polish()
         character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
@@ -484,6 +487,71 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_map_initialised_polish
+
+    !> The review's T1: the continuous route's joint domain contains the incoming pose. A pose found on a disk beyond
+    !! the window (the white-reference fixture shifted by S_TRUE, polished within +-8 px) goes through the committed
+    !! pose's continuous route under trs = 2: it comes back unclipped and scored no worse than itself
+    subroutine test_continuous_seed_beyond_window()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [4.0, -3.5], RDISK = 8.
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)            :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        type(pftc_shsrch_grad)   :: grad_disk
+        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
+        real    :: lims(2,2), cxy(3), sh(2), corr, inpl_coord
+        integer :: irot, inpl, nrots, pdim(3), kfromto(2), pftsz, k, pp, nchecked
+        logical :: inpl_valid
+        write(*,'(A)') 'test_continuous_seed_beyond_window'
+        call set_fixed_seed(20261103)
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, trs=2.)
+        call assert_true(srch%uses_continuous_refinement(), 'the fixture runs the continuous route')
+        nrots   = b%pftc%get_nrots()
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim    = b%pftc%get_pdim_interp()
+        allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                ref(pp,k) = cmplx(gasdev(), gasdev())
+            enddo
+        enddo
+        call b%pftc%set_ref_pft(1, ref, iseven=.true.)
+        call b%pftc%set_eo(1, .true.)
+        call b%pftc%memoize_refs
+        lims(:,1) = -RDISK
+        lims(:,2) =  RDISK
+        call grad_disk%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        nchecked = 0
+        do inpl = 1, nrots, max(1, nrots / 5)
+            call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call b%pftc%set_ptcl_pft(1, ptcl)
+            call b%pftc%shift_ptcl(1, S_TRUE)
+            call b%pftc%memoize_ptcls
+            irot = inpl
+            call grad_disk%set_indices(1, 1)
+            cxy = grad_disk%minimize(irot=irot, sh_rot=.true.)
+            if( irot < 1 ) cycle
+            if( maxval(abs(cxy(2:3))) <= 2. * sqrt(2.) ) cycle
+            nchecked = nchecked + 1
+            sh   = cxy(2:3)
+            corr = 0.
+            call srch%refine_assignment_continuously(1, irot, corr, sh, inpl_coord, inpl_valid)
+            call assert_true(all(abs(sh - cxy(2:3)) <= 0.25), 'the continuous route keeps a seed beyond the window unclipped')
+            call assert_true(corr >= cxy(1) - 1.e-4, 'the continuous route scores the seed itself, not its clipped pose')
+        enddo
+        call assert_true(nchecked >= 3, 'the seed lay beyond the window at three starts or more')
+        call grad_disk%kill
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_continuous_seed_beyond_window
 
     !> a polar section rotated by irot in the calculator's convention (the polar shift map tester's helper, checked there
     !! against the calculator's own rotation)

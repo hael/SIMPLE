@@ -171,6 +171,8 @@ contains
         else
             call assign_ori(s, ref, inpl, corr, sh)
         endif
+        ! the dynamic centring's state under the key (the classic modes)
+        call s%record_shift(ref, sh)
     end subroutine extract_peak_ori
 
     subroutine extract_peak_oris( s, npeaks )

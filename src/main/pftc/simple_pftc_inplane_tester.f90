@@ -522,6 +522,8 @@ contains
         spec%iptcl       = 1
         spec%iptcl_batch = 1
         spec%iptcl_map   = 1
+        ! the window search: under the key the classic modes seed nothing (the polar shift map, ruling 20)
+        p%l_centring        = .false.
         p%l_prob_align_mode = .false.
         p%inpl_cont         = 'no'
         call srch%new(p, spec, b)

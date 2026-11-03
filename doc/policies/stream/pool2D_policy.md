@@ -151,6 +151,10 @@ The iteration runs `prg=refine2D_distr` through `simple_private_exec`: the batch
    `ml_reg=no` and `refine=snhc_smpl` (set by p06's commander; the pool accepts `snhc` and
    `snhc_smpl`), `cls_init=rand` (dropped from the second iteration), `center`, `center_type`,
    `async=yes`, `stream2d=yes`, `mkdir=no`, `nparts`, `nthr` and the worker server's address.
+   Under the polar shift map's key (`shift_sigma`, the default) the classic search centres each
+   particle as it needs (ruling 20, the solve2D policy): `append_sets` marks the appended particles
+   not yet centred (`shsig` the sentinel), and from the third iteration they are searched greedily
+   on the disk.
    Per iteration: `ncls`, `startit` and `maxits` set to the iteration, `frcs`, `refs` (the latest
    class averages), `update_frac` only when the user gave one, `mskdiam`, the working `smpd_crop`,
    `box_crop` and `msk_crop`, `lpstart`, `lpstop`, `cenlp`, and, until iteration 20, `lp`,

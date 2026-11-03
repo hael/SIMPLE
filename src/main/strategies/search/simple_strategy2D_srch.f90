@@ -4,8 +4,9 @@ use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: posterior_temperature
+use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_shiftmap_srch,    only: shiftmap_srch
 use simple_builder,          only: builder
 implicit none
 
@@ -34,6 +35,7 @@ type strategy2D_srch
     type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< fixed-angle origin shift search object
     type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< initial shift search on the previous reference
     type(pftc_shsrch_grad) :: joint_inpl_optimizer    !< continuous joint (sx,sy,rotind_frac) refinement
+    type(shiftmap_srch), allocatable :: smap         !< the polar shift map under the key (l_map_run)
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
@@ -56,6 +58,9 @@ type strategy2D_srch
     real                    :: trs             =  0.  !< shift boundary
     logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
     logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
+    logical                 :: l_map_run       = .false. !< the classic search centres with the polar shift map (shift_sigma)
+    logical                 :: l_map           = .false. !< ... and searches this particle's shifts this iteration
+    logical                 :: l_peaks_mapped  = .false. !< the peaks' screen polished the classes this search
     logical                 :: continuous_active = .false. !< selected candidates receive continuous refinement
     logical                 :: has_continuous_e3 = .false. !< whether continuous_e3 is valid
     real                    :: continuous_e3 = 0. !< continuous e3 angle for the selected candidate
@@ -67,6 +72,7 @@ type strategy2D_srch
     procedure :: inpl_srch
     procedure :: refine_selected_continuously
     procedure :: inpl_srch_peaks
+    procedure, private :: map_srch
     procedure :: store_solution
     procedure :: assign_ori
     procedure :: uses_continuous_refinement
@@ -106,6 +112,14 @@ contains
             &trim(self%p_ptr%inpl_cont) == 'yes'
         self%has_continuous_e3 = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
+        ! the polar shift map under the key: the classic modes' own path (the probability tables' consumer reads
+        ! its poses from the table)
+        self%l_map_run = self%p_ptr%l_centring .and. (.not. self%p_ptr%l_prob_align_mode) .and. &
+            &trim(self%p_ptr%tseries) /= 'yes'
+        if( self%l_map_run )then
+            if( .not. allocated(self%smap) ) allocate(self%smap)
+            call self%smap%new(params, build)
+        endif
         ! construct composites
         self%trs        =  self%p_ptr%trs
         lims(:,1)       = -self%p_ptr%trs
@@ -124,8 +138,8 @@ contains
             ! polishes the committed assignment
             call self%grad_shsrch_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init,&
                 &maxits=self%p_ptr%maxits_sh)
-            call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init,&
-                &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+            if( .not. self%l_map_run ) call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims,&
+                &lims_init=lims_init, maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
         endif
         call self%grad_shsrch_obj2%new_fixed(self%b_ptr, lims, lims_init=lims_init,&
         &maxits=self%p_ptr%maxits_sh)
@@ -198,10 +212,20 @@ contains
         has_been_searched = (.not. self%l_fresh_start) .and. os%has_been_searched(self%iptcl)
         self%l_sh_first   = s2D%do_inplsrch(self%iptcl_batch) .and. self%p_ptr%l_doshift &
             &.and. has_been_searched
+        ! under the key no seed at the previous class: the candidates are scored at the stored shift and the map
+        ! locates the shift (ruling 20)
+        self%l_map          = self%l_map_run .and. s2D%do_inplsrch(self%iptcl_batch)
+        self%l_peaks_mapped = .false.
+        if( self%l_map )then
+            self%l_sh_first = .false.
+            call self%smap%prep(self%iptcl)
+        endif
         self%xy_first     =  0.
         self%xy_first_rot =  0.
         ! init per-thread class-space arrays
         call prep_strategy2D_thread(self%ithr)
+        ! under the key the previous class competes in the screen at its stored-shift score
+        if( self%l_map ) call self%store_solution(self%prev_class, self%prev_rot, self%prev_corr)
     end subroutine prep4srch
 
     subroutine inpl_srch_first( self )
@@ -236,7 +260,11 @@ contains
         real    :: cxy(3)
         integer :: irot
         irot = 0
-        if( s2D%do_inplsrch(self%iptcl_batch) )then
+        if( self%l_map )then
+            ! the screen of the scored classes and the committed pose (the peaks' screen already ran when it did)
+            if( .not. self%l_peaks_mapped ) call self%map_srch(1, .false.)
+            call commit_mapped_class
+        else if( s2D%do_inplsrch(self%iptcl_batch) )then
             ! selection parity: legacy post-selection refinement runs
             ! unchanged under both inpl_cont values, so the committed
             ! discrete pose is identical to the inpl_cont=no route
@@ -260,7 +288,83 @@ contains
         ! polish-only: exactly one local joint solve of the committed pose,
         ! after legacy refinement, independent of the shift-search schedule
         if( self%continuous_active ) call self%refine_selected_continuously
+
+    contains
+
+        !> the committed pose under the key: the class the peaks' sampling chose, else the best class entry after the
+        !! screen (the mode's choice or a screened class that beat it); its mapped pose when the polish (or its cell)
+        !! beat its stored-shift score, else the stored shift
+        subroutine commit_mapped_class
+            real    :: corr, sh(2), sdev
+            integer :: irot_m, iref
+            logical :: found, valid
+            if( .not. self%l_peaks_mapped )then
+                do iref = 1, self%nrefs
+                    if( s2D%cls_pops(iref) <= 0 .or. s2D%class_space_inplinds(iref,self%ithr) <= 0 ) cycle
+                    if( s2D%class_space_corrs(iref,self%ithr) > self%best_corr )then
+                        self%best_class = iref
+                        self%best_rot   = s2D%class_space_inplinds(iref,self%ithr)
+                        self%best_corr  = s2D%class_space_corrs(iref,self%ithr)
+                    endif
+                enddo
+            endif
+            self%best_shvec = 0.
+            call self%smap%get_result(self%best_class, found, valid, irot_m, corr, sh, sdev)
+            if( found .and. valid )then
+                self%best_rot   = irot_m
+                self%best_corr  = corr
+                self%best_shvec = sh
+            endif
+        end subroutine commit_mapped_class
+
     end subroutine inpl_srch
+
+    !> The screen and the polish of the polar shift map (ruling 20) over the classes scored at the stored shift, the
+    !! previous one included, as the tables screen their rows: one polished for the committed pose, npeaks for the
+    !! peaks, whose entries then are the only valid ones, as in the legacy peaks. A polished pose that beat its
+    !! class's stored-shift score replaces the class's entry
+    subroutine map_srch( self, npeaks, l_peaks )
+        class(strategy2D_srch), intent(inout) :: self
+        integer,                intent(in)    :: npeaks
+        logical,                intent(in)    :: l_peaks
+        integer, allocatable :: refs(:), irots0(:)
+        real,    allocatable :: corrs0(:)
+        real    :: corr, sh(2), sdev
+        integer :: iref, irot_m, i, n
+        logical :: found, valid
+        n = count(s2D%cls_pops > 0 .and. s2D%class_space_inplinds(:,self%ithr) > 0)
+        allocate(refs(n), irots0(n), corrs0(n))
+        n = 0
+        do iref = 1, self%nrefs
+            if( s2D%cls_pops(iref) <= 0 .or. s2D%class_space_inplinds(iref,self%ithr) <= 0 ) cycle
+            n = n + 1
+            refs(n)   = iref
+            irots0(n) = s2D%class_space_inplinds(iref,self%ithr)
+            corrs0(n) = s2D%class_space_corrs(iref,self%ithr)
+        enddo
+        if( n == 0 )then
+            ! the committed class alone, also when the strategy stored no class entry
+            if( allocated(refs) ) deallocate(refs, irots0, corrs0)
+            refs   = [self%best_class]
+            irots0 = [self%best_rot]
+            corrs0 = [self%best_corr]
+        endif
+        call self%smap%srch(refs, corrs0, npeaks)
+        if( l_peaks )then
+            s2D%class_space_corrs(   :,self%ithr) = -1.
+            s2D%class_space_inplinds(:,self%ithr) = 0
+        endif
+        do i = 1, size(refs)
+            call self%smap%get_result(refs(i), found, valid, irot_m, corr, sh, sdev)
+            if( .not. found ) cycle
+            if( valid )then
+                call self%store_solution(refs(i), irot_m, corr)
+            else if( l_peaks )then
+                call self%store_solution(refs(i), irots0(i), corrs0(i))
+            endif
+        enddo
+        deallocate(refs, irots0, corrs0)
+    end subroutine map_srch
 
     !> Jointly refine the shift and in-plane angle of one selected candidate.
     !! Probabilistic selection is complete before this routine is entered and is
@@ -293,12 +397,18 @@ contains
         call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
         xy_native = matmul(self%best_shvec, transpose(rotmat))
         block
-        real     :: cxy(3), joint_lims(3,2)
+        real     :: cxy(3), joint_lims(3,2), rbox
         real(dp) :: rotind_frac
         integer  :: irot
         logical  :: evaluation_valid, improved
-        joint_lims(1,:) = [-self%trs, self%trs]
-        joint_lims(2,:) = [-self%trs, self%trs]
+        ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
+        ! starts at, and is judged against, the pose it polishes
+        rbox = self%trs
+        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%trs)
+        rbox = max(rbox, maxval(abs(xy_native)))
+        joint_lims(1,:) = [-rbox, rbox]
+        joint_lims(2,:) = [-rbox, rbox]
         if( .not. l_sh )then
             ! pin the shifts and refine the angle only
             joint_lims(1,:) = xy_native(1)
@@ -372,6 +482,11 @@ contains
         real    :: sorted_cls_corrs(self%nrefs), cxy(3)
         integer :: sorted_cls_inds(self%nrefs), saved_inpl_inds(self%nrefs), iref, isample, inpl_ind
         if( .not. s2D%do_inplsrch(self%iptcl_batch) ) return
+        if( self%l_map )then
+            call self%map_srch(npeaks_inpl, .true.)
+            self%l_peaks_mapped = .true.
+            return
+        endif
         sorted_cls_corrs         = s2D%class_space_corrs(   :, self%ithr)
         saved_inpl_inds          = s2D%class_space_inplinds(:, self%ithr)
         sorted_cls_inds          = (/(iref,iref=1,self%nrefs)/)
@@ -432,9 +547,9 @@ contains
         class(oris),            intent(inout) :: os
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         real :: e3, mi_class, frac
-        real :: best_corr_local
-        integer :: iref, best_class_local, best_rot_local
-        logical :: found_valid
+        real :: best_corr_local, shvec_incr(2), sh_m(2), corr_m, sdev
+        integer :: iref, best_class_local, best_rot_local, irot_m
+        logical :: found_valid, found, valid
         integer :: ithr
         ithr = self%ithr
         found_valid = .false.
@@ -487,16 +602,29 @@ contains
         if( (.not. self%l_fresh_start) .and. self%prev_class_mi == best_class_local ) mi_class = 1.
         ! search space explored
         frac = 100.*(real(self%nrefs_eval)/real(self%nrefs))
+        ! under the key the written class carries its own mapped shift (a peaks' class need not be the sampled one)
+        shvec_incr = self%best_shvec
+        sdev       = -1.
+        if( self%l_map )then
+            call self%smap%get_result(best_class_local, found, valid, irot_m, corr_m, sh_m, sdev)
+            if( best_class_local /= self%best_class )then
+                shvec_incr = 0.
+                if( found .and. valid ) shvec_incr = sh_m
+            endif
+        endif
         ! update parameters
         call os%e3set(self%iptcl, e3)
-        call os%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
-        call os%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
+        call os%set_shift(self%iptcl, self%prev_shvec + shvec_incr)
+        call os%set(self%iptcl, 'shincarg',   arg(shvec_incr))
         call os%set(self%iptcl, 'inpl',       real(best_rot_local))
         call os%set(self%iptcl, 'class',      real(best_class_local))
         call os%set(self%iptcl, 'corr',       best_corr_local)
         call os%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call os%set(self%iptcl, 'mi_class',   mi_class)
         call os%set(self%iptcl, 'frac',       frac)
+        ! the dynamic centring's state: this iteration's move and the prior width of the next search
+        if( self%l_map ) call record_shift_state(os, self%iptcl, norm2(shvec_incr), sdev, self%p_ptr%shift_sigma,&
+            &self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs, self%b_ptr%pftc%get_kfromto())
     end subroutine assign_ori
 
     subroutine kill( self )
@@ -505,6 +633,12 @@ contains
         call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
         call self%joint_inpl_optimizer%kill
+        if( allocated(self%smap) )then
+            call self%smap%kill
+            deallocate(self%smap)
+        endif
+        self%l_map_run         = .false.
+        self%l_map             = .false.
         self%continuous_active = .false.
         self%has_continuous_e3 = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED

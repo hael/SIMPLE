@@ -29,6 +29,8 @@ use simple_strategy2D_prob,          only: strategy2D_prob
 use simple_strategy2D_srch,          only: strategy2D_spec
 use simple_strategy2D_tseries,       only: strategy2D_tseries
 use simple_eul_prob_tab2D,           only: eul_prob_tab2D
+use simple_shiftmap_srch,            only: setup_shiftmap_srch
+use simple_matcher_2Dprep,           only: ptcl_on_disk
 implicit none
 
 public :: refine2D_exec
@@ -91,6 +93,7 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         logical :: attempted, improved, no_improvement, invalid
         real    :: frac_srch_space, neigh_frac
+        logical :: l_map_classic
         integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, ithr, nthr_team
         real(dp), allocatable  :: ts_thr(:)
@@ -138,6 +141,9 @@ contains
         call prepare_alignment_references(batchsz_max)
         if( ctrl%do_bench ) rt_prep_pftc_refs2D = toc(t_prep_pftc_refs2D)
         call prep_strategy2D_glob(p_ptr, b_ptr%spproj, b_ptr%pftc%get_nrots(), neigh_frac)
+        ! the polar shift map of the classic modes under the key (ruling 20)
+        l_map_classic = p_ptr%l_centring .and. (.not. p_ptr%l_prob_align_mode) .and. trim(p_ptr%tseries) /= 'yes'
+        if( l_map_classic ) call setup_shiftmap_srch(p_ptr, b_ptr)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
         if( ctrl%l_prob_align )then
             call eulprob_obj_part%new_assignment(p_ptr,b_ptr,pinds)
@@ -349,6 +355,10 @@ contains
             has_been_searched = b_ptr%spproj_field%has_been_searched(iptcl)
             l_fresh_start     = is_fresh_2D_start(p_ptr, p_ptr%which_iter, b_ptr%spproj_field%isthere(iptcl,'class'))
             first_or_unsearched = l_fresh_start .or. (.not. has_been_searched)
+            ! under the key a particle that needs the disk scores every class, as the sparse table has it do
+            if( l_map_classic .and. .not. first_or_unsearched )then
+                if( s2D%do_inplsrch(iptcl_batch) ) first_or_unsearched = ptcl_on_disk(p_ptr, b_ptr, iptcl)
+            endif
             if( ctrl%l_prob_align )then
                 allocate(strategy2D_prob :: strategy2Dsrch(iptcl_batch)%ptr)
             else if( ctrl%l_stream )then

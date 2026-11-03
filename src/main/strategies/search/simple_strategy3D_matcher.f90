@@ -28,6 +28,8 @@ use simple_strategy3D_cont,            only: strategy3D_cont
 use simple_cartft_pose_opt,            only: cartft_pose_work
 use simple_strategy3D_shc,             only: strategy3D_shc
 use simple_strategy3D_srch,            only: strategy3D_spec
+use simple_shiftmap_srch,              only: setup_shiftmap_srch
+use simple_matcher_2Dprep,             only: ptcl_on_disk
 use simple_strategy3D,                 only: strategy3D
 use simple_type_defs,                  only: OBJFUN_EUCLID
 implicit none
@@ -77,6 +79,7 @@ contains
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
         logical             :: has_been_searched
+        logical             :: l_map_classic
         ! benchmarking
         integer(int64) :: peak_rss, rss_after_teardown, rss_after_reconstruction
         real(real64)    :: peak_rss_gib, rss_after_teardown_gib, rss_after_reconstruction_gib
@@ -182,6 +185,9 @@ contains
             t_prep_orisrch  = tic()
         endif
         call prep_strategy3D(p_ptr, b_ptr)
+        ! the polar shift map of the classic modes under the key (ruling 20)
+        l_map_classic = p_ptr%l_centring .and. p_ptr%l_doshift .and. .not. str_has_substr(p_ptr%refine, 'prob')
+        if( l_map_classic ) call setup_shiftmap_srch(p_ptr, b_ptr)
         allocate(strategy3Dspecs(batchsz_max), strategy3Dsrch(batchsz_max))
         if( ctrl%do_prob_align )then
             call eulprob_obj_part%new_assignment(p_ptr, b_ptr, pinds)
@@ -509,7 +515,8 @@ contains
             else
                 select case(ctrl%refine_mode)
                     case('shc')
-                        if( .not. has_been_searched )then
+                        ! under the key a particle that needs the disk scores every reference
+                        if( .not. has_been_searched .or. on_disk_classic(iptcl) )then
                             allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
                             cnt_greedy(ithr) = cnt_greedy(ithr) + 1
                         else
@@ -564,6 +571,12 @@ contains
                 nullify(strategy3Dsrch(iptcl_batch)%ptr)
             endif
         end subroutine choose_and_run_strategy
+
+        logical function on_disk_classic( iptcl )
+            integer, intent(in) :: iptcl
+            on_disk_classic = .false.
+            if( l_map_classic ) on_disk_classic = ptcl_on_disk(p_ptr, b_ptr, iptcl)
+        end function on_disk_classic
 
 
 

@@ -723,7 +723,7 @@ contains
             call cline_refine2D%set('extr_iter',      params%extr_lim + 1)
             call cline_refine2D%set('refine',         'greedy')
             call cline_refine2D%set('restore_cavgs', 'yes')
-            call cline_refine2D%delete('shift_sigma') ! the map lives in the tables
+            call cline_refine2D%set('shift_sigma', 0.) ! the window search: the terminal pass runs without the polar shift map
             if( present(terminal_policy) ) call terminal_policy(cline_refine2D)
             call cline_refine2D%delete('update_frac')
             call cline_refine2D%delete('fillin')

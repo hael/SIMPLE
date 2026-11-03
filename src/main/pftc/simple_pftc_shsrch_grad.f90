@@ -233,32 +233,35 @@ contains
         call self%ospec%set_limits(lims)
     end subroutine set_limits
 
-    !> The polish from a coarse map's cell (the map initialises the search): the lattice and the L-BFGS in a box of
-    !! one map step about the cell's shift (in the reference's axes at irot), within the object's limits, from the
-    !! cell's rotation. cxy is (correlation, the shift rotated into the particle's axes); l_polished says the box's
-    !! optimum beat the origin, minimize's baseline, else cxy is the cell itself scored at full resolution and irot
-    !! the cell's rotation
+    !> The polish from a coarse map's cell (the map initialises the search): the L-BFGS from the cell's shift (in the
+    !! reference's axes at irot) in a box of one map step about it, within the object's limits; the shift prior, when
+    !! set, stays centred at the stored shift. cxy is (correlation, the shift rotated into the particle's axes) of the
+    !! better of the polish and the cell at its best rotation; l_polished says it beat the stored shift's best
+    !! rotation, else the caller keeps its stored-shift row unless cxy beats it
     subroutine minimize_in_cell( self, irot, xy_cell, step, cxy, l_polished )
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         real,                    intent(in)    :: xy_cell(2), step
         real,                    intent(out)   :: cxy(3)
         logical,                 intent(out)   :: l_polished
-        real    :: lims_orig(2,2), lims_box(2,2)
-        integer :: irot_cell
+        real    :: lims_orig(2,2), lims_box(2,2), corrs(self%nrots)
         if( self%search_mode /= SHSRCH_SHIFT ) THROW_HARD('the cell polish needs a shift search object; minimize_in_cell')
-        irot_cell     = irot
         lims_orig     = self%ospec%limits(1:2,1:2)
         lims_box(:,1) = max(lims_orig(:,1), xy_cell - step)
         lims_box(:,2) = min(lims_orig(:,2), xy_cell + step)
         call self%ospec%set_limits(lims_box)
-        cxy = self%minimize(irot=irot, sh_rot=.true.)
+        cxy = self%minimize(irot=irot, sh_rot=.true., xy_in=xy_cell, prior_origin=.true.)
         call self%ospec%set_limits(lims_orig)
-        l_polished = irot > 0
-        if( l_polished ) return
-        irot     = irot_cell
-        cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, real(xy_cell, dp), irot))
-        cxy(2:3) = shift_ref2ptcl(xy_cell, self%b_ptr%pftc%get_rot(irot))
+        if( irot < 1 )then
+            ! the polish did not improve on the cell: the cell at its best rotation
+            call self%objfun_vals(xy_cell, corrs)
+            irot     = maxloc(corrs, dim=1)
+            cxy(1)   = corrs(irot)
+            cxy(2:3) = shift_ref2ptcl(xy_cell, self%b_ptr%pftc%get_rot(irot))
+        endif
+        ! the stored shift at its best rotation, the prior's centre
+        call self%objfun_vals([0.,0.], corrs)
+        l_polished = cxy(1) > maxval(corrs)
     end subroutine minimize_in_cell
 
     !> The shift prior of the next minimisations: sigma2 the shift variance per axis (pixels^2, from the previous
@@ -590,15 +593,16 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot, sh_rot, xy_in ) result( cxy )
+    function grad_shsrch_minimize( self, irot, sh_rot, xy_in, prior_origin ) result( cxy )
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         logical, optional,       intent(in)    :: sh_rot
         real,    optional,       intent(in)    :: xy_in(2)
+        logical, optional,       intent(in)    :: prior_origin !< the prior centred at the stored shift, not the start
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost
         integer  :: loc, i, lowest_rot, init_rot
-        logical  :: found_better, l_sh_rot, coarse_init_orig, l_fitted
+        logical  :: found_better, l_sh_rot, coarse_init_orig, l_fitted, l_prior_origin
         if( self%search_mode /= SHSRCH_SHIFT )then
             THROW_HARD('shift minimization requested from a joint search object')
         endif
@@ -613,8 +617,15 @@ contains
         endif
         self%ospec%x_8 = dble(self%ospec%x)
         ! the prior is centred at the start, the seed or zero, kept as the stored shift: xy_in is expressed at
-        ! irot on entry (the rotation the caller converted its seed at); a zero start is zero in every frame
-        call self%set_prior_centre(self%ospec%x_8, irot)
+        ! irot on entry (the rotation the caller converted its seed at); a zero start is zero in every frame.
+        ! prior_origin keeps it at the stored shift whatever the start (the map's cell)
+        l_prior_origin = .false.
+        if( present(prior_origin) ) l_prior_origin = prior_origin
+        if( l_prior_origin )then
+            call self%set_prior_centre([0.d0, 0.d0], irot)
+        else
+            call self%set_prior_centre(self%ospec%x_8, irot)
+        endif
         found_better   = .false.
         self%profile_minimize_calls = self%profile_minimize_calls + 1_int64
         ! the objective's double-precision reference, copied once per minimisation

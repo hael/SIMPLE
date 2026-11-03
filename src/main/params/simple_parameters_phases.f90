@@ -1126,15 +1126,21 @@ contains
             self%l_doshift = .false.
         endif
         ! the polar shift map: a positive prior width is the key (the default), under the Euclidean objective, whose
-        ! posterior the map draws (an explicit key under cc is refused); a run centres with it when its mode is a
-        ! probability table with a shift search, and a workflow's master carries the key to the stages that do
+        ! posterior the map draws (an explicit key under cc is refused); a run centres with it when its mode searches
+        ! shifts on the polar grid, a probability table or a classic mode (ruling 20), and a workflow's master carries
+        ! the key to the stages that do
         self%l_shift_map = self%shift_sigma > 0.01
         if( self%l_shift_map .and. self%cc_objfun /= OBJFUN_EUCLID )then
             if( cline%defined('shift_sigma') ) THROW_HARD('shift_sigma needs objfun=euclid: the map draws the tempered posterior')
             self%l_shift_map = .false.
         endif
-        self%l_centring = self%l_shift_map .and. self%l_doshift .and. &
-            &(trim(self%refine) == 'prob' .or. trim(self%refine) == 'prob_snhc' .or. trim(self%refine) == 'prob_neigh')
+        select case(trim(self%refine))
+            case('prob', 'prob_snhc', 'prob_neigh', 'snhc', 'snhc_smpl', 'snhc_smpl_many', 'greedy', 'shc', 'neigh',&
+                &'greedy_inpl')
+                self%l_centring = self%l_shift_map .and. self%l_doshift .and. trim(self%tseries) /= 'yes'
+            case DEFAULT
+                self%l_centring = .false.
+        end select
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch <= 1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

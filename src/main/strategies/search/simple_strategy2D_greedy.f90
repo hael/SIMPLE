@@ -55,6 +55,8 @@ contains
                 call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, shift_eval, corrs)
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
+                ! under the key every class's stored-shift score: the disk's screen picks its pool from them
+                if( self%s%l_map ) call self%s%store_solution(iref, inpl_ind, inpl_corr)
                 ! updates global best
                 if( inpl_corr > corr )then
                     corr              = inpl_corr

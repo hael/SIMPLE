@@ -1,8 +1,35 @@
 # Polar shift map: a global shift search on the polar Fourier transform
 
-Planned 2026-10-30. One living note: the contract (the mechanics and what is fixed), the plan (phases, exit
-criteria, file table), the decisions still open, and the progress record. The mechanics and its unit test are
-written; nothing is wired into a search yet.
+Started 2026-10-30. One living note: the contract, implementation plan, open decisions and progress record.
+
+## Current status and next work (reviewed 2026-11-02)
+
+Reviewed source: `69c6c9d78`. The map is integrated into the dense/sparse 2D and dense/neighbourhood 3D
+probability tables; `shift_sigma=10` is the parameter default where the mode supports it. Dynamic per-particle
+centring (ruling 19) replaces the fixed centring stage and its drain. Stage 1 of solve2D deliberately remains
+shift-free; solve3D's first two stages also have no shift search. The old five-iteration stage-2 budget and
+the proposed stage-2/3 extension below are historical schedules, superseded by ruling 19.
+
+The latest independent review is [section 14 of the review record](polar_shift_search_review.md#14-current-state-and-remaining-work-2026-11-02).
+It finds three current integration issues: continuous polish still clips a disk seed to the small stage
+window before measuring its baseline; neighbourhood insertion does not carry the dense table's physical
+pose-prior loss; and mapped sparse/window polish still enables the legacy increment prior. These are
+recommendations, not fixes made by this review; the first (T1) is fixed since 2026-11-03 (the 2026-11-03 classic
+strategies entry). Continuous in-plane polish currently runs under the key, including the extras; it is distinct
+from the Fourier–Bessel polish of Phase 5 (not pursued).
+
+| Work | Current state | Next action, in order |
+|---|---|---|
+| Table integration and dynamic centring | Implemented; first-entry and later-stage disk selection observed in shared/full and two-part/quarter-sampled solve2D; T1 (the continuous route's clip) fixed 2026-11-03 | Correct the two remaining integration issues (T2, T3); pin the active prior for initializer, polish and insertion separately |
+| Dynamic state and uncertainty | Coarse physical-temperature moments and bound inflation implemented; coarse widths mostly unresolved below one cell | Add mixed sentinel/mover/drained, stage/sampling/injection and physical-moment regressions; calibrate before adding ladder rungs |
+| Laplace width | Proposal in the dynamic-centring note, not built | Specify conditional versus angle-marginal width, evaluate the committed fractional angle, retain the coarse multimodality safeguard and handle flat/indefinite curvature conservatively |
+| Phase 3 | Maintainer's 2D and beta-gal 3D results recorded below; scientific closeout remains | Paired seeded controls, translation-aware retained-mass measurement, per-class comparison on the same particles, centring-frame/mask ruling and re-extraction/downstream 3D |
+| Phase 4 | Every table and, since 2026-11-03, every classic polar mode (ruling 20) uses a map before local polish | The stochastic 2D classic modes (`snhc`, `snhc_smpl`, the stream's pool) need a fixture that separates them from run-to-run spread; the lattice inside `minimize_in_cell` retired for a cell start (the fill's refinement halved to quartered at the same accuracy, the 2026-11-03 entry); measure on beta-gal |
+| Phase 5 | Not pursued (Hans, 2026-11-03) | None. The L-BFGS is under a tenth of the refinement and the maps are built on the coarse band; the levers are the lattice inside `minimize_in_cell`, the pool and the map's own costs (the 2026-11-03 entry) |
+
+Width percentiles describe the evaluated coarse distribution; they do not measure posterior mass excluded by
+the reference pool or the grid. The dated inventories and superseded schedules below are retained as history;
+this status and ruling 19 describe the current implementation. Validation and its limits are in the review.
 
 ## Why
 
@@ -247,7 +274,7 @@ facts read from the code the same day.
     and refine3D's modes, solve3D's stages, single and multi-state alike (Phase 4, from an inventory of today's
     shift initialisations). The polish in the Fourier-Bessel domain, on the map's harmonic correlations
     T_n(k, irot) with analytic gradients in rho and alpha, about five times cheaper per evaluation, follows where
-    the map is built anyway (Phase 5).
+    the map is built anyway (Phase 5; not pursued 2026-11-03, the measurement in the entry of that date).
 
 What Phase 3 measures, in order: the fraction of particles that leave rejected classes for good ones; the
 shift histogram against the Gaussian cryoSPARC measured, sigma included; class quality; after re-extraction,
@@ -280,7 +307,7 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
 18. The weighted insertion's extras take the continuous in-plane route with the committed pose (Hans, 2026-11-01:
     "we ought to inpl_cont-refine all of them, or none of them"; "I do not think it will make a huge difference"):
     each from its own cell and shift through the same local joint solve, the weights the table's, the route status
-    the committed pose's; under the key nothing is polished, as before (the Fourier-Bessel polish is Phase 5).
+    the committed pose's; under the key nothing is polished, as before (Phase 5's Fourier-Bessel polish, not pursued).
 
 19. Dynamic centring (Hans, 2026-11-02; the proposal and its rulings in `polar_shift_search_dynamic_centring.md`; built the same day, Progress below):
     the sampling strategies inject particles the centring stage never sees, so the centring becomes a per-particle
@@ -288,23 +315,22 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     prepared under the box's mask, the move at the bound and the posterior width combined into one prior width that
     chooses the next box at three standard deviations (the pick prior the only prior in the likelihood), the
     neighbourhood table's disk over the subspace pool, `trs_window` and the drain exits retired.
+20. The classic strategies take the table's structure, not a seed (Hans, 2026-11-02): under the key `inpl_srch_first`
+    goes, in every state count. A seed at the previous reference is optimal for that one state only; the states are
+    not docked and nothing records which projection of each other state was optimal last time, which is why the
+    classic multi-state search never seeded. As in the tables, the candidates are scored at the stored shift, the
+    best few get a map each (the window, or the disk by the particle's width) and the best cell is polished in its box.
+    Built 2026-11-03: the pool is every candidate the mode scored and the previous one, window or disk alike (a
+    first build that mapped only SHC's committed class in the window lost the 2D fixture, Progress below).
 
-The 2026-11-01 follow-up review is in `polar_shift_search_review.md`, section 13.
-It verifies the earlier frame, radius, polish-key and diagnostic fixes, but finds
-five active issues: the stage's `startit` skips the first `shincr` reset; map
-insertion losses omit the absolute prior; ordinary class convergence bypasses
-the drain; a non-improving-against-origin polish falls back to a worse coarse
-seed; and the cost record omits the window objects' work. The first, third
-and fifth were reproduced in shared/distributed solve2D probes. The original
-R3 evidence error is fixed, with the remaining prior issue recorded as S2.
-No production changes were made by the follow-up review.
+The 2026-11-01 follow-up review is retained in `polar_shift_search_review.md`, section 13.
+Its stage-entry, drain and cost findings were corrected or superseded by the subsequent consolidation and
+dynamic state. The coarse fallback now preserves the better origin row; dense insertion now carries an
+absolute prior loss. Section 14 rechecks those dispositions and records the remaining path differences.
 
-The maintainer's clarification of 2026-11-01: stage 1 is deliberately
-shift-free because shifts there cause class collapse. The current centring
-budget is the five iterations of stage 2 (global 6-10 in the default
-schedule). The follow-up's initializer finding concerns entry to stage 2;
-its convergence probes used three of those five iterations. Extending
-centring across stages 2 and 3 is under consideration, as Open decision 4.
+The maintainer's stage-1 clarification remains in force: no shift search there because it causes class
+collapse. The former centring budget was five iterations in stage 2 (global 6-10), and the proposal to
+extend it through stage 3 is superseded by the per-particle state of ruling 19, as Open decision 4 records.
 
 ## Open decisions
 
@@ -553,6 +579,100 @@ Ruling 19 as built, in the plan's steps:
   the move at the bound; the Laplace width at the polished optimum is the informative alternative, written up in
   the proposal's section 2.6 for Hans's call. The neighbourhood driver's disk print was missing and is added.
 
+### 2026-11-03: Phase 4's classic strategies built, the continuous route's domain fixed (Claude, agent kit runs 802-)
+
+- Ruling 20 as built: `simple_shiftmap_srch` holds the classic searches' map context (the particle's box and
+  temperatures, the window's and the disk's polish objects, built per run by `setup_shiftmap_srch` in both
+  matchers) and the dense table's screen and polish for a list of candidates scored at the stored shift: the pool
+  of the best by that score (`screen_pool_size`, at least twice the polish count), a coarse map each, the best
+  cells polished with `minimize_in_cell`. Under the key the classic searches seed nothing (`inpl_srch_first`, in
+  any state count), the previous candidate competes at its stored-shift score, `inpl_srch` polishes one,
+  `inpl_srch_peaks` the peaks, the written class carries its own mapped shift (2D `assign_ori`), and the commit
+  records the shift state (2D `assign_ori`, 3D `extract_peak_ori`). Under `shc` (3D) and in 2D a particle that
+  needs the disk is searched greedily (every candidate scored), as the sparse table scores every class for one.
+  `l_centring` covers the classic polar modes (2D `snhc`, `snhc_smpl`, `snhc_smpl_many`, `greedy`; 3D `shc`,
+  `neigh`, `greedy`, `greedy_inpl`), not `tseries`, `inpl`, `inpl_smpl`, `greedy_smpl` or `cont`.
+- The review's T1 fixed: the continuous route's joint domain contains the particle's box (`shift_box_radius`: the
+  disk when `shift_needs_disk`, under the key) and the incoming shift, in 2D and 3D, for the committed pose and the
+  extras. `test_continuous_seed_beyond_window` (in-plane state suite) polishes a pose found at 5.3 px under
+  `trs=2` and checks it comes back unclipped and scored no worse than itself; with the old bound it fails at all
+  five starts on the score (the shift kept, the clipped pose's score attached), as the review traced. The table
+  fixtures are unchanged by the fix: 2D 100 % at 0.19 px, 3D 100 % at 0.54 px.
+- The fixtures, true references or volume, 400 particles whose true shifts have a median of 8.6 px, the key
+  (`shift_sigma=10`) against the window (`shift_sigma=0`), within lp/4 (2.31 px):
+
+  | mode | window | key | no key |
+  |---|---|---|---|
+  | refine3D `shc`, 3 iterations | 5 px | 95.2 %, 96.0 % | 78.8 % |
+  | refine3D `neigh`, 3 iterations | 5 px | 100.0 %, 100.0 % | 86.0 % |
+  | refine2D `greedy`, 12 iterations | 5 px | 78.5 % (purity 98.5 %) | 43.0 % (67.5 %) |
+  | refine2D `snhc`, 12 iterations | 24 px | 79.8 % (100 %) | 20.2 % (67.5 %) |
+  | refine2D `snhc` | 10 px | 65.2 % | 39.5 % |
+  | refine2D `snhc` | 5 px | 39.2, 39.5, 40.0 % | 57.0, 75.2, 41.5 % |
+  | refine2D `snhc_smpl` | 5 px | 60.0, 42.2 % | 55.2 % |
+  | refine2D `snhc_smpl` | 10 px | 40.0 % | 70.5 % |
+
+  The 3D modes, 2D greedy and SNHC at a wide window gain clearly. The stochastic 2D modes at small windows are
+  not resolved by this fixture: its classic 2D search first searches shifts at iteration 3, against class averages
+  rebuilt for two iterations without shifts, so the first centring is poor (43.5 % at iteration 3, against
+  84.8 % for the table's first centring from the true references), the classes stay about 80 % pure in every
+  SNHC run, key or not, and the window's own repeats spread from 41 to 75 %. One pattern repeats: SNHC at a 5 px
+  window, about one coarse map step on this 248 px box, ends at 40 % with the particles stopped (last move
+  0.01 px) about 3 px from their view-mates. A first build that mapped only the class SHC committed to (a wrong
+  class's window map moves the particle to that class's optimum) was worse; the pool over every scored class and
+  the previous one replaced it. The stream's pool (`snhc_smpl`, appended particles greedy against settled class
+  averages) is closer to the table's first centring than to this fixture; its measurement is Hans's data.
+- The lattice inside the box polish retired: `minimize_in_cell` starts the L-BFGS at the map's cell
+  (`minimize(xy_in=cell, prior_origin=.true.)`: the shift prior, when set, stays centred at the stored shift), keeps
+  the better of the polish and the cell at its best rotation, and reports whether it beat the stored shift's best
+  rotation (the callers' contract). A/B from one source, the lattice build snapshotted (`run@lattice`) against the
+  cell start, two repeats interleaved, the table fixtures (true references or volume, 400 particles, the key, 8
+  threads, load 9-10 on 24 cores); the repeats agree within 1-2 %:
+
+  | fixture | refinement (thread-s), lattice / cell | fill wall (s), lattice / cell | objective evaluations, lattice / cell | within lp/4 |
+  |---|---|---|---|---|
+  | 3D, trs=24, 3 iterations | 102.1 / 49.5 | 13.6 / 7.0 | 418 M / 80 M | 100 / 100 % (median 0.60 / 0.61 px) |
+  | 3D, trs=5 | 84.6 / 31.1 | 11.4 / 4.6 | 418 M / 80 M | 100 / 100 % |
+  | 2D, trs=24, 12 iterations | 14.6 / 6.4 | 2.05 / 1.00 | 60 M / 9.9 M | 100 / 100 % (0.18 / 0.18 px) |
+  | 2D, trs=5 | 10.8 / 2.6 | 1.45 / 0.44 | 60 M / 9.9 M | 100 / 100 % |
+
+  The classic fixtures with the cell start: 3D `shc` 95.8 %, `neigh` 99.8 %, 2D `greedy` 78.5 % (the lattice:
+  95.2-96.0, 100, 78.5). The saving is larger than the 2026-11-03 Phase 5 entry estimated from the beta-gal profile
+  (a quarter of the refinement): on these fixtures the polishes were most of the refinement. `test_map_initialised_polish`
+  holds with the cell start (same optimum and rotation as the lattice-initialised search). Beta-gal is not rerun.
+
+### 2026-11-03: Phase 5 not pursued; the polish measured on Hans's beta-gal solve3D run (Claude's reading)
+
+- The cost of the polish, read from `5_solve3D/BENCH/PROB_TAB_BENCH_PART1.txt` (1150 particles, 6 threads, box
+  120, shells 2-36, the dynamic centring):
+
+  | iteration | fill wall | iteration wall | refinement thread-s | maps per particle | polishes per particle |
+  |---|---|---|---|---|---|
+  | 1 (every particle on the disk) | 21.7 s | 34.4 s | 121.6 | 110 | 55 |
+  | 2 (the window) | 6.0 s | 14.7 s | 27.7 | 38 | 19 |
+  | 11-15 (the window) | 1.9 s | 8.6 s | 2.9 | 4 | 2 |
+
+  The refinement is the maps plus the polishes; the profile cannot separate them because the pool is exactly
+  twice the refined count in every block (`npool`'s floor). With the 2026-10-31 like-for-like record at box 120
+  (a window map 0.24 ms, a classic minimisation 0.27 ms) the window iterations split about two thirds maps, one
+  third polish; the disk iteration is the disk maps.
+- What the polish is: 25 grid evaluations per search in every block, i.e. the object's 5 x 5 lattice runs over
+  the box because `minimize_in_cell` calls `minimize` without a start (`xy_in` is what turns the lattice off),
+  then the L-BFGS (7.8 gradients per search). The objective count agrees: about 34 all-rotation evaluations per
+  polish, 25 of them the lattice. The L-BFGS proper is a quarter of the polish, under a tenth of the refinement,
+  the refinement 70-80 % of the fill, the fill 40 % of an early iteration and 20 % of a late one: Phase 5's best
+  case is about 3 % of an early iteration and 1 % of a late one.
+- The band: both maps are built on the coarse band ending at `kscreen` (`setup_shiftmaps`), the polish is what
+  brings the shift to the full band. A Fourier-Bessel polish on the map's intermediate works at the map's band;
+  at the full band the intermediate doubles the shells and the orders kept, about four coarse maps per
+  candidate, more than the polish. Hans: not pursued.
+- The levers, in order of return per effort, each measurable on the in-plane tester's identity and the fixtures:
+  the lattice inside the box polish (start the L-BFGS at the map's cell with the box as bounds, as ruling 14
+  ruled; about three quarters of the polish, a quarter of the refinement; the risk to measure is a full-band
+  secondary optimum inside the box, the lattice at half a step the present guard, a 3 x 3 lattice the fallback);
+  the pool's floor of twice the refined count (the screen-rank record: almost nothing beyond the refined count
+  from the later stages on); the map's own costs (measured FFTW plans, fewer directions on the inner rings).
+
 ### 2026-11-01: solve2D validated on data (Hans's runs; the approach adopted)
 
 - With the drain reset in place and the key solve2D's default, Hans ran the consolidated centring stage on the
@@ -726,12 +846,25 @@ without the joint rotation. The map-initialised polish removes the asymmetry: on
 gives the joint start for single and multi-state alike, the seed bank and the lattice retire where it runs, and
 the neighbourhood table gets the map it lacks.
 
-### Phase 5: the polish in the Fourier-Bessel domain (ruling 14)
+The classic strategies (ruling 20; built 2026-11-03, Progress below): under the key the previous-reference seed
+goes, in every state count, and the strategies take `process_particle_with_map`'s structure
+(`simple_shiftmap_srch`). The candidate loop stays as it is, at the stored shift (SHC's first improvement, greedy's
+sweep, the neighbourhood); the screen covers every scored candidate and the previous one, the best cells polished
+with `minimize_in_cell`, one for the committed pose (`inpl_srch`), the peaks for `inpl_srch_peaks`, then
+`record_shift_state`. `l_centring` extends to these modes. Open: the 2D gate `do_inplsrch` (shifts from the third
+iteration) keeps a freshly injected particle off the disk for two iterations. The stream's pool runs `snhc_smpl`
+(p06; the pool admits `snhc` and `snhc_smpl` only) and is centred this way now.
 
-Where the map is built, keep its intermediate, the per-rotation harmonic correlations T_n(k, irot), and polish
-in (rho, alpha) on them: each evaluation a sum over shells and orders instead of shells by ring samples, the
-gradient analytic. Measured against the classic polish from the same start on the in-plane tester's fixtures
-(same optimum, the evaluation count and time) before it replaces anything.
+### Phase 5: the polish in the Fourier-Bessel domain (ruling 14; not pursued, Hans, 2026-11-03)
+
+The design was: where the map is built, keep its intermediate, the per-rotation harmonic correlations
+T_n(k, irot), and polish in (rho, alpha) on them, each evaluation a sum over shells and orders instead of
+shells by ring samples, the gradient analytic. Not pursued, on the beta-gal 3D profile (the 2026-11-03 entry):
+the L-BFGS it would replace is a quarter of the polish and under a tenth of the refinement, so its best case is
+a few per cent of an iteration; and both maps are built on the coarse band ending at `kscreen`, so a polish on
+their harmonics returns a half-band shift, while the full-band intermediate costs about four coarse maps per
+candidate, more than the polish it replaces. The cheaper levers are the lattice inside `minimize_in_cell`
+(ruling 14 as ruled), the pool and the map's own costs.
 
 ### File disposition
 
@@ -750,8 +883,11 @@ gradient analytic. Measured against the classic polish from the same start on th
 | `src/main/pftc/simple_pftc_shsrch_grad.f90` | `minimize_in_cell`: the polish in a box of one map step about a map's cell, with the origin fallback (every table's) | 4 (done 2026-11-01) |
 | `src/main/strategies/search/simple_strategy3D_inplane_tester.f90` | `test_map_initialised_polish`: the identity of the map-initialised and lattice-initialised optima | 4 (done 2026-11-01) |
 | `src/main/params/simple_parameters.f90` | the radius / switch | 2 |
-| `src/main/strategies/search/simple_strategy2D_srch.f90` | plumbing | 2 |
-| `src/main/strategies/search/simple_strategy3D_srch.f90` | plumbing | 2 |
+| `src/main/strategies/search/simple_strategy2D_srch.f90` | plumbing; the classic map path, the continuous route's domain | 2, 20 |
+| `src/main/strategies/search/simple_strategy3D_srch.f90` | plumbing; the classic map path, the continuous route's domain | 2, 20 |
+| `src/main/strategies/search/simple_shiftmap_srch.f90` | the classic searches' map context: the box, the screen and the polish | 20 |
+| `src/main/strategies/search/simple_strategy2D_greedy.f90`, `simple_strategy2D_snhc.f90`, `simple_strategy3D_utils.f90` | every scored class kept under the key; the 3D commit's shift state | 20 |
+| `src/main/strategies/search/simple_strategy2D_matcher.f90`, `simple_strategy3D_matcher.f90` | the maps built per run; a disk particle searched greedily | 20 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90` | the joint draw in the fill of the centring stage | 2 |
 | `src/main/pftc/simple_polarft_corr.f90` | `gen_posterior_val` over the map's grid | 2 |
 | `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage (`CENTRING_STAGE`): the table, the disk, the box's mask, minits for the shift exit, the key per stage; the mask estimate at its exit (`solve2D_mskdiam_estimate`) | 2b (done 2026-10-31) |

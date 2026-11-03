@@ -74,10 +74,10 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; the probability '//&
-        &'tables centre each particle as it needs: one not yet centred in this workflow, or whose shift posterior is '//&
-        &'wider than a third of the window, locates its likely classes over the disk of 3 sigma with a coarse polar '//&
-        &'shift map under the box''s mask and polishes from the map''s optimum, the others polish from the map over the '//&
-        &'window of trs; 0 is the window search; off under a mode without a table{10}', &
+        &'tables and the classic modes centre each particle as it needs: one not yet centred in this workflow, or whose '//&
+        &'shift posterior is wider than a third of the window, locates its likely classes over the disk of 3 sigma with a '//&
+        &'coarse polar shift map under the box''s mask and polishes from the map''s optimum, the others polish from the '//&
+        &'map over the window of trs; 0 is the window search; off under objfun=cc{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)

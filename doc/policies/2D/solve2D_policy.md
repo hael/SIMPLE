@@ -132,14 +132,34 @@ coverage, as 3D does.
 from its pick, `doc/implementation_notes/planned/polar_shift_search.md` and
 `polar_shift_search_dynamic_centring.md`) is the parameter's default, 10 A
 (Hans, 2026-11-02, across the board), so every workflow has the key where a mode
-can carry it: a probability table (`prob`, `prob_snhc`, `prob_neigh`) with a
-shift search under objfun=euclid; elsewhere (the SNHC and greedy strategies, a
-stage without shifts, objfun=cc) the default is silently off, and a key given
-explicitly on such a run is refused (`validate_parameter_consistency`).
+can carry it: a polar mode with a shift search under objfun=euclid, a
+probability table (`prob`, `prob_snhc`, `prob_neigh`) or, since ruling 20
+(2026-11-03), a classic mode (`snhc`, `snhc_smpl`, `snhc_smpl_many`, `greedy`;
+3D `shc`, `neigh`, `greedy`, `greedy_inpl`); elsewhere (`tseries`, the `inpl`
+and `greedy_smpl` modes, a stage without shifts) the default is silently off,
+and under objfun=cc an explicit key is refused.
 `shift_sigma=0` is the window search in every stage, the control. Two flags
 carry this: `l_shift_map`, the key's presence (a workflow's master passes it to
-its stages), and `l_centring`, a run that centres (the key in a table mode with
-a shift search), which the fills, the preparation and the consumers read.
+its stages), and `l_centring`, a run that centres (the key in such a mode with
+a shift search), which the searches, the preparation and the consumers read.
+
+The classic modes (ruling 20) take the table's structure, not a seed: under the
+key no shift search at the previous class (`inpl_srch_first`) in any state count,
+the candidates scored at the stored shift as the mode has it, and the screen and
+polish of the tables (`simple_shiftmap_srch`: a map per candidate of the pool,
+the disk or the window, the best cells polished with `minimize_in_cell`) over
+every scored class and the previous one, which competes at its stored-shift
+score: one polished for the committed pose, the peaks for `snhc_smpl`. Under the
+key `snhc` keeps every class it scores. (A first build mapped only the class SHC
+committed to for a particle in its window: a wrong class's map moved the particle
+to that class's optimum, and the 2D fixture fell well below the window search.)
+A particle that needs the disk is searched greedily (every class scored), as the
+sparse table scores every class for one; the written class carries its own
+mapped shift, and `assign_ori` records the shift state. The matcher builds the
+maps once per run (`setup_shiftmap_srch`). The stream's pool (`snhc_smpl`, its
+appended particles greedy) is centred this way.
+The continuous in-plane route's joint domain contains the particle's box and the
+incoming shift (the refine3D policy), so a disk shift is polished, not clipped.
 
 The centring is a per-particle state, not a stage (ruling 19, 2026-11-02; the
 sampling strategies inject particles no stage would otherwise centre). Each
@@ -163,8 +183,8 @@ prior width for its next search, in pixels. In every table fill from stage 2 on
   `prob_snhc` fill a disk particle scores every class first), each keeping its
   coarse optimum, and the best classes polished at full resolution in a box of
   one map step about that optimum in the disk's own search object
-  (`pftc_shsrch_grad%minimize_in_cell`; if the box's optimum does not beat the
-  origin, the cell scored at full resolution is the pose if it beats the
+  (`pftc_shsrch_grad%minimize_in_cell`: the L-BFGS from the cell; the better of
+  the polish and the cell at its best rotation is the pose if it beats the
   origin's row, else that row stands). The rows are polished losses;
 - the window: the same screen and polish over the coarse window map
   (`SHIFTMAP_WINDOW`, radius `trs`, no prior), the stage's search object;
@@ -206,8 +226,9 @@ Under the key every table scores the classes at the stored shift, without the
 previous class's seed and its shifted-particle bank, and polishes from a coarse
 map's optimum (Phase 4 of the note), so the 5 x 5 lattice at every rotation
 and the seed retire wherever the key runs; `shift_sigma=0` keeps the seed and
-the lattice. The terminal greedy pass never sees the key: the map lives in the
-2D tables, and `prep_strategy2D_glob` refuses it under any other `refine`. `cls_init=prev` enters at stage 3 and runs no
+the lattice. The terminal greedy pass runs the window search (`shift_sigma=0` on
+its command line; since ruling 20 the greedy mode could carry the key, which this
+pass was validated without). `cls_init=prev` enters at stage 3 and runs no
 centring stage; the stream's checkpointing is refused with the key. With the
 key off every command line is as before.
 

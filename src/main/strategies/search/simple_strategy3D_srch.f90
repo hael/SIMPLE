@@ -6,9 +6,10 @@ use simple_strategy3D_alloc, only: prep_strategy3D_thread, s3D, &
     &seed_continuous_inplane_candidate
 use simple_builder,          only: builder
 use simple_eul_prob_tab,     only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses
+use simple_eul_prob_tab_utils, only: posterior_temperature, prob_insert_poses, record_shift_state, shift_box_radius
 use simple_parameters,       only: parameters
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_shiftmap_srch,    only: shiftmap_srch
 implicit none
 
 integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED = 0
@@ -32,6 +33,7 @@ type strategy3D_srch
     type(pftc_shsrch_grad)     :: grad_shsrch_obj2            !<
     type(pftc_shsrch_grad)     :: grad_shsrch_first_obj       !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
     type(pftc_shsrch_grad)     :: joint_inpl_optimizer        !< selected-reference joint (sx,sy,rotind_frac) refinement
+    type(shiftmap_srch), allocatable :: smap                  !< the polar shift map under the key (l_map)
     type(ori)                  :: o_prev                      !< previous orientation
     type(oris)                 :: opeaks                      !< peak orientations to consider for refinement
     class(parameters), pointer :: p_ptr        => null()      !< global parameters
@@ -64,6 +66,7 @@ type strategy3D_srch
     logical                    :: l_neigh         = .false.   !< neighbourhood refinement flag
     logical                    :: l_greedy        = .false.   !< greedy        refinement flag
     logical                    :: l_sh_first      = .false.   !< use previous-ref shift seed before orientation/state scoring
+    logical                    :: l_map           = .false.   !< the classic search centres with the polar shift map (shift_sigma)
     logical                    :: continuous_active = .false. !< selected candidates receive continuous in-plane refinement
     integer                    :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< final selected-reference route outcome
     logical                    :: doshift         = .true.    !< 2 indicate whether 2 serch shifts
@@ -75,6 +78,8 @@ type strategy3D_srch
     procedure :: inpl_srch_first
     procedure :: inpl_srch
     procedure :: inpl_srch_peaks
+    procedure, private :: map_srch
+    procedure :: record_shift
     procedure :: refine_selected_continuously
     procedure :: refine_assignment_continuously
     procedure :: refine_extra_pose_continuously
@@ -136,14 +141,22 @@ contains
         call self%opeaks%new(self%npeaks, is_ptcl=.true.)
         ! create in-plane search objects
         self%nrots = self%b_ptr%pftc%get_nrots()
+        ! the polar shift map under the key, the classic modes' own path (the probabilistic consumer reads its poses
+        ! from the table): no seed at the previous reference in any state count (ruling 20)
+        self%l_map = self%p_ptr%l_centring .and. self%doshift .and. .not. str_has_substr(self%refine, 'prob')
+        if( self%l_map )then
+            self%l_sh_first = .false.
+            if( .not. allocated(self%smap) ) allocate(self%smap)
+            call self%smap%new(params, build)
+        endif
         if( .not. str_has_substr(self%refine, 'prob') )then
             ! selection parity: candidate scoring, shift-seed estimation and
             ! peak refinement always use the legacy objects; the joint
             ! optimizer only polishes the committed assignment
             call self%grad_shsrch_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                 &maxits=self%p_ptr%maxits_sh)
-            call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
-                &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+            if( .not. self%l_map ) call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims, &
+                &lims_init=lims_init, maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             if( self%continuous_active )then
                 joint_lims(1:2,:) = lims
                 joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
@@ -234,6 +247,11 @@ contains
         call self%b_ptr%pftc%gen_objfun_vals(self%prev_ref, self%iptcl, [0.,0.], corrs)
         corr = max(0.,maxval(corrs))
         self%prev_corr = corr
+        if( self%l_map )then
+            call self%smap%prep(self%iptcl)
+            ! the previous reference competes in the screen at its stored-shift score
+            call self%store_solution(self%prev_ref, maxloc(corrs, dim=1), corr)
+        endif
     end subroutine prep4srch
 
     subroutine inpl_srch_first( self )
@@ -274,6 +292,16 @@ contains
         endif
         irot = s3D%proj_space_inplinds(iref,self%ithr)
         if( present(irot_in) ) irot = irot_in
+        if( self%l_map )then
+            ! the screen of the scored references (the given one alone) and the committed pose
+            if( present(ref) )then
+                call self%map_srch(1, iref)
+            else
+                call self%map_srch(1)
+            endif
+            if( present(irot_in) ) irot_in = s3D%proj_space_inplinds(iref,self%ithr)
+            return
+        endif
         ! BFGS over shifts with in-plane rot exhaustive callback
         call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
         if( self%l_sh_first )then
@@ -291,6 +319,10 @@ contains
         real    :: cxy(3)
         integer :: refs(npeaks_inpl), irot, ipeak
         if( .not. self%doshift ) return
+        if( self%l_map )then
+            call self%map_srch(npeaks_inpl)
+            return
+        endif
         ! selection parity: multi-peak shift refinement shapes the final
         ! selection, so it runs as legacy under the continuous route too
         ! BFGS over shifts with in-plane rot exhaustive callback
@@ -308,6 +340,48 @@ contains
             endif
         enddo
     end subroutine inpl_srch_peaks
+
+    !> The screen and the polish of the polar shift map (ruling 20) over the references scored at the stored shift,
+    !! across states: the reference ref alone when given, else every scored reference, npeaks polished. A polished
+    !! pose that beat its reference's stored-shift score replaces the reference's entry
+    subroutine map_srch( self, npeaks, ref )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: npeaks
+        integer, optional,      intent(in)    :: ref
+        integer, allocatable :: refs(:)
+        real,    allocatable :: corrs0(:)
+        real    :: corr, sh(2), sdev
+        integer :: i, iref, irot_m
+        logical :: found, valid
+        if( present(ref) )then
+            refs   = [ref]
+            corrs0 = [s3D%proj_space_corrs(ref,self%ithr)]
+        else
+            refs   = pack([(iref, iref = 1, self%nrefs)], s3D%proj_space_corrs(:,self%ithr) > -huge(1.0)/2.0)
+            corrs0 = s3D%proj_space_corrs(refs,self%ithr)
+        endif
+        call self%smap%srch(refs, corrs0, npeaks)
+        do i = 1, size(refs)
+            call self%smap%get_result(refs(i), found, valid, irot_m, corr, sh, sdev)
+            if( found .and. valid ) call self%store_solution(refs(i), irot_m, corr, sh=sh)
+        enddo
+        deallocate(refs, corrs0)
+    end subroutine map_srch
+
+    !> the dynamic centring's state after the commit of reference ref with shift increment sh: the move and the prior
+    !! width of the next search (the committed reference's map width, none when it was not mapped)
+    subroutine record_shift( self, ref, sh )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref
+        real,                   intent(in)    :: sh(2)
+        real    :: corr, sh_m(2), sdev
+        integer :: irot_m
+        logical :: found, valid
+        if( .not. self%l_map ) return
+        call self%smap%get_result(ref, found, valid, irot_m, corr, sh_m, sdev)
+        call record_shift_state(self%b_ptr%spproj_field, self%iptcl, norm2(sh), sdev, self%p_ptr%shift_sigma,&
+            &self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs, self%b_ptr%pftc%get_kfromto())
+    end subroutine record_shift
 
     subroutine store_solution( self, ref, inpl_ind, corr, sh )
         class(strategy3D_srch), intent(inout) :: self
@@ -349,7 +423,7 @@ contains
     subroutine refine_selected_continuously_impl( self, ref )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
-        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
+        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2), rbox
         real(dp) :: rotind_frac
         integer  :: irot, incoming_irot
         logical  :: evaluation_valid, improved
@@ -374,8 +448,14 @@ contains
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
-        joint_lims(1,:) = [-self%p_ptr%trs, self%p_ptr%trs]
-        joint_lims(2,:) = [-self%p_ptr%trs, self%p_ptr%trs]
+        ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
+        ! starts at, and is judged against, the pose it polishes
+        rbox = self%p_ptr%trs
+        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+        rbox = max(rbox, maxval(abs(xy_native)))
+        joint_lims(1,:) = [-rbox, rbox]
+        joint_lims(2,:) = [-rbox, rbox]
         if( .not. self%doshift )then
             joint_lims(1,:) = xy_native(1)
             joint_lims(2,:) = xy_native(2)
@@ -447,7 +527,7 @@ contains
         real,                   intent(inout) :: corr, sh(2)
         real,                   intent(out)   :: inpl_coord
         logical,                intent(out)   :: inpl_valid
-        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
+        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2), rbox
         real(dp) :: rotind_frac
         integer  :: refined_inpl
         logical  :: evaluation_valid, improved
@@ -472,8 +552,14 @@ contains
         ! frame; the joint PFTC objective consumes the native particle frame.
         call rotmat2d(self%b_ptr%pftc%get_rot(inpl), rotmat)
         xy_native = matmul(sh, transpose(rotmat))
-        joint_lims(1,:) = [-self%p_ptr%trs, self%p_ptr%trs]
-        joint_lims(2,:) = [-self%p_ptr%trs, self%p_ptr%trs]
+        ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
+        ! starts at, and is judged against, the pose it polishes
+        rbox = self%p_ptr%trs
+        if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
+            &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
+        rbox = max(rbox, maxval(abs(xy_native)))
+        joint_lims(1,:) = [-rbox, rbox]
+        joint_lims(2,:) = [-rbox, rbox]
         if( .not. self%doshift )then
             joint_lims(1,:) = xy_native(1)
             joint_lims(2,:) = xy_native(2)
@@ -585,6 +671,11 @@ contains
         call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
         call self%joint_inpl_optimizer%kill
+        if( allocated(self%smap) )then
+            call self%smap%kill
+            deallocate(self%smap)
+        endif
+        self%l_map = .false.
         call self%opeaks%kill
         call self%o_prev%kill
         if( allocated(self%refine) ) deallocate(self%refine)

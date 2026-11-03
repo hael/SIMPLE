@@ -598,7 +598,7 @@ type :: parameters
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
-    real    :: shift_sigma=10.     !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables locate the likely references over a disk of 3 sigma with a coarse map and polish from its optimum (solve2D's stage 2 and solve3D's stage 3 are the centring stages), and the map initialises every table's polish; off where the mode has no table (prob, prob_snhc, prob_neigh), no shift search or objfun=cc, which refuse an explicit key(0: the window search){10}
+    real    :: shift_sigma=10.     !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; a particle not yet centred, or whose prior width exceeds a third of the window, searches a disk of 3 sigma with a coarse map, the others the window, and the map initialises every polish; on in the probability tables and the classic polar modes with a shift search, off elsewhere and under objfun=cc, which refuses an explicit key(0: the window search){10}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
@@ -662,7 +662,7 @@ type :: parameters
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
     logical :: l_shift_prior     = .false. !< shift_prior=yes
     logical :: l_shift_map       = .false. !< shift_sigma > 0 under objfun=euclid: the polar shift map's key is on (the workflows pass it to their stages)
-    logical :: l_centring        = .false. !< l_shift_map in a run that centres: a probability table with a shift search (the fills, the preparation and the consumers read this one)
+    logical :: l_centring        = .false. !< l_shift_map in a run that centres: a probability table or a classic polar mode with a shift search (the searches, the preparation and the consumers read this one)
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

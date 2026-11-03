@@ -1,7 +1,7 @@
 # Probabilistic in-plane search: mathematical and performance review
 
-**Latest review:** the 2026-11-01 follow-up is in section 13. Section 12
-retains the previous integration review; sections 1-11 retain the original review.
+**Latest review:** the 2026-11-02 current-state review is in section 14. Sections 12-13
+retain the previous integration reviews; sections 1-11 retain the original review.
 
 **Reviewed:** 2026-10-30, `master` at `a2c1b1f86`.
 **Scope:** commits `519c67d2a` and `a2c1b1f86`, the proposed integration into solve2D/solve3D, and the relevant existing probability-table and reconstruction contracts.
@@ -613,3 +613,266 @@ five active findings above.
   remain scientific validation gaps. Earlier reported benchmark results
   in the living plan were not rerun or claimed as this review's results.
 - No Linux/BOX run, production fix, commit or push by this review.
+
+## 14. Current state and remaining work (2026-11-02)
+
+Reviewed clean `master` at `69c6c9d78c531dea3dfdc515ee89dea2c4935b43`, including the
+3D/table consolidation, the parameter default of `shift_sigma=10` and dynamic
+centring. Unrelated XML, molecule-fixture and other development changes are
+outside this review. Production code and testers were not edited. The current
+status/next actions are maintained in the existing living plan, not a new plan.
+
+The original `prob_neff=3` feedback policy has been retired; the current
+`prob_neff_readout` reports entropy at the configured draw beta and at beta 1
+without changing it. The findings below concern the current shift-search
+integration, not a recurrence of that feedback controller.
+
+The dynamic design addresses a real scheduling problem: fractional sampling
+can introduce a particle after any fixed centring stage. The master now resets
+`shsig=-1` even in the first shift-free stage, and later tables and particle
+preparation consult the same per-particle state. Disk particles use the box
+mask; the sparse 2D and neighbourhood 3D tables now have disk paths too. The
+stored width chooses the domain, rather than becoming a new data-derived prior.
+Those ownership and lifecycle choices are sound.
+
+Stage 1 of solve2D remains deliberately shift-free. Its old stage-2 centring
+budget was five iterations, globally 6-10; the proposed extension through
+stage 3 is now superseded by ruling 19. No finding here requests shifts in
+stage 1. Solve3D's first two stages likewise retain their no-shift policy.
+
+### Previous findings at this revision
+
+| Earlier item | Current disposition |
+|---|---|
+| R1/R2, increment frames and insertion cone | The native-increment producer/consumer contract remains coherent; no recurrence found |
+| S1, missing first centring reset | Corrected by the workflow reset before the shift-free stage, with distributed persistence; observed first disk counts below |
+| S2, insertion omitted absolute prior | Corrected in dense 3D; neighbourhood insertion still differs, T2 below |
+| S3, class convergence bypassed drain | Superseded: the fixed centring stage and drain are retired |
+| S4, coarse fallback overwrote a better origin | The caller now retains the origin row when the coarse fallback is worse; the seed/baseline contract still merits the Phase-4 tests below |
+| S5, window work absent from profile | Both search-object sets now reach the profile |
+| Inactive `temp_mass` normalizer defect | Retired API removed; new physical-moment accumulators are separate from the draw normalizer |
+
+### T1 — P1: continuous polish projects a disk seed into the smaller stage window
+
+`simple_strategy2D_srch.f90:300-301` and
+`simple_strategy3D_srch.f90:475-476` still give the joint optimizer bounds
+`[-trs,trs]` about zero. The dynamic table can now return a valid disk
+increment outside that window in any shifting stage. Both committed poses
+and the 3D extras pass through this continuation when continuous refinement
+is enabled, as it is by default. The table's wider disk object does not set
+the consumer's joint limits.
+
+This also breaks the monotonicity/score contract, rather than merely limiting
+the gain from continuous refinement. `minimize_joint` sets `x=xy_in` and
+records its baseline from the optimizer's first objective evaluation
+(`simple_pftc_shsrch_grad.f90:752-765`). L-BFGS-B projects an out-of-bounds
+start before requesting that evaluation (`simple_opt_lbfgsb.f90:137-142`,
+`984-997`). Consequently the baseline is the clipped pose. On a valid
+non-improvement or a bound-pinned result, the function returns the original
+`xy_in` with the clipped pose's score (`simple_pftc_shsrch_grad.f90:832-839`).
+An accepted interior result is likewise compared against the clipped pose,
+not the authoritative incoming one.
+
+An independent one-dimensional example makes the failure explicit: let the
+incoming disk coordinate be 12, `trs=5`, and the loss be
+`L(x)=0.1+0.01*(x-12)^2`. The optimizer first evaluates 5, the constrained
+minimum, with loss 0.59. The no-improvement return keeps coordinate 12 but
+attaches `exp(-0.59)` instead of its correct `exp(-0.1)`. This is a
+source-traced counterexample, not a measured real-data failure rate.
+
+Give the continuation a domain that contains the authoritative disk seed
+and evaluate that actual incoming pose for acceptance. Preserve a consistent
+pose/score on every fallback. Test disk seeds beyond `trs` through the real
+2D, 3D and extra-pose consumers, including non-improvement, boundary and
+interior outcomes. The current map-initialised-polish fixture does not cover
+this table-to-continuous handoff outside the ordinary window.
+
+### T2 — P1: neighbourhood insertion still uses a different posterior loss
+
+The dense table now stores a separate physical pose loss,
+`L_data + |u_prev+du|^2/(2*sigma_px^2*T)`, in
+`prob_refined_entry%loss` (`simple_eul_prob_tab.f90:584-588`). This is the
+correction requested by S2. In contrast, the neighbourhood disk path records
+only the polished data distance (`simple_eul_prob_tab_neigh.f90:1547-1551`).
+`gather_state_row` copies candidate `%dist` to the insertion input, and
+`select_extras` passes it directly to `top_posterior_extras` (lines 947 and
+899-901). There is no corresponding physical pose-prior term. The window
+case can instead include the legacy relative prior described in T3.
+
+At least for first centring, where the pick prior is explicitly active, the
+two routes therefore cannot describe the same insertion posterior. Conditional
+on two poses surviving the same insertion cone, equal data losses with
+`sigma_px=10` and absolute shift magnitudes 20 and 22 give dense weights
+0.603483/0.396517 but neighbourhood disk weights 0.5/0.5. Drawing/selecting a
+coarse cell under the prior does not supply this separately normalized
+point-pose weight.
+
+Carry the intended physical insertion loss separately from the candidate
+selection distance on the neighbourhood route, and compare dense/neighbourhood
+weights on the same externally specified poses. The written policy also needs
+one explicit distinction: the coarse initializer applies the pick prior only
+at first centring, while dense insertion currently applies it on every mapped
+iteration. The dynamic note says both "first centring only" and "the pick
+prior ... in the 3D insertion's loss". These may be deliberately different
+estimators; this review does not assume the dense insertion must drop its
+prior after the first iteration. State the initializer, polish and insertion
+targets separately before extending the width estimator.
+
+### T3 — P2: mapped sparse/window polish retains the legacy increment prior
+
+The dense mapped fills bypass the old `set_shift_prior` setup. Sparse 2D
+(`simple_eul_prob_tab2D.f90:623-624`) and both neighbourhood 3D routes
+(`simple_eul_prob_tab_neigh.f90:284-285`, `533-534`) set it whenever
+`l_shift_prior` and a shift search are active, including map mode. Their
+window branch uses that same object in `minimize_in_cell`; only the disk
+branch switches to the separate object without the legacy prior.
+
+The window map explicitly has zero pick-prior weight, but its polish then
+optimizes a data term plus the old population-increment penalty. Because
+`minimize_in_cell` calls `minimize` without `xy_in`, that relative penalty is
+centred on zero increment. Thus switching dense to sparse/neighbourhood, or
+switching a particle from disk to window, changes the full-band objective as
+well as its domain. It can suppress a window correction or change a
+candidate's distance relative to the raw origin row. A coarse fallback is
+re-scored by `gen_corr_for_rot_8` without that penalty, so polished and
+fallback values can differ in meaning too.
+
+Make the mapped polish objective explicit and apply it consistently. Under
+the written data-only window policy, skip/clear this legacy prior in map
+mode. If a separate local regularizer is desired, specify and test it on all
+table paths instead. Add a dense/sparse/neighbourhood comparison with an
+off-zero optimum and `shift_prior=yes`; the existing kernel identity checks
+do not exercise these per-particle setup calls. The continuous consumer's
+own start-centred prior also needs an explicit disposition in the target
+definition above, rather than silently treating it as the absolute pick prior.
+
+### Remaining development: recommended order and qualifications
+
+1. **Integration corrections and dynamic-state tests first.** The proposed
+   mixed sentinel/mover/drained fill regression is absent. Test the exact
+   `3*shsig > trs` boundary, sentinel persistence through no-shift stages,
+   bound inflation, unchanged state on unsampled particles, first arrivals
+   after stage 2/3, restart versus fresh-workflow resets, stream injection and
+   cropped-record handoff. Cover dense/sparse/neighbourhood and shared/parts
+   consumers, including agreement of the preparation mask with the table's
+   domain. Direct tests of physical-temperature moments and their frame
+   transformations are also missing. The new default makes these completion
+   gates more pressing than another search mode or ladder rung.
+
+2. **Laplace width is useful, but the proposed 2D stencil is conditional.**
+   The observed near-zero coarse widths mean mass concentrated in one grid
+   cell; they do not establish subpixel accuracy. The proposed full-band
+   curvature can resolve that scale. However, `gen_corr_for_rot_8` takes an
+   integer angle, whereas the proposal measures after continuous in-plane
+   polish. Use the actual committed fractional-angle objective; PFTC already
+   exposes fractional-angle evaluators. Put the numerical method in the
+   owning PFTC/search domain and let the strategies orchestrate it.
+
+   A 2 x 2 shift Hessian at fixed angle gives conditional covariance. The
+   current coarse moments marginalize over in-plane rotation. With appreciable
+   shift-angle coupling these are different search-width criteria. For a
+   joint Hessian partitioned into shift and angle blocks, the marginal shift
+   covariance is `(Hss - Hsa * Haa^-1 * Has)^-1`. For the positive-definite
+   example `H=[[1,0,.99],[0,1,0],[.99,0,1]]`, the largest conditional shift
+   standard deviation is 1; the marginal one is 7.0888. A window of 5 would
+   be selected by one rule and rejected by the other. Either marginalize the
+   coupled local model or explicitly adopt and calibrate a conditional rule.
+
+   Specify the active physical-temperature loss/prior, stencil scale,
+   positive-definiteness and near-flat/negative-curvature fallback. Unresolved
+   curvature should keep coverage conservative, not mark a particle centred
+   with zero width. Retain the coarse multimodality flag; a sharp wrong mode
+   can have narrow local curvature. The proposed largest-eigenvalue width is
+   smaller than the current square-root trace (by sqrt(2) for an isotropic
+   2D Gaussian), so it changes the convention rather than being uniformly
+   more conservative. Validate on known Gaussian/coupled/multimodal examples,
+   grid-phase/stencil sweeps and low-SNR fixtures before interpreting width
+   histograms on data as calibration.
+
+3. **Measure translation-aware coverage and close Phase 3.** A pool containing
+   99% of posterior mass at the stored shift need not contain the reference
+   preferred after translation. Coarse width moments describe only evaluated
+   hypotheses; their median/90th percentile is not the retained-mass
+   measurement. Compare pool results to exhaustive translated evaluations on
+   a tractable subset: lost mass, excluded best modes, grid convergence,
+   class/view dependence and late first-time samples. Preserve the explicitly
+   chosen neighbourhood/subspace scope in that comparison. In particular, a
+   new class/direction can have a better, separated peak outside the window
+   while the in-window peak is narrow and its move stays interior; neither
+   local width nor bound inflation certifies coverage in that case. Test this
+   before accepting the dynamic note's claim that class/direction changes
+   need no guard. Complete paired
+   seeded controls, same-particle per-class shift distributions versus the
+   external benchmark, the centring-frame/mask ruling, and re-extraction with
+   downstream 3D. The maintainer's reported beta-gal/2D outcomes are evidence
+   recorded in the plan; they were not rerun by this review.
+
+4. **Phase 4 is complete as table integration, not as lattice retirement.**
+   Every table now gets a map before local polish. Nevertheless,
+   `minimize_in_cell` calls `minimize` without `xy_in`, with `coarse_init=true`
+   on the table objects, so a 5 x 5 all-angle lattice still runs inside the
+   translated box. A subcell seed and a clear best-valid-pose/baseline
+   contract remain work if the aim is to replace that lattice. Test origin
+   versus coarse versus local full-band loss orderings, then measure its
+   fraction of full-iteration cost. The current workflow's first dense 3D
+   record has 7743 searches and 193575 grid evaluations, exactly 25 per
+   search. Its refinement timer includes both maps and local polish, so it
+   does not isolate the lattice's cost. The dated inventory predates the
+   neighbourhood integration; classic non-table modes still use their
+   existing search. Do not count deliberate no-shift stages as missing map
+   integration or expand unsupported modes merely to complete an inventory.
+
+5. **Phase 5 should follow profiling and numerical parity.** Reusing harmonic
+   coefficients for Fourier–Bessel-domain polish is plausible, but the
+   retained coefficients need bounded per-thread/pair ownership, not storage
+   for every particle/reference pair. Both current initializer geometries
+   stop at `kscreen=max(klo+1,khi/2)`; reusing their coefficients alone would
+   change the full-band polish objective. Budget the additional full-band
+   harmonics and truncation requirements on the selected pairs. Specify
+   whether Phase 5 replaces the table's shift polish or also the later joint
+   continuous-angle solve: coefficients at integer rotations alone do not
+   replace the latter's fractional-angle objective. Prove the same normalized objective
+   under angular CTF, noise weighting, distinct halves and the chosen prior;
+   compare analytic derivatives as well as matched-start optima. Treat the
+   polar origin and angular seam explicitly, using stable Cartesian
+   derivatives or limiting formulas at zero radius. Verify thread identity
+   and unchanged draw/RNG behavior where promised, and measure total time and
+   memory. Removing the remaining local lattice may be more valuable than
+   accelerating one polish evaluation. Add an intermediate ladder radius
+   only when calibrated widths and measured cost justify it.
+
+### Validation and limits at the reviewed snapshot
+
+- Existing-tree Mac Release build, `make -C build -j8`: PASS; no compiler
+  warnings observed. Install: PASS. All 822 Fortran source hashes remained
+  unchanged through build and gate.
+- Fast gate: PASS, 15/15, 36.73 s wall, including registry, descriptor and
+  FLEX checks. Polar suite: 1399 assertions, including 72 shift-map and 98
+  refine3D in-plane-state assertions. The sandbox denied the gate's CPU-count
+  `sysctl`; it ran one CTest worker with its usual OpenMP checks.
+- `simulated_workflow_1jxy`: PASS, 878.95 s, including shared-memory and
+  two-part distributed solve3D under the current default map path. Truth
+  correlations 0.898208/0.900111; truth FSC=0.143 at 4.23051/4.37895 A.
+  Both wrong-truth controls and the two-part worker check pass. The output
+  confirms topk=3 with extras actually used. All 822 source hashes still
+  match after completion. This is one fixed-seed workflow, not a repeated
+  random-start quality comparison or a regression test for T1-T3.
+- Manual 400-particle five-view fixture, shared/full-sampling solve2D: normal
+  stop, 19.3 s. No disk search in stage 1. First shifting iteration: 400/400
+  disk searches, all not yet centred. At entry to stage 3, 5/400 still need
+  the disk; subsequent stages can reopen it. The first table benchmark now
+  counts the searches rather than losing the window object's work.
+- Same input, two-part solve2D with `nsample=100`: normal stop, 33.6 s;
+  worker completion and both part records observed. First shifting iteration:
+  100/100 disk searches, all not yet centred. Stage-3 entry still has 33
+  sampled particles marked not yet centred, and stage-6 entry has 12; both
+  are included in the disk set. This establishes later-stage dispatch, not correct shifts
+  against truth. These are manual observations, not registered regressions.
+  The uncontrolled random starts finish with three populated classes in the
+  full run and one in the partial run, so they do not establish class-quality
+  parity or a regression rate. Logs and independent arithmetic:
+  `/private/tmp/simple_shift_review_20261102/`.
+- T1-T3 are source-traced integration findings; the numeric examples are
+  independent arithmetic, not new compiled regression tests or attributed
+  real-data map failures. No new real-data or Linux/BOX run, production fix,
+  commit or push by this review.

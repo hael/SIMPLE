@@ -546,11 +546,12 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   prior pulled centred particles back towards their picks), keeps each one's coarse
   optimum, and polishes
   the best at full resolution in a box of one map step about that optimum in the
-  disk's own search object (`pftc_shsrch_grad%minimize_in_cell`: the lattice and the
-  L-BFGS in the box from the cell's rotation; when the box's optimum does not beat
-  the origin, the optimizer's baseline, the cell scored at full resolution is the
-  pose if it beats the origin's row, else that row stands). The rows are the
-  polished losses, as the window path's;
+  disk's own search object (`pftc_shsrch_grad%minimize_in_cell`: the L-BFGS from the
+  cell in the box, the shift prior, when set, centred at the stored shift; the
+  better of the polish and the cell at its best rotation is the pose when it beats
+  the origin's row, else that row stands; the 5 x 5 lattice that ran in the box until
+  2026-11-03 cost half to three quarters of the fill's refinement at the same
+  accuracy). The rows are the polished losses, as the window path's;
 - the window: the same screen and polish over the coarse window map
   (`SHIFTMAP_WINDOW`, radius `trs`, no prior), the stage's search object, so the
   previous reference's seed, its shifted-particle bank and the 5 x 5 lattice at
@@ -580,9 +581,27 @@ its rotation), and the consumer adds it to the stored shift unconverted
 lattice-initialised one). The parameter's default is 10 A (2026-11-02, across the
 board): `l_shift_map` is the key's presence under objfun=euclid (an explicit key
 under cc is refused), which a workflow's master passes to its stages, and
-`l_centring` a run that centres, the key in `prob` or `prob_neigh` with a shift
-search, which the fills, the preparation and the consumers read; a run without a
-table carries the key silently.
+`l_centring` a run that centres, the key in a polar mode with a shift search
+(`prob`, `prob_neigh`, and since ruling 20 the classic `shc`, `neigh`, `greedy`,
+`greedy_inpl`), which the searches, the preparation and the consumers read;
+`refine=cont` carries the key silently.
+
+The classic modes (ruling 20, 2026-11-03) take the table's structure, not a seed:
+under the key no shift search at the previous reference (`inpl_srch_first`) in any
+state count (a previous-reference seed is optimal for one state only; the states
+are not docked and nothing records each state's optimal projection), the
+references scored at the stored shift as the mode has it, then the screen and
+polish of the tables (`simple_shiftmap_srch`) over every scored reference across
+states and the previous one, which competes at its stored-shift score: one
+polished for the committed pose, the peaks for `neigh`, the best cells polished
+with `minimize_in_cell`. Under `shc` a particle that needs the disk is searched
+greedily. `extract_peak_ori` records the shift state (`record_shift`).
+
+The continuous in-plane route's joint domain contains the particle's box (the
+disk under the key, `shift_box_radius`) and the incoming shift, so the solve
+starts at, and is judged against, the pose it polishes (the review's T1,
+2026-11-03; `test_continuous_seed_beyond_window`). Before, a disk shift beyond
+the window was projected into it and kept with the projected pose's score.
 Every posterior draw of the tables, the fills' in-plane draws
 (`pftc%ptcl_posterior_temp`) and the assignments' direction, class and
 neighbourhood draws alike, runs at one tempering factor times the particle
