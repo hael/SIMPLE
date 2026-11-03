@@ -21,6 +21,7 @@ type(ui_program), target :: single_atoms_stats
 type(ui_program), target :: species_discovery
 type(ui_program), target :: single_workflow
 type(ui_program), target :: stream_preproc
+type(ui_program), target :: stream_chains
 type(ui_program), target :: flex_pca_blobs
 type(ui_program), target :: write_state_weights_labels
 type(ui_program), target :: write_state_weights_mixed
@@ -49,6 +50,7 @@ contains
         call new_species_discovery(tsttab)
         call new_single_workflow(tsttab)
         call new_stream_preproc(tsttab)
+        call new_stream_chains(tsttab)
         call new_flex_pca_blobs(tsttab)
         call new_write_state_weights(tsttab)
         call new_nightly(tsttab)
@@ -76,6 +78,7 @@ contains
         write(logfhandle,'(A)') species_discovery%name%to_char()
         write(logfhandle,'(A)') single_workflow%name%to_char()
         write(logfhandle,'(A)') stream_preproc%name%to_char()
+        write(logfhandle,'(A)') stream_chains%name%to_char()
         write(logfhandle,'(A)') flex_pca_blobs%name%to_char()
         write(logfhandle,'(A)') write_state_weights_labels%name%to_char()
         write(logfhandle,'(A)') write_state_weights_mixed%name%to_char()
@@ -458,6 +461,17 @@ contains
             &'simple_test_exec', .false., display_name='Stream Preprocessing Validation')
         call add_ui_program('stream_preproc', stream_preproc, tsttab, UI_CATEGORY)
     end subroutine new_stream_preproc
+
+    subroutine new_stream_chains( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call stream_chains%new('stream_chains', 'stream-chains', &
+            &'runs worker-backed sieve-to-3D and full p01-p07 movie stream chains and validates their state maps against truth', &
+            &'simple_test_exec', .false., display_name='Stream Chain Validation')
+        call stream_chains%add_input(UI_PARM, 'suite', 'str', 'Run one chain', &
+            &'Choose sieve_to_3d or movies_to_3d for a focused run; list prints the accepted names', &
+            &'chain name{sieve_to_3d|movies_to_3d|list}', .false., 'sieve_to_3d')
+        call add_ui_program('stream_chains', stream_chains, tsttab, UI_CATEGORY)
+    end subroutine new_stream_chains
 
     subroutine new_flex_pca_blobs( tsttab )
         class(ui_hash), intent(inout) :: tsttab

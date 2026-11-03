@@ -19,18 +19,18 @@
 !   executables must be installed and SIMPLE_PATH set, as for the
 !   stream_preproc workflow test. Each test takes tens of minutes.
 !
-!   - sieve to 3D (lib_stream, "sieve to 3D"): simulated particle stacks in
+!   - sieve to 3D (stream_chains, "sieve to 3D"): simulated particle stacks in
 !     completed reference-picking sets, with the picking references' mask
 !     diameter and reference picking's finished marker; p05, p06, p07.
-!   - movies to 3D (lib_stream, "movies to 3D"): simulated movies; p01, p02,
-!     p04 with picking references reprojected from both truths, p05, p06, p07.
-!     Preprocessing is finalised once every movie is processed, so its
-!     finished marker ends the intake downstream.
+!   - movies to 3D (stream_chains, "movies to 3D"): simulated movies; p01 and
+!     p02, p03 through real picking and extraction, then p04-p07 with
+!     deterministic fixture references. Preprocessing is finalised once every
+!     movie is processed, so its finished marker ends the intake downstream.
 !==============================================================================
 module simple_stream_chain_tester
 use simple_type_defs,                                only: ctfparams, CTFFLAG_YES
 use simple_defs,                                     only: CWD_GLOB
-use simple_defs_stream,                              only: DIR_STREAM_COMPLETED, STREAM_FINISHED_MARKER
+use simple_defs_stream,                              only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_FINISHED_MARKER
 use simple_string_utils,                             only: int2str_pad
 use simple_defs_fname,                               only: METADATA_EXT, MRC_EXT, STREAM_MOLDIAM
 use simple_ori,                                      only: ori
@@ -38,7 +38,7 @@ use simple_oris,                                     only: oris
 use simple_timer,                                    only: simple_gettime
 use simple_string,                                   only: string
 use simple_syslib,                                   only: file_exists, simple_abspath, simple_chdir, simple_mkdir, simple_rename
-use simple_fileio,                                   only: simple_touch
+use simple_fileio,                                   only: simple_copy_file, simple_touch
 use simple_cmdline,                                  only: cmdline
 use simple_sp_project,                               only: sp_project
 use simple_image,                                    only: image
@@ -48,15 +48,18 @@ use simple_commanders_sim,                           only: commander_simulate_pa
 use simple_commanders_reproject,                     only: commander_reproject
 use simple_stream_stage_preprocess,                  only: stream_stage_preprocess
 use simple_stream_stage_optics,                      only: stream_stage_optics
+use simple_stream_stage_initial_analysis,            only: stream_stage_initial_analysis
 use simple_stream_stage_refpick,                     only: stream_stage_refpick
 use simple_stream_stage_sieve,                       only: stream_stage_sieve
 use simple_stream_stage_pool2D,                      only: stream_stage_pool2D
 use simple_stream_stage_solve3D,                     only: stream_stage_solve3D
 use simple_commanders_stream_p01_preprocess,         only: set_preprocess_stream_cline
+use simple_commanders_stream_p03_initial_analysis,   only: set_initial_analysis_cline
 use simple_commanders_stream_p04_refpick_extract,    only: set_refpick_cline
 use simple_commanders_stream_p05_sieve_cavgs,        only: set_sieve_cline
 use simple_commanders_stream_p06_pool2D,             only: set_pool2D_cline
 use simple_commanders_stream_p07_solve3D_multistate, only: set_solve3D_cline
+use simple_test_truth_metrics,                       only: dock_both_hands
 implicit none
 private
 public :: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
@@ -81,6 +84,7 @@ integer, parameter :: NSTATES3D     = 2
 integer, parameter :: NTHR_JOBS     = 4
 integer, parameter :: MIN_PTCLS_3D  = 5 * NSTATES3D
 real,    parameter :: SIM_SNR       = 0.5
+real,    parameter :: TRUTH_CORR_MIN = 0.10
 
 contains
 
@@ -124,6 +128,8 @@ contains
         truth2 = 'truth_state2.mrc'
         call write_truth_volume(truth1, 1, BOX_DIRECT)
         call write_truth_volume(truth2, 2, BOX_DIRECT)
+        truth1 = simple_abspath(truth1)
+        truth2 = simple_abspath(truth2)
         oritab = 'simulated_particle_orientations.txt'
         call write_repeated_orientations(oritab, NMICS * NPTCLS_MIC / 2, NPOSES_STATE)
         stk1 = simulate_particle_stack(truth1, oritab, string('simulated_particles_state1.mrcs'), NMICS * NPTCLS_MIC / 2)
@@ -176,6 +182,7 @@ contains
         call assert_false(l_cannot_start_3D,      'chain: the final publication has enough selected particles for 3D')
         call assert_true(l_done,                 'chain: 3D reconstructs its first assignment within the time limit')
         if( allocated(s3D%state_res) ) call assert_true(any(s3D%state_res > 0.), 'chain: a state has a resolution')
+        if( l_done ) call assert_multistate_truth(s3D%result_projfile, truth1, truth2, 'sieve chain')
         ! stop, cancelling what still runs
         call enter(dir_3D)
         call s3D%finalize()
@@ -196,15 +203,18 @@ contains
         integer, parameter :: NMOVIES = 40, NPTCLS_MIC = 24, MIC_BOX = 512, NFRAMES = 8, NREFS = 20
         class(stream_stage_preprocess), allocatable :: pre
         class(stream_stage_optics),     allocatable :: optics
+        class(stream_stage_initial_analysis), allocatable :: initial
         class(stream_stage_refpick),    allocatable :: refpick
         class(stream_stage_sieve),      allocatable :: sieve
         class(stream_stage_pool2D),     allocatable :: pool
         class(stream_stage_solve3D),    allocatable :: s3D
         class(cmdline), allocatable:: cline
-        type(string)  :: cwd_saved, root, dir_movies, dir_pre, dir_optics, dir_refpick, dir_sieve, dir_pool, dir_3D
-        type(string)  :: truth1, truth2, pickrefs, pickrefs1, pickrefs2, ptcl_stk, ptcl_stk1, ptcl_stk2
+        type(string)  :: cwd_saved, root, dir_movies, dir_pre, dir_optics, dir_initial_input, dir_initial, &
+            &dir_refpick, dir_sieve, dir_pool, dir_3D
+        type(string)  :: truth1, truth2, truth1_cmp, truth2_cmp, pickrefs, pickrefs1, pickrefs2, &
+            &ptcl_stk, ptcl_stk1, ptcl_stk2
         integer       :: nfail0, t0, nprocessed
-        logical       :: l_done, l_pre_active, l_cannot_start_3D
+        logical       :: l_done, l_pre_active, l_initial_input_ready, l_initial_active, l_cannot_start_3D
         allocate(cline)
         write(*,'(A)') 'test_movies_to_solve3D'
         nfail0 = tests_failed
@@ -214,16 +224,23 @@ contains
         dir_movies  = stage_dir(root, 'movies')
         dir_pre     = stage_dir(root, 'preprocessing')
         dir_optics  = stage_dir(root, 'optics_assignment')
+        dir_initial_input = stage_dir(root, 'initial_analysis_input')
+        dir_initial = stage_dir(root, 'initial_analysis')
         dir_refpick = stage_dir(root, 'reference_based_picking')
         dir_sieve   = stage_dir(root, 'particle_sieving')
         dir_pool    = stage_dir(root, 'classification_2D')
         dir_3D      = stage_dir(root, 'solve3D_multistate')
-        ! the two truths, their reprojections for the movies and picking references, the movies
+        call simple_mkdir(dir_initial_input//'/'//DIR_STREAM)
+        call simple_mkdir(dir_initial_input//'/'//DIR_STREAM_COMPLETED)
+        ! the two truths, their reprojections for the movies and deterministic picking
+        ! references, and the movies
         call enter(root)
         truth1 = 'truth_state1.mrc'
         truth2 = 'truth_state2.mrc'
         call write_truth_volume(truth1, 1, BOX)
         call write_truth_volume(truth2, 2, BOX)
+        truth1 = simple_abspath(truth1)
+        truth2 = simple_abspath(truth2)
         ptcl_stk1 = reproject_truth(truth1, string('movie_particles_state1.mrcs'), NPTCLS_MIC / 2)
         ptcl_stk2 = reproject_truth(truth2, string('movie_particles_state2.mrcs'), NPTCLS_MIC / 2)
         ptcl_stk  = interleave_stacks(ptcl_stk1, ptcl_stk2, NPTCLS_MIC / 2, NPTCLS_MIC / 2, BOX,&
@@ -233,7 +250,7 @@ contains
         pickrefs  = interleave_stacks(pickrefs1, pickrefs2, NREFS / 2, NREFS / 2, BOX, string('pickrefs.mrcs'))
         call simulate_movies(ptcl_stk, dir_movies, NMOVIES, MIC_BOX, NFRAMES)
         ! the stages (each in its folder)
-        allocate(pre, optics, refpick, sieve, pool, s3D)
+        allocate(pre, optics, initial, refpick, sieve, pool, s3D)
         call enter(dir_pre)
         call preprocess_cline(cline, dir_movies)
         call pre%new(cline)
@@ -243,6 +260,12 @@ contains
         call optics_cline(cline, dir_pre)
         call optics%new(cline)
         optics%wait_s = 0
+        call cline%kill
+        call enter(dir_initial)
+        call initial_analysis_cline(cline, dir_initial_input, dir_optics)
+        call initial%new(cline)
+        initial%settle_s = -1
+        initial%wait_s   = 0
         call cline%kill
         call enter(dir_refpick)
         call refpick_cline(cline, dir_pre, dir_optics, pickrefs)
@@ -269,6 +292,8 @@ contains
         t0                  = simple_gettime()
         l_done              = .false.
         l_pre_active        = .true.
+        l_initial_input_ready = .false.
+        l_initial_active    = .true.
         l_cannot_start_3D   = .false.
         do
             if( l_pre_active )then
@@ -282,6 +307,25 @@ contains
             endif
             call enter(dir_optics)
             call optics%iterate()
+            if( .not. l_initial_input_ready .and. optics%map_id > 0 .and. &
+                &file_exists(dir_pre//'/'//DIR_STREAM_COMPLETED//'/00001.simple') )then
+                call simple_copy_file(dir_pre//'/'//DIR_STREAM_COMPLETED//'/00001.simple', &
+                    &dir_initial_input//'/'//DIR_STREAM_COMPLETED//'/00001.simple')
+                call simple_touch(dir_initial_input//'/'//STREAM_FINISHED_MARKER)
+                l_initial_input_ready = .true.
+            endif
+            if( l_initial_active )then
+                call enter(dir_initial)
+                call initial%iterate()
+                ! The full p03 plan contains two production solve2D runs and solve3D_cavgs and
+                ! takes hours on a CI runner. Its nightly contract ends after the real picker and
+                ! extractor have populated the cycle-1 project; unit tests cover the later state
+                ! machine, while this checkpoint covers the external-job integration and sampling.
+                if( initial%spproj%os_ptcl2D%get_noris() > 0 )then
+                    call initial%finalize()
+                    l_initial_active = .false.
+                endif
+            endif
             call enter(dir_refpick)
             call refpick%iterate()
             call enter(dir_sieve)
@@ -292,7 +336,7 @@ contains
             call s3D%iterate()
             l_done = s3D%result_projfile%strlen() > 0
             l_cannot_start_3D = .not. l_done .and. s3D%l_final_seen .and. s3D%nptcls_selected < MIN_PTCLS_3D
-            if( l_done .or. l_cannot_start_3D ) exit
+            if( (l_done .and. .not. l_initial_active) .or. l_cannot_start_3D ) exit
             if( simple_gettime() - t0 > TIME_LIMIT_S ) exit
             call sleep(PASS_WAIT_S)
         enddo
@@ -300,12 +344,27 @@ contains
         call assert_false(l_pre_active,               'chain: preprocessing processes every movie')
         call assert_true(file_exists(dir_pre//'/'//STREAM_FINISHED_MARKER), 'chain: and leaves its finished marker')
         call assert_true(optics%map_id > 0,           'chain: optics assignment publishes a map')
+        call assert_true(l_initial_input_ready,        'chain: a real preprocessing batch feeds initial analysis')
+        call assert_false(l_initial_active,             'chain: initial analysis reaches particle extraction')
+        call assert_true(initial%spproj%os_ptcl2D%get_noris() > 0,&
+            &'chain: initial analysis extracts particles')
+        call assert_true(abs(initial%spproj%get_smpd() - SMPD) < 1.e-4,&
+            &'chain: initial analysis preserves the input sampling')
         call assert_true(refpick%nptcls_glob > 0,     'chain: reference picking extracts particles')
         call assert_true(sieve%l_final,               'chain: the sieve''s intake ends')
         if( allocated(sieve%sieve) ) call assert_true(sieve%sieve%get_n_accepted_ptcls() > 0, 'chain: the sieve accepts particles')
         call assert_true(pool%last_export_id > 1,     'chain: the pool publishes for 3D')
         call assert_false(l_cannot_start_3D,          'chain: the final publication has enough selected particles for 3D')
         call assert_true(l_done,                      'chain: 3D reconstructs its first assignment within the time limit')
+        if( l_done )then
+            ! Reference picking extracts into its 108-pixel working box. Build the same planted
+            ! objects in that box for docking; the original movie truths are only 64 pixels.
+            truth1_cmp = root//'/truth_state1_compare.mrc'
+            truth2_cmp = root//'/truth_state2_compare.mrc'
+            call write_truth_volume(truth1_cmp, 1, BOX_DIRECT)
+            call write_truth_volume(truth2_cmp, 2, BOX_DIRECT)
+            call assert_multistate_truth(s3D%result_projfile, truth1_cmp, truth2_cmp, 'movie chain')
+        endif
         ! stop, cancelling what still runs
         call enter(dir_3D)
         call s3D%finalize()
@@ -319,13 +378,16 @@ contains
         call enter(dir_refpick)
         call refpick%finalize()
         call refpick%kill()
+        call enter(dir_initial)
+        if( l_initial_active ) call initial%finalize()
+        call initial%kill()
         call enter(dir_optics)
         call optics%finalize()
         call optics%kill()
         call enter(dir_pre)
         if( l_pre_active ) call pre%finalize()
         call pre%kill()
-        deallocate(pre, optics, refpick, sieve, pool, s3D)
+        deallocate(pre, optics, initial, refpick, sieve, pool, s3D)
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_movies_to_solve3D
 
@@ -373,6 +435,32 @@ contains
         call cline%set('nthr',       1)
         call no_folder(cline)
     end subroutine optics_cline
+
+    subroutine initial_analysis_cline( cline, dir_pre, dir_optics )
+        type(cmdline), intent(inout) :: cline
+        class(string), intent(in)    :: dir_pre, dir_optics
+        call base_cline(cline, 'stream_chain_initial_analysis', 'initial_analysis.simple')
+        call cline%set('dir_target',        dir_pre)
+        call cline%set('optics_dir',        dir_optics)
+        call cline%set('smpd',              SMPD)
+        call cline%set('nthr',              1)
+        call cline%set('nthr2D',            NTHR_JOBS)
+        call cline%set('nparts',            1)
+        call cline%set('nchunks',           1)
+        call cline%set('nptcls_per_cls',    20)
+        call cline%set('pick_roi',          'no')
+        call cline%set('nstates_pickrefs',  NSTATES3D)
+        call cline%set('nstages_pickrefs',  1)
+        call cline%set('nspace_pickrefs',   20)
+        call cline%set('nthr3D_pickrefs',   NTHR_JOBS)
+        call cline%set('nrestarts_collapse', 1)
+        call set_initial_analysis_cline(cline)
+        ! The standalone default is eight persistent workers. This gate owns one four-thread
+        ! worker, matching the downstream stages and the registry's CPU reservation.
+        call cline%set('workers',     1)
+        call cline%set('worker_nthr', NTHR_JOBS)
+        call no_folder(cline)
+    end subroutine initial_analysis_cline
 
     subroutine refpick_cline( cline, dir_pre, dir_optics, pickrefs )
         type(cmdline), intent(inout) :: cline
@@ -438,6 +526,54 @@ contains
         call set_solve3D_cline(cline)
         call no_folder(cline)
     end subroutine solve3D_cline
+
+    !> Dock both recovered states against both planted truths. State numbering is arbitrary, so
+    !! accept the better of the two one-to-one assignments, but require that assignment to beat
+    !! the swapped negative control and that both of its correlations clear a small signal floor.
+    subroutine assert_multistate_truth( projfile, truth1, truth2, tag )
+        class(string), intent(in) :: projfile, truth1, truth2
+        character(len=*), intent(in) :: tag
+        class(sp_project), allocatable :: result
+        type(string) :: map, docked, stem, truths(2)
+        real :: corr(2,2), corr_direct, corr_mirrored, eulers(3), shifts(3), smpd
+        real :: direct_score, swapped_score, matched(2)
+        integer :: state, itruth, box
+        logical :: mirrored, has_map(2)
+        allocate(result)
+        corr    = -1.
+        has_map = .false.
+        truths  = [truth1, truth2]
+        call result%read(projfile)
+        do state = 1, NSTATES3D
+            if( .not. result%isthere_in_osout('vol', state) ) cycle
+            call result%get_vol('vol', state, map, smpd, box)
+            if( .not. file_exists(map) ) cycle
+            has_map(state) = .true.
+            do itruth = 1, 2
+                stem = 'truth_dock_state'//int2str_pad(state, 2)//'_truth'//int2str_pad(itruth, 2)
+                docked = stem//MRC_EXT
+                call dock_both_hands(truths(itruth), map, MSKDIAM, 100., 10., stem%to_char(), docked, &
+                    &corr_direct, corr_mirrored, eulers, shifts, mirrored)
+                corr(state, itruth) = max(corr_direct, corr_mirrored)
+            enddo
+        enddo
+        call assert_true(all(has_map), tag//': both recovered states have maps')
+        if( all(has_map) )then
+            direct_score  = corr(1,1) + corr(2,2)
+            swapped_score = corr(1,2) + corr(2,1)
+            if( direct_score >= swapped_score )then
+                matched = [corr(1,1), corr(2,2)]
+            else
+                matched = [corr(1,2), corr(2,1)]
+            endif
+            call assert_true(minval(matched) >= TRUTH_CORR_MIN, &
+                &tag//': both recovered states correlate with distinct planted truths')
+            call assert_true(abs(direct_score - swapped_score) >= 0.02, &
+                &tag//': the truth assignment beats the swapped assignment')
+        endif
+        call result%kill
+        deallocate(result)
+    end subroutine assert_multistate_truth
 
     ! ---- fixtures -----------------------------------------------------------------------------
 

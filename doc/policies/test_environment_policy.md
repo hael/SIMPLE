@@ -32,7 +32,7 @@ labels.
 | --- | --- | --- | --- |
 | `fast` | 15 area suites `unit_<area>` | every `compile_*.sh` build (unless `--exclude-tests`), before installation | unit tests of the library: hermetic, in-process, one thread, seconds |
 | `library` | 5 library suites `lib_<area>` and the PCG entries `pcg_recon` and `pcg_frac_update` | nightly | longer numerical tests on generated data: realistic sizes, minutes |
-| `highlevel` | 18 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
+| `highlevel` | 19 high-level gates | explicit CTest command only | long simulated pipelines and commander integrations, including independent molecular and nanoparticle suites |
 | `platform` | `forked_process` (with the test dispatcher's own tests), plus `coarrays`, `openmp_offload` when CMake finds the capability | by hand, nightly where the machine has the capability, and `coarrays` during `compile_coarrays.sh` | tests that need child processes, a launcher or a device; `coarrays` is the capability-gated two-image synchronization suite |
 
 The fast tier is the build-time gate. Library and supported platform tests may
@@ -82,8 +82,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 41: 15 fast,
-7 library, 18 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 42: 15 fast,
+7 library, 19 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -128,7 +128,8 @@ convenience and deliberately not a CTest entry.
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 10 degrees and 2 pixels (inside the 15° rotation bound), refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
 | `lib_heterogeneity` | library | flex PCA on a two-state phantom, flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models; density particles (the full fit of rendered nanoparticles with known and measured transfer, uniform and varying widths, noise, profile recovery and repeat/thread identity) |
-| `lib_stream` | library | optics assignment, picking references, pick and extract, solve 3D reference docking, and the stream chains sieve to 3D and movies to 3D (they submit jobs to the local queue through the installed executables and take tens of minutes) |
+| `lib_stream` | library | optics assignment, picking references, pick and extract, and solve 3D reference docking |
+| `stream_chains` | highlevel | worker-backed sieve-to-3D and p01-p07 movie-to-3D chains; both compare recovered state maps with planted two-state truth, and the movie route covers initial analysis |
 | `pcg_recon` | library | gated stages of the PCG reconstruction operator on generated data, each stage's decision a row of its table; in process, so a library entry (it was a high-level one until 2026-10-18) |
 | `pcg_frac_update` | library | the PCG fractional-update gates (additivity of the reconstruction sums, the continuation weighting, full-mass preservation, replay) on a project of 600 blob particles at their true poses that the multi-state fixture builds |
 | `mini_stream_6vxx`, `mini_stream_1jxy` | highlevel | independent embedded-model mini-stream validations |

@@ -244,7 +244,8 @@ contains
     !! extracted: the micrograph kept, three particles in the micrograph record, the 2D and 3D
     !! particle segments and the extracted stack (64^2, source sampling, finite non-zero data),
     !! the box file and the thumbnail. nboxes_max=3 caps the picks at the number asserted, so the
-    !! count cannot catch over-picking; the handover asks for the positions.
+    !! count cannot catch over-picking; every recovered centre must also match a distinct planted
+    !! particle centre within POSITION_TOL pixels.
     subroutine test_pick_extract_three_particles()
         use simple_commanders_pick, only: commander_pick_extract
         character(len=*), parameter :: MICROGRAPH_FILE = 'synthetic_micrograph.mrc'
@@ -255,7 +256,8 @@ contains
         integer,          parameter :: PICKREF_BOX     = 64
         integer,          parameter :: EXTRACT_BOX     = 64
         integer,          parameter :: NPARTICLES      = 3
-        integer,          parameter :: PARTICLE_COORDS(2, NPARTICLES) = reshape([32, 32, 160, 40, 96, 152], [2, NPARTICLES])
+        integer,          parameter :: PARTICLE_CORNERS(2, NPARTICLES) = reshape([32, 32, 160, 40, 96, 152], [2, NPARTICLES])
+        real,             parameter :: POSITION_TOL    = 4.0
         type(commander_pick_extract) :: xpick_extract
         class(cmdline), allocatable  :: cline_pick_extract
         type(image)                  :: micrograph, reference, feature, extracted
@@ -263,7 +265,8 @@ contains
         type(string)                 :: cwd_saved, fixture_root, micrograph_path, pickrefs_path
         type(string)                 :: project_path, boxfile_path, thumbnail_path, stack_path
         integer                      :: i, nfail0, npicked, nimages, ldim(3)
-        real                         :: extracted_variance
+        real                         :: extracted_variance, picked_centres(2, NPARTICLES)
+        logical                      :: positions_match
         allocate(cline_pick_extract, fixture, result)
         write(*,'(A)') 'test_pick_extract_three_particles'
         nfail0 = tests_failed
@@ -280,7 +283,7 @@ contains
         call micrograph%new([MICROGRAPH_BOX, MICROGRAPH_BOX, 1], SMPD, wthreads=.false.)
         call micrograph%gauran(0., 0.02)
         do i = 1, NPARTICLES
-            call micrograph%add_window(reference, PARTICLE_COORDS(:, i))
+            call micrograph%add_window(reference, PARTICLE_CORNERS(:, i))
         enddo
         call micrograph%write(string(MICROGRAPH_FILE), 1, del_if_exists=.true.)
         call feature%kill
@@ -336,6 +339,16 @@ contains
                 call assert_int(npicked, result%os_ptcl2D%get_noris(), 'one 2D particle record per pick')
                 call assert_int(npicked, result%os_ptcl3D%get_noris(), 'one 3D particle record per pick')
                 call assert_int(1, result%os_stk%get_noris(), 'one extracted stack record')
+                if( result%os_ptcl2D%get_noris() == NPARTICLES )then
+                    do i = 1, NPARTICLES
+                        ! Both APIs store window corners; compare their centres when the boxes differ.
+                        picked_centres(:, i) = [result%os_ptcl2D%get(i, 'xpos'), result%os_ptcl2D%get(i, 'ypos')] &
+                            &+ 0.5 * real(EXTRACT_BOX)
+                    enddo
+                    positions_match = distinct_position_match(picked_centres,&
+                        &real(PARTICLE_CORNERS) + 0.5 * real(PICKREF_BOX), POSITION_TOL)
+                    call assert_true(positions_match, 'the three picks match the three planted particle positions')
+                endif
                 if( result%os_stk%get_noris() == 1 )then
                     stack_path = result%os_stk%get_str(1, 'stk')
                     call assert_true(file_exists(stack_path), 'the extracted stack exists')
@@ -361,5 +374,25 @@ contains
         call cline_pick_extract%kill
         call leave_fixture(cwd_saved, fixture_root, nfail0)
     end subroutine test_pick_extract_three_particles
+
+    !> Whether the three unordered recovered centres can be paired one-to-one with the three
+    !! planted centres, with every Euclidean error no larger than tol. The explicit permutations
+    !! keep this oracle independent of the picker's output order.
+    logical function distinct_position_match( observed, truth, tol ) result( matches )
+        real, intent(in) :: observed(2, 3), truth(2, 3), tol
+        integer, parameter :: PERMUTATIONS(3, 6) = reshape([1,2,3, 1,3,2, 2,1,3, 2,3,1, 3,1,2, 3,2,1], [3,6])
+        integer :: iperm, i
+        matches = .false.
+        do iperm = 1, size(PERMUTATIONS, 2)
+            matches = .true.
+            do i = 1, 3
+                if( norm2(observed(:, i) - truth(:, PERMUTATIONS(i, iperm))) > tol )then
+                    matches = .false.
+                    exit
+                endif
+            enddo
+            if( matches ) return
+        enddo
+    end function distinct_position_match
 
 end module simple_stream_tester

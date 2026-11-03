@@ -268,6 +268,11 @@ type, extends(commander_base) :: commander_test_lib_stream
     procedure :: execute      => exec_test_lib_stream
 end type commander_test_lib_stream
 
+type, extends(commander_base) :: commander_test_stream_chains
+  contains
+    procedure :: execute      => exec_test_stream_chains
+end type commander_test_stream_chains
+
 type, extends(commander_base) :: commander_test_unit_parallel
   contains
     procedure :: execute      => exec_test_unit_parallel
@@ -558,11 +563,16 @@ contains
         call add_suite(s, n, 'picking references', run_all_stream_pickrefs_tests)
         call add_suite(s, n, 'pick and extract',   run_all_stream_pick_extract_tests)
         call add_suite(s, n, 'solve 3D reference docking', run_all_stream_stage_solve3D_lib_tests)
-        ! decision 19 of the 5 October 2026 fix plan: the stages chained without the master; they
-        ! submit jobs to the local queue (installed executables) and take tens of minutes
-        call add_suite(s, n, 'sieve to 3D',        run_all_stream_chain_sieve_tests)
-        call add_suite(s, n, 'movies to 3D',       run_all_stream_chain_movie_tests)
     end subroutine suites_lib_stream
+
+    !> high-level: production stream stages chained without the master. Both cases submit local
+    !! worker jobs and compare the recovered multistate maps with their planted volumes.
+    subroutine suites_stream_chains( s, n )
+        type(unit_suite), intent(inout) :: s(:)
+        integer,          intent(inout) :: n
+        call add_suite(s, n, 'sieve to 3D',  run_all_stream_chain_sieve_tests)
+        call add_suite(s, n, 'movies to 3D', run_all_stream_chain_movie_tests)
+    end subroutine suites_stream_chains
 
     !> distributed execution: the job controller and the queue-system environment
     subroutine suites_parallel( s, n )
@@ -809,6 +819,16 @@ contains
         call suites_lib_stream(s, n)
         call run_unit_suites('lib_stream', cline, s(1:n))
     end subroutine exec_test_lib_stream
+
+    subroutine exec_test_stream_chains( self, cline )
+        class(commander_test_stream_chains), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(unit_suite) :: s(2)
+        integer :: n
+        n = 0
+        call suites_stream_chains(s, n)
+        call run_unit_suites('stream_chains', cline, s(1:n))
+    end subroutine exec_test_stream_chains
 
     subroutine exec_test_unit_parallel( self, cline )
         class(commander_test_unit_parallel), intent(inout) :: self

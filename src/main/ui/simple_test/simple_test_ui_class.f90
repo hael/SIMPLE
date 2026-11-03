@@ -292,7 +292,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Stream')
         call lib_stream%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract, solve_3d_reference_docking, sieve_to_3d, movies_to_3d)', '', .false., '')
+            &'One sub-suite of this suite to run alone (optics_assignment, picking_references, pick_and_extract, solve_3d_reference_docking)', '', .false., '')
         call add_ui_program('lib_stream', lib_stream, tsttab, UI_CATEGORY)
     end subroutine new_lib_stream
 

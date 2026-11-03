@@ -214,6 +214,8 @@ contains
             output_dir = DIR_EXTRACT
             if( cline%defined('dir') ) output_dir = params%dir//'/'
             call spproj%read(params%projfile)
+            ! The stream job project is the native sampling authority.
+            params%smpd = spproj%get_smpd()
             nmics_tot = spproj%os_mic%get_noris()
             fromto(:)  = [1,1]
             nmics_here = 1

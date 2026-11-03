@@ -265,10 +265,8 @@ if(BUILD_TESTS)
   # The longer nanoparticle atom-statistics pipeline is an explicit highlevel entry.
   simple_add_test(lib_single library 7200 8 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_single)
-  # lib_stream: optics assignment, picking references, pick and extract,
-  # plus the sieve-to-3D and movies-to-3D chains. The chains launch local
-  # worker jobs; reserve the machine and allow hosted runners two hours
-  # for the combined suite.
+  # lib_stream: in-process stream tests only. Worker-backed chain workflows
+  # are the separate high-level stream_chains entry below.
   simple_add_test(lib_stream library 7200 1 RUN_SERIAL
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=lib_stream)
   # pcg_recon: the gated stages of the PCG reconstruction operator on a phantom (operator identities,
@@ -375,6 +373,12 @@ if(BUILD_TESTS)
   # abinitio2D_stream was retired (plan, section 9.7, stream).
   simple_add_test(stream_preproc highlevel 3600 8 PROCESSORS 2
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=stream_preproc)
+  # Two worker-backed stream pipelines on planted two-state phantoms. The
+  # movies route covers p01-p07, including initial analysis; both routes dock
+  # their recovered state maps against both truths. One four-thread worker can
+  # overlap the one-thread stage driver, hence five reserved processors.
+  simple_add_test(stream_chains highlevel 10800 1 PROCESSORS 5
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=stream_chains)
   # FLEX PCA end to end on one deterministic two-state phantom: shared memory
   # versus two real local workers. Two workers times four threads fill the
   # eight processors reserved by this serial CTest entry (D1 in
@@ -420,7 +424,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 41)   # 15 fast + 1 platform + 18 highlevel + 7 library
+  set(SIMPLE_CTEST_BUDGET 42)   # 15 fast + 1 platform + 19 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

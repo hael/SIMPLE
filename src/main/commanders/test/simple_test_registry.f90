@@ -53,6 +53,9 @@ character(len=48), parameter :: ATOMS_OUT(3) = [character(len=48) :: '*.mrc', '*
 character(len=48), parameter :: PREPROC_OUT(8) = [character(len=48) :: '*.mrcs', '*.simple', '1_simulate_movies/*.mrc', &
     &'simulation_truth/*.mrc', 'simulation_truth/*.txt', 'stream_preproc/*.simple', 'stream_preproc/motion_correct/*.mrc', &
     &'stream_preproc/spprojs_completed/*.simple']
+character(len=80), parameter :: STREAM_CHAIN_OUT(2) = [character(len=80) :: &
+    &'SIMPLE_TEST_stream_chains_*/test_stream_chain_sieve_*/truth_state*.mrc', &
+    &'SIMPLE_TEST_stream_chains_*/test_stream_chain_movies_*/truth_state*.mrc']
 character(len=*), parameter :: SINGLEWF = 'test_single_workflow_'
 character(len=48), parameter :: SINGLEWF_OUT(9) = [character(len=48) :: &
     &'/*/*.mrc', '/final_results/*.mrc', '/*.mrc', '/*/*.bin', '/*/*.pdb', '/*/*_oris.txt', '/ptcls_oris.txt', &
@@ -107,6 +110,10 @@ contains
         ! the preprocessing stage submits one-thread jobs to the local queue, one at a time
         &test_entry('stream_preproc', 'stream_preproc', '', 8, 1, 1, 2, 3600, ENTRY_GATE, outputs_of('', PREPROC_OUT), &
             &mem_gb=0.5, disk_gb=0.5, scales=.false.), &
+        ! the initial-analysis and downstream stages share one four-thread local worker; the
+        ! one-thread stage driver remains active while it polls jobs
+        &test_entry('stream_chains', 'stream_chains', '', 1, 1, 4, 5, 10800, ENTRY_GATE, outputs_of('', STREAM_CHAIN_OUT), &
+            &mem_gb=3.0, disk_gb=8.0, scales=.false.), &
         ! two workers of four threads in its distributed FLEX run; the state refinements take eight
         &test_entry('flex_pca_blobs', 'flex_pca_blobs', 'nthr=4', 8, 2, 4, 9, 7200, ENTRY_GATE, '', mem_gb=3.5, disk_gb=2.5) ]
     end function get_test_registry
