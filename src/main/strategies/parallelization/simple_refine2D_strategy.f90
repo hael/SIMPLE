@@ -13,7 +13,6 @@ use simple_matcher_smpl_and_lplims, only: refine2D_requires_full_assignment, all
 use simple_cavg_sums,   only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CAVG_SUMS_OK
 use simple_classaverager, only: cavger_commit_carryover, cavger_restore_cavgs, cavger_gen2Dclassdoc, &
     &cavger_write_merged, cavger_write_eo, cavger_kill
-use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_commit_iter
@@ -173,13 +172,13 @@ contains
         if( .not. cline%defined('part') ) call ensure_canonical_sigma2(params, build, cline)
         startit = 1
         if( cline%defined('startit') )startit = params%startit
-        if( startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        ! the centring stage (shift_sigma > 0) is one refine2D run, whatever its first iteration's number: every
-        ! particle needs the disk until its first search in it
-        if( params%l_shift_map ) call build%spproj_field%set_all2single('shincr', -1.)
-        ! once per refine2D invocation, before any iteration reads particles; may
-        ! fall back to cache=no on cline, which child commands inherit via their copy
-        call ptcl_cache_ensure(params, build, cline)
+        if( startit == 1 )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not
+            ! yet centred (the sentinel), whatever the key's state in this run
+            call build%spproj_field%set_all2single('shsig',  -1.)
+            call build%spproj_field%set_all2single('shincr',  0.)
+        endif
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration( self, params, build, cline, converged)
@@ -326,17 +325,14 @@ contains
         call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         call init_refine2D_refs(cline, params, build)
         call ensure_canonical_sigma2(params, build, cline)
-        if( params%startit == 1 ) call build%spproj_field%clean_entry('updatecnt', 'sampled')
-        ! the centring stage (shift_sigma > 0) is one refine2D run, whatever its first iteration's number: every
-        ! particle needs the disk until its first search in it, which the workers read from the project
-        if( params%l_shift_map )then
-            call build%spproj_field%set_all2single('shincr', -1.)
+        if( params%startit == 1 )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+            ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not
+            ! yet centred (the sentinel), which the workers read from the project
+            call build%spproj_field%set_all2single('shsig',  -1.)
+            call build%spproj_field%set_all2single('shincr',  0.)
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
-        ! master-side, before any job is scheduled, so the workers find it ready;
-        ! must precede gen_job_descr below so a fallback to cache=no reaches the
-        ! worker command lines
-        call ptcl_cache_ensure(params, build, cline)
         call set_master_num_threads(self%nthr_master, string('REFINE2D'))
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)

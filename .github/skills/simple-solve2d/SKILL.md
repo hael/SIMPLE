@@ -1,6 +1,6 @@
 ---
 name: simple-solve2d
-description: Use when working on SIMPLE's solve2D workflow and its refine2D stages, including the public refine2D program and its private worker, 2D search strategies, prob_tab2D/prob_align2D part files, class-sum accumulation in the 2D matcher, class-average restoration and convergence in the 2D strategy, distributed class-average assembly (cavgassemble_exec), carried class sums, the shared-memory particle buffer, cropped class sums and the particle disk cache, project updates, and streaming/rejection helpers.
+description: Use when working on SIMPLE's solve2D workflow and its refine2D stages, including the public refine2D program and its private worker, 2D search strategies, prob_tab2D/prob_align2D part files, class-sum accumulation in the 2D matcher, class-average restoration and convergence in the 2D strategy, distributed class-average assembly (cavgassemble_exec), carried class sums, the shared-memory particle buffer, cropped class sums, project updates, and streaming/rejection helpers.
 ---
 
 # SIMPLE Solve2D
@@ -17,7 +17,7 @@ decides convergence.
 
 ## Read First
 
-1. `doc/policies/2D/solve2D_policy.md` (with `particle_cache_policy.md` and
+1. `doc/policies/2D/solve2D_policy.md` (with
    `doc/policies/particle_read_path_policy.md` for particle reads)
 2. `src/main/ui/simple/simple_ui_refine2D.f90`
 3. `src/main/exec/simple_exec_refine2D.f90`
@@ -63,8 +63,6 @@ If fractional update or probabilistic sampling is involved, also read
 - `src/defs/simple_refine2D_fnames.f90`: class-average file names
   (`cavgs_iterNNN`, `_even`, `_odd`, `_ranked`); never build them by hand.
 - `simple_matcher_ptcl_batch`: batch loading, preparation, `crop_particles2D`.
-- `simple_ptcl_cache`: downscaled particle disk cache (`cache=yes`) shared by
-  `prob_tab2D` and `refine2D_exec`; owns its on-disk lifecycle.
 - `class/` and `simple_commanders_mkcavgs.f90`: class-average products and the
   `make_cavgs`/`cavgassemble` command-line wrappers.
 - `project/` and `ori/`: particle/class metadata persistence.
@@ -86,11 +84,14 @@ If fractional update or probabilistic sampling is involved, also read
   (full size, or Fourier-cropped). In shared memory `prob_tab2D` fills the
   particle buffer, and the matcher copies its batches from it and releases it
   (`release_pass_buffer`), so a table iteration reads each particle once.
-- Keep the cropped-particle decision single: `crop_particles2D` (uncached,
-  not `stream2d`, `box_crop < box`, `ptcl2D`) decides for the table and the
-  matcher, which then prepare particles from the in-memory cache entry (in
-  shared memory the table's records feed the matcher). `cache=no` equals
-  `cache=yes` byte for byte; keep it so.
+- Keep the cropped-particle decision single: `crop_particles2D` (not
+  `stream2d`, `box_crop < box`, `ptcl2D`) decides for the table and the
+  matcher, which then prepare the cropped particle (in shared memory the
+  table's records feed the matcher). The particle disk cache was retired
+  2026-11-02.
+- Under the polar shift map's key (the default) a particle on the disk is
+  prepared under the box's mask (`ptcl_on_disk`, `prepimg4align`); keep the
+  fill's rule and the preparation's reading the same field (`shsig`).
 - `cavger_update_sums` buckets a batch by (class, half) and runs the buckets
   under a dynamic schedule, each in batch order, so the sums do not depend on
   the thread count. Keep that order in any change to the sums.
@@ -124,28 +125,6 @@ If fractional update or probabilistic sampling is involved, also read
   with `partition_eo` in a workflow whose purpose is to consume prior 2D class
   assignments (`ensure_field_halves` labels only rows without halves);
   validate `eo` with `get_eo()` equal to `0` or `1`.
-
-## Particle Disk Cache Lifecycle
-
-- `ptcl_cache_ensure` runs master-side only, before workers are scheduled, and
-  must stay ahead of `gen_job_descr`/cline copies: fallback decisions propagate
-  to worker command lines by flipping `cache=no` on the cline. Cache
-  availability must be uniform across ranks; never make it best-effort per rank.
-- The building (or adopting) process owns the cache files and removes them on
-  exit — normal or hard exception — via the `cache_cleanup_glob` hook in
-  `simple_defs` (armed by `ptcl_cache_own`, fired from `simple_exception`, module
-  `simple_error`, and
-  the tails of `simple_exec`/`single_exec`). Workers never take ownership.
-- The cache basename hashes the execution directory so concurrent runs sharing
-  a `cache_dir` cannot collide; all ranks recompute the name locally because
-  qsys workers cd into the master's directory. The key file records the
-  directory verbatim, geometry, and per-stack fingerprints; leftovers with the
-  same name are validated and adopted or rebuilt, never trusted by name alone.
-- The build refuses to claim more than 25% of the free space at `cache_dir`
-  and falls back to uncached execution with a log message.
-- Delete-on-exit means no cross-run cache reuse; within-run reuse across
-  solve2D stages is the point (box_crop is stage-invariant), so do not add
-  per-stage invalidation or per-stage names.
 
 ## Tests
 

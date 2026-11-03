@@ -36,8 +36,18 @@ describe the software as it is, rather than the history of one change:
 
 ## Work that still needs attention
 
-The source-backed audit on 2026-10-05 found these concrete open areas (links and
-status notes updated 2026-10-14):
+Navigation reconciled 2026-11-02. The topic indexes list the active records and
+their next actions; the linked notes retain the dated evidence and acceptance
+criteria. This navigation update supplies no new runtime validation.
+
+- [Implementation topics and completed investigations](../implementation_notes/README.md)
+- [Refactoring topics and validation closeout](../refactoring_notes/README.md)
+- [Current atomicity-prior algorithm](../algorithms/atomicity_prior.md), including
+  the fitted-model mode absent from the original methods study
+
+The earlier source-backed audit identified the following open areas. Missing
+split records have been reconstructed from the surviving completed records;
+their absence was not evidence that the outstanding work passed:
 
 1. [Batch scheduler completion detection](../implementation_notes/planned/qsys_scheduler_completion_bug_report_unfinished.md):
    the batch exit-code and lost-part detection landed (`2307ea96f`); the periodic
@@ -47,8 +57,10 @@ status notes updated 2026-10-14):
 2. [Stream refactor follow-up](../refactoring_notes/planned/stream_refactor.md)
    and [stream test handover](../refactoring_notes/planned/stream_area_tests_handover.md):
    remaining cleanup and workflow-level coverage are explicitly unfinished.
-3. [Workflow truth gates and nightly runner](../refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md):
-   the simulation-truth gates and unattended nightly evidence are still open.
+3. [Workflow truth gates and nightly runner](../refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md)
+   and [standing nightly triage](../refactoring_notes/planned/nightly_suite_triage.md):
+   reconcile the remaining truth checks and unattended evidence with the latest
+   [triage report](../refactoring_notes/planned/nightly_suite_triage_report.md).
 4. [Probabilistic-alignment peak-memory validation](../refactoring_notes/planned/probabilistic_alignment_table_peak_memory_refactoring_unfinished.md):
    the refactor is done
    ([record](../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring_completed.md));
@@ -69,6 +81,6 @@ status notes updated 2026-10-14):
 Splits: where a note mixed finished and open work it was split on 2026-10-20 into
 `<name>_completed.md` (under `completed/`) and `<name>_unfinished.md` (under `planned/`).
 
-The remaining files under the two `planned` directories are feature proposals
-or lower-priority optimizations. They should be reviewed there before starting
-new work so an existing design is extended rather than duplicated.
+Additional feature proposals, active experiments, test handovers and remaining
+validation are indexed by topic in the two READMEs. Review the owning record
+before starting work so an existing design is extended rather than duplicated.

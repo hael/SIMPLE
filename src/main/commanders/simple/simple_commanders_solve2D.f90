@@ -211,7 +211,7 @@ contains
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('out',   params%projfile)
             call gui_comm%add_metadata(spproj, oritype='cls2D', stage=istage)
-            if( solve2D_centring_stage(params, istage) .or. (l_mskdiam_auto .and. istage < CENTRING_STAGE) ) call adopt_estimated_mskdiam
+            if( solve2D_first_shift_stage(params, istage) .or. (l_mskdiam_auto .and. istage < FIRST_SHIFT_STAGE) ) call adopt_estimated_mskdiam
         enddo
         if( l_checkpoint .and. stop_stage < nstages )then
             last_iter = cline_refine2D%get_iarg('endit')
@@ -301,15 +301,15 @@ contains
             stage_parms(:)%smpd_crop = params%smpd_crop
             stage_parms(:)%trslim    = min(5.,max(2.0, AHELIX_WIDTH/params%smpd_crop))
             if( cline%defined('trs') ) stage_parms(2:)%trslim = params%trs
-            ! the polar shift map (shift_sigma > 0): the centring stage searches the disk of three sigma under the
-            ! box's mask, the other stages the window under the user's mask or the centring stage's estimate
+            ! the polar shift map (shift_sigma > 0): the stages' masks are the user's (or the first shift stage's
+            ! estimate); a particle on the disk is prepared under the box's mask by itself (ptcl_on_disk), and an
+            ! automatic run's first shift stage runs under the box's mask so that its class averages can estimate
+            ! the mask diameter at its exit
             stage_parms(:)%mskdiam = 0.
             if( params%l_shift_map )then
                 stage_parms(:)%mskdiam = params%mskdiam
-                if( size(stage_parms) >= CENTRING_STAGE )then
-                    stage_parms(CENTRING_STAGE)%trslim  = max(stage_parms(CENTRING_STAGE)%trslim, 3. * params%shift_sigma / params%smpd)
-                    stage_parms(CENTRING_STAGE)%mskdiam = (real(params%box) - COSMSKHALFWIDTH) * params%smpd
-                endif
+                if( l_mskdiam_auto .and. size(stage_parms) >= FIRST_SHIFT_STAGE )&
+                    &stage_parms(FIRST_SHIFT_STAGE)%mskdiam = (real(params%box) - COSMSKHALFWIDTH) * params%smpd
             endif
         end subroutine set_dims
 

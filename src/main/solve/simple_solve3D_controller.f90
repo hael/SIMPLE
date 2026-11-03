@@ -70,7 +70,6 @@ type :: refine3D_stage_cfg
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
-    real    :: trs_window  = 0.      !< the centring stage's next window, in pixels (shift_sigma > 0)
     logical :: l_scan_exit = .false. !< the multi-state rule also converges on the scan alone (scan_exit=yes)
 end type refine3D_stage_cfg
 
@@ -489,7 +488,6 @@ contains
         if( params%nstates > 1 ) cfg%inspace = min(cfg%inspace, NSPACE_MULTI_MAX)
         cfg%greedy_sampling = 'yes'
         cfg%l_scan_exit     = .false.
-        cfg%trs_window      = 0.
         select case(istage)
             case(1,2)
                 cfg%imaxits       = MAXITS(istage)
@@ -508,13 +506,6 @@ contains
             case(3,4,5,6)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
-                ! the polar shift map (shift_sigma > 0): the first stage with a shift search is the centring stage,
-                ! its table maps the disk of three sigma (native pixels, at least the window) and drains the
-                ! particles into the next stage's window
-                if( params%l_shift_map .and. istage == PROB_REFINE_STAGE )then
-                    cfg%trs        = max(cfg%trs, 3. * params%shift_sigma / params%smpd)
-                    cfg%trs_window = lpinfo(min(istage + 1, size(lpinfo)))%trslim
-                endif
                 cfg%ml_reg        = 'yes'
                 cfg%frac_best     = 1.0
                 if( params%nstates > 1 .and. istage >= stoch_stage )then
@@ -685,17 +676,12 @@ contains
         ! Early stopping applies in every stage (doc/policies/3D/solve3D_policy.md sec. 4).
         call cline_refine3D%delete('minits')
         call cline_refine3D%set('trs',                    cfg%trs)
-        ! the polar shift map's key goes to every stage with a shift search (the map initialises the tables' polish);
-        ! the centring stage alone gets the window it drains its disk into
+        ! the polar shift map's key goes to every stage with a shift search: the tables centre each particle as it
+        ! needs (the dynamic centring), the map initialises every polish
         if( params%l_shift_map .and. cfg%trs > 0. )then
             call cline_refine3D%set('shift_sigma',        params%shift_sigma)
         else
             call cline_refine3D%delete('shift_sigma')
-        endif
-        if( cfg%trs_window > 0. )then
-            call cline_refine3D%set('trs_window',         cfg%trs_window)
-        else
-            call cline_refine3D%delete('trs_window')
         endif
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)

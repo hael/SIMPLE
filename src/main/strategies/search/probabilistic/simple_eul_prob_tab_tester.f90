@@ -1312,7 +1312,7 @@ contains
                     do ri = 1,nrefs
                         if( .not. refined(ri,i) ) cycle
                         n = n + 1
-                        batch_refined(n) = prob_refined_entry(i_loc, ri, shifts(1,ri,i), shifts(2,ri,i), rows(ri,i)%dist)
+                        batch_refined(n) = prob_refined_entry(i_loc, ri, shifts(1,ri,i), shifts(2,ri,i), rows(ri,i)%dist, -1.)
                     enddo
                 enddo
                 call worker%write_rows(first, rows(:,parts(ipart,1)+first-1:parts(ipart,1)+last-1), batch_refined)

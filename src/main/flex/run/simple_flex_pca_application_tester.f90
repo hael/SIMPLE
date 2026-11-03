@@ -430,7 +430,6 @@ contains
         call cline%set('rtol',              0.0)
         call cline%set('objfun',            'euclid')
         call cline%set('umap',              'no')
-        call cline%set('cache',             'no')
         call cline%set('qsys_name',         'local')
         call cline%set('nparts',            nparts)
         call cline%set('nthr',              nthr)

@@ -65,8 +65,8 @@ which suits nanoparticle sets, not 100 000-particle cryo-EM sets.
   `simple_scattering_simulator.f90` deleted; the ground truth on the nanoparticle with SINGLE's atom detection.
 - **Phase 5, documentation and this report** (`review/phase_5.diff`). The wave-model policy
   (`doc/policies/3D/wave_model_policy.md`); the user-guide page `doc/user_guide/reconstruct3D_wave.md` and the
-  updated `simulate_scattering.md` and index; the new sub-suites in `doc/policies/test_environment_policy.md`;
-  `reconstruct3D_pcg_policy.md` pointed at the moved routines; the note of `simulate_scattering`'s author, Ruben, updated; a particle count corrected
+  updated `../../user_guide/simulate_scattering.md` and index; the new sub-suites in `doc/policies/test_environment_policy.md`;
+  `../../policies/3D/reconstruct3D_pcg_policy.md` pointed at the moved routines; the note of `simulate_scattering`'s author, Ruben, updated; a particle count corrected
   in the plan's Phase 4 entry (2 000 Pt particles, 1 000 per half, not 1 000).
 
 ## simulate_scattering: what changed, for its author

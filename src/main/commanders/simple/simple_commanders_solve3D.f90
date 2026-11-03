@@ -974,10 +974,6 @@ contains
         l_force_full_sampling = .false.
         sampled_active_frac   = 0.
         l_state_continue_mode = .false.
-        ! Particle caching is a 2D-only feature; reject rather than silently ignore
-        if( cline%defined('cache') .or. cline%defined('cache_dir') )then
-            THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
-        endif
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('bfac',            0.) ! because de novo maps should not be sharpened
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')

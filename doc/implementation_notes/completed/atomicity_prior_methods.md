@@ -1,5 +1,11 @@
 # The atomicity prior: methods, theory and outlook
 
+> **Classification, 2026-11-02:** historical methods and FePt evidence for the 2026-10-16 prior.
+> The current implementation also supports per-atom widths and a fitted model with one free scale.
+> Read the [current algorithm reference](../../algorithms/atomicity_prior.md) for that distinction,
+> and [open integration work](../planned/single_pcg_integration_unfinished.md) before resuming development.
+> The mathematics, measurements and outlook below retain their original scope.
+
 Methods note, 2026-10-16. It describes the prior as implemented in `simple_pcg_atomic_prior.f90` and the PCG
 reconstructor (commit `c59611ed1`, "atom prior for PCG"), relates it to Sayre's equation and to the GENFIRE
 family of AET reconstructions, gives the FePt evidence, and looks ahead to biological specimens. The design and

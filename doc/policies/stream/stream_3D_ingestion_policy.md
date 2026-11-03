@@ -376,7 +376,7 @@ input and its forwarding are gone.
    it. Each step runs as a job on the 3D jobs' parts and threads, in the pass the previous one
    finished, and no publication is taken while one runs.
 4. **solve2D** (`start_solve2D_first`, `solve2D/`) classifies every selected row into
-   `NCLS2D_FIRST` (150) classes with the pool's mask diameter and `cache=yes`, and solve2D's
+   `NCLS2D_FIRST` (150) classes with the pool's mask diameter, and solve2D's
    defaults otherwise. Its classes, class averages, halves and FRCs and the rows' 2D parameters
    become the stage's (`adopt_job_2D`); a result without them, or with other rows, counts as
    failed (`usable_job_2D`).

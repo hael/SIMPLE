@@ -34,7 +34,6 @@ type convergence
     real    :: cont_coverage_pct      = 0. !< refine=cont: active particles sampled during the streak (%)
     real    :: progress               = 0. !< progress estimation
     integer :: prob_beta_tail_start   = 0  !< the probability tables' annealing tail to prob_beta_end: its first iteration (0: the run still searches at prob_beta); set when the resolution stops gaining or at the budget's end
-    integer :: shift_stable_its       = 0  !< the polar shift map's centring exit: consecutive iterations with few sampled particles carrying posterior mass beyond the window
     integer :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
     real    :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
     real    :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
@@ -80,8 +79,7 @@ contains
         logical, allocatable :: mask(:)
         character(len=96) :: beta_str
         integer :: n, nptcls, nsampled, nactive
-        real    :: overlap_lim, fracsrch_lim, realized_update_frac, frac_out
-        real,    allocatable :: shincr(:)
+        real    :: overlap_lim, fracsrch_lim, realized_update_frac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         logical :: converged, chk4conv, cont_stats_available, l_tail_run
         601 format(A,1X,F12.3)
@@ -231,25 +229,6 @@ contains
             else
                 converged = self%dist_inpl%avg < 0.5
             endif
-            ! the polar shift map's centring exit (shift_sigma > 0 with the next stage's window): a sampled particle
-            ! needs the disk again while its last move went beyond that window; the stage ends once the fraction
-            ! that does has been below DISK_NEED_FRAC for two iterations
-            if( params%l_shift_map .and. params%trs_window > 0. )then
-                shincr   = os%get_all('shincr')
-                frac_out = real(count(mask .and. shincr > params%trs_window)) / real(max(1, count(mask)))
-                write(logfhandle,'(A,F6.2,A)') '>>> DISK STILL NEEDED BY ', 100. * frac_out,&
-                    &' % OF THE SAMPLED PARTICLES (THE LAST MOVE BEYOND THE NEXT WINDOW)'
-                if( frac_out < DISK_NEED_FRAC )then
-                    self%shift_stable_its = self%shift_stable_its + 1
-                else
-                    self%shift_stable_its = 0
-                endif
-                ! the drain is the centring stage's convergence: the class verdict does not end it while the disk is
-                ! needed (the stage's budget does)
-                converged = self%shift_stable_its >= 2
-                if( converged ) write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
-                deallocate(shincr)
-            endif
         endif
         ! The annealing tail of the probability tables' posterior draws, as check_conv3D's: a run with prob_beta_end searches at prob_beta until its class overlap converges past
         ! minits, then exec_refine2D ramps the draws to prob_beta_end over the PROB_BETA_TAIL iterations from
@@ -335,8 +314,7 @@ contains
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         character(len=96) :: beta_str
-        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, frac_out
-        real,    allocatable :: shincr(:)
+        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff
         logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
@@ -687,25 +665,6 @@ contains
             endif
         endif
         call self%record_res(params, res05_now, res143_now)
-        ! the polar shift map's centring stage (shift_sigma > 0 with the next stage's window): the drain is its
-        ! convergence, as in 2D. A sampled particle needs the disk again while its last move went beyond that window;
-        ! the stage ends once the fraction that does has been below DISK_NEED_FRAC for two iterations. The pose rule,
-        ! the annealing tail and the resolution exit do not end it while the disk is needed (its budget does)
-        if( params%l_shift_map .and. params%trs_window > 0. )then
-            shincr   = os%get_all('shincr')
-            frac_out = real(count(mask .and. shincr > params%trs_window)) / real(max(1, count(mask)))
-            write(logfhandle,'(A,F6.2,A)') '>>> DISK STILL NEEDED BY ', 100. * frac_out,&
-                &' % OF THE SAMPLED PARTICLES (THE LAST MOVE BEYOND THE NEXT WINDOW)'
-            if( frac_out < DISK_NEED_FRAC )then
-                self%shift_stable_its = self%shift_stable_its + 1
-            else
-                self%shift_stable_its = 0
-            endif
-            if( converged .and. self%shift_stable_its < 2 ) write(logfhandle,'(A)') '>>> EXIT DEFERRED: THE DISK IS STILL NEEDED'
-            converged = self%shift_stable_its >= 2
-            if( converged ) write(logfhandle,'(A)') '>>> DISK EXHAUSTED: THE CENTRING STAGE ENDS'
-            deallocate(shincr)
-        endif
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &

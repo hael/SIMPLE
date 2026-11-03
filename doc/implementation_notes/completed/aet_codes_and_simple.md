@@ -1,5 +1,8 @@
 # How the atomic electron tomography codes relate to SIMPLE and SINGLE
 
+> **Classification, 2026-11-02:** completed comparative investigation, dated 2026-10-14.
+> Its proposed experiments remain research directions; this record is not an implementation backlog.
+
 Reference note, 2026-10-14. It compares the codes of Jianwei Miao's group
 (UCLA) with what SIMPLE and SINGLE do today and plan to do. The
 reconstruction gets the most attention: their GENFIRE algorithm against our
@@ -23,7 +26,7 @@ On our side the sources are:
 - `pcg_backend_overview.md`;
 - `single_pcg_integration_completed.md`;
 - `species_discovery_completed.md`;
-- `atom_bfactor_model.md`;
+- `../planned/atom_bfactor_model.md`;
 - the code those documents point to.
 
 **Read later.** The code of the 2021 metallic-glass study (Yang et al.,
@@ -85,7 +88,7 @@ search.
 | Orientations | grid search of each Euler angle against reprojections, scored by an L1 R-factor | full pose search per image (`refine3D`, `refine=neigh`), correlation objective | unchanged |
 | Atom tracing | 2017: greedy, take the brightest local maximum, fit a 3D Gaussian, check a 2 Å minimum distance, subtract the fit, repeat; 2021: every local maximum of a 3× upsampled map, each refined by a 4th-order polynomial fit, accepted brightest first at 2 Å minimum distance, nothing subtracted; manual check in both | `detect_atoms` level 1: correlation with a one-atom template, threshold, connected components, splitting, correlation validation, contact-score pruning | residual recovery of weaker atoms (`discover_species`, opt-in), which is the greedy subtraction idea applied at a second level |
 | Species | intensity threshold, then global templates matched by L1 distance, manual edits, a chemistry prior near the missing wedge; later k-means and local templates | aperture intensity at one common width; Gaussian mixture with measurement noise (extreme deconvolution); BIC for the number of classes; separation gate; shared coordination slope; species list by `element=` | promotion after validation on real two-species data |
-| Model refinement | positions refined against the measured projections, with one amplitude and one B per species; an interatomic potential as restraint in 2017, none in 2021 | none against the images; `_SIM.mrc` (Peng five-Gaussian kernels) becomes the next refinement reference | atomic prior in the PCG solve; per-atom B and occupancy fitted against the particle images (`atom_bfactor_model.md`) |
+| Model refinement | positions refined against the measured projections, with one amplitude and one B per species; an interatomic potential as restraint in 2017, none in 2021 | none against the images; `_SIM.mrc` (Peng five-Gaussian kernels) becomes the next refinement reference | atomic prior in the PCG solve; per-atom B and occupancy fitted against the particle images (`../planned/atom_bfactor_model.md`) |
 | Validation | multislice simulation of their own model, run through the same pipeline; R-factor against the projections; R-free in GENFIRE | synthetic element-kernel particles with ground truth; 66 real Pt maps with planted classes; half maps where they exist | image-level cross-validation (`single_pcg_integration_completed.md`) |
 
 ## 3. Reconstruction: GENFIRE and PCG

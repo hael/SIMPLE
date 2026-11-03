@@ -582,6 +582,9 @@ contains
                 self%msk_crop = min(round2even((real(self%box_crop)-COSMSKHALFWIDTH)/2.), &
                     &round2even(self%msk * real(self%box_crop) / real(self%box)))
             endif
+            ! the box's mask, under which a particle searching the polar shift map's disk is prepared
+            self%msk_box      = round2even((real(self%box) - COSMSKHALFWIDTH) / 2.)
+            self%msk_box_crop = round2even((real(self%box_crop) - COSMSKHALFWIDTH) / 2.)
         endif
         if( self%box > 0 )then
             if( .not. cline%defined('pftsz') ) self%pftsz = magic_pftsz(self%msk_crop)
@@ -659,7 +662,6 @@ contains
         character(len=2), allocatable :: symbols(:)
         character(len=5)              :: selector
         integer                       :: binwidth_min
-        logical                       :: l_shift_map_ok
         if( self%prg == 'select_micrographs' )then
             if( self%nmics < 1 .or. self%state < 1 .or. self%nspace < 1 .or. self%subset_max_nodes < 1 )then
                 THROW_HARD('select_micrographs requires positive nmics, state, nspace and subset_max_nodes')
@@ -1123,21 +1125,16 @@ contains
             self%trs = 0.
             self%l_doshift = .false.
         endif
-        ! the polar shift map: a positive prior width turns it on (the default): the tables' modes with a shift search
-        ! under the Euclidean objective carry it; elsewhere the default is silently off and an explicit key refused
+        ! the polar shift map: a positive prior width is the key (the default), under the Euclidean objective, whose
+        ! posterior the map draws (an explicit key under cc is refused); a run centres with it when its mode is a
+        ! probability table with a shift search, and a workflow's master carries the key to the stages that do
         self%l_shift_map = self%shift_sigma > 0.01
-        if( self%l_shift_map )then
-            l_shift_map_ok = self%l_doshift .and. self%cc_objfun == OBJFUN_EUCLID .and. &
-                &(trim(self%refine) == 'prob' .or. trim(self%refine) == 'prob_snhc' .or. trim(self%refine) == 'prob_neigh')
-            if( .not. l_shift_map_ok )then
-                if( cline%defined('shift_sigma') )then
-                    if( .not. self%l_doshift ) THROW_HARD('shift_sigma needs a shift search: set trs > 0')
-                    if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('shift_sigma needs objfun=euclid: the map draws the tempered posterior')
-                    THROW_HARD('shift_sigma needs a probability table: refine=prob, prob_snhc or prob_neigh')
-                endif
-                self%l_shift_map = .false.
-            endif
+        if( self%l_shift_map .and. self%cc_objfun /= OBJFUN_EUCLID )then
+            if( cline%defined('shift_sigma') ) THROW_HARD('shift_sigma needs objfun=euclid: the map draws the tempered posterior')
+            self%l_shift_map = .false.
         endif
+        self%l_centring = self%l_shift_map .and. self%l_doshift .and. &
+            &(trim(self%refine) == 'prob' .or. trim(self%refine) == 'prob_snhc' .or. trim(self%refine) == 'prob_neigh')
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch <= 1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then
@@ -1192,12 +1189,6 @@ contains
                     THROW_HARD('model_cavgs_rejection quality_context must be chunk, pool, sieve or nano')
             end select
         endif
-        select case(trim(self%cache))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('Unsupported cache='//trim(self%cache)//'; expected yes|no')
-        end select
-        self%l_cache = trim(self%cache) == 'yes'
         select case(trim(self%umap))
             case('yes','no')
             case DEFAULT

@@ -126,67 +126,74 @@ RETURNED FROM REFINE2D STAGE n`). Each iteration prints one `>>> CONVERGED:
 yes|no`, the decision after `minits`, `maxits` and the full-assignment
 coverage, as 3D does.
 
-#### The polar shift map's centring stage (`shift_sigma` > 0)
+#### The polar shift map's dynamic centring (`shift_sigma` > 0)
 
 `shift_sigma` (the width in A of the Gaussian prior on a particle's displacement
-from its pick, `doc/implementation_notes/planned/polar_shift_search.md`) makes
-stage 2 the centring stage (`CENTRING_STAGE`, `solve2D_centring_stage`). The
-parameter's default is 10 A (Hans, 2026-11-02, across the board), so every
-workflow has the key where a mode can carry it: a probability table (`prob`,
-`prob_snhc`, `prob_neigh`) with a shift search under objfun=euclid; elsewhere
-(the SNHC and greedy strategies, a stage without shifts, objfun=cc) the default
-is silently off, and a key given explicitly on such a run is refused
-(`validate_parameter_consistency`). `shift_sigma=0` is the window search in
-every stage, the control.
+from its pick, `doc/implementation_notes/planned/polar_shift_search.md` and
+`polar_shift_search_dynamic_centring.md`) is the parameter's default, 10 A
+(Hans, 2026-11-02, across the board), so every workflow has the key where a mode
+can carry it: a probability table (`prob`, `prob_snhc`, `prob_neigh`) with a
+shift search under objfun=euclid; elsewhere (the SNHC and greedy strategies, a
+stage without shifts, objfun=cc) the default is silently off, and a key given
+explicitly on such a run is refused (`validate_parameter_consistency`).
+`shift_sigma=0` is the window search in every stage, the control. Two flags
+carry this: `l_shift_map`, the key's presence (a workflow's master passes it to
+its stages), and `l_centring`, a run that centres (the key in a table mode with
+a shift search), which the fills, the preparation and the consumers read.
 
-- it runs the dense probability table (`refine=prob`). The stage is
-  coarse-to-fine, consolidated 2026-11-01 after the full-band disk map proved
-  intrinsically too costly (TRPV1: 132 s an iteration against 4.6 s for the
-  window, every iteration): a particle that needs the disk screens the
-  origin's best classes holding 99 % of its posterior there at the draw's
-  temperature (a pick far off leaves that posterior flat and keeps every
-  class, `screen_pool_size`; at least twice the refined count) with the coarse
-  map over the disk of 3 sigma (`trs` = 3 sigma in native pixels, the
-  half-resolution band, `SHIFTMAP_SCREEN`) under the prior, keeps each class's
-  coarse optimum, and the refined count of best classes are polished at full
-  resolution in a box of one map step about that optimum
-  (`pftc_shsrch_grad%minimize_in_cell`: the lattice and the L-BFGS in the box,
-  from the cell's rotation; if the box's optimum does not beat the origin, the
-  optimizer's baseline, the cell scored at full resolution is the pose if it
-  beats the origin's row, else that row stands). The rows are polished losses,
-  as the window path's: no evidence, no draw over the disk
-- its mask is the box's, `(box - COSMSKHALFWIDTH) * smpd`, whatever `mskdiam`
-  says; the low-pass ladder is unchanged
-- it does not repeat the disk: the consumer writes each particle's move of the
-  iteration (`shincr`, the magnitude of the polished increment) and a particle
-  whose last move stayed inside the next stage's window (`trs_window`, the next
-  stage's `trslim`, from the controller) searches that window in the later
-  iterations: the same screen and polish over the coarse window map
-  (`SHIFTMAP_WINDOW`, radius `trs_window`, no prior) from its stored shift;
-  the refine2D master sets `shincr` below zero for every particle at the start
-  of every run under the key, whatever its first iteration's number (solve2D
-  numbers iterations across stages), so every particle's first search in the
-  stage is the disk; the master prints the disk set it is about to search
-- it ends when few particles still need the disk, and only then: under the key
-  the drain is the stage's convergence (`check_conv2D` converges once the
-  fraction of sampled particles whose last move went beyond `trs_window` has
-  been below `DISK_NEED_FRAC` for two iterations, `minits = iter + 1`; the
-  class-overlap verdict does not end the stage while the disk is needed), or
-  the stage's budget does
-- at its exit the mask diameter of the stages after it is estimated from its
-  class averages (`solve2D_mskdiam_estimate`: automask2D's diameters of the
-  populated classes, their population-weighted 90th percentile, taken as the
-  diameter itself) and logged; `mskdiam=0` on the command line adopts it, a
-  positive `mskdiam` is honoured from stage 3 on. An automatic run
-  (`mskdiam=0`) runs stage 1 under the box's mask and the box-derived ladder,
-  adopts the estimate from the class averages at the exits of stage 1 and of
-  the centring stage, and each adoption re-derives the low-pass ladder of the
-  stages after (`rederive_lplims`: the march from that stage's limit to the
-  new `lpstop`; a user-set `lp` or `lpstop` stands). An estimate before any
-  alignment, from the mean of 2000 unaligned particles, was measured and
-  dropped (2026-11-01): the blob's extent under Otsu or above its noise gave
-  110-119 A for beta-gal's 180 A, and stage 1 under that mask cost the run
-  more than the box's mask does
+The centring is a per-particle state, not a stage (ruling 19, 2026-11-02; the
+sampling strategies inject particles no stage would otherwise centre). Each
+particle carries two numbers the consumer writes after its polish
+(`record_shift_state`): `shincr`, the move of the iteration, and `shsig`, its
+prior width for its next search, in pixels. In every table fill from stage 2 on
+(stage 1 is the SNHC window stage, which has no table):
+
+- a sampled particle takes the disk when `shsig` is the sentinel (below zero:
+  not yet centred in this workflow) or when three of its prior widths exceed
+  the stage's window `trs` (`shift_needs_disk`), and the window otherwise;
+- the disk: the coarse map over the disk of 3 sigma (`disk_radius_px`, bounded
+  by the box; `SHIFTMAP_SCREEN`) under the prior on the total displacement from
+  the pick at the particle's first centring, and without it after (a
+  re-centring is the data's alone: under the draw's tempering, `prob_beta`
+  0.3, the untempered prior weighs more than three times its physical weight
+  and pulled correctly centred particles back towards their picks at every
+  re-centring, which cost the solve2D fixture 56 points), at the classes
+  holding 99 % of the particle's posterior at the
+  origin (`screen_pool_size`, at least twice the refined count; in the sparse
+  `prob_snhc` fill a disk particle scores every class first), each keeping its
+  coarse optimum, and the best classes polished at full resolution in a box of
+  one map step about that optimum in the disk's own search object
+  (`pftc_shsrch_grad%minimize_in_cell`; if the box's optimum does not beat the
+  origin, the cell scored at full resolution is the pose if it beats the
+  origin's row, else that row stands). The rows are polished losses;
+- the window: the same screen and polish over the coarse window map
+  (`SHIFTMAP_WINDOW`, radius `trs`, no prior), the stage's search object;
+- a disk particle is prepared under the box's mask (`ptcl_on_disk`,
+  `prepimg4align`: the box's noise mask and soft mask radius, `lmsk_box`,
+  `msk_box_crop`), since the molecular mask at the pick would cut it; the
+  others under the stage's mask;
+- the width: every coarse map's draw measures the standard deviation of the
+  shift under its posterior at the physical temperature, about the mean, in the
+  particle's axes (`shiftmap_draw`); it travels with the candidate
+  (`prob_candidate%sdev`, `prob_refined_entry%sdev`, `ptcl_ref%sdev`) to the
+  consumer, which stores as the next prior width the width of the assigned
+  pose (the previous width when the pose carries none), at least the radius
+  searched when the move reached that radius's bound, within a tenth of it or
+  half a map step where the map is finer (`next_shift_width`: a posterior
+  truncated at the bound says nothing of the mass beyond). The width chooses
+  the next box; it never enters the likelihood, whose only prior is the pick's;
+- the sentinel is set by the refine2D masters at a run's first iteration
+  (every workflow's first stage starts there) and by the stream's pool for the
+  particles it appends (`append_sets`); the master prints the disk set it is
+  about to search by cause (not yet centred, wide) and the widths' median and
+  90th percentile over the centred particles (`print_disk_set`).
+
+No stage ends on the centring: the stages exit by their own rules. An
+automatic run (`mskdiam=0`) runs stage 2 under the box's mask so that its class
+averages can estimate the mask diameter at its exit
+(`solve2D_mskdiam_estimate`, adopted at the exits of stage 1 and stage 2 with
+the low-pass ladder re-derived, `rederive_lplims`); a user's `mskdiam` is the
+stages' mask from stage 2 on, the disk particles excepted.
 
 Stage 1 is the plain SNHC window stage under the key too. Two dense-table
 variants of stage 1 over the disk of 3 sigma (the class from the evidence, the
@@ -195,16 +202,12 @@ the centring stage collapse the populated classes at its entry (90 to 50 with
 no shift assigned, 38 at the end; the SNHC stage 1 gives 79 at the entry and
 57 at the end, the control 65), the per-iteration counts from the runs'
 `clusters2D_iterNNN.star`.
-The later stages receive the key too (Phase 4 of the note, 2026-11-01: the map
-initialises the classic search): their tables, the dense one and the sparse
-`prob_snhc` fill alike, score the classes at the stored shift, without the
-previous class's seed and its shifted-particle bank, and polish each best class
-from the coarse window map's optimum over the stage's window (`trslim`, no
-prior, no drain) in a box of one map step, so the 5 x 5 lattice at every
-rotation and the seed retire wherever the key runs; `shift_sigma=0` keeps the
-seed and the lattice. The terminal greedy pass never sees the key: the map lives
-in the 2D tables, and `prep_strategy2D_glob` refuses it under any other
-`refine`. `cls_init=prev` enters at stage 3 and runs no
+Under the key every table scores the classes at the stored shift, without the
+previous class's seed and its shifted-particle bank, and polishes from a coarse
+map's optimum (Phase 4 of the note), so the 5 x 5 lattice at every rotation
+and the seed retire wherever the key runs; `shift_sigma=0` keeps the seed and
+the lattice. The terminal greedy pass never sees the key: the map lives in the
+2D tables, and `prep_strategy2D_glob` refuses it under any other `refine`. `cls_init=prev` enters at stage 3 and runs no
 centring stage; the stream's checkpointing is refused with the key. With the
 key off every command line is as before.
 
@@ -472,7 +475,7 @@ the references' centering offsets.
 
 The search loop of the matcher runs under a dynamic OpenMP schedule (a
 particle is searched whole by one thread, so only its random draws change).
-In shared memory, without the particle cache, the probability table fills the
+In shared memory the probability table fills the
 particle buffer (`doc/policies/particle_read_path_policy.md`) and the matcher
 of the same iteration copies its batches from it, so a table iteration reads
 each particle once. When the particles are cropped (below), the buffer holds
@@ -503,18 +506,16 @@ images are sized by the thread team.
 The matcher's class averages live at `box_crop`, so whenever `box_crop < box`
 (and outside the stream's 2D pool; `crop_particles2D` decides it for the
 matcher and the table alike) its online sums take the Fourier-cropped
-particle the particle cache would serve (`particle_cache_policy.md`, section
-3), made in memory from the full-size read of the batch: noise-normalized at
-the full box, cropped, then tapered, padded and transformed at `box_crop`.
+particle, made in memory from the full-size read of the batch: noise-normalized
+at the full box, cropped, then tapered, padded and transformed at `box_crop`.
 That replaces a transform of the padded full box of which only the
-`box_crop` region was used. The alignment then prepares the particle exactly
-as with `cache=yes`, and so does the probability table (`prob_tab2D`), so an
-uncached run is byte-identical to a cached one. Both differ from the old
-uncached full-box preparation by rounding: the cropped particle goes back to
-real space and is transformed again, which is not bitwise exact. The class
-sums change as the cached restoration does (statistical parity, not bit
-equality). The final class averages of `solve2D` are restored at the full
-box by `make_cavgs`.
+`box_crop` region was used. The alignment then prepares the cropped particle
+(`prepimg4align_cropped`), and so does the probability table (`prob_tab2D`).
+Both differ from the old uncached full-box preparation by rounding: the cropped
+particle goes back to real space and is transformed again, which is not
+bitwise exact (statistical parity, not bit equality). The final class averages
+of `solve2D` are restored at the full box by `make_cavgs`. The downscaled
+particle disk cache was retired 2026-11-02 (`particle_cache_policy.md`).
 
 Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files; all in
 `BENCH/`): `REFINE2D_BENCH_PARTppp.txt` for every partition, with the

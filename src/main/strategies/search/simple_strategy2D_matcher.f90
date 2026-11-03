@@ -17,7 +17,6 @@ use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D
                                            refine2D_blends_carryover
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
     &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D
-use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_imgarr_utils,             only: alloc_imgarr
 use simple_strategy2D_greedy,        only: strategy2D_greedy
 use simple_strategy2D_greedy_smpl,   only: strategy2D_greedy_smpl
@@ -60,7 +59,6 @@ type :: refine2D_ctrl
     logical :: l_prob_align
     logical :: l_restore_cavgs
     logical :: l_require_full_assignment
-    logical :: l_cached
     logical :: l_crop_sums
     logical :: do_bench
 end type refine2D_ctrl
@@ -123,13 +121,9 @@ contains
             rt_build_batch_particles2D = 0.0
             t_alloc_ptcl_imgs2D        = tic()
         endif
-        ! ptcl_imgs holds the images handed to class-average restoration; cropped (from the cache, or made in
-        ! memory) they are at box_crop, and from the cache the read buffer shrinks to box_crop too
-        if( ctrl%l_cached )then
-            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
-                &imgbatch_box=p_ptr%box_crop, imgbatch_smpd=p_ptr%smpd_crop)
-            call alloc_imgarr(batchsz_max, [p_ptr%box_crop, p_ptr%box_crop, 1], p_ptr%smpd_crop, ptcl_imgs)
-        else if( ctrl%l_crop_sums )then
+        ! ptcl_imgs holds the images handed to class-average restoration; cropped (made in memory) they are at
+        ! box_crop
+        if( ctrl%l_crop_sums )then
             call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
             call alloc_imgarr(batchsz_max, [p_ptr%box_crop, p_ptr%box_crop, 1], p_ptr%smpd_crop, ptcl_imgs)
         else
@@ -270,18 +264,9 @@ contains
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
             endif
             ctrl%l_ctf = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp) .ne. 'no'
-            ! Serve both the alignment and the class-average restoration from the
-            ! downscaled cache. Decided here because it sizes the image buffers and the
-            ! class-averager work images below. Mandatory when requested: a rank that
-            ! quietly fell back would contribute partial sums built by a different
-            ! preprocessing path than its peers.
-            call ptcl_cache_assert_ready(p_ptr, b_ptr)
-            ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
-            if( ctrl%l_cached .and. p_ptr%part == 1 ) &
-                write(logfhandle,'(A)') '>>> REFINE2D: reading particles from the downscaled cache'
-            ! The class averages live at box_crop, so their sums take the Fourier-cropped particles the cache would
-            ! serve, made in memory from the full-size read; the stream's 2D pool keeps the full-size path
-            ctrl%l_crop_sums = crop_particles2D(p_ptr, ctrl%l_cached)
+            ! The class averages live at box_crop, so their sums take the Fourier-cropped particles, made in
+            ! memory from the full-size read; the stream's 2D pool keeps the full-size path
+            ctrl%l_crop_sums = crop_particles2D(p_ptr)
         end subroutine init_ctrl
 
         subroutine sample_particles_for_update()
@@ -338,7 +323,7 @@ contains
                 THROW_HARD('need refs to be part of command line for refine2D execution')
             endif
             call cavger_read_all
-            call cavger_init_online(batchsz_max, cropped_ptcls=ctrl%l_cached .or. ctrl%l_crop_sums)
+            call cavger_init_online(batchsz_max, cropped_ptcls=ctrl%l_crop_sums)
         end subroutine prepare_class_averages_and_restoration
 
         subroutine prepare_alignment_references(batchsz_max)
@@ -480,8 +465,7 @@ contains
             write(fnr,'(a,i0)') 'match2D peak RSS (bytes)            : ', peak_rss
             write(fnr,'(a,f0.3)') 'match2D peak RSS (GiB)              : ', peak_rss_gib
             write(fnr,'(a,i0)') 'match2D node memory in use (bytes)  : ', get_node_mem_in_use_bytes()
-            write(fnr,'(a,l1)') 'match2D particles from the 2D cache : ', ctrl%l_cached
-            write(fnr,'(a,l1)') 'match2D class sums from cropped particles : ', ctrl%l_cached .or. ctrl%l_crop_sums
+            write(fnr,'(a,l1)') 'match2D class sums from cropped particles : ', ctrl%l_crop_sums
             call write_sigma2_bench_context(fnr, 'match2D', nptcls2update)
             call write_ptcl_read_bench_context(fnr, 'match2D search', reads_srch)
             write(fnr,'(a)') ''
@@ -489,9 +473,9 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match2D startup/setup               :', rt_startup
             write(fnr,'(a,1x,f0.2)') 'match2D particle allocation         :', rt_alloc_ptcl_imgs2D
             write(fnr,'(a,1x,f0.2)') 'match2D reference preparation       :', rt_prep_pftc_refs2D
-            write(fnr,'(a,1x,f0.2)') 'match2D particle reading            :', reads_srch%rt_read + reads_srch%rt_cache
+            write(fnr,'(a,1x,f0.2)') 'match2D particle reading            :', reads_srch%rt_read
             write(fnr,'(a,1x,f0.2)') 'match2D particle preparation        :', &
-                &rt_build_batch_particles2D - reads_srch%rt_read - reads_srch%rt_cache
+                &rt_build_batch_particles2D - reads_srch%rt_read
             write(fnr,'(a,1x,f0.2)') 'match2D alignment search            :', rt_align
             write(fnr,'(a,1x,f0.2)') 'match2D class averaging             :', rt_cavg
             write(fnr,'(a,1x,f0.2)') 'match2D cavg FFT/CTF/interpolation  :', rt_cavg_interp_splat

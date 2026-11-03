@@ -277,7 +277,6 @@ contains
         use simple_matcher_pftc_prep,       only: prep_pftc4align2D
         use simple_matcher_ptcl_batch,      only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
             &crop_particles2D
-        use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
         use simple_classaverager,           only: cavger_new, cavger_read_all, cavger_kill
         use simple_eul_prob_tab2D,          only: eul_prob_tab2D
         use simple_eul_prob_tab_utils,      only: prob_fill_profile
@@ -296,7 +295,7 @@ contains
         real    :: frac_srch_space
         integer :: nptcls, batchsz_max, nbatches, ibatch, batch_start, batch_end, batchsz, buffer_status
         integer, allocatable :: batches(:,:)
-        logical :: l_cached, l_crop
+        logical :: l_crop
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup, rt_refs, rt_batch, rt_fill, rt_write
         if( L_BENCH_GLOB )then
@@ -336,19 +335,10 @@ contains
             t        = tic()
         endif
         call set_b_p_ptrs2D(params, build)
-        ! no ptcl_imgs here: prob_tab2D scores against the references and never
-        ! restores class averages, so the raw full-size images are not needed and the
-        ! batch can be served from the downscaled cache
-        call ptcl_cache_assert_ready(params, build)
-        l_cached = ptcl_cache_in_use(params, build)
-        ! cropped as the matcher's particles are: from the in-memory cache entry, as a cached particle
-        l_crop   = crop_particles2D(params, l_cached)
-        if( l_cached )then
-            call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
-                &imgbatch_box=params%box_crop, imgbatch_smpd=params%smpd_crop)
-        else
-            call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
-        endif
+        ! no ptcl_imgs here: prob_tab2D scores against the references and never restores class averages, so
+        ! the raw full-size images are not needed; cropped as the matcher's particles are
+        l_crop = crop_particles2D(params)
+        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
         ! mirror refine2D_exec reference setup
         call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
@@ -368,7 +358,7 @@ contains
         ! reads them once, and the matcher's batches are copied from the particle buffer (it releases it); cropped,
         ! the buffer keeps each particle's record, the cropped particle, which the matcher then neither reads nor
         ! prepares at the full box
-        if( .not. params%l_distr_worker .and. .not. l_cached )then
+        if( .not. params%l_distr_worker )then
             if( l_crop )then
                 buffer_status = open_record_buffer(params, nptcls, pinds, ptcl_buffer_budget(params, build))
             else
@@ -429,7 +419,7 @@ contains
         real(timer_int_kind) :: rt_read
         real(dp) :: ts_sum
         integer :: fnr
-        rt_read = reads%rt_read + reads%rt_cache
+        rt_read = reads%rt_read
         call open_bench_report(fnr, uppercase(params%prg%to_char()), iter=params%which_iter, part=params%part, &
             &numlen=params%numlen)
         write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'

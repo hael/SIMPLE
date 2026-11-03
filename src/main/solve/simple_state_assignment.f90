@@ -1145,7 +1145,7 @@ contains
     ! folder (mkdir=no, @p projfile beside it); the caller adds the threads and parts. A mask
     ! diameter @p mskdiam not positive is left to the job's default.
 
-    !> The route's solve2D: the first set classified into NCLS2D_FIRST classes, cache=yes.
+    !> The route's solve2D: the first set classified into NCLS2D_FIRST classes.
     subroutine set_solve2D_route_cline( cline, projfile, mskdiam )
         class(cmdline),   intent(inout) :: cline
         character(len=*), intent(in)    :: projfile
@@ -1156,7 +1156,6 @@ contains
         call cline%set('projfile', projfile)
         call cline%set('ncls',     NCLS2D_FIRST)
         if( mskdiam > 0. ) call cline%set('mskdiam', mskdiam)
-        call cline%set('cache',    'yes')
     end subroutine set_solve2D_route_cline
 
     !> cls_expansion: the classes of the selected particles split into @p ncls sub-classes in all

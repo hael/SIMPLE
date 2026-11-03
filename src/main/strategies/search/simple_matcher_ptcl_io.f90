@@ -16,7 +16,7 @@ implicit none
 public :: prepimgbatch, killimgbatch, read_imgbatch, ptcl_read_session
 public :: prep_rec_observation
 public :: rec_state_half, rec_obs_oris, rec_obs_inv_sig2, read_rec_obs_batch
-public :: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, add_ptcl_cache_read_time
+public :: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since
 public :: write_ptcl_read_bench_context, write_mem_bench_context
 public :: ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, pass_buffer_status_name, pass_buffer_bytes
 public :: open_record_buffer, records_open, record_slot, put_record, seal_record_buffer, take_records
@@ -38,7 +38,6 @@ type(stack_io) :: stkio_r
 
 !> The particle reads of every read session, cumulative over the process and updated by the
 !! master thread; a pass's counts are the difference of two snapshots (ptcl_read_counts_since).
-!! The downscaled 2D cache has its own reader: only its read time is kept.
 type :: ptcl_read_counts
     integer(int64)       :: nopens     = 0_int64 !< stacks opened
     integer(int64)       :: nrequests  = 0_int64 !< read requests
@@ -49,7 +48,6 @@ type :: ptcl_read_counts
     integer(int64)       :: bytes_advised       = 0_int64 !< file bytes hinted to the kernel beyond the window
     integer(int64)       :: nbuffered  = 0_int64 !< images copied from the particle buffer, no file touched
     real(timer_int_kind) :: rt_read    = 0.      !< wall time reading stacks (L_BENCH_GLOB)
-    real(timer_int_kind) :: rt_cache   = 0.      !< wall time reading the downscaled 2D cache (L_BENCH_GLOB)
 end type ptcl_read_counts
 
 type(ptcl_read_counts) :: read_totals
@@ -102,14 +100,7 @@ contains
         d%bytes_advised       = read_totals%bytes_advised       - t0%bytes_advised
         d%nbuffered           = read_totals%nbuffered           - t0%nbuffered
         d%rt_read    = read_totals%rt_read    - t0%rt_read
-        d%rt_cache   = read_totals%rt_cache   - t0%rt_cache
     end function ptcl_read_counts_since
-
-    !> The 2D cache has its own reader (simple_ptcl_cache); its callers time it
-    subroutine add_ptcl_cache_read_time( rt )
-        real(timer_int_kind), intent(in) :: rt
-        read_totals%rt_cache = read_totals%rt_cache + rt
-    end subroutine add_ptcl_cache_read_time
 
     !> Context lines of a pass's particle reads for a bench file
     subroutine write_ptcl_read_bench_context( fnr, prefix, counts )
@@ -152,8 +143,8 @@ contains
         else
             currsz    = size(build%imgbatch)
             ldim_curr = build%imgbatch(1)%get_ldim()
-            ! a batch read from the downscaled cache needs box_crop buffers at
-            ! smpd_crop, so both have to be honoured on reuse, not just the batch size
+            ! a batch of cropped particles needs box_crop buffers at smpd_crop, so both
+            ! have to be honoured on reuse, not just the batch size
             if( batchsz > currsz .or. ldim_curr(1) /= box_here .or. &
                &abs(build%imgbatch(1)%get_smpd() - smpd_here) > 1.e-6 )then
                 call killimgbatch(build)

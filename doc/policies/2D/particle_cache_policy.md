@@ -1,5 +1,14 @@
 # Particle Cache Policy
 
+**Retired 2026-11-02.** The downscaled particle disk cache (`cache=yes`,
+`simple_ptcl_cache`) was removed with the dynamic centring (ruling 19 of
+`doc/implementation_notes/planned/polar_shift_search.md`), which prepares each
+particle under its own mask; the cropped-particle path in memory
+(`crop_particles2D`, the pass's records) stays. `cache_dir` remains as the flex
+PCA plane cache's location (`simple_flex_pca_plane_cache`). The code is in git
+history before that date; this document is kept as its record.
+
+
 ## 1. Purpose and Scope
 
 This document defines the policy for the downscaled particle disk cache

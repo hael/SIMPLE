@@ -58,11 +58,6 @@ contains
         ! image input/output
         call refine2D%add_input(UI_FILE, projfile, required_override=.true., visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call refine2D%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
-         &'Write Fourier-cropped particles once and read those instead of the originals on every iteration, &
-         &trading disk space for I/O(yes|no){no}', '', &
-         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-         &visibility=UI_VIS_DEVELOPER)
         ! search controls
         call refine2D%add_input(UI_SRCH, ncls, required_override=.false., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
@@ -78,16 +73,12 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
-        &'dense probability table (refine=prob) locates each particle''s likely classes over a disk of 3 sigma within trs '//&
-        &'with a coarse polar shift map and polishes from the map''s optimum; a particle whose last move stayed inside '//&
-        &'trs_window searches that window instead, as every particle does without trs_window (the map over the '//&
-        &'window of trs initialises the polish, in the sparse table too); 0 is the window search; off under a mode without a table{10}', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; the probability '//&
+        &'tables centre each particle as it needs: one not yet centred in this workflow, or whose shift posterior is '//&
+        &'wider than a third of the window, locates its likely classes over the disk of 3 sigma with a coarse polar '//&
+        &'shift map under the box''s mask and polishes from the map''s optimum, the others polish from the map over the '//&
+        &'window of trs; 0 is the window search; off under a mode without a table{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, 'trs_window', 'num', 'Window after the disk', &
-        &'With shift_sigma, the half-width (in pixels) of the window a particle searches once its last move stayed '//&
-        &'inside it; solve2D sets it to the next stage''s window{0}', 'window in pixels{0}', .false., 0., &
-        &group="search", visibility=UI_VIS_DEVELOPER)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
@@ -130,15 +121,6 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call program%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
-         &'Write Fourier-cropped particles once and read those instead of the originals on every iteration, &
-         &trading disk space for I/O(yes|no){no}', '', &
-         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-         &visibility=UI_VIS_DEVELOPER)
-        call program%add_input(UI_PARM, 'cache_dir', 'dir', 'Particle cache directory', &
-         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
-         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
-         &.false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -161,12 +143,12 @@ contains
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, stage 2 '//&
-        &'is the centring stage: its probability table locates each particle''s likely classes over a disk of 3 sigma '//&
-        &'with a coarse polar shift map under the box-wide mask and polishes from the map''s optimum, a particle whose '//&
-        &'last move stayed inside the next stage''s window searching that window instead, and the stage ends once few '//&
-        &'particles still need the disk; the stages after polish from the map over their own window; mskdiam=0 then '//&
-        &'takes the mask diameter of the later stages from the class averages; 0 is the window search in every stage{10}', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; from stage 2 on '//&
+        &'the probability tables centre each particle as it needs: one not yet centred in this workflow, or whose shift '//&
+        &'posterior is wider than a third of the stage''s window, locates its likely classes over the disk of 3 sigma '//&
+        &'with a coarse polar shift map under the box''s mask and polishes from the map''s optimum, the others polish '//&
+        &'from the map over the window; mskdiam=0 takes the mask diameter of the later stages from stage 2''s class '//&
+        &'averages; 0 is the window search in every stage{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
         &to sample each iteration; every active particle when there are fewer{200000}', '# particles to sample{200000}', &

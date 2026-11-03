@@ -282,6 +282,13 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     each from its own cell and shift through the same local joint solve, the weights the table's, the route status
     the committed pose's; under the key nothing is polished, as before (the Fourier-Bessel polish is Phase 5).
 
+19. Dynamic centring (Hans, 2026-11-02; the proposal and its rulings in `polar_shift_search_dynamic_centring.md`; built the same day, Progress below):
+    the sampling strategies inject particles the centring stage never sees, so the centring becomes a per-particle
+    state across every stage and table, 2D and 3D: the sentinel per workflow and on injection, the disk particle
+    prepared under the box's mask, the move at the bound and the posterior width combined into one prior width that
+    chooses the next box at three standard deviations (the pick prior the only prior in the likelihood), the
+    neighbourhood table's disk over the subspace pool, `trs_window` and the drain exits retired.
+
 The 2026-11-01 follow-up review is in `polar_shift_search_review.md`, section 13.
 It verifies the earlier frame, radius, polish-key and diagnostic fixes, but finds
 five active issues: the stage's `startit` skips the first `shincr` reset; map
@@ -314,7 +321,11 @@ centring across stages 2 and 3 is under consideration, as Open decision 4.
    the extras' increments) had assumed the map's frame for the window path's entries too and double-rotated them;
    it is retired and `test_table_increment_axes` (the refine3D in-plane state suite) pins the contract through
    the optimizer itself. The weighted insertion (topk > 1) is refused under the key until R3 is done.
-4. Under consideration (Hans, 2026-11-01): extend the faster centring search
+4. Superseded 2026-11-02 by the dynamic centring proposal
+   (`polar_shift_search_dynamic_centring.md`, Hans's finding: the sampling
+   strategies inject particles the centring stage never sees; the centring
+   becomes a per-particle state across the stages, 2D and 3D). The original
+   text: extend the faster centring search
    across stages 2 and 3, giving a nominal budget of ten centring iterations
    (five per stage), with stage 1 remaining shift-free. This is a proposal,
    not an adopted schedule. A coherent extension would select the dense
@@ -489,6 +500,58 @@ iteration, the window stages' screens collapsing to about twice the refined coun
   ruling 17: solve2D defaults the key (`SHIFT_SIGMA_DEFAULT`), `shift_sigma=0` the control; Hans tests on data
   (bgal, TRPV1, a badly picked set; key against control, mask given against estimated) before further development.
   Ruling 18 built the same day (`resolve_extra_poses` with the polish, `refine_extra_pose_continuously`).
+
+### 2026-11-02: the dynamic centring built (Claude, autonomous run, agent kit runs 692-)
+
+Ruling 19 as built, in the plan's steps:
+
+- The 2D particle disk cache removed (`simple_ptcl_cache` and its sites in the matcher, the batch preparation,
+  the table worker, the masters, the stream's initial analysis, the state-assignment route, the parameters and the
+  UI; the exit hook in `simple_defs`). The cropped-particle path in memory stays (`prepimg4align_cropped`, the
+  records). The flex PCA plane cache kept `cache_dir` and got its own location helpers (`plane_cache_dir`,
+  `plane_cache_run_token`, `plane_cache_space_ok`), gated by `cache_dir` given instead of `cache=yes`.
+- The state: `shsig` (slot 55, `I_SHSIG`) beside `shincr`; the sentinel set by the refine2D and refine3D masters
+  at a run's first iteration (every workflow's first stage starts there, whatever the key's state in that run) and
+  by the stream's pool for the particles it appends (`append_sets`). The width: `shiftmap_draw` measures the
+  posterior's standard deviation at the physical temperature (the mean in the particle's axes from each rotation's
+  sum rotated once; the second moment is rotation-invariant), carried by `prob_candidate%sdev`,
+  `prob_refined_entry%sdev` (the 2D part's refined entry 24 bytes) and `ptcl_ref%sdev` to the consumers;
+  `record_shift_state` (utils) writes the move and `next_shift_width` (the width, or the previous one without a
+  width, at least the radius searched when the move reached its bound within half a map step).
+- The rule in the four fills (`shift_needs_disk`: the sentinel, or three widths beyond `trs`): the disk of
+  `disk_radius_px` (three sigma, bounded by the box) under the prior in the disk's own search object per thread,
+  the window of `trs` otherwise; the sparse 2D fill scores every class for a disk particle, then screens; the
+  neighbourhood table screens the state's evaluated candidates (the state mode's subspace search in front, the
+  geom mode's neighbourhood as it is) with the disk map and polishes the best in the disk object.
+- The preparation: `ptcl_on_disk` (2Dprep) reads the same field and rule; `prepimg4align` and the cropped
+  preparation take the box's noise mask (`build%lmsk_box`) and soft mask (`msk_box_crop`) for a disk particle,
+  the records too.
+- Retired: the centring stage (`FIRST_SHIFT_STAGE` keeps stage 2 on the dense table under the key and under the
+  box's mask only for an automatic run's mask estimate), the stage-3 raise of `trs` in solve3D, `trs_window`,
+  the drain exits of `check_conv2D`/`check_conv3D` and their tests, `DISK_NEED_FRAC`. The drivers print the disk
+  set by cause and the widths' median and 90th percentile (`print_disk_set`).
+- Debug gates 15/15 at each step (runs 695, 697). The first Release chain (runs 698-747) found two defects: the
+  derivation had made the key depend on the run's `refine`, so the solve3D master (default `shc`) carried no key
+  and refused an explicit one; and a re-centring under the pick prior pulled centred particles back towards their
+  picks (the draw tempers the data term by `prob_beta` 0.3, not the prior), the solve2D fixture falling to 40 %
+  within lp/4 against the window's 79.5 %. Fixed (run 749): `l_shift_map` is the key's presence (euclid), which the
+  masters pass on, `l_centring` a run that centres (a table with a shift search), which the fills, the preparation
+  and the consumers read; the pick prior applies at a particle's first centring only, a re-centring is the data's
+  alone; the bound test is a tenth of the radius or half a map step where the map is finer. The second Release
+  chain (runs 750-799): the gate 15/15, the in-plane state suite 98/98 and the 3D table suite 496/496 at four
+  threads; the refine2D fixture from true references 100 % within lp/4 at 0.19 px mean (the window of 5 px 100 %
+  at 0.30 px, of 16 px 100 % at 0.19 px: every polish map-initialised now); the refine3D fixture 100 % at 0.53 px
+  (the 5 px window 96.2 %); solve2D from the random start at full sampling, the key 98.8 % at 1.33 px against the
+  window's 72.8 % (the stage design gave 96.8 %); at a quarter sampled per iteration (`nsample=100`, the case the
+  stage design missed: three quarters of the particles first sampled after what was the centring stage) the key
+  61.5 % against 50.0 %; solve3D de novo at a quarter sampled, the key 20.2 % against 13.0 % (the de novo fixture
+  is variance-dominated, as recorded). Hans validates on data.
+- Hans's beta-gal solve3D with the dynamic centring (2026-11-02): every particle on the disk at the workflow's
+  first shift iteration (4598 of 4598, the table 26.7 s against 7.8 s after), then 37, 37, 11 and 5-10 movers an
+  iteration; no change to the stage's course or the final 4.03 A. The coarse map's width reads 0.00 for nearly
+  every particle (a resolution limit: the cell is 3.6 px against a 4.4 px window), so the re-centring is carried by
+  the move at the bound; the Laplace width at the polished optimum is the informative alternative, written up in
+  the proposal's section 2.6 for Hans's call. The neighbourhood driver's disk print was missing and is added.
 
 ### 2026-11-01: solve2D validated on data (Hans's runs; the approach adopted)
 
@@ -700,7 +763,10 @@ gradient analytic. Measured against the classic polish from the same start on th
 | `src/main/commanders/simple/simple_commanders_solve2D.f90` | the centring stage's trs and mask, mskdiam=0 as the automatic mask, the estimate's adoption | 2b (done 2026-10-31) |
 | `src/main/simple_convergence.f90`, `_tester.f90` | `check_conv2D`'s shift exit (ruling 8) and its test | 2b (done 2026-10-31) |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | the 3D table consolidated (`process_particle_with_map`: the screen, the box polish, the drain), the window map in the later stages | 2a 2b 4 (done 2026-11-01) |
-| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | `screen_pool_size`, `SCREEN_QUANTILE` shared by the tables | 4 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | `screen_pool_size`, `SCREEN_QUANTILE` shared by the tables; the dynamic centring's rule and state (`shift_needs_disk`, `disk_radius_px`, `next_shift_width`, `record_shift_state`), `sdev` in the records | 4 19 |
+| `src/main/strategies/search/simple_matcher_2Dprep.f90`, `simple_matcher_ptcl_batch.f90`, `src/main/simple_builder.f90` | the disk particle's box mask (`ptcl_on_disk`, `lmsk_box`, `msk_box_crop`); the particle cache removed | 19 |
+| `src/main/stream/pool2D/simple_stream_pool2D.f90` | the sentinel on the appended particles | 19 |
+| `src/main/flex/fit/simple_flex_pca_plane_cache.f90` | its own location helpers, gated by `cache_dir` | 19 |
 | `src/main/pftc/simple_polarft_calc.f90`, `simple_polarft_shiftmap.f90` | `SHIFTMAP_WINDOW`, `setup_shiftmaps` with the window's radius; the full map no longer built by the fills | 4 |
 | `src/main/ui/simple/simple_ui_refine2D.f90`, `simple_ui_refine3D.f90` | the key on refine2D, refine3D (2a) and solve2D (2b) | 2a 2b |
 | `src/main/image/simple_image_msk.f90` | `automask2D_set` writes its mask stacks only when asked (write2disk), as its flag intended; the estimate calls it silently | 2b |

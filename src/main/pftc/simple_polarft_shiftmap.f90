@@ -476,8 +476,14 @@ contains
     !! logz = log of the summed mass over the prior's normaliser (shiftmap_prior). l_greedy takes the cell of the
     !! largest mass instead. loss is the data term at the returned cell; the cell's shift in the optimizer's frame
     !! is shiftmap_shift(imap, irho, ialpha)
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss )
-        use simple_rnd, only: ran3
+    !> The draw from the map's tempered posterior over its cells (shift magnitude, direction, rotation) under the
+    !! prior on the total displacement, or its mode (l_greedy). With temp_phys and sdev, the posterior's width at
+    !! the physical temperature is measured alongside: the standard deviation of the shift (the square root of the
+    !! trace of its covariance, in the particle's axes, about the mean), the dynamic centring's state
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
+            &temp_phys, sdev )
+        use simple_rnd,  only: ran3
+        use simple_math, only: rotmat2d
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
         real(dp),                    intent(in)    :: temp, prior_w, u_prev(2), lse_prior
@@ -485,11 +491,19 @@ contains
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
+        real(dp),          optional, intent(in)    :: temp_phys
+        real(sp),          optional, intent(out)   :: sdev
         type(shiftmap_work), pointer :: wk
         real(dp) :: c1(self%nrots), c2(self%nrots)
         real(dp) :: ca(self%shiftmap(imap)%get_nalpha()), sa(self%shiftmap(imap)%get_nalpha())
         real(dp) :: offs(self%nrots), scal(self%nrots), usq, rho, loga, lmax, s, tgt, l, pen, s_ring
+        real(dp) :: dcell, lphys, lmax_phys, w, w0, w1(2,self%nrots), w2, xc(2), mean(2), tphys
+        real     :: rotmat(2,2), v(2)
         integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3)
+        logical  :: l_width
+        l_width = present(temp_phys) .and. present(sdev)
+        tphys   = temp
+        if( l_width ) tphys = temp_phys
         ithr =  omp_get_thread_num() + 1
         wk   => self%smwork(ithr,imap)
         if( wk%iref < 1 ) THROW_HARD('gen_shiftmap first, on this thread; shiftmap_draw')
@@ -500,36 +514,68 @@ contains
         usq  = sum(u_prev**2)
         offs = 1.d0 + wk%refpow / wk%ptclpow
         scal = -2.d0 / (real(self%nrots, dp) * wk%ptclpow)
-        ! the log masses, their maximum and its cell
-        lmax = -huge(lmax)
+        ! the log masses, their maximum and its cell (and the maximum at the physical temperature)
+        lmax      = -huge(lmax)
+        lmax_phys = -huge(lmax_phys)
         imax = 1
         do ir = 1, nrho
             rho  = self%shiftmap(imap)%get_rho(ir)
             loga = log(self%shiftmap(imap)%get_cell_area(ir))
             do ro = 1, self%nrots
                 do j = 1, nalpha
-                    pen = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
-                    l   = -temp * (offs(ro) + scal(ro) * real(wk%gout(j,ro,ir), dp)) - pen + loga
+                    pen   = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
+                    dcell = offs(ro) + scal(ro) * real(wk%gout(j,ro,ir), dp)
+                    l     = -temp * dcell - pen + loga
                     wk%lw(j,ro,ir) = real(l, sp)
                     if( l > lmax )then
                         lmax = l
                         imax = [j, ro, ir]
                     endif
+                    if( l_width ) lmax_phys = max(lmax_phys, -tphys * dcell - pen + loga)
                 enddo
             enddo
         enddo
-        s     = 0.d0
+        s  = 0.d0
+        w0 = 0.d0
+        w1 = 0.d0
+        w2 = 0.d0
         do ir = 1, nrho
+            rho    = self%shiftmap(imap)%get_rho(ir)
+            loga   = log(self%shiftmap(imap)%get_cell_area(ir))
             s_ring = 0.d0
             do ro = 1, self%nrots
                 do j = 1, nalpha
                     l = real(wk%lw(j,ro,ir), dp) - lmax
                     if( l > -40.d0 ) s_ring = s_ring + exp(l)
+                    if( .not. l_width ) cycle
+                    ! the physical log mass from the tempered one: the data term back, re-tempered
+                    pen   = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
+                    lphys = -tphys * (-(real(wk%lw(j,ro,ir), dp) + pen - loga) / temp) - pen + loga - lmax_phys
+                    if( lphys <= -40.d0 ) cycle
+                    w  = exp(lphys)
+                    xc = self%shiftmap_shift(imap, ir, j)
+                    w0 = w0 + w
+                    w1(:,ro) = w1(:,ro) + w * xc
+                    w2 = w2 + w * sum(xc**2)
                 enddo
             enddo
             s = s + s_ring
         enddo
         logz = lmax + log(s) - lse_prior
+        if( l_width )then
+            ! the mean in the particle's axes: each rotation's sum rotated as the search's shifts are
+            mean = 0.d0
+            do ro = 1, self%nrots
+                call rotmat2d(self%get_rot(ro), rotmat)
+                v    = matmul(real(w1(:,ro)), rotmat)
+                mean = mean + real(v, dp)
+            enddo
+            sdev = 0.
+            if( w0 > 0.d0 )then
+                mean = mean / w0
+                sdev = real(sqrt(max(0.d0, w2 / w0 - sum(mean**2))), sp)
+            endif
+        endif
         if( l_greedy )then
             ialpha = imax(1)
             irot   = imax(2)

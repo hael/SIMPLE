@@ -1,5 +1,10 @@
 # Polar matching layouts for many references: a measure-only benchmark
 
+> **Classification, 2026-11-02:** The measure-only layout investigation is complete; adoption of a different layout remains a separate decision.
+> See [polar_matching_layout_bench_report.md](polar_matching_layout_bench_report.md) for the delivered result and its
+> "The measurement on real data that should come first" section for limitations and follow-up work.
+> The dated plan and run evidence below are retained as history; this move supplies no new runtime validation.
+
 Planned 2026-10-21 for an unattended run on Hans's Mac (kit `~/agent_runs/runs/match_bench_mac`). It writes one
 measure-only test program and a report; it changes no production code.
 
@@ -113,7 +118,7 @@ Exit: all four layouts measured and checked, or the ones that could not be made 
 
 ### Phase 2: the report
 
-The report `doc/implementation_notes/planned/polar_matching_layout_bench_report.md` in the worktree: the answer
+The report `doc/implementation_notes/completed/polar_matching_layout_bench_report.md` in the worktree: the answer
 first in plain words (how much faster scoring can be, with which layout, for one, two and four states, and at what
 cost in memory and identity), then the table, then what it would take in production (the files and the in-plane
 draw order question) and the measurement on real data that should come first. Then `full.diff` in the run

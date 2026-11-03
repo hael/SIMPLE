@@ -28,6 +28,7 @@ public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_S
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
 public :: screen_pool_size, SCREEN_QUANTILE
+public :: shift_needs_disk, disk_radius_px, next_shift_width, record_shift_state
 private
 #include "simple_local_flags.inc"
 
@@ -50,6 +51,7 @@ type :: prob_candidate
     real    :: x      = 0.
     real    :: y      = 0.
     logical :: has_sh = .false.
+    real    :: sdev   = -1.     !< the shift's posterior width from the coarse map (px; below zero: none)
 end type prob_candidate
 
 !> The n_eff readout of the tables' posterior draws: the mean effective number of candidates exp(entropy) over a
@@ -185,6 +187,7 @@ type :: prob_refined_entry
     real    :: x
     real    :: y
     real    :: loss
+    real    :: sdev   !< the shift's posterior width from the coarse map (px; below zero: none)
 end type prob_refined_entry
 
 !> Per-particle statistics of the pose posterior over a dense table row (prob_post_diag=yes): the mode
@@ -1501,5 +1504,46 @@ contains
             endif
         enddo
     end function screen_pool_size
+
+    !> The dynamic centring's rule (shift_sigma > 0): a particle searches the disk when it has no history in this
+    !! workflow (the sentinel) or when three of its prior widths exceed the stage's window
+    pure logical function shift_needs_disk( shsig, trs )
+        real, intent(in) :: shsig, trs
+        shift_needs_disk = shsig < 0. .or. 3. * shsig > trs
+    end function shift_needs_disk
+
+    !> the disk's radius: three sigma of the pick prior in the calculator's pixels, bounded by the box
+    pure real function disk_radius_px( shift_sigma, smpd, box )
+        real,    intent(in) :: shift_sigma, smpd
+        integer, intent(in) :: box
+        disk_radius_px = min(3. * shift_sigma / smpd, 0.5 * real(box) - 1.)
+    end function disk_radius_px
+
+    !> The particle's prior width for its next search: the posterior width sdev of this one (the previous width
+    !! when the assigned pose carries none), at least the radius r searched when the move d reached that radius's
+    !! bound (within a tenth of it, or half a map step where the map is finer): a posterior truncated at the bound
+    !! says nothing of the mass beyond it
+    pure real function next_shift_width( sdev, sig_prev, d, r, step ) result( sig )
+        real, intent(in) :: sdev, sig_prev, d, r, step
+        sig = sig_prev
+        if( sdev >= 0. ) sig = sdev
+        if( d >= max(0.9 * r, r - 0.5 * step) ) sig = max(sig, r)
+    end function next_shift_width
+
+    !> The dynamic centring's state after a search, written by the consumer: shincr the move d and shsig the prior
+    !! width of the next search (next_shift_width); the radius searched follows from the state before the search
+    subroutine record_shift_state( os, iptcl, d, sdev, shift_sigma, smpd, box, trs, kfromto )
+        class(oris), intent(inout) :: os
+        integer,     intent(in)    :: iptcl, box, kfromto(2)
+        real,        intent(in)    :: d, sdev, shift_sigma, smpd, trs
+        real :: sig_prev, r, step
+        sig_prev = os%get(iptcl, 'shsig')
+        r = trs
+        if( shift_needs_disk(sig_prev, trs) ) r = disk_radius_px(shift_sigma, smpd, box)
+        ! the coarse map's radial step (setup_shiftmaps: the box over four times the coarse band's last shell)
+        step = real(box) / (4. * real(max(kfromto(1) + 1, kfromto(2) / 2)))
+        call os%set(iptcl, 'shincr', d)
+        call os%set(iptcl, 'shsig',  next_shift_width(sdev, sig_prev, d, r, step))
+    end subroutine record_shift_state
 
 end module simple_eul_prob_tab_utils

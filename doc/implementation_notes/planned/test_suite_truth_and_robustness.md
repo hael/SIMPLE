@@ -2,8 +2,8 @@
 
 Implementation note, 2026-10-16. **Phases 0 to 9 done (see Progress; the
 run `test_truth` carried out Phases 0 to 6, `test_truth_sync` Phases 7 to 9
-on the merged code), the report file has not been written yet;
-the dataset layer follows.** Written
+on the merged code), with the [run report](test_suite_truth_and_robustness_report.md) written
+on 2026-10-19. The dataset layer and remaining follow-up work are still planned.** Written
 after the run `ms_speed`, which could not tell whether its multi-state
 schedule change was correct: no test knows the state labels, and the checks it
 used on beta-galactosidase measured run-to-run scatter, not correctness. The

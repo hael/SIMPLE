@@ -380,7 +380,15 @@ contains
         class(stream_pool2D), intent(inout) :: self
         class(sp_project),    intent(inout) :: sets(:)
         integer,              intent(out)   :: nmics, nsel
+        integer :: iptcl, nptcls_before
+        nptcls_before = self%proj%os_ptcl2D%get_noris()
         call append_project_sets(self%proj, sets)
+        ! the appended particles are new to the pool: not yet centred here (the dynamic centring's sentinel),
+        ! whatever their chunk did
+        do iptcl = nptcls_before + 1, self%proj%os_ptcl2D%get_noris()
+            call self%proj%os_ptcl2D%set(iptcl, 'shsig',  -1.)
+            call self%proj%os_ptcl2D%set(iptcl, 'shincr',  0.)
+        enddo
         nmics = self%proj%os_mic%get_noris()
         nsel  = self%proj%os_ptcl2D%count_state_gt_zero()
     end subroutine append_sets

@@ -20,7 +20,7 @@ phase 9 (the coordination term measured on the 66 real maps, section 10.11
 here, not yet run), the validation of 10.8, promotion of anything beyond
 diagnostics, the open questions of section 13 and the smaller open items. The
 living entry point for picking the work up is
-[`../planned/species_discovery_status.md`](../planned/species_discovery_status.md).
+[`../planned/species_discovery_status.md`](species_discovery_status.md).
 Sections 10.8, 10.11 and 13 below keep their original text as the record of
 what was planned; the unfinished note supersedes them.
 

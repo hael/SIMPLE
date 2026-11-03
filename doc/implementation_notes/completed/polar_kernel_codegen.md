@@ -1,5 +1,10 @@
 # Production polar kernels: faster code for the same per-pair sums
 
+> **Classification, 2026-11-02:** The Mac and x86 kernel changes are implemented; the final phase is recorded as done.
+> See [polar_kernel_codegen_x86_report.md](polar_kernel_codegen_x86_report.md) for the delivered result and its
+> "Open for the maintainer" section for limitations and follow-up work.
+> The dated plan and run evidence below are retained as history; this move supplies no new runtime validation.
+
 Planned 2026-10-21 for an unattended night run on Hans's Mac (kit `~/agent_runs/runs/kernel_mac`). It follows the
 measure-only benchmark of the same evening (`polar_matching_layout_bench.md` and its report, in the same directory
 of the worktree) and works in the same worktree, where the benchmark program is present but not committed.
@@ -90,7 +95,7 @@ Exit: every item kept or restored with its evidence; the correctness checks pass
 
 ### Phase 2: the report
 
-`doc/implementation_notes/planned/polar_kernel_codegen_report.md` in the worktree: the answer first (how much faster
+`doc/implementation_notes/completed/polar_kernel_codegen_report.md` in the worktree: the answer first (how much faster
 the per-pair kernel is, whether it is byte-identical, what changed in the code), a table per item, the diagnosis
 of why production was slower, and what it means for a real run (the share of scoring in a real table is still to
 be measured on the Dell). Then the diffs: `full.diff` (everything since HEAD, the benchmark included) and
@@ -139,11 +144,11 @@ it is closer to the machines SIMPLE normally runs on, and the Mac only has to bu
 
 | file | why | phase |
 |---|---|---|
-| `doc/implementation_notes/planned/polar_kernel_codegen.md` | this plan: Phases 3-4, file table, progress | 3 4 |
+| `doc/implementation_notes/completed/polar_kernel_codegen.md` | this plan: Phases 3-4, file table, progress | 3 4 |
 | `src/main/pftc/simple_polarft_corr.f90` | the chosen form of the euclid and cc sums | 4 |
 | `src/main/commanders/test/simple_polar_matching_bench.f90` | benchmark, test side, only if the measurements need it | 3 4 |
 | `src/main/commanders/test/simple_commanders_test_highlevel_matchbench.f90` | benchmark driver, test side, only if the measurements need it | 3 4 |
-| `doc/implementation_notes/planned/polar_kernel_codegen_x86_report.md` | the x86 report | 4 |
+| `doc/implementation_notes/completed/polar_kernel_codegen_x86_report.md` | the x86 report | 4 |
 
 ## The clock
 

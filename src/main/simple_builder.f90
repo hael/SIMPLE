@@ -46,6 +46,7 @@ type :: builder
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
+    logical,                allocatable :: lmsk_box(:,:,:)        !< the box's (shift_sigma > 0: a particle on the disk)
     logical,                allocatable :: lmsk_crop(:,:,:)       !< logical circular 2D mask for cropped image
 
     ! PRIVATE EXISTENCE VARIABLES
@@ -289,6 +290,7 @@ contains
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
+            if( params%l_shift_map ) call mskimg%disc([params%box,params%box,1], params%smpd, params%msk_box, self%lmsk_box)
             call mskimg%kill
             ! mask memoization
             call self%img%memoize_mask_coords
@@ -360,6 +362,7 @@ contains
             if( allocated(self%subspace_full2sub_map) ) deallocate(self%subspace_full2sub_map)
             if( allocated(self%fsc)                   ) deallocate(self%fsc)
             if( allocated(self%lmsk)                  ) deallocate(self%lmsk)
+            if( allocated(self%lmsk_box)              ) deallocate(self%lmsk_box)
             if( allocated(self%lmsk_crop)             ) deallocate(self%lmsk_crop)
             self%general_tbox_exists = .false.
         endif

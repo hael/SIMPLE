@@ -7,9 +7,9 @@ reconstructs half maps with them, and `simulate_scattering` and the wave mode of
 `simulate_particles`, which draw data with the same operators. The design came from Ghostbuster, the reconstruction
 inside the specter package, and was rebuilt on SIMPLE's own machinery; the plan
 with its measurements is
-`doc/implementation_notes/planned/ghostbuster_operators.md` (sections 3 and 4,
+`doc/implementation_notes/completed/ghostbuster_operators.md` (sections 3 and 4,
 and section 8 for the evidence of every number below), the run's summary
-`doc/implementation_notes/planned/ghostbuster_operators_report.md`; the run that
+`doc/implementation_notes/completed/ghostbuster_operators_report.md`; the run that
 added the wave mode of `simulate_particles` and made the operator faster is
 `doc/implementation_notes/completed/star_origins_and_wave_simulate_run_report.md`.
 The user guides are `doc/user_guide/reconstruct3D_wave.md`,

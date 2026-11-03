@@ -10,16 +10,28 @@ use simple_matcher_smpl_and_lplims, only: set_bp_range3D, set_bp_range2D
 use simple_projector,               only: projector
 use simple_strategy2D_utils,        only: calc_cavg_offset
 use simple_memoize_ft_maps,         only: ft_map_get_farray_shape
+use simple_eul_prob_tab_utils,      only: shift_needs_disk
 implicit none
 
 ! Particle image processing for alignment
-public :: prepimg4align, prepimg4align_cached, prepimg4align_cart
+public :: prepimg4align, prepimg4align_cropped, prepimg4align_cart, ptcl_on_disk
 ! Reference processing for alignment
 public :: prep2Dref, calc_2Dref_offset
 private
 #include "simple_local_flags.inc"
 
 contains
+
+    !> The dynamic centring (shift_sigma > 0): a particle that searches the disk, not yet centred in this workflow or
+    !! with a prior width beyond a third of the window, is prepared under the box's mask, since the molecular mask at
+    !! the pick would cut it; the others under the stage's mask
+    logical function ptcl_on_disk( params, build, iptcl )
+        class(parameters), intent(in) :: params
+        class(builder),    intent(in) :: build
+        integer,           intent(in) :: iptcl
+        ptcl_on_disk = .false.
+        if( params%l_centring ) ptcl_on_disk = shift_needs_disk(build%spproj_field%get(iptcl, 'shsig'), params%trs)
+    end function ptcl_on_disk
 
     !>  \ brief  prepares one particle image for alignment
     !          serial routine
@@ -32,35 +44,47 @@ contains
         class(image),      intent(inout) :: img_out_pd
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: shvec(2), crop_factor
+        real            :: shvec(2), crop_factor, mskrad
+        logical         :: l_box
         crop_factor = real(params%box_crop) / real(params%box)
         shvec(1)    = -build%spproj_field%get(iptcl, 'x') * crop_factor
         shvec(2)    = -build%spproj_field%get(iptcl, 'y') * crop_factor
+        ! the particle's mask: the box's for one on the disk (ptcl_on_disk), the stage's otherwise
+        l_box  = ptcl_on_disk(params, build, iptcl)
+        mskrad = params%msk_crop
+        if( l_box ) mskrad = params%msk_box_crop
         ! Phase-flipping
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)
                 ! fused noise normalization, FFT, clip & shift
-                call img%norm_noise_fft_clip_shift(build%lmsk, img_out, shvec)
+                if( l_box )then
+                    call img%norm_noise_fft_clip_shift(build%lmsk_box, img_out, shvec)
+                else
+                    call img%norm_noise_fft_clip_shift(build%lmsk, img_out, shvec)
+                endif
             case(CTFFLAG_YES)
                 ctfparms%smpd = ctfparms%smpd / crop_factor != smpd_crop
                 tfun          = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
                 ! fused noise normalization, FFT, clip, shift & CTF flip
-                call img%norm_noise_fft_clip_shift_ctf_flip(build%lmsk, img_out, shvec, tfun, ctfparms)
+                if( l_box )then
+                    call img%norm_noise_fft_clip_shift_ctf_flip(build%lmsk_box, img_out, shvec, tfun, ctfparms)
+                else
+                    call img%norm_noise_fft_clip_shift_ctf_flip(build%lmsk, img_out, shvec, tfun, ctfparms)
+                endif
             case DEFAULT
                 THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
         ! fused IFFT, mask, FFT
-        call img_out%ifft_mask_pad_fft(params%msk_crop, img_out_pd)
+        call img_out%ifft_mask_pad_fft(mskrad, img_out_pd)
     end subroutine prepimg4align
 
-    !>  \ brief  prepares one cached particle image for alignment
+    !>  \ brief  prepares one cropped particle image (a pass's record) for alignment
     !          serial routine
-    !>  img is a particle from the downscaled cache: already noise-normalized against
-    !>  the full-box lmsk and already Fourier-cropped, so only the iteration-dependent
-    !>  remainder is left to do. Every stage below is the same operation, in the same
-    !>  order, as its counterpart in prepimg4align.
-    subroutine prepimg4align_cached( params, build, iptcl, img, img_out, img_out_pd )
+    !>  img is already noise-normalized against the full-box lmsk and already Fourier-cropped,
+    !>  so only the iteration-dependent remainder is left to do. Every stage below is the
+    !>  same operation, in the same order, as its counterpart in prepimg4align.
+    subroutine prepimg4align_cropped( params, build, iptcl, img, img_out, img_out_pd )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: iptcl
@@ -69,10 +93,13 @@ contains
         class(image),      intent(inout) :: img_out_pd
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: shvec(2), crop_factor
+        real            :: shvec(2), crop_factor, mskrad
         crop_factor = real(params%box_crop) / real(params%box)
         shvec(1)    = -build%spproj_field%get(iptcl, 'x') * crop_factor
         shvec(2)    = -build%spproj_field%get(iptcl, 'y') * crop_factor
+        ! the particle's mask: the box's for one on the disk (its record keeps its noise normalisation)
+        mskrad = params%msk_crop
+        if( ptcl_on_disk(params, build, iptcl) ) mskrad = params%msk_box_crop
         ! Phase-flipping
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         select case(ctfparms%ctfflag)
@@ -85,11 +112,11 @@ contains
                 ! fused FFT, shift & CTF flip
                 call img%fft_clip_shift_ctf_flip(img_out, shvec, tfun, ctfparms)
             case DEFAULT
-                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align_cached')
+                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align_cropped')
         end select
         ! fused IFFT, mask, FFT
-        call img_out%ifft_mask_pad_fft(params%msk_crop, img_out_pd)
-    end subroutine prepimg4align_cached
+        call img_out%ifft_mask_pad_fft(mskrad, img_out_pd)
+    end subroutine prepimg4align_cropped
 
     !> The Cartesian sibling of prepimg4align (plan section 6.4): the full-disk observation of one
     !! particle as prepimg4align prepares the polar particle

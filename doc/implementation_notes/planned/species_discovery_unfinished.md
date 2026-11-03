@@ -1,10 +1,11 @@
 # Species discovery: open work
 
-Status (2026-10-20): the opt-in prototype is done and in the tree; what is open is one
-measurement run (phase 9), the validation that must follow it, promotion of species results
-into the standard SINGLE products, and a list of open questions. The living entry point for
-picking the work up is [`species_discovery_status.md`](species_discovery_status.md) (it holds the
-current numbers, the FePt findings, the data locations and the lessons). The design, method,
+Status consolidated 2026-11-02: this is the single open-work list for species discovery.
+The prototype and the separate `detect_atomic_species` program are implemented. The 2026-10-27
+update below records the completed part of phase 9; planted-species sensitivity, half-map
+validation and the remaining promotion decisions stay open. No new measurement was made for this cleanup.
+The [dated evidence and handoff](../completed/species_discovery_status.md) holds the numbers,
+FePt findings, data locations and lessons. The design, method,
 rulings and the record of phases 0 to 8 are in
 [`../completed/species_discovery_completed.md`](../completed/species_discovery_completed.md); the
 run reports are in [`../completed/species_discovery_report.md`](../completed/species_discovery_report.md).
@@ -42,14 +43,14 @@ fitted together with the classes. A "recovered atom" is a weaker atom found in t
 (the map minus the model of the atoms already found). "Promotion" means making species results
 part of the standard products instead of diagnostics beside them.
 
-The learning so far. Species discovery does not invent species on single-species real maps
+Historical learning before the 2026-10-27 update. Species discovery does not invent species on single-species real maps
 (one class on about 95 percent of 66 Pt maps), but it is insensitive: a class planted at 0.6 of
 the Pt density was called on 4 of 66 maps, at 0.4 on 21. The limit is how much real atoms of one
 element differ in intensity (about twice the measurement noise, mostly by environment). The
 coordination term was added to absorb that trend. It has passed the synthetic tests and a numpy
 check on one real map; it has not run on the real maps.
 
-## 1. Phase 9: the coordination term on the 66 real Pt maps (not run)
+## 1. Phase 9: the coordination term on the 66 real Pt maps (partly measured)
 
 > **Partly measured, 2026-10-27** (the second run of the atomic density model, its phase 9; tables in
 > `~/agent_runs/atomic_density_model_2/scratch/keep/validation_p9/`). With the final code (species-free `detect_atoms`,
@@ -59,7 +60,10 @@ check on one real map; it has not run on the real maps.
 > (expectations 2 to 4) and the five-run comparison below were not run; they remain the open part of this section,
 > now as runs of `detect_atoms` followed by `detect_atomic_species`.
 
-A measurement only. No source change. It decides whether promotion goes ahead.
+The planting and matched comparisons remain measurement work. Run them through species-free
+`detect_atoms` followed by `detect_atomic_species`; the five old CLI combinations below are the
+historical comparison arms, not commands to copy into a current run. Half-map inputs belong to
+`detect_atomic_species`. Use the acceptance criteria below without reviving retired keys.
 
 Preconditions, all met: the term is in the checkout (`fit_species_mixture` in
 `src/main/nano/simple_nano_species.f90`, `discover_species` in `simple_nanoparticle.f90`,
@@ -153,11 +157,10 @@ Three parts, judged by the maintainer:
   plan for an `rnd_seed` key is `../../refactoring_notes/planned/rnd_seed_parameter.md`.
 - A light species confined to the surface layer is not a target (ruling of 2026-10-09): it cannot
   be told from weak, partly occupied surface sites.
-- B factors and occupancy follow after species: `atom_bfactor_model.md`. Per-atom Gaussian fits
-  on filtered maps invent a core-to-surface B rise (+4.4 Å² on a particle generated with one B).
-  The preferred route measures a smooth B profile with depth in `refine3D_nano`, where references
-  are matched to the particle images. An occupancy profile from that work could replace the
-  coordination slope.
+- B factors and occupancy: [the B-factor note](atom_bfactor_model.md) and
+  [atomic density model](atomic_density_model.md) own the follow-up. The 2026-10-25 ruling
+  settles measurement on the map alone; the older image-side proposal is withdrawn.
+  The historical +4.4 Å² apparent B rise remains a warning about interpretation.
 
 ## 5. Promotion (waits for sections 1 to 3)
 

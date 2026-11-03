@@ -148,7 +148,7 @@ run's work.
   - the fixes above;
   - the `single_workflow` test: `fcc` runs the program on the simulated trajectory, and `wurtzite` keeps the hand
     chain and now carries the atomicity-prior refinement `fcc` had;
-  - the policy note `model_cavgs_rejection.md` and the test descriptions.
+  - the policy note `../../policies/sieving_and_rejection/model_cavgs_rejection.md` and the test descriptions.
 - **Phase 2** (`run/review/phase_2.diff`): the plan's Progress only; no source changed.
 - **Phase 3**: this report and the plan's Progress entry.
 

@@ -1,6 +1,7 @@
 !@descr: 2D strategy for probabilistic class assignment (precomputed by prob_align2D/prob_tab2D)
 module simple_strategy2D_prob
 use simple_pftc_srch_api
+use simple_eul_prob_tab_utils, only: record_shift_state
 use simple_eul_prob_tab_utils, only: eulprob_corr_switch
 use simple_parameters,       only: parameters
 use simple_strategy2D,       only: strategy2D
@@ -57,9 +58,10 @@ contains
                                   self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%y]
             endif
             call self%s%refine_selected_continuously
-            ! the centring stage's drain: the magnitude of this iteration's move (the disk again next time if it
-            ! went beyond the next stage's window)
-            if( self%s%p_ptr%l_shift_map ) call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'shincr', norm2(self%s%best_shvec))
+            ! the dynamic centring's state: this iteration's move and the particle's prior width for its next search
+            if( self%s%p_ptr%l_centring ) call record_shift_state(self%s%b_ptr%spproj_field, self%s%iptcl,&
+                &norm2(self%s%best_shvec), self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%sdev, self%s%p_ptr%shift_sigma,&
+                &self%s%p_ptr%smpd, self%s%p_ptr%box, self%s%p_ptr%trs, self%s%b_ptr%pftc%get_kfromto())
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)
             call os%set(self%s%iptcl, 'frac', frac)

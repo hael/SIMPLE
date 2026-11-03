@@ -1,9 +1,13 @@
 # Ghostbuster-compatible scattering simulator
 
+> **Classification, 2026-11-02:** the simulator implementation and local validation are complete;
+> the 2026-10-24 update records its transfer to the shared wave operators.
+> The dated findings and validation limits below are preserved.
+
 ## Update, 2026-10-24: conventions corrected, simulator on the shared operator
 
 `simulate_scattering` now runs on the wave operators that `reconstruct3D_wave` reconstructs with
-(`doc/implementation_notes/planned/ghostbuster_operators.md`, its report beside it, and
+(`doc/implementation_notes/completed/ghostbuster_operators.md`, its report beside it, and
 `doc/policies/3D/wave_model_policy.md`). What changed for this program, and why:
 
 - **Signs.** The first implementation conjugated both the Fresnel propagator (`exp(+i pi lambda d k^2)`) and

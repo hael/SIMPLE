@@ -482,7 +482,7 @@ the lattice features. `apply` writes the class diameter (`diam`, from the strong
 ### The two gates of `trajectory_solve3D` (raw class averages)
 
 `single_exec prg=trajectory_solve3D` gates before it denoises, because the flex denoiser turns a frame without a
-particle, or a latticeless blob, into a pooled particle image (measured twice in `trajectory_solve3D.md`, phase 1).
+particle, or a latticeless blob, into a pooled particle image (measured twice in `../../implementation_notes/completed/trajectory_solve3D.md`, phase 1).
 The order is: the raw frames centred (`center2D_nano`); the diameter estimated on the centred chunk averages; the
 start model; `refine2D_nano` on the raw frames; and then the two gates, coupled on its class averages. A class is
 kept only if both keep it. Then the prune; only the kept frames are denoised before 3D.

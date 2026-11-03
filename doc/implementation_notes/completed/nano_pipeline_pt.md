@@ -1,5 +1,10 @@
 # The nanoparticle pipeline on every platinum trajectory: denoise, reject, center, refine
 
+> **Classification, 2026-11-02:** The ten-trajectory production run and its report are complete. Map assessment remains the maintainer's.
+> See [nano_pipeline_pt_report.md](nano_pipeline_pt_report.md) for the delivered result and its
+> "9. Left open for the maintainer" section for limitations and follow-up work.
+> The dated plan and run evidence below are retained as history; this move supplies no new runtime validation.
+
 An unattended run on the Dell (`nano_pipeline_pt`), 2026-10-29. It runs the present SINGLE pipeline, from the
 graphene-subtracted frames of a tracked particle to its time-integrated map, on every platinum trajectory in
 `/data2/NanoX_trajs`, fixes what breaks on the way, and leaves the maps and their products in one place for the
@@ -140,7 +145,7 @@ trajectory. Ends DONE with every trajectory of the half either mapped or stopped
 **Phase 2, the second half.** The same for the rest.
 
 **Phase 3, the report.** The table complete; the second half of this note's Progress; a report
-(`doc/implementation_notes/planned/nano_pipeline_pt_report.md`) that reads on its own: what ran, every fix
+(`doc/implementation_notes/completed/nano_pipeline_pt_report.md`) that reads on its own: what ran, every fix
 with its cause and the trajectory that exposed it, the distribution of each stage's numbers over the
 trajectories, where the products are and how the maintainer finds a trajectory's map, and what did not
 finish and why. The species status notes are not touched.
@@ -153,8 +158,8 @@ chain's modules are listed for every phase because the repair mandate reaches al
 
 | File | What changes | Phases |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/nano_pipeline_pt.md` | this note: Progress, file-table rows | each |
-| `doc/implementation_notes/planned/nano_pipeline_pt_report.md` | the report | 3 |
+| `doc/implementation_notes/completed/nano_pipeline_pt.md` | this note: Progress, file-table rows | each |
+| `doc/implementation_notes/completed/nano_pipeline_pt_report.md` | the report | 3 |
 | `src/main/commanders/single/single_commanders_trajectory.f90` | trajectory_denoise, trajectory_import: fixes | each |
 | `src/main/flex/simple_flex_traj_denoise.f90` | the flex denoiser: fixes | each |
 | `src/main/flex/simple_flex_cls_kernel.f90` | its kernel: fixes | each |
@@ -482,7 +487,7 @@ final model. Five of the ten final detections reached the cap on transfer rounds
 for the maintainer. `scratch/keep/pipeline/README.txt` now also says how to find one trajectory's map, which
 denoised stacks are kept, and what the scripts do. The ten trajectories occupy 5.7 GB.
 
-**Files changed in this phase.** `doc/implementation_notes/planned/nano_pipeline_pt_report.md` (new) and this
+**Files changed in this phase.** `doc/implementation_notes/completed/nano_pipeline_pt_report.md` (new) and this
 note. No source file changed, so no build or test was needed. Every job of the run has ended.
 
 **Exit items.** The table is complete and checked against the directories: done (`distributions.txt`). The

@@ -306,7 +306,7 @@ without relying on memory-mapped files or `/dev/shm` shared between images.
 
 Collectives do not reduce the arithmetic of scoring or model construction. NUMA placement can improve locality
 but does not add hardware memory bandwidth. The pre-step needs a fresh compute/I/O/assignment breakdown; related
-kernel work is in `doc/implementation_notes/planned/polar_matching_layout_bench.md` and
+kernel work is in `doc/implementation_notes/completed/polar_matching_layout_bench.md` and
 `doc/refactoring_notes/completed/prob_search_speedup.md`. The master still prepares the canonical model once;
 parallel construction is optional later work. The initial wins are file round trips and launches. Buffer retention
 and locality are separately measured opportunities, not gains implied by the payload table alone.

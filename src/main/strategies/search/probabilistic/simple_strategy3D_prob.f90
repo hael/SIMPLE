@@ -2,7 +2,7 @@
 module simple_strategy3D_prob
 use simple_core_module_api
 use simple_strategy3D_utils, only: assign_ori, candidate_pose, resolve_inplane_e3
-use simple_eul_prob_tab_utils, only: prob_insert_pose
+use simple_eul_prob_tab_utils, only: prob_insert_pose, record_shift_state
 use simple_parameters,      only: parameters
 use simple_strategy3D_pftc,  only: strategy3D_pftc
 use simple_strategy3D_srch, only: strategy3D_spec
@@ -85,9 +85,11 @@ contains
             else
                 call assign_ori(self%s, iref, irot, corr, sh)
             endif
-            ! the centring stage's drain (shift_sigma > 0): the magnitude of this iteration's move (the disk again next
-            ! time if it went beyond the next stage's window)
-            if( self%s%p_ptr%l_shift_map ) call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'shincr', norm2(sh))
+            ! the dynamic centring's state (shift_sigma > 0): this iteration's move and the particle's prior width for
+            ! its next search
+            if( self%s%p_ptr%l_centring ) call record_shift_state(self%s%b_ptr%spproj_field, self%s%iptcl, norm2(sh),&
+                &self%spec%eulprob_obj_part%assgn_map(iptcl_map)%sdev, self%s%p_ptr%shift_sigma, self%s%p_ptr%smpd,&
+                &self%s%p_ptr%box, self%s%p_ptr%trs, self%s%b_ptr%pftc%get_kfromto())
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
             self%assignment_valid = .true.
         else

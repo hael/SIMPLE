@@ -74,8 +74,6 @@ contains
         real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
         logical :: l_fresh_start
-        ! the polar shift map lives in the 2D tables
-        if( params%l_shift_map .and. .not. str_has_substr(params%refine, 'prob') ) THROW_HARD('shift_sigma needs the 2D table: refine=prob or prob_snhc')
         ! the shift prior's width for the committed class's polish, as the 2D tables' (shift_prior_sigma2)
         s2D%shift_prior_sigma2 = 0.
         if( params%l_shift_prior .and. str_has_substr(params%refine, 'prob') ) &

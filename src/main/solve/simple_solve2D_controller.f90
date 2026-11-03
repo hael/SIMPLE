@@ -8,8 +8,8 @@ implicit none
 public :: stage_params, determine_solve2D_stages, mskdiam2lplimits_refine2D, set_cline_refine2D_stage
 public :: set_solve2D_sampling_policy, solve2D_seed_pass_iter, set_cline_refine2D_seed_pass
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
-public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, CENTRING_STAGE
-public :: solve2D_centring_stage, solve2D_mskdiam_estimate
+public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, FIRST_SHIFT_STAGE
+public :: solve2D_first_shift_stage, solve2D_mskdiam_estimate
 private
 #include "simple_local_flags.inc"
 
@@ -25,7 +25,7 @@ integer,          parameter :: PROBREFINE_STAGE   = 3
 integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
 integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
-integer,          parameter :: CENTRING_STAGE     = 2                ! the polar shift map's centring stage (shift_sigma > 0)
+integer,          parameter :: FIRST_SHIFT_STAGE  = 2                ! the first stage with shifts: the dense table under the key, the box's mask for an automatic run's mask estimate
 integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
@@ -43,7 +43,7 @@ end type stage_params
 type refine2D_stage_cfg
     type(string) :: refine, center, objfun, refs, gauref, ml_reg
     integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
-    real         :: trs=0., gaufreq=0., mskdiam=0., shift_sigma=0., trs_window=0.
+    real         :: trs=0., gaufreq=0., mskdiam=0., shift_sigma=0.
     logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
     logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
 end type refine2D_stage_cfg
@@ -144,7 +144,6 @@ contains
         call cline_pass%delete('gaufreq')
         ! Seeded restarts skip the centring stage and keep the ordinary shift window.
         call cline_pass%delete('shift_sigma')
-        call cline_pass%delete('trs_window')
         if( stage_parms(istage)%l_lpset )then
             call cline_pass%set('lp', stage_parms(istage)%lp)
         else
@@ -256,8 +255,6 @@ contains
                     case(2,3,4)
                         call set_refine2D_stage_regular_refs( cfg, params, stage_parms, istage )
                 end select
-                ! the centring stage ends when its shifts stabilise (check_conv2D's shift exit), within its budget
-                if( solve2D_centring_stage(params, istage) ) cfg%minits = cfg%iter + 1
             case(2)
                 cfg%imaxits   = cfg%iter + sampled_stage_nits(stage_parms(istage)%update_frac, params%nits_per_stage) - 1
                 cfg%trs       = stage_parms(istage)%trslim
@@ -326,8 +323,8 @@ contains
         type(refine2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
         integer,                   intent(in)    :: istage, nstages
-        ! the centring stage runs the dense table, the only fill with the map
-        if( solve2D_centring_stage(params, istage) )then
+        ! the first stage with shifts runs the dense table under the key: every particle not yet centred takes the disk
+        if( solve2D_first_shift_stage(params, istage) )then
             cfg%refine = 'prob'
         else if( istage < PROBREFINE_STAGE )then
             cfg%refine = 'snhc_smpl'
@@ -340,10 +337,9 @@ contains
         endif
     end subroutine set_refine2D_stage_search_policy
 
-    !> the stage's mask and the polar shift map's key: the centring stage's mask is the box's, the others' the
-    !! stage's (the user's or the centring stage's estimate, set by the commander); the key goes to every stage
-    !! from the centring stage on (the map initialises the tables' polish; stage 1 has no table), the centring
-    !! stage alone getting the window it measures its drain against
+    !> the stage's mask and the polar shift map's key: the stage's mask (the user's, the box's for the mask estimate
+    !! of an automatic run's first shift stage, or that estimate, set by the commander); the key goes to every stage
+    !! from the first with shifts on (stage 1 is the SNHC window stage, which has no table)
     subroutine set_refine2D_stage_mask_policy( cfg, params, stage_parms, istage )
         type(refine2D_stage_cfg), intent(inout) :: cfg
         class(parameters),         intent(in)    :: params
@@ -351,12 +347,8 @@ contains
         integer,                   intent(in)    :: istage
         cfg%mskdiam     = stage_parms(istage)%mskdiam
         cfg%shift_sigma = 0.
-        cfg%trs_window  = 0.
-        ! from the centring stage on: stage 1 is the SNHC window stage, which has no table
-        if( params%l_shift_map .and. istage >= CENTRING_STAGE .and. stage_parms(istage)%trslim > 0. )&
+        if( params%l_shift_map .and. istage >= FIRST_SHIFT_STAGE .and. stage_parms(istage)%trslim > 0. )&
             &cfg%shift_sigma = params%shift_sigma
-        ! the centring stage measures its posterior mass beyond the window the next stage searches
-        if( solve2D_centring_stage(params, istage) ) cfg%trs_window = stage_parms(min(istage + 1, size(stage_parms)))%trslim
     end subroutine set_refine2D_stage_mask_policy
 
     logical function refine2D_stage_requires_full_assignment( cfg, stage_parms, istage ) result( l_required )
@@ -414,11 +406,6 @@ contains
             call cline_refine2D%delete('shift_sigma')
         endif
         if( cfg%mskdiam > 0. ) call cline_refine2D%set('mskdiam', cfg%mskdiam)
-        if( cfg%trs_window > 0. )then
-            call cline_refine2D%set('trs_window', cfg%trs_window)
-        else
-            call cline_refine2D%delete('trs_window')
-        endif
         call cline_refine2D%set('center',     cfg%center)
         call cline_refine2D%set('restore_cavgs', 'yes')
         call cline_refine2D%set('box_crop',   stage_parms(istage)%box_crop)
@@ -438,13 +425,13 @@ contains
         call cline_refine2D%delete('endit')
     end subroutine emit_refine2D_stage_cfg
 
-    !> the centring stage of the polar shift map (shift_sigma > 0): the first stage with references, where the table
-    !! maps the disk of three sigma under the box's mask and the stage exits once the shifts stabilise
-    logical function solve2D_centring_stage( params, istage )
+    !> the first stage with shifts under the polar shift map's key (shift_sigma > 0): the dense table, where every
+    !! particle not yet centred takes the disk; an automatic run estimates its mask from this stage's class averages
+    logical function solve2D_first_shift_stage( params, istage )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
-        solve2D_centring_stage = params%l_shift_map .and. istage == CENTRING_STAGE
-    end function solve2D_centring_stage
+        solve2D_first_shift_stage = params%l_shift_map .and. istage == FIRST_SHIFT_STAGE
+    end function solve2D_first_shift_stage
 
     !> the mask diameter (A) the stages after the centring stage take from its class averages: automask2D's
     !! diameters of the populated classes, their population-weighted 90th percentile, as the diameter itself (a

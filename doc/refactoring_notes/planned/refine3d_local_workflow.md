@@ -345,8 +345,10 @@ The maintainer approved removing only its nu_envelope route, settings, routine a
 UI entries; removal and static registry/descriptor/whitespace checks are complete.
 Workflow regression tests, findings, logs and downloaded maps were retained.
 
-Detailed counters, errors, hashes and retained replay log are in the local
-[evidence record](../../../codex_logs/cfar_nu_handoff_20261029_134846/RESULT.md).
+Detailed counters, errors, hashes and retained replay log were recorded at the checkout-local
+path `codex_logs/cfar_nu_handoff_20261029_134846/RESULT.md`. That artifact is absent from this
+checkout; the summary above is retained, and replay equivalence remains unproven. Retrieve the
+original artifact before relying on its detailed counters or hashes.
 Earlier focused evidence (817.4 s) reported producer/local/final cFAR
 0.8331/0.9173/0.0000 and FSC=0.143 approximately 3.228/3.120/3.120 A; it is
 historical diagnostic evidence, not a matched quality comparison.

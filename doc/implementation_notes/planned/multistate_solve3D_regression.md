@@ -1,5 +1,10 @@
 # Multi-state solve3D regression: diagnosis on a simulated two-state set
 
+> **Current status, 2026-11-02:** the investigation has run through the Phase 7 progress entry.
+> The [fix check](multistate_solve3D_regression_report.md) and
+> [stage-5 check](multistate_stage5_prob_check_report.md) report partial recovery, not a resolved regression.
+> The original "not run" statement below describes the proposal before those measurements.
+
 Planned 2026-10-21 for a Dell run of about two days (arun run `ms_regression`), base 72930a3a4.
 Revised the same day after the maintainer's rulings (section "Rulings"). Nothing in this note has
 been run yet. The facts in "What we know" were read from the code and the history and checked by a

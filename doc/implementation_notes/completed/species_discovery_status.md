@@ -1,21 +1,25 @@
 # Species discovery: where it stands and where to go next
 
+> **Classification, 2026-11-02:** completed evidence and handoff record, including the dated October updates.
+> Maintain next steps only in [species discovery: open work](../planned/species_discovery_unfinished.md).
+> The results below describe their recorded builds; they are not new validation of today's source.
+
 Status note, 2026-10-12 (links updated 2026-10-20 after the note was split into
-completed and unfinished parts), at master `618d709ec`. It is the entry point for
-picking the work up again after a break and does not repeat the design.
-Three other documents hold the detail:
+completed and unfinished parts), at master `618d709ec`. It preserves the evidence and data locations for that handoff.
+The open-work note is the current entry point for resuming development.
+Four other documents hold the detail:
 
 - `../completed/species_discovery_completed.md` (the note): the design,
   every ruling, and the record of phases 0 to 8.
-- `species_discovery_unfinished.md`: the open work (phase 9, validation,
+- `../planned/species_discovery_unfinished.md`: the open work (phase 9, validation,
   promotion, open questions), self-contained.
 - `../completed/species_discovery_report.md` (the report): the reports of
   the unattended runs.
-- `atom_bfactor_model.md`: the follow-on work on per-atom B factors and
+- `../planned/atom_bfactor_model.md`: the follow-on work on per-atom B factors and
   occupancy.
 
-> **Moved, 2026-10-25 (the atomic density model, `atomic_density_model.md` and its report
-> `atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
+> **Moved, 2026-10-25 (the atomic density model, `../planned/atomic_density_model.md` and its report
+> `../planned/atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
 > `discover_species=yes`: it runs on every `detect_atoms` run, on the present path, and its atoms are
 > the weak atoms (chain B of `_ATMS.pdb`, label and recovery fields in `_atoms.csv`). Every atom is now
 > fitted by the density model (its own intensity and width, seen through the reconstruction's halo,
@@ -23,8 +27,8 @@ Three other documents hold the detail:
 > fitted intensities, with the coordination term, and writes the `_species` files as before;
 > `min_nbrs` applies to the present path. The numbers below are those of the species work.
 
-> **Moved again, 2026-10-27 (the second run of the atomic density model, `atomic_density_model.md` section 12 and the
-> second section of `atomic_density_model_report.md`).** The species call is its own program now,
+> **Moved again, 2026-10-27 (the second run of the atomic density model, `../planned/atomic_density_model.md` section 12 and the
+> second section of `../planned/atomic_density_model_report.md`).** The species call is its own program now,
 > `detect_atomic_species` (`single_exec`, category atoms; domain `src/main/nano/simple_atomic_species.f90`). It reads
 > the products of a `detect_atoms` run (`pdbfile=` its `_ATMS.pdb`, with the `_atoms.csv` and `_model.txt` beside it)
 > and the map (`vol1`, `smpd`), and takes the species keys: `element` (one name, or a list brightest first such as
@@ -252,103 +256,11 @@ What this changes:
   8026 (2025), has AET tomograms of PtNi nanocatalysts. Peter Ercius (NCEM)
   is a co-author, so they are worth asking for.
 
-## Next steps, in order
+## Follow-up work
 
-1. **Phase 9 on dell: the coordination term on the 66 maps.** This is a
-   measurement only, with no code change. The plan is in the note, section
-   10.11.
-   - The run spec is `~/agent_runs/runs/species_validation_coord/`
-     (PHASES "9"). It reuses the second validation run's scripts, with
-     `LOCAL_REPO` = `~/src/SIMPLE` (now at or after `618d709ec`).
-   - It repeats the five `detect_atoms` runs per map: `Pt`, `Pt` with
-     discovery, `Pt,Ni`, no element, and no element with discovery. It also
-     repeats the planting at 0.6, 0.4 and 0.25 and the noise control, with
-     the same seeds.
-   - The expectations were stated before the run:
-     - one class, and `Pt,Ni` rejected, on at least 95% of the unplanted
-       maps;
-     - the 0.4 class found with recall of at least 0.9 on at least 90% of
-       the maps, with false labels on at most 2% of the unplanted atoms;
-     - the noise control never called a class.
-   - The products stay in the run's `scratch/keep/validation/` on dell.
-     Rsync them back and make the figures on the Mac; dell has no numpy.
-   - The run also compares the `species_discovery` metrics with phase 7's
-     copy. That copy is on dell and used the same test seeding.
-2. **Decide on phase 9's result.**
-   - **If the expectations hold,** the validation before promotion comes
-     next (note, section 10.8). It has three parts:
-     - particles passed through a real reconstruction's filtering and
-       masking;
-     - label reproducibility across real half maps;
-     - an A/B of `detect_atoms` with and without discovery on a real Pt/Ni
-       map, at matched false-positive rate.
-
-     The archive is all Pt. Real two-species data now come from the AET
-     work above: the FePt reconstruction, and possibly Peter's PtNi
-     tomograms. Run `detect_atoms` with `element=Pt,Fe`
-     on the FePt volume, with and without the coordination term, and compare
-     with their model by coordination number. That needs no dell and can
-     come before phase 9. Promotion itself comes after that: recovered atoms
-     into `_ATMS.pdb`, classes into `_SIM.mrc`, `element` optional in the
-     other SINGLE programs, and `autorefine3D_nano` on a two-species
-     trajectory.
-   - **If the expectations don't hold,** make occupancy explicit instead.
-     The simple version calls species only on fully coordinated atoms (12
-     neighbours), where full occupancy can be assumed. It reports every
-     other atom's intensity as an occupancy of its likeliest class. In the
-     numpy check it was as sensitive as the coordination term on the atoms
-     it labels, about half of them. The full version belongs to the
-     B-factor and occupancy work.
-3. **B factors and occupancy** (`atom_bfactor_model.md`), after species.
-   The fitting method is open. Per-atom Gaussian fits on filtered maps
-   invent a core-to-surface B rise: +4.4 Å² on a particle generated with
-   one B. The preferred route measures a smooth B profile with depth in
-   `refine3D_nano`. There references are matched to the particle images, so
-   no map filtering is involved. An occupancy profile from that work could
-   take over the role of the coordination slope.
-
-## Smaller open items
-
-- **Recovered atoms off the stored model.** About 20 per real map sit one
-  bond length from a stored atom, mostly in the outer half of the particle.
-  They may be partly occupied sites or noise. Real half maps would tell,
-  and the archive has none. On these boxes the expected number of noise
-  maxima above the second-stage threshold is 2 to 4 per map. The
-  first-stage threshold meets the target of 0.2.
-- **The present detection is short on ten maps.** ESC1_time28s depends on
-  the mask. The automatic 40.1 Å (1.2 times the measured particle diameter)
-  matches 85% of its stored atoms; 37.8 Å matched 99.8%. The factor 1.2 may
-  deserve a look on non-spherical particles. On two other maps the measured
-  diameter is 19% and 27% above the coordinate extent.
-- **`Pt,Ni` was accepted on four real maps**: EFC4_time03s, ESC4_time01s,
-  ESIP1_time08s and ESIP2_time05s. That is one more than the 5% allowed.
-  Phase 9 shows whether the coordination term removes them.
-- **A light species confined to the surface layer is not a target**
-  (ruling of 2026-10-09). It cannot be told from weak, partly occupied
-  surface sites.
-- **The three CdSe `single_atoms_stats` entries** were not run by hand after
-  the coordination term. The next high-level ctest covers them.
-- **`single_workflow_wurtzite` crashed in `refine3D`** on 2026-10-09
-  (`simple_strategy3D_srch.f90`, `subspace_inds` past its bound). It crashed
-  at the base revision too. It is not species work and has not been
-  rechecked since.
-- **The random seed.** Production `seed_rnd` still honours the `SIMPLE_SEED`
-  environment variable, against policy. The plan for an `rnd_seed` key is
-  `doc/refactoring_notes/planned/rnd_seed_parameter.md`. It awaits review
-  and needs no dell run.
-- **The open questions of the note's section 13** are still open:
-  - the atom ratio against the intensity ratio of the target alloys, and
-    the signal-to-noise of the weakest visible atoms;
-  - the class symbols in the PDB;
-  - radius against depth as the radial coordinate;
-  - the starting volume without an element;
-  - the close-packed neighbour cutoff;
-  - equal integrals within a class at the surface;
-  - the false-atom target and the default of the neighbour gate
-    (`min_nbrs`).
-
-  The prototype took the recommended defaults. The Pt/Ni A/B is where they
-  get judged.
+The single current work list is [species discovery: open work](../planned/species_discovery_unfinished.md).
+It owns the phase-9 acceptance criteria, promotion gates, smaller items and open questions formerly repeated here.
+The experiments and measurements elsewhere in this file retain their dates.
 
 ## Lessons worth keeping
 

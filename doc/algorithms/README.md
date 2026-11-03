@@ -204,3 +204,10 @@ file formats. Those are in `doc/policies` (the rules a subsystem must
 preserve), `doc/implementation_notes` (design and validation records for
 individual features), `doc/refactoring_notes` (records of structural
 changes), and `doc/code_overview` (a map of the source tree).
+
+
+## Atomic reconstruction reference
+
+[Atomicity prior in PCG reconstruction](atomicity_prior.md) describes the free-amplitude and
+fitted-model subspaces, the half-pair solve and the evidence limits. The original methods study
+is retained as a dated implementation record.

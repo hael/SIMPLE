@@ -31,7 +31,6 @@ type :: parameters
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
     character(len=3)          :: umap='yes'           !< flex_pca: UMAP plot coordinates and figures of the final embedding(yes|no){yes}
-    character(len=3)          :: cache='no'           !< cache Fourier-cropped particles to cut per-iteration I/O(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
@@ -158,10 +157,10 @@ type :: parameters
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
+    type(string)              :: cache_dir            !< where the flex PCA plane cache and part files live (a fast local disk)
     type(string)              :: angtab               !< per-projection angles of a tilt series(.txt)
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
-    type(string)              :: cache_dir            !< where to keep the downscaled particle cache
     type(string)              :: cavg_new_root        !< new root for relocated class-average data
     type(string)              :: cavg_old_root        !< old root stored for class-average data
     type(string)              :: ciffile              !< xPDB/mmCIF file
@@ -568,6 +567,8 @@ type :: parameters
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)
+    real    :: msk_box=0.          !< the box's mask radius (in pixels; the polar shift map's disk particles)
+    real    :: msk_box_crop=0.     !< the box's mask radius at the cropped box (in pixels)
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mskdiam_detect=0.   !< detect_atoms mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
@@ -598,7 +599,6 @@ type :: parameters
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: shift_sigma=10.     !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's displacement from its picked position; the probability tables locate the likely references over a disk of 3 sigma with a coarse map and polish from its optimum (solve2D's stage 2 and solve3D's stage 3 are the centring stages), and the map initialises every table's polish; off where the mode has no table (prob, prob_snhc, prob_neigh), no shift search or objfun=cc, which refuse an explicit key(0: the window search){10}
-    real    :: trs_window=0.       !< the polar shift map's centring stage: the window's radius (px) its posterior mass is measured beyond(0: not measured){0}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
     real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
@@ -622,7 +622,6 @@ type :: parameters
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale       = .false.
     logical :: l_bfac            = .false.
-    logical :: l_cache           = .false.
     logical :: l_umap            = .false.
     logical :: l_distr_worker    = .false.
     logical :: l_dose_weight     = .false.
@@ -662,7 +661,8 @@ type :: parameters
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
     logical :: l_shift_prior     = .false. !< shift_prior=yes
-    logical :: l_shift_map       = .false. !< shift_sigma > 0: the polar shift map replaces the window search of the probability tables
+    logical :: l_shift_map       = .false. !< shift_sigma > 0 under objfun=euclid: the polar shift map's key is on (the workflows pass it to their stages)
+    logical :: l_centring        = .false. !< l_shift_map in a run that centres: a probability table with a shift search (the fills, the preparation and the consumers read this one)
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set

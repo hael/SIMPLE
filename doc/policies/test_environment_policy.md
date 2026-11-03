@@ -157,7 +157,7 @@ timings, work counts and pose errors, no thresholds; owner decision
 scoring and production's cc scoring on synthetic polar data at production
 sizes: timings and identity checks, including a dump of the production kernels'
 distance vectors for comparing builds, no thresholds;
-`doc/implementation_notes/planned/polar_matching_layout_bench.md`),
+`doc/implementation_notes/completed/polar_matching_layout_bench.md`),
 and the input generators `solve3D_addon_snapshots`, `write_state_weights_labels`
 and `write_state_weights_mixed` (tools for manual runs). `pcg_frac_update`,
 which needed a user's project, builds its own from the multi-state test fixture
@@ -1023,7 +1023,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   reprojection and a trajectory, then a map, then `refine3D_nano refine=cont` and the polish, and its
   map and poses match the truth. fcc makes the map with `trajectory_solve3D` (raw frames centred, 2D, the
   lattice and model gates, then only the kept frames denoised and refined), and its gates may lose at most
-  5% of the 300 frames (`trajectory_solve3D.md`, ruling 8; no planted junk). wurtzite runs the stages by
+  5% of the 300 frames (`../implementation_notes/completed/trajectory_solve3D.md`, ruling 8; no planted junk). wurtzite runs the stages by
   hand: denoising, `analysis2D_nano`, and `autorefine3D_nano` with the atomicity-prior loop
   (`rec_backend=pcg atm_prior=yes`), so both forms stay covered.
 - Checks: the fraction of frames the gates lose (fcc); the

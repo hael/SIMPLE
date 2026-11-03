@@ -145,12 +145,11 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; when set, the '//&
-        &'first stage with a shift search is the centring stage: its probability table locates each particle''s likely '//&
-        &'projection directions over a disk of 3 sigma with a coarse polar shift map and polishes from the map''s '//&
-        &'optimum, a particle whose last move stayed inside the next stage''s window searching that window instead, '//&
-        &'and the stage ends once few particles still need the disk; the stages after polish from the map over their '//&
-        &'own window; 0 is the window search in every stage{10}', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; in every stage '//&
+        &'with shifts the probability tables centre each particle as it needs: one not yet centred in this workflow, '//&
+        &'or whose shift posterior is wider than a third of the stage''s window, locates its likely directions over the '//&
+        &'disk of 3 sigma with a coarse polar shift map under the box''s mask and polishes from the map''s optimum, the '//&
+        &'others polish from the map over the window; 0 is the window search in every stage{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then

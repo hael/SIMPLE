@@ -1,22 +1,22 @@
 !@descr: flex_pca disk plane cache with project, geometry, selection and worker-coverage validation
-!! cache=yes and box_crop<box only. Record 1 is the validated contract; record p+1 is project row p.
+!! cache_dir given and box_crop<box only. Record 1 is the validated contract; record p+1 is project row p.
 !! The master requires the exact selection. A worker requires matching provenance/geometry and rows covered
 !! by the completed master cache. The payload is the box_croppd Fourier block used before gen_fplane4rec.
-!! Location, space budget and publication follow the particle cache (simple_ptcl_cache): cache_dir, at most a
-!! quarter of the free space, built under a run-token name with the contract written last, then atomically
+!! Location, space budget and publication: cache_dir (else $SIMPLE_PTCL_CACHE_DIR, else the execution
+!! directory), at most a quarter of the free space, built under a run-token name with the contract written last, then atomically
 !! renamed into place. The run that built it deletes it once the master has its embedding, since nothing
 !! after the embedding reads planes (with mkdir=yes no later run could adopt it).
 module simple_flex_pca_plane_cache
 !$ use omp_lib, only: omp_get_thread_num
 use simple_core_module_api, only: del_file, dp, fclose, file_exists, filepath, fopen, fplane_type, int2str, logfhandle, &
-    &maximgbatchsz, simple_abspath, simple_exception, simple_file_stat, simple_mkdir, string, tic, timer_int_kind, toc
-use simple_syslib,          only: simple_atomic_replace
+    &maximgbatchsz, simple_abspath, simple_exception, simple_file_stat, simple_mkdir, string, tic, timer_int_kind, toc, &
+    &STDLEN, CWD_GLOB
+use simple_syslib,          only: simple_atomic_replace, fs_avail_bytes
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
 use simple_image,           only: image
 use simple_matcher_3Drec,   only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch
-use simple_ptcl_cache,      only: ptcl_cache_dir, ptcl_cache_run_token, ptcl_cache_space_ok
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -28,6 +28,11 @@ integer(8), parameter :: PLANE_CACHE_MAGIC   = 7134151962_8
 integer(8), parameter :: PLANE_CACHE_VERSION = 3_8   ! 3: FNV-1a project-path hash (string%to_fnv1a_hash64)
 integer,    parameter :: NHEAD               = 11
 integer,    parameter :: IH_NROWS = 5, IH_SMPD = 8, IH_NSEL = 9, IH_HIGHROW = 11
+character(len=*), parameter :: CACHE_DIR_ENV    = 'SIMPLE_PTCL_CACHE_DIR'
+integer(8),       parameter :: FREE_SPACE_DENOM = 4_8
+! rolling-hash constants of the run token
+integer(8),       parameter :: HASH_M1 = 2147483647_8, HASH_A1 = 16807_8  ! 2^31-1
+integer(8),       parameter :: HASH_M2 = 2147483629_8, HASH_A2 = 48271_8  ! largest prime < 2^31-1
 
 type :: flex_pca_plane_cache
     private
@@ -113,13 +118,13 @@ contains
         basename_here = string('flex_pca_planes_b'//int2str(params%box_crop)//'_'//hex%to_char())
         if( present(tmp) )then
             if( tmp )then
-                token         = ptcl_cache_run_token()
+                token         = plane_cache_run_token()
                 basename_here = string(basename_here%to_char()//'_'//token%to_char()//'_part')
                 call token%kill
             endif
         endif
         basename_here = string(basename_here%to_char()//'.bin')
-        dir = ptcl_cache_dir(params)
+        dir = plane_cache_dir(params)
         if( dir%is_blank() )then
             fname = basename_here
         else
@@ -227,7 +232,7 @@ contains
 
     logical function plane_cache_applicable( params )
         class(parameters), intent(in) :: params
-        plane_cache_applicable = params%l_cache .and. params%box_crop < params%box
+        plane_cache_applicable = .not. params%cache_dir%is_blank() .and. params%box_crop < params%box
     end function plane_cache_applicable
 
     ! ---------------------------------------------------------------- probe / open
@@ -352,14 +357,14 @@ contains
         call self%new(plane_cache_fname(params))
         call set_geometry(self, params)
         ! the directory may be on another device, so it need not exist yet
-        dirname = ptcl_cache_dir(params)
+        dirname = plane_cache_dir(params)
         if( dirname%is_blank() ) dirname = string('.')
         call simple_mkdir(dirname)
         ! a stale cache of this project goes first, so the budget measures what the rebuild can use;
         ! records are project rows, so the file is as long as the highest selected row
         call del_file(self%fname)
         want_bytes = (int(maxval(pinds(1:nptcls)),8) + 1_8) * int(self%reclen,8)
-        if( .not. ptcl_cache_space_ok(dirname, want_bytes, 'FLEX_PCA PLANE CACHE') )then
+        if( .not. plane_cache_space_ok(dirname, want_bytes, 'FLEX_PCA PLANE CACHE') )then
             call dirname%kill
             return
         endif
@@ -472,5 +477,63 @@ contains
         call img%set_cmat(self%blk(:,:,:,i))
         call img%set_ft(.true.)
     end subroutine plane_cache_fill
+
+    ! ---------------------------------------------------------------- location, token, space
+
+    !> the cache's directory: cache_dir, else the environment's, else blank (the execution directory)
+    function plane_cache_dir( params ) result( dirname )
+        class(parameters), intent(in) :: params
+        type(string)          :: dirname
+        character(len=STDLEN) :: envdir
+        integer               :: envlen, envstat
+        if( .not. params%cache_dir%is_blank() )then
+            dirname = params%cache_dir
+            return
+        endif
+        call get_environment_variable(CACHE_DIR_ENV, envdir, envlen, envstat)
+        if( envstat == 0 .and. envlen > 0 )then
+            dirname = string(envdir(:envlen))
+        else
+            dirname = string('')
+        endif
+    end function plane_cache_dir
+
+    !> a per-run token: a hash of the execution directory, so concurrent runs sharing cache_dir stay apart and a
+    !! rerun in the same directory adopts or rebuilds what a killed run left
+    function plane_cache_run_token( ) result( tok )
+        type(string) :: tok
+        integer(8)   :: h1, h2
+        h1 = 1_8
+        h2 = 1_8
+        if( allocated(CWD_GLOB) ) call fold_str(h1, h2, CWD_GLOB)
+        tok = string(int2str(int(h1))//'-'//int2str(int(h2)))
+    end function plane_cache_run_token
+
+    pure subroutine fold_str( h1, h2, str )
+        integer(8),       intent(inout) :: h1, h2
+        character(len=*), intent(in)    :: str
+        integer :: i
+        do i = 1, len_trim(str)
+            h1 = mod(h1 * HASH_A1 + int(iachar(str(i:i)), 8), HASH_M1)
+            h2 = mod(h2 * HASH_A2 + int(iachar(str(i:i)), 8), HASH_M2)
+        end do
+        h1 = mod(h1 * HASH_A1 + 255_8, HASH_M1)
+        h2 = mod(h2 * HASH_A2 + 255_8, HASH_M2)
+    end subroutine fold_str
+
+    !> the space budget: at most 1/FREE_SPACE_DENOM of the free space at dirname; an unknown free space is no verdict
+    logical function plane_cache_space_ok( dirname, want_bytes, label ) result( l_ok )
+        class(string),    intent(in) :: dirname
+        integer(8),       intent(in) :: want_bytes
+        character(len=*), intent(in) :: label
+        integer(8) :: avail_bytes
+        avail_bytes = fs_avail_bytes(dirname)
+        l_ok = .not. (avail_bytes >= 0_8 .and. want_bytes > avail_bytes / FREE_SPACE_DENOM)
+        if( l_ok ) return
+        write(logfhandle,'(A,F12.2,A,F12.2,A)') '>>> '//label//': needs ', &
+            &real(want_bytes)/real(1024**3), ' GB, more than 25% of the ', &
+            &real(avail_bytes)/real(1024**3), ' GB free at its destination'
+        write(logfhandle,'(A)') '>>> '//label//': running without cache; point cache_dir at more storage to enable it'
+    end function plane_cache_space_ok
 
 end module simple_flex_pca_plane_cache

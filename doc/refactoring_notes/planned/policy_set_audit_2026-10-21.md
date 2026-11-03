@@ -64,7 +64,7 @@ The documents state the code's behaviour for now.
 | D14 | Detector-defect curation exists twice with different semantics for EER gain defects (integrated micrograph versus particles extracted from movies): name the contract or unify | `simple_motion_correct.f90:569`, `simple_particle_extractor.f90:647` |
 | D15 | `nparts` larger than the item count is an error in `motion_correct` and `preprocess`, a clamp in the other preprocessing strategies | preprocessing strategies |
 | D16 | `bootstrap_cavgs` with `mkdir=no` overwrites the project file with the synthetic project | `simple_commanders_mkcavgs.f90:209` |
-| D17 | Three `_completed` notes link to `_unfinished` notes that are not in this checkout (qsys completion, prob-align peak memory, `pose_cont` aftermath), as does `for_developers/index.md`: recreate them or repoint | `1bfc75404` split |
+| D17 | Done 2026-11-02: reconstructed the missing qsys, prob-align memory and `pose_cont` V1 records from their completed counterparts, plus the missing chunk-emulation and multi-state speed closeouts. The developer index and completed-record links now resolve; outstanding validation remains explicit. | `1bfc75404` split; see the topic indexes in the implementation/refactoring READMEs |
 
 ## 3. Code defects and hygiene (not changed)
 

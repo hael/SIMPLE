@@ -1,5 +1,11 @@
 # The atomic density model: species-agnostic atoms that render like the map
 
+> **Current status, 2026-11-02:** the first run implemented the density model and weak-atom recovery;
+> the second run added the measured transfer and separate `detect_atomic_species` program.
+> This remains a planned record for the unresolved model/validation questions in section 12.
+> The [run report](atomic_density_model_report.md) summarizes delivered work and its limits.
+> "Nothing here is implemented" below is the original 2026-10-25 proposal status.
+
 Design note, 2026-10-25. Nothing here is implemented. It is the first step of the
 species-agnostic rebuild of `detect_atoms` that the maintainer set as the top priority
 on 2026-10-25: get the atom detection and the simulated atomic density right on the map
@@ -48,7 +54,7 @@ Rulings on the first draft, same day:
   this workflow must identify and model every atom. The atoms it adds are labelled
   abstractly, as weak atoms, with no species meaning.
 
-Two measured facts from the species work set the bar (`species_discovery_status.md`,
+Two measured facts from the species work set the bar (`../completed/species_discovery_status.md`,
 `atom_bfactor_model.md`): on the 66 real Pt maps an atom's intensity rises by about 4 to
 6 percent per neighbour while its fitted width stays flat, and a per-atom Gaussian fit
 on a filtered map invents a core-to-surface B rise of 4.4 A^2 on a particle generated
@@ -430,7 +436,7 @@ listed Fortran file are covered by its row.
 | --- | --- | --- |
 | `doc/implementation_notes/planned/atomic_density_model.md` | this note: Progress, file-table rows, rulings | each |
 | `doc/implementation_notes/planned/atomic_density_model_report.md` | the review report | 4 |
-| `doc/implementation_notes/planned/species_discovery_status.md` | pointer to the recovery's new home and the reduced `discover_species` | 4 |
+| `doc/implementation_notes/completed/species_discovery_status.md` | pointer to the recovery's new home and the reduced `discover_species` | 4 |
 | `doc/implementation_notes/planned/species_discovery_unfinished.md` | the same pointer | 4 |
 | `src/main/nano/simple_nano_density.f90` | new: the model, its fit and rendering, with its tester; the fitted kernel as a detection template if the gap table calls for it (phase 4) | 1, 2, 3, 4 |
 | `src/main/nano/simple_nano_species.f90` | the array routines the density module takes over leave; the class call on the fitted intensity | 1, 3 |
@@ -454,7 +460,7 @@ The second run (section 12) adds these rows; its phases are 5 to 9.
 | File | What changes | Phases |
 | --- | --- | --- |
 | `doc/implementation_notes/planned/atomic_density_model_report.md` | the second run's section of the report | 9 |
-| `doc/implementation_notes/planned/species_discovery_status.md` | `detect_atomic_species` as the species workflow; the moved keys | 9 |
+| `doc/implementation_notes/completed/species_discovery_status.md` | `detect_atomic_species` as the species workflow; the moved keys | 9 |
 | `doc/implementation_notes/planned/species_discovery_unfinished.md` | the same | 9 |
 | `src/main/nano/simple_nano_density.f90` | the measured transfer: the shell projection, its smoothing, the kernel tables, rendering through the transfer, the products (phase 6); the contact ceiling from the data if it lives here (phase 7) | 6, 7 |
 | `src/main/nano/simple_nanoparticle.f90` | the transfer's products and keys (phase 6); `element` out of the detection path, the length scales and the contact ceiling from the data for every run (phase 7); `discover_species` and the species products out, into the new workflow (phase 8) | 6, 7, 8 |
@@ -995,7 +1001,7 @@ What it means, in short: the model of phase 3 is the result of the run, unchange
 Files changed:
 
 - `src/main/nano/simple_nanoparticle.f90`, `src/main/nano/simple_nanoparticle_utils.f90`: the second pass and the temporary mask-factor switch were written for the measurement and removed after it. The first file is back to its state at the end of phase 3 (checked hunk for hunk against `review/full_after_3.diff`), the second to HEAD.
-- `doc/implementation_notes/planned/species_discovery_status.md`, `species_discovery_unfinished.md`: a pointer to the recovery's new home and to the reduced `discover_species`.
+- `doc/implementation_notes/completed/species_discovery_status.md`, `species_discovery_unfinished.md`: a pointer to the recovery's new home and to the reduced `discover_species`.
 - `doc/implementation_notes/planned/atomic_density_model_report.md` (new): the review report of the whole run.
 - This note: this entry.
 
@@ -1088,7 +1094,7 @@ replaced by the density model, so the merge joins the two as follows.
 - `atoms%convolve` carries both changes: the occupancy scaling of element atoms under `bfac_pdb`
   and the halo term of pseudo-atoms.
 - The notes of `b60840da2` (`atom_bfactor_model.md`, `single_pcg_integration_unfinished.md`,
-  `species_discovery_status.md`) now describe the merged products.
+  `../completed/species_discovery_status.md`) now describe the merged products.
 
 Not yet built or tested after the merge; the gates `check_test_registry.py` and `check_descr.py`
 pass.
@@ -1810,7 +1816,7 @@ What it means, in short: the final code was run on all 66 real Pt maps and on Fe
 
 **Files changed:**
 - `doc/implementation_notes/planned/atomic_density_model_report.md` (its second section);
-- `doc/implementation_notes/planned/species_discovery_status.md` and `species_discovery_unfinished.md` (the new program, the moved keys, and in the unfinished note what was measured);
+- `doc/implementation_notes/completed/species_discovery_status.md` and `species_discovery_unfinished.md` (the new program, the moved keys, and in the unfinished note what was measured);
 - this note.
 
 **The 66 maps and FePt with the final code** (`scratch/keep/validation_p9/`; `run_p9.sh`, `runs.tsv`, `summary_p9.py` -> `summary_p9.txt`; `nthr=24`).

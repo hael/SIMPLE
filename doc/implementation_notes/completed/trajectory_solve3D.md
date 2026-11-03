@@ -1,5 +1,10 @@
 # `trajectory_solve3D`: the nanoparticle pipeline in one program, with a second gate on the class averages
 
+> **Classification, 2026-11-02:** The one-program workflow, ten-trajectory run and report are complete. Map assessment and further gate research remain open.
+> See [trajectory_solve3D_report.md](trajectory_solve3D_report.md) for the delivered result and its
+> "What is left open for the maintainer" section for limitations and follow-up work.
+> The dated plan and run evidence below are retained as history; this move supplies no new runtime validation.
+
 An unattended run on the Dell (`trajectory_solve3D`), 2026-10-29. It builds the one-command workflow from the
 graphene-subtracted frames of a tracked particle to its time-integrated map, adds a second rejection of class
 averages by their agreement with a start model, sets that gate on the maintainer's labelled trajectories, and
@@ -162,7 +167,7 @@ passes and the trajectory has its map.
 after each, the in-situ check of section 3 step 5 on the three labelled ones. Fix as you go. Ends DONE with
 every trajectory mapped or stopped with its diagnosis.
 
-**Phase 3, the report.** `doc/implementation_notes/planned/trajectory_solve3D_report.md`, reading on its own:
+**Phase 3, the report.** `doc/implementation_notes/completed/trajectory_solve3D_report.md`, reading on its own:
 what the program does, how the gate was set (the labelled-set tables), what gate 2 removed on the ten
 trajectories and what that did to the 3D numbers beside the previous run's, the remaining tail per frame, every
 fix, where the products are, what is left open.
@@ -174,8 +179,8 @@ reason, before it is edited. Testers (`*_tester.f90`) of a listed Fortran file a
 
 | File | What changes | Phases |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/trajectory_solve3D.md` | this note: Progress, file-table rows | each |
-| `doc/implementation_notes/planned/trajectory_solve3D_report.md` | the report | 3 |
+| `doc/implementation_notes/completed/trajectory_solve3D.md` | this note: Progress, file-table rows | each |
+| `doc/implementation_notes/completed/trajectory_solve3D_report.md` | the report | 3 |
 | `doc/policies/sieving_and_rejection/model_cavgs_rejection.md` | the second gate and its constant | 1 2 |
 | `src/main/commanders/single/single_commanders_nano3D.f90` | the `trajectory_solve3D` commander; fixes | 1 2 |
 | `src/main/ui/single/single_ui_trajectory.f90` | the UI entry | 1 2 |
@@ -573,7 +578,7 @@ rows were added to the file table for those fixes. Ruling 4 is applied here for 
   class-average/reprojection pairs, and the override key `model_gate_nsd`. The remedy for a tail inside accepted
   classes is a frame-level gate after the 3D, outside this run. The per-frame tail measure of section 4 is its
   evidence.
-- The test descriptions (`test_environment_policy.md`, the `single_workflow` help text, the CMake comment) state
+- The test descriptions (`../../policies/test_environment_policy.md`, the `single_workflow` help text, the CMake comment) state
   the test as it now stands.
 - `single_workflow_wurtzite` was run again after the two fixes and passes (`scratch/keep/ctest_wurtzite_p1_2.log`,
   652 s): map correlation 0.954, FSC 0.143 at 1.59 Å, rotation errors 3.15° (`autorefine3D_nano`), 3.17°
@@ -680,7 +685,7 @@ The phase stopped a third time, on that last bound.
 - **Other changes and checks.**
   - The policy note gets the two gates of the program in the raw-first order, `LAT_PEAK_MIN_RAW` and why there are
     two grades, `K_MODEL` and the model gate's inertness as a result.
-  - The test descriptions (`test_environment_policy.md`, the `single_workflow` help text, the CMake comment) state
+  - The test descriptions (`../../policies/test_environment_policy.md`, the `single_workflow` help text, the CMake comment) state
     ruling 8's test.
   - The fast gate passes 15 of 15 after the last build (`scratch/keep/fast_gate_p1_6.log`), and the nano tester
     84 of 84 assertions, including the validity case and `K_MODEL`'s closed-form case. `unit_ui`, `unit_single`
@@ -870,7 +875,7 @@ is `scratch/keep/pipeline/queue_phase2.log`.
 
 ### Phase 3, the report (2026-10-30, DONE)
 
-The report is `doc/implementation_notes/planned/trajectory_solve3D_report.md`. It reads on its own and serves as the
+The report is `doc/implementation_notes/completed/trajectory_solve3D_report.md`. It reads on its own and serves as the
 run's review report. It covers:
 
 - what the program does, in its final raw-first order;

@@ -8,7 +8,7 @@ use simple_linalg,    only: rad2deg
 use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
 use simple_chash,     only: chash
-use simple_defs_ori,  only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, I_SHINCR, &
+use simple_defs_ori,  only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, I_SHINCR, I_SHSIG, &
     &get_oriparam_ind, get_oriparam_flag
 use json_kinds
 use json_module
@@ -967,6 +967,8 @@ contains
         call assert_int(I_CFAR, get_oriparam_ind('cfar'), 'flag cfar names slot 53')
         call assert_int(I_SHINCR, get_oriparam_ind('shincr'), 'flag shincr names slot 54')
         call assert_true(trim(get_oriparam_flag(I_SHINCR)) == 'shincr', 'slot 54 carries its flag name')
+        call assert_int(I_SHSIG, get_oriparam_ind('shsig'), 'flag shsig names slot 55')
+        call assert_true(trim(get_oriparam_flag(I_SHSIG)) == 'shsig', 'slot 55 carries its flag name')
         call assert_true(trim(get_oriparam_flag(I_CFAR)) == 'cfar', 'slot 53 carries the cfar flag name')
         call o%kill
         call o2%kill

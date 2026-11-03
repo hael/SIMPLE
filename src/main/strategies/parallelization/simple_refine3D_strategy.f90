@@ -1145,10 +1145,11 @@ contains
             THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
-        ! the centring stage (shift_sigma > 0) is one refine3D run, whatever its first iteration's number: every
-        ! particle needs the disk until its first search in it
-        if( params%l_shift_map )then
-            call build%spproj_field%set_all2single('shincr', -1.)
+        ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not yet
+        ! centred (the sentinel), whatever the key's state in this run
+        if( startit == 1 )then
+            call build%spproj_field%set_all2single('shsig',  -1.)
+            call build%spproj_field%set_all2single('shincr',  0.)
             l_proj_dirty = .true.
         endif
         ! STATE LABEL INIT, as the distributed master: a fresh multi-state start (the first
@@ -1183,9 +1184,6 @@ contains
         params%which_iter = params%startit
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         params%outfile    = 'algndoc'//METADATA_EXT
-        ! Particle caching is a 2D-only feature; fail loudly rather than silently
-        ! ignoring a stray cache=yes so callers adopt the 2D-only contract.
-        if( params%l_cache ) THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
@@ -1657,15 +1655,13 @@ contains
                 call self%cline_commit_sigma2%set('nthr', self%nthr_master)
             endif
         endif
-        ! the centring stage (shift_sigma > 0) is one refine3D run, whatever its first iteration's number: every
-        ! particle needs the disk until its first search in it, which the workers read from the project
-        if( params%l_shift_map )then
-            call build%spproj_field%set_all2single('shincr', -1.)
+        ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not yet
+        ! centred (the sentinel), which the workers read from the project
+        if( params%startit == 1 )then
+            call build%spproj_field%set_all2single('shsig',  -1.)
+            call build%spproj_field%set_all2single('shincr',  0.)
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        ! Particle caching is a 2D-only feature; fail loudly rather than silently
-        ! ignoring a stray cache=yes so callers adopt the 2D-only contract.
-        if( params%l_cache ) THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
         ! prepare job description
         call cline%gen_job_descr(self%job_descr)
         call self%job_descr%set('prg', 'refine3D')

@@ -1,5 +1,10 @@
 # Ghostbuster's forward and adjoint operators in SIMPLE
 
+> **Classification, 2026-11-02:** The operator implementation and its investigation are complete.
+> See [ghostbuster_operators_report.md](ghostbuster_operators_report.md) for the delivered result and its
+> "Open for the maintainer" section for limitations and follow-up work.
+> The dated plan and run evidence below are retained as history; this move supplies no new runtime validation.
+
 Status: implemented by the unattended run on the Dell (section 7), Phases 0
 to 5, 2026-10-23 to 2026-10-24, uncommitted against base `5111068bf`; the
 progress and evidence are in section 8, the summary in
@@ -332,7 +337,7 @@ the measurement makes 1 worth offering.
 
 `T = exp(i (evalPhSh + phshift)) * exp(-B s^2 / 4)`, the phase from the `ctf`
 type itself (a public `eval_phase` that returns what `evalPhSh` computes, the
-phase a required argument as `phase_shift_ctf_policy.md` demands). Amplitude
+phase a required argument as `../../policies/phase_shift_ctf_policy.md` demands). Amplitude
 contrast lives in `c`, not in `T`. Beam tilt and trefoil are not modelled:
 SIMPLE's project has no fields for them yet, and they come with CTF
 refinement.
@@ -361,7 +366,7 @@ intensity (vacuum = 1); the weak-phase model does not. Two conversions:
   normalisation, which the test pins. The solver works in volts; the program
   writes its maps at SIMPLE's scale, so they compare directly with
   `reconstruct3D` maps and a later integration sees no amplitude jump (the
-  scale-continuity contract of `reconstruct3D_pcg_policy.md`).
+  scale-continuity contract of `../../policies/3D/reconstruct3D_pcg_policy.md`).
 
 ### 3.5 Linearisation and adjoint
 
@@ -557,7 +562,7 @@ Testers sit beside each module (`simple_<module>_tester.f90`).
   (`box_crop`, `smpd_crop`, `kv`, ...).
 - **Threads.** Per-thread objects (`wave_imaging`, its FFT plans) sit in
   allocatable arrays sized by `omp_get_max_threads()` at the point of use,
-  never by a stored thread count (`thread_budget_and_safety.md`). FFTW plans
+  never by a stored thread count (`../planned/thread_budget_and_safety.md`). FFTW plans
   are made and destroyed in the unnamed critical section, the one lock every
   FFTW planner call of SIMPLE takes (`image` takes it; FFTW's planner is not
   thread-safe, and a named section would be a second, independent lock;
@@ -938,7 +943,7 @@ edited.
 
 | File | Purpose | Phases |
 | --- | --- | --- |
-| `doc/implementation_notes/planned/ghostbuster_operators.md` | this plan: progress, measured tolerances | each |
+| `doc/implementation_notes/completed/ghostbuster_operators.md` | this plan: progress, measured tolerances | each |
 | `src/utils/math/simple_math_ctf.f90` | electron wavelength and interaction constant | 1 |
 | `src/utils/math/simple_rnd.f90` | Poisson sampler | 1 |
 | `src/main/ctf/simple_ctf.f90` | public `eval_phase`; `kV2wl` on the shared wavelength | 1 |
@@ -973,8 +978,8 @@ edited.
 | `doc/policies/3D/wave_model_policy.md` | new policy | 5 |
 | `doc/policies/test_environment_policy.md` | rows for the new sub-suites | 5 |
 | `doc/policies/3D/reconstruct3D_pcg_policy.md` | the gather, scatter, wrap test and fold it names now live in `pcg_lattice` (moved in Phase 1 and 2); a pointer to the wave-model policy | 5 |
-| `doc/implementation_notes/planned/ghostbuster_scattering_simulator.md` | Ruben's note: conventions corrected, simulator on the shared operator | 5 |
-| `doc/implementation_notes/planned/ghostbuster_operators_report.md` | the run's report | 5 |
+| `doc/implementation_notes/completed/ghostbuster_scattering_simulator.md` | Ruben's note: conventions corrected, simulator on the shared operator | 5 |
+| `doc/implementation_notes/completed/ghostbuster_operators_report.md` | the run's report | 5 |
 
 ## 8. Progress
 
@@ -1183,7 +1188,7 @@ Decisions:
   tolerance must use the projected gradient; a step that still raises the
   loss after backtracking must not be taken; backtracking restarts from the
   stored point) were fixed and are now tested.
-- Left for Phase 5: `reconstruct3D_pcg_policy.md` names `win_wraps`, `sq_rim`
+- Left for Phase 5: `../../policies/3D/reconstruct3D_pcg_policy.md` names `win_wraps`, `sq_rim`
   and `scatter_plane`, which now live in `pcg_lattice`.
 - Not fixed, as recorded in Phase 0: the base's fast-gate failure in
   `unit_pftc_align2D3D`.
@@ -1803,7 +1808,7 @@ plan. Documents only: no source file changed in this phase.
 
 Files changed: the new `doc/policies/3D/wave_model_policy.md`,
 `doc/user_guide/reconstruct3D_wave.md` and
-`doc/implementation_notes/planned/ghostbuster_operators_report.md`;
+`doc/implementation_notes/completed/ghostbuster_operators_report.md`;
 `doc/user_guide/user_guide.md` (index entries), `doc/user_guide/simulate_scattering.md`
 (pointers to the policy and the program), `doc/policies/test_environment_policy.md`
 (the sub-suites `nonlinear conjugate gradient`, `PCG lattice`, `wave field`,
@@ -1811,7 +1816,7 @@ Files changed: the new `doc/policies/3D/wave_model_policy.md`,
 in their area suites), `doc/policies/3D/reconstruct3D_pcg_policy.md` (added to
 the file table in this phase: the gather, scatter, wrap test and fold it names
 moved into `pcg_lattice` in Phases 1 and 2, the item Phase 1 left for this
-phase), `doc/implementation_notes/planned/ghostbuster_scattering_simulator.md`
+phase), `doc/implementation_notes/completed/ghostbuster_scattering_simulator.md`
 (a dated section on the corrected conventions and the move onto the shared
 operator, the contract made current, the first implementation kept as its
 record), and this plan (status line; file table; the Phase 4 entry's particle

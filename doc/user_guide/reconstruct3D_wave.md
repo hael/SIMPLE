@@ -101,7 +101,7 @@ scaled wrongly by that factor. For first Born the fitted value is not a gain and
 ## What to expect
 
 On simulated data with a known answer (the run that built the program, recorded in
-`doc/implementation_notes/planned/ghostbuster_operators.md`):
+`doc/implementation_notes/completed/ghostbuster_operators.md`):
 
 - An ordinary protein at 300 kV, 1 A pixels: every model agrees with the flat map; Rytov is slightly ahead
   (truth FSC 0.762 against 0.733 between 3 and 2 A).

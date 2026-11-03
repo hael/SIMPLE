@@ -102,13 +102,12 @@ contains
         class(commander_base), optional, intent(inout) :: xprob_tab
         real(timer_int_kind),  optional, intent(in)    :: rt_setup
         integer,     allocatable :: pinds(:)
-        real,        allocatable :: shincr(:)
         type(string)             :: fname
         type(eul_prob_tab)       :: eulprob_obj_glob
         type(cmdline)            :: cline_prob_tab
         type(qsys_env)           :: qenv
         type(chash)              :: job_descr
-        integer :: nptcls, ndisk
+        integer :: nptcls
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_sample, rt_sched, rt_read, rt_assign, rt_write
         real(timer_int_kind)    :: rt_setup_here
@@ -133,13 +132,7 @@ contains
         else
             call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
-        if( params%l_shift_map .and. params%trs_window > 0. )then
-            ! the particles the fill searches the disk for: not yet searched in this run, or moved beyond the window
-            shincr = build%spproj_field%get_all('shincr')
-            ndisk  = count(shincr(pinds) < 0. .or. shincr(pinds) > params%trs_window)
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', ndisk, ' OF ', nptcls, ' SAMPLED PARTICLES'
-            deallocate(shincr)
-        endif
+        call print_disk_set(build, params, pinds, nptcls)
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .false.)
@@ -257,6 +250,7 @@ contains
         else
             call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls, pinds)
         endif
+        call print_disk_set(build, params, pinds, nptcls)
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .true.)
         if( L_BENCH_GLOB )then
@@ -336,7 +330,6 @@ contains
         use simple_eul_prob_tab2D,          only: eul_prob_tab2D, prob_assign_profile2D
         use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
-        use simple_ptcl_cache,              only: ptcl_cache_ensure
         use simple_eo_partition,            only: ensure_field_halves
         class(parameters), target,       intent(inout) :: params
         class(builder),    target,       intent(inout) :: build
@@ -351,8 +344,7 @@ contains
         type(qsys_env)             :: qenv
         type(chash)                :: job_descr
         type(prob_assign_profile2D) :: assign_profile
-        real,          allocatable :: shincr(:)
-        integer :: nptcls, ndisk
+        integer :: nptcls
         integer(timer_int_kind) :: t_tot, t
         real(timer_int_kind)    :: rt_setup_here, rt_sample, rt_sched, rt_read, rt_assign, rt_write
         rt_setup_here = 0.
@@ -373,22 +365,9 @@ contains
         ! by prob_tab2D/refine2D_exec; later iterations redraw it, except on a fresh start
         ! without fillin (startit=1), which keeps the subset it drew first.
         call sample_ptcls4update2D(params, build, [params%fromp,params%top], params%l_update_frac, nptcls, pinds)
-        if( params%l_shift_map .and. params%trs_window > 0. )then
-            ! the particles the fill searches the disk for: not yet searched in this run, or moved beyond the window
-            shincr = build%spproj_field%get_all('shincr')
-            ndisk  = count(shincr(pinds) < 0. .or. shincr(pinds) > params%trs_window)
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', ndisk, ' OF ', nptcls, ' SAMPLED PARTICLES'
-            deallocate(shincr)
-        endif
+        call print_disk_set(build, params, pinds, nptcls)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
-        ! Build the downscaled particle cache before the workers start, so they all
-        ! find it ready. A no-op once it exists, so the per-iteration cost is a file
-        ! and key check; this is also the first point in the workflow where the same
-        ! particles get read twice per iteration, once here and once in refine2D.
-        ! Must precede the cline copy below so a fallback to cache=no reaches the
-        ! prob_tab2D worker command lines.
-        call ptcl_cache_ensure(params, build, cline)
         if( L_BENCH_GLOB )then
             rt_sample = toc(t)
             t         = tic()
@@ -502,5 +481,41 @@ contains
         endif
         call fclose(fnr)
     end subroutine write_prob_align_bench
+
+    !> the dynamic centring's disk set of the iteration (shift_sigma > 0): the sampled particles not yet centred in
+    !! this workflow and those whose prior width exceeds a third of the window, and the widths' median and 90th
+    !! percentile over the centred ones
+    subroutine print_disk_set( build, params, pinds, nptcls )
+        use simple_math,               only: hpsort
+        use simple_eul_prob_tab_utils, only: shift_needs_disk
+        class(builder),    intent(inout) :: build
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: pinds(:), nptcls
+        real, allocatable :: shsig(:), widths(:)
+        integer :: i, nnew, nwide, nw
+        if( .not. params%l_centring ) return
+        if( nptcls < 1 ) return
+        shsig = build%spproj_field%get_all('shsig')
+        nnew  = 0
+        nwide = 0
+        do i = 1, nptcls
+            if( shsig(pinds(i)) < 0. )then
+                nnew = nnew + 1
+            else if( shift_needs_disk(shsig(pinds(i)), params%trs) )then
+                nwide = nwide + 1
+            endif
+        enddo
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', nnew + nwide, ' OF ', nptcls,&
+            &' SAMPLED PARTICLES (', nnew, ' NOT YET CENTRED, ', nwide, ' WIDE)'
+        nw = count(shsig(pinds(1:nptcls)) >= 0.)
+        if( nw > 0 )then
+            widths = pack(shsig(pinds(1:nptcls)), shsig(pinds(1:nptcls)) >= 0.)
+            call hpsort(widths)
+            write(logfhandle,'(A,F0.2,A,F0.2,A)') '>>> SHIFT PRIOR WIDTH (PX) MEDIAN ', widths(max(1, nw / 2)),&
+                &' 90TH PCT ', widths(max(1, (9 * nw) / 10)), ' OVER THE CENTRED PARTICLES'
+            deallocate(widths)
+        endif
+        deallocate(shsig)
+    end subroutine print_disk_set
 
 end module simple_prob_align_strategy

@@ -1343,7 +1343,6 @@ contains
         call cline%set('nparts',          params%nparts)
         call cline%set('projfile',        projfile)
         call cline%set('worker_priority', 'high')
-        call cline%set('cache',           'yes')
         if( server_address%strlen() > 0 ) call cline%set('worker_server', server_address)
         if( qenv%get_persistent_worker_nthr() > 0 ) call cline%set('worker_server_nthr', qenv%get_persistent_worker_nthr())
         call cline%printline()

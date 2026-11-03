@@ -2,12 +2,11 @@
 module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
-use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, add_ptcl_cache_read_time, &
+use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, &
     &records_open, record_slot, put_record, take_records, get_records
 !$ use omp_lib, only: omp_get_max_threads
-use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached, prepimg4align_cart
+use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cropped, prepimg4align_cart, ptcl_on_disk
 use simple_cartft_calc,     only: cartft_calc
-use simple_ptcl_cache,      only: ptcl_cache_in_use, ptcl_cache_read_batch
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header
 use, intrinsic :: iso_fortran_env, only: int64
 implicit none
@@ -105,10 +104,10 @@ contains
     end subroutine write_sigma2_bench_timings
 
     !>  imgbatch_box/imgbatch_smpd size the raw read buffer; pass params%box_crop and
-    !!  params%smpd_crop when the batch will be filled from the downscaled particle
-    !!  cache rather than the originals. The sampling distance has to travel with the
-    !!  box: prepimg4align_cached derives img_out's smpd from the input image, so a
-    !!  buffer left at params%smpd would stamp the wrong sampling onto ptcl_match_imgs.
+    !!  params%smpd_crop when the batch holds cropped particles rather than the originals.
+    !!  The sampling distance has to travel with the box: prepimg4align_cropped derives
+    !!  img_out's smpd from the input image, so a buffer left at params%smpd would stamp
+    !!  the wrong sampling onto ptcl_match_imgs.
     subroutine alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz, imgbatch_box, imgbatch_smpd )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters),        intent(inout) :: params
@@ -310,18 +309,16 @@ contains
 
     !> Do the 2D table and the 2D matcher make the cache's Fourier-cropped particle in memory from the full-size read
     !! and prepare alignment from it as a cached particle: uncached, outside the stream's 2D pool, cropped, ptcl2D
-    logical function crop_particles2D( params, l_cached )
+    logical function crop_particles2D( params )
         class(parameters), intent(in) :: params
-        logical,           intent(in) :: l_cached
         crop_particles2D = .false.
-        if( l_cached ) return
         if( trim(params%stream2d) == 'yes' ) return
         crop_particles2D = params%box_crop < params%box .and. trim(params%oritype) == 'ptcl2D'
     end function crop_particles2D
 
     !>  ptcl_imgs receives the images class-average restoration sums, which only callers that restore class
     !!  averages need; omit it to skip both the buffer and the copy. They are the full-size originals, or the
-    !!  Fourier-cropped particles when cached or when crop_sums asks for them (sized box_crop by the caller).
+    !!  Fourier-cropped particles when crop_sums asks for them (sized box_crop by the caller).
     !!  With crop_sums the cropped particle is put as the pass's record while the buffer is open for records (the
     !!  2D table in shared memory), and a batch whose records are all sealed is copied from them, not read.
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, &
@@ -338,26 +335,19 @@ contains
         logical,        optional, intent(in)    :: crop_sums !< cropped particles, made in memory (crop_particles2D)
         type(image), allocatable :: crop_work(:)
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot
-        logical :: l_keep_raw, l_cached, l_crop_mem, l_from_records, l_put_records
-        integer(timer_int_kind) :: t_cache
+        logical :: l_keep_raw, l_crop_mem, l_from_records, l_put_records
         l_keep_raw = present(ptcl_imgs)
-        ! When cached, ptcl_imgs receives the Fourier-cropped particle rather than the
+        ! With crop_sums ptcl_imgs receives the Fourier-cropped particle rather than the
         ! full-size original, so callers that pass it must have sized it at box_crop and
-        ! told cavger_init_online to expect cropped particles.
-        l_cached   = ptcl_cache_in_use(params, build)
-        ! The same cropped particle without the disk cache: made here from the full-size read
+        ! told cavger_init_online to expect cropped particles; made here from the full-size read
         l_crop_mem = .false.
-        if( present(crop_sums) .and. .not. l_cached ) l_crop_mem = crop_sums
+        if( present(crop_sums) ) l_crop_mem = crop_sums
         ! the records the 2D table of this pass made: the batch's cropped particles, without the read
         l_from_records = .false.
         if( l_crop_mem .and. l_keep_raw ) l_from_records = take_records(pinds)
         l_put_records  = .false.
         if( l_crop_mem ) l_put_records = records_open()
-        if( l_cached )then
-            if( L_BENCH_GLOB ) t_cache = tic()
-            call ptcl_cache_read_batch(params, build, nptcls_here, pinds, [1,nptcls_here])
-            if( L_BENCH_GLOB ) call add_ptcl_cache_read_time(toc(t_cache))
-        else if( l_from_records )then
+        if( l_from_records )then
             call get_records(pinds, ptcl_imgs)
         else
             call reads%read(params, build, nptcls_here, pinds, [1,nptcls_here])
@@ -377,32 +367,35 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            if( l_cached )then
-                if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
-                call prepimg4align_cached(params, build, iptcl, build%imgbatch(iptcl_batch), &
-                    &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
-            else if( l_from_records )then
-                ! the record is the cached particle; a copy is prepared for alignment, which transforms its input
+            if( l_from_records )then
+                ! the record is the cropped particle; a copy is prepared for alignment, which transforms its input
                 call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
-                call prepimg4align_cached(params, build, iptcl, crop_work(ithr), &
+                call prepimg4align_cropped(params, build, iptcl, crop_work(ithr), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             else if( l_crop_mem )then
-                ! the cache's entry (ptcl_cache_ensure): noise-normalized, Fourier-cropped, unshifted, real space;
-                ! kept for the sums (or put as the pass's record) before a copy is prepared for alignment as a cached
-                ! particle is
+                ! the cropped particle: noise-normalized, Fourier-cropped, unshifted, real space; kept for the sums
+                ! (or put as the pass's record) before a copy is prepared for alignment
                 if( l_keep_raw )then
-                    call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, ptcl_imgs(iptcl_batch), [0.,0.])
+                    if( ptcl_on_disk(params, build, iptcl) )then
+                        call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk_box, ptcl_imgs(iptcl_batch), [0.,0.])
+                    else
+                        call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, ptcl_imgs(iptcl_batch), [0.,0.])
+                    endif
                     call ptcl_imgs(iptcl_batch)%ifft
                     call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
                 else
-                    call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, crop_work(ithr), [0.,0.])
+                    if( ptcl_on_disk(params, build, iptcl) )then
+                        call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk_box, crop_work(ithr), [0.,0.])
+                    else
+                        call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, crop_work(ithr), [0.,0.])
+                    endif
                     call crop_work(ithr)%ifft
                 endif
                 if( l_put_records )then
                     slot = record_slot(iptcl)
                     if( slot > 0 ) call put_record(slot, crop_work(ithr))
                 endif
-                call prepimg4align_cached(params, build, iptcl, crop_work(ithr), &
+                call prepimg4align_cropped(params, build, iptcl, crop_work(ithr), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             else
                 if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))

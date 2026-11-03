@@ -223,11 +223,11 @@ expose the override. `shift_sigma` (the polar shift map, `refine3D_policy.md`)
 is on by default (the parameter's 10 A; `shift_sigma=0` is the window search
 in every stage) for solve3D and for solve3D_cavgs, solve3D_addon,
 solve3D_chunks and solve3D_pyramid alike, and goes to every stage with a shift
-search: stage 3, the first with one, is the
-centring stage (`trs` raised to 3 sigma in native pixels, `trs_window` the
-next stage's half-width, the drain its convergence) and stages 4-8, dense and
-neighbourhood tables alike, polish from the coarse window map over their own
-half-width. A run manifest records the planned per-stage half-width so
+search (3-8, dense and neighbourhood tables alike), where the tables centre
+each particle as it needs: the disk of 3 sigma for one not yet centred in the
+workflow or whose shift posterior is wider than a third of the stage's window,
+the window otherwise (the dynamic centring, `refine3D_policy.md`). No stage's
+half-width is raised and no stage ends on the centring. A run manifest records the planned per-stage half-width so
 an add-on replays the frozen solution's search policy without acquiring a
 separate public control.
 

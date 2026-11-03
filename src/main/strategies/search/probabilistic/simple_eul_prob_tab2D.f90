@@ -13,7 +13,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, rec
     &read_seed_shift_table, write_seed_shift_table, prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
     &posterior_temperature, draw_posterior_row, shift_prior_sigma2, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN,&
-    &screen_pool_size
+    &screen_pool_size, shift_needs_disk, disk_radius_px
 implicit none
 
 public :: eul_prob_tab2D, prob_assign_profile2D
@@ -32,7 +32,7 @@ integer,          parameter :: PART_READ_OK = 0, PART_READ_OPEN = 1, PART_READ_I
 integer,          parameter :: PART_READ_NCLASSES = 4, PART_READ_COUNTS = 5, PART_READ_PTCL = 6, PART_READ_CLASS = 7
 integer,          parameter :: PART_READ_REFINED = 8, PART_READ_SIZE = 9
 ! bytes of a dense row entry (distance, in-plane index) and of a refined entry (particle, class, shift, loss)
-integer(int64),   parameter :: DENSE_ENTRY_BYTES = 8_int64, REFINED_ENTRY_BYTES = 20_int64
+integer(int64),   parameter :: DENSE_ENTRY_BYTES = 8_int64, REFINED_ENTRY_BYTES = 24_int64
 ! the screen's breadth: the posterior mass at the origin a particle's own pool holds
 
 !> Wall seconds of the master's part reads and assignment, for the PROB_ALIGN2D bench record
@@ -252,7 +252,9 @@ contains
     subroutine fill_tab_range( self, i_first, i_last )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,               intent(in)    :: i_first, i_last
-        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)  !< shift search object, L-BFGS with gradient
+        type(pftc_shsrch_grad), target  :: grad_shsrch_obj(nthr_glob)  !< shift search object, L-BFGS with gradient
+        type(pftc_shsrch_grad), target  :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0): its limits bound the polish box
+        type(pftc_shsrch_grad), pointer :: gso => null()
         type(ori)              :: o_prev
         integer :: i, icls, iptcl, ithr, irot, irot0, icls_prev, iref_n, nactive, nhood_sz_loc, npool, imap
         integer, allocatable :: pool(:)
@@ -261,15 +263,15 @@ contains
         integer :: loc(1)
         real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3), xy0(2)
         real    :: cls_dists(self%nclasses), cls_dists_work(self%nclasses)
-        real    :: inpl_dist, sigma2_prior, shincr_prev, step_map(NSHIFTMAPS)
+        real    :: inpl_dist, sigma2_prior, step_map(NSHIFTMAPS), shsig_loc
         logical :: class_active(self%nclasses)
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region, t0
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob), ndisk(nthr_glob), nscreens(nthr_glob)
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
         real(dp) :: prior_w, prior_w_map, u_prev(2), logz, temp_i, lse_map, logp0, temp_s
-        real     :: loss_cell, scr_xy(2,self%nclasses)
+        real     :: loss_cell, scr_xy(2,self%nclasses), scr_sdev(self%nclasses)
         integer  :: irho, ialpha, kscreen, scr_irot(self%nclasses)
-        logical  :: l_bank, l_map, l_disk, l_centring, l_polished
+        logical  :: l_bank, l_map, l_disk, l_polished
         if( self%l_sparse_snhc )then
             call self%fill_tab_prob_snhc_range(i_first, i_last)
             return
@@ -289,7 +291,6 @@ contains
         nscreens  = 0_int64
         sigma2_prior = 0.
         l_map      = .false.
-        l_centring = .false.
         prior_w    = 0.d0
         kscreen    = 0
         step_map   = 0.
@@ -322,18 +323,20 @@ contains
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
             if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
             ! the polar shift map (shift_sigma > 0): the coarse map over a particle's box at its likely classes, the
-            ! polish at full resolution from its optimum. In the centring stage (trs_window set) the box is the disk of
-            ! three sigma bounded by trs, under the prior, for a particle not yet searched or whose last move went
-            ! beyond the next stage's window, and that window for the others; in a later stage the window of trs
-            l_map      = self%p_ptr%l_shift_map
-            l_centring = l_map .and. self%p_ptr%trs_window > 0.
-            if( l_map ) call setup_shiftmap2D(self, prior_w, kscreen, step_map)
+            ! polish at full resolution from its optimum. The box is the disk of three sigma under the prior for a
+            ! particle not yet centred in this workflow or whose prior width exceeds a third of the window (the
+            ! dynamic centring: shift_needs_disk), the window of trs for the others
+            l_map = self%p_ptr%l_centring
+            if( l_map )then
+                call setup_shiftmap2D(self, prior_w, kscreen, step_map)
+                call new_disk_objects2D(self, grad_shsrch_disk, lims_init)
+            endif
             call alloc_seed_bank2D(self, seed_bank)
             ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,irot,irot0,cxy,icls,icls_prev,loc,&
             !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0,u_prev,logz,temp_i,irho,ialpha,&
-            !$omp& loss_cell,lse_map,logp0,temp_s,npool,pool,shincr_prev,l_disk,scr_xy,scr_irot,imap,prior_w_map,l_polished)&
+            !$omp& loss_cell,lse_map,logp0,temp_s,npool,pool,gso,l_disk,scr_xy,scr_irot,scr_sdev,imap,prior_w_map,l_polished,shsig_loc)&
             !$omp firstprivate(o_prev) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
@@ -344,19 +347,19 @@ contains
                 icls_prev = nint(self%b_ptr%spproj_field%get(iptcl, 'class'))
                 cxy    = 0.
                 l_disk = .false.
+                gso    => grad_shsrch_obj(ithr)
                 if( l_map )then
-                    ! (1) the seed is the stored shift the sections already carry; the box is the disk for a particle the
-                    ! centring stage has not searched yet (shincr below zero) or whose last move went beyond the next
-                    ! stage's window, the window for the others
-                    if( l_centring )then
-                        shincr_prev = self%b_ptr%spproj_field%get(iptcl, 'shincr')
-                        l_disk = shincr_prev < 0. .or. shincr_prev > self%p_ptr%trs_window
-                    endif
+                    ! (1) the seed is the stored shift the sections already carry; the box is the disk for a particle not
+                    ! yet centred in this workflow (under the pick prior) or whose prior width exceeds a third of the
+                    ! window (the data's alone), the window for the others
+                    shsig_loc   = self%b_ptr%spproj_field%get(iptcl, 'shsig')
+                    l_disk      = shift_needs_disk(shsig_loc, self%p_ptr%trs)
                     imap        = SHIFTMAP_WINDOW
                     prior_w_map = 0.d0
                     if( l_disk )then
+                        gso         => grad_shsrch_disk(ithr)
                         imap        = SHIFTMAP_SCREEN
-                        prior_w_map = prior_w
+                        if( shsig_loc < 0. ) prior_w_map = prior_w
                         ndisk(ithr) = ndisk(ithr) + 1_int64
                     endif
                     u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl), dp)
@@ -412,7 +415,8 @@ contains
                         if( icls < 1 ) cycle
                         call self%b_ptr%pftc%gen_shiftmap(imap, icls, iptcl)
                         call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, u_prev, lse_map, .true.,&
-                            &logz, irot, irho, ialpha, loss_cell)
+                            &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
+                            &sdev=scr_sdev(icls))
                         scr_irot(icls) = irot
                         scr_xy(:,icls) = real(self%b_ptr%pftc%shiftmap_shift(imap, irho, ialpha))
                         cls_dists_work(icls) = loss_cell
@@ -425,21 +429,22 @@ contains
                     icls = loc(1)
                     if( cls_dists_work(icls) >= huge(1.0)/2.0 ) exit
                     nrefined(ithr) = nrefined(ithr) + 1_int64
-                    call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
+                    call gso%set_indices(icls, iptcl)
                     if( l_map )then
                         ! the polish at full resolution in a box of one coarse step about the coarse optimum: the box's
                         ! optimum if it beat the origin, minimize's baseline; else the coarse optimum, scored at full
                         ! resolution, if it beats the origin's row; else that row stands
                         irot = scr_irot(icls)
-                        call grad_shsrch_obj(ithr)%minimize_in_cell(irot, scr_xy(:,icls), step_map(imap), cxy_prob, l_polished)
+                        call gso%minimize_in_cell(irot, scr_xy(:,icls), step_map(imap), cxy_prob, l_polished)
                         inpl_dist = eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun)
                         if( l_polished .or. inpl_dist < cls_dists(icls) )then
-                            call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, cxy_prob(2), cxy_prob(3), .true.)
+                            call self%record_sparse_eval(i, ithr, icls, inpl_dist, irot, cxy_prob(2), cxy_prob(3), .true.,&
+                                &scr_sdev(icls))
                         endif
                     else
                         irot = self%candidate_buffers(ithr)%get_inpl(i, icls)
                         xy0  = seed_start(self, cxy(2:3), irot)
-                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=xy0)
+                        cxy_prob = gso%minimize(irot=irot, sh_rot=.true., xy_in=xy0)
                         if( irot > 0 )then
                             call self%record_sparse_eval(i, ithr, icls,&
                                 &eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun), irot,&
@@ -471,9 +476,10 @@ contains
             !$omp end parallel do
         endif
         call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
-            &nscored, nbank, nrefined, ndisk, nscreens, i_to - i_from + 1, nactive, nhood_sz_loc)
+            &nscored, nbank, nrefined, ndisk, nscreens, i_to - i_from + 1, nactive, nhood_sz_loc, grad_disk=grad_shsrch_disk)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
+            if( l_map ) call grad_shsrch_disk(ithr)%kill
         end do
         if( allocated(seed_bank) ) deallocate(seed_bank)
         call o_prev%kill
@@ -488,7 +494,8 @@ contains
     subroutine fill_tab_prob_snhc_range( self, i_first, i_last )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,               intent(in)    :: i_first, i_last
-        type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), target :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0)
         type(eval2D_sparse_ws) :: eval_work
         type(ran_tabu), allocatable :: direct_rts(:)
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, nrots
@@ -544,10 +551,15 @@ contains
             end do
             ! the shift prior's width, from the sampled particles' last shift increments (set per particle below)
             if( self%p_ptr%l_shift_prior ) sigma2_prior = shift_prior_sigma2(self%b_ptr%spproj_field, self%p_ptr%lp / self%p_ptr%smpd)
-            ! the polar shift map (shift_sigma > 0): the coarse map over the window at the best classes initialises
-            ! their polish (minimize_in_cell), and the classes are scored at the stored shift, without a seed
-            l_map = self%p_ptr%l_shift_map
-            if( l_map ) call setup_shiftmap2D(self, prior_w, kscreen, step_map)
+            ! the polar shift map (shift_sigma > 0): the classes are scored at the stored shift, without a seed, and
+            ! the coarse map initialises the best classes' polish (minimize_in_cell): the window map for a centred
+            ! particle, the disk map under the prior over every class for one not yet centred in this workflow or
+            ! whose prior width exceeds a third of the window (the dynamic centring: shift_needs_disk)
+            l_map = self%p_ptr%l_centring
+            if( l_map )then
+                call setup_shiftmap2D(self, prior_w, kscreen, step_map)
+                call new_disk_objects2D(self, grad_shsrch_disk, lims_init)
+            endif
             ! dynamic: the particles' shift searches differ in cost; each is processed whole by one thread with its
             ! own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(dynamic)
@@ -570,9 +582,10 @@ contains
             !$omp end parallel do
         endif
         call record_fill_profile2D(self, grad_shsrch_obj, omp_get_wtime() - t_region, ts_seed, ts_score, ts_refine,&
-            &nscored, nbank, nrefined, ndisk, nscreens, i_to - i_from + 1, 0, smpl_ncls)
+            &nscored, nbank, nrefined, ndisk, nscreens, i_to - i_from + 1, 0, smpl_ncls, grad_disk=grad_shsrch_disk)
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
+            if( l_map ) call grad_shsrch_disk(ithr)%kill
         end do
         call eval_work%dealloc_eval2D_sparse_ws
         deallocate(direct_rts, seed_bank)
@@ -589,6 +602,8 @@ contains
             integer :: neval_bound_loc
             real    :: dist_loc, sh_loc(2)
             real(dp) :: t0
+            logical  :: l_disk_loc, l_prior_loc
+            real     :: shsig_loc
             t0 = omp_get_wtime()
             call direct_rts(ithr_loc)%ne_ran_iarr(eval_work%direct_srch_order(:,ithr_loc))
             call self%b_ptr%spproj_field%get_ori(iptcl_loc, o_prev_loc)
@@ -596,7 +611,14 @@ contains
             if( icls_prev_loc >= 1 .and. icls_prev_loc <= self%nclasses )then
                 call put_last(icls_prev_loc, eval_work%direct_srch_order(:,ithr_loc))
             endif
-            cxy_loc   = 0.
+            cxy_loc    = 0.
+            l_disk_loc  = .false.
+            l_prior_loc = .false.
+            if( l_map .and. l_with_shift )then
+                shsig_loc   = self%b_ptr%spproj_field%get(iptcl_loc, 'shsig')
+                l_disk_loc  = shift_needs_disk(shsig_loc, self%p_ptr%trs)
+                l_prior_loc = shsig_loc < 0.
+            endif
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
                 &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
@@ -619,6 +641,7 @@ contains
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             t0 = omp_get_wtime()
             neval_bound_loc = nrefs_bound
+            if( l_disk_loc ) neval_bound_loc = self%nclasses ! a particle on the disk scores every class
             eval_work%eval_cls(:,ithr_loc)   = 0
             eval_work%eval_dists(:,ithr_loc) = huge(1.0)
             neval_loc = 0
@@ -634,7 +657,7 @@ contains
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
             nscored(ithr_loc)  = nscored(ithr_loc) + int(neval_loc, int64)
             t0 = omp_get_wtime()
-            call refine_best_classes(i_loc, ithr_loc, iptcl_loc, sh_loc, neval_loc, l_with_shift)
+            call refine_best_classes(i_loc, ithr_loc, iptcl_loc, sh_loc, neval_loc, l_with_shift, l_disk_loc, l_prior_loc)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
             call o_prev_loc%kill
         end subroutine process_particle
@@ -651,24 +674,79 @@ contains
         end subroutine score_class
 
         !> the shifts of the best classes: the windowed refinement from the seed, or under the key the polish in a box
-        !! about the coarse window map's optimum (kept if it beat the origin, or the cell if it beats the class's row)
-        subroutine refine_best_classes(i_loc, ithr_loc, iptcl_loc, sh_loc, neval_loc, l_with_shift)
+        !! about the coarse map's optimum (kept if it beat the origin, or the cell if it beats the class's row): the
+        !! window map at the best classes; for a particle on the disk, the screen of the classes holding
+        !! SCREEN_QUANTILE of its posterior at the origin with the disk map under the prior, the best of the screen polished
+        subroutine refine_best_classes(i_loc, ithr_loc, iptcl_loc, sh_loc, neval_loc, l_with_shift, l_disk_loc, l_prior_loc)
             integer,  intent(in) :: i_loc, ithr_loc, iptcl_loc, neval_loc
             real,     intent(in) :: sh_loc(2)
-            logical,  intent(in) :: l_with_shift
-            integer  :: nrefine_loc, j_loc, eval_slot_loc, icls_loc, irot_loc, irho_loc, ialpha_loc
-            real     :: cxy_prob_loc(3), xy0_loc(2), loss_cell_loc, dist_loc
-            real(dp) :: u_prev_loc(2), lse_loc, logp0_loc, temp_s_loc, logz_loc
+            logical,  intent(in) :: l_with_shift, l_disk_loc, l_prior_loc
+            type(pftc_shsrch_grad), pointer :: gso
+            integer  :: nrefine_loc, j_loc, eval_slot_loc, icls_loc, irot_loc, irho_loc, ialpha_loc, imap_loc, npool_loc
+            integer  :: pool_loc(neval_loc), scr_irot_loc(self%nclasses), slot_of_loc(self%nclasses), loc_loc(1)
+            real     :: cxy_prob_loc(3), xy0_loc(2), loss_cell_loc, dist_loc, sdev_loc, dists_sorted_loc(neval_loc)
+            real     :: scr_xy_loc(2,self%nclasses), scr_loss_loc(self%nclasses), scr_sdev_loc(self%nclasses)
+            real(dp) :: u_prev_loc(2), lse_loc, logp0_loc, temp_s_loc, temp_i_loc, logz_loc, prior_w_loc
             logical  :: l_polished_loc
             if( .not. l_with_shift ) return
             if( neval_loc < 1 ) return
+            gso => grad_shsrch_obj(ithr_loc)
             if( l_map )then
-                u_prev_loc = real(self%b_ptr%spproj_field%get_2Dshift(iptcl_loc), dp)
-                temp_s_loc = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
+                u_prev_loc  = real(self%b_ptr%spproj_field%get_2Dshift(iptcl_loc), dp)
+                temp_s_loc  = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                     &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
-                call self%b_ptr%pftc%shiftmap_prior(SHIFTMAP_WINDOW, 0.d0, u_prev_loc, lse_loc, logp0_loc)
+                imap_loc    = SHIFTMAP_WINDOW
+                prior_w_loc = 0.d0
+                if( l_disk_loc )then
+                    imap_loc    = SHIFTMAP_SCREEN
+                    if( l_prior_loc ) prior_w_loc = prior_w
+                    gso         => grad_shsrch_disk(ithr_loc)
+                    ndisk(ithr_loc) = ndisk(ithr_loc) + 1_int64
+                endif
+                call self%b_ptr%pftc%shiftmap_prior(imap_loc, prior_w_loc, u_prev_loc, lse_loc, logp0_loc)
             endif
             nrefine_loc = min(smpl_ncls, neval_loc)
+            if( l_map .and. l_disk_loc )then
+                ! the screen: the disk map at the classes holding SCREEN_QUANTILE of the posterior at the origin (at
+                ! least twice the refined count), then the best of the screen polished in a box about their optimum
+                pool_loc         = minnloc(eval_work%eval_dists(1:neval_loc,ithr_loc), neval_loc)
+                dists_sorted_loc = eval_work%eval_dists(pool_loc,ithr_loc)
+                temp_i_loc       = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
+                npool_loc        = min(neval_loc, max(2 * nrefine_loc, screen_pool_size(dists_sorted_loc, neval_loc, temp_i_loc)))
+                scr_loss_loc = huge(1.0)
+                slot_of_loc  = 0
+                do j_loc = 1, npool_loc
+                    eval_slot_loc = pool_loc(j_loc)
+                    if( eval_slot_loc < 1 ) cycle
+                    icls_loc = eval_work%eval_cls(eval_slot_loc,ithr_loc)
+                    if( icls_loc < 1 ) cycle
+                    slot_of_loc(icls_loc) = eval_slot_loc
+                    call self%b_ptr%pftc%gen_shiftmap(imap_loc, icls_loc, iptcl_loc)
+                    call self%b_ptr%pftc%shiftmap_draw(imap_loc, temp_s_loc, prior_w_loc, u_prev_loc, lse_loc, .true.,&
+                        &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc,&
+                        &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev_loc(icls_loc))
+                    scr_irot_loc(icls_loc) = irot_loc
+                    scr_xy_loc(:,icls_loc) = real(self%b_ptr%pftc%shiftmap_shift(imap_loc, irho_loc, ialpha_loc))
+                    scr_loss_loc(icls_loc) = loss_cell_loc
+                    nscreens(ithr_loc) = nscreens(ithr_loc) + 1_int64
+                enddo
+                do j_loc = 1, nrefine_loc
+                    loc_loc  = minloc(scr_loss_loc)
+                    icls_loc = loc_loc(1)
+                    if( scr_loss_loc(icls_loc) >= huge(1.0)/2. ) exit
+                    nrefined(ithr_loc) = nrefined(ithr_loc) + 1_int64
+                    call gso%set_indices(icls_loc, iptcl_loc)
+                    irot_loc = scr_irot_loc(icls_loc)
+                    call gso%minimize_in_cell(irot_loc, scr_xy_loc(:,icls_loc), step_map(imap_loc), cxy_prob_loc, l_polished_loc)
+                    dist_loc = eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun)
+                    if( l_polished_loc .or. dist_loc < eval_work%eval_dists(slot_of_loc(icls_loc),ithr_loc) )then
+                        call self%record_sparse_eval(i_loc, ithr_loc, icls_loc, dist_loc, irot_loc,&
+                            &cxy_prob_loc(2), cxy_prob_loc(3), .true., scr_sdev_loc(icls_loc))
+                    endif
+                    scr_loss_loc(icls_loc) = huge(1.0)
+                enddo
+                return
+            endif
             eval_work%best_locs(1:nrefine_loc,ithr_loc) = minnloc(eval_work%eval_dists(1:neval_loc,ithr_loc), nrefine_loc)
             do j_loc = 1, nrefine_loc
                 eval_slot_loc = eval_work%best_locs(j_loc,ithr_loc)
@@ -676,24 +754,24 @@ contains
                 icls_loc = eval_work%eval_cls(eval_slot_loc,ithr_loc)
                 if( icls_loc < 1 ) cycle
                 nrefined(ithr_loc) = nrefined(ithr_loc) + 1_int64
-                call grad_shsrch_obj(ithr_loc)%set_indices(icls_loc, iptcl_loc)
+                call gso%set_indices(icls_loc, iptcl_loc)
                 if( l_map )then
                     call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_WINDOW, icls_loc, iptcl_loc)
                     call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s_loc, 0.d0, u_prev_loc, lse_loc, .true.,&
-                        &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc)
+                        &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc,&
+                        &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=sdev_loc)
                     xy0_loc = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho_loc, ialpha_loc))
                     nscreens(ithr_loc) = nscreens(ithr_loc) + 1_int64
-                    call grad_shsrch_obj(ithr_loc)%minimize_in_cell(irot_loc, xy0_loc, step_map(SHIFTMAP_WINDOW),&
-                        &cxy_prob_loc, l_polished_loc)
+                    call gso%minimize_in_cell(irot_loc, xy0_loc, step_map(SHIFTMAP_WINDOW), cxy_prob_loc, l_polished_loc)
                     dist_loc = eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun)
                     if( l_polished_loc .or. dist_loc < eval_work%eval_dists(eval_slot_loc,ithr_loc) )then
                         call self%record_sparse_eval(i_loc, ithr_loc, icls_loc, dist_loc, irot_loc,&
-                            &cxy_prob_loc(2), cxy_prob_loc(3), .true.)
+                            &cxy_prob_loc(2), cxy_prob_loc(3), .true., sdev_loc)
                     endif
                 else
                     irot_loc = self%candidate_buffers(ithr_loc)%get_inpl(i_loc, icls_loc)
                     xy0_loc  = seed_start(self, sh_loc, irot_loc)
-                    cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=xy0_loc)
+                    cxy_prob_loc = gso%minimize(irot=irot_loc, sh_rot=.true., xy_in=xy0_loc)
                     if( irot_loc > 0 )then
                         call self%record_sparse_eval(i_loc, ithr_loc, icls_loc,&
                             &eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun),&
@@ -709,25 +787,39 @@ contains
     !! parallel region: the disk of three sigma about the stored shift bounded by the search range trs, in the pixels
     !! of the shift matrices (the native box), magnitudes a quarter of the matching wavelength apart; prior_w is the
     !! prior's weight 1 / (2 sigma^2). The fill uses the coarse map (SHIFTMAP_SCREEN) alone
-    !> the coarse maps of a fill (shift_sigma > 0): the disk of three sigma bounded by trs and the window (the next
-    !! stage's in the centring stage, trs elsewhere), with each map's radial step, the box of the polish about a cell
+    !> the coarse maps of a fill (shift_sigma > 0): the disk of three sigma (disk_radius_px) and the window of trs,
+    !! with each map's radial step, the box of the polish about a cell
     subroutine setup_shiftmap2D( self, prior_w, kscreen, step_map )
         class(eul_prob_tab2D), intent(inout) :: self
         real(dp),              intent(out)   :: prior_w
         integer,               intent(out)   :: kscreen
         real,                  intent(out)   :: step_map(NSHIFTMAPS)
-        real(dp) :: sigma_px, radius_win
+        real(dp) :: sigma_px
         if( .not. (self%p_ptr%prob_beta > 0.) ) THROW_HARD('the shift map draws at prob_beta x T: prob_beta must be positive')
-        sigma_px   = real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp)
-        radius_win = real(self%p_ptr%trs, dp)
-        if( self%p_ptr%trs_window > 0. ) radius_win = real(self%p_ptr%trs_window, dp)
-        call self%b_ptr%pftc%setup_shiftmaps(sigma_px, min(3.d0 * sigma_px, real(self%p_ptr%trs, dp)), radius_win, prior_w, kscreen)
+        sigma_px = real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp)
+        call self%b_ptr%pftc%setup_shiftmaps(sigma_px, real(disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd,&
+            &self%p_ptr%box), dp), real(self%p_ptr%trs, dp), prior_w, kscreen)
         step_map = 0.
         step_map(SHIFTMAP_SCREEN) = real(norm2(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_SCREEN, 2, 1) -&
             &self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_SCREEN, 1, 1)))
         step_map(SHIFTMAP_WINDOW) = real(norm2(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 2, 1) -&
             &self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 1, 1)))
     end subroutine setup_shiftmap2D
+
+    !> the disk's own search objects (shift_sigma > 0): the polish box clamps to the object's limits
+    subroutine new_disk_objects2D( self, objs, lims_init )
+        class(eul_prob_tab2D),  intent(in)    :: self
+        type(pftc_shsrch_grad), intent(inout) :: objs(:)
+        real,                   intent(in)    :: lims_init(2,2)
+        real    :: lims_disk(2,2)
+        integer :: ithr
+        lims_disk(:,1) = -disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box)
+        lims_disk(:,2) = -lims_disk(:,1)
+        do ithr = 1, size(objs)
+            call objs(ithr)%new_alternating(self%b_ptr, lims_disk, lims_init=lims_init, maxits=self%p_ptr%maxits_sh,&
+                &coarse_init=.true.)
+        end do
+    end subroutine new_disk_objects2D
 
     !> the per-thread memo of the particle shifted by its particle-frame seed, which every class of the particle is
     !! scored against (a seed below SHERRSQ scores against the plain particle memo)
@@ -804,9 +896,10 @@ contains
     !! prob_snhc fill), the most classes refined per particle and their total, shifted particle memos built and the
     !! search objects' counters
     subroutine record_fill_profile2D( self, grad_obj, wall, ts_seed, ts_score, ts_refine, nscored, nbank, nrefined, &
-            &ndisk, nscreens, nfilled, nrefs, nrefine )
+            &ndisk, nscreens, nfilled, nrefs, nrefine , grad_disk)
         class(eul_prob_tab2D),  intent(inout) :: self
         type(pftc_shsrch_grad), intent(inout) :: grad_obj(:)
+        type(pftc_shsrch_grad), optional, intent(inout) :: grad_disk(:)
         real(dp),               intent(in)    :: wall, ts_seed(:), ts_score(:), ts_refine(:)
         integer(int64),         intent(in)    :: nscored(:), nbank(:), nrefined(:), ndisk(:), nscreens(:)
         integer,                intent(in)    :: nfilled, nrefs, nrefine
@@ -830,6 +923,12 @@ contains
             call grad_obj(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
             call add_counters
         enddo
+        if( present(grad_disk) )then
+            do ithr = 1,size(grad_disk)
+                call grad_disk(ithr)%get_profile(obj_ithr, grad_ithr, alt_ithr, grid_ithr, min_ithr)
+                call add_counters
+            enddo
+        endif
 
         contains
 
@@ -843,11 +942,12 @@ contains
 
     end subroutine record_fill_profile2D
 
-    subroutine record_sparse_eval( self, i, ithr, icls, dist, irot, x, y, has_sh )
+    subroutine record_sparse_eval( self, i, ithr, icls, dist, irot, x, y, has_sh, sdev )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,               intent(in)    :: i, ithr, icls, irot
         real,                  intent(in)    :: dist, x, y
         logical,               intent(in)    :: has_sh
+        real,        optional, intent(in)    :: sdev
         type(prob_candidate) :: candidate
         if( icls < 1 .or. icls > self%nclasses )&
             &THROW_HARD('simple_eul_prob_tab2D::record_sparse_eval; class index out of range')
@@ -857,6 +957,7 @@ contains
         candidate%x      = x
         candidate%y      = y
         candidate%has_sh = has_sh
+        if( present(sdev) ) candidate%sdev = sdev
         call self%candidate_buffers(ithr)%append_or_replace(i, candidate)
     end subroutine record_sparse_eval
 
@@ -882,6 +983,7 @@ contains
             if( self%refined(k)%ri /= icls ) cycle
             candidate%x      = self%refined(k)%x
             candidate%y      = self%refined(k)%y
+            candidate%sdev   = self%refined(k)%sdev
             candidate%has_sh = .true.
             exit
         enddo
@@ -900,6 +1002,7 @@ contains
         self%assgn_map(iptcl_loc)%dist   = candidate%dist
         self%assgn_map(iptcl_loc)%x      = candidate%x
         self%assgn_map(iptcl_loc)%y      = candidate%y
+        self%assgn_map(iptcl_loc)%sdev   = candidate%sdev
         self%assgn_map(iptcl_loc)%has_sh = candidate%has_sh
         call record_seed_shift(self%assgn_map(iptcl_loc),self%seed_shifts(:,iptcl_loc),&
             &self%seed_has_sh(iptcl_loc),self%p_ptr%l_doshift)
@@ -1282,7 +1385,7 @@ contains
                     filled(icls)   = .true.
                     if( candidate%has_sh )then
                         nrefined = nrefined + 1
-                        refined(nrefined) = prob_refined_entry(i_loc, icls, candidate%x, candidate%y, candidate%dist)
+                        refined(nrefined) = prob_refined_entry(i_loc, icls, candidate%x, candidate%y, candidate%dist, candidate%sdev)
                     endif
                     j = j + 1
                 enddo

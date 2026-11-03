@@ -264,7 +264,6 @@ contains
             &'in the job''s folder, on its project')
         call assert_int(NCLS2D_FIRST, cline%get_iarg('ncls'), 'into NCLS2D_FIRST classes')
         call assert_real(120., cline%get_rarg('mskdiam'), 1.e-4, 'with the mask diameter')
-        call assert_true(cline%get_carg('cache') == 'yes', 'cache=yes')
         call set_solve2D_route_cline(cline, 'route.simple', 0.)
         call assert_false(cline%defined('mskdiam'), 'no mask diameter: the job''s default')
         call set_clsexp_cline(cline, 'exp.simple', 500, 110.)

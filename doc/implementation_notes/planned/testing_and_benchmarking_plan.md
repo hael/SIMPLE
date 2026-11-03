@@ -466,7 +466,7 @@ Under `doc/implementation_notes/planned/`:
 - `multistate_speed_run_unfinished.md`
 - `speed_architecture_proposals.md` (the maintainer's tree holds the newer copy)
 - `hardware_resource_planning_unfinished.md`
-- `species_discovery_status.md`
+- `../completed/species_discovery_status.md`
 - `atom_bfactor_model.md`
 - `single_pcg_integration_unfinished.md`
 - `nu_evidence_mask_cross_validated_threshold.md`
