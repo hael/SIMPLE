@@ -511,14 +511,19 @@ checked).
 
 ## Part 2. The next release
 
+The architecture review above is carried out by
+[`prob_align_batch_pipeline.md`](prob_align_batch_pipeline.md) (planned
+2026-11-04, ruled done): per-particle draws on keyed random streams, one batch
+pipeline for shared memory and the distributed parts, no global table and no
+part files. It absorbs the rows that stood here for the worker fold, the
+streaming assignment, the read-ahead thread and the 2D table pre-step (the
+first two superseded, the read-ahead already in the read session). What is left
+for the next release:
+
 | item | what | why later |
 | --- | --- | --- |
-| batched, GPU-ready kernels | pure kernels over explicit arrays (references, particle times CTF, shifts, rotations) scoring many references per call, first batched per particle on the CPU | the GPU release; FFT plans and precision change results |
-| the worker fold with the hand-over of the prepared particles and references (a fold without it was dropped 2026-11-04, Status) | as in section 1.3 | size and risk |
-| persistent workers | worker processes that live for the run and exchange only model, sample and assignment; perhaps 5-15% per iteration on queued clusters | large; after the project owner and the worker fold |
-| streaming assignment | keep only the best candidates per reference from each part; master table memory down by orders of magnitude on large multi-state runs | results change; needs a ruling; large |
-| particle read-ahead in its own thread | read the next batch while the current one computes (today the read-ahead runs in the same thread) | medium; gain depends on the storage |
-| table pre-step folded into the 2D search | in shared memory keep the table's prepared references and particle transforms for the search | medium to large; the one-read item of section 1.2 b takes most of the gain first |
+| batched, GPU-ready kernels | pure kernels over explicit arrays (references, particle times CTF, shifts, rotations) scoring many references per call, first batched per particle on the CPU, inside the batch of the pipeline | the GPU release; FFT plans and precision change results |
+| persistent workers, or the coarray SPMD route (`coarray_spmd_execution.md`) | worker processes or images that live for the run and exchange only model, sample and decisions; perhaps 5-15% per iteration on queued clusters | large; after the pipeline, which is the unit an image runs |
 
 Rejected (ruling 2026-11-04): the NU filter as an object with the states
 assembled in parallel. Holding several states' volumes and filter state at

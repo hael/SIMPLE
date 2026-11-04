@@ -46,6 +46,7 @@ resuming an old command or experiment.
 | NU auxiliary candidates | [Blush competition](planned/blush_auxiliary_competition.md) | Proposed experiment; precomputed-map controls precede native inference. |
 | NU masking | [Cross-validated threshold](planned/nu_evidence_mask_cross_validated_threshold.md) | Proposal; start with the diagnostic table. |
 | Distributed execution | [Coarray SPMD](planned/coarray_spmd_execution.md) | Proposal; complete measurements and lifecycle gates before implementation. |
+| Probabilistic alignment pipeline | [Batch pipeline](planned/prob_align_batch_pipeline.md) | Ruled done (2026-11-04): keyed draws, then one batch pipeline for shared memory and the parts, then retirement of the table programs; phase 1 next. |
 | Threading | [Safety and budget](planned/thread_budget_and_safety.md), [BLAS configuration](planned/blas_openmp_policy.md) | Policy decisions and real-toolchain validation remain. |
 | Resource planning | [Planner closeout](planned/hardware_resource_planning_unfinished.md) | External planner delivered; reconcile remaining calibration and scientific gates. |
 | Performance follow-up | [Speed-week closeout](planned/single_state_speed_week_unfinished.md), [multi-state closeout](planned/multistate_speed_run_unfinished.md), [architecture proposals](planned/speed_architecture_proposals.md) | Keep applicable measurements open; dispose explicitly of acceptance criteria for retired search policies. |
