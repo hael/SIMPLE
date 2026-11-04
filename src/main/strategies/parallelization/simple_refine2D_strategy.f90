@@ -9,7 +9,7 @@ use simple_eo_partition, only: ensure_field_halves
 use simple_qsys_env,    only: qsys_env
 use simple_convergence, only: convergence
 use simple_matcher_smpl_and_lplims, only: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, &
-    &refine2D_blends_carryover
+    &refine2D_blends_carryover, master_draws_sample2D, sample_ptcls4update2D
 use simple_cavg_sums,   only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CAVG_SUMS_OK
 use simple_classaverager, only: cavger_commit_carryover, cavger_restore_cavgs, cavger_gen2Dclassdoc, &
     &cavger_write_merged, cavger_write_eo, cavger_kill
@@ -334,7 +334,8 @@ contains
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
         endif
         call set_master_num_threads(self%nthr_master, string('REFINE2D'))
-        call self%qenv%new(params, params%nparts)
+        ! partitions balance the particles with state > 0, as in 3D
+        call self%qenv%new(params, params%nparts, l_active=build%spproj_field%included())
         call cline%gen_job_descr(self%job_descr)
     end subroutine distr_initialize
 
@@ -349,7 +350,9 @@ contains
         type(cmdline)                     :: cline_prob_align
         integer                           :: nthr_here, nthr_glob_here
         type(string)                      :: update_frac_req
+        integer, allocatable              :: pinds_smpl(:)
         real                              :: frac_srch_space
+        integer                           :: nptcls_smpl
         logical                           :: l_full_update, l_update_frac_key
         if( L_BENCH_GLOB )then
             self%bench    = refine2D_bench_state()
@@ -383,6 +386,12 @@ contains
             call cline_prob_align%set('startit',    params%startit)
             if( l_full_update ) call cline_prob_align%set('update_frac', 1.0)
             call prob_align2D_master(params, build, cline_prob_align, l_full_update, self%bench)
+        else if( .not. l_full_update .and. master_draws_sample2D(params) )then
+            ! one fractional-update sample over the whole project, which the workers reproduce (prob_align2D
+            ! draws and writes it in the probabilistic passes)
+            call sample_ptcls4update2D(params, build, [1,params%nptcls], .true., nptcls_smpl, pinds_smpl)
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            if( allocated(pinds_smpl) ) deallocate(pinds_smpl)
         endif
         ! The master creates one generation-scoped candidate after every
         ! project-state update and before workers read the committed state.
@@ -545,8 +554,9 @@ contains
     end subroutine restore_cavgs_inmem
 
     !> The convergence decision of a refine2D iteration in both modes, after the class averages are restored
-    !! (cavger_gen2Dclassdoc writes the particles' res that check_conv2D averages): check_conv2D's criteria, minits,
-    !! maxits and the full-assignment coverage; prints the verdict and updates the progress file
+    !! (cavger_gen2Dclassdoc writes the particles' res that check_conv2D averages): check_conv2D's criteria, minits and
+    !! maxits (counted from startit, as in 3D) and the full-assignment coverage of assign_all; prints the verdict and
+    !! updates the progress file
     subroutine check_refine2D_convergence( params, build, cline, conv, converged )
         type(parameters),  intent(inout) :: params
         type(builder),     intent(inout) :: build
@@ -556,8 +566,8 @@ contains
         integer :: n_unassigned
         logical :: l_full_assignment
         converged = conv%check_conv2D(params, cline, build%spproj_field, build%spproj_field%get_n('class'), params%msk)
-        converged = converged .and. (params%which_iter >= params%minits)
-        converged = converged .or.  (params%which_iter >= params%maxits)
+        converged = converged .and. (params%which_iter >= params%startit + params%minits - 1)
+        converged = converged .or.  (params%which_iter >= params%startit + params%maxits - 1)
         if( refine2D_requires_full_assignment(params) )then
             l_full_assignment = all_active_ptcls_2D_assigned(build%spproj_field, [params%fromp,params%top], n_unassigned)
             if( .not. l_full_assignment )then

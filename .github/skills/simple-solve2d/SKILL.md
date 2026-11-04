@@ -95,9 +95,10 @@ If fractional update or probabilistic sampling is involved, also read
 - `cavger_update_sums` buckets a batch by (class, half) and runs the buckets
   under a dynamic schedule, each in batch order, so the sums do not depend on
   the thread count. Keep that order in any change to the sums.
-- The 2D part files carry a format word: -4 for the candidate stream
-  (`prob_snhc`, with per-particle counts), -5 for the dense rows (`prob`:
-  distance and in-plane index per entry, then the refined entries).
+- The 2D part files carry a format word: -6 for the candidate stream
+  (`prob_neigh`, with per-particle counts), -7 for the dense rows (`prob`:
+  distance and in-plane index per entry, then the refined entries); both carry
+  the particle temperatures after the seed table.
   `prob_align2D` reads them in parallel and checks size, format and that each
   particle is in exactly one part. Change writer, readers and the tester
   together.

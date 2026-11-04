@@ -22,7 +22,7 @@ private
 
 real,             parameter :: NHOOD_FRAC           = 0.1
 integer,          parameter :: PROB_TAB2D_IO_CHUNK  = 65536
-! format words of the part files (header word 3): the candidate stream (refine=prob_snhc) and the dense rows
+! format words of the part files (header word 3): the candidate stream (refine=prob_neigh) and the dense rows
 ! (refine=prob); -6/-7 since the particle temperatures after the seed table (2026-10-23). The 3D dense part file
 ! is -4
 integer(int64),   parameter :: PROB_TAB2D_STREAM_FORMAT = -6_int64
@@ -104,8 +104,8 @@ type :: eul_prob_tab2D
     ! DESTRUCTOR
     procedure :: kill
     ! PRIVATE
-    procedure, private :: fill_tab_prob_snhc
-    procedure, private :: fill_tab_prob_snhc_range
+    procedure, private :: fill_tab_prob_neigh
+    procedure, private :: fill_tab_prob_neigh_range
     procedure, private :: ref_assign_sparse
     procedure, private :: record_sparse_eval
     procedure, private :: write_stream_head
@@ -195,10 +195,10 @@ contains
         self%b_ptr     => build
         self%nptcls    = size(pinds)
         self%nclasses  = params%ncls
-        self%l_sparse_snhc = trim(params%refine) == 'prob_snhc'
+        self%l_sparse_snhc = trim(params%refine) == 'prob_neigh'
         ! the posterior is defined by the Euclidean objective (the particle temperature is its noise scale)
         if( params%cc_objfun /= OBJFUN_EUCLID )&
-            &THROW_HARD('the 2D probability tables draw from the tempered posterior: refine=prob|prob_snhc needs objfun=euclid')
+            &THROW_HARD('the 2D probability tables draw from the tempered posterior: refine=prob|prob_neigh needs objfun=euclid')
         allocate(self%class_exists(self%nclasses))
         ! In 2D probabilistic assignment classes must be able to recover, otherwise
         ! low-population classes are permanently excluded and the solution collapses.
@@ -273,7 +273,7 @@ contains
         integer  :: irho, ialpha, kscreen, scr_irot(self%nclasses)
         logical  :: l_bank, l_map, l_disk, l_polished
         if( self%l_sparse_snhc )then
-            call self%fill_tab_prob_snhc_range(i_first, i_last)
+            call self%fill_tab_prob_neigh_range(i_first, i_last)
             return
         endif
         i_from = max(1, i_first)
@@ -487,12 +487,12 @@ contains
         if( self%table_is_open ) call self%flush_candidate_buffers
     end subroutine fill_tab_range
 
-    subroutine fill_tab_prob_snhc( self )
+    subroutine fill_tab_prob_neigh( self )
         class(eul_prob_tab2D), intent(inout) :: self
-        call self%fill_tab_prob_snhc_range(1, self%nptcls)
-    end subroutine fill_tab_prob_snhc
+        call self%fill_tab_prob_neigh_range(1, self%nptcls)
+    end subroutine fill_tab_prob_neigh
 
-    subroutine fill_tab_prob_snhc_range( self, i_first, i_last )
+    subroutine fill_tab_prob_neigh_range( self, i_first, i_last )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,               intent(in)    :: i_first, i_last
         type(pftc_shsrch_grad), target :: grad_shsrch_obj(nthr_glob)
@@ -784,7 +784,7 @@ contains
             enddo
         end subroutine refine_best_classes
 
-    end subroutine fill_tab_prob_snhc_range
+    end subroutine fill_tab_prob_neigh_range
 
     !> The polar shift maps of a fill (shift_sigma > 0, the centring stage), built on the calculator before the fill's
     !! parallel region: the disk of three sigma about the stored shift bounded by the search range trs, in the pixels
@@ -899,7 +899,7 @@ contains
 
     !> adds one fill to the cost record (bench file): the wall time of the parallel region, thread-seconds of the seed,
     !! the score loop and the refinement, classes scored (nrefs per particle in the plain fill, nscored in the
-    !! prob_snhc fill), the most classes refined per particle and their total, shifted particle memos built and the
+    !! prob_neigh fill), the most classes refined per particle and their total, shifted particle memos built and the
     !! search objects' counters
     subroutine record_fill_profile2D( self, grad_obj, wall, ts_seed, ts_score, ts_refine, nscored, nbank, nrefined, &
             &ndisk, nscreens, nfilled, nrefs, nrefine , grad_disk)
@@ -1016,7 +1016,7 @@ contains
         self%assgn_map(iptcl_loc)%npeaks = npeaks
     end subroutine finalize_candidate_assignment
 
-    !> ptcl -> class assignment over the sparse candidate store (refine=prob_snhc): one draw per particle from its
+    !> ptcl -> class assignment over the sparse candidate store (refine=prob_neigh): one draw per particle from its
     !! tempered posterior over the candidates it evaluated. The class-balanced frontier was removed 2026-10-24:
     !! if every image shows one view, every image is assigned to that class
     subroutine ref_assign_sparse( self )
@@ -1276,7 +1276,7 @@ contains
 
     ! FILE IO
 
-    !> Opens the part file. The candidate stream (prob_snhc): header (classes, particles, format word, candidates,
+    !> Opens the part file. The candidate stream (prob_neigh): header (classes, particles, format word, candidates,
     !! chunks), particle indices, candidate counts per particle (they size the master's store), seed table, particle
     !! temperatures, then the candidate chunks. The dense rows (prob): header (classes, particles, format word,
     !! refined entries), particle indices, seed table, particle temperatures, one row of (distance, in-plane index)

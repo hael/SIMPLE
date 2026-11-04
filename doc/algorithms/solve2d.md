@@ -44,7 +44,7 @@ only a random fraction of classes per particle and accepts random improvements.
 From stage 3 the search switches to the probabilistic mode: a global
 class-likelihood table is built and particles are assigned to classes by a
 balanced stochastic assignment ([sampling](sampling_and_fractional_updates.md)).
-In `prob_snhc`, the intermediate stages keep that table sparse (only a
+In `prob_neigh` (2D's `prob_neigh_mode=snhc`), the intermediate stages keep that table sparse (only a
 neighborhood of classes is scored per particle) and the last stage densifies it
 so every particle's previous class is an explicit candidate and class-overlap
 statistics are meaningful.

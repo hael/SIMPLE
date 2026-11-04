@@ -430,7 +430,7 @@ contains
         self%iter = self%iter + 1 ! Global iteration counter update
         call self%cline_refine2D%set('ncls',     self%ncls)
         call self%cline_refine2D%set('startit', self%iter)
-        call self%cline_refine2D%set('maxits',   self%iter)
+        call self%cline_refine2D%set('maxits',   1)          ! one iteration per round (maxits counts from startit)
         call self%cline_refine2D%set('frcs',     FRCS_FILE)
         call self%cline_refine2D%set('refs', self%refs)
         if( self%iter==1 )then

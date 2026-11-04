@@ -36,6 +36,7 @@ contains
         call reg%add_char('angastunit', self%angastunit)
         call reg%add_char('angconv', self%angconv)
         call reg%add_char('append', self%append)
+        call reg%add_char('assign_all', self%assign_all)
         call reg%add_char('async', self%async)
         call reg%add_char('atom_thres', self%atom_thres)
         call reg%add_char('automsk', self%automsk)

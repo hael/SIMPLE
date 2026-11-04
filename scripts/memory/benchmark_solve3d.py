@@ -202,7 +202,7 @@ def prepare_project(case_dir: Path, case: Case, stack: Path, simple_exec: Path, 
         str(simple_exec), "prg=solve2D", f"projfile={project_file}", "mkdir=no", "ncls=8",
         f"mskdiam={case.mskdiam:.8g}", f"smpd={case.smpd:.8g}", f"nthr={case.nthr}",
         "nstages=1", "nits_per_stage=1", "extr_lim=4", "eo_stage=no", "autoscale=no",
-        "refine=prob_snhc", "rank_cavgs=no",
+        "refine=prob_neigh", "rank_cavgs=no",
     ], project_dir, prep_log, env)
     if rc != 0:
         raise RuntimeError(f"solve2D preparation failed with status {rc}; see {prep_log}")

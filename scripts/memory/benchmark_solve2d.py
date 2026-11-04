@@ -444,7 +444,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--nits-per-stage", type=positive_int, default=1)
     parser.add_argument("--extr-lim", type=positive_int, default=4)
     parser.add_argument("--eo-stage", choices=("yes", "no"), default="no")
-    parser.add_argument("--refine", choices=("prob_snhc", "prob", "snhc_smpl"), default="prob_snhc")
+    parser.add_argument("--refine", choices=("prob_neigh", "prob", "snhc_smpl"), default="prob_neigh")
     parser.add_argument("--repeats", type=positive_int, default=1)
     parser.add_argument("--max-cases", type=positive_int, default=100)
     parser.add_argument("--no-interactions", action="store_true")

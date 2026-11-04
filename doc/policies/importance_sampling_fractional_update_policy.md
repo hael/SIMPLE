@@ -174,23 +174,28 @@ Current stage policy:
 
 - stage 1 uses the sampled-update machinery when needed, but fractional
   class-average carry-over is disabled
-- while `startit == 1` and without `fillin`, `sample_ptcls4update2D` keeps the
+- while `startit == 1` and without `assign_all`, `sample_ptcls4update2D` keeps the
   initial subset sticky by reproducing it after the first random draw; a fresh
-  start with `fillin=yes` samples by update count
+  start with `assign_all=yes` samples by update count
 - later non-probabilistic iterations use `sample4update_cnt`, which is
   stochastic but biased toward particles with lower `updatecnt`
 - probabilistic stages use `prob_align2D` to sample once, then `prob_tab2D` and
   `refine2D_exec` reproduce the same subset
-- staged `fillin=yes` currently acts as a full-assignment coverage guard. It
+- the distributed master draws the sample of the non-probabilistic sampled
+  iterations too (`master_draws_sample2D`, as 3D's `master_draws_sample3D`;
+  not in the stream's pool) and the workers reproduce it, so the sample does
+  not depend on `nparts`
+- staged `assign_all=yes` (`fillin=yes` before 2026-11-03; `fillin` is 3D's
+  periodic sampling of the never-updated particles) acts as a full-assignment coverage guard. It
   requires active particles to have assignments before convergence, while
   particle selection still follows the normal sampled-update path
 - staged `solve2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
   stages 1-2. From stage 3 onward, `refine=prob` uses dense probabilistic
-  assignment; `refine=prob_snhc` uses sparse probabilistic SNHC until the
+  assignment; `refine=prob_neigh` (`prob_neigh_mode=snhc`) uses sparse probabilistic SNHC until the
   final staged invocation, which uses dense `refine=prob`
 - when staged updates were sampled, `solve2D` then runs a separate terminal
-  dense greedy all-particle pass with `update_frac` and `fillin`
-  disabled, refreshing class, in-plane, and shift parameters before final
+  dense greedy all-particle pass with `update_frac`, `fillin` and
+  `assign_all` disabled, refreshing class, in-plane, and shift parameters before final
   class-average generation
 
 Fractional 2D restoration is class-local and happens once, at the assembly

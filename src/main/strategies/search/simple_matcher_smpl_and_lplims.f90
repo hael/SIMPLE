@@ -8,7 +8,7 @@ implicit none
 
 public :: set_bp_range3D, set_bp_range2D
 public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update2D
-public :: sample_ptcls4iter3D, master_draws_sample3D
+public :: sample_ptcls4iter3D, master_draws_sample3D, master_draws_sample2D
 public :: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, refine2D_blends_carryover
 private
 #include "simple_local_flags.inc"
@@ -289,6 +289,20 @@ contains
         l_master = .true.
     end function master_draws_sample3D
 
+    !> Whether the distributed refine2D master draws the iteration's fractional-update sample once, over the
+    !! whole project, for the workers to reproduce, as master_draws_sample3D does: otherwise each worker draws
+    !! within its own particles, and the sample depends on the number of parts. Probabilistic passes draw in
+    !! prob_align2D already; the stream pool keeps its own sampling. Master and workers evaluate this on the
+    !! same command line, so they agree.
+    logical function master_draws_sample2D( params ) result( l_master )
+        class(parameters), intent(in) :: params
+        l_master = .false.
+        if( .not. params%l_update_frac ) return
+        if( params%l_prob_align_mode ) return
+        if( trim(params%stream2d) == 'yes' ) return
+        l_master = .true.
+    end function master_draws_sample2D
+
     subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
@@ -323,9 +337,9 @@ contains
             ! solve2D controller policy:
             ! startit==1  -> sticky sampled subset stage
             ! startit>1   -> stochastic resampling biased toward low updatecnt
-            ! fillin waits for every particle to be assigned, which a sticky subset never reaches,
-            ! so a fresh start with fillin resamples by update count as well
-            if( params%startit == 1 .and. .not. params%l_fillin )then
+            ! assign_all waits for every particle to be assigned, which a sticky subset never reaches,
+            ! so a fresh start with assign_all resamples by update count as well
+            if( params%startit == 1 .and. .not. params%l_assign_all )then
                 if( l_has_been_sampled )then
                     call build%spproj_field%sample4update_reprod(pfromto, nptcls, pinds)
                 else
@@ -354,11 +368,11 @@ contains
         endif
     end function refine2D_blends_carryover
 
+    !> assign_all=yes (under fractional updates): refine2D converges only once every active particle has a class.
+    !! A coverage guard only; fillin keeps the sampling it has in 3D.
     logical function refine2D_requires_full_assignment( params ) result( l_required )
         class(parameters), intent(in) :: params
-        ! In refine2D, fillin is currently a coverage/convergence guard. It does
-        ! not change particle sampling to missing-only selection.
-        l_required = params%l_fillin
+        l_required = params%l_assign_all
     end function refine2D_requires_full_assignment
 
     logical function all_active_ptcls_2D_assigned( os, pfromto, n_missing ) result( l_assigned )

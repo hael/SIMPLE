@@ -14,7 +14,7 @@ use simple_matcher_ptcl_io,          only: ptcl_read_counts, ptcl_read_counts_no
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
-                                           refine2D_blends_carryover
+                                           refine2D_blends_carryover, master_draws_sample2D
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
     &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D
 use simple_imgarr_utils,             only: alloc_imgarr
@@ -283,6 +283,10 @@ contains
                 ! (a distributed partition may hold none of it)
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds, &
                     &allow_empty=p_ptr%l_distr_worker)
+            else if( p_ptr%l_distr_worker .and. master_draws_sample2D(p_ptr) )then
+                ! the distributed master drew this iteration's sample over the whole project
+                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds, &
+                    &allow_empty=.true.)
             else
                 call sample_ptcls4update2D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], ctrl%l_sample_updates, nptcls2update, pinds)
             endif

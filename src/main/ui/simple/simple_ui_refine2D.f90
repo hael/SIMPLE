@@ -62,9 +62,9 @@ contains
         call refine2D%add_input(UI_SRCH, ncls, required_override=.false., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
         &'Refinement mode: snhc_smpl and snhc search stochastically, prob assigns from the dense probabilistic table, &
-        &prob_snhc from a sparse one(snhc_smpl|snhc|prob|prob_snhc){snhc_smpl}', '', &
+        &prob_neigh from a sparse one(snhc_smpl|snhc|prob|prob_neigh){snhc_smpl}', '', &
         &.false., 'snhc_smpl', group="search", &
-        &choices=ui_choices([character(len=9) :: 'snhc_smpl', 'snhc', 'prob', 'prob_snhc']), &
+        &choices=ui_choices([character(len=10) :: 'snhc_smpl', 'snhc', 'prob', 'prob_neigh']), &
         &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_prior', 'binary', 'Shift prior in the probability tables', &
         &'The 2D tables'' shift refinements and seed estimates carry a Gaussian prior on the shift''s distance from '//&
@@ -134,11 +134,11 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode of the stages from the third on (the first two always use snhc_smpl): prob_snhc scores &
+        &'Refinement mode of the stages from the third on (the first two always use snhc_smpl): prob_neigh scores &
         &a sparse probabilistic table and assigns the last stage from a dense one; prob uses the dense table in every &
-        &stage; snhc_smpl is prob_snhc with the last stage sparse too(prob_snhc|prob|snhc_smpl){prob_snhc}','', &
-        &.false., 'prob_snhc', group="search", &
-        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
+        &stage; snhc_smpl is prob_neigh with the last stage sparse too(prob_neigh|prob|snhc_smpl){prob_neigh}','', &
+        &.false., 'prob_neigh', group="search", &
+        &choices=ui_choices([character(len=10) :: 'prob_neigh', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
@@ -232,8 +232,8 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="cluster 2D", &
-        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
+        &'Refinement mode(prob_neigh|prob|snhc_smpl){prob_neigh}','', .false., 'prob_neigh', group="cluster 2D", &
+        &choices=ui_choices([character(len=10) :: 'prob_neigh', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &

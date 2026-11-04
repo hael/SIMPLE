@@ -34,7 +34,7 @@ selector has been removed for `solve2D` and `refine2D`.
 5. optionally run probabilistic pre-alignment in later stages
 6. update particle class, in-plane, shift, sampled, and update-count state
 7. restore class averages through shared-memory or distributed class-average pathways
-8. when updates are sampled, keep the last stages iterating (`fillin=yes`) until every active particle has a class
+8. when updates are sampled, keep the last stages iterating (`assign_all=yes`) until every active particle has a class
 9. when sampled updates were active, run a terminal dense greedy all-particle pass
 10. generate final class averages, FRC metadata, and ranked outputs
 
@@ -52,8 +52,9 @@ chunk-local Nyquist floor.
 
 The staged `solve2D` controller uses sampled SNHC (`refine=snhc_smpl`) for
 stages 1-2. From stage 3 onward, `refine=prob` requests dense probabilistic
-assignment at every stage. For `refine=prob_snhc`, intermediate stages use
-sparse probabilistic SNHC and the final staged invocation uses dense
+assignment at every stage. For `refine=prob_neigh` (2D has only
+`prob_neigh_mode=snhc`; the mode was `refine=prob_snhc` before 2026-11-03,
+when 2D took the 3D names), intermediate stages use sparse probabilistic SNHC and the final staged invocation uses dense
 `refine=prob` so the previous class remains a valid assignment candidate and
 class-overlap convergence reporting can recover. The separate terminal
 all-particle coverage pass after sampled staged updates also uses dense
@@ -68,7 +69,7 @@ child `solve2D` command lines.
 - `center=yes`, `center_type=seg`
 - `cls_init=rand`
 - `gauref=yes`, `ml_reg=yes`
-- `refine=prob_snhc`
+- `refine=prob_neigh` (`prob_neigh_mode=snhc`)
 - `extr_lim=20`, `nits_per_stage=5`, `eo_stage=yes`
 - `rank_cavgs=yes`, `stats=no`
 
@@ -97,12 +98,12 @@ help texts give the rule.
 `simple_solve2D_controller.f90` emits one `refine2D` command line per stage.
 Six stages, in two phases (stages 1-4 and 5-6):
 
-| stage | search (`refine=prob_snhc`) | low-pass | references |
+| stage | search (`refine=prob_neigh`) | low-pass | references |
 | --- | --- | --- | --- |
 | 1 | `snhc_smpl` (dense `prob` on the evidence over the disk under the polar shift map) | `lpstart` | random, Gaussian-filtered (`gauref`), no centering, no shift search |
 | 2 | `snhc_smpl` | ladder | the previous iteration's class averages, `ml_reg`, centering and shift search |
-| 3-4 | sparse `prob_snhc` table | ladder | as stage 2 |
-| 5 | sparse `prob_snhc` table | `lpstop` | as stage 2 |
+| 3-4 | sparse `prob_neigh` table | ladder | as stage 2 |
+| 5 | sparse `prob_neigh` table | `lpstop` | as stage 2 |
 | 6 | dense `prob` table | gold standard (even/odd) | as stage 2 |
 
 - The ladder halves the distance to `lpstop` at each stage.
@@ -113,9 +114,14 @@ Six stages, in two phases (stages 1-4 and 5-6):
   `extr_lim`; phase 2 stages run up to `nits_per_stage` iterations and end on
   convergence from the second on; a sample that needs more than
   `nits_per_stage` iterations to cover every particle fixes the count
-  (`minits = maxits`).
+  (`minits = maxits`). The controller plans the stages in absolute
+  iterations and emits each as `refine2D` run lengths from the stage's
+  `startit`: `refine2D` counts `minits` and `maxits` from `startit`, as
+  `refine3D` does (2026-11-03; before, the 2D keys were absolute iterations).
 - When updates are sampled, stages 5 and 6 (and the last stage) take
-  `fillin=yes`: they keep iterating until every active particle has a class.
+  `assign_all=yes` (`fillin=yes` before 2026-11-03; `fillin` is 3D's
+  periodic sampling of the never-updated particles): they keep iterating until
+  every active particle has a class.
   Stage 1 samples but does not carry previous class sums forward.
 - After the stages, a sampled run ends with one dense `refine=greedy` pass
   over every particle (the terminal pass) before the final class averages.
@@ -166,7 +172,7 @@ from its pick, `doc/implementation_notes/completed/polar_shift_search.md` and
 `polar_shift_search_dynamic_centring.md`) is the parameter's default, 10 A
 (Hans, 2026-11-02, across the board), so every workflow has the key where a mode
 can carry it: a polar mode with a shift search under objfun=euclid, a
-probability table (`prob`, `prob_snhc`, `prob_neigh`) or, since ruling 20
+probability table (`prob`, `prob_neigh`) or, since ruling 20
 (2026-11-03), a classic mode (`snhc`, `snhc_smpl`, `snhc_smpl_many`, `greedy`;
 3D `shc`, `neigh`, `greedy`, `greedy_inpl`); elsewhere (`tseries`, the `inpl`
 and `greedy_smpl` modes, a stage without shifts) the default is silently off,
@@ -215,7 +221,7 @@ prior width for its next search, in pixels. In every table fill from stage 2 on
   the particle is prepared at, which the class centring moves too, at the classes
   holding 99 % of the particle's posterior at the
   origin (`screen_pool_size`, at least twice the refined count; in the sparse
-  `prob_snhc` fill a disk particle scores every class first), each keeping its
+  `prob_neigh` fill a disk particle scores every class first), each keeping its
   coarse optimum, and the best classes polished at full resolution in a box of
   one map step about that optimum in the disk's own search object
   (`pftc_shsrch_grad%minimize_in_cell`: the L-BFGS from the cell; the better of
@@ -310,7 +316,8 @@ Design record:
 - The run is entered at `PROBREFINE_STAGE` through the same path as a
   stream checkpoint resume, preceded by one seed pass: a single dense
   `refine=prob` `refine2D` iteration of every active particle
-  (`update_frac`, `nsample` and `fillin` deleted, `extr_iter=extr_lim+1`)
+  (`update_frac`, `nsample`, `fillin` and `assign_all` deleted,
+  `extr_iter=extr_lim+1`)
   at the low-pass limit of `PROBREFINE_STAGE`. It uses that stage's ordinary
   shift window: `shift_sigma` and `trs_window` are deleted even when the
   parent solve2D uses the default shift map, since seeded restarts skip the
@@ -333,8 +340,10 @@ Design record:
 shared memory, or as the distributed master when `nparts` is given (the
 private `simple_private_exec prg=refine2D_distr` is the same commander). The
 private `simple_private_exec prg=refine2D` is the worker of one partition,
-which the master schedules; the memory estimator keys on that name. 2D has
-the 3D structure: the matcher searches and accumulates, the strategy restores
+which the master schedules; the memory estimator keys on that name. The
+partitions balance the active particles (`state > 0`), the matcher's and the
+table's alike, as in 3D (2026-11-03; before, equal particle ranges). 2D has the
+3D structure: the matcher searches and accumulates, the strategy restores
 the class averages and decides convergence.
 
 `simple_commanders_solve2D.f90` owns:
@@ -359,7 +368,7 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - search-mode policy by stage
 - sampled-update policy, including `NSAMPLE_DEFAULT_2D` and `nsample` override handling
 - the rule that stage 1 may sample particles but does not fractionally restore previous class averages
-- the full-assignment coverage request (`fillin=yes`) on the staged calls
+- the full-assignment coverage request (`assign_all=yes`) on the staged calls
 - the seed-pass iteration index and command line of a `cls_init=prev` run
   (`solve2D_seed_pass_iter`, `set_cline_refine2D_seed_pass`)
 
@@ -417,12 +426,12 @@ Probabilistic table construction has a separate bounded-memory contract:
   current particle batch and stream them to one partition file;
 - `prob_align2D` constructs the global object only after workers complete;
 - dense `refine=prob` uses a compact rectangular table, while sparse
-  `refine=prob_snhc` uses a particle-oriented ragged candidate store;
+  `refine=prob_neigh` uses a particle-oriented ragged candidate store;
 - compact storage is materialized as the established `ptcl_ref` assignment only
   after global selection, so assignment-file semantics do not change.
 
 Both table fills (`fill_tab_range` for `refine=prob`: the last stage and the
-seed pass; `fill_tab_prob_snhc_range` for the `prob_snhc` stages) hold the
+seed pass; `fill_tab_prob_neigh_range` for the `prob_neigh` stages) hold the
 shift in the particle frame, as the 3D tables do (`refine3D_policy.md`,
 probabilistic pre-step): the shift estimated at the particle's previous class
 is converted once at the rotation its search ended at, the particle is
@@ -441,7 +450,7 @@ regions' wall time, the load balance and the shifted particle memos built.
 The 2D part files (`dist_partN.dat`; one iteration's artifacts) have two
 layouts, told apart by a format word in the header:
 
-- the candidate stream (`refine=prob_snhc`, format -6): header (classes,
+- the candidate stream (`refine=prob_neigh`, format -6): header (classes,
   particles, format word, candidates, chunks), particle indices, the
   candidate count of every particle, the seed table, the particle
   temperatures (one real per particle, `posterior_temperature`), then the
@@ -475,7 +484,7 @@ class-balanced frontier was deleted; the constructor requires
 `objfun=euclid`, the loss the posterior is defined by). The rule of the 3D
 tables (`refine3D_policy.md`,
 `doc/implementation_notes/planned/pose_marginalization.md`) on the 2D tables,
-for `refine=prob` and `refine=prob_snhc`: no class is forced to be
+for `refine=prob` and `refine=prob_neigh`: no class is forced to be
 populated. At the fill, every class's in-plane rotation is one draw from the
 posterior over all grid rotations of the class against the seeded particle at
 the particle's temperature T_i = pi wsqsum_i / (2 pftsz) (`gen_posterior_val`,
@@ -505,14 +514,14 @@ at beta 1; `refine3D_policy.md`); the n_eff control that briefly replaced
 `prob_beta` (2026-10-27 to 2026-10-29) is gone from both routes, and the
 weighted insertion (`topk`) is 3D only.
 
-**The annealing tail (2026-10-27, as the 3D one).** A `refine=prob|prob_snhc`
+**The annealing tail (2026-10-27, as the 3D one).** A `refine=prob|prob_neigh`
 run with `prob_beta_end` searches at `prob_beta` until its class overlap
 converges past `minits` (`check_conv2D`'s own rule), then `exec_refine2D`
 ramps the draws geometrically to `prob_beta_end` over the next
 `PROB_BETA_TAIL` (5) iterations and the run ends (`>>> CLASS OVERLAP
 CONVERGED: annealing ...`, `>>> ANNEALING TAIL COMPLETE`); a budget too short
-for that starts the tail so that it completes at `maxits`, the absolute end
-iteration of the 2D rule (`>>> BUDGET END`). The tail's
+for that starts the tail so that it completes at the run's last iteration,
+`startit + maxits - 1`, as in 3D (`>>> BUDGET END`). The tail's
 state lives in the strategy's convergence object (the shared-memory strategy
 keeps one across iterations since this step, as the 3D one). `solve2D` sets
 `prob_beta_end=1` on its last stage unless the user set it, so the last
@@ -522,7 +531,7 @@ flat, as before. Until this step the 2D runs never annealed: a run at 0.3
 wrote its last class averages from draws at 0.3, in expectation a soft
 membership among the best few classes.
 
-The posterior sampling is the tables' (`refine=prob|prob_snhc`, the modes
+The posterior sampling is the tables' (`refine=prob|prob_neigh`, the modes
 of the later stages); the SHC strategies of the early stages (`snhc_smpl`,
 `snhc_smpl_many`, `inpl_smpl`, `greedy_smpl`) keep their own samplers. A
 day's migration of those onto the posterior primitive (2026-10-23) was
@@ -599,7 +608,7 @@ call and rereads the segments they wrote after it. What writes what, as built:
 | --- | --- |
 | `solve2D` | `ptcl2D` at the start (fresh start: after the clustering is deleted; `cls_init=prev`: after the seed partition); `ptcl3D` at the end unless the project holds a valid 3D alignment; `out` after the final class averages. It rereads `cls2D` and `out` after every stage, and `ptcl2D` and `ptcl3D` before the end. |
 | `refine2D`, shared memory | `cls2D` and `cls3D` every iteration (`restore_cavgs_inmem`); `ptcl2D` and `out` at the end of the invocation. With `prob_align2D`, `ptcl2D` is written before the table commander and again once the sample is drawn, and reread after. |
-| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (probabilistic modes), by the merge of the workers' documents, after class-average assembly (with `cls2D`, `cls3D` and `out`), and in the iteration's finalization; `out` at the end of the run. |
+| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (probabilistic modes, and the sampled modes of stages 1-2 under fractional updates), by the merge of the workers' documents, after class-average assembly (with `cls2D`, `cls3D` and `out`), and in the iteration's finalization; `out` at the end of the run. |
 | `refine2D` worker | no project segment: its alignment document, sigma2 part, `cavg_contrib_part<N>.bin`, `dist_part*` and `assignment` files. |
 | `make_cavgs`, shared memory | `ptcl2D` (class remap, halves), then `cls2D` and `out`. |
 | `make_cavgs`, distributed | the master, before the workers start: `ptcl2D` (class remap, expansion, time-series split, halves); the workers: no project segment; the assembly (`run_cavgassemble`): the whole project. |
@@ -632,6 +641,12 @@ Stage policy:
   active particle (and sets `updatecnt=1` on all of them), then the stages
   from `PROBREFINE_STAGE` on sample and restore as they do on any run
 - probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`refine2D_exec` reproduce that subset rather than resampling
+- the sampled stages without a table (stages 1-2) draw on the distributed
+  master as well (`master_draws_sample2D`, 2026-11-03, as 3D's
+  `master_draws_sample3D`): over every particle, written to the project before
+  the workers start, which reproduce it (`sample4update_reprod`), so the sample
+  does not depend on `nparts`; the stream's pool (`stream2d=yes`) keeps its
+  own draw
 - solve2D uses likelihood-weighted probabilistic assignment: raw objective
   distances are kept and evaluated class/in-plane candidates are sampled with
   weights proportional to `exp(-dist)` over the explicit top-K support selected
@@ -644,14 +659,14 @@ Stage policy:
   sometimes in-plane rotation, after stochastic candidate selection; the
   assignment table then stores the refined/profiled distance, which is intended
   current behavior rather than a full soft-assignment EM update
-- staged `fillin=yes` currently acts as a full-assignment coverage guard: it
+- staged `assign_all=yes` (`fillin=yes` before 2026-11-03) acts as a full-assignment coverage guard: it
   keeps iterating until active particles have assignments, while particle
   selection still follows the normal sampled-update path; on a fresh start
   (`startit=1`) it selects the update-count sampler instead of the sticky
   subset of `solve2D`'s first stage, which could never cover every particle
 - if any staged update used `update_frac`, `solve2D` runs a terminal
-  dense `refine=greedy` all-particle `refine2D` pass with `update_frac` and
-  `fillin` disabled, refreshing class, in-plane, and shift parameters before
+  dense `refine=greedy` all-particle `refine2D` pass with `update_frac`,
+  `fillin` and `assign_all` disabled, refreshing class, in-plane, and shift parameters before
   final class-average generation
 
 The restoration model is class-local: each class carries forward its previous sums under the population rule of the [class-average state note](../../refactoring_notes/completed/class_average_and_reconstruct3d_partials_refactoring.md) (Section 4.1). The carried set records `M(c)`, the population its sums represent; the assembly owner counts `N(c)` (active, updated rows of the class) and `n(c)` (those sampled this round) on the merged project and blends `new = current + w * shift(previous)` with `w = (N - n) / M`, recording `M <- N`. The carried mass therefore equals the represented population whatever joined or left the class; without a population change `w = 1 - f`. The rule keeps the mass right, not the membership: the carried sums are an approximation (a stochastic recurrence), not an exact sum over the current class members, and old contributions are removed in proportion, not particle by particle. Shared memory is the reference behaviour; distributed runs give the same result, independent of `nparts`.
@@ -705,7 +720,7 @@ refine3D; see the continuous in-plane section of
 
 For `refine2D`:
 
-- `startit` is the stage/invocation start
+- `startit` is the stage/invocation start; `minits` and `maxits` count from it
 - `which_iter` is the current iteration
 - `extr_iter` tracks the 2D extrapolation/search schedule
 - `endit` is written after an invocation finishes and is consumed by the next stage setup
@@ -754,7 +769,7 @@ For any `solve2D` or `refine2D` change, check:
   evaluated candidate count?
 - Are stale distributed handoffs (assignment, dist and class-sum contribution files) removed, while the carried set `cavg_state.bin` is left to its owner?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
-- Is `fillin=yes` treated as a full-assignment coverage guard unless the
+- Is `assign_all=yes` treated as a full-assignment coverage guard unless the
   implementation is deliberately changed to missing-only assignment?
 - When staged updates are sampled, does terminal dense greedy assignment refresh all active
   particles before final class-average generation?
@@ -777,9 +792,9 @@ For any `solve2D` or `refine2D` change, check:
 - Do not bury stage-policy tables in the matcher.
 - Do not let probabilistic pre-alignment and matcher update sample different particle subsets.
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
-- Do not describe `fillin=yes` as missing-only assignment while it still uses
+- Do not describe `assign_all=yes` as missing-only assignment while it still uses
   the normal sampled-update path.
-- Do not use the staged full-assignment coverage (`fillin=yes`) as a substitute
+- Do not use the staged full-assignment coverage (`assign_all=yes`) as a substitute
   for the terminal dense all-particle refresh when sampled solve2D updates
   were active.
 - Do not reuse stale assignment files as valid current-iteration inputs.

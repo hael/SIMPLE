@@ -135,7 +135,7 @@
         "extr_lim": 20,
         "eo_stage": "no",
         "autoscale": "no",
-        "refine": "prob_snhc",
+        "refine": "prob_neigh",
         "nsample": 2000,
         "ctf": "no",
         "cache": "no"

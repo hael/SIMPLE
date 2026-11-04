@@ -96,7 +96,7 @@ The dense fills have both paths since Phase 4 (`process_particle_with_map` with
   is `trs` in every stage and the second map geometry of the centring stage
   (`trs_window`) goes.
 
-The sparse 2D fill (`prob_snhc`, solve2D's stages 3-6 and the stream's pool)
+The sparse 2D fill (`prob_neigh`, solve2D's stages 3-6 and the stream's pool)
 scores a bounded, extremal-decayed set of classes at the seed and refines the
 best of them. A disk particle there is a particle without a trustworthy class:
 it scores every active class at the origin (one dense row, 90 posterior values

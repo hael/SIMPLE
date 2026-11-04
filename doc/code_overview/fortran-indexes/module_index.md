@@ -4516,6 +4516,7 @@ Uses:
 - `simple_convergence_tester`
 - `simple_ctf_tester`
 - `simple_decay_funs_tester`
+- `simple_dose_series_manifest_tester`
 - `simple_eo_partition_tester`
 - `simple_epu_xml_tester`
 - `simple_eul_prob_tab2d_tester`
@@ -4595,6 +4596,7 @@ Uses:
 - `simple_refine3d_provenance_tester`
 - `simple_refine3d_startup_tester`
 - `simple_refine3d_strategy_tester`
+- `simple_refine_motion_model_tester`
 - `simple_rnd_tester`
 - `simple_segmentation_tester`
 - `simple_sigma2_bootstrap_tester`
@@ -5782,6 +5784,81 @@ Private symbols:
 - `srch_shift` — subroutine
 
 ---
+## Module: simple_dose_series_manifest
+
+Files:
+- `main/volume/simple_dose_series_manifest.f90`
+
+Uses:
+- `ieee_arithmetic`
+- `iso_fortran_env`
+- `simple_defs`
+- `simple_halfmap_diagnostics`
+- `simple_imghead`
+- `simple_string`
+- `simple_syslib`
+
+Public symbols:
+- `dose_series_manifest` — type
+
+Private symbols:
+- `add_window` — subroutine
+- `check_header` — function
+- `check_support` — function
+- `close_value` — function
+- `dose_window` — type
+- `get_geometry` — subroutine
+- `get_nwindows` — function
+- `get_window` — subroutine
+- `header_slot` — function
+- `kill` — subroutine
+- `new` — subroutine
+- `overlap_predecessor` — function
+- `parent_directory` — function
+- `parse_int` — function
+- `parse_real` — function
+- `portable_path` — function
+- `read` — function
+- `read_line` — subroutine
+- `remove_temporary` — subroutine
+- `resolve_path` — function
+- `select_windows` — function
+- `split_tokens` — subroutine
+- `valid_path` — function
+- `validate` — function
+- `validate_files` — function
+- `write` — function
+
+---
+## Module: simple_dose_series_manifest_tester
+
+Files:
+- `main/volume/simple_dose_series_manifest_tester.f90`
+
+Uses:
+- `ieee_arithmetic`
+- `iso_fortran_env`
+- `simple_defs`
+- `simple_dose_series_manifest`
+- `simple_image`
+- `simple_string`
+- `simple_syslib`
+- `simple_test_utils`
+
+Public symbols:
+- `run_all_dose_series_manifest_tests` — subroutine
+
+Private symbols:
+- `make_maps` — subroutine
+- `make_series` — subroutine
+- `test_bad_headers` — subroutine
+- `test_bad_metadata` — subroutine
+- `test_final_line` — subroutine
+- `test_publication` — subroutine
+- `test_roundtrip` — subroutine
+- `write_case` — subroutine
+
+---
 ## Module: simple_edges_sqwins
 
 Files:
@@ -6174,8 +6251,8 @@ Private symbols:
 - `dense_candidate` — function
 - `eval2D_sparse_ws` — type
 - `fill_tab` — subroutine
-- `fill_tab_prob_snhc` — subroutine
-- `fill_tab_prob_snhc_range` — subroutine
+- `fill_tab_prob_neigh` — subroutine
+- `fill_tab_prob_neigh_range` — subroutine
 - `fill_tab_range` — subroutine
 - `finalize_assignment` — subroutine
 - `finalize_candidate_assignment` — subroutine
@@ -6211,9 +6288,9 @@ Private symbols:
 - `write_tab` — subroutine
 
 Local symbols (enclosing procedure scope):
-- `fill_tab_prob_snhc_range::process_particle` — subroutine
-- `fill_tab_prob_snhc_range::refine_best_classes` — subroutine
-- `fill_tab_prob_snhc_range::score_class` — subroutine
+- `fill_tab_prob_neigh_range::process_particle` — subroutine
+- `fill_tab_prob_neigh_range::refine_best_classes` — subroutine
+- `fill_tab_prob_neigh_range::score_class` — subroutine
 - `read_part_cands::read_cands` — function
 - `read_part_cands::read_rows` — function
 - `read_part_head::read_head` — function
@@ -12579,6 +12656,7 @@ Uses:
 
 Public symbols:
 - `all_active_ptcls_2D_assigned` — function
+- `master_draws_sample2D` — function
 - `master_draws_sample3D` — function
 - `refine2D_blends_carryover` — function
 - `refine2D_requires_full_assignment` — function
@@ -18447,7 +18525,9 @@ Uses:
 - `simple_error`
 - `simple_fileio`
 - `simple_flex_pca_application_tester`
+- `simple_halfmap_diagnostics`
 - `simple_image`
+- `simple_parameters`
 - `simple_refine3d_fnames`
 - `simple_sp_project`
 - `simple_state_weight_set`
@@ -18473,6 +18553,7 @@ Private symbols:
 - `test_fractional_phantom` — subroutine
 - `test_labels_equal_hard` — subroutine
 - `test_trailing_weight_identity` — subroutine
+- `test_unmasked_gridding_export` — subroutine
 - `write_mixture` — subroutine
 
 ---
@@ -19288,6 +19369,7 @@ Public symbols:
 
 Private symbols:
 - `test_provenance` — subroutine
+- `test_support_provenance` — subroutine
 
 ---
 ## Module: simple_refine3D_stage_plan
@@ -19611,10 +19693,12 @@ Files:
 - `main/strategies/parallelization/simple_refine_motion_model_strategy.f90`
 
 Uses:
+- `ieee_arithmetic`
 - `simple_builder`
 - `simple_cmdline`
 - `simple_commanders_rec`
 - `simple_core_module_api`
+- `simple_dose_series_manifest`
 - `simple_eo_partition`
 - `simple_matcher_ptcl_io`
 - `simple_motion_model`
@@ -19626,9 +19710,12 @@ Uses:
 - `simple_refine3d_fnames`
 - `simple_sp_project`
 - `simple_stack_io`
+- `simple_syslib`
 
 Public symbols:
 - `create_refine_motion_model_strategy` — function
+- `prepare_fraction_dose_manifest` — function
+- `reconstruct_motion_fractions` — subroutine
 - `refine_motion_model_distr_strategy` — type
 - `refine_motion_model_inmem_strategy` — type
 - `refine_motion_model_strategy` — type
@@ -19647,17 +19734,57 @@ Private symbols:
 - `finalize_interface` — subroutine
 - `fraction_frame_range` — function
 - `fraction_output_dir` — function
+- `fraction_state1_rows` — subroutine
+- `gnu_quote` — function
 - `init_interface` — subroutine
 - `inmem_cleanup` — subroutine
 - `inmem_end_message` — function
 - `inmem_execute` — subroutine
 - `inmem_finalize_run` — subroutine
 - `inmem_initialize` — subroutine
-- `reconstruct_motion_fractions` — subroutine
+- `number` — function
+- `plot_fraction_fsc` — subroutine
+- `remove_fraction_partials` — subroutine
+- `shell_quote` — function
 - `validate_fraction_range` — subroutine
+- `write_fraction_fsc_matrix` — subroutine
 
 Local symbols (enclosing procedure scope):
 - `inmem_execute::validate_input` — subroutine
+- `plot_fraction_fsc::gp` — subroutine
+
+---
+## Module: simple_refine_motion_model_tester
+
+Files:
+- `main/strategies/parallelization/simple_refine_motion_model_tester.f90`
+
+Uses:
+- `ieee_arithmetic`
+- `simple_cmdline`
+- `simple_defs`
+- `simple_dose_series_manifest`
+- `simple_fileio`
+- `simple_flex_pca_application_tester`
+- `simple_image`
+- `simple_motion_model`
+- `simple_parameters`
+- `simple_refine_motion_model_strategy`
+- `simple_sp_project`
+- `simple_string`
+- `simple_string_utils`
+- `simple_syslib`
+- `simple_test_utils`
+- `simple_type_defs`
+
+Public symbols:
+- `check_fraction_dose_export` — subroutine
+- `run_all_refine_motion_model_lib_tests` — subroutine
+- `run_all_refine_motion_model_tests` — subroutine
+
+Private symbols:
+- `check_manifest_partition` — subroutine
+- `write_saved_model` — subroutine
 
 ---
 ## Module: simple_relion
@@ -26824,6 +26951,7 @@ Private symbols:
 - `program_has_key` — function
 - `test_cont_surface_contract` — subroutine
 - `test_param_descriptors` — subroutine
+- `test_particle_storage_contract` — subroutine
 - `test_phshift_contract` — subroutine
 - `test_program_descriptor` — subroutine
 - `test_refine_motion_model_contract` — subroutine

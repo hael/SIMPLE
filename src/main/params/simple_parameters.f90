@@ -22,6 +22,7 @@ type :: parameters
     ! yes/no decision variables in ascending alphabetical order
     character(len=3)          :: acf='no'             !< calculate autocorrelation function(yes|no){no}
     character(len=3)          :: append='no'          !< append selection (yes|no){no}
+    character(len=3)          :: assign_all='no'      !< 2D: converge only once every active particle has a class (fractional updates)(yes|no){no}
     character(len=3)          :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)          :: atom_thres='yes'     !< do atomic thresholding or not (yes|no){yes}
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
@@ -60,7 +61,7 @@ type :: parameters
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
-    character(len=3)          :: fillin='no'          !< fillin particle sampling
+    character(len=3)          :: fillin='no'          !< fillin particle sampling (3D: every fifth iteration the particles never updated)
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: freq_march_aggressive='no' !< solve3D aggressive frequency marching: from the first prob stage the limits are linear in spatial frequency from 12 A to the final limit, with finer angular sampling; the global stages keep their planned rungs(yes|no){no}
@@ -311,7 +312,7 @@ type :: parameters
     ! class-average quality model preset(chunk100mics|sieve|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
-    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|neigh|greedy|prob|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_snhc){shc}
+    character(len=STDLEN)     :: refine='shc'         !< refinement mode; 3D (shc|neigh|greedy|prob|prob_neigh|cont); 2D (snhc|snhc_smpl|snhc_smpl_many|prob|prob_neigh){shc}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -636,6 +637,7 @@ type :: parameters
     logical :: l_atm_prior       = .false.
     logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map
     logical :: l_fillin          = .false.
+    logical :: l_assign_all      = .false. !< assign_all=yes under fractional updates: refine2D converges only when every active particle has a class
     logical :: l_greedy_smpl     = .true.
     logical :: l_frac_best       = .false.
     logical :: l_update_frac     = .false.

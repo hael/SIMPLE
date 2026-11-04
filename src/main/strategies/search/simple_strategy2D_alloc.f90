@@ -40,7 +40,7 @@ contains
         integer,           intent(in) :: which_iter
         logical, optional, intent(in) :: l_has_class
         is_fresh_2D_start = params%startit <= 1 .and. which_iter <= params%startit &
-            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_fillin
+            &.and. trim(params%continue) /= 'yes' .and. .not. params%l_assign_all
         if( is_fresh_2D_start .and. trim(params%tseries) == 'yes' .and. present(l_has_class) )then
             if( l_has_class ) is_fresh_2D_start = .false.
         endif

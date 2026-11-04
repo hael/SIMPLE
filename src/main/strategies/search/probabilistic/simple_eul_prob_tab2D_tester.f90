@@ -2,7 +2,7 @@
 ! A worker's candidate stream for three particles and two classes is written through the table's
 ! writer, merged into the global table, assigned by the per-particle draw from the tempered posterior
 ! at a sharp temperature and written; the assignment file must give each particle its best class,
-! distance, in-plane index, peak count and fraction: dense (refine=prob) and sparse (refine=prob_snhc).
+! distance, in-plane index, peak count and fraction: dense (refine=prob) and sparse (refine=prob_neigh).
 ! The draw on synthetic tables with ties, flat and invalid rows at several temperatures and seeds, and
 ! the particle temperatures through the part files.
 module simple_eul_prob_tab2D_tester
@@ -40,7 +40,7 @@ contains
         call test_dense_posterior_assignment()
         call test_sparse_posterior_assignment()
         call test_parallel_read('prob')
-        call test_parallel_read('prob_snhc')
+        call test_parallel_read('prob_neigh')
         call table%kill
     end subroutine run_all_eul_prob_tab2D_tests
 
@@ -170,7 +170,7 @@ contains
         refine_prev = params%refine
         params%ncls        = NC
         params%npeaks_inpl = NC
-        params%refine      = 'prob_snhc'
+        params%refine      = 'prob_neigh'
         pinds_t = [(i, i=1,NP)]
         call seed_rnd_fixed(20261023)
         allocate(counts(NP))
@@ -292,12 +292,12 @@ contains
         call del_file('prob2d_dense_assignment.dat')
     end subroutine test_dense_stream
 
-    !> refine=prob_snhc: the stream carries only the evaluated candidates, one or two per particle
+    !> refine=prob_neigh: the stream carries only the evaluated candidates, one or two per particle
     subroutine test_sparse_stream()
         type(prob_candidate) :: candidates(4)
         integer :: particle_indices(4)
         write(*,'(A)') 'test_sparse_stream'
-        params%refine = 'prob_snhc'
+        params%refine = 'prob_neigh'
         call set_candidate(candidates(1),1,0.1)
         call set_candidate(candidates(2),2,0.2)
         call set_candidate(candidates(3),1,0.3)
@@ -320,7 +320,7 @@ contains
         type(prob_candidate) :: candidates(6)
         integer :: particle_indices(6)
         write(*,'(A)') 'test_sparse_shared_best_class'
-        params%refine = 'prob_snhc'
+        params%refine = 'prob_neigh'
         call set_candidate(candidates(1),1,0.5)
         call set_candidate(candidates(2),2,0.1)
         call set_candidate(candidates(3),1,0.4)
@@ -379,11 +379,11 @@ contains
             call worker%begin_write(string(trim(fname)))
             do i_loc = 1, size(pinds_part)
                 ncand = NC
-                if( refine == 'prob_snhc' ) ncand = 1 + int(ran3() * real(NC-1))
+                if( refine == 'prob_neigh' ) ncand = 1 + int(ran3() * real(NC-1))
                 do k = 1, ncand
                     candidate        = prob_candidate()
                     candidate%iref   = k
-                    if( refine == 'prob_snhc' ) candidate%iref = 1 + mod(k * 7 + i_loc, NC)
+                    if( refine == 'prob_neigh' ) candidate%iref = 1 + mod(k * 7 + i_loc, NC)
                     candidate%inpl   = 1 + int(ran3() * 35.)
                     candidate%dist   = 4. * ran3()
                     if( k <= 2 )then

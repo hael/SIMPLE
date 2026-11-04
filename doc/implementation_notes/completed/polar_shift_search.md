@@ -837,7 +837,7 @@ Hans's bundle for an autonomous run: the 3D side of the consolidation, Phase 4, 
   `SHIFTMAP_WINDOW` (the coarse band, radius the stage's window: `trs_window` in the centring stage, `trs`
   elsewhere), is set up beside the disk's screen map (`setup_shiftmaps(sigma, radius_disk, radius_win, ...)`). In
   the centring stage a drained particle takes the window map (no prior) through the same screen and polish as the
-  disk; in every later stage every particle does, in the 2D dense and sparse (`prob_snhc`) fills, the 3D dense fill
+  disk; in every later stage every particle does, in the 2D dense and sparse (`prob_neigh`) fills, the 3D dense fill
   and the neighbourhood table's candidates (`refine_best_neighbors`), so the previous reference's seed, its
   shifted-particle bank and the 5 x 5 lattice at every rotation retire wherever the key runs (`shift_sigma=0` keeps
   them). The controllers pass the key to every stage with a shift search (solve2D stages 2-6, solve3D 3-8), the
@@ -945,7 +945,7 @@ Exit: the report; the ruling on masks and re-extraction recorded.
 
 An inventory first: where each mode seeds its shift search today (`estimate_shift_seed`, `seed_start`, the seed
 bank, `coarse_search_opt_angle`, `grid_fit`, the shift prior's centre), for refine2D (`snhc_smpl`, `prob`,
-`prob_snhc`), refine3D (`shc`, `neigh`, `greedy`, `prob`, `prob_neigh` in its modes, `cont`), solve2D's and
+`prob_neigh`), refine3D (`shc`, `neigh`, `greedy`, `prob`, `prob_neigh` in its modes, `cont`), solve2D's and
 solve3D's stages, single and multi-state. Then `pftc_shsrch_grad%minimize` takes the map's refined best cell as
 its start and one grid step as its bounds wherever a map exists for the pair, the lattice seed and the seed bank
 retire where the map replaces them, and the in-plane tester's identity pins the optimum against the old path.
@@ -964,7 +964,7 @@ at the stored shift.
 |---|---|---|
 | 2D strategies (`snhc`, `snhc_smpl`, `greedy`, `greedy_smpl`, `inpl_smpl`; shifts from the third iteration, `do_inplsrch`) | `inpl_srch_first`: the lattice and L-BFGS at the previous class, converted to the particle frame (`xy_first`) | `xy_in = xy_first` at every class; the lattice when there is no seed |
 | 2D `tseries` | none | the lattice at the fixed rotation |
-| 2D tables (`prob`, `prob_snhc`) | the previous class's lattice and L-BFGS; the seed bank memoises the particle at it; every class scored at the seed | `seed_start`: the seed in the reference's frame, clamped to `trs`, as `xy_in`; under the key the map about the stored shift replaces all of it |
+| 2D tables (`prob`, `prob_neigh`) | the previous class's lattice and L-BFGS; the seed bank memoises the particle at it; every class scored at the seed | `seed_start`: the seed in the reference's frame, clamped to `trs`, as `xy_in`; under the key the map about the stored shift replaces all of it |
 | 3D strategies (`shc`, `greedy`, `greedy_sub`, `greedy_inpl`, `neigh`) | `inpl_srch_first` at the previous reference, single state only (`l_sh_first = doshift .and. nstates <= 1`) | the references scored at `xy_first`, the final `inpl_srch` from it; multi-state: the lattice at the best reference, no seed |
 | 3D `cont` | the Cartesian pose optimizer's own 5-parameter solve (`shift_first`) | not polar |
 | 3D dense table (`prob`) | `estimate_shift_seed`: the previous (state, projection)'s lattice and L-BFGS, single state only; multi-state: seed 0 with `grid_fit` and `grid_ptcl` instead; every reference scored at the seed (bank) | `refine_best_refs` from the seed as `xy_in`; under the key the map |
@@ -1029,7 +1029,7 @@ candidate, more than the polish it replaces. The cheaper levers are the lattice 
 | `src/main/pftc/simple_polarft_corr.f90` | `gen_posterior_val` over the map's grid | 2 |
 | `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage (`CENTRING_STAGE`): the table, the disk, the box's mask, minits for the shift exit, the key per stage; the mask estimate at its exit (`solve2D_mskdiam_estimate`) | 2b (done 2026-10-31) |
 | `src/main/solve/simple_solve3D_controller.f90` | stage 3 the centring stage (`trs_window`), the key to every stage with a shift search | 2b 4 (done 2026-11-01) |
-| `src/main/strategies/search/simple_strategy2D_alloc.f90`, `simple_strategy3D_alloc.f90` | the key refused outside the tables (`prob`, `prob_snhc`, `prob_neigh`) | 2b 4 |
+| `src/main/strategies/search/simple_strategy2D_alloc.f90`, `simple_strategy3D_alloc.f90` | the key refused outside the tables (`prob`, `prob_neigh`) | 2b 4 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90` | the window map initialises the candidates' polish, no seed under the key | 4 (done 2026-11-01) |
 | `src/main/ui/simple/simple_ui_solve3D.f90` | the key on solve3D | 2b |
 | `doc/policies/3D/refine3D_policy.md`, `solve3D_policy.md` | the map's paragraph, the key's stage scope (done 2026-10-31) | 2b 3 |

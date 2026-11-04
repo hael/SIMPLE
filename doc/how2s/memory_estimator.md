@@ -181,11 +181,11 @@ The screening run uses one bounded initialization stage:
 
 ```text
 nstages=1 nits_per_stage=1 extr_lim=4 eo_stage=no
-refine=prob_snhc ctf=no smpd=1.3 mskdiam=60
+refine=prob_neigh ctf=no smpd=1.3 mskdiam=60
 ```
 
 SIMPLE stage policy executes the first stage with sampled SNHC even though the
-requested overall refinement mode is `prob_snhc`. The short workflow compares
+requested overall refinement mode is `prob_neigh`. The short workflow compares
 peak allocations; it does not measure scientific convergence or production
 runtime.
 

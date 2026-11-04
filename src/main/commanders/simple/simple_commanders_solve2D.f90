@@ -99,7 +99,7 @@ contains
         if( .not. cline%defined('eo_stage')      ) call cline%set('eo_stage',      EO_STAGE)
         if( .not. cline%defined('rank_cavgs')    ) call cline%set('rank_cavgs',    'yes')
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
-        if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_snhc')
+        if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_neigh')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
         ! the polar shift map is on by default (the parameter's; shift_sigma=0 is the window search); mskdiam=0 under
         ! it runs stage 1 under the box's mask and takes the mask diameter of the stages after from the class averages
@@ -777,6 +777,7 @@ contains
             if( present(terminal_policy) ) call terminal_policy(cline_refine2D)
             call cline_refine2D%delete('update_frac')
             call cline_refine2D%delete('fillin')
+            call cline_refine2D%delete('assign_all')
             call cline_refine2D%delete('endit')
             call execute_refine2D('terminal_greedy', nstages + 1)
             call terminal_refs%kill
@@ -901,7 +902,7 @@ contains
         call cline%set('remove_chunks','no')
         call cline%set('objfun',       'euclid')
         call cline%set('numlen',       5)
-        if( .not. cline%defined('refine') ) call cline%set('refine', 'prob_snhc')
+        if( .not. cline%defined('refine') ) call cline%set('refine', 'prob_neigh')
         call cline%set('nthr2D',       cline%get_iarg('nthr'))
         if( .not. cline%defined('mkdir')          ) call cline%set('mkdir',         'yes')
         if( .not. cline%defined('center')         ) call cline%set('center',        'yes')
@@ -1241,7 +1242,7 @@ contains
         call cline_refine2D_chunk%set('tau',     params%tau)
         ! refinement
         select case(trim(params%refine))
-               case('snhc','snhc_smpl','prob','prob_snhc')
+               case('snhc','snhc_smpl','prob','prob_neigh')
                 call cline_refine2D_chunk%set('refine', params%refine)
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')

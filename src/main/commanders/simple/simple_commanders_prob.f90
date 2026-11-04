@@ -433,7 +433,7 @@ contains
         write(fnr,'(a,i0)') 'prob_tab sampled particles          : ', nptcls
         if( present(fill) )then
             if( fill%nscored > 0 )then
-                ! a neighbourhood table (and the prob_snhc 2D table) scores a different set of references per particle
+                ! a neighbourhood table (and the 2D prob_neigh table) scores a different set of references per particle
                 write(fnr,'(a,i0)') 'prob_tab scored references (all)    : ', fill%nscored
                 if( fill%nrefined > 0 ) write(fnr,'(a,i0)') 'prob_tab refined refs (all)         : ', fill%nrefined
             else

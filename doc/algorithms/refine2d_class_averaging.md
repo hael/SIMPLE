@@ -102,7 +102,7 @@ visited and how the winner is chosen:
   draw (`rank = 1 - u^p`, `p = 2` during the annealed phase, `p = 4` after).
   Sampling replaces argmax so that near-ties keep exploring.
 - **inpl**: class fixed, only rotation and shift are updated.
-- **prob** and **prob_snhc**: the class, rotation, and shift are read from a
+- **prob** and **prob_neigh**: the class, rotation, and shift are read from a
   globally computed probability table (see
   [sampling](sampling_and_fractional_updates.md)); the search step only
   commits and polishes them.

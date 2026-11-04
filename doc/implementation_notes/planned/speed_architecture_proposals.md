@@ -198,6 +198,58 @@ remain separate numerical/locality experiments. Search caps and refined-referenc
 budgets are scientific approximations and are not required to remove this
 architectural overhead.
 
+## Status, 2026-11-03
+
+Done on the Oracle Linux test machine, in the working tree (the maintainer's
+request of 2026-11-03: sections 1.2 e, c and f, the worker fold, dropped, and
+the single-precision weights):
+
+- **Section 1.2 e, the 2D names and counts as 3D**: `refine2D` counts `minits`
+  and `maxits` from `startit` (the `solve2D` controller plans in absolute
+  iterations and emits run lengths; the stream's pool runs `maxits=1`); the 2D
+  convergence guard is the new key `assign_all`, and `fillin` keeps its 3D
+  meaning only, which 2D never had; 2D `refine=prob_snhc` is
+  `refine=prob_neigh` with `prob_neigh_mode=snhc`, the only 2D mode.
+  Byte-identical: distributed `solve2D` (two parts, one thread, fixed seed;
+  full and fractional updates), the 1jxy and 6vxx workflows (path-derived
+  bytes aside), `mini_stream`.
+- **Section 1.2 c and f**: the distributed master draws the sample of the
+  sampled stages without a table (`master_draws_sample2D`, as 3D's
+  `master_draws_sample3D`), so the sample does not depend on `nparts` (one
+  `refine2D` iteration at `update_frac=0.4` draws the same sample at two and
+  three parts); the 2D partitions, the matcher's and the table's, balance the
+  active particles. Changes results. Checked on the beta-galactosidase
+  selection (2,756 of 5,513 particles active, 40 classes, `nsample=1000`, four
+  seeds each): median class resolution 9.50 A before and 9.62 A after, the ten
+  best classes 6.73 and 6.76 A, classes better than 10 A 21.8 and 20.8, within
+  the seeds' spread.
+- **The worker fold, 3D and 2D** (section 1.3, stretch): implemented, then
+  dropped (ruling 2026-11-04). Where every part ran at once (the local queue, a
+  computing unit per part), one job per part filled its table part, waited for
+  the master's assignment and searched. It was byte-identical (one thread per
+  part: distributed `solve2D` of 1jxy, distributed `solve3D` of 6vxx) and
+  measured neutral on this machine: `refine2D` of trpv1 (35,645 particles, 100
+  classes, box 256, four parts of six threads, two iterations) took 138.4 s
+  folded and unfolded (three runs each, 124-146 s), `solve2D` of the
+  beta-galactosidase selection 32.7 against 33.8 s. It saved a process start, a
+  project read and (2D) a particle read per part and iteration, and it needed a
+  second scheduling path, because a queue that cannot run every part at once
+  would deadlock on a part waiting for the assignment. The gain counted above
+  needs the table's prepared particles and references handed to the search;
+  without that hand-over the fold is not worth its branching.
+- **Single-precision weights in the score kernels** (section 1.3): the euclid
+  rotation scan (`euclid_sums`) takes the single-precision weight
+  (`sigma2_wk`); the `_8` routines of the shift search stay double. At the
+  kernels (`polar_matching_bench suite=identity`, 32,000 rows per kernel): the
+  distances within 1.6e-7 relative, one unit in the last place, and no row's
+  best rotation moved. Per pair, pinned to the performance cores, 13.0 to
+  11.8 us at one thread (9.7 %), 19.8 to 18.0 us at eight (9 %). The FSC
+  check: three `refine3D` iterations of trpv1 (35,645 particles, c2, from its
+  `solve3D` map, `refine=prob`, crop 160, four parts of six threads) give the
+  same FSC=0.143 and FSC=0.5 resolutions at every iteration (4.04, 4.10,
+  4.10 A; 6.10, 6.62, 6.77 A); the curves differ by at most 0.02 in a shell,
+  as runs at six threads differ.
+
 ## Status, 2026-10-20
 
 Done in the run `structure2D_owner` (on the Oracle Linux test machine; plan
@@ -263,7 +315,7 @@ ran well on the code before `f078cf683`.
 Ruled 2026-10-19: the 2D code structure aligned with 3D moves from the next
 release to before this one (section 1.5). The states' parallel assembly
 (with the NU filter as an object, which existed for it) is left alone for
-now (Part 2).
+now (Part 2); rejected on 2026-11-04 as too memory-intensive.
 
 Two corrections to section 1.3, found by reading the code at `af13bc828`:
 
@@ -462,12 +514,15 @@ checked).
 | item | what | why later |
 | --- | --- | --- |
 | batched, GPU-ready kernels | pure kernels over explicit arrays (references, particle times CTF, shifts, rotations) scoring many references per call, first batched per particle on the CPU | the GPU release; FFT plans and precision change results |
-| the worker fold (if not done) | as in section 1.3 | size and risk |
+| the worker fold with the hand-over of the prepared particles and references (a fold without it was dropped 2026-11-04, Status) | as in section 1.3 | size and risk |
 | persistent workers | worker processes that live for the run and exchange only model, sample and assignment; perhaps 5-15% per iteration on queued clusters | large; after the project owner and the worker fold |
-| the NU filter as an object, the states assembled in parallel | filter state in an object, one per state, so that volume assembly can run states concurrently | left alone for now (ruling 2026-10-19); open when it returns: holding several states' volumes (the multi-state memory policy forbids it today) and the sums that depend on the thread count (radial FSC, ML noise term, label smoothing weight, per-thread random streams, threaded FFTW plans) |
 | streaming assignment | keep only the best candidates per reference from each part; master table memory down by orders of magnitude on large multi-state runs | results change; needs a ruling; large |
 | particle read-ahead in its own thread | read the next batch while the current one computes (today the read-ahead runs in the same thread) | medium; gain depends on the storage |
 | table pre-step folded into the 2D search | in shared memory keep the table's prepared references and particle transforms for the search | medium to large; the one-read item of section 1.2 b takes most of the gain first |
+
+Rejected (ruling 2026-11-04): the NU filter as an object with the states
+assembled in parallel. Holding several states' volumes and filter state at
+once is too memory-intensive.
 
 ## Part 3. Measurements that settle the order
 

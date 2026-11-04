@@ -158,6 +158,8 @@
 | `simple_defs_string` | defs/simple_defs_string.f90 | 0 |
 | `simple_discrete_stack_io` | fileio/simple_discrete_stack_io.f90 | 6 |
 | `simple_dock_vols` | main/volume/simple_dock_vols.f90 | 12 |
+| `simple_dose_series_manifest` | main/volume/simple_dose_series_manifest.f90 | 25 |
+| `simple_dose_series_manifest_tester` | main/volume/simple_dose_series_manifest_tester.f90 | 9 |
 | `simple_edges_sqwins` | main/interp/simple_edges_sqwins.f90 | 22 |
 | `simple_eer_factory` | fileio/simple_eer_factory.f90 | 17 |
 | `simple_eo_partition` | main/project/simple_eo_partition.f90 | 20 |
@@ -335,7 +337,7 @@
 | `simple_matcher_ptcl_batch` | main/strategies/search/simple_matcher_ptcl_batch.f90 | 12 |
 | `simple_matcher_ptcl_io` | main/strategies/search/simple_matcher_ptcl_io.f90 | 34 |
 | `simple_matcher_refvol_utils` | main/strategies/search/simple_matcher_refvol_utils.f90 | 23 |
-| `simple_matcher_smpl_and_lplims` | main/strategies/search/simple_matcher_smpl_and_lplims.f90 | 12 |
+| `simple_matcher_smpl_and_lplims` | main/strategies/search/simple_matcher_smpl_and_lplims.f90 | 13 |
 | `simple_math` | utils/math/simple_math.f90 | 44 |
 | `simple_math_ctf` | utils/math/simple_math_ctf.f90 | 4 |
 | `simple_math_ft` | utils/math/simple_math_ft.f90 | 20 |
@@ -481,7 +483,7 @@
 | `simple_ran_tabu` | utils/math/simple_ran_tabu.f90 | 15 |
 | `simple_rec3D_pcg_strategy` | main/strategies/parallelization/simple_rec3D_pcg_strategy.f90 | 50 |
 | `simple_rec3D_service` | main/strategies/parallelization/simple_rec3D_service.f90 | 15 |
-| `simple_rec3D_service_tester` | main/strategies/parallelization/simple_rec3D_service_tester.f90 | 13 |
+| `simple_rec3D_service_tester` | main/strategies/parallelization/simple_rec3D_service_tester.f90 | 14 |
 | `simple_rec3D_strategy` | main/strategies/parallelization/simple_rec3D_strategy.f90 | 14 |
 | `simple_rec3D_strategy_tester` | main/strategies/parallelization/simple_rec3D_strategy_tester.f90 | 8 |
 | `simple_rec3D_wave_strategy` | main/strategies/parallelization/simple_rec3D_wave_strategy.f90 | 15 |
@@ -498,7 +500,7 @@
 | `simple_refine3D_fnames` | defs/simple_refine3D_fnames.f90 | 38 |
 | `simple_refine3D_local_tester` | main/commanders/simple/simple_refine3D_local_tester.f90 | 6 |
 | `simple_refine3D_provenance` | main/volume/simple_refine3D_provenance.f90 | 22 |
-| `simple_refine3D_provenance_tester` | main/volume/simple_refine3D_provenance_tester.f90 | 2 |
+| `simple_refine3D_provenance_tester` | main/volume/simple_refine3D_provenance_tester.f90 | 3 |
 | `simple_refine3D_stage_plan` | main/simple_refine3D_stage_plan.f90 | 1 |
 | `simple_refine3D_startup` | main/simple_refine3D_startup.f90 | 7 |
 | `simple_refine3D_startup_tester` | main/simple_refine3D_startup_tester.f90 | 1 |
@@ -506,7 +508,8 @@
 | `simple_refine3D_strategy` | main/strategies/parallelization/simple_refine3D_strategy.f90 | 52 |
 | `simple_refine3D_strategy_tester` | main/strategies/parallelization/simple_refine3D_strategy_tester.f90 | 6 |
 | `simple_refine3D_workflow_controller` | main/simple_refine3D_workflow_controller.f90 | 10 |
-| `simple_refine_motion_model_strategy` | main/strategies/parallelization/simple_refine_motion_model_strategy.f90 | 23 |
+| `simple_refine_motion_model_strategy` | main/strategies/parallelization/simple_refine_motion_model_strategy.f90 | 32 |
+| `simple_refine_motion_model_tester` | main/strategies/parallelization/simple_refine_motion_model_tester.f90 | 5 |
 | `simple_relion` | main/star/simple_relion.f90 | 11 |
 | `simple_rnd` | utils/math/simple_rnd.f90 | 33 |
 | `simple_rnd_tester` | utils/math/simple_rnd_tester.f90 | 7 |
@@ -701,7 +704,7 @@
 | `simple_ui_utils` | main/ui/simple_ui_utils.f90 | 1 |
 | `simple_ui_validate` | main/ui/simple/simple_ui_validation.f90 | 4 |
 | `simple_ui_visibility` | main/ui/simple_ui_visibility.f90 | 2 |
-| `simple_ui_visibility_tester` | main/ui/simple_ui_visibility_tester.f90 | 25 |
+| `simple_ui_visibility_tester` | main/ui/simple_ui_visibility_tester.f90 | 26 |
 | `simple_ui_volume` | main/ui/simple/simple_ui_volume.f90 | 5 |
 | `simple_umap` | main/flex/simple_umap.f90 | 8 |
 | `simple_view_partition_sampling` | main/strategies/search/simple_view_partition_sampling.f90 | 8 |

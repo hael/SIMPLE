@@ -9,8 +9,9 @@ the half-sets in [refine3D_policy.md](../../policies/3D/refine3D_policy.md)
 (section 5), and the add-on passes in
 [solve3D_addon_policy.md](../../policies/3D/solve3D_addon_policy.md).
 
-Note (2026-10-14): `emulate_solve3D_stream` has been removed. Case F and its
-command line in the run table need restating with `solve3D_chunks`.
+Note (2026-10-14): the offline stream emulation that ran case F has been
+removed. Case F and its command line in the run table need restating with
+`solve3D_chunks`.
 
 Note (2026-10-14): benchmark reports now go to `BENCH/` in the run directory,
 one file per family (and partition) with one record per report (refine3D
@@ -78,8 +79,8 @@ Rulings so far (Hans):
   - new particles start from the union's committed global sigma;
   - a frozen particle can be retired in the project but stays in the frozen
     volumetric components already generated (2026-10-13);
-  - add-on chains (`solve3D_addon`, `solve3D_chunks`,
-    `emulate_solve3D_stream`) support only the gridding backend: they look
+  - add-on chains (`solve3D_addon`, `solve3D_chunks`, and the offline stream emulation
+    of the time) support only the gridding backend: they look
     for initial solutions and speed, not PCG-level precision (2026-10-13);
   - the first add-on of a chain reads the base particles once and writes the
     first carried sums; `solve3D` does not change (2026-10-13);
@@ -111,9 +112,9 @@ Rulings so far (Hans):
   - Reconstruction reads once per state and half.
   - The half label alternates by particle index, so a stack is usually opened
     in both halves.
-- **The add-on chains add a larger cost.** They serve the offline chains
-  `solve3D_chunks` and `emulate_solve3D_stream`; the stream no longer runs
-  add-ons (ruling of 2026-10-14). Every `solve3D_addon` reads all frozen
+- **The add-on chains add a larger cost.** They serve the offline chain
+  `solve3D_chunks` (and, until 2026-10-14, the offline stream emulation);
+  the stream no longer runs add-ons (ruling of 2026-10-14). Every `solve3D_addon` reads all frozen
   particles up to six times: two frozen accumulations, and four passes of
   `bootstrap_rec3D` in the final reconstruction.
 - **The plan, none of which stores anything derived from the particles on
@@ -607,9 +608,9 @@ reads through `discrete_read_imgbatch`, so the build gains too.
 ### 3.3 Add-on passes (ruled 2026-10-12)
 
 This is the largest particle I/O of the offline add-on chains
-(`solve3D_chunks`, `emulate_solve3D_stream`), which the add-on passes serve;
-the stream's 3D stage no longer runs add-ons (ruling of 2026-10-14). It changes the `solve3D_addon`
-contract (`solve3D_addon_policy.md`, sections 3, 5, 7 and 8), and it depends
+(`solve3D_chunks`, and the offline stream emulation until 2026-10-14),
+which the add-on passes serve; the stream's 3D stage no longer runs add-ons
+(ruling of 2026-10-14). It changes the `solve3D_addon` contract (`solve3D_addon_policy.md`, sections 3, 5, 7 and 8), and it depends
 on the global-sigma refactoring (`global_sigma2_only.md`). The review found
 four contracts the first rulings did not settle; all four are now ruled
 (section 8).
@@ -652,7 +653,7 @@ Their noise weighting does:
     controls (`maxits_pcg`, `maxits_ml`, `pcg_solvent_check`). It drops
     them and refuses a frozen project whose base run used PCG, naming the
     base run's backend.
-  - `emulate_solve3D_stream` drops its PCG inputs
+  - the offline stream emulation (since removed) drops its PCG inputs
     (`add_solve3D_base_inputs` with `l_include_pcg=.false.`) and forces
     gridding, as `solve3D_chunks` already does.
   - The PCG side of the frozen sets (the `B`/`D` payloads in
@@ -710,8 +711,9 @@ the run's own particles instead of the union, with no image-power seed:
 - **The output** carries the sums and a sigma2 state that merges the frozen
   particles' committed sigmas with the run's new ones.
 - **The full fit.** The stream no longer runs add-ons (ruling of
-  2026-10-14). The offline chains end without a full fit: `emulate_solve3D_stream` ends at its last adopted add-on,
-  and `solve3D_chunks` publishes its last add-on directly. They publish the
+  2026-10-14). The offline chains end without a full fit: the offline stream
+  emulation (since removed) ended at its last adopted add-on, and
+  `solve3D_chunks` publishes its last add-on directly. They publish the
   incremental result as it is, and the historical weighting of the frozen
   contributions stays in offline results (ruled 2026-10-13: the fastest
   option). No terminal full reconstruction is added.
@@ -1018,9 +1020,9 @@ None is open. The review's contracts were ruled by Hans on 2026-10-13:
   does today, and writes the first carried sums. `solve3D` does not change.
   The alternative, the base run writing the sums, would read the same
   particles and touch more code.
-- **What the offline chains publish.** `solve3D_chunks` and
-  `emulate_solve3D_stream` publish their last incremental add-on as it is,
-  with the old noise weighting of the frozen contributions: the fastest
+- **What the offline chains publish.** `solve3D_chunks` (and, until its
+  removal, the offline stream emulation) publish their last incremental
+  add-on as it is, with the old noise weighting of the frozen contributions: the fastest
   option. The stream no longer runs add-ons (ruling of 2026-10-14: its 3D
   stage assigns class averages to fixed reference volumes). Rejected: full final reconstructions in every
   offline add-on, and one terminal full reconstruction per offline chain.
@@ -1122,8 +1124,8 @@ Common to every phase:
      `update_frac=0.2`, five iterations, distributed, twice.
    - **C.** B's command line in shared memory, once.
    - **E.** `solve2D` on the particles, distributed, twice.
-   - **F.** `emulate_solve3D_stream nptcls_base=2000 nptcls_addon=1100
-     rollback=no addon_diag=yes` (a base run and three add-ons; 1,200 gave
+   - **F.** the offline stream emulation (removed 2026-10-14) with `nptcls_base=2000
+     nptcls_addon=1100 rollback=no addon_diag=yes` (a base run and three add-ons; 1,200 gave
      two, see section 11), with A's `solve3D` settings where the program
      takes them, gridding, twice.
    - **P.** A's command line with `rec_backend=pcg`, once; its final
@@ -1214,7 +1216,7 @@ Exit criteria:
 ### 10.6 Phase 5: PCG out of the add-on chains
 
 The "Gridding only" ruling of section 3.3: the PCG inputs leave
-`solve3D_addon` and `emulate_solve3D_stream`, `solve3D_addon` refuses a PCG
+`solve3D_addon` and the offline stream emulation, `solve3D_addon` refuses a PCG
 base run, and the PCG side of the frozen sets is deleted with its tests.
 
 Exit criteria:
@@ -1401,9 +1403,9 @@ as section 10 assumes.
   add-ons (1,200 and 2,313), while the plan asks for a base run and three
   add-ons. 1,100 gives three (1,100, 1,100 and 1,313), so two add-ons follow
   the first, which is what Phase 6 must show reads no frozen particle.
-- **Case F starts from the control project.** `emulate_solve3D_stream`
-  refuses `cavg_ini_ext` and `vol1` (they are not inputs of the stream's base
-  run), so it cannot start from S; it takes A's other `solve3D` settings.
+- **Case F starts from the control project.** The offline stream emulation
+  refused `cavg_ini_ext` and `vol1` (they are not inputs of the stream's base
+  run), so it could not start from S; it took A's other `solve3D` settings.
 - **Case C keeps `mkdir` at its default.** The earlier defect that nested
   shared-memory `refine3D` directories is fixed on this base; C is B's
   command line with `nthr=24` instead of `nparts=4 nthr=6`.
@@ -1426,7 +1428,7 @@ Later phases repeat these lines exactly:
 | B1, B2 | `keep/A/1_solve3D/bgal.simple` | `simple_exec prg=refine3D projfile=bgal.simple vol1=<scratch>/runs/A1/1_solve3D/recvol_state01.mrc mskdiam=180 pgrp=d2 objfun=euclid update_frac=0.2 maxits=5 nparts=4 nthr=6` |
 | C | as B | `simple_exec prg=refine3D projfile=bgal.simple vol1=<same> mskdiam=180 pgrp=d2 objfun=euclid update_frac=0.2 maxits=5 nthr=24` |
 | E1, E2 | the control project | `simple_exec prg=solve2D projfile=bgal.simple mskdiam=180 ncls=100 nparts=4 nthr=6` |
-| F1, F2 | the control project | `simple_exec prg=emulate_solve3D_stream projfile=bgal.simple nptcls_base=2000 nptcls_addon=1100 rollback=no addon_diag=yes mskdiam=180 pgrp=d2 nsample=2500 rec_backend=gridding nparts=4 nthr=6` |
+| F1, F2 | the control project | the offline stream emulation (removed 2026-10-14) with `projfile=bgal.simple nptcls_base=2000 nptcls_addon=1100 rollback=no addon_diag=yes mskdiam=180 pgrp=d2 nsample=2500 rec_backend=gridding nparts=4 nthr=6` |
 | P | `keep/S/1_solve3D_cavgs/bgal.simple` | A's command line with `rec_backend=pcg` |
 
 The high-level tests run as CTest entries in the Release build,
@@ -1505,7 +1507,7 @@ load, `/usr/bin/time -v`), summaries `scratch/logs/summary_<case>.txt`, the
 queue `scratch/logs/queue_phase0.log`, read tables
 `scratch/logs/read_table_phase0_*.txt`, add-on reads
 `scratch/logs/addon_reads_F*.txt`; every benchmark file of every case, and
-F's `emulate_solve3D_stream_report.txt`, in
+F's emulation report, in
 `scratch/keep/bench/phase0/<case>/`. Kept for later phases:
 `scratch/keep/S/1_solve3D_cavgs` (the common start), `scratch/keep/A/1_solve3D`
 (input of B and C, with `final_map_name`), `scratch/keep/P/1_solve3D` (the
@@ -2267,7 +2269,7 @@ list of rulings at the top of this plan):
   describes the passes; this phase changed only what gridding needs.
 
 **What changed.** The add-on chains (`solve3D_addon`, `solve3D_chunks`,
-`emulate_solve3D_stream`) reconstruct by gridding only, as ruled on
+and the offline stream emulation of the time) reconstruct by gridding only, as ruled on
 2026-10-13; a base `solve3D` keeps both backends.
 
 - *The refusal.* `solve3D_addon` reads the base run's backend from its run
@@ -2277,8 +2279,8 @@ list of rulings at the top of this plan):
   backend, naming it. Its own run sets `rec_backend=gridding`, so the manifest
   of an add-on records gridding and a chained add-on passes the check.
 - *No PCG input.* The add-on's UI entry lost `maxits_pcg`, `maxits_ml` and
-  `pcg_solvent_check`; `emulate_solve3D_stream` builds its inputs without the
-  PCG block (`l_include_pcg=.false.`) and forces gridding, as `solve3D_chunks`
+  `pcg_solvent_check`; the offline stream emulation built its inputs without the
+  PCG block (`l_include_pcg=.false.`) and forced gridding, as `solve3D_chunks`
   already did. The backend and the PCG controls are no longer replayed from
   the manifest (they stay recorded, which the refusal needs), and on the
   add-on command line they are refused by name.
@@ -2346,7 +2348,7 @@ and the memory policy; this plan (two tester rows added to the file table).
 ### Phase 6: the add-on passes (2026-10-14)
 
 No new ruling. The add-on passes of section 3.3 serve the offline chains
-(`solve3D_chunks`, `emulate_solve3D_stream`), as ruled the same day.
+(`solve3D_chunks`, and the offline stream emulation of the time), as ruled the same day.
 
 **What was built.**
 
@@ -2447,9 +2449,9 @@ Files changed in this phase:
 - this plan (file-table rows added for the command-line module and the
   testers).
 
-**Evidence: case F against Phase 0.** Case F is `emulate_solve3D_stream
-nptcls_base=2000 nptcls_addon=1100 rollback=no addon_diag=yes`, with the
-Phase 0 command line: a base run and three add-ons, run twice. The tables
+**Evidence: case F against Phase 0.** Case F is the offline stream emulation
+(removed 2026-10-14) with `nptcls_base=2000 nptcls_addon=1100 rollback=no
+addon_diag=yes`, with the Phase 0 command line: a base run and three add-ons, run twice. The tables
 quote Phase 0 first, then Phase 6.
 
 | Step | Wall time (s), Phase 0 runs 1, 2 | Wall time (s), Phase 6 runs 1, 2 | s per 1,000 added, Phase 0 | s per 1,000 added, Phase 6 |
@@ -2561,7 +2563,7 @@ largest resident set of any process of the run.
 | B (`refine3D`, distributed) | 2:38, 2:38 / 2:48 | 3.03 / 3.03 GB | 6.94, 7.10 / 6.80 Å | holds (band 6.73 to 7.31 Å) |
 | C (`refine3D`, shared memory) | 1:46 / 1:46 | 3.63 / 3.92 GB | 7.77 / 7.77 Å | holds |
 | E (`solve2D`) | 3:06, 3:08 / 3:09 | 0.41 / 0.41 GB | score 0.389 / 0.389; class resolution 10.97, 10.94 / 11.05 Å | holds (score at least 0.377, at most 12.11 Å) |
-| F (`emulate_solve3D_stream`) | 39:22, 43:00 / 30:21 | 3.28, 3.30 / 3.22 GB | union FSC 0.143 per step: 4.03 / 3.89 / 3.80, 3.84 / 3.75, 3.80 against 4.03 / 3.93 / 3.89 / 3.84 Å | holds (within 5 % at every step) |
+| F (offline stream emulation) | 39:22, 43:00 / 30:21 | 3.28, 3.30 / 3.22 GB | union FSC 0.143 per step: 4.03 / 3.89 / 3.80, 3.84 / 3.75, 3.80 against 4.03 / 3.93 / 3.89 / 3.84 Å | holds (within 5 % at every step) |
 
 - *Case F's add-ons.* Their wall times were 287 / 342 / 331 s, against Phase
   0's 396, 354 / 636, 629 / 402, 683 s. That is 261 / 310 / 252 s per 1,000

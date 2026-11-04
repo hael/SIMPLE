@@ -51,7 +51,7 @@ resuming an old command or experiment.
 | Performance follow-up | [Speed-week closeout](planned/single_state_speed_week_unfinished.md), [multi-state closeout](planned/multistate_speed_run_unfinished.md), [architecture proposals](planned/speed_architecture_proposals.md) | Keep applicable measurements open; dispose explicitly of acceptance criteria for retired search policies. |
 | Testing and benchmarks | [Order of work](planned/testing_and_benchmarking_plan.md), [truth-suite record](planned/test_suite_truth_and_robustness.md), [report](planned/test_suite_truth_and_robustness_report.md) | Core truth tooling delivered; dataset work and remaining validation stay open. Current rules live in the test policy. |
 | Batch completion | [Diagnostics and timeout](planned/qsys_scheduler_completion_bug_report_unfinished.md) | Exit-code/lost-job handling delivered; periodic reporting and hung-job backstop remain. |
-| Chunked solve3D | [Emulation closeout](planned/emulate_solve3D_stream_unfinished.md) | Reconcile supported chunk/publication checks; the removed emulation command's rollback check is retired. |
+| Chunked solve3D | [solve3D_chunks open validation](completed/solve3D_chunks_completed.md) | Three validation runs remain (its section 9): the whole-stack ribosome rerun, the boundary cases, the published project. |
 | Deferred NU atom support | [C-alpha mask](planned/next_release/calpha_nu_evidence_mask.md) | Next-release proposal. |
 | Deferred optics | [CTF, aberrations and Ewald](planned/next_release/ctf_refinement_aberrations_ewald_plan.md) | Next-release survey and agreed order of work. |
 

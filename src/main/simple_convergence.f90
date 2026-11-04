@@ -233,7 +233,7 @@ contains
         ! The annealing tail of the probability tables' posterior draws, as check_conv3D's: a run with prob_beta_end searches at prob_beta until its class overlap converges past
         ! minits, then exec_refine2D ramps the draws to prob_beta_end over the PROB_BETA_TAIL iterations from
         ! self%prob_beta_tail_start
-        ! and the run ends; a budget (maxits, the absolute end iteration check_refine2D_convergence enforces) too
+        ! and the run ends; a budget (maxits iterations from startit, which check_refine2D_convergence enforces) too
         ! short for that starts the tail so that it completes within it. The state is this object's, which the
         ! strategies keep across iterations. The 2D runs had no tail before 2026-10-27: a run at prob_beta 0.3 wrote
         ! its last class averages from draws at 0.3
@@ -241,11 +241,11 @@ contains
             &abs(params%prob_beta_end - params%prob_beta) > TINY
         if( l_tail_run .or. self%prob_beta_tail_start > 0 )then
             if( self%prob_beta_tail_start == 0 )then
-                if( converged .and. params%which_iter >= params%minits )then
+                if( converged .and. params%which_iter >= params%startit + params%minits - 1 )then
                     self%prob_beta_tail_start = params%which_iter + 1
                     write(logfhandle,'(A,I0,A)') '>>> CLASS OVERLAP CONVERGED: annealing the posterior draws over the next ',&
                         &PROB_BETA_TAIL, ' iterations'
-                else if( params%which_iter + PROB_BETA_TAIL >= params%maxits )then
+                else if( params%which_iter + PROB_BETA_TAIL >= params%startit + params%maxits - 1 )then
                     self%prob_beta_tail_start = params%which_iter + 1
                     write(logfhandle,'(A,I0,A)') '>>> BUDGET END: annealing the posterior draws over the last ',&
                         &PROB_BETA_TAIL, ' iterations'

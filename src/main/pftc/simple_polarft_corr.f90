@@ -290,11 +290,11 @@ contains
             enddo
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
             call euclid_sums(self%pftsz+1, self%pftsz+1, self%nrots, self%nk, self%ft_ctf2(:,:,i),&
-                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, self%sigma2_wk8(:,ih),&
+                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, self%sigma2_wk(:,ih),&
                 &self%crvec1(ithr)%c)
         else
             call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
-                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), self%sigma2_wk8(:,ih),&
+                &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), self%sigma2_wk(:,ih),&
                 &self%crvec1(ithr)%c)
         endif
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
@@ -306,7 +306,7 @@ contains
     subroutine euclid_sums( np, n1, ldr, nk, ctf2, ref2, xctf, ref, wk, acc )
         integer,     intent(in)    :: np, n1, ldr, nk
         complex(sp), intent(in)    :: ctf2(n1,nk), ref2(n1,nk), xctf(n1,nk), ref(ldr,nk)
-        real(dp),    intent(in)    :: wk(nk)
+        real(sp),    intent(in)    :: wk(nk)
         complex(sp), intent(inout) :: acc(n1)
         integer :: kk
         acc = cmplx(0.,0.,kind=sp)
@@ -315,18 +315,19 @@ contains
         enddo
     end subroutine euclid_sums
 
-    !> One shell of euclid_sums: plain array dummies, unit stride and no overlap
+    !> One shell of euclid_sums: plain array dummies, unit stride and no overlap; the weight single precision as
+    !! the data (sigma2_wk), so the loop runs at the full single-precision vector width
     subroutine euclid_shell_sum( np, ctf2, ref2, xctf, ref, wk, acc )
         integer,     intent(in)    :: np
         complex(sp), intent(in)    :: ctf2(np), ref2(np), xctf(np), ref(np)
-        real(dp),    intent(in)    :: wk
+        real(sp),    intent(in)    :: wk
         complex(sp), intent(inout) :: acc(np)
         complex(sp) :: c
         integer     :: p
         do p = 1,np
             c = ctf2(p) * ref2(p)
             c = c - 2.0 * xctf(p) * conjg(ref(p))
-            acc(p) = cmplx(acc(p) + wk * c, kind=sp)
+            acc(p) = acc(p) + wk * c
         enddo
     end subroutine euclid_shell_sum
 
@@ -536,7 +537,7 @@ contains
         endif
         norm = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
         call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
-            &self%ft_ref2(:,:,iref,ieo), bank, self%ft_ref(:,:,iref,ieo), self%sigma2_wk8(:,ih), self%crvec1(ithr)%c)
+            &self%ft_ref2(:,:,iref,ieo), bank, self%ft_ref(:,:,iref,ieo), self%sigma2_wk(:,ih), self%crvec1(ithr)%c)
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
     end subroutine gen_euclid_crvec_bank
 

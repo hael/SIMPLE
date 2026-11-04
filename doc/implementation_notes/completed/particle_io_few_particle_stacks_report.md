@@ -33,7 +33,7 @@ runs' particles.
   - A, `solve3D` from S;
   - B and C, `refine3D` distributed and in shared memory;
   - E, `solve2D`;
-  - F, `emulate_solve3D_stream` with a base run and three add-ons;
+  - F, a base run and three add-ons (the offline stream emulation, removed on 2026-10-14);
   - P, A with the PCG backend.
 
   Four high-level tests were run with them.
@@ -69,7 +69,7 @@ runs' particles.
 - **Phase 5, PCG out of the add-on chains** (`phase_5.diff`).
   - `solve3D_addon` refuses a frozen run that used PCG, naming its backend,
     before anything is written, and forces gridding.
-  - `emulate_solve3D_stream` forces gridding.
+  - The offline stream emulation (since removed) forces gridding.
   - The PCG inputs left both programs, and the PCG side of the frozen sets was
     deleted with its test.
   - Two rulings of 2026-10-14 were applied in this phase as well (below).
@@ -102,7 +102,7 @@ phase named.
 - *Case F uses 1,100 particles per add-on, not 1,200* (Phase 0). 1,200 gives
   two add-ons on this set, and the plan asks for three.
 - *Case F starts from the control project* (Phase 0).
-  `emulate_solve3D_stream` refuses the inputs that would start it from S.
+  The offline stream emulation refused the inputs that would start it from S.
 - *The read session is a builder-free module in `src/fileio`* (Phase 1), so the
   unit tests drive it on synthetic stacks. Its 64 MiB scratch cap is for the
   whole session, shared by its read streams.
@@ -189,7 +189,7 @@ numbers are in section 11, per phase.
 | B (`refine3D`, five iterations, distributed) | 2:38, 2:38; 6.94, 7.10 Å | 2:48; 6.80 Å | holds (band 6.73 to 7.31 Å) |
 | C (B in shared memory) | 1:46; 7.77 Å | 1:46; 7.77 Å | holds |
 | E (`solve2D`) | 3:06, 3:08; score 0.389, class resolution 10.97, 10.94 Å | 3:09; 0.389, 11.05 Å | holds |
-| F (`emulate_solve3D_stream`: a base run and three add-ons) | 39:22, 43:00; union FSC 0.143 4.03 / 3.89 / 3.80, 3.84 / 3.75, 3.80 Å | 30:21; 4.03 / 3.93 / 3.89 / 3.84 Å | holds (within 5 %) |
+| F (a base run and three add-ons) | 39:22, 43:00; union FSC 0.143 4.03 / 3.89 / 3.80, 3.84 / 3.75, 3.80 Å | 30:21; 4.03 / 3.93 / 3.89 / 3.84 Å | holds (within 5 %) |
 
 Peak memory is unchanged, except C in shared memory: 3.92 GB against 3.63 GB,
 which is the particle buffer. Case F's add-ons read 4,000 / 0 / 0 frozen

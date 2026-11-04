@@ -490,11 +490,13 @@ contains
             self%l_update_frac = .true.
             self%l_trail_rec   = trim(self%trail_rec).eq.'yes'
             self%l_fillin      = trim(self%fillin).eq.'yes'
+            self%l_assign_all  = trim(self%assign_all).eq.'yes'
         else
             self%update_frac   = 1.0
             self%l_update_frac = .false.
             self%l_trail_rec   = .false.
             self%l_fillin      = .false.
+            self%l_assign_all  = .false.
         endif
         self%l_update_missing = trim(self%update_missing).eq.'yes'
         self%l_frac_best   = self%frac_best  <= 0.99
@@ -1065,7 +1067,7 @@ contains
         end select
         self%l_prob_align_mode = .false.
         select case(trim(self%refine))
-            case('prob','prob_neigh','prob_snhc')
+            case('prob','prob_neigh')
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
@@ -1089,6 +1091,12 @@ contains
             self%l_cont_polish = trim(self%pose_cont) == 'yes'
             self%inpl_cont = 'no'
         endif
+        ! 2D's neighbourhood table (refine=prob_neigh on ptcl2D) draws the stochastic class neighbourhood only
+        if( trim(self%oritype) == 'ptcl2D' .and. trim(self%refine) == 'prob_neigh' )then
+            if( cline%defined('prob_neigh_mode') .and. trim(self%prob_neigh_mode) /= 'snhc' )&
+                &THROW_HARD('2D refine=prob_neigh supports prob_neigh_mode=snhc only')
+            self%prob_neigh_mode = 'snhc'
+        endif
         select case(trim(self%prob_neigh_mode))
             case('state','geom','shc','snhc')
             case DEFAULT
@@ -1108,7 +1116,8 @@ contains
             THROW_HARD('min_state_frac must be in [0,1)')
         endif
         self%l_neigh = .false.
-        if( str_has_substr(self%refine, 'neigh') )then
+        ! the 3D projection-direction neighbourhood (2D's prob_neigh searches classes, not directions)
+        if( str_has_substr(self%refine, 'neigh') .and. trim(self%oritype) /= 'ptcl2D' )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500
             if( .not. cline%defined('nspace') )     self%nspace     = 20000
             self%nspace_sub = round2even(real(self%nspace_sub))
@@ -1120,7 +1129,8 @@ contains
                 case('snhc','snhc_smpl','snhc_smpl_many')
                     self%trs = 0.
                 case DEFAULT
-                    if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'snhc' )then
+                    if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'snhc' .and. &
+                        &trim(self%oritype) /= 'ptcl2D' )then
                         self%trs = 0.
                     else
                         self%trs = MINSHIFT
@@ -1143,7 +1153,7 @@ contains
             self%l_shift_map = .false.
         endif
         select case(trim(self%refine))
-            case('prob', 'prob_snhc', 'prob_neigh', 'snhc', 'snhc_smpl', 'snhc_smpl_many', 'greedy', 'shc', 'neigh',&
+            case('prob', 'prob_neigh', 'snhc', 'snhc_smpl', 'snhc_smpl_many', 'greedy', 'shc', 'neigh',&
                 &'greedy_inpl')
                 self%l_centring = self%l_shift_map .and. self%l_doshift .and. trim(self%tseries) /= 'yes'
             case DEFAULT

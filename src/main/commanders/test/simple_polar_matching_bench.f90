@@ -783,17 +783,18 @@ contains
         integer,                     intent(in)    :: i, iref
         complex(c_float_complex),    intent(inout) :: cvec(:)
         complex(sp) :: c
-        real(dp)    :: wk
+        real(sp)    :: wk
         integer     :: k, p, ieo, ih
         ih  = merge(1, 2, self%iseven(i))
         ieo = ih
         cvec = cmplx(0.,0.,kind=c_float_complex)
         do k = self%kfromto(1), self%kfromto(2)
-            wk = self%wk8(k,ih)
+            ! single precision, as production's sigma2_wk
+            wk = real(k,sp) / self%sigma2(k,ih)
             do p = 1,self%pftsz
                 c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                 c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
-                cvec(p) = cmplx(cvec(p) + wk * c, kind=kind(cvec))
+                cvec(p) = cvec(p) + wk * c
             enddo
         enddo
     end subroutine pair_sums

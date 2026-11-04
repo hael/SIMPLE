@@ -379,7 +379,8 @@ contains
             if( .not. present(xprob_tab2D) ) THROW_HARD('prob_align2D in shared memory needs the table commander')
             call xprob_tab2D%execute(cline_prob_tab)
         else
-            call qenv%new(params, params%nparts, nptcls=params%nptcls)
+            ! partitions balance the particles with state > 0, as the matcher's and the 3D tables' do
+            call qenv%new(params, params%nparts, nptcls=params%nptcls, l_active=build%spproj_field%included())
             call cline_prob_tab%gen_job_descr(job_descr)
             call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         endif

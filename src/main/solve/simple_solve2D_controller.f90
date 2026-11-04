@@ -59,7 +59,7 @@ contains
         class(parameters), intent(in)  :: params
         integer,           intent(out) :: nstages
         select case(trim(params%refine))
-            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_snhc')
+            case('snhc','snhc_smpl','snhc_smpl_many','prob','prob_neigh')
                 nstages = NSTAGES_CLS
             case DEFAULT
                 THROW_HARD('Unsupported REFINE argument: '//trim(params%refine))
@@ -146,6 +146,7 @@ contains
         call cline_pass%delete('update_frac')
         call cline_pass%delete('nsample')
         call cline_pass%delete('fillin')
+        call cline_pass%delete('assign_all')
         call cline_pass%delete('gaufreq')
         ! Seeded restarts skip the centring stage and keep the ordinary shift window (the key off explicitly: the
         ! parameter's default is the key)
@@ -336,10 +337,10 @@ contains
             cfg%refine = 'snhc_smpl'
         else if( trim(params%refine) == 'prob' )then
             cfg%refine = 'prob'
-        else if( trim(params%refine) == 'prob_snhc' .and. istage == nstages )then
+        else if( trim(params%refine) == 'prob_neigh' .and. istage == nstages )then
             cfg%refine = 'prob'
         else
-            cfg%refine = 'prob_snhc'
+            cfg%refine = 'prob_neigh'
         endif
     end subroutine set_refine2D_stage_search_policy
 
@@ -393,8 +394,9 @@ contains
         else
             call cline_refine2D%delete('gaufreq')
         endif
-        call cline_refine2D%set('minits',     cfg%minits)
-        call cline_refine2D%set('maxits',     cfg%imaxits)
+        ! the stage's absolute iterations as refine2D's run lengths from startit (minits and maxits count from it)
+        call cline_refine2D%set('minits',     max(0, cfg%minits  - cfg%iter + 1))
+        call cline_refine2D%set('maxits',     max(1, cfg%imaxits - cfg%iter + 1))
         call cline_refine2D%set('startit',    cfg%iter)
         call cline_refine2D%set('refine',     cfg%refine)
         call cline_refine2D%set('objfun',     cfg%objfun)
@@ -418,13 +420,14 @@ contains
         else
             call cline_refine2D%delete('update_frac')
         endif
-        ! refine2D fillin=yes requests full-assignment coverage; particle
-        ! selection still follows the normal sampled-update path.
+        ! the stages that need every particle assigned take the coverage guard assign_all=yes (2D's fillin=yes before
+        ! 2026-11-03); fillin is 3D's periodic sampling of the particles never updated, which 2D does not have
         if( l_require_full_assignment )then
-            call cline_refine2D%set('fillin', 'yes')
+            call cline_refine2D%set('assign_all', 'yes')
         else
-            call cline_refine2D%delete('fillin')
+            call cline_refine2D%delete('assign_all')
         endif
+        call cline_refine2D%delete('fillin')
         call cline_refine2D%delete('endit')
     end subroutine emit_refine2D_stage_cfg
 
