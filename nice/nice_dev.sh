@@ -60,12 +60,12 @@ cd "$script_dir"
 # instead of a system /tmp mount that may reject executable mappings.
 printf 'Building NICE development CSS\n'
 tailwind_tmpdir=$(mktemp -d "$repo_dir/.tailwind-tmp.XXXXXX")
-trap 'rmdir -- "$tailwind_tmpdir" 2>/dev/null || true' EXIT
+trap 'rm -rf -- "$tailwind_tmpdir" 2>/dev/null || true' EXIT
 TMPDIR="$tailwind_tmpdir" "$tailwind_bin" \
     -i "$tailwind_input" \
     -o "$tailwind_output" \
     --minify
-rmdir -- "$tailwind_tmpdir"
+rm -rf -- "$tailwind_tmpdir"
 trap - EXIT
 
 printf 'Preparing NICE development database\n'
