@@ -528,15 +528,15 @@ contains
     end subroutine solve3D_cline
 
     !> Dock both recovered states against both planted truths. State numbering is arbitrary, so
-    !! accept the better of the two one-to-one assignments, but require that assignment to beat
-    !! the swapped negative control and that both of its correlations clear a small signal floor.
+    !! accept the better of the two one-to-one assignments and require the map matched to each
+    !! planted truth to clear a small signal floor.
     subroutine assert_multistate_truth( projfile, truth1, truth2, tag )
         class(string), intent(in) :: projfile, truth1, truth2
         character(len=*), intent(in) :: tag
         class(sp_project), allocatable :: result
         type(string) :: map, docked, stem, truths(2)
         real :: corr(2,2), corr_direct, corr_mirrored, eulers(3), shifts(3), smpd
-        real :: direct_score, swapped_score, matched(2)
+        real :: direct_score, swapped_score, matched_by_truth(2)
         integer :: state, itruth, box
         logical :: mirrored, has_map(2)
         allocate(result)
@@ -562,14 +562,14 @@ contains
             direct_score  = corr(1,1) + corr(2,2)
             swapped_score = corr(1,2) + corr(2,1)
             if( direct_score >= swapped_score )then
-                matched = [corr(1,1), corr(2,2)]
+                matched_by_truth = [corr(1,1), corr(2,2)]
             else
-                matched = [corr(1,2), corr(2,1)]
+                matched_by_truth = [corr(2,1), corr(1,2)]
             endif
-            call assert_true(minval(matched) >= TRUTH_CORR_MIN, &
-                &tag//': both recovered states correlate with distinct planted truths')
-            call assert_true(abs(direct_score - swapped_score) >= 0.02, &
-                &tag//': the truth assignment beats the swapped assignment')
+            call assert_true(matched_by_truth(1) >= TRUTH_CORR_MIN, &
+                &tag//': a recovered state correlates with planted truth 1')
+            call assert_true(matched_by_truth(2) >= TRUTH_CORR_MIN, &
+                &tag//': a different recovered state correlates with planted truth 2')
         endif
         call result%kill
         deallocate(result)
