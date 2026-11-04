@@ -8,9 +8,10 @@ movie also makes it possible to produce separate particle datasets for short
 intervals of the exposure, while correcting the motion within each interval.
 
 `refine_motion_model` performs this re-extraction using a saved binary motion
-model, then reconstructs each interval from the saved particle poses. Despite
-its name, it does not compare movie particles with reference images, estimate
-new trajectories, or write a newly refined motion model. Its polynomial refit
+model, then reconstructs each interval from the saved particle poses and exports
+raw FSC diagnostics. Despite its name, it does not compare movie particles
+with reference images, estimate new trajectories, or write a newly refined
+motion model. Its polynomial refit
 uses the existing patch measurements, not new image-alignment measurements.
 
 This is distinct from [reference-free motion correction](motion_correction.md),
@@ -147,6 +148,8 @@ particle stack per movie, `ptcls_from_<movie>_<start>_<end>`, and a project
 named after the input project. That project points to the block's stacks,
 carries the recentered box coordinates and 2D/3D shifts, and keeps the other
 segments of the input project. Movies with no retained particles are left out.
+These folders, stacks and assembled projects are retained after reconstruction
+so their particle data remain available.
 
 ### Reconstruction after extraction
 
@@ -168,11 +171,20 @@ emission. Maps use the saved 3D orientations, residual translations, CTF
 metadata, the interval stacks' native geometry, and the supplied `pgrp` and
 `mskdiam`. Additional undocumented reconstruction-crop arguments are not a
 supported cross-dispatch mode. Optional filtering, automatic envelope masking,
-and postprocessing are disabled; ordinary gridding correction and spherical
-soft support still apply. Each interval is reconstructed by a nested,
+and postprocessing are disabled. Ordinary gridding correction applies to every
+map; spherical support applies to standard outputs after writing the unmasked
+`_unfil` half maps. Each interval is reconstructed by a nested,
 complete run of the `reconstruct3D` program on its own project copy, with its
 own freshly parsed parameters; the master then registers the delivered merged
 map and FSC in that copy.
+
+Before moving to the next interval, the master removes only the reconstruction's
+exact `recvol_stateNN_part...` and `rho_recvol_stateNN_part...` even/odd files,
+after validating every populated state's map/FSC and writing output registration.
+Shared filename helpers identify the targets; canonical directory and file
+checks precede deletion. Failed reconstructions retain their partials. Fraction
+stacks and projects in `frames_a-b/` are always retained. Final maps, half maps,
+FSCs and the copied reconstruction project also remain, with usable stack paths.
 
 The master establishes missing even/odd labels once before extraction jobs
 start. Interval reconstruction verifies that selected particle rows and
@@ -182,6 +194,73 @@ otherwise all active particles. The master's working directory and thread
 settings are restored after each run; its own parameters are never edited.
 `nparts=1` reconstructs in the master process; larger values run the
 program's own distributed gridding master.
+
+## Dose-series export
+
+The `_even_unfil.mrc` and `_odd_unfil.mrc` maps are exported after density and
+interpolation correction, before spherical support. They are unmasked,
+unregularized real-space float32 volumes. Standard half maps and the merged
+volume retain their spherical mask, so the existing FSC surface describes the
+same standard half-map pair.
+
+After all intervals complete, usable state-1 dose metadata produce a
+`dose_series.txt` manifest at the run root. Each row names the unmasked even/odd
+maps using paths relative to that file and records the original inclusive
+fraction range plus its accumulated physical dose bounds. The header includes
+native geometry, saved voltage, dose per fraction, contributor/half counts and
+a fingerprint of the fixed state-1 partition.
+
+For fraction dose `d` from the saved motion model and interval `[a,b]`, the
+bounds are `(a-1)*d` and `b*d` e/Angstrom^2. This dose already includes EER
+fraction grouping; it is not multiplied by that grouping again. Starting after
+fraction 1 retains the preceding dose. Only micrographs contributing to the
+actual state-1 reconstruction sample enter the compatibility checks.
+
+The shared manifest class checks metadata and real MRC headers. Publication
+uses a temporary file and final rename after the full series succeeds. Missing
+or incompatible dose metadata prevents manifest publication, with a reason in
+the log, while leaving successful reconstructions and FSC outputs available.
+The consumer `dose_filter3D` applies its own statistical mask, prunes the
+predecessor of an overlapping final interval and requires at least two disjoint
+windows. Fitting remains a separate application.
+
+## Raw fraction FSC diagnostics
+
+Before the reconstruction loop, the strategy allocates an FSC matrix indexed
+by native Fourier shell, actual fraction interval and state. Each delivered
+binary FSC is copied directly into its interval/state column after checking
+its shell count and finite samples. Unpopulated-state curves remain `NaN`.
+For native box size B, sampling s in Å/pixel and shell j=1,...,B/2,
+
+```text
+resolution_j = B*s/j
+reciprocal_frequency_j = j/(B*s).
+```
+
+After all intervals finish, each state gets `fsc_fractions_stateNN.tsv` with
+columns `shell`, `resolution_A`, `reciprocal_frequency_A^-1` and one
+`FSC_fractions_<first>-<last>` column per actual inclusive interval. The decimal
+precision preserves the raw binary single-precision FSC values on round trip.
+
+Fortran-controlled gnuplot renders two panels: all raw interval FSC curves and
+a 3D surface of the same raw matrix. The surface uses reciprocal frequency,
+fraction-interval midpoint index `(first+last)/2`, and FSC as its x/y/z
+coordinates. Exact fraction-interval labels preserve the correspondence,
+including an overlapping final interval. The y coordinate needs no physical
+dose or voltage metadata.
+
+Outputs share the `fsc_fractions_stateNN` prefix: `_diagnostics.png`,
+`.gp`, and `_surface.tsv`, alongside the matrix TSV. No PDF is generated.
+Negative values, zero and endpoints are displayed without clipping; missing
+samples stay missing, with no interpolation across them. Sparse and empty
+states are displayed without inventing a surface. Gnuplot runs headlessly;
+plotting failures warn and retain the numerical export and reconstructions.
+There is no Python rendering dependency.
+
+The workflow ends after unfiltered reconstruction and raw FSC export. No SNR
+transformation, fit selection, dose-model fitting or model-derived outputs are
+performed. The raw diagnostics impose no dose-metadata or fitting-coverage
+requirements. Standalone Python analysis scripts remain independent.
 
 ## Rationale
 
@@ -215,6 +294,10 @@ as though they were disjoint portions of the exposure.
   `src/main/motion/simple_motion_model.f90`.
 - Shared polynomial coordinate mapping, basis, and evaluation:
   `src/main/motion/simple_motion_correct_utils.f90`.
+- Raw FSC matrix export and native gnuplot diagnostics:
+  `src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90`.
+  The reconstruction coordinator keeps the collected matrix after interval
+  partial-volume cleanup and writes each state's tables and plots.
 - Existing numerical coverage:
   `src/main/motion/simple_motion_model_tester.f90` checks binary round trips,
   accepted/rejected patch metadata, known polynomial coefficients at reference

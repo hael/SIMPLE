@@ -79,8 +79,13 @@ sidecars are not interchangeable extraction inputs.
 The public UI exposes `pgrp`, `mskdiam`, `nparts`, and `nthr` for the combined
 workflow, along with extraction controls. Optional `box` changes the extraction
 box; it must satisfy normal parameter checks and the extractor's even-box
-requirement. `wfloat16` controls particle-stack storage, not a change to the
-integration rule. The default recentering segment is `ptcl3D`; the existing
+requirement. This application always writes particle stacks as MRC mode 12
+(float16), and does not expose `wfloat16` in its UI. Its commander forces
+`wfloat16=yes`, so a supplied shared CLI key cannot override this storage rule.
+Other applications retain the optional `wfloat16=yes|no` setting, defaulting
+to `no`, including `extract` and `reextract`.
+Storage precision does not change the integration rule. The default
+recentering segment is `ptcl3D`; the existing
 `oritype=ptcl2D` extraction path can instead supply the integer recentering
 translation. Reconstruction always reads saved 3D poses.
 
@@ -149,7 +154,7 @@ recentered coordinates, residual shifts, CTF metadata, state labels, and the
 other retained particle fields. Movies with no retained particles are excluded.
 Keep count consistency checks and consumed-part cleanup with assembly.
 
-Every interval project must point to its own physical fraction stacks and name
+During assembly, every interval project must point to its own physical fraction stacks and name
 its actual project file. Return the exact completed paths and bounds to the
 reconstruction coordinator; do not rediscover intervals from a directory scan.
 No reconstruction starts while an interval project is still being assembled.
@@ -173,7 +178,7 @@ fixed settings:
 
 ```text
 objfun=cc ml_reg=no cc_emit_sigma=no rec_backend=gridding
-filt_mode=none automsk=no postprocess=no
+filt_mode=none automsk=no postprocess=no unfil_unmasked=yes
 m_estimator=no update_frac=1 trail_rec=no
 ```
 
@@ -198,10 +203,10 @@ Additional hidden reconstruction-crop arguments are not a supported
 cross-dispatch contract. Do not substitute current project sampling for
 acquisition/model geometry in extraction.
 
-The absence of optional filtering, automatic envelope masking, and postprocess
-passes does not remove normal particle preprocessing, gridding density and
-interpolation correction, spherical soft support, or FSC calculation. Preserve
-these ordinary reconstruction operations and the supplied symmetry/mask size.
+Normal particle preprocessing, gridding density/interpolation correction and
+FSC calculation remain active. Write the `_unfil` half-map exports before
+spherical support; standard half maps and the merged reconstruction retain
+that support and the supplied symmetry/mask size.
 
 Run each interval as a nested `reconstruct3D` program on its own project copy:
 a sparse command line carrying the fixed settings, symmetry, mask diameter and
@@ -218,12 +223,48 @@ For each interval `a-b`, write:
 
 | Directory | Products |
 |---|---|
-| `frames_a-b/` | One `ptcls_from_<movie>_<a>_<b>.mrcs` stack per retained movie, plus the assembled input-named `.simple` project |
+| `frames_a-b/` | Assembled input-named `.simple` project and `ptcls_from_<movie>_<a>_<b>.mrcs` stacks; the directory and its contents are retained after reconstruction |
 | `rec_frames_aa-bb/` | A separate input-named project copy, populated-state reconstruction maps, half maps, FSCs, and normal service artifacts |
 
 Reconstruction endpoints are padded to at least two digits, for example
 `rec_frames_01-03`. The current implementation rejects an existing
 reconstruction directory instead of reusing its files.
+
+Within each reconstruction iteration, clean up only after all populated states
+have delivered valid maps/FSCs, their FSCs have been copied into the in-memory
+matrix, and output registration has been written. Failed, incomplete or skipped
+reconstructions retain their fraction folders and partial volumes.
+
+Retain every `frames_a-b/` directory, its assembled project and its particle
+stacks after both successful and unsuccessful reconstruction. These remain
+available for subsequent analysis without re-extraction.
+
+In the completed reconstruction directory, remove only the even/odd gridding
+partials named by `refine3D_partial_rec_fname` and `refine3D_partial_rho_fname`
+for the run's exact states and parts. Validate the canonical run root and exact
+interval reconstruction directory before deletion. Require existing targets to be non-directory
+file entries without redirection, and preflight them before deletion. Do not use
+broad `recvol*` globs: final maps, half maps, FSCs and the copied project remain.
+Verify cleanup and log the removed partial-file count.
+
+The copied reconstruction project's stack/particle rows continue to reference
+the retained fraction stacks. Raw FSC export and plotting use the collected
+in-memory matrix.
+
+Before the reconstruction loop, allocate an FSC array with dimensions
+`(native Fourier shells, intervals, states)` using the assembled project's
+state count and the native box/sampling. Read each delivered binary FSC directly
+into its interval/state column, checking the shell count and finite values.
+Retain signed correlations and endpoints unchanged. Missing curves, including
+unpopulated states, remain `NaN`; they are not zero-correlation observations.
+
+After all intervals finish, write `fsc_fractions_stateNN.tsv` in the master
+execution directory for each state. Columns are `shell`, `resolution_A`,
+`reciprocal_frequency_A^-1`, followed by `FSC_fractions_<first>-<last>` for
+each actual inclusive interval. Shells run from 1 to `box/2`, without DC;
+resolution is `box*smpd/shell` and reciprocal frequency is its inverse.
+The TSV retains enough digits to round-trip the binary single-precision FSCs.
+The raw diagnostics below use this same matrix.
 
 Use the reconstruction service's canonical state-map, half-map and FSC names.
 Update copied-project `projinfo` to its own project and directory. Remove
@@ -237,6 +278,104 @@ Only publish reconstruction registrations for products actually delivered.
 Write modified segments through their normal ownership paths. A failed
 reconstruction must not be reported as a successful complete application run;
 partial directories are not resumable checkpoints under the current contract.
+
+## Dose-series half maps and manifest
+
+Every populated state's `recvol_stateNN_even_unfil.mrc` and
+`recvol_stateNN_odd_unfil.mrc` contains the density-corrected, deapodized,
+unregularized half volume before spherical masking, written as real-space
+float32 MRC (mode 2). The internal `unfil_unmasked=yes` setting is fixed on the
+fraction reconstruction's child command; other reconstruction callers retain
+the default masked `_unfil` behavior. Support provenance identifies the new
+exports as `none`. Standard half maps, the merged map and their FSC retain
+spherical support and the supplied `mskdiam`.
+
+After successful reconstruction and raw FSC export, the master writes
+`dose_series.txt` for state 1 when its physical dose metadata are usable.
+The shared `dose_series_manifest` class owns its versioned reader/writer and
+validates actual MRC headers before the consumer reads voxel arrays. The
+manifest contains the box, sampling, saved voltage, dose per fraction,
+selected-particle and half counts, a partition fingerprint, and one row per
+actual interval with fraction bounds, accumulated physical dose bounds and
+relative even/odd paths. Paths are relative to the manifest directory so the
+complete run directory can be moved. Version 1 separates columns with spaces
+or tabs; path tokens cannot contain whitespace.
+
+Use only the actual `sample4rec` state-1 contributors to identify motion-model
+metadata. Dose per fraction and voltage come from their saved binary motion
+models; do not use a current CLI default or an EER target dose. The stored dose
+already includes EER grouping. For an original inclusive interval `[a,b]` and
+saved dose per decoded fraction `d`, write `dose_lo=(a-1)*d` and `dose_hi=b*d`
+in double precision, in physical e/Angstrom^2. Retain the dose before `fromf`
+when the selected interval starts after fraction 1. Voltage scaling belongs
+to the consumer.
+
+All contributing micrographs must have compatible positive finite doses,
+supported voltage and sufficient saved fractions. Check the state-1 selected
+rows and half labels across intervals and fingerprint their ordered identities.
+A volume-only consumer can record that invariant but cannot independently
+verify the underlying particle partition. Unused micrographs do not determine
+the state-1 dose metadata.
+
+Keep the final overlapping interval and its predecessor in the manifest. The
+consumer validates the supported overlap pattern, drops the predecessor and
+requires at least two disjoint surviving windows. Publish the complete
+manifest by temporary-file write followed by rename only after validating its
+metadata and all referenced unmasked halves. A failed interval must not leave
+a partial manifest presented as complete.
+
+Missing or incompatible physical metadata, unavailable state-1 halves, a
+changed state-1 sample or insufficient disjoint intervals suppresses this new
+manifest with an explicit reason. It must not discard valid maps, stacks or
+raw FSC outputs. Existing fatal reconstruction and global partition checks
+remain fatal. Report file-publication errors explicitly. No dose fitting is
+performed by `refine_motion_model`; `dose_filter3D` consumes the manifest in a
+separate application.
+
+## Raw FSC diagnostics
+
+After exporting the matrix, generate one two-panel figure for each state in
+`fsc_fractions_stateNN_diagnostics.png`. Do not generate PDF figures.
+The existing reconstruction strategy
+owns this reporting step and consumes its in-memory FSC matrix directly.
+Keep the command file `fsc_fractions_stateNN.gp` and numerical surface table
+`fsc_fractions_stateNN_surface.tsv` beside the raw matrix TSV so the figures
+can be reproduced. The [implementation record](../implementation_notes/completed/fraction_fsc_diagnostics.md)
+records the surviving export and plotting work.
+
+| Panel | Content |
+|---|---|
+| Raw FSC curves | One curve per actual inclusive fraction interval; reciprocal frequency in Å⁻¹ on x and FSC on y, with exact interval labels |
+| Raw FSC surface | The complete raw matrix as a 3D surface; reciprocal frequency in Å⁻¹ on x, fraction-interval midpoint index on y, and FSC on z |
+
+For an interval `[a,b]`, its midpoint index is `(a+b)/2`; preserve the original
+fraction numbers. Label or explicitly map these coordinates to the exact
+inclusive intervals, including overlapping final intervals. These are saved
+fraction indices, not physical dose coordinates. The plotting routine uses
+these indices and does not require a physical dose axis.
+
+Preserve all raw finite correlations, including negative values, zero and
+endpoints, without clipping or display caps. Missing curves remain `NaN` in
+the tables and missing in both panels. Do not interpolate across missing
+values or bridge missing intervals with an invented surface. A single interval,
+single shell, or empty state must remain an honest sparse/empty display rather
+than a fabricated grid. Keep the native frequency grid and actual interval
+order; do not resample the observations for display.
+
+Generate the raw FSC figure through Fortran-controlled
+gnuplot, using the headless `pngcairo` terminal and the repository's existing native plotting
+patterns. There is no Python or Matplotlib runtime dependency and no
+interactive display or pause. Report unavailable gnuplot, renderer failures,
+or missing figure outputs as warnings. Retain the raw matrix TSV and any
+available command/data artifacts, and report which plots were not produced.
+A plotting failure does not discard successful reconstructions or the raw
+FSC export.
+
+The application stops after unfiltered reconstruction and raw FSC export. It
+does not preprocess SNR, select fitting points, fit decay or critical-exposure
+models, or generate fitted parameters, predictions, residuals or new dose
+weights. No fitting-coverage or dose-compatibility gate may reject the raw
+output. Existing standalone Python analysis scripts remain independent.
 
 ## Current limitations
 
@@ -282,6 +421,11 @@ Changes must cover the affected contracts:
   registration, missing/empty inputs, and caller-context restoration.
 - Numerical map recovery against synthetic truth through the nested CC
   gridding route.
+- Raw matrix export: binary-FSC round trips, native shell/frequency coordinates,
+  exact interval labels, signed values/endpoints, and missing-state NaNs.
+- Plot verification: both raw panels, uncapped FSC values, midpoint-index and
+  interval mapping, missing-data gaps, sparse/empty states, and nonfatal
+  renderer failures that retain the numerical export.
 - Complete one- and multiple-partition runs. For structural changes, compare
   before/after binary products and normalized project contents with the same
   seed, partitioning and runtime settings.

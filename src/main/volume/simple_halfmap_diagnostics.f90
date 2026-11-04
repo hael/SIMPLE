@@ -203,7 +203,7 @@ contains
         support_kind_here = merge('density', 'sphere ', l_constrained)
         if( present(support_kind) ) support_kind_here = trim(support_kind)
         select case(trim(support_kind_here))
-            case('sphere','density','nu','explicit')
+            case('none','sphere','density','nu','explicit')
             case default
                 THROW_HARD('invalid support kind for the support provenance sidecar')
         end select
@@ -222,8 +222,9 @@ contains
         character(len=*), optional, intent(out) :: solve_kind
         logical,          optional, intent(out) :: l_kind_found
         character(len=*), optional, intent(out) :: support_kind
-        type(string) :: fname
+        type(string)      :: fname
         character(len=64) :: line
+        character(len=16) :: support_here
         integer :: funit, io_stat
         l_constrained = .false.
         l_found       = .false.
@@ -240,9 +241,19 @@ contains
             read(funit,'(A)',iostat=io_stat) line
             if( io_stat /= 0 ) exit
             if( index(line, 'solve_support=') == 1 )then
-                l_found       = .true.
-                if( present(support_kind) ) support_kind = adjustl(line(len('solve_support=')+1:))
-                l_constrained = index(line, 'sphere') == 0
+                support_here = adjustl(line(len('solve_support=')+1:))
+                l_found = .true.
+                select case(trim(support_here))
+                    case('none','sphere')
+                        l_constrained = .false.
+                    case('density','nu','explicit')
+                        l_constrained = .true.
+                    case default
+                        l_found = .false.
+                        l_constrained = .false.
+                        support_here = ''
+                end select
+                if( present(support_kind) ) support_kind = support_here
             else if( index(line, 'solve_kind=') == 1 )then
                 if( present(solve_kind) ) solve_kind = adjustl(line(len('solve_kind=')+1:))
                 if( present(l_kind_found) ) l_kind_found = .true.

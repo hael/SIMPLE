@@ -88,6 +88,7 @@ type :: parameters
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)          :: mirr_proj='no'       !< mirror projections(no|x|y){no}
     character(len=3)          :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
+    character(len=3)          :: unfil_unmasked='no' !< internal: export unmasked unfiltered half maps(yes|no){no}
     character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
     character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
     character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool

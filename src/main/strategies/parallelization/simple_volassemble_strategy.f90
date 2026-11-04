@@ -625,6 +625,8 @@ contains
             type(image), optional,            intent(inout) :: base_even, base_odd !< the unregularized halves as written
             type(image), optional,            intent(inout) :: aux_even, aux_odd   !< the regularized halves as written (ml_reg)
             type(gridding_half_restore) :: even_restore, odd_restore
+            type(string) :: fname_even_unfil, fname_odd_unfil
+            logical :: l_unmasked
             real,     allocatable :: res(:)
             real                  :: smpd, fny
             integer               :: box, filtsz
@@ -636,18 +638,22 @@ contains
             allocate(diagnostics%fsc(filtsz), source=0.)
             call even_restore%new(even_rec)
             call odd_restore%new(odd_rec)
-            ! Every gridding product is deapodized, then given the PCG solve's soft sphere (msk_crop), so both
-            ! backends ship equivalent halves, the FSC takes them as shipped, and the sphere zeroes deapodization's rim gain.
+            fname_even_unfil = add2fbody(fname_even, MRC_EXT, '_unfil')
+            fname_odd_unfil  = add2fbody(fname_odd, MRC_EXT, '_unfil')
+            l_unmasked = trim(params%unfil_unmasked) == 'yes'
+            ! Standard halves carry spherical support; requested raw exports precede that mask.
             if( params%l_ml_reg )then
                 call even_rec%restore_base(even_restore%base, preserve_numerator=.true.)
                 call even_restore%finalize_from_base(even_rec)
                 call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
-                call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                call even_restore%final%write(fname_even_unfil, del_if_exists=.true.)
+                call write_support_provenance(fname_even_unfil, .false., 'gridding')
                 if( present(base_even) ) call keep_half(even_restore%final, base_even)
                 call odd_rec%restore_base(odd_restore%base, preserve_numerator=.true.)
                 call odd_restore%finalize_from_base(odd_rec)
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
-                call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                call odd_restore%final%write(fname_odd_unfil, del_if_exists=.true.)
+                call write_support_provenance(fname_odd_unfil, .false., 'gridding')
                 if( present(base_odd) ) call keep_half(odd_restore%final, base_odd)
                 call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
                     &state, diagnostics)
@@ -675,19 +681,28 @@ contains
                 call even_rec%restore_base(even_restore%base)
                 call odd_rec%restore_base(odd_restore%base)
                 call even_restore%finalize_from_base(even_rec)
+                if( l_unmasked )then
+                    call even_restore%final%write(fname_even_unfil, del_if_exists=.true.)
+                    call write_support_provenance(fname_even_unfil, .false., 'gridding', support_kind='none')
+                endif
                 call even_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call even_restore%final%write(fname_even, del_if_exists=.true.)
-                ! without ML regularization the halves ARE the unregularized pair:
-                ! write the _unfil copies as well, so postprocess_nu and the
-                ! B-factor estimate always find the pair of the assembly that
-                ! wrote the map and never a stale pair from an earlier
-                ! regularized assembly at another box
-                call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( .not. l_unmasked )then
+                    call even_restore%final%write(fname_even_unfil, del_if_exists=.true.)
+                    call write_support_provenance(fname_even_unfil, .false., 'gridding')
+                endif
                 if( present(base_even) ) call keep_half(even_restore%final, base_even)
                 call odd_restore%finalize_from_base(odd_rec)
+                if( l_unmasked )then
+                    call odd_restore%final%write(fname_odd_unfil, del_if_exists=.true.)
+                    call write_support_provenance(fname_odd_unfil, .false., 'gridding', support_kind='none')
+                endif
                 call odd_restore%final%mask3D_soft(params%msk_crop, backgr=0.)
                 call odd_restore%final%write(fname_odd, del_if_exists=.true.)
-                call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                if( .not. l_unmasked )then
+                    call odd_restore%final%write(fname_odd_unfil, del_if_exists=.true.)
+                    call write_support_provenance(fname_odd_unfil, .false., 'gridding')
+                endif
                 if( present(base_odd) ) call keep_half(odd_restore%final, base_odd)
                 call calc_gridding_pair_diagnostics(params, even_restore%final, odd_restore%final, &
                     &state, diagnostics)
@@ -702,6 +717,8 @@ contains
             deallocate(res)
             call even_restore%kill
             call odd_restore%kill
+            call fname_even_unfil%kill
+            call fname_odd_unfil%kill
         end subroutine restore_gridding_pair
 
         !> a restored half as a read of the file just written gives it: the box only, zero FFT padding

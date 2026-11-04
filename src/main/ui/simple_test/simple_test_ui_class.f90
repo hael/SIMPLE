@@ -139,12 +139,12 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call unit_motion%new(&
         &'unit_motion',&
-        &'unit tests: motion gain, motion model and particle extraction',&
-        &'is the fast-gate unit suite for motion gain helpers, motion model persistence and geometry, and particle extractor initialization',&
+        &'unit tests: motion and particle extraction',&
+        &'tests motion gain, saved-model geometry and particle extraction',&
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Motion')
         call unit_motion%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (motion_gain, motion_model, particle_extractor)', '', .false., '')
+            &'One sub-suite of this area to run alone (motion_gain, motion_model, particle_extractor, fraction_dose_metadata)', '', .false., '')
         call add_ui_program('unit_motion', unit_motion, tsttab, UI_CATEGORY)
     end subroutine new_unit_motion
 
@@ -184,7 +184,7 @@ contains
         &.false., display_name='Unit Tests: Reconstruction')
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
             &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, &
-            &trailing_chain_identity, refine3d_provenance, frozen_accumulator, weighted_insertion, volume_pair_metrics, &
+            &trailing_chain_identity, refine3d_provenance, dose_series_manifest, frozen_accumulator, weighted_insertion, volume_pair_metrics, &
             &nonuniform_filtering, half_map_enhancement, solve3d_cavgs_stage_rules, state_assignment_rules, atomic_prior, pcg_lattice, &
             &wave_field, wave_imaging, wave_multislice, wave_projector, wave_simulation)', '', .false., '')
         call add_ui_program('unit_reconstruction', unit_reconstruction, tsttab, UI_CATEGORY)
@@ -199,7 +199,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, postprocess_pdb, fractional_reconstruction, wave_reconstruction, volume_programs)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, postprocess_pdb, fractional_reconstruction, fraction_dose_export, wave_reconstruction, volume_programs)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 

@@ -324,7 +324,7 @@ contains
         integer :: ldim(3), ldim_unfil(3), nptcls_unfil, lp_find
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_unfil_pair
         logical :: l_support_at_source, l_prov_constrained, l_prov_found, l_prov_kind, l_ml_shrunk
-        character(len=32) :: prov_solve_kind
+        character(len=32) :: prov_solve_kind, prov_support_kind
         character(len=32) :: res05_text, res143_text, cutoff_text, bfac_text, gain_text
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
@@ -439,7 +439,7 @@ contains
         ! an ML-regularized map (provenance solve_kind) already carries ~FSC shrinkage per shell from its prior
         prov_solve_kind = ''
         call read_support_provenance(fname_vol, l_prov_constrained, l_prov_found, &
-            &solve_kind=prov_solve_kind, l_kind_found=l_prov_kind)
+            &solve_kind=prov_solve_kind, l_kind_found=l_prov_kind, support_kind=prov_support_kind)
         l_ml_shrunk = l_prov_kind .and. (trim(prov_solve_kind) == 'regularized' .or. &
             &trim(prov_solve_kind) == 'gridding_regularized')
         call vol_bfac%fft()
@@ -487,8 +487,9 @@ contains
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)
-        ! no post-hoc mask when the support is already in the map (PCG, or a support-provenance record)
-        l_support_at_source = trim(params%rec_backend) == 'pcg' .or. l_prov_found
+        ! An explicit unmasked record overrides the backend's usual support convention.
+        l_support_at_source = trim(params%rec_backend) == 'pcg'
+        if( l_prov_found ) l_support_at_source = trim(prov_support_kind) /= 'none'
         call vol_bfac%ifft()
         if( l_support_at_source )then
             ! no post-hoc mask: the support is already in the map

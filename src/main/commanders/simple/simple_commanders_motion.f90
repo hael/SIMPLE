@@ -25,10 +25,10 @@ contains
         class(refine_motion_model_strategy), allocatable :: strategy
         type(parameters)                                   :: params
         call cline%set('prg', 'refine_motion_model')
+        call cline%set('wfloat16', 'yes')
         if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl3D')
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',          'yes')
         if( .not. cline%defined('pcontrast')    ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('wfloat16')     ) call cline%set('wfloat16',        'no')
         if( .not. cline%defined('fromf')        ) call cline%set('fromf',              1)
         if( .not. cline%defined('tof')          ) call cline%set('tof',                0)
         ! These reconstructions use the saved poses with no noise-model weighting or refinement.

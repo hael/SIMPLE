@@ -961,6 +961,14 @@ contains
         self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
+        select case(trim(self%unfil_unmasked))
+            case('yes')
+                if( trim(self%rec_backend) /= 'gridding' ) THROW_HARD('unfil_unmasked=yes requires gridding reconstruction')
+                if( self%l_ml_reg ) THROW_HARD('unfil_unmasked=yes requires nonregularized reconstruction')
+            case('no')
+            case default
+                THROW_HARD('internal unfil_unmasked must be yes or no')
+        end select
         if( cline%defined('pcg_mskfile') )then
             ! accepted on both backends: the solve support under pcg, the envelope window under gridding
             if( .not. file_exists(self%pcg_mskfile) ) &

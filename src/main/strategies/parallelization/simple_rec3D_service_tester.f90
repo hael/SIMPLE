@@ -49,6 +49,7 @@ contains
         call enter_fixture('rec3D_service', cwd_saved, root)
         call create_flex_pca_phantom_fixture(root, NTHR, truth(1), truth(2), truth_mean, truth_diff, oritab, stack)
         call test_labels_equal_hard('gridding')
+        call test_unmasked_gridding_export()
         call test_labels_equal_hard('pcg')
         call test_fractional_phantom('gridding')
         call test_fractional_phantom('pcg')
@@ -131,12 +132,110 @@ contains
         if( l_weighted ) call cline%set('m_estimator', 'flex')
         if( present(extra_key) )then
             do i = 1, size(extra_key)
-                call cline%set(trim(extra_key(i)), trim(extra_val(i)))
+                call cline%set_from_text(trim(extra_key(i)), trim(extra_val(i)))
             enddo
         endif
         call xrec3D%execute(cline)
         call cline%kill
     end subroutine run_rec3D
+
+    !> Raw export preserves the standard maps/FSC while retaining density beyond their spherical support.
+    subroutine test_unmasked_gridding_export()
+        use simple_defs, only: COSMSKHALFWIDTH
+        use simple_parameters, only: parameters
+        use simple_refine3D_fnames, only: refine3D_fsc_fname
+        use simple_halfmap_diagnostics, only: read_support_provenance
+        use simple_test_utils, only: assert_char, assert_real
+        character(len=5), parameter :: SUFFIXES(3) = [character(len=5) :: '', '_even', '_odd']
+        character(len=16), parameter :: KEYS(4) = [character(len=16) :: 'objfun', 'ml_reg', 'automsk', 'msk_crop']
+        character(len=16), parameter :: VALS(4) = [character(len=16) :: 'cc', 'no', 'no', '8']
+        real, parameter :: MASK_RADIUS = 8., REL_TOL = 2.e-6
+        class(parameters), allocatable :: defaults
+        class(image), allocatable :: raw, standard
+        real, allocatable :: rraw(:,:,:), rstandard(:,:,:)
+        type(string) :: fname, rawname, baseline
+        character(len=32) :: support
+        integer :: labels(FLEX_PHANTOM_NPTCLS), i, s, h, x, y, z, c
+        real :: radius2, raw_outside, standard_outside, scale, err
+        logical :: constrained, found
+        allocate(defaults, raw, standard)
+        call assert_char('no', defaults%unfil_unmasked, 'raw export is disabled by default')
+        labels = [(conformer(i), i=1,FLEX_PHANTOM_NPTCLS)]
+        call make_project('unmasked_gridding', labels)
+        call run_rec3D('gridding', .false., KEYS, VALS)
+        do s = 1, NSTATES
+            do h = 1, size(SUFFIXES)
+                fname = state_map_fname(s, trim(SUFFIXES(h)))
+                baseline = fname//'.baseline'
+                call simple_copy_file(fname, baseline)
+                if( h > 1 )then
+                    rawname = state_map_fname(s, trim(SUFFIXES(h))//'_unfil')
+                    call assert_true(files_identical(fname, rawname), 'default raw half retains spherical support')
+                endif
+            enddo
+            fname = refine3D_fsc_fname(s)
+            call simple_copy_file(fname, fname//'.baseline')
+        enddo
+        call run_rec3D('gridding', .false., [character(len=16) :: KEYS, 'unfil_unmasked'], &
+            &[character(len=16) :: VALS, 'yes'])
+        call raw%new([FLEX_PHANTOM_BOX,FLEX_PHANTOM_BOX,FLEX_PHANTOM_BOX], FLEX_PHANTOM_SMPD, wthreads=.false.)
+        call standard%new([FLEX_PHANTOM_BOX,FLEX_PHANTOM_BOX,FLEX_PHANTOM_BOX], FLEX_PHANTOM_SMPD, wthreads=.false.)
+        c = FLEX_PHANTOM_BOX / 2 + 1
+        do s = 1, NSTATES
+            do h = 1, size(SUFFIXES)
+                fname = state_map_fname(s, trim(SUFFIXES(h)))
+                call assert_true(files_identical(fname, fname//'.baseline'), 'raw export leaves standard map unchanged')
+                if( h == 1 ) cycle
+                rawname = state_map_fname(s, trim(SUFFIXES(h))//'_unfil')
+                call read_support_provenance(rawname, constrained, found, support_kind=support)
+                call assert_true(found, 'unmasked half has support provenance')
+                call assert_false(constrained, 'unmasked half has no envelope constraint')
+                call assert_char('none', trim(support), 'unmasked half records none support')
+                call raw%read(rawname)
+                call standard%read(fname)
+                rraw = raw%get_rmat()
+                rstandard = standard%get_rmat()
+                scale = max(maxval(abs(rraw)), tiny(1.))
+                raw_outside = 0.
+                standard_outside = 0.
+                do z = 1, FLEX_PHANTOM_BOX
+                    do y = 1, FLEX_PHANTOM_BOX
+                        do x = 1, FLEX_PHANTOM_BOX
+                            radius2 = real((x-c)**2 + (y-c)**2 + (z-c)**2)
+                            if( radius2 <= (MASK_RADIUS + COSMSKHALFWIDTH)**2 ) cycle
+                            raw_outside = max(raw_outside, abs(rraw(x,y,z)))
+                            standard_outside = max(standard_outside, abs(rstandard(x,y,z)))
+                        enddo
+                    enddo
+                enddo
+                call assert_true(raw_outside > REL_TOL * scale, 'unmasked half retains density outside the sphere')
+                call assert_real(0., standard_outside, REL_TOL * scale, 'standard half is zero outside the sphere')
+                call raw%mask3D_soft(MASK_RADIUS, backgr=0.)
+                rraw = raw%get_rmat()
+                err = maxval(abs(rraw-rstandard)) / scale
+                call assert_real(0., err, REL_TOL, 'masking the raw export reproduces its standard half')
+            enddo
+            fname = refine3D_fsc_fname(s)
+            call assert_true(files_identical(fname, fname//'.baseline'), 'raw export leaves FSC unchanged')
+        enddo
+        ! Reusing the names in default mode must replace the explicit unmasked provenance.
+        call run_rec3D('gridding', .false., KEYS, VALS)
+        do s = 1, NSTATES
+            do h = 2, size(SUFFIXES)
+                fname = state_map_fname(s, trim(SUFFIXES(h)))
+                rawname = state_map_fname(s, trim(SUFFIXES(h))//'_unfil')
+                call assert_true(files_identical(fname, rawname), 'default rerun restores masked raw exports')
+                call read_support_provenance(rawname, constrained, found, support_kind=support)
+                call assert_true(found, 'rewritten half retains support provenance')
+                call assert_char('sphere', trim(support), 'default rerun replaces stale none support')
+            enddo
+        enddo
+        call raw%kill
+        call standard%kill
+        call fname%kill
+        call rawname%kill
+        call baseline%kill
+    end subroutine test_unmasked_gridding_export
 
     !> 0/1 weights equal to the hard labels give the hard run's state maps and half maps byte for byte
     subroutine test_labels_equal_hard( backend )

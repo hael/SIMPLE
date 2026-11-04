@@ -124,6 +124,7 @@ contains
         call reg%add_char('mirr_proj', self%mirr_proj)
         call reg%add_char('mkdir', self%mkdir)
         call reg%add_char('ml_reg', self%ml_reg)
+        call reg%add_char('unfil_unmasked', self%unfil_unmasked)
         call reg%add_char('ml_reg_chunk', self%ml_reg_chunk)
         call reg%add_char('ml_reg_pool', self%ml_reg_pool)
         call reg%add_char('mcconvention', self%mcconvention)

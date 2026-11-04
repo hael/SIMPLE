@@ -165,6 +165,9 @@ use simple_stream_job_sets_tester,               only: run_all_stream_job_sets_t
 use simple_stream_meta_plots_tester,             only: run_all_stream_meta_plots_tests
 use simple_stream_watcher_tester,                only: run_all_stream_watcher_tests
 use simple_ui,                                   only: validate_ui_json
+use simple_dose_series_manifest_tester,         only: run_all_dose_series_manifest_tests
+use simple_refine_motion_model_tester,          only: run_all_refine_motion_model_tests, &
+    &run_all_refine_motion_model_lib_tests
 use simple_refine3D_provenance_tester,           only: run_all_refine3D_provenance_tests
 use simple_refine3D_strategy_tester,             only: run_all_refine3D_staging_tests
 use simple_parameters_tester,                    only: run_all_parameters_tests
@@ -425,6 +428,7 @@ contains
         call add_suite(s, n, 'motion gain',             run_all_motion_gain_tests)
         call add_suite(s, n, 'motion model',            run_all_motion_model_tests)
         call add_suite(s, n, 'particle extractor',      run_all_particle_extractor_tests)
+        call add_suite(s, n, 'fraction dose metadata',   run_all_refine_motion_model_tests)
     end subroutine suites_motion
 
     subroutine suites_ui( s, n )
@@ -456,6 +460,7 @@ contains
         call add_suite(s, n, 'class-average carry-over',  run_all_cavg_sums_tests)
         call add_suite(s, n, 'trailing chain identity',   run_all_trail_chain_manifest_tests)
         call add_suite(s, n, 'refine3D provenance',        run_all_refine3D_provenance_tests)
+        call add_suite(s, n, 'dose series manifest',        run_all_dose_series_manifest_tests)
         call add_suite(s, n, 'frozen accumulator',        run_all_frozen_accum_tests)
         call add_suite(s, n, 'weighted insertion',        run_all_reconstructor_tests)
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
@@ -617,6 +622,7 @@ contains
         call add_suite(s, n, 'truth map docking', run_all_truth_docking_tests)
         call add_suite(s, n, 'postprocess_pdb', run_all_postprocess_pdb_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
+        call add_suite(s, n, 'fraction dose export',    run_all_refine_motion_model_lib_tests)
         call add_suite(s, n, 'wave reconstruction',  run_all_rec3D_wave_lib_tests)
         call add_suite(s, n, 'volume programs',      run_all_volops_lib_tests)
     end subroutine suites_lib_reconstruction

@@ -168,9 +168,9 @@ contains
         ! PROGRAM SPECIFICATION
         call refine_motion_model%new(&
         &'refine_motion_model', &                                                         ! name
-        &'Re-extract particle fractions with saved motion and reconstruct each interval in 3D',& ! summary
+        &'Reconstruct particle fractions and export their raw FSCs',& ! summary
         &'Re-extract non-dose-weighted particle fractions using the saved motion model, then reconstruct each interval&
-        & in 3D using the existing particle orientations',& ! descr long
+        & in 3D using the existing particle orientations; export raw FSC matrices, curves and surfaces',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true., &
         &visibility=UI_VIS_STANDARD, display_name='Refine Motion Model') ! requires sp_project
@@ -191,7 +191,6 @@ contains
         call refine_motion_model%add_input(UI_PARM, 'stepf', 'num', 'Incremental frame step size', &
         & 'Frames per output stack; the final block ends at tof and overlaps if needed', '', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call refine_motion_model%add_input(UI_PARM, wfloat16, group="refine3D", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

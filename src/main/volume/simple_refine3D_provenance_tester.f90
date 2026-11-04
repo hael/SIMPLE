@@ -19,8 +19,35 @@ contains
         nfail0 = tests_failed
         call enter_fixture('refine3d_provenance', saved, root)
         call test_provenance()
+        call test_support_provenance()
         call leave_fixture(saved, root, nfail0)
     end subroutine run_all_refine3D_provenance_tests
+
+    !> Support records distinguish unmasked exports and replace their previous support on reuse.
+    subroutine test_support_provenance()
+        use simple_halfmap_diagnostics, only: write_support_provenance, read_support_provenance, &
+            &remove_support_provenance
+        use simple_test_utils, only: assert_char
+        character(len=8), parameter :: KINDS(5) = [character(len=8) :: 'sphere', 'none', 'density', 'nu', 'explicit']
+        type(string) :: fname
+        character(len=32) :: kind, solve
+        logical :: constrained, found, kind_found
+        integer :: i
+        fname = 'support_roundtrip.mrc'
+        do i = 1, size(KINDS)
+            call write_support_provenance(fname, .false., 'gridding', support_kind=trim(KINDS(i)))
+            call read_support_provenance(fname, constrained, found, solve, kind_found, kind)
+            call assert_true(found .and. kind_found, 'support: record and solve kind are present')
+            call assert_char(trim(KINDS(i)), trim(kind), 'support: exact kind survives a rewrite')
+            call assert_char('gridding', trim(solve), 'support: solve kind survives a rewrite')
+            call assert_true(constrained .eqv. (i > 2), 'support: none and sphere are not envelope constrained')
+        enddo
+        call remove_support_provenance(fname)
+        call read_support_provenance(fname, constrained, found, solve, kind_found, kind)
+        call assert_false(found .or. kind_found, 'support: removed record is absent')
+        call assert_char('', trim(kind), 'support: absent record clears the returned kind')
+        call fname%kill
+    end subroutine test_support_provenance
 
     ! Small files exercise identity and interrupted publication without a refinement run.
     subroutine test_provenance()

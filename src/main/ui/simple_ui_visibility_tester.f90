@@ -38,6 +38,7 @@ contains
         call test_param_descriptors()
         call test_program_descriptor()
         call test_registered_programs()
+        call test_particle_storage_contract()
         call test_registered_test_programs()
         call test_phshift_contract()
         call test_cont_surface_contract()
@@ -246,13 +247,23 @@ contains
         call assert_registered_cli_summary('import_movies', 'cs', 'Spherical aberration; e.g. 2.7 mm')
         call assert_registered_cli_summary('import_movies', 'fraca', 'Amplitude contrast fraction; e.g. 0.1')
         call assert_registered_cli_summary('import_movies', 'kv', 'Acceleration voltage; e.g. 300 kV')
-        call assert_registered_cli_summary('extract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
-        call assert_registered_cli_summary('refine_motion_model', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
-        call assert_registered_cli_summary('reextract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
         call assert_registered_cli_summary('extract_subproj', 'subprojname', 'Subproject name; e.g. myproject.simple')
         call assert_registered_search_cli_summary('ctf_estimate', 'dfmin', 'Expected minimum defocus; e.g. 0.2 microns')
         call assert_registered_search_cli_summary('ctf_estimate', 'dfmax', 'Expected maximum defocus; e.g. 5.0 microns')
     end subroutine test_registered_programs
+
+    !> Storage is selectable for extraction, but fixed for motion-model fractions.
+    subroutine test_particle_storage_contract()
+        write(*,'(A)') 'test_particle_storage_contract'
+        call make_ui
+        call assert_registered_cli_summary('extract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
+        call assert_registered_cli_summary('reextract', 'wfloat16', 'Write float16 particle stacks (yes|no){no}')
+        program_name = 'refine_motion_model'
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), 'refine_motion_model is registered')
+        if( associated(registered_prg) ) call assert_false(program_has_key(registered_prg, 'wfloat16'), &
+            &'refine_motion_model does not offer a particle-stack format switch')
+    end subroutine test_particle_storage_contract
 
     !> the registered test programs
     subroutine test_registered_test_programs()
