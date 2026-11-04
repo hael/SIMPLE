@@ -397,46 +397,32 @@ contains
         xy     = self%shiftmap(imap)%get_shift(irho, ialpha)
     end subroutine shiftmap_peak
 
-    !> The prior over map imap's grid for a particle whose stored shift is u_prev (particle frame, the pixels of the
-    !! shift matrices): a Gaussian of weight prior_w = 1 / (2 sigma^2) on the absolute displacement
-    !! |u_prev + R(irot)^T x| of every cell, times the cell's area, over every (direction, rotation, magnitude) cell.
-    !! lse_prior is its log normaliser; logp0 the log mass, to that normaliser, of the origin at one rotation (the
-    !! central disk: the pose of a class scored at the stored shift)
-    module subroutine shiftmap_prior( self, imap, prior_w, u_prev, lse_prior, logp0 )
+    !> The prior over map imap's grid: a Gaussian of weight prior_w = 1 / (2 sigma^2) on the cell's shift, the
+    !! increment from the particle's stored shift (the prior moves with the particle: the image is prepared at its
+    !! stored shift, which the class centring moves too), times the cell's area, over every (direction, rotation,
+    !! magnitude) cell. lse_prior is its log normaliser; logp0 the log mass, to that normaliser, of the origin at one
+    !! rotation (the central disk: the pose of a class scored at the stored shift)
+    module subroutine shiftmap_prior( self, imap, prior_w, lse_prior, logp0 )
         class(polarft_calc), intent(in)  :: self
         integer,             intent(in)  :: imap
-        real(dp),            intent(in)  :: prior_w, u_prev(2)
+        real(dp),            intent(in)  :: prior_w
         real(dp),            intent(out) :: lse_prior, logp0
-        real(dp) :: c1(self%nrots), c2(self%nrots)
-        real(dp) :: ca(self%shiftmap(imap)%get_nalpha()), sa(self%shiftmap(imap)%get_nalpha())
-        real(dp) :: usq, rho, loga, l, lmax, s
-        integer  :: nrho, nalpha, irho, irot, j, irho0
+        real(dp) :: rho, l, lmax, s, ncell
+        integer  :: nrho, nalpha, irho, irho0
         if( .not. self%has_shiftmap(imap) ) THROW_HARD('no shift map; new_shiftmap first; shiftmap_prior')
         nrho   = self%shiftmap(imap)%get_nrho()
         nalpha = self%shiftmap(imap)%get_nalpha()
-        call prior_tables(self, imap, u_prev, c1, c2, ca, sa)
-        usq  = sum(u_prev**2)
-        lmax = -huge(lmax)
+        ncell  = real(self%nrots, dp) * real(nalpha, dp)
+        lmax   = -huge(lmax)
         do irho = 1, nrho
             rho  = self%shiftmap(imap)%get_rho(irho)
-            loga = log(self%shiftmap(imap)%get_cell_area(irho))
-            do irot = 1, self%nrots
-                do j = 1, nalpha
-                    l    = -prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(irot) + sa(j) * c2(irot))) + loga
-                    lmax = max(lmax, l)
-                enddo
-            enddo
+            lmax = max(lmax, -prior_w * rho * rho + log(self%shiftmap(imap)%get_cell_area(irho)))
         enddo
         s = 0.d0
         do irho = 1, nrho
-            rho  = self%shiftmap(imap)%get_rho(irho)
-            loga = log(self%shiftmap(imap)%get_cell_area(irho))
-            do irot = 1, self%nrots
-                do j = 1, nalpha
-                    l = -prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(irot) + sa(j) * c2(irot))) + loga - lmax
-                    if( l > -40.d0 ) s = s + exp(l)
-                enddo
-            enddo
+            rho = self%shiftmap(imap)%get_rho(irho)
+            l   = -prior_w * rho * rho + log(self%shiftmap(imap)%get_cell_area(irho)) - lmax
+            if( l > -40.d0 ) s = s + ncell * exp(l)
         enddo
         lse_prior = lmax + log(s)
         ! the origin: the smallest magnitude's ring, whose cells all name one point at a rotation
@@ -444,49 +430,27 @@ contains
         do irho = 2, nrho
             if( self%shiftmap(imap)%get_rho(irho) < self%shiftmap(imap)%get_rho(irho0) ) irho0 = irho
         enddo
-        logp0 = log(real(nalpha,dp) * self%shiftmap(imap)%get_cell_area(irho0)) - prior_w * usq - lse_prior
+        rho   = self%shiftmap(imap)%get_rho(irho0)
+        logp0 = log(real(nalpha,dp) * self%shiftmap(imap)%get_cell_area(irho0)) - prior_w * rho * rho - lse_prior
     end subroutine shiftmap_prior
 
-    !> the prior's centre at every rotation, R(irot) u_prev with R = [[c, s], [-s, c]] (the shift search's frame), and
-    !! map imap's directions' cosines and sines
-    subroutine prior_tables( self, imap, u_prev, c1, c2, ca, sa )
-        class(polarft_calc), intent(in)  :: self
-        integer,             intent(in)  :: imap
-        real(dp),            intent(in)  :: u_prev(2)
-        real(dp),            intent(out) :: c1(self%nrots), c2(self%nrots), ca(:), sa(:)
-        real(dp) :: ang, c, s
-        integer  :: irot, j
-        do irot = 1, self%nrots
-            ang      = real(self%angtab(irot), dp) * DPI / 180.d0
-            c        = cos(ang)
-            s        = sin(ang)
-            c1(irot) =  c * u_prev(1) + s * u_prev(2)
-            c2(irot) = -s * u_prev(1) + c * u_prev(2)
-        enddo
-        do j = 1, size(ca)
-            ang   = self%shiftmap(imap)%get_alpha(j)
-            ca(j) = cos(ang)
-            sa(j) = sin(ang)
-        enddo
-    end subroutine prior_tables
-
     !> One pose of the thread's pair drawn from the tempered posterior over map imap's grid, with mass per cell
-    !! exp(-temp L) exp(-prior_w |u_prev + R(irot)^T x|^2) area (euclid: L the normalised loss over the map's band,
+    !! exp(-temp L) exp(-prior_w |x|^2) area (euclid: L the normalised loss over the map's band, x the cell's shift,
     !! temp the particle's temperature over that band times the tempering factor), and the pair's evidence
     !! logz = log of the summed mass over the prior's normaliser (shiftmap_prior). l_greedy takes the cell of the
     !! largest mass instead. loss is the data term at the returned cell; the cell's shift in the optimizer's frame
     !! is shiftmap_shift(imap, irho, ialpha)
     !> The draw from the map's tempered posterior over its cells (shift magnitude, direction, rotation) under the
-    !! prior on the total displacement, or its mode (l_greedy). With temp_phys and sdev, the posterior's width at
+    !! prior on the increment, or its mode (l_greedy). With temp_phys and sdev, the posterior's width at
     !! the physical temperature is measured alongside: the standard deviation of the shift (the square root of the
     !! trace of its covariance, in the particle's axes, about the mean), the dynamic centring's state
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
             &temp_phys, sdev )
         use simple_rnd,  only: ran3
         use simple_math, only: rotmat2d
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
-        real(dp),                    intent(in)    :: temp, prior_w, u_prev(2), lse_prior
+        real(dp),                    intent(in)    :: temp, prior_w, lse_prior
         logical,                     intent(in)    :: l_greedy
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
@@ -494,9 +458,7 @@ contains
         real(dp),          optional, intent(in)    :: temp_phys
         real(sp),          optional, intent(out)   :: sdev
         type(shiftmap_work), pointer :: wk
-        real(dp) :: c1(self%nrots), c2(self%nrots)
-        real(dp) :: ca(self%shiftmap(imap)%get_nalpha()), sa(self%shiftmap(imap)%get_nalpha())
-        real(dp) :: offs(self%nrots), scal(self%nrots), usq, rho, loga, lmax, s, tgt, l, pen, s_ring
+        real(dp) :: offs(self%nrots), scal(self%nrots), rho, loga, lmax, s, tgt, l, pen, s_ring
         real(dp) :: dcell, lphys, lmax_phys, w, w0, w1(2,self%nrots), w2, xc(2), mean(2), tphys
         real     :: rotmat(2,2), v(2)
         integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3)
@@ -510,8 +472,6 @@ contains
         if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('the tempered posterior is the Gaussian noise model''s: objfun=euclid; shiftmap_draw')
         nrho   = self%shiftmap(imap)%get_nrho()
         nalpha = self%shiftmap(imap)%get_nalpha()
-        call prior_tables(self, imap, u_prev, c1, c2, ca, sa)
-        usq  = sum(u_prev**2)
         offs = 1.d0 + wk%refpow / wk%ptclpow
         scal = -2.d0 / (real(self%nrots, dp) * wk%ptclpow)
         ! the log masses, their maximum and its cell (and the maximum at the physical temperature)
@@ -521,9 +481,9 @@ contains
         do ir = 1, nrho
             rho  = self%shiftmap(imap)%get_rho(ir)
             loga = log(self%shiftmap(imap)%get_cell_area(ir))
+            pen  = prior_w * rho * rho
             do ro = 1, self%nrots
                 do j = 1, nalpha
-                    pen   = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
                     dcell = offs(ro) + scal(ro) * real(wk%gout(j,ro,ir), dp)
                     l     = -temp * dcell - pen + loga
                     wk%lw(j,ro,ir) = real(l, sp)
@@ -542,6 +502,7 @@ contains
         do ir = 1, nrho
             rho    = self%shiftmap(imap)%get_rho(ir)
             loga   = log(self%shiftmap(imap)%get_cell_area(ir))
+            pen    = prior_w * rho * rho
             s_ring = 0.d0
             do ro = 1, self%nrots
                 do j = 1, nalpha
@@ -549,7 +510,6 @@ contains
                     if( l > -40.d0 ) s_ring = s_ring + exp(l)
                     if( .not. l_width ) cycle
                     ! the physical log mass from the tempered one: the data term back, re-tempered
-                    pen   = prior_w * (usq + rho * rho + 2.d0 * rho * (ca(j) * c1(ro) + sa(j) * c2(ro)))
                     lphys = -tphys * (-(real(wk%lw(j,ro,ir), dp) + pen - loga) / temp) - pen + loga - lmax_phys
                     if( lphys <= -40.d0 ) cycle
                     w  = exp(lphys)

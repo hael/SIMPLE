@@ -2,34 +2,31 @@
 
 Started 2026-10-30. One living note: the contract, implementation plan, open decisions and progress record.
 
-## Current status and next work (reviewed 2026-11-02)
+## Status: closed 2026-11-03
 
-Reviewed source: `69c6c9d78`. The map is integrated into the dense/sparse 2D and dense/neighbourhood 3D
-probability tables; `shift_sigma=10` is the parameter default where the mode supports it. Dynamic per-particle
-centring (ruling 19) replaces the fixed centring stage and its drain. Stage 1 of solve2D deliberately remains
-shift-free; solve3D's first two stages also have no shift search. The old five-iteration stage-2 budget and
-the proposed stage-2/3 extension below are historical schedules, superseded by ruling 19.
+Completed. The polar shift map runs by default (`shift_sigma=10` A, objfun=euclid) in every polar mode with a
+shift search: the four probability tables and, since ruling 20, the classic SHC, greedy and neighbourhood
+strategies. Each particle is centred as it needs (ruling 19: the disk when not yet centred in the workflow or
+wide, the window otherwise), the map initialises every polish, and the polish starts at the map's cell. Stage 1
+of solve2D and solve3D's first two stages stay shift-free by design.
 
-The latest independent review is [section 14 of the review record](polar_shift_search_review.md#14-current-state-and-remaining-work-2026-11-02).
-It finds three current integration issues: continuous polish still clips a disk seed to the small stage
-window before measuring its baseline; neighbourhood insertion does not carry the dense table's physical
-pose-prior loss; and mapped sparse/window polish still enables the legacy increment prior. These are
-recommendations, not fixes made by this review; the first (T1) is fixed since 2026-11-03 (the 2026-11-03 classic
-strategies entry). Continuous in-plane polish currently runs under the key, including the extras; it is distinct
-from the Fourier–Bessel polish of Phase 5 (not pursued).
+Hans's validation (2026-11-03), after the cell-start polish and the classic strategies: "best porF so far in
+10/10. Same quality straight out of solve3D as cryo-sparc after NU refinement"; solve2D re-run on the small
+membrane proteins: "It looks amazing". The closing changes (ruling 21) are in the last progress entry.
 
-| Work | Current state | Next action, in order |
-|---|---|---|
-| Table integration and dynamic centring | Implemented; first-entry and later-stage disk selection observed in shared/full and two-part/quarter-sampled solve2D; T1 (the continuous route's clip) fixed 2026-11-03 | Correct the two remaining integration issues (T2, T3); pin the active prior for initializer, polish and insertion separately |
-| Dynamic state and uncertainty | Coarse physical-temperature moments and bound inflation implemented; coarse widths mostly unresolved below one cell | Add mixed sentinel/mover/drained, stage/sampling/injection and physical-moment regressions; calibrate before adding ladder rungs |
-| Laplace width | Proposal in the dynamic-centring note, not built | Specify conditional versus angle-marginal width, evaluate the committed fractional angle, retain the coarse multimodality safeguard and handle flat/indefinite curvature conservatively |
-| Phase 3 | Maintainer's 2D and beta-gal 3D results recorded below; scientific closeout remains | Paired seeded controls, translation-aware retained-mass measurement, per-class comparison on the same particles, centring-frame/mask ruling and re-extraction/downstream 3D |
-| Phase 4 | Every table and, since 2026-11-03, every classic polar mode (ruling 20) uses a map before local polish | The stochastic 2D classic modes (`snhc`, `snhc_smpl`, the stream's pool) need a fixture that separates them from run-to-run spread; the lattice inside `minimize_in_cell` retired for a cell start (the fill's refinement halved to quartered at the same accuracy, the 2026-11-03 entry); measure on beta-gal |
-| Phase 5 | Not pursued (Hans, 2026-11-03) | None. The L-BFGS is under a tenth of the refinement and the maps are built on the coarse band; the levers are the lattice inside `minimize_in_cell`, the pool and the map's own costs (the 2026-11-03 entry) |
+Left open when the note closed:
 
-Width percentiles describe the evaluated coarse distribution; they do not measure posterior mass excluded by
-the reference pool or the grid. The dated inventories and superseded schedules below are retained as history;
-this status and ruling 19 describe the current implementation. Validation and its limits are in the review.
+| Item | State |
+|---|---|
+| The Laplace width | Its own planned note: `../planned/polar_shift_laplace_width.md` (Hans's call) |
+| The centring frame (open decision 2) | Closed by ruling 22 (2026-11-03): the prior moves with the particle |
+| The stochastic 2D classic modes (`snhc`, `snhc_smpl`, the stream's pool) on a fixture that separates them from run-to-run spread | Deferred (Hans: not now) |
+| The dynamic-state regressions the review asked for | Deferred to the Laplace width's change (Hans: later) |
+| Phase 3's written exit (per-class shift histograms against cryoSPARC's, re-extraction, downstream solve3D) | Hans's data; the 2D runs on the small membrane proteins are in |
+| The automatic mask's parity (5.63 against 4.29 A on beta-gal) | Accepted as good enough (Hans: the small beta-gal set says little) |
+| The box's mask in a standalone refine2D's two shift-free iterations | Not now (Hans) |
+
+The dated inventories, superseded schedules and progress below are retained as history.
 
 ## Why
 
@@ -322,6 +319,21 @@ the downstream solve3D. The synthetic recovery test against magnitude and SNR ru
     best few get a map each (the window, or the disk by the particle's width) and the best cell is polished in its box.
     Built 2026-11-03: the pool is every candidate the mode scored and the previous one, window or disk alike (a
     first build that mapped only SHC's committed class in the window lost the 2D fixture, Progress below).
+21. The close (Hans, 2026-11-03): the targets of the three priors are stated once. The coarse draw (the
+    initialiser) carries the pick prior at a particle's first centring; every polish (the cell's, the classic
+    one, the continuous route) is the data's alone, so the window search's increment prior (`shift_prior`) is
+    off under the key (the review's T3); the weighted insertion weighs poses by the data term with the map's prior
+    at the physical temperature, in the dense and the neighbourhood tables alike (`insert_pose_loss`, the review's
+    T2; the prior's centre is ruling 22's). The PCG backend takes the weighted insertion's poses ("fix it").
+    solve2D's terminal greedy pass carries the key ("make the change"). The Laplace width goes to its own planned
+    note; the stochastic 2D fixture, the dynamic-state regressions and the shift-free iterations' mask are
+    deferred; the automatic mask is good enough for now.
+22. The prior moves with the particle (Hans, 2026-11-03, closing open decision 2): "Each particle is shifted to its
+    previous rotational origin offset in prepimg4align and then moved with the center of the class average so
+    having the prior defined at 0,0 must be holding us back". The map's prior is on the cell's shift, the increment
+    from the stored shift (which carries the search's moves and the class centring's), not on the total
+    displacement from the pick: in the first centring's draw and in the insertion's loss alike. In 3D the first
+    centring no longer pulls a particle from its 2D shift back towards its pick.
 
 The 2026-11-01 follow-up review is retained in `polar_shift_search_review.md`, section 13.
 Its stage-entry, drain and cost findings were corrected or superseded by the subsequent consolidation and
@@ -339,7 +351,12 @@ extend it through stage 3 is superseded by the per-particle state of ruling 19, 
    probably the side views of the membrane protein, which the picker places with a systematic bias. Phase 3
    therefore reports the shift histogram per class as well as overall, since a view-dependent bias shows as
    a per-class offset and the frame question of ruling 6 then matters for those classes.
-2. The centring frame (ruling 6), after reading cavger.
+2. The centring frame (ruling 6), after reading cavger. Closed by ruling 22 (2026-11-03): the prior moves with the
+   particle. Hans had asked for more information first. In short: with `center=yes` the 2D search recentres each class average before each
+   iteration (`calc_2Dref_offset`: the mass centre by default) and moves every member's stored shift by the same
+   offset (`add_shift2class`), while the pick prior is on the total displacement from the pick. For a view the
+   picker places off-centre the two disagree; the prior acts at a particle's first centring in 2D and in every
+   3D insertion's loss.
 3. Closed (2026-10-31, revised by the re-review's R1 the same day): the table has one frame contract, every
    increment native (the particle's frame). The window path's `minimize(sh_rot=.true.)` already returns that; the
    map fills convert the drawn cell at the drawn rotation when they record it; every consumer adds the increment
@@ -405,6 +422,16 @@ applied the same day:
 | S5 P2: the drained particles' window objects were not in the cost record | both object sets' counters reach the record (`grad_win`) |
 | latent: `temp_mass` in `shiftmap_draw` overwrote the draw's normaliser | the retired diagnostic (rho_out, mass_out, temp_mass) removed from the sampler and its test |
 | the origin-posterior screen quantile does not bound the posterior over translated candidates; retained mass and coarse-grid convergence unmeasured | open: the fixture's 95.8 % (its refined count of one) is the only measure so far |
+
+The review's section 14 (2026-11-02) and the dispositions, all applied 2026-11-03:
+
+| finding | disposition |
+|---|---|
+| T1 the continuous route projects a disk seed into the window and scores the projected pose | the joint domain contains the particle's box and the incoming shift (`shift_box_radius`), 2D and 3D, committed pose and extras; `test_continuous_seed_beyond_window` fails at all five starts with the old bound |
+| T2 the neighbourhood insertion lacks the dense table's physical pose-prior loss | one definition, `insert_pose_loss`, in both tables; `test_insert_pose_loss` reproduces the review's 0.603483 / 0.396517 |
+| T3 the mapped sparse and window polish keep the legacy increment prior | the increment prior is off under the key (`l_shift_prior`, the continuous route included); `test_key_derivation` |
+| the dynamic-state regressions | deferred with the Laplace width (Hans) |
+| the Laplace width's qualifications (fractional angle, conditional against marginal, indefinite curvature) | carried into `../planned/polar_shift_laplace_width.md` |
 
 ## Phases
 
@@ -571,13 +598,66 @@ Ruling 19 as built, in the plan's steps:
   window's 72.8 % (the stage design gave 96.8 %); at a quarter sampled per iteration (`nsample=100`, the case the
   stage design missed: three quarters of the particles first sampled after what was the centring stage) the key
   61.5 % against 50.0 %; solve3D de novo at a quarter sampled, the key 20.2 % against 13.0 % (the de novo fixture
-  is variance-dominated, as recorded). Hans validates on data.
+  is variance-dominated, as recorded). Hans validates on data. (Corrected 2026-11-03: the solve2D and solve3D
+  "window" numbers here were not controls; their stages ran the map, the last progress entry.)
 - Hans's beta-gal solve3D with the dynamic centring (2026-11-02): every particle on the disk at the workflow's
   first shift iteration (4598 of 4598, the table 26.7 s against 7.8 s after), then 37, 37, 11 and 5-10 movers an
   iteration; no change to the stage's course or the final 4.03 A. The coarse map's width reads 0.00 for nearly
   every particle (a resolution limit: the cell is 3.6 px against a 4.4 px window), so the re-centring is carried by
   the move at the bound; the Laplace width at the polished optimum is the informative alternative, written up in
   the proposal's section 2.6 for Hans's call. The neighbourhood driver's disk print was missing and is added.
+
+### 2026-11-03: the prior moves with the particle (ruling 22; Claude, agent kit runs 1135-1228)
+
+- As built: the map's prior is on the cell's shift, the increment from the stored shift the particle is prepared
+  at (`shiftmap_prior` and `shiftmap_draw` lose their centre argument and its per-rotation tables: the penalty is
+  `prior_w rho^2`, the same at every rotation and direction); the insertion's loss is the data term with the prior
+  on the pose's increment (`insert_pose_loss(dist, du, prior_w, temp)`, `map_prior_weight`). Every caller (the four
+  fills, the classic map search, both insertions) drops the stored shift it passed only for the prior. The shift-map
+  kernel test loses its stored-shift case (the draws centred on the pick); the insertion test's poses are
+  increments of 20 and 22 px (the same weights).
+- Builds and tests: Debug and the gate (run 1135), the polar shift map suite 71/71, the 3D table 504/504, the
+  in-plane state suite 121/121 (runs 1136-1138), Release and the gate (run 1139).
+- A/B against the build before this change (snapshot of run 1062's Release, `run@close`), refine3D `prob` from the
+  true volume, the key, `trs=5`, starting from the true shifts (the case where the prior at the pick pulls back),
+  from the true shifts with 2 px of noise, and from zero: 100 % within lp/4 in every pair, at SNR 0.1 and at SNR
+  0.03 (the same geometry simulated anew), medians within 0.01 px. With the true volume as reference the data term
+  outweighs the prior by tens of nats wherever it sits, so this fixture cannot show the prior's centre; the
+  conditions where it matters (weak references, small particles, the first centring after 2D) are Hans's data.
+
+### 2026-11-03: the close (ruling 21; Claude, agent kit runs 1057-1133)
+
+- **The controls were not controls (a bug since the default of 2026-11-02, `bfef77378`).** The stage
+  controllers switched the key off by deleting `shift_sigma` from a child command line, which since the parameter's
+  default became 10 A gives the child the key. Every solve2D and solve3D run given `shift_sigma=0` ran the map in
+  its shift stages (run 783, the 2026-11-02 solve2D "window" fixture, prints the disk set: 400 of 400 not yet
+  centred); standalone refine2D and refine3D controls were right. Fixed by setting the key explicitly, zero where
+  it is off: solve2D's stages and the seeded restart's probabilistic pass, solve3D's stages, refine3D's Cartesian
+  polish (its command line and its job description), solve2D's terminal greedy pass (which carries the key, ruling
+  21). The solve2D fixture at full sampling, a true control now: the control 19.5 % within lp/4 (two classes left,
+  purity 40 %, no disk line in its log) against the key's 100 % (purity 100 %, 22 disk lines). Any control Hans ran
+  through solve2D or solve3D between 2026-11-02 and this fix had the map on in its shift stages.
+- **T3:** under the key the window search's increment prior is off (`l_shift_prior` false when `l_centring`): the
+  tables' window polish, the classic polish and the continuous route are the data's alone. `test_key_derivation`
+  pins the key's derivation per mode, the prior's switch and `shift_sigma=0`.
+- **T2:** `insert_pose_loss` (with `map_prior_weight`) is the one definition of the insertion's pose loss; the
+  dense fill calls it, and the neighbourhood's `select_extras` replaces each refined candidate's data term by it
+  under the key. `test_insert_pose_loss` gives the review's 0.603483 / 0.396517 at two temperatures.
+- **PCG under topk:** the PCG worker takes the weighted insertion's poses: `pcg_extra_entries` lays the extras out
+  as operator entries after the committed ones (the committed weight on the committed entry, each extra's on its
+  own, the extra's Euler triplet and absolute stored shift at the cropped box) and `accumulate_pcg_extras` adds a
+  batch's extras from its particles' observations; the matcher reads the insertion table under either backend.
+  `test_pcg_extra_entries` (the rec3D backend suite): extras at the committed pose with weights summing to one
+  reproduce the plain accumulation in one batch and in two, a moved extra changes it.
+- Builds and tests: Debug and the gate (run 1058), the in-plane state suite 121/121, the 3D table suite 504/504,
+  the reconstruction suites 546/546 (runs 1059-1061), Release and the gate (run 1062).
+- Fixtures (true volume or references, the key unless said): the sparse 2D table (`prob_snhc`, 5 px window) 100 %
+  against its control's 79.5 %; refine3D gridding with `topk=3` 100 %; the neighbourhood table with `topk=3`
+  97.8-98.2 %; at 2000 directions, where the cone holds 6-7 eligible poses per particle, the posteriors are sharp
+  enough that the extras mostly fall under the insertion's weight floor (1.00-1.04 poses per particle), and PCG with
+  `topk=3` matches `topk=1` (83.0 % against 82.5 %). PCG trails gridding on this fixture with or without today's
+  changes: at 500 directions and `topk=1`, 22-47 % in four runs of the build before the close, 29.5-58.8 % in three
+  after, gridding 100 %; a property of PCG on 400 particles in three iterations, not of the insertion.
 
 ### 2026-11-03: Phase 4's classic strategies built, the continuous route's domain fixed (Claude, agent kit runs 802-)
 
@@ -870,7 +950,7 @@ candidate, more than the polish it replaces. The cheaper levers are the lattice 
 
 | file | why | phase |
 |---|---|---|
-| `doc/implementation_notes/planned/polar_shift_search.md` | this note: progress, rulings as they are applied | each |
+| `doc/implementation_notes/completed/polar_shift_search.md` | this note: progress, rulings as they are applied (planned/ until the close, 2026-11-03) | each |
 | `src/main/pftc/simple_polar_shiftmap.f90` | the mechanics class; phase 1 adds the table accessors of the all-rotation kernel | 0 1 |
 | `src/main/pftc/simple_polar_shiftmap_tester.f90` | its unit tests; phase 1 adds the kernel's identity and timing | 0 1 2 |
 | `src/main/commanders/test/simple_commanders_test_class.f90` | sub-suite registration (done); phase 2 if a strategy sub-suite is added | 0 2 |
@@ -888,6 +968,10 @@ candidate, more than the polish it replaces. The cheaper levers are the lattice 
 | `src/main/strategies/search/simple_shiftmap_srch.f90` | the classic searches' map context: the box, the screen and the polish | 20 |
 | `src/main/strategies/search/simple_strategy2D_greedy.f90`, `simple_strategy2D_snhc.f90`, `simple_strategy3D_utils.f90` | every scored class kept under the key; the 3D commit's shift state | 20 |
 | `src/main/strategies/search/simple_strategy2D_matcher.f90`, `simple_strategy3D_matcher.f90` | the maps built per run; a disk particle searched greedily | 20 |
+| `src/main/solve/simple_solve2D_controller.f90`, `simple_solve3D_controller.f90`, `src/main/strategies/parallelization/simple_refine3D_strategy.f90`, `src/main/commanders/simple/simple_commanders_solve2D.f90` | the key set explicitly where it is off (zero) and on solve2D's terminal pass | 21 |
+| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`, `simple_rec3D_strategy_tester.f90` | the PCG worker's weighted insertion (`pcg_extra_entries`, `accumulate_pcg_extras`) and its test | 21 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90`, `simple_eul_prob_tab.f90`, `simple_eul_prob_tab_utils.f90` | one insertion loss (`insert_pose_loss`) in both 3D tables (T2) | 21 |
+| `src/main/params/simple_parameters_phases.f90` | the increment prior off under the key (T3) | 21 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90` | the joint draw in the fill of the centring stage | 2 |
 | `src/main/pftc/simple_polarft_corr.f90` | `gen_posterior_val` over the map's grid | 2 |
 | `src/main/solve/simple_solve2D_controller.f90` | stage 2 as the centring stage (`CENTRING_STAGE`): the table, the disk, the box's mask, minits for the shift exit, the key per stage; the mask estimate at its exit (`solve2D_mskdiam_estimate`) | 2b (done 2026-10-31) |

@@ -623,8 +623,8 @@ contains
     !> The sampler on the kernel's fixture (euclid, box 64 at 1 A/px, a 30 px disk for sigma 10 px). At temperature
     !! zero the draw is the prior under the polar measure: the mean radius of 1500 draws is the discrete prior's
     !! expectation, which sits by the continuous truncated Gaussian's (12.30 for sigma 10 and a 30 disk, the review's
-    !! figure) within the grid's step, and the evidence is 0; with a stored shift the mean total displacement of the
-    !! draws is the pick; the origin's prior mass is the central disk's share; at the particle's temperature the
+    !! figure) within the grid's step, and the evidence is 0; the origin's prior mass is the central disk's share (the
+    !! prior is on the cell's shift: it moves with the particle); at the particle's temperature the
     !! evidence equals the direct log-sum-exp over shiftmap_objfun_grid's losses with the same weights, and the greedy
     !! draw is the cell of the largest mass.
     !> the disk never reaches beyond its radius (review R4): below one grid step the grid is the origin and the
@@ -674,8 +674,8 @@ contains
         complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
         real(sp),    allocatable :: ctfs(:,:,:), vals(:,:,:)
         real(dp),    allocatable :: rhos(:)
-        real(dp) :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w, x(2), u_prev(2), tot(2)
-        real(dp) :: lmax, s, lse, pen, loga, rho, temp, c, sn, ang
+        real(dp) :: prior_w, lse_prior, logp0, logz, step, mean_rho, disc_mean, wsum, wr, w
+        real(dp) :: lmax, s, lse, pen, loga, rho, temp
         real(sp) :: loss
         integer  :: kfromto(2), nrots, nrho, nalpha, idraw, irot, irho, ialpha, ir, j, ro, imax(3)
         write(*,'(A)') 'test_kernel_draw'
@@ -690,9 +690,8 @@ contains
         call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, nalpha)
         prior_w = 1.d0 / (2.d0 * SIGMA**2)
         call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 1)
-        ! (1) temperature 0, no stored shift: the prior under the polar measure
-        u_prev = 0.d0
-        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, u_prev, lse_prior, logp0)
+        ! (1) temperature 0: the prior under the polar measure
+        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, lse_prior, logp0)
         disc_mean = 0.d0
         wsum      = 0.d0
         do ir = 1, nrho
@@ -704,7 +703,7 @@ contains
         disc_mean = disc_mean / wsum
         mean_rho  = 0.d0
         do idraw = 1, NDRAWS
-            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, u_prev, lse_prior, .false., logz, irot, irho, ialpha, loss)
+            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, lse_prior, .false., logz, irot, irho, ialpha, loss)
             mean_rho = mean_rho + rhos(irho)
             if( idraw == 1 ) call assert_true(abs(logz) <= 1.d-6, 'at temperature 0 the evidence is 0: the prior is normalised')
         enddo
@@ -717,25 +716,8 @@ contains
         w = exp(logp0) * real(nrots,dp)
         call assert_true(abs(w - exp(-prior_w * rhos(1)**2) * pftc%shiftmap_cell_area(SHIFTMAP_FULL, 1) * real(nalpha,dp) / wsum) <= 1.d-9,&
             &'the origin''s prior mass is the central disk''s share')
-        ! (2) a stored shift: the prior is on the total displacement, so the draws centre on the pick
-        u_prev = [4.d0, -3.d0]
-        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, u_prev, lse_prior, logp0)
-        tot = 0.d0
-        do idraw = 1, NDRAWS
-            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, u_prev, lse_prior, .false., logz, irot, irho, ialpha, loss)
-            x   = pftc%shiftmap_shift(SHIFTMAP_FULL, irho, ialpha)
-            ang = real(pftc%get_rot(irot),dp) * DPI / 180.d0
-            c   = cos(ang)
-            sn  = sin(ang)
-            ! u = R(irot)^T x, R = [[c, s], [-s, c]]
-            tot = tot + u_prev + [c * x(1) - sn * x(2), sn * x(1) + c * x(2)]
-        enddo
-        tot = tot / real(NDRAWS,dp)
-        write(*,'(A,2F8.3)') '  mean total displacement with a stored shift of (4, -3): ', tot
-        call assert_true(all(abs(tot) <= 0.9d0), 'with a stored shift the draws centre on the pick')
-        ! (3) the particle's temperature: the evidence against the direct sum over the grid, the greedy cell
-        u_prev = 0.d0
-        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, u_prev, lse_prior, logp0)
+        ! (2) the particle's temperature: the evidence against the direct sum over the grid, the greedy cell
+        call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, lse_prior, logp0)
         temp = real(posterior_temperature(pftc%wsqsum_ptcl_now(1), pftc%get_pftsz()), dp)
         allocate(vals(nalpha,nrots,nrho))
         call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
@@ -766,7 +748,7 @@ contains
             enddo
         enddo
         lse = lmax + log(s) - lse_prior
-        call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, prior_w, u_prev, lse_prior, .true., logz, irot, irho, ialpha, loss)
+        call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, prior_w, lse_prior, .true., logz, irot, irho, ialpha, loss)
         write(*,'(A,ES10.2,A,F10.4)') '  |evidence - direct sum| ', abs(logz - lse), ' at log Z ', lse
         call assert_true(abs(logz - lse) <= 1.d-3 * max(1.d0, abs(lse)), 'the evidence is the log-sum-exp over the grid')
         call assert_int(imax(1), ialpha, 'the greedy draw is the cell of the largest mass (direction)')
@@ -856,11 +838,11 @@ contains
                     call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
                 enddo
                 t_disk = 1.d3 * real(toc(t0),dp) / real(nrep,dp)
-                call pftc%shiftmap_prior(SHIFTMAP_FULL, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), [0.d0, 0.d0], lse_prior, logp0)
+                call pftc%shiftmap_prior(SHIFTMAP_FULL, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), lse_prior, logp0)
                 temp = real(posterior_temperature(pftc%wsqsum_ptcl_now(1), pftc%get_pftsz()), dp)
                 t0 = tic()
                 do irep = 1, nrep
-                    call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), [0.d0, 0.d0], lse_prior, .false.,&
+                    call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), lse_prior, .false.,&
                         &logz, irot, irho, ialpha, loss)
                 enddo
                 t_draw = 1.d3 * real(toc(t0),dp) / real(nrep,dp)

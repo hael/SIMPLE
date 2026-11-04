@@ -2,7 +2,7 @@
 
 Proposal, 2026-11-02 (Claude, for Hans's ruling before implementation). Companion
 to `polar_shift_search.md`, whose rulings 15-18 and Phase 4 this builds on.
-Ruled and built the same day (ruling 19; the as-built record is the note's
+Completed with the plan on 2026-11-03. Ruled and built the same day (ruling 19; the as-built record is the note's
 progress entry of 2026-11-02): the two metrics of section 2.6 with the rule of
 section 2.1, the box's mask per disk particle (B), the subspace pool in the
 state mode and the geometric neighbourhood in the geom mode, `trs_window` and
@@ -237,25 +237,10 @@ the widths with the exploration's flatness, not the particle's uncertainty;
 a floor at the cell's size makes every particle wide against a window of one
 cell.
 
-The informative version is the **Laplace width at the polished optimum on the
-full band**: the curvature of the loss at the committed pose gives the standard
-deviation of a Gaussian fitted to the posterior there, resolved to a fraction
-of a pixel. The consumer measures it after the continuous in-plane polish, for
-the committed pose alone, with a 3 x 3 stencil of full-band evaluations
-(`gen_corr_for_rot_8`, eight calls of about 20 us each per particle): with the
-loss L at the optimum and the physical temperature T, the Hessian H of T L over
-the two shift coordinates from the stencil's second differences, and the width
-the square root of the larger eigenvalue of H^-1 (the covariance's trace is the
-alternative; the larger eigenvalue is the conservative choice for a box). A
-well aligned particle reads a few tenths of a pixel, a weak or wrongly classed
-one pixels, and the rule separates those rather than the two states the coarse
-map can tell apart. The stored prior width is then the Laplace width, with the
-move's inflation as now, and the coarse map's width stays beside it as the
-multi-modality flag (a particle with mass on two coarse cells takes the disk
-whatever its local curvature says). A contained change: the two consumers
-(`strategy2D_prob`, `strategy3D_prob`) and `record_shift_state`, nothing in the
-tables; its validation the widths' distribution on data against the movers,
-and the fixtures with sampling. Not built; Hans's call.
+The informative version, the **Laplace width** at the polished optimum on the
+full band (the loss's curvature at the committed pose), with the review's
+qualifications, is its own planned note since 2026-11-03:
+`../planned/polar_shift_laplace_width.md`. Not built; Hans's call.
 
 **What the width does not do.** It never enters the likelihood as a prior. The
 posterior re-used as a prior on the same particle image would count the data

@@ -10,7 +10,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2, &
     &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, temperature_or_argmin, &
-    &prob_insert_table, prob_insert_cone, screen_pool_size, shift_needs_disk, disk_radius_px
+    &prob_insert_table, prob_insert_cone, screen_pool_size, shift_needs_disk, disk_radius_px, insert_pose_loss
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
@@ -458,7 +458,7 @@ contains
             real(dp)  :: t0
             logical   :: l_bank_seed, l_disk
             if( l_map )then
-                ! the disk for a particle not yet centred in this workflow (under the pick prior) or whose prior width
+                ! the disk for a particle not yet centred in this workflow (under the map's prior) or whose prior width
                 ! exceeds a third of the window (the data's alone); the window for the others
                 shsig_loc = self%b_ptr%spproj_field%get(iptcl_loc, 'shsig')
                 l_disk    = shift_needs_disk(shsig_loc, self%p_ptr%trs)
@@ -507,7 +507,7 @@ contains
         !! coarse map over the box at the references holding SCREEN_QUANTILE of the particle's posterior at the origin
         !! (a pick far off leaves it flat and keeps every reference), at least twice the refined count, each keeping
         !! its coarse optimum; the projs_ns best of the screen polished at full resolution in a box of one coarse step
-        !! about that optimum (minimize_in_cell). The box is the disk (l_disk), under the pick prior at the particle's
+        !! about that optimum (minimize_in_cell). The box is the disk (l_disk), under the map's prior at the particle's
         !! first centring (l_prior) and without it after, or the window without it. Rows the polished losses, as the
         !! window path's; the refined entries carry the posterior loss for the insertion
         subroutine process_particle_with_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
@@ -515,7 +515,7 @@ contains
             logical, intent(in) :: l_disk, l_prior
             type(pftc_shsrch_grad), pointer :: gso
             integer, allocatable :: pool(:)
-            real(dp) :: t0, u_prev(2), lse_map, logp0, temp_i, temp_s, logz, xcell(2), prior_w_map
+            real(dp) :: t0, lse_map, logp0, temp_i, temp_s, logz, xcell(2), prior_w_map
             real     :: loss_cell, loss_pose, dist_loc, cxy(3)
             integer  :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest
             logical  :: l_polished
@@ -530,11 +530,10 @@ contains
             endif
             t0 = omp_get_wtime()
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
-            u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl_loc), dp)
             temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
             temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                 &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
-            call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, u_prev, lse_map, logp0)
+            call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, lse_map, logp0)
             self%seed_shifts(:,i_loc) = 0.
             self%seed_has_sh(i_loc)   = .true.
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
@@ -555,7 +554,7 @@ contains
                 ri_loc = pool(k_loc)
                 if( ri_loc < 1 ) cycle
                 call self%b_ptr%pftc%gen_shiftmap(imap, self%ref_full(ri_loc), iptcl_loc)
-                call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, u_prev, lse_map, .true.,&
+                call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, lse_map, .true.,&
                     &logz, irot_loc, irho_loc, ialpha_loc, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
                     &sdev=scr_sdev(ri_loc,ithr_loc))
                 scr_irot(ri_loc,ithr_loc) = irot_loc
@@ -581,9 +580,9 @@ contains
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
                 xcell = real(cxy(2:3), dp)
                 nrefined_batch(i_loc) = nrefined_batch(i_loc) + 1
-                ! the pose's loss for the insertion: the data term with the absolute prior on the total displacement at
-                ! the physical temperature
-                loss_pose = dist_loc + real(prior_w * sum((u_prev + xcell)**2) / real(self%temps(i_loc), dp))
+                ! the pose's loss for the insertion: the data term with the map's prior on the increment at the physical
+                ! temperature
+                loss_pose = insert_pose_loss(dist_loc, xcell, prior_w, self%temps(i_loc))
                 refined_batch(nrefined_batch(i_loc),i_loc) = prob_refined_entry(i_loc, ri_loc, real(xcell(1)), real(xcell(2)), loss_pose,&
                     &scr_sdev(ri_loc,ithr_loc))
             enddo
@@ -1149,7 +1148,7 @@ contains
         !! entries of its state's block whose pose lies within the insertion cone of the committed one (the rotation
         !! modulo the point group and the shift together moving the rim by less than the map resolves), the kmax - 1 of
         !! highest posterior at the particle's own temperature over the refined poses' own losses (the row's distance
-        !! under the window search, the drawn cell's data term under the map, whose row holds the evidence), with the
+        !! under the window search, the insertion loss with the map's prior under the map: insert_pose_loss), with the
         !! weights that posterior renormalised over the kept set (top_posterior_extras): the draw decides the
         !! hypothesis, the extras only spread the particle over
         !! the poses the map resolves alike. Deterministic given the committed poses, so the particles run in parallel

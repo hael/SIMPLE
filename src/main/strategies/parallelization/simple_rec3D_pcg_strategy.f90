@@ -30,6 +30,7 @@ use simple_oris,                only: population_blend_weights
 use simple_state_weight_set,    only: state_weight_set
 use simple_pcg_atomic_prior,    only: pcg_atomic_prior, pcg_atomic_prior_stats
 use simple_atoms,               only: atoms
+use simple_eul_prob_tab_utils,  only: prob_insert_poses
 !$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
 !$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
@@ -37,6 +38,7 @@ implicit none
 public :: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 public :: rec3D_master_nthr, validate_pcg_common
 public :: set_pcg_solve_support, calculate_pcg_state_diagnostics, accumulate_pcg_state_half
+public :: pcg_extra_entries, accumulate_pcg_extras
 public :: pcg_assemble_bench, write_pcg_assemble_bench
 private
 #include "simple_local_flags.inc"
@@ -254,13 +256,14 @@ contains
     !! folding and every nonlinear finalization step belong to the master.
     !! With a state weight set, a particle is a member of every state it weighs
     !! into above PCG_WEIGHT_THRESHOLD and enters with its noise spectrum over w.
-    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds, wset, wtab )
+    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds, wset, wtab, extra )
         type(parameters),                  intent(inout) :: params
         type(builder),                     intent(inout) :: build
         class(cmdline),                    intent(inout) :: cline
         integer,                           intent(in)    :: selected_pinds(:)
         class(state_weight_set), optional, intent(inout) :: wset
         real,                    optional, intent(in)    :: wtab(:,:)   !< caller's weight table, rows of selected_pinds
+        type(prob_insert_poses), optional, intent(in)    :: extra       !< the weighted insertion's poses (topk > 1)
         integer, allocatable :: half_pinds(:)
         real,    allocatable :: half_w(:)
         logical :: l_weighted
@@ -379,9 +382,9 @@ contains
                 return
             endif
             if( l_weighted )then
-                call accumulate_pcg_state_half(params, build, rsess, eo_here, pinds, pcgop, rt_prep, half_w)
+                call accumulate_pcg_state_half(params, build, rsess, eo_here, pinds, pcgop, rt_prep, half_w, extra=extra)
             else
-                call accumulate_pcg_state_half(params, build, rsess, eo_here, pinds, pcgop, rt_prep)
+                call accumulate_pcg_state_half(params, build, rsess, eo_here, pinds, pcgop, rt_prep, extra=extra)
             endif
             if( l_weighted )then
                 call pcgop%write_raw_accum(fname, state_here, eo_here, params%part, &
@@ -400,27 +403,51 @@ contains
     !! point group, the half's noise spectrum at the native shells (objfun=euclid), the particles' orientations
     !! and CTF at the cropped box, and one pass over their observation batches through rsess. The frame the
     !! PCG worker publishes and reconstruct3D_wave's start finalizes. weights: the state weights, an inverse
-    !! noise scale that multiplies the B term and |T|^2 alike
-    subroutine accumulate_pcg_state_half( params, build, rsess, eo_here, pinds, pcgop, rt_prep, weights )
-        class(parameters),        intent(in)    :: params
-        class(builder),           intent(inout) :: build
-        class(ptcl_read_session), intent(inout) :: rsess
-        integer,                  intent(in)    :: eo_here, pinds(:)
-        class(reconstructor_pcg), intent(inout) :: pcgop
-        real(timer_int_kind),     intent(inout) :: rt_prep
-        real, optional,           intent(in)    :: weights(:)
-        type(oris)  :: selection
+    !! noise scale that multiplies the B term and |T|^2 alike. extra (the weighted insertion, topk > 1): a particle
+    !! with an entry enters at its committed pose with its committed weight and at each extra pose as one more
+    !! entry from the same observation (pcg_extra_entries), as the gridding insertion has it
+    subroutine accumulate_pcg_state_half( params, build, rsess, eo_here, pinds, pcgop, rt_prep, weights, extra )
+        class(parameters),                 intent(in)    :: params
+        class(builder),                    intent(inout) :: build
+        class(ptcl_read_session),          intent(inout) :: rsess
+        integer,                           intent(in)    :: eo_here, pinds(:)
+        class(reconstructor_pcg),          intent(inout) :: pcgop
+        real(timer_int_kind),              intent(inout) :: rt_prep
+        real,                    optional, intent(in)    :: weights(:)
+        type(prob_insert_poses), optional, intent(in)    :: extra
+        type(oris)  :: selection, entries
         type(image), allocatable :: obs(:)
-        complex,     allocatable :: y_batch(:,:,:)
-        real,        allocatable :: inv_sig2(:)
-        integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch, nthr
+        complex,     allocatable :: y_batch(:,:,:), y_x(:,:,:)
+        real,        allocatable :: inv_sig2(:), wbase(:), wts(:)
+        integer,     allocatable :: xptcl(:), xfirst(:)
+        integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch, nthr, n, nxmax
+        logical :: l_extra
         call pcgop%set_sym(build%pgrpsyms)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
+        n     = size(pinds)
         ! every particle of the call is in half eo_here: one inverse spectrum at the native shells 0:R
         if( params%cc_objfun == OBJFUN_EUCLID ) call rec_obs_inv_sig2(params, build, eo_here, R, inv_sig2)
         call rec_obs_oris(params, build, pinds, selection)
-        if( allocated(inv_sig2) )then
+        l_extra = .false.
+        if( present(extra) ) l_extra = extra%nptcls > 0
+        if( l_extra )then
+            allocate(wbase(n), source=1.)
+            if( present(weights) ) wbase = weights
+            call pcg_extra_entries(selection, pinds, wbase, extra, real(params%box_crop) / real(params%box), entries,&
+                &wts, xptcl, xfirst)
+            if( allocated(inv_sig2) )then
+                call pcgop%prep_particles(entries, use_ctf=.true., inv_sig2=inv_sig2, weights=wts)
+            else
+                call pcgop%prep_particles(entries, use_ctf=.true., weights=wts)
+            endif
+            ! the extra entries of a batch's particles, at most
+            nxmax = 1
+            do ibatch = 1, n, MAXIMGBATCHSZ
+                nxmax = max(nxmax, xfirst(min(n, ibatch+MAXIMGBATCHSZ-1)+1) - xfirst(ibatch))
+            enddo
+            allocate(y_x(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), nxmax))
+        else if( allocated(inv_sig2) )then
             if( present(weights) )then
                 call pcgop%prep_particles(selection, use_ctf=.true., inv_sig2=inv_sig2, weights=weights)
             else
@@ -445,12 +472,88 @@ contains
             ! the search's records of a cropped pass are the batch's observations, else the batch is read
             call read_rec_obs_batch(params, build, rsess, pinds, batchlims, obs, lims2, R*R, y_batch, rt_prep)
             call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
+            if( l_extra ) call accumulate_pcg_extras(pcgop, y_batch, batchlims, n, xptcl, xfirst, y_x)
         enddo
         call dealloc_imgarr(obs)
         call selection%kill
+        call entries%kill
         deallocate(y_batch)
         if( allocated(inv_sig2) ) deallocate(inv_sig2)
+        if( allocated(y_x) ) deallocate(y_x, wbase, wts, xptcl, xfirst)
     end subroutine accumulate_pcg_state_half
+
+    !> The PCG entries of the weighted insertion (topk > 1) for the particles pinds, whose committed poses selection
+    !! holds at the cropped box: entries 1..n the committed poses, weighted wbase times the committed weight for a
+    !! particle with an insertion entry, then each extra pose of positive weight in particle order (the committed
+    !! orientation with the pose's Euler triplet and absolute stored shift times crop_factor, weighted wbase times
+    !! the pose's weight). xptcl: each extra entry's particle; xfirst(i): the first extra entry of particle i
+    !! (xfirst(n+1) one past the last), both counted within the extras
+    subroutine pcg_extra_entries( selection, pinds, wbase, extra, crop_factor, entries, wts, xptcl, xfirst )
+        class(oris),             intent(inout) :: selection
+        integer,                 intent(in)    :: pinds(:)
+        real,                    intent(in)    :: wbase(:), crop_factor
+        type(prob_insert_poses), intent(in)    :: extra
+        type(oris),              intent(inout) :: entries
+        real,    allocatable,    intent(out)   :: wts(:)
+        integer, allocatable,    intent(out)   :: xptcl(:), xfirst(:)
+        type(ori) :: o
+        integer   :: n, nx, i, k, iloc, ipose, ix
+        n = size(pinds)
+        if( selection%get_noris() /= n .or. size(wbase) /= n ) THROW_HARD('one committed pose and weight per particle; pcg_extra_entries')
+        allocate(xfirst(n+1))
+        nx = 0
+        do i = 1, n
+            xfirst(i) = nx + 1
+            if( .not. extra%has(pinds(i)) ) cycle
+            iloc = extra%loc(pinds(i))
+            do k = 1, extra%nextra(iloc)
+                if( extra%w(extra%first(iloc) + k - 1) > 0. ) nx = nx + 1
+            enddo
+        enddo
+        xfirst(n+1) = nx + 1
+        allocate(wts(n+nx), xptcl(nx))
+        call entries%new(n + nx, .true.)
+        call o%new(.true.)
+        ix = 0
+        do i = 1, n
+            call selection%get_ori(i, o)
+            call entries%set_ori(i, o)
+            wts(i) = wbase(i)
+            if( .not. extra%has(pinds(i)) ) cycle
+            iloc   = extra%loc(pinds(i))
+            wts(i) = wbase(i) * extra%wc(iloc)
+            do k = 1, extra%nextra(iloc)
+                ipose = extra%first(iloc) + k - 1
+                if( .not. (extra%w(ipose) > 0.) ) cycle
+                ix = ix + 1
+                call selection%get_ori(i, o)
+                call o%set_euler(extra%euler(:,ipose))
+                call o%set_shift(extra%shift(:,ipose) * crop_factor)
+                call entries%set_ori(n + ix, o)
+                wts(n + ix) = wbase(i) * extra%w(ipose)
+                xptcl(ix)   = i
+            enddo
+        enddo
+        call o%kill
+    end subroutine pcg_extra_entries
+
+    !> the extra entries of the particles batchlims(1):batchlims(2) (pcg_extra_entries' layout after the n committed
+    !! ones), each from its particle's observation in y_batch; y_x the scratch planes
+    subroutine accumulate_pcg_extras( pcgop, y_batch, batchlims, n, xptcl, xfirst, y_x )
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        complex,                  intent(in)    :: y_batch(:,:,:)
+        integer,                  intent(in)    :: batchlims(2), n, xptcl(:), xfirst(:)
+        complex,                  intent(inout) :: y_x(:,:,:)
+        integer :: e1, e2, e
+        e1 = xfirst(batchlims(1))
+        e2 = xfirst(batchlims(2) + 1) - 1
+        if( e2 < e1 ) return
+        if( e2 - e1 + 1 > size(y_x,3) ) THROW_HARD('the scratch planes are fewer than the batch''s extra poses; accumulate_pcg_extras')
+        do e = e1, e2
+            y_x(:,:,e - e1 + 1) = y_batch(:,:,xptcl(e) - batchlims(1) + 1)
+        enddo
+        call pcgop%accumulate_batch(y_x(:,:,1:e2-e1+1), e2 - e1 + 1, n + e1)
+    end subroutine accumulate_pcg_extras
 
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
     !! order, then perform all folding, finalization and PCG locally. For each

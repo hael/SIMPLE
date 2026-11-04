@@ -40,6 +40,7 @@ contains
         call test_resolve_inplane_e3()
         call test_inpl_cont_policy()
         call test_inpl_cont_derivation()
+        call test_key_derivation()
         call test_previous_shift_is_stored_shift()
         call test_table_increment_axes()
         call test_map_initialised_polish()
@@ -224,6 +225,45 @@ contains
         deallocate(params)
         call cline%kill
     end subroutine test_inpl_cont_derivation
+
+    !> the polar shift map's key: on by default under euclid in a polar mode with shifts, the classic modes
+    !! included (ruling 20); the legacy increment prior off under it (the review's T3); zero switches the key off and
+    !! gives the legacy prior back, as the stage controllers pass it
+    subroutine test_key_derivation()
+        class(parameters), allocatable :: params
+        type(cmdline) :: cline
+        character(len=12) :: modes(4) = [character(len=12) :: 'shc', 'neigh', 'prob', 'greedy']
+        integer :: i
+        write(*,'(A)') 'test_key_derivation'
+        call cline%set('smpd',    1.5)
+        call cline%set('box',     32)
+        call cline%set('mskdiam', 36.)
+        call cline%set('ctf',     'no')
+        call cline%set('objfun',  'euclid')
+        call cline%set('nthr',    1)
+        call cline%set('trs',     5.)
+        do i = 1, size(modes)
+            call cline%set('refine', trim(modes(i)))
+            allocate(params)
+            call params%new(cline)
+            call assert_true(params%l_centring, 'the key centres under refine='//trim(modes(i)))
+            call assert_false(params%l_shift_prior, 'no increment prior under the key, refine='//trim(modes(i)))
+            deallocate(params)
+        enddo
+        call cline%set('shift_sigma', 0.)
+        allocate(params)
+        call params%new(cline)
+        call assert_false(params%l_shift_map .or. params%l_centring, 'shift_sigma=0 switches the key off')
+        call assert_true(params%l_shift_prior, 'shift_sigma=0 gives the increment prior back')
+        deallocate(params)
+        call cline%delete('shift_sigma')
+        call cline%set('refine', 'cont')
+        allocate(params)
+        call params%new(cline)
+        call assert_false(params%l_centring, 'the Cartesian pass does not centre')
+        deallocate(params)
+        call cline%kill
+    end subroutine test_key_derivation
 
     !> a search control of the named UI program; with expected_default, one with that default
     logical function has_search_input( program_name, key, expected_default ) result( found )

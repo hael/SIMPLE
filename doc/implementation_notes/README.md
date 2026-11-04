@@ -32,7 +32,7 @@ resuming an old command or experiment.
 
 | Topic | Record | Status and next action |
 | --- | --- | --- |
-| Polar shift search | [Living plan](planned/polar_shift_search.md), [review](planned/polar_shift_search_review.md), [dynamic centring](planned/polar_shift_search_dynamic_centring.md) | Active implementation; reconcile the latest changes and review findings against the current source. |
+| Polar shift search | [Laplace width](planned/polar_shift_laplace_width.md) | Proposal split from the completed shift search (2026-11-03); Hans's call on conditional or marginal width. |
 | Posterior search | [Pose marginalization](planned/pose_marginalization.md) | Implemented policy with later experiments and rulings; reconcile real-data evidence and superseded controls. |
 | Stage scheduling | [Data-driven progression](planned/data_driven_stage_progression.md) | Proposal; decide how stage progression should use measured information. |
 | Multi-state regression | [Investigation](planned/multistate_solve3D_regression.md), [fix check](planned/multistate_solve3D_regression_report.md), [stage-5 check](planned/multistate_stage5_prob_check_report.md) | Measurements show partial recovery; diagnosis and scientific closeout remain. |
@@ -64,6 +64,7 @@ resuming an old command or experiment.
 | Platinum pipeline | [Hand-run pipeline](completed/nano_pipeline_pt_report.md), [one-program workflow](completed/trajectory_solve3D_report.md) | Maintainer map assessment and further rejection research remain recorded. |
 | Atomic reconstruction | [Current prior algorithm](../algorithms/atomicity_prior.md), [dated methods](completed/atomicity_prior_methods.md), [AET comparison](completed/aet_codes_and_simple.md) | Current behavior is separated from the original experiments and outlook. |
 | Species evidence | [Dated evidence and handoff](completed/species_discovery_status.md) | Next steps are maintained only in the planned species record. |
+| Polar shift search | [Living plan, closed](completed/polar_shift_search.md), [review](completed/polar_shift_search_review.md), [dynamic centring](completed/polar_shift_search_dynamic_centring.md) | Closed 2026-11-03; the items left open are listed at the top of the plan, the Laplace width is planned. |
 
 The lifecycle directories above contain the remaining historical records. Their
 length alone is not a reason to discard measurements or decision rationale.

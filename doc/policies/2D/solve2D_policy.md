@@ -129,7 +129,7 @@ coverage, as 3D does.
 #### The polar shift map's dynamic centring (`shift_sigma` > 0)
 
 `shift_sigma` (the width in A of the Gaussian prior on a particle's displacement
-from its pick, `doc/implementation_notes/planned/polar_shift_search.md` and
+from its pick, `doc/implementation_notes/completed/polar_shift_search.md` and
 `polar_shift_search_dynamic_centring.md`) is the parameter's default, 10 A
 (Hans, 2026-11-02, across the board), so every workflow has the key where a mode
 can carry it: a polar mode with a shift search under objfun=euclid, a
@@ -172,12 +172,14 @@ prior width for its next search, in pixels. In every table fill from stage 2 on
   not yet centred in this workflow) or when three of its prior widths exceed
   the stage's window `trs` (`shift_needs_disk`), and the window otherwise;
 - the disk: the coarse map over the disk of 3 sigma (`disk_radius_px`, bounded
-  by the box; `SHIFTMAP_SCREEN`) under the prior on the total displacement from
-  the pick at the particle's first centring, and without it after (a
-  re-centring is the data's alone: under the draw's tempering, `prob_beta`
-  0.3, the untempered prior weighs more than three times its physical weight
-  and pulled correctly centred particles back towards their picks at every
-  re-centring, which cost the solve2D fixture 56 points), at the classes
+  by the box; `SHIFTMAP_SCREEN`) under the prior at the particle's first
+  centring, and without it after (a re-centring is the data's alone: under the
+  draw's tempering, `prob_beta` 0.3, the untempered prior weighs more than three
+  times its physical weight, and when it sat at the pick it pulled correctly
+  centred particles back towards their picks at every re-centring, which cost
+  the solve2D fixture 56 points). The prior moves with the particle (ruling 22,
+  2026-11-03): it is on the cell's shift, the increment from the stored shift
+  the particle is prepared at, which the class centring moves too, at the classes
   holding 99 % of the particle's posterior at the
   origin (`screen_pool_size`, at least twice the refined count; in the sparse
   `prob_snhc` fill a disk particle scores every class first), each keeping its

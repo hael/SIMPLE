@@ -268,7 +268,7 @@ contains
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region, t0
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob), ndisk(nthr_glob), nscreens(nthr_glob)
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        real(dp) :: prior_w, prior_w_map, u_prev(2), logz, temp_i, lse_map, logp0, temp_s
+        real(dp) :: prior_w, prior_w_map, logz, temp_i, lse_map, logp0, temp_s
         real     :: loss_cell, scr_xy(2,self%nclasses), scr_sdev(self%nclasses)
         integer  :: irho, ialpha, kscreen, scr_irot(self%nclasses)
         logical  :: l_bank, l_map, l_disk, l_polished
@@ -335,7 +335,7 @@ contains
             ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,irot,irot0,cxy,icls,icls_prev,loc,&
-            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0,u_prev,logz,temp_i,irho,ialpha,&
+            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0,logz,temp_i,irho,ialpha,&
             !$omp& loss_cell,lse_map,logp0,temp_s,npool,pool,gso,l_disk,scr_xy,scr_irot,scr_sdev,imap,prior_w_map,l_polished,shsig_loc)&
             !$omp firstprivate(o_prev) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
@@ -350,7 +350,7 @@ contains
                 gso    => grad_shsrch_obj(ithr)
                 if( l_map )then
                     ! (1) the seed is the stored shift the sections already carry; the box is the disk for a particle not
-                    ! yet centred in this workflow (under the pick prior) or whose prior width exceeds a third of the
+                    ! yet centred in this workflow (under the map's prior) or whose prior width exceeds a third of the
                     ! window (the data's alone), the window for the others
                     shsig_loc   = self%b_ptr%spproj_field%get(iptcl, 'shsig')
                     l_disk      = shift_needs_disk(shsig_loc, self%p_ptr%trs)
@@ -362,11 +362,10 @@ contains
                         if( shsig_loc < 0. ) prior_w_map = prior_w
                         ndisk(ithr) = ndisk(ithr) + 1_int64
                     endif
-                    u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl), dp)
                     temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i), dp)
                     temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                         &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
-                    call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, u_prev, lse_map, logp0)
+                    call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, lse_map, logp0)
                 else
                     ! (1) identify shifts using the previously assigned best class
                     if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr)%set_shift_prior(sigma2_prior,&
@@ -414,7 +413,7 @@ contains
                         icls = pool(iref_n)
                         if( icls < 1 ) cycle
                         call self%b_ptr%pftc%gen_shiftmap(imap, icls, iptcl)
-                        call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, u_prev, lse_map, .true.,&
+                        call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, lse_map, .true.,&
                             &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
                             &sdev=scr_sdev(icls))
                         scr_irot(icls) = irot
@@ -686,13 +685,12 @@ contains
             integer  :: pool_loc(neval_loc), scr_irot_loc(self%nclasses), slot_of_loc(self%nclasses), loc_loc(1)
             real     :: cxy_prob_loc(3), xy0_loc(2), loss_cell_loc, dist_loc, sdev_loc, dists_sorted_loc(neval_loc)
             real     :: scr_xy_loc(2,self%nclasses), scr_loss_loc(self%nclasses), scr_sdev_loc(self%nclasses)
-            real(dp) :: u_prev_loc(2), lse_loc, logp0_loc, temp_s_loc, temp_i_loc, logz_loc, prior_w_loc
+            real(dp) :: lse_loc, logp0_loc, temp_s_loc, temp_i_loc, logz_loc, prior_w_loc
             logical  :: l_polished_loc
             if( .not. l_with_shift ) return
             if( neval_loc < 1 ) return
             gso => grad_shsrch_obj(ithr_loc)
             if( l_map )then
-                u_prev_loc  = real(self%b_ptr%spproj_field%get_2Dshift(iptcl_loc), dp)
                 temp_s_loc  = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                     &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
                 imap_loc    = SHIFTMAP_WINDOW
@@ -703,7 +701,7 @@ contains
                     gso         => grad_shsrch_disk(ithr_loc)
                     ndisk(ithr_loc) = ndisk(ithr_loc) + 1_int64
                 endif
-                call self%b_ptr%pftc%shiftmap_prior(imap_loc, prior_w_loc, u_prev_loc, lse_loc, logp0_loc)
+                call self%b_ptr%pftc%shiftmap_prior(imap_loc, prior_w_loc, lse_loc, logp0_loc)
             endif
             nrefine_loc = min(smpl_ncls, neval_loc)
             if( l_map .and. l_disk_loc )then
@@ -722,7 +720,7 @@ contains
                     if( icls_loc < 1 ) cycle
                     slot_of_loc(icls_loc) = eval_slot_loc
                     call self%b_ptr%pftc%gen_shiftmap(imap_loc, icls_loc, iptcl_loc)
-                    call self%b_ptr%pftc%shiftmap_draw(imap_loc, temp_s_loc, prior_w_loc, u_prev_loc, lse_loc, .true.,&
+                    call self%b_ptr%pftc%shiftmap_draw(imap_loc, temp_s_loc, prior_w_loc, lse_loc, .true.,&
                         &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc,&
                         &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev_loc(icls_loc))
                     scr_irot_loc(icls_loc) = irot_loc
@@ -757,7 +755,7 @@ contains
                 call gso%set_indices(icls_loc, iptcl_loc)
                 if( l_map )then
                     call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_WINDOW, icls_loc, iptcl_loc)
-                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s_loc, 0.d0, u_prev_loc, lse_loc, .true.,&
+                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s_loc, 0.d0, lse_loc, .true.,&
                         &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc,&
                         &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=sdev_loc)
                     xy0_loc = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho_loc, ialpha_loc))

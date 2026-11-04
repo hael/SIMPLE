@@ -12,7 +12,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eul
     &temperature_or_argmin
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
-use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, screen_pool_size
+use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, screen_pool_size, map_prior_weight, insert_pose_loss
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW
 use simple_ori,                only: ori
@@ -862,9 +862,10 @@ contains
         !! modulo the point group and the shift together moving the rim by less than the map resolves), the kmax - 1 of
         !! highest posterior at the particle's own temperature, with the weights that posterior renormalised over the
         !! kept set (top_posterior_extras): the draw decides the hypothesis, the extras only spread the particle over
-        !! the poses the map resolves alike. Deterministic given the committed poses, so the particles run in parallel
-        !! after the draws, each thread gathering the row again on its own arrays; the table takes the result in
-        !! particle order
+        !! the poses the map resolves alike. Under the map the refined candidates are weighed by the dense table's
+        !! insertion loss (insert_pose_loss: the map's prior on the pose's increment), not their data term alone.
+        !! Deterministic given the committed poses, so the particles run in parallel after the draws, each thread
+        !! gathering the row again on its own arrays; the table takes the result in particle order
         subroutine select_extras( kmax, l_refined, which_pos, maxcand )
             integer, intent(in) :: kmax, which_pos(:), maxcand
             logical, intent(in) :: l_refined(:)
@@ -872,7 +873,12 @@ contains
             integer, allocatable :: kpos(:,:), kinds(:,:), nkept(:), nelig(:), pos_c(:,:)
             real,    allocatable :: kw(:,:), dists_c(:,:)
             logical, allocatable :: eligible(:,:)
-            integer :: i_loc, n_loc, ibest, istate_best, r_loc, proj_r, k, ithr
+            integer  :: i_loc, n_loc, ibest, istate_best, r_loc, proj_r, k, ithr
+            real(dp) :: prior_w_ins
+            logical  :: l_prior_ins
+            l_prior_ins = self%p_ptr%l_centring
+            prior_w_ins = 0.d0
+            if( l_prior_ins ) prior_w_ins = map_prior_weight(self%p_ptr%shift_sigma, self%p_ptr%smpd)
             allocate(kpos(kmax,self%nptcls), nkept(self%nptcls), nelig(self%nptcls), source=0)
             allocate(kw(kmax,self%nptcls), source=0.)
             allocate(pos_c(max(1,maxcand),nthr_glob), kinds(kmax,nthr_glob), source=0)
@@ -890,6 +896,9 @@ contains
                 do r_loc = 1,n_loc
                     eligible(r_loc,ithr) = self%candidate_store%candidates(pos_c(r_loc,ithr))%has_sh
                     if( .not. eligible(r_loc,ithr) ) cycle
+                    if( l_prior_ins ) dists_c(r_loc,ithr) = insert_pose_loss(dists_c(r_loc,ithr),&
+                        &real([self%candidate_store%candidates(pos_c(r_loc,ithr))%x,&
+                        &self%candidate_store%candidates(pos_c(r_loc,ithr))%y], dp), prior_w_ins, self%temps(i_loc))
                     proj_r = modulo(self%candidate_store%candidates(pos_c(r_loc,ithr))%iref - 1, self%p_ptr%nspace) + 1
                     eligible(r_loc,ithr) = self%insert_cone%within(istate_best, self%assgn_map(i_loc)%iproj, &
                         &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], proj_r, &
@@ -1483,7 +1492,7 @@ contains
         integer  :: si, state_eval, pool(neval), scr_irot(neval), loc(1)
         real     :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval)
         real     :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval)
-        real(dp) :: u_prev(2), lse_map, logp0, temp_s, temp_i, logz, prior_w_map
+        real(dp) :: lse_map, logp0, temp_s, temp_i, logz, prior_w_map
         logical  :: l_polished
         ew%best_evals(:,ithr) = 0
         if( neval <= 0 ) return
@@ -1492,7 +1501,6 @@ contains
         prior_w_map = 0.d0
         step        = step_win
         if( l_map )then
-            u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl), dp)
             temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                 &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
             temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i), dp)
@@ -1502,7 +1510,7 @@ contains
                 step        = step_disk
                 gso         => grad_disk(ithr)
             endif
-            call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, u_prev, lse_map, logp0)
+            call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, lse_map, logp0)
         endif
         do si = 1, self%nstates
             state_eval = self%ssinds(si)
@@ -1530,7 +1538,7 @@ contains
                     ri = ew%evaluated_ref_ids(eval_slot,ithr)
                     if( ri < 1 ) cycle
                     call self%b_ptr%pftc%gen_shiftmap(imap, self%ref_full(ri), iptcl)
-                    call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, u_prev, lse_map, .true.,&
+                    call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, lse_map, .true.,&
                         &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
                         &sdev=scr_sdev(eval_slot))
                     scr_irot(eval_slot) = irot
@@ -1567,7 +1575,7 @@ contains
                 irot = self%candidate_buffers(ithr)%get_inpl(i, self%ref_full(ri))
                 if( l_map )then
                     call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_WINDOW, self%ref_full(ri), iptcl)
-                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s, 0.d0, u_prev, lse_map, .true.,&
+                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s, 0.d0, lse_map, .true.,&
                         &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=sdev)
                     xy_start = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho, ialpha))
                     call gso%minimize_in_cell(irot, xy_start, step_win, refined_shift, l_polished)

@@ -196,15 +196,11 @@ contains
             ! the search to fill as it commits each particle's pose (strategy3D_prob) and calc_3Drec to insert; the
             ! master writes the table whenever topk > 1, so its absence is a broken handoff, not a case
             if( p_ptr%topk > 1 )then
-                if( trim(p_ptr%rec_backend) == 'pcg' )then
-                    write(logfhandle,'(A)') 'WARNING: topk > 1 applies to the gridding insertion only; the PCG backend reconstructs from the committed poses'
-                else
-                    if( .not. file_exists(string(INSERT_FBODY)//'.dat') )then
-                        THROW_HARD('topk > 1 but the weighted insertion''s table '//INSERT_FBODY//'.dat is missing; refine3D_exec')
-                    endif
-                    call eulprob_obj_part%read_insert_table(string(INSERT_FBODY)//'.dat')
-                    call extra_poses%setup(eulprob_obj_part%insert_tab, pinds)
+                if( .not. file_exists(string(INSERT_FBODY)//'.dat') )then
+                    THROW_HARD('topk > 1 but the weighted insertion''s table '//INSERT_FBODY//'.dat is missing; refine3D_exec')
                 endif
+                call eulprob_obj_part%read_insert_table(string(INSERT_FBODY)//'.dat')
+                call extra_poses%setup(eulprob_obj_part%insert_tab, pinds)
             endif
         endif
         if( ctrl%do_bench )then
@@ -623,19 +619,19 @@ contains
         class(builder),                  intent(inout) :: build
         class(cmdline),                  intent(inout) :: cline
         integer,                         intent(in)    :: nptcls, pinds(:)
-        type(prob_insert_poses), optional, intent(in)  :: extra  !< the weighted insertion's poses (topk > 1, gridding)
+        type(prob_insert_poses), optional, intent(in)  :: extra  !< the weighted insertion's poses (topk > 1)
         type(state_weight_set) :: wset
         if( params%l_m_estimator_flex )then
             call wset%new(build%spproj, build%spproj_field)
             if( trim(params%rec_backend) == 'pcg' )then
-                call execute_rec3D_pcg_worker(params, build, cline, pinds, wset)
+                call execute_rec3D_pcg_worker(params, build, cline, pinds, wset, extra=extra)
             else
                 call calc_3Drec(params, build, nptcls, pinds, wset, extra=extra)
             endif
             call wset%kill
         else
             if( trim(params%rec_backend) == 'pcg' )then
-                call execute_rec3D_pcg_worker(params, build, cline, pinds)
+                call execute_rec3D_pcg_worker(params, build, cline, pinds, extra=extra)
             else
                 call calc_3Drec(params, build, nptcls, pinds, extra=extra)
             endif

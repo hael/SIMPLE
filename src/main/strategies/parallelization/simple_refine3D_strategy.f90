@@ -1304,7 +1304,7 @@ contains
             cline_polish = cline_build
             call cline_polish%set('refine',    'cont')
             call cline_polish%set('pose_cont', 'yes')
-            call cline_polish%delete('shift_sigma') ! the table's map does not run in the Cartesian pass
+            call cline_polish%set('shift_sigma', 0.) ! the map does not run in the Cartesian pass
             call build%kill_strategy3D_tbox
             call build%kill_general_tbox
             if( .not. allocated(self%params_polish) ) allocate(self%params_polish)
@@ -1819,7 +1819,7 @@ contains
             job_descr_pass = self%job_descr
             call job_descr_pass%set('refine',    'cont')
             call job_descr_pass%set('pose_cont', 'yes')
-            if( job_descr_pass%isthere('shift_sigma') ) call job_descr_pass%delete('shift_sigma')
+            call job_descr_pass%set('shift_sigma', '0')
             call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), &
                 &array=L_USE_SLURM_ARR, extra_params=params)
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY, write=.false.)

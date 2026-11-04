@@ -145,7 +145,7 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; in every stage '//&
+        &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); in every stage '//&
         &'with shifts the probability tables centre each particle as it needs: one not yet centred in this workflow, '//&
         &'or whose shift posterior is wider than a third of the stage''s window, locates its likely directions over the '//&
         &'disk of 3 sigma with a coarse polar shift map under the box''s mask and polishes from the map''s optimum, the '//&

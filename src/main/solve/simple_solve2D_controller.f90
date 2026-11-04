@@ -142,8 +142,9 @@ contains
         call cline_pass%delete('nsample')
         call cline_pass%delete('fillin')
         call cline_pass%delete('gaufreq')
-        ! Seeded restarts skip the centring stage and keep the ordinary shift window.
-        call cline_pass%delete('shift_sigma')
+        ! Seeded restarts skip the centring stage and keep the ordinary shift window (the key off explicitly: the
+        ! parameter's default is the key)
+        call cline_pass%set('shift_sigma', 0.)
         if( stage_parms(istage)%l_lpset )then
             call cline_pass%set('lp', stage_parms(istage)%lp)
         else
@@ -400,11 +401,8 @@ contains
             endif
         endif
         call cline_refine2D%set('trs',        cfg%trs)
-        if( cfg%shift_sigma > 0. )then
-            call cline_refine2D%set('shift_sigma', cfg%shift_sigma)
-        else
-            call cline_refine2D%delete('shift_sigma')
-        endif
+        ! zero switches the key off: the parameter's default is the key
+        call cline_refine2D%set('shift_sigma', cfg%shift_sigma)
         if( cfg%mskdiam > 0. ) call cline_refine2D%set('mskdiam', cfg%mskdiam)
         call cline_refine2D%set('center',     cfg%center)
         call cline_refine2D%set('restore_cavgs', 'yes')

@@ -14,7 +14,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_pose, prob_insert_poses, prob_insert_cone, &
-    &PROB_NEFF_MIN_ROWS
+    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss
 use simple_rnd,                only: seed_rnd_fixed
 use simple_sym,                only: sym
 use simple_oris,               only: oris
@@ -50,6 +50,8 @@ contains
         call test_draw_posterior_row()
         write(*,'(A)') 'test_top_posterior_extras'
         call test_top_posterior_extras()
+        write(*,'(A)') 'test_insert_pose_loss'
+        call test_insert_pose_loss()
         write(*,'(A)') 'test_insert_cone'
         call test_insert_cone()
         write(*,'(A)') 'test_insert_table_round_trip'
@@ -863,6 +865,28 @@ contains
     !! entry nor an invalid one, with the weights the posterior over the kept set summing to 1 (the committed
     !! entry's its own share, zero when it has no mass); an extra below wmin is dropped with every lighter one; on a
     !! tie the earlier entry stays; nelig counts the eligible valid entries other than the committed one
+    !> the review's T2: the insertion weighs poses by the data term with the map's prior on the pose's increment, in
+    !! the dense and the neighbourhood tables alike (insert_pose_loss); two poses of equal data term 20 and 22 px from
+    !! the stored shift under sigma = 10 px share the kept set 0.603483 / 0.396517 at any temperature
+    subroutine test_insert_pose_loss()
+        real     :: d(2), w(2), temps(2)
+        real(dp) :: prior_w
+        integer  :: inds(2), nkept, nelig, it
+        prior_w = map_prior_weight(10., 1.)
+        call assert_real(0.005, real(prior_w), 1.e-7, 'the map''s prior''s weight is 1 / (2 sigma^2)')
+        temps = [0.5, 2.]
+        do it = 1, 2
+            d(1) = insert_pose_loss(0.3, [20.d0, 0.d0], prior_w, temps(it))
+            d(2) = insert_pose_loss(0.3, [0.d0, -22.d0], prior_w, temps(it))
+            call top_posterior_extras(2, d, temps(it), [.true., .true.], 1, 2, 1.e-6, nkept, inds, w, nelig)
+            call assert_int(2, nkept, 'both poses kept')
+            call assert_real(0.603483, w(1), 1.e-5, 'the pose moved 20 px weighs 0.603483')
+            call assert_real(0.396517, w(2), 1.e-5, 'the pose moved 22 px weighs 0.396517')
+        enddo
+        call assert_real(0.3, insert_pose_loss(0.3, [20.d0, 0.d0], prior_w, 0.), 0., &
+            &'without a temperature the loss is the data term')
+    end subroutine test_insert_pose_loss
+
     subroutine test_top_posterior_extras()
         real    :: dists(6), w(5), dist, wrow(6), z
         integer :: inds(5), nkept, nelig, i, seq1(20), seq2(20)

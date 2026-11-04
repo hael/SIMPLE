@@ -1141,6 +1141,9 @@ contains
             case DEFAULT
                 self%l_centring = .false.
         end select
+        ! under the map every polish is the data's alone (the map's prior enters the first centring's coarse draw and
+        ! the insertion's loss): the window search's prior on the increment is off
+        if( self%l_centring ) self%l_shift_prior = .false.
         self%l_prob_inpl = trim(self%prob_inpl).eq.'yes'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch <= 1 ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'no' )then

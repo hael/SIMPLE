@@ -73,7 +73,7 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; the probability '//&
+        &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); the probability '//&
         &'tables and the classic modes centre each particle as it needs: one not yet centred in this workflow, or whose '//&
         &'shift posterior is wider than a third of the window, locates its likely classes over the disk of 3 sigma with a '//&
         &'coarse polar shift map under the box''s mask and polishes from the map''s optimum, the others polish from the '//&
@@ -143,7 +143,7 @@ contains
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; from stage 2 on '//&
+        &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); from stage 2 on '//&
         &'the probability tables centre each particle as it needs: one not yet centred in this workflow, or whose shift '//&
         &'posterior is wider than a third of the stage''s window, locates its likely classes over the disk of 3 sigma '//&
         &'with a coarse polar shift map under the box''s mask and polishes from the map''s optimum, the others polish '//&

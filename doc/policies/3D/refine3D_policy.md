@@ -524,7 +524,7 @@ directly for the particle-frame lattice. Until then the centre was the
 start x itself, which held only at the start's rotation: with a nonzero
 seed a rotation change moved the stored shift without the penalty, and a
 rotation that kept it paid (`test_shift_prior_frame`).
-`shift_sigma` (the polar shift map, `doc/implementation_notes/planned/polar_shift_search.md`
+`shift_sigma` (the polar shift map, `doc/implementation_notes/completed/polar_shift_search.md`
 and `polar_shift_search_dynamic_centring.md`) makes the tables' shift search
 coarse-to-fine and centres each particle as it needs (ruling 19, 2026-11-02: the
 centring is a per-particle state, not a stage, since the sampling strategies inject
@@ -540,10 +540,11 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   its geometric neighbourhood), screens the references holding 99 % of the
   particle's posterior at the origin (at least twice the refined count,
   `screen_pool_size`) with the coarse map over the disk of 3 sigma
-  (`disk_radius_px`, bounded by the box; `SHIFTMAP_SCREEN`) under the absolute prior
-  on the displacement from the pick at the particle's first centring and without it
-  after (a re-centring is the data's alone; under the draw's tempering the untempered
-  prior pulled centred particles back towards their picks), keeps each one's coarse
+  (`disk_radius_px`, bounded by the box; `SHIFTMAP_SCREEN`) under the prior on the
+  increment from the stored shift (it moves with the particle, ruling 22: in 3D the
+  2D shift is the origin, not the pick) at the particle's first centring and without
+  it after (a re-centring is the data's alone; under the draw's tempering the
+  untempered prior at the pick pulled centred particles back), keeps each one's coarse
   optimum, and polishes
   the best at full resolution in a box of one map step about that optimum in the
   disk's own search object (`pftc_shsrch_grad%minimize_in_cell`: the L-BFGS from the
@@ -566,9 +567,9 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   least the radius searched when the move reached its bound, within a tenth of it or
   half a map step where the map is finer (`next_shift_width`). The width chooses the
   next box and never enters the
-  likelihood; the pick prior stays the only prior in the draw and in the weighted
-  insertion's loss (`prob_refined_entry%loss`: the polished loss with the absolute
-  prior on the total displacement at the physical temperature);
+  likelihood; the map's prior stays the only prior in the draw and in the weighted
+  insertion's loss (`insert_pose_loss`, both 3D tables: the polished loss with the
+  prior on the pose's increment at the physical temperature);
 - the sentinel is set by both refine3D masters at a run's first iteration; the
   driver prints the disk set by cause and the widths' median and 90th percentile
   (`print_disk_set`). No stage ends on the centring.
@@ -762,12 +763,14 @@ status is the committed pose's. `calc_3Drec` then inserts the committed plane wi
 each extra pose from the committed plane re-shifted by the pose difference
 (`fplane_shift`: a phase ramp over the stored lattice, no second read or
 transform; the CTF^2 plane is shift-free), so the cost of an extra pose is
-one gridding insertion. The weights of a particle sum to 1, so the trailing
-reconstruction's population accounting is unchanged. Gridding backend only:
-the PCG master and the final and bootstrap reconstructions use the
-committed poses (a warning under `rec_backend=pcg`), so the last
-iteration's map and a `reconstruct3D` from the project differ under
-`topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
+one gridding insertion. The PCG worker takes the same poses (2026-11-03):
+each extra pose is one more weighted entry of the operator from the same
+observation, laid out after the committed ones (`pcg_extra_entries`,
+`accumulate_pcg_extras`; `test_pcg_extra_entries` pins the layout). The
+weights of a particle sum to 1, so the trailing reconstruction's population
+accounting is unchanged. The final and bootstrap reconstructions use the
+committed poses, so the last iteration's map and a `reconstruct3D` from the
+project differ under `topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
 insert the committed pose alone, their candidates being the hill climb's
 unrefined proposals; the 2D route is untouched. The assignment's companion
 files (the distance and assignment parts, the merged assignment and the

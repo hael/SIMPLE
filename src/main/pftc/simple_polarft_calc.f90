@@ -1061,18 +1061,18 @@ interface
         integer,             intent(out) :: irho, ialpha
     end subroutine shiftmap_peak
 
-    module subroutine shiftmap_prior( self, imap, prior_w, u_prev, lse_prior, logp0 )
+    module subroutine shiftmap_prior( self, imap, prior_w, lse_prior, logp0 )
         class(polarft_calc), intent(in)  :: self
         integer,             intent(in)  :: imap
-        real(dp),            intent(in)  :: prior_w, u_prev(2)
+        real(dp),            intent(in)  :: prior_w
         real(dp),            intent(out) :: lse_prior, logp0
     end subroutine shiftmap_prior
 
-    module subroutine shiftmap_draw( self, imap, temp, prior_w, u_prev, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
+    module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
             &temp_phys, sdev )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
-        real(dp),                    intent(in)    :: temp, prior_w, u_prev(2), lse_prior
+        real(dp),                    intent(in)    :: temp, prior_w, lse_prior
         logical,                     intent(in)    :: l_greedy
         real(dp),                    intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha

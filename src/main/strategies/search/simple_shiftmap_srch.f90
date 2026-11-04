@@ -30,10 +30,9 @@ type :: shiftmap_srch
     class(builder),    pointer :: b_ptr => null()
     type(pftc_shsrch_grad) :: gso_win              !< the polish within the window
     type(pftc_shsrch_grad) :: gso_disk             !< the polish within the disk
-    real(dp) :: u_prev(2)  = 0.d0                  !< the stored shift
     real(dp) :: temp_i     = 0.d0                  !< the tempered temperature of the full band (the pool's size)
     real(dp) :: temp_s     = 0.d0                  !< the tempered temperature of the coarse band (the maps)
-    real(dp) :: prior_w    = 0.d0                  !< the pick prior's weight: the disk at a particle's first centring
+    real(dp) :: prior_w    = 0.d0                  !< the prior's weight: the disk at a particle's first centring
     integer  :: iptcl      = 0
     integer  :: imap       = SHIFTMAP_WINDOW
     logical  :: l_disk     = .false.
@@ -90,7 +89,7 @@ contains
         self%exists = .true.
     end subroutine new
 
-    !> the particle's box (the disk when shift_needs_disk, under the pick prior at its first centring) and the
+    !> the particle's box (the disk when shift_needs_disk, under the prior at its first centring) and the
     !! temperatures of its screen
     subroutine prep( self, iptcl )
         class(shiftmap_srch), intent(inout) :: self
@@ -107,7 +106,6 @@ contains
             self%imap = SHIFTMAP_SCREEN
             if( shsig < 0. ) self%prior_w = prior_w_run
         endif
-        self%u_prev = real(self%b_ptr%spproj_field%get_2Dshift(iptcl), dp)
         pftsz       = self%b_ptr%pftc%get_pftsz()
         self%temp_i = real(self%p_ptr%prob_beta, dp) *&
             &real(posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), pftsz), dp)
@@ -151,7 +149,7 @@ contains
         do k = 1, npool
             ref = refs(order(k))
             call self%b_ptr%pftc%gen_shiftmap(self%imap, ref, self%iptcl)
-            call self%b_ptr%pftc%shiftmap_draw(self%imap, self%temp_s, self%prior_w, self%u_prev, 0.d0, .true.,&
+            call self%b_ptr%pftc%shiftmap_draw(self%imap, self%temp_s, self%prior_w, 0.d0, .true.,&
                 &logz, irot, irho, ialpha, loss, temp_phys=self%temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(k))
             scr_loss(k)  = loss
             scr_irot(k)  = irot

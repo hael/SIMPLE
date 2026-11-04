@@ -29,6 +29,7 @@ public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state
+public :: map_prior_weight, insert_pose_loss
 private
 #include "simple_local_flags.inc"
 
@@ -179,7 +180,7 @@ end type prob_dense_entry
 
 ! A refined entry of the dense table: the particle (part-local in a part file, the master's index on the master),
 ! the compact reference, the shift of its search and the loss at that pose (the row's distance under the window
-! search; under the polar shift map the drawn cell's posterior loss, its data term with the absolute prior at the
+! search; under the polar shift map the drawn cell's posterior loss, its data term with the map's prior on the increment at the
 ! physical temperature, where the row holds the reference's evidence)
 type :: prob_refined_entry
     integer :: i
@@ -1512,12 +1513,30 @@ contains
         shift_needs_disk = shsig < 0. .or. 3. * shsig > trs
     end function shift_needs_disk
 
-    !> the disk's radius: three sigma of the pick prior in the calculator's pixels, bounded by the box
+    !> the disk's radius: three sigma of the map's prior in the calculator's pixels, bounded by the box
     pure real function disk_radius_px( shift_sigma, smpd, box )
         real,    intent(in) :: shift_sigma, smpd
         integer, intent(in) :: box
         disk_radius_px = min(3. * shift_sigma / smpd, 0.5 * real(box) - 1.)
     end function disk_radius_px
+
+    !> the map's prior's weight 1 / (2 sigma^2) on the squared shift from the stored one, sigma in the calculator's
+    !! pixels
+    pure real(dp) function map_prior_weight( shift_sigma, smpd )
+        real, intent(in) :: shift_sigma, smpd
+        map_prior_weight = 1.d0 / (2.d0 * (real(shift_sigma, dp) / real(smpd, dp))**2)
+    end function map_prior_weight
+
+    !> A pose's loss for the weighted insertion under the polar shift map, the dense and the neighbourhood tables
+    !! alike: the data term dist with the prior (weight prior_w) on the pose's increment du from the stored shift
+    !! (the prior moves with the particle) at the particle's physical temperature temp, so exp(-temp loss) is the
+    !! pose's posterior up to a constant
+    pure real function insert_pose_loss( dist, du, prior_w, temp )
+        real,     intent(in) :: dist, temp
+        real(dp), intent(in) :: du(2), prior_w
+        insert_pose_loss = dist
+        if( temp > 0. ) insert_pose_loss = dist + real(prior_w * sum(du**2) / real(temp, dp))
+    end function insert_pose_loss
 
     !> the radius of the box a particle's search covers: the disk when it needs one, else the window
     pure real function shift_box_radius( shsig, shift_sigma, smpd, box, trs )

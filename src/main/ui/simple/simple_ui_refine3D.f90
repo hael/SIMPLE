@@ -66,7 +66,7 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
-        &'Sigma (in A) of the Gaussian prior on each particle''s displacement from its picked position; the polar '//&
+        &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); the polar '//&
         &'modes (refine=shc, neigh, greedy, greedy_inpl, prob, prob_neigh) centre each particle as it needs: one not yet '//&
         &'centred in this workflow, or whose shift posterior is wider than a third of the window, locates its likely '//&
         &'directions over the disk of 3 sigma with a coarse polar shift map under the box''s mask and polishes from the '//&

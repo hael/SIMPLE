@@ -723,7 +723,12 @@ contains
             call cline_refine2D%set('extr_iter',      params%extr_lim + 1)
             call cline_refine2D%set('refine',         'greedy')
             call cline_refine2D%set('restore_cavgs', 'yes')
-            call cline_refine2D%set('shift_sigma', 0.) ! the window search: the terminal pass runs without the polar shift map
+            ! the polar shift map centres the particles the sampled stages left on the sentinel (zero: the window search)
+            if( params%l_shift_map )then
+                call cline_refine2D%set('shift_sigma', params%shift_sigma)
+            else
+                call cline_refine2D%set('shift_sigma', 0.)
+            endif
             if( present(terminal_policy) ) call terminal_policy(cline_refine2D)
             call cline_refine2D%delete('update_frac')
             call cline_refine2D%delete('fillin')

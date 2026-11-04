@@ -676,12 +676,12 @@ contains
         ! Early stopping applies in every stage (doc/policies/3D/solve3D_policy.md sec. 4).
         call cline_refine3D%delete('minits')
         call cline_refine3D%set('trs',                    cfg%trs)
-        ! the polar shift map's key goes to every stage with a shift search: the tables centre each particle as it
-        ! needs (the dynamic centring), the map initialises every polish
+        ! the polar shift map's key goes to every stage with a shift search, where each particle is centred as it
+        ! needs; zero switches it off elsewhere (the parameter's default is the key)
         if( params%l_shift_map .and. cfg%trs > 0. )then
             call cline_refine3D%set('shift_sigma',        params%shift_sigma)
         else
-            call cline_refine3D%delete('shift_sigma')
+            call cline_refine3D%set('shift_sigma',        0.)
         endif
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
         call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
