@@ -26,6 +26,8 @@ contains
         call test_peak_recovery()
         call test_kernel_identity('cc')
         call test_kernel_identity('euclid')
+        call test_orders_beyond_ring()
+        call test_angular_nyquist()
         call test_cell_areas()
         call test_kernel_threads()
         call test_kernel_draw()
@@ -549,6 +551,122 @@ contains
 
     !> the polar measure: the cells of a grid sum to the disk out to the outer edge, and the origin's cells to the
     !! central disk; an unsorted magnitude list gives the same areas
+    !> The review's M3: a disk wide against a short ring needs Bessel orders beyond the ring's length, whose spectral
+    !! index wraps modulo the ring; the grid's objective is still the calculator's shifted, rotated objective (cc, a
+    !! ring of 2 x 16 samples, magnitudes out to 20 px at shell 21)
+    subroutine test_orders_beyond_ring()
+        integer,  parameter :: NALPHA = 24, NRHO = 4, NTRIALS = 40
+        real(dp), parameter :: RHOS(NRHO) = [0.d0, 6.d0, 13.d0, 20.d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        type(polar_shiftmap)      :: sm
+        real,        allocatable  :: sigma2(:,:)
+        complex(sp), allocatable  :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp),    allocatable  :: ctfs(:,:,:), vals(:,:,:)
+        real(dp) :: s(2), err, val_ref
+        integer  :: kfromto(2), pftsz, nrots, itrial, irot, ir, j
+        write(*,'(A)') 'test_orders_beyond_ring'
+        call set_fixed_seed(20261104)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'cc', 1, 64, 1.0, 48.0, 3.0, 16, 2, 1, sigma2, refs, ptcls, ctfs, kfromto)
+        pftsz = pftc%get_pftsz()
+        nrots = pftc%get_nrots()
+        call sm%new(pftsz, kfromto, 64, RHOS, NALPHA)
+        call assert_true(sm%get_nharm_max() > nrots, 'the fixture needs orders beyond the ring''s length')
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
+        allocate(vals(NALPHA,nrots,NRHO))
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+        err = 0.d0
+        do itrial = 1, NTRIALS
+            irot    = min(nrots,  1 + int(ran3() * real(nrots)))
+            ir      = min(NRHO,   1 + int(ran3() * real(NRHO)))
+            j       = min(NALPHA, 1 + int(ran3() * real(NALPHA)))
+            s       = pftc%shiftmap_shift(SHIFTMAP_FULL, ir, j)
+            val_ref = pftc%gen_corr_for_rot_8(2, 1, s, irot)
+            err     = max(err, abs(real(vals(j,irot,ir), dp) - val_ref))
+        enddo
+        write(*,'(A,I3,A,I3,A,ES10.2)') '  orders to ', sm%get_nharm_max(), ' on a ring of ', nrots,&
+            &': max |grid - gen_corr_for_rot_8| ', err
+        call assert_true(err <= 1.d-6, 'orders beyond the ring wrap: the grid is the calculator''s objective')
+        call sm%kill
+        call pftc%kill
+        deallocate(refs, ptcls, ctfs, vals, p, pftc)
+        if( allocated(sigma2) ) deallocate(sigma2)
+    end subroutine test_orders_beyond_ring
+
+    !> The review's M1: every Euclidean objective carries the angular Nyquist bin. On the fixture's random spectra the
+    !! score row (gen_objfun_vals, exp(-L)) is the direct residual (gen_corr_for_rot_8) at every rotation, unshifted and
+    !! shifted, and the continuous evaluator is the row at the grid angles; with reference and particle the alternating
+    !! half ring (-1)^(p-1), unit CTF, the loss is 0 at rotation 1 and 4 at rotation 2 in all four, the map included
+    subroutine test_angular_nyquist()
+        integer,  parameter :: NALPHA = 8, NRHO = 2
+        real(dp), parameter :: RHOS(NRHO) = [0.d0, 2.d0], TOL = 1.d-5
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable         :: pftc
+        real,        allocatable  :: sigma2(:,:)
+        complex(sp), allocatable  :: refs(:,:,:,:), ptcls(:,:,:), alt(:,:)
+        real(sp),    allocatable  :: ctfs(:,:,:), row(:), vals(:,:,:), ones(:,:)
+        real(dp) :: f, grad(3), err_row, err_cont, shifts(2,2), l_dir, l_row, l_map, l_cont
+        integer  :: kfromto(2), pftsz, nrots, k, pp, irot, is, pdim(3)
+        write(*,'(A)') 'test_angular_nyquist'
+        call set_fixed_seed(20261105)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 36, 2, 1, sigma2, refs, ptcls, ctfs, kfromto)
+        pftsz  = pftc%get_pftsz()
+        nrots  = pftc%get_nrots()
+        pdim   = pftc%get_pdim_interp()
+        shifts = reshape([0.d0, 0.d0, 1.3d0, -0.7d0], [2,2])
+        allocate(row(nrots))
+        err_row  = 0.d0
+        err_cont = 0.d0
+        do is = 1, 2
+            call pftc%gen_objfun_vals(2, 1, real(shifts(:,is)), row)
+            do irot = 1, nrots
+                err_row = max(err_row, abs(real(row(irot),dp) - pftc%gen_corr_for_rot_8(2, 1, shifts(:,is), irot)))
+                if( is > 1 ) cycle
+                call pftc%gen_raw_euclid_grad_at_angle(2, 1, [0.d0, 0.d0], real(irot,dp), f, grad)
+                err_cont = max(err_cont, abs(exp(-f) - real(row(irot),dp)))
+            enddo
+        enddo
+        write(*,'(A,ES10.2,A,ES10.2)') '  max |row - direct| ', err_row, ', max |continuous - row| ', err_cont
+        call assert_true(err_row  <= TOL, 'the score row is the direct residual at every rotation, unshifted and shifted')
+        call assert_true(err_cont <= TOL, 'the continuous evaluator is the score row at the grid angles')
+        ! the alternating half ring: all its energy at the angular Nyquist bin
+        allocate(alt(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        allocate(ones(pdim(1),pdim(2):pdim(3)), source=1.)
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                alt(pp,k) = cmplx(real(1 - 2 * mod(pp-1, 2)), 0.)
+            enddo
+        enddo
+        call pftc%set_ref_pft(2, alt, iseven=.true.)
+        call pftc%set_ref_pft(2, alt, iseven=.false.)
+        call pftc%set_ptcl_ctfmat(1, ones)
+        call pftc%set_ptcl_pft(1, alt)
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        call pftc%assign_sigma2_noise(sigma2)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
+        allocate(vals(NALPHA,nrots,NRHO))
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+        call pftc%gen_objfun_vals(2, 1, [0., 0.], row)
+        do irot = 1, 2
+            l_dir  = -log(pftc%gen_corr_for_rot_8(2, 1, [0.d0, 0.d0], irot))
+            l_row  = -log(real(row(irot),dp))
+            l_map  = real(vals(1,irot,1),dp)
+            call pftc%gen_raw_euclid_grad_at_angle(2, 1, [0.d0, 0.d0], real(irot,dp), l_cont, grad)
+            write(*,'(A,I1,A,4F9.5)') '  rotation ', irot, ': direct, row, map, continuous ', l_dir, l_row, l_map, l_cont
+            call assert_true(abs(l_dir - real(4*(irot-1),dp)) <= 1.d-4, 'the direct residual of the Nyquist pattern')
+            call assert_true(abs(l_row - l_dir) <= 1.d-4 .and. abs(l_map - l_dir) <= 1.d-4 .and. abs(l_cont - l_dir) <= 1.d-4,&
+                &'the row, the map and the continuous evaluator agree with it on the Nyquist bin')
+        enddo
+        call pftc%kill
+        deallocate(refs, ptcls, ctfs, row, alt, ones, vals, p, pftc)
+        if( allocated(sigma2) ) deallocate(sigma2)
+    end subroutine test_angular_nyquist
+
     subroutine test_cell_areas()
         integer,  parameter :: NALPHA = 12, NRHO = 5
         real(dp), parameter :: RHOS(NRHO) = [0.d0, 2.d0, 4.d0, 6.d0, 8.d0], SHUF(NRHO) = [6.d0, 0.d0, 8.d0, 2.d0, 4.d0]

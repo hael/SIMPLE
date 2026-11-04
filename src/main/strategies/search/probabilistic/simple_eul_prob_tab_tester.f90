@@ -925,6 +925,13 @@ contains
         ! the order is by weight, not by index
         call top_posterior_extras(5, [0., 3., 1., 2., 0.5], 1., [.true., .true., .true., .true., .true.], 1, 4, 1.e-6, nkept, inds, w, nelig)
         call assert_true(nkept == 4 .and. inds(2) == 5 .and. inds(3) == 3 .and. inds(4) == 4, 'the extras come in descending weight whatever their row order')
+        ! the review's M4: an excluded row far better than the kept set changes nothing (the normaliser is local)
+        call top_posterior_extras(3, [0., 0.9, 0.901], 100., [.false., .true., .true.], 2, 2, 1.e-6, nkept, inds, w, nelig)
+        call assert_true(nkept == 2 .and. inds(1) == 2 .and. inds(2) == 3, 'an excluded better row keeps the eligible extra')
+        call assert_real(0.524980, w(1), 1.e-5, 'the committed entry''s weight is its conditional share')
+        call assert_real(0.475020, w(2), 1.e-5, 'the extra''s weight is its conditional share')
+        call top_posterior_extras(3, [5., 0.9, 0.901], 100., [.false., .true., .true.], 2, 2, 1.e-6, nkept, inds, w, nelig)
+        call assert_real(0.524980, w(1), 1.e-5, 'changing an excluded row leaves the kept set''s weights')
         ! a tie keeps the earlier entries
         call top_posterior_extras(4, [0., 1., 1., 1.], 1., [.true., .true., .true., .true.], 1, 3, 1.e-6, nkept, inds, w, nelig)
         call assert_true(nkept == 3 .and. inds(2) == 2 .and. inds(3) == 3, 'equal weights keep the earlier entries')

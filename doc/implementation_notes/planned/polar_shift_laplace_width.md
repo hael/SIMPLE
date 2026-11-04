@@ -62,10 +62,20 @@ pixels, and the rule then separates those rather than the two states the coarse 
 4. **Where the numerics live.** The stencil and the Hessian belong to the calculator (`src/main/pftc`) or the
    search domain; the strategies orchestrate.
 
+## The width's convention
+
+The coarse width `shiftmap_draw` measures is the RMS radius of the shift about its mean, the square root of the
+covariance's trace: for an isotropic Gaussian of per-axis sigma s it reads sqrt(2) s. The rule "three widths
+beyond the window" (`shift_needs_disk`: 3 shsig > trs) is therefore 3 sqrt(2) = 4.24 per-axis sigmas, more
+conservative than the disk's three per-axis sigmas of the prior (98.89 % of an isotropic Gaussian's mass). The
+Laplace width as proposed, the square root of the larger eigenvalue of H^-1, is a per-axis sigma along the
+principal axis: adopting it unchanged makes the same rule 3 per-axis sigmas, sqrt(2) less conservative than
+today. Either keep the RMS convention (the square root of the trace of H^-1) or state the factor with the rule.
+
 ## Decisions (Hans)
 
 1. Conditional (2 x 2) or marginal (3 x 3 with the angle) width.
-2. The larger eigenvalue or the trace.
+2. The larger eigenvalue or the trace (the trace keeps today's RMS convention, above).
 3. What an indefinite Hessian means for the next box (the radius searched is the proposal).
 4. The stencil's step (a fraction of the map step) and its cost budget per particle.
 

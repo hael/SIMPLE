@@ -713,7 +713,7 @@ contains
     !> a bank entry (shifted particle memo) against the direct sum at the reference-frame shift it corresponds to
     !! at every rotation, for both objectives, and the posterior route on the same entry
     subroutine test_particle_bank()
-        real(dp), parameter :: TODAY_ATOL = 5.d-2 ! the dropped Nyquist bin separates the two kernels; a frame error is O(1)
+        real(dp), parameter :: TODAY_ATOL = 1.d-4 ! both kernels carry the Nyquist bin; a frame error is O(1)
         type(builder),    target :: b
         type(parameters), target :: p
         complex(sp), allocatable :: bank(:,:)
@@ -743,7 +743,7 @@ contains
             enddo
             call assert_true(max_err <= IDENTITY_ATOL, &
                 &'a bank entry scores every rotation as the reference shifted by its particle shift (direct sum)')
-            call assert_true(max_today <= TODAY_ATOL, 'and agrees with the shifted-reference kernel up to the Nyquist bin')
+            call assert_true(max_today <= TODAY_ATOL, 'and agrees with the shifted-reference kernel')
             write(*,'(A,I0,A,ES10.2,A,ES10.2)') '  objective ', iobj, ': max |bank - direct| ', max_err, &
                 &'   max |bank - shifted-reference kernel| ', max_today
             ! the posterior route (euclid): the bank row is the loss of the same entry at every rotation, and a draw
@@ -766,7 +766,7 @@ contains
             call assert_true(abs(real(vals(irot_seed),dp) - direct) <= IDENTITY_ATOL, &
                 &'a seed scores at its own rotation exactly as the reference-frame seed')
             call assert_true(abs(vals(irot_seed) - vals_today(irot_seed)) <= TODAY_ATOL, &
-                &'and as today''s kernel up to the Nyquist bin')
+                &'and as today''s kernel')
             deallocate(bank, vals, vals_today, pvec)
             call kill_fixture(b)
         enddo

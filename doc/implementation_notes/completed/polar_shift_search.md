@@ -433,6 +433,18 @@ The review's section 14 (2026-11-02) and the dispositions, all applied 2026-11-0
 | the dynamic-state regressions | deferred with the Laplace width (Hans) |
 | the Laplace width's qualifications (fractional angle, conditional against marginal, indefinite curvature) | carried into `../planned/polar_shift_laplace_width.md` |
 
+The review's section 15 (2026-11-03, the end-to-end audit) and the dispositions, applied the same evening (Hans: "Go
+ahead and do all this"):
+
+| finding | disposition |
+|---|---|
+| M1 the Euclidean score row and the continuous evaluator drop the angular Nyquist bin the map and the direct residual carry | every Euclidean kernel sums to `pftsz+1` (`gen_raw_euclid_vals_impl`, `gen_euclid_crvec`, `gen_raw_euclid_grad_at_angle`), as the cc kernels, the bank and the batched rows already did; `test_angular_nyquist`; the bank tests' tolerances tightened from 5e-2 to 1e-4 |
+| M2 a disk particle's reconstruction observation depends on whether its record is kept (box-mask record, ordinary-mask reread) | the preparation records its mask per particle (`builder%obs_mask`, `note_obs_mask`), every reread in the process reads it (`prep_rec_observation_ptcl`, the gridding full-size path, the 2D class sums from full-size images); `test_rec_observation_mask` |
+| M3 Bessel orders beyond the ring's length index outside the ring (a write past the array in Release) | the spectral index wraps modulo the ring (`gen_shiftmap`); `test_orders_beyond_ring` |
+| M4 an excluded row can zero every eligible insertion weight | the extras' normaliser runs over the committed and the eligible rows (`top_posterior_extras`); the review's example in `test_top_posterior_extras` |
+| the initialiser's cell-mass mode | measured against the density mode (the progress entry) |
+| the width's dimensional convention | stated in the Laplace note (the coarse width is an RMS radius, sqrt(2) per-axis sigmas) |
+
 ## Phases
 
 ### Phase 0: build and pass the mechanics (done 2026-10-30, Progress below)
@@ -606,6 +618,47 @@ Ruling 19 as built, in the plan's steps:
   every particle (a resolution limit: the cell is 3.6 px against a 4.4 px window), so the re-centring is carried by
   the move at the bound; the Laplace width at the polished optimum is the informative alternative, written up in
   the proposal's section 2.6 for Hans's call. The neighbourhood driver's disk print was missing and is added.
+
+### 2026-11-03: the review's section 15, M1-M4 (Claude, agent kit runs 1230-1292)
+
+- M1, the angular Nyquist bin: the Euclidean score rows (`gen_raw_euclid_vals_impl`, `gen_euclid_crvec`) and the
+  continuous Euclidean evaluator (`gen_raw_euclid_grad_at_angle`) summed the angular spectrum to `pftsz`, dropping
+  the bin the map, the direct residual, the cc kernels, the bank and the batched rows carry; all sum to `pftsz+1`
+  now, so one energy convention holds across the map, the rows, the polish's objectives and the continuous route.
+  `test_angular_nyquist`: on random spectra the row is the direct residual to 3.7e-8 at every rotation, unshifted
+  and shifted, and the continuous evaluator the row to 2.6e-8 at the grid angles; on the alternating half ring
+  (all energy at the Nyquist bin) the four give 0 at rotation 1 and 4 at rotation 2 (the row gave 2 and 2 before).
+  The bank tests' tolerances went from 5e-2 to 1e-4; one of them compared the cross bank loss with the shifted
+  kernel's best over all rotations, which against an unrelated half is another rotation, and now compares at the
+  bank's own rotation.
+- M2, the record and the reread: the preparation records the mask it normalised a particle under
+  (`builder%obs_mask`, `note_obs_mask`, in `prepimg4align` and the 2D cropped path), and every later normalisation
+  in the process reads it (`obs_on_box`): both backends' rereads (`prep_rec_observation_ptcl`), the gridding
+  full-size path and the 2D class sums from full-size images. Without a preparation in the process (a standalone
+  reconstruction) the ordinary mask, as before. `test_rec_observation_mask` (an off-centred Gaussian on a structured
+  background): the reread equals the record exactly; the ordinary mask would differ by 25 % of the image's range.
+- M3, orders beyond the ring: the spectral index of the harmonic convolution wraps modulo the ring
+  (`gen_shiftmap`); `test_orders_beyond_ring` maps orders to 64 on a ring of 32 against the direct objective to
+  1.5e-7. Before, the slice wrote past the array: Debug stops on it, Release would corrupt memory silently.
+- M4, the insertion's normaliser: `top_posterior_extras` takes its minimum over the committed and the eligible rows;
+  the review's case (distances 0, 0.9, 0.901, the first excluded) keeps both poses at 0.524980 / 0.475020 and is
+  unchanged when the excluded row moves.
+- Builds and tests: Debug and the gate (run 1235); the in-plane state 129/129, the polar shift map 79/79, the polar
+  correlation 80/80, the continuous in-plane 168/168, the 3D table 508/508 (runs 1236-1240); Release and the gate
+  (run 1241).
+- Fixtures after M1-M4 (true references or volume, the key): the 2D table 100 % (0.18 px; 5 px window 0.22 px);
+  the 3D table 100 % (0.61 px; 5 px window 96.2 %); 3D `shc` 96.5 %, `neigh` 100 %, 2D `greedy` 78.0 %, 2D `snhc` at
+  5 px 35.5 and 60.0 %, all as before within their spreads. solve2D from its random start (four runs each): the
+  key 80.0, 39.8, 96.0, 77.2 %, the control 98.8, 97.8, 91.2, 89.0 %; on the build before today's changes the key
+  100, 59.8, 75.5, 99.2 % and the control 19.5, 97.5, 97.0, 77.8 %. Its first, shift-free stage collapses classes at
+  random (3 to 6 of the 10 requested populated, purity 58-99 %), so this fixture ranks neither the key against the
+  control nor one build against the other.
+- The initialiser's mode, measured (the review's statistical point): a build whose greedy cell is the density's mode
+  (the log cell area left out of the pick, the draw unchanged) against the mass mode, interleaved pairs at a 5 px
+  window: 2D `snhc` 57.8, 40.0, 40.0 % against 60.0, 52.8, 60.0 %; `snhc_smpl` 60.0 against 59.8 %; `greedy` 78.0
+  against 78.0 %; 3D `shc` 97.2 against 97.0 %; the 3D table 96.2 against 96.2 %. The density mode does not help and
+  the stalled SNHC runs are not the area term's; the mass mode stays (the variant was a scratch build, runs 1366-1422).
+- Release on the final source and the gate (run 1423).
 
 ### 2026-11-03: the prior moves with the particle (ruling 22; Claude, agent kit runs 1135-1228)
 

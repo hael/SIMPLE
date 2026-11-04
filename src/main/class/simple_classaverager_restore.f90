@@ -293,6 +293,9 @@ contains
                 if( l_cropped_ptcls )then
                     call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk_crop, &
                         &tmp_pad_imgs(ithr), renorm=.false.)
+                else if( b_ptr%obs_on_box(iptcl) )then
+                    ! the mask the particle's preparation chose (the box's on the disk), as its record would carry
+                    call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk_box, tmp_pad_imgs(ithr))
                 else
                     call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk, tmp_pad_imgs(ithr))
                 endif

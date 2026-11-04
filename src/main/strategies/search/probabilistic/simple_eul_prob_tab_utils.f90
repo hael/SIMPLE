@@ -1127,7 +1127,9 @@ contains
         nelig   = 0
         invalid = 0.1 * huge(invalid)
         dmin    = huge(dmin)
+        ! the local normaliser over the committed entry and the eligible ones: an excluded row never changes their weights
         do r = 1,n
+            if( r /= ifirst .and. .not. mask(r) ) cycle
             if( ieee_is_finite(dists(r)) .and. dists(r) < invalid ) dmin = min(dmin, dists(r))
         enddo
         if( dmin >= invalid ) return

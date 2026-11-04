@@ -53,6 +53,8 @@ contains
         l_box  = ptcl_on_disk(params, build, iptcl)
         mskrad = params%msk_crop
         if( l_box ) mskrad = params%msk_box_crop
+        ! the observation's mask, for the reconstructions and the class sums of this process
+        call build%note_obs_mask(iptcl, l_box)
         ! Phase-flipping
         ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
         select case(ctfparms%ctfflag)

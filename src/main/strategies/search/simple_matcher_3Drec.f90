@@ -3,7 +3,7 @@ module simple_matcher_3Drec
 use simple_core_module_api
 use simple_timer
 use simple_builder,         only: builder
-use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch, prep_rec_observation, killimgbatch, &
+use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch, prep_rec_observation_ptcl, killimgbatch, &
     &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, write_ptcl_read_bench_context, &
     &write_mem_bench_context, take_records, get_rec_observation
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
@@ -565,12 +565,16 @@ contains
                 if( l_records )then
                     call get_rec_observation(pinds(i), crop_imgs(ithr), .false.)
                 else
-                    call prep_rec_observation(ptcl_imgs(i), build%lmsk, crop_imgs(ithr), .false.)
+                    call prep_rec_observation_ptcl(build, pinds(i), ptcl_imgs(i), crop_imgs(ithr), .false.)
                 endif
                 call crop_imgs(ithr)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
                     &build%img_pad_heap(ithr), renorm=.false.)
             else
-                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+                if( build%obs_on_box(pinds(i)) )then
+                    call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk_box, build%img_pad_heap(ithr))
+                else
+                    call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+                endif
             endif
             if( l_whiten )then
                 call gen_rec_plane(params, build, pinds(i), build%img_pad_heap(ithr), l_crop, kfromto_here, &

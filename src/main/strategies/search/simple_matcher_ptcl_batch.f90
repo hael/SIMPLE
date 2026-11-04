@@ -375,6 +375,7 @@ contains
             else if( l_crop_mem )then
                 ! the cropped particle: noise-normalized, Fourier-cropped, unshifted, real space; kept for the sums
                 ! (or put as the pass's record) before a copy is prepared for alignment
+                call build%note_obs_mask(iptcl, ptcl_on_disk(params, build, iptcl))
                 if( l_keep_raw )then
                     if( ptcl_on_disk(params, build, iptcl) )then
                         call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk_box, ptcl_imgs(iptcl_batch), [0.,0.])

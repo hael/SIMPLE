@@ -199,13 +199,13 @@ contains
     !> The at-pose loss at a nonzero reference shift is the shift search's objective (gen_objfun_vals, exp(-L))
     !! at the same shift and rotation: the identical-pose null test of prob_post_diag re-scores a refined mode
     !! through it. A seed-bank entry (the particle shifted by a particle-frame shift u) scores at rotation irot
-    !! as the reference shifted by shift_ptcl2ref(u, rot(irot)), up to the angular Nyquist bin the
-    !! shifted-reference kernel drops; the bank's best-rotation and at-pose losses agree with each other
+    !! as the reference shifted by shift_ptcl2ref(u, rot(irot)), both kernels carrying the angular Nyquist
+    !! bin; the bank's best-rotation and at-pose losses agree with each other
     !! exactly, and cross swaps the half as for the unshifted kernels.
     subroutine test_bank_and_at_pose_kernels()
         integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
         real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        real,    parameter :: NYQUIST_ATOL = 5.e-2 ! the dropped bin separates the kernels; a frame error is O(1)
+        real,    parameter :: NYQUIST_ATOL = 1.e-4 ! both kernels carry the Nyquist bin; a frame error is O(1)
         type(parameters), target :: p
         type(cmdline)       :: cline
         type(polarft_calc)  :: pftc
@@ -214,7 +214,7 @@ contains
         real,    allocatable :: vals(:)
         complex, allocatable :: bank(:,:)
         real    :: s(2), u(2), dist_at, dist_b, dist_bx, dist_r, dist_rx
-        integer :: pdim(3), kfromto(2), irot, irot_b, irot_bx, irot_r, irot_rx, nrots
+        integer :: pdim(3), kfromto(2), irot, irot_b, irot_bx, irot_r, nrots
         write(*,'(A)') 'test_bank_and_at_pose_kernels'
         call cline%set('box',     real(BOX))
         call cline%set('smpd',    SMPD)
@@ -273,14 +273,15 @@ contains
         call assert_true(dist_at > 1.e30, 'the bank at-pose loss is huge off the rotation grid')
         call pftc%gen_euclid_val_at(1, 1, shift_ptcl2ref(u, pftc%get_rot(irot_b)), irot_b, dist_r)
         call assert_true(abs(dist_r - dist_b) <= NYQUIST_ATOL, &
-            &'the bank loss at its best rotation is the shifted-reference loss at the frame-converted seed, up to the Nyquist bin')
+            &'the bank loss at its best rotation is the shifted-reference loss at the frame-converted seed')
         call pftc%gen_euclid_val_at(1, 1, u, irot_b, dist_rx)
         ! the unconverted seed is the wrong frame unless the rotation is near zero or the shift along the axis
         if( sum(abs(shift_ptcl2ref(u, pftc%get_rot(irot_b)) - u)) > 0.5 ) call assert_true(abs(dist_rx - dist_b) > abs(dist_r - dist_b), &
             &'the frame-converted seed is closer to the bank loss than the unconverted one')
         ! cross swaps the half for the bank kernels as for the unshifted ones
         call pftc%gen_best_euclid_val_bank(1, 1, bank, dist_bx, irot_bx, cross=.true.)
-        call pftc%gen_best_euclid_val_cross(1, 1, shift_ptcl2ref(u, pftc%get_rot(irot_bx)), dist_rx, irot_rx)
+        ! at the bank's own rotation: against an unrelated half another rotation can be the shifted kernel's best
+        call pftc%gen_euclid_val_at(1, 1, shift_ptcl2ref(u, pftc%get_rot(irot_bx)), irot_bx, dist_rx, cross=.true.)
         call assert_true(abs(dist_bx - dist_rx) <= NYQUIST_ATOL, 'the cross bank loss is the cross shifted-reference loss at the converted seed')
         call assert_true(dist_bx > dist_b + 0.3, 'the other half (an unrelated image) loses to the own half for the shifted particle too')
         call pftc%set_eo(1, .false.)

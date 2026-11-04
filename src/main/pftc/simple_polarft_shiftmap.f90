@@ -208,7 +208,7 @@ contains
         type(shiftmap_work), pointer :: wk
         real(dp) :: w(self%kfromto(1):self%kfromto(2)), wj(self%kfromto(1):self%kfromto(2))
         real(sp) :: fac
-        integer  :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, nhalf, mm, nn, kb(2), k1, k2
+        integer  :: ithr, i, ieo, ih, k, m, n, irho, nrho, nmax, nalpha, nh, jn, sgn, nhalf, mm, nn, kb(2), k1, k2, nwrap
         if( .not. self%has_shiftmap(imap) ) THROW_HARD('no shift map; new_shiftmap first; gen_shiftmap')
         ithr   =  omp_get_thread_num() + 1
         i      =  self%pinds(iptcl)
@@ -265,14 +265,16 @@ contains
                 wk%yhat(self%nrots-m+1,k) = real(sgn, sp) *       self%ft_ptcl_ctf(m+1,k,i)
             enddo
         enddo
-        ! the shell sums of every order: R^[m-n] conj(Y^[m]) by two contiguous slices, then one weighted sum per
-        ! magnitude (single precision, as the spectra)
+        ! the shell sums of every order: R^[m-n] conj(Y^[m]) by two contiguous slices, the spectral index modulo the
+        ! ring (an order beyond the ring's length wraps), then one weighted sum per magnitude (single precision, as the
+        ! spectra)
         do n = 0, nmax
-            if( n == 0 )then
+            nwrap = modulo(n, self%nrots)
+            if( nwrap == 0 )then
                 wk%prod = wk%rhat * wk%yhat
             else
-                wk%prod(1:n,:)            = wk%rhat(self%nrots-n+1:self%nrots,:) * wk%yhat(1:n,:)
-                wk%prod(n+1:self%nrots,:) = wk%rhat(1:self%nrots-n,:)            * wk%yhat(n+1:self%nrots,:)
+                wk%prod(1:nwrap,:)            = wk%rhat(self%nrots-nwrap+1:self%nrots,:) * wk%yhat(1:nwrap,:)
+                wk%prod(nwrap+1:self%nrots,:) = wk%rhat(1:self%nrots-nwrap,:)            * wk%yhat(nwrap+1:self%nrots,:)
             endif
             do irho = 1, nrho
                 if( n > self%shiftmap(imap)%get_nharm(irho) ) cycle

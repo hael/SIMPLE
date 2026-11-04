@@ -14,7 +14,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 public :: prepimgbatch, killimgbatch, read_imgbatch, ptcl_read_session
-public :: prep_rec_observation
+public :: prep_rec_observation, prep_rec_observation_ptcl
 public :: rec_state_half, rec_obs_oris, rec_obs_inv_sig2, read_rec_obs_batch
 public :: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since
 public :: write_ptcl_read_bench_context, write_mem_bench_context
@@ -548,6 +548,21 @@ contains
     !! Fourier-cropped to obs, back in real space, then tapered at the cropped box if l_taper; uncropped: tapered,
     !! then normalized, as in the fused gridding routine. Cropping and tapering do not commute, so all backends use it.
     !! A cropped 3D pass keeps the untapered cropped observation as the particle's record (get_rec_observation).
+    !> prep_rec_observation under the mask particle iptcl's preparation in this process normalised it under (the box's
+    !! for a particle on the disk, build%obs_on_box), so an observation read again agrees with its record
+    subroutine prep_rec_observation_ptcl( build, iptcl, ptcl_img, obs, l_taper )
+        class(builder), intent(in)    :: build
+        integer,        intent(in)    :: iptcl
+        class(image),   intent(inout) :: ptcl_img
+        class(image),   intent(inout) :: obs
+        logical,        intent(in)    :: l_taper
+        if( build%obs_on_box(iptcl) )then
+            call prep_rec_observation(ptcl_img, build%lmsk_box, obs, l_taper)
+        else
+            call prep_rec_observation(ptcl_img, build%lmsk, obs, l_taper)
+        endif
+    end subroutine prep_rec_observation_ptcl
+
     subroutine prep_rec_observation( ptcl_img, lmsk, obs, l_taper )
         class(image), intent(inout) :: ptcl_img
         logical,      intent(in)    :: lmsk(:,:,:)
@@ -673,7 +688,7 @@ contains
             if( l_records )then
                 call get_rec_observation(pinds(batchlims(1)+ii-1), obs(ithr), .true.)
             else
-                call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs(ithr), .true.)
+                call prep_rec_observation_ptcl(build, pinds(batchlims(1)+ii-1), build%imgbatch(ii), obs(ithr), .true.)
             endif
             call obs(ithr)%fft
             y_batch(:,:,ii) = extract_native_fourier_plane(obs(ithr), lims2, sqlp)

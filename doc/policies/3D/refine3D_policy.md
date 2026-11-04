@@ -558,7 +558,11 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   previous reference's seed, its shifted-particle bank and the 5 x 5 lattice at
   every rotation retire wherever the key runs (Phase 4); `shift_sigma=0` keeps them;
 - a disk particle is prepared under the box's mask (`ptcl_on_disk`,
-  `prepimg4align`), the others under the stage's;
+  `prepimg4align`), the others under the stage's; the preparation records the
+  choice per particle (`builder%note_obs_mask`) and both reconstruction backends
+  read it when they read the particle again instead of taking its record
+  (`prep_rec_observation_ptcl`, `obs_on_box`), so the observation does not depend
+  on the record buffer's budget (the review's M2, 2026-11-03);
 - the width: every coarse map's draw measures the standard deviation of the shift
   under its posterior at the physical temperature (`shiftmap_draw`); it travels with
   the refined entry (`prob_refined_entry%sdev`) through the assignment

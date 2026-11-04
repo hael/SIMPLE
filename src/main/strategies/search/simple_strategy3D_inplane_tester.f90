@@ -23,6 +23,9 @@ use simple_syslib,            only: del_file
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose
 use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl
+use simple_matcher_2Dprep,    only: prepimg4align
+use simple_matcher_ptcl_io,   only: prep_rec_observation, prep_rec_observation_ptcl
+use simple_memoize_ft_maps,   only: memoize_ft_maps
 use simple_test_utils
 implicit none
 private
@@ -45,6 +48,7 @@ contains
         call test_table_increment_axes()
         call test_map_initialised_polish()
         call test_continuous_seed_beyond_window()
+        call test_rec_observation_mask()
     end subroutine run_all_strategy3D_inplane_tests
 
     !> nrefs candidates, one thread; the continuous arrays only on request
@@ -327,7 +331,7 @@ contains
 
     !> a one-particle strategy3D toolbox on a small phantom (two directions), the particle at a stored shift, the
     !! search object prepared for the probabilistic route; trs a shift search's window (none by default)
-    subroutine one_particle_fixture( phantom, stored_shift, b, p, cline, srch, spec, trs )
+    subroutine one_particle_fixture( phantom, stored_shift, b, p, cline, srch, spec, trs, objfun, box_crop, mskdiam )
         character(len=*),              intent(in)    :: phantom
         real,                          intent(in)    :: stored_shift(2)
         type(builder),         target, intent(inout) :: b
@@ -336,6 +340,9 @@ contains
         type(strategy3D_srch),         intent(inout) :: srch
         type(strategy3D_spec),         intent(inout) :: spec
         real,                optional, intent(in)    :: trs
+        character(len=*),    optional, intent(in)    :: objfun
+        integer,             optional, intent(in)    :: box_crop
+        real,                optional, intent(in)    :: mskdiam
         integer, parameter :: BOX = 32
         type(image)        :: vol
         real, allocatable  :: rmat(:,:,:)
@@ -361,7 +368,10 @@ contains
         call cline%set('nspace',  2)
         call cline%set('ctf',     'no')
         call cline%set('objfun',  'cc')
-        if( present(trs) ) call cline%set('trs', trs)
+        if( present(objfun) )   call cline%set('objfun',   objfun)
+        if( present(trs) )      call cline%set('trs',      trs)
+        if( present(box_crop) ) call cline%set('box_crop', box_crop)
+        if( present(mskdiam) )  call cline%set('mskdiam',  mskdiam)
         call cline%check
         call b%init_params_and_build_strategy3D_tbox(cline, p)
         call set_bp_range3D(p, b, cline)
@@ -592,6 +602,102 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_continuous_seed_beyond_window
+
+    !> The review's M2: a reconstruction observation is the same whether its record is kept or the particle is read
+    !! again. The search preparation of a particle on the disk normalises it under the box's mask and notes the choice
+    !! (note_obs_mask); its record (the prepared transform's unshifted crop) equals the reread through
+    !! prep_rec_observation_ptcl, which the ordinary mask would not give (an off-centred Gaussian on a structured
+    !! background, as the review's probe); a particle in its window notes the ordinary mask
+    subroutine test_rec_observation_mask()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)            :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        type(image)              :: raw, work, out, out_pd, rec, obs, obs_l
+        real, allocatable        :: rmat(:,:,:), a(:,:,:), c(:,:,:)
+        real    :: d_box, d_lmsk, scale
+        integer :: i, j
+        write(*,'(A)') 'test_rec_observation_mask'
+        call one_particle_fixture(PHANTOM, [0., 0.], b, p, cline, srch, spec, trs=3., objfun='euclid', box_crop=28, mskdiam=18.)
+        call assert_true(allocated(b%lmsk_box), 'the key builds the box''s mask')
+        call assert_true(count(b%lmsk_box) > count(b%lmsk), 'the box''s mask is wider than the molecular one')
+        call assert_false(b%obs_on_box(1), 'without a preparation the ordinary mask')
+        ! the stack record the preparation reads the CTF parameters from
+        call b%spproj_field%set(1, 'stkind', 1)
+        call b%spproj_field%set(1, 'indstk', 1)
+        call b%spproj%os_stk%new(1, is_ptcl=.false.)
+        call b%spproj%os_stk%set(1, 'nptcls_stk', 1)
+        call b%spproj%os_stk%set(1, 'smpd',       p%smpd)
+        call b%spproj%os_stk%set(1, 'ctf',        'no')
+        call b%spproj%os_stk%set(1, 'kv',         300.)
+        call b%spproj%os_stk%set(1, 'cs',         2.7)
+        call b%spproj%os_stk%set(1, 'fraca',      0.1)
+        allocate(rmat(p%box,p%box,1))
+        do j = 1, p%box
+            do i = 1, p%box
+                rmat(i,j,1) = sin(0.37 * real(i)) + cos(0.23 * real(j)) + 6. * exp(-real((i-24)**2 + (j-22)**2) / 10.)
+            enddo
+        enddo
+        call raw%new([p%box,p%box,1], p%smpd)
+        call raw%set_rmat(rmat, .false.)
+        call work%new([p%box,p%box,1], p%smpd)
+        call out%new([p%box_crop,p%box_crop,1], p%smpd_crop)
+        call out%memoize_mask_coords
+        call memoize_ft_maps(out%get_ldim(), out%get_smpd())
+        call out_pd%new([p%box_croppd,p%box_croppd,1], p%smpd_crop)
+        call rec%new(  [p%box_crop,p%box_crop,1], p%smpd_crop)
+        call obs%new(  [p%box_crop,p%box_crop,1], p%smpd_crop)
+        call obs_l%new([p%box_crop,p%box_crop,1], p%smpd_crop)
+        ! on the disk (not yet centred)
+        call b%spproj_field%set(1, 'shsig', -1.)
+        call record_and_reread
+        call assert_true(b%obs_on_box(1), 'the disk particle''s preparation notes the box''s mask')
+        call work%copy(raw)
+        call prep_rec_observation(work, b%lmsk, obs_l, .false.)
+        c      = obs_l%get_rmat()
+        d_lmsk = maxval(abs(a - c)) / scale
+        write(*,'(A,ES10.2,A,ES10.2)') '  disk: |record - reread| ', d_box, ', |record - ordinary-mask reread| ', d_lmsk
+        call assert_true(d_box <= 1.e-5, 'the reread equals the record under the noted mask')
+        call assert_true(d_lmsk > 1.e-2, 'the ordinary mask would give another observation')
+        ! in its window
+        call b%spproj_field%set(1, 'shsig', 0.1)
+        call record_and_reread
+        call assert_false(b%obs_on_box(1), 'the window particle''s preparation notes the ordinary mask')
+        call assert_true(d_box <= 1.e-5, 'its reread equals its record too')
+        call raw%kill
+        call work%kill
+        call out%kill
+        call out_pd%kill
+        call rec%kill
+        call obs%kill
+        call obs_l%kill
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+
+    contains
+
+        !> the record writer's transform (the search preparation, then the unshifted crop) against the reread
+        subroutine record_and_reread
+            call work%copy(raw)
+            call prepimg4align(p, b, 1, work, out, out_pd)
+            call work%clip(rec)
+            call rec%ifft
+            call work%copy(raw)
+            call prep_rec_observation_ptcl(b, 1, work, obs, .false.)
+            a     = rec%get_rmat()
+            c     = obs%get_rmat()
+            scale = maxval(abs(a))
+            d_box = maxval(abs(a - c)) / scale
+        end subroutine record_and_reread
+
+    end subroutine test_rec_observation_mask
 
     !> a polar section rotated by irot in the calculator's convention (the polar shift map tester's helper, checked there
     !! against the calculator's own rotation)

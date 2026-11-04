@@ -193,7 +193,12 @@ prior width for its next search, in pixels. In every table fill from stage 2 on
 - a disk particle is prepared under the box's mask (`ptcl_on_disk`,
   `prepimg4align`: the box's noise mask and soft mask radius, `lmsk_box`,
   `msk_box_crop`), since the molecular mask at the pick would cut it; the
-  others under the stage's mask;
+  others under the stage's mask. The preparation records its choice per particle
+  (`builder%note_obs_mask`), and every later normalisation of the particle in the
+  same process reads it (`obs_on_box`: the class sums from full-size images, the
+  3D rereads `prep_rec_observation_ptcl`), so a class sum or a reconstruction is
+  the same whether the particle's record was kept or it was read again (the
+  review's M2, 2026-11-03);
 - the width: every coarse map's draw measures the standard deviation of the
   shift under its posterior at the physical temperature, about the mean, in the
   particle's axes (`shiftmap_draw`); it travels with the candidate

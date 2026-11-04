@@ -206,7 +206,7 @@ contains
             do k = self%kfromto(1), self%kfromto(2)
                 wk = self%sigma2_wk(k,ih)
                 kk = k - k0 + 1
-                do p = 1,self%pftsz
+                do p = 1,self%pftsz+1
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
                         &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
                     self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
@@ -218,7 +218,7 @@ contains
             self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
             do k = self%kfromto(1), self%kfromto(2)
                 wk = self%sigma2_wk(k,ih)
-                do p = 1,self%pftsz
+                do p = 1,self%pftsz+1
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
                         &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
                     self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
@@ -289,11 +289,11 @@ contains
                     conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
             enddo
             call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-            call euclid_sums(self%pftsz, self%pftsz+1, self%nrots, self%nk, self%ft_ctf2(:,:,i),&
+            call euclid_sums(self%pftsz+1, self%pftsz+1, self%nrots, self%nk, self%ft_ctf2(:,:,i),&
                 &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%cmat2_many(ithr)%c, self%sigma2_wk8(:,ih),&
                 &self%crvec1(ithr)%c)
         else
-            call euclid_sums(self%pftsz, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
+            call euclid_sums(self%pftsz+1, self%pftsz+1, self%pftsz+1, self%nk, self%ft_ctf2(:,:,i),&
                 &self%ft_ref2(:,:,iref,ieo), self%ft_ptcl_ctf(:,:,i), self%ft_ref(:,:,iref,ieo), self%sigma2_wk8(:,ih),&
                 &self%crvec1(ithr)%c)
         endif
@@ -411,8 +411,8 @@ contains
 
     !> The Euclidean loss of a bank entry (the particle shifted by its particle-frame seed, memoize_shifted_ptcl)
     !! at its best grid rotation, own slot or, with cross, the other half's: the deterministic row of the
-    !! pose-posterior diagnostic at the seed the production search scored at. The bank kernel sums the angular
-    !! Nyquist bin (the shifted-reference kernels drop it).
+    !! pose-posterior diagnostic at the seed the production search scored at. Every Euclidean kernel sums the
+    !! angular Nyquist bin.
     module subroutine gen_best_euclid_val_bank( self, iref, iptcl, bank, dist, irot, cross )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -515,8 +515,8 @@ contains
 
     ! Kernels of a particle bank entry (memoize_shifted_ptcl): the shifted particle against the unshifted
     ! memoised reference, so there is no reference shift and no shift matrix. The cross term sums the angular
-    ! Nyquist bin too (p = 1..pftsz+1), which makes the loss exact against the true shifted loss; the
-    ! shifted-reference kernels above drop that bin.
+    ! Nyquist bin (p = 1..pftsz+1), as every Euclidean kernel does, which makes the loss exact against the true
+    ! shifted loss.
 
     !> cross=.true. scores the bank entry against the other half's reference (prob_post_diag), as gen_euclid_crvec
     subroutine gen_euclid_crvec_bank( self, iref, iptcl, bank, norm, ithr, cross )
@@ -1299,7 +1299,7 @@ contains
         do k = self%kfromto(1), self%kfromto(2)
             wk = self%sigma2_wk(k,ih)
             kk = k - k0 + 1
-            do p = 1,self%pftsz
+            do p = 1,self%pftsz+1
                 ref2_term  = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                 cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,kk))
                 coeffs(p,1) = coeffs(p,1) + wk * (ref2_term - 2._sp*cross_term)

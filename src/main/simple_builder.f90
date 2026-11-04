@@ -47,6 +47,7 @@ type :: builder
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
     logical,                allocatable :: lmsk_box(:,:,:)        !< the box's (shift_sigma > 0: a particle on the disk)
+    integer,                allocatable :: obs_mask(:)            !< per particle, the mask its preparation in this process normalised it under (-1 none, 0 lmsk, 1 lmsk_box)
     logical,                allocatable :: lmsk_crop(:,:,:)       !< logical circular 2D mask for cropped image
 
     ! PRIVATE EXISTENCE VARIABLES
@@ -70,6 +71,8 @@ type :: builder
     procedure                           :: kill_strategy3D_tbox
     procedure                           :: build_strategy2D_tbox
     procedure                           :: kill_strategy2D_tbox
+    procedure                           :: note_obs_mask
+    procedure                           :: obs_on_box
 end type builder
 
 contains
@@ -290,7 +293,13 @@ contains
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
-            if( params%l_shift_map ) call mskimg%disc([params%box,params%box,1], params%smpd, params%msk_box, self%lmsk_box)
+            if( params%l_shift_map )then
+                call mskimg%disc([params%box,params%box,1], params%smpd, params%msk_box, self%lmsk_box)
+                if( associated(self%spproj_field) )then
+                    if( allocated(self%obs_mask) ) deallocate(self%obs_mask)
+                    allocate(self%obs_mask(self%spproj_field%get_noris()), source=-1)
+                endif
+            endif
             call mskimg%kill
             ! mask memoization
             call self%img%memoize_mask_coords
@@ -363,6 +372,7 @@ contains
             if( allocated(self%fsc)                   ) deallocate(self%fsc)
             if( allocated(self%lmsk)                  ) deallocate(self%lmsk)
             if( allocated(self%lmsk_box)              ) deallocate(self%lmsk_box)
+            if( allocated(self%obs_mask)              ) deallocate(self%obs_mask)
             if( allocated(self%lmsk_crop)             ) deallocate(self%lmsk_crop)
             self%general_tbox_exists = .false.
         endif
@@ -421,5 +431,28 @@ contains
             self%strategy3D_tbox_exists = .false.
         endif
     end subroutine kill_strategy3D_tbox
+
+    !> The mask particle iptcl's preparation normalised it under (the box's for a particle on the disk), so the
+    !! reconstructions and the class sums of this process re-prepare it the same way whether or not its record is
+    !! kept; distinct particles from parallel threads
+    subroutine note_obs_mask( self, iptcl, l_box )
+        class(builder), intent(inout) :: self
+        integer,        intent(in)    :: iptcl
+        logical,        intent(in)    :: l_box
+        if( .not. allocated(self%obs_mask) ) return
+        if( iptcl < 1 .or. iptcl > size(self%obs_mask) ) return
+        self%obs_mask(iptcl) = merge(1, 0, l_box)
+    end subroutine note_obs_mask
+
+    !> whether particle iptcl's observation is normalised under the box's mask: its preparation's choice in this
+    !! process (note_obs_mask), the ordinary mask without one
+    pure logical function obs_on_box( self, iptcl )
+        class(builder), intent(in) :: self
+        integer,        intent(in) :: iptcl
+        obs_on_box = .false.
+        if( .not. allocated(self%obs_mask) ) return
+        if( iptcl < 1 .or. iptcl > size(self%obs_mask) ) return
+        obs_on_box = self%obs_mask(iptcl) == 1
+    end function obs_on_box
 
 end module simple_builder

@@ -1,13 +1,13 @@
 # Probabilistic in-plane search: mathematical and performance review
 
-**Latest review:** the 2026-11-02 current-state review is in section 14. Sections 12-13
-retain the previous integration reviews; sections 1-11 retain the original review.
+**Latest review:** the 2026-11-03 end-to-end mathematical audit is in section 15.
+Sections 12-14 retain the previous integration reviews; sections 1-11 retain the original review.
 
 **Reviewed:** 2026-10-30, `master` at `a2c1b1f86`.
 **Scope:** commits `519c67d2a` and `a2c1b1f86`, the proposed integration into solve2D/solve3D, and the relevant existing probability-table and reconstruction contracts.
 **Status:** review findings and recommendations; no implementation changes made or recommendations adopted by this review.
 
-The living implementation plan remains [polar_shift_search.md](polar_shift_search.md). This document is the separately requested review record, not a second implementation plan. The related history is in [pose_marginalization.md](pose_marginalization.md), especially sections 11, 20.8–20.13 and 21.
+The implementation/decision record is [polar_shift_search.md](polar_shift_search.md). This document is the separately requested review record, not a second implementation plan. The related history is in [pose_marginalization.md](../planned/pose_marginalization.md), especially sections 11, 20.8–20.13 and 21.
 
 ## Assessment
 
@@ -876,3 +876,318 @@ definition above, rather than silently treating it as the absolute pick prior.
   independent arithmetic, not new compiled regression tests or attributed
   real-data map failures. No new real-data or Linux/BOX run, production fix,
   commit or push by this review.
+
+## 15. End-to-end mathematical closeout audit (2026-11-03)
+
+The maintainer requested the current closing diff and the entire methodology,
+with performance excluded. The initial snapshot was `15a7b0774` plus the
+closing diff, including the classic searches, cell-start polish, rulings
+21-22 and PCG weighted insertion. During review that same source was committed
+as `22703d0ec`; all 823 Fortran hashes still match the initial snapshot. The
+intervening multi-state posterior proposal is separate, unimplemented work
+and is outside this audit. This review changes no production code or testers.
+
+The closing changes resolve the previous T1-T3 findings under their adopted
+contracts: the joint domain contains the incoming disk pose; both 3D tables
+use `insert_pose_loss`; and the legacy increment prior is disabled throughout
+map-mode polish. Ruling 22 deliberately changes the prior to an increment
+about the current origin. This audit does not repeat the old absolute-pick
+requirement. The explicit zero keys also correct the former controls, and the
+PCG extension has the right weighted least-squares algebra.
+
+Four live issues remain. The first two break numerical invariants across the
+pipeline. These findings mostly predate the closing diff; they matter to an
+end-to-end closeout even though a diff-only review would miss them.
+
+### M1 — P1: the map, FFT score row and continuous polish use different losses
+
+The Fourier-Bessel map and direct fixed-pose residual retain the angular
+Nyquist component. The Euclidean FFT row drops it:
+`simple_polarft_corr.f90:209,221` stop at `pftsz`, and
+`gen_euclid_crvec` passes `pftsz`, rather than `pftsz+1`, to the shell sum
+(lines 292,296). The continuous Euclidean evaluator also stops at `pftsz`
+(line 1302). The existing cc continuous evaluator already includes the bin.
+
+The continuous-angle development deliberately preserved the legacy FFT
+semantics (`continuous_inplane_rotation_development_plan.md`, Phase 0 and
+the interpolation contract). This finding does not treat that preservation
+as an accidental change. It concerns the combined method's use of the
+full-bin map/direct residual alongside that baseline without one common
+energy convention or a bound on their discrepancy in likelihood units.
+
+This reaches production through origin/pool scoring, the alternating
+polisher's all-angle callback and returned score, table losses/insertion
+weights, and the continuous consumer. The alternating optimizer's fixed-angle
+objective/gradient uses the direct residual, so even that polish combines
+different objective conventions. This prevents a general same-pose likelihood
+identity and a monotonicity claim against the map/direct objective.
+
+An isolated compiled probe against the current library used the closed-form
+half-ring pattern `R(p)=X(p)=(-1)^(p-1)`, with an even half-ring length of 36,
+unit CTF and noise variance, and zero shift. The expected loss is zero at
+rotation 1 and four at rotation 2. Observed:
+
+| Pose | Direct residual | Shift map | FFT row | Continuous evaluator |
+|---|---:|---:|---:|---:|
+| Rotation 1, zero shift | 0 | 0 | 2 | 2 |
+| Rotation 2, zero shift | 4 | 4 | 2 | — |
+
+The effect is not confined to a pure endpoint pattern. With
+`R=X=1+0.05*(-1)^(p-1)`, shells 2-31, box 64 and unit variance, the true loss
+is zero while the row/continuous loss is 0.00498736. At the calculator's own
+physical temperature that is **3.88759 nats**, despite the small normalized
+loss discrepancy. The map gives approximately zero (single-precision error
+of -3.58e-7). These are controlled polar-array counterexamples, not a claim
+about the endpoint content of the maintainer's data or its failure rate.
+
+Use one angular-spectrum convention in map, score rows, fixed-angle
+objectives/gradients, continuous evaluator and pose weights. Including the
+endpoint consistently is one option; a deliberately projected objective must
+project all terms consistently and be specified as such. Add same-pose tests
+with nonzero endpoint content, at zero/nonzero shifts and grid/fractional
+angles, checking energy differences in nats and derivatives. The existing
+kernel test compares against the direct residual, and the older bank test
+explicitly tolerates the dropped bin; neither pins this whole invariant.
+
+### M2 — P1: record availability changes a disk particle's reconstruction observation
+
+`prepimg4align` normalizes a disk particle against `build%lmsk_box`.
+`polarize_batch_particles3D` keeps that normalized transform's unshifted crop
+as the reconstruction record (`simple_matcher_ptcl_batch.f90:290-296`).
+`get_rec_observation` retrieves it without renormalizing. With no usable
+record, both reconstruction backends instead call `prep_rec_observation`
+with `build%lmsk`, the ordinary mask (`simple_matcher_ptcl_io.f90:676` for
+PCG; `simple_matcher_3Drec.f90:568` for gridding).
+
+The masks determine which background pixels estimate the mean and variance,
+so this changes the observation's scale and offset, not just its spatial
+support. It is particularly relevant to an off-centred particle whose signal
+falls into the ordinary mask's supposed background. Record availability is
+controlled by the memory budget and partition size. Consequently otherwise
+identical scientific settings can produce different reconstruction inputs.
+The normalization factor depends on each particle's content, so a single
+final-map rescaling cannot generally remove the difference.
+
+A compiled probe used a deterministic sinusoidal background plus an
+off-centred Gaussian signal in a 64-pixel image, cropped to 32. It exercised
+the actual record writer/reader and fallback preparation helpers. The
+ordinary/box background standard deviations were 2.32706 and 1.00209.
+The reread observation's demeaned amplitude was **0.430623** times the record's,
+matching the independent ratio of those standard deviations; the relative
+L2 difference was 0.591298. A control using the same box mask in the fallback
+agreed with the record exactly. This is a controlled observation test, not a
+measured map-quality difference.
+
+Give reconstruction records and rereads one normalization policy. Either
+produce records under the reconstruction's invariant policy or carry enough
+normalization information to reproduce the same observation on reread.
+Selecting a mask from the current `shsig` after assignment alone is
+insufficient: that state may already have changed since the record was made.
+Test disk/window observations with records available, absent and partially
+missing, through both backends and across cropping. This is a numerical
+correctness issue, independent of whether the buffer is faster.
+
+### M3 — P2: the harmonic convolution indexes outside the ring for wider searches
+
+The convolution needs the spectral index `(m-n) modulo nrots` for every
+Bessel order n. `gen_shiftmap` implements this with two slices that handle
+only `n <= nrots` (`simple_polarft_shiftmap.f90:274-275`). The public radius
+is bounded by the box, but neither setup nor construction enforces that
+harmonic-order limit. For example, box 128, kstop 32, rho 39 and pftsz 36
+require order 87 while the ring has 72 positions.
+
+Reproduced in the current Debug executable on an imported 248-pixel,
+1.3 A/px stack, with a standalone `refine2D` invocation:
+
+```text
+ncls=5 cls_init=ptcl mskdiam=20 lp=2.6 box_crop=248
+nthr=1 mkdir=no maxits=3 refine=prob trs=4 shift_sigma=26
+```
+
+At its first disk search it aborts at line 274 with index 0 outside
+`1:72`. This is a wider-prior/small-mask boundary case, not an observed
+failure of default sigma 10 on the supplied benchmark sets.
+
+Wrap the spectral index for arbitrary n, or reject an explicitly documented
+unsupported range before entering the fill. Do not silently cap the Bessel
+order: the discarded coefficients can still matter. Angular sampling of
+the translated object is a separate accuracy condition; exact evaluation
+of the discrete ring does not remove its sampling/aliasing limits. Add a
+case with required order greater than one ring length against a direct sum.
+
+### M4 — P2: an excluded pose can erase all eligible insertion weights
+
+`top_posterior_extras` takes `dmin` over every valid row, including entries
+outside the eligibility mask (`simple_eul_prob_tab_utils.f90:1129-1132`).
+It then zeros weights beyond 80 nats relative to that minimum before
+renormalizing the kept set. If an excluded pose is much better, every
+eligible weight can become zero. The fallback then gives the committed
+pose weight one, even when an eligible extra has comparable conditional
+posterior weight.
+
+The current-library probe used distances `[0,0.9,0.901]`, temperature 100,
+mask `[false,true,true]`, committed index 2 and topk 2. It returns one pose
+with weight 1. Removing only the excluded first row returns two poses with
+weights **0.524980/0.475020**, as the closed-form conditional distribution
+requires. Thus changing a hypothesis that cannot be inserted changes the
+distribution over an unchanged eligible set. The dense and neighbourhood
+routes can both reach this helper, including rows with unrefined distances.
+
+Use the minimum over the committed pose and eligible extras for this local
+normalization. Retain a regression that changes an excluded row without
+changing any kept-set weights. This is a numerical tail case; no frequency
+of occurrence on real runs is established by this review.
+
+### What is mathematically sound
+
+Write P for the half-ring length, N=2P, and
+`W_X=sum_k (k/sigma_k^2) sum_p |X_kp|^2`. On the direct objective,
+
+```text
+L(theta,s) = sum_k (k/sigma_k^2) sum_p |X_kp - CTF_kp R_theta,s,kp|^2 / W_X
+T = pi W_X / (2P)
+T L = sum_k (pi k/P) sum_p |residual_kp|^2 / (2 sigma_k^2).
+```
+
+The temperature therefore restores the Gaussian residual energy under the
+stated polar quadrature and per-real-component noise convention. Masking
+and polar sampling still make this a diagonal-noise approximation; that is
+distinct from a normalization or factor-of-two error.
+
+For the full Friedel ring, the cross term follows by expanding the phase
+ramp with Jacobi-Anger and using the DFT of the reference and CTF-modulated
+particle. The shifted spectral index is `m-n`; the full-ring cross sum is
+twice the real half-ring sum, giving the half-weight on order zero and one
+copy of each positive order. Reference power correctly retains its
+rotation-dependent angular CTF term. The kernel respects the half-specific
+reference and sigma2 spectrum. An independent direct-DFT/Bessel calculation
+with an angular CTF checked 200 poses: maximum cross error relative to the
+Cauchy-Schwarz scale 1.79e-10, normalized-loss error 1.61e-10 and energy
+error 5.10e-8 nats. This confirms the identity within truncation, inside the
+supported index range; M1 concerns its consumers.
+
+Polar cell areas are the correct measure for integration, stochastic draws
+and the coarse moments. The origin's area is divided among its duplicate
+direction entries. The new isotropic increment prior is invariant under
+rotation into particle axes and under a common change of the current origin.
+Its weight `1/(2*(shift_sigma/smpd)^2)` has the correct pixel units.
+`insert_pose_loss = L + |du|^2/(2*sigma_px^2*T)` gives precisely
+`exp(-T L) exp(-|du|^2/(2 sigma_px^2))`; the prior is not accidentally
+tempered in those physical insertion weights. Turning the old increment
+prior off under the key avoids adding another penalty during polish.
+
+The increment is converted from optimizer/reference axes to particle axes
+once, then added to the stored shift. The revised joint domain includes
+that incoming pose, fixing T1. The cell-start polisher now retains the better
+of its cell and local result and compares against the stored-shift row,
+fixing the earlier fallback contract independently of M1's objective issue.
+Stage 1 of solve2D and solve3D's first two stages remain shift-free by design.
+
+The cone's rotation is minimized over point-group equivalents, and
+`r*alpha + |delta_shift| <= resolution` is a sufficient rim-displacement
+bound: `2r sin(alpha/2) <= r alpha`, followed by the triangle inequality.
+Its physical scale is heuristic, but the stated geometric bound is sound.
+The table conditions on the committed state and renormalizes after the
+cone/topk/weight-floor truncation, subject to M4.
+
+For fixed pose responsibilities omega_ij, weighted reconstruction minimizes
+
+```text
+Q(V) = sum_i b_i sum_j omega_ij ||Sigma_i^-1/2 (y_i - A_ij V)||^2,
+B    = sum_i,j b_i omega_ij A_ij* Sigma_i^-1 y_i,
+H    = sum_i,j b_i omega_ij A_ij* Sigma_i^-1 A_ij.
+```
+
+There are no cross-pose terms in this expected-residual objective. The new
+PCG entries implement it correctly: the same unshifted observation at each
+pose, that pose's transfer/shift, and its responsibility applied once in
+both B and density. They do not square the responsibility or treat poses
+as additional population mass. The committed shift is already cropped;
+extra stored shifts are multiplied by `box_crop/box` once. This preserves
+the phase `2*pi*h*shift/box` and agrees with the gridding pose convention.
+Since each particle's weights sum to one, fractional/trailing population
+accounting continues to count particles. M2 concerns the observation fed
+into this otherwise-correct algebra.
+
+### Statistical interpretation and deliberate approximations
+
+These points qualify the method; they are not additional code defects or
+requests to undo the maintainer's deferred work.
+
+- **The initializer selects a cell mass.** Its greedy score is
+  `-beta*T*L - prior + log(cell_area)`. That is correct for the most probable
+  discrete polar cell. A Cartesian-density MAP would omit the area term.
+  The distinction matters for a deterministic seed: an isotropic Gaussian
+  with standard deviation 3 px on radial steps of 4 px has its density
+  mode at zero but its largest per-direction polar-cell mass at radius 4.
+  This is an initializer heuristic; it is not a proof of a continuous
+  global minimum. A density-MAP seed is a possible modeling choice, rather
+  than a correction required for stochastic sampling.
+- **The pool is conditional on the current shift.** Retaining 99% of its
+  posterior there does not retain 99% after translation. Full-band polish
+  then replaces in-plane integration by a locally optimized point per
+  selected reference. The direction draw therefore approximates a
+  distribution over those constructed candidates. It is not the earlier
+  fully marginalized joint pose draw. Mode heights alone omit basin volumes
+  (a Laplace marginal would contain a Hessian-determinant factor).
+- **Continuous polish transports frozen weights.** Extras and committed
+  poses take the same continuous route, which resolves their old asymmetry.
+  But insertion weights are computed at the table poses and retained after
+  their individual data-only refinements. This is a transported finite
+  mixture; it need not equal the physical point posterior evaluated at the
+  final poses. If that latter interpretation is required, re-score data and
+  increment-prior terms after polish and renormalize. Frozen table weights
+  are explicitly the current ruling, so this is a modeling qualification.
+- **The moving prior is an iterative regularizer.** Ruling 22 makes it a
+  prior conditional on the current origin, with an empirical picking-width
+  scale. It is equivariant to a consistent origin change and avoids the old
+  pull back from 2D-aligned origins. It does not define one fixed posterior
+  about the original pick across all iterations. Initializer, data-only
+  polish and physical insertion are intentionally different targets.
+- **Coarse width controls coverage heuristically.** The square-root trace
+  is the RMS shift deviation around the coarse posterior's mean, after
+  rotating each cell into common particle axes. It measures only evaluated
+  cells of the selected reference. One occupied coarse cell can give zero
+  width without subpixel certainty; an excluded or separated outside-window
+  mode is invisible. A narrow interior mode after a class/direction change
+  need not trigger either width or bound inflation. The Laplace proposal
+  can resolve local curvature but cannot certify absent global mass. Its
+  conditional-versus-angle-marginal covariance choice remains relevant.
+  Three sigmas also needs a dimensional convention: an isotropic 2D
+  Gaussian has 98.89% mass inside a radius of three per-axis sigmas.
+
+The dynamic-state tests, stochastic 2D comparison and Laplace estimator were
+explicitly deferred by the maintainer. That scope decision is respected.
+For mathematical reporting, describe the current method as adaptive
+coarse-to-fine pose optimization with probabilistic assignment and a local
+weighted reconstruction mixture, with the approximations above stated.
+
+### Validation and evidence
+
+- Existing-tree Mac gfortran-16 **Debug** build: PASS, no compiler warnings
+  observed; install PASS. Fast gate: PASS, 15/15, 89.5 s, warning-only budget
+  overrun. Polar suite: 1429 assertions; reconstruction: 546, including the
+  new PCG entry checks. The CPU-count sysctl is sandbox-denied; the gate
+  uses one CTest worker with its usual OpenMP team checks.
+- PCG fractional-update gate: PASS, 6.90 s. It validates population/chain
+  behavior; it is not a new topk-with-CTF-and-cropping oracle.
+- The full Debug `simulated_workflow_1jxy` was started in the background
+  alongside that gate and is still running at this review's handoff. No
+  current workflow pass or map-quality result is claimed. Its live CTest
+  output is `/private/tmp/simple_polar_math_review_20261103/workflows.log`;
+  the metrics are `build/test_runs/simulated_workflow_1jxy/metrics.tsv`.
+- Independent Python/standard-library DFT/Bessel, Gaussian, insertion and
+  weighted-normal-equation calculations are in
+  `/private/tmp/simple_polar_math_review_20261103/math_oracles.py` and JSON.
+- Compiled scratch probes linked the unchanged current library, in an
+  isolated local clone's worktree, without adding a CMake target or touching
+  repository testers. `math_probe.f90`, `math_probe_weak_nyquist.f90` and
+  `observation_probe.f90`, with their logs, are under
+  `/private/tmp/simple_polar_math_review_20261103/probe_checkout/`.
+  They reproduce M1, M2 and M4 through production APIs. The standalone
+  commander reproduction of M3 is under `harmonic_bounds/` in the same root.
+- No new real-data or Linux/BOX run, production fix, commit or push by this
+  review. The maintainer's reported 10/10 PorF result and membrane-protein
+  improvements are not this review's measurements. These counterexamples
+  establish mathematical/numerical failures, not their frequency on those
+  data sets.
