@@ -74,6 +74,10 @@ type shiftmap_work
     integer                  :: iref = 0, iptcl = 0 !< the pair the work holds
 end type shiftmap_work
 
+type shiftmap_cache
+    integer :: plan_flags = 0
+end type shiftmap_cache
+
 type :: polarft_calc
     private
     class(parameters), pointer :: p_ptr => null()        !< pointer to parameters object (for access to runtime parameters)
@@ -130,6 +134,11 @@ type :: polarft_calc
     ! the polar shift map: the Fourier-Bessel tables of the shift grid and the per-thread work (simple_polarft_shiftmap.f90)
     type(polar_shiftmap),          allocatable :: shiftmap(:)  !< (NSHIFTMAPS), built by new_shiftmap
     type(shiftmap_work),           allocatable :: smwork(:,:)  !< (nthr_glob, NSHIFTMAPS)
+    type(shiftmap_cache),          allocatable :: smcache(:)
+    real(dp),                     allocatable :: sm_times(:,:) !< construction, two reserved slots, selection, posterior reduction
+    integer(int64),               allocatable :: sm_counts(:,:) !< disk/window/full maps, selections, widths, particle expansions
+    real(dp)                                  :: sm_setup_time = 0.d0
+    integer(int64)                            :: sm_builds = 0, sm_reuses = 0
     type(c_ptr)                                :: plan_shiftmap(NSHIFTMAPS) = c_null_ptr !< the batched 2D transforms
     ! Others
     ! Others
@@ -264,6 +273,8 @@ type :: polarft_calc
     procedure          :: shiftmap_peak
     procedure          :: shiftmap_prior
     procedure          :: shiftmap_draw
+    procedure          :: shiftmap_mode
+    procedure          :: get_shiftmap_profile
     ! ===== I/O: simple_polarft_ops_io.f90
     procedure          :: write_ptcl_pft_range
     procedure          :: write_ref_pfts
@@ -1069,17 +1080,37 @@ interface
     end subroutine shiftmap_prior
 
     module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
-            &temp_phys, sdev )
+            &temp_phys, sdev, width_cutoff )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
         real(dp),                    intent(in)    :: temp, prior_w, lse_prior
         logical,                     intent(in)    :: l_greedy
-        real(dp),                    intent(out)   :: logz
+        real(dp),          optional, intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
         real(dp),          optional, intent(in)    :: temp_phys
         real(sp),          optional, intent(out)   :: sdev
+        real(sp),          optional, intent(in)    :: width_cutoff
     end subroutine shiftmap_draw
+
+    module subroutine shiftmap_mode( self, imap, temp, prior_w, irot, irho, ialpha, loss, temp_phys, sdev, width_cutoff )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: imap
+        real(dp),                    intent(in)    :: temp, prior_w
+        integer,                     intent(out)   :: irot, irho, ialpha
+        real(sp),                    intent(out)   :: loss
+        real(dp),          optional, intent(in)    :: temp_phys
+        real(sp),          optional, intent(out)   :: sdev
+        real(sp),          optional, intent(in)    :: width_cutoff
+    end subroutine shiftmap_mode
+
+
+    module subroutine get_shiftmap_profile( self, times, counts, geometry )
+        class(polarft_calc), intent(in) :: self
+        real(dp), intent(out) :: times(6)
+        integer(int64), intent(out) :: counts(8)
+        integer, optional, intent(out) :: geometry(3,NSHIFTMAPS)
+    end subroutine get_shiftmap_profile
 
     ! ===== I/O: simple_polarft_ops_io.f90
 

@@ -11,7 +11,7 @@ use simple_parameters,         only: parameters
 use simple_builder,            only: builder
 use simple_polarft_calc,       only: SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
-use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, posterior_temperature, screen_pool_size,&
+use simple_eul_prob_tab_utils, only: update_screen_best, shift_needs_disk, disk_radius_px, posterior_temperature, screen_pool_size,&
     &eulprob_dist_switch
 implicit none
 
@@ -129,8 +129,7 @@ contains
         real,                 intent(in)    :: corrs0(:)
         real,    allocatable :: dists(:), scr_loss(:), scr_xy(:,:), scr_sdev(:)
         integer, allocatable :: order(:), scr_irot(:), best(:)
-        real(dp) :: logz
-        real     :: cxy(3), loss
+        real     :: cxy(3), loss, width_best(max(1,nbest))
         integer  :: n, npool, nb, k, j, ref, irot, irho, ialpha
         logical  :: l_polished
         self%nres = 0
@@ -145,12 +144,16 @@ contains
         npool = n
         if( n > nbest ) npool = min(n, max(2 * nbest, screen_pool_size(dists, n, self%temp_i)))
         ! the screen: each candidate's map and its mode under the box's prior
+        width_best = huge(1.)
         allocate(scr_loss(npool), scr_xy(2,npool), scr_sdev(npool), scr_irot(npool))
         do k = 1, npool
             ref = refs(order(k))
             call self%b_ptr%pftc%gen_shiftmap(self%imap, ref, self%iptcl)
-            call self%b_ptr%pftc%shiftmap_draw(self%imap, self%temp_s, self%prior_w, 0.d0, .true.,&
-                &logz, irot, irho, ialpha, loss, temp_phys=self%temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(k))
+            call self%b_ptr%pftc%shiftmap_mode(self%imap, self%temp_s, self%prior_w, &
+                &irot, irho, ialpha, loss, &
+                &temp_phys=self%temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(k), &
+                &width_cutoff=maxval(width_best))
+            call update_screen_best(loss, width_best)
             scr_loss(k)  = loss
             scr_irot(k)  = irot
             scr_xy(:,k)  = real(self%b_ptr%pftc%shiftmap_shift(self%imap, irho, ialpha))

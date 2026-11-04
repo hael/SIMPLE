@@ -23,19 +23,38 @@ contains
         real(dp),            intent(in)    :: rho(:)
         integer,             intent(in)    :: nalpha, kstop
         integer(c_int) :: n2(2), nin(2), plan_flags
-        integer        :: ithr, nmax, nrho, nhalf, k1, k2
+        integer        :: ithr, nmax, nrho, nhalf, k1, k2, nthreads
+        real(dp) :: t0
         if( .not. self%existence ) THROW_HARD('the calculator must exist; new_shiftmap')
         if( imap < 1 .or. imap > NSHIFTMAPS ) THROW_HARD('no such shift map; new_shiftmap')
         if( kstop <= self%kfromto(1) .or. kstop > self%kfromto(2) ) THROW_HARD('the map''s last shell must lie in the band; new_shiftmap')
-        if( .not. allocated(self%shiftmap) ) allocate(self%shiftmap(NSHIFTMAPS), self%smwork(nthr_glob, NSHIFTMAPS))
-        call self%kill_one_shiftmap(imap)
+        t0 = omp_get_wtime()
+        nthreads = size(self%crvec1)
+        if( omp_get_max_threads() > nthreads ) THROW_HARD('shift map team exceeds the memo workspace')
+        if( .not. allocated(self%shiftmap) )then
+            allocate(self%shiftmap(NSHIFTMAPS), self%smwork(nthreads, NSHIFTMAPS), self%smcache(NSHIFTMAPS))
+            allocate(self%sm_times(5,nthreads), source=0.d0)
+            allocate(self%sm_counts(6,nthreads), source=0_int64)
+        endif
+        plan_flags = FFTW_MEASURE
+        if( has_global_seed() ) plan_flags = FFTW_ESTIMATE
         k1 = self%kfromto(1)
         k2 = kstop
+        if( self%shiftmap(imap)%matches(self%pftsz, [k1,k2], self%ldim(1), rho, nalpha) )then
+            if( self%smcache(imap)%plan_flags == plan_flags )then
+                self%smwork(:,imap)%iref = 0
+                self%smwork(:,imap)%iptcl = 0
+                self%sm_reuses = self%sm_reuses + 1_int64
+                self%sm_setup_time = self%sm_setup_time + omp_get_wtime() - t0
+                return
+            endif
+        endif
+        call self%kill_one_shiftmap(imap)
         call self%shiftmap(imap)%new(self%pftsz, [k1, k2], self%ldim(1), rho, nalpha)
         nmax  = self%shiftmap(imap)%get_nharm_max()
         nrho  = self%shiftmap(imap)%get_nrho()
         nhalf = nalpha / 2 + 1
-        do ithr = 1, nthr_glob
+        do ithr = 1, nthreads
             allocate(self%smwork(ithr,imap)%rhat(self%nrots, k1:k2),&
                     &self%smwork(ithr,imap)%yhat(self%nrots, k1:k2),&
                     &self%smwork(ithr,imap)%prod(self%nrots, k1:k2),&
@@ -54,8 +73,6 @@ contains
         ! one complex-to-real 2D transform per magnitude over (direction order, ring position), nrho of them in a
         ! batch, out of place; measured plans defeat exact replay, so a fixed seed takes the estimated one (as the
         ! memo workspace)
-        plan_flags = FFTW_MEASURE
-        if( has_global_seed() ) plan_flags = FFTW_ESTIMATE
         n2(1)   = int(self%nrots, c_int)
         n2(2)   = int(nalpha, c_int)
         nin(1)  = int(self%nrots, c_int)
@@ -64,6 +81,9 @@ contains
             &self%smwork(1,imap)%ghalf, nin, 1_c_int, int(nhalf * self%nrots, c_int),&
             &self%smwork(1,imap)%gout,  n2,  1_c_int, int(nalpha * self%nrots, c_int), plan_flags)
         if( .not. c_associated(self%plan_shiftmap(imap)) ) THROW_HARD('FFTW failed to create the shift map plan; new_shiftmap')
+        self%smcache(imap)%plan_flags = plan_flags
+        self%sm_builds = self%sm_builds + 1_int64
+        self%sm_setup_time = self%sm_setup_time + omp_get_wtime() - t0
     end subroutine new_shiftmap
 
     !> The two maps of the probability tables for a prior of width sigma_px (pixels of the shift matrices): the
@@ -148,7 +168,10 @@ contains
         do imap = 1, NSHIFTMAPS
             call self%kill_one_shiftmap(imap)
         enddo
-        deallocate(self%shiftmap, self%smwork)
+        deallocate(self%shiftmap, self%smwork, self%smcache, self%sm_times, self%sm_counts)
+        self%sm_setup_time = 0.d0
+        self%sm_builds = 0_int64
+        self%sm_reuses = 0_int64
     end subroutine kill_shiftmap
 
     module logical function has_shiftmap( self, imap )
@@ -203,6 +226,27 @@ contains
     !! shiftmap_cross and shiftmap_draw read the work on the same thread. The shell weights are the objective's: k
     !! for cc, k/sigma2 for euclid
     module subroutine gen_shiftmap( self, imap, iref, iptcl )
+        class(polarft_calc), target, intent(inout) :: self
+        integer, intent(in) :: imap, iref, iptcl
+        real(dp) :: t0
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        t0 = omp_get_wtime()
+        call gen_shiftmap_kernel(self, imap, iref, iptcl)
+        self%sm_times(1,ithr) = self%sm_times(1,ithr) + omp_get_wtime() - t0
+        select case(imap)
+            case(SHIFTMAP_SCREEN)
+                self%sm_counts(1,ithr) = self%sm_counts(1,ithr) + 1_int64
+            case(SHIFTMAP_WINDOW)
+                self%sm_counts(2,ithr) = self%sm_counts(2,ithr) + 1_int64
+            case default
+                self%sm_counts(3,ithr) = self%sm_counts(3,ithr) + 1_int64
+        end select
+        self%sm_counts(6,ithr) = self%sm_counts(6,ithr) + 1_int64
+    end subroutine gen_shiftmap
+
+    !> Preserve the original arithmetic and array layout in this numerical kernel.
+    subroutine gen_shiftmap_kernel( self, imap, iref, iptcl )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap, iref, iptcl
         type(shiftmap_work), pointer :: wk
@@ -311,7 +355,7 @@ contains
             enddo
         enddo
         call fftwf_execute_dft_c2r(self%plan_shiftmap(imap), wk%ghalf, wk%gout)
-    end subroutine gen_shiftmap
+    end subroutine gen_shiftmap_kernel
 
     !> the cross term of the thread's pair on map imap at grid rotation irot and magnitude rho(irho), at any direction
     !! alpha (the sub-grid readout): the rotation's coefficients from the shell sums by a direct transform
@@ -418,12 +462,12 @@ contains
         lmax   = -huge(lmax)
         do irho = 1, nrho
             rho  = self%shiftmap(imap)%get_rho(irho)
-            lmax = max(lmax, -prior_w * rho * rho + log(self%shiftmap(imap)%get_cell_area(irho)))
+            lmax = max(lmax, -prior_w * rho * rho + self%shiftmap(imap)%get_log_area(irho))
         enddo
         s = 0.d0
         do irho = 1, nrho
             rho = self%shiftmap(imap)%get_rho(irho)
-            l   = -prior_w * rho * rho + log(self%shiftmap(imap)%get_cell_area(irho)) - lmax
+            l   = -prior_w * rho * rho + self%shiftmap(imap)%get_log_area(irho) - lmax
             if( l > -40.d0 ) s = s + ncell * exp(l)
         enddo
         lse_prior = lmax + log(s)
@@ -447,25 +491,28 @@ contains
     !! the physical temperature is measured alongside: the standard deviation of the shift (the square root of the
     !! trace of its covariance, in the particle's axes, about the mean), the dynamic centring's state
     module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
-            &temp_phys, sdev )
+            &temp_phys, sdev, width_cutoff )
         use simple_rnd,  only: ran3
         use simple_math, only: rotmat2d
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
         real(dp),                    intent(in)    :: temp, prior_w, lse_prior
         logical,                     intent(in)    :: l_greedy
-        real(dp),                    intent(out)   :: logz
+        real(dp),          optional, intent(out)   :: logz
         integer,                     intent(out)   :: irot, irho, ialpha
         real(sp),                    intent(out)   :: loss
         real(dp),          optional, intent(in)    :: temp_phys
         real(sp),          optional, intent(out)   :: sdev
+        real(sp),          optional, intent(in)    :: width_cutoff
         type(shiftmap_work), pointer :: wk
-        real(dp) :: offs(self%nrots), scal(self%nrots), rho, loga, lmax, s, tgt, l, pen, s_ring
+        real(dp) :: offs(self%nrots), scal(self%nrots), rho, loga, lmax, s, tgt, l, pen
         real(dp) :: dcell, lphys, lmax_phys, w, w0, w1(2,self%nrots), w2, xc(2), mean(2), tphys
+        real(dp) :: t0, t1
         real     :: rotmat(2,2), v(2)
         integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3)
-        logical  :: l_width
+        logical  :: l_width, l_mass
         l_width = present(temp_phys) .and. present(sdev)
+        l_mass  = present(logz) .or. .not. l_greedy
         tphys   = temp
         if( l_width ) tphys = temp_phys
         ithr =  omp_get_thread_num() + 1
@@ -474,6 +521,7 @@ contains
         if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('the tempered posterior is the Gaussian noise model''s: objfun=euclid; shiftmap_draw')
         nrho   = self%shiftmap(imap)%get_nrho()
         nalpha = self%shiftmap(imap)%get_nalpha()
+        t0 = omp_get_wtime()
         offs = 1.d0 + wk%refpow / wk%ptclpow
         scal = -2.d0 / (real(self%nrots, dp) * wk%ptclpow)
         ! the log masses, their maximum and its cell (and the maximum at the physical temperature)
@@ -482,7 +530,7 @@ contains
         imax = 1
         do ir = 1, nrho
             rho  = self%shiftmap(imap)%get_rho(ir)
-            loga = log(self%shiftmap(imap)%get_cell_area(ir))
+            loga = self%shiftmap(imap)%get_log_area(ir)
             pen  = prior_w * rho * rho
             do ro = 1, self%nrots
                 do j = 1, nalpha
@@ -497,33 +545,44 @@ contains
                 enddo
             enddo
         enddo
+        t1 = omp_get_wtime()
+        self%sm_times(4,ithr) = self%sm_times(4,ithr) + t1 - t0
+        self%sm_counts(4,ithr) = self%sm_counts(4,ithr) + 1_int64
+        if( present(width_cutoff) )then
+            if( l_width )then
+                loss = real(offs(imax(2)) + scal(imax(2)) * real(wk%gout(imax(1),imax(2),imax(3)),dp),sp)
+                if( loss > width_cutoff )then
+                    l_width = .false.
+                    sdev = -1.
+                endif
+            endif
+        endif
+        t0 = t1
         s  = 0.d0
         w0 = 0.d0
         w1 = 0.d0
         w2 = 0.d0
-        do ir = 1, nrho
-            rho    = self%shiftmap(imap)%get_rho(ir)
-            loga   = log(self%shiftmap(imap)%get_cell_area(ir))
-            pen    = prior_w * rho * rho
-            s_ring = 0.d0
-            do ro = 1, self%nrots
-                do j = 1, nalpha
-                    l = real(wk%lw(j,ro,ir), dp) - lmax
-                    if( l > -40.d0 ) s_ring = s_ring + exp(l)
-                    if( .not. l_width ) cycle
-                    ! the physical log mass from the tempered one: the data term back, re-tempered
-                    lphys = -tphys * (-(real(wk%lw(j,ro,ir), dp) + pen - loga) / temp) - pen + loga - lmax_phys
-                    if( lphys <= -40.d0 ) cycle
-                    w  = exp(lphys)
-                    xc = self%shiftmap_shift(imap, ir, j)
-                    w0 = w0 + w
-                    w1(:,ro) = w1(:,ro) + w * xc
-                    w2 = w2 + w * sum(xc**2)
+        if( l_mass ) s = shiftmap_mass(wk%lw, lmax)
+        if( l_width )then
+            do ir = 1, nrho
+                rho    = self%shiftmap(imap)%get_rho(ir)
+                loga   = self%shiftmap(imap)%get_log_area(ir)
+                pen    = prior_w * rho * rho
+                do ro = 1, self%nrots
+                    do j = 1, nalpha
+                        ! the physical log mass from the tempered one: the data term back, re-tempered
+                        lphys = -tphys * (-(real(wk%lw(j,ro,ir), dp) + pen - loga) / temp) - pen + loga - lmax_phys
+                        if( lphys <= -40.d0 ) cycle
+                        w  = exp(lphys)
+                        xc = self%shiftmap_shift(imap, ir, j)
+                        w0 = w0 + w
+                        w1(:,ro) = w1(:,ro) + w * xc
+                        w2 = w2 + w * sum(xc**2)
+                    enddo
                 enddo
             enddo
-            s = s + s_ring
-        enddo
-        logz = lmax + log(s) - lse_prior
+        endif
+        if( present(logz) ) logz = lmax + log(s) - lse_prior
         if( l_width )then
             ! the mean in the particle's axes: each rotation's sum rotated as the search's shifts are
             mean = 0.d0
@@ -538,6 +597,8 @@ contains
                 sdev = real(sqrt(max(0.d0, w2 / w0 - sum(mean**2))), sp)
             endif
         endif
+        self%sm_times(5,ithr) = self%sm_times(5,ithr) + omp_get_wtime() - t0
+        if( l_width ) self%sm_counts(5,ithr) = self%sm_counts(5,ithr) + 1_int64
         if( l_greedy )then
             ialpha = imax(1)
             irot   = imax(2)
@@ -566,5 +627,63 @@ contains
         endif
         loss = real(offs(irot) + scal(irot) * real(wk%gout(ialpha,irot,irho), dp), sp)
     end subroutine shiftmap_draw
+
+    !> The tempered mass, retaining the original cell order and per-ring sums.
+    pure real(dp) function shiftmap_mass( lw, lmax ) result( s )
+        real(sp), intent(in) :: lw(:,:,:)
+        real(dp), intent(in) :: lmax
+        real(dp) :: l, ring_sum
+        integer :: ir, ro, j
+        s = 0.d0
+        do ir = 1, size(lw,3)
+            ring_sum = 0.d0
+            do ro = 1, size(lw,2)
+                do j = 1, size(lw,1)
+                    l = real(lw(j,ro,ir),dp) - lmax
+                    if( l > -40.d0 ) ring_sum = ring_sum + exp(l)
+                enddo
+            enddo
+            s = s + ring_sum
+        enddo
+    end function shiftmap_mass
+
+    !> The posterior mode and optional physical width, without evidence or a draw.
+    !! A loss strictly above width_cutoff returns sdev=-1 without reducing physical moments.
+    module subroutine shiftmap_mode( self, imap, temp, prior_w, irot, irho, ialpha, loss, temp_phys, sdev, width_cutoff )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: imap
+        real(dp),                    intent(in)    :: temp, prior_w
+        integer,                     intent(out)   :: irot, irho, ialpha
+        real(sp),                    intent(out)   :: loss
+        real(dp),          optional, intent(in)    :: temp_phys
+        real(sp),          optional, intent(out)   :: sdev
+        real(sp),          optional, intent(in)    :: width_cutoff
+        call self%shiftmap_draw(imap, temp, prior_w, 0.d0, .true., irot=irot, irho=irho, ialpha=ialpha, &
+            &loss=loss, temp_phys=temp_phys, sdev=sdev, width_cutoff=width_cutoff)
+    end subroutine shiftmap_mode
+
+    !> Cumulative thread-seconds and work counts over every map/batch in this calculator's lifetime.
+    module subroutine get_shiftmap_profile( self, times, counts, geometry )
+        class(polarft_calc), intent(in) :: self
+        real(dp), intent(out) :: times(6)
+        integer(int64), intent(out) :: counts(8)
+        integer, optional, intent(out) :: geometry(3,NSHIFTMAPS)
+        integer :: imap
+        times = 0.d0
+        counts = 0_int64
+        if( allocated(self%sm_times) ) times(1:5) = sum(self%sm_times,dim=2)
+        if( allocated(self%sm_counts) ) counts(1:6) = sum(self%sm_counts,dim=2)
+        times(6) = self%sm_setup_time
+        counts(7) = self%sm_builds
+        counts(8) = self%sm_reuses
+        if( present(geometry) )then
+            geometry = 0
+            do imap = 1, NSHIFTMAPS
+                if( .not. self%has_shiftmap(imap) ) cycle
+                geometry(:,imap) = [self%shiftmap(imap)%get_nrho(), self%shiftmap(imap)%get_nalpha(), &
+                    &self%shiftmap(imap)%get_nharm_max()]
+            enddo
+        endif
+    end subroutine get_shiftmap_profile
 
 end submodule simple_polarft_shiftmap

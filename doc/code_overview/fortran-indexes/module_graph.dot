@@ -451,7 +451,6 @@ digraph module_graph {
   "simple_projfile_utils";
   "simple_pspec_thumb_iter";
   "simple_pspecs";
-  "simple_ptcl_cache";
   "simple_ptcl_layout";
   "simple_ptcl_sieve";
   "simple_ptcl_sieve_tester";
@@ -512,6 +511,7 @@ digraph module_graph {
   "simple_segdiam_bin_picker";
   "simple_segmentation";
   "simple_segmentation_tester";
+  "simple_shiftmap_srch";
   "simple_sigma2_bootstrap";
   "simple_sigma2_bootstrap_tester";
   "simple_sigma2_files";
@@ -524,6 +524,7 @@ digraph module_graph {
   "simple_simulator_tester";
   "simple_solve2D_chunk";
   "simple_solve2D_controller";
+  "simple_solve2D_controller_tester";
   "simple_solve3D_addon_dock_tester";
   "simple_solve3D_addon_report";
   "simple_solve3D_addon_report_tester";
@@ -1405,7 +1406,6 @@ digraph module_graph {
   "simple_commanders_prob" -> "simple_matcher_smpl_and_lplims";
   "simple_commanders_prob" -> "simple_pftc_srch_api";
   "simple_commanders_prob" -> "simple_prob_align_strategy";
-  "simple_commanders_prob" -> "simple_ptcl_cache";
   "simple_commanders_prob" -> "simple_strategy2d_matcher";
   "simple_commanders_project_cls" -> "simple_commanders_api";
   "simple_commanders_project_core" -> "simple_commanders_api";
@@ -1815,6 +1815,7 @@ digraph module_graph {
   "simple_commanders_test_class" -> "simple_sigma2_bootstrap_tester";
   "simple_commanders_test_class" -> "simple_sigma2_state_tester";
   "simple_commanders_test_class" -> "simple_simulator_tester";
+  "simple_commanders_test_class" -> "simple_solve2d_controller_tester";
   "simple_commanders_test_class" -> "simple_solve3d_addon_dock_tester";
   "simple_commanders_test_class" -> "simple_solve3d_addon_report_tester";
   "simple_commanders_test_class" -> "simple_solve3d_chunks_plan_tester";
@@ -2569,7 +2570,6 @@ digraph module_graph {
   "simple_flex_pca_plane_cache" -> "simple_matcher_3drec";
   "simple_flex_pca_plane_cache" -> "simple_matcher_ptcl_io";
   "simple_flex_pca_plane_cache" -> "simple_parameters";
-  "simple_flex_pca_plane_cache" -> "simple_ptcl_cache";
   "simple_flex_pca_plane_cache" -> "simple_syslib";
   "simple_flex_pca_planes" -> "simple_builder";
   "simple_flex_pca_planes" -> "simple_core_module_api";
@@ -3237,6 +3237,7 @@ digraph module_graph {
   "simple_matcher_2Dprep" -> "ieee_arithmetic";
   "simple_matcher_2Dprep" -> "simple_builder";
   "simple_matcher_2Dprep" -> "simple_butterworth";
+  "simple_matcher_2Dprep" -> "simple_eul_prob_tab_utils";
   "simple_matcher_2Dprep" -> "simple_matcher_ptcl_io";
   "simple_matcher_2Dprep" -> "simple_matcher_smpl_and_lplims";
   "simple_matcher_2Dprep" -> "simple_memoize_ft_maps";
@@ -3276,7 +3277,6 @@ digraph module_graph {
   "simple_matcher_ptcl_batch" -> "simple_matcher_2dprep";
   "simple_matcher_ptcl_batch" -> "simple_matcher_ptcl_io";
   "simple_matcher_ptcl_batch" -> "simple_pftc_srch_api";
-  "simple_matcher_ptcl_batch" -> "simple_ptcl_cache";
   "simple_matcher_ptcl_batch" -> "simple_sigma2_state_file";
   "simple_matcher_ptcl_io" -> "iso_fortran_env";
   "simple_matcher_ptcl_io" -> "simple_builder";
@@ -3901,6 +3901,7 @@ digraph module_graph {
   "simple_polarft_calc" -> "simple_defs";
   "simple_polarft_calc" -> "simple_eul_prob_tab_utils";
   "simple_polarft_calc" -> "simple_gpu_utils";
+  "simple_polarft_calc" -> "simple_math";
   "simple_polarft_calc" -> "simple_parameters";
   "simple_polarft_calc" -> "simple_pftc_api";
   "simple_polarft_calc" -> "simple_polar_shiftmap";
@@ -3972,8 +3973,8 @@ digraph module_graph {
   "simple_prob_align_strategy" -> "simple_eul_prob_tab_neigh";
   "simple_prob_align_strategy" -> "simple_eul_prob_tab_utils";
   "simple_prob_align_strategy" -> "simple_matcher_smpl_and_lplims";
+  "simple_prob_align_strategy" -> "simple_math";
   "simple_prob_align_strategy" -> "simple_parameters";
-  "simple_prob_align_strategy" -> "simple_ptcl_cache";
   "simple_prob_align_strategy" -> "simple_qsys_env";
   "simple_prob_align_strategy" -> "simple_qsys_funs";
   "simple_prob_align_strategy" -> "simple_refine3d_fnames";
@@ -4023,14 +4024,6 @@ digraph module_graph {
   "simple_pspecs" -> "simple_fsc";
   "simple_pspecs" -> "simple_image";
   "simple_pspecs" -> "simple_oris";
-  "simple_ptcl_cache" -> "simple_builder";
-  "simple_ptcl_cache" -> "simple_cmdline";
-  "simple_ptcl_cache" -> "simple_discrete_stack_io";
-  "simple_ptcl_cache" -> "simple_imgarr_utils";
-  "simple_ptcl_cache" -> "simple_matcher_ptcl_io";
-  "simple_ptcl_cache" -> "simple_pftc_srch_api";
-  "simple_ptcl_cache" -> "simple_stack_io";
-  "simple_ptcl_cache" -> "simple_syslib";
   "simple_ptcl_layout" -> "iso_fortran_env";
   "simple_ptcl_layout" -> "simple_oris";
   "simple_ptcl_layout" -> "simple_sigma2_state_file";
@@ -4214,6 +4207,7 @@ digraph module_graph {
   "simple_rec3D_pcg_strategy" -> "simple_builder";
   "simple_rec3D_pcg_strategy" -> "simple_cmdline";
   "simple_rec3D_pcg_strategy" -> "simple_core_module_api";
+  "simple_rec3D_pcg_strategy" -> "simple_eul_prob_tab_utils";
   "simple_rec3D_pcg_strategy" -> "simple_halfmap_diagnostics";
   "simple_rec3D_pcg_strategy" -> "simple_image";
   "simple_rec3D_pcg_strategy" -> "simple_image_msk";
@@ -4269,10 +4263,17 @@ digraph module_graph {
   "simple_rec3D_strategy" -> "simple_rec3d_service";
   "simple_rec3D_strategy" -> "simple_sigma2_bootstrap";
   "simple_rec3D_strategy_tester" -> "simple_cmdline";
+  "simple_rec3D_strategy_tester" -> "simple_eul_prob_tab_utils";
+  "simple_rec3D_strategy_tester" -> "simple_ori";
+  "simple_rec3D_strategy_tester" -> "simple_oris";
   "simple_rec3D_strategy_tester" -> "simple_parameters";
+  "simple_rec3D_strategy_tester" -> "simple_rec3d_pcg_strategy";
   "simple_rec3D_strategy_tester" -> "simple_rec3d_service";
   "simple_rec3D_strategy_tester" -> "simple_rec3d_strategy";
+  "simple_rec3D_strategy_tester" -> "simple_reconstructor_pcg";
+  "simple_rec3D_strategy_tester" -> "simple_rnd";
   "simple_rec3D_strategy_tester" -> "simple_test_utils";
+  "simple_rec3D_strategy_tester" -> "simple_type_defs";
   "simple_rec3D_wave_strategy" -> "simple_builder";
   "simple_rec3D_wave_strategy" -> "simple_defs";
   "simple_rec3D_wave_strategy" -> "simple_eo_partition";
@@ -4389,7 +4390,6 @@ digraph module_graph {
   "simple_refine2D_strategy" -> "simple_prob_align_strategy";
   "simple_refine2D_strategy" -> "simple_procimgstk";
   "simple_refine2D_strategy" -> "simple_progress";
-  "simple_refine2D_strategy" -> "simple_ptcl_cache";
   "simple_refine2D_strategy" -> "simple_qsys_env";
   "simple_refine2D_strategy" -> "simple_qsys_funs";
   "simple_refine2D_strategy" -> "simple_refine2d_fnames";
@@ -4609,6 +4609,15 @@ digraph module_graph {
   "simple_segmentation_tester" -> "simple_rnd";
   "simple_segmentation_tester" -> "simple_segmentation";
   "simple_segmentation_tester" -> "simple_test_utils";
+  "simple_shiftmap_srch" -> "simple_builder";
+  "simple_shiftmap_srch" -> "simple_core_module_api";
+  "simple_shiftmap_srch" -> "simple_defs";
+  "simple_shiftmap_srch" -> "simple_error";
+  "simple_shiftmap_srch" -> "simple_eul_prob_tab_utils";
+  "simple_shiftmap_srch" -> "simple_parameters";
+  "simple_shiftmap_srch" -> "simple_pftc_shsrch_grad";
+  "simple_shiftmap_srch" -> "simple_polarft_calc";
+  "simple_shiftmap_srch" -> "simple_srch_sort_loc";
   "simple_sigma2_bootstrap" -> "simple_commanders_api";
   "simple_sigma2_bootstrap" -> "simple_commanders_euclid";
   "simple_sigma2_bootstrap" -> "simple_sigma2_files";
@@ -4687,6 +4696,7 @@ digraph module_graph {
   "simple_solve2D_chunk" -> "simple_qsys_env";
   "simple_solve2D_chunk" -> "simple_rec_list";
   "simple_solve2D_chunk" -> "simple_sp_project";
+  "simple_solve2D_controller" -> "simple_class_frcs";
   "simple_solve2D_controller" -> "simple_cmdline";
   "simple_solve2D_controller" -> "simple_core_module_api";
   "simple_solve2D_controller" -> "simple_default_clines";
@@ -4694,6 +4704,9 @@ digraph module_graph {
   "simple_solve2D_controller" -> "simple_image_msk";
   "simple_solve2D_controller" -> "simple_parameters";
   "simple_solve2D_controller" -> "simple_refine2d_fnames";
+  "simple_solve2D_controller" -> "simple_sp_project";
+  "simple_solve2D_controller_tester" -> "simple_solve2d_controller";
+  "simple_solve2D_controller_tester" -> "simple_test_utils";
   "simple_solve3D_addon_dock_tester" -> "simple_defs";
   "simple_solve3D_addon_dock_tester" -> "simple_image";
   "simple_solve3D_addon_dock_tester" -> "simple_solve3d_addon_report";
@@ -4962,13 +4975,14 @@ digraph module_graph {
   "simple_strategy2D_matcher" -> "simple_eo_partition";
   "simple_strategy2D_matcher" -> "simple_eul_prob_tab2d";
   "simple_strategy2D_matcher" -> "simple_imgarr_utils";
+  "simple_strategy2D_matcher" -> "simple_matcher_2dprep";
   "simple_strategy2D_matcher" -> "simple_matcher_pftc_prep";
   "simple_strategy2D_matcher" -> "simple_matcher_ptcl_batch";
   "simple_strategy2D_matcher" -> "simple_matcher_ptcl_io";
   "simple_strategy2D_matcher" -> "simple_matcher_smpl_and_lplims";
   "simple_strategy2D_matcher" -> "simple_pftc_srch_api";
-  "simple_strategy2D_matcher" -> "simple_ptcl_cache";
   "simple_strategy2D_matcher" -> "simple_qsys_funs";
+  "simple_strategy2D_matcher" -> "simple_shiftmap_srch";
   "simple_strategy2D_matcher" -> "simple_strategy2d";
   "simple_strategy2D_matcher" -> "simple_strategy2d_alloc";
   "simple_strategy2D_matcher" -> "simple_strategy2d_greedy";
@@ -5012,6 +5026,7 @@ digraph module_graph {
   "simple_strategy2D_srch" -> "simple_eul_prob_tab_utils";
   "simple_strategy2D_srch" -> "simple_pftc_shsrch_grad";
   "simple_strategy2D_srch" -> "simple_pftc_srch_api";
+  "simple_strategy2D_srch" -> "simple_shiftmap_srch";
   "simple_strategy2D_srch" -> "simple_strategy2d_alloc";
   "simple_strategy2D_tseries" -> "simple_builder";
   "simple_strategy2D_tseries" -> "simple_pftc_srch_api";
@@ -5133,7 +5148,10 @@ digraph module_graph {
   "simple_strategy3D_inplane_tester" -> "simple_core_module_api";
   "simple_strategy3D_inplane_tester" -> "simple_image";
   "simple_strategy3D_inplane_tester" -> "simple_linked_list";
+  "simple_strategy3D_inplane_tester" -> "simple_matcher_2dprep";
+  "simple_strategy3D_inplane_tester" -> "simple_matcher_ptcl_io";
   "simple_strategy3D_inplane_tester" -> "simple_matcher_smpl_and_lplims";
+  "simple_strategy3D_inplane_tester" -> "simple_memoize_ft_maps";
   "simple_strategy3D_inplane_tester" -> "simple_parameters";
   "simple_strategy3D_inplane_tester" -> "simple_pftc_shsrch_grad";
   "simple_strategy3D_inplane_tester" -> "simple_polarft_calc";
@@ -5155,6 +5173,7 @@ digraph module_graph {
   "simple_strategy3D_matcher" -> "simple_eo_partition";
   "simple_strategy3D_matcher" -> "simple_eul_prob_tab";
   "simple_strategy3D_matcher" -> "simple_eul_prob_tab_utils";
+  "simple_strategy3D_matcher" -> "simple_matcher_2dprep";
   "simple_strategy3D_matcher" -> "simple_matcher_3drec";
   "simple_strategy3D_matcher" -> "simple_matcher_ptcl_batch";
   "simple_strategy3D_matcher" -> "simple_matcher_ptcl_io";
@@ -5163,6 +5182,7 @@ digraph module_graph {
   "simple_strategy3D_matcher" -> "simple_pftc_srch_api";
   "simple_strategy3D_matcher" -> "simple_qsys_funs";
   "simple_strategy3D_matcher" -> "simple_rec3d_pcg_strategy";
+  "simple_strategy3D_matcher" -> "simple_shiftmap_srch";
   "simple_strategy3D_matcher" -> "simple_state_weight_set";
   "simple_strategy3D_matcher" -> "simple_strategy3d";
   "simple_strategy3D_matcher" -> "simple_strategy3d_alloc";
@@ -5201,6 +5221,7 @@ digraph module_graph {
   "simple_strategy3D_srch" -> "simple_eul_prob_tab_utils";
   "simple_strategy3D_srch" -> "simple_parameters";
   "simple_strategy3D_srch" -> "simple_pftc_shsrch_grad";
+  "simple_strategy3D_srch" -> "simple_shiftmap_srch";
   "simple_strategy3D_srch" -> "simple_strategy3d_alloc";
   "simple_strategy3D_utils" -> "simple_core_module_api";
   "simple_strategy3D_utils" -> "simple_pftc_shsrch_grad";
@@ -5243,6 +5264,7 @@ digraph module_graph {
   "simple_stream_chain_tester" -> "simple_commanders_reproject";
   "simple_stream_chain_tester" -> "simple_commanders_sim";
   "simple_stream_chain_tester" -> "simple_commanders_stream_p01_preprocess";
+  "simple_stream_chain_tester" -> "simple_commanders_stream_p03_initial_analysis";
   "simple_stream_chain_tester" -> "simple_commanders_stream_p04_refpick_extract";
   "simple_stream_chain_tester" -> "simple_commanders_stream_p05_sieve_cavgs";
   "simple_stream_chain_tester" -> "simple_commanders_stream_p06_pool2d";
@@ -5255,6 +5277,7 @@ digraph module_graph {
   "simple_stream_chain_tester" -> "simple_ori";
   "simple_stream_chain_tester" -> "simple_oris";
   "simple_stream_chain_tester" -> "simple_sp_project";
+  "simple_stream_chain_tester" -> "simple_stream_stage_initial_analysis";
   "simple_stream_chain_tester" -> "simple_stream_stage_optics";
   "simple_stream_chain_tester" -> "simple_stream_stage_pool2d";
   "simple_stream_chain_tester" -> "simple_stream_stage_preprocess";
@@ -5264,6 +5287,7 @@ digraph module_graph {
   "simple_stream_chain_tester" -> "simple_string";
   "simple_stream_chain_tester" -> "simple_string_utils";
   "simple_stream_chain_tester" -> "simple_syslib";
+  "simple_stream_chain_tester" -> "simple_test_truth_metrics";
   "simple_stream_chain_tester" -> "simple_test_utils";
   "simple_stream_chain_tester" -> "simple_timer";
   "simple_stream_chain_tester" -> "simple_type_defs";

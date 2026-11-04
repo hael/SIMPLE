@@ -9,7 +9,7 @@ use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFT
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_srch_sort_loc,      only: minnloc
 use simple_decay_funs,         only: extremal_decay2D
-use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
+use simple_eul_prob_tab_utils, only: update_screen_best, build_pind_lookup, eulprob_dist_switch, record_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
     &posterior_temperature, draw_posterior_row, shift_prior_sigma2, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN,&
@@ -268,8 +268,8 @@ contains
         real(dp) :: ts_seed(nthr_glob), ts_score(nthr_glob), ts_refine(nthr_glob), t_region, t0
         integer(int64) :: nscored(nthr_glob), nbank(nthr_glob), nrefined(nthr_glob), ndisk(nthr_glob), nscreens(nthr_glob)
         complex(sp), allocatable :: seed_bank(:,:,:) !< per thread: the seed-shifted particle memo
-        real(dp) :: prior_w, prior_w_map, logz, temp_i, lse_map, logp0, temp_s
-        real     :: loss_cell, scr_xy(2,self%nclasses), scr_sdev(self%nclasses)
+        real(dp) :: prior_w, prior_w_map, temp_i, temp_s
+        real     :: loss_cell, scr_xy(2,self%nclasses), scr_sdev(self%nclasses), width_best(self%nclasses)
         integer  :: irho, ialpha, kscreen, scr_irot(self%nclasses)
         logical  :: l_bank, l_map, l_disk, l_polished
         if( self%l_sparse_snhc )then
@@ -335,8 +335,8 @@ contains
             ! fill the table; dynamic: the particles' shift searches differ in cost, and each particle is processed
             ! whole by one thread with its own search object, so only its random draws change
             !$omp parallel do default(shared) private(i,iptcl,ithr,irot,irot0,cxy,icls,icls_prev,loc,&
-            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0,logz,temp_i,irho,ialpha,&
-            !$omp& loss_cell,lse_map,logp0,temp_s,npool,pool,gso,l_disk,scr_xy,scr_irot,scr_sdev,imap,prior_w_map,l_polished,shsig_loc)&
+            !$omp& cls_dists,cls_dists_work,iref_n,cxy_prob,inpl_dist,t0,l_bank,xy0,temp_i,irho,ialpha,&
+            !$omp& loss_cell,temp_s,npool,pool,gso,l_disk,scr_xy,scr_irot,scr_sdev,width_best,imap,prior_w_map,l_polished,shsig_loc)&
             !$omp firstprivate(o_prev) proc_bind(close) schedule(dynamic)
             do i = i_from, i_to
                 iptcl = self%pinds(i)
@@ -365,7 +365,6 @@ contains
                     temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i), dp)
                     temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                         &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
-                    call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, lse_map, logp0)
                 else
                     ! (1) identify shifts using the previously assigned best class
                     if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr)%set_shift_prior(sigma2_prior,&
@@ -409,13 +408,16 @@ contains
                     pool  = minnloc(cls_dists, nactive)
                     npool = min(nactive, max(2 * nhood_sz_loc, screen_pool_size(cls_dists(pool), nactive, temp_i)))
                     cls_dists_work = huge(1.0)
+                    width_best = huge(1.)
                     do iref_n = 1, npool
                         icls = pool(iref_n)
                         if( icls < 1 ) cycle
                         call self%b_ptr%pftc%gen_shiftmap(imap, icls, iptcl)
-                        call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, lse_map, .true.,&
-                            &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
-                            &sdev=scr_sdev(icls))
+                        call self%b_ptr%pftc%shiftmap_mode(imap, temp_s, prior_w_map, &
+                            &irot, irho, ialpha, loss_cell, &
+                            &temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(icls), &
+                            &width_cutoff=maxval(width_best(1:nhood_sz_loc)))
+                        call update_screen_best(loss_cell, width_best(1:nhood_sz_loc))
                         scr_irot(icls) = irot
                         scr_xy(:,icls) = real(self%b_ptr%pftc%shiftmap_shift(imap, irho, ialpha))
                         cls_dists_work(icls) = loss_cell
@@ -685,7 +687,8 @@ contains
             integer  :: pool_loc(neval_loc), scr_irot_loc(self%nclasses), slot_of_loc(self%nclasses), loc_loc(1)
             real     :: cxy_prob_loc(3), xy0_loc(2), loss_cell_loc, dist_loc, sdev_loc, dists_sorted_loc(neval_loc)
             real     :: scr_xy_loc(2,self%nclasses), scr_loss_loc(self%nclasses), scr_sdev_loc(self%nclasses)
-            real(dp) :: lse_loc, logp0_loc, temp_s_loc, temp_i_loc, logz_loc, prior_w_loc
+            real :: width_best_loc(max(1,smpl_ncls))
+            real(dp) :: temp_s_loc, temp_i_loc, prior_w_loc
             logical  :: l_polished_loc
             if( .not. l_with_shift ) return
             if( neval_loc < 1 ) return
@@ -701,7 +704,6 @@ contains
                     gso         => grad_shsrch_disk(ithr_loc)
                     ndisk(ithr_loc) = ndisk(ithr_loc) + 1_int64
                 endif
-                call self%b_ptr%pftc%shiftmap_prior(imap_loc, prior_w_loc, lse_loc, logp0_loc)
             endif
             nrefine_loc = min(smpl_ncls, neval_loc)
             if( l_map .and. l_disk_loc )then
@@ -712,6 +714,7 @@ contains
                 temp_i_loc       = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
                 npool_loc        = min(neval_loc, max(2 * nrefine_loc, screen_pool_size(dists_sorted_loc, neval_loc, temp_i_loc)))
                 scr_loss_loc = huge(1.0)
+                width_best_loc = huge(1.)
                 slot_of_loc  = 0
                 do j_loc = 1, npool_loc
                     eval_slot_loc = pool_loc(j_loc)
@@ -720,9 +723,11 @@ contains
                     if( icls_loc < 1 ) cycle
                     slot_of_loc(icls_loc) = eval_slot_loc
                     call self%b_ptr%pftc%gen_shiftmap(imap_loc, icls_loc, iptcl_loc)
-                    call self%b_ptr%pftc%shiftmap_draw(imap_loc, temp_s_loc, prior_w_loc, lse_loc, .true.,&
-                        &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc,&
-                        &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev_loc(icls_loc))
+                    call self%b_ptr%pftc%shiftmap_mode(imap_loc, temp_s_loc, prior_w_loc, &
+                        &irot_loc, irho_loc, ialpha_loc, loss_cell_loc, &
+                        &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev_loc(icls_loc), &
+                        &width_cutoff=maxval(width_best_loc(1:nrefine_loc)))
+                    call update_screen_best(loss_cell_loc, width_best_loc(1:nrefine_loc))
                     scr_irot_loc(icls_loc) = irot_loc
                     scr_xy_loc(:,icls_loc) = real(self%b_ptr%pftc%shiftmap_shift(imap_loc, irho_loc, ialpha_loc))
                     scr_loss_loc(icls_loc) = loss_cell_loc
@@ -755,8 +760,8 @@ contains
                 call gso%set_indices(icls_loc, iptcl_loc)
                 if( l_map )then
                     call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_WINDOW, icls_loc, iptcl_loc)
-                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s_loc, 0.d0, lse_loc, .true.,&
-                        &logz_loc, irot_loc, irho_loc, ialpha_loc, loss_cell_loc,&
+                    call self%b_ptr%pftc%shiftmap_mode(SHIFTMAP_WINDOW, temp_s_loc, 0.d0, &
+                        &irot_loc, irho_loc, ialpha_loc, loss_cell_loc, &
                         &temp_phys=temp_s_loc / real(self%p_ptr%prob_beta, dp), sdev=sdev_loc)
                     xy0_loc = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho_loc, ialpha_loc))
                     nscreens(ithr_loc) = nscreens(ithr_loc) + 1_int64
@@ -880,6 +885,9 @@ contains
         class(eul_prob_tab2D), intent(in) :: self
         type(prob_fill_profile) :: profile
         profile = self%fill_profile
+        if( associated(self%b_ptr) )then
+            call self%b_ptr%pftc%get_shiftmap_profile(profile%map_times, profile%map_counts, profile%map_geometry)
+        endif
     end function get_fill_profile
 
     !> wall time of the master's part reads and assignment since new, read before kill

@@ -14,7 +14,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_pose, prob_insert_poses, prob_insert_cone, &
-    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss
+    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best
 use simple_rnd,                only: seed_rnd_fixed
 use simple_sym,                only: sym
 use simple_oris,               only: oris
@@ -38,6 +38,7 @@ contains
     subroutine run_all_eul_prob_tab_tests()
         write(*,'(A)') '**** running all 3D probability table tests ****'
         call test_record_seed_shift()
+        call test_screen_width_shortlist()
         write(*,'(A)') 'test_dense_part_round_trip'
         call test_dense_part_round_trip()
         write(*,'(A)') 'test_dense_read_threads'
@@ -68,6 +69,39 @@ contains
         call test_neff_readout()
         call test_neff_report()
     end subroutine run_all_eul_prob_tab_tests
+
+    subroutine test_screen_width_shortlist()
+        integer, parameter :: N = 12, K = 3
+        real :: losses(N), best(K), work(N), cutoff
+        logical :: measured(N)
+        integer :: icase, i
+        do icase = 1, 4
+            select case(icase)
+                case(1)
+                    losses = [(real(i), i=1,N)]
+                case(2)
+                    losses = [(real(N+1-i), i=1,N)]
+                case(3)
+                    losses = 2.
+                case(4)
+                    losses = [5., 5., 5., 1., 7., 2., 2., 0., 8., 2., 0., 0.]
+            end select
+            best = huge(1.)
+            do i = 1, N
+                measured(i) = losses(i) <= maxval(best)
+                call update_screen_best(losses(i), best)
+            enddo
+            work = losses
+            do i = 1, K-1
+                work(minloc(work,dim=1)) = huge(1.)
+            enddo
+            cutoff = minval(work)
+            call assert_true(maxval(best) == cutoff, 'running cutoff equals the independent kth-smallest loss')
+            call assert_true(all(measured .or. losses > cutoff), 'every candidate at or below the final cutoff has a width')
+            if( icase == 1 ) call assert_int(K, count(measured), 'ascending losses only measure the initial shortlist')
+            if( icase == 3 ) call assert_true(all(measured), 'ties are never pruned by the width shortcut')
+        enddo
+    end subroutine test_screen_width_shortlist
 
     subroutine test_neff_report()
         use, intrinsic :: iso_fortran_env, only: iostat_end

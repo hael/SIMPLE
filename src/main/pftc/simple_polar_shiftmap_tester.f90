@@ -12,7 +12,7 @@ use simple_polarft_calc,    only: polarft_calc, SHIFTMAP_FULL, SHIFTMAP_SCREEN
 use simple_polar_shiftmap,  only: polar_shiftmap, shiftmap_ndirections
 use simple_timer,           only: tic, toc, timer_int_kind
 use simple_test_utils
-!$ use omp_lib,             only: omp_get_max_threads, omp_set_num_threads
+!$ use omp_lib,             only: omp_get_max_threads, omp_set_num_threads, omp_get_num_procs, omp_get_num_threads
 implicit none
 private
 public :: run_all_polar_shiftmap_tests
@@ -31,6 +31,10 @@ contains
         call test_cell_areas()
         call test_kernel_threads()
         call test_kernel_draw()
+        call test_physical_width()
+        call test_zero_prior_width_rounding()
+        call test_map_cache_lifecycle()
+        call test_screen_width_identity()
         call test_disk_within_radius()
         call test_kernel_timing()
     end subroutine run_all_polar_shiftmap_tests
@@ -417,7 +421,7 @@ contains
         type(polar_shiftmap)      :: sm
         real,        allocatable  :: sigma2(:,:)
         complex(sp), allocatable  :: refs(:,:,:,:), ptcls(:,:,:)
-        real(sp),    allocatable  :: ctfs(:,:,:), vals(:,:,:)
+        real(sp),    allocatable  :: ctfs(:,:,:), vals(:,:,:), vals_before(:,:,:)
         real(dp),    allocatable  :: w(:)
         complex(dp), allocatable  :: Q(:,:), A(:,:)
         real(dp) :: scale, alpha, c_mech, c_kern, err_mech, err_grid, err_zero, err_fold, val_ref, val_map, s(2), temp
@@ -454,6 +458,14 @@ contains
         if( trim(objfun) == 'euclid' ) temp = real(posterior_temperature(pftc%wsqsum_ptcl_now(1), pftsz), dp)
         call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
         call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+        if( trim(objfun) == 'cc' )then
+            allocate(vals_before,source=vals)
+            call pftc%memoize_sigma2_weights
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+            call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+            call assert_true(all(vals == vals_before), 'CC map weights survive a noise refresh without sigma2')
+            deallocate(vals_before)
+        endif
         branch_rots = [1, pftsz, pftsz + 1, nrots]
         err_mech = 0.d0
         err_grid = 0.d0
@@ -698,41 +710,69 @@ contains
         call assert_int(14, shiftmap_ndirections(13), 'the FFT-friendly direction count admits a factor 7')
     end subroutine test_cell_areas
 
-    !> the kernel inside a parallel region: eight particles against one reference on four threads give the grids the
-    !! serial pass gives, bit for bit (per-thread work, one plan)
+    !> A forced team must give the serial grids bit for bit with per-thread work and one shared plan.
     subroutine test_kernel_threads()
-        integer,  parameter :: NPTCLS = 8, NALPHA = 16, NRHO = 4, NTHR = 4
+        integer,  parameter :: NALPHA = 16, NRHO = 4
         real(dp), parameter :: RHOS(NRHO) = [0.d0, 2.d0, 5.d0, 9.d0]
         class(parameters),   allocatable, target :: p
         class(polarft_calc), allocatable         :: pftc
         real,        allocatable :: sigma2(:,:)
         complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
         real(sp),    allocatable :: ctfs(:,:,:), vals_serial(:,:,:,:), vals_par(:,:,:,:)
-        integer :: kfromto(2), nrots, ip, nthr_prev
+        real(sp), allocatable :: width_serial(:), width_par(:), loss_serial(:), loss_par(:)
+        integer, allocatable :: cells_serial(:,:), cells_par(:,:)
+        integer :: kfromto(2), nrots, ip, nthr_prev, nthr_test, nptcls, actual_team, expected_team
         write(*,'(A)') 'test_kernel_threads'
         call set_fixed_seed(20261103)
         allocate(p, pftc)
-        call make_pftc_kernel(p, pftc, 'euclid', NTHR, 64, 1.0, 48.0, 6.0, 48, 1, NPTCLS, sigma2, refs, ptcls, ctfs, kfromto)
+        nthr_test = 4
+        !$ nthr_test = min(24, max(4, omp_get_num_procs()))
+        nptcls = 2 * nthr_test
+        call make_pftc_kernel(p, pftc, 'euclid', nthr_test, 64, 1.0, 48.0, 6.0, 48, 1, nptcls, sigma2, refs, ptcls, ctfs, kfromto)
         nrots = pftc%get_nrots()
         call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, NALPHA, kfromto(2))
-        allocate(vals_serial(NALPHA,nrots,NRHO,NPTCLS), vals_par(NALPHA,nrots,NRHO,NPTCLS))
+        allocate(vals_serial(NALPHA,nrots,NRHO,nptcls), vals_par(NALPHA,nrots,NRHO,nptcls))
+        allocate(width_serial(nptcls), width_par(nptcls), loss_serial(nptcls), loss_par(nptcls), &
+            &cells_serial(3,nptcls), cells_par(3,nptcls))
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()
         !$ call omp_set_num_threads(1)
-        do ip = 1, NPTCLS
+        do ip = 1, nptcls
             call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
             call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_serial(:,:,:,ip))
+            call pftc%shiftmap_mode(SHIFTMAP_FULL, 3.d0, 0.05d0, &
+                &cells_serial(1,ip), cells_serial(2,ip), cells_serial(3,ip), loss_serial(ip), &
+                &temp_phys=10.d0, sdev=width_serial(ip), &
+                &width_cutoff=merge(huge(1.),-huge(1.),mod(ip,2)==0))
         enddo
-        !$ call omp_set_num_threads(NTHR)
-        !$omp parallel do default(shared) private(ip) schedule(static)
-        do ip = 1, NPTCLS
+        !$ call omp_set_num_threads(nthr_test)
+        actual_team = 1
+        expected_team = 1
+        !$ expected_team = 4
+        !$omp parallel default(shared) private(ip) proc_bind(close)
+        !$omp single
+        !$ actual_team = omp_get_num_threads()
+        !$omp end single
+        !$omp do schedule(dynamic)
+        do ip = 1, nptcls
             call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
             call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals_par(:,:,:,ip))
+            call pftc%shiftmap_mode(SHIFTMAP_FULL, 3.d0, 0.05d0, &
+                &cells_par(1,ip), cells_par(2,ip), cells_par(3,ip), loss_par(ip), &
+                &temp_phys=10.d0, sdev=width_par(ip), &
+                &width_cutoff=merge(huge(1.),-huge(1.),mod(ip,2)==0))
         enddo
-        !$omp end parallel do
+        !$omp end do
+        !$omp end parallel
         !$ call omp_set_num_threads(nthr_prev)
+        write(*,'(A,I0)') '  forced map team: ', actual_team
+        call assert_true(actual_team >= expected_team, 'the map comparison actually ran a parallel team')
         write(*,'(A,ES10.2)') '  max |threaded - serial| ', real(maxval(abs(vals_par - vals_serial)),dp)
-        call assert_true(all(vals_par == vals_serial), 'four threads give the serial grids bit for bit')
+        call assert_true(all(vals_par == vals_serial), 'the forced team gives the serial grids bit for bit')
+        call assert_true(all(cells_par == cells_serial), 'the forced team gives the serial posterior modes')
+        call assert_true(all(loss_par == loss_serial) .and. all(width_par == width_serial), &
+            &'per-thread map work preserves losses and physical widths bit for bit')
+        call assert_int(nptcls/2, count(width_par < 0.), 'parallel width cutoffs skip exactly the requested particles')
         call pftc%kill
         deallocate(refs, ptcls, ctfs, vals_serial, vals_par, p, pftc)
         if( allocated(sigma2) ) deallocate(sigma2)
@@ -877,6 +917,315 @@ contains
         deallocate(refs, ptcls, ctfs, vals, rhos, p, pftc)
         if( allocated(sigma2) ) deallocate(sigma2)
     end subroutine test_kernel_draw
+
+    !> Physical moments from a direct grid sum, including broad and concentrated posteriors in both halves.
+    subroutine test_physical_width()
+        real(dp), parameter :: RHOS(4) = [0.d0, 1.5d0, 3.d0, 4.5d0]
+        class(parameters),   allocatable, target :: p
+        class(polarft_calc), allocatable :: pftc
+        real, allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp), allocatable :: ctfs(:,:,:), vals(:,:,:)
+        real(dp) :: prior_w, lse_prior, logp0, logz, temp, tphys, expected, radial_mass, radial_second
+        real(sp) :: loss, width, mode_loss, mode_width
+        integer :: kb(2), nrho, na, ip, icase, irot, irho, ialpha, ir, ieo, mr, mh, ma
+        write(*,'(A)') 'test_physical_width'
+        call set_fixed_seed(20261103)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, 2, 2, sigma2, refs, ptcls, ctfs, kb)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+        call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, na)
+        allocate(vals(na,pftc%get_nrots(),nrho))
+        do icase = 1, 3
+            if( icase == 2 )then
+                call pftc%set_ref_pft(1, 0. * refs(:,:,1,1), iseven=.true.)
+                call pftc%set_ref_pft(1, 0. * refs(:,:,1,2), iseven=.false.)
+                call pftc%memoize_refs
+            else if( icase == 3 )then
+                do ip = 1, 2
+                    ieo = merge(1, 2, mod(ip,2) == 0)
+                    call pftc%set_ref_pft(1, refs(:,:,1,ieo), iseven=(ieo == 1))
+                    call pftc%set_ptcl_pft(ip, refs(:,:,1,ieo))
+                    call pftc%set_ptcl_ctfmat(ip, 0. * ctfs(:,:,ip) + 1.)
+                enddo
+                call pftc%memoize_refs
+                call pftc%memoize_ptcls
+            endif
+            prior_w = 0.d0
+            if( icase == 1 ) prior_w = 0.08d0
+            tphys = 3.d0
+            if( icase == 3 ) tphys = 300.d0
+            temp = 0.3d0 * tphys
+            call pftc%shiftmap_prior(SHIFTMAP_FULL, prior_w, lse_prior, logp0)
+            do ip = 1, 2
+                call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
+                call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+                expected = direct_shift_width(pftc, RHOS, vals, tphys, prior_w)
+                call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, prior_w, lse_prior, .true., &
+                    &logz, irot, irho, ialpha, loss, temp_phys=tphys, sdev=width)
+                call assert_true(abs(real(width,dp) - expected) <= 5.d-5 * max(1.d0, expected), &
+                    &'physical posterior width agrees with independent grid moments')
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, temp, prior_w, mr, mh, ma, mode_loss, &
+                    &temp_phys=tphys, sdev=mode_width)
+                call assert_true(all([mr,mh,ma] == [irot,irho,ialpha]), 'mode-only selection keeps the evidence route cell')
+                call assert_true(mode_loss == loss .and. mode_width == width, 'mode-only loss and width are bit identical')
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, temp, prior_w, mr, mh, ma, mode_loss, &
+                    &temp_phys=tphys, sdev=mode_width, width_cutoff=loss)
+                call assert_true(mode_width == width, 'a candidate tied at the cutoff retains its exact width')
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, temp, prior_w, mr, mh, ma, mode_loss, &
+                    &temp_phys=tphys, sdev=mode_width, width_cutoff=-huge(1.))
+                call assert_true(mode_width == -1. .and. mode_loss == loss, 'a rejected width leaves the selected loss unchanged')
+                write(*,'(A,2I3,3I5,2ES24.16)') '  width identity ', icase, ip, irot, irho, ialpha, loss, width
+                if( icase == 2 )then
+                    radial_mass = 0.d0
+                    radial_second = 0.d0
+                    do ir = 1, nrho
+                        radial_mass = radial_mass + pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir)
+                        radial_second = radial_second + pftc%shiftmap_cell_area(SHIFTMAP_FULL, ir) * RHOS(ir)**2
+                    enddo
+                    call assert_true(abs(real(width,dp) - sqrt(radial_second/radial_mass)) <= 1.d-5, &
+                        &'flat rotational posterior retains the full radial uncertainty')
+                else if( icase == 3 )then
+                    call assert_true(width < 0.1, 'a concentrated aligned posterior has subpixel width')
+                endif
+            enddo
+        enddo
+        call pftc%kill
+        deallocate(p, pftc, sigma2, refs, ptcls, ctfs, vals)
+    end subroutine test_physical_width
+
+    !> A sub-resolution prior leaves these represented masses unchanged. An off-origin, concentrated
+    !! posterior exposes rounding changes hidden by a broad posterior or an exactly centred peak.
+    subroutine test_zero_prior_width_rounding()
+        real(dp), parameter :: RHOS(4) = [0.d0, 1.5d0, 3.d0, 4.5d0]
+        real(dp), parameter :: TEMPS(5) = [10.d0, 20.d0, 30.d0, 40.d0, 80.d0]
+        class(parameters), allocatable, target :: p
+        class(polarft_calc), allocatable :: pftc
+        real, allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp), allocatable :: ctfs(:,:,:)
+        real(dp), allocatable :: ax(:,:), ay(:,:), phase(:,:)
+        real(dp) :: xy(2), temp, tphys
+        real(sp) :: loss, width, tiny_loss, tiny_width
+        integer :: kb(2), ip, it, ieo, ro, ir, a, tr, ti, ta
+        write(*,'(A)') 'test_zero_prior_width_rounding'
+        call set_fixed_seed(20261103)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, 2, 2, sigma2, refs, ptcls, ctfs, kb)
+        allocate(ax(48,lbound(refs,2):ubound(refs,2)), ay(48,lbound(refs,2):ubound(refs,2)), &
+            &phase(48,lbound(refs,2):ubound(refs,2)))
+        call shift_args(48, [lbound(refs,2),ubound(refs,2)], 64, ax, ay)
+        xy = 3.d0 * [cos(DTWOPI/16.d0), sin(DTWOPI/16.d0)]
+        phase = ax * xy(1) + ay * xy(2)
+        do ip = 1, 2
+            ieo = merge(1, 2, ip == 2)
+            ptcls(:,:,ip) = refs(:,:,1,ieo) * cmplx(cos(phase), sin(phase), kind=sp)
+            call pftc%set_ptcl_pft(ip, ptcls(:,:,ip))
+            call pftc%set_ptcl_ctfmat(ip, 0. * ctfs(:,:,ip) + 1.)
+        enddo
+        call pftc%memoize_ptcls
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+        do ip = 1, 2
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, ip)
+            do it = 1, size(TEMPS)
+                tphys = TEMPS(it)
+                temp = 0.3d0 * tphys
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, temp, 0.d0, ro, ir, a, loss, temp_phys=tphys, sdev=width)
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, temp, 1.d-300, tr, ti, ta, tiny_loss, &
+                    &temp_phys=tphys, sdev=tiny_width)
+                call assert_true(all([ro,ir,a] == [tr,ti,ta]) .and. loss == tiny_loss, &
+                    &'a sub-resolution prior leaves the selected cell and loss unchanged')
+                call assert_true(width == tiny_width, 'zero and sub-resolution priors retain identical width rounding')
+            enddo
+        enddo
+        call pftc%kill
+        deallocate(p, pftc, sigma2, refs, ptcls, ctfs, ax, ay, phase)
+    end subroutine test_zero_prior_width_rounding
+
+    !> Direct posterior moments in particle axes; independent of the sampler's log-mass work and reductions.
+    real(dp) function direct_shift_width( pftc, rhos, vals, temp, prior_w ) result( width )
+        class(polarft_calc), intent(in) :: pftc
+        real(dp), intent(in) :: rhos(:), temp, prior_w
+        real(sp), intent(in) :: vals(:,:,:)
+        real(dp), allocatable :: masses(:,:,:), points(:,:,:,:)
+        real(dp) :: angle, a, x(2), u(2), lmax, z, mu(2), variance
+        integer :: ir, ro, j, na, nr
+        na = size(vals,1)
+        nr = size(vals,2)
+        allocate(masses(na,nr,size(rhos)), points(2,na,nr,size(rhos)))
+        do ir = 1, size(rhos)
+            do ro = 1, nr
+                angle = real(pftc%get_rot(ro),dp) * DPI / 180.d0
+                do j = 1, na
+                    a = DTWOPI * real(j-1,dp) / real(na,dp)
+                    x = rhos(ir) * [cos(a), sin(a)]
+                    u = [cos(angle)*x(1) - sin(angle)*x(2), sin(angle)*x(1) + cos(angle)*x(2)]
+                    points(:,j,ro,ir) = u
+                    masses(j,ro,ir) = -temp * real(vals(j,ro,ir),dp) - prior_w * sum(x**2) &
+                        &+ log(pftc%shiftmap_cell_area(SHIFTMAP_FULL,ir))
+                enddo
+            enddo
+        enddo
+        lmax = maxval(masses)
+        masses = exp(masses - lmax)
+        z = sum(masses)
+        mu(1) = sum(masses * points(1,:,:,:)) / z
+        mu(2) = sum(masses * points(2,:,:,:)) / z
+        variance = sum(masses * ((points(1,:,:,:) - mu(1))**2 + (points(2,:,:,:) - mu(2))**2)) / z
+        width = sqrt(max(0.d0, variance))
+    end function direct_shift_width
+
+    !> Cache reuse across noise updates, same-sized particle remaps and short batches against direct objectives.
+    subroutine test_map_cache_lifecycle()
+        real(dp), parameter :: RHOS(3) = [0.d0, 1.d0, 2.d0]
+        class(parameters), allocatable, target :: p
+        class(polarft_calc), allocatable :: pftc
+        real, allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp), allocatable :: ctfs(:,:,:), before(:,:,:), after(:,:,:)
+        real(dp) :: times(6)
+        integer(int64) :: counts(8)
+        integer :: kb(2), ip, cycle
+        write(*,'(A)') 'test_map_cache_lifecycle'
+        call set_fixed_seed(20261103)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 4, 64, 1.0, 48.0, 6.0, 48, 2, 2, sigma2, refs, ptcls, ctfs, kb)
+        allocate(before(16,pftc%get_nrots(),3), after(16,pftc%get_nrots(),3))
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, before)
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 2, 1)
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 1)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, after)
+        call assert_true(all(before == after), 'reused geometry preserves the grid exactly')
+        call pftc%get_shiftmap_profile(times, counts)
+        call assert_true(counts(7) == 1 .and. counts(8) == 1, 'unchanged geometry builds once and reuses once')
+        sigma2(:,2) = 1.7 * sigma2(:,2)
+        call pftc%memoize_sigma2_weights
+        call check_map_objective(pftc, 1, 1)
+        call check_map_objective(pftc, 2, 2)
+        call pftc%set_ptcl_pft(2, 0.8 * ptcls(:,:,1))
+        call pftc%set_ptcl_ctfmat(2, ctfs(:,:,1))
+        call pftc%memoize_ptcls
+        call check_map_objective(pftc, 1, 2)
+        call pftc%reallocate_ptcls(2, [3,4])
+        do ip = 3, 4
+            call pftc%set_eo(ip, mod(ip,2) == 0)
+            call pftc%set_ptcl_pft(ip, ptcls(:,:,ip-2))
+            call pftc%set_ptcl_ctfmat(ip, ctfs(:,:,ip-2))
+        enddo
+        call pftc%memoize_ptcls
+        call check_map_objective(pftc, 1, 3)
+        call check_map_objective(pftc, 2, 4)
+        call pftc%reallocate_ptcls(1, [7])
+        call pftc%set_eo(7, .false.)
+        call pftc%set_ptcl_pft(7, ptcls(:,:,2))
+        call pftc%set_ptcl_ctfmat(7, ctfs(:,:,1))
+        call pftc%memoize_ptcls
+        call check_map_objective(pftc, 1, 7)
+        do cycle = 1, 2
+            call pftc%new_shiftmap(SHIFTMAP_FULL, 0.7d0*RHOS, 14, kb(2))
+            call check_map_objective(pftc, 1, 7)
+            call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2)-1)
+            call pftc%gen_shiftmap(SHIFTMAP_FULL, 1, 7)
+            call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+            call check_map_objective(pftc, 1, 7)
+            call pftc%kill_shiftmap
+            call pftc%kill_shiftmap
+            call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+            call check_map_objective(pftc, 1, 7)
+        enddo
+        call pftc%kill
+        deallocate(p, pftc, sigma2, refs, ptcls, ctfs, before, after)
+    end subroutine test_map_cache_lifecycle
+
+    subroutine check_map_objective( pftc, iref, iptcl )
+        class(polarft_calc), intent(inout) :: pftc
+        integer, intent(in) :: iref, iptcl
+        real(sp), allocatable :: vals(:,:,:)
+        real(dp) :: xy(2), expected, error
+        integer :: na, nrho, ir, j, ro
+        call pftc%shiftmap_dims(SHIFTMAP_FULL, nrho, na)
+        allocate(vals(na,pftc%get_nrots(),nrho))
+        call pftc%gen_shiftmap(SHIFTMAP_FULL, iref, iptcl)
+        call pftc%shiftmap_objfun_grid(SHIFTMAP_FULL, vals)
+        error = 0.d0
+        do ir = 1, nrho
+            do j = 1, na, max(1,na/4)
+                xy = pftc%shiftmap_shift(SHIFTMAP_FULL, ir, j)
+                do ro = 1, pftc%get_nrots(), max(1,pftc%get_nrots()/4)
+                    expected = pftc%gen_corr_for_rot_8(iref, iptcl, xy, ro)
+                    error = max(error, abs(exp(-real(vals(j,ro,ir),dp)) - expected))
+                enddo
+            enddo
+        enddo
+        call assert_true(error <= 1.d-6, 'cached map equals the independent shifted/rotated objective')
+    end subroutine check_map_objective
+
+    subroutine test_screen_width_identity()
+        use simple_eul_prob_tab_utils, only: update_screen_best
+        integer, parameter :: NREF = 8, KEEP = 2
+        real(dp), parameter :: RHOS(3) = [0.d0, 1.d0, 2.d0]
+        class(parameters), allocatable, target :: p
+        class(polarft_calc), allocatable :: pftc
+        real, allocatable :: sigma2(:,:)
+        complex(sp), allocatable :: refs(:,:,:,:), ptcls(:,:,:)
+        real(sp), allocatable :: ctfs(:,:,:)
+        real :: losses(NREF), widths(NREF), selected_widths(NREF), best(KEEP), work(NREF), loss
+        real(dp) :: times(6), times0(6), full_time, selective_time
+        integer(int64) :: counts0(8), counts1(8)
+        integer :: kb(2), r, j, ro, ir, a, selected, ip, ieo
+        write(*,'(A)') 'test_screen_width_identity'
+        call set_fixed_seed(20261103)
+        allocate(p, pftc)
+        call make_pftc_kernel(p, pftc, 'euclid', 1, 64, 1.0, 48.0, 6.0, 48, NREF, 2, sigma2, refs, ptcls, ctfs, kb)
+        do ip = 1, 2
+            ieo = merge(1, 2, ip == 2)
+            call pftc%set_ptcl_ctfmat(ip, 0. * ctfs(:,:,ip) + 1.)
+            do r = 1, NREF
+                call pftc%set_ref_pft(r, real(r+1)*ptcls(:,:,ip), iseven=(ieo == 1))
+            enddo
+        enddo
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        call pftc%new_shiftmap(SHIFTMAP_FULL, RHOS, 16, kb(2))
+        do ip = 1, 2
+            call pftc%get_shiftmap_profile(times0, counts0)
+            do r = 1, NREF
+                call pftc%gen_shiftmap(SHIFTMAP_FULL, r, ip)
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, 6.d0, 0.d0, ro, ir, a, losses(r), &
+                    &temp_phys=20.d0, sdev=widths(r))
+            enddo
+            call pftc%get_shiftmap_profile(times, counts0)
+            full_time = sum(times(4:5) - times0(4:5))
+            times0 = times
+            best = huge(1.)
+            selected_widths = -1.
+            do r = 1, NREF
+                call pftc%gen_shiftmap(SHIFTMAP_FULL, r, ip)
+                call pftc%shiftmap_mode(SHIFTMAP_FULL, 6.d0, 0.d0, ro, ir, a, loss, &
+                    &temp_phys=20.d0, sdev=selected_widths(r), width_cutoff=maxval(best))
+                call assert_true(loss == losses(r), 'width cutoff leaves each candidate loss identical')
+                call update_screen_best(loss, best)
+            enddo
+            call pftc%get_shiftmap_profile(times, counts1)
+            selective_time = sum(times(4:5) - times0(4:5))
+            write(*,'(A,I0,A,I0,A,2F10.4)') '  screened ', NREF, ', widths ', counts1(5)-counts0(5), &
+                &', full/selective posterior ms ', 1.d3*full_time, 1.d3*selective_time
+            call assert_true(counts1(5)-counts0(5) < NREF, 'selective width calculation removes measured work')
+            call assert_true(counts1(3)-counts0(3) == NREF, 'selective widths keep every reference map')
+            call assert_true(counts1(4)-counts0(4) == NREF, 'selective widths use one selection traversal per map')
+            work = losses
+            do j = 1, KEEP
+                selected = minloc(work,dim=1)
+                call assert_true(selected_widths(selected) == widths(selected), 'each final shortlisted width is bit identical')
+                work(selected) = huge(1.)
+            enddo
+        enddo
+        call pftc%kill
+        deallocate(p, pftc, sigma2, refs, ptcls, ctfs)
+    end subroutine test_screen_width_identity
 
     !> the magnitudes 0, step, 2 step, ... up to radius
     subroutine magnitudes( radius, step, rhos )

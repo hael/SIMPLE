@@ -27,6 +27,7 @@ type :: polar_shiftmap
     real(dp),    allocatable :: rho(:)         !< the magnitudes (pixels)
     real(dp),    allocatable :: alpha(:)       !< the directions (radians)
     real(dp),    allocatable :: area(:)        !< the translation area of one cell at each magnitude (pixels^2)
+    real(dp),    allocatable :: logarea(:), ca(:), sa(:)
     integer,     allocatable :: nharm(:)       !< highest harmonic order kept at each magnitude
     real(dp),    allocatable :: jn(:,:,:)      !< J_n(2 pi k rho / box): (0:nharm_max, kfromto(1):kfromto(2), nrho)
     complex(dp), allocatable :: tw(:,:)        !< exp(i n theta_p): (pftsz, 0:nharm_max)
@@ -41,10 +42,12 @@ type :: polar_shiftmap
     procedure :: get_nharm
     procedure :: get_kfromto
     procedure :: exists
+    procedure :: matches
     procedure :: get_rho
     procedure :: get_alpha
     procedure :: get_shift
     procedure :: get_cell_area
+    procedure :: get_log_area
     procedure :: cross_spectrum
     procedure :: coeffs
     procedure :: eval
@@ -124,14 +127,17 @@ contains
                 self%tw(p,n) = cmplx(cos(real(n,dp)*theta), sin(real(n,dp)*theta), kind=dp)
             enddo
         enddo
-        allocate(self%alpha(nalpha))
+        allocate(self%alpha(nalpha), self%ca(nalpha), self%sa(nalpha))
         do j = 1, nalpha
             self%alpha(j) = real(j-1,dp) * DTWOPI / real(nalpha,dp)
+            self%ca(j) = cos(self%alpha(j))
+            self%sa(j) = sin(self%alpha(j))
             do n = 0, self%nharm_max
                 self%ea(j,n) = cmplx(cos(real(n,dp)*self%alpha(j)), -sin(real(n,dp)*self%alpha(j)), kind=dp)
             enddo
         enddo
         call self%cell_areas
+        allocate(self%logarea(self%nrho), source=log(self%area))
         self%exists_flag = .true.
     end subroutine new
 
@@ -193,7 +199,7 @@ contains
     subroutine kill( self )
         class(polar_shiftmap), intent(inout) :: self
         if( self%exists_flag )then
-            deallocate(self%rho, self%alpha, self%area, self%nharm, self%jn, self%tw, self%ea)
+            deallocate(self%rho, self%alpha, self%area, self%logarea, self%ca, self%sa, self%nharm, self%jn, self%tw, self%ea)
             self%pftsz     = 0
             self%nrots     = 0
             self%kfromto   = 0
@@ -204,6 +210,17 @@ contains
             self%exists_flag = .false.
         endif
     end subroutine kill
+
+    pure logical function matches( self, pftsz, kfromto, box, rho, nalpha )
+        class(polar_shiftmap), intent(in) :: self
+        integer, intent(in) :: pftsz, kfromto(2), box, nalpha
+        real(dp), intent(in) :: rho(:)
+        matches = .false.
+        if( .not. self%exists_flag ) return
+        if( self%pftsz /= pftsz .or. self%box /= box .or. self%nalpha /= nalpha ) return
+        if( any(self%kfromto /= kfromto) .or. self%nrho /= size(rho) ) return
+        matches = all(self%rho == rho)
+    end function matches
 
     pure integer function get_nrho( self )
         class(polar_shiftmap), intent(in) :: self
@@ -255,13 +272,19 @@ contains
         get_cell_area = self%area(irho)
     end function get_cell_area
 
+    pure real(dp) function get_log_area( self, irho )
+        class(polar_shiftmap), intent(in) :: self
+        integer, intent(in) :: irho
+        get_log_area = self%logarea(irho)
+    end function get_log_area
+
     !> the shift of a grid point, in pixels, in the frame the shift matrix acts in (the reference's own)
     pure function get_shift( self, irho, ialpha ) result( s )
         class(polar_shiftmap), intent(in) :: self
         integer,               intent(in) :: irho, ialpha
         real(dp) :: s(2)
-        s(1) = self%rho(irho) * cos(self%alpha(ialpha))
-        s(2) = self%rho(irho) * sin(self%alpha(ialpha))
+        s(1) = self%rho(irho) * self%ca(ialpha)
+        s(2) = self%rho(irho) * self%sa(ialpha)
     end function get_shift
 
     !> Q of the pair (reference, particle, |CTF|) at grid rotation irot, in the reference's own indexing: the

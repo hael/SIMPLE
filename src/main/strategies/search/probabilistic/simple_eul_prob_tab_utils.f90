@@ -29,7 +29,7 @@ public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state
-public :: map_prior_weight, insert_pose_loss
+public :: map_prior_weight, insert_pose_loss, update_screen_best
 private
 #include "simple_local_flags.inc"
 
@@ -253,8 +253,11 @@ type :: prob_fill_profile
     integer(int64) :: minimize_calls  = 0_int64 !< shift searches started
     integer(int64) :: bank_builds     = 0_int64 !< shifted particle memos built
     integer(int64) :: nscored         = 0_int64 !< references scored, summed over particles (neighbourhood tables; 0 in the full table, which scores nrefs per particle)
-    integer(int64) :: screens         = 0_int64 !< coarse maps over the disk built, the candidates' choice (shift_sigma > 0)
+    integer(int64) :: screens         = 0_int64 !< coarse maps over either search domain
     integer(int64) :: disk_ptcls      = 0_int64 !< particles that searched the disk (shift_sigma > 0, the centring stage)
+    real(dp)       :: map_times(6)    = 0.d0   !< construction, two reserved slots, selection, posterior reduction, setup wall time
+    integer(int64) :: map_counts(8)   = 0_int64
+    integer        :: map_geometry(3,3) = 0   !< radius/direction/order counts of full/disk/window maps
     integer(int64) :: fit_counts(0:5) = 0_int64 !< quadratic grid step: (0) fits kept, (1:5) fallbacks per reason; all zero in a single-state table
     !> Is the refinement budget binding? Per particle of the dense fill, the rank in the unrefined row of the entry
     !! that is lowest after the shift refinement: (0) rank 1, the unrefined argmin kept; (1:10) the rank by decile
@@ -295,6 +298,18 @@ interface angle_sampling
 end interface
 
 contains
+
+    !> The best losses bound width readout only; final candidate ordering is unchanged.
+    pure subroutine update_screen_best( loss, best_losses )
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        real, intent(in) :: loss
+        real, intent(inout) :: best_losses(:)
+        integer :: worst
+        if( size(best_losses) < 1 ) return
+        if( .not. ieee_is_finite(loss) ) return
+        worst = maxloc(best_losses,dim=1)
+        if( loss < best_losses(worst) ) best_losses(worst) = loss
+    end subroutine update_screen_best
 
     subroutine append_candidate( self, particle_index, candidate )
         class(prob_candidate_buffer), intent(inout) :: self

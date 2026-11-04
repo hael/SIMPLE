@@ -448,8 +448,20 @@ contains
                 endif
             endif
             write(fnr,'(a,i0)') 'prob_tab shift searches             : ', fill%minimize_calls
-            if( fill%screens > 0 ) write(fnr,'(a,i0)') 'prob_tab coarse disk maps (all)     : ', fill%screens
+            if( fill%screens > 0 ) write(fnr,'(a,i0)') 'prob_tab coarse maps (all)          : ', fill%screens
             if( fill%disk_ptcls > 0 ) write(fnr,'(a,i0)') 'prob_tab particles on the disk      : ', fill%disk_ptcls
+            if( sum(fill%map_counts(1:3)) > 0 )then
+                write(fnr,'(a,i0)') 'prob_tab disk maps                  : ', fill%map_counts(1)
+                write(fnr,'(a,i0)') 'prob_tab window maps                : ', fill%map_counts(2)
+                write(fnr,'(a,i0)') 'prob_tab full-band maps             : ', fill%map_counts(3)
+                write(fnr,'(a,i0)') 'prob_tab map selections             : ', fill%map_counts(4)
+                write(fnr,'(a,i0)') 'prob_tab map widths                 : ', fill%map_counts(5)
+                write(fnr,'(a,i0)') 'prob_tab map particle expansions    : ', fill%map_counts(6)
+                write(fnr,'(a,i0)') 'prob_tab map geometry builds        : ', fill%map_counts(7)
+                write(fnr,'(a,i0)') 'prob_tab map geometry reuses        : ', fill%map_counts(8)
+                write(fnr,'(a,3(1x,i0))') 'prob_tab disk grid radii dirs order  :', fill%map_geometry(:,2)
+                write(fnr,'(a,3(1x,i0))') 'prob_tab window grid radii dirs order:', fill%map_geometry(:,3)
+            endif
             write(fnr,'(a,i0)') 'prob_tab alternations               : ', fill%alternations
             write(fnr,'(a,i0)') 'prob_tab grid evaluations           : ', fill%grid_points
             write(fnr,'(a,i0)') 'prob_tab objective evaluations      : ', fill%objective_evals
@@ -479,6 +491,9 @@ contains
         write(fnr,'(a,1x,f0.2)') 'prob_tab particle reading           :', rt_read
         write(fnr,'(a,1x,f0.2)') 'prob_tab particle preparation       :', rt_batch - rt_read
         write(fnr,'(a,1x,f0.2)') 'prob_tab table fill                 :', rt_fill
+        if( present(fill) )then
+            write(fnr,'(a,1x,f0.2)') 'prob_tab map setup (within fill)     :', fill%map_times(6)
+        endif
         write(fnr,'(a,1x,f0.2)') 'prob_tab table write                :', rt_write
         write(fnr,'(a,1x,f0.2)') 'prob_tab total time                 :', rt_tot
         if( rt_tot > 0. )then
@@ -493,6 +508,12 @@ contains
             write(fnr,'(a,1x,f0.2)') 'prob_tab seed estimation            :', fill%ts_seed
             write(fnr,'(a,1x,f0.2)') 'prob_tab score loop                 :', fill%ts_score
             write(fnr,'(a,1x,f0.2)') 'prob_tab refinement                 :', fill%ts_refine
+            if( sum(fill%map_counts(1:3)) > 0 )then
+                write(fnr,'(a)') 'Map phases below are nested within the fill phases above.'
+                write(fnr,'(a,1x,f0.4)') 'prob_tab map construction           :', fill%map_times(1)
+                write(fnr,'(a,1x,f0.4)') 'prob_tab map cell selection         :', fill%map_times(4)
+                write(fnr,'(a,1x,f0.4)') 'prob_tab map posterior reduction    :', fill%map_times(5)
+            endif
             write(fnr,'(a,1x,f0.2)') 'prob_tab thread-seconds, sum        :', ts_sum
             write(fnr,'(a,1x,f0.2)') 'prob_tab fill region wall time      :', fill%wall_region
             if( fill%wall_region > 0.d0 .and. fill%nthr > 0 )then

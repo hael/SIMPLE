@@ -5,7 +5,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use omp_lib,                   only: omp_get_max_threads
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_num2sample, &
+use simple_eul_prob_tab_utils, only: update_screen_best, build_pind_lookup, calc_num2sample, &
     &eulprob_dist_switch, read_seed_shift_table, record_seed_shift, &
     &write_seed_shift_table, prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
     &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, shift_prior_sigma2, &
@@ -515,8 +515,8 @@ contains
             logical, intent(in) :: l_disk, l_prior
             type(pftc_shsrch_grad), pointer :: gso
             integer, allocatable :: pool(:)
-            real(dp) :: t0, lse_map, logp0, temp_i, temp_s, logz, xcell(2), prior_w_map
-            real     :: loss_cell, loss_pose, dist_loc, cxy(3)
+            real(dp) :: t0, temp_i, temp_s, xcell(2), prior_w_map
+            real     :: loss_cell, loss_pose, dist_loc, cxy(3), width_best(max(1,projs_ns))
             integer  :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest
             logical  :: l_polished
             imap        = SHIFTMAP_WINDOW
@@ -533,7 +533,6 @@ contains
             temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
             temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
                 &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
-            call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, lse_map, logp0)
             self%seed_shifts(:,i_loc) = 0.
             self%seed_has_sh(i_loc)   = .true.
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
@@ -550,13 +549,16 @@ contains
             pool  = minnloc(dists_refs(:,ithr_loc), self%nrefs)
             npool = min(self%nrefs, max(2 * projs_ns, screen_pool_size(dists_refs(pool,ithr_loc), self%nrefs, temp_i)))
             scr_loss(:,ithr_loc) = huge(1.0)
+            width_best = huge(1.)
             do k_loc = 1, npool
                 ri_loc = pool(k_loc)
                 if( ri_loc < 1 ) cycle
                 call self%b_ptr%pftc%gen_shiftmap(imap, self%ref_full(ri_loc), iptcl_loc)
-                call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, lse_map, .true.,&
-                    &logz, irot_loc, irho_loc, ialpha_loc, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
-                    &sdev=scr_sdev(ri_loc,ithr_loc))
+                call self%b_ptr%pftc%shiftmap_mode(imap, temp_s, prior_w_map, &
+                    &irot_loc, irho_loc, ialpha_loc, loss_cell, &
+                    &temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(ri_loc,ithr_loc), &
+                    &width_cutoff=maxval(width_best))
+                call update_screen_best(loss_cell, width_best)
                 scr_irot(ri_loc,ithr_loc) = irot_loc
                 scr_xy(:,ri_loc,ithr_loc) = real(self%b_ptr%pftc%shiftmap_shift(imap, irho_loc, ialpha_loc))
                 scr_loss(ri_loc,ithr_loc) = loss_cell
@@ -982,6 +984,9 @@ contains
         class(eul_prob_tab), intent(in) :: self
         type(prob_fill_profile) :: profile
         profile = self%fill_profile
+        if( associated(self%b_ptr) )then
+            call self%b_ptr%pftc%get_shiftmap_profile(profile%map_times, profile%map_counts, profile%map_geometry)
+        endif
     end function get_fill_profile
 
     !> the particles without a valid distance and those whose valid distances are all equal: warnings, and a stop

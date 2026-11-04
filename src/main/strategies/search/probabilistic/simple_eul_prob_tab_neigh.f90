@@ -5,7 +5,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
-use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
+use simple_eul_prob_tab_utils, only: update_screen_best, build_pind_lookup, eulprob_dist_switch, eulprob_corr_switch, &
     &read_seed_shift_table, write_seed_shift_table, record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
     &draw_posterior_row, shift_prior_sigma2, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, &
@@ -1491,8 +1491,8 @@ contains
         integer  :: nrefs_to_refine, nstate_eval, j, k, eval_slot, ri, istate, iproj, irot, irho, ialpha, imap, npool
         integer  :: si, state_eval, pool(neval), scr_irot(neval), loc(1)
         real     :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval)
-        real     :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval)
-        real(dp) :: lse_map, logp0, temp_s, temp_i, logz, prior_w_map
+        real     :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval), width_best(max(1,max_refs_to_refine))
+        real(dp) :: temp_s, temp_i, prior_w_map
         logical  :: l_polished
         ew%best_evals(:,ithr) = 0
         if( neval <= 0 ) return
@@ -1510,7 +1510,6 @@ contains
                 step        = step_disk
                 gso         => grad_disk(ithr)
             endif
-            call self%b_ptr%pftc%shiftmap_prior(imap, prior_w_map, lse_map, logp0)
         endif
         do si = 1, self%nstates
             state_eval = self%ssinds(si)
@@ -1532,15 +1531,18 @@ contains
                 npool = min(nstate_eval, max(2 * nrefs_to_refine,&
                     &screen_pool_size(dists_sorted(1:nstate_eval), nstate_eval, temp_i)))
                 scr_loss = huge(1.0)
+                width_best = huge(1.)
                 do k = 1, npool
                     eval_slot = pool(k)
                     if( eval_slot < 1 ) cycle
                     ri = ew%evaluated_ref_ids(eval_slot,ithr)
                     if( ri < 1 ) cycle
                     call self%b_ptr%pftc%gen_shiftmap(imap, self%ref_full(ri), iptcl)
-                    call self%b_ptr%pftc%shiftmap_draw(imap, temp_s, prior_w_map, lse_map, .true.,&
-                        &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp),&
-                        &sdev=scr_sdev(eval_slot))
+                    call self%b_ptr%pftc%shiftmap_mode(imap, temp_s, prior_w_map, &
+                        &irot, irho, ialpha, loss_cell, &
+                        &temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(eval_slot), &
+                        &width_cutoff=maxval(width_best(1:nrefs_to_refine)))
+                    call update_screen_best(loss_cell, width_best(1:nrefs_to_refine))
                     scr_irot(eval_slot) = irot
                     scr_xy(:,eval_slot) = real(self%b_ptr%pftc%shiftmap_shift(imap, irho, ialpha))
                     scr_loss(eval_slot) = loss_cell
@@ -1575,8 +1577,9 @@ contains
                 irot = self%candidate_buffers(ithr)%get_inpl(i, self%ref_full(ri))
                 if( l_map )then
                     call self%b_ptr%pftc%gen_shiftmap(SHIFTMAP_WINDOW, self%ref_full(ri), iptcl)
-                    call self%b_ptr%pftc%shiftmap_draw(SHIFTMAP_WINDOW, temp_s, 0.d0, lse_map, .true.,&
-                        &logz, irot, irho, ialpha, loss_cell, temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=sdev)
+                    call self%b_ptr%pftc%shiftmap_mode(SHIFTMAP_WINDOW, temp_s, 0.d0, &
+                        &irot, irho, ialpha, loss_cell, &
+                        &temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=sdev)
                     xy_start = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho, ialpha))
                     call gso%minimize_in_cell(irot, xy_start, step_win, refined_shift, l_polished)
                     dist = eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun)
