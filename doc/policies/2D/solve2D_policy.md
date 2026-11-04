@@ -120,6 +120,39 @@ Six stages, in two phases (stages 1-4 and 5-6):
 - After the stages, a sampled run ends with one dense `refine=greedy` pass
   over every particle (the terminal pass) before the final class averages.
 
+**Stage omission (2026-11-03).** A stage whose planned limit the class
+averages already resolve past is omitted, as `solve3D` omits a stage behind
+its FSC=0.5 resolution (`doc/policies/3D/solve3D_policy.md`). The evidence is
+the class FRCs (`frcs.bin`, the out segment's `frc2D`) at the end of every
+executed stage: per selected populated class the FRC=0.5 crossing
+(`class_frcs%estimate_res`), and from them the resolution the classes of
+`FRC05_SKIP_PTCL_FRAC` (0.5) of the particles reach, the classes best first
+and their populations cumulated (`frc05_ptcl_quantile`,
+`solve2D_class_frc05_quantile`): the median particle's class resolution,
+which a few overfit or empty classes cannot move, where the 3D rule has one
+map and one FSC. The log prints it after every stage (`>>> STAGE n CLASS
+FRC=0.5 RESOLUTION REACHED BY 50% OF THE PARTICLES`) with the fraction of the
+particles in classes past the next planned limit. Stage k is omitted
+(`solve2D_stage_behind_frc05`, a `cycle` in the marching loop, `>>> SOLVE2D
+OMITTING STAGE`) when that resolution at the ends of the last two executed
+stages is finer than `stage_parms(k)%lp`: the estimate must have held across
+a stage, the stability guard the many per-class estimates need. Never
+omitted: the entry stage, the first `SKIP_MIN_STAGE` (2) stages (the second
+is the centring stage, whose class averages estimate an automatic run's
+mask), the last stage of the invocation (the gold-standard stage has no
+planned limit; a checkpoint segment's last stage too) and a stage without a
+planned limit; the first two stages after a checkpoint resume or a
+`cls_init=prev` seed pass only record the evidence. Phase 1 ends at fixed
+iterations because the extremal schedule runs over `extr_lim`: an omitted
+phase-1 stage before the last advances the ladder, the phase-1 stage that
+follows taking its iterations at its own limit, while an omitted last phase-1
+stage (`PHASES(1)`) drops them and ends the extremal schedule there, at the
+small neighbourhood fraction its decay has reached (logged either way). A
+phase-2 stage's iterations are dropped. On the beta-galactosidase fixture
+(4463 particles, 20 classes, run 1428 of 2026-11-03) the median particle's
+class resolution tracked the ladder within one rung and no stage was omitted;
+the rule is meant for the easy data whose classes outrun the march.
+
 The log marks each stage (`>>> STAGE n WITH LP x A`, or `WITH GOLD STANDARD
 E/O`) and its call (`>>> SOLVE2D ENTERING REFINE2D STAGE n`, `>>> SOLVE2D
 RETURNED FROM REFINE2D STAGE n`). Each iteration prints one `>>> CONVERGED:

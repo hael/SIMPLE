@@ -77,6 +77,7 @@ use simple_rec3D_service_tester,             only: run_all_rec3D_service_lib_tes
 use simple_rec3D_wave_strategy_tester,       only: run_all_rec3D_wave_lib_tests
 use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
+use simple_solve2D_controller_tester,        only: run_all_solve2D_stage_rule_tests
 use simple_state_assignment_tester,          only: run_all_state_assignment_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
@@ -485,6 +486,7 @@ contains
         call add_suite(s, n, 'sigma2 bootstrap',         run_all_sigma2_bootstrap_tests)
         call add_suite(s, n, 'cavg registration',          run_all_cavg_registration_tests)
         call add_suite(s, n, 'cavgs state match',          run_all_cavgs_state_match_tests)
+        call add_suite(s, n, 'solve2D stage rules',        run_all_solve2D_stage_rule_tests)
     end subroutine suites_pftc_align2D3D
 
     !> the Cartesian (continuous) 3D registration: the neutral Cartesian Fourier layer (shared

@@ -72,8 +72,9 @@ contains
         type(gui_communicator)     :: gui_comm
         class(oris),       pointer :: spproj_field
         integer, allocatable :: seed_parent(:), seed_pops(:)
+        real,    allocatable :: res05_hist(:) !< the class FRC=0.5 particle quantile at the ends of the executed stages
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
-        integer :: start_stage, stop_stage, it_pass
+        integer :: start_stage, stop_stage, it_pass, nhist
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_refine2D, rt_final_cavgs, rt_tot
         logical :: l_shmem, l_seeded, l_mskdiam_auto, l_key
@@ -192,7 +193,25 @@ contains
         endif
 
         ! Frequency marching
+        allocate(res05_hist(nstages), source=0.)
+        nhist = 0
         do istage = start_stage,stop_stage
+            ! Omit the stage when the class averages already resolve past its planned limit at FRC=0.5 at the
+            ! ends of the last two executed stages (solve2D_stage_behind_frc05): never the entry stage, the
+            ! first two or the last. Phase 1 ends at fixed iterations (the extremal schedule's), so an omitted
+            ! phase-1 stage's iterations go to the phase-1 stage that follows; the last phase-1 stage's and a
+            ! phase-2 stage's are dropped
+            if( solve2D_stage_behind_frc05(stage_parms, istage, start_stage, stop_stage, res05_hist, nhist) )then
+                write(logfhandle,'(A,I3,A,F5.1,A,I0,A)')'>>> SOLVE2D OMITTING STAGE ', istage, ': PLANNED LP ', &
+                    &stage_parms(istage)%lp, ' A ALREADY REACHED AT FRC=0.5 BY THE CLASSES OF ', &
+                    &nint(100.*FRC05_SKIP_PTCL_FRAC), '% OF THE PARTICLES'
+                if( istage < PHASES(1) )then
+                    write(logfhandle,'(A)') '>>> SOLVE2D: THE NEXT STAGE RUN TAKES ITS ITERATIONS (PHASE 1 ENDS AT FIXED ITERATIONS)'
+                else if( istage == PHASES(1) )then
+                    write(logfhandle,'(A)') '>>> SOLVE2D: ITS ITERATIONS ARE DROPPED (PHASE 2 FOLLOWS; THE EXTREMAL SCHEDULE ENDS HERE)'
+                endif
+                cycle
+            endif
             write(logfhandle,'(A)')'>>>'
             if( stage_parms(istage)%l_lpset )then
                 write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', stage_parms(istage)%lp, ' A'
@@ -211,8 +230,10 @@ contains
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('out',   params%projfile)
             call gui_comm%add_metadata(spproj, oritype='cls2D', stage=istage)
+            call record_stage_frc05
             if( solve2D_first_shift_stage(params, istage) .or. (l_mskdiam_auto .and. istage < FIRST_SHIFT_STAGE) ) call adopt_estimated_mskdiam
         enddo
+        deallocate(res05_hist)
         if( l_checkpoint .and. stop_stage < nstages )then
             last_iter = cline_refine2D%get_iarg('endit')
             write(logfhandle,'(A,I0,A,I0)') '>>> SOLVE2D CHECKPOINT READY: stage=', stop_stage,&
@@ -312,6 +333,30 @@ contains
                     &stage_parms(FIRST_SHIFT_STAGE)%mskdiam = (real(params%box) - COSMSKHALFWIDTH) * params%smpd
             endif
         end subroutine set_dims
+
+        !> the stage omission's evidence (solve2D_stage_behind_frc05): the FRC=0.5 resolution the classes of
+        !! FRC05_SKIP_PTCL_FRAC of the particles reached at the stage's end, from the class FRCs the stage wrote,
+        !! with the fraction of the particles in classes past the next planned limit
+        subroutine record_stage_frc05
+            real :: res05_q, frac_past, lp_next
+            lp_next = 0.
+            if( istage < stop_stage )then
+                if( stage_parms(istage+1)%l_lpset ) lp_next = stage_parms(istage+1)%lp
+            endif
+            frac_past = 0.
+            if( lp_next > TINY )then
+                call solve2D_class_frc05_quantile(spproj, FRC05_SKIP_PTCL_FRAC, res05_q, lp=lp_next, frac_past=frac_past)
+            else
+                call solve2D_class_frc05_quantile(spproj, FRC05_SKIP_PTCL_FRAC, res05_q)
+            endif
+            nhist = nhist + 1
+            res05_hist(nhist) = res05_q
+            if( res05_q < TINY ) return
+            write(logfhandle,'(A,I3,A,I0,A,F5.1,A)') '>>> STAGE ', istage, ' CLASS FRC=0.5 RESOLUTION REACHED BY ', &
+                &nint(100.*FRC05_SKIP_PTCL_FRAC), '% OF THE PARTICLES: ', res05_q, ' A'
+            if( lp_next > TINY ) write(logfhandle,'(A,F5.1,A,F5.1)') &
+                &'>>> % OF THE PARTICLES IN CLASSES PAST THE NEXT PLANNED LP ', lp_next, ' A: ', 100.*frac_past
+        end subroutine record_stage_frc05
 
         ! the mask diameter estimated from the stage's class averages: printed at the centring stage's exit and, in an
         ! automatic run (mskdiam=0), adopted for the stages after at the exits of the stages up to the centring stage,

@@ -10,6 +10,8 @@ public :: set_solve2D_sampling_policy, solve2D_seed_pass_iter, set_cline_refine2
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
 public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, FIRST_SHIFT_STAGE
 public :: solve2D_first_shift_stage, solve2D_mskdiam_estimate
+public :: frc05_ptcl_quantile, solve2D_class_frc05_quantile, solve2D_stage_behind_frc05
+public :: SKIP_MIN_STAGE, FRC05_SKIP_PTCL_FRAC
 private
 #include "simple_local_flags.inc"
 
@@ -29,6 +31,9 @@ integer,          parameter :: FIRST_SHIFT_STAGE  = 2                ! the first
 integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
+! Stage omission: a stage whose planned limit the class averages already resolve past is omitted
+integer,          parameter :: SKIP_MIN_STAGE       = 2   ! never the first two stages (the second is the centring stage)
+real,             parameter :: FRC05_SKIP_PTCL_FRAC = 0.5 ! the fraction of the particles whose classes must resolve past the limit at FRC=0.5
 
 ! convenience type
 type stage_params
@@ -430,6 +435,110 @@ contains
         integer,           intent(in) :: istage
         solve2D_first_shift_stage = params%l_shift_map .and. istage == FIRST_SHIFT_STAGE
     end function solve2D_first_shift_stage
+
+    !> The FRC=0.5 resolution (A) the classes of a fraction frac of the particles reach: the classes best first by
+    !! their FRC=0.5 crossing, the populations cumulated to frac of their total (the lower weighted quantile; 0.5 is
+    !! the median particle's class resolution, which a few overfit or empty classes cannot move). frac_past is the
+    !! population fraction in classes past lp. A class with pop < 1 is left out; 0 without a populated class.
+    subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
+        real,           intent(in)  :: res05s(:) !< FRC=0.5 resolution per class (A)
+        integer,        intent(in)  :: pops(:)   !< population per class
+        real,           intent(in)  :: frac
+        real,           intent(out) :: res05_q
+        real, optional, intent(in)  :: lp
+        real, optional, intent(out) :: frac_past
+        real,    allocatable :: keys(:)
+        integer, allocatable :: order(:)
+        integer :: ncls, i, ntot, ncum
+        res05_q = 0.
+        if( present(frac_past) ) frac_past = 0.
+        ncls = size(res05s)
+        if( ncls < 1 .or. size(pops) /= ncls ) return
+        ntot = sum(pops, mask=pops > 0)
+        if( ntot < 1 ) return
+        if( present(lp) .and. present(frac_past) )then
+            frac_past = real(sum(pops, mask=pops > 0 .and. res05s < lp)) / real(ntot)
+        endif
+        keys  = res05s
+        order = [(i, i=1,ncls)]
+        call hpsort(keys, order)
+        ncum = 0
+        do i = 1, ncls
+            if( pops(order(i)) < 1 ) cycle
+            ncum    = ncum + pops(order(i))
+            res05_q = keys(i)
+            if( real(ncum) >= frac * real(ntot) ) exit
+        end do
+        deallocate(keys, order)
+    end subroutine frc05_ptcl_quantile
+
+    !> frc05_ptcl_quantile over the project's selected populated classes (cls2D state > 0, pop > 0) and their
+    !! FRCs (the out segment's frc2D, read from the file); 0 without them
+    subroutine solve2D_class_frc05_quantile( spproj, frac, res05_q, lp, frac_past )
+        use simple_sp_project, only: sp_project
+        use simple_class_frcs, only: class_frcs
+        class(sp_project), intent(inout) :: spproj
+        real,              intent(in)    :: frac
+        real,              intent(out)   :: res05_q
+        real, optional,    intent(in)    :: lp
+        real, optional,    intent(out)   :: frac_past
+        type(class_frcs)     :: clsfrcs
+        type(string)         :: frcs_fname
+        real,    allocatable :: res05s(:)
+        integer, allocatable :: pops(:)
+        integer :: ncls, icls
+        real    :: res05, res0143
+        res05_q = 0.
+        if( present(frac_past) ) frac_past = 0.
+        ncls = spproj%os_cls2D%get_noris()
+        if( ncls < 1 ) return
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( frcs_fname%to_char() == NIL )then
+            call frcs_fname%kill
+            return
+        endif
+        if( .not. file_exists(frcs_fname) )then
+            call frcs_fname%kill
+            return
+        endif
+        call clsfrcs%read(frcs_fname)
+        if( clsfrcs%get_ncls() /= ncls ) THROW_HARD('class FRCs and cls2D disagree on the class count; solve2D_class_frc05_quantile')
+        allocate(res05s(ncls), source=0.)
+        allocate(pops(ncls),   source=0)
+        do icls = 1, ncls
+            if( spproj%os_cls2D%get_state(icls) < 1 ) cycle
+            pops(icls) = nint(spproj%os_cls2D%get(icls, 'pop'))
+            if( pops(icls) < 1 ) cycle
+            call clsfrcs%estimate_res(icls, res05, res0143)
+            res05s(icls) = res05
+        end do
+        call frc05_ptcl_quantile(res05s, pops, frac, res05_q, lp, frac_past)
+        call clsfrcs%kill
+        call frcs_fname%kill
+        deallocate(res05s, pops)
+    end subroutine solve2D_class_frc05_quantile
+
+    !> Whether stage istage is omitted: its planned limit is behind the FRC=0.5 resolution the classes of
+    !! FRC05_SKIP_PTCL_FRAC of the particles reached at the ends of the last two executed stages (the estimate
+    !! held across a stage). Never the entry stage, the first SKIP_MIN_STAGE stages, the last stage of the
+    !! invocation or a stage without a planned limit (the gold-standard stage). Phase 1 ends at fixed iterations
+    !! (the extremal schedule's): an omitted phase-1 stage's iterations go to the phase-1 stage that follows; the
+    !! last phase-1 stage's and a phase-2 stage's are dropped.
+    logical function solve2D_stage_behind_frc05( stage_parms, istage, start_stage, stop_stage, res05_hist, nhist ) result( l_behind )
+        type(stage_params), intent(in) :: stage_parms(:)
+        integer,            intent(in) :: istage, start_stage, stop_stage
+        real,               intent(in) :: res05_hist(:) !< the quantile at the ends of the executed stages, in order
+        integer,            intent(in) :: nhist         !< # stages executed so far
+        l_behind = .false.
+        if( istage <= start_stage )                 return
+        if( istage <= SKIP_MIN_STAGE )              return
+        if( istage >= stop_stage )                  return
+        if( istage > size(stage_parms) )            return
+        if( .not. stage_parms(istage)%l_lpset )     return
+        if( nhist < 2 .or. nhist > size(res05_hist) ) return
+        if( any(res05_hist(nhist-1:nhist) < TINY) ) return
+        l_behind = all(res05_hist(nhist-1:nhist) < stage_parms(istage)%lp)
+    end function solve2D_stage_behind_frc05
 
     !> the mask diameter (A) the stages after the centring stage take from its class averages: automask2D's
     !! diameters of the populated classes, their population-weighted 90th percentile, as the diameter itself (a
