@@ -370,7 +370,7 @@ contains
         type(image_bin),   allocatable                :: cc_img(:)
         type(image_bin)                               :: cc_min_dist
         integer :: i, n
-        real    :: mm(2)
+        real    :: mm(2), shift(2)
         logical :: l_write, l_verbose
         n = size(imgs)
         l_write = .false.
@@ -391,9 +391,10 @@ contains
             endif
         endif
         call imgs(1)%memoize_mask_coords
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,shift) schedule(static) proc_bind(close)
         do i = 1,n
-            call automask2D_binary_one(settings, imgs(i), cc_img(i), diams(i), shifts(i,:))
+            call automask2D_binary_one(settings, imgs(i), cc_img(i), diams(i), shift)
+            shifts(i,:) = shift
             ! apply cosine egde to soften mask (to avoid Fourier artefacts)
             call imgs(i)%zero_and_unflag_ft
             call cc_img(i)%cos_edge(settings%edge,imgs(i))

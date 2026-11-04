@@ -170,14 +170,14 @@ contains
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final one')
     if( allocated(self%meta_cavg2D) )then
-      call stage_slot(self%meta_cavg2D%is_final, stage, islot, nslots)
+      call stage_slot(size(self%meta_cavg2D), findloc(self%meta_cavg2D%is_final, .true., 1), stage, islot, nslots)
       if( nslots > size(self%meta_cavg2D) )then
         allocate(tmp(nslots))
         tmp(1:size(self%meta_cavg2D)) = self%meta_cavg2D
         call move_alloc(tmp, self%meta_cavg2D)
       endif
     else
-      call stage_slot([logical ::], stage, islot, nslots)
+      call stage_slot(0, 0, stage, islot, nslots)
       allocate(self%meta_cavg2D(nslots))
     endif
     self%meta_cavg2D(islot)%is_final = stage == 0
@@ -197,30 +197,30 @@ contains
     if( .not. self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     if( stage < 0 ) THROW_HARD('stage must be >= 1, or 0 for the final one')
     if( allocated(self%meta_vol3D) )then
-      call stage_slot(self%meta_vol3D%is_final, stage, islot, nslots)
+      call stage_slot(size(self%meta_vol3D), findloc(self%meta_vol3D%is_final, .true., 1), stage, islot, nslots)
       if( nslots > size(self%meta_vol3D) )then
         allocate(tmp(nslots))
         tmp(1:size(self%meta_vol3D)) = self%meta_vol3D
         call move_alloc(tmp, self%meta_vol3D)
       endif
     else
-      call stage_slot([logical ::], stage, islot, nslots)
+      call stage_slot(0, 0, stage, islot, nslots)
       allocate(self%meta_vol3D(nslots))
     endif
     self%meta_vol3D(islot)%is_final = stage == 0
     self%meta_vol3D(islot)%states   = vols
   end subroutine set_vols3D
 
-  ! The slot of @p stage in a stage array whose slots' final flags are @p is_final: stage s >= 1
-  ! is slot s; stage 0 is the final slot, reused when there is one and appended otherwise.
-  ! @p nslots is the size the array needs.
-  subroutine stage_slot( is_final, stage, islot, nslots )
-    logical, intent(in)  :: is_final(:)
-    integer, intent(in)  :: stage
+  ! The slot of @p stage in a stage array of @p nslots_have slots whose final slot is @p ifinal
+  ! (0 if none): stage s >= 1 is slot s; stage 0 is the final slot, reused when there is one and
+  ! appended otherwise. @p nslots is the size the array needs. Scalars in, so that the callers'
+  ! strided is_final component is not copied to a temporary.
+  subroutine stage_slot( nslots_have, ifinal, stage, islot, nslots )
+    integer, intent(in)  :: nslots_have, ifinal, stage
     integer, intent(out) :: islot, nslots
-    nslots = size(is_final)
+    nslots = nslots_have
     if( stage == 0 )then
-      islot = findloc(is_final, .true., 1)
+      islot = ifinal
       if( islot == 0 )then
         nslots = nslots + 1
         islot  = nslots
