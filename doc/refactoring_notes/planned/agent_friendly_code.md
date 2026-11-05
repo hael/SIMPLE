@@ -1,9 +1,9 @@
 # Agent-friendly code
 
-Status, 2026-11-04: on hold until the batch alignment pipeline refactoring
-([plan](../../implementation_notes/completed/prob_align_batch_pipeline.md)) has landed, since both
-change the same code. Delivered with this note: section 2 and the defect fixes of section 5 (1-7).
-Every ruling is decided; the work they call for is section 7, small items first.
+Status, 2026-11-05: delivered with this note: section 2 and the defect fixes of section 5 (1-7).
+Every ruling is decided. The batch alignment pipeline has landed (`ea4c1c20a`), so the rest of
+section 7 runs as the autonomous run `agent_friendly` on the dell (section 8), except the items that
+change files of the run `ms_posterior2` (on dell2 at the same time), which wait for it.
 
 ## 1. Why
 
@@ -281,4 +281,136 @@ Large, or measured before adopting:
   after.
 - Batch optics grouping moves to the stream's (S4): compare the groups on one data set with beam tilt.
 - The judging runs of 3.7 and the language-server experiment of 3.8.
+
+Deferred until the run `ms_posterior2` has landed, since they change its files
+(`doc/implementation_notes/planned/multistate_posterior_state_draw.md`, "File table"): retiring the
+`internal:` parameters and the `INPROCESS_KEYS` (R4, X4), one class-average row builder (C3), the run
+state of `simple_solve3D_utils` as a type (C4), the folder moves of 3.4 (R6) and the judging runs of
+3.7 (the test registry).
+
+## 8. The autonomous run `agent_friendly`
+
+### 8.1 Scope
+
+The run carries out section 7 without the deferred items: the small items, the medium items, the
+measurements of the large ones (measured and reported, never adopted), the checks of 3.1 and 3.2,
+the renames of 3.5, the glossary of 3.6 and the language-server experiment of 3.8. The rulings are
+section 5 and the ids of section 7; the folder guides already state each guide question's ruling.
+Two kinds of file are out of bounds whatever a row of the file table seems to allow: the 20 files
+of `ms_posterior2`'s file table (among them `simple_refine3D_strategy.f90`,
+`simple_prob_align_strategy.f90`, `simple_convergence.f90`, `simple_solve3D_controller.f90`,
+`simple_commanders_solve3D.f90`, `simple_commanders_prob.f90`, the files of
+`strategies/search/probabilistic/`, `simple_test_registry.f90` and the policies `refine3D_policy.md`,
+`solve3D_policy.md`, `refine3D_states_policy.md` and `test_environment_policy.md`), and
+`src/main/sieve/`, whose recovery defect its developer is fixing. If an item cannot be done
+without one of them, it is recorded as deferred with the reason, and the run goes on.
+
+### 8.2 The machine and how the work is judged
+
+The dell (24 cores: 8 performance, 16 efficiency; 62 GB; GCC 15.2; CMake 3.26; Python 3.12 at
+`/usr/bin/python3.12`, `python3` is 3.6). The run builds and tests only in its own copy and its own
+build trees. The maintainer works on the machine meanwhile; record `uptime` with every timing.
+
+- Every change comes with the check that shows it: a tester assertion that fails on the base and
+  passes now where the change is testable in a unit, otherwise the program or workflow run that
+  exercises it, named in Progress.
+- Each phase ends with the fast gate (15/15) in a Release and a Debug build, the unit suites of the
+  touched areas, and `scripts/check_guide_imports.py`, `check_test_registry.py`, `check_descr.py`.
+- Behaviour that should not change does not: phases 2 and 3 run `simulated_workflow` (1jxy and
+  6vxx) and `mini_stream_1jxy` with `SIMPLE_SEED` set, on the phase's build and the previous phase's,
+  and compare them with `test=identity`; a difference is either explained by a ruled change or a
+  stop. Pure renames and moves (3.5, O11, V5) must be byte-identical.
+- No floor, tolerance or assertion is relaxed. Failures the base already has are recorded in
+  phase 0 and not fixed unless their cause is in this run's files.
+
+### 8.3 Phases
+
+- **Phase 0, baseline and guides.** Build the base (Release and Debug) and record the fast gate, the
+  unit suites and the base failures of the workflow entries above. Bring the guides up to date with
+  the landed batch pipeline: every statement in the strategies guides (umbrella, `-parallelization`,
+  `-search`, `-probabilistic`), pftc, sigma2, class, cftc, commanders, exec, apis, root, volume and
+  their `references/` about the probability tables, part files, table programs, particle batches or
+  `prob_align` is checked against HEAD and rewritten, and every link to a note that moved to
+  `completed/` is fixed. Exit: both builds pass the gate; Progress records the baselines and the
+  guide changes.
+- **Phase 1, the command-line chain.** R1, R2, R3, P2, P3, P6, X3 and the gate check of 3.2
+  (`scripts/check_cli_chain.py`: every UI input an accepted key, every accepted key bound, every
+  private program in `simple_private_prgs.f90`, no key bound twice), run by `run_fast_gate.sh`.
+  Exit: the check passes and fails on a planted violation of each kind (recorded, then removed).
+- **Phase 2, the small fixes and the checks of 3.1.** The small items of section 7 not in phase 1,
+  and the rows of 3.1 whose files are in bounds, each with its check. Exit: every item done or
+  recorded as deferred with the reason; the identity comparison of 8.2 against phase 1.
+- **Phase 3, the medium items, renames and the glossary.** X2, C1, V2, N10, O11, V5, G3, the renames
+  of 3.5, the glossary of 3.6 (`doc/glossary.md`, linked from `simple-architecture`), and the
+  experiment of 3.8 (a local plugin for `fortls` 3.2.2 in `~/.local/bin`, kept under the run's
+  scratch; its findings in Progress, nothing of it in the repository). Exit: as phase 2, renames
+  and moves byte-identical.
+- **Phase 4, measurements.** I1, O1, O4 and S4, each measured as section 7 says on scratch builds
+  and data, with the numbers and a recommendation in Progress. No repository code changes.
+- **Phase 5, the report.** `doc/refactoring_notes/completed/agent_friendly_code_report.md`: what was
+  learned, the evidence, the measurements and their recommendations, the deferred items with their
+  reasons, and a commit message; the refactoring notes index updated; this note moved to
+  `doc/refactoring_notes/completed/` with `mv`.
+
+### 8.4 Common rules
+
+- No new parameter, except the fields ruling R2 binds for an input a program already reads.
+- Unreferenced is not dead: delete only what a ruling deletes (X3) or what a change itself makes
+  unused.
+- A change that alters a rule a folder guide states updates the guide's `SKILL.md` in the same
+  phase; the importing `CLAUDE.md` files are never edited.
+- New tests go into existing suites (a new sub-suite changes the test policy, which is out of
+  bounds).
+- Release 4: no backwards compatibility except reading earlier `.simple` projects.
+
+### File table
+
+| File | What | Phases |
+|---|---|---|
+| `doc/refactoring_notes/planned/agent_friendly_code.md` | this plan, its Progress | each |
+| `.github/skills/` | the folder and workflow guides | each |
+| `params/` | R1, R2, P6, O9, O10 | 1, 2 |
+| `ui/` | R2, P2, P3 | 1 |
+| `exec/` | P3 | 1 |
+| `apis/` | P3 | 1 |
+| `production/` | X3, P3 | 1 |
+| `scripts/` | R3, the gate check of 3.2, run_fast_gate.sh | 1 |
+| `project/` | C5, C1 | 2, 3 |
+| `ori/` | O2, X1, renames | 2, 3 |
+| `opt/` | O3, O5, O6 | 2 |
+| `ctf/` | O6, O7 | 2 |
+| `motion/` | O10, V5 (the dose-series manifest moves here) | 2, 3 |
+| `preprocess/` | O9, O11 | 2, 3 |
+| `pick/` | O13, O14 | 2 |
+| `image/` | I2, I5, 3.1 (CTF memo), renames | 2, 3 |
+| `image_processing/` | 3.1 (CTF memo) | 2 |
+| `cftc/` | I3 | 2 |
+| `pftc/` | O6, 3.1 (memo counters), renames | 2, 3 |
+| `class/` | X1 | 2 |
+| `sigma2/` | 3.1 (weights) | 2 |
+| `volume/` | V2, V5, N10 | 3 |
+| `nu_filt/` | 3.1 (clamp) | 2 |
+| `star/` | S2, S3 | 2 |
+| `nano/` | X5, N1 | 2 |
+| `flex/` | N9, N10 | 2, 3 |
+| `cavg_quality/` | N6, 3.1 (model length) | 2 |
+| `quality/` | 3.1 | 2 |
+| `src/defs/` | N3 | 2 |
+| `src/fileio/` | 3.1 (particle writer), renames | 2, 3 |
+| `src/utils/` | renames | 3 |
+| `strategies/search/simple_*.f90` | X1 (simple_matcher_3Drec.f90), G3, the pspecs move; not probabilistic/ | 2, 3 |
+| `strategies/parallelization/simple_refine_motion_model_strategy.f90` | X2 | 3 |
+| `strategies/parallelization/simple_rec3D_service.f90` | X2, N10 | 3 |
+| `strategies/parallelization/simple_rec3D_service_tester.f90` | X2, N10 | 3 |
+| `strategies/parallelization/simple_volassemble_strategy.f90` | V2 | 3 |
+| `strategies/parallelization/simple_pick_strategy.f90` | O14 | 2 |
+| `commanders/test/simple_commanders_test_class.f90` | suite tables of new tester routines | 2, 3 |
+| `doc/policies/layering_and_project_ownership_policy.md` | X2 (section 8) | 3 |
+| `doc/glossary.md` | 3.6 | 3 |
+| `doc/code_overview/fortran-indexes/` | regenerated after renames and moves | 3, 5 |
+| `doc/refactoring_notes/completed/agent_friendly_code_report.md` | the report | 5 |
+| `doc/refactoring_notes/completed/agent_friendly_code.md` | this plan, moved | 5 |
+| `doc/refactoring_notes/README.md` | the index | 5 |
+
+## Progress
 

@@ -44,7 +44,7 @@ this index does not establish a new passing test result.
 | FLEX architecture | [PCA architecture closeout](planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md) | Refactor implemented; baseline capture/replay and optional cleanup remain. |
 | Policy debt | [Gap register](planned/policy_set_audit_2026-10-21.md) | Open decisions and code/coverage debt remain here; the completed audit reports are archived below. |
 | Random seed | [Parameter proposal](planned/rnd_seed_parameter.md) | Awaiting review; production still uses the environment seed. |
-| Agent-friendly code | [Proposal](planned/agent_friendly_code.md) | Folder guides and defect fixes delivered 2026-11-04; the rest (section 7) on hold until the batch alignment pipeline has landed. |
+| Agent-friendly code | [Proposal](planned/agent_friendly_code.md) | Folder guides and defect fixes delivered 2026-11-04; section 7 runs as `agent_friendly` on the dell (section 8), items that change `ms_posterior2`'s files deferred until it lands. |
 | Tomography | [refine_tomo](planned/refine_tomo.md) | Reconcile compilation and ground-truth evidence with subsequent workflow work. |
 | Microscope metadata | [Multi-microscope parameters](planned/need2basis/multi_microscope_parameters.md) | First phase delivered; audit remaining CTF construction/merge tests and policy decisions. |
 | MRC naming | [Stack/volume suffixes](planned/need2basis/mrc_stack_volume_output_suffix_refactoring.md) | Decision/basis needed before migration. |
