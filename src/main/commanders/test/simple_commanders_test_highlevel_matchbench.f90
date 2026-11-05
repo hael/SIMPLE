@@ -1,13 +1,18 @@
 !@descr: polar matching layout benchmark of simple_commanders_test_highlevel (measure only, no CTest entry)
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_matchbench
 use simple_polar_matching_bench, only: polar_matching_bench, PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER,&
-    &PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC, PMB_NKINDS
+    &PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC, PMB_NKINDS, pmb_fill_result, PMB_NROUTES, PMB_NDIFF, PMB_DIFF_NAMES,&
+    &pmb_route_name, kill_fill_result, compare_fill_results
 implicit none
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: MATCHBENCH_TSV   = 'polar_matching_bench.tsv'
 character(len=*), parameter :: MATCHCHECK_TSV   = 'polar_matching_check.tsv'
 character(len=*), parameter :: IDENTITY_TSV     = 'polar_kernel_identity.tsv'
+character(len=*), parameter :: FILLS_TSV        = 'polar_fill_identity.tsv'
+integer,          parameter :: NSPACE_FILLS     = 200    !< directions of suite fills unless nspace is given
+integer,          parameter :: NSTATES_FILLS(2) = [1, 2] !< its states unless nstates is given
+integer,          parameter :: NPTCLS_FILLS     = 64     !< its particles unless nptcls is given
 integer,          parameter :: NKEEP_IDENTITY   = 32     !< particles of suite identity unless nptcls is given
 integer,          parameter :: NREPS            = 3      !< timing: best of three after one warm-up
 integer,          parameter :: NREPS_CHECK      = 5      !< identity: repeats at the full team
@@ -27,7 +32,7 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     integer, allocatable :: nspaces(:), nstates_list(:), nthrs(:), layouts(:)
     type(string) :: suite
     integer      :: nptcls, nthr_max, ispace, istate
-    logical      :: l_check, l_identity
+    logical      :: l_check, l_identity, l_fills
     suite    = ''
     nptcls   = 2000
     nthr_max = 1
@@ -41,10 +46,11 @@ module subroutine exec_test_polar_matching_bench( self, cline )
     if( cline%defined('nstates') ) nstates_list = [cline%get_iarg('nstates')]
     l_check    = .false.
     l_identity = .false.
+    l_fills    = .false.
     select case(suite%to_char())
         case('list')
             write(logfhandle,'(a)') 'Available suites for polar_matching_bench: per_pair, replica, blocked, states_inner,&
-                & matrix, matrix_t, per_pair_cc, check, identity'
+                & matrix, matrix_t, per_pair_cc, check, identity, fills'
             return
         case('')
             layouts = [PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER, PMB_MATRIX, PMB_MATRIX_T]
@@ -66,6 +72,11 @@ module subroutine exec_test_polar_matching_bench( self, cline )
             l_check = .true.
         case('identity')
             l_identity = .true.
+        case('fills')
+            l_fills = .true.
+            if( .not. cline%defined('nspace')  ) nspaces      = [NSPACE_FILLS]
+            if( .not. cline%defined('nstates') ) nstates_list = NSTATES_FILLS
+            if( .not. cline%defined('nptcls')  ) nptcls       = NPTCLS_FILLS
         case default
             THROW_HARD('no suite '//suite%to_char()//' in polar_matching_bench; use suite=list')
     end select
@@ -81,6 +92,8 @@ module subroutine exec_test_polar_matching_bench( self, cline )
         do istate = 1,size(nstates_list)
             if( l_check )then
                 call check_case(nspaces(ispace), nstates_list(istate), nthr_max)
+            else if( l_fills )then
+                call fills_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
             else if( l_identity )then
                 if( cline%defined('nptcls') )then
                     call identity_case(nspaces(ispace), nstates_list(istate), nptcls, nthr_max)
@@ -398,6 +411,86 @@ subroutine identity_case( nspace, nstates, nkeep, nthr_max )
     enddo
     deallocate(bench)
 end subroutine identity_case
+
+!> The frozen-input harness of the probabilistic routes (prob_align_batch_pipeline.md, level 2 of section 8): each
+!! route's batch pipeline (the fill, the selection and the extras the matchers run, in parts as the distributed
+!! parts run it) on the bench's synthetic references and particles at one thread, one batch and one part (the
+!! reference), then repeated as it is, at the full team, in batches of a third, in three parts, all three together,
+!! and in three parts with the earlier parts' committed outputs perturbed before the later parts' fills (the
+!! input-boundary regression of the iteration's model); the entries differing from the reference are counted by
+!! particle and reference identity per category (rows of polar_fill_identity.tsv: the rows' distances, in-plane
+!! indices, refined shifts, temperatures, seeds, assignments, extras). Every draw is keyed on the run, the pass,
+!! the iteration, the particle and the draw, so every configuration must give the reference's entries: the run
+!! fails on any differing entry.
+subroutine fills_case( nspace, nstates, nptcls, nthr_max )
+    !$ use omp_lib, only: omp_get_wtime
+    integer, intent(in) :: nspace, nstates, nptcls, nthr_max
+    integer, parameter :: NCONF = 6
+    class(polar_matching_bench), allocatable, target :: bench
+    type(pmb_fill_result) :: ref, res
+    character(len=:), allocatable :: route
+    integer  :: conf_nthr(NCONF), conf_bsz(NCONF), conf_nparts(NCONF)
+    logical  :: conf_pert(NCONF)
+    integer  :: iroute, iconf, ndiff(PMB_NDIFF), nfail, funit, bsz3, nparts3, idiff
+    real(dp) :: wall
+    logical  :: l_new
+    bsz3        = max(1, (nptcls + 2) / 3)
+    nparts3     = min(3, nptcls)
+    ! the pipeline at one and nthr_max threads, two batch sizes, one and three parts, the earlier parts perturbed
+    conf_nthr   = [1,       nthr_max, 1,       1,       nthr_max, 1      ]
+    conf_bsz    = [nptcls,  nptcls,   bsz3,    nptcls,  bsz3,     nptcls ]
+    conf_nparts = [1,       1,        1,       nparts3, nparts3,  nparts3]
+    conf_pert   = [.false., .false.,  .false., .false., .false.,  .true. ]
+    nfail = 0
+    allocate(bench)
+    do iroute = 1,PMB_NROUTES
+        route = pmb_route_name(iroute)
+        call bench%new(nspace, nstates, nptcls, nthr_max, .true., .false., .false., 0, fills_route=iroute)
+        call report_case(bench, nspace, nstates)
+        write(logfhandle,'(4x,a)') 'route '//route//': the reference fill at one thread, one batch, one part'
+        call bench%run_fill(1, nptcls, 1, ref)
+        do iconf = 1,NCONF
+            wall = 0._dp
+            !$ wall = omp_get_wtime()
+            call bench%run_fill(conf_nthr(iconf), conf_bsz(iconf), conf_nparts(iconf), res, l_perturb=conf_pert(iconf))
+            !$ wall = omp_get_wtime() - wall
+            call compare_fill_results(ref, res, ndiff)
+            inquire(file=FILLS_TSV, exist=l_new)
+            l_new = .not. l_new
+            open(newunit=funit, file=FILLS_TSV, position='append', action='write', status='unknown')
+            if( l_new )then
+                write(funit,'(a)',advance='no') 'route'//achar(9)//'nspace'//achar(9)//'nstates'//achar(9)//'nptcls'//&
+                    &achar(9)//'nthr'//achar(9)//'batchsz'//achar(9)//'nparts'//achar(9)//'perturbed'//achar(9)//'entries'
+                do idiff = 1,PMB_NDIFF
+                    write(funit,'(a)',advance='no') achar(9)//'diff_'//trim(PMB_DIFF_NAMES(idiff))
+                enddo
+                write(funit,'(a)') achar(9)//'wall_s'
+            endif
+            write(funit,'(a,8(a,i0))',advance='no') route, achar(9), nspace, achar(9), nstates, achar(9), nptcls,&
+                &achar(9), conf_nthr(iconf), achar(9), conf_bsz(iconf), achar(9), conf_nparts(iconf), achar(9), &
+                &merge(1, 0, conf_pert(iconf)), achar(9), res%nentries
+            do idiff = 1,PMB_NDIFF
+                write(funit,'(a,i0)',advance='no') achar(9), ndiff(idiff)
+            enddo
+            write(funit,'(a,f10.4)') achar(9), wall
+            close(funit)
+            write(logfhandle,'(4x,a,a,i0,a,i0,a,i0,a,l1,a,i0,a,7(1x,i0),a,f8.3,a)') route, ' nthr=', conf_nthr(iconf),&
+                &' batchsz=', conf_bsz(iconf), ' nparts=', conf_nparts(iconf), ' perturbed=', conf_pert(iconf),&
+                &' entries=', res%nentries,&
+                &' differing from the reference (dists inpls shifts temps seeds assignment extras):', ndiff, ' in ', wall, ' s'
+            if( any(ndiff /= 0) )then
+                nfail = nfail + 1
+                write(logfhandle,'(4x,a)') 'FAIL: a configuration of route '//route//' differs from its reference'
+            endif
+        enddo
+        call bench%kill
+    enddo
+    call kill_fill_result(ref)
+    call kill_fill_result(res)
+    deallocate(bench)
+    if( nfail > 0 ) THROW_HARD('the fill harness differs between configurations; see '//FILLS_TSV)
+    write(logfhandle,'(a)') '>>> the fill harness gives identical rows, selections and extras in every configuration'
+end subroutine fills_case
 
 subroutine report_case( bench, nspace, nstates )
     class(polar_matching_bench), intent(in) :: bench

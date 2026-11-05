@@ -180,6 +180,43 @@ contains
         call state_name%kill
     end subroutine set_sigma2_state_path
 
+    !> The run's restart metadata of the keyed random draws: the seed every part and every draw of the run reads
+    !! (SIMPLE_SEED) and the generator's schema version, written by the project owner at the run's start; a run
+    !! that continues reuses them (get_rnd_seed). The 64-bit seed is stored as four 16-bit words (rnd_seed_w1,
+    !! the lowest, to rnd_seed_w4), numbers the project's records keep exactly.
+    module subroutine set_rnd_seed( self, seed, version )
+        class(sp_project), intent(inout) :: self
+        integer(int64),    intent(in)    :: seed
+        integer,           intent(in)    :: version
+        integer :: iw
+        if( self%projinfo%get_noris() /= 1 ) call self%projinfo%new(1, is_ptcl=.false.)
+        do iw = 1, 4
+            call self%projinfo%set(1, 'rnd_seed_w'//achar(48 + iw), int(iand(shiftr(seed, 16 * (iw - 1)), 65535_int64)))
+        enddo
+        call self%projinfo%set(1, 'rnd_version', version)
+    end subroutine set_rnd_seed
+
+    !> the recorded run seed and generator version; found is false when the project records none
+    module subroutine get_rnd_seed( self, seed, version, found )
+        class(sp_project), intent(in)  :: self
+        integer(int64),    intent(out) :: seed
+        integer,           intent(out) :: version
+        logical,           intent(out) :: found
+        integer :: iw
+        seed    = 0_int64
+        version = 0
+        found   = self%projinfo%get_noris() == 1
+        if( found ) found = self%projinfo%isthere(1, 'rnd_version')
+        do iw = 1, 4
+            if( found ) found = self%projinfo%isthere(1, 'rnd_seed_w'//achar(48 + iw))
+        enddo
+        if( .not. found ) return
+        do iw = 1, 4
+            seed = ior(seed, shiftl(int(self%projinfo%get_int(1, 'rnd_seed_w'//achar(48 + iw)), int64), 16 * (iw - 1)))
+        enddo
+        version = self%projinfo%get_int(1, 'rnd_version')
+    end subroutine get_rnd_seed
+
     !> The registered canonical sigma2 state, resolved: a name resolves
     !! against the project's own directory, an absolute registration is
     !! returned as is

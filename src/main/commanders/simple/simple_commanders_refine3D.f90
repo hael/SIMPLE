@@ -1541,7 +1541,6 @@ contains
         end subroutine validate_input_volumes
 
         subroutine run_classify3D_refs()
-            use simple_eul_prob_tab_utils, only: del_prob_align_files
             integer, parameter  :: STEP_IT = 3
             type(refine3D_stage_plan_entry), allocatable :: stages(:)
             integer :: startit, lastit, stage
@@ -1579,7 +1578,6 @@ contains
                 iter_glob = lastit
                 call cline%delete('endit')
             enddo
-            call del_prob_align_files(params%nparts)
             write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' EXITING FREQUENCY MARCHING AT ITERATION ', iter_glob
             deallocate(stages)
         end subroutine run_classify3D_refs

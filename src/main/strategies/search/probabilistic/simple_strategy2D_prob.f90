@@ -1,4 +1,4 @@
-!@descr: 2D strategy for probabilistic class assignment (precomputed by prob_align2D/prob_tab2D)
+!@descr: 2D strategy for probabilistic class assignment (the class drawn from the particle's row by the matcher's pipeline)
 module simple_strategy2D_prob
 use simple_pftc_srch_api
 use simple_eul_prob_tab_utils, only: record_shift_state

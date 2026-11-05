@@ -228,7 +228,10 @@ contains
         call polar_matching_bench%add_input(UI_PARM, 'suite', 'str', 'Layout', &
             &'Run one layout (per_pair, replica, blocked, states_inner, matrix, matrix_t, per_pair_cc), the identity '//&
             &'checks of the layouts (check) or of the production kernels (identity, 32 particles unless nptcls is '//&
-            &'given, one-thread results written to ./polar_kernel_identity_*.bin); list prints them. '//&
+            &'given, one-thread results written to ./polar_kernel_identity_*.bin), or the frozen-input harness of '//&
+            &'the probabilistic routes (fills: each route''s batch pipeline, the fill, selection and extras, in parts at '//&
+            &'one thread against the full team, batches of a third and three parts, 200 directions, 1 and 2 states '//&
+            &'and 64 particles unless given; rows to ./polar_fill_identity.tsv); list prints them. '//&
             &'Default times all euclid layouts', '', .false., '')
         call polar_matching_bench%add_input(UI_PARM, 'nspace', 'num', 'Directions', &
             &'Run one number of projection directions. Default runs 1000 and 2500', '', .false., 0.)

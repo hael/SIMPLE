@@ -15,7 +15,7 @@ their development date; the table records their current disposition.
 | 2. Single-precision scoring weights | Delivered; the November 3 record in [speed and architecture](../planned/speed_architecture_proposals.md) records the kernel and workflow checks. The double-precision shift-search routines retain their own arithmetic. |
 | 3. Repeated project reads | Distributed-master assembly and sigma2 commit use the master's builder. Shared-memory wrappers still construct another toolbox; reuse there remains an optional cleanup opportunity. |
 | 4. Parallel state assembly | Parked multi-state experiment, subject to the existing memory and numerical constraints; not an unfinished single-state implementation item. |
-| 5. One worker per iteration | Superseded by the [batch-pipeline plan](../planned/prob_align_batch_pipeline.md). The earlier waiting-worker fold was implemented and dropped; its protocol below is historical. |
+| 5. One worker per iteration | Superseded by the [batch-pipeline plan](../completed/prob_align_batch_pipeline.md). The earlier waiting-worker fold was implemented and dropped; its protocol below is historical. |
 | 6. Representative benchmarks | Matched PfCRT and I/O-heavy-dataset timing, peak memory and quality evidence remains outstanding; msp1 is the separate multi-state case. Old savings estimates are not measured gains. |
 | 7. Refined-reference budget across states | Separate multi-state work, now addressed by the budget split in the [posterior-state proposal](../planned/multistate_posterior_state_draw.md); not a new single-state task. |
 

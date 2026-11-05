@@ -110,7 +110,7 @@ tester module (section 4.1).
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, refine3D provenance, dose series manifest, frozen accumulator, weighted insertion, volume pair metrics, nonuniform filtering, half-map enhancement, solve3D_cavgs stage rules, state assignment rules, atomic prior, PCG lattice (the gather and scatter of planes on the Ewald paraboloid and of a particle's spectrum cube), wave field, wave imaging, wave multislice, wave projector (the wave operators of `reconstruct3D_wave` and `simulate_scattering`: adjoint and finite-difference checks, the weak-phase identity, the curvature's sign and size, specter's golden images, thread identity at 1, 11, 16 and 24 threads; `doc/policies/3D/wave_model_policy.md`), wave simulation (the wave mode of `simulate_particles`: its weak-signal limit against the Fourier-projection particle, the second order, per-particle B-factors, the detector's noise statistics) |
-| `unit_pftc_align2D3D` | polar correlation, polar shift map, continuous in-plane, refine3D in-plane state, 2D probability table I/O, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match, solve2D stage rules |
+| `unit_pftc_align2D3D` | polar correlation, polar shift map, continuous in-plane, refine3D in-plane state, 2D probability table, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match, solve2D stage rules |
 | `unit_cart_align3D` | local startup, local staging, startup state, Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator, flex cls_expansion, flex cls_expansion kernel |
 | `unit_parallel` | qsys control, qsys environment, test tools (the profile statistics, packing, identity rules and the registry of the suite runner) |
@@ -241,7 +241,12 @@ gate or a robustness profile only), its peak resident memory and the disk its
 run directory grows to (each from a measurement, with a margin), whether its
 master's threads follow a profile's thread count, and the outputs an identity
 check compares: declared for the one-thread workflows and for every entry that
-runs no `solve3D` or `refine3D`. `scripts/check_test_registry.py`
+runs no `solve3D` or `refine3D` (a refactoring run compares the entries that
+run them at one thread and at eight, each thread count against itself on the
+two builds; the keyed draws of the probabilistic routes make the drawn entries
+the same at every thread count, the preparations' and accumulators'
+floating-point order does not, so identity is never decided between thread
+counts). `scripts/check_test_registry.py`
 holds the `highlevel` registrations of `production/CMakeLists.txt` to the
 registry: the same names, command lines, timeouts and thread counts, and a
 CTest `PROCESSORS` equal to the CPU reservation, so that `ctest -L highlevel -j
@@ -362,8 +367,9 @@ simple_test_exec test=identity target=<entry> dir1=<run directory> dir2=<run dir
     project, `projinfo`'s `solve3D_run_id` (the manifest's `run_id`) is left
     out.
   A declared pattern that selects no file in either directory fails. The
-  `BENCH` timing files are not declared outputs. Identity is decided only by
-  one-thread runs. An entry that works in a directory named by its process id
+  `BENCH` timing files are not declared outputs. Identity is decided at a fixed
+  thread count on both builds (one thread; eight where a refactoring run checks
+  it), never between thread counts. An entry that works in a directory named by its process id
   (`test_<name>_<pid>`: the mini stream, `simulate_particles`, the atom
   statistics, the stream preprocessing) declares its outputs relative to that
   directory, and `dir1=` and `dir2=` name it; `state_fixture` and
@@ -434,14 +440,18 @@ expected value at 0.99 and the defect at 0.4).
 
 ### 2.3 Four kinds of test, kept apart
 
-A run of SIMPLE with more than one thread is not reproducible, and a workflow
-on simulated data is a draw: its metric scatters from seed to seed. A test
+A run of SIMPLE with more than one thread is reproducible run to run where its
+draws are keyed (the probabilistic routes since 2026-11-04) and not where a
+classic stage's draws depend on the thread that meets a particle; between
+thread counts it is not byte-reproducible (the preparations' and the
+accumulators' floating-point order), and a workflow on simulated data is a
+draw: its metric scatters from seed to seed. A test
 that mixes "is it right" with "how reliably" cannot say which of the two
 failed. So there are four kinds of test, and each answers one question:
 
 | kind | question | how it is run | how it passes |
 | --- | --- | --- | --- |
-| **identity** | did a refactoring change any result? | one thread, fixed seed, the same case on two builds (`test=identity`) | the declared outputs byte-identical, run-specific fields excluded by a declared list |
+| **identity** | did a refactoring change any result? | a fixed thread count (one, and eight where the run checks it), fixed seed, the same case on two builds (`test=identity`) | the declared outputs byte-identical, run-specific fields excluded by a declared list |
 | **correctness** | does the code recover the truth it was given? | one run on simulated data with a large, known signal (CTest, `test=nightly`) | truth metrics against floors that sit far from both the observed distribution and the negative control |
 | **robustness** | how reliably, and how well, across draws? | the same case over many seeds and thread settings (`test=profile`) | a distribution (median, spread, worst, failure rate) recorded and compared over time; never a single-run gate |
 | **performance** | how fast? | benchmark reports | timings, never in a pass/fail test |
@@ -455,7 +465,8 @@ Consequences:
   metric is reported as a robustness profile, or its signal is raised until it
   can be a gate.
 - **Identity is the only test of a refactoring that claims identical
-  results.** It never uses multi-threaded runs.
+  results.** It compares a thread count with itself on the two builds, never
+  one thread count with another.
 - **Robustness profiles inform decisions; they do not stop work.** A change
   meant to change results is judged by comparing profiles before and after,
   on cases with known truth.
@@ -856,8 +867,9 @@ their data reaches the machine (section 6.6).
   that run, which passes only if every row of it passes.
 - **It fails on a missed floor**, with a message naming the metric, its value
   and the floor. Its draws are fixed (`SIMPLE_SEED` and the seed offset), so a
-  one-thread run is reproducible; a run on several threads is still a draw
-  from a distribution, which is why its floors come from a profile.
+  one-thread run is reproducible, and so is a run on several threads where
+  every draw is keyed; a run whose classic draws meet the threads is still a
+  draw from a distribution, which is why its floors come from a profile.
 
 ### 6.3 The nightly GitHub Actions runs
 
@@ -1326,7 +1338,7 @@ written as `sub-suite` (entry).
 | `discrete_stack_io`, `stack_io` | `stack I/O` (`unit_core`) |
 | `eigh`, `eigh_test` | `linear algebra` (`unit_numerics`) |
 | `eo_diff`, `opt_lp` | deleted (needed refine3D volumes or a download; asserted nothing) |
-| `eul_prob_tab2D_io` | `2D probability table I/O` (`unit_pftc_align2D3D`) |
+| `eul_prob_tab2D_io` | `2D probability table` (`unit_pftc_align2D3D`; the part-file I/O retired 2026-11-05, the selection tests on the pipeline's batch) |
 | `extr_frac` | `decay schedules` (`unit_numerics`) |
 | `flex_gpu` | deleted with the flex GPU implementation |
 | `flex_pca` | `flex PCA` (`unit_heterogeneity`) |

@@ -30,10 +30,10 @@ selector has been removed for `solve2D` and `refine2D`.
 1. set run defaults and read project state
 2. determine stage geometry, low-pass limits, sampling policy, and refine2D command lines
 3. initialize references when needed
-4. run staged `refine2D` iterations
-5. optionally run probabilistic pre-alignment in later stages
-6. update particle class, in-plane, shift, sampled, and update-count state
-7. restore class averages through shared-memory or distributed class-average pathways
+4. run staged `refine2D` iterations (the later stages probabilistic: each
+   particle's class drawn from its own row inside the matcher's batch pipeline)
+5. update particle class, in-plane, shift, sampled, and update-count state
+6. restore class averages through shared-memory or distributed class-average pathways
 8. when updates are sampled, keep the last stages iterating (`assign_all=yes`) until every active particle has a class
 9. when sampled updates were active, run a terminal dense greedy all-particle pass
 10. generate final class averages, FRC metadata, and ranked outputs
@@ -252,7 +252,8 @@ prior width for its next search, in pixels. In every table fill from stage 2 on
   (every workflow's first stage starts there) and by the stream's pool for the
   particles it appends (`append_sets`); the master prints the disk set it is
   about to search by cause (not yet centred, wide) and the widths' median and
-  90th percentile over the centred particles (`print_disk_set`).
+  90th percentile over the centred particles after its sample draw
+  (`print_disk_set`; a distributed part prints none).
 
 No stage ends on the centring: the stages exit by their own rules. An
 automatic run (`mskdiam=0`) runs stage 2 under the box's mask so that its class
@@ -327,7 +328,7 @@ Design record:
   the terminal greedy pass run exactly as on an unseeded run: same limits,
   refine policy, iteration counts, sampling and fractional restore. The
   pass must not be a fresh start (`startit > 1`): a fresh start zeroes the
-  shifts after `prob_tab2D` has built its table against them.
+  shifts the matcher's table fill would seed from.
 - Diagnostics: `>>> SOLVE2D SEED` (parents, seed classes, dropped and
   unassigned counts, seed populations), `>>> SOLVE2D SEED PASS
   REASSIGNED` (% class changes, % shifts moved > 1 px, % seed classes
@@ -341,8 +342,8 @@ shared memory, or as the distributed master when `nparts` is given (the
 private `simple_private_exec prg=refine2D_distr` is the same commander). The
 private `simple_private_exec prg=refine2D` is the worker of one partition,
 which the master schedules; the memory estimator keys on that name. The
-partitions balance the active particles (`state > 0`), the matcher's and the
-table's alike, as in 3D (2026-11-03; before, equal particle ranges). 2D has the
+partitions balance the active particles (`state > 0`), as in 3D (2026-11-03;
+before, equal particle ranges). 2D has the
 3D structure: the matcher searches and accumulates, the strategy restores
 the class averages and decides convergence.
 
@@ -377,16 +378,21 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - shared-memory versus distributed execution selection
 - iteration control inside one `refine2D` invocation
 - scheduler interaction
-- probabilistic pre-alignment dispatch
-- distributed worker scheduling
-- the distributed master's own project: it runs `prob_align2D`
-  (`prob_align2D_exec`), class-average assembly (`cavgassemble_exec`) and the
-  sigma2 commit (`commit_sigma2_exec`) on its own `(params, build)`, each at
-  the thread count it needs, the master's own restored after; a full-update
-  iteration sets the master's `update_frac` to 1 for the alignment and restores
-  it. Assembly updates the master's `cls2D`, `cls3D`, `out` and the particles'
-  `res` in memory; the master writes those segments and the particle segment
-  (Project segments, below) and does not reread the particle segment
+- the iteration's sample draw under the probabilistic and the sampled modes
+  (`sample_ptcls4prob2D`, `sample_ptcls4iter2D`, keyed on the run's seed, the
+  pass, the iteration and the particle; written to the project before the
+  parts, which reproduce it)
+- distributed worker scheduling: one scheduling phase per iteration; the
+  probabilistic parts publish readout records that the master merges in part
+  order and prints
+- the distributed master's own project: it draws the sample, runs
+  class-average assembly (`cavgassemble_exec`) and the sigma2 commit
+  (`commit_sigma2_exec`) on its own `(params, build)`, each at the thread count
+  it needs, the master's own restored after; a full-update iteration draws
+  every particle. Assembly updates the master's `cls2D`, `cls3D`, `out` and the
+  particles' `res` in memory; the master writes those segments and the
+  particle segment (Project segments, below) and does not reread the particle
+  segment
 - shared-memory restoration of the class averages from the sums the matcher
   accumulated (`restore_cavgs_inmem`: the carried sums committed, the averages
   restored and written, the class document, the `cls2D` and `cls3D` segments)
@@ -399,8 +405,12 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 
 `simple_strategy2D_matcher.f90` owns:
 
-- particle-domain alignment/search
-- reproduction of the probabilistic sampled subset when `prob_align2D` is active
+- particle-domain alignment/search; under `refine=prob` and `prob_neigh` the
+  batch pipeline (`prob_align_batch_pipeline.md`, 2026-11-04): the batch's
+  rows or candidates filled, each particle's class drawn from its own row,
+  then the polish, residual and class sums, the same body in shared memory and
+  in a distributed part
+- reproduction of the master's sampled subset
 - strategy-object selection
 - sigma updates during Euclidean search
 - accumulating the class sums from the batch images
@@ -420,20 +430,17 @@ that re-reads image stacks to lower peak memory. Offline or terminal
 class-average assembly commands may have their own explicit reads, but that is
 separate from the matcher worker's online single-read contract.
 
-Probabilistic table construction has a separate bounded-memory contract:
-
-- `prob_tab2D` workers retain only thread-local compact candidates for the
-  current particle batch and stream them to one partition file;
-- `prob_align2D` constructs the global object only after workers complete;
-- dense `refine=prob` uses a compact rectangular table, while sparse
-  `refine=prob_neigh` uses a particle-oriented ragged candidate store;
-- compact storage is materialized as the established `ptcl_ref` assignment only
-  after global selection, so assignment-file semantics do not change.
+The probability table has a bounded-memory contract: the fill keeps
+thread-local compact candidates for the current batch alone, the assignment
+turns them into the batch's dense rows (`refine=prob`, one entry per class) or
+ragged candidate store (`refine=prob_neigh`) and releases them after the
+batch's draws; the assignment map (`ptcl_ref`) is the part's only state across
+batches. No partition file and no global table exist (retired 2026-11-05).
 
 Both table fills (`fill_tab_range` for `refine=prob`: the last stage and the
 seed pass; `fill_tab_prob_neigh_range` for the `prob_neigh` stages) hold the
 shift in the particle frame, as the 3D tables do (`refine3D_policy.md`,
-probabilistic pre-step): the shift estimated at the particle's previous class
+section 8): the shift estimated at the particle's previous class
 is converted once at the rotation its search ended at, the particle is
 shifted once by it (`memoize_shifted_ptcl`, unless the shift is below
 `SHERRSQ`), every class is scored against that memo with the bank kernel
@@ -442,41 +449,18 @@ refined class starts its shift search from the seed converted at its own
 rotation and clamped into the search box, and an assigned, unrefined
 candidate records the seed as it is (`record_seed_shift`). The particle loops
 run with dynamic OpenMP scheduling (a particle is processed whole by one
-thread, so only its random draws change). Each table part's bench record
-(`BENCH/PROB_TAB2D_BENCH_PARTppp.txt`) carries the 3D tables' fill profile: the
-thread-seconds of the seed, the score loop and the refinement, the fill
-regions' wall time, the load balance and the shifted particle memos built.
+thread; its draws are keyed on the particle, so the schedule changes none).
+Each part's bench record (`BENCH/REFINE2D_BENCH_PARTppp.txt`, the `match2D fill
+...` lines) carries the fill profile: the thread-seconds of the seed, the score
+loop and the refinement, the fill regions' wall time, the load balance and the
+shifted particle memos built, beside the wall time of the table fill and the
+assignment.
 
-The 2D part files (`dist_partN.dat`; one iteration's artifacts) have two
-layouts, told apart by a format word in the header:
-
-- the candidate stream (`refine=prob_neigh`, format -6): header (classes,
-  particles, format word, candidates, chunks), particle indices, the
-  candidate count of every particle, the seed table, the particle
-  temperatures (one real per particle, `posterior_temperature`), then the
-  chunks the worker threads flushed (particle indices and 24-byte
-  candidates);
-- the dense rows (`refine=prob`, format -7): header (classes, particles,
-  format word, refined entries), particle indices, the seed table, the
-  particle temperatures, one row of (distance, in-plane index) per particle
-  and class (8 bytes per entry), then the refined entries (particle, class,
-  shift) of the candidates whose shift was refined. A worker turns each
-  thread's buffered candidates into rows when it flushes them: a particle
-  is processed whole by one thread, so its candidates are consecutive in
-  one buffer.
-
-The formats were -4/-5 before the temperatures (2026-10-23).
-
-`prob_align2D` reads the parts in parallel (one task per part file, file
-names built before the loop, a status per part raised after it): first every
-part's head, which sizes the sparse store from the counts, then every part's
-candidates or rows, once. Each part's size must be the size its header
-implies, and every particle of the master must be in exactly one part
-(counted with an atomic capture). The dense master keeps `rows(nclasses,
-nptcls)` of 8 bytes and the refined entries in compressed-row form; the
-assignment rebuilds a full candidate from them (`dense_candidate`). The
-`PROB_ALIGN2D` report splits the reads (heads, candidates) and the
-assignment (the posterior draws).
+The 2D part files (`dist_partN.dat`, the candidate stream of `prob_neigh` and
+the dense rows of `prob`), their parallel read by `prob_align2D` and the
+`PROB_ALIGN2D` report were retired on 2026-11-05 with the `prob_tab2D` worker:
+a particle's candidates stay in the thread buffer that filled them until the
+batch's assignment.
 
 The assignment is one draw per particle from its tempered row posterior
 (2026-10-23; the tables' only assignment since 2026-10-24, when the
@@ -489,18 +473,18 @@ populated. At the fill, every class's in-plane rotation is one draw from the
 posterior over all grid rotations of the class against the seeded particle at
 the particle's temperature T_i = pi wsqsum_i / (2 pftsz) (`gen_posterior_val`,
 its bank form; `score_seeded_class`, the shift-free direct call), no angular
-threshold; the worker writes T_i per particle into the part file. At the
-assignment, each particle's class is one draw from the posterior over its
+threshold; the fill keeps T_i with the row. At the batch's assignment
+(`assign_batch`), each particle's class is one draw from the posterior over its
 row, p proportional to exp(-T_i (L - L_min)): over the active classes of its
-dense row (`ref_assign`, the drawn class's `dense_candidate`, `frac` 100), or
-over its valid evaluated candidates (`ref_assign_sparse`, an active class
+dense row (`assign_rows_dense`, the drawn class's `row_candidate`, `frac` 100),
+or over its valid evaluated candidates (`assign_rows_sparse`, an active class
 with an in-plane index; the drawn candidate with its shift, the peak count
 the candidates with an in-plane index and the fraction their share of the
 classes). A particle without a valid distance takes the first active class
 (dense) or its best candidate (sparse); one without a temperature its argmin,
-with a warning. The draws run in particle order on the master's random
-stream, so shared-memory and distributed runs draw alike; the log reports the
-fraction of particles drawn at their row mode. The tempering factor
+with a warning. The draw is keyed on the particle, so shared-memory and
+distributed runs draw alike; the master reports the fraction of particles
+drawn at their row mode from the parts' readout records. The tempering factor
 `PROB_BETA` (0.3, `simple_defs`; for small membrane proteins; below one
 hotter) multiplies the temperature of every draw, the fills' in-plane draws
 and the class draws as of the 3D direction draws, so below one they draw
@@ -537,21 +521,17 @@ of the later stages); the SHC strategies of the early stages (`snhc_smpl`,
 day's migration of those onto the posterior primitive (2026-10-23) was
 taken back on 2026-10-24.
 
-A distributed part with none of the sampled particles is valid: its table
-part writes an empty table (header, no candidates; the readers skip its
-rotation grid), and its matcher pass runs without batches, writing its
-orientations, its sigma2 range and an empty class-sum contribution carrying
-the references' centering offsets.
+A distributed part with none of the sampled particles is valid: its matcher
+pass runs without batches, writing its orientations, its sigma2 range, an
+empty readout record and an empty class-sum contribution carrying the
+references' centering offsets.
 
 The search loop of the matcher runs under a dynamic OpenMP schedule (a
-particle is searched whole by one thread, so only its random draws change).
-In shared memory the probability table fills the
-particle buffer (`doc/policies/particle_read_path_policy.md`) and the matcher
-of the same iteration copies its batches from it, so a table iteration reads
-each particle once. When the particles are cropped (below), the buffer holds
-their records, the cropped particles, so the matcher neither reads nor
-prepares them at the full box; otherwise it holds raw images and the
-preparation runs twice.
+particle is searched whole by one thread; the draws are keyed on the particle,
+so the schedule changes none). The pipeline reads and prepares each batch once
+for the fill, the draw and the search; the particle buffer's hand-over from a
+table pass to the search pass went with the table pass
+(`doc/policies/particle_read_path_policy.md`).
 
 `simple_cavgassemble_strategy.f90` (`cavgassemble_exec`), the classaverager
 modules and the `make_cavgs`/`cavgassemble` commanders of
@@ -580,8 +560,8 @@ particle, made in memory from the full-size read of the batch: noise-normalized
 at the full box, cropped, then tapered, padded and transformed at `box_crop`.
 That replaces a transform of the padded full box of which only the
 `box_crop` region was used. The alignment then prepares the cropped particle
-(`prepimg4align_cropped`), and so does the probability table (`prob_tab2D`).
-Both differ from the old uncached full-box preparation by rounding: the cropped
+(`prepimg4align_cropped`), the table fill's and the search's one preparation.
+It differs from the old uncached full-box preparation by rounding: the cropped
 particle goes back to real space and is transformed again, which is not
 bitwise exact (statistical parity, not bit equality). The final class averages
 of `solve2D` are restored at the full box by `make_cavgs`. The downscaled
@@ -591,10 +571,9 @@ Benchmark reports (`refine3D_policy.md`, section 11.1, lists the files; all in
 `BENCH/`): `REFINE2D_BENCH_PARTppp.txt` for every partition, with the
 thread-seconds and load balance of the search loop and of the class sums;
 `REFINE2D_STRATEGY_BENCH.txt` for the whole iteration, setup to the
-class-average JPEG (pre-step, matcher or scheduler, merge, class-average
+class-average JPEG (the sample draw, matcher or scheduler, merge, class-average
 assembly, the master's project writes and rereads, sigma2, convergence, star
-file); `PROB_ALIGN2D_BENCH.txt` for the pre-step driver;
-`CAVGSUMS_BENCH_PARTppp.txt` with the class sums' load balance.
+file); `CAVGSUMS_BENCH_PARTppp.txt` with the class sums' load balance.
 `scripts/plot_refine3d_bench.py` turns them into the 2D critical path per
 iteration.
 
@@ -607,9 +586,9 @@ call and rereads the segments they wrote after it. What writes what, as built:
 | Process | Writes |
 | --- | --- |
 | `solve2D` | `ptcl2D` at the start (fresh start: after the clustering is deleted; `cls_init=prev`: after the seed partition); `ptcl3D` at the end unless the project holds a valid 3D alignment; `out` after the final class averages. It rereads `cls2D` and `out` after every stage, and `ptcl2D` and `ptcl3D` before the end. |
-| `refine2D`, shared memory | `cls2D` and `cls3D` every iteration (`restore_cavgs_inmem`); `ptcl2D` and `out` at the end of the invocation. With `prob_align2D`, `ptcl2D` is written before the table commander and again once the sample is drawn, and reread after. |
-| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (probabilistic modes, and the sampled modes of stages 1-2 under fractional updates), by the merge of the workers' documents, after class-average assembly (with `cls2D`, `cls3D` and `out`), and in the iteration's finalization; `out` at the end of the run. |
-| `refine2D` worker | no project segment: its alignment document, sigma2 part, `cavg_contrib_part<N>.bin`, `dist_part*` and `assignment` files. |
+| `refine2D`, shared memory | `cls2D` and `cls3D` every iteration (`restore_cavgs_inmem`); `ptcl2D` and `out` at the end of the invocation. |
+| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (the probabilistic modes and the sampled modes under fractional updates), by the merge of the workers' documents, after class-average assembly (with `cls2D`, `cls3D` and `out`), and in the iteration's finalization; `out` at the end of the run. |
+| `refine2D` worker | no project segment: its alignment document, sigma2 part, `cavg_contrib_part<N>.bin` and, under the probabilistic modes, its readout record `prob_readout_part<N>.txt`. |
 | `make_cavgs`, shared memory | `ptcl2D` (class remap, halves), then `cls2D` and `out`. |
 | `make_cavgs`, distributed | the master, before the workers start: `ptcl2D` (class remap, expansion, time-series split, halves); the workers: no project segment; the assembly (`run_cavgassemble`): the whole project. |
 | `cavgassemble` | the whole project. |
@@ -640,13 +619,15 @@ Stage policy:
 - a `cls_init=prev` run has no sticky stage: the seed pass updates every
   active particle (and sets `updatecnt=1` on all of them), then the stages
   from `PROBREFINE_STAGE` on sample and restore as they do on any run
-- probabilistic stages preserve sample-once-and-reuse: `prob_align2D` chooses the subset, and `prob_tab2D`/`refine2D_exec` reproduce that subset rather than resampling
-- the sampled stages without a table (stages 1-2) draw on the distributed
-  master as well (`master_draws_sample2D`, 2026-11-03, as 3D's
-  `master_draws_sample3D`): over every particle, written to the project before
-  the workers start, which reproduce it (`sample4update_reprod`), so the sample
-  does not depend on `nparts`; the stream's pool (`stream2d=yes`) keeps its
-  own draw
+- the stages preserve sample-once-and-reuse: the master (or the shared-memory
+  matcher) chooses the subset with a keyed draw, and `refine2D_exec`
+  reproduces it rather than resampling
+- every sampled stage, probabilistic or not, draws on the distributed master
+  (`master_draws_sample2D`, 2026-11-03 for the classic sampled stages, 2026-11-04
+  for the probabilistic ones, as 3D's `master_draws_sample3D`): over every
+  particle, written to the project before the workers start, which reproduce
+  it (`sample4update_reprod`), so the sample does not depend on `nparts`; the
+  stream's pool (`stream2d=yes`) runs the classic routes and keeps its own draw
 - solve2D uses likelihood-weighted probabilistic assignment: raw objective
   distances are kept and evaluated class/in-plane candidates are sampled with
   weights proportional to `exp(-dist)` over the explicit top-K support selected
@@ -725,14 +706,14 @@ For `refine2D`:
 - `extr_iter` tracks the 2D extrapolation/search schedule
 - `endit` is written after an invocation finishes and is consumed by the next stage setup
 
-Do not collapse these counters into one another. Child command lines, including probabilistic pre-alignment and fill-in, must preserve the distinction between stage start and current iteration.
+Do not collapse these counters into one another. Child command lines, including fill-in, must preserve the distinction between stage start and current iteration.
 
 ## 6. Artifact and Handoff Policy
 
 Stable 2D workflow artifacts include:
 
-- `assignment_part*.dat` and `assignment.dat`
-- `dist_part*.dat` and `dist.dat`
+- `prob_readout_part<N>.txt`: one probabilistic part's readout record (counts
+  and sums), merged in part order and deleted by the master after the schedule
 - `cavg_contrib_part<N>.bin`: one worker's current-iteration class sums (four
   unregularized accumulators, centering offsets, populations), accumulated from zero
 - `cavg_state.bin`: the carried class sums of the run, with `M(c)` per class; no
@@ -751,7 +732,7 @@ Stable 2D workflow artifacts include:
   candidate, and `commit_sigma2` publishes it as the next generation
 - `ptcl2D`, `cls2D`, `cls3D`, and `out` project segments
 
-Partition-local probabilistic assignment/dist files and the class-sum contributions are per-iteration artifacts: the master removes them before the next distributed iteration writes new ones, and the assembly owner deletes the contributions after the blend. Workers never read carried state. The carried set `cavg_state.bin` is the only durable source of class-average carry-over: the owner (class-average assembly on the distributed master, the strategy's shared-memory restoration) reads it, applies the class-centering shifts the workers report once, blends, and publishes the new set through a temporary name and a rename. When an iteration would blend but the carried set is missing, unreadable, or disagrees with the run on class count, `box_crop` or `smpd_crop`, the master runs that iteration as a full update (every particle, no carry-over). Legacy `cavgs_*_partN.mrc` / `ctfsqsums_*_partN.mrc` files are never read; a run continued from such a directory starts with one full update. Changing `nparts` or the execution mode across `continue=yes` needs nothing else.
+The parts' readout records and the class-sum contributions are per-iteration artifacts: the master removes them before the next distributed iteration writes new ones, and the assembly owner deletes the contributions after the blend. Workers never read carried state. The carried set `cavg_state.bin` is the only durable source of class-average carry-over: the owner (class-average assembly on the distributed master, the strategy's shared-memory restoration) reads it, applies the class-centering shifts the workers report once, blends, and publishes the new set through a temporary name and a rename. When an iteration would blend but the carried set is missing, unreadable, or disagrees with the run on class count, `box_crop` or `smpd_crop`, the master runs that iteration as a full update (every particle, no carry-over). Legacy `cavgs_*_partN.mrc` / `ctfsqsums_*_partN.mrc` files are never read; a run continued from such a directory starts with one full update. Changing `nparts` or the execution mode across `continue=yes` needs nothing else.
 
 ## 7. Review Checklist
 
@@ -764,10 +745,10 @@ For any `solve2D` or `refine2D` change, check:
 - Are class-average assembly/restoration responsibilities explicit?
 - Does online class-average restoration reuse the matcher batch images instead
   of introducing a second particle-stack read?
-- Does probabilistic table construction stay batch-bounded in workers, avoid
-  worker/global overlap, and keep sparse global storage proportional to the
-  evaluated candidate count?
-- Are stale distributed handoffs (assignment, dist and class-sum contribution files) removed, while the carried set `cavg_state.bin` is left to its owner?
+- Does the probability table stay batch-bounded in the matcher (the batch's
+  rows or candidates released after its draws, no table across batches, no
+  file)?
+- Are stale distributed handoffs (the readout records and the class-sum contribution files) removed, while the carried set `cavg_state.bin` is left to its owner?
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Is `assign_all=yes` treated as a full-assignment coverage guard unless the
   implementation is deliberately changed to missing-only assignment?
@@ -790,18 +771,17 @@ For any `solve2D` or `refine2D` change, check:
 
 - Do not reintroduce a `polar` branch selector into `solve2D`.
 - Do not bury stage-policy tables in the matcher.
-- Do not let probabilistic pre-alignment and matcher update sample different particle subsets.
+- Do not let the master's sample draw and the parts' matcher update use different particle subsets: the parts reproduce, never redraw.
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
 - Do not describe `assign_all=yes` as missing-only assignment while it still uses
   the normal sampled-update path.
 - Do not use the staged full-assignment coverage (`assign_all=yes`) as a substitute
   for the terminal dense all-particle refresh when sampled solve2D updates
   were active.
-- Do not reuse stale assignment files as valid current-iteration inputs.
 - Do not re-read particle stacks in the online matcher/restoration path when the
   raw batch images are already available.
 - Do not let workers read or write the carried class sums, and do not reintroduce partition-shaped carry-over: workers accumulate the current sample from zero; only the assembly owner blends and publishes `cavg_state.bin`.
-- Do not add fractional in-plane coordinates to probabilistic assignment
-  artifacts; rerun the joint optimizer after final assignment instead.
+- Do not add fractional in-plane coordinates to the probability tables' rows;
+  rerun the joint optimizer after final assignment instead.
 - Do not invoke the legacy angle callback from any `inpl_cont=yes` failure or
   no-improvement path.

@@ -101,10 +101,7 @@ character(len=*), parameter :: DIR_INIPICK_PREPROC           = 'pick_preprocessi
 character(len=*), parameter :: DIR_EXTRACT                   = 'extract/'
 character(len=*), parameter :: DIR_PICKER                    = 'picker/'
 character(len=*), parameter :: DIR_PREPROC                   = './'
-! REG CORR/ASSIGNMENT
-character(len=*), parameter :: DIST_FBODY                    = 'dist_part'
-character(len=*), parameter :: ASSIGNMENT_FBODY              = 'assignment_part'
-character(len=*), parameter :: INSERT_FBODY                  = 'insert_poses'    !< the weighted insertion's extra poses of an iteration (topk > 1)
+! 2D CLASS SUMS
 character(len=*), parameter :: CAVG_STATE_FILE               = 'cavg_state'//BIN_EXT        ! carried 2D class sums
 character(len=*), parameter :: CAVG_CONTRIB_FBODY            = 'cavg_contrib_part'          ! per-worker 2D class sums
 ! STREAMING

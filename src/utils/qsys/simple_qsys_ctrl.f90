@@ -10,6 +10,7 @@ use simple_qsys_coarray,             only: qsys_coarray
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: parameters
 use simple_syslib,                   only: simple_rmfile
+use simple_rnd,                      only: has_global_seed, rnd_run_seed
 use simple_qsys_job_record,          only: check_job_lost, cancel_queued_job, JOB_LOST_EXIT_CODE
 use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task 
 use simple_persistent_worker_server,       only: persistent_worker
@@ -404,6 +405,7 @@ contains
         else
             call self%myqsys%write_array_instr(q_descr, self%fromto_part, fhandle=funit)
         end if
+        call write_seed_export(funit)
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! start partsarray definition
@@ -462,6 +464,7 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
+        call write_seed_export(funit)
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! the part records itself, and its exit status, so that the master sees a part that fails
@@ -515,6 +518,7 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
+        call write_seed_export(funit)
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! an asynchronous job first records its pid, host and scheduler job id next to its exit-status
@@ -588,6 +592,7 @@ contains
         else
             call self%myqsys%write_instr(jobs_descr(1), fhandle=funit)
         endif
+        call write_seed_export(funit)
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         if( present(exit_code_fname) ) call write_job_record(funit, exit_code_fname)
@@ -661,6 +666,7 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
+        call write_seed_export(funit)
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! compose the command line
@@ -1313,5 +1319,13 @@ contains
         end if
         self%existence = .false.
     end subroutine kill
+
+    !> the run's seed into a job script when SIMPLE_SEED is set: a part run by a worker whose environment is not
+    !! the master's (the persistent worker) reads the same seed as every other part and the master. Written after
+    !! the scheduler's directive block: a scheduler stops reading its directives at the first non-comment line
+    subroutine write_seed_export( funit )
+        integer, intent(in) :: funit
+        if( has_global_seed() ) write(funit,'(a,i0)') 'export SIMPLE_SEED=', rnd_run_seed()
+    end subroutine write_seed_export
 
 end module simple_qsys_ctrl

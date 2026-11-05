@@ -2257,7 +2257,6 @@ contains
         end subroutine read_multistate_update_coverage
 
         subroutine run_multistate_missing_update( nmissing, nactive )
-            use simple_eul_prob_tab_utils, only: del_prob_align_files
             integer, intent(in) :: nmissing, nactive
             type(cmdline) :: cline_missing
             integer       :: iter_missing
@@ -2284,7 +2283,6 @@ contains
             call cline_missing%set('extr_iter',     iter_missing)
             call cline_missing%delete('endit')
             call xrefine3D%execute(cline_missing)
-            call del_prob_align_files(params%nparts)
             call cline_missing%kill
         end subroutine run_multistate_missing_update
 

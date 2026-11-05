@@ -154,6 +154,7 @@ contains
             self%p_ptr => null()
             self%existence = .false.
         endif
+        self%l_rnd_scope = .false.
     end subroutine kill
 
     module subroutine reallocate_ptcls(self, nptcls, pinds)
@@ -318,6 +319,14 @@ contains
         logical,             intent(in)    :: l_wctf
         self%with_ctf = l_wctf
     end subroutine set_with_ctf
+
+    !> the scope of the keyed posterior draws (gen_posterior_val, gen_posterior_val_bank, shiftmap_draw)
+    module subroutine set_rnd_scope(self, scope)
+        class(polarft_calc), intent(inout) :: self
+        type(rnd_key),       intent(in)    :: scope
+        self%rnd_scope   = scope
+        self%l_rnd_scope = .true.
+    end subroutine set_rnd_scope
 
     module subroutine assign_sigma2_noise(self, sigma2_noise)
         class(polarft_calc),       intent(inout) :: self

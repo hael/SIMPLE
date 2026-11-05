@@ -876,7 +876,6 @@ contains
     end subroutine read_update_coverage
 
     subroutine run_missing_update( self, params, cline, xrefine3D, nmissing, nactive )
-        use simple_eul_prob_tab_utils, only: del_prob_align_files
         class(refine3D_states_controller), intent(in)    :: self
         class(parameters),                 intent(in)    :: params
         class(cmdline),                    intent(inout) :: cline
@@ -908,7 +907,6 @@ contains
         call cline_missing%set('greedy_sampling',   'yes')
         call cline_missing%set('update_missing',    'yes')
         call xrefine3D%execute(cline_missing)
-        call del_prob_align_files(params%nparts)
         call cline_missing%kill
     end subroutine run_missing_update
 

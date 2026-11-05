@@ -220,12 +220,6 @@ contains
         type(commander_calc_pspec)              :: xcalc_pspec
         type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
         type(commander_commit_sigma2)       :: xcommit_sigma2
-        type(commander_prob_tab)                :: xprob_tab
-        type(commander_prob_tab_neigh)          :: xprob_tab_neigh
-        type(commander_prob_align)              :: xprob_align
-        type(commander_prob_align_neigh)        :: xprob_align_neigh
-        type(commander_prob_tab2D)              :: xprob_tab2D
-        type(commander_prob_align2D)            :: xprob_align2D
         type(commander_flex_pca_worker)           :: xflex_pca
         ! RECONSTRUCTION PROGRAMS
         type(commander_volassemble)             :: xvolassemble
@@ -319,18 +313,6 @@ contains
                 call xcalc_pspec_assemble%execute(cline)
             case( 'commit_sigma2' )
                 call xcommit_sigma2%execute(cline)
-            case( 'prob_tab' )
-                call xprob_tab%execute(cline)
-            case( 'prob_tab_neigh' )
-                call xprob_tab_neigh%execute(cline)
-            case( 'prob_align' )
-                call xprob_align%execute(cline)
-            case( 'prob_align_neigh' )
-                call xprob_align_neigh%execute(cline)
-            case( 'prob_tab2D' )
-                call xprob_tab2D%execute(cline)
-            case( 'prob_align2D' )
-                call xprob_align2D%execute(cline)
             case( 'flex_pca' )
                 call xflex_pca%execute(cline)
             ! RECONSTRUCTION PROGRAMS

@@ -19,8 +19,9 @@ is tested image for image against a single read of each image
 
 Every pass that reads particles reads them through one read session
 (`stack_read_session`, `src/fileio/simple_stack_read_session.f90`). A pass is a
-search, a reconstruction, a probability table, power spectra, class sums or a
-FLEX batch loop. Each wraps the session in `ptcl_read_session`
+search (with, under the probabilistic modes, the table fill and the draw of
+each batch inside it), a reconstruction, power spectra, class sums or a FLEX
+batch loop. Each wraps the session in `ptcl_read_session`
 (`simple_matcher_ptcl_io.f90`). None of these passes opens a particle stack on
 its own. Outside the session are the reads of the 2D particle cache
 (`ptcl_cache_read_batch`) and the single-image utilities: `ctf_correct`
@@ -83,21 +84,17 @@ the PCG backend's own observation image transforms with several threads when
 the two may differ by rounding. A particle without a record is read from the
 stacks.
 
-In shared-memory 2D without the particle cache, the probability table
-(`prob_tab2D`, run in the master process) fills the buffer with the
-iteration's sampled particles, the matcher of the same iteration copies its
-batches from it, and the matcher releases it. Batches are copied out of the buffer in parallel. When the 2D
-particles are cropped (`box_crop < box`, uncached, outside the stream's 2D
-pool), the table opens the buffer for records instead: each particle's
-in-memory cache entry (noise-normalized at the full box, Fourier-cropped,
-unshifted, real space at `box_crop`), put before the table's alignment
-preparation transforms its copy. The matcher copies a batch's records, which
-are its cropped particles for the class sums and, as cached particles, for
-alignment, and neither reads the stacks nor prepares the full box. The
-buffer is then `(box/box_crop)^2` smaller.
-Its budget is half the task memory a queue system grants; otherwise it is the
-node's physical memory (`MemTotal` on Linux, `hw.memsize` on macOS) divided by
-twice the number of processes the node runs.
+The buffer's hand-over between a 2D probability-table pass and the search pass
+of the same iteration (the table filling the buffer, the matcher copying its
+batches from it) was retired on 2026-11-05 with the table pass: the 2D batch
+pipeline reads and prepares each batch once for the fill, the draw and the
+search (`prob_align_batch_pipeline.md`), so a 2D iteration reads each particle
+once without the buffer.
+The buffer's budget is half the task memory a queue system grants; otherwise
+it is the node's physical memory (`MemTotal` on Linux, `hw.memsize` on macOS)
+divided by twice the number of processes the node runs; the 3D pipeline holds
+its alignment context (the references, the thread scratch, one batch's rows)
+to the same budget (`ptcl_buffer_budget`).
 A share above the budget, or an allocation that fails, leaves the buffer empty,
 and the batches are read from the stacks as before. The outputs are the same
 either way.

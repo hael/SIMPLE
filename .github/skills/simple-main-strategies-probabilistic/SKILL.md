@@ -57,5 +57,5 @@ Silent ones first.
 ## See also
 
 `doc/policies/3D/refine3D_policy.md` section 8, `doc/policies/2D/solve2D_policy.md`,
-`doc/implementation_notes/planned/prob_align_batch_pipeline.md` (the refactoring that removes the global table,
+`doc/implementation_notes/completed/prob_align_batch_pipeline.md` (the refactoring that removes the global table,
 the part files and the per-fill reseed); skills `simple-solve3d-importance-sampling`, `simple-main-pftc`.

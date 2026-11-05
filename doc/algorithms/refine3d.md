@@ -65,9 +65,9 @@ One iteration:
    An envelope mask is never multiplied into the matching reference: removing
    density that is present in the images destroys pose discrimination under
    the Euclidean objective.
-2. **Candidate preparation** (probabilistic modes). Build the probability
-   table and run the per-particle posterior assignment described in
-   [sampling](sampling_and_fractional_updates.md).
+2. **Candidate preparation** (probabilistic modes). Inside the search's batch
+   loop, fill each particle's probability-table row and draw its pose from that
+   row, as described in [sampling](sampling_and_fractional_updates.md).
 3. **Search and commit.** For each active particle choose one direction,
    in-plane rotation, shift, and state:
    - `shc`: visit references in random order with the previous one last, take

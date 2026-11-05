@@ -3,7 +3,7 @@ module simple_matcher_ptcl_batch
 use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_ptcl_io, only: prepimgbatch, ptcl_read_session, killimgbatch, &
-    &records_open, record_slot, put_record, take_records, get_records
+    &records_open, record_slot, put_record
 !$ use omp_lib, only: omp_get_max_threads
 use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cropped, prepimg4align_cart, ptcl_on_disk
 use simple_cartft_calc,     only: cartft_calc
@@ -319,8 +319,6 @@ contains
     !>  ptcl_imgs receives the images class-average restoration sums, which only callers that restore class
     !!  averages need; omit it to skip both the buffer and the copy. They are the full-size originals, or the
     !!  Fourier-cropped particles when crop_sums asks for them (sized box_crop by the caller).
-    !!  With crop_sums the cropped particle is put as the pass's record while the buffer is open for records (the
-    !!  2D table in shared memory), and a batch whose records are all sealed is copied from them, not read.
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, reads, ptcl_imgs, ptcl_match_imgs, &
         &ptcl_match_imgs_pad, crop_sums )
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
@@ -334,24 +332,15 @@ contains
         class(image),             intent(inout) :: ptcl_match_imgs_pad(params%nthr)
         logical,        optional, intent(in)    :: crop_sums !< cropped particles, made in memory (crop_particles2D)
         type(image), allocatable :: crop_work(:)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot
-        logical :: l_keep_raw, l_crop_mem, l_from_records, l_put_records
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team
+        logical :: l_keep_raw, l_crop_mem
         l_keep_raw = present(ptcl_imgs)
         ! With crop_sums ptcl_imgs receives the Fourier-cropped particle rather than the
         ! full-size original, so callers that pass it must have sized it at box_crop and
         ! told cavger_init_online to expect cropped particles; made here from the full-size read
         l_crop_mem = .false.
         if( present(crop_sums) ) l_crop_mem = crop_sums
-        ! the records the 2D table of this pass made: the batch's cropped particles, without the read
-        l_from_records = .false.
-        if( l_crop_mem .and. l_keep_raw ) l_from_records = take_records(pinds)
-        l_put_records  = .false.
-        if( l_crop_mem ) l_put_records = records_open()
-        if( l_from_records )then
-            call get_records(pinds, ptcl_imgs)
-        else
-            call reads%read(params, build, nptcls_here, pinds, [1,nptcls_here])
-        endif
+        call reads%read(params, build, nptcls_here, pinds, [1,nptcls_here])
         call build%pftc%reallocate_ptcls(nptcls_here, pinds)
         pdim_interp = build%pftc%get_pdim_interp()
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
@@ -363,18 +352,13 @@ contains
             !$ nthr_team = omp_get_max_threads()
             call alloc_imgarr(nthr_team, [params%box_crop, params%box_crop, 1], params%smpd_crop, crop_work)
         endif
-        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,slot) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            if( l_from_records )then
-                ! the record is the cropped particle; a copy is prepared for alignment, which transforms its input
-                call crop_work(ithr)%copy_fast(ptcl_imgs(iptcl_batch))
-                call prepimg4align_cropped(params, build, iptcl, crop_work(ithr), &
-                    &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
-            else if( l_crop_mem )then
+            if( l_crop_mem )then
                 ! the cropped particle: noise-normalized, Fourier-cropped, unshifted, real space; kept for the sums
-                ! (or put as the pass's record) before a copy is prepared for alignment
+                ! before a copy is prepared for alignment
                 call build%note_obs_mask(iptcl, ptcl_on_disk(params, build, iptcl))
                 if( l_keep_raw )then
                     if( ptcl_on_disk(params, build, iptcl) )then
@@ -391,10 +375,6 @@ contains
                         call build%imgbatch(iptcl_batch)%norm_noise_fft_clip_shift(build%lmsk, crop_work(ithr), [0.,0.])
                     endif
                     call crop_work(ithr)%ifft
-                endif
-                if( l_put_records )then
-                    slot = record_slot(iptcl)
-                    if( slot > 0 ) call put_record(slot, crop_work(ithr))
                 endif
                 call prepimg4align_cropped(params, build, iptcl, crop_work(ithr), &
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))

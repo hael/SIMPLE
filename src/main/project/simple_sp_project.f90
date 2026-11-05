@@ -1,5 +1,6 @@
 !@descr: single-particle project, the complete interface and abstract data type
 module simple_sp_project
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_defs_ori
 use simple_ansi_ctrls
@@ -55,6 +56,8 @@ contains
     procedure, private :: update_projinfo_2
     procedure          :: set_sigma2_state_path
     procedure          :: get_sigma2_state_path
+    procedure          :: set_rnd_seed
+    procedure          :: get_rnd_seed
     procedure          :: update_compenv
     procedure          :: append_project
     procedure          :: append_job_descr2jobproc
@@ -240,6 +243,19 @@ interface
         type(string),      intent(inout) :: state_path
         logical,           intent(out)   :: found
     end subroutine get_sigma2_state_path
+
+    module subroutine set_rnd_seed( self, seed, version )
+        class(sp_project), intent(inout) :: self
+        integer(int64),    intent(in)    :: seed
+        integer,           intent(in)    :: version
+    end subroutine set_rnd_seed
+
+    module subroutine get_rnd_seed( self, seed, version, found )
+        class(sp_project), intent(in)  :: self
+        integer(int64),    intent(out) :: seed
+        integer,           intent(out) :: version
+        logical,           intent(out) :: found
+    end subroutine get_rnd_seed
 
     module subroutine update_compenv( self, cline )
         class(sp_project), intent(inout) :: self

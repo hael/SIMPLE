@@ -277,10 +277,6 @@ contains
         call del_file('start2Drefs'//params%ext%to_char())
         call del_file('start2Drefs_even'//params%ext%to_char())
         call del_file('start2Drefs_odd'//params%ext%to_char())
-        call del_files(DIST_FBODY,      params%nparts,ext='.dat')
-        call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
-        call del_file(DIST_FBODY//'.dat')
-        call del_file(ASSIGNMENT_FBODY//'.dat')
         call cline_refine2D%kill
         call cline_calc_pspec%kill
         deallocate(stage_parms)

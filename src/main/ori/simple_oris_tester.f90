@@ -3,6 +3,8 @@ module simple_oris_tester
 use simple_core_module_api
 use simple_test_utils    ! for assert_* utilities and counters
 use simple_oris,        only: population_blend_weights, class_sample_quotas, class_sample_sweep
+use simple_rnd,         only: rnd_key, rnd_scope_key, rnd_draw_key, ran3, RND_PROG_REFINE3D, RND_PASS_ALIGN, RND_FAM_SAMPLE
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_oris_utils,  only: oridist_from_oris
 !$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
@@ -18,6 +20,7 @@ contains
         call test_extract_and_copy()
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
+        call test_keyed_sampling()
         call test_ranked_balanced_sampling()
         call test_empty_partition_sampling()
         call test_nested_class_quota()
@@ -40,6 +43,112 @@ contains
         call test_oridist_from_oris()
         call test_get_pops_halves()
     end subroutine run_all_oris_tests
+
+    !> The keyed fractional-update samplers: given a key, sample4update_rnd, _cnt, _fillin and _class draw the
+    !! same subset again whatever the intrinsic stream drew in between, another iteration's key draws another
+    !! subset, the tier rules and counts hold as they do on the intrinsic stream, and without a key the
+    !! intrinsic stream is used as before
+    subroutine test_keyed_sampling()
+        type(oris) :: os
+        type(class_sample), allocatable :: clssmp(:)
+        integer, allocatable :: inds1(:), inds2(:), inds3(:)
+        type(rnd_key) :: key, key2
+        integer :: i, n, nsamp, nsamp2, nsamp3, nchanged, irep
+        real    :: r
+        write(*,'(A)') 'test_keyed_sampling'
+        n = 40
+        key  = rnd_draw_key(rnd_scope_key(20261104_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 3), 0, RND_FAM_SAMPLE)
+        key2 = rnd_draw_key(rnd_scope_key(20261104_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 4), 0, RND_FAM_SAMPLE)
+        ! sample4update_rnd: half of the active particles, the same under the same key, another under another
+        call fresh_field
+        call os%sample4update_rnd([1, n], 0.5, nsamp, inds1, .false., key=key)
+        call assert_int(n/2, nsamp, 'keyed sample4update_rnd draws the requested fraction')
+        do irep = 1, 7
+            r = ran3()
+        enddo
+        call fresh_field
+        call os%sample4update_rnd([1, n], 0.5, nsamp2, inds2, .false., key=key)
+        call assert_true(nsamp2 == nsamp .and. all(inds2 == inds1), 'the same key draws the same subset whatever was drawn before')
+        call fresh_field
+        call os%sample4update_rnd([1, n], 0.5, nsamp3, inds3, .false., key=key2)
+        call assert_true(any(inds3 /= inds1), 'another iteration''s key draws another subset')
+        ! sample4update_cnt: the lowest tier whole, the cutoff tier keyed
+        call fresh_field
+        do i = 1, 6
+            call os%set(i, 'updatecnt', 0.)
+        enddo
+        call os%sample4update_cnt([1, n], 0.25, nsamp, inds1, .false., key=key)
+        call assert_int(10, nsamp, 'keyed sample4update_cnt draws the requested count')
+        call assert_int(6, count(inds1 <= 6), 'keyed sample4update_cnt exhausts the lowest tier')
+        call fresh_field
+        do i = 1, 6
+            call os%set(i, 'updatecnt', 0.)
+        enddo
+        call os%sample4update_cnt([1, n], 0.25, nsamp2, inds2, .false., key=key)
+        call assert_true(all(inds2 == inds1), 'keyed sample4update_cnt reproduces its cutoff tier')
+        call fresh_field
+        do i = 1, 6
+            call os%set(i, 'updatecnt', 0.)
+        enddo
+        call os%sample4update_cnt([1, n], 0.25, nsamp3, inds3, .false., key=key2)
+        call assert_true(any(inds3 /= inds1), 'another key draws another cutoff tier')
+        ! sample4update_fillin: the never-updated first, keyed
+        call fresh_field
+        call os%set_all2single('updatecnt', 1.0)
+        do i = 1, 4
+            call os%set(i, 'updatecnt', 0.)
+        enddo
+        call os%sample4update_fillin([1, n], 0.25, nsamp, inds1, .false., key=key)
+        call assert_int(10, nsamp, 'keyed sample4update_fillin draws the requested count')
+        call assert_int(4, count(inds1 <= 4), 'keyed sample4update_fillin takes the never-updated first')
+        call fresh_field
+        call os%set_all2single('updatecnt', 1.0)
+        do i = 1, 4
+            call os%set(i, 'updatecnt', 0.)
+        enddo
+        call os%sample4update_fillin([1, n], 0.25, nsamp2, inds2, .false., key=key)
+        call assert_true(all(inds2 == inds1), 'keyed sample4update_fillin reproduces its draw')
+        ! sample4update_class: two units of twenty, a quarter of each, keyed per unit and tier
+        allocate(clssmp(2))
+        do i = 1, 2
+            clssmp(i)%clsind = i
+            clssmp(i)%pop    = 20
+            allocate(clssmp(i)%pinds(20), clssmp(i)%ccs(20))
+            clssmp(i)%pinds = [(20*(i-1) + irep, irep=1,20)]
+            clssmp(i)%ccs   = [(real(21 - irep), irep=1,20)]
+        enddo
+        call fresh_field
+        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp, inds1, .false., .false., key=key)
+        call assert_int(10, nsamp, 'keyed sample4update_class draws the requested count')
+        call assert_int(5, count(inds1 <= 20), 'keyed sample4update_class takes the unit quota')
+        call fresh_field
+        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp2, inds2, .false., .false., key=key)
+        call assert_true(all(inds2 == inds1), 'keyed sample4update_class reproduces its draw')
+        call fresh_field
+        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp3, inds3, .false., .false., key=key2)
+        call assert_true(any(inds3 /= inds1), 'another key draws another class-balanced subset')
+        ! no key: the intrinsic stream, so two seeds give two subsets of the same size
+        call fresh_field
+        call set_fixed_seed(11)
+        call os%sample4update_rnd([1, n], 0.5, nsamp, inds1, .false.)
+        call fresh_field
+        call set_fixed_seed(12)
+        call os%sample4update_rnd([1, n], 0.5, nsamp2, inds2, .false.)
+        nchanged = count(inds2 /= inds1)
+        call assert_true(nsamp == n/2 .and. nsamp2 == n/2 .and. nchanged > 0, 'without a key the samplers draw on the intrinsic stream')
+        call os%kill
+
+    contains
+
+        subroutine fresh_field
+            call os%kill
+            call os%new(n, .true.)
+            call os%set_all2single('state',     1.0)
+            call os%set_all2single('updatecnt', 1.0)
+            call os%set_all2single('sampled',   0.0)
+        end subroutine fresh_field
+
+    end subroutine test_keyed_sampling
 
     subroutine test_ranked_balanced_sampling()
         use simple_type_defs, only: class_sample

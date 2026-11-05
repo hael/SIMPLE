@@ -57,9 +57,11 @@ been updated, and `sampled`, the last sampling round that selected it. The
   `frac_best < 1`, only the best-scoring fraction of each unit is eligible,
   and `greedy_sampling` takes the top of each unit deterministically.
 - **reproduce**: reuse exactly the particles whose `sampled` equals the
-  current maximum. This lets a probabilistic iteration choose the subset once
-  and have every later step (table filling, matching, and reconstruction) act
-  on the same particles.
+  current maximum. This lets a probabilistic iteration choose the subset once,
+  on the master, and have every part's pipeline (the table rows, the draws, the
+  matching and the reconstruction) act on the same particles. The draw is
+  keyed on the run's seed, the pass, the iteration and the particle, so the
+  subset does not depend on the number of parts or threads.
 - **cohort** (`refine3D_states`): the set drawn at the first iteration of a
   frequency block is kept for the whole block. Later iterations reproduce it
   and advance its counters, so that state labels and poses converge on one
@@ -85,9 +87,12 @@ close to the full set, subsampling would save little and add noise.
 
 ## Inner sampling: the probability table
 
-Before any hard assignment, a probabilistic iteration fills a table of losses
-between every particle in the subset and every reference `j`: in 3D the
-`nstates x nspace` projections, in 2D the active classes. For each particle:
+Before a particle's hard assignment, the matcher fills its row of losses
+against every reference `j`: in 3D the `nstates x nspace` projections, in 2D
+the active classes. The rows are filled batch by batch inside the matcher's
+pipeline, each batch's rows drawn from and released before the next (no table
+across batches, no file); every random draw below is keyed on the seed, the
+pass, the iteration, the particle and the draw. For each particle:
 
 1. a common shift seed is found by shift-only optimization at the particle's
    previous pose;
@@ -171,11 +176,11 @@ true one near its seed pays nothing (the note, section 19, item 11).
 
 ## Assignment
 
-The table is consumed particle by particle (2026-10-23; the only assignment
+The rows are consumed particle by particle (2026-10-23; the only assignment
 since 2026-10-24, when the class-balanced frontier was deleted from every
 table): each particle's reference is one draw from its own row by the
 tempered posterior above, within the state of its closest reference, `T_i`
-written by the table worker into the part file. Particles are assigned to
+kept with the row by the fill. Particles are assigned to
 references; no reference is forced to be populated, and no particle takes
 an argmin. The stage then ends on the resolution exit or its budget, not on
 the pose overlap (the committed pose is a draw and stable from a stage's
@@ -312,5 +317,10 @@ on its own would be too noisy to align against.
 - Trailing blend: `src/main/commanders/simple/simple_commanders_rec_distr.f90`;
   the distributed PCG chain in
   `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`.
-- Orchestration: `src/main/commanders/simple/simple_commanders_prob.f90`.
-- Policy: `doc/policies/importance_sampling_fractional_update_policy.md`.
+- The batch pipeline (the rows, the draws and the commit per batch):
+  `src/main/strategies/search/simple_strategy3D_matcher.f90` and
+  `simple_strategy2D_matcher.f90`; the master's sample draw:
+  `src/main/strategies/parallelization/simple_refine3D_strategy.f90` and
+  `simple_refine2D_strategy.f90`.
+- Policy: `doc/policies/importance_sampling_fractional_update_policy.md`;
+  the design: `doc/implementation_notes/completed/prob_align_batch_pipeline.md`.

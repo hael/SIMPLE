@@ -36,6 +36,7 @@ contains
         call test_phase_records()
         call test_phase_serialisation()
         call test_write_read_roundtrip()
+        call test_rnd_seed_roundtrip()
         call test_read_does_not_mutate_projinfo()
         call test_map_cls3D_states2ptcls()
         call test_prune_particles()
@@ -286,6 +287,36 @@ contains
         call proj%kill
         call proj_read%kill
     end subroutine test_write_read_roundtrip
+
+    !> the run seed and the generator version of the keyed draws survive the project file: a 63-bit seed with
+    !! all four 16-bit words set and a negative seed (a user's SIMPLE_SEED may be negative) read back exactly, and a
+    !! project without the restart fields reports none
+    subroutine test_rnd_seed_roundtrip()
+        use, intrinsic :: iso_fortran_env, only: int64
+        type(sp_project) :: proj, proj_read
+        integer(int64)   :: seeds(2), seed_read
+        integer          :: version, icase
+        logical          :: found
+        write(*,'(A)') 'test_rnd_seed_roundtrip'
+        call make_project(proj)
+        call proj%get_rnd_seed(seed_read, version, found)
+        call assert_false(found, 'a project without the restart fields records no seed')
+        seeds(1) = huge(0_int64) - 12345_int64
+        seeds(2) = -987654321987_int64
+        do icase = 1, 2
+            call proj%set_rnd_seed(seeds(icase), 6 + icase)
+            call del_file(string(PROJ_FILE))
+            call proj%write(string(PROJ_FILE))
+            call proj_read%read_segment('projinfo', string(PROJ_FILE))
+            call proj_read%get_rnd_seed(seed_read, version, found)
+            call assert_true(found, 'the restart fields are read back')
+            call assert_true(seed_read == seeds(icase), 'the 64-bit run seed survives the project file exactly')
+            call assert_int(6 + icase, version, 'the generator version survives the project file')
+            call proj_read%kill
+        enddo
+        call proj%kill
+        call del_file(string(PROJ_FILE))
+    end subroutine test_rnd_seed_roundtrip
 
     ! reading a project through an absolute path from another working directory must not rewrite
     ! the on-disk projinfo (cwd bookkeeping is the caller's business)

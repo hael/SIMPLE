@@ -104,7 +104,6 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: l_combine_eo
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_rec3D
-    type(cmdline) :: cline_prob_align_distr
     type(cmdline) :: cline_commit_sigma2
     type(cmdline) :: cline_volassemble
     type(cmdline) :: cline_postprocess
@@ -1066,7 +1065,7 @@ contains
         write(fnr,'(a,1x,f0.2)') 'refine3D reprojection model         :', bench%rt_model
         write(fnr,'(a,1x,f0.3)') 'refine3D sigma2 candidate prep      :', bench%rt_sigma_prep
         write(fnr,'(a,1x,f0.3)') 'refine3D sigma2 commit              :', bench%rt_sigma
-        write(fnr,'(a,1x,f0.2)') 'refine3D probabilistic pre-step     :', bench%rt_prob
+        write(fnr,'(a,1x,f0.2)') 'refine3D sample draw                :', bench%rt_prob
         write(fnr,'(a,1x,f0.2)') 'refine3D matcher/scheduler          :', bench%rt_sched
         write(fnr,'(a,1x,f0.2)') 'refine3D assembly/postprocess       :', bench%rt_assemble
         write(fnr,'(a,1x,f0.2)') 'refine3D total time                 :', bench%rt_tot
@@ -1109,6 +1108,7 @@ contains
     end subroutine check_cls3D_field
 
     subroutine inmem_initialize(self, params, build, cline)
+        use simple_matcher_smpl_and_lplims, only: adopt_run_seed
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1128,7 +1128,7 @@ contains
         l_proj_dirty = .false.
         ! Some refine modes manage sampling/updatecnt internally
         if( params%l_prob_align_mode )then
-            ! random sampling and updatecnt dealt with in prob_align
+            ! the sample and updatecnt are the master's draw's (sample_ptcls4prob3D)
         else if( trim(params%refine) == 'sigma' )then
             ! a residual-only sigma2 pass leaves the update history as it is
         else
@@ -1140,6 +1140,8 @@ contains
         if( trim(params%continue) == 'yes' )then
             THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
         endif
+        ! the run's seed of the keyed draws (the probabilistic routes), before any draw of the run
+        if( params%l_prob_align_mode ) call adopt_run_seed(params, build)
         ! Input reference validation
         if( .not. file_exists(params%vols(1)) ) then
             THROW_HARD('shared-memory implementation of refine3D needs starting volume input')
@@ -1189,7 +1191,6 @@ contains
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
         use simple_strategy3D_matcher,   only: refine3D_exec
         use simple_commanders_euclid,    only: commander_commit_sigma2
-        use simple_commanders_prob,      only: commander_prob_align, commander_prob_align_neigh
         use simple_volassemble_strategy, only: run_volassemble
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
@@ -1197,14 +1198,10 @@ contains
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
         type(commander_commit_sigma2) :: xcommit_sigma2
-        type(commander_prob_align)        :: xprob_align
-        type(commander_prob_align_neigh)  :: xprob_align_neigh
-        type(cmdline)                     :: cline_prob_align
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_build, cline_polish
         integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
-        logical                           :: l_prob_neigh_mode
         logical                           :: l_write_partial_recs, l_polish, l_force_full_first
         type(string)                      :: volname
         601 format(A,1X,F12.3)
@@ -1246,33 +1243,14 @@ contains
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model(params, cline, build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        ! refine=prob* pre-step
+        ! the probabilistic modes run their pipeline inside refine3D_exec on this project (the sample, the fill, the
+        ! draws, the polish); the matching low-pass limit the matcher starts from is the command line's, as it was
+        ! when the pre-step ran on its own parameters
         if( L_BENCH_GLOB )then
             self%bench%rt_init = toc(self%bench%t_init)
             self%bench%t_prob  = tic()
         endif
         if( params%l_prob_align_mode )then
-            cline_prob_align = cline
-            if( l_prob_neigh_mode )then
-                call cline_prob_align%set('prg', 'prob_align_neigh')
-            else
-                call cline_prob_align%set('prg', 'prob_align')
-            endif
-            call cline_prob_align%set('which_iter', params%which_iter)
-            do state = 1, params%nstates
-                call cline_prob_align%set('vol'//int2str(state), params%vols(state))
-            enddo
-            ! communicate changes to probabilistic alignment
-            call build%spproj%write_segment_inside(params%oritype)
-            if( l_prob_neigh_mode )then
-                call xprob_align_neigh%execute( cline_prob_align )
-            else
-                call xprob_align%execute( cline_prob_align )
-            endif
-            ! communicate back changes made by probabilistic alignment including sampling
-            call build%spproj%read_segment(params%oritype, params%projfile)
-            ! make sure prob_align and refine see the same information
             if( cline%defined('lp') ) params%lp = cline%get_rarg('lp')
         endif
         if( L_BENCH_GLOB )then
@@ -1476,6 +1454,7 @@ contains
     subroutine distr_initialize(self, params, build, cline)
         use simple_exec_helpers,   only: set_master_num_threads
         use simple_commanders_rec, only: commander_rec3D
+        use simple_matcher_smpl_and_lplims, only: adopt_run_seed
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1485,7 +1464,7 @@ contains
         type(string)  :: prev_refine_path, fname_vol, vol, fsc_file, chain_files(2)
         real    :: smpd
         integer :: state, box
-        logical :: fall_over, vol_defined, l_prob_neigh_mode
+        logical :: fall_over, vol_defined
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
@@ -1505,7 +1484,9 @@ contains
         end select
         if( fall_over ) THROW_HARD('no particles found! refine3D distributed master')
         call check_cls3D_field(params, build)
-
+        ! the run's seed of the keyed draws (the probabilistic routes), before any part is scheduled: continue=yes
+        ! reuses the recorded one
+        if( params%l_prob_align_mode ) call adopt_run_seed(params, build)
         if( .not. self%l_multistates .and. params%nstates > 1 )then
             THROW_HARD('nstates > 1 but refine mode is single')
         endif
@@ -1522,19 +1503,12 @@ contains
         call self%qenv%new(params, params%nparts, l_active=build%spproj_field%included())
         ! prepare prototype command lines
         self%cline_rec3D = cline
-        self%cline_prob_align_distr    = cline
         self%cline_postprocess         = cline
         self%cline_commit_sigma2   = cline
         call strip_refine3D_search_only_args(self%cline_rec3D)
         call strip_refine3D_search_only_args(self%cline_postprocess)
         call strip_refine3D_search_only_args(self%cline_commit_sigma2)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
-        l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        if( l_prob_neigh_mode )then
-            call self%cline_prob_align_distr%set( 'prg', 'prob_align_neigh' )
-        else
-            call self%cline_prob_align_distr%set( 'prg', 'prob_align' )
-        endif
         call self%cline_postprocess%set(         'prg', 'postprocess' )
         call self%cline_commit_sigma2%set(   'prg', 'commit_sigma2' )
         call self%cline_postprocess%set('mirr',    'no')
@@ -1697,17 +1671,17 @@ contains
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_volassemble_strategy, only: volassemble_exec
         use simple_commanders_volops,    only: commander_postprocess
-        use simple_prob_align_strategy,  only: prob_align_exec, prob_align_neigh_exec
+        use simple_eul_prob_tab_utils,   only: merge_prob_readouts, prob_insert_cone, insert_cone_from_fsc
         !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
         use simple_fsc,                     only: plot_fsc
-        use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D
+        use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D, sample_ptcls4prob3D
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
         type(commander_postprocess)       :: xpostprocess
-        type(cmdline) :: cline_prob_align, cline_volassemble
+        type(cmdline) :: cline_volassemble
         type(string)  :: str
         integer(timer_int_kind) :: t_recphase
         type(string)  :: vol, vol_iter, fsc_templ, fsc_file
@@ -1716,8 +1690,10 @@ contains
         integer, allocatable :: state_pops(:), pinds_smpl(:)
         logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
+        type(prob_insert_cone) :: insert_cone
+        real    :: lp_cone
         integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
-        logical :: l_prob_neigh_mode, l_polish, l_force_full_first
+        logical :: l_polish, l_force_full_first
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -1740,34 +1716,25 @@ contains
         if( L_BENCH_GLOB ) self%bench%t_model = tic()
         call materialize_reprojection_model_master(self, params, cline, build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
-        l_prob_neigh_mode = trim(params%refine) == 'prob_neigh'
-        ! prob refinement
+        ! the iteration's sample
         if( L_BENCH_GLOB )then
             self%bench%rt_init = toc(self%bench%t_init)
             self%bench%t_prob  = tic()
         endif
         if( params%l_prob_align_mode )then
-            cline_prob_align = cline
-            if( l_prob_neigh_mode )then
-                call cline_prob_align%set('prg', 'prob_align_neigh')
-            else
-                call cline_prob_align%set('prg', 'prob_align')
+            ! the probabilistic modes: the master draws the iteration's sample (keyed) in its particle field and
+            ! prints the disk set; the parts reproduce their share and run the pipeline (one scheduling phase)
+            call sample_ptcls4prob3D(params, build, nptcls_smpl, pinds_smpl)
+            call build%spproj%write_segment_inside(params%oritype)
+            if( allocated(pinds_smpl) ) deallocate(pinds_smpl)
+            if( params%topk > 1 )then
+                ! the weighted insertion's cone of the iteration, reported here: the parts open the same cone from
+                ! the same FSC files, bounded by the command line's limit, into logs the next schedule wipes
+                lp_cone = 0.
+                if( cline%defined('lp') ) lp_cone = cline%get_rarg('lp')
+                insert_cone = insert_cone_from_fsc(params%nstates, params%box, params%smpd, params%mskdiam, lp_cone)
+                call insert_cone%kill
             endif
-            call cline_prob_align%set('which_iter', iter)
-            call cline_prob_align%set('mkdir',      'no')
-            call cline_prob_align%set('stream',     'no')
-            ! on the master's parameters and builder: the sample is drawn in its particle field; the alignment runs on
-            ! the workers' thread count and the master's own is restored after
-            nthr_here      = params%nthr
-            !$ nthr_here   = omp_get_max_threads()
-            nthr_glob_here = nthr_glob
-            if( l_prob_neigh_mode )then
-                call prob_align_neigh_exec(params, build, cline_prob_align, params%nthr)
-            else
-                call prob_align_exec(params, build, cline_prob_align, params%nthr)
-            endif
-            !$ call omp_set_num_threads(nthr_here)
-            nthr_glob = nthr_glob_here
         else if( master_draws_sample3D(params) )then
             ! one fractional-update sample over the whole project; the workers reproduce it
             call sample_ptcls4iter3D(params, build, iter, [1,params%nptcls], nptcls_smpl, pinds_smpl)
@@ -1806,6 +1773,8 @@ contains
         job_descr_pass = self%job_descr
         if( l_polish ) call job_descr_pass%set('volrec', 'no')
         call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
+        ! the parts' readouts of the probabilistic assignment, merged in part order and reported as the owner's
+        if( params%l_prob_align_mode ) call merge_prob_readouts(params%nparts, params%numlen, params%prob_beta)
         ! merge alignment docs (a residual-only sigma pass, refine=sigma,
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) call build%spproj%merge_algndocs(params%nptcls, params%nparts, &

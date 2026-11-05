@@ -795,8 +795,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         call gate%check(tag//'_control_shuffled_fails_the_basin_floor', .not. (basin >= MIN_BASIN))
     end subroutine gate_e25
 
-    !> stage d: no polar reprojection model, no probability table, and the seed's projection
-    !! direction in every particle (a discrete pass would assign its own)
+    !> stage d: no polar reprojection model, no readout record of a probabilistic part, and the seed's
+    !! projection direction in every particle (a discrete pass would assign its own)
     subroutine check_no_polar( tag, out )
         character(len=*), intent(in) :: tag
         class(sp_project), intent(in) :: out
@@ -806,9 +806,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         npolar = 0
         if( file_exists(refine3D_reproj_model_fname('even')) ) npolar = npolar + 1
         if( file_exists(refine3D_reproj_model_fname('odd'))  ) npolar = npolar + 1
-        call simple_list_files(DIST_FBODY//'*', files)
-        npolar = npolar + size(files)
-        call simple_list_files(ASSIGNMENT_FBODY//'*', files)
+        call simple_list_files('prob_readout_part*', files)
         npolar = npolar + size(files)
         call gate%check('d_'//tag//'_no_polar_model_or_probability_table', npolar == 0)
         l_seed_proj = .true.

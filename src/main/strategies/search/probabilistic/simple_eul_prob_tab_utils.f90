@@ -9,27 +9,35 @@ use simple_math,      only: hpsort
 use simple_oris,      only: oris
 use simple_sym,       only: sym
 use simple_ori_utils, only: euler2m
-use simple_rnd,       only: ran3
+use simple_rnd,       only: ran3, rnd_key, rnd_scope_key, rnd_draw_key, rnd_run_seed, rnd_keyed_partial_shuffle, &
+    &RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_FAM_CAND
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 use simple_string,    only: string
-use simple_fileio,    only: fopen, fclose, fileiochk, del_file, del_files
+use simple_string_utils, only: int2str_pad
+use simple_fileio,    only: fopen, fclose, fileiochk, del_file, del_files, file2rarr
 use simple_syslib,    only: file_exists
-use simple_defs_fname, only: DIST_FBODY, ASSIGNMENT_FBODY, INSERT_FBODY
+use simple_math_ft,   only: get_resarr
+use simple_estimate_ssnr,   only: get_resolution
+use simple_refine3D_fnames, only: refine3D_fsc_fname
 implicit none
 
-public :: angle_sampling, build_pind_lookup, calc_athres, calc_num2sample
+public :: angle_sampling, calc_athres, calc_num2sample
+public :: prob_rnd_scope, keyed_candidate_order
 public :: eulprob_corr_switch, eulprob_dist_switch
-public :: record_seed_shift, read_seed_shift_table, write_seed_shift_table
+public :: record_seed_shift, write_fill_profile_bench
 public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
-public :: prob_insert_pose, prob_insert_table, prob_insert_poses, del_prob_align_files, prob_insert_cone
+public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readout, add_prob_readout, report_prob_readout
+public :: merge_prob_readouts
+public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
+public :: prob_insert_pose, prob_insert_table, prob_insert_poses, prob_insert_cone
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state
-public :: map_prior_weight, insert_pose_loss, update_screen_best
+public :: map_prior_weight, insert_pose_loss, update_screen_best, print_disk_set, insert_cone_from_fsc
 private
 #include "simple_local_flags.inc"
 
@@ -57,10 +65,13 @@ end type prob_candidate
 
 !> The n_eff readout of the tables' posterior draws: the mean effective number of candidates exp(entropy) over a
 !! subsample of rows, at the draw's tempering factor and at beta 1 (the physical posterior), logged every iteration
-!! as POSTERIOR DRAW N_EFF. The tables offer their rows in particle order before the draws: every stride-th particle
-!! whose row holds at least PROB_NEFF_NMIN valid distances is kept, up to PROB_NEFF_ROWS rows, packed as distances
-!! above the row minimum with the particle's temperature; a row of two candidates lands on one of its best two at
-!! any factor and would pull the level of the rows where the choice is open. A readout, not a control: a factor
+!! as POSTERIOR DRAW N_EFF. The rows are chosen from the global sample by rank, the same rows whatever the
+!! partitioning (plan section 5): the particle's rank in the sample, with the stride the global sample size over
+!! PROB_NEFF_ROWS, every stride-th rank among the first PROB_NEFF_ROWS strides is wanted; a wanted row is kept when
+!! it holds at least PROB_NEFF_NMIN valid distances and a positive temperature, packed as distances above the row
+!! minimum with the particle's temperature (a row of two candidates lands on one of its best two at any factor and
+!! would pull the level of the rows where the choice is open). A part offers its rows with their global rank (its
+!! rank offset in the sample); the master merges the parts' sums in part order. A readout, not a control: a factor
 !! solved to pin n_eff cancels the data's own annealing at the band entries (the schedule is prob_beta flat with
 !! the tail)
 integer, parameter :: PROB_NEFF_ROWS     = 1000  !< rows of the subsample
@@ -69,7 +80,7 @@ integer, parameter :: PROB_NEFF_MIN_ROWS = 50    !< below which nothing is repor
 
 type :: prob_neff_readout
     private
-    integer :: stride = 1, nmax = 0, nmin = 2, nrows = 0, nvals = 0
+    integer :: stride = 1, nmax = 0, nmin = 2, nrows = 0, nvals = 0, rank0 = 0
     integer, allocatable :: offs(:)
     real,    allocatable :: dists(:), temps(:)
 contains
@@ -78,9 +89,33 @@ contains
     procedure :: offer     => neff_readout_offer
     procedure :: nkept     => neff_readout_nkept
     procedure :: mean_neff => neff_readout_mean_neff
+    procedure :: sum_neff  => neff_readout_sum_neff
     procedure :: report    => neff_readout_report
     procedure :: kill      => neff_readout_kill
 end type prob_neff_readout
+
+!> the per-part publication of the readouts an assignment prints (plan section 5): the counts, the insert report's
+!! sums and the n_eff readout's kept rows and sums, written by a distributed part as prob_readout_part<NN>.txt,
+!! read and summed by the master in part order, then reported as the owner reports its own
+integer, parameter :: PROB_READOUT_3D_DENSE = 1, PROB_READOUT_3D_NEIGH = 2, PROB_READOUT_2D_DENSE = 3, PROB_READOUT_2D_SPARSE = 4
+type :: prob_readout
+    integer        :: route = 0            !< PROB_READOUT_*
+    integer        :: nptcls = 0           !< particles assigned (3D: the part's sampled particles; 2D: assigned)
+    integer        :: nrefs  = 0           !< references or classes (the same on every part)
+    integer        :: nmode  = 0           !< draws that landed on the row mode
+    integer        :: ntemp_missing = 0    !< particles without a temperature
+    integer        :: nbad   = 0           !< rows without a valid distance (3D dense)
+    integer        :: nflat  = 0           !< rows with a flat distance (3D dense)
+    integer        :: nkept  = 0           !< particles without a valid candidate, orientation kept (neighbourhood)
+    integer        :: kmax   = 1           !< topk
+    logical        :: l_extras = .false.   !< the insertion table was filled (a cone was open)
+    integer        :: ins_nptcls = 0, ins_npose = 0, ins_ncapped = 0
+    integer(int64) :: ins_nelig = 0_int64
+    real(dp)       :: ins_wc_sum = 0.d0    !< the committed weights' sum
+    integer        :: neff_nrows = 0
+    real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
+    real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
+end type prob_readout
 
 !> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
 !! refined shift in the stored frame and its weight. The committed pose is the project's, with the weight the
@@ -90,12 +125,11 @@ type :: prob_insert_pose
     real    :: x = 0., y = 0., w = 0.
 end type prob_insert_pose
 
-!> The weighted insertion's table of one iteration: per particle (the global table's order) the committed pose's
-!! weight and its extra poses, selected by the assignment (top_posterior_extras) and written by the master beside
-!! the assignment (INSERT_FBODY); the workers read it with the particle indices and insert each particle at its
-!! committed pose with its weight and at its extras with theirs, every particle's weights summing to 1. The master
+!> The weighted insertion's table of one iteration: per particle (the table's order) the committed pose's weight
+!! and its extra poses, selected by the assignment (top_posterior_extras); the search inserts each particle at its
+!! committed pose with its weight and at its extras with theirs, every particle's weights summing to 1. The table
 !! also counts the cone's occupancy (the eligible entries per particle and the particles with more of them than
-!! the cap kmax - 1 admits) for the PROB_TAB_INSERT line; the counts are not written
+!! the cap kmax - 1 admits) for the PROB_TAB_INSERT line, published by a distributed part through its counts
 type :: prob_insert_table
     private
     integer :: nptcls = 0, kmax = 1, npose = 0, ncapped = 0
@@ -106,10 +140,8 @@ type :: prob_insert_table
 contains
     procedure :: new    => insert_table_new
     procedure :: add    => insert_table_add
-    procedure :: subset => insert_table_subset
-    procedure :: write  => insert_table_write
-    procedure :: read   => insert_table_read
     procedure :: report => insert_table_report
+    procedure :: counts => insert_table_counts
     procedure :: get_nptcls   => insert_table_get_nptcls
     procedure :: get_kmax     => insert_table_get_kmax
     procedure :: get_pind     => insert_table_get_pind
@@ -137,9 +169,9 @@ type :: prob_insert_poses
     real,    allocatable :: shift(:,:)   !< (2,npose) absolute stored shifts
     real,    allocatable :: w(:)         !< (npose), 0 until the search fills the slot
 contains
-    procedure :: setup => insert_poses_setup
-    procedure :: has   => insert_poses_has
-    procedure :: kill  => insert_poses_kill
+    procedure :: setup_range => insert_poses_setup_range
+    procedure :: has         => insert_poses_has
+    procedure :: kill        => insert_poses_kill
 end type prob_insert_poses
 
 !> The weighted insertion's cone: per state the resolution (the state map's FSC=0.5, Angstrom) that bounds how far
@@ -178,7 +210,7 @@ type :: prob_dense_entry
     integer :: inpl
 end type prob_dense_entry
 
-! A refined entry of the dense table: the particle (part-local in a part file, the master's index on the master),
+! A refined entry of the dense table: the particle (the table's local index),
 ! the compact reference, the shift of its search and the loss at that pose (the row's distance under the window
 ! search; under the polar shift map the drawn cell's posterior loss, its data term with the map's prior on the increment at the
 ! physical temperature, where the row holds the reference's evidence)
@@ -422,23 +454,6 @@ contains
         if( allocated(self%seed_has_sh)  ) deallocate(self%seed_has_sh)
     end subroutine kill_candidate_store
 
-    subroutine build_pind_lookup( glob_pinds, loc_pinds, pind2glob, max_pind )
-        integer,              intent(in)  :: glob_pinds(:), loc_pinds(:)
-        integer, allocatable, intent(out) :: pind2glob(:)
-        integer,              intent(out) :: max_pind
-        integer :: i, pind
-        max_pind = max(maxval(glob_pinds), maxval(loc_pinds))
-        if( max_pind < 1 )then
-            allocate(pind2glob(0))
-            return
-        endif
-        allocate(pind2glob(max_pind), source=0)
-        do i = 1, size(glob_pinds)
-            pind = glob_pinds(i)
-            if( pind > 0 .and. pind <= max_pind ) pind2glob(pind) = i
-        enddo
-    end subroutine build_pind_lookup
-
     !> The shift recorded for an assigned candidate that was not refined: the particle-frame seed every candidate of
     !! the particle was scored with, as it is (every probability table seeds in the particle frame).
     subroutine record_seed_shift( assgn, seed_shift, seed_has_sh, l_doshift )
@@ -450,34 +465,6 @@ contains
         assgn%y      = seed_shift(2)
         assgn%has_sh = .true.
     end subroutine record_seed_shift
-
-    subroutine write_seed_shift_table( funit, addr, seed_nrots, seed_shifts, seed_has_sh )
-        integer, intent(in)    :: funit
-        integer(int64), intent(inout) :: addr
-        integer, intent(in)    :: seed_nrots
-        real,    intent(in)    :: seed_shifts(:,:)
-        logical, intent(in)    :: seed_has_sh(:)
-        write(funit, pos=addr) seed_nrots
-        addr = addr + sizeof(seed_nrots)
-        write(funit, pos=addr) seed_shifts
-        addr = addr + sizeof(seed_shifts)
-        write(funit, pos=addr) seed_has_sh
-        addr = addr + sizeof(seed_has_sh)
-    end subroutine write_seed_shift_table
-
-    subroutine read_seed_shift_table( funit, addr, seed_nrots, seed_shifts, seed_has_sh )
-        integer, intent(in)    :: funit
-        integer(int64), intent(inout) :: addr
-        integer, intent(out)   :: seed_nrots
-        real,    intent(out)   :: seed_shifts(:,:)
-        logical, intent(out)   :: seed_has_sh(:)
-        read(funit, pos=addr) seed_nrots
-        addr = addr + sizeof(seed_nrots)
-        read(funit, pos=addr) seed_shifts
-        addr = addr + sizeof(seed_shifts)
-        read(funit, pos=addr) seed_has_sh
-        addr = addr + sizeof(seed_has_sh)
-    end subroutine read_seed_shift_table
 
     subroutine calc_num2sample( os, num_all, field_str, num_smpl, prob_athres, state)
         class(oris),       intent(in)  :: os
@@ -557,24 +544,32 @@ contains
     ! ---- the n_eff readout -----------------------------------------------------------------------------------
 
     !> nptcls rows will be offered; keep up to nmax of them, each with at least nmin valid distances
-    subroutine neff_readout_new( self, nptcls, nmax, nmin )
+    !> nptcls is the global sample's size (the stride's), rank0 the rank in it of the row before this table's first
+    !! (a part's offset; 0 for the owner's whole sample)
+    subroutine neff_readout_new( self, nptcls, nmax, nmin, rank0 )
         class(prob_neff_readout), intent(inout) :: self
         integer,                  intent(in)    :: nptcls, nmax, nmin
+        integer,        optional, intent(in)    :: rank0
         call self%kill
         self%nmax   = max(1, nmax)
         self%nmin   = max(2, nmin)
         self%stride = max(1, nptcls / self%nmax)
+        self%rank0  = 0
+        if( present(rank0) ) self%rank0 = rank0
         self%nrows  = 0
         self%nvals  = 0
         allocate(self%offs(self%nmax + 1), self%temps(self%nmax), self%dists(64 * self%nmax))
         self%offs(1) = 1
     end subroutine neff_readout_new
 
-    !> is particle i's row wanted (its turn in the stride, room left)? the caller skips building the rest
+    !> is the row of the table's i-th particle wanted (its global rank's turn in the stride, within the first nmax
+    !! strides)? the caller skips building the rest
     pure logical function neff_readout_wanted( self, i ) result( l_wanted )
         class(prob_neff_readout), intent(in) :: self
         integer,                  intent(in) :: i
-        l_wanted = self%nrows < self%nmax .and. mod(i - 1, self%stride) == 0
+        integer :: rank
+        rank     = self%rank0 + i
+        l_wanted = mod(rank - 1, self%stride) == 0 .and. (rank - 1) / self%stride < self%nmax
     end function neff_readout_wanted
 
     !> offer a row: its valid distances (finite, below the invalid marker) are packed above their minimum when
@@ -586,8 +581,7 @@ contains
         real, allocatable :: tmp(:)
         real    :: dmin, invalid
         integer :: r, nvalid, need
-        if( self%nrows >= self%nmax ) return
-        if( .not. (temp > 0.) )       return
+        if( .not. (temp > 0.) ) return
         invalid = 0.1 * huge(invalid)
         nvalid  = 0
         dmin    = huge(dmin)
@@ -620,13 +614,21 @@ contains
         nrows = self%nrows
     end function neff_readout_nkept
 
-    !> the mean over the kept rows of exp(entropy) of the row posterior at tempering factor beta:
-    !! p_r proportional to exp(-beta T d_r), d_r the distance above the row minimum; in one pass per row,
-    !! H = log z + beta T <d>_p with z the partition sum
+    !> the mean over the kept rows of exp(entropy) of the row posterior at tempering factor beta
     real function neff_readout_mean_neff( self, beta ) result( neff )
         class(prob_neff_readout), intent(in) :: self
         real,                     intent(in) :: beta
-        real(dp) :: z, s, acc, a, e
+        neff = 0.
+        if( self%nrows > 0 ) neff = real(self%sum_neff(beta) / real(self%nrows,dp))
+    end function neff_readout_mean_neff
+
+    !> the sum over the kept rows of exp(entropy) of the row posterior at tempering factor beta:
+    !! p_r proportional to exp(-beta T d_r), d_r the distance above the row minimum; in one pass per row,
+    !! H = log z + beta T <d>_p with z the partition sum
+    real(dp) function neff_readout_sum_neff( self, beta ) result( acc )
+        class(prob_neff_readout), intent(in) :: self
+        real,                     intent(in) :: beta
+        real(dp) :: z, s, a, e
         integer  :: irow, k
         acc = 0.d0
         !$omp parallel do default(shared) private(irow,k,z,s,a,e) schedule(static) reduction(+:acc)
@@ -644,24 +646,30 @@ contains
             acc = acc + exp(log(z) + s / z)
         enddo
         !$omp end parallel do
-        neff = 0.
-        if( self%nrows > 0 ) neff = real(acc / real(self%nrows,dp))
-    end function neff_readout_mean_neff
+    end function neff_readout_sum_neff
 
     !> the readout of one assignment: the mean n_eff at the draw's factor beta_draw and at beta 1 (the physical
     !! posterior), over the kept rows; nothing below PROB_NEFF_MIN_ROWS rows
     subroutine neff_readout_report( self, beta_draw )
         class(prob_neff_readout), intent(in) :: self
         real,                     intent(in) :: beta_draw
-        character(len=32) :: draw_neff, beta, physical_neff
-        if( self%nrows < PROB_NEFF_MIN_ROWS ) return
-        write(draw_neff,'(F32.2)') self%mean_neff(beta_draw)
-        write(beta,'(F32.2)') beta_draw
-        write(physical_neff,'(F32.2)') self%mean_neff(1.)
-        write(logfhandle,'(A,I0,A)') '>>> POSTERIOR DRAW N_EFF: '//trim(adjustl(draw_neff))//&
-            &' at beta '//trim(adjustl(beta))//', '//trim(adjustl(physical_neff))//' at beta 1.00 (', self%nrows, ' rows)'
-        call flush(logfhandle)
+        call neff_report_sums(self%nrows, self%sum_neff(beta_draw), self%sum_neff(1.), beta_draw)
     end subroutine neff_readout_report
+
+    !> the readout line from the kept rows and their sums (one table's, or the parts' summed in part order)
+    subroutine neff_report_sums( nrows, sum_draw, sum_phys, beta_draw )
+        integer,  intent(in) :: nrows
+        real(dp), intent(in) :: sum_draw, sum_phys
+        real,     intent(in) :: beta_draw
+        character(len=32) :: draw_neff, beta, physical_neff
+        if( nrows < PROB_NEFF_MIN_ROWS ) return
+        write(draw_neff,'(F32.2)') real(sum_draw / real(nrows,dp))
+        write(beta,'(F32.2)') beta_draw
+        write(physical_neff,'(F32.2)') real(sum_phys / real(nrows,dp))
+        write(logfhandle,'(A,I0,A)') '>>> POSTERIOR DRAW N_EFF: '//trim(adjustl(draw_neff))//&
+            &' at beta '//trim(adjustl(beta))//', '//trim(adjustl(physical_neff))//' at beta 1.00 (', nrows, ' rows)'
+        call flush(logfhandle)
+    end subroutine neff_report_sums
 
     subroutine neff_readout_kill( self )
         class(prob_neff_readout), intent(inout) :: self
@@ -722,96 +730,348 @@ contains
         enddo
     end subroutine insert_table_add
 
-    !> this table as the part of glob that holds the particles loc_pinds, in their order: a particle glob has no
-    !! entry for keeps weight 1 and no extras
-    subroutine insert_table_subset( self, glob, loc_pinds )
-        class(prob_insert_table), intent(inout) :: self
-        class(prob_insert_table), intent(in)    :: glob
-        integer,                  intent(in)    :: loc_pinds(:)
-        integer, allocatable :: pind2glob(:)
-        integer :: max_pind, i_loc, i_glob, pind, k, n
-        call self%new(size(loc_pinds), loc_pinds, glob%kmax)
-        if( glob%nptcls < 1 ) return
-        call build_pind_lookup(glob%pinds(1:glob%nptcls), loc_pinds, pind2glob, max_pind)
-        if( max_pind < 1 ) return
-        do i_loc = 1,size(loc_pinds)
-            pind = loc_pinds(i_loc)
-            if( pind < 1 .or. pind > max_pind ) cycle
-            i_glob = pind2glob(pind)
-            if( i_glob < 1 ) cycle
-            n = glob%nextra(i_glob)
-            self%wc(i_loc) = glob%wc(i_glob)
-            if( n < 1 ) cycle
-            if( self%npose + n > size(self%poses) )then
-                block
-                    type(prob_insert_pose), allocatable :: tmp(:)
-                    allocate(tmp(2 * size(self%poses) + n))
-                    tmp(1:self%npose) = self%poses(1:self%npose)
-                    call move_alloc(tmp, self%poses)
-                end block
-            endif
-            self%first(i_loc)  = self%npose + 1
-            self%nextra(i_loc) = n
-            do k = 1,n
-                self%npose = self%npose + 1
-                self%poses(self%npose) = glob%poses(glob%first(i_glob) + k - 1)
-            enddo
-        enddo
-        deallocate(pind2glob)
-    end subroutine insert_table_subset
-
-    !> the table to a binary file: nptcls, kmax, npose; pinds, wc, nextra, first; the poses
-    subroutine insert_table_write( self, fname )
-        class(prob_insert_table), intent(in) :: self
-        class(string),            intent(in) :: fname
-        integer :: funit, io_stat
-        call fopen(funit, fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
-        call fileiochk('insert_table_write; file: '//fname%to_char(), io_stat)
-        write(unit=funit) self%nptcls, self%kmax, self%npose
-        if( self%nptcls > 0 )then
-            write(unit=funit) self%pinds(1:self%nptcls), self%wc(1:self%nptcls), self%nextra(1:self%nptcls), &
-                &self%first(1:self%nptcls)
-        endif
-        if( self%npose > 0 ) write(unit=funit) self%poses(1:self%npose)
-        call fclose(funit)
-    end subroutine insert_table_write
-
-    subroutine insert_table_read( self, fname )
-        class(prob_insert_table), intent(inout) :: self
-        class(string),            intent(in)    :: fname
-        integer :: funit, io_stat, nptcls, kmax, npose
-        call self%kill
-        if( .not. file_exists(fname) ) THROW_HARD('file '//fname%to_char()//' does not exist; insert_table_read')
-        call fopen(funit, fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
-        call fileiochk('insert_table_read; file: '//fname%to_char(), io_stat)
-        read(unit=funit) nptcls, kmax, npose
-        self%nptcls = nptcls
-        self%kmax   = kmax
-        self%npose  = npose
-        allocate(self%pinds(max(1,nptcls)), self%nextra(max(1,nptcls)), self%first(max(1,nptcls)), source=0)
-        allocate(self%wc(max(1,nptcls)), source=1.)
-        allocate(self%poses(max(1,npose)))
-        if( nptcls > 0 ) read(unit=funit) self%pinds(1:nptcls), self%wc(1:nptcls), self%nextra(1:nptcls), self%first(1:nptcls)
-        if( npose  > 0 ) read(unit=funit) self%poses(1:npose)
-        call fclose(funit)
-    end subroutine insert_table_read
-
     !> the log line: insertions per particle, the committed pose's mean weight, and the cone's occupancy (the
     !! eligible entries per particle and the fraction of particles with more of them than the cap admits: at a
     !! fraction near zero the insertion is the full average within the cone, above it topk is binding)
     subroutine insert_table_report( self )
         class(prob_insert_table), intent(in) :: self
-        character(len=32) :: ninsert, wcommit, nelig, pct_capped
-        if( self%nptcls < 1 ) return
-        write(ninsert,'(F32.2)') 1. + real(self%npose) / real(self%nptcls)
-        write(wcommit,'(F32.2)') sum(self%wc(1:self%nptcls)) / real(self%nptcls)
-        write(nelig,'(F32.2)') self%get_mean_eligible()
-        write(pct_capped,'(F32.1)') 100. * self%get_frac_capped()
-        write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', self%kmax, '): '//trim(adjustl(ninsert))//&
-            &' poses per particle, committed weight '//trim(adjustl(wcommit))//', '//trim(adjustl(nelig))//&
+        integer        :: nptcls, npose, ncapped, kmax
+        integer(int64) :: nelig
+        real(dp)       :: wc_sum
+        call self%counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
+        call insert_report_counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
+    end subroutine insert_table_report
+
+    !> the counts the report is made of (a part publishes them, the master sums them in part order); the committed
+    !! weights' sum is the single-precision sum the report always took
+    subroutine insert_table_counts( self, nptcls, npose, wc_sum, nelig, ncapped, kmax )
+        class(prob_insert_table), intent(in)  :: self
+        integer,                  intent(out) :: nptcls, npose, ncapped, kmax
+        integer(int64),           intent(out) :: nelig
+        real(dp),                 intent(out) :: wc_sum
+        nptcls  = self%nptcls
+        npose   = self%npose
+        ncapped = self%ncapped
+        kmax    = self%kmax
+        nelig   = self%nelig_sum
+        wc_sum  = 0.d0
+        if( self%nptcls > 0 ) wc_sum = real(sum(self%wc(1:self%nptcls)),dp)
+    end subroutine insert_table_counts
+
+    !> the fill's cost record in a matcher's bench report: the counts of the fill (references scored and refined,
+    !! the shift searches, the maps, the optimiser's evaluations, the memos) and the thread-seconds of its regions;
+    !! the table workers' bench families carried them, the matcher's part record carries them now
+    subroutine write_fill_profile_bench( fnr, label, fill, nstates )
+        integer,                 intent(in) :: fnr
+        character(len=*),        intent(in) :: label
+        type(prob_fill_profile), intent(in) :: fill
+        integer,                 intent(in) :: nstates
+        real(dp) :: ts_sum
+        if( fill%nptcls < 1 ) return
+        write(fnr,'(a,i0)') key('fill particles'), fill%nptcls
+        if( fill%nscored > 0 )then
+            ! a neighbourhood table (and the 2D prob_neigh table) scores a different set of references per particle
+            write(fnr,'(a,i0)') key('fill scored references (all)'), fill%nscored
+            if( fill%nrefined > 0 ) write(fnr,'(a,i0)') key('fill refined refs (all)'), fill%nrefined
+        else
+            write(fnr,'(a,i0)') key('fill references'), fill%nrefs
+            write(fnr,'(a,i0)') key('fill refined refs per particle'), fill%projs_ns
+            write(fnr,'(a,i0)') key('fill refined refs (all)'), fill%nrefined
+            if( fill%nrefined > 0 )then
+                ! where the entry lowest after refinement sat in the unrefined ranking: is the budget binding?
+                write(fnr,'(a,i0)')        key('fill refined argmin at unrefined rank 1'), fill%rank_counts(0)
+                write(fnr,'(a,10(1x,i0))') key('fill refined argmin by decile of the cap'), fill%rank_counts(1:10)
+                write(fnr,'(a,i0)')        key('fill refined argmin outside refined set'), fill%rank_counts(11)
+            endif
+        endif
+        write(fnr,'(a,i0)') key('fill shift searches'), fill%minimize_calls
+        if( fill%screens > 0 )    write(fnr,'(a,i0)') key('fill coarse maps (all)'), fill%screens
+        if( fill%disk_ptcls > 0 ) write(fnr,'(a,i0)') key('fill particles on the disk'), fill%disk_ptcls
+        if( sum(fill%map_counts(1:3)) > 0 )then
+            write(fnr,'(a,i0)') key('fill disk maps'), fill%map_counts(1)
+            write(fnr,'(a,i0)') key('fill window maps'), fill%map_counts(2)
+            write(fnr,'(a,i0)') key('fill full-band maps'), fill%map_counts(3)
+            write(fnr,'(a,i0)') key('fill map selections'), fill%map_counts(4)
+            write(fnr,'(a,i0)') key('fill map widths'), fill%map_counts(5)
+            write(fnr,'(a,i0)') key('fill map particle expansions'), fill%map_counts(6)
+            write(fnr,'(a,i0)') key('fill map geometry builds'), fill%map_counts(7)
+            write(fnr,'(a,i0)') key('fill map geometry reuses'), fill%map_counts(8)
+            write(fnr,'(a,3(1x,i0))') key('fill disk grid radii dirs order'), fill%map_geometry(:,2)
+            write(fnr,'(a,3(1x,i0))') key('fill window grid radii dirs order'), fill%map_geometry(:,3)
+        endif
+        write(fnr,'(a,i0)') key('fill alternations'), fill%alternations
+        write(fnr,'(a,i0)') key('fill grid evaluations'), fill%grid_points
+        write(fnr,'(a,i0)') key('fill objective evaluations'), fill%objective_evals
+        write(fnr,'(a,i0)') key('fill gradient evaluations (E)'), fill%gradient_evals
+        if( nstates > 1 )then
+            write(fnr,'(a,i0)') key('fill grid fits kept'), fill%fit_counts(0)
+            write(fnr,'(a,i0)') key('fill fit fallback, edge'), fill%fit_counts(1)
+            write(fnr,'(a,i0)') key('fill fit fallback, curvature'), fill%fit_counts(2)
+            write(fnr,'(a,i0)') key('fill fit fallback, step'), fill%fit_counts(3)
+            write(fnr,'(a,i0)') key('fill fit fallback, search box'), fill%fit_counts(4)
+            write(fnr,'(a,i0)') key('fill fit fallback, value'), fill%fit_counts(5)
+        endif
+        write(fnr,'(a,i0)') key('fill shifted particle memos'), fill%bank_builds
+        if( fill%minimize_calls > 0 )then
+            write(fnr,'(a,1x,f0.2)') key('fill alternations per search'), real(fill%alternations,dp) / real(fill%minimize_calls,dp)
+            write(fnr,'(a,1x,f0.2)') key('fill gradient evals per search'), real(fill%gradient_evals,dp) / real(fill%minimize_calls,dp)
+        endif
+        write(fnr,'(a,1x,f0.2)') key('fill map setup (within fill, s)'), fill%map_times(6)
+        ! thread-seconds are never part of a report's '% accounted for'
+        ts_sum = fill%ts_seed + fill%ts_score + fill%ts_refine
+        write(fnr,'(a,1x,f0.2)') key('fill seed estimation (thread-s)'), fill%ts_seed
+        write(fnr,'(a,1x,f0.2)') key('fill score loop (thread-s)'), fill%ts_score
+        write(fnr,'(a,1x,f0.2)') key('fill refinement (thread-s)'), fill%ts_refine
+        if( sum(fill%map_counts(1:3)) > 0 )then
+            write(fnr,'(a,1x,f0.4)') key('fill map construction (thread-s)'), fill%map_times(1)
+            write(fnr,'(a,1x,f0.4)') key('fill map cell selection (thread-s)'), fill%map_times(4)
+            write(fnr,'(a,1x,f0.4)') key('fill map posterior reduction (thread-s)'), fill%map_times(5)
+        endif
+        write(fnr,'(a,1x,f0.2)') key('fill thread-seconds, sum'), ts_sum
+        write(fnr,'(a,1x,f0.2)') key('fill region wall time (s)'), fill%wall_region
+        if( fill%wall_region > 0.d0 .and. fill%nthr > 0 )then
+            write(fnr,'(a,1x,f0.3)') key('fill load balance'), ts_sum / (fill%wall_region * real(fill%nthr,dp))
+        endif
+        if( fill%nscored > 0 )then
+            write(fnr,'(a,1x,es10.3)') key('fill score loop s/(particle*ref)'), fill%ts_score / real(fill%nscored,dp)
+        else if( fill%nptcls > 0 .and. fill%nrefs > 0 )then
+            write(fnr,'(a,1x,es10.3)') key('fill score loop s/(particle*ref)'), &
+                &fill%ts_score / (real(fill%nptcls,dp) * real(fill%nrefs,dp))
+        endif
+
+    contains
+
+        !> the line's key: the report's label, the counter's name, padded to the report's column
+        function key( name ) result( k )
+            character(len=*), intent(in) :: name
+            character(len=44) :: k
+            k = label//' '//name
+            k(43:44) = ': '
+        end function key
+
+    end subroutine write_fill_profile_bench
+
+    !> the insertion report from counts
+    subroutine insert_report_counts( nptcls, npose, wc_sum, nelig, ncapped, kmax )
+        integer,        intent(in) :: nptcls, npose, ncapped, kmax
+        integer(int64), intent(in) :: nelig
+        real(dp),       intent(in) :: wc_sum
+        character(len=32) :: ninsert, wcommit, nelig_str, pct_capped
+        if( nptcls < 1 ) return
+        write(ninsert,'(F32.2)') 1. + real(npose) / real(nptcls)
+        write(wcommit,'(F32.2)') real(wc_sum) / real(nptcls)
+        write(nelig_str,'(F32.2)') real(nelig) / real(nptcls)
+        write(pct_capped,'(F32.1)') 100. * real(ncapped) / real(nptcls)
+        write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', kmax, '): '//trim(adjustl(ninsert))//&
+            &' poses per particle, committed weight '//trim(adjustl(wcommit))//', '//trim(adjustl(nelig_str))//&
             &' eligible per particle, '//trim(adjustl(pct_capped))//'% capped'
         call flush(logfhandle)
-    end subroutine insert_table_report
+    end subroutine insert_report_counts
+
+    !> the readout record of part ipart: prob_readout_part<NN>.txt
+    function prob_readout_fname( ipart, numlen ) result( fname )
+        integer, intent(in) :: ipart, numlen
+        type(string) :: fname
+        fname = string('prob_readout_part')//int2str_pad(ipart, numlen)//'.txt'
+    end function prob_readout_fname
+
+    !> a part's record, one key and value per line (reals to the last digit)
+    subroutine write_prob_readout( rec, fname )
+        type(prob_readout), intent(in) :: rec
+        class(string),      intent(in) :: fname
+        integer :: funit, io_stat
+        call fopen(funit, fname, status='replace', action='write', iostat=io_stat)
+        call fileiochk('write_prob_readout; fopen '//fname%to_char(), io_stat)
+        write(funit,'(a,1x,i0)')      'route',         rec%route
+        write(funit,'(a,1x,i0)')      'nptcls',        rec%nptcls
+        write(funit,'(a,1x,i0)')      'nrefs',         rec%nrefs
+        write(funit,'(a,1x,i0)')      'nmode',         rec%nmode
+        write(funit,'(a,1x,i0)')      'ntemp_missing', rec%ntemp_missing
+        write(funit,'(a,1x,i0)')      'nbad',          rec%nbad
+        write(funit,'(a,1x,i0)')      'nflat',         rec%nflat
+        write(funit,'(a,1x,i0)')      'nkept',         rec%nkept
+        write(funit,'(a,1x,i0)')      'kmax',          rec%kmax
+        write(funit,'(a,1x,l1)')      'l_extras',      rec%l_extras
+        write(funit,'(a,1x,i0)')      'ins_nptcls',    rec%ins_nptcls
+        write(funit,'(a,1x,i0)')      'ins_npose',     rec%ins_npose
+        write(funit,'(a,1x,i0)')      'ins_ncapped',   rec%ins_ncapped
+        write(funit,'(a,1x,i0)')      'ins_nelig',     rec%ins_nelig
+        write(funit,'(a,1x,es24.16)') 'ins_wc_sum',    rec%ins_wc_sum
+        write(funit,'(a,1x,i0)')      'neff_nrows',    rec%neff_nrows
+        write(funit,'(a,1x,es24.16)') 'neff_sum_draw', rec%neff_sum_draw
+        write(funit,'(a,1x,es24.16)') 'neff_sum_phys', rec%neff_sum_phys
+        call fclose(funit)
+    end subroutine write_prob_readout
+
+    subroutine read_prob_readout( rec, fname )
+        type(prob_readout), intent(out) :: rec
+        class(string),      intent(in)  :: fname
+        character(len=64) :: line_value
+        integer :: funit, io_stat
+        if( .not. file_exists(fname) ) THROW_HARD('a part published no readout record: '//fname%to_char())
+        call fopen(funit, fname, status='old', action='read', iostat=io_stat)
+        call fileiochk('read_prob_readout; fopen '//fname%to_char(), io_stat)
+        call read_int('route',         rec%route)
+        call read_int('nptcls',        rec%nptcls)
+        call read_int('nrefs',         rec%nrefs)
+        call read_int('nmode',         rec%nmode)
+        call read_int('ntemp_missing', rec%ntemp_missing)
+        call read_int('nbad',          rec%nbad)
+        call read_int('nflat',         rec%nflat)
+        call read_int('nkept',         rec%nkept)
+        call read_int('kmax',          rec%kmax)
+        call read_log('l_extras',      rec%l_extras)
+        call read_int('ins_nptcls',    rec%ins_nptcls)
+        call read_int('ins_npose',     rec%ins_npose)
+        call read_int('ins_ncapped',   rec%ins_ncapped)
+        call read_i8 ('ins_nelig',     rec%ins_nelig)
+        call read_dp ('ins_wc_sum',    rec%ins_wc_sum)
+        call read_int('neff_nrows',    rec%neff_nrows)
+        call read_dp ('neff_sum_draw', rec%neff_sum_draw)
+        call read_dp ('neff_sum_phys', rec%neff_sum_phys)
+        call fclose(funit)
+
+        contains
+
+            !> one line: its key checked against the one expected (a stale or foreign file is refused)
+            subroutine read_key( expected )
+                character(len=*), intent(in) :: expected
+                character(len=32) :: key
+                read(funit,*,iostat=io_stat) key, line_value
+                if( io_stat /= 0 ) THROW_HARD('readout record '//fname%to_char()//' ends before '//trim(expected))
+                if( trim(key) /= trim(expected) ) THROW_HARD('readout record '//fname%to_char()//' holds '//trim(key)//' where '//trim(expected)//' is expected')
+            end subroutine read_key
+
+            subroutine read_int( expected, val )
+                character(len=*), intent(in)  :: expected
+                integer,          intent(out) :: val
+                call read_key(expected)
+                read(line_value,*) val
+            end subroutine read_int
+
+            subroutine read_i8( expected, val )
+                character(len=*), intent(in)  :: expected
+                integer(int64),   intent(out) :: val
+                call read_key(expected)
+                read(line_value,*) val
+            end subroutine read_i8
+
+            subroutine read_dp( expected, val )
+                character(len=*), intent(in)  :: expected
+                real(dp),         intent(out) :: val
+                call read_key(expected)
+                read(line_value,*) val
+            end subroutine read_dp
+
+            subroutine read_log( expected, val )
+                character(len=*), intent(in)  :: expected
+                logical,          intent(out) :: val
+                call read_key(expected)
+                read(line_value,*) val
+            end subroutine read_log
+
+    end subroutine read_prob_readout
+
+    !> the parts' records summed in part order; the route, the reference count and topk are the same on every part,
+    !! the extras flag is any part's (a part without a sampled particle has none)
+    subroutine add_prob_readout( acc, rec )
+        type(prob_readout), intent(inout) :: acc
+        type(prob_readout), intent(in)    :: rec
+        if( rec%route > 0 ) acc%route = rec%route
+        acc%nptcls        = acc%nptcls        + rec%nptcls
+        acc%nrefs         = max(acc%nrefs, rec%nrefs)
+        acc%nmode         = acc%nmode         + rec%nmode
+        acc%ntemp_missing = acc%ntemp_missing + rec%ntemp_missing
+        acc%nbad          = acc%nbad          + rec%nbad
+        acc%nflat         = acc%nflat         + rec%nflat
+        acc%nkept         = acc%nkept         + rec%nkept
+        acc%kmax          = max(acc%kmax, rec%kmax)
+        acc%l_extras      = acc%l_extras .or. rec%l_extras
+        acc%ins_nptcls    = acc%ins_nptcls    + rec%ins_nptcls
+        acc%ins_npose     = acc%ins_npose     + rec%ins_npose
+        acc%ins_ncapped   = acc%ins_ncapped   + rec%ins_ncapped
+        acc%ins_nelig     = acc%ins_nelig     + rec%ins_nelig
+        acc%ins_wc_sum    = acc%ins_wc_sum    + rec%ins_wc_sum
+        acc%neff_nrows    = acc%neff_nrows    + rec%neff_nrows
+        acc%neff_sum_draw = acc%neff_sum_draw + rec%neff_sum_draw
+        acc%neff_sum_phys = acc%neff_sum_phys + rec%neff_sum_phys
+    end subroutine add_prob_readout
+
+    !> the distributed master's merge of its parts' records in part order, reported as the owner reports its own
+    !! (plan section 5: sums and counts, never means of means); the records are deleted after the merge
+    subroutine merge_prob_readouts( nparts, numlen, prob_beta )
+        integer, intent(in) :: nparts, numlen
+        real,    intent(in) :: prob_beta
+        type(prob_readout) :: acc, rec
+        type(string)       :: fname
+        integer :: ipart
+        do ipart = 1,nparts
+            fname = prob_readout_fname(ipart, numlen)
+            call read_prob_readout(rec, fname)
+            call add_prob_readout(acc, rec)
+            call del_file(fname)
+        enddo
+        call report_prob_readout(acc, prob_beta)
+    end subroutine merge_prob_readouts
+
+    !> the lines an assignment prints, from a record (the owner's own, or the parts' sum): the n_eff readout, the
+    !! insert report or the "no FSC yet" line (3D), the row-mode share, the warnings; the dense 3D stops when every
+    !! row is invalid or flat
+    subroutine report_prob_readout( rec, prob_beta )
+        type(prob_readout), intent(in) :: rec
+        real,               intent(in) :: prob_beta
+        character(len=32) :: mode_pct
+        integer :: nassigned
+        call neff_report_sums(rec%neff_nrows, rec%neff_sum_draw, rec%neff_sum_phys, prob_beta)
+        select case(rec%route)
+            case(PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH)
+                if( rec%l_extras )then
+                    call insert_report_counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_nelig, &
+                        &rec%ins_ncapped, rec%kmax)
+                else if( rec%kmax > 1 )then
+                    write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', rec%kmax, '): no FSC yet, committed pose only'
+                endif
+                nassigned = rec%nptcls
+                if( rec%route == PROB_READOUT_3D_NEIGH ) nassigned = rec%nptcls - rec%nkept
+                write(mode_pct,'(F32.1)') 100. * real(rec%nmode) / real(max(1,nassigned))
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_ASSIGN: ', nassigned, ' particles x ', rec%nrefs,&
+                    &' references, '//trim(adjustl(mode_pct))//'% at the row mode'
+                if( rec%route == PROB_READOUT_3D_NEIGH )then
+                    if( rec%nkept > 0 ) write(logfhandle,'(A,I0)') &
+                        &'WARNING: particles without a valid neighbourhood candidate, orientation kept: ', rec%nkept
+                    if( rec%ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
+                        &'WARNING: particles without a temperature in the neighbourhood rows, assigned to their argmin: ', &
+                        &rec%ntemp_missing
+                else
+                    if( rec%ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
+                        &'WARNING: particles without a temperature in the dense rows, assigned to their argmin: ', &
+                        &rec%ntemp_missing
+                    if( rec%nptcls > 0 )then
+                        if( rec%nbad  == rec%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
+                        if( rec%nflat == rec%nptcls ) THROW_HARD('all probability-table reference distances are flat')
+                    endif
+                    if( rec%nbad  > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', rec%nbad
+                    if( rec%nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', rec%nflat
+                endif
+            case(PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE)
+                write(mode_pct,'(F32.1)') 100. * real(rec%nmode) / real(max(1,rec%nptcls))
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB2D_ASSIGN: ', rec%nptcls, ' particles x ', rec%nrefs,&
+                    &' classes, '//trim(adjustl(mode_pct))//'% at the row mode'
+                if( rec%ntemp_missing > 0 )then
+                    if( rec%route == PROB_READOUT_2D_SPARSE )then
+                        write(logfhandle,'(A,I0)') &
+                            &'WARNING: particles without a temperature in the 2D candidate rows, assigned to their best candidate: ', &
+                            &rec%ntemp_missing
+                    else
+                        write(logfhandle,'(A,I0)') &
+                            &'WARNING: particles without a temperature in the 2D rows, assigned to their argmin: ', rec%ntemp_missing
+                    endif
+                endif
+            case DEFAULT
+                THROW_HARD('unknown readout route; report_prob_readout')
+        end select
+        call flush(logfhandle)
+    end subroutine report_prob_readout
 
     !> the eligible entries per particle, over the particles added
     pure real function insert_table_get_mean_eligible( self )
@@ -879,33 +1139,42 @@ contains
 
     ! ---- the resolved poses of a part -----------------------------------------------------------------------------
 
-    !> the layout from the part's table tab (its particles in the order of pinds, tab's order): counts, committed
-    !! weights and slots; the slots' poses are zero (weight 0, which the insertion skips) until the search fills them
-    subroutine insert_poses_setup( self, tab, pinds )
+    !> the pipeline's layout, a batch at a time in particle order: the first call (i_first = 1) lays the structure out
+    !! for the part with room for every particle's kmax - 1 extras, each later call takes the counts and weights of
+    !! the batch's particles from the table as their extras are selected, so the slots are those setup gives when the
+    !! whole table is known
+    subroutine insert_poses_setup_range( self, tab, pinds, i_first, i_last )
         class(prob_insert_poses), intent(inout) :: self
         class(prob_insert_table), intent(in)    :: tab
-        integer,                  intent(in)    :: pinds(:)
-        integer :: i, ipose, max_pind
-        call self%kill
-        if( tab%nptcls /= size(pinds) ) THROW_HARD('the table is not the part''s; insert_poses_setup')
-        self%nptcls = tab%nptcls
-        self%npose  = tab%npose
-        max_pind    = 0
-        if( size(pinds) > 0 ) max_pind = maxval(pinds)
-        allocate(self%loc(max(1,max_pind)), self%nextra(max(1,self%nptcls)), self%first(max(1,self%nptcls)), source=0)
-        allocate(self%wc(max(1,self%nptcls)), source=1.)
-        allocate(self%euler(3,max(1,self%npose)), self%shift(2,max(1,self%npose)), source=0.)
-        allocate(self%w(max(1,self%npose)), source=0.)
-        ipose = 0
-        do i = 1,self%nptcls
-            if( tab%pinds(i) /= pinds(i) ) THROW_HARD('the table''s particles are not the part''s; insert_poses_setup')
-            if( pinds(i) > 0 ) self%loc(pinds(i)) = i
+        integer,                  intent(in)    :: pinds(:), i_first, i_last
+        integer :: i, max_pind, capacity
+        if( i_first == 1 )then
+            call self%kill
+            if( tab%nptcls /= size(pinds) ) THROW_HARD('the table is not the part''s; insert_poses_setup_range')
+            self%nptcls = tab%nptcls
+            self%npose  = 0
+            capacity    = max(1, self%nptcls * (tab%kmax - 1))
+            max_pind    = 0
+            if( size(pinds) > 0 ) max_pind = maxval(pinds)
+            allocate(self%loc(max(1,max_pind)), self%nextra(max(1,self%nptcls)), self%first(max(1,self%nptcls)), source=0)
+            allocate(self%wc(max(1,self%nptcls)), source=1.)
+            allocate(self%euler(3,capacity), self%shift(2,capacity), source=0.)
+            allocate(self%w(capacity), source=0.)
+            do i = 1,self%nptcls
+                if( tab%pinds(i) /= pinds(i) ) THROW_HARD('the table''s particles are not the part''s; insert_poses_setup_range')
+                if( pinds(i) > 0 ) self%loc(pinds(i)) = i
+            enddo
+        endif
+        if( .not. allocated(self%loc) ) THROW_HARD('the layout starts with the first batch; insert_poses_setup_range')
+        if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first ) THROW_HARD('invalid range; insert_poses_setup_range')
+        do i = i_first,i_last
             self%wc(i)     = tab%wc(i)
             self%nextra(i) = tab%nextra(i)
-            self%first(i)  = ipose + 1
-            ipose = ipose + tab%nextra(i)
+            self%first(i)  = self%npose + 1
+            self%npose     = self%npose + tab%nextra(i)
         enddo
-    end subroutine insert_poses_setup
+        if( self%npose > size(self%w) ) THROW_HARD('more extras than the layout holds; insert_poses_setup_range')
+    end subroutine insert_poses_setup_range
 
     !> whether particle iptcl has an entry
     pure logical function insert_poses_has( self, iptcl )
@@ -930,30 +1199,21 @@ contains
         self%npose  = 0
     end subroutine insert_poses_kill
 
-    !> the files the probabilistic alignment of an iteration leaves in the run directory: the tables' parts, the
-    !! assignment and the weighted insertion's extra poses; one place for the four workflows that remove them
-    subroutine del_prob_align_files( nparts )
-        integer, intent(in) :: nparts
-        call del_files(DIST_FBODY,       nparts, ext='.dat')
-        call del_files(ASSIGNMENT_FBODY, nparts, ext='.dat')
-        call del_file(DIST_FBODY//'.dat')
-        call del_file(ASSIGNMENT_FBODY//'.dat')
-        call del_file(INSERT_FBODY//'.dat')
-    end subroutine del_prob_align_files
-
     !> One draw from the posterior over a table row at temperature temp (the tables' assignment): p_r proportional to
     !! exp(-temp (dist_r - dist_min)) over the valid distances (finite, below the invalid marker), zero
     !! elsewhere. which is the drawn index and dist its distance; which = 0 when no distance is valid.
     !! temp = 0 draws uniformly over the valid distances; a huge temp returns the argmin when the minimum
     !! is unique and one of the equal minima with equal probability otherwise (a flat row is a uniform draw
     !! at any temperature: the posterior, not the balanced rule's lowest-index convention). w is a work
-    !! array of size >= n; the one random number is ran3's, so the stream is the caller's.
-    subroutine draw_posterior_row( n, dists, temp, w, which, dist )
-        integer, intent(in)    :: n
-        real,    intent(in)    :: dists(n), temp
-        real,    intent(inout) :: w(:)
-        integer, intent(out)   :: which
-        real,    intent(out)   :: dist
+    !! array of size >= n; u is the draw's unit variate in [0,1), the caller's keyed draw (rnd_keyed), so
+    !! the selection depends on the row and the key alone.
+    subroutine draw_posterior_row( n, dists, temp, w, u, which, dist )
+        integer,  intent(in)    :: n
+        real,     intent(in)    :: dists(n), temp
+        real,     intent(inout) :: w(:)
+        real(dp), intent(in)    :: u
+        integer,  intent(out)   :: which
+        real,     intent(out)   :: dist
         real(dp) :: wsum, csum, tgt, arg
         real     :: dmin, invalid
         integer  :: r, imin
@@ -984,7 +1244,7 @@ contains
                 endif
             endif
         enddo
-        tgt    = real(ran3(),dp) * wsum
+        tgt    = u * wsum
         csum   = 0.d0
         do r = 1,n
             if( w(r) <= 0. ) cycle
@@ -1588,5 +1848,113 @@ contains
         call os%set(iptcl, 'shincr', d)
         call os%set(iptcl, 'shsig',  next_shift_width(sdev, sig_prev, d, r, step))
     end subroutine record_shift_state
+
+    !> The scope of the probabilistic alignment's keyed draws of one iteration: the run's seed (SIMPLE_SEED), the
+    !! program (refine3D or refine2D), the discrete alignment pass and the iteration. The tables take it at every
+    !! fill and assignment and set it on the calculator, so that a draw depends on the key alone.
+    function prob_rnd_scope( which_iter, l_2D ) result( scope )
+        integer, intent(in) :: which_iter
+        logical, intent(in) :: l_2D
+        type(rnd_key) :: scope
+        scope = rnd_scope_key(rnd_run_seed(), merge(RND_PROG_REFINE2D, RND_PROG_REFINE3D, l_2D), RND_PASS_ALIGN, which_iter)
+    end function prob_rnd_scope
+
+    !> The sparse fills' candidate order of a particle: its previous reference (or class) last, the others in a
+    !! keyed partial Fisher-Yates permutation (family CAND, one keyed uniform per swap), so the order depends on
+    !! the particle and the scope alone, never on the thread
+    subroutine keyed_candidate_order( scope, iptcl, n, iprev, order )
+        type(rnd_key), intent(in)    :: scope
+        integer,       intent(in)    :: iptcl, n, iprev
+        integer,       intent(inout) :: order(n)
+        integer :: j
+        do j = 1, n
+            order(j) = j
+        enddo
+        if( iprev >= 1 .and. iprev <= n )then
+            order(iprev) = n
+            order(n)     = iprev
+            if( n > 1 ) call rnd_keyed_partial_shuffle(rnd_draw_key(scope, iptcl, RND_FAM_CAND), order(1:n-1), n-1)
+        else
+            call rnd_keyed_partial_shuffle(rnd_draw_key(scope, iptcl, RND_FAM_CAND), order, n)
+        endif
+    end subroutine keyed_candidate_order
+
+    !> The weighted insertion's cone from the current FSCs: per state the rim limit is the FSC=0.5 resolution,
+    !! bounded by the matching low-pass limit when one is set (lp > 0); a state without an FSC file gets no cone.
+    !! The rim limits are reported unless l_report is false (a distributed part, whose log the next schedule wipes;
+    !! its master reports the same cone from the same files)
+    function insert_cone_from_fsc( nstates, box, smpd, mskdiam, lp, l_report ) result( cone )
+        integer,           intent(in) :: nstates, box
+        real,              intent(in) :: smpd, mskdiam, lp
+        logical, optional, intent(in) :: l_report
+        type(prob_insert_cone) :: cone
+        real, allocatable :: res05(:), fsc(:), res(:)
+        type(string) :: fname
+        real    :: fsc05, fsc0143
+        integer :: s
+        logical :: ll_report
+        character(len=32) :: limit, angle, shift
+        ll_report = .true.
+        if( present(l_report) ) ll_report = l_report
+        allocate(res05(nstates), source=0.)
+        res = get_resarr(box, smpd)
+        do s = 1,nstates
+            fname = refine3D_fsc_fname(s)
+            if( .not. file_exists(fname) ) cycle
+            fsc = file2rarr(fname)
+            if( size(fsc) < 1 .or. size(fsc) > size(res) ) cycle
+            call get_resolution(fsc, res(:size(fsc)), fsc05, fsc0143)
+            res05(s) = fsc05
+            if( lp > 0. ) res05(s) = min(res05(s), lp)
+            deallocate(fsc)
+        enddo
+        call cone%new(res05, mskdiam, smpd)
+        do s = 1,nstates
+            if( .not. ll_report ) exit
+            if( cone%get_angle(s) < 0. ) cycle
+            write(limit,'(F32.2)') res05(s)
+            write(angle,'(F32.2)') cone%get_angle(s)
+            write(shift,'(F32.2)') res05(s) / smpd
+            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT CONE (state ', s, &
+                &'): rim limit '//trim(adjustl(limit))//' A, i.e. '//trim(adjustl(angle))//' deg of rotation or '//&
+                &trim(adjustl(shift))//' px of shift'
+        enddo
+        call fname%kill
+    end function insert_cone_from_fsc
+
+    !> the dynamic centring's disk set of the iteration (shift_sigma > 0): the sampled particles not yet centred in
+    !! this workflow and those whose prior width exceeds a third of the window, and the widths' median and 90th
+    !! percentile over the centred ones; printed by the project owner after the sample draw
+    subroutine print_disk_set( os, l_centring, trs, pinds, nptcls )
+        class(oris), intent(inout) :: os
+        logical,     intent(in)    :: l_centring
+        real,        intent(in)    :: trs
+        integer,     intent(in)    :: pinds(:), nptcls
+        real, allocatable :: shsig(:), widths(:)
+        integer :: i, nnew, nwide, nw
+        if( .not. l_centring ) return
+        if( nptcls < 1 ) return
+        shsig = os%get_all('shsig')
+        nnew  = 0
+        nwide = 0
+        do i = 1, nptcls
+            if( shsig(pinds(i)) < 0. )then
+                nnew = nnew + 1
+            else if( shift_needs_disk(shsig(pinds(i)), trs) )then
+                nwide = nwide + 1
+            endif
+        enddo
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', nnew + nwide, ' OF ', nptcls,&
+            &' SAMPLED PARTICLES (', nnew, ' NOT YET CENTRED, ', nwide, ' WIDE)'
+        nw = count(shsig(pinds(1:nptcls)) >= 0.)
+        if( nw > 0 )then
+            widths = pack(shsig(pinds(1:nptcls)), shsig(pinds(1:nptcls)) >= 0.)
+            call hpsort(widths)
+            write(logfhandle,'(A,F0.2,A,F0.2,A)') '>>> SHIFT PRIOR WIDTH (PX) MEDIAN ', widths(max(1, nw / 2)),&
+                &' 90TH PCT ', widths(max(1, (9 * nw) / 10)), ' OVER THE CENTRED PARTICLES'
+            deallocate(widths)
+        endif
+        deallocate(shsig)
+    end subroutine print_disk_set
 
 end module simple_eul_prob_tab_utils

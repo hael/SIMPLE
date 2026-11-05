@@ -53,5 +53,5 @@ Unit suites are in the subfolder guides. Workflow checks (`build/bin/simple_test
 ## See also
 
 `doc/policies/3D/refine3D_policy.md` sections 3-4, `doc/policies/2D/solve2D_policy.md`,
-`doc/implementation_notes/planned/prob_align_batch_pipeline.md` (replaces the global table);
+`doc/implementation_notes/completed/prob_align_batch_pipeline.md` (replaces the global table);
 skills `simple-refine3d`, `simple-solve2d`, `simple-solve3d-importance-sampling`, `simple-modern-fortran`.

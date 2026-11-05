@@ -279,7 +279,7 @@ and results. Do not attribute historical or unobserved Linux runs to this work.
 ## 6. Deferred work and review decisions
 
 - The speed-week goal of one worker per partition per iteration is now owned by
-  the [batch-pipeline plan](../../implementation_notes/planned/prob_align_batch_pipeline.md).
+  the [batch-pipeline plan](../../implementation_notes/completed/prob_align_batch_pipeline.md).
   The earlier waiting-worker fold was dropped; no second worker framework is
   part of this polar refactor.
 - The old distributed-master project-read item has substantially advanced:

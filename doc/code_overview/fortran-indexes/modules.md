@@ -22,7 +22,7 @@
 | `simple_ansi_ctrls_tester` | defs/simple_ansi_ctrls_tester.f90 | 1 |
 | `simple_atomic_species` | main/nano/simple_atomic_species.f90 | 23 |
 | `simple_atoms` | main/nano/simple_atoms.f90 | 59 |
-| `simple_atoms_tester` | main/nano/simple_atoms_tester.f90 | 16 |
+| `simple_atoms_tester` | main/nano/simple_atoms_tester.f90 | 17 |
 | `simple_bench_io` | fileio/simple_bench_io.f90 | 2 |
 | `simple_binoris` | fileio/simple_binoris.f90 | 30 |
 | `simple_binoris_io` | fileio/simple_binoris_io.f90 | 4 |
@@ -98,7 +98,6 @@
 | `simple_commanders_postprocess_nu` | main/commanders/simple/simple_commanders_postprocess_nu.f90 | 1 |
 | `simple_commanders_postprocess_pdb_tester` | main/commanders/simple/simple_commanders_postprocess_pdb_tester.f90 | 1 |
 | `simple_commanders_preprocess` | main/commanders/simple/simple_commanders_preprocess.f90 | 4 |
-| `simple_commanders_prob` | main/commanders/simple/simple_commanders_prob.f90 | 11 |
 | `simple_commanders_project_cls` | main/commanders/simple/simple_commanders_project_cls.f90 | 3 |
 | `simple_commanders_project_core` | main/commanders/simple/simple_commanders_project_core.f90 | 23 |
 | `simple_commanders_project_mov` | main/commanders/simple/simple_commanders_project_mov.f90 | 2 |
@@ -128,7 +127,7 @@
 | `simple_commanders_stream_p06_pool2D` | main/commanders/stream/simple_commanders_stream_p06_pool2D.f90 | 2 |
 | `simple_commanders_stream_p07_solve3D_multistate` | main/commanders/stream/simple_commanders_stream_p07_solve3D_multistate.f90 | 2 |
 | `simple_commanders_test_class` | main/commanders/test/simple_commanders_test_class.f90 | 51 |
-| `simple_commanders_test_highlevel` | main/commanders/test/simple_commanders_test_highlevel.f90<br>main/commanders/test/simple_commanders_test_highlevel_addon.f90<br>main/commanders/test/simple_commanders_test_highlevel_backends.f90<br>main/commanders/test/simple_commanders_test_highlevel_cont.f90<br>main/commanders/test/simple_commanders_test_highlevel_fixture.f90<br>main/commanders/test/simple_commanders_test_highlevel_flex.f90<br>main/commanders/test/simple_commanders_test_highlevel_frac.f90<br>main/commanders/test/simple_commanders_test_highlevel_matchbench.f90<br>main/commanders/test/simple_commanders_test_highlevel_msworkflows.f90<br>main/commanders/test/simple_commanders_test_highlevel_pcg.f90<br>main/commanders/test/simple_commanders_test_highlevel_stream.f90<br>main/commanders/test/simple_commanders_test_highlevel_suite.f90<br>main/commanders/test/simple_commanders_test_highlevel_workflow.f90 | 153 |
+| `simple_commanders_test_highlevel` | main/commanders/test/simple_commanders_test_highlevel.f90<br>main/commanders/test/simple_commanders_test_highlevel_addon.f90<br>main/commanders/test/simple_commanders_test_highlevel_backends.f90<br>main/commanders/test/simple_commanders_test_highlevel_cont.f90<br>main/commanders/test/simple_commanders_test_highlevel_fixture.f90<br>main/commanders/test/simple_commanders_test_highlevel_flex.f90<br>main/commanders/test/simple_commanders_test_highlevel_frac.f90<br>main/commanders/test/simple_commanders_test_highlevel_matchbench.f90<br>main/commanders/test/simple_commanders_test_highlevel_msworkflows.f90<br>main/commanders/test/simple_commanders_test_highlevel_pcg.f90<br>main/commanders/test/simple_commanders_test_highlevel_stream.f90<br>main/commanders/test/simple_commanders_test_highlevel_suite.f90<br>main/commanders/test/simple_commanders_test_highlevel_workflow.f90 | 154 |
 | `simple_commanders_test_single` | main/commanders/test/simple_commanders_test_single.f90 | 47 |
 | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 6 |
 | `simple_commanders_validate` | main/commanders/simple/simple_commanders_validate.f90 | 3 |
@@ -169,12 +168,12 @@
 | `simple_error` | fileio/simple_error.f90 | 3 |
 | `simple_estimate_ssnr` | utils/filter/simple_estimate_ssnr.f90 | 25 |
 | `simple_euclid_sigma2` | main/sigma2/simple_euclid_sigma2.f90 | 17 |
-| `simple_eul_prob_tab` | main/strategies/search/probabilistic/simple_eul_prob_tab.f90 | 48 |
-| `simple_eul_prob_tab2D` | main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90 | 53 |
-| `simple_eul_prob_tab2D_tester` | main/strategies/search/probabilistic/simple_eul_prob_tab2D_tester.f90 | 13 |
-| `simple_eul_prob_tab_neigh` | main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90 | 52 |
+| `simple_eul_prob_tab` | main/strategies/search/probabilistic/simple_eul_prob_tab.f90 | 40 |
+| `simple_eul_prob_tab2D` | main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90 | 35 |
+| `simple_eul_prob_tab2D_tester` | main/strategies/search/probabilistic/simple_eul_prob_tab2D_tester.f90 | 12 |
+| `simple_eul_prob_tab_neigh` | main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90 | 49 |
 | `simple_eul_prob_tab_tester` | main/strategies/search/probabilistic/simple_eul_prob_tab_tester.f90 | 32 |
-| `simple_eul_prob_tab_utils` | main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90 | 70 |
+| `simple_eul_prob_tab_utils` | main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90 | 84 |
 | `simple_exec_api` | main/apis/simple_exec_api.f90 | 0 |
 | `simple_exec_cavgproc` | main/exec/simple_exec_cavgproc.f90 | 1 |
 | `simple_exec_denoise` | main/exec/simple_exec_denoise.f90 | 1 |
@@ -197,7 +196,7 @@
 | `simple_exec_sym` | main/exec/simple_exec_sym.f90 | 1 |
 | `simple_exec_validate` | main/exec/simple_exec_validate.f90 | 1 |
 | `simple_exec_volume` | main/exec/simple_exec_volume.f90 | 1 |
-| `simple_external_reference_pose_initialization` | main/simple_external_reference_pose_initialization.f90 | 4 |
+| `simple_external_reference_pose_initialization` | main/simple_external_reference_pose_initialization.f90 | 3 |
 | `simple_extract_strategy` | main/strategies/parallelization/simple_extract_strategy.f90 | 24 |
 | `simple_fftw3` | defs/simple_fftw3.f90 | 138 |
 | `simple_fileio` | fileio/simple_fileio.f90 | 56 |
@@ -337,7 +336,7 @@
 | `simple_matcher_ptcl_batch` | main/strategies/search/simple_matcher_ptcl_batch.f90 | 12 |
 | `simple_matcher_ptcl_io` | main/strategies/search/simple_matcher_ptcl_io.f90 | 34 |
 | `simple_matcher_refvol_utils` | main/strategies/search/simple_matcher_refvol_utils.f90 | 23 |
-| `simple_matcher_smpl_and_lplims` | main/strategies/search/simple_matcher_smpl_and_lplims.f90 | 13 |
+| `simple_matcher_smpl_and_lplims` | main/strategies/search/simple_matcher_smpl_and_lplims.f90 | 17 |
 | `simple_math` | utils/math/simple_math.f90 | 44 |
 | `simple_math_ctf` | utils/math/simple_math_ctf.f90 | 4 |
 | `simple_math_ft` | utils/math/simple_math_ft.f90 | 20 |
@@ -402,7 +401,7 @@
 | `simple_ori_tester` | main/ori/simple_ori_tester.f90 | 35 |
 | `simple_ori_utils` | main/ori/simple_ori_utils.f90 | 16 |
 | `simple_oris` | main/ori/simple_oris.f90<br>main/ori/simple_oris_dists.f90<br>main/ori/simple_oris_getters.f90<br>main/ori/simple_oris_io.f90<br>main/ori/simple_oris_life.f90<br>main/ori/simple_oris_neig.f90<br>main/ori/simple_oris_reshape.f90<br>main/ori/simple_oris_sampling.f90<br>main/ori/simple_oris_setters.f90<br>main/ori/simple_oris_stats.f90<br>main/ori/simple_oris_transform.f90 | 490 |
-| `simple_oris_tester` | main/ori/simple_oris_tester.f90 | 32 |
+| `simple_oris_tester` | main/ori/simple_oris_tester.f90 | 34 |
 | `simple_oris_utils` | main/ori/simple_oris_utils.f90 | 1 |
 | `simple_parameters` | main/params/simple_parameters.f90<br>main/params/simple_parameters_core.f90<br>main/params/simple_parameters_parse.f90<br>main/params/simple_parameters_phases.f90 | 38 |
 | `simple_parameters_registry` | main/params/simple_parameters_registry.f90 | 14 |
@@ -437,7 +436,7 @@
 | `simple_pickref` | main/pick/simple_pickref.f90 | 22 |
 | `simple_pickref_corr_batch` | main/pick/simple_pickref_corr_batch.f90 | 4 |
 | `simple_picksegdiam` | main/pick/simple_picksegdiam.f90 | 10 |
-| `simple_polar_matching_bench` | main/commanders/test/simple_polar_matching_bench.f90 | 25 |
+| `simple_polar_matching_bench` | main/commanders/test/simple_polar_matching_bench.f90 | 38 |
 | `simple_polar_shiftmap` | main/pftc/simple_polar_shiftmap.f90 | 24 |
 | `simple_polar_shiftmap_tester` | main/pftc/simple_polar_shiftmap_tester.f90 | 24 |
 | `simple_polarft_calc` | main/pftc/simple_polarft_access.f90<br>main/pftc/simple_polarft_calc.f90<br>main/pftc/simple_polarft_core.f90<br>main/pftc/simple_polarft_corr.f90<br>main/pftc/simple_polarft_ctf.f90<br>main/pftc/simple_polarft_geom.f90<br>main/pftc/simple_polarft_memo.f90<br>main/pftc/simple_polarft_ops_io.f90<br>main/pftc/simple_polarft_shiftmap.f90 | 282 |
@@ -445,7 +444,6 @@
 | `simple_preprocess_strategy` | main/strategies/parallelization/simple_preprocess_strategy.f90 | 17 |
 | `simple_private_exec_api` | main/apis/simple_private_exec_api.f90 | 0 |
 | `simple_private_prgs` | main/ui/simple_private_prgs.f90 | 9 |
-| `simple_prob_align_strategy` | main/strategies/parallelization/simple_prob_align_strategy.f90 | 10 |
 | `simple_procimgstk` | main/image_processing/simple_procimgstk.f90 | 28 |
 | `simple_progress` | utils/simple_progress.f90 | 9 |
 | `simple_project_merge_tester` | main/project/simple_project_merge_tester.f90 | 14 |
@@ -465,7 +463,7 @@
 | `simple_qsys_async_job` | utils/qsys/simple_qsys_async_job.f90 | 7 |
 | `simple_qsys_base` | utils/qsys/simple_qsys_base.f90 | 5 |
 | `simple_qsys_coarray` | utils/qsys/simple_qsys_coarray.f90 | 5 |
-| `simple_qsys_ctrl` | utils/qsys/simple_qsys_ctrl.f90 | 47 |
+| `simple_qsys_ctrl` | utils/qsys/simple_qsys_ctrl.f90 | 48 |
 | `simple_qsys_ctrl_tester` | utils/qsys/simple_qsys_ctrl_tester.f90 | 16 |
 | `simple_qsys_env` | utils/qsys/simple_qsys_env.f90 | 27 |
 | `simple_qsys_env_tester` | utils/qsys/simple_qsys_env_tester.f90 | 8 |
@@ -496,7 +494,7 @@
 | `simple_reconstructor_tester` | main/volume/simple_reconstructor_tester.f90 | 4 |
 | `simple_reextract_strategy` | main/strategies/parallelization/simple_reextract_strategy.f90 | 21 |
 | `simple_refine2D_fnames` | defs/simple_refine2D_fnames.f90 | 5 |
-| `simple_refine2D_strategy` | main/strategies/parallelization/simple_refine2D_strategy.f90 | 33 |
+| `simple_refine2D_strategy` | main/strategies/parallelization/simple_refine2D_strategy.f90 | 31 |
 | `simple_refine3D_fnames` | defs/simple_refine3D_fnames.f90 | 38 |
 | `simple_refine3D_local_tester` | main/commanders/simple/simple_refine3D_local_tester.f90 | 6 |
 | `simple_refine3D_provenance` | main/volume/simple_refine3D_provenance.f90 | 22 |
@@ -511,8 +509,8 @@
 | `simple_refine_motion_model_strategy` | main/strategies/parallelization/simple_refine_motion_model_strategy.f90 | 32 |
 | `simple_refine_motion_model_tester` | main/strategies/parallelization/simple_refine_motion_model_tester.f90 | 5 |
 | `simple_relion` | main/star/simple_relion.f90 | 11 |
-| `simple_rnd` | utils/math/simple_rnd.f90 | 33 |
-| `simple_rnd_tester` | utils/math/simple_rnd_tester.f90 | 7 |
+| `simple_rnd` | utils/math/simple_rnd.f90 | 46 |
+| `simple_rnd_tester` | utils/math/simple_rnd_tester.f90 | 17 |
 | `simple_sauron` | main/ori/simple_sauron.f90 | 3 |
 | `simple_segdiam_bin_picker` | main/pick/simple_segdiam_bin_picker.f90 | 10 |
 | `simple_segmentation` | main/image_processing/simple_segmentation.f90 | 16 |
@@ -540,8 +538,8 @@
 | `simple_solve3D_manifest_tester` | main/solve/simple_solve3D_manifest_tester.f90 | 21 |
 | `simple_solve3D_reseed_tester` | main/solve/simple_solve3D_reseed_tester.f90 | 9 |
 | `simple_solve3D_utils` | main/solve/simple_solve3D_controller.f90<br>main/solve/simple_solve3D_utils.f90 | 108 |
-| `simple_sp_project` | main/project/simple_sp_project.f90<br>main/project/simple_sp_project_cls.f90<br>main/project/simple_sp_project_core.f90<br>main/project/simple_sp_project_io.f90<br>main/project/simple_sp_project_mic.f90<br>main/project/simple_sp_project_optics.f90<br>main/project/simple_sp_project_out.f90<br>main/project/simple_sp_project_ptcl.f90<br>main/project/simple_sp_project_stk.f90 | 247 |
-| `simple_sp_project_tester` | main/project/simple_sp_project_tester.f90 | 17 |
+| `simple_sp_project` | main/project/simple_sp_project.f90<br>main/project/simple_sp_project_cls.f90<br>main/project/simple_sp_project_core.f90<br>main/project/simple_sp_project_io.f90<br>main/project/simple_sp_project_mic.f90<br>main/project/simple_sp_project_optics.f90<br>main/project/simple_sp_project_out.f90<br>main/project/simple_sp_project_ptcl.f90<br>main/project/simple_sp_project_stk.f90 | 251 |
+| `simple_sp_project_tester` | main/project/simple_sp_project_tester.f90 | 18 |
 | `simple_srch_sort_loc` | utils/math/simple_srch_sort_loc.f90 | 27 |
 | `simple_srch_sort_loc_tester` | utils/math/simple_srch_sort_loc_tester.f90 | 19 |
 | `simple_srchspace_map` | main/strategies/search/simple_srchspace_map.f90 | 11 |
@@ -552,7 +550,7 @@
 | `simple_starfile` | main/star/simple_starfile.f90 | 12 |
 | `simple_starfile_tester` | main/star/simple_starfile_tester.f90 | 35 |
 | `simple_starfile_wrappers` | main/star/simple_starfile_wrapper.f90 | 63 |
-| `simple_starproject` | main/star/simple_starproject.f90 | 28 |
+| `simple_starproject` | main/star/simple_starproject.f90 | 30 |
 | `simple_starproject_stream` | main/star/simple_starproject_stream.f90 | 14 |
 | `simple_starproject_stream_tester` | main/star/simple_starproject_stream_tester.f90 | 9 |
 | `simple_starproject_tester` | main/star/simple_starproject_tester.f90 | 39 |
@@ -570,12 +568,12 @@
 | `simple_strategy2D_greedy_smpl` | main/strategies/search/simple_strategy2D_greedy_smpl.f90 | 3 |
 | `simple_strategy2D_inpl` | main/strategies/search/simple_strategy2D_inpl.f90 | 3 |
 | `simple_strategy2D_inpl_smpl` | main/strategies/search/simple_strategy2D_inpl_smpl.f90 | 3 |
-| `simple_strategy2D_matcher` | main/strategies/search/simple_strategy2D_matcher.f90 | 15 |
+| `simple_strategy2D_matcher` | main/strategies/search/simple_strategy2D_matcher.f90 | 18 |
 | `simple_strategy2D_prob` | main/strategies/search/probabilistic/simple_strategy2D_prob.f90 | 3 |
 | `simple_strategy2D_snhc` | main/strategies/search/simple_strategy2D_snhc.f90 | 3 |
 | `simple_strategy2D_snhc_smpl` | main/strategies/search/simple_strategy2D_snhc_smpl.f90 | 3 |
 | `simple_strategy2D_snhc_smpl_many` | main/strategies/search/simple_strategy2D_snhc_smpl_many.f90 | 3 |
-| `simple_strategy2D_srch` | main/strategies/search/simple_strategy2D_srch.f90 | 15 |
+| `simple_strategy2D_srch` | main/strategies/search/simple_strategy2D_srch.f90 | 16 |
 | `simple_strategy2D_tseries` | main/strategies/search/simple_strategy2D_tseries.f90 | 4 |
 | `simple_strategy2D_utils` | main/strategies/search/simple_strategy2D_utils.f90 | 23 |
 | `simple_strategy3D` | main/strategies/search/simple_strategy3D.f90 | 4 |
@@ -588,7 +586,7 @@
 | `simple_strategy3D_greedy_inpl` | main/strategies/search/simple_strategy3D_greedy_inpl.f90 | 4 |
 | `simple_strategy3D_greedy_sub` | main/strategies/search/simple_strategy3D_greedy_sub.f90 | 4 |
 | `simple_strategy3D_inplane_tester` | main/strategies/search/simple_strategy3D_inplane_tester.f90 | 20 |
-| `simple_strategy3D_matcher` | main/strategies/search/simple_strategy3D_matcher.f90 | 13 |
+| `simple_strategy3D_matcher` | main/strategies/search/simple_strategy3D_matcher.f90 | 17 |
 | `simple_strategy3D_pftc` | main/strategies/search/simple_strategy3D_pftc.f90 | 0 |
 | `simple_strategy3D_prob` | main/strategies/search/probabilistic/simple_strategy3D_prob.f90 | 6 |
 | `simple_strategy3D_shc` | main/strategies/search/simple_strategy3D_shc.f90 | 4 |

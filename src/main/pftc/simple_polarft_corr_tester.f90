@@ -11,6 +11,8 @@ use simple_parameters,   only: parameters
 use simple_polarft_calc, only: polarft_calc
 use simple_pftc_shsrch_grad, only: shift_ptcl2ref
 use simple_image,        only: image
+use simple_rnd,          only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_test_utils
 implicit none
 private
@@ -65,6 +67,9 @@ contains
         call set_fixed_seed(20261025)
         kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
         call pftc%new(p, NREFS, [1,NPTCLS], kfromto)
+        ! the keyed draws' scope: one pair draws one variate per scope, so the sampling loops below move the
+        ! scope's iteration from draw to draw
+        call pftc%set_rnd_scope(rnd_scope_key(20261025_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
         pdim  = pftc%get_pdim_srch()
         nrots = pftc%get_nrots()
         call img_self%new([BOX,BOX,1], SMPD)
@@ -116,6 +121,7 @@ contains
         noff    = 0
         max_err = 0.
         do idraw = 1,NDRAWS
+            call pftc%set_rnd_scope(rnd_scope_key(20261025_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, idraw))
             call pftc%gen_posterior_val(1, 1, s, 0., dist, irot)
             if( irot < 1 .or. irot > nrots )then
                 noff = noff + 1
@@ -181,6 +187,7 @@ contains
             nmode_loc = 0
             nnear_loc = 0
             do idraw_loc = 1,NDRAWS
+                call pftc%set_rnd_scope(rnd_scope_key(20261025_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, idraw_loc))
                 call pftc%gen_posterior_val(1, 1, [0.,0.], temp_loc, dist_loc, irot_loc)
                 dstep = min(abs(irot_loc - irot_b), nrots - abs(irot_loc - irot_b))
                 if( irot_loc == irot_b ) nmode_loc = nmode_loc + 1

@@ -11,6 +11,8 @@ use simple_parameters,      only: parameters
 use simple_polarft_calc,    only: polarft_calc, SHIFTMAP_FULL, SHIFTMAP_SCREEN
 use simple_polar_shiftmap,  only: polar_shiftmap, shiftmap_ndirections
 use simple_timer,           only: tic, toc, timer_int_kind
+use simple_rnd,             only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_test_utils
 !$ use omp_lib,             only: omp_get_max_threads, omp_set_num_threads, omp_get_num_procs, omp_get_num_threads
 implicit none
@@ -166,6 +168,7 @@ contains
         call p%new(cline)
         kfromto = [2, KHI]
         call pftc%new(p, 1, [1,1], kfromto)
+        call pftc%set_rnd_scope(rnd_scope_key(20261105_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
         pftsz = pftc%get_pftsz()
         box   = BOXSZ
         call assert_int(PFTSIZE, pftsz, 'the calculator takes the requested pftsz')
@@ -364,6 +367,7 @@ contains
         call p%new(cline)
         kfromto = [2, min(box/2 - 1, max(3, nint(real(box) * smpd / lp)))]
         call pftc%new(p, nrefs, [1,nptcls], kfromto)
+        call pftc%set_rnd_scope(rnd_scope_key(20261105_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
         pftsz = pftc%get_pftsz()
         pdim  = pftc%get_pdim_interp()
         allocate(refs(pdim(1),pdim(2):pdim(3),nrefs,2), ptcls(pdim(1),pdim(2):pdim(3),nptcls), source=cmplx(0.,0.))
@@ -861,7 +865,8 @@ contains
         disc_mean = disc_mean / wsum
         mean_rho  = 0.d0
         do idraw = 1, NDRAWS
-            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, lse_prior, .false., logz, irot, irho, ialpha, loss)
+            call pftc%shiftmap_draw(SHIFTMAP_FULL, 0.d0, prior_w, lse_prior, .false., logz, irot, irho, ialpha, loss,&
+                &ordinal=idraw)
             mean_rho = mean_rho + rhos(irho)
             if( idraw == 1 ) call assert_true(abs(logz) <= 1.d-6, 'at temperature 0 the evidence is 0: the prior is normalised')
         enddo
@@ -1310,7 +1315,7 @@ contains
                 t0 = tic()
                 do irep = 1, nrep
                     call pftc%shiftmap_draw(SHIFTMAP_FULL, temp, 1.d0 / (2.d0 * (10.d0 / SMPD)**2), lse_prior, .false.,&
-                        &logz, irot, irho, ialpha, loss)
+                        &logz, irot, irho, ialpha, loss, ordinal=irep)
                 enddo
                 t_draw = 1.d3 * real(toc(t0),dp) / real(nrep,dp)
                 write(*,'(A,I3,A,I4,A,F9.3,A,F9.3)') '           disk grid ', nrho, ' x ', nalpha, ' | disk ', t_disk,&

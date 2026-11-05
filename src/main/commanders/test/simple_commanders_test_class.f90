@@ -485,7 +485,7 @@ contains
         call add_suite(s, n, 'polar shift map',          run_all_polar_shiftmap_tests)
         call add_suite(s, n, 'continuous in-plane',      run_all_pftc_inplane_tests)
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
-        call add_suite(s, n, '2D probability table I/O', run_all_eul_prob_tab2D_tests)
+        call add_suite(s, n, '2D probability table',     run_all_eul_prob_tab2D_tests)
         call add_suite(s, n, '3D probability table',     run_all_eul_prob_tab_tests)
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
         call add_suite(s, n, 'sigma2 bootstrap',         run_all_sigma2_bootstrap_tests)

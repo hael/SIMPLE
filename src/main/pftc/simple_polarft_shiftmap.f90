@@ -491,8 +491,8 @@ contains
     !! the physical temperature is measured alongside: the standard deviation of the shift (the square root of the
     !! trace of its covariance, in the particle's axes, about the mean), the dynamic centring's state
     module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
-            &temp_phys, sdev, width_cutoff )
-        use simple_rnd,  only: ran3
+            &temp_phys, sdev, width_cutoff, ordinal )
+        use simple_rnd,  only: rnd_keyed, rnd_draw_key, RND_FAM_DISK
         use simple_math, only: rotmat2d
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
@@ -504,12 +504,13 @@ contains
         real(dp),          optional, intent(in)    :: temp_phys
         real(sp),          optional, intent(out)   :: sdev
         real(sp),          optional, intent(in)    :: width_cutoff
+        integer,           optional, intent(in)    :: ordinal      !< the draw's ordinal for the pair (the screen's); 0 by default
         type(shiftmap_work), pointer :: wk
         real(dp) :: offs(self%nrots), scal(self%nrots), rho, loga, lmax, s, tgt, l, pen
         real(dp) :: dcell, lphys, lmax_phys, w, w0, w1(2,self%nrots), w2, xc(2), mean(2), tphys
         real(dp) :: t0, t1
         real     :: rotmat(2,2), v(2)
-        integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3)
+        integer  :: ithr, nrho, nalpha, ir, ro, j, imax(3), iord
         logical  :: l_width, l_mass
         l_width = present(temp_phys) .and. present(sdev)
         l_mass  = present(logz) .or. .not. l_greedy
@@ -604,7 +605,11 @@ contains
             irot   = imax(2)
             irho   = imax(3)
         else
-            tgt    = real(ran3(), dp) * s
+            ! the disk draw: keyed on the scope, the pair the map holds and the draw's ordinal
+            if( .not. self%l_rnd_scope ) THROW_HARD('the disk draw needs the calculator''s scope (set_rnd_scope); shiftmap_draw')
+            iord = 0
+            if( present(ordinal) ) iord = ordinal
+            tgt    = rnd_keyed(rnd_draw_key(self%rnd_scope, wk%iptcl, RND_FAM_DISK, reference=wk%iref, ordinal=iord)) * s
             s      = 0.d0
             ialpha = imax(1)
             irot   = imax(2)

@@ -1,6 +1,8 @@
 # Speed and architecture: before the release, and the next release
 
-Proposal note, 2026-10-18. **Partly implemented: see "Status" below.** The maintainer
+Proposal note, 2026-10-18. **Partly implemented: see "Status" below; the architecture review's
+main item, the batch pipeline of probabilistic alignment, was implemented by the run
+`prob_pipeline` (2026-11-04/05).** The maintainer
 accepted the proposals on 2026-10-18, except two 2D defaults that stay as
 they are (section 1.2 c). It collects the changes proposed after the run
 `speed_mac`, split into what should be done before release 4 and what moves
@@ -26,8 +28,10 @@ suite of the run `test_truth`.
 Source review at `69a623cb8`. This section supersedes the remaining-work order
 below where it conflicts with current code. The older measurements and release
 estimates remain historical evidence, not predictions for the current search.
-The architecture described here is proposed; no implementation or new runtime
-validation accompanies this review.
+The architecture described here was proposed on 2026-11-04 and implemented by
+the run `prob_pipeline` on 2026-11-04/05 (`prob_align_batch_pipeline.md`, its
+Progress section holds the evidence and the measurements); the review's text
+below is kept as the record of what was found.
 
 ### What remains, and what has changed
 
@@ -39,8 +43,10 @@ validation are in the existing
 Further gains should address the workflow's scientific-object lifetimes before
 adding more numerical shortcuts.
 
-The main remaining architectural cost is **probabilistic alignment implemented
-as a table pre-step followed by a separate generic matcher pass**:
+The main remaining architectural cost was **probabilistic alignment implemented
+as a table pre-step followed by a separate generic matcher pass** (resolved by
+the batch pipeline, 2026-11-04; the description that follows is the state
+reviewed):
 
 - Shared-memory strategies still enter commanders that create another toolbox,
   publish/reload project fields, and serialize tables and assignments inside the
@@ -126,6 +132,11 @@ is a hard boundary. Preserve 2D batch/class/half accumulation order initially.
 
 ### RNG is the dependency that must be resolved before batch fusion
 
+Resolved by the keyed, stateless generator of `prob_align_batch_pipeline.md`
+(section 4; phase 1 of the run, 2026-11-04): every draw of the probabilistic
+routes is keyed on the run's seed, the pass, the iteration, the particle and
+the draw. The reasoning below is kept as the record.
+
 The mathematical row independence does not establish byte identity after
 reordering. Candidate evaluation draws in-plane/shift samples; assignment later
 draws in particle order on the master's intrinsic RNG stream. In shared memory
@@ -197,6 +208,34 @@ Reference-neighbourhood tiling, SP weights, alternate contractions and GPU work
 remain separate numerical/locality experiments. Search caps and refined-reference
 budgets are scientific approximations and are not required to remove this
 architectural overhead.
+
+## Status, 2026-11-05
+
+Done by the autonomous run `prob_pipeline` on the Dell, in the working tree
+(`prob_align_batch_pipeline.md`, Progress: phases 0 to 4):
+
+- Every random draw of the probabilistic routes (the sample, the in-plane draw
+  per scored reference, the polar shift map's disk draw, the sparse fills'
+  candidate order, the assignment draw, the diagnostics) comes from a keyed,
+  stateless generator (a multiply-xor-shift hash of the run's seed, the pass,
+  the iteration, the particle and the draw; `simple_rnd`), so a draw depends on
+  none of the thread, the batch, the part or the process. The seed travels as
+  `SIMPLE_SEED`; no new parameter.
+- Probabilistic alignment is one batch pipeline inside `refine3D_exec` and
+  `refine2D_exec`, in shared memory and in every distributed part alike: a
+  batch is prepared once, its probability-table rows filled, each particle's
+  pose or class drawn from its own row with the extras of the weighted
+  insertion, then polished, its residual computed and committed. The master
+  draws the sample, schedules its parts once, merges the parts' readout
+  records in part order and assembles as before. The global table, the part
+  files, the master's assignment step, the table programs and their commanders
+  are retired.
+- Measured (phase 4 of the note): the wall time per iteration and per phase of
+  the trpv1 2D and 3D cases against the base build, the preparations per
+  particle, and the peak resident memory of a worker, of the master and of the
+  node; the identity of the drawn entries across thread counts, batch sizes and
+  part counts holds (the fill harness), and a complete run across part counts
+  agrees to the accumulators' tolerance frozen in phase 0.
 
 ## Status, 2026-11-03
 
@@ -512,7 +551,7 @@ checked).
 ## Part 2. The next release
 
 The architecture review above is carried out by
-[`prob_align_batch_pipeline.md`](prob_align_batch_pipeline.md) (planned
+[`prob_align_batch_pipeline.md`](../completed/prob_align_batch_pipeline.md) (planned
 2026-11-04, ruled done): per-particle draws on keyed random streams, one batch
 pipeline for shared memory and the distributed parts, no global table and no
 part files. It absorbs the rows that stood here for the worker fold, the

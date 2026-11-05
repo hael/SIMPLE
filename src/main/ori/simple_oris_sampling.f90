@@ -1,28 +1,14 @@
 !@descr: sampling and updatecnt related routines for oris
+! The fractional-update samplers draw on the intrinsic stream, or, given a key (the probabilistic routes), on the
+! keyed generator: the key's reference lane counts the sampler's shuffles, its ordinal lane the swap within one
+! (rnd_keyed_partial_shuffle), so a sample depends on the run, the pass, the iteration and the field alone.
 submodule (simple_oris) simple_oris_sampling
 use simple_ori_api
+use simple_rnd, only: rnd_keyed_partial_shuffle
 implicit none
 #include "simple_local_flags.inc"
 
 contains
-
-    module subroutine select_particles_set( self, nptcls, inds )
-        class(oris),          intent(in)    :: self
-        integer,              intent(in)    :: nptcls
-        integer, allocatable, intent(inout) :: inds(:)
-        integer        :: i,n
-        if( allocated(inds) ) deallocate(inds)
-        inds = (/(i,i=1,self%n)/)
-        inds = pack(inds, mask=self%get_all('state') > 0.5)
-        n    = size(inds)
-        if( n < nptcls )then
-            ! if less than desired particles select all
-        else
-            call partial_shuffle(inds, nptcls)
-            inds = inds(1:nptcls)
-            call hpsort(inds)
-        endif
-    end subroutine select_particles_set
 
     ! Active rows of fromto to reconstruct: those with updatecnt > 0 when any
     ! active row of the whole project has been updated, else every active row.
@@ -151,13 +137,14 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_all
 
-    module subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, incr_sampled )
+    module subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, incr_sampled, key )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
+        type(rnd_key), optional, intent(in) :: key
         integer, allocatable :: states(:)
         integer :: i, cnt, nptcls
         nptcls = fromto(2) - fromto(1) + 1
@@ -174,13 +161,29 @@ contains
         if( nptcls == 0 ) THROW_HARD('no active particles to sample')
         inds     = pack(inds, mask=states > 0)
         nsamples = min(nptcls, max(1, nint(update_frac * real(nptcls))))
-        call partial_shuffle(inds, nsamples)
+        call keyed_or_intrinsic_partial_shuffle(inds, nsamples, 1, key)
         inds = inds(1:nsamples)
         call hpsort(inds)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_rnd
 
-    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty )
+    !> the sampler's shuffle number ishuffle of arr's first nshuffle positions: keyed on the key's reference lane
+    !! when a key is given, on the intrinsic stream otherwise
+    subroutine keyed_or_intrinsic_partial_shuffle( arr, nshuffle, ishuffle, key )
+        integer,                 intent(inout) :: arr(:)
+        integer,                 intent(in)    :: nshuffle, ishuffle
+        type(rnd_key), optional, intent(in)    :: key
+        type(rnd_key) :: k
+        if( present(key) )then
+            k           = key
+            k%reference = ishuffle
+            call rnd_keyed_partial_shuffle(k, arr, nshuffle)
+        else
+            call partial_shuffle(arr, nshuffle)
+        endif
+    end subroutine keyed_or_intrinsic_partial_shuffle
+
+    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
@@ -188,6 +191,7 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         logical, optional,    intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in) :: key
         integer, allocatable :: states(:), updatecnts(:), candidates(:), selected(:)
         integer :: i, cnt, nptcls, ucnt
         integer :: ncandidates, nfill, nselected
@@ -224,7 +228,7 @@ contains
             candidates  = pack(inds, mask=updatecnts == ucnt)
             ncandidates = size(candidates)
             nfill = min(nsamples - nselected, ncandidates)
-            if( nfill < ncandidates ) call partial_shuffle(candidates, nfill)
+            if( nfill < ncandidates ) call keyed_or_intrinsic_partial_shuffle(candidates, nfill, 1, key)
             selected(nselected + 1:nselected + nfill) = candidates(:nfill)
             nselected = nselected + nfill
             if( nselected == nsamples ) exit
@@ -240,7 +244,7 @@ contains
     !! populations), each group's share equally over its units (the remainder to the least-updated units),
     !! and a unit draws its quota lowest updatecnt first. Units with group 0 are their own group.
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, &
-        &frac_best, allow_empty )
+        &frac_best, allow_empty, key )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
@@ -250,15 +254,17 @@ contains
         logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
         logical, optional,    intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in) :: key
         integer, allocatable :: states(:), eligible(:), updatecnts(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
         integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
-        integer :: nbest, nfill, ucnt, ucnt_min, ucnt_max
+        integer :: nbest, nfill, ucnt, ucnt_min, ucnt_max, ishuffle
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
         call alloc_unit_quotas(self, clssmp, nsamples_class)
         states_bal = 0
+        ishuffle   = 0
         do i = 1, size(clssmp)
             if( clssmp(i)%nsample < 1 ) cycle
             if( present(frac_best) )then
@@ -284,7 +290,8 @@ contains
                 if( size(inds_pool) >= clssmp(i)%nsample ) exit
                 inds_fill = pack(eligible, mask=updatecnts == ucnt)
                 if( size(inds_fill) == 0 ) cycle
-                call shuffle(inds_fill)
+                ishuffle = ishuffle + 1
+                call keyed_or_intrinsic_shuffle(inds_fill, ishuffle, key)
                 nfill = min(clssmp(i)%nsample - size(inds_pool), size(inds_fill))
                 inds_pool = [inds_pool, inds_fill(1:nfill)]
             end do
@@ -313,6 +320,19 @@ contains
         inds     = pack(inds, mask=states > 0)
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_class
+
+    !> the sampler's full shuffle number ishuffle: keyed when a key is given (every position swapped, front to
+    !! back), on the intrinsic stream otherwise
+    subroutine keyed_or_intrinsic_shuffle( arr, ishuffle, key )
+        integer,                 intent(inout) :: arr(:)
+        integer,                 intent(in)    :: ishuffle
+        type(rnd_key), optional, intent(in)    :: key
+        if( present(key) )then
+            call keyed_or_intrinsic_partial_shuffle(arr, size(arr), ishuffle, key)
+        else
+            call shuffle(arr)
+        endif
+    end subroutine keyed_or_intrinsic_shuffle
 
     !> Integer unit quotas (clssmp%nsample) of the nested equal quota. Inside a group the remainder of
     !! the equal split goes to the units with the lowest mean updatecnt (ties: larger population, then
@@ -537,7 +557,7 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_updated
 
-    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty )
+    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
@@ -545,8 +565,9 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         logical, optional,    intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in) :: key
         integer, allocatable :: updatecnts(:), states(:), updatecnts_active(:), inds_pool(:), inds_fill(:)
-        integer :: i, cnt, nptcls, nptcls_active, maxucnt, nfill, ucnt
+        integer :: i, cnt, nptcls, nptcls_active, maxucnt, nfill, ucnt, ishuffle
         nptcls = fromto(2) - fromto(1) + 1
         if( allocated(inds) ) deallocate(inds)
         allocate(inds(nptcls), states(nptcls), updatecnts(nptcls), source=0)
@@ -570,12 +591,14 @@ contains
         maxucnt           = maxval(updatecnts_active)
         nsamples          = min(nptcls_active, max(1, nint(update_frac * real(nptcls_active))))
         allocate(inds_pool(0), source=0)
+        ishuffle = 0
         ! Prefer never-updated particles first (updatecnt==0), then 1, 2, ...
         do ucnt = 0, maxucnt
             if( size(inds_pool) >= nsamples ) exit
             inds_fill = pack(inds, mask=states > 0 .and. updatecnts == ucnt)
             if( size(inds_fill) == 0 ) cycle
-            call shuffle(inds_fill)
+            ishuffle = ishuffle + 1
+            call keyed_or_intrinsic_shuffle(inds_fill, ishuffle, key)
             nfill = min(nsamples - size(inds_pool), size(inds_fill))
             inds_pool = [inds_pool, inds_fill(1:nfill)]
         enddo

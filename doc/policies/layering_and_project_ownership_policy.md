@@ -58,12 +58,17 @@ Imports point downward. A strategy or domain module does not import a concrete
 commander module (`simple_commanders_<topic>`) **(proposed)**; the controllers
 (`src/main/solve`, the multi-state controller, the final reconstruction, the
 external-reference pose initialization) may, to run whole programs (section 4).
-The strategy modules of the six master steps never import the commander that
-wraps them: a body that needs an in-process commander takes it as a
-`commander_base` dummy **(ruled)**. Shared-memory `refine3D` and `refine2D` run
-those steps through the commanders' `execute(cline)` **(ruled 2026-10-20)**; that
-is the one accepted exception, and it ends if the steps get a shared-memory
-entry on the caller's `(params, build)`.
+The strategy modules of the three master steps (volume assembly, class-average
+assembly, the sigma2 commit) never import the commander that wraps them: a body
+that needs an in-process commander takes it as a `commander_base` dummy
+**(ruled)**. Shared-memory `refine3D` and `refine2D` run those steps through the
+commanders' `execute(cline)` **(ruled 2026-10-20)**; that is the one accepted
+exception, and it ends for a step when the step gets a shared-memory entry on the
+caller's `(params, build)`. It ended for the probabilistic alignment step on
+2026-11-04: the probabilistic routes run as one batch pipeline inside the
+matchers (`refine3D_exec`, `refine2D_exec`) in shared memory and in every
+distributed part alike, and the `prob_align` step, its commanders and its table
+workers were retired on 2026-11-05.
 
 `simple_commanders_api` is an import convenience, not a layer: it re-exports
 `builder`, `parameters`, `cmdline`, `sp_project` and the queue helpers. New
@@ -75,26 +80,29 @@ widening the umbrella).
 | Kind | Examples | Home | Commander |
 |---|---|---|---|
 | Program | `refine3D`, `reconstruct3D`, `preprocess` | a controller or strategy (`create_<x>_strategy`) | `execute(cline)` |
-| Master step: a part of a stage that the master or another workflow runs in process | volume assembly, `prob_align`(`_neigh`), `prob_align2D`, class-average assembly, sigma2 commit | strategy routine `<x>_exec(params, build, explicit args)` in `strategies/parallelization` with a `run_<x>(cline)` entry **(ruled)** | thin wrapper that calls `run_<x>` |
-| Worker step: the per-partition program a scheduler starts | the probability-table workers, the matchers' `refine3D_exec`/`refine2D_exec`, `calc_pspec` parts | the matcher or strategy module beside the master routine for the same step **(proposed)** | thin shell: `params`, builder, body, `qsys_declare_part_finished`, `simple_end` |
+| Master step: a part of a stage that the master or another workflow runs in process | volume assembly, class-average assembly, sigma2 commit | strategy routine `<x>_exec(params, build, explicit args)` in `strategies/parallelization` with a `run_<x>(cline)` entry **(ruled)** | thin wrapper that calls `run_<x>` |
+| Worker step: the per-partition program a scheduler starts | the matchers' `refine3D_exec`/`refine2D_exec` (the probabilistic routes' fills, draws and polish inside, the same body in shared memory), `calc_pspec` parts | the matcher or strategy module beside the master routine for the same step **(proposed)** | thin shell: `params`, builder, body, `qsys_declare_part_finished`, `simple_end` |
 | Domain operation | restore class averages, assemble volumes' reduction, NU filter | domain module | none |
 
 A step that is *part of a stage* is never a commander called from a strategy.
 Typed entry points beside `execute(cline)` (`execute_from_project`,
 `execute_hand_on`) were deleted and do not come back **(ruled)**.
 
-**Variants share one skeleton (proposed).** The probability-table workers for
-3D, 3D-neighbourhood and 2D, and any future worker, repeat the same frame:
-`params`/builder set-up, reproduction of the master's sample
-(`sample4update_reprod`), the empty-partition contribution, batching with
-`split_nobjs_even`, the benchmark timers, and the completion call. Write that
-frame once; a variant supplies only what differs (which table, which
-references, which fill). A new variant that copies the frame is rejected in
-review.
+**Variants share one skeleton (proposed).** A worker's frame is `params`/builder
+set-up, reproduction of the master's sample (`sample4update_reprod`), the
+empty-partition contribution, batching with `split_nobjs_even`, the benchmark
+timers, and the completion call. The matchers hold it once for the search
+workers; the three probability-table workers that each carried their own copy
+were retired with the batch pipeline (2026-11-05). Write that frame once; a
+variant supplies only what differs. A new variant that copies the frame is
+rejected in review.
 
 **A worker reproduces, never redraws (ruled).** The master draws the sample and
 writes it; a worker reproduces it (`sample4update_reprod`) and stops with an
-error if the field was not sampled.
+error if the field was not sampled. The draws inside a part (the probabilistic
+routes' in-plane, shift-map, candidate and assignment draws) are keyed on the
+run's seed, the pass, the iteration, the particle and the draw, so a part draws
+the same whatever its thread count, batch size or partition (2026-11-04).
 
 **Whole programs inside a program.** A controller (`solve3D`, `refine3D_auto`,
 the multi-state controller) may run whole programs as stages by calling their
@@ -133,7 +141,7 @@ process reads it can be seen half-written.
    A stream stage and the 2D pool each own the files they write. Two processes
    never write one file.
 2. **Workers read the file and write part files** (orientation documents,
-   probability tables, partial sums); a worker does not write the project
+   partial sums, the readout record of a probabilistic part); a worker does not write the project
    **(proposed)**. The master reads only what the workers write, and merges
    their documents in memory with `merge_algndocs(..., write=.false.)`
    **(ruled)**.
@@ -185,7 +193,9 @@ process reads it can be seen half-written.
   search toolbox, the band, the model), not a second builder **(proposed)**.
 - A routine on the caller's `(params, build)` runs at the thread count it is
   given, saves and restores nothing but its own, and draws from the random
-  generator without a reseed **(ruled)**.
+  generator without a reseed **(ruled)**; the probabilistic routes draw through
+  the keyed, stateless generator (`rnd_keyed`), never through a stream a reseed
+  could move.
 
 ## 7. Red flags in review
 
@@ -199,7 +209,7 @@ Each is a signal to ask "what already does this?":
 - `sample4update_reprod`, `split_nobjs_even` and `qsys_declare_part_finished`
   together in a new commander: a third copy of the worker frame.
 - A message or `qsys_declare_part_finished` label that names another module
-  (evidence of a copy; `exec_prob_tab` labels itself `simple_commanders_refine3D`).
+  (evidence of a copy).
 - `use simple_commanders_<topic>` of a concrete commander module in a strategy
   or domain module, or a routine added to a commander module for a strategy to
   call (`postprocess_volume_from_files`).
@@ -208,23 +218,19 @@ Each is a signal to ask "what already does this?":
 - A new `optional` argument that only one caller omits, added to avoid reading
   the caller's code.
 
-## 8. Known deviations (2026-10-21)
+## 8. Known deviations (2026-10-21; the probabilistic alignment entries closed 2026-11-05)
 
 Measured on the working tree at `fd5b5bc8e`. They are the ledger of what the
 rules above do not yet describe; each one's fix is a planned item, not a
-precedent.
+precedent. The entries the batch pipeline of probabilistic alignment closed
+(the worker frames of the probability-table workers in commanders, the
+`prob_align` commanders imported by the strategies, the shared-memory
+write-and-reread around the `prob_align` step) are gone from the list.
 
-- **Worker frames in commanders.** `exec_prob_tab`, `exec_prob_tab_neigh` and
-  `exec_prob_tab2D` (`commanders/simple/simple_commanders_prob.f90`) each carry
-  their own frame (100, 113 and 137 lines), and `write_prob_tab_bench` and
-  `write_empty_prob_tab` are local to that module. In shared memory,
-  `prob_align_exec` writes the sample to the project file and runs the table
-  through `xprob_tab%execute(cline)`, which reads the file again.
 - **Concrete commander modules imported by strategies.**
-  `simple_refine3D_strategy` (`commit_sigma2`, `prob_align`(`_neigh`) by the
-  shared-memory ruling; also `rec3D` and `postprocess`),
-  `simple_refine2D_strategy` (`commit_sigma2`, `prob_align2D` by the same ruling;
-  also `make_cavgs`, `make_cavgs_distr`, `scale`), `simple_calc_pspec_strategy`
+  `simple_refine3D_strategy` (`commit_sigma2` by the shared-memory ruling; also
+  `rec3D` and `postprocess`), `simple_refine2D_strategy` (`commit_sigma2` by the
+  same ruling; also `make_cavgs`, `make_cavgs_distr`, `scale`), `simple_calc_pspec_strategy`
   (`calc_pspec_assemble`), `simple_pick_strategy` (`cluster_cavgs`) and
   `simple_rec3D_service` (`postprocess_volume_from_files`, a routine that lives
   in `simple_commanders_volops`). The controllers import them by design
@@ -237,17 +243,17 @@ precedent.
   `cfar` update), so a distributed `rec_backend=pcg` iteration writes the field
   once more than `3D/refine3D_policy.md` section 4 counts.
 - **Shared memory hands over through the file.** A shared-memory `refine3D`
-  iteration writes the particle field at up to five points (after the model,
-  before `prob_align`, before a file-based assembly, around a polish pass, at
-  the iteration's end) and re-reads it after the `prob_align` commander, because
-  each commander it calls builds its own `params` and builder from the file.
+  iteration writes the particle field at up to four points (after the model,
+  before a file-based assembly, around a polish pass, at the iteration's end),
+  because each commander it calls builds its own `params` and builder from the
+  file; the write before the probabilistic step and the re-read after it ended
+  with the pipeline (2026-11-04).
 - **The 2D master writes `ptcl2D` more than once.** The distributed `refine2D`
   master writes it in `merge_algndocs` (called without `write=.false.`), after
   assembly (`run_distributed_cavg_assembly`) and in `distr_finalize_iteration`,
-  and once more after sampling in `prob_align2D_exec`: three writes per
-  iteration, four in probabilistic mode, against the one of section 5.4.
-  Shared-memory `refine2D` in probabilistic mode writes it twice and re-reads it
-  once.
+  and once more before the parts when it draws the iteration's sample (the
+  sampled and the probabilistic modes): three writes per iteration, four with a
+  sample, against the one of section 5.4.
 - **A domain module imports a strategy module.** `ptcl_read_session` lives in
   `strategies/search/simple_matcher_ptcl_io.f90` but `class/`, `volume/` and
   `flex/` use it.
@@ -309,7 +315,7 @@ Proposed, not built:
   count may fall but not rise: strategy/domain modules that import commander
   modules; commander `exec_*` routines over 150 lines; `params%new` and
   builder construction in strategy modules; `sample4update_reprod` outside the
-  matchers and the shared worker frame; `write`/`write_segment_inside` in code
+  matchers; `write`/`write_segment_inside` in code
   that runs as a worker. Add it to the fast gate once the baseline is clean of
   false positives.
 - Project I/O counters in `sp_project` (reads and writes by segment, printed

@@ -1,5 +1,6 @@
 !@descr: high-level search routines for the refine2D and solve2D applications
 module simple_strategy2D_matcher
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
@@ -10,11 +11,15 @@ use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_declare_part_finished
 use simple_syslib,                   only: get_peak_rss_bytes, get_node_mem_in_use_bytes
 use simple_matcher_ptcl_io,          only: ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, &
-    &write_ptcl_read_bench_context, ptcl_read_session, release_pass_buffer
+    &write_ptcl_read_bench_context, ptcl_read_session, ptcl_buffer_budget
+use simple_eul_prob_tab_utils,       only: prob_readout, prob_readout_fname, write_prob_readout, PROB_READOUT_2D_DENSE, &
+    &prob_fill_profile, write_fill_profile_bench, &
+    &PROB_READOUT_2D_SPARSE
+use simple_type_defs,                only: ptcl_ref
 use simple_strategy2D,               only: strategy2D, strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
-                                           refine2D_blends_carryover, master_draws_sample2D
+                                           refine2D_blends_carryover, master_draws_sample2D, sample_ptcls4prob2D
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
     &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D
 use simple_imgarr_utils,             only: alloc_imgarr
@@ -34,7 +39,6 @@ use simple_matcher_2Dprep,           only: ptcl_on_disk
 implicit none
 
 public :: refine2D_exec
-public :: set_b_p_ptrs2D
 public :: ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
 private
 #include "simple_local_flags.inc"
@@ -44,10 +48,11 @@ class(builder),    pointer :: b_ptr => null()
 class(parameters), pointer :: p_ptr => null()
 real(timer_int_kind)       :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
 real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_tot
-real(timer_int_kind)       :: rt_cavg_interp_splat, rt_sigma2_write
+real(timer_int_kind)       :: rt_cavg_interp_splat, rt_sigma2_write, rt_fill_tab, rt_assign
+type(prob_fill_profile)    :: fill_prof
 real(dp)                   :: ts_search, wall_search, ts_sums, wall_sums  !< thread-seconds and wall of the regions
 integer(timer_int_kind)    :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
-integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot, t_sigma2_write
+integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot, t_sigma2_write, t_fill_tab, t_assign
 
 type :: refine2D_ctrl
     character(len=:), allocatable :: refine_flag
@@ -62,17 +67,11 @@ type :: refine2D_ctrl
     logical :: l_restore_cavgs
     logical :: l_require_full_assignment
     logical :: l_crop_sums
+    logical :: l_pipeline   !< the probabilistic pipeline: the fill and the class draw per batch, in this process
     logical :: do_bench
 end type refine2D_ctrl
 
 contains
-
-    subroutine set_b_p_ptrs2D( params, build )
-        class(parameters), target, intent(in) :: params
-        class(builder),    target, intent(in) :: build
-        p_ptr => params
-        b_ptr => build
-    end subroutine set_b_p_ptrs2D
 
     !>  \brief  is the prime2D algorithm: samples, searches, accumulates the class sums and writes the orientations
     !!  and sigma2 rows; a distributed worker writes its class-sum contribution, shared memory returns with the sums in
@@ -95,11 +94,14 @@ contains
         real    :: frac_srch_space, neigh_frac
         logical :: l_map_classic
         integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
+        integer, allocatable :: pinds_glob(:)
+        integer :: neff_nglob, neff_rank0
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, ithr, nthr_team
         real(dp), allocatable  :: ts_thr(:)
         real(dp)               :: t_region, t_ptcl
         type(ptcl_read_counts) :: reads0, reads_srch
         type(ptcl_read_session) :: reads
+        integer(int64)          :: pipeline_bytes, pipeline_budget
         p_ptr => params
         b_ptr => build
         call init_ctrl()
@@ -145,9 +147,14 @@ contains
         l_map_classic = p_ptr%l_centring .and. (.not. p_ptr%l_prob_align_mode) .and. trim(p_ptr%tseries) /= 'yes'
         if( l_map_classic ) call setup_shiftmap_srch(p_ptr, b_ptr)
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
-        if( ctrl%l_prob_align )then
-            call eulprob_obj_part%new_assignment(p_ptr,b_ptr,pinds)
-            call eulprob_obj_part%read_assignment(string(ASSIGNMENT_FBODY)//'.dat')
+        if( ctrl%l_pipeline )then
+            ! a partition without a sampled particle runs no batch, so no pipeline; a distributed part without one
+            ! publishes a zero readout record (the master merges every part's)
+            if( nptcls2update > 0 )then
+                call begin_pipeline()
+            else if( p_ptr%l_distr_worker )then
+                call write_empty_readout()
+            endif
         endif
         allocate(strategy2Dsrch(batchsz_max))
         if( ctrl%do_bench ) reads0 = ptcl_read_counts_now()
@@ -156,6 +163,9 @@ contains
         rt_align = 0.0
         rt_cavg  = 0.0
         rt_cavg_interp_splat = 0.0
+        rt_fill_tab = 0.0
+        fill_prof   = prob_fill_profile()
+        rt_assign   = 0.0
         ! busy time per thread of the team the search runs on
         nthr_team = omp_get_max_threads()
         allocate(ts_thr(nthr_team), source=0.d0)
@@ -168,7 +178,9 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles_local()
-            call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end) )
+            if( ctrl%l_pipeline ) call pipeline_batch()
+            call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end), &
+                &l_order=.not. ctrl%l_prob_align )
             if( ctrl%do_bench ) t_align = tic()
             t_region = omp_get_wtime()
             ! Preserve initialized lifecycle flags and pointers in each thread's working objects. A particle's cost
@@ -214,9 +226,11 @@ contains
             call restore_class_averages_for_batch()
             if( ctrl%do_bench ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo
+        if( ctrl%l_pipeline .and. nptcls2update > 0 )then
+            call eulprob_obj_part%close_assignment
+            if( ctrl%do_bench ) fill_prof = eulprob_obj_part%get_fill_profile()
+        endif
         call reads%kill
-        ! the particle buffer the shared-memory probability table filled for this iteration
-        call release_pass_buffer
         ts_search = sum(ts_thr)
         deallocate(ts_thr)
         if( ctrl%do_bench ) reads_srch = ptcl_read_counts_since(reads0)
@@ -273,16 +287,42 @@ contains
             ! The class averages live at box_crop, so their sums take the Fourier-cropped particles, made in
             ! memory from the full-size read; the stream's 2D pool keeps the full-size path
             ctrl%l_crop_sums = crop_particles2D(p_ptr)
+            ! the probabilistic pipeline runs on the caller's project, in shared memory and in every distributed part
+            ! alike (the master draws the sample, a part reproduces its share and publishes its readouts)
+            ctrl%l_pipeline  = ctrl%l_prob_align
+            if( ctrl%l_pipeline .and. ctrl%l_stream .and. p_ptr%l_distr_worker )then
+                THROW_HARD('the stream''s pool runs the classic 2D routes; a probabilistic part of it has no master sample; refine2D_exec')
+            endif
         end subroutine init_ctrl
+
+        !> a part without a sampled particle publishes a zero readout record (the master merges every part's and takes
+        !! the class count from the parts that assigned)
+        subroutine write_empty_readout()
+            type(prob_readout) :: rec
+            rec%route = merge(PROB_READOUT_2D_SPARSE, PROB_READOUT_2D_DENSE, trim(p_ptr%refine) == 'prob_neigh')
+            call write_prob_readout(rec, prob_readout_fname(p_ptr%part, p_ptr%numlen))
+        end subroutine write_empty_readout
 
         subroutine sample_particles_for_update()
             if( allocated(pinds) ) deallocate(pinds)
-            if( ctrl%l_prob_align )then
-                ! prob_align2D owns the outer subset sampling in probabilistic mode;
-                ! refine2D only reproduces that same subset for the downstream update
-                ! (a distributed partition may hold none of it)
-                call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds, &
-                    &allow_empty=p_ptr%l_distr_worker)
+            if( ctrl%l_pipeline )then
+                if( p_ptr%l_distr_worker )then
+                    ! the distributed master drew this iteration's sample over the whole project (keyed); the part
+                    ! reproduces its share (a partition may hold none of it) and notes its place in the sample for
+                    ! the n_eff readout's rows, chosen by global rank
+                    call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds, &
+                        &allow_empty=.true.)
+                    call b_ptr%spproj_field%sample4update_reprod([1,p_ptr%nptcls], neff_nglob, pinds_glob, &
+                        &allow_empty=.true.)
+                    neff_rank0 = count(pinds_glob < p_ptr%fromp)
+                    deallocate(pinds_glob)
+                else
+                    ! the project owner draws the iteration's sample (keyed) and prints the disk set; the stream's
+                    ! and the chunks' rule of the full update is the strategy's
+                    call sample_ptcls4prob2D(p_ptr, b_ptr, p_ptr%l_update_frac, nptcls2update, pinds)
+                    neff_nglob = nptcls2update
+                    neff_rank0 = 0
+                endif
             else if( p_ptr%l_distr_worker .and. master_draws_sample2D(p_ptr) )then
                 ! the distributed master drew this iteration's sample over the whole project
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls2update, pinds, &
@@ -345,6 +385,52 @@ contains
                 call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter)
             endif
         end subroutine prepare_alignment_references
+
+        !> the alignment context of the probabilistic pipeline: the part's table, the iteration's model from the
+        !! complete incoming field, the assignment opened; the context's memory against the budget (bench file)
+        subroutine begin_pipeline()
+            call eulprob_obj_part%new_pipeline(p_ptr, b_ptr, pinds)
+            call eulprob_obj_part%set_model_from_field
+            call eulprob_obj_part%open_assignment(nglob=neff_nglob, rank0=neff_rank0)
+            pipeline_budget = ptcl_buffer_budget(p_ptr, b_ptr)
+            pipeline_bytes  = pipeline_context_bytes()
+            if( pipeline_bytes > pipeline_budget )then
+                write(logfhandle,'(A,I0,A,I0,A)') 'WARNING: the alignment context (', pipeline_bytes, &
+                    &' bytes) exceeds the memory budget (', pipeline_budget, ' bytes); refine2D_exec'
+            endif
+        end subroutine begin_pipeline
+
+        !> the context's memory, its dominant terms in checked 64-bit arithmetic: the polar class averages of both
+        !! halves and their memoized transforms, the batch's polar particles with their CTF terms and memos, the
+        !! batch's images for the class sums, the batch's rows, the part's assignment map
+        integer(int64) function pipeline_context_bytes() result( nbytes )
+            integer(int64), parameter :: CSZ = 8_int64 !< a single-precision complex
+            type(ptcl_ref) :: entry
+            integer(int64) :: nrefs, pftsz, nk, kfromto(2), box
+            nrefs   = int(b_ptr%pftc%get_nrefs(), int64)
+            pftsz   = int(b_ptr%pftc%get_pftsz(), int64)
+            kfromto = int(b_ptr%pftc%get_kfromto(), int64)
+            nk      = kfromto(2) - kfromto(1) + 1_int64
+            box     = int(merge(p_ptr%box_crop, p_ptr%box, ctrl%l_crop_sums), int64)
+            nbytes = 2_int64 * nrefs * pftsz * nk * CSZ                 ! the class averages, even and odd
+            nbytes = nbytes + 4_int64 * nrefs * (pftsz + 1_int64) * nk * CSZ  ! their memoized transforms, two per half
+            nbytes = nbytes + 3_int64 * int(batchsz_max,int64) * (pftsz + 1_int64) * nk * CSZ ! the batch's particles and memos
+            nbytes = nbytes + int(batchsz_max,int64) * box * box * 4_int64  ! the batch's images for the sums
+            nbytes = nbytes + int(batchsz_max,int64) * nrefs * 8_int64  ! the batch's rows (distance, in-plane index)
+            nbytes = nbytes + int(nptcls2update,int64) * int(storage_size(entry)/8,int64)
+        end function pipeline_context_bytes
+
+        !> the batch's fill and selection: its rows filled on the prepared batch, each particle's class drawn from its row
+        subroutine pipeline_batch()
+            if( ctrl%do_bench ) t_fill_tab = tic()
+            call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
+            if( ctrl%do_bench )then
+                rt_fill_tab = rt_fill_tab + toc(t_fill_tab)
+                t_assign    = tic()
+            endif
+            call eulprob_obj_part%assign_batch(batch_start, batch_end)
+            if( ctrl%do_bench ) rt_assign = rt_assign + toc(t_assign)
+        end subroutine pipeline_batch
 
         subroutine build_batch_particles_local()
             if( ctrl%do_bench ) t_build_batch_particles2D = tic()
@@ -490,6 +576,13 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match2D particle reading            :', reads_srch%rt_read
             write(fnr,'(a,1x,f0.2)') 'match2D particle preparation        :', &
                 &rt_build_batch_particles2D - reads_srch%rt_read
+            if( ctrl%l_pipeline )then
+                write(fnr,'(a,i0)') 'match2D pipeline context (bytes)    : ', pipeline_bytes
+                write(fnr,'(a,i0)') 'match2D pipeline budget (bytes)     : ', pipeline_budget
+                write(fnr,'(a,1x,f0.2)') 'match2D table fill                  :', rt_fill_tab
+                write(fnr,'(a,1x,f0.2)') 'match2D assignment                  :', rt_assign
+                call write_fill_profile_bench(fnr, 'match2D', fill_prof, 1)
+            endif
             write(fnr,'(a,1x,f0.2)') 'match2D alignment search            :', rt_align
             write(fnr,'(a,1x,f0.2)') 'match2D class averaging             :', rt_cavg
             write(fnr,'(a,1x,f0.2)') 'match2D cavg FFT/CTF/interpolation  :', rt_cavg_interp_splat
@@ -497,7 +590,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'match2D total time                  :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'match2D % accounted for             :', &
                 ((rt_startup + rt_alloc_ptcl_imgs2D + rt_prep_pftc_refs2D + rt_build_batch_particles2D + &
-                  rt_align + rt_cavg + rt_sigma2_write) / rt_tot) * 100.
+                  rt_fill_tab + rt_assign + rt_align + rt_cavg + rt_sigma2_write) / rt_tot) * 100.
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** THREAD-SECONDS (summed over threads; not wall time) ***'
             write(fnr,'(a,1x,f0.2)') 'match2D search                      :', ts_search

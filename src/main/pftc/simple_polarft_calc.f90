@@ -2,6 +2,7 @@
 module simple_polarft_calc
 use simple_pftc_api
 use simple_polar_shiftmap, only: polar_shiftmap
+use simple_rnd,            only: rnd_key
 implicit none
 
 public :: polarft_calc
@@ -149,6 +150,10 @@ type :: polarft_calc
     real(sp),    allocatable :: sigma2_wk(:,:)
     real(dp),    allocatable :: sigma2_wk8(:,:)
     logical              :: with_ctf  = .false.         !< CTF flag
+    ! the keyed draws' scope (the run's seed, the pass, the iteration), set by the calculator's owner before a
+    ! posterior draw: the draw's key completes it with the particle, the family, the reference and the ordinal
+    type(rnd_key)        :: rnd_scope
+    logical              :: l_rnd_scope = .false.       !< a scope has been set
     logical              :: existence = .false.         !< to indicate existence
   contains
     ! ===== CORE (new, kill, setters, getters, pointer helpers): simple_polarft_core.f90
@@ -168,6 +173,7 @@ type :: polarft_calc
     procedure          :: cp_refs
     procedure          :: set_eo
     procedure          :: set_with_ctf
+    procedure          :: set_rnd_scope
     procedure          :: assign_sigma2_noise
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
     procedure          :: get_nrots
@@ -224,7 +230,6 @@ type :: polarft_calc
     procedure          :: gen_euclid_dists_bank
     procedure          :: gen_posterior_val
     procedure          :: gen_posterior_val_bank
-    procedure          :: gen_posterior_evid
     procedure          :: gen_best_objfun_val
     procedure          :: gen_prob_objfun_val
     procedure          :: gen_prob_power_objfun_val
@@ -379,6 +384,11 @@ interface
         class(polarft_calc), intent(inout) :: self
         logical,             intent(in)    :: l_wctf
     end subroutine set_with_ctf
+
+    module subroutine set_rnd_scope(self, scope)
+        class(polarft_calc), intent(inout) :: self
+        type(rnd_key),       intent(in)    :: scope
+    end subroutine set_rnd_scope
 
     module subroutine assign_sigma2_noise(self, sigma2_noise)
         class(polarft_calc),       intent(inout) :: self
@@ -721,14 +731,6 @@ interface
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
     end subroutine gen_posterior_val_bank
-
-    module subroutine gen_posterior_evid(self, iref, iptcl, shift, temp, dist, irot, evid)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2), temp
-        real(sp),                    intent(out)   :: dist, evid
-        integer,                     intent(out)   :: irot
-    end subroutine gen_posterior_evid
 
     module subroutine gen_best_objfun_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), intent(inout) :: self
@@ -1080,7 +1082,7 @@ interface
     end subroutine shiftmap_prior
 
     module subroutine shiftmap_draw( self, imap, temp, prior_w, lse_prior, l_greedy, logz, irot, irho, ialpha, loss,&
-            &temp_phys, sdev, width_cutoff )
+            &temp_phys, sdev, width_cutoff, ordinal )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: imap
         real(dp),                    intent(in)    :: temp, prior_w, lse_prior
@@ -1091,6 +1093,7 @@ interface
         real(dp),          optional, intent(in)    :: temp_phys
         real(sp),          optional, intent(out)   :: sdev
         real(sp),          optional, intent(in)    :: width_cutoff
+        integer,           optional, intent(in)    :: ordinal
     end subroutine shiftmap_draw
 
     module subroutine shiftmap_mode( self, imap, temp, prior_w, irot, irho, ialpha, loss, temp_phys, sdev, width_cutoff )

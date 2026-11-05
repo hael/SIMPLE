@@ -3,11 +3,18 @@ module simple_rnd
 use simple_defs
 use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
+use omp_lib,       only: omp_in_parallel
+use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 
 public :: seed_rnd, seed_rnd_fixed, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
 public :: shuffle, partial_shuffle, has_global_seed, poisson_rnd
+public :: rnd_key, rnd_keyed, rnd_keyed_bits, rnd_keyed_int, rnd_keyed_partial_shuffle, rnd_key_lanes, rnd_bits_to_unit
+public :: rnd_scope, RND_KEYED_VERSION, RND_KEY_NLANES
+public :: rnd_run_seed, ensure_run_seed, set_run_seed, rnd_scope_key, rnd_draw_key
+public :: RND_FAM_SAMPLE, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, RND_FAM_DIAG
+public :: RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_PASS_POLISH, RND_PASS_FINAL, RND_PASS_DIAG
 private
 #include "simple_local_flags.inc"
 
@@ -48,6 +55,55 @@ interface greedy_sampling
 end interface
 
 integer :: nseed_rnd_calls = 0 ! seed_rnd calls under SIMPLE_SEED since the last seed_rnd_fixed
+! the run seed, cached by the serial code that sets or reads SIMPLE_SEED (seed_rnd at every commander's start,
+! put_simple_seed, ensure_run_seed, set_run_seed, a serial rnd_run_seed call), so that a keyed draw inside a
+! parallel region reads no environment and takes no lock
+integer(int64) :: run_seed_cache = 0_int64
+logical        :: l_run_seed_cached = .false.
+
+! ---- the keyed, stateless generator of the probabilistic alignment (prob_align_batch_pipeline.md, section 4) ----
+! A draw is a pure function of its key: the run's seed, the generator's version, the logical pass (scope), the
+! iteration, the particle, the family of the draw, the reference and the draw's ordinal. The key's nine 32-bit
+! lanes (seed low word, seed high word, version, scope, iteration, particle, family, reference, ordinal, in that
+! order) are absorbed into two 32-bit lanes by a multiply-xor-shift mixer whose constants lie below 2^31, so that a
+! lane times a constant stays below 2^63 in a signed 64-bit integer: no step relies on integer overflow. The word
+! is the two lanes, and the unit variate is the word's top 53 bits over 2^53 (0 is possible, 1 is not). The
+! constants, the lane order, the finaliser and the mapping are pinned by the vectors of simple_rnd_tester; changing
+! any of them changes every probabilistic trajectory and bumps RND_KEYED_VERSION.
+integer,        parameter :: RND_KEYED_VERSION = 1
+integer,        parameter :: RND_KEY_NLANES    = 9
+integer(int64), parameter :: RND_MASK32   = 4294967295_int64 !< 2^32 - 1
+integer(int64), parameter :: RND_MIX_C1   = 569420461_int64  !< 0x21f0aaad, the mixer's first multiplier (lowbias32)
+integer(int64), parameter :: RND_MIX_C2   = 1935289751_int64 !< 0x735a2d97, its second
+integer(int64), parameter :: RND_LANE_A0  = 1779033703_int64 !< 0x6a09e667, the first lane's initial value (fractional part of sqrt 2)
+integer(int64), parameter :: RND_LANE_B0  = 1359893119_int64 !< 0x510e527f, the second lane's (fractional part of sqrt 11)
+real(dp),       parameter :: RND_TWO53    = 9007199254740992._dp !< 2^53
+! the families of section 4.3
+integer, parameter :: RND_FAM_SAMPLE = 1 !< the sample (the project owner's draws: particle 0, the sampler's ordinal)
+integer, parameter :: RND_FAM_INPL   = 2 !< the in-plane draw per scored reference (keyed on the reference)
+integer, parameter :: RND_FAM_DISK   = 3 !< the polar shift map's disk draw (the screen's ordinal)
+integer, parameter :: RND_FAM_CAND   = 4 !< the sparse fills' candidate picks (the swap's ordinal of the keyed permutation)
+integer, parameter :: RND_FAM_ASSIGN = 5 !< the assignment draw (ordinal 0)
+integer, parameter :: RND_FAM_DIAG   = 6 !< the diagnostics' draws (their own ordinals)
+! the scope of a logical pass (section 4.2): the program and the pass kind, packed by rnd_scope
+integer, parameter :: RND_PROG_REFINE3D = 1, RND_PROG_REFINE2D = 2
+integer, parameter :: RND_PASS_ALIGN = 1  !< the discrete alignment
+integer, parameter :: RND_PASS_POLISH = 2 !< the pose_cont polish
+integer, parameter :: RND_PASS_FINAL  = 3 !< the final full-population assignment
+integer, parameter :: RND_PASS_DIAG   = 4 !< a diagnostic evaluation
+integer, parameter :: RND_SCOPE_STRIDE = 16
+
+!> the key of one draw (section 4.2); a field the family has no use for stays 0
+type :: rnd_key
+    integer(int64) :: seed      = 0_int64           !< the run's seed (SIMPLE_SEED)
+    integer        :: version   = RND_KEYED_VERSION !< the generator's schema version
+    integer        :: scope     = 0                 !< the logical pass: rnd_scope(program, pass)
+    integer        :: iteration = 0                 !< which_iter within the scope
+    integer        :: particle  = 0                 !< the particle's row in the run's particle field (0: the project owner's draws)
+    integer        :: family    = 0                 !< RND_FAM_*
+    integer        :: reference = 0                 !< the canonical reference (state, direction or class), where the family has one
+    integer        :: ordinal   = 0                 !< the sub-draw's ordinal within the family for the particle
+end type rnd_key
 
 contains
 
@@ -66,6 +122,8 @@ contains
         integer(int64)       :: t, base
         integer, parameter   :: un=703
         if( simple_seed_base(base) )then
+            run_seed_cache    = base
+            l_run_seed_cached = .true.
             !$omp atomic capture
             icall = nseed_rnd_calls
             nseed_rnd_calls = nseed_rnd_calls + 1
@@ -158,6 +216,8 @@ contains
         write(seed_string,'(i0)') seed
         status = c_setenv('SIMPLE_SEED'//c_null_char, trim(seed_string)//c_null_char, 1_c_int)
         if( status /= 0_c_int ) error stop 'Could not set SIMPLE_SEED for the SIMPLE process'
+        run_seed_cache    = seed
+        l_run_seed_cached = .true.
     end subroutine put_simple_seed
 
     subroutine put_fixed_seed( base )
@@ -626,5 +686,190 @@ contains
            end do
        end do
     end subroutine r8po_fa
+
+    ! ---- the keyed generator ----
+
+    !> the scope of a logical pass: the program (RND_PROG_*) and the pass kind (RND_PASS_*)
+    pure integer function rnd_scope( program, pass )
+        integer, intent(in) :: program, pass
+        rnd_scope = RND_SCOPE_STRIDE * program + pass
+    end function rnd_scope
+
+    !> the key's nine 32-bit lanes in the pinned order, each as a non-negative 64-bit integer below 2^32 (a negative
+    !! field contributes its two's-complement low word)
+    pure function rnd_key_lanes( key ) result( lanes )
+        type(rnd_key), intent(in) :: key
+        integer(int64) :: lanes(RND_KEY_NLANES)
+        lanes(1) = iand(key%seed, RND_MASK32)
+        lanes(2) = iand(shiftr(key%seed, 32), RND_MASK32)
+        lanes(3) = iand(int(key%version,   int64), RND_MASK32)
+        lanes(4) = iand(int(key%scope,     int64), RND_MASK32)
+        lanes(5) = iand(int(key%iteration, int64), RND_MASK32)
+        lanes(6) = iand(int(key%particle,  int64), RND_MASK32)
+        lanes(7) = iand(int(key%family,    int64), RND_MASK32)
+        lanes(8) = iand(int(key%reference, int64), RND_MASK32)
+        lanes(9) = iand(int(key%ordinal,   int64), RND_MASK32)
+    end function rnd_key_lanes
+
+    !> the 32-bit mixer (lowbias32): two multiply-xor-shift rounds on a lane below 2^32; each product is below
+    !! 2^32 x 2^31 = 2^63, so it fits the signed 64-bit integer and the low 32 bits are taken by a mask
+    pure integer(int64) function rnd_mix32( x_in ) result( x )
+        integer(int64), intent(in) :: x_in
+        x = ieor(x_in, shiftr(x_in, 16))
+        x = iand(x * RND_MIX_C1, RND_MASK32)
+        x = ieor(x, shiftr(x, 15))
+        x = iand(x * RND_MIX_C2, RND_MASK32)
+        x = ieor(x, shiftr(x, 15))
+    end function rnd_mix32
+
+    !> the 64-bit word of a key: the lanes absorbed in order into two 32-bit lanes (a takes the lane, b chains on a
+    !! and the lane's position), then cross-finalised; a is the word's high 32 bits
+    pure integer(int64) function rnd_keyed_bits( key ) result( word )
+        type(rnd_key), intent(in) :: key
+        integer(int64) :: lanes(RND_KEY_NLANES), a, b
+        integer :: i
+        lanes = rnd_key_lanes(key)
+        a = RND_LANE_A0
+        b = RND_LANE_B0
+        do i = 1, RND_KEY_NLANES
+            a = rnd_mix32(ieor(a, lanes(i)))
+            b = rnd_mix32(ieor(ieor(b, a), int(i, int64)))
+        enddo
+        a = rnd_mix32(ieor(a, b))
+        b = rnd_mix32(ieor(b, a))
+        word = ior(shiftl(a, 32), b)
+    end function rnd_keyed_bits
+
+    !> the unit variate of a 64-bit word: its top 53 bits over 2^53, in [0,1)
+    pure real(dp) function rnd_bits_to_unit( word )
+        integer(int64), intent(in) :: word
+        rnd_bits_to_unit = real(shiftr(word, 11), dp) / RND_TWO53
+    end function rnd_bits_to_unit
+
+    !> the keyed uniform variate in [0,1)
+    pure real(dp) function rnd_keyed( key )
+        type(rnd_key), intent(in) :: key
+        rnd_keyed = rnd_bits_to_unit(rnd_keyed_bits(key))
+    end function rnd_keyed
+
+    !> the keyed uniform integer in 1..n: the variate's equal-width bin, as irnd_uni
+    integer function rnd_keyed_int( key, n )
+        type(rnd_key), intent(in) :: key
+        integer,       intent(in) :: n
+        if( n < 1 ) THROW_HARD('a keyed integer draw needs a positive upper bound; rnd_keyed_int')
+        rnd_keyed_int = min(n, 1 + int(rnd_keyed(key) * real(n, dp)))
+    end function rnd_keyed_int
+
+    !> the keyed partial Fisher-Yates permutation: the first nshuffle positions of arr become a uniformly ordered
+    !! sample without replacement of its values (as partial_shuffle), the rest keep the unselected values; the
+    !! swap's ordinal keys its uniform (key%ordinal is overridden by the swap index), so the permutation depends on
+    !! the key alone, never on the order of other draws
+    subroutine rnd_keyed_partial_shuffle( key, arr, nshuffle )
+        type(rnd_key), intent(in)    :: key
+        integer,       intent(inout) :: arr(:)
+        integer,       intent(in)    :: nshuffle
+        type(rnd_key) :: k
+        integer :: tmp, irnd, i, n
+        n = size(arr)
+        if( nshuffle < 0 .or. nshuffle > n )&
+        &THROW_HARD('partial shuffle size must be between zero and the array size; rnd_keyed_partial_shuffle')
+        k = key
+        do i = 1, min(nshuffle, n - 1)
+            k%ordinal = i
+            irnd      = i - 1 + rnd_keyed_int(k, n - i + 1)
+            tmp       = arr(i)
+            arr(i)    = arr(irnd)
+            arr(irnd) = tmp
+        enddo
+    end subroutine rnd_keyed_partial_shuffle
+
+    ! ---- the run's seed and the scope of a logical pass ----
+
+    !> the run's 64-bit seed: SIMPLE_SEED, which the project owner sets before any draw (ensure_run_seed) and the
+    !! parts inherit, cached when it is set or first read in serial code (seed_rnd at every commander's start
+    !! primes it), so a call inside a parallel region reads no environment and takes no lock; unset is a
+    !! programming error, not a fallback
+    integer(int64) function rnd_run_seed()
+        if( .not. l_run_seed_cached )then
+            if( omp_in_parallel() )&
+                &THROW_HARD('the run seed is read inside a parallel region before any serial code set it; rnd_run_seed')
+            if( .not. simple_seed_base(run_seed_cache) )&
+                &THROW_HARD('SIMPLE_SEED is not set: the project owner draws and exports the run seed before any keyed draw; rnd_run_seed')
+            l_run_seed_cached = .true.
+        endif
+        rnd_run_seed = run_seed_cache
+    end function rnd_run_seed
+
+    !> the project owner's call at the start of a run: when SIMPLE_SEED is unset, draw a 64-bit seed (from the
+    !! operating system's generator, else the clock and the process id) and export it, so that every part and
+    !! every keyed draw of the run reads the same seed; a set SIMPLE_SEED is kept. Returns the run's seed.
+    integer(int64) function ensure_run_seed() result( seed )
+        integer(int64) :: t
+        integer        :: un, istat, dt(8)
+        if( simple_seed_base(seed) )then
+            run_seed_cache    = seed
+            l_run_seed_cached = .true.
+            return
+        endif
+        open(newunit=un, file='/dev/urandom', access='stream', form='unformatted', action='read', status='old', iostat=istat)
+        if( istat == 0 )then
+            read(un, iostat=istat) seed
+            close(un)
+        endif
+        if( istat /= 0 )then
+            call system_clock(t)
+            call date_and_time(values=dt)
+            seed = ieor(t, int(get_process_id(), int64) * 1000003_int64) + int(dt(7), int64) * 1000_int64 + int(dt(8), int64)
+        endif
+        ! a non-negative seed reads back through the environment as it was written
+        seed = iand(seed, huge(0_int64))
+        call put_simple_seed(seed)
+    end function ensure_run_seed
+
+    !> the project owner's call when a run continues from recorded restart metadata: the recorded seed becomes the
+    !! run's; a SIMPLE_SEED already set to another value is inconsistent restart metadata and stops the run
+    subroutine set_run_seed( seed )
+        integer(int64), intent(in) :: seed
+        integer(int64)     :: current
+        character(len=160) :: msg
+        if( simple_seed_base(current) )then
+            if( current /= seed )then
+                write(msg,'(a,i0,a,i0)') 'SIMPLE_SEED ', current, ' differs from the recorded run seed ', seed
+                THROW_HARD(msg)
+            endif
+            run_seed_cache    = seed
+            l_run_seed_cached = .true.
+            return
+        endif
+        call put_simple_seed(seed)
+    end subroutine set_run_seed
+
+    !> the scope of a logical pass of a run: the seed, the generator's version, the program and pass kind, the
+    !! iteration; the draw sites complete it with the particle, the family, the reference and the ordinal
+    function rnd_scope_key( seed, program, pass, iteration ) result( key )
+        integer(int64), intent(in) :: seed
+        integer,        intent(in) :: program, pass, iteration
+        type(rnd_key) :: key
+        key%seed      = seed
+        key%version   = RND_KEYED_VERSION
+        key%scope     = rnd_scope(program, pass)
+        key%iteration = iteration
+    end function rnd_scope_key
+
+    !> the key of one draw within a scope
+    pure function rnd_draw_key( scope, particle, family, reference, ordinal ) result( key )
+        type(rnd_key),     intent(in) :: scope
+        integer,           intent(in) :: particle, family
+        integer, optional, intent(in) :: reference, ordinal
+        type(rnd_key) :: key
+        key           = scope
+        key%particle  = particle
+        key%family    = family
+        key%reference = 0
+        key%ordinal   = 0
+        if( present(reference) ) key%reference = reference
+        if( present(ordinal)   ) key%ordinal   = ordinal
+    end function rnd_draw_key
+
 
 end module simple_rnd

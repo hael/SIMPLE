@@ -397,7 +397,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected)
     call return_to_stage_root('solve3D')
 
-    ! 1jxy also runs the distributed strategy (job scheduling, the master's prob_align and
+    ! 1jxy also runs the distributed strategy (job scheduling, the master's sample draw and
     ! volume assembly between parts) from the same input project, which mkdir=yes left unchanged
     distr_ok = .true.
     if( system_name == '1jxy' )then

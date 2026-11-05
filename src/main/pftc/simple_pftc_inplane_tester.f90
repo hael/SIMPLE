@@ -17,6 +17,7 @@ use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, 
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_eul_prob_tab_utils,      only: posterior_temperature, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 use simple_oris,                    only: oris
+use simple_rnd,                     only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
 use, intrinsic :: iso_fortran_env,  only: int64
@@ -167,6 +168,7 @@ contains
         if( sum(abs(shift)) > 0. ) call b%pftc%shift_ptcl(1, shift)
         call b%pftc%memoize_refs
         call b%pftc%memoize_ptcls
+        call b%pftc%set_rnd_scope(rnd_scope_key(20261104_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
         if( allocated(sigma2_fixture) ) deallocate(sigma2_fixture)
         allocate(sigma2_fixture(p%kfromto(1):p%kfromto(2),2), source=1.0_sp)
         call b%pftc%assign_sigma2_noise(sigma2_fixture)

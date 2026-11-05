@@ -27,20 +27,22 @@ project and one or more starting 3D references. Its durable contract is:
 
 1. initialize project state and execution mode
 2. materialize the iteration reprojection model from current Cartesian volumes
-3. optionally run probabilistic pre-alignment
-4. run particle-domain search and hard assignment
-5. write partition-local Cartesian reconstruction inputs
-6. run volume assembly when volume reconstruction is enabled
-7. persist project state for the next iteration or caller
+3. run particle-domain search and hard assignment: under `refine=prob*` the
+   matcher's batch pipeline (each batch's probability-table rows filled, each
+   particle's pose drawn from its own row, polished, its residual, its commit),
+   under the classic modes the search strategies
+4. write partition-local Cartesian reconstruction inputs
+5. run volume assembly when volume reconstruction is enabled
+6. persist project state for the next iteration or caller
 
 The supported reconstruction path is Cartesian. Cartesian matching still uses
 polar Fourier central sections internally, but those sections are generated
 from the current Cartesian volumes. `refine3D` does not own a separate
 non-Cartesian reconstruction branch.
 
-Particle-domain work stays in the probabilistic pre-step, matcher preparation,
-search strategies, pose/state/shift updates, sigma updates during Euclidean
-matching, and partial reconstruction writing. Volume-domain work stays in
+Particle-domain work stays in the matcher: its preparation, the probabilistic
+fills and draws, the search strategies, pose/state/shift updates, sigma updates
+during Euclidean matching, and partial reconstruction writing. Volume-domain work stays in
 `volassemble` and the volume postprocessing helpers it calls.
 
 Shared-memory and distributed `refine3D` must preserve the same scientific
@@ -105,7 +107,8 @@ of `refine3D_auto`, `refine3D_states`, `refine3D_states_cavgs`,
 - shared-memory versus distributed orchestration
 - scheduler interaction
 - iteration counters and convergence checks
-- probabilistic pre-step dispatch
+- the iteration's sample draw (keyed on the run's seed, the pass, the
+  iteration and the particle) under the probabilistic and the sampled modes
 - matcher dispatch
 - volume assembly dispatch
 - per-iteration reprojection-model materialization
@@ -117,11 +120,19 @@ construction.
 `simple_strategy3D_matcher.f90` owns `refine3D_exec`: consuming the
 driver-generated reprojection model, selecting and running the search strategy,
 updating orientations/states/shifts, updating Euclidean sigma estimates during
-search, and writing partition-local Cartesian partial reconstructions.
+search, and writing partition-local Cartesian partial reconstructions. Under
+`refine=prob*` it owns the batch pipeline (since 2026-11-04, the same body in
+shared memory and in a distributed part): per batch the probability-table rows
+filled, each particle's pose and state drawn from its own row, the extras of
+the weighted insertion, then the polish, residual and commit; a distributed
+part publishes a readout record (`prob_readout_part<NN>.txt`) that the master
+merges in part order and prints.
 
-`simple_prob_align_strategy.f90` (`prob_align_exec`, `prob_align_neigh_exec`)
-plus `simple_eul_prob_tab*.f90` own probabilistic pre-alignment and the
-assignment artifacts consumed by the matcher.
+`simple_eul_prob_tab*.f90` own the fills and the selection rules on the
+matcher's batches: the rows, the draws, the extras and cones, the temperatures,
+the n_eff readout. No table, assignment or insertion file exists: the master
+table, the table workers, the `prob_align` step and their files were retired on
+2026-11-05.
 
 `simple_volassemble_strategy.f90` owns volume assembly (`volassemble_exec`):
 reducing partials, restoring even/odd volumes, calculating FSCs, running
@@ -134,16 +145,16 @@ and leaves `params%vols` alone.
 
 These are strategy routines on a caller's `(params, build)` with explicit
 arguments for what differs from the caller's own settings (the thread count,
-`which_iter`, a write flag). The commanders `prob_align`, `prob_align_neigh`,
-`volassemble` and `commit_sigma2` are thin wrappers: their `execute(cline)`
-builds parameters and a builder from the command line and calls the routine.
-Shared-memory `refine3D` calls the `prob_align`, `prob_align_neigh` and
-`commit_sigma2` commanders; it and `reconstruct3D` call `run_volassemble`, the
+`which_iter`, a write flag). The commanders `volassemble` and `commit_sigma2`
+are thin wrappers: their `execute(cline)` builds parameters and a builder from
+the command line and calls the routine. Shared-memory `refine3D` calls the
+`commit_sigma2` commander; it and `reconstruct3D` call `run_volassemble`, the
 routine's own entry that builds from the command line. The other command-line
 callers use the commanders. A routine that runs on the caller's parameters does
 not run `params%new`: it sets the thread count it needs and the caller restores
 its own afterwards, and it draws from the random generator without a reseed
-(ruling of 2026-10-20).
+(ruling of 2026-10-20); the probabilistic routes draw through the keyed,
+stateless generator, which no reseed moves.
 
 `simple_vol_pproc_policy.f90` owns one check: whether a state's density-mask
 file exists and matches the box and sampling of the volumes it would mask
@@ -164,8 +175,7 @@ before the next rebuild reads the project.
 
 Distributed `refine3D` keeps prototype command lines for the workers, the start
 reconstruction, postprocessing and the thread count of the sigma commit; the
-probability and assembly command lines are made each iteration from the
-master's own. These command lines are execution templates, not independent
+assembly command line is made each iteration from the master's own. These command lines are execution templates, not independent
 workflow policies.
 
 The distributed master is the one owner of its project. It materialises the
@@ -176,17 +186,20 @@ non-data segments, `out`, `optics` and the particle field, then
 `update_projinfo`, so that writes go to the run's own project and not to a
 project the run was copied from), because the start reconstruction may
 have written them; on later iterations the builder's volumes again
-(`new_vols`), the search toolbox, the band and the model. `prob_align` (or
-`prob_align_neigh`), volume assembly (gridding) and the sigma commit run on
-the master's `(params, build)`; the PCG master already did. The particle
+(`new_vols`), the search toolbox, the band and the model. The iteration's
+sample draw (`sample_ptcls4prob3D`, keyed), volume assembly (gridding) and the
+sigma commit run on the master's `(params, build)`; the PCG master already did. The particle
 field therefore holds this iteration's resolution fields (`cfar`,
 `lp_est`) in memory, and the matching low-pass refresh reads the master's
 own project.
 
 The master writes the particle field once before the workers start (with
-the alignment's sample, or as the model left it), once more after the
-merge only when a polish pass follows (its workers read the merged field),
-and once at the end of the iteration; `merge_algndocs(..., write=.false.)`
+the iteration's sample, drawn by the master, or as the model left it), once
+more after the merge only when a polish pass follows (its workers read the
+merged field), and once at the end of the iteration; the parts of a
+probabilistic iteration reproduce the master's sample over their ranges
+(`sample4update_reprod`) and publish their readout records, which the master
+merges in part order after the schedule; `merge_algndocs(..., write=.false.)`
 merges the workers' documents in memory, and gridding assembly does not write
 the project on this path. The PCG master (`rec_backend=pcg`) writes the
 particle field once, at the end of its call. The `out` segment is written once,
@@ -332,8 +345,8 @@ an empty directory, and every final reconstruction at a new sampling. Since
 
 ## 6. Reference Preparation
 
-The strategy materializes the iteration reprojection model before
-probabilistic pre-alignment or matcher work starts. Reference preparation:
+The strategy materializes the iteration reprojection model before matcher
+work starts. Reference preparation:
 
 1. reads the current Cartesian reference volumes
 2. applies reference masking/filtering/centering policy
@@ -366,7 +379,7 @@ iteration's reprojection model is generated by the strategy from the current
 Cartesian outputs.
 
 The model file header is the authority for the matching shell range consumed
-by matcher workers and probabilistic table workers.
+by the matcher workers.
 
 Reference preparation must project only the active matching shell range. It
 must not silently project to the crop interpolation limit unless matching
@@ -421,25 +434,33 @@ separate operations.
 
 ## 8. Probabilistic and Matcher Work
 
-The current workflow is probabilistic pre-alignment followed by hard particle
-assignment. It is not a monolithic soft-assignment volume-integrated EM
-implementation. Every particle gets one pose and one state label, and
+The current workflow is a probabilistic alignment followed by hard particle
+assignment, both inside the matcher's batch pipeline. It is not a monolithic
+soft-assignment volume-integrated EM implementation. Every particle gets one pose and one state label, and
 reconstruction follows the labels. The one exception is the per-state
 M-estimation below: there reconstruction weighs each particle by a frozen
 weight that `flex_pca` computed before the run. The refinement never computes
 these weights from its own scores, and alignment never reads them.
 
-Use the terms "probabilistic pre-alignment" and "hard-assignment particle
-update" unless the ownership, artifacts, and update model actually change.
+Use the terms "probabilistic alignment" and "hard-assignment particle update"
+unless the ownership, artifacts, and update model actually change.
 
-`refine=prob*` modes run the probability pre-step before the main matcher.
-`prob_neigh` dispatches to the neighborhood probability command. The matcher
-then consumes the generated assignment artifact.
+`refine=prob*` modes run the batch pipeline inside `refine3D_exec`
+(`prob_align_batch_pipeline.md`, 2026-11-04): a batch's particles are
+prepared once, their probability-table rows filled (`fill_tab_range`, the dense
+table; `prob_neigh` the neighbourhood table's), each particle's pose and state
+drawn from its own row (`assign_batch`), the extras of the weighted insertion
+laid out, then the existing polish, residual and commit. The same body runs in
+shared memory and in every distributed part; there is no pre-step, no master
+table and no assignment artifact.
 
 The matcher's search loop (3D and 2D) runs under a dynamic OpenMP schedule: a
-particle is searched whole by one thread, so at more than one thread only
-which random draws a particle meets changes; one thread gives the same
-results as a static schedule.
+particle is searched whole by one thread. Every draw of the probabilistic
+routes is keyed on the run's seed, the pass, the iteration, the particle and
+the draw (`rnd_keyed`, section 4 of the note), so the thread count, the batch
+size and the partitioning change no draw; what a thread count still changes is
+the floating-point order of the preparations and of the accumulators, which
+the note's phase 3 measured and leaves as it is.
 
 `prob_neigh_mode` controls how `prob_neigh` chooses candidate neighborhoods
 before evaluating candidates:
@@ -469,8 +490,8 @@ intended current behavior, not a full soft-assignment EM update.
 
 ### Dense-table assignment (`ref_assign`)
 
-The `prob` driver assigns the particles from the dense table
-(`simple_eul_prob_tab.f90`, `ref_assign`) by one draw per particle from its
+Under `prob` the matcher assigns each batch's particles from their rows
+(`simple_eul_prob_tab.f90`, `assign_batch`) by one draw per particle from its
 tempered row posterior (since 2026-10-23; the only assignment since
 2026-10-24, when the reference-balanced frontier was deleted from every
 table). Particles are assigned to references; no reference is forced to be
@@ -478,11 +499,10 @@ populated. The particle's state is the state of its closest
 reference over all states (an exact tie goes to the lowest reference index),
 and its direction is one draw within that state's block of its row with p
 proportional to exp(-T_i (L - L_min)), T_i the particle's own temperature
-pi wsqsum_i / (2 pftsz) (the Euclidean loss's noise scale), which the table
-worker computes at the fill and writes per particle into the dense part file
-(format word -4). The drawn reference's dense candidate is committed (its
-in-plane, its refined shift when refined, the seed shift recorded, `frac`
-100); the draws run in particle order on the master's random stream, so
+pi wsqsum_i / (2 pftsz) (the Euclidean loss's noise scale), which the fill
+computes and keeps with the row. The drawn reference's dense candidate is
+committed (its in-plane, its refined shift when refined, the seed shift
+recorded, `frac` 100); the draw is keyed on the particle, so shared-memory and
 distributed runs draw alike. A particle without a valid distance takes
 reference 1. The row's values are the fill's (the top set refined), so the
 draw is a direction sampler on that row. The in-plane rotation of every row
@@ -575,8 +595,9 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   insertion's loss (`insert_pose_loss`, both 3D tables: the polished loss with the
   prior on the pose's increment at the physical temperature);
 - the sentinel is set by both refine3D masters at a run's first iteration; the
-  driver prints the disk set by cause and the widths' median and 90th percentile
-  (`print_disk_set`). No stage ends on the centring.
+  master prints the disk set by cause and the widths' median and 90th percentile
+  after its sample draw (`print_disk_set`; a part prints none). No stage ends on
+  the centring.
 
 Every table increment is native whatever the path (the polish's
 `minimize(sh_rot=.true.)` rotates the optimizer's shift into the particle's axes at
@@ -646,11 +667,14 @@ frozen assignment from convergence) but on the resolution exit (`lpexit`),
 its annealing tail, or its iteration budget.
 
 **The n_eff readout (`POSTERIOR DRAW N_EFF`, 2026-10-29; section 20.2 of
-the note).** Every table logs, per iteration, the mean effective number of
-candidates a particle draws among, exp(entropy) of its tempered row
-posterior, at the draw's factor (`prob_beta`, or the tail's) and at beta 1
-(the physical posterior), over a subsample of the rows the draws are from:
-up to `PROB_NEFF_ROWS` (1000) rows at a fixed stride through the particles,
+the note).** Every iteration logs the mean effective number of candidates a
+particle draws among, exp(entropy) of its tempered row posterior, at the
+draw's factor (`prob_beta`, or the tail's) and at beta 1 (the physical
+posterior), over a subsample of the rows the draws are from: up to
+`PROB_NEFF_ROWS` (1000) rows at a fixed stride through the iteration's global
+sample (the rows are chosen by rank in that sample, so they are the same rows
+whatever the partitioning; a part publishes its sums and counts in its readout
+record and the master sums the parts in part order, never means of means),
 each with at least `PROB_NEFF_NMIN` (6) valid candidates (a row of two lands
 on one of its best two at any factor and would pull the level of the rows
 where the choice is open), nothing below `PROB_NEFF_MIN_ROWS` (50) rows
@@ -720,15 +744,15 @@ that wide admitted most of the refined set and the first iterations of the
 stage inserted the top of the row's posterior rather than the hot draw,
 three of seven restarts ending the stage a shell behind, 2026-10-30): the
 search cannot leave poses undecided at a scale coarser than its own
-matching limit. The master reads each state's FSC on disk before the
-assignment (`insert_cone_from_fsc`, logged as `PROB_TAB_INSERT CONE`; no
-FSC, no cone, the committed pose alone), and the table sets the
-cone's geometry at the assignment from the direction space, the point group
-and its rotation grid as rotation matrices (`set_space`; the dense master,
-whose general toolbox has no 3D part, builds the direction space itself,
-`builder%build_eulspace`). The extras are computed in a parallel pass after
-the serial draws (`select_extras` in both tables), each thread on its own
-eligibility mask, and enter the table in particle order. The two builds
+matching limit. Each part reads each state's FSC on disk before its batches
+(`insert_cone_from_fsc`; no FSC, no cone, the committed pose alone), the
+distributed master reports the cone from the same files after its sample draw
+(`PROB_TAB_INSERT CONE`; the owner reports it in shared memory), and the table
+sets the cone's geometry at the assignment from the direction space, the point
+group and its rotation grid as rotation matrices (`set_space`). The extras are
+selected per batch after the batch's draws (`select_extras` in both tables),
+each thread on its own eligibility mask, and enter the part's insertion table
+in particle order. The two builds
 before the cone (2026-10-29) failed in opposite directions: extras over the
 whole row at the search's factor 0.3 blurred the map and capped the
 resolution (PfCRT 5/10); over the whole row at the particle's own
@@ -739,17 +763,17 @@ stage-3 map bad, PorF and PfCRT unsatisfactory) while the late stages
 gained (exp_gate, streptavidin finals). The committed pose is the single
 draw as before and keeps the search, its seeds, the shift prior and the
 convergence statistics unchanged; `topk=1` is bit for bit the single-draw
-run. The master writes the extras beside the assignment (`INSERT_FBODY`:
+run. The part keeps the extras in its insertion table (`prob_insert_table`:
 per particle the committed weight and the extras as reference, in-plane
-index, refined shift and weight; `prob_insert_table`) and logs
-`PROB_TAB_INSERT` with the insertions per particle, the mean committed
-weight, the eligible entries per particle (the cone's occupancy) and the
-fraction of particles with more eligible entries than `topk - 1`: near zero
-the insertion is the full average within the cone, above it `topk` is
-binding. The worker reads the table after the assignment into the part's
-layout (`prob_insert_poses`, one slot per extra, handed to the search
-through `strategy3D_spec`; a missing table under `topk > 1` is an error,
-the master always writes it), and the probabilistic strategy resolves a
+index, refined shift and weight), publishes their counts in its readout
+record, and the master logs `PROB_TAB_INSERT` from the merged counts with the
+insertions per particle, the mean committed weight, the eligible entries per
+particle (the cone's occupancy) and the fraction of particles with more
+eligible entries than `topk - 1`: near zero the insertion is the full average
+within the cone, above it `topk` is binding. The batch's extras are laid out
+from the part's table for the search (`prob_insert_poses%setup_range`, one
+slot per extra, handed through `strategy3D_spec`), and the probabilistic
+strategy resolves a
 particle's extras in its `srch` just before it commits the draw
 (`strategy3D_prob%resolve_extra_poses`), through the same conversion rule
 as the committed pose (`candidate_pose`: the reference's Euler pair, the
@@ -776,10 +800,9 @@ accounting is unchanged. The final and bootstrap reconstructions use the
 committed poses, so the last iteration's map and a `reconstruct3D` from the
 project differ under `topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
 insert the committed pose alone, their candidates being the hill climb's
-unrefined proposals; the 2D route is untouched. The assignment's companion
-files (the distance and assignment parts, the merged assignment and the
-extras' table) have one deleter, `del_prob_align_files`, which every site
-that clears the alignment's files calls. State assignment stays hard: the
+unrefined proposals; the 2D route is untouched. No file carries the
+assignment or the extras: the rows, the draws and the insertion table live in
+the part's memory for the batch. State assignment stays hard: the
 extras are drawn from the committed state's block alone (the dense table's
 block, the neighbourhood table's state row) and enter that state's
 half-map, and a particle never enters another state's map through the
@@ -823,8 +846,8 @@ shift, `frac` the evaluated fraction; a particle whose state emptied mid-run
 keeps its orientation. The in-plane rotation of every candidate is the
 posterior draw over all grid rotations (`score_seeded_ref`,
 `gen_posterior_val` and its bank form), as in the dense and 2D tables; the
-re-seeding draws its in-plane the same way. T_i travels in the neighbourhood
-part file after the seed table (one real per particle; both fills write it).
+re-seeding draws its in-plane the same way. T_i stays with the candidate row
+(both fills write it).
 The pose-overlap bypass covers `prob_neigh` as it covers `prob`. Particles
 are assigned to references and no reference is forced to be populated: the
 reference-balanced frontier (every active reference drawing its closest free
@@ -858,47 +881,18 @@ test (PfCRT, 10 of 10 restarts at 3.6 A or better):
 `doc/implementation_notes/completed/pose_marginalization.md` sections 4, 10,
 16-19.
 
-### Probability-table part files
+### Probability-table rows
 
-Every table part writes one file that the driver reads after the parts have
-finished.
-
-- **The dense table (`prob`).** The header holds the number of references
-  and particles, a format word (`PROB_TAB_DENSE_FORMAT`, -4 since the
-  particle temperatures, private to the dense table) and the number of
-  refined entries; then the number and list of the active states, the
-  particle indices, the seed table, the particle temperatures
-  (`posterior_temperature`, one real per particle, read by the posterior
-  assignment), one row per particle of (distance, in-plane index) for every reference
-  (`prob_dense_entry`, 8 bytes; the reference and particle follow from the
-  position), and a list of the refined entries (particle, reference,
-  shift; `prob_refined_entry`). An unrefined entry has no shift of its own.
-  The worker writes a batch's rows at the particles' positions and checks at
-  the end that every row was written. The driver reads the parts in
-  parallel: consecutive rows of a part in one statement (up to 8 MiB),
-  scattered to the driver's columns, and each particle's refined entries
-  counted during the read; the refined lists are then laid out by a prefix
-  sum and every part places its entries in parallel (a particle's entries
-  come from its one part, in file order). Every particle
-  of the driver must be in exactly one part, and the parts must agree on the
-  rotation grid and on the active states (a row's reference index counts the
-  active references). Before reading past the header the file size must be
-  the size the header implies, and every read checks its status. Inside the
-  parallel read nothing stops: each part returns a status, and the first
-  failing part stops the run after the loop, with its file name and the
-  reason. `dense_candidate` rebuilds the entry `assign_candidate` reads. The
-  driver's table is not initialised before the read; its refined-entry
-  offsets are default integers behind a size guard.
-- **The neighbourhood table (`prob_neigh`)** keeps its candidate stream
-  (particle index and full candidate per entry). The neighbourhood part
-  writes the number of candidates of each particle after the particle
-  indices, then the seed table and the particle temperatures
-  (`posterior_temperature`, one real per particle, since 2026-10-23); the
-  driver sizes its store from these counts and then places the candidates
-  in file order (the order decides ties). The 2D table's parts are
-  described in `solve2D_policy.md`.
-- An empty part writes the header of its own table type. The neighbourhood
-  table refuses `write_rows`, the dense table's row writer.
+A part's rows live in its memory for one batch and are released after the
+batch's selection: the dense table keeps the batch's rows and refined entries
+(`batch_rows`, `batch_refined`, moved in by the fill, `keep_batch_rows`), the
+neighbourhood table and the 2D tables keep the fill's candidates in the thread
+buffers and turn them into the batch's candidate store or dense rows at the
+assignment (`batch_store_from_buffers`, `batch_rows_from_buffers`). No part
+file and no master table exist: the dense (format word -4), neighbourhood and
+2D (-6, -7) part files, the parallel part reads, the assignment and
+insertion-pose files and their deleter were retired on 2026-11-05 with the
+`prob_align` step and the table workers (`prob_align_batch_pipeline.md`).
 
 The shift search of the tables keeps a double-precision copy of the
 reference for one minimisation (`load_ref_aln_8`, which records the
@@ -1027,8 +1021,8 @@ refactoring, `doc/refactoring_notes/completed/pose_cont_refactoring.md`). It
 refines the five pose parameters of every sampled particle (three rotation
 components, two shifts) continuously against Cartesian central sections of
 the reference, from the poses stored in `ptcl3D`. It runs none of the polar
-machinery: no projection grid, no polar reprojection model, no `prob_align`,
-no in-plane table. It is a continuation mode: every active particle must hold
+machinery: no projection grid, no polar reprojection model, no probability
+table, no in-plane table. It is a continuation mode: every active particle must hold
 a pose from a discrete workflow (positive state, half-set, projection
 direction, finite angles and shifts); `check_cont_seeds` stops the run at
 entry otherwise, before the random-orientation fallback of an unsearched
@@ -1236,32 +1230,26 @@ them.
 
 The refined map of X, its FSC and the refined poses live in the work project.
 
-### Probabilistic pre-step benchmark files and particle-frame shifts
+### The fill's benchmark counters and particle-frame shifts
 
-The pre-step has benchmark reports of its own, so its time is split into named
-parts instead of being one number in the strategy report (the files are in
-`BENCH/`, section 11.1):
-
-- `PROB_TAB_BENCH_PARTppp.txt`, one record per table part and iteration:
-  wall-clock entries measured outside the parallel regions (setup, reference
-  preparation, particle reading and preparation, table fill, table write), and
-  a separate thread-seconds block (seed estimation, score loop, refinement,
-  their sum, the fill region's wall time and the load balance). Thread-seconds
-  are never part of `% accounted for`. The context lists the references, the
-  references refined per particle, the shift searches, their alternations, the
-  coarse-grid evaluations and the objective and gradient evaluations.
-- `PROB_ALIGN_BENCH.txt` (`prob`) and `PROB_ALIGN_NEIGH_BENCH.txt`
-  (`prob_neigh`), one record per iteration, written by the driver, all wall
-  time: setup, sampling and project write, scheduling (launch to last part
-  finished), table reads, `ref_assign` and the assignment write.
+The fill's cost record (`prob_fill_profile`) is printed in each part's
+`REFINE3D_BENCH_PARTppp.txt` record, the `match3D fill ...` lines (the files
+are in `BENCH/`, section 11.1): the counts (the particles filled, the
+references scored and refined, the shift searches, their alternations, the
+coarse-grid evaluations, the objective and gradient evaluations, the coarse
+maps, the shifted particle memos) and the thread-seconds of the fill's regions
+(seed estimation, score loop, refinement, their sum, the fill region's wall
+time and the load balance), beside the wall time of the table fill and of the
+assignment. Thread-seconds are never part of `% accounted for`. The strategy
+record times the master's sample draw where it timed the pre-step. The
+`PROB_TAB*` and `PROB_ALIGN*` families were retired on 2026-11-05.
 
 Every table fill with a shift search (the single-state and multi-state `prob`
 tables and all `prob_neigh` fills) runs its particle loop with dynamic OpenMP
 scheduling: the particles' costs differ (the shift searches, the stopping rule
 of `prob_neigh`), and static blocks left threads idle at the tail. A particle
-is processed whole by one thread with that thread's search object, so the
-order only changes which thread's random draws a particle meets; a one-thread
-run is unchanged.
+is processed whole by one thread with that thread's search object, and every
+draw is keyed on the particle, so the schedule changes no draw.
 
 Every probabilistic table holds its shifts in the particle frame (the only
 path since 2026-10-15; a developer key used to switch it on). The kernels shift the reference in its own polar frame and correlate
@@ -1283,8 +1271,7 @@ shifted-reference kernels drop that bin and differ from it slightly.
   scored from one shifted particle (a seed below `SHERRSQ` uses the plain
   memo), a refined reference starts from the seed converted at its own
   rotation and clamped into the box, and an assigned candidate that was not
-  refined records the seed as it is (`record_seed_shift`). The seed table,
-  the table file and `prob_align` keep their layout.
+  refined records the seed as it is (`record_seed_shift`).
 - Particle-frame grid, multi-state `prob` table: the 5 x 5 lattice of the
   coarse shift grid is a lattice of particle-frame shifts, one entry per
   lattice point built once per particle and shared by its refined references.
@@ -1300,9 +1287,9 @@ shifted-reference kernels drop that bin and differ from it slightly.
 
 All three are approximations of shifting each reference by the seed: away
 from the seed rotation, and on the lattice, the scores, starts and recorded
-shifts differ from it. The table parts' bench files record the shifted
-particle memos built and (multi-state) the fits kept and the fallbacks per
-reason.
+shifts differ from it. The parts' bench records (the fill lines) record the
+shifted particle memos built and (multi-state) the fits kept and the fallbacks
+per reason.
 
 ## 9. Volume Assembly
 
@@ -1457,16 +1444,14 @@ subdirectory of the run directory, `BENCH/`, never into the run directory
 itself. Each benchmark family has one file there, and a family that every
 partition reports has one file per partition. A report is appended to its
 file as one record, so a run of any length writes a fixed number of files: for
-a distributed solve3D run with 10 partitions and both probability-table modes,
-about 45 instead of one file per iteration and partition (3,104 for a solve3D run of 94 refine3D iterations).
+a distributed solve3D run with 10 partitions, about 25 instead of one file per
+iteration and partition (3,104 for a solve3D run of 94 refine3D iterations).
 
 | file | written by | records |
 | --- | --- | --- |
 | `REFINE3D_STRATEGY_BENCH.txt` | the refine3D strategy | one per iteration |
 | `REFINE3D_BENCH_PARTppp.txt` | each 3D search partition | one per iteration |
 | `REC3D_BENCH_PARTppp.txt` | each partition's reconstruction (gridding or PCG) | one per pass |
-| `PROB_TAB_BENCH_PARTppp.txt`, `PROB_TAB_NEIGH_BENCH_PARTppp.txt`, `PROB_TAB2D_BENCH_PARTppp.txt` | each probability-table part | one per iteration |
-| `PROB_ALIGN_BENCH.txt`, `PROB_ALIGN_NEIGH_BENCH.txt`, `PROB_ALIGN2D_BENCH.txt` | the probabilistic pre-step driver of `prob`, of `prob_neigh`, of the 2D tables | one per iteration |
 | `VOLASSEMBLE_BENCH.txt` | volume assembly | one per iteration |
 | `PCG_ASSEMBLE_BENCH.txt` | the distributed PCG master (`rec_backend=pcg`) | one per iteration |
 | `SIGMA2_COMMIT_BENCH.txt` | the sigma2 commit | one per commit |
@@ -1479,7 +1464,7 @@ about 45 instead of one file per iteration and partition (3,104 for a solve3D ru
 A record starts with a `*** BENCHMARK RECORD ***` header that names the family
 and, where they apply, the iteration (`which_iter`) and the partition. The
 writer's own sections follow, as before: `BENCHMARK CONTEXT` and `TIMINGS (s)`,
-plus `THREAD-SECONDS` for the table parts, the 2D and 3D searches and the class sums
+plus `THREAD-SECONDS` for the 2D and 3D searches (with the fill's regions under the probabilistic modes) and the class sums
 (busy time summed over the team, the region's wall time, the team size and
 the load balance), and `RELATIVE TIMINGS (%)` where a
 writer reports them. A Cartesian pass (`refine=cont`, the polish) adds
@@ -1533,7 +1518,7 @@ and reports the PCG phases over the run and by stage.
 
 On each iteration, the strategy report should stay simple: context plus one
 `TIMINGS (s)` section. Labels should include the coarse operation buckets
-setup, probabilistic pre-step, matcher/scheduler, assembly/postprocess, and
+setup, the sample draw, matcher/scheduler, assembly/postprocess, and
 total time, together with separately timed reprojection-model materialization
 and the sigma2 transaction (the candidate preparation and the commit). These
 measurements keep a per-iteration sigma update distinguishable from reference
@@ -1646,8 +1631,8 @@ committed store is registered, in `projinfo`.
 - Do not merge probabilistic particle-update logic with volume postprocessing.
 - Do not introduce a second ambiguous source of matching references.
 - Preserve the single image-stack read per matcher batch.
-- Treat assignment maps, partition-local partials, state volumes, even/odd
-  volumes, FSC files, automasks, and NU outputs as explicit workflow
+- Treat the parts' readout records, partition-local partials, state volumes,
+  even/odd volumes, FSC files, automasks, and NU outputs as explicit workflow
   contracts.
 - Preserve the two-mode in-plane boundary: only `new_alternating` may attach the
   callback, and no `inpl_cont=yes` path may invoke it.

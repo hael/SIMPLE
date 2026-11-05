@@ -18,9 +18,10 @@ The outer subset is recorded in the project through `sampled` and `updatecnt`.
 Downstream restoration and reconstruction consume that recorded state. They must
 not infer participation from the nominal command-line `update_frac` alone.
 
-Probabilistic pre-alignment is a sample-once-and-reuse path: the pre-alignment
-routine (`prob_align_exec`) chooses the outer subset, probability-table workers
-reuse it, and the matcher reuses it again for the hard particle update.
+Probabilistic alignment is a sample-once-and-reuse path: the master (or the
+shared-memory matcher) chooses the outer subset with a keyed draw and writes
+it, and every part's matcher reproduces it once for its batch pipeline (the
+table fill, the draw and the hard particle update in one pass).
 
 ## 2. Ownership
 
@@ -54,13 +55,13 @@ coverage report printed before the first stage.
 cohort rescoring, global realized update fraction, and class-local realized
 update fractions.
 
-`simple_prob_align_strategy.f90` owns probabilistic pre-alignment
-orchestration (`prob_align_exec`, `prob_align_neigh_exec`, `prob_align2D_exec`
-on the caller's `(params, build)`; the distributed masters call them on their
-own project, the commanders in `simple_commanders_prob.f90` wrap them for
-command-line callers): sampling the outer subset once, running table
-generation, aggregating probability-table outputs, and writing the assignment
-artifact.
+The outer subset of a probabilistic iteration is drawn once, by the master on
+its own project (`sample_ptcls4prob3D`, `sample_ptcls4prob2D` in
+`simple_matcher_smpl_and_lplims.f90`; the shared-memory matcher calls the same
+helpers), keyed on the run's seed, the pass, the iteration and the particle,
+and written before the parts start. The `prob_align` step that sampled,
+scheduled table workers, aggregated their outputs and wrote an assignment
+artifact was retired on 2026-11-05.
 
 `simple_eul_prob_tab*.f90` owns inner candidate importance sampling. These
 modules may sample references, orientations, neighbors, or in-plane candidates
@@ -68,9 +69,10 @@ inside the active particle subset, but they must not choose a new particle
 subset.
 
 `simple_strategy2D_matcher.f90` and `simple_strategy3D_matcher.f90` own
-particle-domain search on the active subset, assignment consumption, pose or
-class updates, sigma updates during search, and writing partition-local
-reconstruction or class-average inputs.
+particle-domain search on the active subset: the probabilistic routes' batch
+pipeline (the rows filled, each particle's pose or class drawn from its own
+row), the pose or class updates, sigma updates during search, and writing
+partition-local reconstruction or class-average inputs.
 
 The classaverager modules own the 2D class-average sums and restoration;
 the 2D strategy restores in shared memory and `cavgassemble_exec`
@@ -89,8 +91,8 @@ own particle selection.
 it to prefer under-updated or never-updated active particles.
 
 `sample4update_reprod` is the only correct way to reuse a previously selected
-probabilistic subset. A probability-table worker or downstream matcher must not
-silently resample when a probabilistic pre-step has already sampled the subset.
+probabilistic subset. A part's matcher must not silently resample when the
+master has sampled the subset.
 
 `get_state_update_fracs` returns state-local realized update fractions for 3D
 trailing from the current `sampled` round, state labels, and particles with
@@ -127,7 +129,7 @@ The nominal `update_frac` is a target used by sampling. The realized fraction in
 
 ### In-plane representation during probabilistic search
 
-`inpl_cont` does not change either sampling layer or the assignment-file
+`inpl_cont` does not change either sampling layer or the assignment map's
 schema. With `inpl_cont=yes`, callback-style local angle/shift profiling is
 replaced by joint `(sx,sy,rotind_frac)` optimization, but inner importance
 sampling still carries a canonical rounded in-plane index. Its stored shift is
@@ -179,12 +181,10 @@ Current stage policy:
   start with `assign_all=yes` samples by update count
 - later non-probabilistic iterations use `sample4update_cnt`, which is
   stochastic but biased toward particles with lower `updatecnt`
-- probabilistic stages use `prob_align2D` to sample once, then `prob_tab2D` and
-  `refine2D_exec` reproduce the same subset
-- the distributed master draws the sample of the non-probabilistic sampled
-  iterations too (`master_draws_sample2D`, as 3D's `master_draws_sample3D`;
-  not in the stream's pool) and the workers reproduce it, so the sample does
-  not depend on `nparts`
+- the distributed master draws the sample of every sampled iteration,
+  probabilistic or not (`master_draws_sample2D`, as 3D's
+  `master_draws_sample3D`; not in the stream's pool), keyed, and the workers
+  reproduce it (`refine2D_exec`), so the sample does not depend on `nparts`
 - staged `assign_all=yes` (`fillin=yes` before 2026-11-03; `fillin` is 3D's
   periodic sampling of the never-updated particles) acts as a full-assignment coverage guard. It
   requires active particles to have assignments before convergence, while
@@ -208,9 +208,9 @@ population rule (Section 7), independently for the even/odd numerators and
 CTF-squared sums. This is the 2D analogue of respecting independently updated
 objects in 3D.
 
-Distributed cleanup removes assignment, distance and class-sum contribution
-files before each iteration; the owner deletes the contributions after the
-blend. The carried set is never partition-shaped and is owned by the assembly
+Distributed cleanup removes the parts' readout records and the class-sum
+contribution files before each iteration; the owner deletes the contributions
+after the blend. The carried set is never partition-shaped and is owned by the assembly
 step only. When an iteration would blend but the carried set is missing,
 unreadable or disagrees with the run (class count, `box_crop`, `smpd_crop`),
 the master runs that iteration as a full update.
@@ -295,8 +295,8 @@ The quota of an iteration, `nint(update_frac * active)`, is nested:
 2. equal over the units of a group, capped at their populations; the remainder
    of the equal split goes to the units whose particles have the lowest mean
    `updatecnt` (ties: larger population, then lower class index), which the
-   project state fixes, so every partition computes the same quotas and the
-   remainder rotates over iterations;
+   project state fixes, so the master's draw and every partition's
+   reproduction agree on the quotas and the remainder rotates over iterations;
 3. inside a unit, lowest `updatecnt` first, drawn uniformly within a tier.
 
 Under `class` the first level is the whole rule, as before. The nested level
@@ -360,10 +360,10 @@ block's first iteration, which stamps a new round marker on the cohort; lowest
 latest marker, which is what `sample4update_reprod` returns, and advances
 `sampled` and `updatecnt` on those rows once, so the next iteration finds the
 same set under the new marker. Earlier cohorts carry older markers; `fromto`
-and `allow_empty` behave as in `sample4update_reprod`. `prob_tab` and the
-matcher keep reproducing the round with `sample4update_reprod`. The
-first-iteration clean-up of `sampled` and `updatecnt` in `prob_align`
-(`startit == 1`) is unchanged. The terminal missing-update pass does not use
+and `allow_empty` behave as in `sample4update_reprod`. The parts' matchers
+keep reproducing the round with `sample4update_reprod`. The first-iteration
+clean-up of `sampled` and `updatecnt` in the master's draw (`startit == 1`,
+`sample_ptcls4prob3D`) is unchanged. The terminal missing-update pass does not use
 cohorts. A full visit takes `sweep`
 blocks; the report states the blocks needed against those planned.
 `solve3D` is not part of the cohort schedule.
@@ -394,24 +394,34 @@ default value and must not be interpreted as an active override by itself.
 Multi-state convergence reporting records those effective state-local fractions
 as `TRAIL_REC_UPDATE_FRAC_STATE01`, `TRAIL_REC_UPDATE_FRAC_STATE02`, and so on.
 
-## 6. Probabilistic Pre-Alignment
+## 6. Probabilistic Alignment
 
-Probabilistic pre-alignment is not a second outer sampler.
+Probabilistic alignment is not a second outer sampler.
 
-The workflow is:
+The workflow is (`doc/implementation_notes/completed/prob_align_batch_pipeline.md`,
+2026-11-04):
 
-1. choose the outer subset through the normal 2D or 3D sampling helper
-2. write the sampled project state
-3. run probability-table generation only for that subset
-4. aggregate table outputs into one assignment artifact
-5. reproduce the same subset in the matcher
-6. perform the hard particle update
+1. the master (or the shared-memory matcher) chooses the outer subset through
+   the normal 2D or 3D sampling helper, with a draw keyed on the run's seed,
+   the pass, the iteration and the particle
+2. the master writes the sampled project state and schedules its parts once
+3. each part's matcher reproduces its share of the subset
+   (`sample4update_reprod`), and for each batch fills the probability-table
+   rows, draws each particle's pose or class from its own row (keyed on the
+   particle), polishes, computes the residual and commits: the hard particle
+   update in the same pass
+4. a part publishes a readout record of its counts and sums; the master merges
+   the records in part order and prints the readouts
 
 `simple_eul_prob_tab.f90`, `simple_eul_prob_tab_neigh.f90`, and
 `simple_eul_prob_tab2D.f90` perform candidate-level importance sampling inside
 that subset. They may use score-derived candidate distributions,
 `angle_sampling`, `greedy_sampling`, or neighborhood sampling, but the selected
-particle set is already fixed before they run.
+particle set is already fixed before they run. Every draw of theirs is keyed
+(the in-plane draw per scored reference, the shift map's disk draw, the sparse
+fills' candidate order, the assignment draw), so it depends on the seed, the
+pass, the iteration, the particle and the draw, never on a thread, a batch or
+a part.
 
 ## 7. Restoration and Assembly
 
@@ -525,8 +535,8 @@ are separate workflow stages and may perform their own reads.
 
 ## 8. Invariants
 
-- Outer particle sampling happens before probabilistic table generation.
-- Probabilistic table workers and downstream matchers reproduce the same subset.
+- Outer particle sampling happens on the master before the parts fill their rows.
+- Every part's matcher reproduces the master's subset.
 - Candidate importance sampling never changes the particle subset.
 - `sampled` remains the current-round marker.
 - `updatecnt` remains cumulative update history.
@@ -556,9 +566,9 @@ are separate workflow stages and may perform their own reads.
 For sampling, probabilistic alignment, class-average restoration, or volume
 assembly changes, check:
 
-- Does the outer subset get selected exactly once for a probabilistic
-  pre-alignment iteration?
-- Do table workers and matchers reuse the recorded subset through
+- Does the outer subset get selected exactly once, by the master, for a
+  probabilistic iteration?
+- Do the parts' matchers reuse the recorded subset through
   `sample4update_reprod`?
 - Is candidate-level importance sampling kept separate from particle-level
   subset selection?

@@ -54,7 +54,7 @@ type(ptcl_read_counts) :: read_totals
 
 ! The particle buffer of one search pass: its share's images, read once into an immutable slab and copied from
 ! it by the batches of the same process (section 3.1 of particle_io_few_particle_stacks.md). 3D: the search and
-! the reconstruction; 2D in shared memory: the probability table fills it, the matcher's batches use it.
+! the reconstruction.
 ! A cropped 3D pass holds records instead: each particle's reconstruction observation (prep_rec_observation,
 ! untapered), put by the search's batches from the transform the alignment computes, sealed before the
 ! reconstruction, which takes its observations from them.

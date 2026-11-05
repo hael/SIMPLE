@@ -102,9 +102,9 @@ visited and how the winner is chosen:
   draw (`rank = 1 - u^p`, `p = 2` during the annealed phase, `p = 4` after).
   Sampling replaces argmax so that near-ties keep exploring.
 - **inpl**: class fixed, only rotation and shift are updated.
-- **prob** and **prob_neigh**: the class, rotation, and shift are read from a
-  globally computed probability table (see
-  [sampling](sampling_and_fractional_updates.md)); the search step only
+- **prob** and **prob_neigh**: the particle's row of class losses is filled in
+  the matcher's batch, its class, rotation and shift drawn from that row (see
+  [sampling](sampling_and_fractional_updates.md)); the search step then
   commits and polishes them.
 
 Shifts are refined with L-BFGS-B on the same objective, bounded by `trs`,

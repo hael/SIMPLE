@@ -4,11 +4,15 @@ use simple_pftc_srch_api
 use simple_builder, only: builder
 use simple_solve2D_controller, only: NSAMPLE_DEFAULT_2D
 use simple_refine3D_fnames, only: refine3D_fsc_fname
+use simple_rnd, only: rnd_key, rnd_scope_key, rnd_draw_key, rnd_run_seed, RND_PROG_REFINE3D, RND_PROG_REFINE2D, &
+    &RND_PASS_ALIGN, RND_FAM_SAMPLE, ensure_run_seed, set_run_seed, RND_KEYED_VERSION
+use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
 public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update2D
-public :: sample_ptcls4iter3D, master_draws_sample3D, master_draws_sample2D
+public :: sample_ptcls4iter3D, master_draws_sample3D, master_draws_sample2D, adopt_run_seed
+public :: sample_ptcls4prob3D, sample_ptcls4prob2D
 public :: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, refine2D_blends_carryover
 private
 #include "simple_local_flags.inc"
@@ -217,12 +221,15 @@ contains
         integer, allocatable, intent(inout) :: pinds(:)
         logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
         type(class_sample),   allocatable   :: clssmp(:)
+        type(rnd_key),        allocatable   :: key
         type(string) :: fname
         if( .not. params%l_update_frac )then
             ! we sample all state > 0
             call build%spproj_field%sample4update_all(pfromto, nptcls2update, pinds, l_incr_sampl)
             return
         endif
+        ! the probabilistic routes draw the sample on the keyed generator (an absent key: the intrinsic stream)
+        if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE3D)
         if( params%l_cohort_sampling .and. params%which_iter /= params%startit )then
             call build%spproj_field%sample4update_rescore(pfromto, nptcls2update, pinds, allow_empty=allow_empty)
             return
@@ -237,19 +244,55 @@ contains
                 if( params%l_frac_best )then
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
                         &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best, &
-                        &allow_empty=allow_empty)
+                        &allow_empty=allow_empty, key=key)
                 else
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
                         &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, &
-                        &allow_empty=allow_empty)
+                        &allow_empty=allow_empty, key=key)
                 endif
                 call deallocate_class_samples(clssmp)
                 call fname%kill
             case DEFAULT
                 call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, &
-                    &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty)
+                    &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, key=key)
         end select
     end subroutine sample_ptcls4update3D
+
+    !> The project owner's seed at the start of a refine3D or refine2D run, before any part is scheduled: a run
+    !! that continues (continue=yes) reuses the seed the project records (a SIMPLE_SEED set to another value is
+    !! inconsistent restart metadata and stops the run); any other run keeps a set SIMPLE_SEED or draws one and
+    !! exports it. The seed and the generator version are recorded in the project's info segment and written.
+    subroutine adopt_run_seed( params, build )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer(int64) :: seed
+        integer        :: version
+        logical        :: found
+        character(len=96) :: msg
+        found = .false.
+        if( trim(params%continue) == 'yes' ) call build%spproj%get_rnd_seed(seed, version, found)
+        if( found )then
+            if( version /= RND_KEYED_VERSION )then
+                write(msg,'(a,i0,a,i0)') 'the project records generator version ', version, ', this build is ', RND_KEYED_VERSION
+                THROW_HARD(msg)
+            endif
+            call set_run_seed(seed)
+        else
+            seed = ensure_run_seed()
+        endif
+        call build%spproj%set_rnd_seed(seed, RND_KEYED_VERSION)
+        call build%spproj%write_segment_inside('projinfo', params%projfile)
+    end subroutine adopt_run_seed
+
+    !> the key of the probabilistic routes' sample draw (family SAMPLE, the project owner's particle 0): the
+    !! run's seed, the program, the discrete alignment pass and the iteration, so that the sample depends on
+    !! the run and the field alone
+    function sample_rnd_key( params, program ) result( key )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: program
+        type(rnd_key) :: key
+        key = rnd_draw_key(rnd_scope_key(rnd_run_seed(), program, RND_PASS_ALIGN, params%which_iter), 0, RND_FAM_SAMPLE)
+    end function sample_rnd_key
 
     !> The particle sample of one refine3D search iteration over pfromto, advancing sampled and updatecnt:
     !! the missing-update pass, the periodic fill-in, or the fractional-update policy of sample_ptcls4update3D
@@ -270,18 +313,23 @@ contains
         endif
     end subroutine sample_ptcls4iter3D
 
-    !> Whether the distributed refine3D master draws the iteration's fractional-update sample once, over
-    !! the whole project, for the workers to reproduce. Each worker would otherwise draw its own sample
-    !! over the whole project with its own random seed and keep the part in its range, so the union is
-    !! not one sample. Probabilistic passes draw in prob_align already, the polish pass reproduces the
-    !! discrete pass it follows, the missing-update pass and full sampling are deterministic, and the
-    !! eval and sigma passes keep their own selection. Master and workers evaluate this on the same
-    !! command line, so they agree.
+    !> Whether the distributed refine3D master draws the iteration's sample once, over the whole project,
+    !! for the workers to reproduce. Each worker would otherwise draw its own sample over the whole project
+    !! with its own random seed and keep the part in its range, so the union is not one sample. The
+    !! probabilistic modes always do (their parts run the pipeline on the master's sample, whatever the
+    !! update fraction, so the field's sample stamps must be the master's); otherwise under a fractional
+    !! update, except that the polish pass reproduces the discrete pass it follows, the missing-update
+    !! pass and full sampling are deterministic, and the eval and sigma passes keep their own selection.
+    !! Master and workers evaluate this on the same command line, so they agree.
     logical function master_draws_sample3D( params ) result( l_master )
         class(parameters), intent(in) :: params
         l_master = .false.
+        if( params%l_cont_polish .or. params%l_update_missing ) return
+        if( params%l_prob_align_mode )then
+            l_master = .true.
+            return
+        endif
         if( .not. params%l_update_frac ) return
-        if( params%l_prob_align_mode .or. params%l_cont_polish .or. params%l_update_missing ) return
         select case(trim(params%refine))
             case('eval','sigma')
                 return
@@ -289,19 +337,59 @@ contains
         l_master = .true.
     end function master_draws_sample3D
 
-    !> Whether the distributed refine2D master draws the iteration's fractional-update sample once, over the
-    !! whole project, for the workers to reproduce, as master_draws_sample3D does: otherwise each worker draws
-    !! within its own particles, and the sample depends on the number of parts. Probabilistic passes draw in
-    !! prob_align2D already; the stream pool keeps its own sampling. Master and workers evaluate this on the
-    !! same command line, so they agree.
+    !> Whether the distributed refine2D master draws the iteration's sample once, over the whole project, for
+    !! the workers to reproduce, as master_draws_sample3D does: otherwise each worker draws within its own
+    !! particles, and the sample depends on the number of parts. The probabilistic modes always do (their parts
+    !! run the pipeline on the master's sample); the stream pool keeps its own sampling. Master and workers
+    !! evaluate this on the same command line, so they agree.
     logical function master_draws_sample2D( params ) result( l_master )
         class(parameters), intent(in) :: params
         l_master = .false.
-        if( .not. params%l_update_frac ) return
-        if( params%l_prob_align_mode ) return
         if( trim(params%stream2d) == 'yes' ) return
+        if( params%l_prob_align_mode )then
+            l_master = .true.
+            return
+        endif
+        if( .not. params%l_update_frac ) return
         l_master = .true.
     end function master_draws_sample2D
+
+    !> The probabilistic routes' sample draw of one refine3D iteration over the whole project, by the project
+    !! owner (the shared-memory matcher, or the distributed master whose parts reproduce it): the sampling
+    !! history is reset at the run's first iteration only, the fill-in sample every fifth iteration under
+    !! fillin, else the fractional-update draw; then the disk-set readout, whose inputs are the owner's
+    subroutine sample_ptcls4prob3D( params, build, nptcls2update, pinds )
+        use simple_eul_prob_tab_utils, only: print_disk_set
+        class(parameters),    intent(in)    :: params
+        class(builder),       intent(inout) :: build
+        integer,              intent(out)   :: nptcls2update
+        integer, allocatable, intent(inout) :: pinds(:)
+        if( params%startit == 1 .and. params%which_iter == params%startit )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
+        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
+            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls2update, pinds)
+        else
+            call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls2update, pinds)
+        endif
+        call print_disk_set(build%spproj_field, params%l_centring, params%trs, pinds, nptcls2update)
+    end subroutine sample_ptcls4prob3D
+
+    !> The same for refine2D: the history reset at the run's first iteration, the draw of sample_ptcls4update2D
+    !! (l_updatefrac the strategy's rule: false on a full update), the disk-set readout
+    subroutine sample_ptcls4prob2D( params, build, l_updatefrac, nptcls2update, pinds )
+        use simple_eul_prob_tab_utils, only: print_disk_set
+        class(parameters),    intent(in)    :: params
+        class(builder),       intent(inout) :: build
+        logical,              intent(in)    :: l_updatefrac
+        integer,              intent(out)   :: nptcls2update
+        integer, allocatable, intent(inout) :: pinds(:)
+        if( params%startit == 1 .and. params%which_iter == params%startit )then
+            call build%spproj_field%clean_entry('updatecnt', 'sampled')
+        endif
+        call sample_ptcls4update2D(params, build, [1,params%nptcls], l_updatefrac, nptcls2update, pinds)
+        call print_disk_set(build%spproj_field, params%l_centring, params%trs, pinds, nptcls2update)
+    end subroutine sample_ptcls4prob2D
 
     subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
@@ -311,8 +399,10 @@ contains
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
         logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
+        type(rnd_key), allocatable :: key
+        if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE3D)
         call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl, &
-            &allow_empty=allow_empty)
+            &allow_empty=allow_empty, key=key)
     end subroutine sample_ptcls4fillin
 
     subroutine sample_ptcls4missing3D( build, pfromto, l_incr_sampl, nptcls2update, pinds )
@@ -331,8 +421,10 @@ contains
         integer,              intent(in)    :: pfromto(2)
         integer,              intent(inout) :: nptcls
         integer, allocatable, intent(inout) :: pinds(:)
+        type(rnd_key), allocatable :: key
         logical :: l_has_been_sampled
         l_has_been_sampled = build%spproj_field%has_been_sampled()
+        if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE2D)
         if( l_updatefrac )then
             ! solve2D controller policy:
             ! startit==1  -> sticky sampled subset stage
@@ -343,11 +435,11 @@ contains
                 if( l_has_been_sampled )then
                     call build%spproj_field%sample4update_reprod(pfromto, nptcls, pinds)
                 else
-                    call build%spproj_field%sample4update_rnd(pfromto, params%update_frac, nptcls, pinds, .true.)
+                    call build%spproj_field%sample4update_rnd(pfromto, params%update_frac, nptcls, pinds, .true., key=key)
                     call build%spproj_field%set_updatecnt(1, pinds)
                 endif
             else
-                call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, nptcls, pinds, .true.)
+                call build%spproj_field%sample4update_cnt(pfromto, params%update_frac, nptcls, pinds, .true., key=key)
             endif
         else
             call build%spproj_field%sample4update_all(pfromto, nptcls, pinds, .true.)

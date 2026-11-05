@@ -2,6 +2,7 @@
 module simple_oris
 use simple_ori_api
 use simple_ori, only: ori
+use simple_rnd, only: rnd_key
 implicit none
 
 public :: oris, population_blend_weights, class_sample_quotas, class_sample_sweep
@@ -165,7 +166,6 @@ type :: oris
     !======================================================================
     ! SAMPLING / UPDATECOUNT (simple_oris_sampling.f90)
     !======================================================================
-    procedure          :: select_particles_set
     procedure          :: sample4rec
     procedure          :: get_state_rec_pops
     procedure          :: sample4update_all
@@ -1189,12 +1189,6 @@ interface
     ! SAMPLING / UPDATECOUNT (simple_oris_sampling.f90)
     !======================================================================
 
-    module subroutine select_particles_set( self, nptcls, inds )
-        class(oris),          intent(in)    :: self
-        integer,              intent(in)    :: nptcls
-        integer, allocatable, intent(inout) :: inds(:)
-    end subroutine select_particles_set
-
     module subroutine sample4rec( self, fromto, nsamples, inds )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1216,16 +1210,17 @@ interface
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_all
 
-    module subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, incr_sampled )
+    module subroutine sample4update_rnd( self, fromto, update_frac, nsamples, inds, incr_sampled, key )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
+        type(rnd_key), optional, intent(in) :: key
     end subroutine sample4update_rnd
 
-    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty )
+    module subroutine sample4update_cnt( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
@@ -1233,10 +1228,11 @@ interface
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         logical, optional,    intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in) :: key
     end subroutine sample4update_cnt
 
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, &
-                                        incr_sampled, l_greedy, frac_best, allow_empty )
+                                        incr_sampled, l_greedy, frac_best, allow_empty, key )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
@@ -1246,6 +1242,7 @@ interface
         logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
         logical, optional,    intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in) :: key
     end subroutine sample4update_class
 
     module subroutine sample4update_reprod( self, fromto, nsamples, inds, allow_empty )
@@ -1272,7 +1269,7 @@ interface
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_updated
 
-    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty )
+    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
@@ -1280,6 +1277,7 @@ interface
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
         logical, optional,    intent(in)    :: allow_empty
+        type(rnd_key), optional, intent(in) :: key
     end subroutine sample4update_fillin
 
     module subroutine sample4update_missing( self, fromto, nsamples, inds, incr_sampled )

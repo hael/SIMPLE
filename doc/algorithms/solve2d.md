@@ -41,9 +41,10 @@ whatever resolution the classes have actually reached.
 **Search stochasticity.** Stages 1 and 2 use stochastic neighborhood hill
 climbing with sampled in-plane and class choices (`snhc_smpl`), which visits
 only a random fraction of classes per particle and accepts random improvements.
-From stage 3 the search switches to the probabilistic mode: a global
-class-likelihood table is built and particles are assigned to classes by a
-balanced stochastic assignment ([sampling](sampling_and_fractional_updates.md)).
+From stage 3 the search switches to the probabilistic mode: each particle's
+row of class likelihoods is filled in the matcher's batch and its class is one
+draw from its own tempered posterior ([sampling](sampling_and_fractional_updates.md);
+the class-balanced assignment was deleted on 2026-10-24).
 In `prob_neigh` (2D's `prob_neigh_mode=snhc`), the intermediate stages keep that table sparse (only a
 neighborhood of classes is scored per particle) and the last stage densifies it
 so every particle's previous class is an explicit candidate and class-overlap
@@ -89,11 +90,11 @@ classes is
 p_j = exp[-(d_j - d_min)] / sum_l exp[-(d_l - d_min)],
 ```
 
-where `d_j` is the whitened Euclidean loss for class `j` at the seed shift
-(for the correlation objective, `d = 1 - clamp(cc, 0, 1)`). Because the losses
-are already noise-normalized log-likelihoods, no temperature is needed; the
-`d_min` shift is only overflow protection. One candidate is drawn, its shift
-is refined, and the matcher commits it as a hard assignment. The class
+where `d_j` is the whitened Euclidean loss for class `j` at the seed shift,
+tempered by the particle's own temperature `T_i` and the run's factor
+`prob_beta` (the policy's section 3; the losses need `objfun=euclid`). One
+candidate is drawn, keyed on the particle, its shift is refined, and the
+matcher commits it as a hard assignment. The class
 average is never a soft weighted sum over all candidates.
 
 ## Coverage and final products
@@ -113,9 +114,9 @@ class products, and the per-particle assignments, scores, and noise spectra.
   has few minima, and the solution found there is a good starting point for the
   sharper objective at 15 A, and so on.
 - Stochastic acceptance early and greedy acceptance late is annealing. The
-  switch to balanced probabilistic assignment at stage 3 addresses the
-  class-collapse failure mode directly: a class cannot take a second particle
-  until it wins another draw, so populations stay comparable.
+  switch to the probabilistic draw at stage 3 keeps near-ties exploring: a
+  particle leaves its best class with the posterior's probability, which the
+  tempering factor and its own temperature set.
 - Random noise references are deliberately uninformative, so the first stage's
   structure comes entirely from the data.
 - Fractional updates make the cost per iteration independent of dataset size;
@@ -127,5 +128,5 @@ class products, and the per-particle assignments, scores, and noise spectra.
 - Stage schedule: `src/main/solve/simple_solve2D_controller.f90`.
 - Orchestration: `src/main/commanders/simple/simple_commanders_solve2D.f90`.
 - Iteration execution: `src/main/strategies/parallelization/simple_refine2D_strategy.f90`.
-- Class-likelihood table: `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90`.
+- Class-likelihood rows and their draw: `src/main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90`, inside the matcher's batch pipeline (`src/main/strategies/search/simple_strategy2D_matcher.f90`).
 - Policy: `doc/policies/2D/solve2D_policy.md`.

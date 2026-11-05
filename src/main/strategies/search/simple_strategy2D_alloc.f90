@@ -135,15 +135,17 @@ contains
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)
-    subroutine prep_strategy2D_batch( params, spproj, which_iter, nptcls, pinds )
+    subroutine prep_strategy2D_batch( params, spproj, which_iter, nptcls, pinds, l_order )
         class(parameters),  intent(in) :: params  
         type(sp_project),   intent(in) :: spproj
         integer,            intent(in) :: which_iter
         integer,            intent(in) :: nptcls        ! # of particles in batch
         integer,            intent(in) :: pinds(nptcls)
+        logical, optional,  intent(in) :: l_order       !< draw the stochastic search order (default); the probabilistic
+                                                        !! routes never read it and pass .false., so it is not drawn
         type(ran_tabu) :: rt
-        integer        :: i,iptcl,prev_class
-        logical        :: l_alloc, l_fresh_start
+        integer        :: i,iptcl,prev_class,k
+        logical        :: l_alloc, l_fresh_start, l_draw
         l_alloc = .true.
         if( allocated(s2D%do_inplsrch) )then
             l_alloc = size(s2D%do_inplsrch) /= nptcls
@@ -152,6 +154,15 @@ contains
         if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(params%ncls, 1:nptcls))
         ! in plane search
         s2D%do_inplsrch = params%l_doshift .and. which_iter>2
+        l_draw = .true.
+        if( present(l_order) ) l_draw = l_order
+        if( .not. l_draw )then
+            ! the order in class order, unread: the probabilistic routes draw nothing here
+            do i = 1,nptcls
+                s2D%srch_order(:,i) = [(k, k=1,params%ncls)]
+            enddo
+            return
+        endif
         ! stochastic search order
         s2D%srch_order = 0
         rt = ran_tabu(params%ncls)

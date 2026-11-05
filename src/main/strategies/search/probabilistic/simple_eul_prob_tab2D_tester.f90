@@ -1,20 +1,18 @@
-!@descr: unit tests for the streamed 2D probability tables: dense and sparse merge and assignment (simple_eul_prob_tab2D)
-! A worker's candidate stream for three particles and two classes is written through the table's
-! writer, merged into the global table, assigned by the per-particle draw from the tempered posterior
-! at a sharp temperature and written; the assignment file must give each particle its best class,
-! distance, in-plane index, peak count and fraction: dense (refine=prob) and sparse (refine=prob_neigh).
-! The draw on synthetic tables with ties, flat and invalid rows at several temperatures and seeds, and
-! the particle temperatures through the part files.
+!@descr: unit tests for the 2D probability tables: the pipeline's dense and sparse selection (simple_eul_prob_tab2D)
+! A batch of candidates for three particles and two classes goes through the pipeline's table (the thread buffers
+! the fill appends to, the batch's rows or candidate store, the per-particle draw from the tempered posterior at a
+! sharp temperature); the assignment must give each particle its best class, distance, in-plane index, peak count
+! and fraction: dense (refine=prob) and sparse (refine=prob_neigh). The draw on synthetic tables with ties, flat
+! and invalid rows at several temperatures and seeds.
 module simple_eul_prob_tab2D_tester
 use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab2D,     only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: prob_candidate, prob_candidate_store
+use simple_eul_prob_tab_utils, only: prob_candidate
 use simple_type_defs,          only: ptcl_ref
 use simple_rnd,                only: seed_rnd_fixed
 use simple_test_utils
-!$ use omp_lib,                only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
 private
 public :: run_all_eul_prob_tab2D_tests
@@ -34,14 +32,13 @@ contains
         params%npeaks_inpl  = NCLASSES
         params%l_doshift    = .false.
         params%prob_beta    = 1.
-        call test_dense_stream()
-        call test_sparse_stream()
+        call test_dense_batch()
+        call test_sparse_batch()
         call test_sparse_shared_best_class()
         call test_dense_posterior_assignment()
         call test_sparse_posterior_assignment()
-        call test_parallel_read('prob')
-        call test_parallel_read('prob_neigh')
         call table%kill
+        call fix_test_seed()
     end subroutine run_all_eul_prob_tab2D_tests
 
     !> the dense posterior draw on a synthetic table of 150 particles and 20 classes with ties (a flat particle,
@@ -82,10 +79,8 @@ contains
         l_unique = .true.
         l_unique([1,9,13]) = .false.
         ! a huge temperature: the argmin
-        call tab%new(params, build, pinds_t)
-        call set_table(tab, 1.e9)
-        call seed_rnd_fixed(5001)
-        call tab%ref_assign
+        call set_fixed_seed(5001, propagate=.true.)
+        call assign_dense(tab, 1.e9)
         nwrong = 0
         do i = 1, NP
             if( l_unique(i) )then
@@ -102,15 +97,13 @@ contains
         call assert_true(all(tab%assgn_map(:)%frac == 100.) .and. all(tab%assgn_map(:)%npeaks == 0), 'frac 100 and no peak count')
         icls_a = tab%assgn_map(:)%icls
         ! no temperature from the fill: the argmin, as at the huge temperature
-        call set_table(tab, 0.)
-        call seed_rnd_fixed(5001)
-        call tab%ref_assign
+        call set_fixed_seed(5001, propagate=.true.)
+        call assign_dense(tab, 0.)
         call assert_int(0, count(pack(tab%assgn_map(:)%icls, l_unique) /= pack(icls_a, l_unique)),&
             &'a particle without a temperature takes its argmin')
         ! T = 2: some particles leave the mode, at the same seed the same ones
-        call set_table(tab, 2.)
-        call seed_rnd_fixed(5002)
-        call tab%ref_assign
+        call set_fixed_seed(5002, propagate=.true.)
+        call assign_dense(tab, 2.)
         icls_a = tab%assgn_map(:)%icls
         nwrong = 0
         do i = 1, NP
@@ -120,13 +113,11 @@ contains
             if( tab%assgn_map(i)%dist /= dists(icls_a(i),i) ) nwrong = nwrong + NP
         enddo
         call assert_true(nwrong > 0 .and. nwrong < NP, 'at T = 2 some particles leave the mode, with the drawn class''s distance')
-        call set_table(tab, 2.)
-        call seed_rnd_fixed(5002)
-        call tab%ref_assign
+        call set_fixed_seed(5002, propagate=.true.)
+        call assign_dense(tab, 2.)
         call assert_int(0, count(tab%assgn_map(:)%icls /= icls_a), 'the same seed gives the same dense posterior assignment')
-        call set_table(tab, 2.)
-        call seed_rnd_fixed(5003)
-        call tab%ref_assign
+        call set_fixed_seed(5003, propagate=.true.)
+        call assign_dense(tab, 2.)
         icls_b = tab%assgn_map(:)%icls
         call assert_true(any(icls_b /= icls_a), 'another seed gives another dense posterior assignment')
         call tab%kill
@@ -136,22 +127,33 @@ contains
 
     contains
 
-        subroutine set_table( t, temp )
+        !> the pipeline's table over the particles, every row's candidates (one per class, the in-plane index the
+        !! class) appended to the first thread buffer as the fill appends them, the temperature set, the batch of
+        !! every row assigned
+        subroutine assign_dense( t, temp )
             type(eul_prob_tab2D), intent(inout) :: t
             real,                 intent(in)    :: temp
+            type(prob_candidate) :: candidate
             integer :: ip, ic
+            call t%new_pipeline(params, build, pinds_t)
             do ip = 1, NP
                 do ic = 1, NC
-                    t%rows(ic,ip)%inpl = ic
-                    t%rows(ic,ip)%dist = dists(ic,ip)
+                    candidate      = prob_candidate()
+                    candidate%iref = ic
+                    candidate%inpl = ic
+                    candidate%dist = dists(ic,ip)
+                    call t%candidate_buffers(1)%append(ip, candidate)
                 enddo
             enddo
             t%temps = temp
-        end subroutine set_table
+            call t%open_assignment
+            call t%assign_batch(1, NP)
+            call t%close_assignment
+        end subroutine assign_dense
 
     end subroutine test_dense_posterior_assignment
 
-    !> the sparse posterior draw on a synthetic candidate store of 300 particles and 20 classes (1 to 20 candidates
+    !> the sparse posterior draw on a synthetic candidate batch of 300 particles and 20 classes (1 to 20 candidates
     !! per particle, ties, candidates without an in-plane index): at a huge temperature every particle takes a
     !! candidate at its smallest valid distance, with the peak count of the candidates with an in-plane index and
     !! their fraction of the classes; at T = 2 some particles leave the mode; the same seed gives the same
@@ -194,9 +196,8 @@ contains
         cands(n+1:n+NC)%inpl = 3
         allocate(tab)
         ! a huge temperature: a candidate at the smallest valid distance
-        call set_store(tab, 1.e9)
-        call seed_rnd_fixed(6001)
-        call tab%ref_assign
+        call set_fixed_seed(6001, propagate=.true.)
+        call assign_sparse(tab, 1.e9)
         nwrong = 0
         n = 0
         do i = 1, NP
@@ -217,9 +218,8 @@ contains
         call assert_int(0, nwrong, 'a huge temperature gives every particle a candidate at its smallest valid distance')
         call tab%kill
         ! T = 2: some particles leave the mode, at the same seed the same ones
-        call set_store(tab, 2.)
-        call seed_rnd_fixed(6002)
-        call tab%ref_assign
+        call set_fixed_seed(6002, propagate=.true.)
+        call assign_sparse(tab, 2.)
         icls_a = tab%assgn_map(:)%icls
         nwrong = 0
         n = 0
@@ -233,14 +233,12 @@ contains
         enddo
         call assert_true(nwrong > 0 .and. nwrong < NP, 'at T = 2 some particles leave the mode')
         call tab%kill
-        call set_store(tab, 2.)
-        call seed_rnd_fixed(6002)
-        call tab%ref_assign
+        call set_fixed_seed(6002, propagate=.true.)
+        call assign_sparse(tab, 2.)
         call assert_int(0, count(tab%assgn_map(:)%icls /= icls_a), 'the same seed gives the same sparse posterior assignment')
         call tab%kill
-        call set_store(tab, 2.)
-        call seed_rnd_fixed(6003)
-        call tab%ref_assign
+        call set_fixed_seed(6003, propagate=.true.)
+        call assign_sparse(tab, 2.)
         icls_b = tab%assgn_map(:)%icls
         call assert_true(any(icls_b /= icls_a), 'another seed gives another sparse posterior assignment')
         call tab%kill
@@ -251,23 +249,35 @@ contains
 
     contains
 
-        subroutine set_store( t, temp )
+        !> the pipeline's table over the particles, every particle's candidates appended to the first thread
+        !! buffer in their order (the order the fill gives the batch's store), the temperature set, the batch of
+        !! every row assigned
+        subroutine assign_sparse( t, temp )
             class(eul_prob_tab2D), intent(inout) :: t
             real,                  intent(in)    :: temp
-            call t%new(params, build, pinds_t)
-            call t%candidate_store%new_ragged(pinds_t, counts)
-            t%candidate_store%candidates = cands
+            integer :: ip, k, pos
+            call t%new_pipeline(params, build, pinds_t)
+            pos = 0
+            do ip = 1, NP
+                do k = 1, counts(ip)
+                    pos = pos + 1
+                    call t%candidate_buffers(1)%append(ip, cands(pos))
+                enddo
+            enddo
             t%temps = temp
-        end subroutine set_store
+            call t%open_assignment
+            call t%assign_batch(1, NP)
+            call t%close_assignment
+        end subroutine assign_sparse
 
     end subroutine test_sparse_posterior_assignment
 
     !> refine=prob: every particle carries a candidate per class; at the sharp temperature the draw is the smaller
-    !! distance, and a refined candidate keeps its shift through the dense part file
-    subroutine test_dense_stream()
+    !! distance, and a refined candidate keeps its shift through the batch's rows
+    subroutine test_dense_batch()
         type(prob_candidate) :: candidates(6)
         integer :: particle_indices(6)
-        write(*,'(A)') 'test_dense_stream'
+        write(*,'(A)') 'test_dense_batch'
         params%refine = 'prob'
         call set_candidate(candidates(1),1,0.1)
         call set_candidate(candidates(2),2,0.9)
@@ -279,41 +289,27 @@ contains
         candidates(4)%y      = -2.5
         candidates(4)%has_sh = .true.
         particle_indices = [1,1,2,2,3,3]
-        call write_candidate_stream('prob2d_dense_part1.dat',particle_indices,candidates)
-        call table%new(params,build,pinds)
-        call table%read_tabs_to_glob(string('prob2d_dense_part'),1,1)
-        call table%ref_assign
-        call table%write_assignment(string('prob2d_dense_assignment.dat'))
-        call assert_assignment('prob2d_dense_assignment.dat',[1,2,1],[0.1,0.2,0.3],&
-            &[0,0,0],[100.,100.,100.])
-        call assert_shifts('prob2d_dense_assignment.dat',[0.,1.5,0.],[0.,-2.5,0.],[.false.,.true.,.false.])
+        call assign_batch_of(particle_indices, candidates)
+        call assert_assignment('dense batch',[1,2,1],[0.1,0.2,0.3],[0,0,0],[100.,100.,100.])
+        call assert_shifts('dense batch',[0.,1.5,0.],[0.,-2.5,0.],[.false.,.true.,.false.])
         call table%kill
-        call del_file('prob2d_dense_part1.dat')
-        call del_file('prob2d_dense_assignment.dat')
-    end subroutine test_dense_stream
+    end subroutine test_dense_batch
 
-    !> refine=prob_neigh: the stream carries only the evaluated candidates, one or two per particle
-    subroutine test_sparse_stream()
+    !> refine=prob_neigh: the batch carries only the evaluated candidates, one or two per particle
+    subroutine test_sparse_batch()
         type(prob_candidate) :: candidates(4)
         integer :: particle_indices(4)
-        write(*,'(A)') 'test_sparse_stream'
+        write(*,'(A)') 'test_sparse_batch'
         params%refine = 'prob_neigh'
         call set_candidate(candidates(1),1,0.1)
         call set_candidate(candidates(2),2,0.2)
         call set_candidate(candidates(3),1,0.3)
         call set_candidate(candidates(4),2,0.4)
         particle_indices = [1,2,3,3]
-        call write_candidate_stream('prob2d_sparse_part1.dat',particle_indices,candidates)
-        call table%new(params,build,pinds)
-        call table%read_tabs_to_glob(string('prob2d_sparse_part'),1,1)
-        call table%ref_assign
-        call table%write_assignment(string('prob2d_sparse_assignment.dat'))
-        call assert_assignment('prob2d_sparse_assignment.dat',[1,2,1],[0.1,0.2,0.3],&
-            &[1,1,2],[50.,50.,100.])
+        call assign_batch_of(particle_indices, candidates)
+        call assert_assignment('sparse batch',[1,2,1],[0.1,0.2,0.3],[1,1,2],[50.,50.,100.])
         call table%kill
-        call del_file('prob2d_sparse_part1.dat')
-        call del_file('prob2d_sparse_assignment.dat')
-    end subroutine test_sparse_stream
+    end subroutine test_sparse_batch
 
     !> two particles share their best class: at the sharp temperature both draw it, no class forced to be populated
     subroutine test_sparse_shared_best_class()
@@ -328,127 +324,10 @@ contains
         call set_candidate(candidates(5),1,0.3)
         call set_candidate(candidates(6),2,0.6)
         particle_indices = [1,1,2,2,3,3]
-        call write_candidate_stream('prob2d_sparse_shared_part1.dat',particle_indices,candidates)
-        call table%new(params,build,pinds)
-        call table%read_tabs_to_glob(string('prob2d_sparse_shared_part'),1,1)
-        call table%ref_assign
-        call table%write_assignment(string('prob2d_sparse_shared_assignment.dat'))
-        call assert_assignment('prob2d_sparse_shared_assignment.dat',[2,2,1],[0.1,0.2,0.3],&
-            &[2,2,2],[100.,100.,100.])
+        call assign_batch_of(particle_indices, candidates)
+        call assert_assignment('sparse shared best class',[2,2,1],[0.1,0.2,0.3],[2,2,2],[100.,100.,100.])
         call table%kill
-        call del_file('prob2d_sparse_shared_part1.dat')
-        call del_file('prob2d_sparse_shared_assignment.dat')
     end subroutine test_sparse_shared_best_class
-
-    !> The part reads run in parallel over the parts: synthetic part files (7 parts of interleaved particles, 20
-    !! classes, refined entries with shifts in the dense layout, 1 to 20 candidates per particle in the stream layout,
-    !! seeds) read at one thread and 20 times at every processor; the master's table must agree bit for bit
-    subroutine test_parallel_read( refine )
-        character(len=*), intent(in) :: refine
-        integer, parameter :: NP = 700, NC = 20, NPARTS = 7, NREP = 20
-        class(eul_prob_tab2D), allocatable :: worker, ref, tab
-        type(prob_candidate) :: candidate
-        integer, allocatable :: pinds_t(:), pinds_part(:)
-        integer :: i, i_loc, ipart, k, ncand, irep, nwrong, nthr_prev, nthr_full, ncls_prev, npeaks_prev
-        character(len=len(params%refine)) :: refine_prev
-        character(len=32) :: fname
-        write(*,'(A)') 'test_parallel_read '//refine
-        ncls_prev   = params%ncls
-        npeaks_prev = params%npeaks_inpl
-        refine_prev = params%refine
-        params%ncls        = NC
-        params%npeaks_inpl = NC
-        params%refine      = refine
-        nthr_prev = 1
-        nthr_full = 1
-        !$ nthr_prev = omp_get_max_threads()
-        !$ nthr_full = omp_get_num_procs()
-        pinds_t = [(100 + 3*i, i=1,NP)]
-        call seed_rnd_fixed(20261019)
-        allocate(worker, ref, tab)
-        do ipart = 1, NPARTS
-            pinds_part = pack(pinds_t, [(mod(i-1,NPARTS) == ipart-1, i=1,NP)])
-            call worker%new_worker(params, build, pinds_part)
-            worker%seed_nrots = 36
-            do i_loc = 1, size(pinds_part)
-                worker%seed_shifts(:,i_loc) = [ran3() - 0.5, ran3() - 0.5]
-                worker%seed_has_sh(i_loc)   = ran3() > 0.3
-                worker%temps(i_loc)         = real(pinds_part(i_loc))
-            enddo
-            write(fname,'(A,I1,A)') 'prob2d_par_part', ipart, '.dat'
-            call worker%begin_write(string(trim(fname)))
-            do i_loc = 1, size(pinds_part)
-                ncand = NC
-                if( refine == 'prob_neigh' ) ncand = 1 + int(ran3() * real(NC-1))
-                do k = 1, ncand
-                    candidate        = prob_candidate()
-                    candidate%iref   = k
-                    if( refine == 'prob_neigh' ) candidate%iref = 1 + mod(k * 7 + i_loc, NC)
-                    candidate%inpl   = 1 + int(ran3() * 35.)
-                    candidate%dist   = 4. * ran3()
-                    if( k <= 2 )then
-                        candidate%x      = ran3() - 0.5
-                        candidate%y      = ran3() - 0.5
-                        candidate%has_sh = .true.
-                    endif
-                    call worker%candidate_buffers(1)%append(i_loc, candidate)
-                enddo
-            enddo
-            call worker%write_tab(string(trim(fname)))
-            call worker%kill
-        enddo
-        !$ call omp_set_num_threads(1)
-        call ref%new(params, build, pinds_t)
-        call ref%read_tabs_to_glob(string('prob2d_par_part'), NPARTS, 1)
-        !$ call omp_set_num_threads(nthr_full)
-        nwrong = 0
-        do irep = 1, NREP
-            call tab%new(params, build, pinds_t)
-            call tab%read_tabs_to_glob(string('prob2d_par_part'), NPARTS, 1)
-            nwrong = nwrong + count(tab%seed_shifts /= ref%seed_shifts) + count(tab%seed_has_sh .neqv. ref%seed_has_sh)
-            nwrong = nwrong + count(tab%temps /= ref%temps)
-            if( tab%seed_nrots /= ref%seed_nrots ) nwrong = nwrong + 1
-            if( refine == 'prob' )then
-                nwrong = nwrong + count(tab%rows%dist /= ref%rows%dist) + count(tab%rows%inpl /= ref%rows%inpl)
-                nwrong = nwrong + count(tab%refined_offsets /= ref%refined_offsets)
-                if( size(tab%refined) /= size(ref%refined) )then
-                    nwrong = nwrong + 1
-                else
-                    nwrong = nwrong + count(tab%refined%i /= ref%refined%i) + count(tab%refined%ri /= ref%refined%ri) +&
-                        &count(tab%refined%x /= ref%refined%x) + count(tab%refined%y /= ref%refined%y)
-                endif
-            else
-                nwrong = nwrong + count(tab%candidate_store%offsets /= ref%candidate_store%offsets)
-                if( size(tab%candidate_store%candidates) /= size(ref%candidate_store%candidates) )then
-                    nwrong = nwrong + 1
-                else
-                    associate( a => tab%candidate_store%candidates, b => ref%candidate_store%candidates )
-                    nwrong = nwrong + count(a%iref /= b%iref) + count(a%inpl /= b%inpl) + count(a%dist /= b%dist) +&
-                        &count(a%x /= b%x) + count(a%y /= b%y) + count(a%has_sh .neqv. b%has_sh)
-                    end associate
-                endif
-            endif
-            call tab%kill
-        enddo
-        !$ call omp_set_num_threads(nthr_prev)
-        call assert_int(0, nwrong, 'the 2D part read ('//refine//') at every processor equals the read at one thread')
-        call assert_int(0, count(ref%temps /= real(pinds_t)), 'the particle temperatures land at their master particles')
-        if( refine == 'prob' )then
-            call assert_int(2*NP, size(ref%refined), 'the dense master holds every refined entry')
-        else
-            call assert_true(all(ref%candidate_store%offsets(2:) > ref%candidate_store%offsets(:NP)),&
-                &'every particle of the sparse master has candidates')
-        endif
-        call ref%kill
-        do ipart = 1, NPARTS
-            write(fname,'(A,I1,A)') 'prob2d_par_part', ipart, '.dat'
-            call del_file(trim(fname))
-        enddo
-        deallocate(worker, ref, tab)
-        params%ncls        = ncls_prev
-        params%npeaks_inpl = npeaks_prev
-        params%refine      = refine_prev
-    end subroutine test_parallel_read
 
     subroutine set_candidate( candidate, icls, dist )
         type(prob_candidate), intent(out) :: candidate
@@ -459,67 +338,45 @@ contains
         candidate%dist = dist
     end subroutine set_candidate
 
-    !> a worker's part file through the table's own writer: the candidates in one chunk, in the given order, at a
-    !! temperature sharp enough that the master's draw is the argmin (the distances differ by 0.1 or more)
-    subroutine write_candidate_stream( fname, particle_indices, candidates )
-        character(len=*),     intent(in) :: fname
+    !> the module's table as the pipeline's over the three particles: the candidates appended to the first thread
+    !! buffer in the given order (as the fill appends them), the temperature sharp enough that the draw is the argmin
+    !! (the distances differ by 0.1 or more), the one batch assigned
+    subroutine assign_batch_of( particle_indices, candidates )
         integer,              intent(in) :: particle_indices(:)
         type(prob_candidate), intent(in) :: candidates(:)
-        class(eul_prob_tab2D), allocatable :: worker
         integer :: j
-        if( size(particle_indices) /= size(candidates) ) THROW_HARD('candidate stream test size mismatch')
-        allocate(worker)
-        call worker%new_worker(params,build,pinds)
-        worker%temps = 1.e9
-        call worker%begin_write(string(fname))
+        if( size(particle_indices) /= size(candidates) ) THROW_HARD('candidate batch test size mismatch')
+        call table%new_pipeline(params, build, pinds)
+        table%temps = 1.e9
         do j = 1,size(candidates)
-            call worker%candidate_buffers(1)%append(particle_indices(j), candidates(j))
+            call table%candidate_buffers(1)%append(particle_indices(j), candidates(j))
         enddo
-        call worker%write_tab(string(fname))
-        call worker%kill
-        deallocate(worker)
-    end subroutine write_candidate_stream
+        call table%open_assignment
+        call table%assign_batch(1, NPTCLS)
+        call table%close_assignment
+    end subroutine assign_batch_of
 
-    subroutine assert_assignment( fname, expected_classes, expected_dists, expected_npeaks, expected_fracs )
-        character(len=*), intent(in) :: fname
+    subroutine assert_assignment( label, expected_classes, expected_dists, expected_npeaks, expected_fracs )
+        character(len=*), intent(in) :: label
         integer,          intent(in) :: expected_classes(NPTCLS)
         real,             intent(in) :: expected_dists(NPTCLS)
         integer,          intent(in) :: expected_npeaks(NPTCLS)
         real,             intent(in) :: expected_fracs(NPTCLS)
-        type(ptcl_ref) :: assignments(NPTCLS)
-        integer :: funit, io_stat, nptcls_file
-        call fopen(funit,string(fname),access='STREAM',action='READ',status='OLD',iostat=io_stat)
-        call fileiochk('simple_eul_prob_tab2D_tester; read assignment '//fname,io_stat)
-        read(funit,pos=1) nptcls_file
-        call assert_int(NPTCLS, nptcls_file, fname//': particle count')
-        if( nptcls_file /= NPTCLS )then
-            call fclose(funit)
-            return
-        endif
-        read(funit,pos=sizeof(nptcls_file)+1) assignments
-        call fclose(funit)
-        call assert_true(all(assignments(:)%pind == pinds), fname//': particle indices')
-        call assert_true(all(assignments(:)%icls == expected_classes), fname//': best class per particle')
-        call assert_true(all(abs(assignments(:)%dist - expected_dists) <= 1.e-6), fname//': distance of the best class')
-        call assert_true(all(assignments(:)%inpl == expected_classes), fname//': in-plane index of the best class')
-        call assert_true(all(assignments(:)%npeaks == expected_npeaks), fname//': peak count')
-        call assert_true(all(abs(assignments(:)%frac - expected_fracs) <= 1.e-6), fname//': evaluated fraction')
+        call assert_true(all(table%assgn_map(:)%pind == pinds), label//': particle indices')
+        call assert_true(all(table%assgn_map(:)%icls == expected_classes), label//': best class per particle')
+        call assert_true(all(abs(table%assgn_map(:)%dist - expected_dists) <= 1.e-6), label//': distance of the best class')
+        call assert_true(all(table%assgn_map(:)%inpl == expected_classes), label//': in-plane index of the best class')
+        call assert_true(all(table%assgn_map(:)%npeaks == expected_npeaks), label//': peak count')
+        call assert_true(all(abs(table%assgn_map(:)%frac - expected_fracs) <= 1.e-6), label//': evaluated fraction')
     end subroutine assert_assignment
 
-    subroutine assert_shifts( fname, expected_x, expected_y, expected_has_sh )
-        character(len=*), intent(in) :: fname
+    subroutine assert_shifts( label, expected_x, expected_y, expected_has_sh )
+        character(len=*), intent(in) :: label
         real,             intent(in) :: expected_x(NPTCLS), expected_y(NPTCLS)
         logical,          intent(in) :: expected_has_sh(NPTCLS)
-        type(ptcl_ref) :: assignments(NPTCLS)
-        integer :: funit, io_stat, nptcls_file
-        call fopen(funit,string(fname),access='STREAM',action='READ',status='OLD',iostat=io_stat)
-        call fileiochk('simple_eul_prob_tab2D_tester; read assignment '//fname,io_stat)
-        read(funit,pos=1) nptcls_file
-        read(funit,pos=sizeof(nptcls_file)+1) assignments
-        call fclose(funit)
-        call assert_true(all(assignments(:)%x == expected_x) .and. all(assignments(:)%y == expected_y),&
-            &fname//': shifts of the assigned candidates')
-        call assert_true(all(assignments(:)%has_sh .eqv. expected_has_sh), fname//': shift flags')
+        call assert_true(all(table%assgn_map(:)%x == expected_x) .and. all(table%assgn_map(:)%y == expected_y),&
+            &label//': shifts of the assigned candidates')
+        call assert_true(all(table%assgn_map(:)%has_sh .eqv. expected_has_sh), label//': shift flags')
     end subroutine assert_shifts
 
 end module simple_eul_prob_tab2D_tester

@@ -1,7 +1,7 @@
 # Agent-friendly code
 
 Status, 2026-11-04: on hold until the batch alignment pipeline refactoring
-([plan](../../implementation_notes/planned/prob_align_batch_pipeline.md)) has landed, since both
+([plan](../../implementation_notes/completed/prob_align_batch_pipeline.md)) has landed, since both
 change the same code. Delivered with this note: section 2 and the defect fixes of section 5 (1-7).
 Every ruling is decided; the work they call for is section 7, small items first.
 
@@ -75,7 +75,7 @@ Seed list from the guide audit:
 | A model's `feature_weights` and `linear_coefficients` follow the feature bank's order (cavg_quality) | a short vector is zero-filled | stop on a length mismatch |
 
 The batch alignment pipeline refactoring
-([plan](../../implementation_notes/planned/prob_align_batch_pipeline.md)) rewrites
+([plan](../../implementation_notes/completed/prob_align_batch_pipeline.md)) rewrites
 `strategies/search`; the rows for that folder wait for it.
 
 ### 3.2 A static check of the command-line chain

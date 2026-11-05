@@ -2,6 +2,7 @@
 submodule (simple_polarft_calc) simple_polarft_corr
 use simple_defs, only: DTWOPI
 use simple_eul_prob_tab_utils, only: sample_bounded_dists, sample_power_dists, draw_posterior_row, posterior_temperature
+use simple_rnd,                only: rnd_keyed, rnd_draw_key, RND_FAM_INPL
 #include "simple_local_flags.inc"
 implicit none
 
@@ -472,7 +473,7 @@ contains
     !! Gaussian noise model's pi wsqsum / (2 pftsz) from the memoized self-term under the current sigma2
     !! (posterior_temperature) times the iteration's tempering factor prob_beta (T_eff = beta T, below one hotter),
     !! the one factor every draw of the tables runs at, so the annealing tail cools the in-plane draws with the
-    !! direction and class draws. The table workers write the untempered value into their part files
+    !! direction and class draws. The tables keep the untempered value with the row
     module real function ptcl_posterior_temp( self, iptcl )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
@@ -658,53 +659,22 @@ contains
     !! fill): p_r proportional to
     !! exp(-temp (L_r - L_min)) over every grid rotation, no angular threshold and no truncation to a best subset.
     !! dist is the drawn rotation's loss. objfun=euclid only: the temperature is the Gaussian noise model's
-    !! (posterior_temperature).
+    !! (posterior_temperature). The draw's variate is keyed on the calculator's scope, the particle (the
+    !! project index) and the reference: the same pair in the same pass draws the same variate on any thread.
     module subroutine gen_posterior_val( self, iref, iptcl, shift, temp, dist, irot )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2), temp
         real(sp),                    intent(out)   :: dist
         integer,                     intent(out)   :: irot
-        real(dp) :: norm
+        real(dp) :: norm, u
         integer  :: ithr
         if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_val requires objfun=euclid')
+        if( .not. self%l_rnd_scope ) THROW_HARD('the posterior draw needs the calculator''s scope (set_rnd_scope); gen_posterior_val')
+        u = rnd_keyed(rnd_draw_key(self%rnd_scope, iptcl, RND_FAM_INPL, reference=iref))
         call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
+        call draw_posterior_crvec(self, ithr, norm, temp, u, dist, irot)
     end subroutine gen_posterior_val
-
-    !> gen_posterior_val and, at the same temperature, the row's evidence at this shift as an effective loss:
-    !! exp(-temp evid) = sum_r exp(-temp L_r) over the valid rotations, the in-plane marginal the tables' class draw
-    !! uses with the polar shift map
-    module subroutine gen_posterior_evid( self, iref, iptcl, shift, temp, dist, irot, evid )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2), temp
-        real(sp),                    intent(out)   :: dist, evid
-        integer,                     intent(out)   :: irot
-        real(dp) :: norm, lmin, s
-        real(sp) :: invalid
-        integer  :: ithr, r
-        if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_evid requires objfun=euclid')
-        if( .not. (temp > 0.) ) THROW_HARD('gen_posterior_evid needs a positive temperature')
-        call gen_euclid_crvec(self, iref, iptcl, shift, norm, ithr)
-        call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
-        invalid = 0.1 * huge(invalid)
-        lmin    = huge(lmin)
-        do r = 1, self%nrots
-            if( self%heap_vars(ithr)%rot_dists(r) < invalid ) lmin = min(lmin, real(self%heap_vars(ithr)%rot_dists(r), dp))
-        enddo
-        if( lmin >= real(invalid, dp) )then
-            evid = huge(evid)
-            return
-        endif
-        s = 0.d0
-        do r = 1, self%nrots
-            if( self%heap_vars(ithr)%rot_dists(r) < invalid )then
-                s = s + exp(-real(temp, dp) * (real(self%heap_vars(ithr)%rot_dists(r), dp) - lmin))
-            endif
-        enddo
-        evid = real(lmin - log(s) / real(temp, dp), sp)
-    end subroutine gen_posterior_evid
 
     !> gen_posterior_val for a bank entry (the particle shifted once by its seed, with the angular Nyquist bin)
     module subroutine gen_posterior_val_bank( self, iref, iptcl, bank, temp, dist, irot )
@@ -714,25 +684,27 @@ contains
         real(sp),            intent(in)    :: temp
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
-        real(dp) :: norm
+        real(dp) :: norm, u
         integer  :: ithr
         if( self%p_ptr%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('gen_posterior_val_bank requires objfun=euclid')
+        if( .not. self%l_rnd_scope ) THROW_HARD('the posterior draw needs the calculator''s scope (set_rnd_scope); gen_posterior_val_bank')
+        u = rnd_keyed(rnd_draw_key(self%rnd_scope, iptcl, RND_FAM_INPL, reference=iref))
         call gen_euclid_crvec_bank(self, iref, iptcl, bank, norm, ithr)
-        call draw_posterior_crvec(self, ithr, norm, temp, dist, irot)
+        call draw_posterior_crvec(self, ithr, norm, temp, u, dist, irot)
     end subroutine gen_posterior_val_bank
 
     !> the posterior draw over the Euclidean distances of the calling thread's crvec1 (gen_euclid_crvec or its bank
-    !! form), rot_cdf the work array; a row without a valid rotation (every loss above -log(TINY)) returns
-    !! rotation 1 at the invalid marker
-    subroutine draw_posterior_crvec( self, ithr, norm, temp, dist, irot )
+    !! form) with the variate u, rot_cdf the work array; a row without a valid rotation (every loss above
+    !! -log(TINY)) returns rotation 1 at the invalid marker
+    subroutine draw_posterior_crvec( self, ithr, norm, temp, u, dist, irot )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: ithr
-        real(dp),            intent(in)    :: norm
+        real(dp),            intent(in)    :: norm, u
         real(sp),            intent(in)    :: temp
         real(sp),            intent(out)   :: dist
         integer,             intent(out)   :: irot
         call euclid_dists_from_crvec(self%nrots, self%crvec1(ithr)%r, norm, self%heap_vars(ithr)%rot_dists)
-        call draw_posterior_row(self%nrots, self%heap_vars(ithr)%rot_dists, temp, self%heap_vars(ithr)%rot_cdf, irot, dist)
+        call draw_posterior_row(self%nrots, self%heap_vars(ithr)%rot_dists, temp, self%heap_vars(ithr)%rot_cdf, u, irot, dist)
         if( irot < 1 )then
             irot = 1
             dist = huge(dist)

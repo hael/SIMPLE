@@ -4,7 +4,8 @@ use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius
+use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius, prob_rnd_scope
+use simple_rnd,              only: rnd_keyed_int, rnd_draw_key, RND_FAM_ASSIGN
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_shiftmap_srch,    only: shiftmap_srch
 use simple_builder,          only: builder
@@ -185,17 +186,11 @@ contains
                 ! all done
             else
                 ! for limiting cases
-                self%prev_class = irnd_uni(self%nrefs)
-                do while( s2D%cls_pops(self%prev_class) <= 0 )
-                    self%prev_class = irnd_uni(self%nrefs)
-                enddo
+                call pick_populated_class
             endif
         else
             ! initialization
-            self%prev_class = irnd_uni(self%nrefs)
-            do while( s2D%cls_pops(self%prev_class) <= 0 )
-                self%prev_class = irnd_uni(self%nrefs)
-            enddo
+            call pick_populated_class
         endif
         ! set best to previous best by default
         self%best_class = self%prev_class
@@ -226,6 +221,26 @@ contains
         call prep_strategy2D_thread(self%ithr)
         ! under the key the previous class competes in the screen at its stored-shift score
         if( self%l_map ) call self%store_solution(self%prev_class, self%prev_rot, self%prev_corr)
+    contains
+
+        !> a populated class drawn uniformly until one is found: on the probabilistic routes keyed on the particle
+        !! (family ASSIGN with the pick's ordinal from 1; the assignment draw is ordinal 0), so the pick depends on
+        !! the particle and the iteration alone; on the classic routes the intrinsic stream, as before
+        subroutine pick_populated_class
+            integer :: ipick
+            ipick = 0
+            do
+                ipick = ipick + 1
+                if( self%p_ptr%l_prob_align_mode )then
+                    self%prev_class = rnd_keyed_int(rnd_draw_key(prob_rnd_scope(self%p_ptr%which_iter, .true.), &
+                        &self%iptcl, RND_FAM_ASSIGN, ordinal=ipick), self%nrefs)
+                else
+                    self%prev_class = irnd_uni(self%nrefs)
+                endif
+                if( s2D%cls_pops(self%prev_class) > 0 ) exit
+            enddo
+        end subroutine pick_populated_class
+
     end subroutine prep4srch
 
     subroutine inpl_srch_first( self )
