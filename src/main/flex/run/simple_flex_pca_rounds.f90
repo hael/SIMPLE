@@ -1,6 +1,6 @@
 !@descr: flex_pca distribution contract: the role/round object handed down by the strategy
-!! Domain modules (model, em, rec3D) ask a flex_pca_rounds only for the master/worker role, the part
-!! count and how to run one qsys round for a typed flex_stage_request (simple_flex_pca_stages). The
+!! The flex modules ask a flex_pca_rounds only for the master/worker role, the part count, part file
+!! names and how to run one qsys round for a typed flex_stage_request (simple_flex_pca_stages). The
 !! strategies extend it: the master implements rounds on its qsys context, shared memory and workers
 !! refuse them. Part naming lives in simple_flex_pca_artifacts.
 module simple_flex_pca_rounds

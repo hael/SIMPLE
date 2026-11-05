@@ -276,10 +276,20 @@ precedent.
   stage folder. None of this is written in `stream/`.
 - **solve3D add-on.** The final reconstruction rewrites the working project in
   full three times (`switch_addon_membership`, `calc_final_rec_addon`).
-- **Long commander routines.** 33 `exec_*` routines exceed 150 lines and 14
-  exceed 300 (`exec_refine3D_auto` 707, `exec_solve3D` 597,
-  `exec_bootstrap_cavgs` 553, `exec_stream_p00_master` 490,
-  `exec_refine3D_states_cavgs` 459, `exec_classify3D_refs` 392, ...). Most
+- **SINGLE sets `mkdir` in its routers.** `production/single_exec.f90` sets `mkdir=yes` when
+  the command line leaves it out, and the SINGLE routers override it per program
+  (`single_exec_atom.f90`, `single_exec_trajectory.f90`, `single_exec_nano2D.f90`),
+  a normalization of `cline` that section 2 leaves to the commander.
+- **Routers rerun programs.** With `nrestarts` given, the routers of `solve2D`,
+  `refine3D` (`_auto`, `_local`, `_states`, `_states_cavgs`), `classify3D_refs`,
+  `solve3D`, `solve3D_cavgs` and `autorefine3D_nano` call `restarted_exec`
+  (`exec/simple_exec_helpers.f90`), which runs the program `nrestarts` times as
+  a child process instead of dispatching to its commander.
+- **Long commander routines.** Measured on 2026-11-04 with contained procedures
+  counted, 35 `exec_*` routines outside the test commanders exceed 150 lines and
+  15 exceed 300 (`exec_solve3D` 1468, `exec_solve2D_workflow` 818,
+  `exec_trajectory_solve3D` 624, `exec_solve3D_cavgs` 558,
+  `exec_bootstrap_cavgs` 551, `exec_stream_p00_master` 488, ...). Most
   are controllers that sequence programs; the numerics and the I/O inside them
   are the part to move out when they are next changed.
 - **Counts are static.** No test measures project reads and writes per

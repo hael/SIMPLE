@@ -155,7 +155,7 @@ contains
                 moldiams(i) = str2real(moldiams_str(i))
             end do
             deallocate(moldiams_str)
-            box = round2even((1.0+BOX_EXP_FAC)*maxval(moldiams)) + 2
+            box = round2even((1.0+BOX_EXP_FAC)*maxval(moldiams)/ smpd) + 2
             call alloc_imgarr(1, [box, box,1], smpd, pickrefs)
             l_competitive = .true.
         else

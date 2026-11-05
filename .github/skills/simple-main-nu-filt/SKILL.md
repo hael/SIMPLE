@@ -1,126 +1,75 @@
 ---
 name: simple-main-nu-filt
-description: Use when working in SIMPLE's src/main/nu_filt subsystem, including simple_nu_filter and its submodules, candidate-bank setup, the source pair of nu_filter_vols, like-for-like label selection, mask-packed objective costs, ordered-label Potts smoothing, tent smoothing, NU sub-timers, NU local-resolution output, the NU-evidence envelope, and cleanup of module-level filter state.
+description: Use when working in SIMPLE's src/main/nu_filt subsystem, including simple_nu_filter and its submodules, candidate-bank setup, the source pair of nu_filter_vols, like-for-like label selection, mask-packed objective costs, ordered-label Potts smoothing, tent smoothing, NU sub-timers, NU local-resolution output, the NU-evidence envelope and evidence state (nu_filt3D, postprocess_nu sharpening), and cleanup of module-level filter state.
 ---
 
-# SIMPLE `src/main/nu_filt`
+# `src/main/nu_filt`: the volume-domain nonuniform filter
 
-This folder owns the volume-domain nonuniform filtering algorithm. Workflow
-ownership belongs to the callers: `nonuniform_filter_state` in
-`src/main/volume/simple_nu_state_filter.f90` (volume assembly,
-`volassemble_exec` in `simple_volassemble_strategy.f90`, and the PCG master in
-`simple_rec3D_pcg_strategy.f90`), `exec_nu_filt3D` in
-`simple_commanders_resolest.f90`, and `postprocess_nu`. This subsystem
-implements the filter state machine they call.
+Owns `simple_nu_filter` and its submodules: the candidate bank (a static low-pass ladder capped from
+the pair's FSC), mask-packed cross-half costs, coarse-to-fine label selection with ordered-label Potts
+smoothing, composition of the filtered pair, the local-resolution map, the NU-evidence envelope and
+the evidence state. It filters the one even/odd pair it is given. When NU runs, which pair is base,
+auxiliary or apply pair, which mask plays which role and what is written belong to the callers:
+`nonuniform_filter_state` (`volume/simple_nu_state_filter.f90`, both backends), `exec_nu_filt3D`
+(`simple_commanders_resolest.f90`), `simple_commanders_postprocess_nu.f90`. The workflow contract is
+skill `simple-nonuniform-regularization`.
 
-## Read First
+## Rules
 
-- `simple_nu_filter.f90` (interfaces and constants)
-- `simple_nu_filter_vars.f90` (the module-level working state)
-- `simple_nu_filter_bank.f90` (`setup_nu_dmats`, `optimize_nu_cutoff_finds`)
-- `simple_nu_filter_state.f90` (filtering, smoothing, packing, cleanup)
-- `simple_nu_filter_apply.f90` (`nu_filter_vols`)
-- `simple_nu_filter_potts.f90`
-- `simple_nu_filter_stats.f90`
-- `simple_nu_filter_envmask.f90`, `simple_nu_filter_evidence.f90`,
-  `simple_nu_filter_sharpen.f90`
-- `src/utils/filter/simple_tent_smooth.f90`
-- `doc/policies/NU/nonuniform_filtering_policy.md` (sections 8-9)
+Silent ones first: nothing reports these.
 
-## Core Lifecycle
+- One sequence per process at a time, never two pairs concurrently: a rule, not a limitation to lift
+  (the state is module-level, `simple_nu_filter_vars`). Order: `setup_nu_dmats` ->
+  `set_nu_evidence_null_shell` -> envelope -> `set_nu_solvent_envelope` -> `optimize_nu_cutoff_finds`
+  -> `build_nu_evidence_state` -> `nu_filter_vols` -> outputs -> `cleanup_nu_filter`. A clamp set
+  after `optimize_nu_cutoff_finds` leaves the labels unclamped, a null shell set after the envelope
+  leaves it on the mixture null; other steps out of order stop (`THROW_HARD`).
+- `cleanup_nu_filter` after every sequence, on every path: setup does not clear the clamp or the null
+  shell, so the next pair (another state, same box) runs with the previous pair's background clamp.
+- The source pair of `nu_filter_vols` stays alive and unchanged from setup to composition: it is
+  filtered again per label, and the composed voxels must be the candidates scored. Keep
+  `prepare_nu_candidate_fts`/`filter_nu_candidate` and `compose_nu_labels_from_volume` on one taper,
+  transform and Butterworth filter. Another pair (`pcg_solvent=yes`) gets the base pair's labels.
+- Label index runs coarse to fine; an auxiliary pair is appended last, only at or beyond the finest
+  retained rung, at that rung's Potts coordinate. The level loop, the Potts cap (a voxel only moves
+  coarser), the clamp (label 1) and the handoff (`get_nu_filter_bank_finest_lp`, the last label)
+  depend on that order.
+- The NU domain is the sphere `setup_nu_dmats` builds from `mskdiam`; callers never pass a density
+  mask as support. Costs are mask-packed (`nu_mask_vox` order): nothing outside the sphere enters the
+  noise level, smoothing or selection; it is composed at the coarsest label. Exact zero/zero voxels
+  (a PCG density support) are kept out of the noise level and evidence calibration.
+- Units: `lowpass_limits`, `mskdiam`, `fsc_res`, `amsklp`, envelope lengths in Angstrom; `cutoff_finds`
+  are Fourier indices of the input box; the filter runs at the pair's box (`box_crop` in assembly).
+  Without `fsc_res` the bank is uncapped (`nu_filt3D` only).
+- The Potts beta is a real OpenMP reduction: label fields repeat at a fixed thread count, not across
+  counts. Compare runs at equal `nthr`.
+- `build_nu_evidence_state` needs `evidence_source=` at setup, no auxiliary pair, the setup pair
+  itself (fingerprint) and the unary bank, so it runs before `nu_filter_vols`, which releases the
+  bank; it stops otherwise. The envelope reads `nu_ev_base`/`nu_ev_best`, which last until
+  `cleanup_nu_filter`; the evidence state outlives it.
+- `src/utils/filter/simple_tent_smooth.f90` is held bit for bit to a reference by
+  `test_tent_smooth_exact` here.
+- A new timed phase follows `nu_rt_*` (reset in `init_nu_filter`); a new field also goes through
+  `get_nu_filter_timings` and `nu_state_filter_timings` (`volume/`) into the `VOLASSEMBLE` report.
 
-Normal callers follow:
+## Where to start
 
-```fortran
-call setup_nu_dmats(vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, fsc_res=res0143)
-call optimize_nu_cutoff_finds()
-call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_src_even, vol_src_odd)
-call cleanup_nu_filter()
-```
-
-The bank is the static ladder `lowpass_limits`. Given `fsc_res` it is cut at
-`fsc_res/NU_BANK_FSC_HEADROOM` (at least two rungs); without it (`nu_filt3D`)
-it is uncapped. `postprocess_nu` stops after `optimize_nu_cutoff_finds` and
-`build_nu_evidence_state`; it never composes.
-
-## Working Rules
-
-- Treat `simple_nu_filter` as stateful for one call sequence. Preserve
-  `cleanup_nu_filter` of every module allocatable. The filter writes no
-  scratch files: `setup_nu_dmats` filters each candidate pair from the
-  transforms of the edge-tapered halves and scores it at once, and
-  `nu_filter_vols` filters its source pair again per label with the same
-  taper, transform and Butterworth filter, so the composed voxels are the
-  candidates'.
-- The source pair of `nu_filter_vols` must stay alive and unchanged from
-  setup to composition (`nonuniform_filter_state` kills the base pair only
-  after it). An apply pair other than the setup pair (the `pcg_solvent=yes`
-  solvent-prior pair) receives the label field estimated on the base pair.
-- `setup_nu_dmats` owns the NU support mask. It accepts `mskdiam` in Angstrom
-  and constructs spherical support internally; callers must not supply density
-  automasks or arbitrary logical envelopes.
-- Keep objective construction mask-packed; values outside the NU support mask
-  must not influence smoothing or label selection.
-- Label selection is like-for-like, coarse to fine: at each level the
-  incumbent and the candidate are smoothed at the candidate's radius from
-  `raw_dmats_mask`, and the candidate wins only when strictly cheaper. The
-  candidate's own column is the setup's `dmats_mask`, and the smoothing norm
-  of that radius is the setup's `norms_mask` (`load_nu_smooth_norm`); do not
-  smooth either again.
-- The Potts sweeps walk per-colour voxel lists packed once and may only move
-  a voxel to a coarser label than the one it entered with. Their beta comes
-  from a real-valued reduction, so the label field is reproducible at a fixed
-  thread count, not across thread counts.
-- `tent_smooth_3d` writes all-zero rows, planes and slabs as zeros and filters
-  Y and Z a plane at a time, each column keeping the one-column operation
-  sequence. `test_tent_smooth_exact` holds it bit for bit to a column-by-column
-  reference; keep that identity when changing it.
-- The auxiliary (ML-regularized) pair is appended as the last label, never in
-  a rung's place, and only when its Fourier index is at or beyond the finest
-  retained rung. It shares that rung's Potts coordinate and is stashed as a
-  copy (`stash_aux_volumes`). The last label is the finest bank member and the
-  matching low-pass handoff (`get_nu_filter_bank_finest_lp`).
-- Ordered-label Potts smoothing is part of the current algorithm, not an optional
-  user-facing mode.
-- When the NU-evidence envelope arms the background clamp, derive it after
-  `setup_nu_dmats` and before `optimize_nu_cutoff_finds`; the clamp is applied
-  before and after the Potts sweeps. Run `build_nu_evidence_state` (or the
-  envelope) before `nu_filter_vols`, which releases the unary bank.
-- Timings: under `L_BENCH_GLOB` the sequence accumulates `nu_rt_*` (candidate
-  filtering, objective, optimisation split into level smoothings and Potts
-  sweeps, composition); `get_nu_filter_timings` feeds the `VOLASSEMBLE`
-  report through `nu_state_filter_timings`. Time new phases the same way.
-- Keep the standalone `nu_filt3D` envelope interface to two shape controls:
-  `nu_msk_sig` for evidence threshold and `amsklp` for physical evidence scale.
-  Absolute evidence, zero density weighting, MRF beta 1, and the 0.1 component
-  fraction are fixed production policy, even though the internal API retains
-  diagnostic variants. Preserve their semantics beside the constants: beta
-  controls boundary smoothness; density weighting can retain strong but poorly
-  ordered density; scale-free evidence can protect weak ordered density from a
-  high-contrast core; and the component fraction removes small components
-  relative to the largest.
-- Express standalone envelope morphology in Angstrom: 1 A binary growth and a
-  6 A cosine edge. Convert those lengths to the nearest voxel count at the
-  input-map sampling, with a minimum of one voxel.
-
-## Mask Ownership
-
-- Spherical `mskdiam` support owns the NU objective domain.
-- The density envelope (`automask3D_stateNN.mrc`) is independent of NU support.
-  It feeds `envfsc`, and under `automsk=yes` (or as the `automsk=nu` fallback)
-  it fixes the filter-field background and masks the `_nu_filt` references.
-- The NU-evidence envelope has its own artifact, `nu_envmask3D_stateNN.mrc`,
-  written by `write_nu_evidence_envmask` under active automasking. It is a
-  diagnostic under `automsk=yes`. Under `automsk=nu`, when valid, it is the
-  background and reference mask, and its lag-one artifact is the gridding
-  `envfsc` FSC mask (density fallback). It never replaces spherical NU support
-  and is never the PCG solve support.
+- `simple_nu_filter.f90`: interfaces, tuning constants and their reasons. Bodies: `_bank` (setup,
+  selection), `_state` (init, cleanup, packing, clamp), `_potts`, `_apply`, `_stats`, `_envmask`,
+  `_evidence`, `_sharpen`. Algorithm, mask roles, envelope policy: [references/algorithm.md](references/algorithm.md).
 
 ## Tests
 
-`simple_test_exec test=unit_reconstruction`, sub-suite `nonuniform filtering`
-(`simple_nu_filter_tester.f90`): the objective's closed form and noise level,
-the label field on a two-resolution phantom, the per-label composition, the
-evidence envelope, the tent smoothing identity and the label field repeated at
-every processor. End to end: `simple_exec prg=nu_filt3D` on a refined half-map
-pair, before and after the change.
+- `build/bin/simple_test_exec test=unit_reconstruction suite=nonuniform_filtering` (about 3 s): closed
+  form and noise level, the label field of a two-resolution phantom, composition, the evidence
+  envelope, the tent identity, the label field repeated at every processor.
+- `simple_exec prg=nu_filt3D` on a refined half-map pair before and after: `_nu_filt`, `_nu_locres`,
+  the `>>> NU` lines. In refinement: the `VOLASSEMBLE` NU split, `>>> NU AUXILIARY MEMBER:`,
+  `>>> NU MATCHING LOW-PASS HANDOFF:`.
+- Behaviour: `simulated_workflow_6vxx`/`_1jxy` (NU from solve3D stage 5; a robustness profile),
+  `cont_refine3D_1jxy suite=nu_handoff`.
+
+## See also
+
+`doc/policies/NU/nonuniform_filtering_policy.md` §8-9 and 12, `doc/policies/3D/automasking_policy.md`;
+skills `simple-nonuniform-regularization`, `simple-main-volume`.

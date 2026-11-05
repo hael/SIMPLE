@@ -220,6 +220,6 @@ For code changes, consider:
 
 ## Current Limitations
 
-- The module uses module-level state, which makes concurrent use awkward.
+- The module uses module-level state: one filter sequence per process at a time is the rule.
 - The selected-cutoff map and summary statistics are exposed through module
   state and logging rather than explicit outputs.

@@ -1,33 +1,75 @@
 ---
 name: simple-main-volume
-description: Use when working in SIMPLE's src/main/volume subsystem, including the gridding and PCG reconstructors, half-map diagnostics, trailing-reconstruction chains, the frozen accumulators of solve3D_addon, assembly-owned nonuniform filtering of a state, the PCG priors, volume analysis, docking, clustering, interpolation, polar-Fourier volume correlation, and symmetry search.
+description: Use when working in SIMPLE's src/main/volume subsystem, including the gridding and PCG reconstructors (accumulators, raw part artifacts, restoration, the PCG lattice and priors), half-map FSC/cFAR diagnostics and the support-provenance sidecar, trailing-chain manifests, the frozen accumulators of solve3D_addon, refine3D reference-set provenance, assembly-owned nonuniform filtering of a state, the wave-model operators, volume analysis, docking, clustering, symmetry search, half-map sharpening and volume pair metrics.
 ---
 
-# SIMPLE `src/main/volume`
+# `src/main/volume`: reconstructors, half-map diagnostics and volume analysis
 
-This folder owns reconstruction objects and volume analysis.
+Owns the reconstruction objects (gridding `reconstructor`, PCG `reconstructor_pcg` on `pcg_lattice`,
+wave operators) and their raw artifacts, the half-map FSC and support sidecar, the chain manifest,
+the solve3D_addon frozen sets, the reference-set record, one state's NU filtering
+(`nonuniform_filter_state`, the only NU path of both backends: change it, not a caller) and analysis
+tools. Which particles enter, blend weights, restore order and file names are assembly's
+(`simple_volassemble_strategy.f90`, `simple_rec3D_pcg_strategy.f90`); planes are made in
+`simple_matcher_3Drec.f90`. Nothing here writes the project. The NU algorithm is `nu_filt/`.
 
-## Read First
+## Rules
 
-- `simple_reconstructor.f90`: gridding (KB convolution) reconstruction
-- `simple_reconstructor_pcg.f90`, `simple_pcg_lattice.f90`: the PCG backend (`rec_backend=pcg`); its solver engine is `opt/simple_pcg_solver.f90`
-- `simple_halfmap_diagnostics.f90`: half-map FSC, cFAR and resolution, shared by both backends
-- `simple_nu_state_filter.f90`: nonuniform filtering of one state's half-map pair, called by assembly
-- `simple_trail_chain_manifest.f90`, `simple_frozen_accum.f90`: trailing-chain identity; `solve3D_addon` frozen sets
-- `simple_vol_pproc_policy.f90` (per-state mask compatibility), `simple_volanalyzer.f90`, `simple_dock_vols.f90`
-- `doc/policies/3D/reconstruct3D_pcg_policy.md`, `doc/policies/NU/nonuniform_filtering_policy.md`, `doc/policies/3D/automasking_policy.md`, `doc/policies/3D/refine3D_policy.md`
+Silent ones first: nothing reports these.
 
-## Ownership
+- Raw before restored: blend, scale, sum and publish (partials, chains, frozen sets) raw accumulators
+  only. `restore_base`/`restore_final` divide cmat by rho and inverse-transform the object unless
+  `preserve_numerator=.true.`; `add_invtausq2rho` adds the ML ridge to rho in place. What is written
+  or summed after them is a map or carries the ridge. PCG `end_accum` consumes its accumulators.
+- Gridding: `new_accumulator(expand=.true.)` -> `insert_plane_oversamp` -> `compress_exp` ->
+  `write_raw_accum` | `sum_reduce` -> restore -> `kill`. `compress_exp` overwrites the native
+  cmat/rho (a sum read in before is lost). The object points to `params` (`tau`, `hp`, `box_crop`
+  read at `add_invtausq2rho`): keep that alive.
+- `insert_plane_oversamp`, `insert_planes_multi` and PCG `accumulate_batch` open their own parallel
+  regions: call them from serial code, one object per caller, or they race. No module state in
+  `reconstructor_pcg`: the master solves both halves at once (nested sections).
+- One accumulator per (state, half); it does not know its half. Planes are whitened by their half's
+  sigma2; PCG `prep_particles` takes one spectrum: one half per call, or the others are whitened
+  wrongly. CTF at `smpd_crop`, shifts in `box_crop` pixels, planes padded by `OSMPL_PAD_FAC`.
+- Gridding partials and chains carry no box: `read_rho` reads the receiver's shape, a larger file as
+  a prefix. Every reader checks box and sampling before `read_rho`; today only the `update_frac`
+  path does (its manifests): ruled for fixing by a header with both. PCG raw artifacts stop on any
+  header mismatch.
+- FSCs are per Fourier shell of their box (`box_crop`) and carry no box: `add_invtausq2rho(fsc)` and
+  PCG `set_ml_prior(fsc)` take the overlapping shells of whatever they get.
+- PCG setters are read once: `set_sym` by the batches accumulated after it, the support and
+  `set_ml_prior` by `end_accum` (the support also by the solve). Late, the result is partial,
+  inconsistent (operator masked, RHS not) or unregularised (until `regularize_finalized`). Solvent
+  and atomic priors need `end_accum` (stop otherwise).
+- A volume and its `_pcg_support.txt` sidecar are one artifact (`copy/rename/remove_support_provenance`):
+  without it postprocess masks and FSC-weights again; a stale one skips both.
+- `begin_reference_set` before a state's volumes, `publish_reference_set` after all its products. Its
+  list is exactly what refine3D_local stages (`stage_reference_derivatives`,
+  `simple_refine3D_strategy.f90`), no more: change both together, or refine3D_local stops carrying
+  the product.
+- Chains and frozen sets: manifest deleted first, written last; frozen sets are gridding only, added
+  with weight one before any restoration (skill `simple-frac-update-trailing`, addon policy §5-8).
+- Couplings: the expanded-lattice API serves `flex/`; flex PCG and the wave operators extend
+  `pcg_lattice`; deapodisation is the transform of the operator's KB stencil (`interp/`).
 
-- Volume assembly (even, odd and merged state volumes from partial reconstructions, the trailing blend, the NU filter) is `src/main/strategies/parallelization/simple_volassemble_strategy.f90`: `volassemble_exec` on the caller's `(params, build)` (the distributed refine3D master), `run_volassemble` on its own (shared-memory refine3D, the rec3D service, `simple_commanders_rec_distr.f90`), `filter_pcg_nonuniform_maps` for PCG maps
-- The PCG routes (shared-memory solve, worker accumulation, the master's reduction and solve) are `simple_rec3D_pcg_strategy.f90`; reconstruction requests go through `simple_rec3D_service.f90`
-- Reconstruction takes the backend-neutral cropped observation (`prep_rec_observation`) or the same observation from the pass's records (`take_records`, `get_rec_observation` in `strategies/search/simple_matcher_ptcl_io.f90`), bit for bit; keep the two identical
+## Where to start
 
-## Connections
+Call orders (callers `calc_3Drec`, `restore_state_from_parts`, `accumulate_pcg_state_half`,
+`prepare_distributed_half_job`), artifacts, other modules: [references/lifecycles.md](references/lifecycles.md).
 
-- Very closely tied to `refine3D`, `rec3D`, `interp/`, `image/`, `nu_filt/`, and `project/`
-- Tests: `simple_test_exec test=unit_reconstruction`; `lib_reconstruction` holds the PCG half-set and sparse-sampling suites
+## Tests
 
-## Working Rule
+- `build/bin/simple_test_exec test=unit_reconstruction` (about 7 s; `suite=list`, e.g.
+  `weighted_insertion`, `frozen_accumulator`); `test=unit_image suite=trailing_reconstruction_blend`.
+- `test=pcg_recon` (14 gated stages): a change to the PCG kernel, scale, masks, symmetry, weights,
+  preconditioner or box conversion adds a kernel-versus-matrix-free gate there.
+- Nightly: `test=lib_reconstruction` (`pcg_half_set`, `pcg_sparse_sampling`,
+  `fractional_reconstruction`, ...), `test=pcg_frac_update`; `flex/`: `test=unit_heterogeneity`.
+- Behaviour: `simulated_workflow_6vxx`/`_1jxy` (a robustness profile: 1-2 misses in 20 runs is normal),
+  `solve3D_addon`, `multistate_workflows suite=states`, `cont_refine3D_1jxy suite=nu_handoff`;
+  `test=rec3D_backends` compares the backends on a real project.
 
-Preserve the distinction between reconstruction mechanics (here) and assembly/workflow policy (strategies).
+## See also
+
+`doc/policies/3D/reconstruct3D_pcg_policy.md`, `wave_model_policy.md`, `solve3D_addon_policy.md`;
+skills `simple-main-nu-filt`, `simple-frac-update-trailing`, `simple-nonuniform-regularization`.

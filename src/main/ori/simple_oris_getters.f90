@@ -753,13 +753,18 @@ contains
         end do
     end function included
 
+    ! a particle row reads eo=0 until its field has halves, so its even rows count once a row is odd
     module function get_neven( self )
         class(oris), intent(inout) :: self
         integer :: i
+        logical :: l_halves
         get_neven = 0
+        l_halves  = self%get_nodd() > 0
         do i=1,self%n
-            if(self%o(i)%isthere('eo'))then
-                if( self%o(i)%get_eo()==0) get_neven = get_neven + 1
+            if( self%o(i)%is_particle() )then
+                if( l_halves .and. self%o(i)%get_eo() == 0 ) get_neven = get_neven + 1
+            else if( self%o(i)%isthere('eo') )then
+                if( self%o(i)%get_eo() == 0 ) get_neven = get_neven + 1
             endif
         enddo
     end function get_neven

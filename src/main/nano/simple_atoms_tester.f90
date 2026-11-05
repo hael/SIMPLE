@@ -25,6 +25,7 @@ contains
         call test_access()
         call test_geometry()
         call test_pdb_roundtrip()
+        call test_pdb_hetatm()
         call test_anisou()
         call test_validation()
         call test_pseudo_symbols()
@@ -127,6 +128,44 @@ contains
         call a%kill
         call b%kill
     end subroutine test_pdb_roundtrip
+
+    ! the record name of each atom (ATOM or HETATM) survives a read and a write
+    subroutine test_pdb_hetatm()
+        character(len=*), parameter :: FMT = '(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10X,A2,A2)'
+        type(atoms)       :: a
+        character(len=80) :: line
+        character(len=6)  :: tags(2)
+        integer :: funit, ios, n
+        write(*,'(A)') 'test_pdb_hetatm'
+        call del_file(TMP_PDB)
+        open(newunit=funit, file=TMP_PDB, status='replace', action='write')
+        write(funit, FMT) 'ATOM  ', 1, ' CA ', ' ', 'ALA', 'A', 1,   ' ', [1., 2., 3.], 1., 0., ' C', '  '
+        write(funit, FMT) 'HETATM', 2, 'PD  ', ' ', ' PD', 'A', 101, ' ', [4., 5., 6.], 1., 0., 'PD', '  '
+        close(funit)
+        call a%new(string(TMP_PDB))
+        call del_file(TMP_PDB)
+        call a%writepdb(string(TMP_PDB))
+        n    = 0
+        tags = ''
+        open(newunit=funit, file=TMP_PDB, status='old', action='read', iostat=ios)
+        call assert_int(0, ios, 'the rewritten PDB file opens')
+        if( ios == 0 )then
+            do
+                read(funit, '(A)', iostat=ios) line
+                if( ios /= 0 ) exit
+                if( line(1:6) == 'ATOM  ' .or. line(1:6) == 'HETATM' )then
+                    n = n + 1
+                    if( n <= 2 ) tags(n) = line(1:6)
+                endif
+            end do
+            close(funit)
+        endif
+        call assert_int(2, n, 'a PDB round trip writes one coordinate record per atom')
+        call assert_char('ATOM  ', tags(1), 'an ATOM record is written back as ATOM')
+        call assert_char('HETATM', tags(2), 'a HETATM record is written back as HETATM')
+        call del_file(TMP_PDB)
+        call a%kill
+    end subroutine test_pdb_hetatm
 
     ! one ANISOU record per atom, U in units of 1e-4 A**2 in columns 29-70 (PDB format)
     subroutine test_anisou()

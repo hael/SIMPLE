@@ -123,7 +123,6 @@ contains
         class(string), intent(in)    :: fname
         character(len=STDLEN) :: line
         character(len=11)     :: elevenfirst, twentyseven
-        character(len=6)      :: atom_field
         integer               :: i, l, nl, filnum, io_stat, n, num
         call self%kill
         nl = nlines(fname)
@@ -182,7 +181,7 @@ contains
             self%num(i)  = num
             self%name(i) = strip_digits(self%name(i))
             call fileiochk('new_from_pdb; simple_atoms error reading line '//fname%to_char(), io_stat)
-            self%het(i) = atom_field == 'HETATM'
+            self%het(i) = line(1:6) == 'HETATM'
         enddo
         call self%guess_element
         ! done

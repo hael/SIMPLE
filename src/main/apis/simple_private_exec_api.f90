@@ -9,8 +9,9 @@
 !! command:
 !!  1. USE its defining simple_commanders_* module here.
 !!  2. Add the corresponding commander_* symbol to the PUBLIC list.
-!!  3. Declare a type(commander_...) variable in simple_exec and wire it
-!!     into the SELECT CASE(prg) dispatch.
+!!  3. Declare a type(commander_...) variable in dispatch_private_prg
+!!     (production/simple_private_exec_driver.f90) and wire it into its
+!!     SELECT CASE(prg).
 module simple_private_exec_api
 use simple_core_module_api
 use simple_cmdline,        only: cmdline, cmdline_err

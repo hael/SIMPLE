@@ -34,6 +34,7 @@ contains
     procedure          :: read_layout
     procedure          :: finalise_ptcl_import
     procedure, private :: origins_to_pixels
+    procedure, private :: coords_to_corners
     ! export
     procedure          :: export_mics
     procedure          :: export_cls2D
@@ -105,8 +106,8 @@ contains
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnDefocusV", splflag="dfy", mult=0.0001)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnDefocusAngle", splflag="angast")]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnAnglePsi", splflag="e3")]
-        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateX", splflag="xpos")]
-        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos")]
+        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateX", splflag="xpos", centred=.true.)]
+        self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos", centred=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x", angst=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y", angst=.true.)]
         self%starfile%particles2D%flags = [self%starfile%particles2D%flags, &
@@ -128,8 +129,8 @@ contains
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnAnglePsi", splflag="e3")]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnAngleRot", splflag="e1")]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnAngleTilt", splflag="e2")]
-        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateX", splflag="xpos")]
-        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos")]
+        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateX", splflag="xpos", centred=.true.)]
+        self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos", centred=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x", angst=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y", angst=.true.)]
         self%starfile%particles3D%flags = [self%starfile%particles3D%flags, &
@@ -314,6 +315,7 @@ contains
             if( stardata%flags(flagsindex)%present ) fieldmask(stardata%flags(flagsindex)%ind) = .true.
         enddo
         if( any(stardata%flags(:)%present .and. stardata%flags(:)%angst) ) self%starfile%origins_angst = .true.
+        if( any(stardata%flags(:)%present .and. stardata%flags(:)%centred) ) self%starfile%coords_centred = .true.
         if(isptcl) then
             call sporis%new(self%starfile%stkptclcount, .true.)
             do ival = 1, self%starfile%stkptclcount
@@ -677,6 +679,7 @@ contains
            end if
         end do
         call self%origins_to_pixels(spproj)
+        call self%coords_to_corners(spproj)
     end subroutine finalise_ptcl_import
 
     ! STAR origins are in Angstrom, SIMPLE's x and y in pixels of the particle's stack
@@ -716,6 +719,42 @@ contains
             end subroutine field_to_pixels
 
     end subroutine origins_to_pixels
+
+    ! STAR's coordinates are the particle's centre, SIMPLE's (EMAN's) the corner of its box: the
+    ! writers add half the stack's box, the import takes it off once
+    subroutine coords_to_corners(self, spproj)
+        class(starproject), intent(inout) :: self
+        class(sp_project),  intent(inout) :: spproj
+        if( .not. self%starfile%coords_centred ) return
+        call field_to_corners(spproj%os_ptcl2D)
+        call field_to_corners(spproj%os_ptcl3D)
+        self%starfile%coords_centred = .false.
+
+        contains
+
+            subroutine field_to_corners( os )
+                class(oris), intent(inout) :: os
+                type(string) :: msg, stkname
+                integer :: iptcl, stkind, half_boxsize
+                do iptcl = 1, os%get_noris()
+                    if( .not. (os%isthere(iptcl, 'xpos') .or. os%isthere(iptcl, 'ypos')) ) cycle
+                    stkind = os%get_int(iptcl, 'stkind')
+                    if( stkind < 1 .or. stkind > spproj%os_stk%get_noris() ) cycle
+                    ! the particles of a missing stack are pruned
+                    if( spproj%os_stk%get_state(stkind) == 0 ) cycle
+                    half_boxsize = spproj%os_stk%get_int(stkind, 'box') / 2
+                    if( half_boxsize < 1 )then
+                        stkname = spproj%os_stk%get_str(stkind, 'stk')
+                        msg = 'particle '//int2str(iptcl)//' of stack '//stkname%to_char()//&
+                            &' has no box size to convert its coordinates to the box corner'
+                        THROW_HARD(msg%to_char())
+                    endif
+                    call os%set(iptcl, 'xpos', os%get(iptcl, 'xpos') - real(half_boxsize))
+                    call os%set(iptcl, 'ypos', os%get(iptcl, 'ypos') - real(half_boxsize))
+                end do
+            end subroutine field_to_corners
+
+    end subroutine coords_to_corners
 
     ! export
 

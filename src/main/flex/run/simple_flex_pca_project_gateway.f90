@@ -1,10 +1,10 @@
 !@descr: flex_pca project gateway: the one owner of what the run reads from and writes into the project
 !!
-!! Selection and validation of the run's particles (a worker's partition list, the master's state>0
-!! rows), the even/odd repair the master persists for its workers, the canonical sigma2 load with
-!! the master/worker pin, and the deliveries that mutate the run's project copy: the state weight set
-!! registered in the out segment, the hard state labels written into ptcl3D, and the state maps
-!! reconstructed from that set and registered as vol and FSC entries.
+!! Selection and validation of the run's particles, the even/odd repair the master persists for its
+!! workers, the canonical sigma2 load with the master/worker pin, and the deliveries a non-worker
+!! writes into the run's project at publish (the mkdir=yes copy, or the caller's own project under
+!! mkdir=no, as refine3D_states runs it): the state weight set and embedding entry (out), the hard
+!! state labels (ptcl3D), and the state maps reconstructed from that set as vol and FSC entries (out).
 module simple_flex_pca_project_gateway
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api, only: fclose, file_exists, fileiochk, fopen, logfhandle, nlines, simple_exception, string, tiny
@@ -64,7 +64,7 @@ contains
         if( .not. l_vol1_explicit )then
             THROW_HARD('flex_pca requires a consensus mean map: pass vol1 or register one in the project out segment')
         endif
-        ! a run writes its state labels into its project copy, so a rerun must start from the original
+        ! a run writes its state labels into its project, so a rerun must start from the original
         ! project (a subset is selected with pindfile=, never with the labels)
         if( build%spproj_field%get_n('state') /= 1 ) THROW_HARD('flex_pca works on one population but the project carries several state labels (a delivered copy): rerun from the original project, selecting particles with pindfile= if needed')
         if( l_pindfile )then
@@ -225,9 +225,9 @@ contains
     !>  Write the hard state assignment INTO the run's own project: ptcl3D/state carries each embedded
     !!  particle's label, 0 elsewhere. Judge the clusters independently of the kernel-weighted backend with
     !!      simple_exec prg=reconstruct3D projfile=<projfile> nstates=<nstates>
-    !!  mkdir=yes already gave the master a private copy of the project, so this rewrites that copy and
-    !!  never the project the user pointed at. MUTATES the live field, so it must run after every stage
-    !!  that reads the input particle selection, and on the master only.
+    !!  projfile is the run's project: the copy mkdir=yes made, or under mkdir=no the caller's own
+    !!  (refine3D_states reads these labels back). MUTATES the live field, so it must run after every
+    !!  stage that reads the input particle selection, and on the master only.
     subroutine write_discrete_state_project( spproj, pinds, labels, nstates, projfile )
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: pinds(:), labels(:), nstates

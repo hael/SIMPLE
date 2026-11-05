@@ -11,12 +11,8 @@
 !   sp_project%import_optics_map. Ids grow by one per publication; the writer
 !   keeps the newest nkeep maps, and readers take the highest id present.
 !
-!   The writer used to prune by testing every id from 1 up on each
-!   publication, and readers found the newest map with three copies of the
-!   same directory scan (get_latest_optics_map_id in simple_stream_utils and
-!   two internal get_latest_optics_map in simple_stream_refine2D_utils).
-!   Readers switch to import_latest_optics_map when their stages move over.
-!   copy_project_with_optics_map hands a project to the next stage with the
+!   Every reader goes through this module: import_latest_optics_map applies
+!   the newest map to a project, copy_project_with_optics_map hands a project to the next stage with the
 !   newest groups applied (the particle sieve uses it for finished chunks).
 !   latest_optics_map_table reads the newest map's table as it is (the
 !   optics stage restores its groups from it on a restart).

@@ -103,7 +103,7 @@ Anything kept only in memory is lost:
   - the sieve (`unit_project` "particle sieve"): its import and the final-ingestion chunk;
   - jobs (`unit_parallel` "qsys control"): the job record, the fresh folder, the multi-job
     script's exit status.
-  The chained tests (`lib_stream` "sieve to 3D", "movies to 3D") run the stages from fixtures
+  The chained tests (`stream_chains` "sieve to 3D", "movies to 3D") run the stages from fixtures
   without the master; they do not restart a stage.
 
 ## Job lifecycle

@@ -25,6 +25,7 @@ type star_flag
     real                    :: mult       = 0
     logical                 :: imagesplit = .false.
     logical                 :: angst      = .false. ! Angstrom in STAR, pixels of the particle's stack in SIMPLE
+    logical                 :: centred    = .false. ! the particle's centre in STAR, its box's corner in SIMPLE
 end type star_flag
 
 type star_data
@@ -50,7 +51,8 @@ type star_file
     integer              :: stkptclcount
     integer              :: fd
     logical              :: initialised   = .false.
-    logical              :: origins_angst = .false. ! imported particle origins still in Angstrom
+    logical              :: origins_angst  = .false. ! imported particle origins still in Angstrom
+    logical              :: coords_centred = .false. ! imported particle coordinates still the centre
 end type star_file
 
 type tilt_info

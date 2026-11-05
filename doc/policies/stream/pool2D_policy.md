@@ -155,7 +155,8 @@ The iteration runs `prg=refine2D_distr` through `simple_private_exec`: the batch
    particle as it needs (ruling 20, the solve2D policy): `append_sets` marks the appended particles
    not yet centred (`shsig` the sentinel), and from the third iteration they are searched greedily
    on the disk.
-   Per iteration: `ncls`, `startit` and `maxits` set to the iteration, `frcs`, `refs` (the latest
+   Per iteration: `ncls`, `startit` set to the iteration, `maxits=1` (refine2D counts it from
+   `startit`), `frcs`, `refs` (the latest
    class averages), `update_frac` only when the user gave one, `mskdiam`, the working `smpd_crop`,
    `box_crop` and `msk_crop`, `lpstart`, `lpstop`, `cenlp`, and, until iteration 20, `lp`,
    `gauref`, `gaufreq`, `extr_iter`, `extr_lim` and `trs`.

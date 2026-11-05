@@ -1,66 +1,72 @@
 ---
 name: simple-main-commanders
-description: Use when working in SIMPLE's src/main/commanders subsystem, including the abstract commander_base interface (execute(cline) only) plus the SIMPLE, SINGLE, stream and test commander families that own high-level workflow behavior for most CLI programs, thin wrappers of strategy routines, and the high-level test commanders run by simple_test_exec.
+description: Use when working in SIMPLE's src/main/commanders subsystem, including the abstract commander_base interface (execute(cline) only), the SIMPLE, SINGLE and test commander families that own CLI program behavior, command-line normalization before params%new and child command lines, controllers that run whole programs as stages (solve3D, solve2D, refine3D_auto/local/states, solve3D_chunks/pyramid), thin wrappers of strategy routines, worker shells, the unit-suite tables and the high-level test registry of simple_test_exec.
 ---
 
-# SIMPLE `src/main/commanders`
+# `src/main/commanders`: the command objects of the CLI programs
 
-This is the command object layer.
+One `commander_<x>` per program, reached from the `exec/` routers and, for workers, from
+`simple_private_exec`. A commander normalizes and validates `cline`, makes the one `params`, calls a
+routine and ends; controllers (`exec_solve3D`, `exec_solve2D`, `exec_refine3D_workflow`,
+`refine3D_states`, `solve3D_chunks`, `_pyramid`) sequence whole programs. Not here: a part of a stage
+another workflow runs (`strategies/parallelization`: `<x>_exec(params, build, ...)` with
+`run_<x>(cline)`), stage ladders (`solve/`), numerics (domain folders), `commanders/stream` (skill
+`simple-main-stream`). Rules: `doc/policies/layering_and_project_ownership_policy.md`.
 
-## Read First
+## Rules
 
-- `simple/simple_commander_base.f90`
-- `simple/simple_commanders_refine3D.f90`
-- `simple/simple_commanders_refine2D.f90`
-- `simple/simple_commanders_preprocess.f90`
-- `simple/simple_commanders_project_core.f90`
+Silent ones first: nothing reports these.
 
-Then branch into `simple/`, `single/`, `stream/` (see `simple-main-stream`) or `test/` as needed.
+- A called commander builds its own `params` and builder from the file. Only a controller calls
+  one, for a whole program (the shared-memory refine strategies' master steps are the one ruled
+  exception, policy section 2): write the segments it reads first (`write_segment_inside`),
+  read back the ones it wrote after (`read_segment`); your in-memory project is stale across the
+  call. `refine3D` and `refine2D` return their last iteration as `endit` on the caller's cline:
+  delete it before a stage, number the next stage from it.
+- `params%new` changes the process (skill `simple-main-params`): with `mkdir=yes` it enters a new
+  `<n>_<prg>/` (copying a required project there), so set `mkdir=no` on every child cline after, or the
+  child nests a directory and you read stale files. Each `new`, so each in-process commander call,
+  reseeds (one more or less shifts every later draw of a seeded run) and resets the threads.
+- `cline%set` takes any key: `params%new` ignores one it does not bind, a worker's parse stops on
+  one outside the vocabulary (`THROW_HARD`). Silent in shared memory, fatal distributed. No
+  parameter for an internal switch; the in-process handshakes (`INPROCESS_KEYS`,
+  `simple_cmdline.f90`) never reach job descriptions and, like the `internal:` keys, are ruled to be
+  retired: add none. After `new`, read `params%`, not `cline`.
+- One `params%new` per execution path, after the cline is final and validated: `exec_refine3D`
+  refuses an unknown `refine=` before `create_refine3D_strategy`, so a master never waits on workers
+  that stopped. A strategy-object program makes `params` in the strategy's `initialize`.
+- A master step's commander is one call to `run_<x>` (`commander_volassemble`,
+  `commander_prob_align`(`_neigh`), `commander_prob_align2D`, `commander_cavgassemble`,
+  `commander_commit_sigma2`). No typed entry beside `execute`: they were deleted and stay deleted.
+- A worker program is a shell: `params` and builder, the body, part finished
+  (`commander_refine3D_distr_worker` hands `refine3D_exec` its `(params, build)`).
+- Deviations here (policy section 8), not patterns: the frames of `exec_prob_tab`(`_neigh`, `2D`) in
+  `simple_commanders_prob.f90` (`sample4update_reprod`, `split_nobjs_even` and
+  `qsys_declare_part_finished` in a new commander is a fourth copy); `postprocess_volume_from_files`
+  in `simple_commanders_volops.f90`, called by a strategy; controller routines of hundreds of lines.
+- New code imports `builder`, `parameters`, `cmdline`, `sp_project` directly, not
+  `simple_commanders_api`; shared defaults go in `src/defs/simple_default_clines.f90`.
 
-## Role
+## Where to start
 
-- Owns high-level command behavior for named programs
-- Bridges CLI/UI requests to strategies and domain objects
-- Is usually the right place for workflow sequencing, defaults, and validation
+`simple/simple_commander_base.f90`; a wrapper, `simple_commanders_rec_distr.f90`; a strategy object,
+`exec_calc_pspec`; controllers, `exec_solve3D` and `exec_refine3D_workflow`. `single/`: SINGLE
+programs (skill `simple-main-nano`).
 
-## Working Rule
+## Tests
 
-Keep commanders relatively thin: orchestration here, heavy algorithmic work in `strategies/` or domain folders.
+- `test/simple_commanders_test_class.f90` holds the `suites_<area>` tables of `test=unit_<area>`,
+  `lib_<area>`, `units`. A high-level entry is a row of `test/simple_test_registry.f90` plus its
+  `production/CMakeLists.txt` registration, added together (`scripts/check_test_registry.py`).
+- A commander change: `scripts/run_fast_gate.sh build`, then its program's entry:
+  `test=simulated_workflow suite=1jxy` (solve2D, solve3D, then solve3D with `nparts=2`; ~1000 s),
+  `test=multistate_workflows suite=<cavgs|shc|states|consensus>`, `test=cont_refine3D_1jxy`
+  (refine3D_auto/local), `test=solve3D_addon`, `test=flex_pca_blobs` (refine3D_states_cavgs).
+- A simulated workflow's map correlation is a robustness profile (1-2 misses in 20 seeds is
+  normal): one run shows breakage, not improvement (`test=profile`). A change that must not move
+  results: one-thread runs on two builds, then `test=identity target=<entry> dir1= dir2=`.
 
-- `commander_base` defers one procedure, `execute(self, cline)`. Do not add
-  typed entry points beside it; a step another workflow runs on its own
-  `(params, build)` is a strategy routine (`<x>_exec`) with a `run_<x>(cline)`
-  entry, and the commander calls `run_<x>` (`commander_volassemble`,
-  `commander_prob_align`(`_neigh`), `commander_prob_align2D`,
-  `commander_cavgassemble`, `commander_commit_sigma2`).
-- A worker step's frame (params and builder set-up, reproduction of the master's
-  sample with `sample4update_reprod`, the empty-partition contribution, batching,
-  completion) is written once; a new variant supplies only what differs. The
-  three probability-table workers in `simple_commanders_prob.f90` each carry their
-  own copy today; do not add a fourth. See the layering policy, section 3.
-- `refine2D` and `refine3D` commanders drive a strategy object
-  (`create_refine2D_strategy`, `create_refine3D_strategy`); the `*_distr_worker`
-  types are the per-partition workers (`simple_private_exec prg=refine2D|refine3D`).
-- Shared defaults that several commanders apply live in
-  `src/defs/simple_default_clines.f90` (`set_refine2D_defaults`); the UI's
-  display defaults are traced from them by `scripts/default_audit.py`.
+## See also
 
-## Parameter Construction Invariant
-
-- Never create a `parameters` object twice in a commander execution path.
-- Normalize and validate `cmdline` defaults before the single `params%new(cline)` call.
-- After `params%new(cline)` creates/chdirs into an execution directory, set child command lines to `mkdir=no` before invoking nested commanders.
-
-## Test Commanders
-
-- `test/simple_commanders_test_class.f90` holds the unit-suite tables
-  (`suites_<area>`, `add_suite`) behind `test=unit_<area>`, `lib_<area>` and `units`.
-- High-level tests are commanders: `simple_commanders_test_highlevel.f90` (types
-  and interfaces) with one submodule per family, plus `_single` and `_stream`.
-  `_suite` runs `test=nightly`, `test=profile` and `test=identity` through the
-  dispatcher (`simple_test_dispatch.f90`).
-- `simple_test_registry.f90` lists every high-level CTest entry (command line,
-  threads, CPU reservation, deadline, identity outputs); a new entry gets its
-  registry row and its `production/CMakeLists.txt` registration together, and
-  `scripts/check_test_registry.py` must pass. Rules:
-  `doc/policies/test_environment_policy.md`.
+`doc/policies/test_environment_policy.md`; skills `simple-main-root` (builder, cmdline, `solve/`),
+`simple-main-strategies-parallelization`, `simple-main-params`, `simple-main-exec`.

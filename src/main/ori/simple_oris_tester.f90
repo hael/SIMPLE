@@ -874,7 +874,7 @@ contains
     ! 6. Randomization helpers and symmetry / merge / partition_eo
     !---------------------------------------------------------------
     subroutine test_randomization_and_symmetry()
-        type(oris) :: os, os2
+        type(oris) :: os, os2, os_ptcl
         integer    :: n
         write(*,'(A)') 'test_randomization_and_symmetry'
         n = 8
@@ -886,6 +886,13 @@ contains
         call os%rnd_corrs()
         call os%partition_eo()
         call assert_int(os%get_noris(), os%get_nevenodd(), 'partition_eo nevenodd==n')
+        ! a particle field reads eo=0 on every row: no halves until a row is odd
+        call os_ptcl%new(n, .true.)
+        call assert_int(0, os_ptcl%get_nevenodd(), 'a particle field without halves counts no even/odd rows')
+        call os_ptcl%partition_eo()
+        call assert_int(n/2, os_ptcl%get_neven(), 'get_neven counts the even rows of a particle field')
+        call assert_int(n/2, os_ptcl%get_nodd(),  'get_nodd counts the odd rows of a particle field')
+        call os_ptcl%kill
         ! symmetrize
         os2 = os
         call os2%symmetrize(3)

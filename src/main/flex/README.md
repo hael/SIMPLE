@@ -38,9 +38,9 @@ the production-module layers, and runs before the fast test gate.
 - the folder root: shared helpers (`util`), figures (`plot`, `umap`) and the
   fast-gate testers.
 
-There are 44 source files: 32 production modules, the probe fit's four
+There are 45 source files: 32 production modules, the probe fit's four
 submodule files, the self-test submodules of the PCG operator and of the
-`cls_expansion` kernel route, three testers, `cls_expansion` with its kernel
+`cls_expansion` kernel route, four testers, `cls_expansion` with its kernel
 route (`simple_flex_cls_kernel`) and `trajectory_denoise`
 (`simple_flex_traj_denoise`), the last three outside the layering. `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and
@@ -194,9 +194,9 @@ clustering). There is no `doc/policies/flex_pca_policy.md`.
 
 Alongside the state weight set, the application writes the hard state label of every
 embedded particle into `ptcl3D/state` of the run's own project, leaving
-unassigned particles at state 0. `mkdir=yes` already gave the master a private
-copy of the project, so this rewrites that copy inside the job directory and
-never the project the user pointed at. Only `ptcl3D` is written, as refine3D does
+unassigned particles at state 0. Under `mkdir=yes` the master works on a private
+copy of the project in the job directory; under `mkdir=no`, as `refine3D_states`
+runs flex, it writes the caller's project, which the controller reads back. Only `ptcl3D` is written, as refine3D does
 for `nstates>1`. This lets the embedding and its state assignment be judged with a
 plain `simple_exec prg=reconstruct3D projfile=<projfile> nstates=<n>`.
 

@@ -1,43 +1,82 @@
 ---
 name: simple-main-pftc
-description: Use when working in SIMPLE's src/main/pftc subsystem, including the polarft_calc type (polar Fourier references and particles, memoised FFT terms, cc and Euclidean objectives and their shift gradients, the rotation samplers of the probabilistic searches, per-thread work buffers, reference I/O) and the gradient shift search pftc_shsrch_grad used by the 2D and 3D alignment workflows.
+description: Use when working in SIMPLE's src/main/pftc subsystem, including the polarft_calc type (polar Fourier references and particles, memoised FFT terms, cc and Euclidean objectives and their shift gradients, the rotation samplers of the probabilistic searches, per-thread work buffers, reference I/O), the polar shift maps, and the gradient shift search pftc_shsrch_grad used by the 2D and 3D alignment workflows.
 ---
 
-# SIMPLE `src/main/pftc`
+# `src/main/pftc`: the polar Fourier calculator
 
-This folder is central to polar-Fourier search workflows.
+Owns `polarft_calc` (`build%pftc`): polar references and particles, their memoised transforms, the
+cc and Euclidean objectives with their shift gradients, the in-plane draws, the polar shift maps and
+the shift search of one pair (`pftc_shsrch_grad`). It scores pairs; it does not decide which
+references a particle sees, how particles are sampled or what goes into a probability table: that
+is `strategies/search`. Sigma2 is estimated in `sigma2/`; polar sections are cut by `image/`
+(`simple_image_polar`, `simple_projector*`).
 
-## Read First
+## Rules
 
-- `simple_polarft_calc.f90`: the `polarft_calc` type, the per-thread `heap_vars` type and every interface
-- `simple_polarft_core.f90`: `new`/`kill`, setters, the per-thread allocations
-- `simple_polarft_corr.f90`: objectives, gradients, the sampler front ends, the `_aln` evaluators
-- `simple_polarft_geom.f90`: shift matrices (`gen_shmat*`), rotation, mirroring
-- `simple_polarft_memo.f90`: memoised particle/reference FFTs, square sums, sigma2 weights, the shifted-particle bank
-- `simple_polarft_access.f90`, `simple_polarft_ctf.f90`, `simple_polarft_ops_io.f90`
-- `simple_pftc_shsrch_grad.f90`: the L-BFGS-B shift (or joint shift and in-plane) search of one reference/particle pair
+Silent ones first: nothing reports these.
 
-## Structure
+- Memoise before scoring, outside any parallel region. Order: `new` -> references
+  (`set_ref_pft`/`polarize_ref_pft` per half, or even then `cp_even2odd_ref`) -> `memoize_refs` ->
+  particles (`reallocate_ptcls`, `set_ptcl_pft`/`polarize_ptcl_pft`) -> `memoize_ptcls` -> score ->
+  `kill`. Nothing checks that the memo is current: `reallocate_ptcls` keeps the old transforms when
+  the batch size is unchanged, so a skipped `memoize_ptcls` scores the previous batch without error.
+  `memoize_*` inside an OpenMP region stops (`THROW_HARD`).
+- When the sigma2 spectra change, call `memoize_sigma2_weights` before scoring (`prep_sigmas_objfun`
+  does after `read_global`): the particle self-term `wsqsums_ptcls` is refreshed only there. A
+  normalisation that restores the residual by the "+1" identity must use `wsqsum_ptcl_now`, or the
+  loss is unbounded below and exp(-loss) scores exceed 1.
+- Mutable work arrays are per OpenMP thread, indexed by `omp_get_thread_num() + 1`: `heap_vars(ithr)`
+  (`params%nthr` of them, from `new`) and the FFTW buffers `cmat2_many`, `cmat_joint_many`,
+  `crmat_many`, `crmat1_many`, `crvec1`, `drvec` and the shift-map work `smwork` (`nthr_glob`, from
+  the memo workspace). Keep the thread index local to the call. New scratch goes into these buffers,
+  never into a module variable, a per-call allocation in the score loop or an internal procedure
+  (heap trampoline).
+- Load before evaluate, on one thread. `load_ref_aln_8(iref, iptcl)` copies the reference into the
+  thread's buffer; `gen_corr_for_rot_8_aln` and `gen_corr_grad_for_rot_8_aln` evaluate against that
+  copy and stop on an index or half mismatch; `pftc_shsrch_grad%minimize` does the load. Shift maps
+  likewise: `gen_shiftmap`, then `shiftmap_cross`, `shiftmap_objfun_grid` or `shiftmap_draw` on the
+  same thread. The loaded state spans a whole minimisation: no nested parallel region or untied task
+  inside it.
+- References are stored per half (`pfts_refs(:,:,iref,ieo)`) and picked by the particle's `iseven`;
+  sigma2 is two spectra, one per half.
+- Shift matrices span only the searched shells `kfromto(1):kfromto(2)` (`gen_shmat4aln_8`; the
+  single-precision `gen_shmat4aln` is converted from it on those shells only).
+- The probability tables score a reference with the posterior in-plane draw (`gen_posterior_val`,
+  `gen_posterior_val_bank`: the Euclidean row over every rotation, `draw_posterior_row` at
+  `ptcl_posterior_temp`, objfun=euclid only); `gen_euclid_dists(_bank)` return that row without the
+  draw (bench, testers). The SHC samplers (`sample_bounded_dists`, `sample_power_dists` in
+  `strategies/search/probabilistic/simple_eul_prob_tab_utils.f90`) take distance arrays filled in
+  the thread's buffers.
+- `gen_many_euclids_gpu` and `gen_many2many_euclids_cufft` compile only with `USE_OPENMP_OFFLOAD`
+  (off by default) and run only on a GPU build: say so when a change touches them.
 
-- The type and its interfaces are declared in `simple_polarft_calc.f90`; the bodies live in its submodules
-- Mutable work arrays are per OpenMP thread, indexed by `omp_get_thread_num() + 1`: `heap_vars(ithr)` (shift matrices, double-precision reference copies, the rotation distances and the draws' work array; `params%nthr` of them, from `new`) and the FFTW buffers (`cmat2_many`, `cmat_joint_many`, `crmat_many`, `crmat1_many`, `crvec1`, `drvec`; `nthr_glob` of them, from the memo workspace). Keep the thread index local to the call; never share these buffers across threads
-- References are stored per half (`pfts_refs(:,:,iref,ieo)`), picked by the particle's `iseven`; sigma2 is two global spectra, one per half (`assign_sigma2_noise`, `memoize_sigma2_weights`)
-- The probability tables score a reference with the posterior in-plane draw (`gen_posterior_val`, `gen_posterior_val_bank`: the Euclidean row over every rotation, `draw_posterior_row` at `ptcl_posterior_temp`, objfun=euclid only); `gen_euclid_dists`/`gen_euclid_dists_bank` return that row without the draw (bench, testers). The SHC strategies' rotation samplers (`sample_bounded_dists`, `sample_power_dists` in `strategies/search/probabilistic/simple_eul_prob_tab_utils.f90`, behind `gen_prob_objfun_val`, `gen_prob_power_objfun_val`) take arrays of distances filled in the thread's buffers; do not reintroduce internal procedures (heap trampolines) or per-call allocations in the score loop
-- The alignment shift matrix (`gen_shmat4aln_8`) spans only the searched shells `kfromto(1):kfromto(2)`; the single-precision one (`gen_shmat4aln`) is converted from it on those shells only
+## Where to start
 
-## Load-Before-Evaluate Contract
+- `simple_polarft_calc.f90`: the type, `heap_vars` and every interface. Bodies are in submodules:
+  `_core` (new/kill, setters), `_memo` (memoised transforms, sigma2 weights, shifted-particle bank),
+  `_corr` (objectives, gradients, samplers, `_aln` evaluators), `_geom` (shift matrices, rotation,
+  mirroring), `_shiftmap` (a pair's shift maps over every rotation), `_access`, `_ctf`, `_ops_io`.
+- `simple_polar_shiftmap.f90`: one pair's shift-dependent cross term over a disk of shifts
+  (Fourier-Bessel tables, driven by `_shiftmap`).
+- `simple_pftc_shsrch_grad.f90`: the L-BFGS-B shift (or joint shift and in-plane) search of one pair;
+  its `kill` leaks the optimiser (no `deallocate`): ruled for fixing.
+- Callers that show the order: `strategies/search/simple_matcher_pftc_prep.f90` (2D references),
+  `simple_matcher_ptcl_batch.f90` (particle batches, sigma2 weights), `simple_shiftmap_srch.f90`.
 
-- A shift search copies its reference once per minimisation into the calling thread's buffer: `load_ref_aln_8(iref, iptcl)` records the reference index and half. `gen_corr_for_rot_8_aln` and `gen_corr_grad_for_rot_8_aln` evaluate against that copy and stop (`THROW_HARD`) on an index or half mismatch
-- `pftc_shsrch_grad%minimize` does the load; a new caller of the `_aln` evaluators must load first, on the same thread
-- The loaded state lives for a whole minimisation, so a shift search runs on one thread: no nested parallel region or untied task inside it
+## Tests
 
-## Connections
+- `build/bin/simple_test_exec test=unit_pftc_align2D3D` (about 12 s; `suite=` runs one of: polar
+  correlation, polar shift map, continuous in-plane, refine3D in-plane state, the 2D and 3D
+  probability tables, sigma2 state and bootstrap, ...). The testers are here and in `strategies/search`.
+- New OpenMP code: repeated runs at many threads, not only the one-thread identity.
+- Kernel speed or layout: `test=polar_matching_bench` (timings and identity checks, a dump of the
+  production kernels' distance vectors for comparing builds).
+- A change in scores moves alignment: run `test=simulated_workflow`. Its map correlation is a
+  robustness profile (1-2 misses in 20 runs is normal), so one run shows breakage, not improvement.
 
-- Polar sections come from `image/` (`simple_image_polar`, `simple_projector`, `simple_projector_pft_batch`); CTF from `ctf/`
-- Driven by `strategies/search` (2D/3D matchers, strategy objects, probability tables) through the builder (`build%pftc`)
-- Tests: `simple_test_exec test=unit_pftc_align2D3D`. New OpenMP code here also needs repeated runs at many threads, not only one-thread identity
-- Policy: `doc/policies/3D/refine3D_policy.md` (shift search of the tables, continuous in-plane), `doc/policies/2D/solve2D_policy.md`
+## See also
 
-## Working Rule
-
-Changes here often affect alignment performance and correctness simultaneously, so treat caching, per-thread buffers and geometry logic as part of the design, not incidental detail.
+`doc/policies/3D/refine3D_policy.md` (shift search of the tables, continuous in-plane),
+`doc/policies/2D/solve2D_policy.md`, `doc/refactoring_notes/planned/polar_shift_search_performance_refactoring.md`;
+skills `simple-refine3d`, `simple-solve2d`.

@@ -20,6 +20,7 @@ type picksegdiam
     private
     real              :: moldiam_max
     real              :: moldiam_min
+    real              :: smpd_raw = 0.   !< sampling of the micrograph the positions refer to (A)
     type(linked_list) :: diameters, xpos, ypos
 contains
     generic            :: pick => pick_1, pick_2, pick_3 
@@ -49,6 +50,7 @@ contains
         logical         :: l_empty
         call self%kill
         self%moldiam_max = moldiam_max
+        self%smpd_raw    = smpd
         scale = smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
         if(present(empty)) empty = l_empty
@@ -134,6 +136,7 @@ contains
         real           :: rpos(2), diam, diam_adj, scale
         integer        :: pos(2), icc, nccs, ldim(3), nframes
         call self%kill
+        self%smpd_raw = smpd_raw
         scale = smpd_raw / SMPD_SHRINK1
         ! read binary
         call find_ldim_nptcls(binmicname, ldim, nframes)
@@ -194,6 +197,7 @@ contains
         endif
         self%moldiam_max = maxval(moldiams)
         self%moldiam_min = minval(moldiams)
+        self%smpd_raw    = smpd
         scale = smpd / SMPD_SHRINK1
         call read_mic_subtr_backgr_shrink(micname, smpd, scale, pcontrast, mic_raw, mic_shrink, l_empty)
         if(present(empty)) empty = l_empty
@@ -345,7 +349,7 @@ contains
         if( present(box) )then
             box_here = box
         else
-            box_here = round2even(BOX_EXP_FAC*self%moldiam_max)
+            box_here = round2even(BOX_EXP_FAC*self%moldiam_max/self%smpd_raw)
         endif
         allocate(diams(nptcls),source=0.)
         call self%get_diameters(diams)
@@ -379,6 +383,7 @@ contains
     subroutine kill( self )
         class(picksegdiam), intent(inout) :: self
         self%moldiam_max = 0.
+        self%smpd_raw    = 0.
         call self%diameters%kill
         call self%xpos%kill
         call self%ypos%kill

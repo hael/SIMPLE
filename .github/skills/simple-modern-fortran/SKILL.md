@@ -5,29 +5,13 @@ description: Use when editing SIMPLE's Fortran code and you need repo-specific g
 
 # Modern Fortran In SIMPLE
 
-SIMPLE already uses modern Fortran heavily. Follow the local style instead of introducing foreign patterns.
-
-## Patterns To Expect
-
-- Module-based APIs with `use ..., only: ...`
-- Abstract base types with deferred procedures, e.g. command interfaces
-- Type-bound procedures and generic bindings on domain objects
-- Submodules for large types such as `image`, `oris`, `sp_project`, and `polarft_calc`
-- Allocatable state and explicit lifecycle methods such as `new`, `copy`, `kill`
-- OpenMP-aware loops and shared-memory execution paths
-- C interoperability for FFTW and selected low-level helpers
-
-## Best Entry Files
-
-- `src/main/simple_builder.f90`
-- `src/main/simple_cmdline.f90`
-- `src/main/image/simple_image.f90`
-- `src/main/project/simple_sp_project.f90`
-- `src/main/commanders/simple/simple_commander_base.f90`
+The repo-wide Fortran rules; each folder's guide (`simple-main-*`) adds its subsystem's rules.
+Follow the local style instead of introducing foreign patterns.
 
 ## Local Conventions
 
 - Prefer adding behavior through existing types and submodules rather than creating detached helper files.
+  Where a large module already has submodules, extend them instead of inflating the parent interface file.
 - Keep orchestration in commanders/strategies and numerical work in domain modules.
 - Reuse `parameters`, `cmdline`, and `builder` instead of inventing parallel configuration plumbing.
 - In commanders, normalize and validate `cmdline` before the single `params%new(cline)` call; never construct a `parameters` object twice in one commander execution path.
@@ -45,8 +29,9 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
 - Keep child command lines sparse. Set only values that change behavior or
   preserve execution mode rather than restating defaults already supplied by the
   child commander or `parameters`.
-- Do not declare a dummy argument `optional` when every valid caller supplies
-  it; make the dependency explicit and update all callers together.
+- An `optional` dummy argument must be present at some calls and absent at
+  others. When every caller supplies it, make it required; when none does,
+  delete it with the code that reads it. Update all callers together.
 - Preserve `new`/`kill` lifecycle symmetry for stateful types.
 - A new stateful module is an encapsulated class: `private` components,
   `new`/`kill`, behavior as type-bound procedures, private helpers, getters
@@ -163,6 +148,15 @@ thread safety. For every parallel region you add or change:
   code by hand at the machine's full thread count, repeated, bit for bit where
   the result is deterministic.
 
+## Testers
+
+- A tester (`simple_<x>_tester.f90`, entry `run_all_<x>_tests`) runs only from a
+  suite table in `src/main/commanders/test/simple_commanders_test_class.f90`
+  (`add_suite`). Nothing reports a tester that no table calls; the fast gate's
+  `scripts/check_test_registry.py` checks only that the tables, the test UI's
+  `suite=` help, the routers and CTest agree. Rules:
+  `doc/policies/test_environment_policy.md`.
+
 ## Debugging And Build Notes
 
 - Debug build: `./compile_debug.sh` (runtime checks including bounds; `--traps`
@@ -170,10 +164,3 @@ thread safety. For every parallel region you add or change:
   fast gate unless `--exclude-tests`.
 - Helpful notes: `doc/how2s/how2debug_fortran.md`
 - Many objects expose derived-type state through type-bound methods; prefer following those paths before adding temporary print code.
-
-## When Extending Code
-
-- Match the existing folder ownership before adding files.
-- If a large module already uses submodules, extend the submodule structure instead of inflating the parent interface file.
-- If a workflow already has `ui -> exec -> commander -> strategy`, add the feature in the narrowest layer that owns it.
-- For parameter parsing changes, read `.github/skills/simple-main-params/SKILL.md`.

@@ -1,41 +1,77 @@
 ---
 name: simple-main-image
-description: Use when working in SIMPLE's src/main/image subsystem, including the core image type and its submodules (FFT and Fourier-space operations, geometry, filtering, masks, I/O, polarization), the binary and mask extensions, expanded Fourier transforms for motion correction, projector classes, and related image-processing infrastructure.
+description: Use when working in SIMPLE's src/main/image or src/main/image_processing subsystems, including the image type (one FFTW buffer seen as rmat/cmat, the Fourier-state flag, FFT normalisation and phase origin, Fourier addressing, pad/clip, copies, FFTW plans and threads, process-wide memos), its submodules (FFT, filters, masks, CTF application, geometry, I/O), image_bin and image_msk, the polarizer and projector, ft_expanded for motion correction, the reconstruction plane grid, the wave field and imaging, and the image-array, stack-file, micrograph and segmentation helpers.
 ---
 
-# SIMPLE `src/main/image`
+# `src/main/image`: the image type and its Fourier conventions
 
-This is one of the central scientific subsystems.
+Owns `image`: one FFTW buffer seen as `rmat` (real, with padding rows) or `cmat` (the stored Hermitian
+half), the flag `ft`, the transforms and the operations on one image (filters, masks, CTF application,
+geometry, I/O), plus the polarizer (`simple_image_polar`) and projector (`simple_projector*`) that cut
+sections for `pftc`, `ft_expanded` (motion), `fplane_grid` (planes of `gen_fplane4rec`) and the wave
+field and imaging (`doc/policies/3D/wave_model_policy.md`). It does not prepare particles
+(`strategies/search`, `prepimg4align*`), reconstruct (`volume/`), model the CTF (`ctf/`) or score
+(`pftc/`, `cftc/`). `src/main/image_processing` holds procedures on images (arrays, stack-file loops,
+micrograph and segmentation helpers): no type, reads a project, never writes one; these rules apply.
+Details and the memo table: `references/fourier-and-memos.md`.
 
-## Read First
+## Rules
 
-- `simple_image.f90`
-- `simple_image_core.f90`: `new`/`kill`, the FFTW buffer and plans
-- `simple_image_fft.f90`
-- `simple_image_access.f90`
-- `simple_image_filt.f90`
-- `simple_projector.f90`, `simple_projector_pft_batch.f90`
+Silent ones first: nothing reports these.
 
-## Structure
+- Know the state; `set_ft` only flips the flag. Methods transform on demand and restore (`shift`,
+  `corr`, `bp`), stop on the wrong state (`window`, `pad_mirr`, `expand_cmat`), or trust it unchecked
+  (`shift2Dserial`, `apply_ctf`, `polarize*`, `mul_cmat`; `add` reads the operand in self's state).
+- `fft` divides by N = product(ldim), `ifft` does not; `fft` swaps quadrants first so the real-space
+  origin is the centre pixel ldim/2+1, even boxes only (THROW_HARD). `fft_noshift` takes the origin at
+  (1,1,1), any box; `ifft` always swaps back. `comp_addr_phys` maps h < 0 to the Friedel mate without
+  conjugating: use `get_fcomp`/`set_fcomp`, which conjugate, or conjugate yourself.
+- `shift(s)`, `shift2Dserial(s)`: out(x) = in(x + s), the content moves by -s (phase exp(+2 pi i h.s/N)).
+  A particle is centred on its stored shift with `-shift`; cftc uses the same sign.
+- In real space the padding rows hold zeros (the class's reductions rely on it): outside the class use
+  `get_rmat_ptr` (the box, not contiguous); `get_cmat_ptr` is in place only, then `set_ft` by hand.
+- `pad`/`clip` act in the current state: in Fourier space they resample (the output's smpd changes;
+  `pad` applies a Hann anti-aliasing weight by default), in real space they embed or cut the box. The
+  output must exist with the target ldim; the wrong direction does nothing.
+- Copies: scalar `=` and `copy` reallocate via `new` and take the source's `wthreads`; `copy_fast` needs
+  equal ldim (unchecked) and keeps the receiver's. Array assignment and `allocate(source=)` copy the
+  pointers: two owners of one buffer. No finaliser or elemental assignment, and none is to be added:
+  `kill` every image (`dealloc_imgarr` for arrays); operator results and the `image()` constructor
+  leak a buffer and two plans each.
+- Process-wide memos (mask coordinates, `memoize_ft_maps` for every CTF application, the polarizer's
+  geometry, `construct_thread_safe_tmp_imgs`, `ftexp_transfmat_init`): make them serially, before the
+  parallel loop, for the box in use (`apply_ctf_wpad` on a real-space image works at twice the box).
+  Several readers do not check the box.
+- Polarizer: one geometry per process, the last `memoize4polarize`/`_oversamp` wins (both forms stay);
+  `polarize*` check neither box, pdim nor mode and the memo has no region guard (known defect, ruled
+  for fixing: add the checks): memoize with the pdim given to `polarize_*_pft` and pass the matching
+  `oversamp`. Its angles duplicate `polarft_calc%polar` (`pftc/simple_polarft_core.f90`): change both.
+- Projector order and `cmat_exp` (a copy: re-expand after a change): the reference.
+- `image_bin` syncs `bimat` from rmat only once: after changing rmat call `set_imat`.
+- Threads: `new`, `copy`, `=`, `set_wthreads`, `kill` plan or destroy inside an unnamed `omp critical`.
+  In a parallel loop use per-thread images made before it (`wthreads=.false.`, sized by the team),
+  `copy_fast` and the `_serial` variants. Distinct images transform concurrently; share one image only
+  if every thread just reads it in its current state (on-demand transforms write). Reproducibility
+  limits (Fourier crop, `fft_measure`): the reference.
 
-- `simple_image.f90` declares the `image` type and its procedure surface; behaviour lives in submodules (`*_core`, `*_access`, `*_arith`, `*_fft`, `*_filt`, `*_geom`, `*_io`, `*_polar`, `*_norm`, `*_ops`, ...)
-- `image_bin` (`simple_image_bin.f90`) and `image_msk` (`simple_image_msk.f90`) extend `image`
-- Projector code lives alongside the image primitives because it is tightly coupled
-- `simple_ft_expanded.f90` and `simple_ftexp_shsrch.f90` serve motion correction; `simple_fplane_grid.f90` the reconstruction's plane insertion
+## Where to start
 
-## Guardrails
+- `simple_image.f90`: the type, every binding (grouped under the name of its submodule) and interface.
+- `simple_ftiter.f90` (addressing, loop limits); `simple_image_tester.f90` (the conventions as assertions).
+- Callers that show the order: `strategies/search/simple_matcher_refvol_utils.f90` (projector),
+  `simple_matcher_ptcl_batch.f90` (polarizer and CTF maps around the particle loop).
 
-- One FFTW buffer is seen as `cmat` (Fourier) and `rmat` (real, with padding rows in the first dimension). In real space the padding holds zeros. Outside the image class use `get_rmat_ptr` (the box only); `get_rmat_ptr_padded` is for the few callers that need the FFT layout
-- Plans are made with `FFTW_ESTIMATE` inside an `omp critical` (the planner is not thread-safe); keep plan creation and destruction there
-- `wthreads` defaults to on in `new`; an image gets threaded plans only with `wthreads`, more than one plan thread, and a dimension of at least 200 (or `ldim(3)` of at least 100). Per-thread work images are made with `wthreads=.false.`
-- The Fourier crop round trip (crop, inverse FFT, forward FFT) is exact in mathematics, not in single precision: never promise bitwise identity across it
+## Tests
 
-## Connections
+- `build/bin/simple_test_exec test=unit_image` (about 1 s; `suite=` image, masks, binary_image,
+  fourier_iterator, ctf, segmentation, ...). Elsewhere: `unit_numerics suite=shift_search` (ft_expanded),
+  `unit_reconstruction suite=wave_field`, `wave_imaging`, `observation_noise`.
+- Polarizer or projector: `unit_pftc_align2D3D suite=polar_correlation`, `unit_cart_align3D
+  suite=cart_calculator`, `test=simulate_particles` (11 s; images against their reprojections).
+- Alignment or maps move: `test=simulated_workflow`, a robustness profile (one run shows breakage, not
+  improvement). New OpenMP code: a forced team against the serial result.
 
-- Core dependency for `motion`, `ctf`, `class`, `refine2D`, `refine3D`, `volume`, and `pftc`
-- The matchers' particle buffer stores decoded images in an `image_slab` (`src/fileio/simple_image_slab.f90`), read back bit for bit; the 3D record buffer of cropped observations lives in `strategies/search/simple_matcher_ptcl_io.f90`
-- Tests: `simple_test_exec test=unit_image`
+## See also
 
-## Working Rule
-
-Before adding a new standalone helper, check whether a matching type-bound method or submodule already exists.
+`doc/policies/KB_Interpolation_Policy.md`, `doc/refactoring_notes/completed/image_rmat_padding_encapsulation.md`;
+skills `simple-main-interp`, `simple-main-pftc`, `simple-main-cftc`, `simple-main-sigma2`, `simple-modern-fortran`.

@@ -220,8 +220,8 @@ contains
             avg_out = 'vol_nufilt'//params%ext%to_char()
         endif
         locres_out = add2fbody(avg_out, params%ext, NULOCRES_SUFFIX)
-        ! The envelope is derived from the mask-packed unary costs, which
-        ! nu_filter_vols releases. It has to run first.
+        ! The envelope reads the raw evidence (nu_ev_base, nu_ev_best), which
+        ! lives until cleanup_nu_filter.
         l_envmask = params%nu_envmsk .eq. 'yes'
         if( l_envmask )then
             ! The evidence margin is always written: its histogram is what tells

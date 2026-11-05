@@ -3,7 +3,7 @@
 !! What a probe EM fit IS, as data: identity and resolved policy (spec), the model handles
 !! (model), the cross-iteration state (history), the E-step bank (estep), the M-step system
 !! (mstep), diagnostics (diag) and the per-iteration workspace (iter). Each piece frees itself;
-!! the fit's kill runs the pieces in dependency order. The EM engine (simple_flex_pca_em) extends
+!! the fit's kill runs the pieces in dependency order. The probe fit (simple_flex_probe_fit) extends
 !! this type with its iteration procedures; nothing here computes.
 module simple_flex_pca_fit_types
 use simple_core_module_api, only: dp, fplane_type, simple_exception, string

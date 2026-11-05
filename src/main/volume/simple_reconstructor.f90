@@ -11,9 +11,9 @@ public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi
 private
 #include "simple_local_flags.inc"
 
-!> Dense outputs produced while restoring one gridding half. The base image is
-!! deliberately undeapodized because FSC and cFAR are estimated on it;
-!! final is the deapodized map handed to downstream consumers.
+!> Dense outputs produced while restoring one gridding half: base is the
+!! undeapodized map; final is its deapodized copy, on which FSC and cFAR are
+!! estimated (masked at msk_crop) and which downstream consumers take.
 type :: gridding_half_restore
     type(image) :: base
     type(image) :: final
@@ -333,7 +333,7 @@ contains
         call deapodize3D_inplace(vol, self%invenv1d)
     end subroutine deapodize_volume
 
-    !> Promote the undeapodized FSC base representation to the deapodized final-map
+    !> Promote the undeapodized base representation to the deapodized final-map
     !! representation without changing the base image.
     subroutine finalize_gridding_half_restore( self, backend )
         class(gridding_half_restore), intent(inout) :: self
@@ -343,8 +343,8 @@ contains
         call backend%deapodize_volume(self%final)
     end subroutine finalize_gridding_half_restore
 
-    !> Restore the dense, undeapodized native-grid map on which the gridding
-    !! FSC is estimated. With preserve_numerator=.true., sampling-density
+    !> Restore the dense, undeapodized native-grid map (the gridding FSC is taken
+    !! on its deapodized copy). With preserve_numerator=.true., sampling-density
     !! correction runs on a temporary image and the raw Fourier numerator is
     !! restored for a later FSC-prior replay. Rho is deliberately not copied:
     !! attaching a prior to it remains an in-place backend operation.

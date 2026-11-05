@@ -60,8 +60,8 @@ enum, bind(c)
     enumerator :: I_SHSIG               = 55 ! polar shift map: the particle's prior width for its next shift search (below zero: not yet centred in this workflow)
 end enum
 
-! A particle carries the named slots 1-54 in memory (ori%pparms).
-! On disk its record is N_PTCL_RECORD_REALS wide: slots 55-64 are zero padding reserved
+! A particle carries the named slots 1-55 in memory (ori%pparms).
+! On disk its record is N_PTCL_RECORD_REALS wide: slots 56-64 are zero padding reserved
 ! for later fields, so adding a field does not change the project file's record width,
 ! while resident particles pay only for the named slots. Projects written by earlier
 ! releases (narrower records) still read, with zeros in the missing slots

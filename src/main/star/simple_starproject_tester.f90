@@ -1038,7 +1038,10 @@ contains
         type(sp_project)  :: proj, proj2
         type(cmdline)     :: cl
         type(string)      :: dir, stknames(2), fname
+        real, parameter   :: CORNERS(2,2) = reshape([10., 21., 37., 5.], [2,2]) ! box corners (px), box 16
+        real(dp)          :: coords(2)
         integer           :: i
+        logical           :: found, ok
         write(*,'(A)') 'test_roundtrip_origins'
         call make_origins_stacks(dir, stknames)
         fname = dir//'/roundtrip.star'
@@ -1066,6 +1069,8 @@ contains
             call proj%os_ptcl2D%set(i, 'ogid',   i)
             call proj%os_ptcl2D%set(i, 'x',      ORIGINS_PX(1,i))
             call proj%os_ptcl2D%set(i, 'y',      ORIGINS_PX(2,i))
+            call proj%os_ptcl2D%set(i, 'xpos',   CORNERS(1,i))
+            call proj%os_ptcl2D%set(i, 'ypos',   CORNERS(2,i))
             call proj%os_ptcl2D%set_state(i, 1)
         end do
         call sf%init(fname)
@@ -1077,6 +1082,18 @@ contains
         call proj2%os_ptcl3D%copy(proj2%os_ptcl2D, is_ptcl=.true.)
         call sp%finalise_ptcl_import(proj2)
         call check_origins_px(proj2, .false., 'pixels to STAR to pixels')
+        ! box corners: the file holds the particle's centre (corner + box/2), the import the corner
+        call read_particle_doubles(fname, EMDL_IMAGE_COORD_X, coords, found)
+        call assert_true(found .and. all(abs(coords - real(CORNERS(1,:) + 8., dp)) < 1.e-6_dp), &
+            &'the writer stores the particle centre: corner + box/2')
+        ok = .true.
+        do i = 1, 2
+            if( abs(proj2%os_ptcl2D%get(i, 'xpos') - CORNERS(1,i)) > 1.e-4 ) ok = .false.
+            if( abs(proj2%os_ptcl2D%get(i, 'ypos') - CORNERS(2,i)) > 1.e-4 ) ok = .false.
+            if( abs(proj2%os_ptcl3D%get(i, 'xpos') - CORNERS(1,i)) > 1.e-4 ) ok = .false.
+            if( abs(proj2%os_ptcl3D%get(i, 'ypos') - CORNERS(2,i)) > 1.e-4 ) ok = .false.
+        end do
+        call assert_true(ok, 'box corners: pixels to STAR to pixels is the identity in ptcl2D and ptcl3D')
         call sp%kill
         call proj%kill
         call proj2%kill
