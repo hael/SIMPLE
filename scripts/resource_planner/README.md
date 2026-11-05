@@ -105,5 +105,5 @@ PYTHONPATH=scripts python3 -m unittest discover -s scripts/resource_planner/test
 ```
 
 Set `SIMPLE_FIXTURE_PYTHON` to a NumPy-capable interpreter for fixture replay tests.
-See [remaining work](../../doc/implementation_notes/planned/hardware_resource_planning_unfinished.md)
+See [retained qualification limits](../../doc/implementation_notes/completed/hardware_resource_planning_validation_closeout.md)
 for qualification limits and future native integration.

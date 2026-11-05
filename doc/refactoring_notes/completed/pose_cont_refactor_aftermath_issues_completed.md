@@ -1,7 +1,10 @@
 # `pose_cont` refactoring aftermath
 
-Status (2026-10-20): all work items are implemented except the validation runs (V1), which are
-tracked in [pose_cont_refactor_aftermath_issues_unfinished.md](../planned/pose_cont_refactor_aftermath_issues_unfinished.md).
+Status: changes C1-C4, tests T1-T2 and documentation D1-D2 are implemented.
+On 2026-11-04 the maintainer closed the historical V1 validation task with its
+unrecorded checks retained in the [validation closeout](pose_cont_refactor_aftermath_validation_closeout.md).
+Those checks are not claimed as passed. The source-state descriptions below
+retain their original dates.
 This file is the record of the implemented items. Reviewed against the source at `108c8c9da` (2026-10-07). This is the record of what the completed [`pose_cont` refactoring](../completed/pose_cont_refactoring.md) and its
 [review report](../completed/pose_cont_refactoring_report.md) left to do. Line numbers are at
 `108c8c9da` and will drift; the routine names are the stable reference.

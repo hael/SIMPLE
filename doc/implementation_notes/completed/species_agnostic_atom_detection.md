@@ -1,6 +1,6 @@
 # Report of the run `atomic_density_model_2`
 
-The Dell, 26 to 27 October 2026. The second unattended run on the atomic density model of `detect_atoms`, the nanoparticle atom finder of SINGLE. Its code is now in `~/src/SIMPLE`, uncommitted, on top of `ad4432498` ("first draft nanoparticle rejection model"). This report reads on its own; the run's own, longer account is the second section of `doc/implementation_notes/planned/atomic_density_model_report.md`, and every number with its log path is in section 13 of `doc/implementation_notes/planned/atomic_density_model.md`.
+The Dell, 26 to 27 October 2026. The second unattended run on the atomic density model of `detect_atoms`, the nanoparticle atom finder of SINGLE. Its code is now in `~/src/SIMPLE`, uncommitted, on top of `ad4432498` ("first draft nanoparticle rejection model"). This report reads on its own; the run's own, longer account is the second section of `doc/implementation_notes/completed/atomic_density_model_report.md`, and every number with its log path is in section 13 of `doc/implementation_notes/completed/atomic_density_model.md`.
 
 ## What the run was for and what it delivered
 

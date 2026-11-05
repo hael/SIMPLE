@@ -247,7 +247,7 @@ diffable. The second is worth doing, with the run-summary sidecar.
 
 This changes results. It is judged by comparing robustness profiles before
 and after on cases with known truth, per
-`doc/implementation_notes/planned/test_suite_truth_and_robustness.md`, not by
+`doc/implementation_notes/completed/test_suite_truth_and_robustness.md`, not by
 a single PfCRT run. **A corollary applies either way: FSC=0.5 must not be a
 pass/fail gate for PfCRT**, since on a plateau it is a ~40x amplifier of
 noise. cFAR and the FSC=0.143 crossing are the stable metrics.

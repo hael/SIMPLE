@@ -35,7 +35,7 @@ The polar shift-search refactor has already removed unused evidence work,
 reused map geometry/plans/workspaces and avoided physical-width calculations
 for candidates that cannot enter the polish shortlist. Its retained scope and
 validation are in the existing
-[polar shift-search record](../../refactoring_notes/planned/polar_shift_search_performance_refactoring.md).
+[polar shift-search record](../../refactoring_notes/completed/polar_shift_search_performance_refactoring.md).
 Further gains should address the workflow's scientific-object lifetimes before
 adding more numerical shortcuts.
 

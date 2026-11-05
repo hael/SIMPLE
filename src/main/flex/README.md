@@ -236,4 +236,4 @@ time, with rank, latent bandwidth and temporal bandwidth chosen by coefficient-s
 cross-validation; frames as given (no alignment), the whole trajectory or windows (`halfwin`), only
 frames of the same row parity pooled (`eo_pool`). It reuses `flex_cls_fit`; arrays in, arrays out;
 the commander (`../commanders/single/single_commanders_trajectory.f90`) does the stack I/O. Design,
-toy and validation: `doc/implementation_notes/planned/trajectory_denoise_flex.md`.
+toy and validation: `doc/implementation_notes/completed/trajectory_denoise_flex.md`.

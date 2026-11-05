@@ -483,7 +483,7 @@ The assignment is one draw per particle from its tempered row posterior
 class-balanced frontier was deleted; the constructor requires
 `objfun=euclid`, the loss the posterior is defined by). The rule of the 3D
 tables (`refine3D_policy.md`,
-`doc/implementation_notes/planned/pose_marginalization.md`) on the 2D tables,
+`doc/implementation_notes/completed/pose_marginalization.md`) on the 2D tables,
 for `refine=prob` and `refine=prob_neigh`: no class is forced to be
 populated. At the fill, every class's in-plane rotation is one draw from the
 posterior over all grid rotations of the class against the seeded particle at

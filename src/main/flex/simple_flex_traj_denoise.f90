@@ -5,7 +5,7 @@
 ! with weights from the other set's model (no selection bias), every other coefficient with the mean of the two.
 ! Two copies of the frames: soft-masked ones (ym) for the similarity (models, latents, CV) and the frames themselves
 ! (yu) for the averages, so the output is the whole box.
-! Design, toy and validation: doc/implementation_notes/planned/trajectory_denoise_flex.md
+! Design, toy and validation: doc/implementation_notes/completed/trajectory_denoise_flex.md
 module simple_flex_traj_denoise
 use simple_defs,               only: sp, dp, DCMPLX_ZERO, logfhandle
 use simple_error,              only: simple_exception

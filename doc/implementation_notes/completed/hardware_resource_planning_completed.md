@@ -1,13 +1,19 @@
 # SIMPLE hardware resource planning
 
-**Status (2026-10-20):** design record, written as a draft on 2026-09-29, then partly implemented.
+Status: external planning tool delivered; on 2026-11-04 the maintainer closed
+the implementation with its qualification boundaries and optional future scope
+retained in the [validation closeout](hardware_resource_planning_validation_closeout.md).
+Native SIMPLE profile consumption and streaming extensions are not claimed as
+implemented. This closure supplies no new calibration or runtime evidence.
+
+**Historical status (2026-10-20):** design record, written as a draft on 2026-09-29, then partly implemented.
 Done: the memory estimator (`scripts/memory_estimator.py`), and the Python calibration and planning
 tool (`scripts/hardware_resource_planner.py` with the package `scripts/resource_planner/`: hardware
 discovery, standard calibration of motion correction, CTF estimation, picking, solve2D and solve3D
 on synthetic fixtures, Slurm submission, JSON profile export), recorded in sections 15 to 23.
 Sections 1 to 14 are the original design text; where they say "future" or "proposed" for these
 parts, read "implemented in Python". Not done, and described in
-[`../planned/hardware_resource_planning_unfinished.md`](../planned/hardware_resource_planning_unfinished.md):
+[`hardware_resource_planning_validation_closeout.md`](hardware_resource_planning_validation_closeout.md):
 native SIMPLE consumption of the profiles (explicitly not implemented), streaming planning,
 real-data qualification, the solve2D and solve3D accuracy gates, and the gaps of section 13.
 

@@ -1,5 +1,10 @@
 # Single-state speed: the plan for the week of 2026-10-15
 
+Status: delivered speed-week work closed on 2026-11-04. The
+[closeout record](single_state_speed_week_closeout.md) reconciles the original
+remaining items with later implementations and plans and retains the unmeasured
+profiling/benchmark limits. No new performance or runtime result is claimed.
+
 Implementation note, 2026-10-14. Revised 2026-10-15 for the unattended run
 `prob_speed` on the Oracle Linux test machine, which carried out days 1 and 2
 and the same changes in the 2D table (section "Execution"; the record is in
@@ -10,10 +15,12 @@ runs added 2026-10-15 (section "Multi-state").
 retirement of `prob_fast` (run `prob_speed`); the identical parts of days 3
 and 4 and the multi-state items 2 to 4 (runs `ms_speed` and `speed_mac`, see
 "Status after the run `speed_mac`" at the end); the multi-state schedule
-(multi-state item 1, run `ms_speed`). The open work (day 3 items 5 and 6, the
+(multi-state item 1, run `ms_speed`). The remainder identified at that split
+(day 3 items 5 and 6, the
 rest of day 4, day 5's one worker process per iteration, the states' parallel
-assembly, and the measurements on PfCRT and msp1) is in
-[`../planned/single_state_speed_week_unfinished.md`](../planned/single_state_speed_week_unfinished.md).
+assembly, and the measurements on PfCRT and msp1) is preserved with its current
+disposition in
+[the closeout record](single_state_speed_week_closeout.md).
 Where this text below says days 3 to 5 are "planned" or "still to follow", read
 it with that status. Its report is `single_state_speed_week_report.md`.
 

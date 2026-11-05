@@ -117,7 +117,7 @@ The reference benchmarks are still run by hand:
 
 ## 3. Now: the suite on the merged code (`test_truth_sync`, Dell)
 
-Specified in `test_suite_truth_and_robustness.md`, Phases 7 to 9. Phase 9
+Specified in `../completed/test_suite_truth_and_robustness.md`, Phases 7 to 9. Phase 9
 times A, A-shm, E and E-shm as `prob_speed` defined them and MS and M as
 `ms_speed` did. It also closes these documentation gaps:
 
@@ -461,15 +461,15 @@ FePt with two species, the nonuniform evidence-mask diagnostic.
 
 ## Sources
 
-Under `doc/implementation_notes/planned/`:
+Implementation records and related planned work (paths relative to this note):
 
-- `test_suite_truth_and_robustness.md`
-- `single_state_speed_week_unfinished.md`
+- `../completed/test_suite_truth_and_robustness.md`
+- `../completed/single_state_speed_week_closeout.md`
 - `multistate_speed_run_unfinished.md`
 - `speed_architecture_proposals.md` (the maintainer's tree holds the newer copy)
-- `hardware_resource_planning_unfinished.md`
+- `../completed/hardware_resource_planning_validation_closeout.md`
 - `../completed/species_discovery_status.md`
-- `atom_bfactor_model.md`
+- `../completed/atom_bfactor_model.md`
 - `single_pcg_integration_unfinished.md`
 - `nu_evidence_mask_cross_validated_threshold.md`
 - `next_release/calpha_nu_evidence_mask.md`

@@ -2,10 +2,12 @@
 
 ## Status
 
-Implemented as of 2026-10-20 (all phases below are in the code). Only validation
-remains: scientific equivalence on representative datasets, the multi-state peak-RSS
-measurement, and the final decision on the partly done workspace cleanup. They are tracked in
-[probabilistic_alignment_table_peak_memory_refactoring_unfinished.md](../planned/probabilistic_alignment_table_peak_memory_refactoring_unfinished.md).
+Implemented as of 2026-10-20 (all phases below are in the code). On 2026-11-04
+the maintainer closed the historical validation task with the missing
+scientific-equivalence and multi-state peak-RSS evidence retained in the
+[validation closeout](probabilistic_alignment_table_peak_memory_validation_closeout.md).
+No new equivalence or memory result is claimed; partly completed workspace
+cleanup remains a recorded follow-up rather than a new implementation task.
 Sections written in the future tense ("the future refactor should introduce") describe the
 design that was then built.
 

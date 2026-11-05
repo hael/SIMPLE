@@ -10,8 +10,8 @@ rulings and the record of phases 0 to 8 are in
 [`../completed/species_discovery_completed.md`](../completed/species_discovery_completed.md); the
 run reports are in [`../completed/species_discovery_report.md`](../completed/species_discovery_report.md).
 
-> **Moved, 2026-10-25 (the atomic density model, `atomic_density_model.md` and its report
-> `atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
+> **Moved, 2026-10-25 (the atomic density model, `../completed/atomic_density_model.md` and its report
+> [atomic-density run report](../completed/atomic_density_model_report.md)).** The residual recovery of weaker atoms no longer belongs to
 > `discover_species=yes`: it runs on every `detect_atoms` run, on the present path, and its atoms are
 > the weak atoms (chain B of `_ATMS.pdb`, label and recovery fields in `_atoms.csv`). Every atom is now
 > fitted by the density model (its own intensity and width, seen through the reconstruction's halo,
@@ -19,8 +19,8 @@ run reports are in [`../completed/species_discovery_report.md`](../completed/spe
 > fitted intensities, with the coordination term, and writes the `_species` files as before;
 > `min_nbrs` applies to the present path. The numbers below are those of the species work.
 
-> **Moved again, 2026-10-27 (the second run of the atomic density model, `atomic_density_model.md` section 12 and the
-> second section of `atomic_density_model_report.md`).** The species call is its own program now,
+> **Moved again, 2026-10-27 (the second run of the atomic density model, `../completed/atomic_density_model.md` section 12 and the
+> second section of [atomic-density run report](../completed/atomic_density_model_report.md)).** The species call is its own program now,
 > `detect_atomic_species` (`single_exec`, category atoms; domain `src/main/nano/simple_atomic_species.f90`). It reads
 > the products of a `detect_atoms` run (`pdbfile=` its `_ATMS.pdb`, with the `_atoms.csv` and `_model.txt` beside it)
 > and the map (`vol1`, `smpd`), and takes the species keys: `element` (one name, or a list brightest first such as
@@ -113,7 +113,7 @@ phase 9 shows whether the coordination term removes them.
   fully coordinated atoms (12 neighbours), where full occupancy can be assumed, and reports every
   other atom's intensity as an occupancy of its likeliest class. In the numpy check it was as
   sensitive as the coordination term on the atoms it labels (about half of them). The full
-  version belongs to the B-factor and occupancy work (`atom_bfactor_model.md`).
+  version belongs to the B-factor and occupancy work (`../completed/atom_bfactor_model.md`).
 
 ## 3. Validation before promotion (not part of a run yet)
 
@@ -157,8 +157,8 @@ Three parts, judged by the maintainer:
   plan for an `rnd_seed` key is `../../refactoring_notes/planned/rnd_seed_parameter.md`.
 - A light species confined to the surface layer is not a target (ruling of 2026-10-09): it cannot
   be told from weak, partly occupied surface sites.
-- B factors and occupancy: [the B-factor note](atom_bfactor_model.md) and
-  [atomic density model](atomic_density_model.md) own the follow-up. The 2026-10-25 ruling
+- B factors and occupancy: [the B-factor note](../completed/atom_bfactor_model.md) and
+  [atomic density model](../completed/atomic_density_model.md) own the follow-up. The 2026-10-25 ruling
   settles measurement on the map alone; the older image-side proposal is withdrawn.
   The historical +4.4 Å² apparent B rise remains a warning about interpretation.
 

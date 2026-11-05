@@ -1,5 +1,5 @@
 !@descr: the species call of detect_atomic_species: the class fit on the atoms of detect_atoms' density model, posteriors with their errors, the _species files
-! The design is doc/implementation_notes/planned/atomic_density_model.md (sections 2 and 12): the classes are fitted on
+! The design is doc/implementation_notes/completed/atomic_density_model.md (sections 2 and 12): the classes are fitted on
 ! ln I_i = ln S_k + beta (c_i - 12) with one beta for every class, every atom carrying the variance tau_I(c_i)**2 + v_i
 ! (tau_I the coordination spread by coordination bin, measured within the classes, v_i the measurement variance of
 ! ln I_i);

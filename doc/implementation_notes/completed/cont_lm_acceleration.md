@@ -5,7 +5,7 @@ done: built, checked, and measured against the baseline. The measured gains
 are in section 2.** The maintainer's rulings are in section 8. The findings come from a static review of `master` at
 `4da5cb9c0`. The savings below are work counts read from the code. The rule of
 the local-workflow plan applies: do not infer a speedup percentage from removed
-calls (`doc/refactoring_notes/planned/refine3d_local_workflow.md:264-267`).
+calls (`doc/refactoring_notes/completed/refine3d_local_workflow.md`, implementation evidence).
 Every stage is therefore measured with the benchmark of section 6.
 
 This is also a learning note for Maz. Each stage says why it comes where it
@@ -23,7 +23,7 @@ Companion notes:
 
 - `cont_kb_gather_performance.md`: the fused gather and its list of
   future work.
-- `doc/refactoring_notes/planned/refine3d_local_workflow.md`: the
+- `doc/refactoring_notes/completed/refine3d_local_workflow.md`: the
   workflow-level startup savings. This note covers the per-particle cost inside
   `strategy3D_cont`.
 - `identical_speed_run*.md` and `single_state_speed_week*.md`: the polar speed

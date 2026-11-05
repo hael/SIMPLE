@@ -1,5 +1,5 @@
 !@descr: atomic density model of SINGLE: Gaussian atoms through the measured transfer of the reconstruction, their fit, profiles in the coordination number, noise and rendering
-! The design and its notation are doc/implementation_notes/planned/atomic_density_model.md (sections 2, 4 and 12).
+! The design and its notation are doc/implementation_notes/completed/atomic_density_model.md (sections 2, 4 and 12).
 ! Positions are voxel coordinates (voxel (i,j,k) sits at (i,j,k)), widths B in A**2, intensities are integrals.
 ! The transfer T(s) is a radial curve per Fourier shell, measured on the map as the projection onto the atoms
 ! without it and smoothed; an atom through it is K_T(B) = IFT[exp(-B s**2/4) T(s)] = K(B) - h(B), with the halo

@@ -969,7 +969,7 @@ evidence in its separately versioned data and reporting repository.
 ### 6.5 The test cards
 
 One card per high-level entry, from the audit of the runs `test_truth` and `test_truth_sync`
-(`doc/implementation_notes/planned/test_suite_truth_and_robustness.md`, Progress: Phase 1 for the
+(`doc/implementation_notes/completed/test_suite_truth_and_robustness.md`, Progress: Phase 1 for the
 first profiles, Phase 5 for the repairs, Phase 7 for the entries whose outputs stayed byte-identical
 through the merge with master, Phase 8 for the profiles of the merged code). Every floor named here
 is written in the test next to its check with the profile it comes from (section 6.2). "Profile"

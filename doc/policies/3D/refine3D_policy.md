@@ -855,7 +855,7 @@ samplers; a day's migration of those onto the posterior primitive
 (2026-10-23) was taken back on 2026-10-24, the posterior being the rule for
 the table modes of the later stages. Design, measurements and the acceptance
 test (PfCRT, 10 of 10 restarts at 3.6 A or better):
-`doc/implementation_notes/planned/pose_marginalization.md` sections 4, 10,
+`doc/implementation_notes/completed/pose_marginalization.md` sections 4, 10,
 16-19.
 
 ### Probability-table part files

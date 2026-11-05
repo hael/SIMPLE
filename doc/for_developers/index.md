@@ -36,7 +36,7 @@ describe the software as it is, rather than the history of one change:
 
 ## Work that still needs attention
 
-Navigation reconciled 2026-11-02. The topic indexes list the active records and
+Navigation reconciled 2026-11-04. The topic indexes list the active records and
 their next actions; the linked notes retain the dated evidence and acceptance
 criteria. This navigation update supplies no new runtime validation.
 
@@ -44,6 +44,21 @@ criteria. This navigation update supplies no new runtime validation.
 - [Refactoring topics and validation closeout](../refactoring_notes/README.md)
 - [Current atomicity-prior algorithm](../algorithms/atomicity_prior.md), including
   the fitted-model mode absent from the original methods study
+
+The delivered polar shift-search performance refactor, `refine3D_local`
+workflow/ownership refactor, stream refactor, 3D snapshots, Release 4 cleanup,
+unreferenced-code review, historical pose/alignment-table closeouts and dated
+policy-audit reports are indexed under
+[completed refactors and reviews](../refactoring_notes/README.md#completed-refactors-and-reviews).
+Their recorded evidence limits are retained. The policy audit's live gap
+register remains in `planned/`.
+
+Completed implementation records and reports, including trajectory denoising,
+posterior search, atomic density/B factors, resource planning, truth-suite
+tooling, BLAS configuration and the nano-context investigation, are indexed
+under [completed implementation evidence](../implementation_notes/README.md#completed-investigations-and-reference-material).
+Their validation and research limits remain explicit; later proposals and the
+testing/benchmarking backlog retain their open scope.
 
 The earlier source-backed audit identified the following open areas. Missing
 split records have been reconstructed from the surviving completed records;
@@ -54,26 +69,18 @@ their absence was not evidence that the outstanding work passed:
    report of outstanding parts, the wall-clock timeout and the unused
    `qsys_watcher_diag` remain. Background:
    [the completed report](../implementation_notes/completed/qsys_scheduler_completion_bug_report_completed.md).
-2. [Stream refactor follow-up](../refactoring_notes/planned/stream_refactor.md)
-   and [stream test handover](../refactoring_notes/planned/stream_area_tests_handover.md):
-   remaining cleanup and workflow-level coverage are explicitly unfinished.
+2. [Stream test handover](../refactoring_notes/planned/stream_area_tests_handover.md):
+   remaining workflow-level coverage is explicitly unfinished. The delivered
+   [stage refactor](../refactoring_notes/completed/stream_refactor.md) is closed,
+   retaining its follow-ups and validation limits.
 3. [Workflow truth gates and nightly runner](../refactoring_notes/planned/phase5_workflow_gates_and_nightly_runner_handover.md)
    and [standing nightly triage](../refactoring_notes/planned/nightly_suite_triage.md):
    reconcile the remaining truth checks and unattended evidence with the latest
    [triage report](../refactoring_notes/planned/nightly_suite_triage_report.md).
-4. [Probabilistic-alignment peak-memory validation](../refactoring_notes/planned/probabilistic_alignment_table_peak_memory_refactoring_unfinished.md):
-   the refactor is done
-   ([record](../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring_completed.md));
-   the scientific-equivalence and multi-state peak-memory validation are still required.
-5. [Multi-microscope parameter follow-up](../refactoring_notes/planned/need2basis/multi_microscope_parameters.md):
+4. [Multi-microscope parameter follow-up](../refactoring_notes/planned/need2basis/multi_microscope_parameters.md):
    the first phase landed; the CTF-construction audit, most of the merge tests,
    and the open policy questions remain.
-6. [Release 4 cleanup inventory](../refactoring_notes/planned/release4_legacy_cleanup_inventory.md)
-   and [continuous-pose aftermath, open part](../refactoring_notes/planned/pose_cont_refactor_aftermath_issues_unfinished.md):
-   these are the current cleanup ledgers (the finished items are in
-   [the completed record](../refactoring_notes/completed/pose_cont_refactor_aftermath_issues_completed.md);
-   validation item V1 is still open).
-7. [FLEX PCA architecture validation](../refactoring_notes/planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md):
+5. [FLEX PCA architecture validation](../refactoring_notes/planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md):
    phases 0b--11 landed
    ([record](../refactoring_notes/completed/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_completed.md));
    the phase-0a cluster baseline/replay is still an outstanding validation activity.

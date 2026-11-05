@@ -6,7 +6,7 @@ per cluster (refine3D, solve3D/PCG/NU, 2D and particle I/O, stream and sieving,
 infrastructure, preprocessing). Each concrete claim (names, ownership, defaults,
 file names, tests, links) was checked with `rg` and by reading the code; nothing
 was built or run. The raw reports, with `file:line` evidence for every finding
-below, are in [policy_set_audit_2026-10-21/](policy_set_audit_2026-10-21/). They
+below, are in [the completed audit reports](../completed/policy_set_audit_2026-10-21/). They
 are the record before the corrections; the register below says what was done.
 
 The audit followed the restructuring of 2026-10-20
@@ -227,7 +227,7 @@ contract (two), first-set triggers (two), the final-ingestion trigger (two).
 
 - A "Layering and project I/O" section was added to `CLAUDE.md` and
   `.github/copilot-instructions.md` (the proposed text is kept in
-  [proposed_instruction_edits.md](policy_set_audit_2026-10-21/proposed_instruction_edits.md));
+  [proposed_instruction_edits.md](../completed/policy_set_audit_2026-10-21/proposed_instruction_edits.md));
   `CLAUDE.md` now lists the sixth executable, `simple_persistent_worker`.
   `CLAUDE.md`, `AGENTS.md` and `copilot-instructions.md` still repeat the same text
   and can drift; `AGENTS.md` only points to `copilot-instructions.md` and was not changed.

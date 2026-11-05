@@ -7,7 +7,7 @@ Sections 12-14 retain the previous integration reviews; sections 1-11 retain the
 **Scope:** commits `519c67d2a` and `a2c1b1f86`, the proposed integration into solve2D/solve3D, and the relevant existing probability-table and reconstruction contracts.
 **Status:** review findings and recommendations; no implementation changes made or recommendations adopted by this review.
 
-The implementation/decision record is [polar_shift_search.md](polar_shift_search.md). This document is the separately requested review record, not a second implementation plan. The related history is in [pose_marginalization.md](../planned/pose_marginalization.md), especially sections 11, 20.8–20.13 and 21.
+The implementation/decision record is [polar_shift_search.md](polar_shift_search.md). This document is the separately requested review record, not a second implementation plan. The related history is in [pose_marginalization.md](pose_marginalization.md), especially sections 11, 20.8–20.13 and 21.
 
 ## Assessment
 

@@ -466,7 +466,7 @@ into 3D. On three labeled platinum trajectories 0.65 keeps 98 to 99% of the sele
 the rejected ones through; the balanced-accuracy optimum (0.90 to 0.95, 0.92 to 0.98) rejected faint-fringe
 classes the maintainer keeps. A learned nano model ranked the classes exactly as `lattice_peak` alone does
 (held-out AUC 0.973 to 0.991) and was not promoted; the gate is the preset. The evidence is in
-`doc/implementation_notes/planned/nano_cavgs_rejection_report.md`.
+`doc/implementation_notes/completed/nano_cavgs_rejection_report.md`.
 
 The rejection of a nanoparticle time series, after `analysis2D_nano`:
 

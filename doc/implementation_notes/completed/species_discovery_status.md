@@ -15,11 +15,11 @@ Four other documents hold the detail:
   promotion, open questions), self-contained.
 - `../completed/species_discovery_report.md` (the report): the reports of
   the unattended runs.
-- `../planned/atom_bfactor_model.md`: the follow-on work on per-atom B factors and
+- `atom_bfactor_model.md`: the follow-on work on per-atom B factors and
   occupancy.
 
-> **Moved, 2026-10-25 (the atomic density model, `../planned/atomic_density_model.md` and its report
-> `../planned/atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
+> **Moved, 2026-10-25 (the atomic density model, `atomic_density_model.md` and its report
+> `atomic_density_model_report.md`).** The residual recovery of weaker atoms no longer belongs to
 > `discover_species=yes`: it runs on every `detect_atoms` run, on the present path, and its atoms are
 > the weak atoms (chain B of `_ATMS.pdb`, label and recovery fields in `_atoms.csv`). Every atom is now
 > fitted by the density model (its own intensity and width, seen through the reconstruction's halo,
@@ -27,8 +27,8 @@ Four other documents hold the detail:
 > fitted intensities, with the coordination term, and writes the `_species` files as before;
 > `min_nbrs` applies to the present path. The numbers below are those of the species work.
 
-> **Moved again, 2026-10-27 (the second run of the atomic density model, `../planned/atomic_density_model.md` section 12 and the
-> second section of `../planned/atomic_density_model_report.md`).** The species call is its own program now,
+> **Moved again, 2026-10-27 (the second run of the atomic density model, `atomic_density_model.md` section 12 and the
+> second section of `atomic_density_model_report.md`).** The species call is its own program now,
 > `detect_atomic_species` (`single_exec`, category atoms; domain `src/main/nano/simple_atomic_species.f90`). It reads
 > the products of a `detect_atoms` run (`pdbfile=` its `_ATMS.pdb`, with the `_atoms.csv` and `_model.txt` beside it)
 > and the map (`vol1`, `smpd`), and takes the species keys: `element` (one name, or a list brightest first such as

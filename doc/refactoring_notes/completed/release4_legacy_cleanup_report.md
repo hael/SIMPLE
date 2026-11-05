@@ -485,5 +485,5 @@ An independent review of the change set found seven issues. All are resolved.
   NICE fields, a squash of the NICE migrations, old statistics channels,
   compatibility parameters and module renames. These wait for the developer
   working in that area, and are listed in
-  `doc/refactoring_notes/planned/release4_legacy_cleanup_inventory.md`.
+  `doc/refactoring_notes/completed/release4_legacy_cleanup_inventory.md`.
 - **GPU.** An unreferenced debug compile script waits for the GPU work.

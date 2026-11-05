@@ -66,4 +66,4 @@ place. Local defaults to `autoscale=no` (native sampling); auto retains
 `autoscale=yes`. Explicit settings take precedence.
 
 The current source design, historical evidence and pending Linux checks are in the living
-[local-workflow plan](../../refactoring_notes/planned/refine3d_local_workflow.md).
+[completed local-workflow record](../../refactoring_notes/completed/refine3d_local_workflow.md).

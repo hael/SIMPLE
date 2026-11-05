@@ -64,10 +64,10 @@ the prior'd halves are never a noise reference (use the prior-free `_base` halve
    The loop is agnostic to the atomic species (ruling of 2026-10-26): `autorefine3D_nano` takes
    no `element` and no species key, each round's `detect_atoms` runs species-free, and the next
    prior uses `_ATMS.pdb` with its per-atom table `_atoms.csv` (the density model of
-   `atomic_density_model.md`: every strong and weak atom with its fitted intensity and width); the
+   `../completed/atomic_density_model.md`: every strong and weak atom with its fitted intensity and width); the
    model products are retained per round. The prior takes from that table the positions and the
    per-atom widths (`BFAC`) and leaves every amplitude free: its unpenalized subspace is the span of
-   the atom kernels, each at its own width (ruling 4 of `atomic_density_model.md`, 2026-10-26; the
+   the atom kernels, each at its own width (ruling 4 of `../completed/atomic_density_model.md`, 2026-10-26; the
    one-scale form pinned every atom's intensity to the last round's fit of an incomplete model).
    Species are called afterwards on the final model. A PDB without a per-atom table (a model from
    elsewhere) keeps the position-only, free-amplitude prior at one fitted width; `_species.pdb`

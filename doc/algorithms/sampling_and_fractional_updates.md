@@ -105,7 +105,7 @@ T_i = pi wsqsum_i / (2 pftsz),
 ```
 
 the particle's noise temperature, several hundred to a thousand on PfCRT
-(measured 2026-10-22, doc/implementation_notes/planned/pose_marginalization.md,
+(measured 2026-10-22, doc/implementation_notes/completed/pose_marginalization.md,
 sections 3 and 14). A draw from `n` candidates uses
 
 ```text
@@ -204,7 +204,7 @@ iteration, then anneals geometrically to `prob_beta_end` over the next five
 iterations and ends (the annealing tail); solve3D does so on its last
 stage, to 1, so the final map is weighted at the physical posterior. The
 design and its measurements are in
-`doc/implementation_notes/planned/pose_marginalization.md`.
+`doc/implementation_notes/completed/pose_marginalization.md`.
 
 ### The balanced frontier, deleted
 
