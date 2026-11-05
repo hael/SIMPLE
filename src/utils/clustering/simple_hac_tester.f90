@@ -5,7 +5,8 @@
 ! the population-weighted update (UPGMA) from the unweighted one (WPGMA). Complete linkage: a four-point
 ! case where the maximum cross distance sends the second merge elsewhere than the average, with the merge
 ! history. Threshold stop under both linkages, the mask, and nclust = n and nclust = 1 as the edges, run
-! on one object that is reconstructed in between.
+! on one object that is reconstructed in between. A minimum cluster weight merges a light outlier into its
+! nearest cluster past the count stop and leaves the clusters at or above it alone.
 module simple_hac_tester
 use simple_core_module_api, only: dp
 use simple_test_utils
@@ -25,6 +26,7 @@ contains
         call test_hac_threshold_stop()
         call test_hac_mask()
         call test_hac_edges()
+        call test_hac_min_weight()
     end subroutine run_all_hac_tests
 
     !> clusters the points x on a line into nclust groups
@@ -172,5 +174,26 @@ contains
         call assert_true(all(labels == 1) .and. i_medoids(1) == 2, 'hac reclustering one construction repeats the result')
         call hc%kill
     end subroutine test_hac_edges
+
+    !> x = 0..3, 10..13 (weight 10 each) and 100 (weight 1). Three clusters by count: {1-4}, {5-8}, {9}.
+    !! A minimum weight of 5 leaves {9} light: its mean distance to {5-8} is 88.5 against 98.5 to {1-4}, so
+    !! it joins {5-8}; then every cluster weighs at least 5 and merging stops at two, below nclust. A
+    !! minimum of 1 changes nothing
+    subroutine test_hac_min_weight()
+        real,     parameter  :: X(9) = [0., 1., 2., 3., 10., 11., 12., 13., 100.]
+        real(dp), parameter  :: W(9) = [10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 10._dp, 1._dp]
+        integer, allocatable :: i_medoids(:), labels(:)
+        type(hac)            :: hc
+        write(*,'(A)') 'test_hac_min_weight'
+        call hc%new(size(X), line_dmat(X), 'average', nclust=3, weights=W, min_weight=5._dp)
+        call hc%cluster(i_medoids, labels)
+        call assert_int(2, hc%get_nclust(), 'hac merges a light cluster past the count stop')
+        call assert_true(all(labels == [2,2,2,2,1,1,1,1,1]), 'hac joins the light outlier to its nearest cluster')
+        call hc%new(size(X), line_dmat(X), 'average', nclust=3, weights=W, min_weight=1._dp)
+        call hc%cluster(i_medoids, labels)
+        call assert_int(3, hc%get_nclust(), 'hac leaves clusters at the minimum weight alone')
+        call assert_true(all(labels == [1,1,1,1,2,2,2,2,3]), 'hac count-stop labels with a met minimum weight')
+        call hc%kill
+    end subroutine test_hac_min_weight
 
 end module simple_hac_tester

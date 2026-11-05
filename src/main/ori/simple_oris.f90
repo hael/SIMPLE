@@ -1375,8 +1375,9 @@ interface
         real, optional, intent(in)  :: ufrac
     end subroutine population_blend_weights_mass
 
-    ! Expected particles per iteration of every sampling unit under the nested equal quota of
-    ! sample4update_class (equal over groups, then over the units of a group, capped at populations)
+    ! Expected particles per iteration of every sampling unit under the nested square-root quota of
+    ! sample4update_class (over groups, then over the units of a group, in proportion to the square root
+    ! of the populations, capped at the populations)
     module subroutine class_sample_quotas( clssmp, ntarget, quotas )
         type(class_sample), intent(in)  :: clssmp(:)
         integer,            intent(in)  :: ntarget

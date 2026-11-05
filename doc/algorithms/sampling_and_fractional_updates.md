@@ -38,18 +38,25 @@ been updated, and `sampled`, the last sampling round that selected it. The
   draw, so coverage of the dataset is as even as possible.
 - **fill-in** (late 3D stages): the same, but always starting from the
   particles that have never been updated (`updatecnt = 0`).
-- **class units** (`balance=class` or `balance=cavg`; `cavg` is the default
+- **class units** (`balance=class` or `balance=cavg`; `class` is the default
   of `solve3D`, `refine3D_states`, and `classify3D_refs`): share the budget
   over sampling units built from the selected 2D classes. Each unit is one
   selected class, with its active particles ordered by their 2D score.
 
-  - Under `class`, every unit gets an equal share, capped at its population.
+  - Under `class`, every unit gets a share in proportion to the square root
+    of its population, capped at its population. Rare views are sampled more
+    often than proportional sampling would, but a class 100 times smaller is
+    visited 10 times as often per particle, not 100 times, so one small odd
+    class cannot take over the draw.
   - Under `cavg`, the class averages are first clustered into `nclust`
     groups (default 20) by average linkage on their rotation-, shift-, and
-    mirror-invariant correlation, so that a preferred view split over many
-    classes becomes one group. The budget is then shared equally over the
-    groups and, within a group, equally over its units; the remainder of a
-    split goes to the least-updated units. The group level keeps the views
+    mirror-invariant correlation between 30 and 6 A, so that a preferred view
+    split over many classes becomes one group. A group holding fewer than 2.5%
+    of the particles keeps merging into its nearest group, so outlier classes
+    do not become groups of their own. The budget is then shared over the groups
+    and, within a group, over its units, in both cases in proportion to the
+    square root of the populations; the remainder of a split goes to the
+    least-updated units. The group level keeps the views
     balanced, and the unit level keeps the classes inside a view, which may
     be different conformational states, on an equal footing.
 
@@ -74,7 +81,7 @@ decides which particles are sampled. The maps carry bias, and a sampler
 driven by them would feed that bias back; the 2D class averages are evidence
 independent of the maps.
 
-With equal quotas, visiting every particle once takes
+With unequal quotas, visiting every particle once takes
 `max over units of ceil(pop / quota)` iterations rather than
 `1 / update_frac`, because a unit larger than its share takes longer. This
 sweep length is printed in a table of the units before the first stage, and

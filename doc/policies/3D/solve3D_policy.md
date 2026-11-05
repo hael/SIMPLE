@@ -43,7 +43,7 @@ When unset, it supplies:
 - `filt_mode=nonuniform`
 - `automsk=no`
 - `gauref=yes`
-- `balance=cavg` (`class` with input volumes, which bring random classes and
+- `balance=class` (also with input volumes, which bring random classes and
   no class averages, `cavg` being rejected there; `none` for a project
   without a 2D solution)
 
@@ -130,15 +130,22 @@ sampling setup is bypassed in favor of all-active sampling.
 
 ### Sampling units
 
-Every stage runs with the run's `balance` (default `cavg`). Below the
+Every stage runs with the run's `balance` (default `class`). Below the
 full-sampling switch, `solve3D` writes the class sampling file `clssmp.bin`
 once at startup: one unit per selected 2D class, and under `cavg` each unit's
 group among `nclust` (default 20) groups of similar class averages, formed by
-average linkage on their aligned correlation, so a preferred view spread over
-many classes no longer dominates the sample. Every fractional update shares
-its target equally over the groups, then equally over the classes of a group,
-each capped at its population, then lowest `updatecnt` first inside a class.
-Under `class` every class is its own group; under `none` the stages sample the
+average linkage on their aligned correlation between 30 and 6 A, a group with
+fewer than 2.5% of the particles merged into its nearest group, so a preferred
+view spread over many classes no longer dominates the sample and an odd class
+does not become a group of its own. Every fractional update shares
+its target over the groups in proportion to the square root of their
+populations, then over the classes of a group the same way, each capped at its
+population, then lowest `updatecnt` first inside a class. Under `class` every
+class is its own group, so a rare view is sampled more often than its
+population alone would give, without one small class taking a large part of
+every draw (equal shares did: on a small membrane protein with six one-class
+groups of odd class averages, `cavg` with equal shares drew 80% of every sample
+from 18% of the particles); under `none` the stages sample the
 global lowest `updatecnt` tiers, and the file holds class units only for the
 initial greedy sample. The groups are written
 as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The
@@ -730,8 +737,10 @@ stage or later (stage 3; stage 4 when the run searches an axis, section 7); the
 run manifest follows it, so such a run can be the frozen input of
 `solve3D_addon`, which then runs that stage. Single-state schedules stopped
 before it skip this final all-particle reconstruction.
-Before a multi-state final reconstruction, a greedy missing-update pass
-(`refine=greedy`) assigns every active particle that no stage updated.
+Before the final reconstruction, single- or multi-state, a greedy
+missing-update pass (`refine=greedy`) assigns every active particle that no
+stage updated; the final reconstruction leaves out rows without an update, so
+without it a run whose sampling did not reach every particle would drop them.
 
 The final reconstruction inherits only the scientific reconstruction policy it
 needs. It preserves the parent `envfsc` request so the original-sampling half

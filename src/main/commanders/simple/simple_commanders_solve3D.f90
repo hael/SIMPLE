@@ -992,8 +992,7 @@ contains
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
         ! balance defaults once the project is read (set_balance_default):
-        ! cavg with a 2D solution (class with input volumes, which bring random
-        ! classes and no class averages to group), none without one
+        ! class with a 2D solution (input volumes bring random classes), none without one
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
@@ -1417,7 +1416,7 @@ contains
         enddo
         if( L_BENCH_GLOB ) t_phase = tic()
         if( l_run_final_rec )then
-            if( params%nstates > 1 ) call ensure_multistate_particle_assignments
+            call ensure_all_particle_assignments
             ! the shared ending: final all-particle reconstruction at original
             ! sampling, project registration, final products and reprojections;
             ! solve3D_addon reconstructs incrementally from its own particles and
@@ -2181,10 +2180,8 @@ contains
             if( cline%defined('balance') ) return
             if( l_no2D )then
                 params%balance = 'none'
-            else if( cline%defined('vol1') )then
-                params%balance = 'class'
             else
-                params%balance = 'cavg'
+                params%balance = 'class'
             endif
             call cline%set('balance', trim(params%balance))
         end subroutine set_balance_default
@@ -2222,47 +2219,54 @@ contains
             if( nactive < 1 ) THROW_HARD('No active particles selected in ptcl2D for solve3D')
         end subroutine reset_ptcl3D_from_ptcl2D_selection
 
-        subroutine ensure_multistate_particle_assignments
+        !> every active particle carries a pose (and a label) before the final reconstruction, which leaves out
+        !! the rows no stage updated: a greedy pass against the last references assigns the rows the stages missed
+        subroutine ensure_all_particle_assignments
             integer :: nactive, nupdated, nmissing
-            call read_multistate_update_coverage(nactive, nupdated, nmissing)
+            call read_update_coverage(nactive, nupdated, nmissing)
             if( nactive < 1 )then
-                THROW_HARD('multistate solve3D has no active particles after staged refinement')
+                THROW_HARD('solve3D has no active particles after staged refinement')
             endif
             if( nmissing > 0 )then
-                call run_multistate_missing_update(nmissing, nactive)
-                call read_multistate_update_coverage(nactive, nupdated, nmissing)
+                call run_missing_update(nmissing, nactive)
+                call read_update_coverage(nactive, nupdated, nmissing)
                 if( nmissing > 0 )then
-                    THROW_HARD('multistate solve3D final missing-update pass failed to update every active particle')
+                    THROW_HARD('solve3D final missing-update pass failed to update every active particle')
                 endif
             endif
-        end subroutine ensure_multistate_particle_assignments
+        end subroutine ensure_all_particle_assignments
 
-        subroutine read_multistate_update_coverage( nactive, nupdated, nmissing )
+        subroutine read_update_coverage( nactive, nupdated, nmissing )
             integer, intent(out) :: nactive, nupdated, nmissing
             integer, allocatable :: states(:), updatecnts(:)
             call spproj%read_segment('ptcl3D', params%projfile)
-            if( .not. spproj%os_ptcl3D%isthere('updatecnt') )then
-                THROW_HARD('multistate solve3D requires post-label particle assignments before final reconstruction')
+            states  = spproj%os_ptcl3D%get_all_asint('state')
+            nactive = count(states > 0)
+            if( spproj%os_ptcl3D%isthere('updatecnt') )then
+                updatecnts = spproj%os_ptcl3D%get_all_asint('updatecnt')
+                nupdated   = count(states > 0 .and. updatecnts > 0)
+            else
+                if( params%nstates > 1 ) &
+                    &THROW_HARD('multistate solve3D requires post-label particle assignments before final reconstruction')
+                nupdated = 0
             endif
-            states     = spproj%os_ptcl3D%get_all_asint('state')
-            updatecnts = spproj%os_ptcl3D%get_all_asint('updatecnt')
-            nactive    = count(states > 0)
-            nupdated   = count(states > 0 .and. updatecnts > 0)
-            nmissing   = nactive - nupdated
+            nmissing = nactive - nupdated
+            ! single state without any update: the final reconstruction takes every active row (sample4rec)
+            if( params%nstates == 1 .and. nupdated == 0 ) nmissing = 0
             write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') &
-                &'>>> SOLVE3D MULTISTATE ASSIGNMENT COVERAGE NSTATES=', params%nstates, &
+                &'>>> SOLVE3D ASSIGNMENT COVERAGE NSTATES=', params%nstates, &
                 &' UPDATED/ACTIVE/MISSING: ', nupdated, '/', nactive, '/', nmissing
             if( allocated(states)     ) deallocate(states)
             if( allocated(updatecnts) ) deallocate(updatecnts)
-        end subroutine read_multistate_update_coverage
+        end subroutine read_update_coverage
 
-        subroutine run_multistate_missing_update( nmissing, nactive )
+        subroutine run_missing_update( nmissing, nactive )
             integer, intent(in) :: nmissing, nactive
             type(cmdline) :: cline_missing
             integer       :: iter_missing
             iter_missing = next_refine3D_iteration()
             write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') &
-                &'>>> SOLVE3D MULTISTATE FINAL MISSING-UPDATE GREEDY ASSIGNMENT NSTATES=', params%nstates, &
+                &'>>> SOLVE3D FINAL MISSING-UPDATE GREEDY ASSIGNMENT NSTATES=', params%nstates, &
                 &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
             call flush(logfhandle)
             cline_missing = cline_refine3D
@@ -2284,7 +2288,7 @@ contains
             call cline_missing%delete('endit')
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
-        end subroutine run_multistate_missing_update
+        end subroutine run_missing_update
 
         integer function next_refine3D_iteration() result(iter)
             iter = 1

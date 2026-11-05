@@ -127,7 +127,7 @@ The runs keep the order of arrival:
 
 - **The base is the start of the session.** Session drift, and views or
   classes that are rare early in the data, carry into the base map.
-- **View imbalance within a run** is left to the sampler: `balance=cavg`
+- **View imbalance within a run** is left to the sampler: `balance=class`
   evens out the views among the particles a run has. Views a cohort lacks come
   from the frozen term of its add-on.
 - **Each run reads its own block of stack files.**

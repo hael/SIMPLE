@@ -1,8 +1,11 @@
 !@descr: agglomerative hierarchical clustering of a distance matrix, average (UPGMA) or complete linkage
 ! Merging stops at a cluster count or at a distance threshold (exactly one is given). Labels by decreasing
 ! population (ties by smallest member index); medoid = minimal summed distance. Entries outside the
-! optional mask never merge and stay singletons. The merge history (the two clusters joined, named by
-! their smallest member index, and the linkage distance) is kept for callers that report it.
+! optional mask never merge and stay singletons. With per-entry weights and a minimum weight, merging
+! continues past the cluster count while a cluster lighter than the minimum remains, each merge the
+! closest pair that holds a light cluster, so outliers join their nearest cluster instead of staying apart.
+! The merge history (the two clusters joined, named by their smallest member index, and the linkage
+! distance) is kept for callers that report it.
 module simple_hac
 use simple_core_module_api, only: dp, simple_exception
 implicit none
@@ -18,6 +21,7 @@ type hac
     integer               :: nclust_out = 0       !< nr of clusters the last cluster call formed
     integer               :: nmerge     = 0       !< nr of merges of the last cluster call
     real(dp)              :: thres      = 0._dp   !< largest linkage distance that merges (threshold stop)
+    real(dp)              :: wmin       = 0._dp   !< minimum cluster weight under the count stop (0: none)
     logical               :: l_complete = .false. !< complete linkage, else average
     real(dp), allocatable :: D(:,:)               !< private distance matrix
     real(dp), allocatable :: dlink(:,:)           !< linkage distance between clusters (active rows/columns)
@@ -25,6 +29,8 @@ type hac
     integer,  allocatable :: csize(:)             !< population of the cluster named by an entry
     logical,  allocatable :: active(:)            !< entry names a cluster that still exists
     logical,  allocatable :: incl(:)              !< entry may merge (the mask)
+    real(dp), allocatable :: w(:)                 !< weight of every entry (1 without weights)
+    real(dp), allocatable :: cmass(:)             !< summed weight of the cluster named by an entry
     integer,  allocatable :: hpairs(:,:)          !< (2,N-1) clusters joined at each merge, smaller name first
     real(dp), allocatable :: heights(:)           !< (N-1) linkage distance of each merge
     logical               :: exists = .false.     !< to indicate existence
@@ -44,8 +50,9 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor; linkage is 'average' or 'complete', and exactly one of nclust and thres
-    !!          ends the merging
-    subroutine new( self, N, D, linkage, nclust, thres, mask )
+    !!          ends the merging; weights and min_weight (both or neither, count stop only) keep merging
+    !!          past nclust until every unmasked cluster weighs at least min_weight
+    subroutine new( self, N, D, linkage, nclust, thres, mask, weights, min_weight )
         class(hac),         intent(inout) :: self
         integer,            intent(in)    :: N       ! # data entries
         real(dp),           intent(in)    :: D(N,N)  ! distance matrix
@@ -53,6 +60,8 @@ contains
         integer,  optional, intent(in)    :: nclust  ! # clusters to form
         real(dp), optional, intent(in)    :: thres   ! largest linkage distance that merges
         logical,  optional, intent(in)    :: mask(N) ! .false. entries stay singletons
+        real(dp), optional, intent(in)    :: weights(N)  ! weight of every entry
+        real(dp), optional, intent(in)    :: min_weight  ! minimum cluster weight
         call self%kill
         if( N < 1 ) THROW_HARD('N must be >= 1; new')
         if( present(nclust) .eqv. present(thres) ) THROW_HARD('give exactly one of nclust and thres; new')
@@ -72,9 +81,18 @@ contains
             self%nclust = 0
             self%thres  = thres
         endif
+        if( present(weights) .neqv. present(min_weight) ) THROW_HARD('give both or neither of weights and min_weight; new')
         allocate(self%D(N,N), source=D)
-        allocate(self%dlink(N,N), self%rep(N), self%csize(N), self%active(N), self%incl(N))
+        allocate(self%dlink(N,N), self%rep(N), self%csize(N), self%active(N), self%incl(N), self%cmass(N))
         allocate(self%hpairs(2,max(1,N-1)), self%heights(max(1,N-1)))
+        allocate(self%w(N), source=1._dp)
+        self%wmin = 0._dp
+        if( present(weights) )then
+            if( self%nclust == 0 ) THROW_HARD('a minimum cluster weight needs the count stop (nclust); new')
+            if( any(weights < 0._dp) ) THROW_HARD('weights must be >= 0; new')
+            self%w    = weights
+            self%wmin = min_weight
+        endif
         self%incl = .true.
         if( present(mask) ) self%incl = mask
         self%exists = .true.
@@ -97,23 +115,36 @@ contains
 
     !>  \brief  agglomerates from singletons: the closest pair of active, unmasked clusters merges while
     !!          more than nclust clusters remain (count stop) or while its distance is <= thres
-    !!          (threshold stop). Clusters are a union-find flattened into rep: every entry names its
+    !!          (threshold stop). Under the count stop with a minimum weight, merging then continues
+    !!          while an unmasked cluster is lighter than the minimum, each time the closest pair that
+    !!          holds a light cluster. Clusters are a union-find flattened into rep: every entry names its
     !!          cluster's smallest member index, and a merge renames the larger name to the smaller.
     subroutine merge_clusters( self )
         class(hac), intent(inout) :: self
+        logical, allocatable :: l_light(:)
         real(dp) :: dmin
         integer  :: nactive, i, j, k, imin, jmin
+        logical  :: l_floor
         self%dlink  = self%D
         self%rep    = [(i, i=1,self%N)]
         self%csize  = 1
+        self%cmass  = self%w
         self%active = .true.
         self%nmerge = 0
         nactive     = self%N
+        allocate(l_light(self%N), source=.false.)
         do
+            ! past the count stop only the merges that lift a light cluster remain
+            l_floor = .false.
             if( self%nclust > 0 )then
-                if( nactive <= self%nclust ) exit
+                if( nactive <= self%nclust )then
+                    l_light = self%active .and. self%incl .and. self%cmass < self%wmin
+                    if( .not. any(l_light) ) exit
+                    l_floor = .true.
+                endif
             endif
-            ! closest pair of active, unmasked clusters, the first one on a tie (j, then i < j)
+            ! closest pair of active, unmasked clusters (holding a light one past the count stop),
+            ! the first one on a tie (j, then i < j)
             dmin = huge(dmin)
             imin = 0
             jmin = 0
@@ -123,6 +154,9 @@ contains
                 do i = 1, j - 1
                     if( .not. self%active(i) ) cycle
                     if( .not. self%incl(i)   ) cycle
+                    if( l_floor )then
+                        if( .not. (l_light(i) .or. l_light(j)) ) cycle
+                    endif
                     if( self%dlink(i,j) < dmin )then
                         dmin = self%dlink(i,j)
                         imin = i
@@ -147,6 +181,7 @@ contains
                 self%dlink(k,imin) = self%dlink(imin,k)
             enddo
             self%csize(imin)  = self%csize(imin) + self%csize(jmin)
+            self%cmass(imin)  = self%cmass(imin) + self%cmass(jmin)
             self%active(jmin) = .false.
             where( self%rep == jmin ) self%rep = imin
             nactive     = nactive - 1
@@ -231,12 +266,14 @@ contains
     subroutine kill( self )
         class(hac), intent(inout) :: self
         if( self%exists )then
-            deallocate(self%D, self%dlink, self%rep, self%csize, self%active, self%incl, self%hpairs, self%heights)
+            deallocate(self%D, self%dlink, self%rep, self%csize, self%active, self%incl, self%hpairs, self%heights, &
+                &self%w, self%cmass)
             self%N          = 0
             self%nclust     = 0
             self%nclust_out = 0
             self%nmerge     = 0
             self%thres      = 0._dp
+            self%wmin       = 0._dp
             self%l_complete = .false.
             self%exists     = .false.
         endif

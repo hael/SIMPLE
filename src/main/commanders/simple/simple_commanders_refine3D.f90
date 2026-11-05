@@ -762,7 +762,7 @@ contains
         if( .not. cline%defined('filt_mode')     ) call cline%set('filt_mode', 'nonuniform_lpset')
         call states_ctrl%resolve_states(cline)
         ! hard defaults (balance falls back to none without selected class averages)
-        call cline%set('balance',        'cavg')
+        call cline%set('balance',        'class')
         call cline%set('greedy_sampling', 'no')
         call cline%set('frac_best',       1.0)
         call cline%set('trail_rec',     'yes')
@@ -1294,7 +1294,7 @@ contains
         integer :: nptcls_eff, iter_glob, state
         call cline%set('prg', 'classify3D_refs')
         ! hard defaults (balance falls back to none without selected class averages)
-        call cline%set('balance',         'cavg')
+        call cline%set('balance',         'class')
         call cline%set('greedy_sampling', 'no')
         call cline%set('frac_best',       1.0)
         call cline%set('trail_rec',       'yes')

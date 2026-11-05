@@ -14,13 +14,16 @@ private
 
 contains
 
-    subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref, nclust_max )
+    !> nclust returns the number of clusters formed; with avglink, weights and min_weight (both or neither)
+    !! merge clusters lighter than min_weight into their nearest cluster, so fewer than nclust may result
+    subroutine cluster_dmat( dmat, algorithm, nclust, i_medoids, labels, ap_pref, nclust_max, weights, min_weight )
         real,                 intent(in)    :: dmat(:,:)
         character(len=*),     intent(in)    :: algorithm
         integer,              intent(inout) :: nclust
         integer, allocatable, intent(inout) :: i_medoids(:), labels(:)
         real,    optional,    intent(in)    :: ap_pref
         integer, optional,    intent(in)    :: nclust_max
+        real,    optional,    intent(in)    :: weights(:), min_weight
         real,    allocatable :: smat(:,:)
         type(kmedoids)       :: kmed
         type(aff_prop)       :: aprop
@@ -45,8 +48,15 @@ contains
                 call merge_if_necessary
             case('avglink')
                 write(logfhandle,'(A,I0,A)') '>>> CLUSTERING DISTANCE MATRIX WITH AVERAGE LINKAGE INTO ', nclust, ' CLUSTERS'
-                call avglink%new(n, real(dmat,dp), 'average', nclust=nclust)
+                if( present(weights) .and. present(min_weight) )then
+                    if( size(weights) /= n ) THROW_HARD('weights do not match the distance matrix; cluster_dmat')
+                    call avglink%new(n, real(dmat,dp), 'average', nclust=nclust, weights=real(weights,dp), &
+                        &min_weight=real(min_weight,dp))
+                else
+                    call avglink%new(n, real(dmat,dp), 'average', nclust=nclust)
+                endif
                 call avglink%cluster(i_medoids, labels)
+                nclust = avglink%get_nclust()
                 call avglink%kill
             case('kmed')
                 if( allocated(labels) ) deallocate(labels)

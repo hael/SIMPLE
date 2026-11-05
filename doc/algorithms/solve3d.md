@@ -96,7 +96,7 @@ gaining (`prob_beta_end=1`, the annealing tail of
 gives `update_frac = nsample * nstates / N_active`, capped at 0.9 so that
 fractional updates stay on; if `nsample` exceeds 90 percent of the active set,
 the run switches to full updates and disables trailing. The subset is drawn
-over sampling units built from the selected 2D class averages (`balance=cavg`
+over sampling units built from the selected 2D class averages (`balance=class`
 by default; see [sampling](sampling_and_fractional_updates.md)). Until stage 5
 (stage 4 for independent multi-state runs), each iteration takes the
 top-scoring particles of every unit by their 2D score, so the early stages

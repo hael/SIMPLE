@@ -34,8 +34,10 @@ Important details:
 That same command writes the sampling units to `CLASS_SAMPLING_FILE`
 (`clssmp.bin`, `make_class_samples` in `simple_view_partition_sampling`): one
 unit per selected 2D class with its `group` (0 under `balance=class`, the
-class-average group under `balance=cavg`; class units under `none`, used only
-by the initial draw), and prints the unit table with the expected visits per
+class-average group under `balance=cavg`, formed by average linkage at
+`hp=30`/`lp=6` with groups below 2.5% of the particles merged into their
+nearest group; class units under `none`, used only by the initial draw), and
+prints the unit table with the expected visits per
 particle before the first stage. Stages only read the file. Nothing in this
 layer uses 3D maps, poses or projection directions.
 
@@ -83,8 +85,9 @@ and reconstruction behavior.
 
 Key routines:
 
-- `sample4update_class`: nested equal quota over the units of `CLASS_SAMPLING_FILE`
-  (equal over groups, then over the units of a group, then lowest `updatecnt`);
+- `sample4update_class`: nested square-root quota over the units of `CLASS_SAMPLING_FILE`
+  (over groups, then over the units of a group, in proportion to the square root of the
+  populations and capped at them, then lowest `updatecnt`);
   `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
   draws one full sweep takes (`max ceil(pop/quota)`)
 - `sample4update_rescore`: the latest round again, `sampled`/`updatecnt` advanced

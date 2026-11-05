@@ -116,14 +116,16 @@ contains
         endif
         call prg%add_input(UI_SRCH, 'balance', 'multi', 'Fractional-update sampling units', &
         &'Units every fractional-update sample is balanced over: none draws globally from the lowest update-count '//&
-        &'particles; class gives every selected 2D class the same share; cavg first gives every group of similar '//&
-        &'class averages the same share, then every class inside a group, so a preferred view spread over many '//&
-        &'classes no longer dominates the sample and classes of one view keep equal footing(none|class|cavg){cavg}', &
-        &'', .false., 'cavg', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
+        &'particles; class shares every sample over the selected 2D classes in proportion to the square root of '//&
+        &'their populations, so rare views are sampled more often without one small class dominating; cavg first '//&
+        &'shares it the same way over groups of similar class averages, then over the classes inside a '//&
+        &'group(none|class|cavg){class}', &
+        &'', .false., 'class', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
         &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         call prg%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
         &'Number of groups of similar class averages formed with balance=cavg, by average linkage on their aligned '//&
-        &'correlation; with no more selected classes than this, every class is its own group{20}', '# groups{20}', &
+        &'correlation; a group with fewer than 2.5% of the particles joins its nearest group; with no more selected '//&
+        &'classes than this, none that small, every class is its own group{20}', '# groups{20}', &
         &.false., 20., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('balance', [character(len=4) :: 'cavg']))
         call prg%add_input(UI_SRCH, 'nstages', 'num', 'Last solve3D stage to run',&
@@ -261,7 +263,7 @@ contains
         &'Units every fractional-update sample of the searched particles is balanced over (see solve3D); '//&
         &'default is the frozen run''s value; none needs no 2D solution in the superset project, class and cavg '//&
         &'need its 2D classes(none|class|cavg)', &
-        &'', .false., 'cavg', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
+        &'', .false., 'class', group="search", choices=ui_choices([character(len=5) :: 'none', 'class', 'cavg']), &
         &visibility=UI_VIS_ADVANCED)
         call solve3D_addon%add_input(UI_SRCH, 'nclust', 'num', 'Number of class-average groups', &
         &'Number of groups of similar class averages formed with balance=cavg; default is the frozen run''s value', &

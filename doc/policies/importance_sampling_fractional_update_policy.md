@@ -252,20 +252,20 @@ top-ranked fraction. The outer particle target remains the fixed
 - if fractional update is off, select all active particles
 - `none`: no sampling units; update-count-biased sampling over the whole range
   (`sample4update_cnt`, lowest `updatecnt` tiers first)
-- `class` and `cavg`: the nested equal quota of `sample4update_class` over the
+- `class` and `cavg`: the nested square-root quota of `sample4update_class` over the
   sampling units of the class sampling file `clssmp.bin` (below)
 - with `cohort_sampling=yes` (an internal flag `refine3D_states` sets on its
   `prob_neigh` frequency blocks) the stage draws by the rule above at its first
   iteration (`which_iter == startit`) and calls `sample4update_rescore` at the
   others (see "Cohort schedule")
 
-`cavg` is the default wherever balanced sampling is the workflow default
+`class` is the default wherever balanced sampling is the workflow default
 (`solve3D`, `refine3D_states`, `classify3D_refs`);
 `refine3D`, `refine3D_auto` and external-reference pose initialization use
 `none`. `refine3D_states` and `classify3D_refs` fall back to `none` when the
 project carries no selected class averages. `solve3D` with input volumes
-(`vol1`) defaults to `class` over the random classes it assigns and rejects
-`cavg`, since those classes have no averages.
+(`vol1`) samples over the random classes it assigns and rejects `cavg`, since
+those classes have no averages.
 
 ### Sampling units and the nested quota
 
@@ -276,12 +276,23 @@ integer `group`:
 
 - `class`: `group = 0`, every unit is its own group
 - `cavg`: the selected class averages are aligned pairwise under their own
-  parameters (`objfun=cc`, no CTF, `lp=6`, `trs=10`, as `cluster_cavgs`) and
-  their in-plane, shift and mirror invariant correlation is clustered into
-  `nclust` groups (default 20) by average linkage; with no more selected
-  classes than `nclust` every class is its own group. Average linkage merges
-  the most similar class averages first, so a tight preferred view becomes one
-  group however many classes 2D classification split it into. The groups are
+  parameters (`objfun=cc`, no CTF, `hp=30`, `lp=6`, `trs=10`) and their
+  in-plane, shift and mirror invariant correlation is clustered into `nclust`
+  groups (default 20) by average linkage; with no more selected classes than
+  `nclust` every class is its own group. Average linkage merges the most
+  similar class averages first, so a tight preferred view becomes one group
+  however many classes 2D classification split it into. Cut at a fixed count
+  it also leaves the outliers, odd or junk classes far from everything, as
+  groups of their own, so a group holding fewer than 2.5% of the particles in
+  the units (`VIEW_PARTITION_MIN_FRAC`) keeps merging into its nearest group by
+  the same linkage (`hac` with weights and a minimum weight), and fewer than
+  `nclust` groups may result; with no more classes than `nclust` the classes
+  below that size are merged the same way. The 30 A high-pass keeps the
+  overall outline out of the comparison: for a small protein in a micelle or
+  nanodisc the outline dominates the low frequencies and grouped side views
+  against top views rather than by the protein. `cls_expansion` groups its
+  parent classes with the same alignment and linkage but without the minimum
+  group size. The groups are
   written as `view_partitionNN_cavgs` stacks with the class-to-group table
   `view_partition.txt` for inspection; the project's `cluster` labels are not
   used or changed. On local execution the clustering in `solve3D` takes the
@@ -289,17 +300,23 @@ integer `group`:
 
 The quota of an iteration, `nint(update_frac * active)`, is nested:
 
-1. equal over groups: every group gets one more particle per round until the
-   target is reached, capped at its population (the total may exceed the
-   target by fewer particles than there are groups);
-2. equal over the units of a group, capped at their populations; the remainder
-   of the equal split goes to the units whose particles have the lowest mean
-   `updatecnt` (ties: larger population, then lower class index), which the
-   project state fixes, so the master's draw and every partition's
-   reproduction agree on the quotas and the remainder rotates over iterations;
+1. over groups in proportion to the square root of their populations, each
+   capped at its population, the excess shared again over the others;
+2. over the units of a group the same way (`class_sample_quotas` gives the
+   real-valued quotas); a unit draws the floor of its quota, and the
+   particles left to reach the target go one each to the units with a
+   fractional quota whose particles have the lowest mean `updatecnt` (ties:
+   larger population, then lower class index), which the project state fixes,
+   so the master's draw and every partition's reproduction agree on the
+   quotas and the remainder rotates over iterations;
 3. inside a unit, lowest `updatecnt` first, drawn uniformly within a tier.
 
-Under `class` the first level is the whole rule, as before. The nested level
+Under `class` the first level is the whole rule. The square root sits between
+proportional sampling (`none`, which leaves the view skew of the data) and
+equal shares, which correct it fully but hand a small class, often an odd or
+junk one, many times its share: a unit's visits per particle relative to
+another's are the inverse square root of their population ratio, so a class
+100 times smaller is visited 10 times as often, not 100 times. The nested level
 exists because several conformational states can hide inside one view: 2D
 classification separates them into classes that average linkage merges into
 one group first. The group level keeps the view balance, the unit level keeps
@@ -326,7 +343,7 @@ particles that are inactive in `ptcl3D` out of their units.
 
 ### Coverage planning and report
 
-With equal quotas the iterations that visit every particle once are
+With unequal quotas the iterations that visit every particle once are
 `sweep = max over units of ceil(pop / quota)`, not `ceil(1 / update_frac)`:
 a unit larger than its share takes longer. `class_sample_sweep` computes it
 from the unit table with the expected (real-valued) quotas of
@@ -373,7 +390,7 @@ scaled by `u/f` and the chain by `(1−u)·N/M`, with current-map coefficient
 `u` (`u = f = n/N` per state unless `ufrac_trec`). Holding one cohort for `k`
 iterations therefore gives it a cumulative coefficient `1 − (1−u)^k` while
 earlier cohorts fade geometrically (covered by the cohort case of the
-`trailing_reconstruction_blend` sub-suite). The equal quota biases the
+`trailing_reconstruction_blend` sub-suite). The quota biases the
 composition of the selected partial reconstruction towards about
 `min(pop, quota)` particles per unit per iteration; the state-level blend
 computes no per-unit weight, so the composition moves with `nsample`, `nclust`
