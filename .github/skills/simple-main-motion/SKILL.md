@@ -10,9 +10,9 @@ micrograph row), `simple_motion_correct` (frames, gain, defects, scaling, global
 alignment, sums), `motion_align_hybrid`, `motion_patched`, `motion_model` (the `.mmodel`),
 `motion_correct_utils` (gain, EER fractions, polynomial basis), the gain-flip analysis and
 `motion_align_nano` (SINGLE time series). `preprocess/` holds `ptcl_extractor` (particles from the
-micrograph, or from the movie through the `.mmodel`), `pspec_thumb_iter` and `pspecs` (class-average
-spectra for `strategies/search/simple_strategy2D_utils`, ruled to move next to it);
-`volume/simple_dose_series_manifest` (`refine_motion_model`) is ruled to move here. Scheduling, gain
+micrograph, or from the movie through the `.mmodel`) and `pspec_thumb_iter`. `motion/` also holds
+`simple_dose_series_manifest` (the dose-series half maps of `refine_motion_model`, `dose_series.txt`;
+its tests run in `unit_reconstruction suite=dose_series_manifest`). Scheduling, gain
 preparation and project writes belong to the strategies in `strategies/parallelization` and the
 stream's preprocessing stage; CTF to `ctf/`; box files to `pick/`.
 
@@ -36,8 +36,8 @@ Silent ones first: nothing reports these.
 - Offsets are frame displacements: frames are shifted by their negative, the extractor windows at
   `corner - offset`. `mcconvention=simple` refers them to the central frame; `first`/`relion`
   re-reference to frame 1 before the frames are shifted.
-- `nframesgrp` is for time series: elsewhere the temporary grouped movie is recorded as the movie
-  (ruled for fixing: stop outside time series).
+- `nframesgrp` is for time series: `motion_correct_iter%iterate` stops on it otherwise (the temporary
+  grouped movie would be recorded as the movie).
 - `forctf` is the plain (1/nframes) sum without dose weights, made before dose weighting touches the
   frame buffers, and transient (deleted after the CTF fit); `intg` uses the alignment frame weights
   and, with `total_dose`, dose weights. `apply_dose_weighing(..., mode='GG')` is called in both sums
@@ -53,8 +53,9 @@ Silent ones first: nothing reports these.
 - Extractor: `init_mic`; `init_mov` falls back to `init_mic` with only a warning when `mcmodel` is
   missing; `init_model` (`refine_motion_model`) stops. Coordinates are box-file corners on the
   `intg` grid; centre = corner + box/2, +1 for `pix2polycoords`; motion is referred to the model's
-  `fixed_frame` (central), so `extractfrommov=yes` assumes `mcconvention=simple` (`first`/`relion`
-  register `intg` to frame 1; ruled for fixing: stop on them).
+  `fixed_frame` (central), so `extractfrommov=yes` needs `mcconvention=simple`: motion correction records
+  the convention on the micrograph row and `init_mov` stops on `first`/`relion` (which register `intg` to
+  frame 1); a row of an earlier run without the key passes.
   `local_polynomial = .false.` in the extractor is an experiment to keep. Per-thread buffers are
   sized `nthr_glob`: call `extract_particles*` outside a parallel region. `post_process` negates for
   `pcontrast=black`, removes the ramp, normalises noise.

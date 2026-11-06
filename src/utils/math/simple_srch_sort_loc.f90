@@ -5,15 +5,15 @@ use simple_error, only: simple_exception
 implicit none
 
 interface find
-    module procedure find_1, find_2
+    module procedure find_real, find_int
 end interface
 
 interface hpsort
-    module procedure hpsort_1, hpsort_2, hpsort_3, hpsort_4, hpsort_5, hpsort_6
+    module procedure hpsort_real_inds, hpsort_int, hpsort_int_cmp, hpsort_real, hpsort_real_real, hpsort_int_inds
 end interface
 
 interface locate
-   module procedure locate_1, locate_2
+   module procedure locate_real, locate_int
 end interface
 
 interface reverse
@@ -21,7 +21,7 @@ interface reverse
 end interface
 
 interface reorder
-    module procedure reorder_1, reorder_2
+    module procedure reorder_real, reorder_int
 end interface
 
 interface selec
@@ -31,13 +31,13 @@ end interface
 contains
 
     !>   for finding closest element in an ordered list
-    pure subroutine find_1( arr, n, x, j, dist1 )
+    pure subroutine find_real( arr, n, x, j, dist1 )
         integer, intent(in)  :: n           !< size of list
         real,    intent(in)  :: arr(n), x   !< list and search value
         real,    intent(out) :: dist1
         integer, intent(out) :: j
         real                 :: dist2
-        j = max(1,locate_1( arr, n, x ))
+        j = max(1,locate_real( arr, n, x ))
         dist1 = arr(j)-x
         if( j < n ) then
             dist2 = arr(j+1)-x
@@ -46,16 +46,16 @@ contains
                 dist1 = dist2
             endif
         endif
-    end subroutine find_1
+    end subroutine find_real
 
     !>   for finding closest element in an ordered list
-    pure subroutine find_2( arr, n, x, j, dist1 )
+    pure subroutine find_int( arr, n, x, j, dist1 )
         integer, intent(in)  :: n         !< size of list
         integer, intent(in)  :: arr(n), x !< list and search value
         integer, intent(out) :: dist1
         integer, intent(out) :: j
         integer              :: dist2
-        j = max(1,locate_2( arr, n, x ))
+        j = max(1,locate_int( arr, n, x ))
         dist1 = arr(j)-x
         if( j < n ) then
             dist2 = arr(j+1)-x
@@ -64,17 +64,17 @@ contains
                 dist1 = dist2
             endif
         endif
-    end subroutine find_2
+    end subroutine find_int
 
     ! heapsort from numerical recipes (largest last)
-    subroutine hpsort_1( rarr, iarr )
+    subroutine hpsort_real_inds( rarr, iarr )
         real,    intent(inout) :: rarr(:)
         integer, intent(inout) :: iarr(:)
         integer :: i, ir, j, l, ia, n
         real    :: ra
         n = size(rarr)
         if( n /= size(iarr) )&
-        &call simple_exception('nonconforming array sizes; hpsort_1', __FILENAME__ , __LINE__)
+        &call simple_exception('nonconforming array sizes; hpsort_real_inds', __FILENAME__ , __LINE__)
         if( n < 2 ) return
         l  = n/2+1
         ir = n
@@ -113,10 +113,10 @@ contains
                 iarr(i) = ia
             end do
         end do
-    end subroutine hpsort_1
+    end subroutine hpsort_real_inds
 
     ! heapsort from numerical recepies (largest last)
-    subroutine hpsort_2( iarr )
+    subroutine hpsort_int( iarr )
         integer, intent(inout) :: iarr(:)
         integer :: i, ir, j, l, ra, n
         n = size(iarr)
@@ -152,10 +152,10 @@ contains
                 iarr(i) = ra
             end do
         end do
-    end subroutine hpsort_2
+    end subroutine hpsort_int
 
     ! heapsort from numerical recepies (largest last)
-    subroutine hpsort_3( iarr, p1_lt_p2 )
+    subroutine hpsort_int_cmp( iarr, p1_lt_p2 )
         integer, intent(inout) :: iarr(:)
         interface
             function p1_lt_p2( p1, p2 ) result( val )
@@ -197,10 +197,10 @@ contains
                 iarr(i) = ra
             end do
         end do
-    end subroutine hpsort_3
+    end subroutine hpsort_int_cmp
 
     ! heapsort from numerical recepies (largest last)
-    subroutine hpsort_4( rarr )
+    subroutine hpsort_real( rarr )
         real, intent(inout) :: rarr(:)
         integer :: i, ir, j, l, n
         real    :: ra
@@ -237,16 +237,16 @@ contains
                 rarr(i) = ra
             end do
         end do
-    end subroutine hpsort_4
+    end subroutine hpsort_real
 
     ! heapsort from numerical recepies (largest last)
-    subroutine hpsort_5( rarr, rarr2 )
+    subroutine hpsort_real_real( rarr, rarr2 )
         real, intent(inout) :: rarr(:), rarr2(:)
         integer :: i, ir, j, l, n
         real    :: ra, ra2
         n = size(rarr)
         if( n /= size(rarr2) )&
-        &call simple_exception('nonconforming array sizes; hpsort_5', __FILENAME__ , __LINE__)
+        &call simple_exception('nonconforming array sizes; hpsort_real_real', __FILENAME__ , __LINE__)
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -285,15 +285,15 @@ contains
                 rarr2(i) = ra2
             end do
         end do
-    end subroutine hpsort_5
+    end subroutine hpsort_real_real
 
     ! heapsort from numerical recipes (largest last)
-    subroutine hpsort_6( arr, iarr )
+    subroutine hpsort_int_inds( arr, iarr )
         integer, intent(inout) :: arr(:), iarr(:)
         integer :: i, ir, j, l, ia, n, ra
         n = size(arr)
         if( n /= size(iarr) )&
-        &call simple_exception('nonconforming array sizes; hpsort_6', __FILENAME__ , __LINE__)
+        &call simple_exception('nonconforming array sizes; hpsort_int_inds', __FILENAME__ , __LINE__)
         if( n < 2 ) return
         l  = n/2+1
         ir = n
@@ -332,12 +332,12 @@ contains
                 iarr(i) = ia
             end do
         end do
-    end subroutine hpsort_6
+    end subroutine hpsort_int_inds
 
     !>   given an array arr(1:n), and given value x, locate returns a value j such that x is
     !!         between arr(j) and arr(j+1). arr(1:n) must be monotonic, either increasing or decreasing.
     !!         j=0 or j=n is returned to indicate that x is out of range, from numerical recepies
-    pure function locate_1( arr, n, x ) result( j )
+    pure function locate_real( arr, n, x ) result( j )
         integer, intent(in) :: n
         real, intent(in)    :: arr(n), x
         integer             :: jl, jm, ju, j
@@ -358,12 +358,12 @@ contains
         else
             j = jl
         endif
-    end function locate_1
+    end function locate_real
 
     !>   given an array arr(1:n), and given value x, locate returns a value j such that x is
     ! between arr(j) and arr(j+1). arr(1:n) must be monotonic, either increasing or decreasing.
     ! j=0 or j=n is returned to indicate that x is out of range, from numerical recepies
-    pure function locate_2( arr, n, x ) result( j )
+    pure function locate_int( arr, n, x ) result( j )
         integer, intent(in) :: n             !< size of list
         integer, intent(in) :: arr(n), x     !< list and search value
         integer             :: jl, jm, ju, j
@@ -384,7 +384,7 @@ contains
         else
             j = jl
         endif
-    end function locate_2
+    end function locate_int
 
     function maxnloc( rarr, n ) result( loc )
         real,    intent(in) :: rarr(:)
@@ -784,7 +784,7 @@ contains
         inds = pack(inds, mask=mask)
     end function mask2inds
 
-    subroutine reorder_1( arr, order )
+    subroutine reorder_real( arr, order )
         real,    intent(inout) :: arr(:)
         integer, intent(in)    :: order(:)
         real, allocatable :: tmp(:)
@@ -798,9 +798,9 @@ contains
         end do
         arr = tmp
         deallocate(tmp)
-    end subroutine reorder_1
+    end subroutine reorder_real
 
-    subroutine reorder_2( arr, order )
+    subroutine reorder_int( arr, order )
         integer, intent(inout) :: arr(:)
         integer, intent(in)    :: order(:)
         integer, allocatable :: tmp(:)
@@ -814,7 +814,7 @@ contains
         end do
         arr = tmp
         deallocate(tmp)
-    end subroutine reorder_2
+    end subroutine reorder_int
 
 end module simple_srch_sort_loc
     

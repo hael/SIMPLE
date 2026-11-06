@@ -214,12 +214,12 @@ contains
             call merged_proj%add_frcs2os_out(dir//trim(FRCS_FILE), 'frc2D')
         endif
         if( l_cavgs_replace ) then
-            call simple_rename( cavgs,    cavgs_tmp,    overwrite=.true. )
+            call simple_rename( cavgs,    cavgs_tmp)
             if( l_merge_evenodd )then
                 evenname = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_even'//MRC_EXT
                 oddname  = dir//get_fbody(basename(cavgs), fname2ext(cavgs))//'_odd'//MRC_EXT
-                call simple_rename( evenname, evenname_tmp, overwrite=.true. )
-                call simple_rename( oddname,  oddname_tmp,  overwrite=.true. )
+                call simple_rename( evenname, evenname_tmp)
+                call simple_rename( oddname,  oddname_tmp)
             endif
             cavgs = cavgs_tmp
         endif

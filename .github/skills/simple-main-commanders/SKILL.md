@@ -18,15 +18,16 @@ another workflow runs (`strategies/parallelization`: `<x>_exec(params, build, ..
 Silent ones first: nothing reports these.
 
 - A called commander builds its own `params` and builder from the file. Only a controller calls
-  one, for a whole program (the shared-memory refine strategies' master steps are the one ruled
-  exception, policy section 2): write the segments it reads first (`write_segment_inside`),
+  one, for a whole program (the shared-memory refine strategies' sigma2 commit through
+  `commander_commit_sigma2` is the one ruled exception, policy section 2): write the segments it reads first (`write_segment_inside`),
   read back the ones it wrote after (`read_segment`); your in-memory project is stale across the
   call. `refine3D` and `refine2D` return their last iteration as `endit` on the caller's cline:
   delete it before a stage, number the next stage from it.
 - `params%new` changes the process (skill `simple-main-params`): with `mkdir=yes` it enters a new
   `<n>_<prg>/` (copying a required project there), so set `mkdir=no` on every child cline after, or the
   child nests a directory and you read stale files. Each `new`, so each in-process commander call,
-  reseeds (one more or less shifts every later draw of a seeded run) and resets the threads.
+  reseeds (one more or less shifts every later draw of a seeded run; the keyed draws of `refine=prob*`
+  excepted) and resets the threads.
 - `cline%set` takes any key: `params%new` ignores one it does not bind, a worker's parse stops on
   one outside the vocabulary (`THROW_HARD`). Silent in shared memory, fatal distributed. No
   parameter for an internal switch; the in-process handshakes (`INPROCESS_KEYS`,
@@ -36,14 +37,16 @@ Silent ones first: nothing reports these.
   refuses an unknown `refine=` before `create_refine3D_strategy`, so a master never waits on workers
   that stopped. A strategy-object program makes `params` in the strategy's `initialize`.
 - A master step's commander is one call to `run_<x>` (`commander_volassemble`,
-  `commander_prob_align`(`_neigh`), `commander_prob_align2D`, `commander_cavgassemble`,
-  `commander_commit_sigma2`). No typed entry beside `execute`: they were deleted and stay deleted.
+  `commander_cavgassemble`, `commander_commit_sigma2`). No typed entry beside `execute`: they were
+  deleted and stay deleted. The probabilistic alignment has no master step and no commander: it runs
+  inside the matchers (skill `simple-main-strategies-probabilistic`).
 - A worker program is a shell: `params` and builder, the body, part finished
   (`commander_refine3D_distr_worker` hands `refine3D_exec` its `(params, build)`).
-- Deviations here (policy section 8), not patterns: the frames of `exec_prob_tab`(`_neigh`, `2D`) in
-  `simple_commanders_prob.f90` (`sample4update_reprod`, `split_nobjs_even` and
-  `qsys_declare_part_finished` in a new commander is a fourth copy); `postprocess_volume_from_files`
-  in `simple_commanders_volops.f90`, called by a strategy; controller routines of hundreds of lines.
+- The worker frame (`sample4update_reprod`, `split_nobjs_even`, `qsys_declare_part_finished`) is the
+  matchers' (`refine3D_exec`, `refine2D_exec`): the three together in a new commander are a third copy
+  (policy section 7). Deviations here (policy section 8), not patterns: `postprocess_volume_from_files`
+  in `simple_commanders_volops.f90`, called by a strategy (`simple_rec3D_service`); controller routines
+  of hundreds of lines.
 - New code imports `builder`, `parameters`, `cmdline`, `sp_project` directly, not
   `simple_commanders_api`; shared defaults go in `src/defs/simple_default_clines.f90`.
 

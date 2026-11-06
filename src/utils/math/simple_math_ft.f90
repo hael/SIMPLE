@@ -8,11 +8,11 @@ use simple_srch_sort_loc
 implicit none
 
 interface csq_fast
-    module procedure csq_fast_1, csq_fast_2
+    module procedure csq_fast_sp, csq_fast_dp
 end interface
 
 interface csq
-    module procedure csq_1, csq_2
+    module procedure csq_sp, csq_dp
 end interface
 
 contains
@@ -58,19 +58,19 @@ contains
     end function calc_lowpass_lim
 
     ! faster unsafe complex magnitude, single precision
-    real(sp) elemental function csq_fast_1( comp )
+    real(sp) elemental function csq_fast_sp( comp )
         complex(sp), intent(in) :: comp
-        csq_fast_1 = real(comp*conjg(comp))
-    end function csq_fast_1
+        csq_fast_sp = real(comp*conjg(comp))
+    end function csq_fast_sp
 
     ! faster unsafe complex magnitude, double precision
-    real(dp) elemental function csq_fast_2( comp )
+    real(dp) elemental function csq_fast_dp( comp )
         complex(dp), intent(in) :: comp
-        csq_fast_2 = real(comp*conjg(comp),dp)
-    end function csq_fast_2
+        csq_fast_dp = real(comp*conjg(comp),dp)
+    end function csq_fast_dp
 
     !>   is for complex squaring
-    elemental function csq_1( a ) result( sq )
+    elemental function csq_sp( a ) result( sq )
         complex(sp), intent(in) :: a !< complx component
         real(sp) :: sq, x, y, frac
         x = abs(real(a))
@@ -86,10 +86,10 @@ contains
             frac = x/y
             sq = y*y*(1.+frac*frac)
         endif
-    end function csq_1
+    end function csq_sp
 
     !>  is for double complex squaring
-    elemental function csq_2( a ) result( sq )
+    elemental function csq_dp( a ) result( sq )
         complex(dp), intent(in) :: a !< complx component
         real(dp) :: sq, x, y, frac
         x = abs(real(a))
@@ -105,7 +105,7 @@ contains
             frac = x/y
             sq = y*y*(1.+frac*frac)
         endif
-    end function csq_2
+    end function csq_dp
 
     !>   one-dimensional cyclic index generation
     !! \param lims limits

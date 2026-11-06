@@ -386,7 +386,7 @@ contains
             msg = 'failed writing '//tmpname%to_char()
             return
         endif
-        call simple_rename(tmpname, fname, overwrite=.true.)
+        call simple_rename(tmpname, fname)
         if( .not. file_exists(fname) )then
             msg = 'failed publishing '//fname%to_char()
             return

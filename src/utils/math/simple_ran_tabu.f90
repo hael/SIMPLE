@@ -25,9 +25,9 @@ type :: ran_tabu
     procedure          :: mnomal
     procedure          :: ne_ran_iarr
     procedure          :: ne_mnomal_iarr
-    procedure, private :: shuffle_1
-    procedure, private :: shuffle_2
-    generic            :: shuffle => shuffle_1, shuffle_2
+    procedure, private :: shuffle_int
+    procedure, private :: shuffle_real
+    generic            :: shuffle => shuffle_int, shuffle_real
     procedure          :: balanced
     procedure          :: kill
 end type ran_tabu
@@ -208,7 +208,7 @@ contains
     end subroutine ne_mnomal_iarr
 
     !>  \brief  shuffles an integer array
-    subroutine shuffle_1( self, shuffled )
+    subroutine shuffle_int( self, shuffled )
         class(ran_tabu), intent(inout) :: self
         integer,         intent(inout) :: shuffled(self%NP)  !< integer array for shuffling
         integer :: tmp(self%NP), irnd, i
@@ -220,10 +220,10 @@ contains
         end do
         shuffled = tmp
         call self%reset
-    end subroutine shuffle_1
+    end subroutine shuffle_int
 
     !>  \brief  shuffles a real array
-    subroutine shuffle_2( self, shuffled )
+    subroutine shuffle_real( self, shuffled )
         class(ran_tabu), intent(inout) :: self
         real,            intent(inout) :: shuffled(self%NP)  !< integer array for shuffling
         real    :: tmp(self%NP)
@@ -236,7 +236,7 @@ contains
         end do
         shuffled = tmp
         call self%reset
-    end subroutine shuffle_2
+    end subroutine shuffle_real
 
     !>  \brief  creates a balanced randomised partitioning over nstates states
     subroutine balanced( self, nstates, iarr )

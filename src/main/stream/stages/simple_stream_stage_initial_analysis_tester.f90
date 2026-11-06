@@ -72,7 +72,41 @@ contains
         call test_restore_cavgs_selection()
         call test_choose_state()
         call test_finished()
+        call test_segdiam_bins_count_erosion()
     end subroutine run_all_stream_stage_initial_analysis_tests
+
+    !> the stage's picker assigns a pick to the bin of its diameter with the binarization's 2x erosion
+    !! added back (8 A), as its bin decision does: a 95 A pick is 103 A, in the accepted 100-200 A bin
+    subroutine test_segdiam_bins_count_erosion()
+        use simple_segdiam_bin_picker, only: segdiam_bin_picker
+        class(segdiam_bin_picker), allocatable :: picker
+        class(sp_project),         allocatable :: proj
+        type(string) :: cwd_saved, root
+        integer      :: nfail0
+        write(*,'(A)') 'test_segdiam_bins_count_erosion'
+        nfail0 = tests_failed
+        call enter_fixture('ia_segdiam_bins', cwd_saved, root)
+        allocate(picker, proj)
+        call write_singlelineoftext(string('segdiam_diams.txt'), string('100 100 64 64 95.0'))
+        call proj%projinfo%new(1, is_ptcl=.false.)
+        call proj%projinfo%set(1, 'projfile', 'segdiam_bins.simple')
+        call proj%os_mic%new(1, is_ptcl=.false.)
+        call proj%os_mic%set(1, 'intg',     'segdiam_mic.mrc')
+        call proj%os_mic%set(1, 'imgkind',  'mic')
+        call proj%os_mic%set(1, 'smpd',     1.0)
+        call proj%os_mic%set(1, 'mic_den',  'segdiam_den.mrc')
+        call proj%os_mic%set(1, 'mic_topo', 'segdiam_topo.mrc')
+        call proj%os_mic%set(1, 'mic_bin',  'segdiam_bin.mrc')
+        call proj%os_mic%set(1, 'mic_diam', 'segdiam_diams.txt')
+        call proj%os_mic%set_state(1, 1)
+        call proj%write(string('segdiam_bins.simple'))
+        call picker%new([.false., .true., .false., .false., .false.], 64)
+        call picker%pick(proj, 'black', 1)
+        call assert_int(1, proj%os_mic%get_noris(), 'a 95 A pick (103 A before erosion) is kept in the accepted 100-200 A bin')
+        call picker%kill
+        call proj%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_segdiam_bins_count_erosion
 
     !> the stage's project is made with a computing environment, and the stage directory is the
     !! working directory

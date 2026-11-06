@@ -656,18 +656,15 @@ contains
         endif
     end subroutine syslib_symlink
 
-    !> \brief  Rename or move file
+    !> \brief  Rename or move file; an existing fileout is replaced atomically (rename(2)), never absent
     subroutine simple_rename( filein, fileout, overwrite )
         class(*),          intent(in) :: filein, fileout !< input filename
-        logical, optional, intent(in) :: overwrite       !< default true
+        logical, optional, intent(in) :: overwrite       !< ignored: the replacement is always atomic (one caller
+                                                         !! in simple_commanders_solve3D.f90 still passes it)
         character(kind=c_char, len=:), allocatable :: f1, f2
         character(len=:),              allocatable :: msg
-        logical :: force_overwrite
         integer :: file_status
         if( .not. file_exists(filein) ) THROW_ERROR("designated input file does not exist")
-        force_overwrite = .true.
-        if( present(overwrite) ) force_overwrite=overwrite
-        if( file_exists(fileout) .and. (force_overwrite) ) call del_file(fileout)
         select type(filein)
             type is(string)
                 allocate(f1, source=filein%to_char()//achar(0))

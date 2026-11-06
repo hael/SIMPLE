@@ -18,11 +18,11 @@ type :: oris
     !======================================================================
     ! LIFE CYCLE / ALLOCATION (simple_oris_life.f90)
     !======================================================================
-    generic            :: new => new_1, new_2
-    procedure, private :: new_1, new_2
+    generic            :: new => new_by_n, new_from_arr
+    procedure, private :: new_by_n, new_from_arr
     procedure          :: reallocate
-    procedure, private :: extract_subset_1, extract_subset_2
-    generic            :: extract_subset => extract_subset_1, extract_subset_2
+    procedure, private :: extract_subset_range, extract_subset_inds
+    generic            :: extract_subset => extract_subset_range, extract_subset_inds
     procedure          :: kill_chash
     procedure          :: kill
     !======================================================================
@@ -39,8 +39,8 @@ type :: oris
     procedure          :: get_int
     procedure          :: get_str
     procedure          :: get_static
-    procedure, private :: getter_1, getter_2, getter_3
-    generic            :: getter => getter_1, getter_2, getter_3
+    procedure, private :: getter_str, getter_real, getter_int
+    generic            :: getter => getter_str, getter_real, getter_int
     procedure          :: get_all, get_all_asint
     procedure          :: gen_ptcl_mask
     procedure          :: get_all_sampled
@@ -52,18 +52,21 @@ type :: oris
     procedure          :: get_class
     procedure          :: get_proj
     procedure          :: get_eo
+    procedure          :: get_half
+    procedure          :: nonslot_key
+    procedure          :: strip_nonslot_keys
     procedure          :: get_fromp, get_top
     procedure          :: get_sampled
     procedure          :: get_updatecnt
     procedure          :: get_tseries_neighs
-    procedure, private :: isthere_1, isthere_2
-    generic            :: isthere => isthere_1, isthere_2
+    procedure, private :: isthere_any, isthere_by_ind
+    generic            :: isthere => isthere_any, isthere_by_ind
     procedure          :: ischar
     procedure          :: is_particle
     procedure          :: max_ori_strlen_trim
     procedure          :: get_n
-    procedure, private :: get_pop_1, get_pop_2
-    generic            :: get_pop => get_pop_1, get_pop_2
+    procedure, private :: get_pop_scalar, get_pop_array
+    generic            :: get_pop => get_pop_scalar, get_pop_array
     procedure          :: get_pops
     procedure          :: get_pinds
     procedure          :: gen_mask
@@ -97,22 +100,22 @@ type :: oris
     !======================================================================
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
-    procedure, private :: append_1, append_2
-    generic            :: append => append_1, append_2
-    procedure, private :: copy_1, copy_2
-    generic            :: copy => copy_1, copy_2
+    procedure, private :: append_at, append_oris
+    generic            :: append => append_at, append_oris
+    procedure, private :: copy_as_kind, copy_same_kind
+    generic            :: copy => copy_as_kind, copy_same_kind
     procedure          :: reject
-    procedure, private :: delete_entry_1, delete_entry_2
-    generic            :: delete_entry => delete_entry_1, delete_entry_2
-    procedure, private :: delete_2Dclustering_1, delete_2Dclustering_2
-    generic            :: delete_2Dclustering => delete_2Dclustering_1, delete_2Dclustering_2
+    procedure, private :: delete_entry_all, delete_entry_by_ind
+    generic            :: delete_entry => delete_entry_all, delete_entry_by_ind
+    procedure, private :: delete_2Dclustering_all, delete_2Dclustering_by_ind
+    generic            :: delete_2Dclustering => delete_2Dclustering_all, delete_2Dclustering_by_ind
     procedure          :: delete_3Dalignment
     procedure          :: delete
     procedure          :: transfer_2Dshifts
-    procedure, private :: transfer_2Dparams_1, transfer_2Dparams_2
-    generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
-    procedure, private :: transfer_3Dparams_1, transfer_3Dparams_2
-    generic            :: transfer_3Dparams => transfer_3Dparams_1, transfer_3Dparams_2
+    procedure, private :: transfer_2Dparams_ori, transfer_2Dparams_oris
+    generic            :: transfer_2Dparams => transfer_2Dparams_ori, transfer_2Dparams_oris
+    procedure, private :: transfer_3Dparams_ori, transfer_3Dparams_oris
+    generic            :: transfer_3Dparams => transfer_3Dparams_ori, transfer_3Dparams_oris
     procedure          :: transfer_class_assignment
     procedure          :: set_euler
     procedure          :: set_shift
@@ -123,17 +126,17 @@ type :: oris
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
-    procedure, private :: set_1, set_2, set_3, set_4, set_5
-    generic            :: set => set_1, set_2, set_3, set_4, set_5
+    procedure, private :: set_real, set_char, set_int, set_dp, set_str
+    generic            :: set => set_real, set_char, set_int, set_dp, set_str
     procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
-    procedure, private :: set_all_1, set_all_2, set_all_3
-    generic            :: set_all => set_all_1, set_all_2, set_all_3
-    procedure, private :: set_all2single_1, set_all2single_2, set_all2single_3
-    generic            :: set_all2single => set_all2single_1, set_all2single_2, set_all2single_3
-    procedure, private :: set_field2single_1, set_field2single_2, set_field2single_3
-    generic            :: set_field2single => set_field2single_1, set_field2single_2, set_field2single_3
+    procedure, private :: set_all_real, set_all_char, set_all_int
+    generic            :: set_all => set_all_real, set_all_char, set_all_int
+    procedure, private :: set_all2single_real, set_all2single_char, set_all2single_int
+    generic            :: set_all2single => set_all2single_real, set_all2single_char, set_all2single_int
+    procedure, private :: set_field2single_real, set_field2single_char, set_field2single_int
+    generic            :: set_field2single => set_field2single_real, set_field2single_char, set_field2single_int
     procedure          :: set_projs
     procedure          :: remap_projs
     procedure          :: proj2class
@@ -177,8 +180,8 @@ type :: oris
     procedure          :: sample4update_updated
     procedure          :: sample4update_fillin
     procedure          :: sample4update_missing
-    procedure, private :: sample_balanced_1, sample_balanced_2
-    generic            :: sample_balanced => sample_balanced_1, sample_balanced_2
+    procedure, private :: sample_balanced_mode, sample_balanced_frac_best
+    generic            :: sample_balanced => sample_balanced_mode, sample_balanced_frac_best
     procedure          :: sample_balanced_inv
     procedure          :: sample_balanced_parts
     procedure          :: sample_ranked_parts
@@ -190,8 +193,8 @@ type :: oris
     !======================================================================
     ! DISTANCES (simple_oris_dists.f90)
     !======================================================================
-    procedure, private :: euldist_1, euldist_2
-    generic            :: euldist => euldist_1, euldist_2
+    procedure, private :: euldist_inds, euldist_ori
+    generic            :: euldist => euldist_inds, euldist_ori
     procedure          :: min_euldist
     procedure          :: find_angres
     !======================================================================
@@ -201,8 +204,8 @@ type :: oris
     procedure          :: print_matrices
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
-    procedure, private :: write_1, write_2
-    generic            :: write => write_1, write_2
+    procedure, private :: write_range, write_by_ind
+    generic            :: write => write_range, write_by_ind
     procedure          :: write2bild
     procedure          :: write_projdir_heatmap
     !======================================================================
@@ -223,12 +226,12 @@ type :: oris
     procedure          :: round_shifts
     procedure          :: introd_alig_err
     procedure          :: introd_ctf_err
-    procedure, private :: rot_1, rot_2
-    generic            :: rot => rot_1, rot_2
-    procedure, private :: rot_transp_1, rot_transp_2
-    generic            :: rot_transp => rot_transp_1, rot_transp_2
-    procedure, private :: map3dshift22d_1, map3dshift22d_2
-    generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
+    procedure, private :: rot_all, rot_by_ind
+    generic            :: rot => rot_all, rot_by_ind
+    procedure, private :: rot_transp_all, rot_transp_by_ind
+    generic            :: rot_transp => rot_transp_all, rot_transp_by_ind
+    procedure, private :: map3dshift22d_all, map3dshift22d_by_ind
+    generic            :: map3dshift22d => map3dshift22d_all, map3dshift22d_by_ind
     procedure          :: calc_avg_offset2D, calc_avg_offset3D
     procedure          :: mirror2d
     procedure          :: mirror3d
@@ -236,13 +239,13 @@ type :: oris
     !======================================================================
     ! STATS / ORDERING / PEAKS (simple_oris_stats.f90)
     !======================================================================
-    procedure, private :: median_1
-    generic            :: median => median_1
-    procedure, private :: stats_1, stats_2, stats_3
-    generic            :: stats => stats_1, stats_2, stats_3
+    procedure, private :: median_key
+    generic            :: median => median_key
+    procedure, private :: stats_all, stats_masked, stats_range
+    generic            :: stats => stats_all, stats_masked, stats_range
     procedure          :: minmax
-    procedure, private :: spiral_1, spiral_2
-    generic            :: spiral => spiral_1, spiral_2
+    procedure, private :: spiral_full, spiral_lims
+    generic            :: spiral => spiral_full, spiral_lims
     procedure          :: order
     procedure          :: order_cls
     procedure          :: detect_peaks
@@ -252,11 +255,11 @@ type :: oris
     ! NEIGHBORS / CORRELATION / OVERLAP (simple_oris_neigh.f90)
     !======================================================================
     procedure          :: find_closest_proj
-    procedure, private :: nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
-    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2, nearest_proj_neighbors_3
+    procedure, private :: nearest_proj_neighbors_mat, nearest_proj_neighbors_thres, nearest_proj_neighbors_k
+    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_mat, nearest_proj_neighbors_thres, nearest_proj_neighbors_k
     procedure          :: replace_with_closest
-    procedure, private :: diststat_1, diststat_2
-    generic            :: diststat => diststat_1, diststat_2
+    procedure, private :: diststat_within, diststat_between
+    generic            :: diststat => diststat_within, diststat_between
     procedure          :: overlap
 end type oris
 
@@ -276,33 +279,33 @@ interface
         type(oris) :: self
     end function constructor
 
-    module subroutine new_1( self, n, is_ptcl )
+    module subroutine new_by_n( self, n, is_ptcl )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: n
         logical,     intent(in)    :: is_ptcl
-    end subroutine new_1
+    end subroutine new_by_n
 
-    module subroutine new_2( self, o_arr )
+    module subroutine new_from_arr( self, o_arr )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o_arr(:)
-    end subroutine new_2
+    end subroutine new_from_arr
 
     module subroutine reallocate( self, new_n )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: new_n
     end subroutine reallocate
 
-    module function extract_subset_1( self, from, to ) result( self_sub )
+    module function extract_subset_range( self, from, to ) result( self_sub )
         class(oris), intent(in) :: self
         integer,     intent(in) :: from, to
         type(oris) :: self_sub
-    end function extract_subset_1
+    end function extract_subset_range
 
-    module function extract_subset_2( self, inds ) result( self_sub )
+    module function extract_subset_inds( self, inds ) result( self_sub )
         class(oris), intent(in) :: self
         integer,     intent(in) :: inds(:)
         type(oris) :: self_sub
-    end function extract_subset_2
+    end function extract_subset_inds
 
     module subroutine kill_chash( self )
         class(oris), intent(inout) :: self
@@ -386,26 +389,26 @@ interface
         character(len=*), intent(out) :: val
     end subroutine get_static
 
-    module subroutine getter_1( self, i, key, val )
+    module subroutine getter_str( self, i, key, val )
         class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         type(string),     intent(inout) :: val
-    end subroutine getter_1
+    end subroutine getter_str
 
-    module subroutine getter_2( self, i, key, val )
+    module subroutine getter_real( self, i, key, val )
         class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
-    end subroutine getter_2
+    end subroutine getter_real
 
-    module subroutine getter_3( self, i, key, ival )
+    module subroutine getter_int( self, i, key, ival )
         class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         integer,          intent(inout) :: ival
-    end subroutine getter_3
+    end subroutine getter_int
 
     module function get_all( self, key, fromto, nonzero ) result( arr )
         class(oris),       intent(in) :: self
@@ -492,6 +495,22 @@ interface
         integer :: get_eo
     end function get_eo
 
+    module function get_half( self, i ) result( eo )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        integer :: eo
+    end function get_half
+
+    module function nonslot_key( self, i ) result( key )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        type(string) :: key
+    end function nonslot_key
+
+    module subroutine strip_nonslot_keys( self )
+        class(oris), intent(inout) :: self
+    end subroutine strip_nonslot_keys
+
     module pure function get_fromp( self, i )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -522,18 +541,18 @@ interface
         integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
     end subroutine get_tseries_neighs
 
-    module pure function isthere_1( self, key ) result( is )
+    module pure function isthere_any( self, key ) result( is )
         class(oris),      intent(in) :: self
         character(len=*), intent(in) :: key
         logical :: is
-    end function isthere_1
+    end function isthere_any
 
-    module pure function isthere_2( self, i, key ) result( is )
+    module pure function isthere_by_ind( self, i, key ) result( is )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: i
         character(len=*),  intent(in) :: key
         logical :: is
-    end function isthere_2
+    end function isthere_by_ind
 
     module function ischar( self, i, key ) result( is )
         class(oris),       intent(in) :: self
@@ -558,21 +577,21 @@ interface
         integer :: n
     end function get_n
 
-    module function get_pop_1( self, ind, label, eo ) result( pop )
+    module function get_pop_scalar( self, ind, label, eo ) result( pop )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: ind
         character(len=*),  intent(in) :: label
         integer, optional, intent(in) :: eo
         integer :: pop
-    end function get_pop_1
+    end function get_pop_scalar
 
-    module function get_pop_2( self, inds, labels, eo ) result( pop )
+    module function get_pop_array( self, inds, labels, eo ) result( pop )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: inds(:)
         character(len=*),  intent(in) :: labels(:)
         integer, optional, intent(in) :: eo
         integer :: pop
-    end function get_pop_2
+    end function get_pop_array
 
     module subroutine get_pops( self, pops, label, maxn, eo )
         class(oris),          intent(in)    :: self
@@ -775,54 +794,54 @@ interface
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
 
-    module subroutine append_1( self, i, ori_in )
+    module subroutine append_at( self, i, ori_in )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: ori_in
         integer,     intent(in)    :: i
-    end subroutine append_1
+    end subroutine append_at
 
-    module subroutine append_2( self1, self2 )
+    module subroutine append_oris( self1, self2 )
         class(oris), intent(inout) :: self1
         class(oris), intent(in)    :: self2
-    end subroutine append_2
+    end subroutine append_oris
 
-    module subroutine copy_1( self_out, self_in, is_ptcl )
+    module subroutine copy_as_kind( self_out, self_in, is_ptcl )
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
         logical,     intent(in)    :: is_ptcl
-    end subroutine copy_1
+    end subroutine copy_as_kind
 
-    module subroutine copy_2( self_out, self_in )
+    module subroutine copy_same_kind( self_out, self_in )
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
-    end subroutine copy_2
+    end subroutine copy_same_kind
 
     module subroutine reject( self, i )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
     end subroutine reject
 
-    module subroutine delete_entry_1( self, key )
+    module subroutine delete_entry_all( self, key )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: key
-    end subroutine delete_entry_1
+    end subroutine delete_entry_all
 
-    module subroutine delete_entry_2( self, ind, key )
+    module subroutine delete_entry_by_ind( self, ind, key )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: ind
         character(len=*), intent(in)    :: key
-    end subroutine delete_entry_2
+    end subroutine delete_entry_by_ind
 
-    module subroutine delete_2Dclustering_1( self, keepshifts, keepcls )
+    module subroutine delete_2Dclustering_all( self, keepshifts, keepcls )
         class(oris),       intent(inout) :: self
         logical, optional, intent(in)    :: keepshifts, keepcls
-    end subroutine delete_2Dclustering_1
+    end subroutine delete_2Dclustering_all
 
-    module subroutine delete_2Dclustering_2( self, i, keepshifts, keepcls )
+    module subroutine delete_2Dclustering_by_ind( self, i, keepshifts, keepcls )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: i
         logical, optional, intent(in)    :: keepshifts, keepcls
-    end subroutine delete_2Dclustering_2
+    end subroutine delete_2Dclustering_by_ind
 
     module subroutine delete_3Dalignment( self, keepshifts )
         class(oris),       intent(inout) :: self
@@ -839,29 +858,29 @@ interface
         type(oris),  intent(in)    :: self_in
     end subroutine transfer_2Dshifts
 
-    module subroutine transfer_2Dparams_1( self, i, o_in )
+    module subroutine transfer_2Dparams_ori( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
-    end subroutine transfer_2Dparams_1
+    end subroutine transfer_2Dparams_ori
 
-    module subroutine transfer_2Dparams_2( self, i, os_in, i_in )
+    module subroutine transfer_2Dparams_oris( self, i, os_in, i_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i, i_in
         class(oris), intent(in)    :: os_in
-    end subroutine transfer_2Dparams_2
+    end subroutine transfer_2Dparams_oris
 
-    module subroutine transfer_3Dparams_1( self, i, o_in )
+    module subroutine transfer_3Dparams_ori( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
-    end subroutine transfer_3Dparams_1
+    end subroutine transfer_3Dparams_ori
 
-    module subroutine transfer_3Dparams_2( self, i, os_in, i_in )
+    module subroutine transfer_3Dparams_oris( self, i, os_in, i_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i, i_in
         class(oris), intent(in)    :: os_in
-    end subroutine transfer_3Dparams_2
+    end subroutine transfer_3Dparams_oris
 
     module subroutine transfer_class_assignment( self_from, self_to )
         class(oris), intent(in)    :: self_from
@@ -918,40 +937,40 @@ interface
         real,         intent(in)   :: e3
     end subroutine e3set
 
-    module subroutine set_1( self, i, key, val )
+    module subroutine set_real( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
-    end subroutine set_1
+    end subroutine set_real
 
-    module subroutine set_2( self, i, key, val )
+    module subroutine set_char( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: val
-    end subroutine set_2
+    end subroutine set_char
 
-    module subroutine set_3( self, i, key, val )
+    module subroutine set_int( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: val
-    end subroutine set_3
+    end subroutine set_int
 
-    module subroutine set_4( self, i, key, val )
+    module subroutine set_dp( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: val
-    end subroutine set_4
+    end subroutine set_dp
 
-    module subroutine set_5( self, i, key, val )
+    module subroutine set_str( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         class(string),    intent(in)    :: val
-    end subroutine set_5
+    end subroutine set_str
 
     module subroutine set_dfx( self, i, dfx )
         class(oris), intent(inout) :: self
@@ -977,65 +996,65 @@ interface
         integer,     intent(in)    :: i, i2transfer
     end subroutine transfer_ori
 
-    module subroutine set_all_1( self, which, vals )
+    module subroutine set_all_real( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: vals(self%n)
-    end subroutine set_all_1
+    end subroutine set_all_real
 
-    module subroutine set_all_2( self, which, vals )
+    module subroutine set_all_char( self, which, vals )
         class(oris),           intent(inout) :: self
         character(len=*),      intent(in)    :: which
         character(len=STDLEN), intent(in)    :: vals(self%n)
-    end subroutine set_all_2
+    end subroutine set_all_char
 
-    module subroutine set_all_3( self, which, vals )
+    module subroutine set_all_int( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         integer,          intent(in)    :: vals(self%n)
-    end subroutine set_all_3
+    end subroutine set_all_int
 
-    module subroutine set_all2single_1( self, which, val )
+    module subroutine set_all2single_real( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: val
-    end subroutine set_all2single_1
+    end subroutine set_all2single_real
 
-    module subroutine set_all2single_2( self, which, val )
+    module subroutine set_all2single_char( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         character(len=*), intent(in)    :: val
-    end subroutine set_all2single_2
+    end subroutine set_all2single_char
 
-    module subroutine set_all2single_3( self, which, ival )
+    module subroutine set_all2single_int( self, which, ival )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         integer,          intent(in)    :: ival
-    end subroutine set_all2single_3
+    end subroutine set_all2single_int
 
-    module subroutine set_field2single_1( self, field, ind, which, val )
+    module subroutine set_field2single_real( self, field, ind, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: field
         integer,          intent(in)    :: ind
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: val
-    end subroutine set_field2single_1
+    end subroutine set_field2single_real
 
-    module subroutine set_field2single_2( self, field, ind, which, val )
+    module subroutine set_field2single_char( self, field, ind, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: field
         integer,          intent(in)    :: ind
         character(len=*), intent(in)    :: which
         character(len=*), intent(in)    :: val
-    end subroutine set_field2single_2
+    end subroutine set_field2single_char
 
-    module subroutine set_field2single_3( self, field, ind, which, ival )
+    module subroutine set_field2single_int( self, field, ind, which, ival )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: field
         integer,          intent(in)    :: ind
         character(len=*), intent(in)    :: which
         integer,          intent(in)    :: ival
-    end subroutine set_field2single_3
+    end subroutine set_field2single_int
 
     module subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
@@ -1288,22 +1307,22 @@ interface
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_missing
 
-    module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states, exact )
+    module subroutine sample_balanced_mode( self, clssmp, nptcls, l_greedy, states, exact )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: nptcls
         logical,            intent(in)    :: l_greedy
         integer,            intent(inout) :: states(self%n)
         logical, optional,  intent(in)    :: exact
-    end subroutine sample_balanced_1
+    end subroutine sample_balanced_mode
 
-    module subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )
+    module subroutine sample_balanced_frac_best( self, clssmp, nptcls, frac_best, states )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: nptcls
         real,               intent(in)    :: frac_best
         integer,            intent(inout) :: states(self%n)
-    end subroutine sample_balanced_2
+    end subroutine sample_balanced_frac_best
 
     module subroutine sample_balanced_inv( self, clssmp, nptcls, frac_worst, states )
         class(oris),        intent(in)    :: self
@@ -1375,9 +1394,8 @@ interface
         real, optional, intent(in)  :: ufrac
     end subroutine population_blend_weights_mass
 
-    ! Expected particles per iteration of every sampling unit under the nested square-root quota of
-    ! sample4update_class (over groups, then over the units of a group, in proportion to the square root
-    ! of the populations, capped at the populations)
+    ! Expected particles per iteration of every sampling unit under the nested equal quota of
+    ! sample4update_class (equal over groups, then over the units of a group, capped at populations)
     module subroutine class_sample_quotas( clssmp, ntarget, quotas )
         type(class_sample), intent(in)  :: clssmp(:)
         integer,            intent(in)  :: ntarget
@@ -1395,18 +1413,18 @@ interface
     ! DISTANCES (simple_oris_dist.f90)
     !======================================================================
 
-    module pure function euldist_1( self, i, j )
+    module pure function euldist_inds( self, i, j )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i, j
-        real :: euldist_1
-    end function euldist_1
+        real :: euldist_inds
+    end function euldist_inds
 
-    module pure function euldist_2( self, i, o )
+    module pure function euldist_ori( self, i, o )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
         class(ori),  intent(in) :: o
-        real :: euldist_2
-    end function euldist_2
+        real :: euldist_ori
+    end function euldist_ori
 
     module subroutine min_euldist( self, o_in, mindist )
         class(oris), intent(inout) :: self
@@ -1444,17 +1462,17 @@ interface
         class(string), intent(in)    :: ctfparamfile
     end subroutine read_ctfparams_state_eo
 
-    module subroutine write_1( self, orifile, fromto )
+    module subroutine write_range( self, orifile, fromto )
         class(oris),       intent(in) :: self
         class(string),     intent(in) :: orifile
         integer, optional, intent(in) :: fromto(2)
-    end subroutine write_1
+    end subroutine write_range
 
-    module subroutine write_2( self, i, orifile )
+    module subroutine write_by_ind( self, i, orifile )
         class(oris),   intent(inout) :: self
         class(string), intent(in)    :: orifile
         integer,       intent(in)    :: i
-    end subroutine write_2
+    end subroutine write_by_ind
 
     module subroutine write2bild( self, file )
         class(oris),   intent(inout) :: self
@@ -1538,40 +1556,40 @@ interface
         real,        intent(in)    :: dferr
     end subroutine introd_ctf_err
 
-    module subroutine rot_1( self, e )
+    module subroutine rot_all( self, e )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: e
-    end subroutine rot_1
+    end subroutine rot_all
 
-    module subroutine rot_2( self, i, e )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: i
-        class(ori),  intent(in)    :: e
-    end subroutine rot_2
-
-    module subroutine rot_transp_1( self, e )
-        class(oris), intent(inout) :: self
-        class(ori),  intent(in)    :: e
-    end subroutine rot_transp_1
-
-    module subroutine rot_transp_2( self, i, e )
+    module subroutine rot_by_ind( self, i, e )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         class(ori),  intent(in)    :: e
-    end subroutine rot_transp_2
+    end subroutine rot_by_ind
 
-    module subroutine map3dshift22d_1( self, sh3d, state )
+    module subroutine rot_transp_all( self, e )
+        class(oris), intent(inout) :: self
+        class(ori),  intent(in)    :: e
+    end subroutine rot_transp_all
+
+    module subroutine rot_transp_by_ind( self, i, e )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        class(ori),  intent(in)    :: e
+    end subroutine rot_transp_by_ind
+
+    module subroutine map3dshift22d_all( self, sh3d, state )
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: sh3d(3)
         integer, optional, intent(in)    :: state
-    end subroutine map3dshift22d_1
+    end subroutine map3dshift22d_all
 
-    module subroutine map3dshift22d_2( self, i, sh3d, state )
+    module subroutine map3dshift22d_by_ind( self, i, sh3d, state )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: i
         real,              intent(in)    :: sh3d(3)
         integer, optional, intent(in)    :: state
-    end subroutine map3dshift22d_2
+    end subroutine map3dshift22d_by_ind
 
     module subroutine calc_avg_offset2D( self, class, offset_avg )
         class(oris),    intent(in)    :: self
@@ -1603,34 +1621,34 @@ interface
     ! STATS / ORDERING / PEAKS (simple_oris_stats.f90)
     !======================================================================
 
-    module function median_1( self, which ) result( med )
+    module function median_key( self, which ) result( med )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real :: med
-    end function median_1
+    end function median_key
 
-    module subroutine stats_1( self, which, ave, sdev, var, err )
+    module subroutine stats_all( self, which, ave, sdev, var, err )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
-    end subroutine stats_1
+    end subroutine stats_all
 
-    module subroutine stats_2( self, which, statvars, mask, nozero )
+    module subroutine stats_masked( self, which, statvars, mask, nozero )
         class(oris),        intent(inout) :: self
         character(len=*),   intent(in)    :: which
         type(stats_struct), intent(inout) :: statvars
         logical,            intent(in)    :: mask(self%n)
         logical, optional,  intent(in)    :: nozero
-    end subroutine stats_2
+    end subroutine stats_masked
 
-    module subroutine stats_3( self, which, ave, sdev, var, err, fromto )
+    module subroutine stats_range( self, which, ave, sdev, var, err, fromto )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
         integer,          intent(in)    :: fromto(2)
-    end subroutine stats_3
+    end subroutine stats_range
 
     module subroutine minmax( self, which, minv, maxv )
         class(oris),      intent(inout) :: self
@@ -1638,15 +1656,15 @@ interface
         real,             intent(out)   :: minv, maxv
     end subroutine minmax
 
-    module subroutine spiral_1( self )
+    module subroutine spiral_full( self )
         class(oris), intent(inout) :: self
-    end subroutine spiral_1
+    end subroutine spiral_full
 
-    module subroutine spiral_2( self, nsym, eullims )
+    module subroutine spiral_lims( self, nsym, eullims )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
-    end subroutine spiral_2
+    end subroutine spiral_lims
 
     module function order( self ) result( inds )
         class(oris), intent(inout) :: self
@@ -1692,40 +1710,40 @@ interface
         integer :: closest
     end function find_closest_proj
 
-    module subroutine nearest_proj_neighbors_1( self, k, nnmat )
+    module subroutine nearest_proj_neighbors_mat( self, k, nnmat )
         class(oris), intent(in)    :: self
         integer,     intent(in)    :: k
         integer,     intent(inout) :: nnmat(k,self%n)
-    end subroutine nearest_proj_neighbors_1
+    end subroutine nearest_proj_neighbors_mat
 
-    module subroutine nearest_proj_neighbors_2( self, o, euldist_thres, lnns )
+    module subroutine nearest_proj_neighbors_thres( self, o, euldist_thres, lnns )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o
         real,        intent(in)    :: euldist_thres
         logical,     intent(inout) :: lnns(self%n)
-    end subroutine nearest_proj_neighbors_2
+    end subroutine nearest_proj_neighbors_thres
 
-    module subroutine nearest_proj_neighbors_3( self, o, k, lnns )
+    module subroutine nearest_proj_neighbors_k( self, o, k, lnns )
         class(oris), intent(in)    :: self
         class(ori),  intent(in)    :: o
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
-    end subroutine nearest_proj_neighbors_3
+    end subroutine nearest_proj_neighbors_k
 
     module subroutine replace_with_closest( self, other )
         class(oris), intent(inout) :: self
         class(oris), intent(in)    :: other
     end subroutine replace_with_closest
 
-    module subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
+    module subroutine diststat_within( self, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(in)  :: self
         real,        intent(out) :: sumd, avgd, sdevd, mind, maxd
-    end subroutine diststat_1
+    end subroutine diststat_within
 
-    module subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
+    module subroutine diststat_between( self1, self2, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(inout) :: self1, self2
         real,        intent(out)   :: sumd, avgd, sdevd, mind, maxd
-    end subroutine diststat_2
+    end subroutine diststat_between
 
     module real function overlap( self1, self2, which, state )
         class(oris),      intent(inout) :: self1, self2

@@ -312,8 +312,24 @@ contains
         call check_rot('t')
         call check_rot('o')
         call check_rot('i')
+        call check_c1_south_pole()
 
         contains
+
+            ! c1 has no operator but the identity: a record outside its unit (e2 = 180) is kept whole
+            subroutine check_c1_south_pole()
+                type(sym) :: se
+                type(ori) :: o
+                call se%new('c1')
+                call o%new_ori(.false.)
+                call o%set_euler([40., 180., 0.])
+                call o%set('x', 2.5)
+                call se%rot_to_asym(o)
+                call assert_real(180., o%e2get(), DEG_TOL, 'rot_to_asym c1 keeps a south-pole record')
+                call assert_real(2.5,  o%get('x'), 1.e-6,  'rot_to_asym c1 keeps the other keys')
+                call o%kill
+                call se%kill
+            end subroutine check_c1_south_pole
 
             subroutine check_rot( pgrp )
                 character(len=*), intent(in) :: pgrp

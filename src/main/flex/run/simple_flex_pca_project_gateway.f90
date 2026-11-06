@@ -58,7 +58,7 @@ contains
         type(builder),          intent(inout) :: build
         integer, allocatable,   intent(out)   :: pinds(:)
         integer,                intent(out)   :: nptcls
-        integer :: q, i, cnt
+        integer :: q, i, cnt, ihalf
         integer, allocatable :: sel(:)
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_pca requires oritype=ptcl3D')
         if( .not. l_vol1_explicit )then
@@ -104,6 +104,10 @@ contains
             write(logfhandle,'(A)') '>>> FLEX_PCA project eo is degenerate; completing the project partition'
             call ensure_field_halves(build%spproj, params%oritype, params%projfile)
         endif
+        ! every selected particle in a half: an eo=-1 row stops (get_half), as in the class sums
+        do q = 1, nptcls
+            ihalf = build%spproj_field%get_half(pinds(q))
+        end do
         if( count([(build%spproj_field%get_eo(pinds(q))==0,q=1,nptcls)]) < 20 .or. &
             &count([(build%spproj_field%get_eo(pinds(q))==1,q=1,nptcls)]) < 20 ) &
             &THROW_HARD('flex_pca requires populated even and odd halfsets')
@@ -186,7 +190,7 @@ contains
 
     !>  The delivered weight table as the project's state weight set (simple_state_weight_set): one
     !!  file per state over every project row (zero outside the selection) with the hard labels, a
-    !!  manifest published last, registered in the out segment of the run's own project copy.
+    !!  manifest published last, registered in the out segment of the run's project (params%projfile).
     subroutine write_state_weight_set( params, build, pinds, weights, labels, l_merged )
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build

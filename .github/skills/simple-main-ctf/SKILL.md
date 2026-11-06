@@ -37,9 +37,9 @@ Silent ones first: nothing reports these.
   `strategies/parallelization/simple_cls_expansion_strategy`, and the analytic-gradient cost of
   `ctf_estimate_cost4Dcont`. A change to the model changes all of them.
 - `ctf_estimate_fit%new` memoises the process-wide tables of `image/simple_memoize_ft_maps` at its
-  spectrum box (`THROW_HARD` inside an OpenMP region); `kill` forgets them for every user in the
-  process (image CTF kernel, class averager): re-memoise after it. Known defect, ruled for fixing:
-  `kill` is to release only its own state. `new` also reseeds the RNG (`seed_rnd`) per micrograph:
+  spectrum box (`THROW_HARD` inside an OpenMP region) and leaves them memoised: `kill` releases only
+  the fit's own state, so another user of the maps (image CTF kernel, class averager) must memoise its
+  own box before use, not rely on the fit's. `new` also reseeds the RNG (`seed_rnd`) per micrograph:
   intended.
 - `ctf_estimate_fit` points at the caller's micrograph (`new` back-transforms it): keep it unchanged
   until `kill`. Order: `new` -> `fit` -> `fit_patches` (starts from the global fit; does nothing

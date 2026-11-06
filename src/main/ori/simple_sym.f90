@@ -39,25 +39,25 @@ type sym
     ! setters
     procedure, private :: set_subgrps
     ! modifiers
-    procedure, private :: apply_1, apply_2
-    generic            :: apply => apply_1, apply_2
+    procedure, private :: apply_ori, apply_euls
+    generic            :: apply => apply_ori, apply_euls
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
     procedure          :: find_closest_proj
-    procedure, private :: nearest_proj_neighbors_1
-    procedure, private :: nearest_proj_neighbors_2
-    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2
+    procedure, private :: nearest_proj_neighbors_thres
+    procedure, private :: nearest_proj_neighbors_k
+    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_thres, nearest_proj_neighbors_k
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
     procedure          :: symrandomize
     procedure          :: build_refspiral
-    procedure, private :: rnd_euler_1
-    procedure, private :: rnd_euler_2
-    procedure, private :: rnd_euler_3
-    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3
+    procedure, private :: rnd_euler_full
+    procedure, private :: rnd_euler_near
+    procedure, private :: rnd_euler_near_projinpl
+    generic            :: rnd_euler => rnd_euler_full, rnd_euler_near, rnd_euler_near_projinpl
     ! calculators
-    procedure, private :: sym_dists_1, sym_dists_2
-    generic            :: sym_dists => sym_dists_1, sym_dists_2
+    procedure, private :: sym_dists_ori, sym_dists_euls
+    generic            :: sym_dists => sym_dists_ori, sym_dists_euls
     procedure          :: sym_dist_table
     procedure          :: nearest_sym_neighbors
     ! utils
@@ -66,7 +66,6 @@ type sym
     procedure, private :: make_t
     procedure, private :: make_o
     procedure, private :: make_i_spider
-    procedure, private :: make_i_relion
     procedure, private :: within_asymunit
     procedure, private :: within_platonic_asymunit
     ! destructor
@@ -92,18 +91,16 @@ real,             parameter :: ico_theta_lim = 37.37736814064969
 contains
 
     !>  \brief  is a constructor
-    function constructor( pgrp, icorelion ) result( self )
+    function constructor( pgrp ) result( self )
         character(len=*), intent(in)  :: pgrp        !< sym group string
-        logical, optional, intent(in) :: icorelion
         type(sym)                     :: self
-        call self%new(pgrp, icorelion)
+        call self%new(pgrp)
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new( self, pgrp, icorelion )
+    subroutine new( self, pgrp )
         class(sym),        intent(inout) :: self
         character(len=*),  intent(in)    :: pgrp         !< sym group string
-        logical, optional, intent(in)    :: icorelion
         call self%kill
         self%c_or_d = .false.
         self%n      = 1
@@ -142,15 +139,8 @@ contains
             if( self%pgrp(1:1).eq.'I' ) self%pgrp(1:1) = 'i'
             self%n = nico
             call self%e_sym%new(self%n, is_ptcl=.false.)
-            if( present(icorelion) )then
-                if( icorelion )then
-                    call self%make_i_relion
-                else
-                    call self%make_i_spider
-                endif
-            else
-                call self%make_i_spider
-            endif
+            ! one icosahedral setting everywhere: SPIDER's (a 5-fold on z), which the asymmetric unit assumes
+            call self%make_i_spider
         else
             write(logfhandle,'(a)') 'symmetry not supported; new; simple_sym', pgrp
             stop
@@ -305,7 +295,7 @@ contains
     !> Modifiers
 
     !>  \brief  is a symmetry adaptor
-    subroutine apply_1( self, e_in, symop, e_sym )
+    subroutine apply_ori( self, e_in, symop, e_sym )
         class(sym), intent(in)    :: self
         class(ori), intent(in)    :: e_in  !< orientation object
         integer,    intent(in)    :: symop !< index of sym operation
@@ -317,10 +307,10 @@ contains
         call e_sym%set_euler(e_tmp%get_euler())
         call e_symop%kill
         call e_tmp%kill
-    end subroutine apply_1
+    end subroutine apply_ori
 
     !>  \brief  is a symmetry adaptor, operates on euler triplet
-    subroutine apply_2( self, euls_in, symop, euls_sym )
+    subroutine apply_euls( self, euls_in, symop, euls_sym )
         class(sym), intent(in)    :: self
         real,       intent(in)    :: euls_in(3)
         integer,    intent(in)    :: symop !< index of sym operation
@@ -328,7 +318,7 @@ contains
         real :: euls_symop(3)
         euls_symop = self%e_sym%get_euler(symop)
         call euler_compose(euls_symop, euls_in, euls_sym)
-    end subroutine apply_2
+    end subroutine apply_euls
 
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in, symop )
@@ -355,6 +345,8 @@ contains
         if( self%within_asymunit(osym, incl_mirr=.true.) )then
             ! already in asymetric unit
         else
+            ! from the record: c1 has no other operator, and its record must survive
+            oasym = osym
             do nsym=2,self%n ! nsym=1 is the identity operator
                 call self%apply(osym, nsym, oasym)
                 if( self%within_asymunit(oasym, incl_mirr=.true.) ) exit
@@ -380,7 +372,7 @@ contains
 
     !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
-    subroutine sym_dists_1( self, oref, oasym, osym, euldist, inplrotdist )
+    subroutine sym_dists_ori( self, oref, oasym, osym, euldist, inplrotdist )
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref        !< is the untouched reference
         class(ori), intent(in)    :: oasym       !< is the orientation determined within asymmetric unit
@@ -422,11 +414,11 @@ contains
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )
         call o%kill
-    end subroutine sym_dists_1
+    end subroutine sym_dists_ori
 
         !>  \brief  determines euler distance and corresponding symmetrized
     !>          orientation between two orientations
-    subroutine sym_dists_2( self, euls_ref, euls_asym, euls_sym, euldist, inplrotdist )
+    subroutine sym_dists_euls( self, euls_ref, euls_asym, euls_sym, euldist, inplrotdist )
         class(sym), intent(in)    :: self
         real,       intent(in)    :: euls_ref(3), euls_asym(3)
         real,       intent(inout) :: euls_sym(3) !< symmetry-equivalent representative minimizing in-plane tie distance
@@ -434,7 +426,7 @@ contains
         real,       intent(out)   :: inplrotdist !< in-plane distance for euls_sym
         real    :: euls(3), dist, inpldist
         integer :: isym
-        ! same tie-folding as sym_dists_1, see the rationale there
+        ! same tie-folding as sym_dists_ori, see the rationale there
         real, parameter :: TIETOL = 1.e-4 ! radians
         euldist     = euler_dist(euls_asym, euls_ref)
         inplrotdist = euler_inplrotdist(euls_asym, euls_ref)
@@ -461,7 +453,7 @@ contains
         endif
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )
-    end subroutine sym_dists_2
+    end subroutine sym_dists_euls
 
     !>  \brief  table of the symmetry-minimised Euler distance (degrees): distmat(i,j) is the euldist that
     !!          sym_dists(oref = os_ref(i), oasym = os_asym(j)) returns, with the same tie folding. The symmetry
@@ -515,7 +507,7 @@ contains
         !$omp private(i,j,isym,euldist,inplrotdist,dist,inpldist)
         do j = 1,nasym
             do i = 1,nref
-                ! the same order of operands and the same branches as sym_dists_1
+                ! the same order of operands and the same branches as sym_dists_ori
                 euldist     = myacos(dot_product(nrm_asym(:,1,j), nrm_ref(:,i)))
                 inplrotdist = myacos(dot_product(x_asym(:,1,j),   x_ref(:,i)))
                 do isym = 2,self%n
@@ -690,7 +682,7 @@ contains
     !! the policy here is based solely on angular distance and initialization of lnns is
     !! deferred to the calling unit, so that we can add additional neighborhoods on top of
     !! of each other to create more complex search spaces
-    subroutine nearest_proj_neighbors_1( self, os_asym_unit, o, euldist_thres, lnns )
+    subroutine nearest_proj_neighbors_thres( self, os_asym_unit, o, euldist_thres, lnns )
         class(sym), intent(inout) :: self
         type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
         class(ori), intent(in)    :: o
@@ -719,13 +711,13 @@ contains
         endif
         call oasym%kill
         call osym%kill
-    end subroutine nearest_proj_neighbors_1
+    end subroutine nearest_proj_neighbors_thres
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases
     !! initialization of lnns is
     !! deferred to the calling unit, so that we can add additional neighborhoods on top of
     !! of each other to create more complex search spaces
-    subroutine nearest_proj_neighbors_2( self, os_asym_unit, o, nnn, lnns )
+    subroutine nearest_proj_neighbors_k( self, os_asym_unit, o, nnn, lnns )
         class(sym), intent(inout) :: self
         type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
         class(ori), intent(in)    :: o
@@ -757,7 +749,7 @@ contains
         endif
         call oasym%kill
         call osym%kill
-    end subroutine nearest_proj_neighbors_2
+    end subroutine nearest_proj_neighbors_k
 
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
     subroutine nearest_sym_neighbors( self, asym_os, nnmat )
@@ -940,27 +932,27 @@ contains
 
     end subroutine build_refspiral
 
-    subroutine rnd_euler_1( self, osym )
+    subroutine rnd_euler_full( self, osym )
         class(sym), intent(inout) :: self
         class(ori), intent(inout) :: osym
         call osym%rnd_euler(self%eullims)
-    end subroutine rnd_euler_1
+    end subroutine rnd_euler_full
 
-    subroutine rnd_euler_2( self, o_prev, athres, osym )
+    subroutine rnd_euler_near( self, o_prev, athres, osym )
         class(sym),     intent(inout) :: self
         class(ori),     intent(in)    :: o_prev
         real,           intent(in)    :: athres
         class(ori),     intent(inout) :: osym
         call osym%rnd_euler(o_prev, athres, self%eullims)
-    end subroutine rnd_euler_2
+    end subroutine rnd_euler_near
 
-    subroutine rnd_euler_3( self, o_prev, athres_proj, athres_inpl, osym )
+    subroutine rnd_euler_near_projinpl( self, o_prev, athres_proj, athres_inpl, osym )
         class(sym),     intent(inout) :: self
         class(ori),     intent(in)    :: o_prev
         real,           intent(in)    :: athres_proj, athres_inpl
         class(ori),     intent(inout) :: osym
         call osym%rnd_euler(o_prev, athres_proj, athres_inpl, self%eullims)
-    end subroutine rnd_euler_3
+    end subroutine rnd_euler_near_projinpl
 
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )
@@ -1066,791 +1058,6 @@ contains
             end do
         end do
     end subroutine make_i_spider
-
-    subroutine make_i_relion( self )
-        class(sym), intent(inout) :: self
-        real :: rmat(3,3)
-        type(ori) :: o
-        ! Symmetry operation: 1
-        rmat(1,1) = 1
-        rmat(1,2) = 0
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = 1
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = 0
-        rmat(3,3) = 1
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(1, o)
-
-        ! Symmetry operation: 2
-        rmat(1,1) = -1
-        rmat(1,2) = 0
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = -1
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = 0
-        rmat(3,3) = 1
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(2, o)
-
-        ! Symmetry operation: 3
-        rmat(1,1) = 0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(3, o)
-
-        ! Symmetry operation: 4
-        rmat(1,1) = -0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(4, o)
-
-        ! Symmetry operation: 5
-        rmat(1,1) = -0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(5, o)
-
-        ! Symmetry operation: 6
-        rmat(1,1) = 0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(6, o)
-
-        ! Symmetry operation: 7
-        rmat(1,1) = -0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(7, o)
-
-        ! Symmetry operation: 8
-        rmat(1,1) = -0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(8, o)
-
-        ! Symmetry operation: 9
-        rmat(1,1) = -0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(9, o)
-
-        ! Symmetry operation: 10
-        rmat(1,1) = 0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(10, o)
-
-        ! Symmetry operation: 11
-        rmat(1,1) = 0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(11, o)
-
-        ! Symmetry operation: 12
-        rmat(1,1) = 0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(12, o)
-
-        ! Symmetry operation: 13
-        rmat(1,1) = 0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(13, o)
-
-        ! Symmetry operation: 14
-        rmat(1,1) = -0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(14, o)
-
-        ! Symmetry operation: 15
-        rmat(1,1) = -0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(15, o)
-
-        ! Symmetry operation: 16
-        rmat(1,1) = 0
-        rmat(1,2) = 0
-        rmat(1,3) = 1
-        rmat(2,1) = 1
-        rmat(2,2) = 0
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = 1
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(16, o)
-
-        ! Symmetry operation: 17
-        rmat(1,1) = 0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(17, o)
-
-        ! Symmetry operation: 18
-        rmat(1,1) = 0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(18, o)
-
-        ! Symmetry operation: 19
-        rmat(1,1) = 0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = 0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(19, o)
-
-        ! Symmetry operation: 20
-        rmat(1,1) = 0
-        rmat(1,2) = 1
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = 0
-        rmat(2,3) = 1
-        rmat(3,1) = 1
-        rmat(3,2) = 0
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(20, o)
-
-        ! Symmetry operation: 21
-        rmat(1,1) = 0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(21, o)
-
-        ! Symmetry operation: 22
-        rmat(1,1) = 0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(22, o)
-
-        ! Symmetry operation: 23
-        rmat(1,1) = 0
-        rmat(1,2) = 0
-        rmat(1,3) = 1
-        rmat(2,1) = -1
-        rmat(2,2) = 0
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = -1
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(23, o)
-
-        ! Symmetry operation: 24
-        rmat(1,1) = -0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(24, o)
-
-        ! Symmetry operation: 25
-        rmat(1,1) = -0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(25, o)
-
-        ! Symmetry operation: 26
-        rmat(1,1) = 0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(26, o)
-
-        ! Symmetry operation: 27
-        rmat(1,1) = 0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(27, o)
-
-        ! Symmetry operation: 28
-        rmat(1,1) = 0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(28, o)
-
-        ! Symmetry operation: 29
-        rmat(1,1) = 0
-        rmat(1,2) = -1
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = 0
-        rmat(2,3) = -1
-        rmat(3,1) = 1
-        rmat(3,2) = 0
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(29, o)
-
-        ! Symmetry operation: 30
-        rmat(1,1) = -0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(30, o)
-
-        ! Symmetry operation: 31
-        rmat(1,1) = -0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(31, o)
-
-        ! Symmetry operation: 32
-        rmat(1,1) = -0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = 0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(32, o)
-
-        ! Symmetry operation: 33
-        rmat(1,1) = 0
-        rmat(1,2) = 0
-        rmat(1,3) = -1
-        rmat(2,1) = -1
-        rmat(2,2) = 0
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = 1
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(33, o)
-
-        ! Symmetry operation: 34
-        rmat(1,1) = -0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = 0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(34, o)
-
-        ! Symmetry operation: 35
-        rmat(1,1) = -0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(35, o)
-
-        ! Symmetry operation: 36
-        rmat(1,1) = 0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(36, o)
-
-        ! Symmetry operation: 37
-        rmat(1,1) = 0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(37, o)
-
-        ! Symmetry operation: 38
-        rmat(1,1) = -0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(38, o)
-
-        ! Symmetry operation: 39
-        rmat(1,1) = -0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = 0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(39, o)
-
-        ! Symmetry operation: 40
-        rmat(1,1) = -0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = 0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(40, o)
-
-        ! Symmetry operation: 41
-        rmat(1,1) = 0
-        rmat(1,2) = 0
-        rmat(1,3) = -1
-        rmat(2,1) = 1
-        rmat(2,2) = 0
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = -1
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(41, o)
-
-        ! Symmetry operation: 42
-        rmat(1,1) = 0
-        rmat(1,2) = -1
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = 0
-        rmat(2,3) = 1
-        rmat(3,1) = -1
-        rmat(3,2) = 0
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(42, o)
-
-        ! Symmetry operation: 43
-        rmat(1,1) = -0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(43, o)
-
-        ! Symmetry operation: 44
-        rmat(1,1) = -0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = 0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = 0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(44, o)
-
-        ! Symmetry operation: 45
-        rmat(1,1) = -0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = 0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = 0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(45, o)
-
-        ! Symmetry operation: 46
-        rmat(1,1) = 0
-        rmat(1,2) = 1
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = 0
-        rmat(2,3) = -1
-        rmat(3,1) = -1
-        rmat(3,2) = 0
-        rmat(3,3) = 0
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(46, o)
-
-        ! Symmetry operation: 47
-        rmat(1,1) = -0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(47, o)
-
-        ! Symmetry operation: 48
-        rmat(1,1) = 0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(48, o)
-
-        ! Symmetry operation: 49
-        rmat(1,1) = 0.80902
-        rmat(1,2) = 0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = -0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = -0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = 0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(49, o)
-
-        ! Symmetry operation: 50
-        rmat(1,1) = 0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(50, o)
-
-        ! Symmetry operation: 51
-        rmat(1,1) = 0.80902
-        rmat(1,2) = -0.30902
-        rmat(1,3) = -0.5
-        rmat(2,1) = 0.30902
-        rmat(2,2) = -0.5
-        rmat(2,3) = 0.80902
-        rmat(3,1) = -0.5
-        rmat(3,2) = -0.80902
-        rmat(3,3) = -0.30902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(51, o)
-
-        ! Symmetry operation: 52
-        rmat(1,1) = 0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(52, o)
-
-        ! Symmetry operation: 53
-        rmat(1,1) = -0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = 0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(53, o)
-
-        ! Symmetry operation: 54
-        rmat(1,1) = 1
-        rmat(1,2) = 0
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = -1
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = 0
-        rmat(3,3) = -1
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(54, o)
-
-        ! Symmetry operation: 55
-        rmat(1,1) = 0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = -0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = 0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(55, o)
-
-        ! Symmetry operation: 56
-        rmat(1,1) = 0.30902
-        rmat(1,2) = -0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = -0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = 0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = 0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(56, o)
-
-        ! Symmetry operation: 57
-        rmat(1,1) = -0.5
-        rmat(1,2) = -0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = -0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = 0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = 0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(57, o)
-
-        ! Symmetry operation: 58
-        rmat(1,1) = -0.5
-        rmat(1,2) = 0.80902
-        rmat(1,3) = -0.30902
-        rmat(2,1) = 0.80902
-        rmat(2,2) = 0.30902
-        rmat(2,3) = -0.5
-        rmat(3,1) = -0.30902
-        rmat(3,2) = -0.5
-        rmat(3,3) = -0.80902
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(58, o)
-
-        ! Symmetry operation: 59
-        rmat(1,1) = 0.30902
-        rmat(1,2) = 0.5
-        rmat(1,3) = -0.80902
-        rmat(2,1) = 0.5
-        rmat(2,2) = -0.80902
-        rmat(2,3) = -0.30902
-        rmat(3,1) = -0.80902
-        rmat(3,2) = -0.30902
-        rmat(3,3) = -0.5
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(59, o)
-
-        ! Symmetry operation: 60
-        rmat(1,1) = -1
-        rmat(1,2) = 0
-        rmat(1,3) = 0
-        rmat(2,1) = 0
-        rmat(2,2) = 1
-        rmat(2,3) = 0
-        rmat(3,1) = 0
-        rmat(3,2) = 0
-        rmat(3,3) = -1
-        call o%ori_from_rotmat(rmat, is_ptcl=.false.)
-        call self%e_sym%set_ori(60, o)
-    end subroutine make_i_relion
 
     !>  \brief Sets the array of subgroups (character identifier) including itself
     subroutine set_subgrps( self )

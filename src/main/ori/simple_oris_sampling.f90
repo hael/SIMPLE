@@ -240,10 +240,9 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt
 
-    !> Nested square-root quota: nint(update_frac * active) is shared over the groups in proportion to the
-    !! square root of their populations (capped at the populations), each group's share over its units the
-    !! same way (the remainder to the least-updated units), and a unit draws its quota lowest updatecnt
-    !! first. Units with group 0 are their own group.
+    !> Nested equal quota: nint(update_frac * active) is shared equally over the groups (capped at their
+    !! populations), each group's share equally over its units (the remainder to the least-updated units),
+    !! and a unit draws its quota lowest updatecnt first. Units with group 0 are their own group.
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, &
         &frac_best, allow_empty, key )
         class(oris),          intent(inout) :: self
@@ -335,49 +334,59 @@ contains
         endif
     end subroutine keyed_or_intrinsic_shuffle
 
-    !> Integer unit quotas (clssmp%nsample) of the nested square-root quota: the floors of the real quotas
-    !! of class_sample_quotas, then one more particle each to the units with a fractional quota whose
-    !! particles have the lowest mean updatecnt (ties: larger population, then lower index), so the quotas
-    !! are the same in every partition and the remainder rotates over the iterations.
+    !> Integer unit quotas (clssmp%nsample) of the nested equal quota. Inside a group the remainder of
+    !! the equal split goes to the units with the lowest mean updatecnt (ties: larger population, then
+    !! lower index), so it is the same in every partition and rotates over the iterations.
     subroutine alloc_unit_quotas( self, clssmp, ntarget )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: ntarget
-        real, parameter      :: QUOTA_TOL = 1.e-4
-        real,    allocatable :: quotas(:), ucnt_mean(:)
-        logical, allocatable :: l_open(:)
-        integer :: nunits, i, k, remaining, ibest
+        integer, allocatable :: gquota(:), members(:), open_units(:)
+        real,    allocatable :: ucnt_mean(:)
+        logical, allocatable :: l_taken(:)
+        integer :: gind(size(clssmp)), ngroups, nunits, g, i, k, remaining, nopen, ibest
         nunits = size(clssmp)
         clssmp(:)%nsample = 0
         if( nunits < 1 ) return
-        allocate(quotas(nunits), ucnt_mean(nunits), source=0.)
-        call class_sample_quotas(clssmp, ntarget, quotas)
+        call unit_groups(clssmp, gind, ngroups)
+        call group_quotas(clssmp, gind, ngroups, ntarget, gquota)
+        allocate(ucnt_mean(nunits), source=0.)
         do i = 1, nunits
             if( clssmp(i)%pop < 1 ) cycle
-            clssmp(i)%nsample = min(clssmp(i)%pop, floor(quotas(i) + QUOTA_TOL))
             do k = 1, clssmp(i)%pop
                 ucnt_mean(i) = ucnt_mean(i) + real(self%o(clssmp(i)%pinds(k))%get_int('updatecnt'))
             end do
             ucnt_mean(i) = ucnt_mean(i) / real(clssmp(i)%pop)
         end do
-        remaining = min(ntarget, sum(clssmp(:)%pop)) - sum(clssmp(:)%nsample)
-        ! the units with a fractional quota take the remainder; any open unit if rounding leaves more
-        l_open = clssmp(:)%nsample < clssmp(:)%pop .and. quotas - real(clssmp(:)%nsample) > QUOTA_TOL
-        do while( remaining > 0 )
-            if( .not. any(l_open) ) l_open = clssmp(:)%nsample < clssmp(:)%pop
-            if( .not. any(l_open) ) exit
-            ibest = 0
-            do i = 1, nunits
-                if( .not. l_open(i) ) cycle
-                if( ibest == 0 )then
-                    ibest = i
-                else if( takes_remainder(i, ibest) )then
-                    ibest = i
+        do g = 1, ngroups
+            members   = pack([(i, i=1,nunits)], mask=gind == g)
+            remaining = gquota(g)
+            do
+                open_units = pack(members, mask=clssmp(members)%nsample < clssmp(members)%pop)
+                nopen      = size(open_units)
+                if( remaining <= 0 .or. nopen == 0 ) exit
+                if( remaining >= nopen )then
+                    clssmp(open_units)%nsample = clssmp(open_units)%nsample + 1
+                    remaining = remaining - nopen
+                else
+                    allocate(l_taken(nopen), source=.false.)
+                    do k = 1, remaining
+                        ibest = 0
+                        do i = 1, nopen
+                            if( l_taken(i) ) cycle
+                            if( ibest == 0 )then
+                                ibest = i
+                            else if( takes_remainder(open_units(i), open_units(ibest)) )then
+                                ibest = i
+                            endif
+                        end do
+                        l_taken(ibest) = .true.
+                        clssmp(open_units(ibest))%nsample = clssmp(open_units(ibest))%nsample + 1
+                    end do
+                    deallocate(l_taken)
+                    remaining = 0
                 endif
             end do
-            clssmp(ibest)%nsample = clssmp(ibest)%nsample + 1
-            l_open(ibest)         = .false.
-            remaining             = remaining - 1
         end do
 
     contains
@@ -418,53 +427,51 @@ contains
         ngroups = size(labels)
     end subroutine unit_groups
 
-    !> total shared over pops in proportion to the square root of each population, every share capped at its
-    !! population and the excess shared again over the uncapped entries; an empty entry gets nothing
-    pure subroutine sqrt_capped_shares( pops, total, shares )
-        integer, intent(in)  :: pops(:)
-        real,    intent(in)  :: total
-        real,    intent(out) :: shares(size(pops))
-        logical :: l_open(size(pops)), l_capped(size(pops))
-        real    :: remaining, wsum
-        shares    = 0.
-        l_open    = pops > 0
-        remaining = total
-        do
-            if( .not. any(l_open) .or. remaining <= 0. ) exit
-            wsum     = sum(sqrt(real(pops)), mask=l_open)
-            l_capped = l_open .and. real(pops) <= remaining * sqrt(real(pops)) / wsum
-            if( .not. any(l_capped) )then
-                where( l_open ) shares = remaining * sqrt(real(pops)) / wsum
-                exit
-            endif
-            where( l_capped ) shares = real(pops)
-            remaining = remaining - real(sum(pops, mask=l_capped))
-            l_open    = l_open .and. .not. l_capped
+    !> equal group quotas capped at the group populations; every open group gets one more particle
+    !! per round, so the total may exceed ntarget by fewer than the number of groups
+    subroutine group_quotas( clssmp, gind, ngroups, ntarget, gquota )
+        type(class_sample),   intent(in)    :: clssmp(:)
+        integer,              intent(in)    :: gind(:), ngroups, ntarget
+        integer, allocatable, intent(inout) :: gquota(:)
+        integer :: gpop(ngroups), g
+        do g = 1, ngroups
+            gpop(g) = sum(clssmp(:)%pop, mask=gind == g)
         end do
-    end subroutine sqrt_capped_shares
+        if( allocated(gquota) ) deallocate(gquota)
+        allocate(gquota(ngroups), source=0)
+        do while( sum(gquota) < ntarget .and. any(gquota < gpop) )
+            where( gquota < gpop ) gquota = gquota + 1
+        end do
+    end subroutine group_quotas
 
     module subroutine class_sample_quotas( clssmp, ntarget, quotas )
         type(class_sample), intent(in)  :: clssmp(:)
         integer,            intent(in)  :: ntarget
         real,               intent(out) :: quotas(size(clssmp))
-        integer, allocatable :: members(:)
-        real,    allocatable :: gquota(:), mquota(:)
-        integer :: gind(size(clssmp)), gpop(size(clssmp)), ngroups, nunits, g, i
+        integer, allocatable :: gquota(:), members(:), open_units(:), capped(:)
+        integer :: gind(size(clssmp)), ngroups, nunits, g, i
+        real    :: remaining, share
         nunits = size(clssmp)
         quotas = 0.
         if( nunits < 1 ) return
         call unit_groups(clssmp, gind, ngroups)
+        call group_quotas(clssmp, gind, ngroups, ntarget, gquota)
         do g = 1, ngroups
-            gpop(g) = sum(clssmp(:)%pop, mask=gind == g)
-        end do
-        allocate(gquota(ngroups))
-        call sqrt_capped_shares(gpop(:ngroups), real(ntarget), gquota)
-        do g = 1, ngroups
-            members = pack([(i, i=1,nunits)], mask=gind == g)
-            allocate(mquota(size(members)))
-            call sqrt_capped_shares(clssmp(members)%pop, gquota(g), mquota)
-            quotas(members) = mquota
-            deallocate(mquota)
+            members    = pack([(i, i=1,nunits)], mask=gind == g .and. clssmp(:)%pop > 0)
+            open_units = members
+            remaining  = real(gquota(g))
+            do
+                if( size(open_units) == 0 .or. remaining <= 0. ) exit
+                share  = remaining / real(size(open_units))
+                capped = pack(open_units, mask=real(clssmp(open_units)%pop) <= share)
+                if( size(capped) == 0 )then
+                    quotas(open_units) = share
+                    exit
+                endif
+                quotas(capped) = real(clssmp(capped)%pop)
+                remaining      = remaining - real(sum(clssmp(capped)%pop))
+                open_units     = pack(open_units, mask=real(clssmp(open_units)%pop) > share)
+            end do
         end do
     end subroutine class_sample_quotas
 
@@ -626,7 +633,7 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_missing
 
-    module subroutine sample_balanced_1( self, clssmp, nptcls, l_greedy, states, exact )
+    module subroutine sample_balanced_mode( self, clssmp, nptcls, l_greedy, states, exact )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: nptcls
@@ -677,9 +684,9 @@ contains
                 deallocate(pinds_left)
             end do
         endif
-    end subroutine sample_balanced_1
+    end subroutine sample_balanced_mode
 
-    module subroutine sample_balanced_2( self, clssmp, nptcls, frac_best, states )
+    module subroutine sample_balanced_frac_best( self, clssmp, nptcls, frac_best, states )
         class(oris),        intent(in)    :: self
         type(class_sample), intent(inout) :: clssmp(:)
         integer,            intent(in)    :: nptcls
@@ -707,7 +714,7 @@ contains
                 deallocate(pinds2sample)
             endif
         end do
-    end subroutine sample_balanced_2
+    end subroutine sample_balanced_frac_best
 
     module subroutine sample_balanced_inv( self, clssmp, nptcls, frac_worst, states )
         class(oris),        intent(in)    :: self

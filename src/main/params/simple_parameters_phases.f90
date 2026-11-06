@@ -119,6 +119,11 @@ contains
                 self%projname = str_tmp%to_char()
             endif
         endif
+        ! a partition worker reads its master's project and writes part files (a stream job owns its job project)
+        if( allocated(worker_projfile_glob) ) deallocate(worker_projfile_glob)
+        if( self%l_distr_worker .and. self%stream .ne. 'yes' .and. self%projfile .ne. '' )then
+            worker_projfile_glob = self%projfile%to_char()
+        endif
         if( self%mkdir .eq. 'yes' )then
             if( associated(self%ptr2prg) .and. .not. self%executable%has_substr('simple_private') )then
                 if( self%prg .eq. 'mkdir' )then

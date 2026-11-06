@@ -316,7 +316,7 @@ contains
         self%ft = .false.
     end subroutine corners
 
-    module subroutine gauimg_1( self, wsz , alpha )
+    module subroutine gauimg_center( self, wsz , alpha )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: wsz
         real, intent(in), optional  :: alpha
@@ -346,9 +346,9 @@ contains
         end do
         self%ft = .false.
         call self%zero_padding
-    end subroutine gauimg_1
+    end subroutine gauimg_center
 
-    module subroutine gauimg_2( self, wsz, offx,offy)
+    module subroutine gauimg_offset( self, wsz, offx,offy)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: wsz, offx, offy
         real    :: x, y, z, xw, yw, zw
@@ -375,7 +375,7 @@ contains
         end do
         self%ft = .false.
         call self%zero_padding
-    end subroutine gauimg_2
+    end subroutine gauimg_offset
 
     module subroutine gauimg2D( self, xsigma, ysigma, cutoff )
         class(image),   intent(inout) :: self
@@ -542,7 +542,7 @@ contains
         call tmp%kill()
     end subroutine pad_inplace
 
-    module subroutine pad_mirr_1( self_in, self_out )
+    module subroutine pad_mirr_into( self_in, self_out )
         class(image), intent(inout) :: self_in, self_out
         integer :: starts(3), stops(3)
         integer :: i,j, i_in, j_in
@@ -591,17 +591,17 @@ contains
         else
             THROW_HARD('inconsistent dimensions; pad_mirr')
         endif
-    end subroutine pad_mirr_1
+    end subroutine pad_mirr_into
 
-    module subroutine pad_mirr_2( self, ldim )
+    module subroutine pad_mirr_inplace( self, ldim )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: ldim(3)
         type(image) :: tmp
         call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
-        call self%pad_mirr_1(tmp)
+        call self%pad_mirr_into(tmp)
         call self%copy(tmp)
         call tmp%kill
-    end subroutine pad_mirr_2
+    end subroutine pad_mirr_inplace
 
     ! For reconstruction: pads fourier self_prev & rho_prev array, it is assumed self & rho have been zeroed
     module subroutine pad_mats( self, rho, self_prev, rho_prev)
@@ -1188,7 +1188,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine shift
 
-    module subroutine shift2Dserial_1( self, shvec  )
+    module subroutine shift2Dserial_inplace( self, shvec  )
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(2)
         real(dp),allocatable :: hcos(:), hsin(:)
@@ -1213,7 +1213,7 @@ contains
                     &* cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h),sp)
             end do
         end do
-    end subroutine shift2Dserial_1
+    end subroutine shift2Dserial_inplace
 
     module subroutine shift2D_demoivre( self, shvec  )
         class(image), intent(inout) :: self
@@ -1246,7 +1246,7 @@ contains
         enddo
     end subroutine shift2D_demoivre
 
-    module subroutine shift2Dserial_2( self, shvec, self_out )
+    module subroutine shift2Dserial_into( self, shvec, self_out )
         class(image), intent(inout) :: self, self_out
         real,         intent(in)    :: shvec(2)
         real(dp),allocatable :: hcos(:), hsin(:)
@@ -1271,7 +1271,7 @@ contains
                     &* cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h),sp)
             end do
         end do
-    end subroutine shift2Dserial_2
+    end subroutine shift2Dserial_into
 
     module subroutine masscen( self, xyz, mask_in )
         class(image),      intent(inout) :: self

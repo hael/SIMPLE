@@ -5,7 +5,8 @@ implicit none
 
 integer, parameter :: POLMEM_NORMAL = 1, POLMEM_OVERSAMP = 2
 
-! polarization memoization (mem_poldim lives in the parent: it bounds the polarizer interfaces)
+! polarization memoization (polarize checks the caller's pdim against mem_poldim)
+integer              :: mem_poldim(3)    = 0      !< Polar-FT matrix dimensions
 real,    allocatable :: mem_polweights_mat(:,:,:) !< polar weights matrix for the image to polar transformer
 integer, allocatable :: mem_polph_mat(:,:,:)      !< physical h addresses for the image to polar transformer
 integer, allocatable :: mem_polk_mat(:,:,:)       !< physical k addresses for the image to polar transformer
@@ -26,6 +27,7 @@ contains
         real              :: x, y, dang
         integer           :: win_lo(2), lims(2,3), i, k, l, m, ind, wdim, iwinsz
         if( polar_memo_valid(self, pdim, POLMEM_NORMAL) ) return
+        if( OMP_IN_PARALLEL() ) THROW_HARD('no polarizer memo inside an OpenMP region; memoize4polarize')
         call clear_polar_memo
         mem_poldim   = pdim
         mem_polldim  = self%ldim
@@ -85,6 +87,7 @@ contains
         real    :: xpd, ypd, dang
         integer :: win_lo(2), lims(2,3), i, k, l, m, ind, pf, wdim, iwinsz
         if( polar_memo_valid(self, pdim, POLMEM_OVERSAMP) ) return
+        if( OMP_IN_PARALLEL() ) THROW_HARD('no polarizer memo inside an OpenMP region; memoize4polarize_oversamp')
         call clear_polar_memo
         mem_poldim  = pdim
         mem_polldim = self%ldim
@@ -140,11 +143,14 @@ contains
     end subroutine memoize4polarize_oversamp
 
     ! keep serial
-    module subroutine polarize( self, pft )
+    module subroutine polarize( self, pdim, pft )
         class(image),      intent(in)    :: self     !< image instance to polarize
-        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3)) !< polarft to be filled
+        integer,           intent(in)    :: pdim(3)
+        complex,           intent(inout) :: pft(pdim(1),pdim(2):pdim(3)) !< polarft to be filled
         complex(kind=c_float_complex) :: acc, fcomp
         integer :: i, k, ind
+        ! the memo's box, polar dimensions and mode, or the samples are another geometry's
+        if( .not. polar_memo_valid(self, pdim, POLMEM_NORMAL) ) THROW_HARD('polarizer memo does not match the box, pdim or mode; polarize')
         ! interpolate
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,fcomp)
         do k = mem_poldim(2), mem_poldim(3)
@@ -161,12 +167,15 @@ contains
         !$OMP END SIMD
     end subroutine polarize
 
-    module subroutine polarize_oversamp( self, pft )
+    module subroutine polarize_oversamp( self, pdim, pft )
         class(image),      intent(in)    :: self
-        complex,           intent(inout) :: pft(mem_poldim(1),mem_poldim(2):mem_poldim(3))
+        integer,           intent(in)    :: pdim(3)
+        complex,           intent(inout) :: pft(pdim(1),pdim(2):pdim(3))
         complex(kind=c_float_complex) :: acc, fcomp
         real    :: padding_factor_scaling
         integer :: i, k, ind
+        ! the memo's box, polar dimensions and mode, or the samples are another geometry's
+        if( .not. polar_memo_valid(self, pdim, POLMEM_OVERSAMP) ) THROW_HARD('polarizer memo does not match the box, pdim or mode; polarize_oversamp')
         padding_factor_scaling = real(OSMPL_PAD_FAC**2)
         !$OMP SIMD COLLAPSE(2) PRIVATE(i,k,acc,ind,fcomp)
         do k = mem_poldim(2), mem_poldim(3)

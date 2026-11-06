@@ -30,9 +30,9 @@ type :: chash
     logical :: exists      = .false.        !< to indicate existence
   contains
     !< CONSTRUCTORS
-    procedure, private :: new_1
-    procedure, private :: new_2
-    generic            :: new => new_1, new_2
+    procedure, private :: new_default
+    procedure, private :: new_by_sz
+    generic            :: new => new_default, new_by_sz
     procedure, private :: alloc_chash
     procedure, private :: realloc_chash
     procedure, private :: copy
@@ -40,19 +40,19 @@ type :: chash
     procedure          :: parse_cmdline
     procedure          :: gen_job_descr
     !< SETTERS
-    procedure, private :: push_1, push_2, push_3
-    generic            :: push => push_1, push_2, push_3
-    procedure, private :: set_1, set_2, set_3
-    generic            :: set => set_1, set_2, set_3
+    procedure, private :: push_char, push_char_str, push_str
+    generic            :: push => push_char, push_char_str, push_str
+    procedure, private :: set_char, set_char_str, set_str
+    generic            :: set => set_char, set_char_str, set_str
     procedure          :: delete
-    procedure, private :: move_key_to_front_1, move_key_to_front_2
-    generic            :: move_key_to_front => move_key_to_front_1, move_key_to_front_2
+    procedure, private :: move_key_to_front_char, move_key_to_front_str
+    generic            :: move_key_to_front => move_key_to_front_char, move_key_to_front_str
     !< GETTERS
     procedure          :: isthere
     procedure          :: lookup
     procedure          :: reverselookup
-    procedure, private :: get_1, get_2
-    generic            :: get => get_1, get_2
+    procedure, private :: get_by_key, get_by_ind
+    generic            :: get => get_by_key, get_by_ind
     procedure          :: get_static
     procedure          :: get_key
     procedure          :: chash2str
@@ -61,8 +61,8 @@ type :: chash
     !< MODIFIERS
     procedure          :: sort
     !< PRINTERS
-    procedure, private :: print_key_val_pair_1
-    procedure, private :: print_key_val_pair_2
+    procedure, private :: print_key_val_pair_by_key
+    procedure, private :: print_key_val_pair_by_ind
     procedure          :: print_key_val_pairs
     !< DESTRUCTORS
     procedure          :: kill
@@ -70,8 +70,8 @@ type :: chash
 end type chash
 
 interface chash
-    module procedure constructor_1
-    module procedure constructor_2
+    module procedure constructor_default
+    module procedure constructor_by_sz
 end interface chash
 
 contains
@@ -79,30 +79,30 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    function constructor_1( ) result( self )
+    function constructor_default( ) result( self )
         type(chash) :: self
-        call self%new_1
-    end function constructor_1
+        call self%new_default
+    end function constructor_default
 
     !>  \brief  is a constructor
-    function constructor_2( sz, buffsz ) result( self )
+    function constructor_by_sz( sz, buffsz ) result( self )
         integer,           intent(in)    :: sz     !< initial size
         integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
         type(chash) :: self
-        call self%new_2(sz, buffsz)
-    end function constructor_2
+        call self%new_by_sz(sz, buffsz)
+    end function constructor_by_sz
 
     !>  \brief  is a constructor
-    subroutine new_1( self )
+    subroutine new_default( self )
         class(chash), intent(inout) :: self
         call self%kill
         self%buffsz = BUFFSZ_DEFAULT
         call self%alloc_chash(self%buffsz)
         self%exists = .true.
-    end subroutine new_1
+    end subroutine new_default
 
     !>  \brief  is a constructor
-    subroutine new_2( self, sz, buffsz )
+    subroutine new_by_sz( self, sz, buffsz )
         class(chash),      intent(inout) :: self   !< instance
         integer,           intent(in)    :: sz     !< initial size
         integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
@@ -114,7 +114,7 @@ contains
         endif
         call self%alloc_chash(sz)
         self%exists = .true.
-    end subroutine new_2
+    end subroutine new_by_sz
 
     !>  \brief  allocates keys and values without touching buffsz and chash_index
     subroutine alloc_chash( self, sz )
@@ -202,7 +202,7 @@ contains
     ! SETTERS
 
     !>  \brief  pushes values to the chash
-    subroutine push_1( self, key, val )
+    subroutine push_char( self, key, val )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: val
@@ -217,10 +217,10 @@ contains
         self%keys(self%chash_index)   = trim(adjustl(key))
         ! set value
         self%values(self%chash_index) = trim(adjustl(val))
-    end subroutine push_1
+    end subroutine push_char
 
     !>  \brief  pushes values to the chash
-    subroutine push_2( self, key, str )
+    subroutine push_char_str( self, key, str )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         class(string),    intent(in)    :: str
@@ -235,10 +235,10 @@ contains
         self%keys(self%chash_index)   = trim(adjustl(key))
         ! set value
         self%values(self%chash_index) = str
-    end subroutine push_2
+    end subroutine push_char_str
 
     !>  \brief  pushes values to the chash
-    subroutine push_3( self, key, str )
+    subroutine push_str( self, key, str )
         class(chash),  intent(inout) :: self
         class(string), intent(in)    :: key
         class(string), intent(in)    :: str
@@ -253,10 +253,10 @@ contains
         self%keys(self%chash_index)   = key
         ! set value
         self%values(self%chash_index) = str
-    end subroutine push_3
+    end subroutine push_str
 
     !>  \brief  sets a value in the chash
-    subroutine set_1( self, key, val )
+    subroutine set_char( self, key, val )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key, val
         integer :: i
@@ -271,11 +271,11 @@ contains
             end do
         endif
         ! otherwise, push
-        call self%push_1(key, val)
-    end subroutine set_1
+        call self%push_char(key, val)
+    end subroutine set_char
 
     !>  \brief  sets a value in the chash
-    subroutine set_2( self, key, str )
+    subroutine set_char_str( self, key, str )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         class(string),    intent(in)    :: str
@@ -291,11 +291,11 @@ contains
             end do
         endif
         ! otherwise, push
-        call self%push_2(key, str)
-    end subroutine set_2
+        call self%push_char_str(key, str)
+    end subroutine set_char_str
 
     !>  \brief  sets a value in the chash
-    subroutine set_3( self, key, str )
+    subroutine set_str( self, key, str )
         class(chash),  intent(inout) :: self
         class(string), intent(in)    :: key
         class(string), intent(in)    :: str
@@ -311,8 +311,8 @@ contains
             end do
         endif
         ! otherwise, push
-        call self%push_3(key, str)
-    end subroutine set_3
+        call self%push_str(key, str)
+    end subroutine set_str
 
     !>  \brief  deletes a value in the chash
     subroutine delete( self, key )
@@ -338,7 +338,7 @@ contains
     end subroutine delete
 
     !>  \brief  moves an existing key-value pair to the front of the hash
-    subroutine move_key_to_front_1( self, key )
+    subroutine move_key_to_front_char( self, key )
         class(chash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         type(string) :: key_tmp, val_tmp
@@ -356,14 +356,14 @@ contains
         self%values(1) = val_tmp
         call key_tmp%kill
         call val_tmp%kill
-    end subroutine move_key_to_front_1
+    end subroutine move_key_to_front_char
 
     !>  \brief  moves an existing key-value pair to the front of the hash
-    subroutine move_key_to_front_2( self, key )
+    subroutine move_key_to_front_str( self, key )
         class(chash),  intent(inout) :: self
         class(string), intent(in)    :: key
-        call self%move_key_to_front_1(key%to_char())
-    end subroutine move_key_to_front_2
+        call self%move_key_to_front_char(key%to_char())
+    end subroutine move_key_to_front_str
 
     ! GETTERS
 
@@ -415,7 +415,7 @@ contains
     end function reverselookup
 
     !>  \brief  gets a value in the chash
-    function get_1( self, key ) result( val )
+    function get_by_key( self, key ) result( val )
         class(chash),     intent(in)  :: self
         character(len=*), intent(in)  :: key
         type(string) :: val
@@ -429,16 +429,16 @@ contains
                 endif
             endif
         end do
-    end function get_1
+    end function get_by_key
 
     !>  \brief  gets a value in the chash
-    function get_2( self, ival ) result( val )
+    function get_by_ind( self, ival ) result( val )
         class(chash), intent(in)      :: self
         integer,      intent(in)      :: ival
         type(string) :: val
         val = ''
         if( self%values(ival)%is_allocated() ) val = self%values(ival)
-    end function get_2
+    end function get_by_ind
 
     ! this needs to be used in openMP parallel sections
     pure subroutine get_static( self, key, val )
@@ -547,7 +547,7 @@ contains
     ! PRINTERS
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, ansi_flag )
+    subroutine print_key_val_pair_by_key( self, key, maxlen, fhandle, ansi_flag )
         class(chash),               intent(in) :: self
         character(len=*),           intent(in) :: key
         integer,                    intent(in) :: maxlen
@@ -571,12 +571,12 @@ contains
             allocate(str2print, source=format_str(key_padded//' = '//self%values(which)%to_char(), aansi_flag))
             write(fhandle, '(a,1x,a)') str2print
         else
-            THROW_HARD('key: '//trim(key)//' does not exist in the chash; print_key_val_pair_1')
+            THROW_HARD('key: '//trim(key)//' does not exist in the chash; print_key_val_pair_by_key')
         endif
-    end subroutine print_key_val_pair_1
+    end subroutine print_key_val_pair_by_key
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle, ansi_flag )
+    subroutine print_key_val_pair_by_ind( self, ikey, maxlen, fhandle, ansi_flag )
         class(chash), intent(in)      :: self
         integer,                    intent(in) :: ikey
         integer,                    intent(in) :: maxlen
@@ -595,7 +595,7 @@ contains
         end do
         allocate(str2print, source=format_str(key_padded//' = '//self%values(ikey)%to_char(), aansi_flag))
         write(fhandle, '(a,1x,a)') str2print
-    end subroutine print_key_val_pair_2
+    end subroutine print_key_val_pair_by_ind
 
     !>  \brief  pretty printing of all key-value  pairs
     subroutine print_key_val_pairs( self, fhandle, keys2print, mask )
@@ -628,9 +628,9 @@ contains
             ! print selected key-value pairs
             do ikey=1,sz
                 if( mmask(ikey) )then
-                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, ansi_flag=C_BOLD)
+                    call self%print_key_val_pair_by_key(keys2print(ikey), maxlen, fhandle, ansi_flag=C_BOLD)
                 else
-                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle)
+                    call self%print_key_val_pair_by_key(keys2print(ikey), maxlen, fhandle)
                 endif
             end do
         else
@@ -650,9 +650,9 @@ contains
                 ! print all key-value pairs
                 do ikey=1,self%chash_index
                     if( mmask(ikey) )then
-                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, ansi_flag=C_BOLD)
+                        call self%print_key_val_pair_by_ind(ikey, maxlen, fhandle, ansi_flag=C_BOLD)
                     else
-                        call self%print_key_val_pair_2(ikey, maxlen, fhandle)
+                        call self%print_key_val_pair_by_ind(ikey, maxlen, fhandle)
                     endif
                 end do
             endif

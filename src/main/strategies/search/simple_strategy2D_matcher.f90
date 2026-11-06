@@ -21,7 +21,7 @@ use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, refine2D_requires_full_assignment, &
                                            refine2D_blends_carryover, master_draws_sample2D, sample_ptcls4prob2D
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D, &
-    &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D
+    &write_sigma2_bench_context, write_sigma2_bench_timings, crop_particles2D, check_pass_team
 use simple_imgarr_utils,             only: alloc_imgarr
 use simple_strategy2D_greedy,        only: strategy2D_greedy
 use simple_strategy2D_greedy_smpl,   only: strategy2D_greedy_smpl
@@ -104,6 +104,7 @@ contains
         integer(int64)          :: pipeline_bytes, pipeline_budget
         p_ptr => params
         b_ptr => build
+        call check_pass_team('refine2D_exec')
         call init_ctrl()
         if( trim(p_ptr%inpl_cont) == 'yes' )then
             call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)

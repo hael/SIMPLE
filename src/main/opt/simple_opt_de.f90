@@ -36,31 +36,34 @@ contains
     subroutine new_de( self, spec )
         class(opt_de),   intent(inout) :: self !< instance
         class(opt_spec), intent(inout) :: spec !< specification
+        integer :: npop_mode
         ! destruct if exists
         call self%kill
         ! adjust control parameters according to mode
         select case(trim(spec%str_mode))
             case('general')
-                spec%npop = N_GENERAL
+                npop_mode = N_GENERAL
                 self%F    = F_GENERAL
                 self%CR   = X_GENERAL
             case('valley')
-                spec%npop = N_VALLEY
+                npop_mode = N_VALLEY
                 self%F    = F_VALLEY
                 self%CR   = X_VALLEY
             case('multimodal')
-                spec%npop = N_MULTIMODAL
+                npop_mode = N_MULTIMODAL
                 self%F    = F_MULTIMODAL
                 self%CR   = X_MULTIMODAL
             case('flat')
-                spec%npop = N_FLAT
+                npop_mode = N_FLAT
                 self%F    = F_FLAT
                 self%CR   = X_FLAT
             case DEFAULT
-                spec%npop = N_GENERAL
+                npop_mode = N_GENERAL
                 self%F    = F_GENERAL
                 self%CR   = X_GENERAL
         end select
+        ! the npop given to specify, else the mode's
+        if( spec%npop < 1 ) spec%npop = npop_mode
         ! allocate
         allocate(self%pop(spec%ndim,spec%npop), self%costs(spec%npop))
         self%exists = .true. ! indicates existence
@@ -75,7 +78,7 @@ contains
         real,            intent(out)   :: lowest_cost !< lowest cost
         real    :: rtol
         real    :: trial(spec%ndim), cost_trial, L
-        integer :: ab(2), i, j, X, jrand, t, loc(1)
+        integer :: ab(2), i, j, k, X, jrand, t, loc(1)
         if( .not. associated(spec%costfun) )then
             THROW_HARD('cost function not associated in opt_spec; de_minimize')
         endif
@@ -87,12 +90,18 @@ contains
                 L = spec%limits(j,2) - spec%limits(j,1)
                 self%pop(j,i) = spec%limits(j,1) + ran3() * L
             end do
-            if( i == 1 )then
-                if( .not. all(spec%x == 0.) )then ! set one point in the swarm to best point in spec
-                    self%pop(:,1)= spec%x
-                endif
-            endif
         end do
+        ! the start (unless nostart), then the members of set_inipop, replace the first random members
+        k = 0
+        if( .not. spec%nostart )then
+            k = 1
+            self%pop(:,1) = spec%x
+        endif
+        if( allocated(spec%inipopulation) )then
+            do i = 1,min(size(spec%inipopulation,dim=1), spec%npop-k)
+                self%pop(:,k+i) = spec%inipopulation(i,:)
+            end do
+        endif
         ! calculate initial costs
         do i=1,spec%npop
             self%costs(i) = spec%costfun(fun_self, self%pop(:,i), spec%ndim)

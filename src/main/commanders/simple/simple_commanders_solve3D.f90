@@ -4,7 +4,6 @@ use simple_commanders_api
 use simple_solve3D_utils
 use simple_final_rec,                              only: calc_final_rec, calc_final_rec_addon
 use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
-use simple_procimgstk,                             only: shift_imgfile
 use simple_commanders_project_core,                only: commander_selection
 use simple_commanders_reproject,                   only: commander_reproject
 use simple_commanders_refine3D,                    only: commander_refine3D, commander_bootstrap_rec3D
@@ -78,7 +77,7 @@ contains
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
         type(commander_reproject) :: xreproject
         ! other
-        type(string)              :: stk, orig_stk, shifted_stk, stk_even, stk_odd, ext
+        type(string)              :: stk, orig_stk, stk_even, stk_odd, ext
         integer, allocatable      :: states(:)
         type(ori)                 :: o, o_even, o_odd
         type(parameters)          :: params
@@ -197,7 +196,6 @@ contains
         if( .not. file_exists(stk_odd)  ) THROW_HARD('Odd cavgs stk: '//stk_odd%to_char()//' does not exist!')
         ctfvars%ctfflag = CTFFLAG_NO
         ctfvars%smpd    = params%smpd
-        shifted_stk     = basename(add2fbody(stk, ext, '_shifted'))
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//params%projfile%to_char()//'; solve3D_cavgs')
         endif
@@ -399,10 +397,6 @@ contains
             call stkio_r%close
             call stkio_r2%close
             call stkio_w%close
-            ! produce shifted stack
-            call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, cavg_smpd)
-            ! add shifted stack to project
-            call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), cavg_smpd, 'cavg_shifted')
         endif
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()

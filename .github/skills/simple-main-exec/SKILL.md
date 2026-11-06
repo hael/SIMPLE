@@ -32,14 +32,16 @@ Silent ones first: nothing reports these.
   family, `classify3D_refs`, `autorefine3D_nano`) runs the program that many times as child
   processes (`restarted_exec`); a child's non-zero exit is only reported.
 - `script=yes` builds a `parameters` with `mkdir=no`, writes a queue script and exits before routing
-  (`script_exec`).
+  (`script_exec`). `solve3D_cavgs` with `nrestarts_collapse` routes to a second commander, and
+  `solve3D` with `screen` to `exec_screen` (unreachable: `screen` is no accepted key); the front
+  doors rewrite the project's job descriptions after the commander (policy section 8).
 - `simple_exec_helpers.f90` is library code: commanders get `set_shmem_flag` (deletes `nparts` when
   it is 1) and `set_master_num_threads` (sets the OpenMP team from `SLURM_CPUS_PER_TASK`, else at
   most `NTHR_SHMEM_MAX`) through `simple_commanders_api`, and strategies call them too. A module-level
   import added there reaches every importer of that umbrella (skill `simple-main-apis`).
 - Loud: a name no router matches stops after the chain ("not recognized"); a case for a name the UI
-  does not register never runs, because `cmdline%parse` stops first (`initial_analysis` and
-  `opening2D` in `production/simple_stream.f90`, aliases of `gen_pickrefs`: ruled to be dropped).
+  does not register never runs, because `cmdline%parse` stops first: add no alias case (the stream's
+  `initial_analysis` and `opening2D` cases were dropped 2026-11-05).
   `l_silent` only drops the git version and timer lines.
 - Test routers (`simple_test_exec_class|highlevel|single|stream.f90`): each test UI program has
   exactly one case, checked by `scripts/check_test_registry.py` in the fast gate.

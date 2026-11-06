@@ -27,8 +27,8 @@ type :: parameters
     character(len=3)          :: atom_thres='yes'     !< do atomic thresholding or not (yes|no){yes}
     character(len=3)          :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
-    character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
-    character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
+    character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction(yes|no){no}
+    character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups(yes|no){no}
     character(len=4)          :: bfac_model='line'    !< dose_filter3D: shrink each window's B-factor towards the dose curve or keep its own(line|free){line}
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
@@ -39,15 +39,15 @@ type :: parameters
     character(len=3)          :: center_pdb='no'      !< move PDB atomic center to the center of the box(yes|no){no}
     character(len=3)          :: chunk='no'           !< indicates whether we are within a chunk(yes|no){no}
     character(len=3)          :: classtats='no'       !< calculate class population statistics(yes|no){no}
-    character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)
+    character(len=3)          :: clear='no'           !< clear exising processing upon start (stream)(yes|no){no}
     character(len=3)          :: cluster_only='no'    !< perform clustering only (id junk but no rejection)in cluster_cavgs(yes|no){no}
     character(len=3)          :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)          :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
-    character(len=3)          :: doprint='no'
+    character(len=3)          :: doprint='no' !< (yes|no){no}
     character(len=8)          :: dose_weighting='gg'  !< reextract: weight the movie fractions by Grant & Grigorieff or by the measured dose curve(gg|measured){gg}
-    character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
+    character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction(yes|no){yes}
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
     character(len=3)          :: exit_collapse='no'   !< early exit on state collapse(yes|no){no}
@@ -60,78 +60,78 @@ type :: parameters
     character(len=3)          :: eo_pool='yes'        !< trajectory_denoise flex: pool only frames of the same row parity(yes|no){yes}
     character(len=3)          :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)          :: ewald='neg'          !< Ewald-sphere curvature of the wave models(neg|pos|no){neg}
-    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)
+    character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)(yes|no){yes}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
-    character(len=3)          :: fillin='no'          !< fillin particle sampling (3D: every fifth iteration the particles never updated)
+    character(len=3)          :: fillin='no'          !< fillin particle sampling (3D: every fifth iteration the particles never updated)(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: freq_march_aggressive='no' !< solve3D aggressive frequency marching: from the first prob stage the limits are linear in spatial frequency from 12 A to the final limit, with finer angular sampling; the global stages keep their planned rungs(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search
-    character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
-    character(len=3)          :: hist='no'            !< whether to print histogram
+    character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search(yes|no){no}
+    character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)(yes|no){yes}
+    character(len=3)          :: hist='no'            !< whether to print histogram(yes|no){no}
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
-    character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
-    character(len=3)          :: interactive='no'     !< Whether job is interactive
-    character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
-    character(len=3)          :: json='no'            !< Print in json format (mainly for nice)
-    character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
-    character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter
+    character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit(yes|no){no}
+    character(len=3)          :: interactive='no'     !< Whether job is interactive(yes|no){no}
+    character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations(yes|no){no}
+    character(len=3)          :: json='no'            !< Print in json format (mainly for nice)(yes|no){no}
+    character(len=3)          :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d(yes|no){no}
+    character(len=3)          :: lam_anneal='no'      !< anneal lambda parameter(yes|no){no}
     character(len=3)          :: loc_sdev='no'        !< Whether to calculate local standard deviations(yes|no){no}
     character(len=STDLEN)     :: filt_mode='none'     !< filtering mode(none|uniform|fsc|nonuniform|nonuniform_lpset){none}
     character(len=3)          :: fit_phshift='no'     !< fit additive CTF phase shift(yes|no){no}
-    character(len=3)          :: makemovie='no'
-    character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
+    character(len=3)          :: makemovie='no' !< (yes|no){no}
+    character(len=3)          :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction(yes|no){yes}
     character(len=3)          :: mcpatch_thres='yes'  !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)          :: memreport='no'       !< enable per-process runtime memory telemetry(yes|no){no}
     character(len=3)          :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)          :: mirr_proj='no'       !< mirror projections(no|x|y){no}
     character(len=3)          :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
     character(len=3)          :: unfil_unmasked='no' !< internal: export unmasked unfiltered half maps(yes|no){no}
-    character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume
-    character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks
-    character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool
+    character(len=3)          :: ml_reg='yes'         !< apply ML regularization to class averages or volume(yes|no){yes}
+    character(len=3)          :: ml_reg_chunk='no'    !< apply ML regularization to class averages or volume in chunks(yes|no){no}
+    character(len=3)          :: ml_reg_pool='no'     !< apply ML regularization to class averages or volume in pool(yes|no){no}
     character(len=3)          :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
-    character(len=3)          :: norm='no'            !< do statistical normalisation avg
+    character(len=3)          :: norm='no'            !< do statistical normalisation avg(yes|no){no}
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: regpass='yes'        !< refine3D_auto: one global registration pass at the FSC=regpass_fsc band before the neighbourhood iterations(yes|no){yes}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
-    character(len=3)          :: pad='no'
+    character(len=3)          :: pad='no' !< (yes|no){no}
     character(len=3)          :: pdb_bfac='no'        !< simulate_nanoparticle pdbfile=: the B column broadens the element kernels(yes|no){no}
     character(len=3)          :: partition='no'       !< selection: states are partitions of classes, written to cls2D cluster(yes|no){no}
     character(len=3)          :: phrand='no'          !< phase randomize(yes|no){no}
-    character(len=3)          :: pick_roi='yes'
+    character(len=3)          :: pick_roi='yes' !< (yes|no){yes}
     character(len=3)          :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)          :: postprocess='yes'    !< postprocess reconstruction output(yes|no){yes}
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
-    character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
+    character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes(yes|no){no}
     character(len=3)          :: addon_diag='no'      !< solve3D_addon cohort-only diagnostic reconstruction(yes|no){no}
-    character(len=3)          :: projstats='no'
-    character(len=3)          :: prune='no'
+    character(len=3)          :: projstats='no' !< (yes|no){no}
+    character(len=3)          :: prune='no' !< (yes|no){no}
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
     character(len=3)          :: rank_cavgs='yes'     !< Whether to rank class averages(yes|no)
-    character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling
+    character(len=3)          :: ranked_parts='yes'   !< generate ranked rather than balanced partitions in class sampling(yes|no){yes}
     character(len=3)          :: recthres='no'        !< reconstruction angular threshold (yes|no){no}
-    character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac
+    character(len=3)          :: reject_mics='no'     !< whether to reject micrographs based on ctfres/icefrac(yes|no){no}
     character(len=3)          :: reseed_states='no'   !< solve3D_cavgs: reseed a state that empties from the largest(yes|no){no}
-    character(len=3)          :: remap_cls='no'
+    character(len=3)          :: remap_cls='no' !< (yes|no){no}
     character(len=3)          :: remove_chunks='yes'  !< whether to remove chunks after completion (yes|no){yes}
     character(len=3)          :: reset_boxfiles='no'  !< whether to remove existing boxfiles and set boxfile in current dir (yes|no){no}
     character(len=3)          :: restore_cavgs='yes'  !< Whether to restore images to class averages after orientation search (yes|no){yes}
-    character(len=3)          :: ring='no'            !< whether to use ring in interactive stream pick
-    character(len=3)          :: roavg='no'           !< rotationally average images in stack
+    character(len=3)          :: ring='no'            !< whether to use ring in interactive stream pick(yes|no){no}
+    character(len=3)          :: roavg='no'           !< rotationally average images in stack(yes|no){no}
     character(len=3)          :: trust_header='no'    !< whether to trust the header information in the input files(yes|no){no}
-    character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
+    character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue(yes|no){no}
     character(len=3)          :: score_states='no'    !< report quality-model scores grouped by cls3D state(yes|no){no}
     character(len=3)          :: single_pass='no'     !< only run coarse pass of sieving(yes|no){no}
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
-    character(len=3)          :: sort_asc='yes'       !< sort oris ascending
+    character(len=3)          :: sort_asc='yes'       !< sort oris ascending(yes|no){yes}
     character(len=3)          :: stepwise='no'        !< stream pool 2D: import only the sets that reach the particle threshold(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
@@ -145,19 +145,19 @@ type :: parameters
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
-    character(len=3)          :: taper_edges='no'     !< self-explanatory
+    character(len=3)          :: taper_edges='no'     !< self-explanatory(yes|no){no}
     character(len=3)          :: tester='no'          !< write periodic tester-mode tracking outputs(yes|no){no}
     character(len=3)          :: tophat='no'          !< tophat filter(yes|no){no}
-    character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes 
+    character(len=3)          :: trail_rec='no'       !< trailing (weighted average) reconstruction when update_frac=yes(yes|no){no}
     character(len=3)          :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)          :: tseries='no'         !< images represent a time-series(yes|no){no}
-    character(len=3)          :: updated='no'         !< whether parameters has been updated
+    character(len=3)          :: updated='no'         !< whether parameters has been updated; not a command-line key
     character(len=3)          :: use_model='yes'      !< use model for class-average rejection in sieve(yes|no){yes}
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
     character(len=3)          :: wfloat16='no'        !< write MRC stacks in mode 12 float16 format(yes|no){no}
-    character(len=3)          :: write_imgarr='no'    !< write out cavgs
+    character(len=3)          :: write_imgarr='no'    !< write out cavgs(yes|no){no}
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     character(len=3)          :: zerodose='no'        !< dose_filter3D: also write the zero-dose extrapolation(yes|no){no}
     ! files & directories strings in ascending alphabetical order
@@ -171,7 +171,7 @@ type :: parameters
     type(string)              :: ciffile              !< xPDB/mmCIF file
     type(string)              :: class_assignment     !< text file listing class ids assigned to a worker
     type(string)              :: classdoc             !< doc with per-class stats(.txt)
-    type(string)              :: cwd
+    type(string)              :: cwd !< not a command-line key
     type(string)              :: deftab               !< file with CTF info(.txt|.simple)
     type(string)              :: deselfile            !< file with indices to be deselected(.txt)
     type(string)              :: dir                  !< directory
@@ -186,8 +186,8 @@ type :: parameters
     type(string)              :: dir_select           !< move selected files to here{selected}
     type(string)              :: dir_target           !< put output here
     type(string)              :: dose_curve           !< dose curve written by dose_filter3D(.txt)
-    type(string)              :: exec_dir             !< auto-named execution directory
-    type(string)              :: executable           !< name of executable
+    type(string)              :: exec_dir             !< auto-named execution directory; not a command-line key
+    type(string)              :: executable           !< name of executable; not a command-line key
     type(string)              :: ext                  !< file extension{.mrc}
     type(string)              :: fbody                !< file body
     type(string)              :: filetab              !< list of files(.txt)
@@ -201,7 +201,7 @@ type :: parameters
     type(string)              :: infile2              !< file with inputs(.txt)
     type(string)              :: pindfile             !< distributed worker: particle rows written by the master (flex_pca, reconstruct3D)
     type(string)              :: keys
-    type(string)              :: last_prev_dir        !< last previous execution directory
+    type(string)              :: last_prev_dir        !< last previous execution directory; not a command-line key
     type(string)              :: mic_new_root         !< new root for relocated micrograph data
     type(string)              :: mic_old_root         !< old root stored for micrograph data
     type(string)              :: msklist              !< table (text file) of mask volume files(.txt)
@@ -238,8 +238,8 @@ type :: parameters
     type(string)              :: ptcl_new_root        !< new root for relocated particle data
     type(string)              :: ptcl_old_root        !< old root stored for particle data
     type(string)              :: refs                 !< initial2Dreferences.ext
-    type(string)              :: refs_even
-    type(string)              :: refs_odd
+    type(string)              :: refs_even !< not a command-line key
+    type(string)              :: refs_odd !< not a command-line key
     type(string)              :: snapshot             !< path to write snapshot project file to
     type(string)              :: star_datadir         !< STAR-generated data directory
     type(string)              :: star_mic             !< STAR-formatted EM file (micrographs.star)
@@ -253,7 +253,7 @@ type :: parameters
     type(string)              :: stktab               !< list of per-micrograph stacks
     type(string)              :: subprojname          !< SIMPLE  subproject name
     type(string)              :: verbose_exit_fname   !< File name of indicator file when task completes(TASK_FINISHED)
-    type(string)              :: vol
+    type(string)              :: vol !< not a command-line key
     type(string)              :: vol_even             !< even reference volume
     type(string)              :: vol_new_root         !< new root for relocated volume data
     type(string)              :: vol_odd              !< odd  reference volume
@@ -330,19 +330,19 @@ type :: parameters
     character(len=STDLEN)     :: wave_model='rytov'   !< wave model of the image formation(projection|first_born|rytov|multislice){rytov}
     character(len=STDLEN)     :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|uniformno){sum}
     ! special integer kinds
-    integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
-    integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
+    integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to; not a command-line key
+    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_EUCLID !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1); not a command-line key
+    integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights; not a command-line key
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
-    integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
+    integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded; not a command-line key
     integer :: box_extract
     integer :: box_coarse=0
     integer :: box_fine=0
-    integer :: boxpd=0
+    integer :: boxpd=0 !< not a command-line key
     integer :: class=1             !< 2D class identity
     integer :: clip=0              !< clipped image box size(in pixels)
     integer :: clustind=0          !< cluster index
@@ -362,7 +362,7 @@ type :: parameters
     integer :: fromf=1             !< frame start index
     integer :: grow=0              !< # binary layers to grow(in pixels)
     integer :: halfwin=0           !< trajectory_denoise flex: window half-width in frames (0: the whole trajectory)
-    integer :: hpind_fsc           !< high-pass Fourier index for FSC
+    integer :: hpind_fsc           !< high-pass Fourier index for FSC; not a command-line key
     integer :: iptcl=1
     integer :: istart=0
     integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
@@ -450,7 +450,7 @@ type :: parameters
     integer :: nstages_pickrefs=0  !< # solve3D_cavgs stages of the stream's picking references (0: the initial analysis' default)
     integer :: nstates=1           !< # states to reconstruct
     integer :: nstates_pickrefs=0  !< # solve3D_cavgs states of the stream's picking references (0: the initial analysis' default)
-    integer :: nsym=1
+    integer :: nsym=1 !< not a command-line key
     integer :: nthr=1              !< # OpenMP threads{1}
     integer :: nthr2D=1            !< # OpenMP threads{1}
     integer :: nthr_ini3D=1        !< # OpenMP threads{1}
@@ -466,10 +466,10 @@ type :: parameters
     integer :: pcafit=0            !< flex_pca worker-side fit selector, set by the master (0=all|1=halfset A|2=halfset B)
     integer :: nfits=1             !< flex_pca worker: fits served by this round (1 single, 2 paired halves)
     integer :: period=0           !< periodic window step in frames (0 means disabled)
-    integer :: pid=0               !< process ID
+    integer :: pid=0               !< process ID; not a command-line key
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
-    integer :: ptcl=1
+    integer :: ptcl=1 !< not a command-line key
     integer :: ref_ind=0           !> reference index
     integer :: reliongroups=0
     integer :: startit=1           !< start iterating from here
@@ -477,7 +477,7 @@ type :: parameters
     integer :: state=1             !< state to extract
     integer :: stepf=3             !< Incremental frame step size{3}
     integer :: stepsz=1            !< size of step{1}
-    integer :: tofny=0
+    integer :: tofny=0 !< not a command-line key
     integer :: top=1
     integer :: topk=3              !< refine3D/solve3D prob modes: poses a particle enters the iteration's reconstruction at, the committed draw and up to topk-1 extras, the refined entries of its row of highest posterior at the particle's own temperature within the insertion cone of the committed pose (rotation and shift moving the rim by less than the map's FSC=0.5 resolution), each with its share of that posterior; the search and the final reconstruction see the committed pose alone; 1 = the committed pose alone, the single-draw run bit for bit{3}
     integer :: tof=0               !< end index
@@ -490,7 +490,7 @@ type :: parameters
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
-    integer :: xdimpd=0
+    integer :: xdimpd=0 !< not a command-line key
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
     real    :: amsklp=8.           !< low-pass limit for NU/standalone envelope generation(in A)
@@ -515,8 +515,8 @@ type :: parameters
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=DFMAX_DEFAULT !< maximum expected defocus(in microns)
     real    :: dfmin=DFMIN_DEFAULT !< minimum expected defocus(in microns)
-    real    :: dstep=0.
-    real    :: dsteppd=0.
+    real    :: dstep=0. !< not a command-line key
+    real    :: dsteppd=0. !< not a command-line key
     real    :: e1=0.               !< 1st Euler(in degrees){0}
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
@@ -525,7 +525,7 @@ type :: parameters
     real    :: eps_bounds(2) = [0.5,1.0]
     real    :: eullims(3,2)=0.
     real    :: extr_init=EXTRINITHRES !< initial extremal ratio (0-1)
-    real    :: fny=0.
+    real    :: fny=0. !< not a command-line key
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
     real    :: frac_best=1.0       !< fraction of best particles to sample from per class with sampling units (balance=class|cavg)
@@ -563,18 +563,18 @@ type :: parameters
     real    :: local_shift_bound=-1. !< refine3D_states local shift override in pixels; negative is automatic
     real    :: min_state_frac=0.   !< flex_pca population floor: fraction of embedded particles every delivered state must hold; 0=off
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
-    real    :: max_rad=0.          !< particle longest  dim (in pixels)
-    real    :: min_rad=100.        !< particle shortest dim (in pixels)
+    real    :: max_rad=0.          !< particle longest  dim (in pixels); not a command-line key
+    real    :: min_rad=100.        !< particle shortest dim (in pixels); not a command-line key
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moldiam_max=500.    !< upper bound molecular diameter(in A)
     real    :: moldiam_refine=0.   !< upper bound molecular diameter(in A)
     real    :: moldiam_ring=0.     !< ring picker diameter(in A)
     real    :: model_gate_nsd=0.   !< trajectory_solve3D model gate: cut in robust spreads below the median (0 = K_MODEL)
-    real    :: moment=0.
+    real    :: moment=0. !< not a command-line key
     real    :: msk=0.              !< mask radius(in pixels)
     real    :: msk_crop=0.         !< mask radius(in pixels)
-    real    :: msk_box=0.          !< the box's mask radius (in pixels; the polar shift map's disk particles)
-    real    :: msk_box_crop=0.     !< the box's mask radius at the cropped box (in pixels)
+    real    :: msk_box=0.          !< the box's mask radius (in pixels; the polar shift map's disk particles); not a command-line key
+    real    :: msk_box_crop=0.     !< the box's mask radius at the cropped box (in pixels); not a command-line key
     real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mskdiam_detect=0.   !< detect_atoms mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
@@ -601,7 +601,7 @@ type :: parameters
     real    :: rtol_atm=0.         !< atomicity-prior solve: stop at this true L2 relative residual; <=0 runs exactly maxits_atm{0}
     real    :: pcg_solvent_lambda=1.0 !< PCG solvent prior ridge coefficient relative to the data scale; estimated by cross-validation when not given (pcg_solvent=yes){auto}
     real    :: scale=1.            !< image scale factor{1}
-    real    :: scale_movies=1.     !< movie scale factor
+    real    :: scale_movies=1.     !< movie scale factor; not a command-line key
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: shift_sigma=10.     !< the polar shift map: sigma (in A) of the Gaussian prior on a particle's shift from its current origin, the picking error's width; a particle not yet centred, or whose prior width exceeds a third of the window, searches a disk of 3 sigma with a coarse map, the others the window, and the map initialises every polish; on in the probability tables and the classic polar modes with a shift search, off elsewhere and under objfun=cc, which refuses an explicit key(0: the window search){10}
@@ -626,57 +626,57 @@ type :: parameters
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
-    logical :: l_autoscale       = .false.
-    logical :: l_bfac            = .false.
-    logical :: l_umap            = .false.
-    logical :: l_distr_worker    = .false.
-    logical :: l_dose_weight     = .false.
-    logical :: l_doshift         = .false.
-    logical :: l_eer_fraction    = .false.
-    logical :: l_envfsc          = .false.
-    logical :: l_pcg_solvent     = .false.
-    logical :: l_pcg_solvent_check = .false.
-    logical :: l_pcg_solvent_lambda_auto = .true. !< pcg_solvent_lambda not given: estimated per state and iteration
-    logical :: l_freq_march_aggressive = .false. !< freq_march_aggressive=yes: solve3D's frequency-linear ladder and finer early search space
-    logical :: l_atm_prior       = .false.
-    logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map
-    logical :: l_fillin          = .false.
-    logical :: l_assign_all      = .false. !< assign_all=yes under fractional updates: refine2D converges only when every active particle has a class
-    logical :: l_greedy_smpl     = .true.
-    logical :: l_frac_best       = .false.
-    logical :: l_update_frac     = .false.
-    logical :: l_gauref          = .false.
-    logical :: l_preimage_auto   = .false.
-    logical :: l_incrreslim      = .false.
-    logical :: l_lam_anneal      = .false.
-    logical :: l_lpauto          = .false.
-    logical :: l_lpset           = .false.
-    logical :: l_ml_reg          = .true.
-    logical :: l_noise_reg       = .false.
-    logical :: l_neigh           = .false.
-    logical :: l_pdb_bfac        = .false.
-    logical :: l_species_list    = .false. !< element= is a comma-separated species list (detect_atomic_species)
-    logical :: l_nonuniform      = .false.
-    logical :: l_nonuniform_lpset = .false.
-    logical :: l_regpass         = .true.
-    logical :: l_prob_inpl       = .false.
-    logical :: l_prob_align_mode = .false.
-    logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont)
-    logical :: l_cont_polish     = .false. !< the Cartesian pass the polish schedules after a discrete one
-    logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first
-    logical :: l_cohort_sampling = .false.
-    logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone
-    logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics
-    logical :: l_shift_prior     = .false. !< shift_prior=yes
-    logical :: l_shift_map       = .false. !< shift_sigma > 0 under objfun=euclid: the polar shift map's key is on (the workflows pass it to their stages)
-    logical :: l_centring        = .false. !< l_shift_map in a run that centres: a probability table or a classic polar mode with a shift search (the searches, the preparation and the consumers read this one)
-    logical :: l_trail_rec       = .false.
-    logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
-    logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set
-    logical :: l_state_defined      = .false. !< state= was given: reconstruction restricted to that state
-    logical :: l_update_missing  = .false.
-    logical :: l_remap_cls       = .false.
-    logical :: sp_required       = .false.
+    logical :: l_autoscale       = .false. !< not a command-line key
+    logical :: l_bfac            = .false. !< not a command-line key
+    logical :: l_umap            = .false. !< not a command-line key
+    logical :: l_distr_worker    = .false. !< not a command-line key
+    logical :: l_dose_weight     = .false. !< not a command-line key
+    logical :: l_doshift         = .false. !< not a command-line key
+    logical :: l_eer_fraction    = .false. !< not a command-line key
+    logical :: l_envfsc          = .false. !< not a command-line key
+    logical :: l_pcg_solvent     = .false. !< not a command-line key
+    logical :: l_pcg_solvent_check = .false. !< not a command-line key
+    logical :: l_pcg_solvent_lambda_auto = .true. !< pcg_solvent_lambda not given: estimated per state and iteration; not a command-line key
+    logical :: l_freq_march_aggressive = .false. !< freq_march_aggressive=yes: solve3D's frequency-linear ladder and finer early search space; not a command-line key
+    logical :: l_atm_prior       = .false. !< not a command-line key
+    logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map; not a command-line key
+    logical :: l_fillin          = .false. !< not a command-line key
+    logical :: l_assign_all      = .false. !< assign_all=yes under fractional updates: refine2D converges only when every active particle has a class; not a command-line key
+    logical :: l_greedy_smpl     = .true. !< not a command-line key
+    logical :: l_frac_best       = .false. !< not a command-line key
+    logical :: l_update_frac     = .false. !< not a command-line key
+    logical :: l_gauref          = .false. !< not a command-line key
+    logical :: l_preimage_auto   = .false. !< not a command-line key
+    logical :: l_incrreslim      = .false. !< not a command-line key
+    logical :: l_lam_anneal      = .false. !< not a command-line key
+    logical :: l_lpauto          = .false. !< not a command-line key
+    logical :: l_lpset           = .false. !< not a command-line key
+    logical :: l_ml_reg          = .true. !< not a command-line key
+    logical :: l_noise_reg       = .false. !< not a command-line key
+    logical :: l_neigh           = .false. !< not a command-line key
+    logical :: l_pdb_bfac        = .false. !< not a command-line key
+    logical :: l_species_list    = .false. !< element= is a comma-separated species list (detect_atomic_species); not a command-line key
+    logical :: l_nonuniform      = .false. !< not a command-line key
+    logical :: l_nonuniform_lpset = .false. !< not a command-line key
+    logical :: l_regpass         = .true. !< not a command-line key
+    logical :: l_prob_inpl       = .false. !< not a command-line key
+    logical :: l_prob_align_mode = .false. !< not a command-line key
+    logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
+    logical :: l_cont_polish     = .false. !< the Cartesian pass the polish schedules after a discrete one; not a command-line key
+    logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key
+    logical :: l_cohort_sampling = .false. !< not a command-line key
+    logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone; not a command-line key
+    logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics; not a command-line key
+    logical :: l_shift_prior     = .false. !< shift_prior=yes; not a command-line key
+    logical :: l_shift_map       = .false. !< shift_sigma > 0 under objfun=euclid: the polar shift map's key is on (the workflows pass it to their stages); not a command-line key
+    logical :: l_centring        = .false. !< l_shift_map in a run that centres: a probability table or a classic polar mode with a shift search (the searches, the preparation and the consumers read this one); not a command-line key
+    logical :: l_trail_rec       = .false. !< not a command-line key
+    logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided; not a command-line key
+    logical :: l_m_estimator_flex   = .false. !< m_estimator=flex: reconstruction weighs particles by the state weight set; not a command-line key
+    logical :: l_state_defined      = .false. !< state= was given: reconstruction restricted to that state; not a command-line key
+    logical :: l_update_missing  = .false. !< not a command-line key
+    logical :: l_remap_cls       = .false. !< not a command-line key
+    logical :: sp_required       = .false. !< not a command-line key
 contains
     procedure, private :: init_dynamic_defaults
     procedure, private :: parse_inputs

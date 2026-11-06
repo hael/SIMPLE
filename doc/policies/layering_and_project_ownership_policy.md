@@ -142,7 +142,9 @@ process reads it can be seen half-written.
    never write one file.
 2. **Workers read the file and write part files** (orientation documents,
    partial sums, the readout record of a probabilistic part); a worker does not write the project
-   **(proposed)**. The master reads only what the workers write, and merges
+   **(ruled; checked)**: the project writers stop when a partition worker (`part` given, not a
+   stream job) writes its input project (`worker_projfile_glob`, recorded by `params%new`). The
+   master reads only what the workers write, and merges
    their documents in memory with `merge_algndocs(..., write=.false.)`
    **(ruled)**.
    **Part files have one shape per step family (proposed).** A step that only
@@ -286,6 +288,13 @@ write-and-reread around the `prob_align` step) are gone from the list.
   the command line leaves it out, and the SINGLE routers override it per program
   (`single_exec_atom.f90`, `single_exec_trajectory.f90`, `single_exec_nano2D.f90`),
   a normalization of `cline` that section 2 leaves to the commander.
+- **Routers choose by key.** `solve3D_cavgs` with `nrestarts_collapse` dispatches to
+  `commander_solve3D_cavgs_conditional_restarts`, and `solve3D` with `screen` to `exec_screen`
+  (unreachable: `screen` is no accepted key, so `cmdline%parse` stops first), a choice of
+  workflow that section 2 leaves to the commander.
+- **Front doors write the project.** After the commander returns, `production/simple_exec.f90`,
+  `single_exec.f90` and `simple_stream.f90` rewrite the project's job descriptions
+  (`update_job_descriptions_in_project`), a project write outside any commander.
 - **Routers rerun programs.** With `nrestarts` given, the routers of `solve2D`,
   `refine3D` (`_auto`, `_local`, `_states`, `_states_cavgs`), `classify3D_refs`,
   `solve3D`, `solve3D_cavgs` and `autorefine3D_nano` call `restarted_exec`

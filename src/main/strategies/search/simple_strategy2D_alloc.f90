@@ -68,11 +68,13 @@ contains
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob( params, spproj, nrots, neigh_frac )
         use simple_eul_prob_tab_utils, only: calc_athres, shift_prior_sigma2
+        !$ use omp_lib,                only: omp_get_max_threads
         class(parameters), intent(in)    :: params
         type(sp_project),  intent(inout) :: spproj
         integer,           intent(in)    :: nrots
         real,              intent(in)    :: neigh_frac
         real    :: overlap, avg_dist_inpl
+        integer :: nteam
         logical :: l_fresh_start
         ! the shift prior's width for the committed class's polish, as the 2D tables' (shift_prior_sigma2)
         s2D%shift_prior_sigma2 = 0.
@@ -125,11 +127,13 @@ contains
                 endif
             endif
         endif
-        ! per-thread class-space arrays
+        ! per-thread class-space arrays, sized by the team the pass's regions run
+        nteam = nthr_glob
+        !$ nteam = omp_get_max_threads()
         if( allocated(s2D%class_space_corrs)    ) deallocate(s2D%class_space_corrs)
         if( allocated(s2D%class_space_inplinds) ) deallocate(s2D%class_space_inplinds)
-        allocate(s2D%class_space_corrs(   params%ncls, nthr_glob),&
-                &s2D%class_space_inplinds(params%ncls, nthr_glob))
+        allocate(s2D%class_space_corrs(   params%ncls, nteam),&
+                &s2D%class_space_inplinds(params%ncls, nteam))
         s2D%class_space_corrs    = -huge(1.0)
         s2D%class_space_inplinds = 0
     end subroutine prep_strategy2D_glob

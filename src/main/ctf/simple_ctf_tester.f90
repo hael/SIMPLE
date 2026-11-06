@@ -11,7 +11,7 @@ use simple_string_utils,       only: int2str
 use simple_image,              only: image
 use simple_fplane_grid,        only: fplane_grid
 use simple_ctf,                only: ctf
-use simple_memoize_ft_maps,    only: memoize_ft_maps
+use simple_memoize_ft_maps,    only: memoize_ft_maps, ft_map_get_farray_shape
 implicit none
 private
 public :: run_all_ctf_tests
@@ -46,7 +46,23 @@ contains
         call test_extrema()
         call test_fast_kernel_and_ft2img()
         call test_restoration_contracts()
+        call test_fit_kill_keeps_ft_maps()
     end subroutine run_all_ctf_tests
+
+    ! kill releases only the fit's own state: the process-wide Fourier maps stay memoised
+    subroutine test_fit_kill_keeps_ft_maps()
+        use simple_ctf_estimate_fit, only: ctf_estimate_fit
+        class(ctf_estimate_fit), allocatable :: fit
+        integer :: shape_before(3)
+        write(*,'(A)') 'test_fit_kill_keeps_ft_maps'
+        allocate(fit)
+        call memoize_ft_maps(LDIM, SMPD)
+        shape_before = ft_map_get_farray_shape()
+        call assert_true(all(shape_before > 0), 'the Fourier maps are memoised')
+        call fit%kill
+        call assert_true(all(ft_map_get_farray_shape() == shape_before), 'ctf_estimate_fit%kill keeps the memoised Fourier maps')
+        deallocate(fit)
+    end subroutine test_fit_kill_keeps_ft_maps
 
     function make_tfun() result( tfun )
         type(ctf) :: tfun

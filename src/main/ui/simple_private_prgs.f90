@@ -155,6 +155,10 @@ contains
         call cmd_dict%push('oritype',       'SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D|projinfo|jobproc|compenv)')
         call cmd_dict%push('outfile',       'output document')
         call cmd_dict%push('outstk',        'output image stack')
+        call cmd_dict%push('projfile_target', 'SIMPLE *.simple project file to merge into')
+        call cmd_dict%push('scale',         'image scale factor')
+        call cmd_dict%push('smpd',          'sampling distance(in A)')
+        call cmd_dict%push('dir_target',    'output directory')
         call cmd_dict%push('pickrefs',       'MRC stack of picking references')
         call cmd_dict%push('projfile',      'SIMPLE *.simple project file')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')
@@ -166,143 +170,204 @@ contains
         call cmd_dict%push('which_iter',    'iteration nr')
     end subroutine init_cmd_dict
 
+    !> the next entry of the table; push_req and push_opt add to it (n_private_prgs counts them)
+    subroutine add_private_prg( name )
+        character(len=*), intent(in) :: name
+        type(string) :: errmsg
+        integer      :: i
+        do i=1,n_private_prgs
+            if( private_prgs(i)%name%to_char() == trim(name) )then
+                errmsg = 'private program '//trim(name)//' has two entries; add_private_prg'
+                THROW_HARD(errmsg%to_char())
+            endif
+        end do
+        if( n_private_prgs == NMAX_PRIVATE_PRGS ) THROW_HARD('raise NMAX_PRIVATE_PRGS; add_private_prg')
+        n_private_prgs = n_private_prgs + 1
+        call private_prgs(n_private_prgs)%set_name(name)
+    end subroutine add_private_prg
+
+    subroutine push_req( key )
+        character(len=*), intent(in) :: key
+        call private_prgs(n_private_prgs)%push_req_key(key)
+    end subroutine push_req
+
+    subroutine push_opt( key )
+        character(len=*), intent(in) :: key
+        call private_prgs(n_private_prgs)%push_opt_key(key)
+    end subroutine push_opt
+
+    !> every program of simple_private_exec without a public descriptor has an entry here
+    !! (scripts/check_cli_chain.py); a program with one is checked by its descriptor
     subroutine new_private_prgs
         private_prgs(:)%nreq = 0
         private_prgs(:)%nopt = 0
+        n_private_prgs       = 0
 
         ! CAVGASSEMBLE, for assembling class averages
-        call private_prgs(1)%set_name('cavgassemble')
+        call add_private_prg('cavgassemble')
         ! required keys
-        call private_prgs(1)%push_req_key('projfile')
-        call private_prgs(1)%push_req_key('nparts')
-        call private_prgs(1)%push_req_key('ncls')
+        call push_req('projfile')
+        call push_req('nparts')
+        call push_req('ncls')
         ! optional keys
-        call private_prgs(1)%push_opt_key('nthr')
-        call private_prgs(1)%push_opt_key('refs')
+        call push_opt('nthr')
+        call push_opt('refs')
 
         ! CHECK_BOX
-        call private_prgs(2)%set_name('check_box')
+        call add_private_prg('check_box')
         ! optional keys
-        call private_prgs(2)%push_opt_key('stk')
-        call private_prgs(2)%push_opt_key('vol1')
+        call push_opt('stk')
+        call push_opt('vol1')
 
         ! CHECK_NPTCLS
-        call private_prgs(3)%set_name('check_nptcls')
+        call add_private_prg('check_nptcls')
         ! required keys
-        call private_prgs(3)%push_req_key('stk')
+        call push_req('stk')
 
         ! EXPORT_CAVGS
-        call private_prgs(4)%set_name('export_cavgs')
+        call add_private_prg('export_cavgs')
         ! required keys
-        call private_prgs(4)%push_req_key('projfile')
+        call push_req('projfile')
         ! optional keys
-        call private_prgs(4)%push_opt_key('outstk')
+        call push_opt('outstk')
 
         ! KSTEST, Kolmogorov-Smirnov test to deduce equivalence or
         ! non-equivalence between two distributions in a non-parametric manner
-        call private_prgs(5)%set_name('kstest')
+        call add_private_prg('kstest')
         ! required keys
-        call private_prgs(5)%push_req_key('infile')
-        call private_prgs(5)%push_req_key('infile2')
+        call push_req('infile')
+        call push_req('infile2')
 
         ! MAKE_PICKREFS, for preparing templates for particle picking
-        call private_prgs(6)%set_name('make_pickrefs')
+        call add_private_prg('make_pickrefs')
         ! optional keys
-        call private_prgs(6)%push_opt_key('nthr')
-        call private_prgs(6)%push_opt_key('pickrefs')
-        call private_prgs(6)%push_opt_key('neg')
-        call private_prgs(6)%push_opt_key('nrots')
-        call private_prgs(6)%push_opt_key('mirr')
-        call private_prgs(6)%push_opt_key('trust_header')
+        call push_opt('nthr')
+        call push_opt('pickrefs')
+        call push_opt('neg')
+        call push_opt('nrots')
+        call push_opt('mirr')
+        call push_opt('trust_header')
 
         ! PRINT_PROJECT_VALS, for printing specific values in a project file field
-        call private_prgs(7)%set_name('print_project_vals')
+        call add_private_prg('print_project_vals')
         ! required keys
-        call private_prgs(7)%push_req_key('projfile')
-        call private_prgs(7)%push_req_key('keys')
-        call private_prgs(7)%push_req_key('oritype')
+        call push_req('projfile')
+        call push_req('keys')
+        call push_req('oritype')
 
         ! RANK_CAVGS, for ranking class averages
-        call private_prgs(8)%set_name('rank_cavgs')
+        call add_private_prg('rank_cavgs')
         ! required keys
-        call private_prgs(8)%push_req_key('projfile')
-        call private_prgs(8)%push_req_key('stk')
+        call push_req('projfile')
+        call push_req('stk')
         ! set optional keys
-        call private_prgs(8)%push_opt_key('outstk')
+        call push_opt('outstk')
 
         ! ROTMATS2ORIS, for converting a text file (9 records per line) describing rotation matrices into a SIMPLE oritab
-        call private_prgs(9)%set_name('rotmats2oris')
+        call add_private_prg('rotmats2oris')
         ! required keys
-        call private_prgs(9)%push_req_key('infile')
+        call push_req('infile')
         ! optional keys
-        call private_prgs(9)%push_opt_key('outfile')
-        call private_prgs(9)%push_opt_key('oritype')
+        call push_opt('outfile')
+        call push_opt('oritype')
 
         ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
-        call private_prgs(10)%set_name('volassemble')
+        call add_private_prg('volassemble')
         ! required keys
-        call private_prgs(10)%push_req_key('nparts')
-        call private_prgs(10)%push_req_key('projfile')
-        call private_prgs(10)%push_req_key('mskdiam')
+        call push_req('nparts')
+        call push_req('projfile')
+        call push_req('mskdiam')
         ! optional keys
-        call private_prgs(10)%push_opt_key('nthr')
-        call private_prgs(10)%push_opt_key('nstates')
-        call private_prgs(10)%push_opt_key('which_iter')
+        call push_opt('nthr')
+        call push_opt('nstates')
+        call push_opt('which_iter')
 
         ! CALC_PSPEC, for asssembling power spectra for refine3D
-        call private_prgs(11)%set_name('calc_pspec')
+        call add_private_prg('calc_pspec')
         ! required keys
-        call private_prgs(11)%push_req_key('nparts')
-        call private_prgs(11)%push_req_key('projfile')
-        call private_prgs(11)%push_req_key('nthr')
+        call push_req('nparts')
+        call push_req('projfile')
+        call push_req('nthr')
 
         ! COMMIT_SIGMA2, the commit of the canonical sigma2 state after a matcher pass
-        call private_prgs(12)%set_name('commit_sigma2')
+        call add_private_prg('commit_sigma2')
         ! required keys
-        call private_prgs(12)%push_req_key('nparts')
-        call private_prgs(12)%push_req_key('projfile')
-        call private_prgs(12)%push_req_key('nthr')
-        call private_prgs(12)%push_req_key('which_iter')
+        call push_req('nparts')
+        call push_req('projfile')
+        call push_req('nthr')
+        call push_req('which_iter')
 
         ! Pearson's correlation coefficient
-        call private_prgs(13)%set_name('pearsn')
+        call add_private_prg('pearsn')
         ! required keys
-        call private_prgs(13)%push_req_key('infile')
-        call private_prgs(13)%push_req_key('infile2')
+        call push_req('infile')
+        call push_req('infile2')
 
         ! check stochastic update scheme
-        call private_prgs(14)%set_name('check_stoch_update')
+        call add_private_prg('check_stoch_update')
         ! required keys
-        call private_prgs(14)%push_req_key('maxits')
-        call private_prgs(14)%push_req_key('nptcls')
+        call push_req('maxits')
+        call push_req('nptcls')
 
         ! check fractional update scheme
-        call private_prgs(15)%set_name('check_update_frac')
+        call add_private_prg('check_update_frac')
         ! required keys
-        call private_prgs(15)%push_req_key('nptcls')
+        call push_req('nptcls')
 
         ! suggest picking references
-        call private_prgs(16)%set_name('shape_rank_cavgs')
+        call add_private_prg('shape_rank_cavgs')
         ! required keys
-        call private_prgs(16)%push_req_key('projfile')
+        call push_req('projfile')
         ! optional keys
-        call private_prgs(16)%push_opt_key('nthr')
+        call push_opt('nthr')
 
         ! the project's class averages matched against state volumes vol1..volN (stream multistate 3D)
-        call private_prgs(17)%set_name('assign_cavgs_states')
+        call add_private_prg('assign_cavgs_states')
         ! required keys
-        call private_prgs(17)%push_req_key('projfile')
-        call private_prgs(17)%push_req_key('nstates')
-        call private_prgs(17)%push_req_key('vol1')
-        call private_prgs(17)%push_req_key('mskdiam')
+        call push_req('projfile')
+        call push_req('nstates')
+        call push_req('vol1')
+        call push_req('mskdiam')
         ! optional keys
-        call private_prgs(17)%push_opt_key('vol2')
-        call private_prgs(17)%push_opt_key('nthr')
-        call private_prgs(17)%push_opt_key('lp')
-        call private_prgs(17)%push_opt_key('trs')
-        call private_prgs(17)%push_opt_key('nspace')
+        call push_opt('vol2')
+        call push_opt('nthr')
+        call push_opt('lp')
+        call push_opt('trs')
+        call push_opt('nspace')
 
-        n_private_prgs = 17
+        ! REFINE2D_DISTR, the distributed refine2D master of the stream's 2D pool
+        call add_private_prg('refine2D_distr')
+        ! required keys
+        call push_req('projfile')
+        ! optional keys
+        call push_opt('nparts')
+        call push_opt('nthr')
+
+        ! CALC_PSPEC_ASSEMBLE, the assembly of the partitions' power spectra (sigma2 bootstrap)
+        call add_private_prg('calc_pspec_assemble')
+        ! required keys
+        call push_req('projfile')
+        call push_req('nparts')
+        ! optional keys
+        call push_opt('nthr')
+
+        ! AGGREGATE_CHUNKS, the merge of two chunk projects and their class averages
+        call add_private_prg('aggregate_chunks')
+        ! required keys
+        call push_req('projfile')
+        call push_req('projfile_target')
+        ! optional keys
+        call push_opt('mskdiam')
+        call push_opt('ncls')
+
+        ! SCALE_PROJECT, a project's particles scaled to a new box (written into a new project)
+        call add_private_prg('scale_project')
+        ! required keys
+        call push_req('projfile')
+        ! optional keys
+        call push_opt('scale')
+        call push_opt('smpd')
+        call push_opt('dir_target')
     end subroutine new_private_prgs
 
 end module simple_private_prgs

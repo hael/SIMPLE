@@ -41,11 +41,12 @@ Silent ones first: nothing reports these.
 - Process-wide memos (mask coordinates, `memoize_ft_maps` for every CTF application, the polarizer's
   geometry, `construct_thread_safe_tmp_imgs`, `ftexp_transfmat_init`): make them serially, before the
   parallel loop, for the box in use (`apply_ctf_wpad` on a real-space image works at twice the box).
-  Several readers do not check the box.
+  `apply_ctf` and `ctf2img` stop on maps of another box or sampling (`ft_maps_match`); some readers still do not
+  check (the `*_ctf_flip` kernels).
 - Polarizer: one geometry per process, the last `memoize4polarize`/`_oversamp` wins (both forms stay);
-  `polarize*` check neither box, pdim nor mode and the memo has no region guard (known defect, ruled
-  for fixing: add the checks): memoize with the pdim given to `polarize_*_pft` and pass the matching
-  `oversamp`. Its angles duplicate `polarft_calc%polar` (`pftc/simple_polarft_core.f90`): change both.
+  `polarize*` take the caller's `pdim` and stop unless box, `pdim` and mode match the memo, and the
+  memo stops inside an OpenMP region: memoize with the pdim given to `polarize_*_pft` and pass the
+  matching `oversamp`. Its angles duplicate `polarft_calc%polar` (`pftc/simple_polarft_core.f90`): change both.
 - Projector order and `cmat_exp` (a copy: re-expand after a change): the reference.
 - `image_bin` syncs `bimat` from rmat only once: after changing rmat call `set_imat`.
 - Threads: `new`, `copy`, `=`, `set_wthreads`, `kill` plan or destroy inside an unnamed `omp critical`.

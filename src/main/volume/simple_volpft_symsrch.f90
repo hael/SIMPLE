@@ -51,7 +51,7 @@ contains
         nspace_nonred = vpftc%get_nspace_nonred()
         kfromto       = vpftc%get_kfromto()
         ! create the symmetry object
-        call symobj%new(pgrp, icorelion=.true.)
+        call symobj%new(pgrp)
         nsym = symobj%get_nsym()
         ! allocate
         allocate(sym_rmats(nsym,3,3), source=0.0)
@@ -211,7 +211,7 @@ contains
                 call opt_symaxes(ithr)%ospec%kill
                 if( associated(opt_symaxes(ithr)%opt_obj) )then
                     call opt_symaxes(ithr)%opt_obj%kill
-                    nullify(opt_symaxes(ithr)%opt_obj)
+                    deallocate(opt_symaxes(ithr)%opt_obj)
                 endif
             end do
             deallocate(opt_symaxes)

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Validate the full UI JSON registry emitted by a SIMPLE executable.
 
+The stream launcher's JSON (``prg=print_ui_stream``, written by hand in
+``print_stream_ui_json``) is validated against the registry too: its processes are
+simple_stream programs, the user inputs a process takes are defined, are inputs of its
+program and carry that input's default. With the stream contract it is also compared
+with its reviewed reference, ``stream_launcher_contract.json``.
+
 This is intentionally standard-library-only.  CMake's ``string(JSON)`` reparses
 the complete registry for every field, which makes a complete contract check
 unacceptably slow in the normal build path.
@@ -53,7 +59,6 @@ PATH_PLACEHOLDER_SUFFIXES = {
     "plaintexttab": (".txt",),
     "projtab": (".txt",),
     "refs": (".mrc", ".mrcs", ".spi"),
-    "rmsd_file": (".bin",),
     "star_mic": (".star",),
     "star_model": (".star",),
     "star_ptcl": (".star",),
@@ -61,7 +66,6 @@ PATH_PLACEHOLDER_SUFFIXES = {
     "stk": (".mrc", ".mrcs", ".spi"),
     "stk2": (".mrc", ".mrcs", ".spi"),
     "stk_backgr": (".mrc", ".mrcs"),
-    "stk_traj": (".mrc", ".mrcs"),
     "stktab": (".txt",),
     "vol1": (".mrc", ".spi"),
     "vol2": (".mrc", ".spi"),
@@ -70,6 +74,10 @@ PATH_PLACEHOLDER_SUFFIXES = {
     "vol_odd": (".mrc", ".spi"),
 }
 STREAM_UI_CONTRACT_REFERENCE = Path(__file__).resolve().with_name("stream_ui_contract.json")
+STREAM_LAUNCHER_CONTRACT_REFERENCE = STREAM_UI_CONTRACT_REFERENCE.with_name("stream_launcher_contract.json")
+STREAM_LAUNCHER_CONTRACT_DISPLAY_NAME = str(
+    STREAM_LAUNCHER_CONTRACT_REFERENCE.relative_to(STREAM_LAUNCHER_CONTRACT_REFERENCE.parent.parent)
+)
 STREAM_UI_CONTRACT_DISPLAY_NAME = str(
     STREAM_UI_CONTRACT_REFERENCE.relative_to(STREAM_UI_CONTRACT_REFERENCE.parent.parent)
 )
@@ -255,14 +263,96 @@ def canonical_stream_contract(registry: dict[str, Any]) -> str:
     return json.dumps(stream_registry, indent=2, sort_keys=True) + "\n"
 
 
-def validate_stream_contract(actual: str) -> None:
+def program_inputs(entry: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The inputs of one registry program, by key."""
+    return {
+        input_entry["key"]: input_entry
+        for section in SECTIONS
+        for input_entry in entry.get(section, [])
+    }
+
+
+def same_default(launcher_default: Any, ui_default: Any) -> bool:
+    """A launcher default (often a string) against the descriptor's (often a number)."""
+    try:
+        a, b = float(launcher_default), float(ui_default)
+    except (TypeError, ValueError):
+        return str(launcher_default) == str(ui_default)
+    return abs(a - b) <= 1e-6 * max(1.0, abs(a), abs(b))
+
+
+def validate_stream_launcher(launcher: Any, registry: dict[str, Any]) -> None:
+    """The hand-written stream launcher (print_ui_stream) against the program registry."""
+    context = "stream launcher (print_ui_stream)"
+    launcher = object_value(launcher, context)
+    if set(launcher) != {"user_inputs", "processes"}:
+        fail(context, f"has keys {sorted(launcher)}, expected user_inputs and processes")
+    user_inputs: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(array_value(launcher["user_inputs"], f"{context}.user_inputs")):
+        item_context = f"{context}.user_inputs[{index}]"
+        item = object_value(item, item_context)
+        key = required_string(item, "key", item_context)
+        for field in ("keytype", "label", "help"):
+            required_string(item, field, f"{item_context}.{key}")
+        bool_value(item.get("required"), f"{item_context}.{key}.required")
+        if key in user_inputs:
+            fail(item_context, f"user input {key!r} is defined twice")
+        user_inputs[key] = item
+    used: set[str] = set()
+    names: set[str] = set()
+    for index, process in enumerate(array_value(launcher["processes"], f"{context}.processes")):
+        process_context = f"{context}.processes[{index}]"
+        process = object_value(process, process_context)
+        name = required_string(process, "name", process_context)
+        prg = required_string(process, "prg", f"{process_context}.{name}")
+        number_value(process.get("nthr_master"), f"{process_context}.{name}.nthr_master")
+        if name in names:
+            fail(process_context, f"process name {name!r} is used twice")
+        names.add(name)
+        entry = registry.get(prg)
+        if entry is None or entry["program"]["executable"] != "simple_stream":
+            fail(f"{process_context}.{name}", f"prg={prg} is no simple_stream program of the registry")
+        inputs = program_inputs(entry)
+        for key in array_value(process.get("user_inputs", []), f"{process_context}.{name}.user_inputs"):
+            key = string_value(key, f"{process_context}.{name}.user_inputs")
+            if key not in user_inputs:
+                fail(f"{process_context}.{name}", f"user input {key!r} is not defined in user_inputs")
+            if key not in inputs:
+                fail(f"{process_context}.{name}", f"user input {key!r} is no input of program {prg}")
+            used.add(key)
+            launcher_default = user_inputs[key].get("default")
+            ui_default = inputs[key].get("default")
+            if launcher_default is not None and inputs[key].get("has_default") and \
+                    not same_default(launcher_default, ui_default):
+                fail(f"{process_context}.{name}",
+                     f"user input {key!r} defaults to {launcher_default!r}, program {prg} to {ui_default!r}")
+        for item in array_value(process.get("static_inputs", []), f"{process_context}.{name}.static_inputs"):
+            item = string_value(item, f"{process_context}.{name}.static_inputs")
+            key, sep, _ = item.partition("=")
+            if not sep or not key:
+                fail(f"{process_context}.{name}", f"static input {item!r} is not key=value")
+    unused = sorted(set(user_inputs) - used)
+    if unused:
+        fail(context, f"user inputs no process takes: {unused}")
+
+
+def canonical_stream_launcher(launcher: Any) -> str:
+    """Return the reviewable, deterministic stream launcher JSON."""
+    return json.dumps(launcher, indent=2, sort_keys=True) + "\n"
+
+
+def validate_stream_contract(
+    actual: str,
+    reference: Path = STREAM_UI_CONTRACT_REFERENCE,
+    display_name: str = STREAM_UI_CONTRACT_DISPLAY_NAME,
+) -> None:
     """Reject an unreviewed stream-GUI change and show its JSON diff."""
     try:
-        expected = STREAM_UI_CONTRACT_REFERENCE.read_text(encoding="utf-8")
+        expected = reference.read_text(encoding="utf-8")
     except FileNotFoundError as error:
         raise ValueError(
             "stream UI contract: missing review reference "
-            f"'{STREAM_UI_CONTRACT_DISPLAY_NAME}'"
+            f"'{display_name}'"
         ) from error
 
     if expected == actual:
@@ -272,7 +362,7 @@ def validate_stream_contract(actual: str) -> None:
         difflib.unified_diff(
             expected.splitlines(keepends=True),
             actual.splitlines(keepends=True),
-            fromfile=STREAM_UI_CONTRACT_DISPLAY_NAME,
+            fromfile=display_name,
             tofile="generated stream UI JSON",
         )
     )
@@ -321,6 +411,11 @@ def validate_numeric_default_precision(registry: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--executable", required=True, type=Path)
+    parser.add_argument(
+        "--launcher-executable",
+        type=Path,
+        help="the executable that prints the stream launcher (prg=print_ui_stream); default --executable",
+    )
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--stamp", required=True, type=Path)
     stream_contract_action = parser.add_mutually_exclusive_group()
@@ -345,6 +440,15 @@ def main() -> int:
     if completed.returncode:
         sys.stderr.buffer.write(completed.stderr)
         raise RuntimeError(f"print_ui_json failed with exit code {completed.returncode}")
+    launcher_run = subprocess.run(
+        [str(args.launcher_executable or args.executable), "prg=print_ui_stream"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if launcher_run.returncode:
+        sys.stderr.buffer.write(launcher_run.stderr)
+        raise RuntimeError(f"print_ui_stream failed with exit code {launcher_run.returncode}")
 
     try:
         registry = json.loads(completed.stdout, object_pairs_hook=no_duplicate_object)
@@ -354,13 +458,28 @@ def main() -> int:
         for program_name, program in registry.items():
             string_value(program_name, "complete UI registry key")
             validate_program(program_name, program)
+        launcher = json.loads(launcher_run.stdout, object_pairs_hook=no_duplicate_object)
+        validate_stream_launcher(launcher, registry)
         stream_contract = None
         if args.check_stream_contract or args.update_stream_contract:
             stream_contract = canonical_stream_contract(registry)
+            launcher_contract = canonical_stream_launcher(launcher)
             if args.update_stream_contract:
                 STREAM_UI_CONTRACT_REFERENCE.write_text(stream_contract, encoding="utf-8")
+                STREAM_LAUNCHER_CONTRACT_REFERENCE.write_text(launcher_contract, encoding="utf-8")
             else:
-                validate_stream_contract(stream_contract)
+                # both references are compared, so a stale one does not hide the other's diff
+                failures = []
+                for actual, reference, display_name in (
+                    (stream_contract, STREAM_UI_CONTRACT_REFERENCE, STREAM_UI_CONTRACT_DISPLAY_NAME),
+                    (launcher_contract, STREAM_LAUNCHER_CONTRACT_REFERENCE, STREAM_LAUNCHER_CONTRACT_DISPLAY_NAME),
+                ):
+                    try:
+                        validate_stream_contract(actual, reference, display_name)
+                    except ValueError as error:
+                        failures.append(str(error))
+                if failures:
+                    raise ValueError("\n\n".join(failures))
         textual_registry = json.loads(
             completed.stdout,
             object_pairs_hook=no_duplicate_object,

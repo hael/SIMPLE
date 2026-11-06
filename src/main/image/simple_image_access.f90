@@ -181,7 +181,7 @@ contains
     ! Setters
     !===========================
 
-    module subroutine set_1( self, logi, val )
+    module subroutine set_real_at( self, logi, val )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: val
@@ -189,15 +189,15 @@ contains
             .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
             self%rmat(logi(1),logi(2),logi(3)) = val
         endif
-    end subroutine set_1
+    end subroutine set_real_at
 
-    module subroutine set_2( self, self2set )
+    module subroutine set_img( self, self2set )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2set
         self%ft       = self2set%ft
         self%rmat     = self2set%rmat
         self%wthreads = self2set%wthreads
-    end subroutine set_2
+    end subroutine set_img
 
     module subroutine set_rmat( self, rmat, ft )
         class(image), intent(inout) :: self
@@ -233,33 +233,33 @@ contains
         endif
     end subroutine set_cmat
 
-    module pure subroutine set_cmat_1( self, cmat )
+    module pure subroutine set_cmat_3d( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         self%ft   = .true.
         self%cmat = cmat
-    end subroutine set_cmat_1
+    end subroutine set_cmat_3d
 
-    module pure subroutine set_cmat_2( self, cval )
+    module pure subroutine set_cmat_scalar( self, cval )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cval
         self%ft   = .true.
         self%cmat = cval
-    end subroutine set_cmat_2
+    end subroutine set_cmat_scalar
 
-    module pure subroutine set_cmat_3( self, self2copy )
+    module pure subroutine set_cmat_img( self, self2copy )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2copy
         self%ft   = .true.
         self%cmat = self2copy%cmat
-    end subroutine set_cmat_3
+    end subroutine set_cmat_img
 
-    module pure subroutine set_cmat_4( self, cmat )
+    module pure subroutine set_cmat_2d( self, cmat )
         class(image), intent(inout) :: self
         complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2))
         self%ft          = .true.
         self%cmat(:,:,1) = cmat
-    end subroutine set_cmat_4
+    end subroutine set_cmat_2d
 
     module pure subroutine set_cmat_at( self, h, k, l, comp)
         class(image), intent(inout) :: self
@@ -408,7 +408,7 @@ contains
     ! Serialization / misc
     !===========================
 
-    module function serialize_2( self, l_msk )result( pcavec )
+    module function serialize_masked( self, l_msk )result( pcavec )
         class(image), intent(in) :: self
         logical,      intent(in) :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable :: pcavec(:)
@@ -426,13 +426,13 @@ contains
                 end do
             end do
         end do
-    end function serialize_2
+    end function serialize_masked
 
-    module function serialize_3( self, thres ) result( vec )
+    module function serialize_thres( self, thres ) result( vec )
         class(image), intent(in) :: self
         real,         intent(in) :: thres
         real, allocatable :: vec(:)
         vec = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > thres)
-    end function serialize_3
+    end function serialize_thres
 
 end submodule simple_image_access

@@ -22,7 +22,7 @@ private
 
 character(len=*), parameter :: FROZEN_CONTEXT_SCHEMA = 'solve3D_addon_frozen_context'
 character(len=*), parameter :: FROZEN_SET_SCHEMA     = 'solve3D_addon_frozen_set'
-integer,          parameter :: FROZEN_SCHEMA_VERSION = 3   ! 3: sets record the state weight set identity
+integer,          parameter :: FROZEN_SCHEMA_VERSION = 4   ! 4: set components carry the density (rho) header
 character(len=*), parameter :: FROZEN_BACKEND        = 'gridding'
 real,             parameter :: SMPD_RELTOL           = 1.e-5
 character(len=*), parameter :: BUNDLE_SCHEMA         = 'solve3D_addon_carried_bundle'
@@ -137,7 +137,7 @@ contains
         enddo
         write(funit,'(A)') 'end'
         call fclose(funit)
-        call simple_rename(tmpname, fname, overwrite=.true.)
+        call simple_rename(tmpname, fname)
         call tmpname%kill
     end subroutine write
 
@@ -441,7 +441,7 @@ contains
         write(funit,'(A,4(1X,I0))')  'sizes',   sizes
         write(funit,'(A)')           'end'
         call fclose(funit)
-        call simple_rename(tmpname, manifest, overwrite=.true.)
+        call simple_rename(tmpname, manifest)
         call manifest%kill
         call tmpname%kill
     end subroutine write_set_manifest
@@ -614,6 +614,7 @@ contains
             fname = self%component(state, ldim(1), ifile+1)
             call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=ierr)
             call fileiochk('frozen_accum%add_gridding_set opening '//fname%to_char(), ierr)
+            call rec%check_rho_header(funit, fname)
             call rec%read_raw_rho(funit)
             call fclose(funit)
         end subroutine read_one
@@ -651,7 +652,7 @@ contains
         enddo
         write(funit,'(A)') 'end'
         call fclose(funit)
-        call simple_rename(tmpname, fname, overwrite=.true.)
+        call simple_rename(tmpname, fname)
         call tmpname%kill
     end subroutine write_bundle
 
@@ -853,7 +854,7 @@ contains
         call fileiochk('write_carried_membership opening '//tmpname%to_char(), io_stat)
         write(funit) int(states, kind=4)
         call fclose(funit)
-        call simple_rename(tmpname, fname, overwrite=.true.)
+        call simple_rename(tmpname, fname)
         call tmpname%kill
     end subroutine write_carried_membership
 

@@ -24,7 +24,7 @@ use simple_gui_metadata_types,                   only: GUI_METADATA_STREAM_PARTI
 use simple_gui_metadata_stream_particle_sieving, only: gui_metadata_stream_particle_sieving
 use simple_stream_pipe,                          only: stream_pipe
 use simple_stream_stage_sieve,                   only: stream_stage_sieve
-use simple_ptcl_sieve,                           only: CHUNKED_MICS
+use simple_ptcl_sieve,                           only: CHUNKED_MICS, CHUNK_MICS
 implicit none
 private
 public :: run_all_stream_stage_sieve_tests
@@ -40,6 +40,7 @@ contains
         call test_init_params()
         call test_restart_removes_term_stream()
         call test_restore_and_attach()
+        call test_restore_after_rejected_chunk()
         call test_restart_resumes_sieve()
         call test_import_projects()
         call test_read_mask_diameter()
@@ -139,6 +140,49 @@ contains
         call cline%kill
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine test_restore_and_attach
+
+    !> a restart after a rejected coarse chunk and a crash between the next chunk's project and chunked_mics.txt:
+    !! the rejected chunk kept its list, so the rebuild lists both chunks, both sets are restored and in the
+    !! history, and nothing is imported again
+    subroutine test_restore_after_rejected_chunk()
+        class(stream_stage_sieve), allocatable :: stage
+        type(cmdline) :: cline
+        type(string)  :: cwd_saved, root, set1, set2
+        integer       :: nfail0, funit
+        allocate(stage)
+        write(*,'(A)') 'test_restore_after_rejected_chunk'
+        nfail0 = tests_failed
+        call enter_fixture('sv_stage_rejected', cwd_saved, root)
+        call make_upstream()
+        set1 = write_completed_set(1, [10, 20])
+        set2 = write_completed_set(2, [30])
+        ! coarse 1: rejected (cleaned), its list kept; coarse 2: its project written, then the crash
+        call simple_mkdir('chunks_coarse')
+        call simple_mkdir('chunks_coarse/chunk_coarse_1')
+        call simple_touch('chunks_coarse/chunk_coarse_1/chunk_coarse_1'//METADATA_EXT)
+        call simple_touch('chunks_coarse/chunk_coarse_1/REJECTION_FINISHED')
+        open(newunit=funit, file='chunks_coarse/chunk_coarse_1/'//CHUNK_MICS, status='replace', action='write')
+        write(funit,'(A,1X,I0)') set1%to_char(), 1
+        write(funit,'(A,1X,I0)') set1%to_char(), 2
+        close(funit)
+        call simple_mkdir('chunks_coarse/chunk_coarse_2')
+        call simple_touch('chunks_coarse/chunk_coarse_2/chunk_coarse_2'//METADATA_EXT)
+        open(newunit=funit, file='chunks_coarse/chunk_coarse_2/'//CHUNK_MICS, status='replace', action='write')
+        write(funit,'(A,1X,I0)') set2%to_char(), 1
+        close(funit)
+        ! the list the crash left: coarse 1's micrographs only
+        call write_chunked_mics(set1, [1, 2])
+        call set_test_cline(cline)
+        call make_test_stage(stage, cline)
+        call stage%restore_imports()
+        call assert_int(3, stage%project_list%size(), 'both chunks'' micrographs are restored')
+        call assert_int(0, stage%project_list%get_nptcls_tot(l_not_included=.true.), 'none is left for the sieve again')
+        call stage%attach_upstream()
+        call assert_true(stage%project_buff%is_past(set2), 'the set the crashed chunk took is in the history')
+        call stage%kill
+        call cline%kill
+        call leave_fixture(cwd_saved, root, nfail0)
+    end subroutine test_restore_after_rejected_chunk
 
     !> a restart with chunks to take up makes the sieve with nothing new to import
     subroutine test_restart_resumes_sieve()

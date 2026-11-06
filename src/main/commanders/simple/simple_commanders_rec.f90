@@ -62,32 +62,12 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D_WAVE NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rec3D_wave
 
+    !> reconstruct3D: a thin wrapper of the strategy routine
     subroutine exec_rec3D( self, cline )
-        use simple_rec3D_strategy, only: rec3D_strategy, create_rec3D_strategy
-        use simple_parameters,     only: parameters
-        use simple_builder,        only: builder
+        use simple_rec3D_strategy, only: run_rec3D
         class(commander_rec3D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
-        class(rec3D_strategy), allocatable :: strategy
-        type(parameters) :: params
-        type(builder)    :: build
-        type(string)     :: rec_backend
-        ! Commander-level defaults (apply to both modes)
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
-        if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
-        rec_backend = cline%get_carg('rec_backend')
-        call cline%set('oritype', 'ptcl3D')
-        call cline%delete('refine')
-        ! Select and run strategy
-        strategy = create_rec3D_strategy(cline)
-        call strategy%initialize(params, build, cline)
-        call strategy%execute(params, build, cline)
-        call strategy%cleanup(params, build, cline)
-        call rec_backend%kill
-        ! End gracefully (single unified termination)
-        call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
-        if( allocated(strategy) ) deallocate(strategy)
+        call run_rec3D(cline)
     end subroutine exec_rec3D
 
     subroutine exec_rec3D_distr_worker( self, cline )

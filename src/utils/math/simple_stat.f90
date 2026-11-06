@@ -11,57 +11,57 @@ implicit none
 #include "simple_local_flags.inc"
 
 interface avg_sdev
-    module procedure avg_sdev_1
-    module procedure avg_sdev_2
-    module procedure avg_sdev_3
-    module procedure avg_sdev_4
+    module procedure avg_sdev_1d
+    module procedure avg_sdev_2d
+    module procedure avg_sdev_3d
+    module procedure avg_sdev_1d_dp
 end interface avg_sdev
 
 interface moment
-    module procedure moment_1
-    module procedure moment_2
-    module procedure moment_3
-    module procedure moment_4
+    module procedure moment_1d
+    module procedure moment_2d
+    module procedure moment_3d
+    module procedure moment_1d_masked
 end interface
 
 interface skewness
-    module procedure skewness_1
-    module procedure skewness_2
+    module procedure skewness_1d
+    module procedure skewness_2d
 end interface
 
 interface kurtosis
-    module procedure kurtosis_1
-    module procedure kurtosis_2
+    module procedure kurtosis_1d
+    module procedure kurtosis_2d
 end interface
 
 interface pearsn
-    module procedure pearsn_1
-    module procedure pearsn_2
-    module procedure pearsn_3
+    module procedure pearsn_1d
+    module procedure pearsn_2d
+    module procedure pearsn_3d
 end interface
 
 interface normalize
-    module procedure normalize_1
-    module procedure normalize_2
-    module procedure normalize_3
-    module procedure normalize_4
+    module procedure normalize_1d
+    module procedure normalize_2d
+    module procedure normalize_3d
+    module procedure normalize_1d_masked
 end interface
 
 interface normalize_minmax
-    module procedure normalize_minmax_1
-    module procedure normalize_minmax_2
+    module procedure normalize_minmax_1d
+    module procedure normalize_minmax_2d
 end interface
 
 
 interface normalize_sigm
-    module procedure normalize_sigm_1
-    module procedure normalize_sigm_2
-    module procedure normalize_sigm_3
+    module procedure normalize_sigm_1d
+    module procedure normalize_sigm_2d
+    module procedure normalize_sigm_3d
 end interface
 
 interface merge_dmats
-    module procedure merge_dmats_1
-    module procedure merge_dmats_2
+    module procedure merge_dmats_pair
+    module procedure merge_dmats_triple
 end interface
 
 interface median
@@ -76,7 +76,7 @@ real, parameter :: NNET_CONST = exp(1.)-1.
 
 contains
 
-    subroutine avg_sdev_1( vec, avg, sdev, mask )
+    subroutine avg_sdev_1d( vec, avg, sdev, mask )
         real,              intent(in)    :: vec(:)
         real,              intent(inout) :: avg, sdev
         logical, optional, intent(in)    :: mask(:)
@@ -107,9 +107,9 @@ contains
                 sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
             endif
         endif
-    end subroutine avg_sdev_1
+    end subroutine avg_sdev_1d
 
-    subroutine avg_sdev_2( vec, avg, sdev, mask )
+    subroutine avg_sdev_2d( vec, avg, sdev, mask )
         real,              intent(in)    :: vec(:,:)
         real,              intent(inout) :: avg, sdev
         logical, optional, intent(in)    :: mask(:,:)
@@ -140,9 +140,9 @@ contains
                 sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
             endif
         endif
-    end subroutine avg_sdev_2
+    end subroutine avg_sdev_2d
 
-    subroutine avg_sdev_3( vec, avg, sdev, mask )
+    subroutine avg_sdev_3d( vec, avg, sdev, mask )
         real,              intent(in)    :: vec(:,:,:)
         real,              intent(inout) :: avg, sdev
         logical, optional, intent(in)    :: mask(:,:,:)
@@ -173,9 +173,9 @@ contains
                 sdev = sqrt(sum((vec - avg)**2.) / (rn - 1.))
             endif
         endif
-    end subroutine avg_sdev_3
+    end subroutine avg_sdev_3d
 
-    subroutine avg_sdev_4( vec, avg, sdev, mask )
+    subroutine avg_sdev_1d_dp( vec, avg, sdev, mask )
         real(dp),          intent(in)    :: vec(:)
         real(dp),          intent(inout) :: avg, sdev
         logical, optional, intent(in)    :: mask(:)
@@ -206,7 +206,7 @@ contains
                 sdev = sqrt(sum((vec - avg)**2.d0) / (rn - 1.d0))
             endif
         endif
-    end subroutine avg_sdev_4
+    end subroutine avg_sdev_1d_dp
 
     function avg_frac_smallest( vec, frac ) result( avg )
         real,  intent(in) :: vec(:)
@@ -222,7 +222,7 @@ contains
         deallocate(tmp)
     end function avg_frac_smallest
 
-    subroutine moment_1( data, ave, sdev, var, err )
+    subroutine moment_1d( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var
         logical, intent(out) :: err
         real,    intent(in)  :: data(:)
@@ -236,7 +236,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2; moment_1')
+            THROW_WARN('ERROR: n must be at least 2; moment_1d')
             return
         endif
         ! calc average
@@ -263,9 +263,9 @@ contains
             var  = 0.
             sdev = 0.
         endif
-    end subroutine moment_1
+    end subroutine moment_1d
 
-    subroutine moment_2( data, ave, sdev, var, err )
+    subroutine moment_2d( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var
         logical, intent(out) :: err
         real,    intent(in)  :: data(:,:)
@@ -281,7 +281,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2; moment_2')
+            THROW_WARN('ERROR: n must be at least 2; moment_2d')
             return
         endif
         ! calc average
@@ -310,9 +310,9 @@ contains
             var  = 0.
             sdev = 0.
         endif
-    end subroutine moment_2
+    end subroutine moment_2d
 
-    subroutine moment_3( data, ave, sdev, var, err )
+    subroutine moment_3d( data, ave, sdev, var, err )
         real,    intent(out) :: ave, sdev, var
         logical, intent(out) :: err
         real,    intent(in)  :: data(:,:,:)
@@ -329,7 +329,7 @@ contains
         sdev = 0.
         var  = 0.
         if( n < 2 )then
-            THROW_WARN('ERROR: n must be at least 2; moment_3')
+            THROW_WARN('ERROR: n must be at least 2; moment_3d')
             return
         endif
         ave = real(sum(real(data,dp))/real(n,dp), kind=kind(ave))
@@ -359,9 +359,9 @@ contains
             var  = 0.
             sdev = 0.
         endif
-    end subroutine moment_3
+    end subroutine moment_3d
 
-    subroutine moment_4( data, ave, sdev, var, err, mask )
+    subroutine moment_1d_masked( data, ave, sdev, var, err, mask )
         real,    intent(out) :: ave, sdev, var
         logical, intent(out) :: err
         real,    intent(in)  :: data(:)
@@ -371,7 +371,7 @@ contains
         real(dp) :: ep_dp, var_dp
         err  = .false.
         sz   = size(data)
-        if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
+        if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_1d_masked')
         n    = count(mask)
         nr   = real(n)
         ave  = 0.
@@ -407,7 +407,7 @@ contains
             var  = 0.
             sdev = 0.
         endif
-    end subroutine moment_4
+    end subroutine moment_1d_masked
 
     subroutine moment_serial( data, ave, sdev, var, err, mask )
         real,    intent(out) :: ave, sdev, var
@@ -454,39 +454,39 @@ contains
         endif
     end subroutine moment_serial
 
-    real function skewness_1( data )
+    real function skewness_1d( data )
         real, intent(in) :: data(:)
         real(dp) :: mu, k2, k3, c
         integer  :: n
-        skewness_1 = 0.
+        skewness_1d = 0.
         n  = size(data)
         if( n < 3 )then
-            THROW_WARN('ERROR: n must be at least 2; skewness_1')
+            THROW_WARN('ERROR: n must be at least 2; skewness_1d')
         else
             mu = sum(real(data,dp)) / real(n,dp)
             k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
             if( k2 > DTINY )then
                 k3 = sum((real(data,dp)-mu)**3) / real(n,dp)
                 c  = sqrt(real(n*(n-1),dp)) / real(n-2,dp) ! unbiased
-                skewness_1 = real(c * k3 / k2**1.5d0)
+                skewness_1d = real(c * k3 / k2**1.5d0)
             endif
         endif
-    end function skewness_1
+    end function skewness_1d
 
-    real function skewness_2( data, mask )
+    real function skewness_2d( data, mask )
         real,              intent(in) :: data(:,:)
         logical, optional, intent(in) :: mask(:,:)
         real(dp) :: mu, k2, k3, c
         real(qp) :: sq
         integer  :: n
-        skewness_2 = 0.
+        skewness_2d = 0.
         n  = size(data)
         if( n < 3 )then
-            THROW_WARN('ERROR: n must be at least 2; skewness_2')
+            THROW_WARN('ERROR: n must be at least 2; skewness_2d')
             return
         endif
         if( present(mask) )then
-            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions; skewness_2')
+            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions; skewness_2d')
             n  = count(mask)
             mu = sum(real(data,dp), mask=mask) / real(n,dp)
             k3 = sum((real(data,dp)-mu)**3, mask=mask) / real(n,dp)
@@ -499,18 +499,18 @@ contains
         if( k2 > DTINY )then
             sq = real(n, qp) * real(n-1, qp)
             c = real(sqrt(sq) / real(n-2,dp), kind=kind(c)) ! unbiased
-            skewness_2 = real(c * k3 / k2**1.5d0)
+            skewness_2d = real(c * k3 / k2**1.5d0)
         endif
-    end function skewness_2
+    end function skewness_2d
 
-    real function kurtosis_1( data )
+    real function kurtosis_1d( data )
         real, intent(in) :: data(:)
         real(dp) :: mu, k2, k4, k4b, c1, c2
         integer  :: n
-        kurtosis_1 = 0.
+        kurtosis_1d = 0.
         n  = size(data)
         if( n < 4 )then
-            THROW_WARN('ERROR: n must be at least 2; kurtosis_1')
+            THROW_WARN('ERROR: n must be at least 2; kurtosis_1d')
             return
         endif
         mu = sum(real(data,dp)) / real(n,dp)
@@ -524,23 +524,23 @@ contains
             k4 = c1*k4b
             c2 =     real(n-1,dp) / real(n-2,dp)
             c2 = c2*(real(n-1,dp) / real(n-3,dp))
-            kurtosis_1 = real(k4 / k2**2 - 3.d0 * c2)
+            kurtosis_1d = real(k4 / k2**2 - 3.d0 * c2)
         endif
-    end function kurtosis_1
+    end function kurtosis_1d
 
-    real function kurtosis_2( data, mask )
+    real function kurtosis_2d( data, mask )
         real,              intent(in) :: data(:,:)
         logical, optional, intent(in) :: mask(:,:)
         real(dp) :: mu, k2, k4, k4b, c1, c2
         integer  :: n
-        kurtosis_2 = 0.
+        kurtosis_2d = 0.
         n  = size(data)
         if( n < 4 )then
-            THROW_WARN('ERROR: n must be at least 2; kurtosis_2')
+            THROW_WARN('ERROR: n must be at least 2; kurtosis_2d')
             return
         endif
         if( present(mask) )then
-            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions; kurtosis_2')
+            if( size(mask) /= n ) THROW_HARD('ERROR: Incompatibe dimensions; kurtosis_2d')
             n   = count(mask)
             mu  = sum(real(data,dp), mask=mask) / real(n,dp)
             k4b = sum((real(data,dp)-mu)**4, mask=mask)
@@ -558,16 +558,16 @@ contains
             k4 = c1*k4b
             c2 =     real(n-1,dp) / real(n-2,dp)
             c2 = c2*(real(n-1,dp) / real(n-3,dp))
-            kurtosis_2 = real(k4 / k2**2 - 3.d0 * c2)
+            kurtosis_2d = real(k4 / k2**2 - 3.d0 * c2)
         endif
-    end function kurtosis_2
+    end function kurtosis_2d
 
-    function pearsn_1( x, y ) result( r )
+    function pearsn_1d( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: j, n
         n = size(x)
-        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_1; pearsn_1')
+        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_1d; pearsn_1d')
         ax  = sum(x)/real(n)
         ay  = sum(y)/real(n)
         sxx = 0.
@@ -588,7 +588,7 @@ contains
         else
             r = 0.
         endif
-    end function pearsn_1
+    end function pearsn_1d
 
     function pearsn_serial( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
@@ -639,13 +639,13 @@ contains
         if( prod > 0.d0 ) r = real(max(-1.d0,min(1.d0,sxy/sqrt(prod))),kind=4)
     end function pearsn_serial_8
 
-    function pearsn_2( x, y ) result( r )
+    function pearsn_2d( x, y ) result( r )
         real, intent(in) :: x(:,:),y(:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, nx, ny
         nx = size(x,1)
         ny = size(x,2)
-        if( size(y,1) /= nx .or. size(y,2) /= ny ) THROW_HARD('arrays not equal size in pearsn_2')
+        if( size(y,1) /= nx .or. size(y,2) /= ny ) THROW_HARD('arrays not equal size in pearsn_2d')
         ax  = sum(x)/real(nx*ny)
         ay  = sum(y)/real(nx*ny)
         sxx = 0.
@@ -665,9 +665,9 @@ contains
         else
             r = 0.
         endif
-    end function pearsn_2
+    end function pearsn_2d
 
-    function pearsn_3( x, y ) result( r )
+    function pearsn_3d( x, y ) result( r )
         real, intent(in) :: x(:,:,:),y(:,:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: i, j, k, nx, ny, nz
@@ -675,7 +675,7 @@ contains
         ny = size(x,2)
         nz = size(x,3)
         if( size(y,1) /= nx .or. size(y,2) /= ny .or. size(y,3) /= nz )&
-        THROW_HARD('arrays not equal size, in pearsn_3')
+        THROW_HARD('arrays not equal size, in pearsn_3d')
         ax  = sum(x)/real(nx*ny*nz)
         ay  = sum(y)/real(nx*ny*nz)
         sxx = 0.
@@ -697,7 +697,7 @@ contains
         else
             r = 0.
         endif
-    end function pearsn_3
+    end function pearsn_3d
 
     function spear( n, rank1, rank2 ) result( r )
         integer, intent(in) :: n, rank1(n), rank2(n)
@@ -705,44 +705,44 @@ contains
         r = 1. - (6. * real(sum((rank1 - rank2)**2))) / real((n * (n**2 - 1)))
     end function spear
 
-    subroutine normalize_1( arr, err )
+    subroutine normalize_1d( arr, err )
         real, intent(inout)  :: arr(:)
         logical, intent(out) :: err
         real :: ave, sdev, var
-        call moment_1( arr, ave, sdev, var, err )
+        call moment_1d( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev
-    end subroutine normalize_1
+    end subroutine normalize_1d
 
-    subroutine normalize_2( arr, err )
+    subroutine normalize_2d( arr, err )
         real,    intent(inout)  :: arr(:,:)
         logical, intent(out) :: err
         real :: ave, sdev, var
-        call moment_2( arr, ave, sdev, var, err )
+        call moment_2d( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev
-    end subroutine normalize_2
+    end subroutine normalize_2d
 
-    subroutine normalize_3( arr, err )
+    subroutine normalize_3d( arr, err )
         real, intent(inout)  :: arr(:,:,:)
         logical, intent(out) :: err
         real :: ave, sdev, var
-        call moment_3( arr, ave, sdev, var, err )
+        call moment_3d( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev
-    end subroutine normalize_3
+    end subroutine normalize_3d
 
-    subroutine normalize_4( arr, err, mask )
+    subroutine normalize_1d_masked( arr, err, mask )
         real, intent(inout)  :: arr(:)
         logical, intent(out) :: err
         logical, intent(in)  :: mask(:)
         real :: ave, sdev, var
-        call moment_4( arr, ave, sdev, var, err, mask )
+        call moment_1d_masked( arr, ave, sdev, var, err, mask )
         if( err ) return
         where( mask ) arr = (arr-ave)/sdev
-    end subroutine normalize_4
+    end subroutine normalize_1d_masked
 
-    subroutine normalize_sigm_1( arr )
+    subroutine normalize_sigm_1d( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
         if( size(arr) == 1 )then
@@ -759,11 +759,11 @@ contains
             arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
             !$omp end parallel workshare
         else
-            THROW_WARN('normalize_sigm_1, division with zero, no normalisation done')
+            THROW_WARN('normalize_sigm_1d, division with zero, no normalisation done')
         endif
-    end subroutine normalize_sigm_1
+    end subroutine normalize_sigm_1d
 
-    subroutine normalize_sigm_2( arr )
+    subroutine normalize_sigm_2d( arr )
         real, intent(inout) :: arr(:,:)
         real                :: smin, smax, delta
         ! find minmax
@@ -776,11 +776,11 @@ contains
             arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
             !$omp end parallel workshare
         else
-            THROW_WARN('normalize_sigm_2, division with zero, no normalisation done')
+            THROW_WARN('normalize_sigm_2d, division with zero, no normalisation done')
         endif
-    end subroutine normalize_sigm_2
+    end subroutine normalize_sigm_2d
 
-    subroutine normalize_sigm_3( arr )
+    subroutine normalize_sigm_3d( arr )
         real, intent(inout) :: arr(:,:,:)
         real                :: smin, smax, delta
         ! find minmax
@@ -793,27 +793,27 @@ contains
             arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
             !$omp end parallel workshare
         else
-            THROW_WARN('normalize_sigm_3, division with zero, no normalisation done')
+            THROW_WARN('normalize_sigm_3d, division with zero, no normalisation done')
         endif
-    end subroutine normalize_sigm_3
+    end subroutine normalize_sigm_3d
 
-    subroutine normalize_minmax_1( arr )
+    subroutine normalize_minmax_1d( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax - smin
         arr   = (arr - smin)/delta
-    end subroutine normalize_minmax_1
+    end subroutine normalize_minmax_1d
 
-    subroutine normalize_minmax_2( arr )
+    subroutine normalize_minmax_2d( arr )
         real, intent(inout) :: arr(:,:)
         real                :: smin, smax, delta
         smin  = minval(arr)
         smax  = maxval(arr)
         delta = smax - smin
         arr   = (arr - smin)/delta
-    end subroutine normalize_minmax_2
+    end subroutine normalize_minmax_2d
 
     subroutine prepare_tree_sub_distmat(context, sub_distmat)
         character(len=*), intent(in)    :: context
@@ -1207,7 +1207,7 @@ contains
         smat = 0.5 * (smat + tmpmat)
     end function merge_smats
 
-    function merge_dmats_1( dmat1, dmat2 ) result( dmat )
+    function merge_dmats_pair( dmat1, dmat2 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:)
         real, allocatable :: dmat(:,:), tmpmat(:,:)
         integer :: sz1_1, sz1_2, sz2_1, sz2_2, n1, n2
@@ -1223,9 +1223,9 @@ contains
         call normalize_minmax(dmat)
         call normalize_minmax(tmpmat)
         dmat = 0.5 * (dmat + tmpmat)
-    end function merge_dmats_1
+    end function merge_dmats_pair
 
-    function merge_dmats_2( dmat1, dmat2, dmat3 ) result( dmat )
+    function merge_dmats_triple( dmat1, dmat2, dmat3 ) result( dmat )
         real, intent(in)  :: dmat1(:,:), dmat2(:,:), dmat3(:,:)
         real, allocatable :: dmat(:,:), tmpmat1(:,:), tmpmat2(:,:)
         integer :: sz1_1, sz1_2, sz2_1, sz2_2, sz3_1, sz3_2, n1, n2
@@ -1246,7 +1246,7 @@ contains
         call normalize_minmax(tmpmat1)
         call normalize_minmax(tmpmat2)
         dmat = (dmat + tmpmat1 + tmpmat2) / 3.
-    end function merge_dmats_2
+    end function merge_dmats_triple
 
     function calc_ap_pref( smat, mode ) result( pref )
         real,             intent(inout) :: smat(:,:)

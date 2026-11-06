@@ -46,6 +46,7 @@ type :: cartft_ptcl
     integer  :: half    = 0                     !< column of its half in sigma2 (OBJFUN_EUCLID only)
     integer  :: objfun  = 0                     !< OBJFUN_CC or OBJFUN_EUCLID once prepared
     logical  :: valid   = .false.
+    logical  :: stale   = .false.   !< unprepared by new spectra (set_sigma2): stops when used
 end type cartft_ptcl
 
 type :: cartft_calc
@@ -433,8 +434,19 @@ contains
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: kfrom
         real,               intent(in)    :: sigma2(kfrom:,:)
-        integer :: kto, k, h
+        integer :: kto, k, h, i
         if( size(sigma2,2) /= 2 ) THROW_HARD('cartft_calc sigma2 must hold one spectrum per even/odd half')
+        ! a Euclidean slot was whitened by the previous spectra: unprepared until set_ptcl again
+        if( allocated(self%ptcls) )then
+            do i = 1, size(self%ptcls)
+                if( self%ptcls(i)%objfun == OBJFUN_EUCLID )then
+                    self%ptcls(i)%objfun = 0
+                    self%ptcls(i)%valid  = .false.
+                    self%ptcls(i)%npix   = 0
+                    self%ptcls(i)%stale  = .true.
+                endif
+            end do
+        endif
         kto = ubound(sigma2,1)
         if( allocated(self%sigma2)       ) deallocate(self%sigma2)
         if( allocated(self%rsqrt_sigma2) ) deallocate(self%rsqrt_sigma2)
@@ -473,13 +485,14 @@ contains
         call self%fill_ptcl(iptcl, OBJFUN_EUCLID, observed, ctfparms, lower_shell, upper_shell, half)
     end subroutine set_ptcl_euclid
 
-    !> True when particle slot iptcl holds a valid preparation.
-    pure logical function ptcl_is_valid( self, iptcl )
+    !> True when particle slot iptcl holds a valid preparation; stops on a slot new spectra unprepared
+    logical function ptcl_is_valid( self, iptcl )
         class(cartft_calc), intent(in) :: self
         integer,            intent(in) :: iptcl
         ptcl_is_valid = .false.
         if( .not. self%exists ) return
         if( iptcl < 1 .or. iptcl > self%nptcls ) return
+        if( self%ptcls(iptcl)%stale ) THROW_HARD('cartft_calc slot used after its spectra changed; set_ptcl again')
         ptcl_is_valid = self%ptcls(iptcl)%valid
     end function ptcl_is_valid
 
@@ -1047,7 +1060,7 @@ contains
         if( iptcl < 1 .or. iptcl > self%nptcls )   THROW_HARD('cartft_calc particle slot out of range')
         l_diag = present(ref_pow) .or. present(ptcl_pow) .or. present(v)
         if( present(v) ) v = -1.
-        if( .not. self%ptcls(iptcl)%valid ) return
+        if( .not. self%ptcl_is_valid(iptcl) ) return
         if( self%ptcls(iptcl)%objfun /= OBJFUN_EUCLID ) THROW_HARD('cartft_calc sigma contribution requires a euclid particle slot')
         ihalf = self%ref_index(iseven)
         associate( p => self%ptcls(iptcl), cmat => self%refs(ihalf,state)%cmat )
@@ -1178,6 +1191,7 @@ contains
         end select
         associate( p => self%ptcls(iptcl) )
             p%valid   = .false.
+            p%stale   = .false.
             p%objfun  = objfun
             p%power   = 0._dp
             p%kfromto = [lower_shell, upper_shell]

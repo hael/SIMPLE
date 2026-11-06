@@ -24,12 +24,29 @@ use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose
 use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl
 use simple_matcher_2Dprep,    only: prepimg4align
-use simple_matcher_ptcl_io,   only: prep_rec_observation, prep_rec_observation_ptcl
+use simple_matcher_ptcl_io,   only: prep_rec_observation, prep_rec_observation_ptcl, pass_team, killimgbatch, &
+                                    &rec_state_half
 use simple_memoize_ft_maps,   only: memoize_ft_maps
+use simple_matcher_ptcl_batch, only: check_pass_team, alloc_ptcl_imgs
+use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
+use simple_defs,              only: nthr_glob
 use simple_test_utils
+!$ use omp_lib,               only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
 public :: run_all_strategy3D_inplane_tests
+
+!> a pass on a team larger than nthr_glob, which must stop
+type, extends(forked_process) :: oversized_team_pass
+contains
+    procedure :: execute => run_oversized_team_pass
+end type oversized_team_pass
+
+!> selects a state half among particles of which one is in no half (eo=-1), which must stop
+type, extends(forked_process) :: halfless_selection
+contains
+    procedure :: execute => select_halfless
+end type halfless_selection
 
 contains
 
@@ -49,7 +66,123 @@ contains
         call test_map_initialised_polish()
         call test_continuous_seed_beyond_window()
         call test_rec_observation_mask()
+        call test_pass_team_check()
+        call test_pass_state_team_sized()
+        call test_rec_state_half_stops_on_eo()
     end subroutine run_all_strategy3D_inplane_tests
+
+    !> the reconstruction's state halves (rec_state_half, also the PCG backend's) take the used particles' half
+    !! through get_half: a used particle with eo=-1 stops; a rejected one (state 0) is not looked at
+    subroutine test_rec_state_half_stops_on_eo()
+        class(builder), allocatable, target :: build
+        type(halfless_selection) :: child
+        integer, allocatable :: selected(:)
+        write(*,'(A)') 'test_rec_state_half_stops_on_eo'
+        allocate(build)
+        call make_half_field(build, 0)
+        call rec_state_half(build, 1, 0, [1,2,3,4], selected)
+        call assert_int(2, size(selected), 'the even half of state 1 without the rejected particle')
+        call child%start(name=string('REC_STATE_HALF_EO'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a used particle in no half stops the selection')
+        call child%destroy
+        call build%spproj%kill
+    end subroutine test_rec_state_half_stops_on_eo
+
+    !> four particles, eo [0,1,-1,0]; particle 3 has state @p state3, the others state 1
+    subroutine make_half_field( build, state3 )
+        class(builder), target, intent(inout) :: build
+        integer,                intent(in)    :: state3
+        integer :: i
+        integer, parameter :: EOS(4) = [0, 1, -1, 0]
+        call build%spproj%os_ptcl3D%new(4, is_ptcl=.true.)
+        do i = 1, 4
+            call build%spproj%os_ptcl3D%set_state(i, 1)
+            call build%spproj%os_ptcl3D%set(i, 'eo', EOS(i))
+        enddo
+        call build%spproj%os_ptcl3D%set_state(3, state3)
+        build%spproj_field => build%spproj%os_ptcl3D
+    end subroutine make_half_field
+
+    subroutine select_halfless( self, cline )
+        class(halfless_selection), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        class(builder), allocatable, target :: build
+        integer, allocatable :: selected(:)
+        allocate(build)
+        call make_half_field(build, 1)
+        call rec_state_half(build, 1, 0, [1,2,3,4], selected)
+    end subroutine select_halfless
+
+    !> a pass's per-thread particle images are sized by the team its regions run, not by nthr_glob
+    !! (OpenMP builds only)
+    subroutine test_pass_state_team_sized()
+        class(parameters), allocatable :: params
+        class(builder),    allocatable :: build
+        type(image),       allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
+        integer :: nthr_saved, nteam_saved, i
+        logical :: l_omp
+        write(*,'(A)') 'test_pass_state_team_sized'
+        l_omp = .false.
+        !$ l_omp = .true.
+        if( .not. l_omp ) return
+        nthr_saved  = nthr_glob
+        nteam_saved = 1
+        !$ nteam_saved = omp_get_max_threads()
+        allocate(params, build)
+        params%box        = 16
+        params%smpd       = 2.
+        params%box_crop   = 16
+        params%box_croppd = 32
+        params%smpd_crop  = 2.
+        nthr_glob = 1
+        !$ call omp_set_num_threads(2)
+        call assert_int(2, pass_team(), 'the pass team is the OpenMP team')
+        call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, 2)
+        call assert_int(2, size(ptcl_imgs),     'the particle images follow the team, not nthr_glob')
+        call assert_int(2, size(ptcl_imgs_pad), 'the padded particle images follow the team, not nthr_glob')
+        do i = 1, size(ptcl_imgs)
+            call ptcl_imgs(i)%kill
+            call ptcl_imgs_pad(i)%kill
+        enddo
+        deallocate(ptcl_imgs, ptcl_imgs_pad)
+        call killimgbatch(build)
+        nthr_glob = nthr_saved
+        !$ call omp_set_num_threads(nteam_saved)
+    end subroutine test_pass_state_team_sized
+
+    !> a team of at most nthr_glob passes; a larger one stops (in a child; OpenMP builds only)
+    subroutine test_pass_team_check()
+        type(oversized_team_pass) :: child
+        integer :: nthr_saved, nteam_saved
+        logical :: l_omp
+        write(*,'(A)') 'test_pass_team_check'
+        l_omp = .false.
+        !$ l_omp = .true.
+        if( .not. l_omp ) return
+        nthr_saved  = nthr_glob
+        nteam_saved = 1
+        !$ nteam_saved = omp_get_max_threads()
+        nthr_glob = 2
+        !$ call omp_set_num_threads(2)
+        call check_pass_team('test_pass_team_check')
+        !$ call omp_set_num_threads(1)
+        call check_pass_team('test_pass_team_check')
+        call child%start(name=string('PASS_TEAM_OVERSIZED'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a pass on a team larger than nthr_glob stops')
+        call child%destroy
+        nthr_glob = nthr_saved
+        !$ call omp_set_num_threads(nteam_saved)
+    end subroutine test_pass_team_check
+
+    subroutine run_oversized_team_pass( self, cline )
+        class(oversized_team_pass), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        nthr_glob = 1
+        !$ call omp_set_num_threads(2)
+        call check_pass_team('run_oversized_team_pass')
+    end subroutine run_oversized_team_pass
 
     !> nrefs candidates, one thread; the continuous arrays only on request
     subroutine alloc_state( nrefs, continuous )

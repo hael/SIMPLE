@@ -13,7 +13,7 @@ use simple_rec3D_service,     only: rec3D_service, rec3D_request, rec3D_backend_
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
-public :: rec3D_pcg_inmem_strategy
+public :: rec3D_pcg_inmem_strategy, run_rec3D
 private
 #include "simple_local_flags.inc"
 
@@ -305,6 +305,25 @@ contains
             &params%smpd, 'RECONSTRUCT3D', l_rebuilt)
         if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
     end subroutine ensure_canonical_sigma_state
+
+    !> reconstruct3D on its own parameters and builder, built from cline by the strategy it selects
+    subroutine run_rec3D( cline )
+        class(cmdline), intent(inout) :: cline
+        class(rec3D_strategy), allocatable :: strategy
+        type(parameters) :: params
+        type(builder)    :: build
+        if( .not. cline%defined('mkdir')       ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('trs')         ) call cline%set('trs', 5.)     ! to assure that shifts are being used
+        if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
+        call cline%set('oritype', 'ptcl3D')
+        call cline%delete('refine')
+        strategy = create_rec3D_strategy(cline)
+        call strategy%initialize(params, build, cline)
+        call strategy%execute(params, build, cline)
+        call strategy%cleanup(params, build, cline)
+        call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
+        if( allocated(strategy) ) deallocate(strategy)
+    end subroutine run_rec3D
 
     subroutine sync_resolved_rec_params(params, cline)
         type(parameters), intent(in)    :: params

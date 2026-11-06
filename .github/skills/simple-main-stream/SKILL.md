@@ -16,18 +16,7 @@ data on as files, GUI messages go over pipes. Not owned here: the particle sieve
 
 ## Rules
 
-<<<<<<< HEAD
-- `doc/refactoring_notes/completed/stream_refactor.md`: what each module does, how each stage differs from the stage it replaced, and the retained follow-ups
-- the policy for the contract you change, in `doc/policies/stream/` (index and the per-stage `pNN_overview.md` diagrams in its README):
-  - `reference_generation_policy.md`: p03's routes to the picking references, their publication and precedence, p04's use of them
-  - `stream_3D_ingestion_policy.md`: p06's publications for 3D, p07's import of them, its reference volumes, the assignment of each publication to them, and its 3D snapshots
-  - `pool2D_policy.md`: the 2D pool's schedule, sampling, resolution, dimensions, snapshots and final project
-  - `ipc_policy.md`: the stage-to-master pipes, the GUI metadata wire format, the master's heartbeat and the GUI's answers
-  - `restart_policy.md`: what each stage keeps, restores and redoes when started again
-- `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md` for the particle sieve (p03, p05)
-=======
 Silent ones first: nothing reports these.
->>>>>>> 910e90b5c (Self-loading folder guides, agent-friendly-code proposal, seven defect fixes)
 
 - Hand files on by temporary name and rename in the destination folder (an optics map: `.simple`
   first, `.txt` last); readers take a file once untouched for the watcher's settle time. Keep both.
@@ -85,5 +74,7 @@ Silent ones first: nothing reports these.
 ## See also
 
 `doc/policies/stream/` (README, `ipc_`, `restart_`, `pool2D_`, `reference_generation_`,
-`stream_3D_ingestion_policy.md`, `pNN_overview.md`); layering policy section 8; skills
+`stream_3D_ingestion_policy.md`, `pNN_overview.md`), `doc/policies/sieving_and_rejection/ptcl_sieve_policy.md`
+(the particle sieve, p03 and p05), `doc/refactoring_notes/completed/stream_refactor.md` (each module, and how
+each stage differs from the one it replaced); layering policy section 8; skills
 `simple-main-sieve`, `simple-solve2d`, `simple-main-star`.

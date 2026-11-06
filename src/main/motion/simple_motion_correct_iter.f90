@@ -82,6 +82,8 @@ contains
         self%moviename_thumb  = dir_out%to_char()//fbody_here%to_char()//THUMBNAIL_SUFFIX//JPG_EXT
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( params%nframesgrp > 0 )then
+            ! the grouped movie is temporary, and a movie row would record it as the movie
+            if( .not. l_tseries ) THROW_HARD('nframesgrp is for time series only; motion_correct_iter')
             self%moviename = 'tmpnframesgrpmovie'//MRC_EXT
             call frameavg_stack(moviename, self%moviename, params%nframesgrp, ctfvars%smpd)
         else
@@ -197,6 +199,7 @@ contains
             call orientation%set('forctf',      simple_abspath(self%moviename_forctf))
             call orientation%set('mc_starfile', simple_abspath(star_fname))
             call orientation%set('mcmodel',     simple_abspath(model_fname))
+            call orientation%set('mcconvention', trim(params%mcconvention))
             call orientation%set('bid',         bid)
         endif
         call orientation%set('intg',    simple_abspath(self%moviename_intg))

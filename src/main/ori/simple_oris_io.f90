@@ -102,7 +102,7 @@ contains
         call os_tmp%kill
     end subroutine read_ctfparams_state_eo
 
-    module subroutine write_1( self, orifile, fromto )
+    module subroutine write_range( self, orifile, fromto )
         class(oris),       intent(in) :: self
         class(string),     intent(in) :: orifile
         integer, optional, intent(in) :: fromto(2)
@@ -119,18 +119,18 @@ contains
             call self%o(i)%write(fnr)
         end do
         call fclose(fnr)
-    end subroutine write_1
+    end subroutine write_range
 
-    module subroutine write_2( self, i, orifile )
+    module subroutine write_by_ind( self, i, orifile )
         class(oris),   intent(inout) :: self
         class(string), intent(in)    :: orifile
         integer,       intent(in)    :: i
         integer :: fnr, file_stat
         call fopen(fnr, orifile, status='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat)
-        call fileiochk( 'In: write_2, module: simple_oris.f90  opening '//orifile%to_char(), file_stat )
+        call fileiochk( 'In: write_by_ind, module: simple_oris.f90  opening '//orifile%to_char(), file_stat )
         call self%o(i)%write(fnr)
         call fclose(fnr)
-    end subroutine write_2
+    end subroutine write_by_ind
 
     module subroutine write2bild( self, file )
         class(oris),   intent(inout) :: self

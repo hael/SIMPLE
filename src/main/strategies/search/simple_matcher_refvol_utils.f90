@@ -126,7 +126,7 @@ contains
 
     !> The matcher's reader of the references of its pass: the prepared Cartesian reference
     !! volumes for a Cartesian pass (l_cart_refine; read_cart_refvols), the polar reprojection
-    !! model otherwise. With diag_halves (the dense table workers under prob_post_diag=yes) and
+    !! model otherwise. With diag_halves (the matcher under prob_post_diag=yes) and
     !! the diagnostic's model of the real halves on disk, the polar object holds twice the
     !! references: the matcher's in 1..nrefs, the real even/odd sections of the same directions
     !! in nrefs+1..2*nrefs, so that the diagnostic can re-score a pose against the half the particle

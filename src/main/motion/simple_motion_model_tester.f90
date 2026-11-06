@@ -6,6 +6,7 @@ use simple_cmdline,      only: cmdline
 use simple_motion_model, only: motion_model
 use simple_parameters,   only: parameters
 use simple_test_utils
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -13,6 +14,12 @@ private
 public :: run_all_motion_model_tests
 
 character(len=2), parameter :: FLIP_MODES(5) = ['no', 'x ', 'y ', 'xy', 'yx']
+
+!> a motion correction of a movie with nframesgrp outside a time series, which must stop
+type, extends(forked_process) :: grouped_movie
+contains
+    procedure :: execute => correct_grouped_movie
+end type grouped_movie
 
 contains
 
@@ -24,7 +31,35 @@ contains
         call test_binary_roundtrip_with_rejected_patch()
         call test_binary_roundtrip_without_optional_arrays()
         call test_refit_polynomial_known_coefficients()
+        call test_nframesgrp_outside_tseries()
     end subroutine run_all_motion_model_tests
+
+    !> nframesgrp groups the frames of a time series: elsewhere the grouped movie would be recorded as the movie
+    subroutine test_nframesgrp_outside_tseries()
+        type(grouped_movie) :: child
+        write(*,'(A)') 'test_nframesgrp_outside_tseries'
+        call child%start(name=string('NFRAMESGRP_OUTSIDE_TSERIES'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'nframesgrp outside a time series stops')
+        call child%destroy
+    end subroutine test_nframesgrp_outside_tseries
+
+    subroutine correct_grouped_movie( self, cline )
+        use simple_motion_correct_iter, only: motion_correct_iter
+        class(grouped_movie), intent(inout) :: self
+        class(cmdline),       intent(inout) :: cline
+        class(motion_correct_iter), allocatable :: mciter
+        class(parameters),          allocatable :: params
+        type(ctfparams) :: ctfp
+        type(ori)       :: orientation
+        integer         :: frame_counter
+        allocate(mciter, params)
+        params%nframesgrp = 2
+        frame_counter     = 0
+        call orientation%new(is_ptcl=.false.)
+        call mciter%iterate(params, cline, ctfp, orientation, string(''), frame_counter, &
+            &string('absent_grouped_movie.mrc'), string(''))
+    end subroutine correct_grouped_movie
 
     subroutine test_flipgain_lifecycle()
         use simple_image, only: image
@@ -298,8 +333,10 @@ contains
         call cline%set('kv', 300.)
         call cline%set('total_dose', 40.)
         call cline%set('fraction_dose_target', 1.5)
-        call cline%set('scale_movies', 0.5)
+        ! a runtime movie scale (smpd/smpd_downscale) other than the file's: read must use stored metadata
+        call cline%set('smpd_downscale', 3.0)
         call params%new(cline)
+        call assert_real(0.5, params%scale_movies, 1.e-6, 'the parameters scale movies by 0.5, unlike the file')
         call del_file(input_bin)
         call del_file(output_bin)
         call del_file(output_star)

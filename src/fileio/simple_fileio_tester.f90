@@ -109,15 +109,15 @@ contains
         s2 = string('subdir')
         s3 = string('file.txt')
         fname = filepath(s1, s2)
-        call assert_char('/tmp'//PATH_SEPARATOR//'subdir', fname%to_char(), 'filepath_1: 2 args')
+        call assert_char('/tmp'//PATH_SEPARATOR//'subdir', fname%to_char(), 'filepath_str: 2 args')
         fname = filepath(s1, s2, s3)
-        call assert_char('/tmp'//PATH_SEPARATOR//'subdir'//PATH_SEPARATOR//'file.txt', fname%to_char(), 'filepath_1: 3 args')
+        call assert_char('/tmp'//PATH_SEPARATOR//'subdir'//PATH_SEPARATOR//'file.txt', fname%to_char(), 'filepath_str: 3 args')
         fname = filepath(s1, 'name')
-        call assert_char('/tmp'//PATH_SEPARATOR//'name', fname%to_char(), 'filepath_2: string,char')
+        call assert_char('/tmp'//PATH_SEPARATOR//'name', fname%to_char(), 'filepath_str_char: string,char')
         fname = filepath('/root', 'x')
-        call assert_char('/root'//PATH_SEPARATOR//'x', fname%to_char(), 'filepath_3: char,char')
+        call assert_char('/root'//PATH_SEPARATOR//'x', fname%to_char(), 'filepath_char: char,char')
         fname = filepath('/data', s2)
-        call assert_char('/data'//PATH_SEPARATOR//'subdir', fname%to_char(), 'filepath_4: char,string')
+        call assert_char('/data'//PATH_SEPARATOR//'subdir', fname%to_char(), 'filepath_char_str: char,string')
         call s1%kill
         call s2%kill
         call s3%kill
@@ -519,7 +519,7 @@ contains
         call simple_touch(f1)
         call assert_true(file_exists(f1), 'simple_touch + file_exists: f1 exists')
         ! Rename to f2 (and overwrite if needed)
-        call simple_rename(f1, f2, overwrite=.true.)
+        call simple_rename(f1, f2)
         call assert_true(.not. file_exists(f1), 'simple_rename: f1 no longer exists')
         call assert_true(file_exists(f2),       'simple_rename: f2 exists')
         ! Absolute path of f2 should have basename f2

@@ -9,7 +9,7 @@ use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
 use simple_chash,     only: chash
 use simple_defs_ori,  only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, I_SHINCR, I_SHSIG, &
-    &get_oriparam_ind, get_oriparam_flag
+    &I_FRAME, get_oriparam_ind, get_oriparam_flag, oriparam_isthere
 use json_kinds
 use json_module
 implicit none
@@ -970,6 +970,11 @@ contains
         call assert_int(I_SHSIG, get_oriparam_ind('shsig'), 'flag shsig names slot 55')
         call assert_true(trim(get_oriparam_flag(I_SHSIG)) == 'shsig', 'slot 55 carries its flag name')
         call assert_true(trim(get_oriparam_flag(I_CFAR)) == 'cfar', 'slot 53 carries the cfar flag name')
+        call assert_int(56, I_FRAME, 'frame sits in slot 56')
+        call assert_int(I_FRAME, get_oriparam_ind('frame'), 'flag frame names slot 56')
+        call assert_true(trim(get_oriparam_flag(I_FRAME)) == 'frame', 'slot 56 carries its flag name')
+        call assert_true(oriparam_isthere(I_FRAME, 3.) .and. .not. oriparam_isthere(I_FRAME, 0.), &
+            &'frame is there when set, absent at 0')
         call o%kill
         call o2%kill
     end subroutine test_cartesian_score_fields

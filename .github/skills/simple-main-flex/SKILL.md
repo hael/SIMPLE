@@ -23,16 +23,20 @@ Silent ones first: nothing reports these.
   mutates the live field, so it comes after every stage that reads the selection.
   `refine3D_states` runs flex with `mkdir=no` on its own project and reads the labels and `vol`
   entries back (`simple_refine3D_states_controller.f90`, `run_flex_pca`): change both together. This
-  in-place write is the design; the gateway comment that a run writes only its project copy is wrong.
+  in-place write is the design.
 - `ml_reg` is a phase switch: `load_and_validate_sigma` turns it on (the fit whitens its planes by
   `params%l_ml_reg`), `infer_states` turns it off before any trial map.
 - The embedding cache holds raw latents: write it before `apply_latent_deconvolution`, or a resume
   (`infile=`) deconvolves twice.
 - Under `preimage_auto=yes` the commander leaves `npreimages` undefined: the application reads
   `cline%defined('npreimages')` to raise the ceiling to `AUTO_NSTATES`.
-- `reconstruct_state_halves` overrides, then restores, the `params` fields the reconstruction service
-  reads (states, parts, nonuniform, trailing, automask, vols) to keep the trial maps raw. Ruled for
-  fixing: the inputs move into a `rec3D_request`; do not extend the hand-kept list.
+- Every selected particle is in an even/odd half: `validate_covariance_inputs` stops on an `eo = -1` row
+  (`oris%get_half`) instead of the fits dropping it.
+- `reconstruct_state_halves` keeps the trial maps raw through its `rec3D_request` (`nstates`, `one_part`,
+  `no_nonuniform`, `no_trail_rec`, `all_states`, `no_automsk`): the service applies them to `params` for the
+  reconstruction and restores the caller's values (and `vols`) after. A new setting the reconstruction must
+  take goes into the request, never into a save-and-restore list of the caller. The command line the
+  service gives volume assembly (`cline_rec`) still carries the same settings as keys.
 - Per iteration (`fit_engine_iterate`): `iter_begin`, E-step pass, `iter_reduce`, `merge_stash`,
   `iter_finish`. The stash precedes `iter_finish`, which solves in place and frees the accumulators.
   `history%mix_*` survive iterations; only `kill` or the rank-change resize in `iter_begin` frees them.
@@ -40,7 +44,7 @@ Silent ones first: nothing reports these.
   at `fit_engine_iterate` entry, indexed by `omp_get_thread_num()+1`. Only `estep_particle` runs in
   the E-step region; bank build and `mstep_insert_batch` are called outside it. No `image%new` or
   `read_and_crop` (FFTW plans) in a region. `simple_flex_pca_basis` sets `omp_set_max_active_levels(1)`
-  for the process and does not restore it: known defect, ruled for fixing (restore it on the way out).
+  for its pass and restores the caller's level on the way out.
 - The mod-4 split (`flex_pca_half_of`: rows {0,1} fit A, {2,3} fit B) is shared by master, workers
   and `check_flex_fits` in `commanders/simple/simple_commanders_refine3D.f90`, which repeats the
   100-row minimum per half (the paired run stops below it, or with `n_probe_iters < 2`).

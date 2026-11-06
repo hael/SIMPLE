@@ -22,9 +22,6 @@ Silent ones first: nothing reports these.
   `chunks_coarse/` and `chunks_fine/` (restart import) and `chunked_mics.txt` is written there;
   `submit` changes directory and restores it and `CWD_GLOB`. Make and cycle it in the driving
   stage's folder; a fresh run needs a fresh folder.
-- The records marked included must stay a prefix of `project_list`: coarse chunking takes the
-  contiguous range from the first record not included, so an included record inside it is chunked
-  again. A restart pushes the chunked micrographs first (p05 `restore_imports`).
 - `cycle` order is policy: `collect_and_reject`, `generate_chunks_coarse`, `generate_chunks_fine`
   (not with `single_pass`), `submit` (fine before coarse), `hand_off_final_set`.
 - Sentinel files are the state a restart reads (`SOLVE2D_FINISHED`, `REJECTION_FINISHED`,
@@ -44,6 +41,13 @@ Silent ones first: nothing reports these.
   kept as `<folder>_attempt1`); a second failure drops it with its particles counted. The stage
   never stops for a chunk.
 - Counters are cumulative across restarts (rebuilt by `new` from the chunks on disk).
+- The records marked included stay a prefix of `project_list`: coarse chunking takes the contiguous
+  range from the first record not included. `generate_chunks_coarse` and `write_chunked_mics` stop
+  otherwise (`check_included_prefix`). A restart pushes the chunked micrographs first (p05
+  `restore_imports`).
+- `cleanup_chunk` keeps what a chunk took (`chunk_mics.txt`, `consumed_coarse.txt`) with its sentinels:
+  p05's restart rebuilds `chunked_mics.txt` from the coarse chunks' lists (`rebuild_chunked_mics`), and
+  gives up, with a warning, only on a chunk without its list (`pre_chunked`, or older than the fix).
 
 ## Order of calls
 
@@ -63,9 +67,10 @@ then `kill`; `kill` alone leaves them running.
 ## Tests
 
 - `build/bin/simple_test_exec test=unit_project suite=particle_sieve` (part of a 2-3 s suite):
-  lifecycle, restart import, counters, `get_finished`, hand-off with optics, retries.
+  lifecycle, restart import, counters, `get_finished`, hand-off with optics, retries, the lists kept by
+  the cleanup and the rebuild after a rejection, the prefix stop.
 - `test=unit_stream suite=particle_sieving` and `suite=initial_analysis`: the drivers, a partly
-  chunked set restored from `chunked_mics.txt`.
+  chunked set restored from `chunked_mics.txt`, the restore after a rejected chunk and a crash.
 - `test=stream_chains suite=sieve_to_3d` runs real chunk jobs (after `make -C build install`, tens
   of minutes). A change to selection moves p05's counts: compare the chain's sieve and pool numbers.
 

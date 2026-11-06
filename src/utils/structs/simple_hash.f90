@@ -22,25 +22,25 @@ type :: hash
     logical :: exists     = .false.
   contains
     !< CONSTRUCTORS
-    procedure, private :: new_1, new_2
-    generic            :: new => new_1, new_2
+    procedure, private :: new_default, new_by_sz
+    generic            :: new => new_default, new_by_sz
     procedure, private :: alloc_hash
     procedure, private :: realloc_hash
     procedure, private :: copy
     generic            :: assignment(=) => copy
     !< SETTERS
-    procedure, private :: push_1, push_2
-    generic            :: push => push_1, push_2
-    procedure, private :: set_1, set_2, set_3
-    generic            :: set => set_1, set_2, set_3
+    procedure, private :: push_dp, push_int
+    generic            :: push => push_dp, push_int
+    procedure, private :: set_real, set_int, set_dp
+    generic            :: set => set_real, set_int, set_dp
     procedure          :: delete
     !< GETTERS
     procedure          :: isthere
     procedure          :: lookup
     procedure          :: get
     procedure          :: get_dp
-    procedure, private :: getter_1, getter_2, getter_3
-    generic            :: getter => getter_1, getter_2, getter_3
+    procedure, private :: getter_real, getter_dp, getter_int
+    generic            :: getter => getter_real, getter_dp, getter_int
     procedure          :: get_keys
     procedure          :: get_key
     procedure          :: get_value_at
@@ -55,8 +55,8 @@ type :: hash
 end type hash
 
 interface hash
-    module procedure constructor_1
-    module procedure constructor_2
+    module procedure constructor_default
+    module procedure constructor_by_sz
 end interface hash
 
 contains
@@ -64,30 +64,30 @@ contains
     ! CONSTRUCTORS
 
     !>  \brief  is a constructor
-    function constructor_1( ) result( self )
+    function constructor_default( ) result( self )
         type(hash) :: self
-        call self%new_1
-    end function constructor_1
+        call self%new_default
+    end function constructor_default
 
     !>  \brief  is a constructor
-    function constructor_2( sz, buffsz ) result( self )
+    function constructor_by_sz( sz, buffsz ) result( self )
         integer,           intent(in)    :: sz     !< initial size
         integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
         type(hash) :: self
-        call self%new_2(sz, buffsz)
-    end function constructor_2
+        call self%new_by_sz(sz, buffsz)
+    end function constructor_by_sz
 
     !>  \brief  is a constructor
-    subroutine new_1( self )
+    subroutine new_default( self )
         class(hash), intent(inout) :: self
         call self%kill
         self%buffsz = BUFFSZ_DEFAULT
         call self%alloc_hash(self%buffsz)
         self%exists = .true.
-    end subroutine new_1
+    end subroutine new_default
 
     !>  \brief  is a constructor
-    subroutine new_2( self, sz, buffsz )
+    subroutine new_by_sz( self, sz, buffsz )
         class(hash),       intent(inout) :: self   !< instance
         integer,           intent(in)    :: sz     !< initial size
         integer, optional, intent(in)    :: buffsz !< size of subsequent allocation increments
@@ -99,7 +99,7 @@ contains
         endif
         call self%alloc_hash(sz)
         self%exists = .true.
-    end subroutine new_2
+    end subroutine new_by_sz
 
     !>  \brief  allocates keys and values without touching buffsz and hash_index
     subroutine alloc_hash( self, sz )
@@ -158,7 +158,7 @@ contains
     ! SETTERS
 
     !>  \brief  pushes real values to the hash
-    subroutine push_1( self, key, val )
+    subroutine push_dp( self, key, val )
         class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: val
@@ -173,10 +173,10 @@ contains
         self%keys(self%hash_index) = trim(adjustl(key))
         ! set value
         self%values(self%hash_index) = real(val,dp)
-    end subroutine push_1
+    end subroutine push_dp
 
     !>  \brief  pushes real values to the hash
-    subroutine push_2( self, key, val )
+    subroutine push_int( self, key, val )
         class(hash),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: val
@@ -191,10 +191,10 @@ contains
         self%keys(self%hash_index) = trim(adjustl(key))
         ! set value
         self%values(self%hash_index) = real(val,dp)
-    end subroutine push_2
+    end subroutine push_int
 
     !>  \brief  sets a real value in the hash
-    subroutine set_1( self, key, val )
+    subroutine set_real( self, key, val )
         class(hash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
@@ -209,10 +209,10 @@ contains
             end do
         endif
         call self%push(key, real(val,dp))
-    end subroutine set_1
+    end subroutine set_real
 
     !>  \brief  sets an integer value in the hash
-    subroutine set_2( self, key, ival )
+    subroutine set_int( self, key, ival )
         class(hash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: ival
@@ -227,10 +227,10 @@ contains
             end do
         endif
         call self%push(key, real(ival,dp))
-    end subroutine set_2
+    end subroutine set_int
 
     !>  \brief  sets a real(kind=8) value in the hash
-    subroutine set_3( self, key, rval )
+    subroutine set_dp( self, key, rval )
         class(hash),     intent(inout) :: self
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: rval
@@ -245,7 +245,7 @@ contains
             end do
         endif
         call self%push(key, rval)
-    end subroutine set_3
+    end subroutine set_dp
 
     !>  \brief  deletes a value in the hash
     subroutine delete( self, key )
@@ -329,28 +329,28 @@ contains
     end function get_dp
 
     !>  \brief  returns real(kind=4)
-    pure subroutine getter_1( self, key, rvalsp )
+    pure subroutine getter_real( self, key, rvalsp )
         class(hash),      intent(in)  :: self
         character(len=*), intent(in)  :: key
         real(kind=sp),    intent(out) :: rvalsp
         rvalsp = real(self%get_dp(key))
-    end subroutine getter_1
+    end subroutine getter_real
 
     !>  \brief  returns real(kind=8)
-    pure subroutine getter_2( self, key, rvaldp )
+    pure subroutine getter_dp( self, key, rvaldp )
         class(hash),      intent(in)  :: self
         character(len=*), intent(in)  :: key
         real(kind=dp),    intent(out) :: rvaldp
         rvaldp = self%get_dp(key)
-    end subroutine getter_2
+    end subroutine getter_dp
 
     !>  \brief  returns integer(kind=4)
-    pure subroutine getter_3( self, key, ival )
+    pure subroutine getter_int( self, key, ival )
         class(hash),      intent(in)  :: self
         character(len=*), intent(in)  :: key
         integer(kind=sp), intent(out) :: ival
         ival = nint(self%get_dp(key))
-    end subroutine getter_3
+    end subroutine getter_int
 
     !>  \brief  gets a value in the hash
     function get_key( self, keyindx ) result( key )

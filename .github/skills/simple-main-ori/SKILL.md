@@ -17,8 +17,10 @@ Silent ones first: nothing reports these.
 
 - **Particle records save only their slots.** A particle-typed record (`is_ptcl=.true.`: `os_ptcl2D`,
   `os_ptcl3D`) keeps named keys in real slots and others in hash tables, but `binoris` writes particle
-  segments as the slots alone: a non-slot key (`z`, `mirr`, a new name) is lost at the next project
-  write. Other segments are hash-typed, saved as text. `=` into an existing record keeps the target's
+  segments as the slots alone: a non-slot key (`z`, `mirr`, a new name) would be lost at the next
+  project write, so a Debug build stops there (`check_particle_slots` in `simple_binoris`); producers strip
+  what they do not keep (`strip_nonslot_keys`; `nonslot_key` names the first such key) and a key read back
+  after a write is a slot (`frame`, slot 56). Other segments are hash-typed, saved as text. `=` into an existing record keeps the target's
   typing. A new particle field is a slot (`references/particle_slots.md`); never renumber or reuse one.
 - **Absent reads as zero; presence depends on the typing.** `get`/`get_int` of a missing key give 0
   (permanent, by ruling: no stop, no `get_or`), `get_str` ''. On a particle record the slots listed
@@ -40,8 +42,8 @@ Silent ones first: nothing reports these.
 - **Shifts** `x, y` are pixels of the particle's stack in the particle frame; an image is centred by
   shifting it by minus `[x, y]`. Cropping and resampling: `references/conventions.md`.
 - **Labels.** `state` 0 excludes a row (`ptcl2D`'s selects, `ptcl3D`'s is the 3D label); `class` and
-  `proj` (a direction of `eulspace`) are unassigned at 0; `eo` is 0 even, 1 odd, -1 none (`reject`; the
-  class averager and `normalized_eo` take it as even: known defect, ruled to stop). `get_pop(s)` and
+  `proj` (a direction of `eulspace`) are unassigned at 0; `eo` is 0 even, 1 odd, -1 none (`reject`); a half sum
+  takes it through `get_half`, which stops on -1 (class averages, 3D reconstruction). `get_pop(s)` and
   `get_pinds` skip state 0; `get_n(label)` (largest label, at least 1) and `get_noris` count every row.
 - **Halves** of particle fields have one maker, `ensure_field_halves`, with one label in `os_ptcl2D`
   and `os_ptcl3D`; `partition_eo` (row parity) is for class-average fields and time series.
@@ -52,10 +54,10 @@ Silent ones first: nothing reports these.
   owner draws and writes; a worker only reproduces.
 - **Reallocating** makes row indices stale: the calls in `references/conventions.md`.
 - **Symmetry.** `sym%apply(o, isym, osym)` gives `R_o R_isym`, other keys kept (op 1 is the identity).
-  The asymmetric unit (`get_eullims`) includes the mirror half. Icosahedral operators: SPIDER's by
-  default (the builder's `pgrpsyms`), RELION's with `icorelion=.true.` (`volume/` symmetry search and
-  analysis): ruled for fixing to one setting (test an icosahedral case first). An unsupported group
-  calls `stop`: check with `is_valid_pointgroup`. `rot_to_asym` has a known c1 defect (reference).
+  The asymmetric unit (`get_eullims`) includes the mirror half. Icosahedral operators have one setting,
+  SPIDER's (a 5-fold axis on z), everywhere: the builder's `pgrpsyms`, the symmetry search and analysis of
+  `volume/`, `symmetrize_map`; the asymmetric unit assumes it. An unsupported group
+  calls `stop`: check with `is_valid_pointgroup`.
 - **OpenMP**: one row per thread; read strings with `get_static` (`get_str` allocates).
 
 ## Where to start

@@ -5,7 +5,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 interface butterworth_filter
-    module procedure butterworth_filter_1, butterworth_filter_2, butterworth_filter_3, butterworth_filter_4, butterworth_filter_5
+    module procedure butterworth_filter_img, butterworth_filter_vec, butterworth_filter_band, butterworth_filter_krange, butterworth_filter_pair
 end interface butterworth_filter
 
 integer, parameter :: BW_ORDER = 8
@@ -50,7 +50,7 @@ contains
         val = min(1.,max(0.,val))
     end function butterworth
 
-    subroutine butterworth_filter_1(img, cutoff_find, cur_fil)
+    subroutine butterworth_filter_img(img, cutoff_find, cur_fil)
         use simple_image, only: image
         class(image), intent(inout) :: img
         integer,      intent(in)    :: cutoff_find
@@ -60,19 +60,19 @@ contains
             cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
         enddo
         call img%apply_filter(cur_fil)
-    end subroutine butterworth_filter_1
+    end subroutine butterworth_filter_img
 
-    subroutine butterworth_filter_2(cutoff_find, cur_fil)
+    subroutine butterworth_filter_vec(cutoff_find, cur_fil)
         integer,      intent(in)    :: cutoff_find
         real,         intent(inout) :: cur_fil(:)
         integer :: freq_val
         do freq_val = 1, size(cur_fil)
             cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
         enddo
-    end subroutine butterworth_filter_2
+    end subroutine butterworth_filter_vec
 
     !< notch filter squeezed between two cut_off frequencies
-    subroutine butterworth_filter_3(c1, c2, cur_fil)
+    subroutine butterworth_filter_band(c1, c2, cur_fil)
         integer,      intent(in)    :: c1, c2           ! two cut-off frequencies
         real,         intent(inout) :: cur_fil(:)
         integer :: freq_val
@@ -80,9 +80,9 @@ contains
             cur_fil(freq_val) =        butterworth(real(freq_val-1), BW_ORDER, real(c2)) * &
                                 &( 1 - butterworth(real(freq_val-1), BW_ORDER, real(c1)) )
         enddo
-    end subroutine butterworth_filter_3
+    end subroutine butterworth_filter_band
 
-    subroutine butterworth_filter_4(cutoff_find, kfromto, cur_fil)
+    subroutine butterworth_filter_krange(cutoff_find, kfromto, cur_fil)
         integer,      intent(in)    :: cutoff_find
         integer,      intent(in)    :: kfromto(2)
         real,         intent(inout) :: cur_fil(kfromto(1):kfromto(2))
@@ -90,9 +90,9 @@ contains
         do freq_val = kfromto(1), kfromto(2)
             cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
         enddo
-    end subroutine butterworth_filter_4
+    end subroutine butterworth_filter_krange
 
-    subroutine butterworth_filter_5(img1, img2, cutoff_find, cur_fil)
+    subroutine butterworth_filter_pair(img1, img2, cutoff_find, cur_fil)
         use simple_image, only: image
         class(image), intent(inout) :: img1, img2
         integer,      intent(in)    :: cutoff_find
@@ -102,6 +102,6 @@ contains
             cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cutoff_find))
         enddo
         call img1%apply_filter(img2, cur_fil)
-    end subroutine butterworth_filter_5
+    end subroutine butterworth_filter_pair
 
 end module simple_butterworth

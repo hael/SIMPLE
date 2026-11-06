@@ -132,8 +132,12 @@ contains
         integer(timer_int_kind) :: t, t_stage
         real(timer_int_kind)    :: dt_h2d, dt_launch, dt_wait
         integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
-        integer :: ibatch, batchsz, sz, nbatch
+        integer :: ibatch, batchsz, sz, nbatch, i, ihalf
         type(ptcl_read_session) :: reads
+        ! an inserted particle in no even/odd half stops (get_half), before the parallel batches
+        do i = 1, nptcls
+            ihalf = build%spproj_field%get_half(pinds(i))
+        end do
         ! prep first batch
         nbatch = ceiling(real(nptcls)/real(MAXIMGBATCHSZ))
         call reads%new(params)

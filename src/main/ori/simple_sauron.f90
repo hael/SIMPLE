@@ -12,8 +12,8 @@ public :: sauron_ori_parser
 private
 
 interface sauron_ori_parser
-    module procedure sauron_ori_parser_1
-    module procedure sauron_ori_parser_2
+    module procedure sauron_ori_parser_hash
+    module procedure sauron_ori_parser_pparms
 end interface
 
 contains
@@ -45,7 +45,7 @@ contains
 
     !> This parser is optimised for real/character output types.
     !  Refer to sauron_ori_parser_old for more generic cases
-    subroutine sauron_ori_parser_1( line, htab, chtab )
+    subroutine sauron_ori_parser_hash( line, htab, chtab )
         character(len=*), intent(in)    :: line
         class(hash),      intent(inout) :: htab
         class(chash),     intent(inout) :: chtab
@@ -95,9 +95,9 @@ contains
                 call chtab%push(keys(iarg),vals(iarg))
             endif
         end do
-    end subroutine sauron_ori_parser_1
+    end subroutine sauron_ori_parser_hash
 
-    subroutine sauron_ori_parser_2( line, pparms, htab, chtab )
+    subroutine sauron_ori_parser_pparms( line, pparms, htab, chtab )
         character(len=*), intent(in)    :: line
         real,             intent(inout) :: pparms(N_PTCL_ORIPARAMS)
         class(hash),      intent(inout) :: htab
@@ -159,6 +159,6 @@ contains
                 call chtab%push(keys(iarg), vals(iarg))
             endif
         end do
-    end subroutine sauron_ori_parser_2
+    end subroutine sauron_ori_parser_pparms
 
 end module simple_sauron

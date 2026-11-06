@@ -12,11 +12,13 @@ use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_
                            &nu_evidence_summary, get_nu_evidence_summary, unpack_nu_evidence_state, &
                            &nu_evidence_state_is_valid, calc_nu_evidence_margin, nu_evidence_envelope, &
                            &nu_envmask_params, nu_envmask_stats, NU_EVIDENCE_NBANDS, NU_EVIDENCE_SOURCE_BASE, &
-                           &NU_EVIDENCE_MIN_NULL_FRAC, NU_EVIDENCE_MAX_NULL_FRAC
+                           &NU_EVIDENCE_MIN_NULL_FRAC, NU_EVIDENCE_MAX_NULL_FRAC, set_nu_solvent_envelope
 use simple_test_utils
 use simple_tent_smooth, only: tent_smooth_3d
 use simple_rnd,         only: seed_rnd_fixed
 !$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline,        only: cmdline
 implicit none
 
 public :: run_all_nu_filter_tests
@@ -41,6 +43,13 @@ real,    parameter :: HARD_RAD_PX = 18.0
 real,    parameter :: ENV_NOISE   = 1.0  !< amplitude of the uniform [-0.5,0.5] per-half noise
 real,    parameter :: ENV_LP      = 4.0  !< envelope scale in A, small so the floors test the statistic
 
+
+!> a second pair set up while the first pair's solvent clamp is still set, which must stop
+type, extends(forked_process) :: clamped_setup
+contains
+    procedure :: execute => setup_with_clamp
+end type clamped_setup
+
 contains
 
     subroutine run_all_nu_filter_tests()
@@ -53,7 +62,32 @@ contains
         call test_evidence_envelope()
         call test_tent_smooth_exact()
         call test_label_field_threads()
+        call test_clamp_between_pairs()
     end subroutine run_all_nu_filter_tests
+
+    !> cleanup_nu_filter runs between pairs: a setup that meets the previous pair's clamp stops
+    subroutine test_clamp_between_pairs()
+        type(clamped_setup) :: child
+        write(logfhandle,'(A)') 'test_clamp_between_pairs'
+        call child%start(name=string('NU_CLAMP_LEFT_SET'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a setup with the previous pair''s clamp still set stops')
+        call child%destroy
+    end subroutine test_clamp_between_pairs
+
+    subroutine setup_with_clamp( self, cline )
+        class(clamped_setup), intent(inout) :: self
+        class(cmdline),       intent(inout) :: cline
+        type(image) :: even, odd, env
+        ! one thread: the parent's OpenMP pool does not exist in a forked child
+        !$ call omp_set_num_threads(1)
+        call make_pair(.false., even, odd)
+        call setup_nu_dmats(even, odd, MSKDIAM, [real ::])
+        call env%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
+        env = 1.
+        call set_nu_solvent_envelope(env)
+        call setup_nu_dmats(even, odd, MSKDIAM, [real ::])
+    end subroutine setup_with_clamp
 
     !> the label optimisation at every processor, 20 times on one setup: the same label field each time (the smoothing
     !! beta is a real reduction, so the field is reproducible at a fixed thread count; the level smoothings and the

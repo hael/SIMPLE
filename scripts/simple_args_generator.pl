@@ -26,23 +26,36 @@ if ( @ARGV && length($ARGV[0]) ){
 -d $outdir or die "Output directory $outdir does not exist\n";
 $varlistfile     = $outdir.'/simple_varlist.txt';
 $simple_argsfile = $outdir.'/simple_args.f90';
-$tmp_varlist  = $ENV{'SIMPLE_PATH'}.'/simple_varlist.tmp';
-$tmp_argsfile = $ENV{'SIMPLE_PATH'}.'/simple_args.tmp';
+$tmp_varlist  = $outdir.'/simple_varlist.tmp';
+$tmp_argsfile = $outdir.'/simple_args.tmp';
 open(PARAMS, "< simple_parameters.f90") or die "Cannot open simple_parameters.f90\n";
 @lines = <PARAMS>;
 close(PARAMS);
 
-# extract the relevant lines
+# extract the components of type(parameters): from its first line to its type-bound
+# procedures (contains) or, without them, to end type; declarations after the type
+# (interfaces, dummy arguments) are not keys
+my $in_type = 0;
 LINESLOOP:{
     foreach (@lines) {
         chomp($_);
-        if( $_ =~ /^\s+contains/ ){
+        if( $_ =~ /^\s*type\s*(,[^:]*)?(::)?\s*parameters\s*(!.*)?$/i ){
+            $in_type = 1;
+            next;
+        }
+        next unless $in_type;
+        if( $_ =~ /^\s*contains\s*(!.*)?$/i or $_ =~ /^\s*end\s*type/i ){
             last LINESLOOP;
         }
         if( $_ =~ /^\s+character/ or ($_ =~ /^\s+integer/ or ($_ =~ /^\s+real/ or ($_ =~ /^\s+logical/ or $_ =~ /^\s+type\(string\)/)))){
+            # a field parameters derives or sets itself says so in its comment and is no key
+            next if $_ =~ /!.*not a command-line key/;
             # strip the trailing comment first: commas in a !< descriptor would otherwise become arguments
             $_ =~ s/!.*//;
             $_ =~ s/.+:://;
+            # an array constructor's commas are not separators: [0.5,1.0] would become the key 1.0]
+            $_ =~ s/\[[^\]]*\]//g;
+            $_ =~ s/\(\/.*?\/\)//g;
             my @splitted = split(",",$_);
             push(@vars,@splitted);
         }
@@ -59,6 +72,10 @@ foreach my$i (0..$#vars){
     if( defined($vars[$i]) ){ $vars[$i] =~ s/\s//g };
 }
 @vars = grep defined, @vars;
+$in_type or die "type(parameters) not found in simple_parameters.f90\n";
+foreach (@vars){
+    /^[a-z][a-z0-9_]*$/i or die "simple_args_generator.pl: '$_' is not a Fortran name; a declaration of type(parameters) was misread\n";
+}
 
 # add wanted stuff (volumes)
 foreach my$i (1 .. 20){

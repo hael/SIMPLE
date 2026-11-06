@@ -1,6 +1,7 @@
 !@descr: covalent atomic radii and lattice parameter definitions 
 module simple_defs_atoms
 implicit none
+#include "simple_local_flags.inc"
 
 ! Pseudo-atoms X1..X3: Gaussian intensity classes, not elements; atoms%convolve renders them from
 ! occupancy (integrated intensity) and beta (B factor). Their Z are sentinels, clear of CDSE's 999.
@@ -232,6 +233,7 @@ contains
 
     ! From Wheeler, D, 1925, Physical Review. 25 (6): 753–761, FCC & BCC only.
     subroutine get_lattice_params( element_ucase, crystal_system, a )
+        use simple_error, only: simple_exception
         character(len=5),  intent(in)    :: element_ucase
         character(len=10), intent(inout) :: crystal_system
         real,              intent(inout) :: a(3)
@@ -277,7 +279,7 @@ contains
                 ! Samarth, N. 1989, Appl. Phys. Lett. 54; 2680-2682
                 a = 6.077;                                   crystal_system = 'zincblende'
             case DEFAULT
-                a = 3.76
+                THROW_HARD('no lattice parameters for '//trim(element_ucase)//'; get_lattice_params')
         end select
     end subroutine get_lattice_params
 

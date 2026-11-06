@@ -1458,7 +1458,8 @@ contains
         real, intent(in)    :: smpd
         real                :: center(3), half_box(3)
         center      = self%get_geom_center()
-        half_box(:) = real(ldim-1)/2. * smpd
+        ! the box centre is voxel ldim/2+1, at ldim/2*smpd (integer division keeps an odd box on its centre voxel)
+        half_box(:) = real(ldim/2) * smpd
         call self%translate(-center+half_box)
         THROW_WARN('PDB atomic center moved to the center of the box; center_pdbcoord')
     end subroutine center_pdbcoord

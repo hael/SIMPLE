@@ -7,7 +7,7 @@ implicit none
 public :: memoize_ft_maps, forget_ft_maps
 public :: ft_map_lims, ft_map_lims_nr
 public :: ft_map_phys_addrh, ft_map_phys_addrk, ft_map_spafreqsq, ft_map_astigang
-public :: ft_map_get_lfny, ft_map_get_farray_shape
+public :: ft_map_get_lfny, ft_map_get_farray_shape, ft_maps_match
 private
 #include "simple_local_flags.inc"
 
@@ -63,6 +63,16 @@ contains
             call ftiterator%reset
         endif
     end subroutine forget_ft_maps
+
+    !> the maps are memoised for an image of these logical dimensions (a reader checks before it loops)
+    pure logical function ft_maps_match( ldim, smpd )
+        integer, intent(in) :: ldim(3)
+        real,    intent(in) :: smpd
+        ft_maps_match = .false.
+        if( .not. allocated(ft_map_phys_addrh) ) return
+        if( any(ftiterator%get_ldim() /= [ldim(1), ldim(2), 1]) ) return
+        ft_maps_match = abs(smpd - ftiterator%get_smpd()) <= 1.e-4 * smpd
+    end function ft_maps_match
 
     pure integer function ft_map_get_lfny()
         ft_map_get_lfny = ftiterator%get_lfny(1)

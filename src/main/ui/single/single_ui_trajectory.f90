@@ -74,10 +74,12 @@ subroutine new_trajectory_extract_substk( prgtab )
         &.false., visibility=UI_VIS_STANDARD, display_name='Remove Graphene Signal') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call trajectory_graphene_subtr%add_input(UI_IMG, stk_traj, &
-        &visibility=UI_VIS_STANDARD)
-        call trajectory_graphene_subtr%add_input(UI_IMG, stk_backgr, &
-        &visibility=UI_VIS_STANDARD)
+        call trajectory_graphene_subtr%add_input(UI_IMG, stk, label_override='Tracked NP image stack', &
+        &help_override='xxx.mrc file with NP time-trajectory', placeholder_override='e.g. trajectory.mrcs', &
+        &required_override=.true., visibility=UI_VIS_STANDARD)
+        call trajectory_graphene_subtr%add_input(UI_IMG, stk2, label_override='Background power spectra stack', &
+        &help_override='background power spectra stack, one per image of the trajectory', &
+        &placeholder_override='e.g. background_pspec.mrcs', required_override=.true., visibility=UI_VIS_STANDARD)
         call trajectory_graphene_subtr%add_input(UI_IMG, outstk, &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output

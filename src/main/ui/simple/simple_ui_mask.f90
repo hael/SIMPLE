@@ -90,10 +90,6 @@ subroutine new_auto_spher_mask( prgtab )
         call automask2D%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6., &
         &visibility=UI_VIS_ADVANCED)
-        call automask2D%add_input(UI_MASK, 'positive', 'binary', 'Consider only positive pixels',&
-        &'Consider only positive pixels for threshold determination(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call automask2D%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)

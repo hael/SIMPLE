@@ -11,7 +11,7 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_heade
 use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 
-public :: prep_sigmas_objfun, alloc_ptcl_imgs
+public :: prep_sigmas_objfun, alloc_ptcl_imgs, check_pass_team
 public :: write_sigma2_bench_context, write_sigma2_bench_timings
 public :: build_batch_particles3D, build_batch_particles2D, prep_cart_batch, crop_particles2D
 public :: clean_batch_particles2D, clean_batch_particles3D
@@ -117,7 +117,7 @@ contains
         integer,                  intent(in)    :: batchsz
         integer, optional,        intent(in)    :: imgbatch_box
         real,    optional,        intent(in)    :: imgbatch_smpd
-        integer           :: ithr
+        integer           :: ithr, nteam
         if( present(imgbatch_box) )then
             if( present(imgbatch_smpd) )then
                 call prepimgbatch(params, build, batchsz, box=imgbatch_box, smpd=imgbatch_smpd)
@@ -127,19 +127,36 @@ contains
         else
             call prepimgbatch(params, build, batchsz)
         endif
-        allocate(ptcl_imgs(nthr_glob), ptcl_imgs_pad(nthr_glob))
+        ! one image per thread of the team the pass's regions run
+        nteam = nthr_glob
+        !$ nteam = omp_get_max_threads()
+        allocate(ptcl_imgs(nteam), ptcl_imgs_pad(nteam))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
-        do ithr = 1,nthr_glob
+        do ithr = 1,nteam
             call ptcl_imgs(ithr)%new(    [params%box_crop,  params%box_crop,  1], params%smpd_crop, wthreads=.false.)
             call ptcl_imgs_pad(ithr)%new([params%box_croppd,params%box_croppd,1], params%smpd_crop, wthreads=.false.)
         enddo
         !$omp end parallel do
     end subroutine alloc_ptcl_imgs
 
+    !> the probability tables and the polar calculator size their per-thread state by nthr_glob and index it
+    !! by the thread: a pass stops on a larger team
+    subroutine check_pass_team( caller )
+        character(len=*), intent(in) :: caller
+        character(len=STDLEN) :: msg
+        integer :: nteam
+        nteam = 1
+        !$ nteam = omp_get_max_threads()
+        if( nteam > nthr_glob )then
+            write(msg,'(a,a,i0,a,i0)') caller, ': OpenMP team of ', nteam, ' exceeds nthr_glob = ', nthr_glob
+            THROW_HARD(trim(msg))
+        endif
+    end subroutine check_pass_team
+
     !> Prepare one 3-D particle batch from a single read for the representation(s) of the pass:
     !! the particle slots of the Cartesian calculator when the pass has built it (build%cftc
-    !! holds the references a Cartesian pass or the in-matcher polish read; other 3-D batch
-    !! users, the probability-table commanders, build none) and the polar particles unless the
+    !! holds the references a Cartesian pass or the in-matcher polish read; refine3D_exec is
+    !! the only caller) and the polar particles unless the
     !! pass is Cartesian (l_cart_refine). The Cartesian slots are prepared first, from copies,
     !! because the polar preparation normalizes the images in place.
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, reads )
@@ -147,7 +164,7 @@ contains
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
-        class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+        class(image),           intent(inout) :: tmp_imgs(:), tmp_imgs_pad(:)
         class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
         logical :: l_polar, l_cart
         l_polar   = .not. params%l_cart_refine
@@ -268,9 +285,9 @@ contains
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: src_imgs(nptcls_here)
-        class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
+        class(image),           intent(inout) :: tmp_imgs(:), tmp_imgs_pad(:)
         type(image), allocatable :: rec_work(:)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, slot, ihalf
         logical :: l_record
         l_record = records_open()
         if( l_record )then
@@ -283,6 +300,10 @@ contains
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         pdim_interp = build%pftc%get_pdim_interp()
         call tmp_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
+        ! a scored particle in no even/odd half stops (get_half), before the parallel region
+        do iptcl_batch = 1,nptcls_here
+            ihalf = build%spproj_field%get_half(pinds_here(iptcl_batch))
+        end do
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr,slot) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -297,7 +318,7 @@ contains
                 endif
             endif
             ! the half first: memoizing the particle's self-term reads its half's spectrum
-            call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            call build%pftc%set_eo(iptcl, build%spproj_field%get_eo(iptcl) == 0)
             call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
         end do
         !$omp end parallel do
@@ -328,11 +349,11 @@ contains
         integer,                  intent(in)    :: pinds(nptcls_here)
         class(ptcl_read_session), intent(inout) :: reads   !< the read session of the pass
         class(image),   optional, intent(inout) :: ptcl_imgs(nptcls_here)
-        class(image),             intent(inout) :: ptcl_match_imgs(params%nthr)
-        class(image),             intent(inout) :: ptcl_match_imgs_pad(params%nthr)
+        class(image),             intent(inout) :: ptcl_match_imgs(:)
+        class(image),             intent(inout) :: ptcl_match_imgs_pad(:)
         logical,        optional, intent(in)    :: crop_sums !< cropped particles, made in memory (crop_particles2D)
         type(image), allocatable :: crop_work(:)
-        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team
+        integer :: iptcl_batch, iptcl, ithr, pdim_interp(3), nthr_team, ihalf
         logical :: l_keep_raw, l_crop_mem
         l_keep_raw = present(ptcl_imgs)
         ! With crop_sums ptcl_imgs receives the Fourier-cropped particle rather than the
@@ -352,6 +373,10 @@ contains
             !$ nthr_team = omp_get_max_threads()
             call alloc_imgarr(nthr_team, [params%box_crop, params%box_crop, 1], params%smpd_crop, crop_work)
         endif
+        ! a scored particle in no even/odd half stops (get_half), before the parallel region
+        do iptcl_batch = 1,nptcls_here
+            ihalf = build%spproj_field%get_half(pinds(iptcl_batch))
+        end do
         !$omp parallel do default(shared) private(iptcl,iptcl_batch,ithr) schedule(static) proc_bind(close)
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
@@ -384,7 +409,7 @@ contains
                     &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
             endif
             ! the half first: memoizing the particle's self-term reads its half's spectrum
-            call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
+            call build%pftc%set_eo(iptcl, build%spproj_field%get_eo(iptcl) == 0)
             call build%pftc%polarize_ptcl_pft(ptcl_match_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
         end do
         !$omp end parallel do

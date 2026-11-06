@@ -9,7 +9,8 @@ use simple_ptcl_sieve, only: ptcl_sieve, ptcl_sieve_settings, FINAL_INGESTION_MA
                             &read_chunked_mics, rebuild_chunked_mics
 use simple_sp_project, only: sp_project
 use simple_image,      only: image
-use simple_rec_list,   only: rec_list
+use simple_rec_list,   only: rec_list, project_rec
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 use simple_string,     only: string
 use simple_defs_fname, only: METADATA_EXT, SOLVE2D_FINISHED, FRCS_FILE
 use simple_projfile_utils, only: merge_chunk_projfiles_without_sigma2
@@ -26,6 +27,12 @@ integer,          parameter :: CAVG_BOX   = 64
 integer,          parameter :: NCLASSES   = 2
 integer,          parameter :: NPARTICLES = 8
 integer,          parameter :: NPER_CLASS = NPARTICLES / NCLASSES
+
+!> chunks a record list whose included records are not a prefix, which must stop
+type, extends(forked_process) :: gapped_chunker
+contains
+    procedure :: execute => chunk_gapped_list
+end type gapped_chunker
 
 contains
 
@@ -47,7 +54,88 @@ contains
         call test_failed_chunk_retried_once()
         call test_failed_chunk_dropped_after_retry()
         call test_merge_staged_chunk_only()
+        call test_rejected_chunk_keeps_its_lists()
+        call test_included_prefix_stop()
     end subroutine run_all_ptcl_sieve_tests
+
+    !> the cleanup after a rejection keeps what the chunk took (chunk_mics.txt, consumed_coarse.txt), so a
+    !! crash between a later chunk's project and chunked_mics.txt is still repaired by the rebuild
+    subroutine test_rejected_chunk_keeps_its_lists()
+        class(ptcl_sieve), allocatable :: sieve
+        class(parameters), allocatable :: params_sieve
+        class(cmdline),    allocatable :: cline_sieve
+        type(string), allocatable :: projnames(:)
+        integer,      allocatable :: micinds(:)
+        type(string) :: ws_dir, cwd_saved, chunk_dir, completed_path, chunk_projfile
+        write(*,'(A)') 'test_rejected_chunk_keeps_its_lists'
+        allocate(sieve, params_sieve, cline_sieve)
+        call make_completed_coarse_chunk(string('keep_lists'), ws_dir, cwd_saved, chunk_dir, completed_path,&
+            &chunk_projfile, cline_sieve)
+        call write_text('chunks_coarse/'//CHUNK_STEM//'/'//CHUNK_MICS, 'setA.simple 1')
+        ! the cleanup keeps by file name, not by tier
+        call write_text('chunks_coarse/'//CHUNK_STEM//'/'//CONSUMED_COARSE, '7')
+        call write_text('chunks_coarse/'//CHUNK_STEM//'/scratch.log', 'x')
+        call write_text(CHUNKED_MICS, 'setA.simple 1')
+        call params_sieve%new(cline_sieve)
+        call sieve%new(params_sieve, sieve_settings(params_sieve), completed_path)
+        call sieve%collect_and_reject()
+        call sieve%kill()
+        call assert_true(file_exists(filepath(chunk_dir, 'REJECTION_FINISHED')), 'the chunk is rejected')
+        call assert_false(file_exists(filepath(chunk_dir, 'scratch.log')),       'the cleanup ran')
+        call assert_true(file_exists(filepath(chunk_dir, CHUNK_MICS)),           'the cleanup keeps chunk_mics.txt')
+        call assert_true(file_exists(filepath(chunk_dir, CONSUMED_COARSE)),      'the cleanup keeps consumed_coarse.txt')
+        ! a crash after coarse 2's project, before chunked_mics.txt was rewritten
+        call make_chunk_project('coarse', 2, 4, 4, 2)
+        call write_text('chunks_coarse/chunk_coarse_2/'//CHUNK_MICS, 'setB.simple 1', 'setB.simple 2')
+        call rebuild_chunked_mics()
+        call read_chunked_mics(string(CHUNKED_MICS), projnames, micinds)
+        call assert_int(3, size(projnames), 'rebuilt after a rejection: the rejected chunk''s and the new one''s')
+        if( size(projnames) == 3 )then
+            call assert_true(projnames(1) == 'setA.simple' .and. micinds(1) == 1, 'coarse 1, micrograph 1')
+            call assert_true(projnames(3) == 'setB.simple' .and. micinds(3) == 2, 'coarse 2, micrograph 2')
+        endif
+        call cline_sieve%kill()
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_rejected_chunk_keeps_its_lists
+
+    !> chunking a record list whose included records are not a prefix stops (it would chunk them again);
+    !! a prefix chunks nothing amiss
+    subroutine test_included_prefix_stop()
+        type(gapped_chunker) :: child
+        type(string)         :: ws_dir, cwd_saved
+        write(*,'(A)') 'test_included_prefix_stop'
+        call setup_workspace(string('prefix_stop'), ws_dir, cwd_saved)
+        call child%start(name=string('SIEVE_GAPPED_LIST'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a gap in the included records stops the chunking')
+        call child%destroy
+        call teardown_workspace(ws_dir, cwd_saved)
+    end subroutine test_included_prefix_stop
+
+    subroutine chunk_gapped_list( self, cline )
+        !$ use omp_lib, only: omp_set_num_threads
+        class(gapped_chunker), intent(inout) :: self
+        class(cmdline),        intent(inout) :: cline
+        class(ptcl_sieve), allocatable :: sieve
+        class(parameters), allocatable :: params
+        type(rec_list)    :: project_list
+        type(project_rec) :: prec
+        integer :: i
+        !$ call omp_set_num_threads(1)
+        allocate(sieve, params)
+        call init_test_params(params)
+        call sieve%new(params, sieve_settings(params), string('completed'))
+        do i = 1, 3
+            prec%id       = i
+            prec%projname = string('set.simple')
+            prec%micind   = i
+            prec%nptcls   = 10
+            prec%included = .false.
+            call project_list%push_back(prec)
+        enddo
+        call project_list%set_included_flags([2,2])
+        call sieve%generate_chunks_coarse(project_list)
+    end subroutine chunk_gapped_list
 
     !> a final flush of only the staged chunk (no class averages, so no FRCs and no class map)
     !! merges its particles, without classes, and writes no FRC file
@@ -272,7 +360,8 @@ contains
             call assert_true(projnames(2) == 'setA.simple' .and. micinds(2) == 2, 'coarse 1, micrograph 2')
             call assert_true(projnames(3) == 'setB.simple' .and. micinds(3) == 1, 'coarse 3, micrograph 1')
         endif
-        ! a chunk that exists without a list: the file is kept
+        ! a chunk that exists without a list (pre_chunked, or made or cleaned before the cleanup kept the
+        ! lists): the file is kept
         call make_chunk_project('coarse', 4, 4, 4, 1)
         call write_text(CHUNKED_MICS, 'setD.simple 5')
         call rebuild_chunked_mics()

@@ -298,7 +298,7 @@ contains
         endif
     end subroutine rmsd
 
-    module subroutine stats_1( self, which, ave, sdev, maxv, minv, msk, med, errout )
+    module subroutine stats_region( self, which, ave, sdev, maxv, minv, msk, med, errout )
         class(image),      intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,              intent(out)   :: ave, sdev, maxv, minv
@@ -333,7 +333,7 @@ contains
         else if( which.eq.'foreground' )then
             background = .false.
         else
-            THROW_HARD('unrecognized parameter: which; stats_1')
+            THROW_HARD('unrecognized parameter: which; stats_region')
         endif
         allocate( pixels(product(self%ldim)) )
         pixels = 0.
@@ -397,12 +397,12 @@ contains
         if( present(errout) )then
             errout = err
         else
-            if( err ) THROW_WARN('variance zero; stats_1')
+            if( err ) THROW_WARN('variance zero; stats_region')
         endif
         if( didft ) call self%fft()
-    end subroutine stats_1
+    end subroutine stats_region
 
-    module subroutine stats_2( self, ave, sdev, maxv, minv, mskimg, med, errout )
+    module subroutine stats_mskimg( self, ave, sdev, maxv, minv, mskimg, med, errout )
         class(image),           intent(inout) :: self
         real,                   intent(out)   :: ave, sdev, maxv, minv
         class(image), optional, intent(in)    :: mskimg
@@ -412,7 +412,7 @@ contains
         logical           :: err
         real, allocatable :: pixels(:)
         ! FT
-        if( self%ft ) THROW_HARD('not for FTed imgs; stats_2')
+        if( self%ft ) THROW_HARD('not for FTed imgs; stats_mskimg')
         if( present(mskimg) )then
             pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
                 &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.95 )
@@ -427,9 +427,9 @@ contains
         if( present(errout) )then
             errout = err
         else
-            if( err ) THROW_WARN('variance zero; stats_2')
+            if( err ) THROW_WARN('variance zero; stats_mskimg')
         endif
-    end subroutine stats_2
+    end subroutine stats_mskimg
 
     ! returns the real space variance
     ! Based on Parseval's theorem when in the Fourier domain
@@ -1333,7 +1333,7 @@ contains
         endif
     end function corr_shifted
 
-    module function real_corr_1( self1, self2 ) result( r )
+    module function real_corr_unmasked( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
         real    :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3)), diff1sc
         real    :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3)), diff2sc
@@ -1381,9 +1381,9 @@ contains
                 r = 0.
             endif
         endif
-    end function real_corr_1
+    end function real_corr_unmasked
 
-    module function real_corr_2( self1, self2, mask ) result( r )
+    module function real_corr_masked( self1, self2, mask ) result( r )
         class(image), intent(inout) :: self1, self2
         logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         real :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3))
@@ -1404,7 +1404,7 @@ contains
         else
             r = 0.
         endif
-    end function real_corr_2
+    end function real_corr_masked
 
     module subroutine phase_corr(self1, self2, pc, lp )
         class(image),      intent(inout) :: self1, self2, pc
@@ -1595,7 +1595,7 @@ contains
         endif
     end subroutine fcorr_shift3D
 
-    module subroutine prenorm4real_corr_1( self, sxx )
+    module subroutine prenorm4real_corr_sxx( self, sxx )
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
         real :: npix, ax
@@ -1603,9 +1603,9 @@ contains
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / npix
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-    end subroutine prenorm4real_corr_1
+    end subroutine prenorm4real_corr_sxx
 
-    module subroutine prenorm4real_corr_2( self, sxx, mask )
+    module subroutine prenorm4real_corr_sxx_masked( self, sxx, mask )
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
         logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -1614,9 +1614,9 @@ contains
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
         sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
-    end subroutine prenorm4real_corr_2
+    end subroutine prenorm4real_corr_sxx_masked
 
-    module subroutine prenorm4real_corr_3( self, err )
+    module subroutine prenorm4real_corr_inplace( self, err )
         class(image), intent(inout) :: self
         logical,      intent(out)   :: err
         real :: npix, ave, var
@@ -1630,9 +1630,9 @@ contains
         else
             err = .true.
         endif
-    end subroutine prenorm4real_corr_3
+    end subroutine prenorm4real_corr_inplace
 
-    module function real_corr_prenorm_1( self_ref, self_ptcl, sxx_ref ) result( r )
+    module function real_corr_prenorm_sxx( self_ref, self_ptcl, sxx_ref ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
         real,         intent(in)    :: sxx_ref
         real :: diff(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
@@ -1647,9 +1647,9 @@ contains
         else
             r = 0.
         endif
-    end function real_corr_prenorm_1
+    end function real_corr_prenorm_sxx
 
-    module function real_corr_prenorm_2( self_ref, self_ptcl, sxx_ref, mask ) result( r )
+    module function real_corr_prenorm_sxx_masked( self_ref, self_ptcl, sxx_ref, mask ) result( r )
         class(image), intent(inout) :: self_ref, self_ptcl
         real,         intent(in)    :: sxx_ref
         logical,      intent(in)    :: mask(self_ptcl%ldim(1),self_ptcl%ldim(2),self_ptcl%ldim(3))
@@ -1665,14 +1665,14 @@ contains
         else
             r = 0.
         endif
-    end function real_corr_prenorm_2
+    end function real_corr_prenorm_sxx_masked
 
-    module real function real_corr_prenorm_3( self_ref, self_ptcl )
+    module real function real_corr_prenorm_inplace( self_ref, self_ptcl )
         class(image), intent(inout) :: self_ref, self_ptcl
-        real_corr_prenorm_3 = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))&
+        real_corr_prenorm_inplace = sum(self_ptcl%rmat(:self_ptcl%ldim(1),:self_ptcl%ldim(2),:self_ptcl%ldim(3))&
                                 & * self_ref%rmat(:self_ref%ldim(1),:self_ref%ldim(2),:self_ref%ldim(3)))
-        real_corr_prenorm_3 = real_corr_prenorm_3 / product(self_ref%ldim)
-    end function real_corr_prenorm_3
+        real_corr_prenorm_inplace = real_corr_prenorm_inplace / product(self_ref%ldim)
+    end function real_corr_prenorm_inplace
 
     module subroutine radial_cc( self1, self2, self_w, smpd, rad_corrs, rad_dists )
         class(image), intent(inout):: self1, self2, self_w
@@ -1999,7 +1999,7 @@ contains
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-    module pure function oshift_1( self, logi, shvec ) result( comp )
+    module pure function oshift_real( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self
         real,         intent(in) :: logi(3)
         real,         intent(in) :: shvec(3)
@@ -2009,17 +2009,17 @@ contains
         ldim = merge(2,3,self%ldim(3) == 1)
         arg  = sum(logi(:ldim)*shvec(:ldim)*self%shconst(:ldim))
         comp = cmplx(cos(arg),sin(arg))
-    end function oshift_1
+    end function oshift_real
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-    module pure function oshift_2( self, logi, shvec ) result( comp )
+    module pure function oshift_int( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self
         integer,      intent(in) :: logi(3)
         real,         intent(in) :: shvec(3)
         complex :: comp
-        comp = self%oshift_1(real(logi), shvec)
-    end function oshift_2
+        comp = self%oshift_real(real(logi), shvec)
+    end function oshift_int
 
     !>  \brief  returns the real argument transfer matrix components at point logi in a Fourier transform
     module function gen_argtransf_comp( self, logi, ldim ) result( arg )
@@ -2036,11 +2036,7 @@ contains
             if( self%ldim(i) == 1 )then
                 cycle
             else
-                if( is_even(self%ldim(i)) )then
-                    arg = arg+logi(i)*(PI/real(self%ldim(i)/2.))
-                else
-                    arg = arg+logi(i)*(PI/real((self%ldim(i)-1)/2.))
-                endif
+                arg = arg+logi(i)*(PI/(real(self%ldim(i))/2.)) ! 2 pi/n, an odd box included
             endif
         end do
     end function gen_argtransf_comp

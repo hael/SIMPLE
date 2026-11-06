@@ -58,17 +58,18 @@ enum, bind(c)
     enumerator :: I_CFAR                = 53 ! conical FSC area ratio of the state's latest half-map pair
     enumerator :: I_SHINCR              = 54 ! polar shift map: the magnitude of the last shift increment
     enumerator :: I_SHSIG               = 55 ! polar shift map: the particle's prior width for its next shift search (below zero: not yet centred in this workflow)
+    enumerator :: I_FRAME               = 56 ! time series: the particle's frame in its trajectory (0: none)
 end enum
 
-! A particle carries the named slots 1-55 in memory (ori%pparms).
-! On disk its record is N_PTCL_RECORD_REALS wide: slots 56-64 are zero padding reserved
+! A particle carries the named slots 1-56 in memory (ori%pparms).
+! On disk its record is N_PTCL_RECORD_REALS wide: slots 57-64 are zero padding reserved
 ! for later fields, so adding a field does not change the project file's record width,
 ! while resident particles pay only for the named slots. Projects written by earlier
 ! releases (narrower records) still read, with zeros in the missing slots
 ! (simple_binoris). A spare slot has no flag and is never "there".
-integer, parameter :: N_PTCL_ORIPARAMS      = 55
+integer, parameter :: N_PTCL_ORIPARAMS      = 56
 integer, parameter :: N_PTCL_RECORD_REALS   = 64
-integer, parameter :: I_LAST_NAMED_ORIPARAM = I_SHSIG
+integer, parameter :: I_LAST_NAMED_ORIPARAM = I_FRAME
 
 contains
 
@@ -184,6 +185,8 @@ contains
                 get_oriparam_ind = I_SHINCR
             case('shsig')
                 get_oriparam_ind = I_SHSIG
+            case('frame')
+                get_oriparam_ind = I_FRAME
         end select
     end function get_oriparam_ind
 
@@ -299,6 +302,8 @@ contains
                 flag = 'shincr'
             case(I_SHSIG)
                 flag = 'shsig'
+            case(I_FRAME)
+                flag = 'frame'
             case DEFAULT
                 flag = 'unknown'
         end select
@@ -326,6 +331,8 @@ contains
             case(I_FRAC)
                 oriparam_isthere = abs(val) > TINY
             case(I_INDSTK)
+                oriparam_isthere = abs(val) > TINY
+            case(I_FRAME)
                 oriparam_isthere = abs(val) > TINY
             case(I_INPL)
                 oriparam_isthere = abs(val) > TINY

@@ -919,6 +919,13 @@ contains
         if( .not. file_exists(fname) )then
             THROW_HARD('inputted file: '//fname%to_char()//' does not exist; read_segment')
         endif
+        if( present(fromto) )then
+            select case(trim(oritype))
+                case('ptcl2D','ptcl3D','cls3D')
+                case DEFAULT
+                    THROW_HARD('a row range is read for ptcl2D, ptcl3D and cls3D only; read_segment')
+            end select
+        endif
         select case(fname2format(fname))
             case('O')
                 ! *.simple project file
@@ -967,7 +974,8 @@ contains
         logical, optional,          intent(in)    :: only_ctfparams_state_eo, wthreads
         integer :: n
         n = self%bos%get_n_records(isegment)
-        ! a segment the file does not hold (empty, or past its last one) reads as empty
+        ! a segment the file does not hold (empty, or past its last one) reads as empty; a row range keeps the
+        ! field at the segment's size and fills only its rows (ptcl2D, ptcl3D, cls3D)
         select case(isegment)
             case(MIC_SEG)
                 call self%os_mic%new(n,    is_ptcl=.false.)
@@ -977,16 +985,16 @@ contains
                 if( n > 0 ) call self%bos%read_segment(isegment, self%os_stk,    only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
             case(PTCL2D_SEG)
                 call self%os_ptcl2D%new(n, is_ptcl=.true.)
-                if( n > 0 ) call self%bos%read_segment(isegment, self%os_ptcl2D, only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
+                if( n > 0 ) call self%bos%read_segment(isegment, self%os_ptcl2D, fromto=fromto, only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
             case(CLS2D_SEG)
                 call self%os_cls2D%new(n,  is_ptcl=.false.)
                 if( n > 0 ) call self%bos%read_segment(isegment, self%os_cls2D)
             case(CLS3D_SEG)
                 call self%os_cls3D%new(n,  is_ptcl=.false.)
-                if( n > 0 ) call self%bos%read_segment(isegment, self%os_cls3D)
+                if( n > 0 ) call self%bos%read_segment(isegment, self%os_cls3D, fromto=fromto)
             case(PTCL3D_SEG)
                 call self%os_ptcl3D%new(n, is_ptcl=.true.)
-                if( n > 0 ) call self%bos%read_segment(isegment, self%os_ptcl3D, only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
+                if( n > 0 ) call self%bos%read_segment(isegment, self%os_ptcl3D, fromto=fromto, only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
             case(OUT_SEG)
                 call self%os_out%new(n,    is_ptcl=.false.)
                 if( n > 0 ) call self%bos%read_segment(isegment, self%os_out)
@@ -1074,6 +1082,7 @@ contains
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
+        call refuse_worker_write(projfile)
         if( l_tmp )then
             tmpfile = swap_suffix(projfile, string('.tmp'), string(METADATA_EXT))
             call self%bos%open(tmpfile, del_if_exists=.true.)
@@ -1101,6 +1110,7 @@ contains
         character(len=*),  intent(in)    :: oritype
         class(string),     intent(in)    :: fname
         if( .not. file_exists(fname) ) return
+        call refuse_worker_write(fname)
         call self%bos%open(fname)
         call self%bos%empty_segment_inside(oritype2segment(oritype))
         call self%bos%close
@@ -1122,6 +1132,7 @@ contains
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
+        call refuse_worker_write(projfile)
         if( file_exists(projfile) )then
             iseg = oritype2segment(oritype)
             call self%bos%open(projfile)
@@ -1132,6 +1143,18 @@ contains
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
     end subroutine write_segment_inside
+
+    !> a partition worker writes its part files, never its master's project (one owner per project)
+    subroutine refuse_worker_write( projfile )
+        class(string), intent(in) :: projfile
+        type(string) :: absname, msg
+        if( .not. l_distr_worker_glob ) return
+        if( .not. allocated(worker_projfile_glob) ) return
+        absname = simple_abspath(projfile, check_exists=.false.)
+        if( absname%to_char() /= worker_projfile_glob ) return
+        msg = 'a distributed worker writes part files, never the project: '//absname%to_char()
+        THROW_HARD(msg%to_char())
+    end subroutine refuse_worker_write
 
     ! Numerical phase is part of the project CTF schema irrespective of whether
     ! it was fitted. A missing value is materialized as the identity shift.
@@ -1159,6 +1182,7 @@ contains
             THROW_HARD('file format of: '//fname%to_char()//' not supported; sp_project :: write_non_data_segments')
         endif
         projfile = fname
+        call refuse_worker_write(projfile)
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             do iseg=11,MAXN_OS_SEG

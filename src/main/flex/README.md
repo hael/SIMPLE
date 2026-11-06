@@ -161,7 +161,8 @@ clustering). There is no `doc/policies/flex_pca_policy.md`.
    magic and part naming are in `simple_flex_pca_artifacts.f90`.
 8. The embedding artifact (`simple_flex_pca_embedding_io`) is written to a
    `.part` name and renamed into place, and registered in the out segment of
-   the run's project copy as imgkind `flex_embedding`; a resumed run reads its
+   the run's project (the `mkdir=yes` copy, or the caller's under `mkdir=no`) as
+   imgkind `flex_embedding`; a resumed run reads its
    noise scale from the artifact.
 9. `simple_flex_pca_polar.f90` (the allocatable per-fit polar E-step bank),
    `simple_flex_pca_pcg.f90` (the coupled PCG operator of the M-step, on the

@@ -81,7 +81,7 @@ contains
             if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
             if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
         end do
-        call starfile_table__open_ofile(startable, 'micrographs_corrected.star', 0)
+        call starfile_table__open_ofile(startable, 'micrographs_corrected.star.tmp', 0)
         call starfile_table__write_ofile(startable)
         call starfile_table__close_ofile(startable)
         call starfile_table__delete(startable)
@@ -120,9 +120,11 @@ contains
                 if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
             endif
         end do
-        call starfile_table__open_ofile(startable, 'micrographs_corrected.star', 1)
+        call starfile_table__open_ofile(startable, 'micrographs_corrected.star.tmp', 1)
         call starfile_table__write_ofile(startable)
         call starfile_table__close_ofile(startable)
+        ! written as .tmp and renamed when complete: a reader never meets a partial file
+        call simple_rename(string('micrographs_corrected.star.tmp'), string('micrographs_corrected.star'))
         call starfile_table__delete(startable)
         call getstring%kill
     end subroutine write_corrected_micrographs_star
@@ -186,7 +188,7 @@ contains
             if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
             if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
         end do
-        call starfile_table__open_ofile(startable, 'micrographs.star', 0)
+        call starfile_table__open_ofile(startable, 'micrographs.star.tmp', 0)
         call starfile_table__write_ofile(startable)
         call starfile_table__close_ofile(startable)
         call starfile_table__delete(startable)
@@ -237,9 +239,11 @@ contains
                 if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
             endif
         end do
-        call starfile_table__open_ofile(startable, 'micrographs.star', 1)
+        call starfile_table__open_ofile(startable, 'micrographs.star.tmp', 1)
         call starfile_table__write_ofile(startable)
         call starfile_table__close_ofile(startable)
+        ! written as .tmp and renamed when complete: a reader never meets a partial file
+        call simple_rename(string('micrographs.star.tmp'), string('micrographs.star'))
         call starfile_table__delete(startable)
         call getstring%kill
         call getstring_base%kill
@@ -349,7 +353,7 @@ contains
             if(box) call starfile_table__setValue_int(startable, EMDL_IMAGE_SIZE, int(spproj%os_stk%get(i, 'box')))
             call starfile_table__setValue_int(startable, EMDL_IMAGE_DIMENSIONALITY, 2)
         end do
-        call starfile_table__open_ofile(startable, 'particles2D.star', 0)
+        call starfile_table__open_ofile(startable, 'particles2D.star.tmp', 0)
         call starfile_table__write_ofile(startable)
         call starfile_table__close_ofile(startable)
         call starfile_table__delete(startable)
@@ -412,9 +416,11 @@ contains
                 endif
             endif
         end do
-        call starfile_table__open_ofile(startable, 'particles2D.star', 1)
+        call starfile_table__open_ofile(startable, 'particles2D.star.tmp', 1)
         call starfile_table__write_ofile(startable)
         call starfile_table__close_ofile(startable)
+        ! written as .tmp and renamed when complete: a reader never meets a partial file
+        call simple_rename(string('particles2D.star.tmp'), string('particles2D.star'))
         call starfile_table__delete(startable)
         call getstring%kill
         call getstring_base%kill

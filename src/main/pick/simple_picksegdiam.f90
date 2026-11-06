@@ -34,12 +34,14 @@ end type picksegdiam
 
 contains
 
-    subroutine pick_1( self, micname, smpd, moldiam_max, pcontrast, denfname, topofname, binfname, empty )
+    subroutine pick_1( self, micname, smpd, moldiam_max, pcontrast, denfname, topofname, binfname, empty, thumbfname )
+        use simple_gui_utils, only: mic2thumb
         class(picksegdiam),      intent(inout) :: self
         class(string),           intent(in)    :: micname !< micrograph file name
         real,                    intent(in)    :: smpd, moldiam_max
         character(len=*),        intent(in)    :: pcontrast
         class(string), optional, intent(in)    :: denfname, topofname, binfname
+        class(string), optional, intent(in)    :: thumbfname !< thumbnail of the denoised micrograph (particles black)
         logical,       optional, intent(out)   :: empty
         integer, allocatable :: cc_imat(:,:,:), cc_imat_copy(:,:,:)
         logical, allocatable :: picking_mask(:,:)
@@ -73,6 +75,7 @@ contains
             call mic_den%write(denfname)
             write(logfhandle,'(a)')  '>>> DENOISED MICROGRAPH: '//denfname%to_char()
         endif
+        if( present(thumbfname) ) call mic2thumb(mic_den, thumbfname, l_neg=.true.)
         if( present(topofname) ) call mic_shrink%write(topofname)
         call binarize_mic_den(mic_shrink, FRAC_FG, mic_bin)
         write(logfhandle,'(a)')  '>>> BINARIZATION, CONNECTED COMPONENT IDENTIFICATION, DIAMETER ESTIMATION'

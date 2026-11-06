@@ -287,7 +287,7 @@ contains
         src  = support_provenance_fname(src_vol)
         dest = support_provenance_fname(dest_vol)
         if( file_exists(src) )then
-            call simple_rename(src, dest, overwrite=.true.)
+            call simple_rename(src, dest)
         else if( file_exists(dest) )then
             call del_file(dest)
         endif

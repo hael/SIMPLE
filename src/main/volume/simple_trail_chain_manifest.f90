@@ -15,7 +15,7 @@ private
 integer, parameter :: TRAIL_MANIFEST_OK         = 0
 integer, parameter :: TRAIL_MANIFEST_MISSING    = 1
 integer, parameter :: TRAIL_MANIFEST_UNREADABLE = 2
-integer, parameter :: MANIFEST_VERSION          = 3   ! 3: contributor count and weight-set identity
+integer, parameter :: MANIFEST_VERSION          = 4   ! 4: the density files carry a box and sampling header
 
 type :: trail_chain_manifest
     private

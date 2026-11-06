@@ -1,6 +1,6 @@
 !@descr: flex_pca: the mean and its scale, the data-free basis initialiser and its calibration, probe-state and basis I/O, basis pooling, deflation and cross-half angles
 module simple_flex_pca_basis
-!$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num, omp_set_max_active_levels
+!$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num, omp_set_max_active_levels, omp_get_max_active_levels
 use simple_core_module_api, only: arr2file, dp, dtiny, eigsrt, fclose, fdim, file2rarr, file_exists, fileiochk, &
     &fopen, fplane_type, int2str_pad, jacobi, logfhandle, maximgbatchsz, mrc_ext, ori, osmpl_pad_fac, &
     &simple_exception, simple_rename, string, tic, timer_int_kind, tiny, toc
@@ -181,7 +181,7 @@ contains
         type(exp_samples), allocatable :: es_t(:)
         type(ori),         allocatable :: ori_t(:)
         integer  :: batchlims(2), batchsz, ibatch, i, iptcl, stride, used, nyq, sh, j, nsub
-        integer  :: nthr_here, ithr, t
+        integer  :: nthr_here, ithr, t, levels_saved
         integer, allocatable :: sub_pinds(:), used_t(:)
         real(dp) :: s_my, s_mm, s, sm
         real(dp), allocatable :: smy_sh(:), smm_sh(:), sprof(:)
@@ -195,6 +195,9 @@ contains
         s_my = 0.d0; s_mm = 0.d0; used = 0
         ! THREADED OVER PARTICLES: per-thread partial sums, folded in fixed thread order below.
         ! Reproducible at a given nthr; changing nthr moves the fitted scale only at rounding level.
+        ! one active level for the pass, restored on the way out (the process's setting is the caller's)
+        levels_saved = 1
+        !$ levels_saved = omp_get_max_active_levels()
         !$ call omp_set_max_active_levels(1)
         nthr_here = max(1, omp_get_max_threads())
         allocate(mean_fpl_t(nthr_here), es_t(nthr_here), ori_t(nthr_here), used_t(nthr_here))
@@ -293,6 +296,7 @@ contains
         call mean_rec%expand_exp
         if( rounds%is_master() ) call write_mean_scale(filt, cache_fname=cache_fname)
         deallocate(smy_sh, smm_sh, sprof, filt)
+        !$ call omp_set_max_active_levels(levels_saved)
     end subroutine estimate_mean_scale
 
     !>  Accumulate per-shell mean/data cross power Re<T mu, y> and mean auto power |T mu|^2 over the

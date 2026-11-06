@@ -16,7 +16,9 @@
 !   keep their own policy and call these for the shared part.
 !==============================================================================
 module simple_cavg_quality_selection
-use simple_defs,                  only: logfhandle
+use simple_defs,                  only: logfhandle, nthr_glob, CWD_GLOB, part_glob, l_distr_worker_glob, &
+                                        &worker_projfile_glob
+use simple_rnd,                   only: get_rnd_state, put_rnd_state
 use simple_error,                 only: simple_exception
 use simple_string,                only: string
 use simple_fileio,                only: file_exists, del_file
@@ -28,6 +30,7 @@ use simple_imgarr_utils,          only: read_cavgs_into_imgarr, dealloc_imgarr
 use simple_cavg_quality_model,    only: cavg_quality_model
 use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_hard_reject
+!$ use omp_lib,                   only: omp_get_max_threads, omp_set_num_threads
 implicit none
 
 public :: score_project_cavgs, write_cavg_selection_stacks, write_cavg_stack
@@ -53,6 +56,10 @@ contains
         real,             optional, intent(in)    :: smpd
         type(parameters) :: relation_params
         type(cmdline)    :: relation_cline
+        integer, allocatable :: seed_saved(:)
+        character(len=:), allocatable :: cwd_saved, worker_projfile_saved
+        integer :: nthr_saved, nteam_saved, ncalls_saved, part_saved
+        logical :: l_worker_saved
         if( allocated(cavg_imgs) ) call dealloc_imgarr(cavg_imgs)
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) < 1 ) THROW_HARD('no class averages in the project; score_project_cavgs')
@@ -66,8 +73,27 @@ contains
         call relation_cline%set('objfun',  'cc')
         call relation_cline%set('mskdiam', mskdiam)
         if( present(smpd) ) call relation_cline%set('smpd', smpd)
+        ! the relation parameters must not change the caller's process: its threads, random stream, directory
+        ! and worker identity
+        nthr_saved  = nthr_glob
+        nteam_saved = nthr_saved
+        !$ nteam_saved = omp_get_max_threads()
+        if( allocated(CWD_GLOB) ) cwd_saved = CWD_GLOB
+        part_saved     = part_glob
+        l_worker_saved = l_distr_worker_glob
+        if( allocated(worker_projfile_glob) ) worker_projfile_saved = worker_projfile_glob
+        call relation_cline%set('nthr', nteam_saved)
+        call get_rnd_state(seed_saved, ncalls_saved)
         call relation_params%new(relation_cline)
+        call put_rnd_state(seed_saved, ncalls_saved)
         call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, mskdiam, quality, model, relation_params=relation_params)
+        nthr_glob = nthr_saved
+        if( allocated(cwd_saved) ) CWD_GLOB = cwd_saved
+        part_glob           = part_saved
+        l_distr_worker_glob = l_worker_saved
+        if( allocated(worker_projfile_glob) ) deallocate(worker_projfile_glob)
+        if( allocated(worker_projfile_saved) ) worker_projfile_glob = worker_projfile_saved
+        !$ call omp_set_num_threads(nteam_saved)
         call relation_cline%kill
     end subroutine score_project_cavgs
 

@@ -5,18 +5,18 @@ implicit none
 
 contains
 
-    module pure real function euldist_1( self, i, j )
+    module pure real function euldist_inds( self, i, j )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i, j
-        euldist_1 = self%o(i).euldist.self%o(j)
-    end function euldist_1
+        euldist_inds = self%o(i).euldist.self%o(j)
+    end function euldist_inds
 
-    module pure real function euldist_2( self, i, o )
+    module pure real function euldist_ori( self, i, o )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
         class(ori),  intent(in) :: o
-        euldist_2 = self%o(i).euldist.o
-    end function euldist_2
+        euldist_ori = self%o(i).euldist.o
+    end function euldist_ori
 
     module subroutine min_euldist( self, o_in, mindist )
         class(oris), intent(inout) :: self

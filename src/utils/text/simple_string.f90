@@ -27,30 +27,30 @@ type :: string
     procedure          :: strlen
     procedure          :: strlen_trim
     procedure          :: raw
-    procedure, private :: to_char_1, to_char_2
-    generic            :: to_char => to_char_1, to_char_2
-    procedure, private :: to_static_1, to_static_2
-    generic            :: to_static => to_static_1, to_static_2
+    procedure, private :: to_char_full, to_char_range
+    generic            :: to_char => to_char_full, to_char_range
+    procedure, private :: to_static_full, to_static_range
+    generic            :: to_static => to_static_full, to_static_range
     procedure          :: to_int
     procedure          :: to_real
     procedure          :: to_dble
     procedure          :: to_fnv1a_hash64
-    procedure, private :: has_substr_1, has_substr_2
-    generic            :: has_substr => has_substr_1, has_substr_2
+    procedure, private :: has_substr_str, has_substr_char
+    generic            :: has_substr => has_substr_str, has_substr_char
     procedure          :: substr_remove
-    procedure, private :: ends_with_substr_1, ends_with_substr_2
-    generic            :: ends_with_substr => ends_with_substr_1, ends_with_substr_2
-    procedure, private :: substr_ind_1, substr_ind_2
-    generic            :: substr_ind => substr_ind_1, substr_ind_2
+    procedure, private :: ends_with_substr_str, ends_with_substr_char
+    generic            :: ends_with_substr => ends_with_substr_str, ends_with_substr_char
+    procedure, private :: substr_ind_char, substr_ind_str
+    generic            :: substr_ind => substr_ind_char, substr_ind_str
     procedure          :: substr_replace
     procedure          :: is_blank
     procedure          :: is_allocated
-    procedure, private :: is_equal_1, is_equal_2
-    generic            :: operator(.eq.) => is_equal_1, is_equal_2
-    generic            :: operator(==) => is_equal_1, is_equal_2
-    procedure, private :: is_not_equal_1, is_not_equal_2
-    generic            :: operator(.ne.) => is_not_equal_1, is_not_equal_2
-    generic            :: operator(/=) => is_not_equal_1, is_not_equal_2
+    procedure, private :: is_equal_str, is_equal_char
+    generic            :: operator(.eq.) => is_equal_str, is_equal_char
+    generic            :: operator(==) => is_equal_str, is_equal_char
+    procedure, private :: is_not_equal_str, is_not_equal_char
+    generic            :: operator(.ne.) => is_not_equal_str, is_not_equal_char
+    generic            :: operator(/=) => is_not_equal_str, is_not_equal_char
     procedure          :: readline
     procedure          :: readfile
     procedure          :: writeline
@@ -141,7 +141,7 @@ contains
         end if
     end function raw
 
-    pure function to_char_1(self) result(c)
+    pure function to_char_full(self) result(c)
         class(string), intent(in) :: self
         character(:), allocatable :: c
         if (.not. allocated(self%buffer)) then
@@ -150,9 +150,9 @@ contains
             allocate(character(len_trim(self%buffer)) :: c)
             if (len(c) > 0) c = trim(self%buffer)
         end if
-    end function to_char_1
+    end function to_char_full
 
-    pure function to_char_2(self, fromto) result(c)
+    pure function to_char_range(self, fromto) result(c)
         class(string), intent(in) :: self
         integer,       intent(in) :: fromto(2)
         character(:), allocatable :: c
@@ -165,10 +165,10 @@ contains
             allocate(character(len(self%buffer(i1:i2))) :: c)
             c = self%buffer(i1:i2)
         end if
-    end function to_char_2
+    end function to_char_range
 
     ! this needs to be used in OpenMP sections
-    pure subroutine to_static_1( self, str_static )
+    pure subroutine to_static_full( self, str_static )
         class(string),    intent(in)  :: self
         character(len=*), intent(out) :: str_static
         if( allocated(self%buffer) )then
@@ -176,10 +176,10 @@ contains
         else
             str_static = ''
         endif
-    end subroutine to_static_1
+    end subroutine to_static_full
 
     ! this needs to be used in OpenMP sections
-    pure subroutine to_static_2( self, fromto, str_static )
+    pure subroutine to_static_range( self, fromto, str_static )
         class(string),    intent(in)  :: self
         integer,          intent(in)  :: fromto(2)
         character(len=*), intent(out) :: str_static
@@ -191,7 +191,7 @@ contains
         else
             str_static = self%buffer(i1:i2)
         end if
-    end subroutine to_static_2
+    end subroutine to_static_range
 
     integer function to_int( self, io_stat )
         class(string),     intent(in)  :: self
@@ -261,18 +261,18 @@ contains
         hash = hash_hex
     end function to_fnv1a_hash64
 
-    elemental logical function has_substr_1( self, substr )
+    elemental logical function has_substr_str( self, substr )
         class(string), intent(in) :: self, substr
-        has_substr_1 = .false.
-        if( allocated(self%buffer) .and. allocated(substr%buffer) ) has_substr_1 = .not. (index(self%buffer, substr%buffer) == 0)
-    end function has_substr_1
+        has_substr_str = .false.
+        if( allocated(self%buffer) .and. allocated(substr%buffer) ) has_substr_str = .not. (index(self%buffer, substr%buffer) == 0)
+    end function has_substr_str
 
-    elemental logical function has_substr_2( self, substr )
+    elemental logical function has_substr_char( self, substr )
         class(string),    intent(in) :: self
         character(len=*), intent(in) :: substr
-        has_substr_2 = .false.
-        if( allocated(self%buffer) ) has_substr_2 = .not. (index(self%buffer, substr) == 0)
-    end function has_substr_2
+        has_substr_char = .false.
+        if( allocated(self%buffer) ) has_substr_char = .not. (index(self%buffer, substr) == 0)
+    end function has_substr_char
 
     function substr_remove( self, substr ) result( self_sub )
         class(string), intent(in) :: self, substr
@@ -312,59 +312,59 @@ contains
 
     end function substr_remove
 
-    elemental logical function ends_with_substr_1( str, substr )
+    elemental logical function ends_with_substr_str( str, substr )
         class(string), intent(in) :: str, substr
         integer :: start_substr, lenstr
-        ends_with_substr_1  = .false.
+        ends_with_substr_str  = .false.
         if( allocated(str%buffer) .and. allocated(substr%buffer) )then
             lenstr              = len(str%buffer)
             start_substr        = lenstr - len(substr%buffer) + 1
             if( start_substr >= 1 )then
-                ends_with_substr_1 = str%buffer(start_substr:lenstr) == substr%buffer
+                ends_with_substr_str = str%buffer(start_substr:lenstr) == substr%buffer
             endif
         endif
-    end function ends_with_substr_1
+    end function ends_with_substr_str
 
-    elemental logical function ends_with_substr_2( str, substr )
+    elemental logical function ends_with_substr_char( str, substr )
         class(string),    intent(in) :: str
         character(len=*), intent(in) :: substr
         integer :: start_substr, lenstr
-        ends_with_substr_2  = .false.
+        ends_with_substr_char  = .false.
         if( allocated(str%buffer) )then
             lenstr              = len(str%buffer)
             start_substr        = lenstr - len(substr) + 1
             if( start_substr >= 1 )then
-                ends_with_substr_2 = str%buffer(start_substr:lenstr) == substr
+                ends_with_substr_char = str%buffer(start_substr:lenstr) == substr
             endif
         endif
-    end function ends_with_substr_2
+    end function ends_with_substr_char
 
-    elemental integer function substr_ind_1( self, substr, back )
+    elemental integer function substr_ind_char( self, substr, back )
         class(string),     intent(in) :: self
         character(len=*),  intent(in) :: substr
         logical, optional, intent(in) :: back 
-        substr_ind_1 = 0
+        substr_ind_char = 0
         if( allocated(self%buffer) )then
             if( present(back) )then
-                substr_ind_1 = index(self%buffer, substr, back=back)
+                substr_ind_char = index(self%buffer, substr, back=back)
             else
-                substr_ind_1 = index(self%buffer, substr)
+                substr_ind_char = index(self%buffer, substr)
             endif
         endif
-    end function substr_ind_1
+    end function substr_ind_char
 
-    integer function substr_ind_2( self, substr, back )
+    integer function substr_ind_str( self, substr, back )
         class(string),     intent(in) :: self, substr
         logical, optional, intent(in) :: back 
-        substr_ind_2 = 0
+        substr_ind_str = 0
         if( allocated(self%buffer) .and. allocated(substr%buffer) )then
             if( present(back) )then
-                substr_ind_2 = index(self%buffer, substr%buffer, back=back)
+                substr_ind_str = index(self%buffer, substr%buffer, back=back)
             else
-                substr_ind_2 = index(self%buffer, substr%buffer)
+                substr_ind_str = index(self%buffer, substr%buffer)
             endif
         endif
-    end function substr_ind_2
+    end function substr_ind_str
 
     pure subroutine substr_replace( self, s1, s2, one, back )
         class(string),     intent(inout) :: self
@@ -434,42 +434,42 @@ contains
     end function is_allocated
 
     ! invariant to leading and trailing spaces
-    elemental logical function is_equal_1( self1, self2 )
+    elemental logical function is_equal_str( self1, self2 )
         class(string), intent(in) :: self1, self2
-        is_equal_1 = .false.
+        is_equal_str = .false.
         if( allocated(self1%buffer) .and. allocated(self2%buffer) )then
-            is_equal_1 = trim(adjustl(self1%buffer)) .eq. trim(adjustl(self2%buffer))
+            is_equal_str = trim(adjustl(self1%buffer)) .eq. trim(adjustl(self2%buffer))
         endif
-    end function is_equal_1
+    end function is_equal_str
 
     ! invariant to leading and trailing spaces
-    elemental logical function is_equal_2( self, str_char )
+    elemental logical function is_equal_char( self, str_char )
         class(string),    intent(in) :: self
         character(len=*), intent(in) :: str_char
-        is_equal_2 = .false.
+        is_equal_char = .false.
         if( allocated(self%buffer) )then
-            is_equal_2 = trim(adjustl(self%buffer)) .eq. trim(adjustl(str_char))
+            is_equal_char = trim(adjustl(self%buffer)) .eq. trim(adjustl(str_char))
         endif
-    end function is_equal_2
+    end function is_equal_char
 
     ! invariant to leading and trailing spaces
-    elemental logical function is_not_equal_1( self1, self2 )
+    elemental logical function is_not_equal_str( self1, self2 )
         class(string), intent(in) :: self1, self2
-        is_not_equal_1 = .true.
+        is_not_equal_str = .true.
         if( allocated(self1%buffer) .and. allocated(self2%buffer) )then
-            is_not_equal_1 = trim(adjustl(self1%buffer)) .ne. trim(adjustl(self2%buffer))
+            is_not_equal_str = trim(adjustl(self1%buffer)) .ne. trim(adjustl(self2%buffer))
         endif
-    end function is_not_equal_1
+    end function is_not_equal_str
 
     ! invariant to leading and trailing spaces
-    elemental logical function is_not_equal_2( self, str_char )
+    elemental logical function is_not_equal_char( self, str_char )
         class(string),    intent(in) :: self
         character(len=*), intent(in) :: str_char
-        is_not_equal_2 = .true.
+        is_not_equal_char = .true.
         if( allocated(self%buffer) )then
-            is_not_equal_2 = trim(adjustl(self%buffer)) .ne. trim(adjustl(str_char))
+            is_not_equal_char = trim(adjustl(self%buffer)) .ne. trim(adjustl(str_char))
         endif
-    end function is_not_equal_2
+    end function is_not_equal_char
 
     elemental subroutine set_real(self, val)
         class(string), intent(inout) :: self

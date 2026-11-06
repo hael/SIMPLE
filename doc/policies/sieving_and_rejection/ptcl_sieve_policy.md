@@ -131,9 +131,10 @@ Import policy from previous runs:
 6. the counters (section 11) are rebuilt from the imported chunks as the run counted them;
 7. the particle-sieving stage rebuilds `chunked_mics.txt` from the `chunk_mics.txt` of the coarse
    chunks that exist before it reads it (`rebuild_chunked_mics`), so a crash between a chunk's
-   project and `chunked_mics.txt` neither imports its micrographs twice nor loses them. While a
-   chunk that exists has no list (made before lists were kept, or `pre_chunked`), the file is kept
-   as it is.
+   project and `chunked_mics.txt` neither imports its micrographs twice nor loses them. Cleanup keeps
+   the lists (section 8, item 2), so this holds for the whole run. While a chunk that exists has no
+   list (`pre_chunked`, or made or cleaned before 2026-11-05), the file is kept as it is, with a
+   warning.
 
 `cancel` cancels the 2D jobs of the running chunks; the stage calls it when it
 stops (p03 and p05). A cancelled chunk is resubmitted after a restart.
@@ -164,7 +165,8 @@ Coarse chunk creation is driven by particle thresholds and record inclusion:
    `<project file> <micrograph index>` line per included record, in record
    order. p05 reads it on restart (`read_chunked_mics`) to import every set it
    chunked from again with those micrographs marked included. The included
-   records stay a prefix of the record list, which slicing by id relies on.
+   records stay a prefix of the record list, which slicing by id relies on; `generate_chunks_coarse`
+   and `write_chunked_mics` stop when they are not, before a slice puts a record in a chunk again.
 
 In `pre_chunked` mode, coarse projects are copied from provided per-record
 project files instead of repartitioning records.
@@ -288,9 +290,10 @@ Rejection outputs and artifacts:
 Cleanup retention policy (`cleanup_chunk`):
 
 1. cleanup runs after rejection completes;
-2. keep lifecycle sentinels used by restart/import recovery:
-  `SOLVE2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`,
-  `REJECTION_FAILED`, `FINAL_INGESTION`;
+2. keep the files a restart reads (section 4): the lifecycle sentinels
+  `SOLVE2D_FINISHED`, `REJECTION_FINISHED`, `COMPLETE`, `REJECTION_FAILED`,
+  `FINAL_INGESTION`, and what the chunk took, `chunk_mics.txt` (coarse) and
+  `consumed_coarse.txt` (fine);
 3. keep chunk project metadata file and `frcs.bin`;
 4. keep selected/rejected JPEG renderings;
 5. keep all-reasons reason-overlay JPEG and its sidecar key file;

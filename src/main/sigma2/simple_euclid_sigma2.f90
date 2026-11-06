@@ -28,6 +28,7 @@ type euclid_sigma2
     integer                       :: kfromto(2) = 0
     type(string)                  :: binfname
     logical                       :: exists     = .false.
+    integer(int64)                :: spectra_gen = 0_int64 !< bumped whenever the spectra change; never reset
     logical                       :: replaces_range = .false. !< started from the open transaction's range (read_pending_range)
     ! the reconstruction-plane grid of the spectra (shell table, resampled inverse spectra), memoised by
     ! prep_fplane_grid for one padded box and lowest shell; dropped whenever the spectra are (re)loaded
@@ -81,7 +82,7 @@ contains
         class(string),                intent(in)    :: binfname
         integer,                      intent(in)    :: box
         call self%new_cart(params, binfname, box)
-        call pftc%assign_sigma2_noise(self%sigma2_noise)
+        call pftc%assign_sigma2_noise(self%sigma2_noise, self%spectra_gen)
     end subroutine new_pftc
 
     !> The two global spectra of a pass: a Cartesian pass, which constructs no polar calculator,
@@ -96,6 +97,7 @@ contains
         self%p_ptr => params
         self%kfromto = [1, fdim(box)-1]
         allocate(self%sigma2_noise(self%kfromto(1):self%kfromto(2),2), source=0.)
+        self%spectra_gen = self%spectra_gen + 1_int64
         self%binfname = binfname
         self%fromp = self%p_ptr%fromp
         self%top = self%p_ptr%top
@@ -171,6 +173,7 @@ contains
         if( size(spectra,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
             &THROW_HARD('canonical global sigma2 has incompatible shell bounds')
         self%sigma2_noise(:,:) = real(spectra)
+        self%spectra_gen = self%spectra_gen + 1_int64
         deallocate(spectra)
         call self%fplane%kill
     end subroutine read_global
@@ -321,6 +324,8 @@ contains
             self%exists      = .false.
         endif
         call self%fplane%kill
+        ! a calculator still pointing at the freed spectra then stops at its next Euclidean score
+        self%spectra_gen    = self%spectra_gen + 1_int64
         self%replaces_range = .false.
         self%p_ptr => null()
     end subroutine kill

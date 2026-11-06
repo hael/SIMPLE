@@ -158,7 +158,7 @@ contains
     !===============================
     ! add_* family
     !===============================
-    module subroutine add_1( self, self_to_add, w )
+    module subroutine add_img( self, self_to_add, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         real, optional, intent(in)    :: w
@@ -170,9 +170,9 @@ contains
         else
             self%rmat = self%rmat+ww*self_to_add%rmat
         endif
-    end subroutine add_1
+    end subroutine add_img
 
-    module subroutine add_2( self, logi, comp, phys_in, phys_out )
+    module subroutine add_cmplx_at( self, logi, comp, phys_in, phys_out )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
         complex,           intent(in)    :: comp
@@ -180,7 +180,7 @@ contains
         integer, optional, intent(out)   :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) THROW_HARD('cannot add complex number to real image; add_2')
+        if( .not. self%ft ) THROW_HARD('cannot add complex number to real image; add_cmplx_at')
         if( present(phys_in) )then
             phys = phys_in
         else
@@ -193,24 +193,24 @@ contains
         endif
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))+comp_here
         if( present(phys_out) ) phys_out = phys
-    end subroutine add_2
+    end subroutine add_cmplx_at
 
-    module subroutine add_3( self, rval, i, j, k )
+    module subroutine add_real_at( self, rval, i, j, k )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rval
         integer,      intent(in)    :: i, j, k
-        if( self%ft ) THROW_HARD('cannot add real number to transform; add_3')
+        if( self%ft ) THROW_HARD('cannot add real number to transform; add_real_at')
         self%rmat(i,j,k) = self%rmat(i,j,k) + rval
-    end subroutine add_3
+    end subroutine add_real_at
 
-    module subroutine add_4( self, logi, comp, w, k )
+    module subroutine add_cmplx_at_kdiv( self, logi, comp, w, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         complex,      intent(in)    :: comp
         real,         intent(in)    :: w, k(:,:,:)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) THROW_HARD('cannot add complex number to real image; add_2')
+        if( .not. self%ft ) THROW_HARD('cannot add complex number to real image; add_cmplx_at')
         phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
@@ -220,9 +220,9 @@ contains
         if( abs(k(phys(1),phys(2),phys(3))) > 1e-6 )then
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))+(comp_here/k(phys(1),phys(2),phys(3)))*w
         endif
-    end subroutine add_4
+    end subroutine add_cmplx_at_kdiv
 
-    module subroutine add_5( self, c )
+    module subroutine add_scalar( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
         if( self%ft )then
@@ -230,29 +230,29 @@ contains
         else
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))+c
         endif
-    end subroutine add_5
+    end subroutine add_scalar
 
-    module subroutine add_mat2cmat_1( self, M, w )
+    module subroutine add_mat2cmat_cmplx( self, M, w )
         class(image),                  intent(inout) :: self
         complex(kind=c_float_complex), intent(in)    :: M(:,:)
         real,                          intent(in)    :: w
         if( self%ft )then
             self%cmat(:,:,1) = self%cmat(:,:,1) + real(w,kind=c_float) * M
         else
-            THROW_HARD('Image must be in the reciprocal domain! add_mat2cmat_1')
+            THROW_HARD('Image must be in the reciprocal domain! add_mat2cmat_cmplx')
         endif
-    end subroutine add_mat2cmat_1
+    end subroutine add_mat2cmat_cmplx
 
-    module subroutine add_mat2cmat_2( self, M, w )
+    module subroutine add_mat2cmat_real( self, M, w )
         class(image),               intent(inout) :: self
         real(kind=c_float_complex), intent(in)    :: M(:,:)
         real,                       intent(in)    :: w
         if( self%ft )then
             self%cmat(:,:,1) = self%cmat(:,:,1) + real(w,kind=c_float) * cmplx(M, 0., kind=c_float_complex)
         else
-            THROW_HARD('Image must be in the reciprocal domain! add_mat2cmat_2')
+            THROW_HARD('Image must be in the reciprocal domain! add_mat2cmat_real')
         endif
-    end subroutine add_mat2cmat_2
+    end subroutine add_mat2cmat_real
 
     module subroutine add_rmat2mat_workshare( self, M )
         class(image), intent(in)    :: self
@@ -272,7 +272,7 @@ contains
         M = M + cmplx(self%cmat(:,:,:),kind=dp)
     end subroutine add_dble_cmat2mat
 
-    module subroutine add_workshare_1( self, self_to_add )
+    module subroutine add_workshare_img( self, self_to_add )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         if( self%ft )then
@@ -284,9 +284,9 @@ contains
             self%rmat = self%rmat + self_to_add%rmat
             !$omp end parallel workshare
         endif
-    end subroutine add_workshare_1
+    end subroutine add_workshare_img
 
-    module subroutine add_workshare_2( self, self_to_add, w )
+    module subroutine add_workshare_weighted( self, self_to_add, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         real,           intent(in)    :: w
@@ -299,7 +299,7 @@ contains
             self%rmat = self%rmat + w * self_to_add%rmat
             !$omp end parallel workshare
         endif
-    end subroutine add_workshare_2
+    end subroutine add_workshare_weighted
 
     module subroutine sum_reduce_mats( self, self1, rho, rho1 )
         class(image),       intent(inout) :: self
@@ -325,7 +325,7 @@ contains
     !===============================
     ! subtr_* family
     !===============================
-    module subroutine subtr_1( self, self_to_subtr, w )
+    module subroutine subtr_img( self, self_to_subtr, w )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_subtr
         real, optional, intent(in)    :: w
@@ -337,9 +337,9 @@ contains
         else
             self%rmat = self%rmat-ww*self_to_subtr%rmat
         endif
-    end subroutine subtr_1
+    end subroutine subtr_img
 
-    module subroutine subtr_2( self, logi, comp, phys_in, phys_out )
+    module subroutine subtr_cmplx_at( self, logi, comp, phys_in, phys_out )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
         complex,           intent(in)    :: comp
@@ -347,7 +347,7 @@ contains
         integer, optional, intent(out)   :: phys_out(3)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) THROW_HARD('cannot subtract complex number from real image; subtr_2')
+        if( .not. self%ft ) THROW_HARD('cannot subtract complex number from real image; subtr_cmplx_at')
         if( present(phys_in) )then
             phys = phys_in
         else
@@ -360,16 +360,16 @@ contains
         endif
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))-comp_here
         if( present(phys_out) ) phys_out = phys
-    end subroutine subtr_2
+    end subroutine subtr_cmplx_at
 
-    module subroutine subtr_3( self, logi, comp, w, k )
+    module subroutine subtr_cmplx_at_kdiv( self, logi, comp, w, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         complex,      intent(in)    :: comp
         real,         intent(in)    :: w, k(:,:,:)
         integer :: phys(3)
         complex :: comp_here
-        if( .not. self%ft ) THROW_HARD('cannot subtract complex number from real image; subtr_3')
+        if( .not. self%ft ) THROW_HARD('cannot subtract complex number from real image; subtr_cmplx_at_kdiv')
         phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         if( logi(1) < 0 )then
             comp_here = conjg(comp)
@@ -380,9 +380,9 @@ contains
             self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) -&
                 &(comp_here/k(phys(1),phys(2),phys(3)))*w
         endif
-    end subroutine subtr_3
+    end subroutine subtr_cmplx_at_kdiv
 
-    module subroutine subtr_4( self, c )
+    module subroutine subtr_scalar( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
         if( self%ft )then
@@ -390,16 +390,16 @@ contains
         else
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-c
         endif
-    end subroutine subtr_4
+    end subroutine subtr_scalar
 
     !===============================
     ! div_* family
     !===============================
-    module subroutine div_1( self, c )
+    module subroutine div_scalar( self, c )
         class(image), intent(inout) :: self
         real,         intent(in)    :: c
         if( abs(c) < 1e-6 )then
-            THROW_HARD('division with zero; div_1')
+            THROW_HARD('division with zero; div_scalar')
         else
             if( self%ft )then
                 self%cmat = self%cmat/c
@@ -407,9 +407,9 @@ contains
                 self%rmat = self%rmat/c
             endif
         endif
-    end subroutine div_1
+    end subroutine div_scalar
 
-    module subroutine div_2( self, logi, k )
+    module subroutine div_kernel_at( self, logi, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: k(:,:,:)
@@ -422,11 +422,11 @@ contains
                 self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
             endif
         else
-            THROW_HARD('Image need to be Fourier transformed; div_2')
+            THROW_HARD('Image need to be Fourier transformed; div_kernel_at')
         endif
-    end subroutine div_2
+    end subroutine div_kernel_at
 
-    module subroutine div_3( self, logi, k, phys_in )
+    module subroutine div_real_at( self, logi, k, phys_in )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
         real,              intent(in)    :: k
@@ -448,9 +448,9 @@ contains
                 self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))/k
             endif
         endif
-    end subroutine div_3
+    end subroutine div_real_at
 
-    module subroutine div_4( self, self2div )
+    module subroutine div_img( self, self2div )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2div
         if( self.eqdims.self2div )then
@@ -466,14 +466,14 @@ contains
                 self%ft = .true.
             endif
         else
-            THROW_HARD('cannot divide images of different dims; div_4')
+            THROW_HARD('cannot divide images of different dims; div_img')
         endif
-    end subroutine div_4
+    end subroutine div_img
 
     !===============================
     ! mul_* family
     !===============================
-    module subroutine mul_1( self, logi, rc, phys_in, phys_out )
+    module subroutine mul_real_at( self, logi, rc, phys_in, phys_out )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: logi(3)
         real,              intent(in)    :: rc
@@ -491,9 +491,9 @@ contains
         else
             self%rmat(logi(1),logi(2),logi(3)) = self%rmat(logi(1),logi(2),logi(3))*rc
         endif
-    end subroutine mul_1
+    end subroutine mul_real_at
 
-    module subroutine mul_2( self, rc )
+    module subroutine mul_scalar( self, rc )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rc
         if( self%ft )then
@@ -501,9 +501,9 @@ contains
         else
             self%rmat = self%rmat*rc
         endif
-    end subroutine mul_2
+    end subroutine mul_scalar
 
-    module subroutine mul_3( self, self2mul )
+    module subroutine mul_img( self, self2mul )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2mul
         if( self.eqdims.self2mul )then
@@ -519,11 +519,11 @@ contains
                 self%ft = .true.
             endif
         else
-            THROW_HARD('cannot multiply images of different dims; mul_3')
+            THROW_HARD('cannot multiply images of different dims; mul_img')
         endif
-    end subroutine mul_3
+    end subroutine mul_img
 
-    module subroutine mul_4( self, self2mul, lp )
+    module subroutine mul_img_lp( self, self2mul, lp )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self2mul
         real,         intent(in)    :: lp
@@ -545,18 +545,18 @@ contains
                 end do
             end do
         else
-            THROW_HARD('cannot multiply images of different dims; mul_3')
+            THROW_HARD('cannot multiply images of different dims; mul_img')
         endif
-    end subroutine mul_4
+    end subroutine mul_img_lp
 
-    module subroutine mul_5( self, logi, c)
+    module subroutine mul_cmplx_at( self, logi, c)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         complex,      intent(in)    :: c
         integer :: phys(3)
         phys = self%fit%comp_addr_phys(logi(1),logi(2),logi(3))
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * c
-    end subroutine mul_5
+    end subroutine mul_cmplx_at
 
     module pure subroutine mul_rmat( self, rmat )
         class(image), intent(in)    :: self
@@ -600,36 +600,36 @@ contains
         self%cmat(h,k,l) = self%cmat(h,k,l) + comp
     end subroutine add_cmat_at
 
-    module pure subroutine mul_cmat_at_1( self, h,k,l,rval )
+    module pure subroutine mul_cmat_at_real( self, h,k,l,rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         real,         intent(in)    :: rval
         self%cmat(h,k,l) = self%cmat(h,k,l) * rval
-    end subroutine mul_cmat_at_1
+    end subroutine mul_cmat_at_real
 
-    module pure subroutine mul_cmat_at_2( self, h,k,l, cval )
+    module pure subroutine mul_cmat_at_cmplx( self, h,k,l, cval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
         self%cmat(h,k,l) = self%cmat(h,k,l) * cval
-    end subroutine mul_cmat_at_2
+    end subroutine mul_cmat_at_cmplx
 
-    module subroutine mul_cmat_1( self, rmat )
+    module subroutine mul_cmat_unmasked( self, rmat )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         self%cmat = self%cmat * rmat
-    end subroutine mul_cmat_1
+    end subroutine mul_cmat_unmasked
 
-    module subroutine mul_cmat_2( self, rmat, resmsk )
+    module subroutine mul_cmat_masked( self, rmat, resmsk )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         logical,      intent(in)    :: resmsk(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         where( resmsk )
             self%cmat = self%cmat * rmat
         end where
-    end subroutine mul_cmat_2
+    end subroutine mul_cmat_masked
 
-    module pure subroutine div_cmat_at_1( self,h,k,l, rval)
+    module pure subroutine div_cmat_at_real( self,h,k,l, rval)
         class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         real,         intent(in) :: rval
@@ -638,9 +638,9 @@ contains
         else
             self%cmat(h,k,l) =cmplx(0.,0.)
         end if
-    end subroutine div_cmat_at_1
+    end subroutine div_cmat_at_real
 
-    module pure subroutine div_cmat_at_2( self,h,k,l, cval)
+    module pure subroutine div_cmat_at_cmplx( self,h,k,l, cval)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
@@ -649,7 +649,7 @@ contains
         else
             self%cmat(h,k,l) = cmplx(0.,0.)
         end if
-    end subroutine div_cmat_at_2
+    end subroutine div_cmat_at_cmplx
 
     !>  adds complex matrices from images & arrays. Specialized routine for simple_classaverager
     module subroutine add_cmats_to_cmat( self1 , self2 , self3, self4, cmat_sums )

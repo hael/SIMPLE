@@ -93,7 +93,7 @@ contains
         integer,          intent(in) :: i
         character(len=*), intent(in) :: key
         type(string) :: val
-        call self%getter_1(i, key, val)
+        call self%getter_str(i, key, val)
     end function get_str
 
     module pure subroutine get_static( self, i, key, val )
@@ -104,29 +104,29 @@ contains
         call self%o(i)%get_static(key, val)
     end subroutine get_static
 
-    module subroutine getter_1( self, i, key, val )
+    module subroutine getter_str( self, i, key, val )
         class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         type(string),     intent(inout) :: val
         call self%o(i)%getter(key, val)
-    end subroutine getter_1
+    end subroutine getter_str
 
-    module subroutine getter_2( self, i, key, val )
+    module subroutine getter_real( self, i, key, val )
         class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
         call self%o(i)%getter(key, val)
-    end subroutine getter_2
+    end subroutine getter_real
 
-    module subroutine getter_3( self, i, key, ival )
+    module subroutine getter_int( self, i, key, ival )
         class(oris),      intent(in)    :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         integer,          intent(inout) :: ival
         call self%o(i)%getter(key, ival)
-    end subroutine getter_3
+    end subroutine getter_int
 
     module function get_all( self, key, fromto, nonzero ) result( arr )
         class(oris),       intent(in) :: self
@@ -277,6 +277,27 @@ contains
         get_eo = self%o(i)%get_eo()
     end function get_eo
 
+    !> the half of a row a half sum takes: 0 even, 1 odd; a row in no half (eo = -1) stops
+    module function get_half( self, i ) result( eo )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        integer :: eo
+        character(len=STDLEN) :: msg
+        eo = self%o(i)%get_eo()
+        if( eo == 0 .or. eo == 1 ) return
+        write(msg,'(A,I0,A,I0)') 'row ', i, ' is in no even/odd half (eo=', eo
+        msg = trim(msg)//'); get_half'
+        THROW_HARD(trim(msg))
+    end function get_half
+
+    !> the first key of particle row i that no named slot holds ('' when none): a project write drops it
+    module function nonslot_key( self, i ) result( key )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        type(string) :: key
+        key = self%o(i)%nonslot_key()
+    end function nonslot_key
+
     module pure function get_fromp( self, i )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -322,7 +343,7 @@ contains
        end do
     end subroutine get_tseries_neighs
 
-    module pure function isthere_1( self, key ) result( is )
+    module pure function isthere_any( self, key ) result( is )
         class(oris),      intent(in) :: self
         character(len=*), intent(in) :: key
         logical :: is
@@ -332,15 +353,15 @@ contains
             is = self%o(i)%isthere(key)
             if( is ) exit
         end do
-    end function isthere_1
+    end function isthere_any
 
-    module pure function isthere_2( self, i, key ) result( is )
+    module pure function isthere_by_ind( self, i, key ) result( is )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: i
         character(len=*),  intent(in) :: key
         logical :: is
         is = self%o(i)%isthere(key)
-    end function isthere_2
+    end function isthere_by_ind
 
     module function ischar( self, i, key ) result( is )
         class(oris),       intent(in) :: self
@@ -379,7 +400,7 @@ contains
         end do
     end function get_n
 
-    module function get_pop_1( self, ind, label, eo ) result( pop )
+    module function get_pop_scalar( self, ind, label, eo ) result( pop )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: ind
         character(len=*),  intent(in) :: label
@@ -405,9 +426,9 @@ contains
             end do
             !$omp end parallel do
         endif
-    end function get_pop_1
+    end function get_pop_scalar
 
-    module function get_pop_2( self, inds, labels, eo ) result( pop )
+    module function get_pop_array( self, inds, labels, eo ) result( pop )
         class(oris),       intent(in) :: self
         integer,           intent(in) :: inds(:)
         character(len=*),  intent(in) :: labels(:)
@@ -448,7 +469,7 @@ contains
             end do
             !$omp end parallel do
         endif
-    end function get_pop_2
+    end function get_pop_array
 
     !> pops(v): the active records with label value v (1..max(get_n(label), maxn)); with eo, those of that half only
     module subroutine get_pops( self, pops, label, maxn, eo )

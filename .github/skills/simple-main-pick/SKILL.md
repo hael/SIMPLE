@@ -39,8 +39,8 @@ Silent ones first: nothing reports these.
   boxes in pixels (`picksegdiam`'s default box `BOX_EXP_FAC*moldiam_max/smpd_raw`, the Gaussian
   references' `(1+BOX_EXP_FAC)*moldiam/smpd + 2`). Segmentation runs at 4 A/pixel; reference matching
   at 4 then 2 A/pixel, or the micrograph's if coarser. `picksegdiam` stores and writes diameters
-  without the 8 A of its 2-pixel erosion: the bin decision of `segdiam_bin_picker` adds them back,
-  its assignment of picks to bins does not (known defect, ruled for fixing: both add 8 A).
+  without the 8 A of its 2-pixel erosion: `segdiam_bin_picker` adds them back both to decide the bins
+  and to assign each pick to one (its box files keep the stored diameter).
 - `segdiam_bin_picker`: the first `pick` decides the accepted bins and the box, later calls reuse
   them; `new(accepted_bins, box)` supplies both (`THROW_HARD` if one comes alone). `pick` writes box
   files and thumbnails in the working directory, deletes from `os_mic` the micrographs with state 0,
@@ -55,8 +55,9 @@ Silent ones first: nothing reports these.
 ## Where to start
 
 - `simple_picker_iter.f90`: `picker=new` with `pickrefs` (reference) or `moldiam`/`multi_moldiams`
-  (Gaussian), `picker=segdiam` (returns no `thumb_den`, so an empty one is stored: known defect, ruled
-  for fixing); `simple_picker_utils.f90` names the outputs and sets the box.
+  (Gaussian; returns no `thumb_den`), `picker=segdiam` (the thumbnail of its denoised micrograph, as
+  the reference picker); `simple_picker_utils.f90` names the outputs and sets the box. The pick strategy
+  stores `thumb_den` only when a picker returned one.
 - `simple_segdiam_bin_picker.f90` (header has the lifecycle); its caller
   `stream/stages/simple_stream_stage_initial_analysis.f90`.
 - `doc/algorithms/particle_picking.md` (both pickers), `doc/policies/stream/reference_generation_policy.md`,

@@ -7,9 +7,17 @@ use simple_rnd,         only: rnd_key, rnd_scope_key, rnd_draw_key, ran3, RND_PR
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_oris_utils,  only: oridist_from_oris
 !$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline,        only: cmdline
 implicit none
 private
 public :: run_all_oris_tests
+
+!> a half sum taking a row in no half (eo = -1), which must stop
+type, extends(forked_process) :: half_of_unhalved
+contains
+    procedure :: execute => take_unhalved
+end type half_of_unhalved
 
 contains
 
@@ -42,7 +50,37 @@ contains
         call test_assignment()
         call test_oridist_from_oris()
         call test_get_pops_halves()
+        call test_get_half()
     end subroutine run_all_oris_tests
+
+    !> get_half returns a row's even/odd half and stops on a row in no half (eo = -1), which the half sums
+    !! (class averages, 3D reconstruction) once put in the even half
+    subroutine test_get_half()
+        type(oris) :: os
+        type(half_of_unhalved) :: child
+        write(*,'(A)') 'test_get_half'
+        call os%new(2, is_ptcl=.true.)
+        call os%set(1, 'eo', 0.)
+        call os%set(2, 'eo', 1.)
+        call assert_int(0, os%get_half(1), 'get_half of an even row')
+        call assert_int(1, os%get_half(2), 'get_half of an odd row')
+        call child%start(name=string('HALF_OF_UNHALVED'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a row in no half (eo=-1) stops the half sums')
+        call child%destroy
+        call os%kill
+    end subroutine test_get_half
+
+    subroutine take_unhalved( self, cline )
+        class(half_of_unhalved), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(oris) :: os
+        integer    :: eo
+        call os%new(1, is_ptcl=.true.)
+        call os%set(1, 'eo', -1.)
+        eo = os%get_half(1)
+        call os%kill
+    end subroutine take_unhalved
 
     !> The keyed fractional-update samplers: given a key, sample4update_rnd, _cnt, _fillin and _class draw the
     !! same subset again whatever the intrinsic stream drew in between, another iteration's key draws another
@@ -245,14 +283,14 @@ contains
         os2 = oris(n, .false.)
         call assert_int(n, os2%get_noris(), 'oris constructor: size')
         call assert_true(.not. os2%is_particle(), 'oris constructor: is_particle() false')
-        ! new_2: from array of ori
+        ! new_from_arr: from array of ori
         call o%new_ori(.true.)
         call o%e1set(10.0)
         call o%e2set(20.0)
         call o%e3set(30.0)
         call os2%new([o, o])
-        call assert_int(2, os2%get_noris(), 'new_2 size from ori array')
-        call assert_real(10.0, os2%e1get(1), 1.0e-6, 'new_2 e1get')
+        call assert_int(2, os2%get_noris(), 'new_from_arr size from ori array')
+        call assert_real(10.0, os2%e1get(1), 1.0e-6, 'new_from_arr e1get')
         call os%kill
         call os2%kill
         call o%kill
@@ -325,16 +363,16 @@ contains
         sub2 = os%extract_subset(inds)
         call assert_int(3, sub2%get_noris(), 'extract_subset(indices) size')
         call assert_int(3, sub2%get_state(2), 'extract_subset(indices) state(2)')
-        ! copy_2
+        ! copy_same_kind
         call os_copy%copy(os)
-        call assert_int(n, os_copy%get_noris(), 'copy_2 size')
-        call assert_int(5, os_copy%get_state(5), 'copy_2 content')
+        call assert_int(n, os_copy%get_noris(), 'copy_same_kind size')
+        call assert_int(5, os_copy%get_state(5), 'copy_same_kind content')
         ! append(oris)
         os2 = oris(2, .true.)
         call os2%set_all('state', [10.0, 11.0])
         call os%append(os2)
-        call assert_int(n+2, os%get_noris(), 'append_2 size')
-        call assert_int(11, os%get_state(n+2), 'append_2 content')
+        call assert_int(n+2, os%get_noris(), 'append_oris size')
+        call assert_int(11, os%get_state(n+2), 'append_oris content')
         ! delete (single entry)
         call os%delete(3)
         call assert_int(n+1, os%get_noris(), 'delete size')
@@ -565,17 +603,17 @@ contains
         end do
     end function unit_counts
 
-    ! balance=class: every unit a share in proportion to the square root of its population, capped at its
-    ! population, lowest updatecnt first. balance=cavg: the same over the groups, then over the units of a
-    ! group; the fractional remainders go to the least-updated units
+    ! balance=class: every unit the same count capped at its population, lowest updatecnt first.
+    ! balance=cavg: every group the same count capped at its population and, inside a group, every unit
+    ! the same count capped at its population; the remainder of a group's equal split goes to its
+    ! least-updated unit
     subroutine test_nested_class_quota()
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:)
         integer :: nsamp, i, cnts3(3), cnts5(5)
         write(*,'(A)') 'test_nested_class_quota'
-        ! class: pops 2, 5, 10; 9 of 17 -> real quotas 1.87, 2.95, 4.18, floors 1, 2, 4 and the two
-        ! remaining particles to the units of lowest mean updatecnt: units 2 and 1 (unit 3 holds updated rows)
+        ! class: pops 2, 5, 10; 9 of 17 -> the equal rounds stop at 4 per unit, the first capped at 2
         call os%new(17, .true.)
         call os%set_all2single('state',     1.0)
         call os%set_all2single('updatecnt', 0.0)
@@ -585,14 +623,13 @@ contains
         call make_units([2,5,10], [0,0,0], clssmp)
         call os%sample4update_class(clssmp, [1, 17], 9./17., nsamp, inds, .true., .false.)
         cnts3 = unit_counts(clssmp, inds)
-        call assert_int(9, nsamp, 'class: the sample size is the target')
-        call assert_true(all(cnts3 == [2,3,4]), 'class: shares in proportion to the square root of the population')
+        call assert_int(10, nsamp, 'class: equal rounds overshoot by less than the number of units')
+        call assert_true(all(cnts3 == [2,4,4]), 'class: every unit the same count capped at its population')
         call assert_true(.not. any(inds == 8) .and. .not. any(inds == 9), 'class: lowest updatecnt first within a unit')
         call free_units(clssmp)
         call os%kill
         ! cavg: group 1 holds units of 2, 6 and 6 particles, group 2 one unit of 3, group 3 one unit of 20.
-        ! 19 of 37: group quotas 7.29, 3 (capped), 8.71; inside group 1: 1.63, 2.83, 2.83; floors 1, 2, 2, 3, 8
-        ! and the three remaining particles (all updatecnts equal) to the larger units: 5, 2, 3
+        ! 19 of 37: group quotas 8, 3 (capped), 8; inside group 1: 2 (capped), 3, 3
         call os%new(37, .true.)
         call os%set_all2single('state',     1.0)
         call os%set_all2single('updatecnt', 0.0)
@@ -601,8 +638,8 @@ contains
         call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true., .false.)
         cnts5 = unit_counts(clssmp, inds)
         call assert_int(19, nsamp, 'cavg: sample size')
-        call assert_true(all(cnts5 == [1,3,3,3,9]), 'cavg: nested square-root quota over groups, then units')
-        call assert_int(7, sum(cnts5(1:3)), 'cavg: group 1 gets its square-root share')
+        call assert_true(all(cnts5 == [2,3,3,3,8]), 'cavg: nested equal quota over groups, then units')
+        call assert_int(8, sum(cnts5(1:3)), 'cavg: group 1 gets the equal group count')
         call free_units(clssmp)
         call os%kill
         ! remainder: one group of three units of 4 and 4 draws -> 1 each and the remainder to the unit
@@ -617,7 +654,7 @@ contains
         call make_units([4,4,4], [1,1,1], clssmp)
         call os%sample4update_class(clssmp, [1, 12], 4./12., nsamp, inds, .true., .false.)
         cnts3 = unit_counts(clssmp, inds)
-        call assert_true(all(cnts3 == [1,2,1]), 'cavg: the remainder goes to the least-updated unit')
+        call assert_true(all(cnts3 == [1,2,1]), 'cavg: the group remainder goes to the least-updated unit')
         call free_units(clssmp)
         call os%kill
         if( allocated(inds) ) deallocate(inds)
@@ -633,11 +670,9 @@ contains
         write(*,'(A)') 'test_class_sample_sweep'
         call make_units([2,6,6,3,20], [1,1,1,2,3], clssmp)
         call class_sample_quotas(clssmp, 19, quotas)
-        call assert_real(1.6327, quotas(1), 1.e-3, 'quota of the smallest unit of group 1')
-        call assert_real(2.8279, quotas(2), 1.e-3, 'quota of a larger unit of group 1')
-        call assert_real(3.,     quotas(4), 1.e-5, 'quota of the capped single-unit group 2 is its population')
-        call assert_real(8.7115, quotas(5), 1.e-3, 'quota of the single-unit group 3')
-        call assert_real(19.,    sum(quotas), 1.e-3, 'the quotas add up to the target')
+        call assert_real(2., quotas(1), 1.e-5, 'quota of the capped unit is its population')
+        call assert_real(3., quotas(2), 1.e-5, 'quota of an open unit of group 1')
+        call assert_real(8., quotas(5), 1.e-5, 'quota of the single-unit group 3')
         sweep = class_sample_sweep(clssmp, 19)
         call assert_int(3, sweep, 'sweep = max over units of ceil(pop/quota)')
         call os%new(37, .true.)
@@ -1066,9 +1101,9 @@ contains
         call os%spiral()
         ! stats (simple interface)
         call os%stats('corr', ave, sdev, var, err)
-        call assert_true(.not. err, 'stats_1 no error')
+        call assert_true(.not. err, 'stats_all no error')
         call os%stats('corr', ave, sdev, var, err, fromto=[2,4])
-        call assert_true(.not. err, 'stats_2 no error with fromto')
+        call assert_true(.not. err, 'stats_masked no error with fromto')
         ! order / order_cls: best correlation first, state ignored
         inds = os%order()
         call assert_int(n, size(inds), 'order size')

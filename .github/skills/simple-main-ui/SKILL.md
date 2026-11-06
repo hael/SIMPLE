@@ -18,8 +18,9 @@ Silent ones first: nothing reports these.
   every `parameters` field for every program. So no input, and no parameter, for an internal
   mechanism or a test switch (every field is a key of every program): decide from existing state,
   force alternative paths in A/B identity runs with an existing key, ask Hans before adding a
-  parameter. An input that is no field stops when given (`positive`, `heldout`, `rmsd_file`,
-  `stk_traj`): known defect, ruled for fixing (bind those a program reads, drop the rest).
+  parameter. An input whose key the program does not read is accepted and ignored, and nothing checks
+  that (`trajectory_graphene_subtr` offered `stk_traj`/`stk_backgr` and read `stk`/`stk2`, fixed
+  2026-11-05); `scripts/check_cli_chain.py` fails the gate only on an input that is no accepted key.
 - Exception: `solve3D_addon` and `solve3D_chunks` refuse keys their descriptor lacks
   (`ui_program%accepts`), and `solve3D_chunks` forwards to the add-on only what `solve3D_addon`
   accepts, dropping the rest without a word.
@@ -28,10 +29,10 @@ Silent ones first: nothing reports these.
   the execution directory, so the run writes the copy.
 - Required inputs and requirement groups are enforced by `cmdline`, also on workers that share a
   public program's name (`refine2D`, `refine3D`, `reconstruct3D`, ...): a new required input stops
-  the command lines their masters write. Other workers' keys are in `simple_private_prgs.f90`,
-  indexed by hand up to `n_private_prgs`: an entry past it, or a worker in neither table (`prob_tab*`,
-  `prob_align*`, `refine2D_distr`, ...), runs with no key check. Ruled for fixing: an entry for every
-  private program without a public name, the count computed.
+  the command lines their masters write. Every other worker of `dispatch_private_prg` has an entry in
+  `simple_private_prgs.f90` (`add_private_prg`, then `push_req`/`push_opt`; the count follows), which
+  `scripts/check_cli_chain.py` enforces; a required key there stops the masters' command lines that
+  lack it.
 - Defaults are generated (`simple_ui_default_values.f90` in the build tree, by
   `scripts/default_audit.py`): the declaration, `init_dynamic_defaults`, and a literal
   `if( .not. cline%defined(k) ) call cline%set(k, v)` in the routed commander's `execute` before
@@ -40,8 +41,11 @@ Silent ones first: nothing reports these.
   baseline instead. The rule: a default the UI must show is set in the commander before
   `params%new`. No literal UI default that repeats a baseline.
 - `prg=print_ui_stream` (`print_stream_ui_json`) is written by hand, keys, defaults and program names
-  included, and nothing checks it (ruled for fixing: the stream UI contract is to cover it): a stream
-  key or default change is made there too.
+  included: a stream key or default change is made there too. Every build checks it against the
+  descriptors (`validate_complete_ui_json.py`: its processes are simple_stream programs, each user input
+  it gives a process is defined, is an input of that program and has its default), the gate checks its
+  keys are accepted, and `validate_stream_ui_contract` compares it with
+  `production/stream_launcher_contract.json`.
 - Visibility is presentation only. Required inputs are Standard (anything else stops); optional
   inputs default to Advanced, programs to Developer.
 - Loud: `make_ui` runs in every front door and stops every program on a bad descriptor (summary
@@ -67,8 +71,11 @@ fails silently when it is missed: `references/cli_change_chain.md`.
 - `build/bin/simple_test_exec test=unit_ui` (`suite=` `ui_json`, `gui_metadata`, `gui_assembler`,
   `ui_hash`, `ui_visibility`); under a second.
 - Every build regenerates and validates the whole UI JSON (`validate_complete_ui_json`).
-- simple_stream programs: `cmake --build build --target validate_stream_ui_contract`; update the
-  reference (`update_stream_ui_contract`) only after review.
+- simple_stream programs and the launcher: `cmake --build build --target validate_stream_ui_contract`;
+  update the references (`update_stream_ui_contract`) only after review. The programs' reference
+  (`production/stream_ui_contract.json`) differed from the descriptors already at `6565f5ba5`: its
+  review is the maintainer's.
+- The chain: `python3 scripts/check_cli_chain.py` (in the fast gate).
 - Defaults by hand: `cmake --build build --target audit_ui_defaults`, then read
   `build/production/simple_ui_default_audit.md` (unresolved and unexposed defaults).
 

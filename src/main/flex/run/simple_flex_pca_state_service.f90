@@ -67,35 +67,14 @@ contains
         type(rec3D_service), allocatable :: service
         type(rec3D_request) :: request
         type(cmdline)       :: cline_rec
-        type(string), allocatable :: vols_bak(:)
-        character(len=len(params%automsk)) :: automsk_bak
-        integer :: nstates_bak, nparts_bak, part_bak, numlen_bak, nstates
-        logical :: l_nonuniform_bak, l_trail_rec_bak, l_state_defined_bak
+        integer :: nstates
         nstates = size(weights,2)
         if( size(weights,1) /= size(pinds) .or. nstates < 1 ) THROW_HARD('state weight table shape; reconstruct_state_halves')
         ! an all-zero column would leave a state without half maps
         if( any(maxval(weights, dim=1) <= 0.) ) THROW_HARD('a state of the weight table has no weight; reconstruct_state_halves')
-        ! The service reconstructs every column as a state of a single in-process part. The PCG path reads
-        ! these parameters directly (volassemble rebuilds its own from cline_rec): raw maps carry no
+        ! The service reconstructs every column as a state of a single in-process part. Raw maps carry no
         ! nonuniform filter, envelope support, trailing chain or state selection, whatever the caller's
-        ! command line holds.
-        nstates_bak            = params%nstates
-        nparts_bak             = params%nparts
-        part_bak               = params%part
-        numlen_bak             = params%numlen
-        l_nonuniform_bak       = params%l_nonuniform
-        l_trail_rec_bak        = params%l_trail_rec
-        l_state_defined_bak    = params%l_state_defined
-        automsk_bak            = params%automsk
-        vols_bak               = params%vols(1:nstates)
-        params%nstates         = nstates
-        params%nparts          = 1
-        params%part            = 1
-        params%numlen          = 1
-        params%l_nonuniform    = .false.
-        params%l_trail_rec     = .false.
-        params%l_state_defined = .false.
-        params%automsk         = 'no'
+        ! command line holds: the request's settings (volassemble rebuilds its parameters from cline_rec).
         cline_rec = cline
         call cline_rec%set('nstates',     size(weights,2))
         call cline_rec%set('box_crop',    params%box_crop)
@@ -122,22 +101,18 @@ contains
         request%prefix        = prefix
         request%register      = .false.
         request%dispatch      = REC3D_DISPATCH_INPROC
+        request%nstates       = nstates
+        request%one_part      = .true.
+        request%no_nonuniform = .true.
+        request%no_trail_rec  = .true.
+        request%all_states    = .true.
+        request%no_automsk    = .true.
         allocate(service)
         call service%new(params, build, cline_rec, REC3D_DISPATCH_INPROC, params%nthr)
         call service%execute(params, build, cline_rec, request)
         call service%kill
         deallocate(service)
         call cline_rec%kill
-        params%nstates          = nstates_bak
-        params%nparts           = nparts_bak
-        params%part             = part_bak
-        params%numlen           = numlen_bak
-        params%l_nonuniform     = l_nonuniform_bak
-        params%l_trail_rec      = l_trail_rec_bak
-        params%l_state_defined  = l_state_defined_bak
-        params%automsk          = automsk_bak
-        params%vols(1:nstates)  = vols_bak
-        deallocate(vols_bak)
     end subroutine reconstruct_state_halves
 
     !> <prefix>_stateNN<suffix>.mrc, suffix '', '_even', '_odd', '_even_unfil' or '_odd_unfil'

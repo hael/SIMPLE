@@ -5,20 +5,20 @@ implicit none
 #include "simple_local_flags.inc"
 
 interface neigh_8
-    module procedure neigh_8_1
-    module procedure neigh_8_2
-    module procedure neigh_8_3
+    module procedure neigh_8_coords
+    module procedure neigh_8_imat
+    module procedure neigh_8_rmat
 end interface neigh_8
 
 interface neigh_8_3D
-    module procedure neigh_8_3D_0
-    module procedure neigh_8_3D_1
-    module procedure neigh_8_3D_2
+    module procedure neigh_8_3D_coords
+    module procedure neigh_8_3D_imat
+    module procedure neigh_8_3D_rmat
 end interface neigh_8_3D
 
 interface neigh_4_3D
-    module procedure neigh_4_3D_1
-    module procedure neigh_4_3D_2
+    module procedure neigh_4_3D_coords
+    module procedure neigh_4_3D_imat
 end interface neigh_4_3D
 
 contains
@@ -26,7 +26,7 @@ contains
     ! Returns 8-neighborhoods of the pixel position px
     ! it returns the pixel INDECES of the 8-neigh in CLOCKWISE order,
     ! starting from any 8-neigh. It doesn't consider the pixel itself.
-    subroutine neigh_8_1( ldim, px, neigh_8, nsz )
+    subroutine neigh_8_coords( ldim, px, neigh_8, nsz )
         integer, intent(in)    :: ldim(3), px(3)
         integer, intent(inout) :: neigh_8(3,8)
         integer, intent(out)   :: nsz
@@ -93,12 +93,12 @@ contains
             neigh_8(1:3,8) = [i-1,j,1]
             nsz = 8
         endif
-    end subroutine neigh_8_1
+    end subroutine neigh_8_coords
 
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! and the value of the pixel itself (the last one).
-    subroutine neigh_8_2( ldim, imat, px, neigh_8, nsz )
+    subroutine neigh_8_imat( ldim, imat, px, neigh_8, nsz )
         integer, intent(in)    :: ldim(3), imat(ldim(1),ldim(2),ldim(3)), px(3)
         integer, intent(inout) :: neigh_8(9), nsz
         integer :: i, j
@@ -173,12 +173,12 @@ contains
             neigh_8(9) = imat(i,j,1)
             nsz = 9
         endif
-    end subroutine neigh_8_2
+    end subroutine neigh_8_imat
 
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! and the value of the pixel itself (the last one).
-    subroutine neigh_8_3( ldim, rmat, px, neigh_8, nsz )
+    subroutine neigh_8_rmat( ldim, rmat, px, neigh_8, nsz )
         integer, intent(in)    :: ldim(3), px(3)
         real,    intent(in)    :: rmat(ldim(1),ldim(2),ldim(3))
         real,    intent(inout) :: neigh_8(9)
@@ -255,11 +255,11 @@ contains
             neigh_8(9) = rmat(i,j,1)
             nsz = 9
         endif
-    end subroutine neigh_8_3
+    end subroutine neigh_8_rmat
 
     ! Returns the 26-neighborhood coordinates of the voxel position px.
     ! The value of the voxel itself is NOT saved.
-    subroutine neigh_8_3D_0( ldim, px, neigh_8, nsz )
+    subroutine neigh_8_3D_coords( ldim, px, neigh_8, nsz )
         integer, intent(in)    :: ldim(3), px(3)
         integer, intent(inout) :: neigh_8(3,26)
         integer, intent(out)   :: nsz
@@ -283,14 +283,14 @@ contains
                 end do
             end do
         end do
-    end subroutine neigh_8_3D_0
+    end subroutine neigh_8_3D_coords
 
     ! Returns 8-neighborhoods (in 3D they are 27) of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! of the first slice, then central slice and finally third slice.
     ! The value of the pixel itself is saved as the last one.
     ! This function is for volumes.
-    subroutine neigh_8_3D_1(ldim, imat, px, neigh_8, nsz )
+    subroutine neigh_8_3D_imat(ldim, imat, px, neigh_8, nsz )
         integer, intent(in)    :: ldim(3), imat(ldim(1),ldim(2),ldim(3)), px(3)
         integer, intent(inout) :: neigh_8(27), nsz
         integer :: i, j, k
@@ -730,14 +730,14 @@ contains
             write(logfhandle, *) 'i, j, k =  ', i, j, k
             THROW_HARD('Case not covered!; neigh_8_3D')
         endif
-    end subroutine neigh_8_3D_1
+    end subroutine neigh_8_3D_imat
 
     ! Returns 8-neighborhoods (in 3D they are 27) of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! of the first slice, then central slice and finally third slice.
     ! The value of the pixel itself is saved as the last one.
     ! This function is for volumes.
-    subroutine neigh_8_3D_2( ldim, rmat, px, neigh_8, nsz )
+    subroutine neigh_8_3D_rmat( ldim, rmat, px, neigh_8, nsz )
         integer, intent(in)    :: ldim(3), px(3)
         real,    intent(in)    :: rmat(ldim(1),ldim(2),ldim(3))
         real,    intent(inout) :: neigh_8(27)
@@ -1179,13 +1179,13 @@ contains
             write(logfhandle, *) 'i, j, k =  ', i, j, k
             THROW_HARD('Case not covered!; neigh_8_3D')
         endif
-    end subroutine neigh_8_3D_2
+    end subroutine neigh_8_3D_rmat
 
     ! Returns 4-neighborhoods (in 3D they are 6) of the pixel position px in self
     ! it returns the COORDINATES of the 8-neigh in a fixed order.
     ! The value of the pixel itself is NOT saved.
     ! This function is for volumes.
-    subroutine neigh_4_3D_1(ldim, px, neigh_4, nsz)
+    subroutine neigh_4_3D_coords(ldim, px, neigh_4, nsz)
         integer, intent(in)    :: ldim(3), px(3)
         integer, intent(inout) :: neigh_4(3,6)
         integer, intent(out)   :: nsz
@@ -1388,13 +1388,13 @@ contains
             nsz = 6
             return
         endif
-    end subroutine neigh_4_3D_1
+    end subroutine neigh_4_3D_coords
 
     ! Returns 4-neighborhoods (in 3D they are 6) of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a fixed order.
     ! The value of the pixel itself is NOT saved.
     ! This function is for volumes.
-    subroutine neigh_4_3D_2(ldim, imat, px, neigh_4, nsz )
+    subroutine neigh_4_3D_imat(ldim, imat, px, neigh_4, nsz )
         integer, intent(in)    :: ldim(3), imat(ldim(1),ldim(2),ldim(3)), px(3)
         integer, intent(inout) :: neigh_4(6), nsz
         integer :: i, j, k
@@ -1468,6 +1468,6 @@ contains
             nsz = 4
             return
         endif
-    end subroutine neigh_4_3D_2
+    end subroutine neigh_4_3D_imat
 
 end module simple_neighs

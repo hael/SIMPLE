@@ -940,7 +940,8 @@ contains
         character(len=LONGSTRLEN)  :: key, preset_name
         character(len=XLONGSTRLEN) :: val
         character(len=32)          :: file_context
-        integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients, nfeats
+        character(len=LONGSTRLEN)  :: errmsg_len
+        integer :: funit, ios, parse_ios, model_version, n_interaction_coefficients, n_linear_coefficients, nfeats
         logical :: have_relational_schema, have_preset, ok_line, have_terms, have_coefficients
         ! Model files are complete model definitions. Start from chunk defaults,
         ! apply any preset found in the file, then apply explicit key overrides.
@@ -1016,7 +1017,13 @@ contains
                     if( parse_ios /= 0 ) THROW_HARD('read_model: failed to parse intercept')
                 case('linear_coefficients')
                     call read_real_values_keyed(val, self%linear_coefficients, nfeats, &
-                        'linear_coefficients')
+                        'linear_coefficients', n_linear_coefficients)
+                    ! one coefficient per feature of the bank, in bank order: a short list would zero-fill the rest
+                    if( n_linear_coefficients /= nfeats )then
+                        write(errmsg_len,'(A,I0,A,I0)') 'read_model: linear_coefficients expected ', nfeats, &
+                            ' values, got ', n_linear_coefficients
+                        THROW_HARD(trim(errmsg_len))
+                    endif
                 case('interaction_terms')
                     call read_interaction_terms(val, self%interaction_terms, self%n_interactions, self%context)
                     have_terms = .true.
@@ -1072,8 +1079,9 @@ contains
         real    :: parsed(CAVG_QUALITY_NFEATS)
         call parse_feature_weight_values(val, parsed, nvals)
         if( nvals == 0 ) THROW_HARD('read_model: feature_weights has no values')
-        if( nvals > nfeats )then
-            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected at most ', nfeats, &
+        ! one weight per feature of the bank, in bank order: a short list would zero-fill the rest
+        if( nvals /= nfeats )then
+            write(errmsg,'(A,I0,A,I0)') 'read_model: feature_weights expected ', nfeats, &
                 ' values, got ', nvals
             THROW_HARD(trim(errmsg))
         endif

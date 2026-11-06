@@ -51,7 +51,7 @@ contains
                     THROW_HARD('New picker requires 2D references (pickrefs) or moldiam')
                 endif
             case('segdiam')
-                call exec_segdiampick(params, moviename_intg, boxfile, smpd, nptcls_out, params%moldiam_max, dir_out=dir_out)
+                call exec_segdiampick(params, moviename_intg, boxfile, thumb_den, smpd, nptcls_out, params%moldiam_max, dir_out=dir_out)
             case DEFAULT
                 THROW_HARD('unsupported picker: '//trim(params%picker)//'; expected new|segdiam')
         end select

@@ -7,6 +7,7 @@ use omp_lib,       only: omp_in_parallel
 use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 
+public :: get_rnd_state, put_rnd_state
 public :: seed_rnd, seed_rnd_fixed, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
 public :: shuffle, partial_shuffle, has_global_seed, poisson_rnd
@@ -24,34 +25,34 @@ interface seed_rnd_fixed
 end interface
 
 interface ran3arr
-    module procedure ran3arr_1
-    module procedure ran3arr_2
+    module procedure ran3arr_1d
+    module procedure ran3arr_2d
 end interface
 
 interface gasdev
-    module procedure gasdev_1
-    module procedure gasdev_2
-    module procedure gasdev_3
+    module procedure gasdev_std
+    module procedure gasdev_mean_sdev
+    module procedure gasdev_bounded
 end interface
 
 interface randn
-    module procedure randn_1
-    module procedure randn_2
+    module procedure randn_1d
+    module procedure randn_2d
 end interface
 
 interface shuffle
-    module procedure shuffle_1
-    module procedure shuffle_2
+    module procedure shuffle_int
+    module procedure shuffle_real
 end interface
 
 interface partial_shuffle
-    module procedure partial_shuffle_1
-    module procedure partial_shuffle_2
+    module procedure partial_shuffle_int
+    module procedure partial_shuffle_real
 end interface
 
 interface greedy_sampling
-    module procedure greedy_sampling_1
-    module procedure greedy_sampling_2
+    module procedure greedy_sampling_alloc
+    module procedure greedy_sampling_prealloc
 end interface
 
 integer :: nseed_rnd_calls = 0 ! seed_rnd calls under SIMPLE_SEED since the last seed_rnd_fixed
@@ -220,6 +221,25 @@ contains
         l_run_seed_cached = .true.
     end subroutine put_simple_seed
 
+    !> the intrinsic generator's state and the reseed count: a routine that must build a parameters object
+    !! (which reseeds) puts them back, so its caller's stream is as if it had not
+    subroutine get_rnd_state( seed, ncalls )
+        integer, allocatable, intent(out) :: seed(:)
+        integer,              intent(out) :: ncalls
+        integer :: n
+        call random_seed(size=n)
+        allocate(seed(n))
+        call random_seed(get=seed)
+        ncalls = nseed_rnd_calls
+    end subroutine get_rnd_state
+
+    subroutine put_rnd_state( seed, ncalls )
+        integer, intent(in) :: seed(:)
+        integer, intent(in) :: ncalls
+        call random_seed(put=seed)
+        nseed_rnd_calls = ncalls
+    end subroutine put_rnd_state
+
     subroutine put_fixed_seed( base )
         use iso_fortran_env, only: int64
         integer(int64), intent(in) :: base
@@ -263,39 +283,39 @@ contains
     end function ran3
 
     !>  \brief  returns a random matrix
-    subroutine ran3arr_1( harvest )
+    subroutine ran3arr_1d( harvest )
         real, intent(inout) :: harvest(:)
         call random_number(harvest)
-    end subroutine ran3arr_1
+    end subroutine ran3arr_1d
 
      !>  \brief  returns a random matrix
-    subroutine ran3arr_2( harvest )
+    subroutine ran3arr_2d( harvest )
         real, intent(inout) :: harvest(:,:)
         call random_number(harvest)
-    end subroutine ran3arr_2
+    end subroutine ran3arr_2d
 
     !>  \brief  returns a random array [-1,1]
     !! \param n dimension of required rand array
-    function randn_1( n ) result( a )
+    function randn_1d( n ) result( a )
         integer, intent(in) :: n
         real, allocatable   :: a(:)
         allocate( a(n) )
         call random_number(a)
         a = a * 2. - 1.
-    end function randn_1
+    end function randn_1d
 
     !>  \brief  returns a random matrix [-1,1]
     !! \param n1,n2 dimensions of required rand array
-    function randn_2( n1, n2 ) result( a )
+    function randn_2d( n1, n2 ) result( a )
         integer, intent(in) :: n1, n2
         real, allocatable   :: a(:,:)
         allocate( a(n1,n2) )
         call random_number(a)
         a = a * 2. - 1.
-    end function randn_2
+    end function randn_2d
 
     !>  \brief  shuffles an integer array using Fisher-Yates
-    subroutine shuffle_1( shuffled )
+    subroutine shuffle_int( shuffled )
         integer, intent(inout) :: shuffled(:)
         integer :: tmp, irnd, i
         do i=size(shuffled),2,-1
@@ -304,10 +324,10 @@ contains
             shuffled(i)    = shuffled(irnd)
             shuffled(irnd) = tmp
         enddo
-    end subroutine shuffle_1
+    end subroutine shuffle_int
 
     !>  \brief  shuffles a real array using Fisher-Yates
-    subroutine shuffle_2( shuffled )
+    subroutine shuffle_real( shuffled )
         real, intent(inout) :: shuffled(:)
         real    :: tmp
         integer :: irnd, i
@@ -317,44 +337,44 @@ contains
             shuffled(i)    = shuffled(irnd)
             shuffled(irnd) = tmp
         enddo
-    end subroutine shuffle_2
+    end subroutine shuffle_real
 
     !>  \brief  partially shuffles an integer array using Fisher-Yates
     !!  The first nshuffle positions form a uniformly ordered sample without
     !!  replacement. The unselected elements remain in the trailing positions.
-    subroutine partial_shuffle_1( shuffled, nshuffle )
+    subroutine partial_shuffle_int( shuffled, nshuffle )
         integer, intent(inout) :: shuffled(:)
         integer, intent(in)    :: nshuffle
         integer :: tmp, irnd, i, n
         n = size(shuffled)
         if( nshuffle < 0 .or. nshuffle > n )&
-        &THROW_HARD('partial shuffle size must be between zero and the array size; partial_shuffle_1')
+        &THROW_HARD('partial shuffle size must be between zero and the array size; partial_shuffle_int')
         do i=1,min(nshuffle,n-1)
             irnd           = i - 1 + irnd_uni(n - i + 1)
             tmp            = shuffled(i)
             shuffled(i)    = shuffled(irnd)
             shuffled(irnd) = tmp
         enddo
-    end subroutine partial_shuffle_1
+    end subroutine partial_shuffle_int
 
     !>  \brief  partially shuffles a real array using Fisher-Yates
     !!  The first nshuffle positions form a uniformly ordered sample without
     !!  replacement. The unselected elements remain in the trailing positions.
-    subroutine partial_shuffle_2( shuffled, nshuffle )
+    subroutine partial_shuffle_real( shuffled, nshuffle )
         real,    intent(inout) :: shuffled(:)
         integer, intent(in)    :: nshuffle
         real    :: tmp
         integer :: irnd, i, n
         n = size(shuffled)
         if( nshuffle < 0 .or. nshuffle > n )&
-        &THROW_HARD('partial shuffle size must be between zero and the array size; partial_shuffle_2')
+        &THROW_HARD('partial shuffle size must be between zero and the array size; partial_shuffle_real')
         do i=1,min(nshuffle,n-1)
             irnd           = i - 1 + irnd_uni(n - i + 1)
             tmp            = shuffled(i)
             shuffled(i)    = shuffled(irnd)
             shuffled(irnd) = tmp
         enddo
-    end subroutine partial_shuffle_2
+    end subroutine partial_shuffle_real
 
     !> A Poisson deviate of the given mean: multiplication of uniforms below 30, the transformed
     !! rejection of Hormann (1993, PTRS) above
@@ -421,7 +441,7 @@ contains
     end function multinomal
 
     ! using the multinomal sampling idea to be more greedy towards the best probabilistic candidates
-    function greedy_sampling_1( pvec, nsmpl_ub, nsmpl_lb ) result( which )
+    function greedy_sampling_alloc( pvec, nsmpl_ub, nsmpl_lb ) result( which )
         use simple_math, only: hpsort
         real,              intent(in) :: pvec(:) !< probabilities
         integer,           intent(in) :: nsmpl_ub
@@ -431,10 +451,10 @@ contains
         integer :: which, n
         n = size(pvec)
         allocate(pvec_sorted(n),sorted_inds(n))
-        which = greedy_sampling_2(pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb)
-    end function greedy_sampling_1
+        which = greedy_sampling_prealloc(pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb)
+    end function greedy_sampling_alloc
 
-    function greedy_sampling_2( pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb_in ) result( which )
+    function greedy_sampling_prealloc( pvec, pvec_sorted, sorted_inds, nsmpl_ub, nsmpl_lb_in ) result( which )
         use simple_math, only: hpsort
         real,              intent(in)    :: pvec(:)        !< probabilities
         real,              intent(inout) :: pvec_sorted(:) !< sorted probabilities
@@ -464,12 +484,12 @@ contains
                 which = sorted_inds(nsmpl_ub)
             endif
         endif
-    end function greedy_sampling_2
+    end function greedy_sampling_prealloc
 
     !>  \brief  random number generator yielding normal distribution
     !!          with zero mean and unit variance (from NR)
     !!  Edited for thread safety
-    real function gasdev_1()
+    real function gasdev_std()
         real :: v1, v2, r, fac
         r = 99.
         do while( r >= 1. .or. r < TINY )
@@ -480,22 +500,22 @@ contains
         fac = sqrt(-2.*log(r)/r)
         ! Now make Box-Muller transformation to get the two normal deviates.
         ! Return one, no saving is performed as this is not thread safe
-        gasdev_1 = v2*fac
-    end function gasdev_1
+        gasdev_std = v2*fac
+    end function gasdev_std
 
     !>  \brief  random number generator yielding normal distribution
     !!          with given _mean_ and _stdev_ (from NR). standard _mean_
     !!          and _stdev_ values are 0 and 1, respectively
-    function gasdev_2( mean, stdev ) result( harvest )
+    function gasdev_mean_sdev( mean, stdev ) result( harvest )
         real, intent(in) :: mean, stdev
         real             :: harvest
         harvest = stdev * gasdev( ) + mean
-    end function gasdev_2
+    end function gasdev_mean_sdev
 
     !>  \brief  random number generator yielding normal distribution with
     !!          given mean and stdev (from NR). Added acceptance-rejection
     !!          according to limits (for constrained CE optimization)
-    function gasdev_3( mean, stdev, limits ) result( harvest )
+    function gasdev_bounded( mean, stdev, limits ) result( harvest )
         real, intent(in)   :: mean, stdev
         real, intent(in)   :: limits(2)
         real               :: harvest
@@ -507,11 +527,11 @@ contains
             harvest = gasdev( mean, stdev )
             cnt = cnt + 1
             if( cnt == maxits )then
-                THROW_WARN('gasdev_3 exceeding maxits')
+                THROW_WARN('gasdev_bounded exceeding maxits')
                 return
              endif
         end do
-    end function gasdev_3
+    end function gasdev_bounded
 
     !>  \brief  generate a uniformly distributed random integer [_1_,_NP_]
     function irnd_uni( NP ) result( irnd )

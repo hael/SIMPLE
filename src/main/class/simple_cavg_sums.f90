@@ -224,8 +224,8 @@ contains
         if( all(abs(offset) < TINY) ) return
         fit   = ftiter([self%box_crop, self%box_crop, 1], 1.0)
         lims  = fit%loop_lims(2)
-        sh(1) = real(offset(1) * PI / real(self%box_crop/2), dp)
-        sh(2) = real(offset(2) * PI / real(self%box_crop/2), dp)
+        sh(1) = real(offset(1) * PI / (real(self%box_crop)/2.), dp)
+        sh(2) = real(offset(2) * PI / (real(self%box_crop)/2.), dp)
         w1    = cmplx(cos(sh(1)), sin(sh(1)), kind=dp)
         w2    = cmplx(cos(sh(2)), sin(sh(2)), kind=dp)
         allocate(ph_h(lims(1,1):lims(1,2)), ph_k(lims(2,1):lims(2,2)))
@@ -332,7 +332,7 @@ contains
         if( ios == 0 ) write(funit, iostat=ios) nbytes
         call fileiochk('cavg_sums write: '//tmpname%to_char(), ios)
         call fclose(funit)
-        call simple_rename(tmpname, fname, overwrite=.false.)
+        call simple_rename(tmpname, fname)
         call tmpname%kill
     end subroutine write
 

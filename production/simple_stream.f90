@@ -65,7 +65,7 @@ select case(trim(prg))
         call xpreprocess%execute(cline)
     case( 'assign_optics' )
         call xassign_optics%execute(cline)
-    case( 'gen_pickrefs','initial_analysis', 'opening2D' ) ! to maintain GUI support
+    case( 'gen_pickrefs' )
         call xinitial_analysis%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)

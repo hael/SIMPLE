@@ -18,7 +18,7 @@ contains
         closest = minloc( dists, dim=1 )
     end function find_closest_proj
 
-    module subroutine nearest_proj_neighbors_1( self, k, nnmat )
+    module subroutine nearest_proj_neighbors_mat( self, k, nnmat )
         class(oris), intent(in)    :: self
         integer,     intent(in)    :: k
         integer,     intent(inout) :: nnmat(k,self%n)
@@ -37,9 +37,9 @@ contains
             end do
         end do
         !$omp end parallel do
-    end subroutine nearest_proj_neighbors_1
+    end subroutine nearest_proj_neighbors_mat
 
-    module subroutine nearest_proj_neighbors_2( self, o, euldist_thres, lnns )
+    module subroutine nearest_proj_neighbors_thres( self, o, euldist_thres, lnns )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o
         real,        intent(in)    :: euldist_thres
@@ -51,9 +51,9 @@ contains
             dists(j) = self%o(j).euldist.o
         end do
         where( dists <= euldist_thres_rad ) lnns = .true.
-    end subroutine nearest_proj_neighbors_2
+    end subroutine nearest_proj_neighbors_thres
 
-    module subroutine nearest_proj_neighbors_3( self, o, k, lnns )
+    module subroutine nearest_proj_neighbors_k( self, o, k, lnns )
         class(oris), intent(in)    :: self
         class(ori),  intent(in)    :: o
         integer,     intent(in)    :: k
@@ -70,7 +70,7 @@ contains
         do j=1,k
             lnns(inds(j)) = .true.
         end do
-    end subroutine nearest_proj_neighbors_3
+    end subroutine nearest_proj_neighbors_k
 
     module subroutine replace_with_closest( self, other )
         class(oris), intent(inout) :: self
@@ -83,7 +83,7 @@ contains
         end do
     end subroutine replace_with_closest
 
-    module subroutine diststat_1( self, sumd, avgd, sdevd, mind, maxd )
+    module subroutine diststat_within( self, sumd, avgd, sdevd, mind, maxd )
         class(oris), intent(in)  :: self
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
         integer :: i, j, cnt
@@ -100,9 +100,9 @@ contains
         maxd = maxval(dists)
         sumd = sum(dists)
         call moment(dists, avgd, sdevd, vard, err )
-    end subroutine diststat_1
+    end subroutine diststat_within
 
-    module subroutine diststat_2( self1, self2, sumd, avgd, sdevd, mind, maxd )
+    module subroutine diststat_between( self1, self2, sumd, avgd, sdevd, mind, maxd )
         use simple_linalg, only: vector_angle_norm
         class(oris), intent(inout)  :: self1, self2
         real,        intent(out) :: mind, maxd, avgd, sdevd, sumd
@@ -111,7 +111,7 @@ contains
         integer :: i
         logical :: err
         if( self1%n /= self2%n )then
-            THROW_HARD('cannot calculate distance between sets of different size; euldist_2')
+            THROW_HARD('cannot calculate distance between sets of different size; euldist_ori')
         endif
         mind = huge(x)
         maxd = -mind
@@ -129,7 +129,7 @@ contains
         !$omp end parallel do
         call moment(dists, avgd, sdevd, vard, err )
         deallocate(onormals1,onormals2)
-    end subroutine diststat_2
+    end subroutine diststat_between
 
     module real function overlap( self1, self2, which, state )
         class(oris),      intent(inout) :: self1, self2

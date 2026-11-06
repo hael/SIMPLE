@@ -7,7 +7,7 @@ implicit none
 
 contains
 
-    module function median_1( self, which ) result( med )
+    module function median_key( self, which ) result( med )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: which
         real,    allocatable :: vals(:), vals4med(:)
@@ -17,9 +17,9 @@ contains
         vals     = self%get_all(which)
         vals4med = pack(vals, incl)
         med      = median_nocopy(vals4med)
-    end function median_1
+    end function median_key
 
-    module subroutine stats_1( self, which, ave, sdev, var, err )
+    module subroutine stats_all( self, which, ave, sdev, var, err )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
@@ -31,9 +31,9 @@ contains
         vals          = pack(vals, mask=states > 0)
         call moment(vals, ave, sdev, var, err)
         deallocate(vals, states)
-    end subroutine stats_1
+    end subroutine stats_all
 
-    module subroutine stats_2( self, which, statvars, mask, nozero )
+    module subroutine stats_masked( self, which, statvars, mask, nozero )
         class(oris),        intent(inout) :: self
         character(len=*),   intent(in)    :: which
         type(stats_struct), intent(inout) :: statvars
@@ -54,9 +54,9 @@ contains
         statvars%maxv = maxval(vals)
         statvars%med  = median_nocopy(vals)
         deallocate(vals)
-    end subroutine stats_2
+    end subroutine stats_masked
 
-    module subroutine stats_3( self, which, ave, sdev, var, err, fromto )
+    module subroutine stats_range( self, which, ave, sdev, var, err, fromto )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
@@ -69,7 +69,7 @@ contains
         vals          = pack(vals, mask=states > 0)
         call moment(vals, ave, sdev, var, err)
         deallocate(vals, states)
-    end subroutine stats_3
+    end subroutine stats_range
 
     module subroutine minmax( self, which, minv, maxv )
         class(oris),      intent(inout) :: self
@@ -89,7 +89,7 @@ contains
         end do
     end subroutine minmax
 
-    module subroutine spiral_1( self )
+    module subroutine spiral_full( self )
         class(oris), intent(inout) :: self
         real    :: h, theta, psi
         integer :: k
@@ -110,11 +110,11 @@ contains
                 call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
             end do
         else
-            THROW_HARD('object nonexistent; spiral_1')
+            THROW_HARD('object nonexistent; spiral_full')
         endif
-    end subroutine spiral_1
+    end subroutine spiral_full
 
-    module subroutine spiral_2( self, nsym, eullims )
+    module subroutine spiral_lims( self, nsym, eullims )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
         real,        intent(in)    :: eullims(3,2)
@@ -123,7 +123,7 @@ contains
         integer    :: cnt, i, n, nprojs, lim
         real       :: e1lim, e2lim, frac, frac1, frac2
         if( nsym == 1 )then
-            call self%spiral_1
+            call self%spiral_full
             return
         endif
         e1lim  = eullims(1,2)
@@ -170,14 +170,14 @@ contains
                 if( allocated(avail) )deallocate(avail)
                 allocate(avail(n), source=.false.)
                 call tmp%new(n, self%o(1)%is_particle())
-                call tmp%spiral_1
+                call tmp%spiral_full
                 do i = 1, n
                     if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )&
                     &avail(i) = .true.
                 end do
             end subroutine gen_c1
 
-    end subroutine spiral_2
+    end subroutine spiral_lims
 
     module function order( self ) result( inds )
         class(oris), intent(inout) :: self

@@ -19,12 +19,23 @@ use simple_refine3D_fnames,   only: refine3D_frozen_rec_fbody, refine3D_frozen_m
     &refine3D_carried_rec_fbody, refine3D_carried_bundle_fname, refine3D_carried_membership_fname
 use simple_frozen_accum,      only: frozen_accum, carried_bundle, write_carried_membership, read_carried_membership
 use simple_syslib,            only: simple_mkdir, simple_rmdir
+use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline,           only: cmdline
 use simple_test_utils
 implicit none
 private
 public :: run_all_frozen_accum_tests
 
+!> reads the density file RHO_FNAME into an accumulator of box (and smpd), which must stop when they differ
+type, extends(forked_process) :: rho_reader
+    integer :: box  = 16
+    real    :: smpd = 2.0
+contains
+    procedure :: execute => read_rho_into
+end type rho_reader
+
 integer, parameter :: BOX      = 16
+character(len=*), parameter :: RHO_FNAME = 'tmp_frozen_accum_tester_rho.mrc'
 integer, parameter :: NFROZEN  = 14   ! frozen planes (even/odd alternate)
 integer, parameter :: NCOHORT  = 10   ! cohort planes
 integer, parameter :: SEED     = 20260926
@@ -46,6 +57,7 @@ contains
         call test_context_refusals()
         call test_gridding_union_equals_sum()
         call test_carried_chain()
+        call test_rho_header()
     end subroutine run_all_frozen_accum_tests
 
     ! ---- fixtures -------------------------------------------------------------
@@ -168,7 +180,7 @@ contains
         character(len=64)     :: good(10)
         integer :: status
         write(*,'(A)') 'test_context_refusals'
-        good = [character(len=64) :: 'solve3D_addon_frozen_context 3', 'run_id r1', 'backend gridding', &
+        good = [character(len=64) :: 'solve3D_addon_frozen_context 4', 'run_id r1', 'backend gridding', &
             &'nstates 2', 'nrows 30', 'nrows_frozen 25', 'nfrozen 7', 'nfrozen_state 1 3', 'nfrozen_state 2 4', 'end']
         call write_text(CTX_FNAME, good)
         call ctx%read(string(CTX_FNAME), status, msg)
@@ -176,9 +188,9 @@ contains
         call del_file(CTX_FNAME)
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'a missing context is refused')
-        call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_context 2', good(2:)])
+        call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_context 3', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
-        call assert_true(status /= 0, 'an unsupported schema version is refused')
+        call assert_true(status /= 0, 'a context of the version before the density header (3) is refused')
         call write_text(CTX_FNAME, [character(len=64) :: 'solve3D_addon_frozen_set 1', good(2:)])
         call ctx%read(string(CTX_FNAME), status, msg)
         call assert_true(status /= 0, 'another schema is refused')
@@ -595,6 +607,72 @@ contains
         if( allocated(fplane%ctfsq_plane)    ) deallocate(fplane%ctfsq_plane)
         if( allocated(fplane%transfer_plane) ) deallocate(fplane%transfer_plane)
     end subroutine test_carried_chain
+
+    !> a density file carries its box and sampling: a reader of another box, of another sampling or of a
+    !! file without the header stops (the payload alone would be read as a prefix of the receiver's shape)
+    subroutine test_rho_header()
+        type(parameters), target :: params
+        type(sp_project)         :: project
+        type(reconstructor)      :: rec_w, rec_r
+        type(rho_reader)         :: child
+        real, allocatable        :: rho_w(:,:,:), rho_r(:,:,:)
+        write(*,'(A)') 'test_rho_header'
+        call accumulator_params(params, BOX, SMPD)
+        call rec_w%new_accumulator(params, project, expand=.false., wthreads=.false.)
+        call rec_r%new_accumulator(params, project, expand=.false., wthreads=.false.)
+        call rec_w%write_rho(string(RHO_FNAME))
+        call rec_r%read_rho(string(RHO_FNAME))
+        call rec_w%get_rho_copy(rho_w)
+        call rec_r%get_rho_copy(rho_r)
+        call assert_true(all(rho_w == rho_r), 'a density file reads back on its own grid')
+        child%box  = BOX - 2
+        child%smpd = SMPD
+        call child%start(name=string('RHO_SMALLER_BOX'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a density file read into a smaller box stops')
+        call child%destroy
+        child%box  = BOX
+        child%smpd = 1.1 * SMPD
+        call child%start(name=string('RHO_OTHER_SMPD'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a density file read at another sampling stops')
+        call child%destroy
+        call truncate_file(string(RHO_FNAME))
+        child%smpd = SMPD
+        call child%start(name=string('RHO_NO_HEADER'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a density file without the header stops')
+        call child%destroy
+        call del_file(string(RHO_FNAME))
+        call rec_w%kill
+        call rec_r%kill
+    end subroutine test_rho_header
+
+    subroutine accumulator_params( params, box_here, smpd_here )
+        type(parameters), intent(inout) :: params
+        integer,          intent(in)    :: box_here
+        real,             intent(in)    :: smpd_here
+        params%box        = box_here
+        params%box_crop   = box_here
+        params%box_croppd = OSMPL_PAD_FAC * box_here
+        params%smpd_crop  = smpd_here
+        params%nstates    = 1
+        params%numlen     = 1
+        params%oritype    = 'cls3D'
+    end subroutine accumulator_params
+
+    subroutine read_rho_into( self, cline )
+        !$ use omp_lib, only: omp_set_num_threads
+        class(rho_reader), intent(inout) :: self
+        class(cmdline),    intent(inout) :: cline
+        type(parameters), target :: params
+        type(sp_project)         :: project
+        type(reconstructor)      :: rec
+        !$ call omp_set_num_threads(1)
+        call accumulator_params(params, self%box, self%smpd)
+        call rec%new_accumulator(params, project, expand=.false., wthreads=.false.)
+        call rec%read_rho(string(RHO_FNAME))
+    end subroutine read_rho_into
 
     subroutine truncate_file( fname )
         class(string), intent(in) :: fname

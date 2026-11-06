@@ -95,7 +95,7 @@ contains
         enddo
         call stkio_r%close()
         call img_jpeg%write_jpg(string(outfile%to_char() // ".tmp"))
-        call simple_rename(outfile%to_char()// ".tmp", outfile, overwrite=.true.)
+        call simple_rename(outfile%to_char()// ".tmp", outfile)
         if(present(scale))  scale  = real(JPEG_DIM) / ldim_stk(1)
         if(present(ntiles)) ntiles = l_ntiles
         if(present(n_xtiles)) n_xtiles = xtiles

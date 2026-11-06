@@ -22,6 +22,7 @@ public :: ptcl_buffer_budget, fill_pass_buffer, release_pass_buffer, pass_buffer
 public :: open_record_buffer, records_open, record_slot, put_record, seal_record_buffer, take_records
 public :: get_rec_observation, get_records
 public :: BUFFER_FILLED, BUFFER_OFF, BUFFER_OVER_BUDGET, BUFFER_NO_MEMORY, BUFFER_RECORDS
+public :: pass_team
 private
 
 ! outcomes of filling the particle buffer, or of opening it for records
@@ -83,6 +84,12 @@ contains
 end type ptcl_read_session
 
 contains
+
+    !> the team the pass's parallel regions run, by which its per-thread state is sized
+    integer function pass_team()
+        pass_team = nthr_glob
+        !$ pass_team = omp_get_max_threads()
+    end function pass_team
 
     type(ptcl_read_counts) function ptcl_read_counts_now()
         ptcl_read_counts_now = read_totals
@@ -599,7 +606,7 @@ contains
         do i = 1, size(pinds)
             p = pinds(i)
             if( build%spproj_field%get_state(p) /= state_here ) cycle
-            if( build%spproj_field%get_eo(p) /= eo_here ) cycle
+            if( build%spproj_field%get_half(p) /= eo_here ) cycle
             n = n + 1
         enddo
         allocate(selected(n))
@@ -607,7 +614,7 @@ contains
         do i = 1, size(pinds)
             p = pinds(i)
             if( build%spproj_field%get_state(p) /= state_here ) cycle
-            if( build%spproj_field%get_eo(p) /= eo_here ) cycle
+            if( build%spproj_field%get_half(p) /= eo_here ) cycle
             n = n + 1
             selected(n) = p
         enddo

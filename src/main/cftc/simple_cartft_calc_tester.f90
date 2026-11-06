@@ -35,9 +35,16 @@ use simple_matcher_2Dprep,  only: prepimg4align_cart
 use simple_type_defs,       only: ctfparams, ctfvars, CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
 use simple_sigma2_state_tester, only: write_test_sigma2_store
+use simple_forked_process,  only: forked_process, FORK_STATUS_FAILED
 implicit none
 private
 public :: run_all_cartft_calc_tests
+
+!> evaluates a Euclidean slot after new spectra unprepared it, which must stop
+type, extends(forked_process) :: stale_slot_user
+contains
+    procedure :: execute => use_stale_slot
+end type stale_slot_user
 
 integer,  parameter :: TEST_BOX        = 24
 integer,  parameter :: SMALL_BOX       = 16
@@ -96,6 +103,7 @@ contains
         call test_batch_preparation()
         write(*,'(A)') 'test_concurrent_evaluation'
         call test_concurrent_evaluation()
+        call test_sigma2_invalidates_slots()
         write(*,'(A)') 'test_sigma_owner'
         call test_sigma_owner()
         write(*,'(A)') 'test_polar_sigma_agreement'
@@ -1306,7 +1314,7 @@ contains
         call oracle_work%pad(padded, backgr=0.)
         call padded%fft()
         call padded%memoize4polarize_oversamp([PFTSZ, KFROMTO(1), KFROMTO(2)])
-        call padded%polarize_oversamp(pft)
+        call padded%polarize_oversamp([PFTSZ, KFROMTO(1), KFROMTO(2)], pft)
         do k = KFROMTO(1), KFROMTO(2)
             ! angle index 1 samples (0,-k), index PFTSZ/2+1 samples (k,0), both on the native lattice
             call assert_true(abs(pft(1,k) - observed(0,-k)) <= 1.e-3*scale .and. &
@@ -1570,14 +1578,22 @@ contains
         type(cartft_calc), intent(in)  :: calc
         integer,           intent(in)  :: nb
         real(dp),          intent(out) :: values(6,nb)
-        real(dp) :: gradient(5)
         integer  :: i
         do i = 1, nb
-            call calc%objective_gradient(1, .true., i, real(euler2m([20., 36.2, 28.7]), dp), [0.1_dp, -0.2_dp], &
-                &values(1,i), gradient)
-            values(2:6,i) = gradient
+            call slot_signature(calc, i, values(:,i))
         end do
     end subroutine slot_signatures
+
+    !> slot i's objective and gradient at a fixed pose
+    subroutine slot_signature( calc, i, values )
+        type(cartft_calc), intent(in)  :: calc
+        integer,           intent(in)  :: i
+        real(dp),          intent(out) :: values(6)
+        real(dp) :: gradient(5)
+        call calc%objective_gradient(1, .true., i, real(euler2m([20., 36.2, 28.7]), dp), [0.1_dp, -0.2_dp], &
+            &values(1), gradient)
+        values(2:6) = gradient
+    end subroutine slot_signature
 
     ! N11 and N12: the batch preparation of production (prep_cart_batch) fills slot i exactly as
     ! the single-particle path called in the test (prepimg4align_cart on a copy, then set_ptcl),
@@ -1644,7 +1660,9 @@ contains
                     call refill_calc%set_ptcl(i, observed, ctf_out, KFROMTO)
                 else
                     call single_calc%set_ptcl(i, observed, ctf_out, halves(i), KFROMTO)
+                    ! new spectra unprepare the earlier Euclidean slots: the signature is taken at once
                     call set_euclid_slot(copy_calc, i, observed, ctf_out, sigma2(:,halves(i)), KFROMTO)
+                    call slot_signature(copy_calc, i, copy_values(:,i))
                     call refill_calc%set_ptcl(i, observed, ctf_out, [1, KFROMTO(2)])
                     call refill_calc%set_ptcl(i, observed, ctf_out, halves(i), KFROMTO)
                 endif
@@ -1657,7 +1675,6 @@ contains
             call assert_true(all(refill_values == single_values), &
                 &'a refilled slot differs from a slot filled once')
             if( iobj == 2 )then
-                call slot_signatures(copy_calc, NB, copy_values)
                 call assert_true(all(copy_values == single_values), &
                     &'slots by half differ from slots holding their own copy of the spectrum')
             endif
@@ -1693,6 +1710,59 @@ contains
     ! N26: objective, gradient, residual, both normal-term blocks and the pose transaction of NP
     ! particles, concurrently on different particles at every processor, 20 times, equal the results
     ! at one thread bit for bit (the calculator is intent(in) in every evaluation)
+    !> new spectra unprepare a Euclidean slot (whitened by the old ones), whose use then stops; a cc slot does
+    !! not depend on them
+    subroutine test_sigma2_invalidates_slots()
+        type(stale_slot_user) :: child
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: no_ctf
+        real, allocatable :: volume(:,:,:)
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real    :: sigma2(0:TEST_BOX/2)
+        write(*,'(A)') 'test_sigma2_invalidates_slots'
+        call build_test_volume(volume)
+        call calc%new(1, TEST_BOX, 2)
+        call calc%set_ref(1, .true., volume)
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2 = 1.
+        call calc%predict(1, .true., real(euler2m([19., 37., 28.]), dp), [0._dp, 0._dp], observed)
+        call calc%set_sigma2(0, spread(sigma2, 2, 2))
+        call calc%set_ptcl(1, observed, no_ctf, 1, [2, TEST_BOX/2 - 1])
+        call calc%set_ptcl(2, observed, no_ctf, [2, TEST_BOX/2 - 1])
+        call calc%set_sigma2(0, spread(2.*sigma2, 2, 2))
+        call assert_int(0, calc%get_ptcl_objfun(1), 'an unprepared slot has no objective')
+        call assert_true(calc%ptcl_is_valid(2), 'a cc slot does not depend on the spectra')
+        call calc%kill
+        call child%start(name=string('CARTFT_STALE_SLOT'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a slot unprepared by new spectra stops when used')
+        call assert_int(1, child%get_exit_code(), 'it stops by its check, not a crash')
+        call child%destroy
+    end subroutine test_sigma2_invalidates_slots
+
+    subroutine use_stale_slot( self, cline )
+        class(stale_slot_user), intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: no_ctf
+        real, allocatable :: volume(:,:,:)
+        complex  :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real     :: sigma2(0:TEST_BOX/2)
+        logical  :: l_valid
+        !$ call omp_set_num_threads(1)
+        call build_test_volume(volume)
+        call calc%new(1, TEST_BOX, 2)
+        call calc%set_ref(1, .true., volume)
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2 = 1.
+        call calc%predict(1, .true., real(euler2m([19., 37., 28.]), dp), [0._dp, 0._dp], observed)
+        call calc%set_sigma2(0, spread(sigma2, 2, 2))
+        call calc%set_ptcl(1, observed, no_ctf, 1, [2, TEST_BOX/2 - 1])
+        call calc%set_sigma2(0, spread(2.*sigma2, 2, 2))
+        ! the validity query every consumer asks first (pose transaction, sigma contribution): it stops
+        l_valid = calc%ptcl_is_valid(1)
+    end subroutine use_stale_slot
+
     subroutine test_concurrent_evaluation()
         integer, parameter :: NP = 24, NREPS = 20, NRES = 57, KFROMTO(2) = [2, TEST_BOX/2 - 1]
         type(cartft_calc)     :: calc
@@ -1708,12 +1778,14 @@ contains
         call calc%set_ref(1, .true., volume)
         no_ctf%ctfflag = CTFFLAG_NO
         sigma2 = [(1. + 0.1*real(shell), shell = 0, TEST_BOX/2)]
+        ! the spectra once: new spectra would unprepare the earlier Euclidean slots
+        call calc%set_sigma2(0, spread(sigma2, 2, 2))
         do i = 1, NP
             call calc%predict(1, .true., real(euler2m([10.*real(i), 30., 5.*real(i)]), dp), [0.2_dp, -0.1_dp], observed)
             if( mod(i,2) == 0 )then
                 call calc%set_ptcl(i, observed, no_ctf, KFROMTO)
             else
-                call set_euclid_slot(calc, i, observed, no_ctf, sigma2, KFROMTO)
+                call calc%set_ptcl(i, observed, no_ctf, 1, KFROMTO)
             endif
             call opts(i)%new(TEST_BOX, TEST_BOX, 5., 15.)
         end do

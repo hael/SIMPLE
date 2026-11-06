@@ -969,7 +969,7 @@ contains
         ! the halves: the project's eo of the members (the particles' gold-standard halves), else members alternately
         allocate(even(nptcls))
         do j = 1, nptcls
-            even(j) = nint(spproj%os_ptcl2D%get(pinds(j), 'eo')) == 0
+            even(j) = spproj%os_ptcl2D%get_half(pinds(j)) == 0
         end do
         if( all(even) .or. .not. any(even) )then
             even = [(mod(j,2) == 0, j=1,nptcls)]

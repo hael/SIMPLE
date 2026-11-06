@@ -852,6 +852,8 @@ contains
     integer                         :: i, j, imic, chunk_nptcls, chunk_id
 
     t0 = timer_start()
+    ! the chunks slice from the first record not included: an included record after it would be chunked again
+    call check_included_prefix(project_list)
 
     ! Pre-chunked mode: import existing per-chunk project files from
     ! project_list instead of creating new coarse chunks from particle slices.
@@ -1873,6 +1875,9 @@ contains
       if( fname == string(FINAL_INGESTION_MARKER) ) cycle
       if( fname == string(FRCS_FILE) ) cycle
       if( fname == string(SIGMA2_STATE_FNAME) ) cycle
+      ! what the chunk took: a restart rebuilds chunked_mics.txt from it (policy section 4)
+      if( fname == string(CHUNK_MICS)      ) cycle
+      if( fname == string(CONSUMED_COARSE) ) cycle
       if( fname_keep_last_iter_jpeg%strlen() > 0 .and. fname == fname_keep_last_iter_jpeg ) cycle
       if( fname_keep_last_iter_stk%strlen()  > 0 .and. fname == fname_keep_last_iter_stk  ) cycle
       if( fname_keep_last_iter_even_stk%strlen() > 0 .and. fname == fname_keep_last_iter_even_stk ) cycle
@@ -2647,6 +2652,7 @@ contains
     type(rec_iterator) :: it
     type(project_rec)  :: prec
     integer :: funit, ios
+    call check_included_prefix(project_list)
     open(newunit=funit, file=CHUNKED_MICS//'.tmp', status='replace', action='write', iostat=ios)
     if( ios /= 0 )then
       THROW_WARN('cannot write '//CHUNKED_MICS//'.tmp')
@@ -2661,6 +2667,20 @@ contains
     close(funit)
     call simple_rename(CHUNKED_MICS//'.tmp', CHUNKED_MICS)
   end subroutine write_chunked_mics
+
+  !> stops unless the records marked included are a prefix of @p project_list (the rule of policy section 6.1)
+  subroutine check_included_prefix( project_list )
+    type(rec_list), intent(in) :: project_list
+    logical, allocatable :: included(:)
+    type(string) :: msg
+    integer :: n_inc
+    included = project_list%get_included_flags()
+    n_inc    = count(included)
+    if( all(included(:n_inc)) ) return
+    msg = 'the records put in a chunk are not a prefix of the record list (record '//&
+      &int2str(findloc(included, .false., dim=1))//' is not, '//int2str(n_inc)//' are); check '//CHUNKED_MICS
+    THROW_HARD(msg%to_char())
+  end subroutine check_included_prefix
 
   ! The micrographs a previous run put in a chunk, from @p fname (a CHUNKED_MICS): their project
   ! files and micrograph indices, in the order they were chunked. Unallocated when the file is

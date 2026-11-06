@@ -146,7 +146,7 @@ contains
         call simple_touch(src)
         call assert_true(file_exists(src), 'rename: src exists')
         call assert_true(.not. file_exists(dst), 'rename: dst does not exist initially')
-        call simple_rename(src, dst, overwrite=.true.)
+        call simple_rename(src, dst)
         call assert_true(.not. file_exists(src), 'rename: src gone after rename')
         call assert_true(file_exists(dst), 'rename: dst exists after rename')
         call del_file(dst)

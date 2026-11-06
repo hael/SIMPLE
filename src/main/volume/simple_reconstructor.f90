@@ -8,8 +8,14 @@ use simple_gridding,   only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 implicit none
 
 public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi, wiener_ridge
+public :: RHO_HDR_BYTES, read_rho_header
 private
 #include "simple_local_flags.inc"
+
+! A density file (rho_*) starts with a header (magic, box, density shape, sampling) padded to RHO_HDR_BYTES;
+! the payload follows it
+integer(kind=8),  parameter :: RHO_HDR_BYTES = 64_8
+character(len=8), parameter :: RHO_MAGIC     = 'SMPLRHO1'
 
 !> Dense outputs produced while restoring one gridding half: base is the
 !! undeapodized map; final is its deapodized copy, on which FSC and cFAR are
@@ -83,7 +89,7 @@ type, extends(image) :: reconstructor
     ! I/O
     procedure          :: write_raw_accum
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
-    procedure          :: read_rho, read_raw_rho
+    procedure          :: read_rho, read_raw_rho, check_rho_header
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane_oversamp
     procedure          :: sampl_dens_correct
@@ -284,37 +290,78 @@ contains
         class(reconstructor), intent(in) :: self   !< this instance
         class(string),        intent(in) :: kernam !< kernel name
         integer :: filnum, ierr
+        character(len=24) :: pad
         call del_file(kernam)
         call fopen(filnum, kernam, status='NEW', action='WRITE', access='STREAM', iostat=ierr)
         call fileiochk( 'simple_reconstructor ; write rho '//kernam%to_char(), ierr)
-        write(filnum, pos=1, iostat=ierr) self%rho
+        pad = repeat(achar(0), 24)
+        write(filnum, pos=1, iostat=ierr) RHO_MAGIC, self%get_ldim(), self%rho_shape, real(self%get_smpd(),dp), pad
         if( ierr .ne. 0 ) &
-            call fileiochk('read_rho; simple_reconstructor writing '//kernam%to_char(), ierr)
+            call fileiochk('write_rho; simple_reconstructor writing the header of '//kernam%to_char(), ierr)
+        write(filnum, pos=RHO_HDR_BYTES+1, iostat=ierr) self%rho
+        if( ierr .ne. 0 ) &
+            call fileiochk('write_rho; simple_reconstructor writing '//kernam%to_char(), ierr)
         call fclose(filnum)
     end subroutine write_rho
 
-    !> Read sampling density matrix
+    !> Read sampling density matrix, after its header is checked against this accumulator
     subroutine read_rho( self, kernam )
         class(reconstructor), intent(inout) :: self !< this instance
         class(string),        intent(in)    :: kernam !< kernel name
         integer :: filnum, ierr
         call fopen(filnum, file=kernam, status='OLD', action='READ', access='STREAM', iostat=ierr)
         call fileiochk('read_rho; simple_reconstructor opening '//kernam%to_char(), ierr)
-        read(filnum, pos=1, iostat=ierr) self%rho
-        if( ierr .ne. 0 ) &
-            call fileiochk('simple_reconstructor::read_rho; simple_reconstructor reading '//kernam%to_char(), ierr)
+        call self%check_rho_header(filnum, kernam)
+        call self%read_raw_rho(filnum)
         call fclose(filnum)
     end subroutine read_rho
 
-    !> Serial read of sampling density matrix given an open pipe
+    !> Read the payload of a density file given an open unit; the caller checks its header first
+    !! (check_rho_header), serially
     subroutine read_raw_rho( self, fhandle )
         class(reconstructor), intent(inout) :: self
         integer,              intent(in)    :: fhandle
         integer :: ierr
-        read(fhandle, pos=1, iostat=ierr) self%rho
+        read(fhandle, pos=RHO_HDR_BYTES+1, iostat=ierr) self%rho
         if( ierr .ne. 0 ) &
             call fileiochk('simple_reconstructor::raw read_rho; simple_reconstructor reading from pipe', ierr)
     end subroutine read_raw_rho
+
+    !> The box (ldim), density shape and sampling recorded in a density file's header; stops on a file
+    !! without the header
+    subroutine read_rho_header( fhandle, fname, ldim, rho_shape, smpd )
+        integer,       intent(in)  :: fhandle
+        class(string), intent(in)  :: fname
+        integer,       intent(out) :: ldim(3), rho_shape(3)
+        real(dp),      intent(out) :: smpd
+        character(len=8)              :: magic
+        character(len=:), allocatable :: errmsg
+        integer :: ierr
+        read(fhandle, pos=1, iostat=ierr) magic, ldim, rho_shape, smpd
+        if( ierr /= 0 .or. magic /= RHO_MAGIC )then
+            errmsg = 'not a gridding density file with a header: '//fname%to_char()
+            THROW_HARD(errmsg)
+        endif
+    end subroutine read_rho_header
+
+    !> Stops unless the density file open on fhandle holds this accumulator's box and sampling
+    subroutine check_rho_header( self, fhandle, fname )
+        class(reconstructor), intent(in) :: self
+        integer,              intent(in) :: fhandle
+        class(string),        intent(in) :: fname
+        character(len=:), allocatable :: errmsg
+        character(len=160) :: line
+        integer  :: ldim(3), rho_shape(3)
+        real(dp) :: smpd
+        call read_rho_header(fhandle, fname, ldim, rho_shape, smpd)
+        if( any(ldim /= self%get_ldim()) .or. any(rho_shape /= self%rho_shape) .or. &
+            &abs(smpd - real(self%get_smpd(),dp)) > 1.d-4 * real(self%get_smpd(),dp) )then
+            write(line,'(A,3I6,A,F10.5,A,3I6,A,F10.5)') ' holds box', ldim, ' at smpd', smpd, &
+                &'; the reader is', self%get_ldim(), ' at smpd', self%get_smpd()
+            errmsg = 'gridding density file '//fname%to_char()//trim(line)
+            THROW_HARD(errmsg)
+        endif
+    end subroutine check_rho_header
 
     ! CONVOLUTION INTERPOLATION
 

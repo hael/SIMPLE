@@ -296,8 +296,11 @@ contains
         call json%destroy(all_programs)
     end subroutine write_ui_json
 
+    !> the stream launcher's screens and processes (prg=print_ui_stream), written by hand: every build checks it
+    !! against the program registry, and validate_stream_ui_contract against its reviewed reference
+    !! (production/validate_complete_ui_json.py, stream_launcher_contract.json); its keys are accepted keys
+    !! (scripts/check_cli_chain.py)
     subroutine print_stream_ui_json
-        ! this is ugly at the moment but paves the way ....
         use json_module
         type(json_core)           :: json
         type(json_value), pointer :: input, user_inputs, ui
@@ -419,7 +422,6 @@ contains
         call json%add(process_inputs, '', 'fraca')
         call json%add(process_inputs, '', 'kv')
         call json%add(process_inputs, '', 'smpd')
-        call json%add(process_inputs, '', 'scale')
         call json%add(process_inputs, '', 'total_dose')
         call json%add(process_inputs, '', 'smpd_downscale')
         call json%create_array(process_inputs, 'static_inputs')

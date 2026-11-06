@@ -98,11 +98,8 @@ contains
                 self%shconst(i) = 0.
                 cycle
             endif
-            if( is_even(self%ldim(i)) )then
-                self%shconst(i) = PI/real(self%ldim(i)/2.)
-            else
-                self%shconst(i) = PI/real((self%ldim(i)-1)/2.)
-            endif
+            ! 2 pi/n, an odd box included (the same bits as pi/(n/2) for an even one)
+            self%shconst(i) = PI/(real(self%ldim(i))/2.)
         end do
         self%existence = .true.
     end subroutine new
@@ -180,7 +177,7 @@ contains
     ! Shape / generator helpers
     !========================================
 
-    module subroutine disc_1( self, ldim, smpd, radius, npix )
+    module subroutine disc_img( self, ldim, smpd, radius, npix )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd, radius
@@ -195,9 +192,9 @@ contains
             self%rmat(:ldim(1),:ldim(2),:ldim(3)) = 0.
         end where
         if( present(npix) ) npix = count(self%rmat(:ldim(1),:ldim(2),:ldim(3)) > 0.5)
-    end subroutine disc_1
+    end subroutine disc_img
 
-    module subroutine disc_2( self, ldim, smpd, radius, lmsk, npix )
+    module subroutine disc_lmsk( self, ldim, smpd, radius, lmsk, npix )
         class(image),         intent(inout) :: self
         integer,              intent(in)    :: ldim(3)
         real,                 intent(in)    :: smpd, radius
@@ -215,7 +212,7 @@ contains
             lmsk = .false.
         end where
         if( present(npix) ) npix = count(lmsk)
-    end subroutine disc_2
+    end subroutine disc_lmsk
 
     module subroutine ring( self, ldim, smpd, outer_radius, inner_radius, npix )
         class(image),      intent(inout) :: self

@@ -1,6 +1,6 @@
 ---
 name: simple-solve3d-importance-sampling
-description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, greedy/stochastic, frac_best, fillin), prob_align/prob_tab sampling reuse and the distributed master's sample draw, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
+description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, greedy/stochastic, frac_best, fillin), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
 ---
 
 # SIMPLE Solve3D Importance Sampling
@@ -15,9 +15,10 @@ and per-iteration particle sampling. Treat the implementation as a pipeline:
    full sampling), writes the sampling units, and the stage controller emits
    the per-stage sampling controls.
 2. `simple_oris` stores the chosen subset through `sampled` and `updatecnt`.
-3. `prob_align_exec` (probabilistic passes) or the distributed master
-   (non-probabilistic fractional passes) draws once; table workers and
-   `refine3D_exec` reproduce that exact subset instead of resampling.
+3. The project owner draws once per iteration (the distributed master:
+   `sample_ptcls4prob3D` under `refine=prob*`, else `sample_ptcls4iter3D` when
+   `master_draws_sample3D` holds; in shared memory `refine3D_exec`); distributed parts and the
+   `pose_cont` polish reproduce that exact subset with `sample4update_reprod`.
 4. `simple_eul_prob_tab*` performs importance-style reference and in-plane selection only inside the sampled subset.
 5. Volume assembly does not resample particles, but it consumes the realized per-state update fraction to blend the trailing chain.
 
@@ -43,9 +44,10 @@ Then answer the user request in this order:
 - Do not describe volume assembly as the module that decides which particles
   get updated. It only consumes the result later for trailing reconstruction
   weighting.
-- Do not describe `prob_align` as introducing a second independent sampling
-  policy. It samples once, writes the subset to `ptcl3D`, and downstream
-  `prob_tab` plus `refine3D_exec` reproduce that subset.
+- The probabilistic routes add no second sampling policy: the owner draws
+  once (`sample_ptcls4prob3D`, keyed on the run's seed, the pass and the
+  iteration), the distributed master writes it to `ptcl3D`, and the parts'
+  `refine3D_exec` reproduce it.
 - Do not conflate probabilistic candidate selection with the outer
   fractional-update schedule. The outer schedule decides which particles
   participate; `simple_eul_prob_tab` decides which references and in-plane
@@ -101,16 +103,14 @@ units (`balance=none|class|cavg`) are produced by
 
 Inspect:
 
-- `src/main/strategies/parallelization/simple_prob_align_strategy.f90`
-- `src/main/commanders/simple/simple_commanders_prob.f90` (table workers)
+- `src/main/strategies/parallelization/simple_refine3D_strategy.f90` (the master's draw)
 - `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`
 - `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90`
 - `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`
 - `src/main/strategies/search/simple_strategy3D_matcher.f90`
 
-Preserve the sample-once-and-reproduce contract between `prob_align`,
-`prob_tab`, and `refine3D_exec`, and between the distributed master's draw
-(`master_draws_sample3D`) and its workers.
+Preserve the sample-once-and-reproduce contract between the owner's draw
+(`sample_ptcls4prob3D`, `master_draws_sample3D`) and the parts' `refine3D_exec`.
 
 ### Trailing reconstruction
 

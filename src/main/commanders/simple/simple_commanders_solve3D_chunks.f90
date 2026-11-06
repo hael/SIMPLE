@@ -272,7 +272,7 @@ contains
         call proj%projinfo%set(1, 'projname', pname%to_char())
         tmpname = stemname(dst)//'/solve3D_chunks_publish_'//basename(dst)
         call proj%write(tmpname)
-        call simple_rename(tmpname, dst, overwrite=.true.)
+        call simple_rename(tmpname, dst)
         call man%kill
         call proj%kill
     end subroutine publish_solve3D_result

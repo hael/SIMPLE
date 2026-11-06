@@ -16,8 +16,8 @@ type kmedoids
     integer, allocatable :: i_medoids(:), cls_labels(:), cls_pops(:)
     logical              :: exists = .false.
   contains
-    procedure, private   :: new_1, new_2
-    generic              :: new => new_1, new_2
+    procedure, private   :: new_by_ncls, new_from_labels
+    generic              :: new => new_by_ncls, new_from_labels
     procedure            :: get_labels
     procedure            :: get_medoids
     procedure            :: init
@@ -32,7 +32,7 @@ end type kmedoids
 
 contains
 
-    subroutine new_1( self, n, dmat, ncls )
+    subroutine new_by_ncls( self, n, dmat, ncls )
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: n, ncls
         real, target,    intent(in)    :: dmat(n,n)
@@ -43,16 +43,16 @@ contains
         allocate(self%i_medoids(self%ncls), self%cls_labels(self%n), self%cls_pops(self%ncls), source=0)
         allocate(self%dists2meds(self%n,self%ncls), source=0.)
         self%exists   = .true.
-    end subroutine new_1
+    end subroutine new_by_ncls
 
-    subroutine new_2( self, cls_labels, dmat )
+    subroutine new_from_labels( self, cls_labels, dmat )
         class(kmedoids), intent(inout) :: self
         integer,         intent(in)    :: cls_labels(:)
         real, target,    intent(in)    :: dmat(size(cls_labels),size(cls_labels))
-        call self%new_1(size(cls_labels), dmat, maxval(cls_labels))
+        call self%new_by_ncls(size(cls_labels), dmat, maxval(cls_labels))
         self%cls_labels = cls_labels
         call self%find_medoids
-    end subroutine new_2
+    end subroutine new_from_labels
 
     subroutine get_labels( self, cls_labels )
         class(kmedoids), intent(inout) :: self

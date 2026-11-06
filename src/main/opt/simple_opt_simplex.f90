@@ -46,21 +46,14 @@ contains
         real, allocatable :: lims_dyn(:,:)
         integer           :: i, avgniter
         integer           :: niters(spec%nrestarts)
-        logical           :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
            THROW_HARD('cost function not associated in opt_spec; simplex_minimize')
         end if
         ! initialise nevals counter
         spec%nevals = 0
-        ! test if best point in spec is set
-        arezero = .false.
-        do i=1,spec%ndim
-            if( is_zero(spec%x(i)) ) arezero(i) = .true.
-        end do
-        ! generate initial vector
-        if( all(arezero) )then
+        ! no start: a random point within the limits (an all-zero x is a start, the origin)
+        if( spec%nostart )then
             do i=1,spec%ndim
-                ! initialize each variable by randomized bounds
                 spec%x(i) = spec%limits(i,1)+ran3()*(spec%limits(i,2)-spec%limits(i,1))
             end do
         endif

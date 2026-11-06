@@ -139,12 +139,12 @@ end interface
 #endif
 
 interface set_offload_device
-    module procedure set_offload_device_1, set_offload_device_2
+    module procedure set_offload_device_cline, set_offload_device_id
 end interface
 
 contains
 
-    subroutine set_offload_device_1( cline, id )
+    subroutine set_offload_device_cline( cline, id )
         use simple_cmdline, only: cmdline
         class(cmdline), intent(in)  :: cline
         integer,        intent(out) :: id
@@ -155,7 +155,7 @@ contains
         if( cline%defined('device') )then
             ! device id provided
             id = cline%get_iarg('device')
-            call set_offload_device_2( id )
+            call set_offload_device_id( id )
         else
             ! use default device
             ndevices = omp_get_num_devices()
@@ -164,7 +164,7 @@ contains
                 return
             endif
             id = omp_get_default_device()
-            call set_offload_device_2( id )
+            call set_offload_device_id( id )
         endif
         if( id < 0 ) then
             THROW_HARD('A device could not be set')
@@ -176,9 +176,9 @@ contains
             THROW_WARN('Ignoring DEVICE input. Build with USE_OPENMP_OFFLOAD=ON for device offloading')
         endif
 #endif
-    end subroutine set_offload_device_1
+    end subroutine set_offload_device_cline
 
-    subroutine set_offload_device_2( id )
+    subroutine set_offload_device_id( id )
         integer, intent(in) :: id
 #ifdef USE_OPENMP_OFFLOAD
         integer :: ndevices, host_device
@@ -204,7 +204,7 @@ contains
         endif
         write(logfhandle, '(A,I0)') '>>> OpenMP offload device ID: ', id
 #endif
-    end subroutine set_offload_device_2
+    end subroutine set_offload_device_id
 
     subroutine print_gpu_specs( id )
         integer, intent(in) :: id

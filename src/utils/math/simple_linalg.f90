@@ -24,11 +24,11 @@ interface eigh
 end interface eigh
 
 interface euclid
-    module procedure euclid_sp_1, euclid_sp_2, euclid_dp
+    module procedure euclid_sp_1d, euclid_sp_2d, euclid_dp
 end interface euclid
 
 interface hyp
-    module procedure hyp_1, hyp_2, hyp_3, hyp_4
+    module procedure hyp_real_xy, hyp_real_xyz, hyp_int_xy, hyp_int_xyz
 end interface hyp
 
 interface jacobi
@@ -52,7 +52,7 @@ interface pythag
 end interface pythag
 
 interface rad2deg
-    module procedure rad2deg_1, rad2deg_2
+    module procedure rad2deg_sp, rad2deg_dp
 end interface rad2deg
 
 interface deg2rad
@@ -703,17 +703,17 @@ elemental function deg2rad_dp(deg) result(rad)
     rad = (deg / 180.0_dp) * DPI
 end function deg2rad_dp
 
-elemental function rad2deg_1(rad) result(deg)
+elemental function rad2deg_sp(rad) result(deg)
     real(kind=4), intent(in) :: rad
     real(kind=4) :: deg
     deg = (rad / PI) * 180.0_sp
-end function rad2deg_1
+end function rad2deg_sp
 
-elemental function rad2deg_2(rad) result(deg)
+elemental function rad2deg_dp(rad) result(deg)
     real(kind=8), intent(in) :: rad
     real(kind=8) :: deg
     deg = (rad / DPI) * 180.0_dp
-end function rad2deg_2
+end function rad2deg_dp
 
 elemental function ang2vox(ang, smpd) result(vox)
     real(kind=4), intent(in) :: ang, smpd
@@ -728,37 +728,37 @@ elemental function vox2ang(vox, smpd) result(ang)
     ang = (vox - 1.0_sp) * smpd
 end function vox2ang
 
-real(kind=4) pure function hyp_1(x1, x2)
+real(kind=4) pure function hyp_real_xy(x1, x2)
     real(kind=4), intent(in) :: x1, x2
-    hyp_1 = sqrt(x1*x1 + x2*x2)
-end function hyp_1
+    hyp_real_xy = sqrt(x1*x1 + x2*x2)
+end function hyp_real_xy
 
-real(kind=4) pure function hyp_2(x1, x2, x3)
+real(kind=4) pure function hyp_real_xyz(x1, x2, x3)
     real(kind=4), intent(in) :: x1, x2, x3
-    hyp_2 = sqrt(x1*x1 + x2*x2 + x3*x3)
-end function hyp_2
+    hyp_real_xyz = sqrt(x1*x1 + x2*x2 + x3*x3)
+end function hyp_real_xyz
 
-real(kind=4) pure function hyp_3(x1, x2)
+real(kind=4) pure function hyp_int_xy(x1, x2)
     integer, intent(in) :: x1, x2
-    hyp_3 = sqrt(real(x1*x1 + x2*x2, sp))
-end function hyp_3
+    hyp_int_xy = sqrt(real(x1*x1 + x2*x2, sp))
+end function hyp_int_xy
 
-real(kind=4) pure function hyp_4(x1, x2, x3)
+real(kind=4) pure function hyp_int_xyz(x1, x2, x3)
     integer, intent(in) :: x1, x2, x3
-    hyp_4 = sqrt(real(x1*x1 + x2*x2 + x3*x3, sp))
-end function hyp_4
+    hyp_int_xyz = sqrt(real(x1*x1 + x2*x2 + x3*x3, sp))
+end function hyp_int_xyz
 
-pure function euclid_sp_1(vec1, vec2) result(dist)
+pure function euclid_sp_1d(vec1, vec2) result(dist)
     real(kind=4), intent(in) :: vec1(:), vec2(:)
     real(kind=4) :: dist
     dist = sqrt(sum((vec1 - vec2)**2))
-end function euclid_sp_1
+end function euclid_sp_1d
 
-pure function euclid_sp_2(vec1, vec2) result(dist)
+pure function euclid_sp_2d(vec1, vec2) result(dist)
     real(kind=4), intent(in) :: vec1(:,:), vec2(:,:)
     real(kind=4) :: dist
     dist = sqrt(sum((vec1 - vec2)**2))
-end function euclid_sp_2
+end function euclid_sp_2d
 
 pure function euclid_dp(vec1, vec2) result(dist)
     real(kind=8), intent(in) :: vec1(:), vec2(:)

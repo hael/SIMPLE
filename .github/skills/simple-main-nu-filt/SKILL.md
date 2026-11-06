@@ -24,8 +24,8 @@ Silent ones first: nothing reports these.
   -> `build_nu_evidence_state` -> `nu_filter_vols` -> outputs -> `cleanup_nu_filter`. A clamp set
   after `optimize_nu_cutoff_finds` leaves the labels unclamped, a null shell set after the envelope
   leaves it on the mixture null; other steps out of order stop (`THROW_HARD`).
-- `cleanup_nu_filter` after every sequence, on every path: setup does not clear the clamp or the null
-  shell, so the next pair (another state, same box) runs with the previous pair's background clamp.
+- `cleanup_nu_filter` after every sequence, on every path: `setup_nu_dmats` stops when the previous
+  pair's clamp or null shell is still set (it does not clear them).
 - The source pair of `nu_filter_vols` stays alive and unchanged from setup to composition: it is
   filtered again per label, and the composed voxels must be the candidates scored. Keep
   `prepare_nu_candidate_fts`/`filter_nu_candidate` and `compose_nu_labels_from_volume` on one taper,

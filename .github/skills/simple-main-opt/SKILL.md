@@ -25,12 +25,13 @@ Silent ones first: nothing reports these.
 - `ftol`/`gtol` differ by optimiser. Simplex and DE stop when the fractional cost range is below
   `ftol`. In `lbfgsb` they are the line search's sufficient-decrease and curvature constants; it stops on
   `factr` (relative decrease in machine epsilons) and `pgtol` (projected gradient), and `maxits` counts
-  cost-and-gradient evaluations, not iterations. Clients that pass their convergence tolerance as
-  `ftol`/`gtol` set the line search: ruled for fixing (clients set `factr`/`pgtol`; measure the
-  shift-search and CTF-fit results before and after).
-- Simplex and DE read an all-zero `x` as no start: simplex draws a random start within the limits, DE
-  keeps its random population, so a real start at the origin (zero shift) is lost (ruled for fixing:
-  an explicit no-start flag makes the origin a valid start). `lbfgsb` starts at
+  cost-and-gradient evaluations, not iterations. A client states its convergence through `factr`/`pgtol`
+  and leaves the line search at its standard constants (`ftol=1e-3`, `gtol=0.9`, as the CTF fit does),
+  unless a measurement says otherwise: the polar shift search keeps a strict line search (`ftol=gtol=1e-5`,
+  stated at its `specify`), since the standard one fails there (more evaluations, line-search failures,
+  larger shift errors; plan agent_friendly, phase 4). `opt_spec`'s defaults are `ftol=gtol=1e-5`.
+- `x` is the start, the origin included; `ospec%nostart = .true.` (reset by `specify`) says there is
+  none: simplex then draws a random start within the limits, DE keeps its random population. `lbfgsb` starts at
   `ospec%x` (copied into `x_8`; setting only `x_8` has no effect).
 - Bounds: `lbfgsb` needs `limits` (`THROW_HARD`) and keeps both; DE clamps trials to them; simplex uses
   `limits` (or `limits_init`) only to place its vertices, the amoeba step is unbounded and the result
@@ -39,8 +40,9 @@ Silent ones first: nothing reports these.
   the single pair on `x` rounded to real. Give cost and gradient in one precision: a mixed pair passes
   the `lbfgsb` check, then every evaluation returns f = 0, g = 0 with a printed error only. Simplex and
   DE take only the single-precision `costfun`.
-- DE takes population size, F and CR from `str_mode` (`specify('de')` sets `multimodal`); `de_minimize`
-  reads neither the `npop` given to `specify` nor `set_inipop` (ruled for fixing: use both).
+- DE takes F and CR from `str_mode` (`specify('de')` sets `multimodal`) and the population size from
+  `specify(npop=)`, else from the mode; the start, then the members given by `set_inipop`, replace its
+  first random members (all members are drawn first, so the random stream does not depend on them).
 - `fun_self` is the client's object (`class(*)`), resolved in the cost by `select type` with a
   `class default` `THROW_HARD`. `opt_callback` runs at each accepted `lbfgsb` iterate, `x` updated, and
   may change the objective (the discrete in-plane angle of `pftc_shsrch_grad`).
@@ -48,8 +50,8 @@ Silent ones first: nothing reports these.
   one pair per thread, never shared (`minimize` writes `x`, counters and workspace). Simplex and DE draw
   random numbers: results depend on the seed and the thread.
 - `opt_factory%new` allocates a new optimiser per call; the caller owns the pointer: `kill`,
-  `deallocate`, `nullify` (as `image/simple_ftexp_shsrch` does). `pftc_shsrch_grad` and
-  `ctf_estimate_cost` skip `deallocate`: known leaks, ruled for fixing.
+  `deallocate` (as `image/simple_ftexp_shsrch`, `pftc_shsrch_grad`, `ctf_estimate_cost4Dcont` and
+  `volpft_symsrch` do in their `kill`); a `kill` that only nullifies leaks the optimiser, and nothing reports it.
 - `pcg_solve` needs `apply` and `precond` symmetric positive definite. Non-positive curvature returns
   `stop_reason='indefinite'`, `converged=.false.`, no error (one cold retry if `cold_restart` and the
   start was warm): the caller checks. `rtol <= 0` runs `maxits`. Contract:

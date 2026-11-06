@@ -51,7 +51,23 @@ type :: rec3D_request
     type(string)         :: prefix                           !< blank: the canonical recvol_stateNN names
     logical              :: register = .false.               !< state maps and FSCs into the project out segment
     integer              :: dispatch = REC3D_DISPATCH_INPROC
+    ! settings the reconstruction takes instead of the caller's parameters, which execute restores after
+    integer              :: nstates       = 0                !< states (weight columns); 0: params%nstates
+    logical              :: one_part      = .false.          !< a single part (nparts, part, numlen 1)
+    logical              :: no_nonuniform = .false.          !< no nonuniform filter
+    logical              :: no_trail_rec  = .false.          !< no trailing reconstruction
+    logical              :: all_states    = .false.          !< every state, whatever state= says
+    logical              :: no_automsk    = .false.          !< no automask (automsk=no)
 end type rec3D_request
+
+!> The caller's values of the parameters a request overrides
+type :: rec3D_saved_params
+    type(string), allocatable :: vols(:)
+    character(len=STDLEN)     :: automsk = ''
+    integer :: nstates = 0, nparts = 0, part = 0, numlen = 0
+    logical :: l_nonuniform = .false., l_trail_rec = .false., l_state_defined = .false.
+    logical :: active = .false.
+end type rec3D_saved_params
 
 !> The service; the queue environment lives here when the dispatch is the queue
 type :: rec3D_service
@@ -116,7 +132,9 @@ contains
         type(builder),        intent(inout) :: build
         class(cmdline),       intent(inout) :: cline
         type(rec3D_request),  intent(in)    :: request
+        type(rec3D_saved_params) :: saved
         if( .not. self%exists ) THROW_HARD('service not constructed; rec3D_service%execute')
+        call apply_request(params, request, saved)
         if( request%dispatch /= self%dispatch ) THROW_HARD('request dispatch differs from the service; rec3D_service%execute')
         select case(request%weights)
             case(REC3D_WEIGHTS_HARD)
@@ -146,7 +164,58 @@ contains
         if( request%register ) call register_outputs(params, build)
         if( request%output == REC3D_OUTPUT_DELIVERED ) call postprocess_states(params, build, cline)
         if( request%prefix%strlen_trim() > 0 ) call rename_outputs(params, request%prefix)
+        call restore_params(params, saved)
     end subroutine execute
+
+    !> the request's settings replace the caller's parameters for this reconstruction; saved keeps them
+    subroutine apply_request( params, request, saved )
+        type(parameters),         intent(inout) :: params
+        type(rec3D_request),      intent(in)    :: request
+        type(rec3D_saved_params), intent(inout) :: saved
+        integer :: nstates
+        saved%active = request%nstates > 0 .or. request%one_part .or. request%no_nonuniform .or. &
+            &request%no_trail_rec .or. request%all_states .or. request%no_automsk
+        if( .not. saved%active ) return
+        nstates = params%nstates
+        if( request%nstates > 0 ) nstates = request%nstates
+        if( size(params%vols) < nstates ) THROW_HARD('more states than volume slots; rec3D_service apply_request')
+        saved%nstates         = params%nstates
+        saved%nparts          = params%nparts
+        saved%part            = params%part
+        saved%numlen          = params%numlen
+        saved%l_nonuniform    = params%l_nonuniform
+        saved%l_trail_rec     = params%l_trail_rec
+        saved%l_state_defined = params%l_state_defined
+        saved%automsk         = params%automsk
+        saved%vols            = params%vols(1:nstates)
+        params%nstates = nstates
+        if( request%one_part )then
+            params%nparts = 1
+            params%part   = 1
+            params%numlen = 1
+        endif
+        if( request%no_nonuniform ) params%l_nonuniform    = .false.
+        if( request%no_trail_rec  ) params%l_trail_rec     = .false.
+        if( request%all_states    ) params%l_state_defined = .false.
+        if( request%no_automsk    ) params%automsk         = 'no'
+    end subroutine apply_request
+
+    subroutine restore_params( params, saved )
+        type(parameters),         intent(inout) :: params
+        type(rec3D_saved_params), intent(inout) :: saved
+        if( .not. saved%active ) return
+        params%nstates         = saved%nstates
+        params%nparts          = saved%nparts
+        params%part            = saved%part
+        params%numlen          = saved%numlen
+        params%l_nonuniform    = saved%l_nonuniform
+        params%l_trail_rec     = saved%l_trail_rec
+        params%l_state_defined = saved%l_state_defined
+        params%automsk         = trim(saved%automsk)
+        params%vols(1:size(saved%vols)) = saved%vols
+        deallocate(saved%vols)
+        saved%active = .false.
+    end subroutine restore_params
 
     subroutine kill( self )
         class(rec3D_service), intent(inout) :: self

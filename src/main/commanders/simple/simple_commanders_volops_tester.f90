@@ -18,6 +18,7 @@ integer, parameter :: BOX = 64, NSEED = 4, NTHR = 4
 real,    parameter :: SMPD = 2.0, MSKDIAM = 100., LP = 8., SIGMA = 3.0                !< A
 real,    parameter :: SEED(3,NSEED) = reshape([12., 5., 3.,  -4., 14., 6.,  6., -9., 11.,  -10., -6., -8.], [3,NSEED])
 real,    parameter :: AMPS(NSEED)   = [1.0, 0.8, 0.6, 0.9]
+real,    parameter :: SEED_I(3,2) = reshape([24., 16., 13.,  -10., 22., -15.], [3,2])  !< 32 and 28 A out: 120 blobs apart
 real,    parameter :: CORR_FLOOR = 0.95  !< a map moved by the program back onto its exact target
 real,    parameter :: CONTROL_CEIL = 0.8 !< the same comparison before the program ran
 
@@ -31,6 +32,7 @@ contains
         call enter_fixture('volops', cwd_saved, root)
         call make_ui
         call test_symaxis_search_d2()
+        call test_symaxis_search_i()
         call test_dock_volpair()
         call test_centervol()
         call leave_fixture(cwd_saved, root, nfail0)
@@ -76,6 +78,47 @@ contains
         call assert_true(cc_aligned >= CORR_FLOOR, 'symaxis_search: the aligned map is invariant under D2')
         call assert_true(cc_input < CONTROL_CEIL, 'symaxis_search: the turned input is not (the control)')
     end subroutine test_symaxis_search_d2
+
+    !> symaxis_search with pgrp=i aligns a turned icosahedral phantom to the setting the builder's operators
+    !! (refinement, reconstruction) use: the aligned map is invariant under them (above the control ceiling; the
+    !! search's icosahedral accuracy keeps it under the exact floor), the turned input is not
+    subroutine test_symaxis_search_i()
+        type(commander_symaxis_search)  :: xsymaxis
+        class(cmdline), allocatable     :: cl
+        real, allocatable :: ops(:,:,:), pos(:,:)
+        real    :: rot(3,3), cc_aligned, cc_input, cc_larger
+        integer :: g, k, n
+        write(*,'(A)') 'test_symaxis_search_i'
+        ops = group_operators('i')
+        rot = axis_operator([1., 2., 3.] / norm2([1., 2., 3.]), 37.)
+        allocate(pos(3, size(SEED_I,2) * size(ops, 3)))
+        n = 0
+        do g = 1, size(ops, 3)
+            do k = 1, size(SEED_I,2)
+                n = n + 1
+                pos(:,n) = matmul(rot, matmul(ops(:,:,g), SEED_I(:,k)))
+            enddo
+        enddo
+        call write_blobs('i_turned.mrc', pos, [(AMPS(1:2), g = 1, size(ops, 3))])
+        allocate(cl)
+        call cl%set('prg',     'symaxis_search')
+        call cl%set('vol1',    'i_turned.mrc')
+        call cl%set('smpd',    SMPD)
+        call cl%set('mskdiam', MSKDIAM)
+        call cl%set('lp',      LP)
+        call cl%set('pgrp',    'i')
+        call cl%set('center',  'no')
+        call cl%set('mkdir',   'no')
+        call cl%set('nthr',    NTHR)
+        call xsymaxis%execute(cl)
+        call cl%kill
+        deallocate(cl)
+        call point_group_check(string('vol_aligned2_iaxis.mrc'), ops, axis_operator([0., 0., 1.], 90.), cc_aligned, cc_larger)
+        call point_group_check(string('i_turned.mrc'), ops, axis_operator([0., 0., 1.], 90.), cc_input, cc_larger)
+        write(logfhandle,'(a,f7.4,a,f7.4)') '>>> symaxis_search I self-correlation aligned ', cc_aligned, ', input ', cc_input
+        call assert_true(cc_aligned >= CONTROL_CEIL, 'symaxis_search: the aligned map is in the builder''s I setting')
+        call assert_true(cc_input < CONTROL_CEIL, 'symaxis_search: the turned input is not (the control)')
+    end subroutine test_symaxis_search_i
 
     !> dock_volpair docks a copy of the asymmetric phantom turned by a generic rotation and shifted by
     !! 2-3 pixels back onto the phantom: the docked map correlates with it, the undocked copy does not

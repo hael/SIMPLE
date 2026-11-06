@@ -36,14 +36,14 @@ type :: ori
     procedure          :: swape1e3
     procedure          :: set_shift
     procedure          :: set_dfx, set_dfy
-    procedure, private :: set_1, set_2, set_3, set_4, set_5
-    generic            :: set => set_1, set_2, set_3, set_4, set_5
+    procedure, private :: set_dp, set_real, set_char, set_int, set_str
+    generic            :: set => set_dp, set_real, set_char, set_int, set_str
     procedure          :: set_state
     procedure          :: set_class
     procedure          :: set_stkind
     procedure          :: set_ogid
-    procedure, private :: rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4, rnd_euler_5
-    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2, rnd_euler_3, rnd_euler_4, rnd_euler_5
+    procedure, private :: rnd_euler_full, rnd_euler_lims, rnd_euler_near, rnd_euler_near_projinpl, rnd_euler_offset
+    generic            :: rnd_euler => rnd_euler_full, rnd_euler_lims, rnd_euler_near, rnd_euler_near_projinpl, rnd_euler_offset
     procedure          :: rnd_ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift, gau_rnd_shift
@@ -59,8 +59,8 @@ type :: ori
     procedure          :: get_int
     procedure          :: get_str
     procedure          :: get_static
-    procedure, private :: getter_1, getter_2, getter_3
-    generic            :: getter => getter_1, getter_2, getter_3
+    procedure, private :: getter_str, getter_real, getter_int
+    generic            :: getter => getter_str, getter_real, getter_int
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
     procedure          :: get_state
@@ -88,6 +88,8 @@ type :: ori
     procedure          :: get_ctfvars
     procedure          :: set_ctfvars
     procedure          :: get_keys
+    procedure          :: nonslot_key
+    procedure          :: strip_nonslot_keys
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -452,7 +454,7 @@ contains
         endif
     end subroutine set_dfy
 
-    subroutine set_1( self, key, rval )
+    subroutine set_dp( self, key, rval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: rval
@@ -470,9 +472,9 @@ contains
         else
             call self%htab%set(key, rval_here)
         endif
-    end subroutine set_1
+    end subroutine set_dp
 
-    subroutine set_2( self, key, rval )
+    subroutine set_real( self, key, rval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: rval
@@ -490,27 +492,27 @@ contains
         else
             call self%htab%set(key, rval_here)
         endif
-    end subroutine set_2
+    end subroutine set_real
 
-    subroutine set_3( self, key, cval )
+    subroutine set_char( self, key, cval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key, cval
         call self%chtab%set(key, cval)
-    end subroutine set_3
+    end subroutine set_char
 
-    subroutine set_4( self, key, ival )
+    subroutine set_int( self, key, ival )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: ival
-        call self%set_1(key, real(ival,dp))
-    end subroutine set_4
+        call self%set_dp(key, real(ival,dp))
+    end subroutine set_int
 
-    subroutine set_5( self, key, cval )
+    subroutine set_str( self, key, cval )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         class(string),    intent(in)    :: cval
         call self%chtab%set(key, cval%to_char())
-    end subroutine set_5
+    end subroutine set_str
 
     subroutine set_state( self, state )
         class(ori), intent(inout) :: self
@@ -553,16 +555,16 @@ contains
     end subroutine set_ogid
 
     !>  \brief  for generating a random Euler angle
-    subroutine rnd_euler_1( self )
+    subroutine rnd_euler_full( self )
         class(ori), intent(inout) :: self
         real    :: euls(3), rmat(3,3)
         call rnd_romat(rmat)
         euls = m2euler(rmat)
         call self%set_euler(euls)
-    end subroutine rnd_euler_1
+    end subroutine rnd_euler_full
 
     !>  \brief  for generating a random Euler angle
-    subroutine rnd_euler_2( self, eullims )
+    subroutine rnd_euler_lims( self, eullims )
         class(ori), intent(inout) :: self
         real,       intent(inout) :: eullims(3,2) !< Euler angle limits
         logical :: found
@@ -580,10 +582,10 @@ contains
             found = .true.
         end do
         call self%set_euler(euls)
-    end subroutine rnd_euler_2
+    end subroutine rnd_euler_lims
 
     !>  \brief  for generating a random Euler angle neighbour to o_prev
-    subroutine rnd_euler_3( self, o_prev, athres, eullims )
+    subroutine rnd_euler_near( self, o_prev, athres, eullims )
         class(ori), intent(inout) :: self         !< instance
         class(ori), intent(in)    :: o_prev       !< template ori
         real,       intent(in)    :: athres       !< Euler angle threshold in degrees
@@ -602,9 +604,9 @@ contains
         euls(2) = min(eullims(2,2), euls(2))
         euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
-    end subroutine rnd_euler_3
+    end subroutine rnd_euler_near
 
-    subroutine rnd_euler_4( self, o_prev, athres_proj, athres_inpl, eullims )
+    subroutine rnd_euler_near_projinpl( self, o_prev, athres_proj, athres_inpl, eullims )
         class(ori), intent(inout) :: self                     !< instance
         class(ori), intent(in)    :: o_prev                   !< template ori
         real,       intent(in)    :: athres_proj, athres_inpl !< Euler angle thresholds in degrees
@@ -623,9 +625,9 @@ contains
         euls(2) = min(eullims(2,2), euls(2))
         euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
-    end subroutine rnd_euler_4
+    end subroutine rnd_euler_near_projinpl
 
-    subroutine rnd_euler_5( self, uni_thres, eullims )
+    subroutine rnd_euler_offset( self, uni_thres, eullims )
         class(ori), intent(inout) :: self         !< instance
         real,       intent(in)    :: uni_thres(3)
         real,       intent(inout) :: eullims(3,2) !< Euler angle limits
@@ -643,7 +645,7 @@ contains
         euls(2) = min(eullims(2,2), euls(2))
         euls(3) = min(eullims(3,2), euls(3))
         call self%set_euler(euls)
-    end subroutine rnd_euler_5
+    end subroutine rnd_euler_offset
 
     !>  \brief  for generating random ori
     subroutine rnd_ori( self, trs, eullims )
@@ -831,7 +833,7 @@ contains
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
         type(string) :: val
-        call self%getter_1(key, val)
+        call self%getter_str(key, val)
     end function get_str
 
     ! this needs to be used in openMP parallel sections
@@ -842,15 +844,15 @@ contains
         call self%chtab%get_static(key, val)
     end subroutine get_static
 
-    subroutine getter_1( self, key, val )
+    subroutine getter_str( self, key, val )
         class(ori),       intent(in)    :: self
         character(len=*), intent(in)    :: key
         type(string),     intent(inout) :: val
         call val%kill
         val = self%chtab%get(key)
-    end subroutine getter_1
+    end subroutine getter_str
 
-    pure subroutine getter_2( self, key, val )
+    pure subroutine getter_real( self, key, val )
         class(ori),       intent(in)    :: self
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
@@ -865,9 +867,9 @@ contains
         else
             val = self%htab%get(key)
         endif
-    end subroutine getter_2
+    end subroutine getter_real
 
-    pure subroutine getter_3( self, key, ival )
+    pure subroutine getter_int( self, key, ival )
         class(ori),       intent(in)    :: self
         character(len=*), intent(in)    :: key
         integer,          intent(inout) :: ival
@@ -882,7 +884,7 @@ contains
         else
             ival = nint(self%htab%get(key))
         endif
-    end subroutine getter_3
+    end subroutine getter_int
 
     pure function get_2Dshift( self ) result( vec )
         class(ori), intent(in) :: self
@@ -1324,6 +1326,40 @@ contains
         call self%set_dfy(ctfvars%dfy)
         call self%set('angast', ctfvars%angast)
     end subroutine set_ctfvars
+
+    !> the first key of a particle record that no named slot holds ('' when none): a project write drops it
+    function nonslot_key( self ) result( key )
+        class(ori), intent(in) :: self
+        type(string) :: key
+        integer :: i
+        key = ''
+        if( .not. self%is_ptcl ) return
+        if( self%chtab%size_of() > 0 )then
+            key = self%chtab%get_key(1)
+            return
+        endif
+        do i = 1, self%htab%size_of()
+            key = self%htab%get_key(i)
+            if( get_oriparam_ind(key%to_char()) == 0 ) return
+        enddo
+        key = ''
+    end function nonslot_key
+
+    !> removes the keys of a particle record that no named slot holds (a project write would drop them)
+    subroutine strip_nonslot_keys( self )
+        class(ori), intent(inout) :: self
+        type(string) :: key
+        if( .not. self%is_ptcl ) return
+        do
+            key = self%nonslot_key()
+            if( key%strlen_trim() == 0 ) exit
+            if( self%chtab%isthere(key%to_char()) )then
+                call self%chtab%delete(key%to_char())
+            else
+                call self%htab%delete(key%to_char())
+            endif
+        enddo
+    end subroutine strip_nonslot_keys
 
     function get_keys( self ) result( keys )
         class(ori), intent(in)  :: self

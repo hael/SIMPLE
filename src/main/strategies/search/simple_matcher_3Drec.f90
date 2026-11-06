@@ -5,7 +5,7 @@ use simple_timer
 use simple_builder,         only: builder
 use simple_matcher_ptcl_io, only: ptcl_read_session, prepimgbatch, prep_rec_observation_ptcl, killimgbatch, &
     &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, write_ptcl_read_bench_context, &
-    &write_mem_bench_context, take_records, get_rec_observation
+    &write_mem_bench_context, take_records, get_rec_observation, pass_team
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_fplane_grid,     only: fplane_grid
 use simple_parameters,      only: parameters
@@ -67,7 +67,7 @@ contains
         call init_rec(params, build, MAXIMGBATCHSZ, fpls, &
             &cropped=params%box_crop < params%box)
         if( params%box_crop < params%box )then
-            call alloc_imgarr(nthr_glob, [params%box_crop,params%box_crop,1], &
+            call alloc_imgarr(pass_team(), [params%box_crop,params%box_crop,1], &
                 &params%smpd_crop, crop_imgs)
         endif
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
@@ -183,18 +183,6 @@ contains
         state_eo_group = 2 * (state - 1) + eo + 1
     end function state_eo_group
 
-    pure integer function normalized_eo( eo )
-        integer, intent(in) :: eo
-        select case(eo)
-            case(-1,0)
-                normalized_eo = 0
-            case(1)
-                normalized_eo = 1
-            case default
-                normalized_eo = -1
-        end select
-    end function normalized_eo
-
     !> Group the selected reconstruction particles by final hard state and
     !! even/odd half.  This lets a worker construct only one half-volume at a
     !! time while preserving the existing paired partial-file contract.
@@ -214,11 +202,7 @@ contains
                 ninvalid = ninvalid + 1
                 cycle
             endif
-            eo = normalized_eo(build%spproj_field%get_eo(iptcl))
-            if( eo < 0 )then
-                ninvalid = ninvalid + 1
-                cycle
-            endif
+            eo = build%spproj_field%get_half(iptcl)
             group = state_eo_group(state, eo)
             group_counts(group) = group_counts(group) + 1
         enddo
@@ -234,15 +218,14 @@ contains
             iptcl = pinds(i)
             state = build%spproj_field%get_state(iptcl)
             if( state < 1 .or. state > params%nstates ) cycle
-            eo = normalized_eo(build%spproj_field%get_eo(iptcl))
-            if( eo < 0 ) cycle
+            eo = build%spproj_field%get_half(iptcl)
             group = state_eo_group(state, eo)
             grouped_pinds(next_pos(group)) = iptcl
             next_pos(group) = next_pos(group) + 1
         enddo
         if( nvalid + ninvalid /= nptcls ) THROW_HARD('invalid state/even-odd grouping count; group_pinds_by_state_eo')
         if( ninvalid > 0 )then
-            write(logfhandle,'(A,I0)') '>>> RECONSTRUCTION: SKIPPING PARTICLES WITH INVALID STATE OR EVEN/ODD LABELS: ', ninvalid
+            write(logfhandle,'(A,I0)') '>>> RECONSTRUCTION: SKIPPING PARTICLES WITH INVALID STATE: ', ninvalid
         endif
         deallocate(group_counts, next_pos)
     end subroutine group_pinds_by_state_eo
@@ -264,7 +247,7 @@ contains
         end type state_members
         type(state_members), allocatable :: mem(:)
         integer, allocatable :: next_pos(:)
-        integer :: i, state, eo, group, ninvalid, ntot
+        integer :: i, state, eo, group, ntot
         if( present(wset) )then
             if( wset%get_nstates() /= params%nstates ) THROW_HARD('nstates differs from the state weight set; group_pinds_by_weights')
         else
@@ -273,7 +256,6 @@ contains
         allocate(mem(params%nstates), state_eo_offsets(2*params%nstates+1), next_pos(2*params%nstates))
         ! counts per (state, half)
         state_eo_offsets = 0
-        ninvalid = 0
         do state = 1,params%nstates
             if( params%l_state_defined .and. state /= params%state )then
                 allocate(mem(state)%rows(0), mem(state)%w(0))
@@ -286,11 +268,7 @@ contains
                 mem(state)%w    = pack(wtab(:,state), wtab(:,state) > 0.)
             endif
             do i = 1,size(mem(state)%rows)
-                eo = normalized_eo(build%spproj_field%get_eo(mem(state)%rows(i)))
-                if( eo < 0 )then
-                    ninvalid = ninvalid + 1
-                    cycle
-                endif
+                eo = build%spproj_field%get_half(mem(state)%rows(i))
                 group = state_eo_group(state, eo)
                 state_eo_offsets(group+1) = state_eo_offsets(group+1) + 1
             enddo
@@ -304,17 +282,13 @@ contains
         next_pos = state_eo_offsets(1:2*params%nstates)
         do state = 1,params%nstates
             do i = 1,size(mem(state)%rows)
-                eo = normalized_eo(build%spproj_field%get_eo(mem(state)%rows(i)))
-                if( eo < 0 ) cycle
+                eo = build%spproj_field%get_half(mem(state)%rows(i))
                 group = state_eo_group(state, eo)
                 grouped_pinds(next_pos(group)) = mem(state)%rows(i)
                 grouped_w(next_pos(group))     = mem(state)%w(i)
                 next_pos(group) = next_pos(group) + 1
             enddo
         enddo
-        if( ninvalid > 0 )then
-            write(logfhandle,'(A,I0)') '>>> RECONSTRUCTION: SKIPPING WEIGHTED MEMBERS WITH INVALID EVEN/ODD LABELS: ', ninvalid
-        endif
         deallocate(mem, next_pos)
     end subroutine group_pinds_by_weights
 
@@ -361,7 +335,7 @@ contains
                     THROW_HARD('non-homogeneous state reconstruction batch; update_state_half_rec')
                 endif
             endif
-            if( normalized_eo(orientation%get_eo()) /= eo )then
+            if( orientation%get_eo() /= eo )then
                 THROW_HARD('non-homogeneous even-odd reconstruction batch; update_state_half_rec')
             endif
             l_entry = .false.
@@ -495,9 +469,9 @@ contains
         ! the same spatial frequency on either grid; the cropped one simply stops
         ! at the crop Nyquist, which is all the box_crop reconstructor can hold.
         if( l_cropped )then
-            call alloc_imgarr(nthr_glob, [params%box_croppd, params%box_croppd, 1], params%smpd_crop, build%img_pad_heap)
+            call alloc_imgarr(pass_team(), [params%box_croppd, params%box_croppd, 1], params%smpd_crop, build%img_pad_heap)
         else
-            call alloc_imgarr(nthr_glob, [params%boxpd, params%boxpd, 1], params%smpd, build%img_pad_heap)
+            call alloc_imgarr(pass_team(), [params%boxpd, params%boxpd, 1], params%smpd, build%img_pad_heap)
         endif
     end subroutine init_rec
 

@@ -111,6 +111,7 @@ contains
         complex(sp), pointer :: shmat(:,:)
         real(sp) :: shift_mag_sq
         integer  :: i, ithr, k, kk, k0, ieo
+        call self%check_ptcl_memo
         ithr    =  omp_get_thread_num() + 1
         i       =  self%pinds(iptcl)
         k0      =  self%kfromto(1)
@@ -182,6 +183,8 @@ contains
         real(dp)    :: ptcl_sqsum
         real(sp)    :: A_sp, shift_mag_sq, wk
         integer     :: k, i, ithr, kk, k0, p, ieo, ih
+        call self%check_ptcl_memo
+        call self%check_euclid_weights
         ithr         =  omp_get_thread_num() + 1
         i            =  self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
@@ -270,6 +273,8 @@ contains
         complex(sp), pointer :: shmat(:,:)
         real(sp)    :: shift_mag_sq
         integer     :: k, i, kk, k0, ieo, ih
+        call self%check_ptcl_memo
+        call self%check_euclid_weights
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
@@ -529,6 +534,8 @@ contains
         integer,             intent(out)   :: ithr
         logical, optional,   intent(in)    :: cross
         integer :: i, ieo, ih
+        call self%check_ptcl_memo
+        call self%check_euclid_weights
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
         ih   = merge(1, 2, self%iseven(i))
@@ -548,6 +555,7 @@ contains
         complex(sp),         intent(in)    :: bank(:,:)
         real(sp),            intent(out)   :: cc(self%nrots)
         integer :: i, ithr, ieo
+        call self%check_ptcl_memo
         ithr = omp_get_thread_num() + 1
         i    = self%pinds(iptcl)
         ieo  = merge(REF_EVEN, REF_ODD, self%iseven(i))
@@ -711,7 +719,7 @@ contains
         endif
     end subroutine draw_posterior_crvec
 
-    module real(dp) function gen_corr_for_rot_8_1( self, iref, iptcl, irot )
+    module real(dp) function gen_corr_for_rot_8_noshift( self, iref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
         complex(dp), pointer :: pft_ref_8(:,:)
@@ -721,16 +729,16 @@ contains
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
         ieo       = merge(REF_EVEN, REF_ODD, self%iseven(i))
         pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-        gen_corr_for_rot_8_1 = 0.d0
+        gen_corr_for_rot_8_noshift = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
-                gen_corr_for_rot_8_1 = self%gen_corr_cc_for_rot_8_1(pft_ref_8, i, irot)
+                gen_corr_for_rot_8_noshift = self%gen_corr_cc_for_rot_8_noshift(pft_ref_8, i, irot)
             case(OBJFUN_EUCLID)
-                gen_corr_for_rot_8_1 = self%gen_euclid_for_rot_8_1(pft_ref_8, iptcl, irot)
+                gen_corr_for_rot_8_noshift = self%gen_euclid_for_rot_8_noshift(pft_ref_8, iptcl, irot)
         end select
-    end function gen_corr_for_rot_8_1
+    end function gen_corr_for_rot_8_noshift
 
-    module real(dp) function gen_corr_for_rot_8_2( self, iref, iptcl, shvec, irot )
+    module real(dp) function gen_corr_for_rot_8_shifted( self, iref, iptcl, shvec, irot )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(dp),                    intent(in)    :: shvec(2)
@@ -742,16 +750,16 @@ contains
         pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
         ieo       = merge(REF_EVEN, REF_ODD, self%iseven(i))
         pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-        gen_corr_for_rot_8_2 = 0.d0
+        gen_corr_for_rot_8_shifted = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
-                gen_corr_for_rot_8_2 = self%gen_corr_cc_for_rot_8_2(pft_ref_8, i, shvec, irot)
+                gen_corr_for_rot_8_shifted = self%gen_corr_cc_for_rot_8_shifted(pft_ref_8, i, shvec, irot)
             case(OBJFUN_EUCLID)
-                gen_corr_for_rot_8_2 = self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)
+                gen_corr_for_rot_8_shifted = self%gen_euclid_for_rot_8_shifted(pft_ref_8, iptcl, shvec, irot)
         end select
-    end function gen_corr_for_rot_8_2
+    end function gen_corr_for_rot_8_shifted
 
-    module real(dp) function gen_corr_cc_for_rot_8_1( self, pft_ref, i, irot )
+    module real(dp) function gen_corr_cc_for_rot_8_noshift( self, pft_ref, i, irot )
         class(polarft_calc),  intent(inout) :: self
         complex(dp), pointer, intent(inout) :: pft_ref(:,:)
         integer,              intent(in)    :: i, irot
@@ -759,7 +767,7 @@ contains
         real(dp)    :: sqsum_ref, sqsumk, wk, fk
         integer     :: k, p, rp
         sqsum_ref = 0.d0
-        gen_corr_cc_for_rot_8_1 = 0.d0
+        gen_corr_cc_for_rot_8_noshift = 0.d0
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
                 sqsumk = 0.d0
@@ -780,7 +788,7 @@ contains
                     fk      = fk     + real(crefctf * conjg(self%pfts_ptcls(p,k,i)), dp)
                     sqsumk  = sqsumk + real(crefctf * conjg(crefctf), dp)
                 enddo
-                gen_corr_cc_for_rot_8_1 = gen_corr_cc_for_rot_8_1 + wk * fk
+                gen_corr_cc_for_rot_8_noshift = gen_corr_cc_for_rot_8_noshift + wk * fk
                 sqsum_ref = sqsum_ref + wk * sqsumk
             enddo
         else
@@ -800,14 +808,14 @@ contains
                     fk      = fk     + real(crefctf * conjg(self%pfts_ptcls(p,k,i)), dp)
                     sqsumk  = sqsumk + real(crefctf * conjg(crefctf), dp)
                 enddo
-                gen_corr_cc_for_rot_8_1 = gen_corr_cc_for_rot_8_1 + wk * fk
+                gen_corr_cc_for_rot_8_noshift = gen_corr_cc_for_rot_8_noshift + wk * fk
                 sqsum_ref = sqsum_ref + wk * sqsumk
             enddo
         endif
-        gen_corr_cc_for_rot_8_1 = gen_corr_cc_for_rot_8_1 / sqrt(sqsum_ref * self%ksqsums_ptcls(i))
-    end function gen_corr_cc_for_rot_8_1
+        gen_corr_cc_for_rot_8_noshift = gen_corr_cc_for_rot_8_noshift / sqrt(sqsum_ref * self%ksqsums_ptcls(i))
+    end function gen_corr_cc_for_rot_8_noshift
 
-    module real(dp) function gen_corr_cc_for_rot_8_2( self, pft_ref, i, shvec, irot )
+    module real(dp) function gen_corr_cc_for_rot_8_shifted( self, pft_ref, i, shvec, irot )
         class(polarft_calc), target, intent(inout) :: self
         complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: i, irot
@@ -822,7 +830,7 @@ contains
         ! shift matrix
         call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
         ! evaluation
-        gen_corr_cc_for_rot_8_2 = 0.d0
+        gen_corr_cc_for_rot_8_shifted = 0.d0
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
                 sqsumk = 0.d0
@@ -843,7 +851,7 @@ contains
                     fk      = fk     + real(crefctf * conjg(self%pfts_ptcls(p,k,i)), dp)
                     sqsumk  = sqsumk + real(crefctf * conjg(crefctf), dp)
                 enddo
-                gen_corr_cc_for_rot_8_2 = gen_corr_cc_for_rot_8_2 + wk * fk
+                gen_corr_cc_for_rot_8_shifted = gen_corr_cc_for_rot_8_shifted + wk * fk
                 sqsum_ref = sqsum_ref + wk * sqsumk
             enddo
         else
@@ -863,14 +871,14 @@ contains
                     fk      = fk     + real(crefctf * conjg(self%pfts_ptcls(p,k,i)), dp)
                     sqsumk  = sqsumk + real(crefctf * conjg(crefctf), dp)
                 enddo
-                gen_corr_cc_for_rot_8_2 = gen_corr_cc_for_rot_8_2 + wk * fk
+                gen_corr_cc_for_rot_8_shifted = gen_corr_cc_for_rot_8_shifted + wk * fk
                 sqsum_ref = sqsum_ref + wk * sqsumk
             enddo
         endif
-        gen_corr_cc_for_rot_8_2 = gen_corr_cc_for_rot_8_2 / sqrt(sqsum_ref * self%ksqsums_ptcls(i))
-    end function gen_corr_cc_for_rot_8_2
+        gen_corr_cc_for_rot_8_shifted = gen_corr_cc_for_rot_8_shifted / sqrt(sqsum_ref * self%ksqsums_ptcls(i))
+    end function gen_corr_cc_for_rot_8_shifted
 
-    module real(dp) function gen_euclid_for_rot_8_1( self, pft_ref, iptcl, irot )
+    module real(dp) function gen_euclid_for_rot_8_noshift( self, pft_ref, iptcl, irot )
         class(polarft_calc), target, intent(inout) :: self
         complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: iptcl, irot
@@ -880,7 +888,7 @@ contains
         ithr = omp_get_thread_num() + 1
         i = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))
-        gen_euclid_for_rot_8_1 = 0.d0
+        gen_euclid_for_rot_8_noshift = 0.d0
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
                 wk    = self%sigma2_wk8(k,ih)
@@ -899,7 +907,7 @@ contains
                     sumsq = sumsq + real(c * conjg(c), dp)
                 enddo
                 ! DIST^2 = SUMk weightk SUMp |Rot(REFkp).CTFkp - PTCLkp|^2
-                gen_euclid_for_rot_8_1 = gen_euclid_for_rot_8_1 + wk * sumsq
+                gen_euclid_for_rot_8_noshift = gen_euclid_for_rot_8_noshift + wk * sumsq
             enddo
         else
             do k = self%kfromto(1),self%kfromto(2)
@@ -916,14 +924,14 @@ contains
                     sumsq = sumsq + real(c * conjg(c), dp)
                 enddo
                 ! accumulate weighted sum over k
-                gen_euclid_for_rot_8_1 = gen_euclid_for_rot_8_1 + wk * sumsq
+                gen_euclid_for_rot_8_noshift = gen_euclid_for_rot_8_noshift + wk * sumsq
             enddo
         endif
         ! EUCL = EXP( -DIST^2 / |PTCL|^2 )
-        gen_euclid_for_rot_8_1 = exp(-gen_euclid_for_rot_8_1 / self%wsqsums_ptcls(i))
-    end function gen_euclid_for_rot_8_1
+        gen_euclid_for_rot_8_noshift = exp(-gen_euclid_for_rot_8_noshift / self%wsqsums_ptcls(i))
+    end function gen_euclid_for_rot_8_noshift
 
-    module real(dp) function gen_euclid_for_rot_8_2( self, pft_ref, iptcl, shvec, irot )
+    module real(dp) function gen_euclid_for_rot_8_shifted( self, pft_ref, iptcl, shvec, irot )
         class(polarft_calc), target, intent(inout) :: self
         complex(dp),        pointer, intent(inout) :: pft_ref(:,:)
         integer,                     intent(in)    :: iptcl, irot
@@ -939,7 +947,7 @@ contains
         call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
         ! splitting both the compute based on irot and the loop avoids branching,
         ! and optimizes for memory access patterns & vectorization
-        gen_euclid_for_rot_8_2 = 0.d0
+        gen_euclid_for_rot_8_shifted = 0.d0
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
                 wk    = self%sigma2_wk8(k,ih)
@@ -961,7 +969,7 @@ contains
                     sumsq = sumsq + real(c * conjg(c), dp)
                 enddo
                 ! DIST^2 = SUMk weightk SUMp |Rot(Shift(REFkp)).CTFkp - PTCLkp|^2
-                gen_euclid_for_rot_8_2 = gen_euclid_for_rot_8_2 + wk * sumsq
+                gen_euclid_for_rot_8_shifted = gen_euclid_for_rot_8_shifted + wk * sumsq
             enddo
         else
             do k = self%kfromto(1),self%kfromto(2)
@@ -980,12 +988,12 @@ contains
                     sumsq = sumsq + real(c * conjg(c), dp)
                 enddo
                 ! accumulate weighted sum over k
-                gen_euclid_for_rot_8_2 = gen_euclid_for_rot_8_2 + wk * sumsq
+                gen_euclid_for_rot_8_shifted = gen_euclid_for_rot_8_shifted + wk * sumsq
             enddo
         endif
         ! EUCL = EXP( -DIST^2 / |PTCL|^2 )
-        gen_euclid_for_rot_8_2 = exp(-gen_euclid_for_rot_8_2 / self%wsqsums_ptcls(i))
-    end function gen_euclid_for_rot_8_2
+        gen_euclid_for_rot_8_shifted = exp(-gen_euclid_for_rot_8_shifted / self%wsqsums_ptcls(i))
+    end function gen_euclid_for_rot_8_shifted
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad )
         class(polarft_calc), target, intent(inout) :: self
@@ -1228,6 +1236,8 @@ contains
         integer :: i, ithr, k, k0, kk, p, ieo, ih
         logical :: shifted
 
+        call self%check_ptcl_memo
+        call self%check_euclid_weights
         if( .not. self%is_euclid_objfun() )then
             THROW_HARD('continuous Euclidean gradient requires objfun=euclid')
         endif
@@ -1364,6 +1374,7 @@ contains
         integer :: i, ithr, k, k0, kk, p, ieo
         logical :: shifted
 
+        call self%check_ptcl_memo
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
         k0           = self%kfromto(1)
@@ -1505,9 +1516,9 @@ contains
         gen_corr_for_rot_8_aln = 0.d0
         select case(self%p_ptr%cc_objfun)
             case(OBJFUN_CC)
-                gen_corr_for_rot_8_aln = self%gen_corr_cc_for_rot_8_2(pft_ref_8, self%pinds(iptcl), shvec, irot)
+                gen_corr_for_rot_8_aln = self%gen_corr_cc_for_rot_8_shifted(pft_ref_8, self%pinds(iptcl), shvec, irot)
             case(OBJFUN_EUCLID)
-                gen_corr_for_rot_8_aln = self%gen_euclid_for_rot_8_2(pft_ref_8, iptcl, shvec, irot)
+                gen_corr_for_rot_8_aln = self%gen_euclid_for_rot_8_shifted(pft_ref_8, iptcl, shvec, irot)
         end select
     end function gen_corr_for_rot_8_aln
 
@@ -1628,6 +1639,8 @@ contains
         real(dp)    :: A, v
         real(sp)    :: wk, shift_mag_sq
         integer     :: k, kk, k0, i, j, ithr, iref, p, ieo, ih
+        call self%check_ptcl_memo
+        call self%check_euclid_weights
         ithr  = omp_get_thread_num() + 1
         i     = self%pinds(iptcl)
         ih = merge(1, 2, self%iseven(i))

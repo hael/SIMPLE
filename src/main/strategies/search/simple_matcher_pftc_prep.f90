@@ -5,6 +5,7 @@ use simple_builder,              only: builder
 use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd, cavger_set_center_offset
 use simple_image,                only: image
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
+use simple_matcher_ptcl_io,      only: pass_team
 use simple_parameters,           only: parameters
 use simple_strategy2D_alloc,     only: is_fresh_2D_start
 implicit none
@@ -40,7 +41,7 @@ contains
         pdim_srch = build%pftc%get_pdim_srch()
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_srch)
         allocate(match_imgs(params%ncls))
-        call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+        call cavgs_merged(1)%construct_thread_safe_tmp_imgs(pass_team())
         ! mask memoization
         call cavgs_merged(1)%memoize_mask_coords
         ! mode of cavg centering

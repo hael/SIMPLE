@@ -15,9 +15,12 @@ contains
         integer,           optional, intent(in)    :: nmany_refs
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
-        integer               :: irot, k, ithr, i
+        integer               :: irot, k, ithr, i, nthr_team
         logical               :: even_dims, test(2)
         call self%kill
+        ! per-thread work buffers, one per thread of the team in use
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
         ! set params pointer
         self%p_ptr      => params
         ! set particle index range
@@ -83,7 +86,7 @@ contains
         self%iseven = .true.
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,self%kfromto(1):self%interpklim), self%argtransf_shellone(self%nrots) )
-        A = DPI / real(self%ldim(1:2)/2,dp) ! argument transfer matrix normalization constant
+        A = DPI / (real(self%ldim(1:2),dp)/2._dp) ! argument transfer normalization: 2 pi/n, odd boxes too
         ! shell = 1
         self%argtransf_shellone(:self%pftsz  ) = real(polar_here(:self%pftsz),dp)                        * A(1) ! x-part
         self%argtransf_shellone(self%pftsz+1:) = real(polar_here(self%nrots+1:self%nrots+self%pftsz),dp) * A(2) ! y-part
@@ -96,8 +99,8 @@ contains
                 &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
                 &self%kshell_sqsums_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
-                &self%heap_vars(self%p_ptr%nthr))
-        do ithr=1,self%p_ptr%nthr
+                &self%heap_vars(nthr_team))
+        do ithr=1,nthr_team
             allocate(self%heap_vars(ithr)%argvec(self%pftsz),&
                     &self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%interpklim),&
@@ -130,7 +133,7 @@ contains
         class(polarft_calc), intent(inout) :: self
         integer :: ithr
         if( self%existence )then
-            do ithr=1,self%p_ptr%nthr
+            do ithr=1,size(self%heap_vars)
                 deallocate(self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
@@ -154,7 +157,11 @@ contains
             self%p_ptr => null()
             self%existence = .false.
         endif
-        self%l_rnd_scope = .false.
+        self%l_rnd_scope     = .false.
+        self%ptcl_gen        = 0_int64
+        self%ptcl_gen_memo   = -1_int64
+        self%sigma2_gen_memo = -1_int64
+        nullify(self%sigma2_gen)
     end subroutine kill
 
     module subroutine reallocate_ptcls(self, nptcls, pinds)
@@ -197,6 +204,7 @@ contains
             iptcl = pinds(i)
             self%pinds( iptcl ) = i
         enddo
+        call self%bump_ptcl_gen
     end subroutine reallocate_ptcls
 
     module subroutine set_ref_pft(self, iref, pft, iseven)
@@ -215,6 +223,7 @@ contains
         complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         self%pfts_ptcls(:,:,self%pinds(iptcl)) = pft
         call self%memoize_sqsum_ptcl(iptcl)
+        call self%bump_ptcl_gen
     end subroutine set_ptcl_pft
 
     !> one particle's |CTF| on the polar grid (the tests' angularly varying CTF; production fills every particle's
@@ -225,6 +234,7 @@ contains
         real(sp),            intent(in)    :: ctfmat(self%pftsz,self%kfromto(1):self%interpklim)
         self%ctfmats(:,:,self%pinds(iptcl)) = ctfmat
         self%with_ctf = .true.
+        call self%bump_ptcl_gen
     end subroutine set_ptcl_ctfmat
 
     module subroutine polarize_ref_pft(self, img, iref, iseven, pdim, oversamp)
@@ -237,9 +247,9 @@ contains
         if( iref < 1 .or. iref > self%nrefs ) THROW_HARD('iref out of range; polarize_ref_pft')
         ieo = merge(REF_EVEN, REF_ODD, iseven)
         if( oversamp )then
-            call img%polarize_oversamp(self%pfts_refs(:,pdim(2):pdim(3),iref,ieo))
+            call img%polarize_oversamp(pdim, self%pfts_refs(:,pdim(2):pdim(3),iref,ieo))
         else
-            call img%polarize(self%pfts_refs(:,pdim(2):pdim(3),iref,ieo))
+            call img%polarize(pdim, self%pfts_refs(:,pdim(2):pdim(3),iref,ieo))
         endif
     end subroutine polarize_ref_pft
 
@@ -252,11 +262,12 @@ contains
         if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) ) THROW_HARD('iptcl out of range; polarize_ptcl_pft')
         if( self%pinds(iptcl) < 1 .or. self%pinds(iptcl) > self%nptcls ) THROW_HARD('particle not indexed; polarize_ptcl_pft')
         if( oversamp )then
-            call img%polarize_oversamp(self%pfts_ptcls(:,pdim(2):pdim(3),self%pinds(iptcl)))
+            call img%polarize_oversamp(pdim, self%pfts_ptcls(:,pdim(2):pdim(3),self%pinds(iptcl)))
         else
-            call img%polarize(self%pfts_ptcls(:,pdim(2):pdim(3),self%pinds(iptcl)))
+            call img%polarize(pdim, self%pfts_ptcls(:,pdim(2):pdim(3),self%pinds(iptcl)))
         endif
         call self%memoize_sqsum_ptcl(iptcl)
+        call self%bump_ptcl_gen
     end subroutine polarize_ptcl_pft
 
     subroutine assert_polarize_pdim(self, pdim, caller)
@@ -281,6 +292,7 @@ contains
         integer,             intent(in)    :: iptcl, irot, k
         complex(sp),         intent(in)    :: comp
         self%pfts_ptcls(irot,k,self%pinds(iptcl)) = comp
+        call self%bump_ptcl_gen
     end subroutine set_ptcl_fcomp
 
     module subroutine cp_even2odd_ref(self, iref)
@@ -305,6 +317,7 @@ contains
         integer,             intent(in)    :: iref, iptcl
         self%pfts_ptcls(:,:,self%pinds(iptcl)) = self%pfts_refs(:,:,iref,REF_EVEN)
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
+        call self%bump_ptcl_gen
     end subroutine cp_even_ref2ptcl
 
     module subroutine set_eo(self, iptcl, is_even)
@@ -328,11 +341,15 @@ contains
         self%l_rnd_scope = .true.
     end subroutine set_rnd_scope
 
-    module subroutine assign_sigma2_noise(self, sigma2_noise)
-        class(polarft_calc),       intent(inout) :: self
-        real, allocatable, target, intent(inout) :: sigma2_noise(:,:)
+    module subroutine assign_sigma2_noise(self, sigma2_noise, spectra_gen)
+        class(polarft_calc),                     intent(inout) :: self
+        real, allocatable,               target, intent(inout) :: sigma2_noise(:,:)
+        integer(int64), optional, target,        intent(inout) :: spectra_gen
         if( size(sigma2_noise,2) /= 2 ) THROW_HARD('sigma2 must hold one spectrum per even/odd half')
         self%sigma2_noise => sigma2_noise
+        ! the owner's generation of the spectra: a score on spectra newer than the weights stops
+        nullify(self%sigma2_gen)
+        if( present(spectra_gen) ) self%sigma2_gen => spectra_gen
         ! the weights of the spectra as they are now; whoever fills them later refreshes the weights
         call self%memoize_sigma2_weights
     end subroutine assign_sigma2_noise

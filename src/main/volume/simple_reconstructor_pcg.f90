@@ -1391,7 +1391,7 @@ contains
         file_size = -1_int64
         inquire(file=tmpfname%to_char(), size=file_size)
         if( file_size <= 0_int64 ) THROW_HARD('raw PCG artifact write produced an empty file')
-        call simple_rename(tmpfname, fname, overwrite=.true.)
+        call simple_rename(tmpfname, fname)
         call tmpfname%kill
     end subroutine write_raw_accum
 

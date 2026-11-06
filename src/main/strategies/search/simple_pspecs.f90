@@ -43,7 +43,7 @@ contains
         real,          intent(in)    :: msk, hp, lp
         type(image), allocatable :: cavg_threads(:) 
         real,        allocatable :: pspec(:)
-        integer :: ldim(3), ispec, ithr
+        integer :: ldim(3), ispec, ithr, nthr_team
         call self%kill
         self%nspecs     = size(imgs)
         ldim            = imgs(1)%get_ldim()
@@ -57,8 +57,11 @@ contains
         ! allocate arrays
         allocate(self%pspecs(self%nspecs,self%sz), source=0.)
         ! fill-up the instance
-        allocate(cavg_threads(nthr_glob))
-        do ithr = 1, nthr_glob
+        ! one work image per thread of the team in use
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
+        allocate(cavg_threads(nthr_team))
+        do ithr = 1, nthr_team
             call cavg_threads(ithr)%new(ldim, self%smpd)
         end do
         call cavg_threads(1)%memoize_mask_coords
@@ -74,7 +77,7 @@ contains
             deallocate(pspec)
         end do
         !$omp end parallel do
-        do ithr = 1, nthr_glob
+        do ithr = 1, size(cavg_threads)
             call cavg_threads(ithr)%kill
         end do
         deallocate(cavg_threads)

@@ -81,7 +81,7 @@ contains
         call self%kill
         ! set constants
         self%ldim = img%get_ldim()
-        if( self%ldim(3) > 1 ) THROW_HARD('only for 2D images; new_1')
+        if( self%ldim(3) > 1 ) THROW_HARD('only for 2D images; ft_expanded%new')
         self%smpd = img%get_smpd()
         self%hp   = hp
         lp_nyq    = 2.*self%smpd
@@ -562,11 +562,7 @@ contains
         shconst = 0.
         do i=1,2
             if( ldim(i) > 1 )then
-                if( is_even(ldim(i)) )then
-                    shconst(i) = PI/real(ldim(i)/2)
-                else
-                    shconst(i) = PI/real((ldim(i)-1)/2)
-                endif
+                shconst(i) = PI/(real(ldim(i))/2.) ! 2 pi/n, an odd box included
             endif
         end do
         allocate(ftexp_transfmat(ftexp_transf_flims(1,1):ftexp_transf_flims(1,2),&

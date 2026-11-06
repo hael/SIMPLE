@@ -358,7 +358,7 @@ contains
             endif
             allocate(l_half(size(members)))
             do i = 1, size(members)
-                l_half(i) = build%spproj_field%get_eo(members(i)) == eo_here
+                l_half(i) = build%spproj_field%get_half(members(i)) == eo_here
             enddo
             selected = pack(members, l_half)
             weights  = pack(wmem,    l_half)
@@ -1179,8 +1179,8 @@ contains
                 allocate(l_row(params%fromp:params%top), source=.false.)
                 do p = params%fromp, params%top
                     if( build%spproj_field%get_state(p) <= 0 ) cycle
-                    if( build%spproj_field%get_eo(p) /= eo_here ) cycle
                     if( l_has_updates .and. build%spproj_field%get_updatecnt(p) < 1 ) cycle
+                    if( build%spproj_field%get_half(p) /= eo_here ) cycle
                     l_row(p) = .true.
                 enddo
                 rows = pack([(p, p = params%fromp, params%top)], l_row)
@@ -1192,8 +1192,8 @@ contains
             endif
             do p = params%fromp, params%top
                 if( build%spproj_field%get_state(p) /= state_here ) cycle
-                if( build%spproj_field%get_eo(p) /= eo_here ) cycle
                 if( l_has_updates .and. build%spproj_field%get_updatecnt(p) < 1 ) cycle
+                if( build%spproj_field%get_half(p) /= eo_here ) cycle
                 n = n + 1
             enddo
             mass = real(n, dp)

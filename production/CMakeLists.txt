@@ -73,7 +73,8 @@ install(TARGETS ${SIMPLE_EXECUTABLES}
 # Complete UI JSON validation
 # ------------------------------------------------------------------------------
 # The UI descriptor is a client contract.  Regenerate and validate the complete
-# emitted registry whenever simple_exec is rebuilt, independently of the
+# emitted registry, and the stream launcher of simple_private_exec against it,
+# whenever simple_exec or simple_private_exec is rebuilt, independently of the
 # optional CTest suite. Use the serial front end so metadata validation does not
 # initialize an optional coarray/MPI runtime.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -84,10 +85,12 @@ add_custom_command(
   COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
     --executable "$<TARGET_FILE:${SIMPLE_EXE}>"
+    --launcher-executable "$<TARGET_FILE:${SIMPLE_PRIVATE_EXE}>"
     --output "${UI_JSON_VALIDATION_OUTPUT}"
     --stamp "${UI_JSON_VALIDATION_STAMP}"
   DEPENDS
     ${SIMPLE_EXE}
+    ${SIMPLE_PRIVATE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
   BYPRODUCTS "${UI_JSON_VALIDATION_OUTPUT}"
   COMMENT "Generating and validating the complete UI JSON registry"
@@ -97,8 +100,10 @@ add_custom_target(validate_complete_ui_json ALL
   DEPENDS "${UI_JSON_VALIDATION_STAMP}"
 )
 
-# The stream interface is a reviewed acquisition-facing screen. Its exact
-# snapshot is deliberately opt-in: ordinary builds verify valid JSON without
+# The stream interface is a reviewed acquisition-facing screen: the stream
+# programs' descriptors (stream_ui_contract.json) and the launcher written by
+# hand for prg=print_ui_stream (stream_launcher_contract.json), which every
+# build checks against the descriptors. Its exact snapshot is deliberately opt-in: ordinary builds verify valid JSON without
 # blocking routine wording or layout work on a separate approval step.
 set(STREAM_UI_CONTRACT_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/simple_stream_ui_contract.json")
 set(STREAM_UI_CONTRACT_STAMP "${CMAKE_CURRENT_BINARY_DIR}/simple_stream_ui_contract.valid")
@@ -116,6 +121,7 @@ add_custom_command(
     ${SIMPLE_PRIVATE_EXE}
     "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
     "${STREAM_UI_CONTRACT_REFERENCE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_launcher_contract.json"
   BYPRODUCTS "${STREAM_UI_CONTRACT_OUTPUT}"
   COMMENT "Reviewing the stream UI snapshot"
   VERBATIM

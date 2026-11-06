@@ -29,14 +29,15 @@ without modifying the project (`quality_mode=analyze`, `evaluate`).
   the set's hard-gate survivors (`normalize_robust`; with one survivor or none every feature is 0), and
   the relational feature is a kNN over the same set. Scoring a subset or a merged set changes every score.
 - Model files and built-in presets are positional: `feature_weights` and `linear_coefficients` follow
-  the bank order, and fewer values than the bank are zero-filled. Training tables (`z_<name>` columns)
+  the bank order, and a model file must give exactly one value per feature of the bank (`read_model`
+  stops otherwise). Training tables (`z_<name>` columns)
   and `interaction_terms` (`a:b`) go by name. Reordering or inserting a feature re-maps the weights of
   every model file and preset without an error; a feature appended at the end gets weight 0 in them.
 - `score_project_cavgs` needs `smpd` (the class averages' pixel size) when it scores with a model: the
   relational feature's mask radius comes from it, and without it the default pixel size is used. It
-  builds its own `parameters` (`relation_params%new`), which reseeds the RNG (one call more or less
-  shifts every later draw of a seeded run) and resets `nthr_glob` to the current team. Known
-  deviation, ruled for fixing: it is to take the caller's settings.
+  builds its own `parameters` (`relation_params%new`) at the caller's team and puts back the caller's
+  random stream, `nthr_glob`, team, `CWD_GLOB` and worker identity (`part_glob`, `l_distr_worker_glob`, the
+  worker's recorded project) after (`get_rnd_state`/`put_rnd_state`).
 - `nano` apply writes `diam` and `lattice_peak` into `cls2D` for every class that passes the hard gates
   (and the median diameter beside the class-average entry of `out`). `trajectory_solve3D`
   (`commanders/single/single_commanders_trajectory_solve3D.f90`) runs `quality_model=nano` at
@@ -60,11 +61,7 @@ without modifying the project (`quality_mode=analyze`, `evaluate`).
 - `src/main/cavg_quality/simple_cavg_quality_model.f90`: built-in presets, model file I/O, scoring, promotion snippets.
 - `src/main/cavg_quality/simple_cavg_quality_analysis.f90`: evaluation, hard-gate-only evaluation, training and feature tables.
 - `src/main/cavg_quality/simple_cavg_quality_learn.f90`: learn/evaluate model fitting and reports.
-<<<<<<< HEAD
-- `src/main/quality/simple_quality_logistic.f90`: the bank-free core the learner calls (the logistic problem and its L-BFGS-B fit, dataset roles and class weights, the lambda and threshold grids, the robust macro score), the second client of which is the `nano` context's learn path (`doc/implementation_notes/completed/nano_cavgs_rejection.md`). A change to it must keep the class-average `learn` output byte-identical; its tests are `simple_test_exec test=unit_numerics suite=quality_logistic`.
-=======
 - `src/main/quality/simple_quality_logistic.f90`: the bank-free core the learner calls for every context (the logistic problem and its L-BFGS-B fit, dataset roles and class weights, the lambda and threshold grids, the robust macro score); `simple_cavg_quality_learn.f90` is its only caller. Order: `new(feature indices, nobs, has_extra, lambda)` -> `set_row` for every row -> `finalize` -> `fit` -> `kill`. A row never set keeps weight 0 and drops out without an error; `fit` without `finalize` stops. It knows no feature names: the indices point into the caller's bank (at most `QUALITY_MAX_FEATS`). Tests: `unit_numerics suite=quality_logistic`.
->>>>>>> 910e90b5c (Self-loading folder guides, agent-friendly-code proposal, seven defect fixes)
 - `src/main/cavg_quality/simple_cavg_quality_selection.f90`: `score_project_cavgs` and `write_cavg_selection_stacks`, shared by every caller.
 - `src/main/cavg_quality/simple_cavg_quality_stats.f90`, `_helpers.f90`, `_types.f90`: metrics, helpers, shared types and constants.
 - `src/main/cavg_quality/simple_cavg_quality_lattice.f90`: the `nano` context's lattice bank (Fourier spot

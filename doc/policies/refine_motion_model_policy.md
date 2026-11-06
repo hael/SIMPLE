@@ -63,8 +63,8 @@ partition invocations are worker executions, not equivalent public runs.
 
 The master is the sole writer of each assembled project. Each reconstruction
 owns a separate project copy and runs as a nested, complete `reconstruct3D`
-program on it, through the public commander with its own freshly parsed
-parameters and builder. The master's own `parameters` object is never edited
+program on it, through its strategy routine (`run_rec3D` in
+`simple_rec3D_strategy`) with its own freshly parsed parameters and builder. The master's own `parameters` object is never edited
 or copied for a reconstruction. Heavy stored components and imports follow the
 [compile-time policy](compile_time_policy.md).
 
@@ -449,5 +449,5 @@ record implementation history and dated results in implementation notes.
 - [Application strategy](../../src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90): range helpers, worker extraction, master dispatch, `assemble_motion_fractions`, and `reconstruct_motion_fractions`.
 - [Motion commander](../../src/main/commanders/simple/simple_commanders_motion.f90) and [UI](../../src/main/ui/simple/simple_ui_preproc.f90): command-line defaults, lifecycle and public input contract.
 - [Particle extractor](../../src/main/preprocess/simple_particle_extractor.f90) and [binary model](../../src/main/motion/simple_motion_model.f90): saved-motion extraction and equal-weight normalized sums.
-- [Reconstruct3D commander](../../src/main/commanders/simple/simple_commanders_rec.f90), [reconstruction service](../../src/main/strategies/parallelization/simple_rec3D_service.f90) and [volume assembly](../../src/main/strategies/parallelization/simple_volassemble_strategy.f90): the nested interval reconstruction runs.
+- [Reconstruct3D strategy](../../src/main/strategies/parallelization/simple_rec3D_strategy.f90) (`run_rec3D`), [reconstruction service](../../src/main/strategies/parallelization/simple_rec3D_service.f90) and [volume assembly](../../src/main/strategies/parallelization/simple_volassemble_strategy.f90): the nested interval reconstruction runs.
 - [Project half-set ownership](../../src/main/project/simple_eo_partition.f90) and [reconstruction row selection](../../src/main/ori/simple_oris_sampling.f90): shared labels and `sample4rec`.

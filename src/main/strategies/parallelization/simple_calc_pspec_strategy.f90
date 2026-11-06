@@ -278,7 +278,7 @@ contains
         integer :: batchlims(2)
         integer :: i, nyq, nselected, n_work, batchsz_max, nbatch
         integer :: islot, nslots, ipart, fromp, top, run_lo, run_hi, eo
-        integer :: ninvalid_sigma2
+        integer :: ninvalid_sigma2, nthr_team
         nslots          = size(part_ids)
         nselected       = size(sel_pinds)
         ninvalid_sigma2 = 0
@@ -305,7 +305,10 @@ contains
         call sum_img%zero_and_flag_ft
         cmat_dims = sum_img%allocate_cmat()
         allocate(cmat_part_sum(size(cmat_dims,dim=1), size(cmat_dims,dim=2), 1, nslots), source=cmplx(0.,0.))
-        allocate(cmat_thr_sum( size(cmat_dims,dim=1), size(cmat_dims,dim=2), 1, nthr_glob))
+        ! one partial sum per thread of the team in use
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
+        allocate(cmat_thr_sum( size(cmat_dims,dim=1), size(cmat_dims,dim=2), 1, nthr_team))
         allocate(sigma2_sel(nyq,max(1,n_work)), source=0.)
         if( n_work > 0 )then
             batchsz_max = min(n_work, 50 * nthr_glob)
@@ -405,7 +408,7 @@ contains
             !$omp end parallel do
             nsum_slot(islot_here) = nsum_slot(islot_here) + nadd
             ! partition sum
-            do ithr_here = 1, nthr_glob
+            do ithr_here = 1, size(cmat_thr_sum, dim=4)
                 cmat_part_sum(:,:,:,islot_here) = cmat_part_sum(:,:,:,islot_here)&
                     &+ cmplx(cmat_thr_sum(:,:,:,ithr_here), kind=sp)
             end do

@@ -23,9 +23,12 @@ Silent ones first: nothing reports these.
 - SIMPLE's `x`, `y` are pixels of the particle's stack; STAR's `rlnOriginX/YAngst` are Angstrom.
   `import_ptcls2D`/`import_ptcls3D` leave origins in Angstrom until `finalise_ptcl_import`, which
   divides both `ptcl2D` and `ptcl3D` by each stack's `smpd` once and clears the mark. Order:
-  import one field, copy it into the other, finalise. Without the finalise shifts stay in
-  Angstrom; finalising a second import into a project whose other field holds pixels divides it
-  again. `import_ptcls` finalises itself.
+  import one field, copy it into the other, finalise, once per import: a second finalise, a new
+  particle import before the finalise, and `export_mics`/`export_cls2D`/`assign_optics` of an
+  unfinalised import stop (`ptcl_import_open`). A project written without the finalise is not
+  caught. `import_ptcls` finalises itself. The finalise moves the optics constants (`kv`, `cs`,
+  `fraca`, `smpd`, `detpix`, `mag`) to the stacks and strips them from the particle rows, which have no
+  slot for them.
 - Every particle writer multiplies by the stack's `smpd`: `write_ptcl2D_table` (serial and
   parallel), `starproject_stream`'s particle table, `relion_project%write_particles2D_star`. A
   change of a particle column or unit is made in all of them and in the flag table (`initialise`).
@@ -38,11 +41,12 @@ Silent ones first: nothing reports these.
 - Writers take each particle's `stkind` and `indstk` as stored (`write_ptcl2D_star` maps them
   first). Micrograph names are written only when stacks and micrographs are equal in number, and
   then row i of each is taken to be the same micrograph.
-- `starfile` and `starproject_stream` write `<name>.tmp` and rename on `complete()`/deinit;
-  `export_cls2D`, `export_stardata` and `relion_project` write in place (ruled for fixing: every
-  writer uses a temporary file; a new one writes `.tmp` and renames). `export_cls2D` also adds
-  `ncls` to every `cls2D` row of the project it is given, and refine2D passes `build%spproj`: a
-  known side effect, ruled for fixing (an export does not change its project).
+- Every writer writes `<name>.tmp` and renames it when complete (`simple_rename` replaces the target
+  atomically, so the file is never absent) (`starfile`, `starproject_stream`,
+  `export_mics`, `export_cls2D`, `export_opticsgroups`, the `relion_project` writers);
+  `export_stardata` stops on a file name without `.tmp`. A new writer does the same. An export does
+  not change its project: `export_cls2D` adds its `stk` and `ncls` to a copy of the `cls2D` rows
+  (`export_mics` still numbers the micrograph rows it is given: `nmics`, `micid`).
 - Batch `assign_optics` groups hierarchically, the stream's p02 by single linkage: ruled to move
   batch to the stream's grouping (after comparing both on one data set with beam tilt). Do not
   extend the hierarchical one.

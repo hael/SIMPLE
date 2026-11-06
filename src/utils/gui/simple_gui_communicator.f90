@@ -44,9 +44,9 @@ type gui_communicator
 contains
     procedure :: new
     procedure :: kill => kill_gui_communicator
-    procedure :: add_metadata_1
-    procedure :: add_metadata_2
-    generic   :: add_metadata => add_metadata_1, add_metadata_2
+    procedure :: add_metadata_spproj
+    procedure :: add_metadata_projfile
+    generic   :: add_metadata => add_metadata_spproj, add_metadata_projfile
 end type gui_communicator
 
 contains
@@ -122,7 +122,7 @@ contains
         remote_active = .false.
     end subroutine kill_gui_communicator
 
-    subroutine add_metadata_1( self, spproj, oritype, stage, selection, vol_kind )
+    subroutine add_metadata_spproj( self, spproj, oritype, stage, selection, vol_kind )
         class(gui_communicator),    intent(inout) :: self
         type(sp_project),           intent(inout) :: spproj
         character(len=*), optional, intent(in)    :: oritype
@@ -146,9 +146,9 @@ contains
         call builder%apply(gui_project_metadata_inst)
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
         call builder%kill()
-    end subroutine add_metadata_1
+    end subroutine add_metadata_spproj
 
-    subroutine add_metadata_2( self, projfile, oritype, stage, selection )
+    subroutine add_metadata_projfile( self, projfile, oritype, stage, selection )
         class(gui_communicator),    intent(inout) :: self
         type(string),               intent(in)    :: projfile
         character(len=*), optional, intent(in)    :: oritype
@@ -190,7 +190,7 @@ contains
         if( c_pthread_mutex_unlock(gui_comm_args_inst%metadata_mutex) /= 0 ) THROW_HARD('failed to unlock metadata mutex')
         call builder%kill()
         call spproj%kill()
-    end subroutine add_metadata_2
+    end subroutine add_metadata_projfile
 
     subroutine communication_worker( carg ) bind(c)
         integer, parameter            :: SEND_INTERVAL_SEC = 10

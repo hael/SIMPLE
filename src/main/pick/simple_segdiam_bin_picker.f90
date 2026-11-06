@@ -270,7 +270,7 @@ contains
                     endif
                     do iline = 1, ndatalines
                         call diams_file%readNextDataLine(line_data)
-                        diam_here = line_data(5)
+                        diam_here = line_data(5) + 2. * SMPD_SHRINK1 ! the 2X erosion in binarization, as in the bin decision
                         if( diam_here < diam_lo .or. diam_here > diam_hi ) cycle
                         ibin  = bin_index_from_bounds(diam_here, MOLDIAMS_PICK, NBINS)
                         i_acc = cluster_for_bin(ibin)
@@ -280,7 +280,7 @@ contains
                         old_box = nint(line_data(3))
                         x_new   = nint(real(x_old) + 0.5 * real(old_box) - 0.5 * real(box_single))
                         y_new   = nint(real(y_old) + 0.5 * real(old_box) - 0.5 * real(box_single))
-                        write(funit,'(4I7,2F8.1)') x_new, y_new, box_single, box_single, diam_here
+                        write(funit,'(4I7,2F8.1)') x_new, y_new, box_single, box_single, line_data(5)
                         nptcls = nptcls + 1
                     enddo
                 endif

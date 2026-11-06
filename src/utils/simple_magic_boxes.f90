@@ -19,7 +19,7 @@ integer, parameter :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 
 6250, 6400, 6912, 7776, 8192, 9216, 10240, 12288, 12500]
 
 interface magic_pftsz
-    module procedure magic_pftsz_1, magic_pftsz_2
+    module procedure magic_pftsz_msk, magic_pftsz_crop
 end interface magic_pftsz
 
 integer, parameter :: MIN_PFTSZ = 36
@@ -27,31 +27,31 @@ integer, parameter :: MIN_PFTSZ = 36
 contains
 
     !>  For finding fftw-friendly dimension for polar representation from mask radius
-    pure integer function magic_pftsz_1( msk )
+    pure integer function magic_pftsz_msk( msk )
         real, intent(in) :: msk
         real    :: a
         integer :: pftsz, pftsz_old
         a = PI*real(nint(msk))
         pftsz_old   = round2even(a)
         pftsz       = find_magic_box(nint(a))
-        magic_pftsz_1 = pftsz
+        magic_pftsz_msk = pftsz
         if( real(abs(pftsz-pftsz_old))/real(pftsz_old) > 0.1 )then
             ! defaults to original logic when relative size difference > 10%
-            magic_pftsz_1 = pftsz_old
+            magic_pftsz_msk = pftsz_old
         endif
-        magic_pftsz_1 = max(MIN_PFTSZ, magic_pftsz_1)
-    end function magic_pftsz_1
+        magic_pftsz_msk = max(MIN_PFTSZ, magic_pftsz_msk)
+    end function magic_pftsz_msk
 
     !>  For finding fftw-friendly dimension for polar representation
     !   from original mask radius & image sizes
-    pure integer function magic_pftsz_2( msk, box, box_crop )
+    pure integer function magic_pftsz_crop( msk, box, box_crop )
         real,    intent(in) :: msk
         integer, intent(in) :: box, box_crop
         real :: msk_crop
         msk_crop      = min((real(box_crop)-COSMSKHALFWIDTH)/2., msk*real(box_crop)/real(box))
         msk_crop      = real(round2even(msk_crop))
-        magic_pftsz_2 = magic_pftsz_1(msk_crop)
-    end function magic_pftsz_2
+        magic_pftsz_crop = magic_pftsz_msk(msk_crop)
+    end function magic_pftsz_crop
 
     elemental function find_larger_magic_box( trial_box ) result( best_box )
         integer, intent(in) :: trial_box

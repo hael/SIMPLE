@@ -6,9 +6,19 @@ use simple_parameters,         only: parameters
 use simple_particle_extractor, only: ptcl_extractor
 use simple_syslib,             only: file_exists
 use simple_test_utils,         only: assert_true, assert_false, assert_int
+use simple_forked_process,     only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline,            only: cmdline
 implicit none
 private
 public :: run_all_particle_extractor_tests
+
+!> extraction from the frames of a micrograph motion corrected under another convention, which must stop
+type, extends(forked_process) :: convention_extract
+    type(ori)                  :: omic
+    class(parameters), pointer :: params => null()
+contains
+    procedure :: execute => extract_other_convention
+end type convention_extract
 
 contains
 
@@ -253,6 +263,7 @@ contains
             write(message,'(A,I0)') 'gain, drift reference and weighting match analytic particles for constructor ',imode
             call assert_real(0., maxval(abs(actual(1)%get_rmat()-expected(1)%get_rmat())), PIXEL_TOL, trim(message))
         enddo
+        call check_convention_refused()
         model%dw = .true.
         call model%write(star_file, model_file, .false.)
         call del_file(star_file)
@@ -290,7 +301,30 @@ contains
         call del_file(gain)
         call del_file(model_file)
         !$ call omp_set_num_threads(saved_omp)
+
+        contains
+
+            ! intg registered to frame 1 (mcconvention first or relion) cannot be extracted from the frames
+            subroutine check_convention_refused()
+                type(convention_extract) :: child
+                child%omic = omic
+                call child%omic%set('mcconvention', 'first')
+                child%params => params
+                call child%start(name=string('EXTRACT_CONVENTION_FIRST'))
+                call child%await_final_status()
+                call assert_int(FORK_STATUS_FAILED, child%status(), 'extraction from frames stops under mcconvention=first')
+                call child%destroy
+            end subroutine check_convention_refused
+
     end subroutine test_binary_model_constructors
+
+    subroutine extract_other_convention( self, cline )
+        class(convention_extract), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        class(ptcl_extractor), allocatable :: extractor
+        allocate(extractor)
+        call extractor%init_mov(self%omic, self%params)
+    end subroutine extract_other_convention
 
     subroutine test_particle_frame_cache()
         use simple_image,        only: image

@@ -31,10 +31,14 @@ Silent ones first: nothing reports these.
 - One accumulator per (state, half); it does not know its half. Planes are whitened by their half's
   sigma2; PCG `prep_particles` takes one spectrum: one half per call, or the others are whitened
   wrongly. CTF at `smpd_crop`, shifts in `box_crop` pixels, planes padded by `OSMPL_PAD_FAC`.
-- Gridding partials and chains carry no box: `read_rho` reads the receiver's shape, a larger file as
-  a prefix. Every reader checks box and sampling before `read_rho`; today only the `update_frac`
-  path does (its manifests): ruled for fixing by a header with both. PCG raw artifacts stop on any
-  header mismatch.
+- A gridding density file (`rho_*`, partials, chains, frozen sets) starts with a header (magic, box,
+  density shape, sampling; `RHO_HDR_BYTES`): `read_rho` and the readers of open units
+  (`check_rho_header`, serially, before `read_raw_rho`) stop on another box or sampling, and on a file
+  without the header; the `update_frac` padding of a smaller chain checks the header's box against its
+  numerator and the physical extent. The numerator (`<fbody>_even/odd.mrc`) is still read in the reader's
+  shape without its MRC header. PCG raw artifacts stop on any header mismatch. Frozen-set contexts of the
+  schema before the header (version 3) are refused (`FROZEN_SCHEMA_VERSION` 4); trailing chains of the
+  manifest before it are re-seeded (version 4).
 - FSCs are per Fourier shell of their box (`box_crop`) and carry no box: `add_invtausq2rho(fsc)` and
   PCG `set_ml_prior(fsc)` take the overlapping shells of whatever they get.
 - PCG setters are read once: `set_sym` by the batches accumulated after it, the support and

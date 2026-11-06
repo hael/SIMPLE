@@ -214,7 +214,6 @@ artifacts:
 - `final_oris.txt`
 - reprojections of the final low-pass volumes
 - an alternating `cavgs_reprojs.mrc` stack
-- a shifted class-average stack registered as `cavg_shifted`
 - optional class-average ranking by cavg-vs-reprojection correlation
 
 Even/odd convergence diagnostics report the angle between the projection

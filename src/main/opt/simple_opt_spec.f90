@@ -54,6 +54,7 @@ type :: opt_spec
     logical                   :: debug     = .false.
     logical                   :: warn      = .false.
     logical                   :: converged = .false.                  !< converged status
+    logical                   :: nostart   = .false.                  !< x is no start: simplex draws one, DE keeps its random population
     logical                   :: exists    = .false.                  !< to indicate existence
   contains
     procedure :: specify
@@ -208,6 +209,9 @@ contains
         ! parse input data
         self%str_opt = str_opt
         self%ndim = ndim
+        ! kill keeps scalars: a re-specified spec forgets an earlier optimiser's population size and no-start flag
+        self%npop    = 0
+        self%nostart = .false.
         if(present(mode))        self%str_mode  = mode
         if(present(npop))        self%npop      = npop
         if(present(ldim))        self%ldim      = ldim
@@ -234,7 +238,6 @@ contains
             self%stepsz = stepsz
         endif
  !       if(present(verbose_arg)) self%verbose = verbose_arg
-        if(present(npop))        self%npop    = npop
         if(present(cfac))        self%cfac    = cfac
         if(present(debug_arg))   self%debug   = debug_arg
         if(present(warn_arg))    self%warn    = warn_arg

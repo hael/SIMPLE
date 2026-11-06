@@ -19,6 +19,8 @@ use simple_cavg_quality_analysis,  only: evaluate_cavg_quality_hard_reject, writ
 use simple_cavg_quality_model,     only: cavg_quality_model, cavg_quality_model_spec, write_cavg_quality_model_builtin_code
 use simple_cavg_quality_learn,     only: learn_cavg_quality_model
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
+use simple_forked_process,         only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline,                only: cmdline
 implicit none
 private
 public :: run_all_cavg_quality_lattice_tests
@@ -28,6 +30,14 @@ real,     parameter :: SMPD = 0.358
 integer,  parameter :: FH = 18, FK = 12           !< the fringe wave vector (shell 22, 1.99 A at this box)
 integer,  parameter :: KIND_NOISE = 0, KIND_LATTICE = 1, KIND_LOWPASS = 2
 integer(kind=8)     :: rng_state = 20261028_8
+
+
+!> a model read from fname, which must stop (a list one value short of the bank)
+type, extends(forked_process) :: model_reader
+    type(string) :: fname
+contains
+    procedure :: execute => read_short_model
+end type model_reader
 
 contains
 
@@ -442,8 +452,61 @@ contains
         call r%read(fname%to_char())
         call assert_int(p%n_interactions, r%n_interactions, 'preset interactions kept')
         call assert_real(8.0, r%relational_corr_lp, 1.e-6, 'preset override applied')
+        ! a list one value short of the bank stops instead of being zero-filled
+        call check_short_list('feature_weights')
+        call check_short_list('linear_coefficients')
         call del_file(fname)
+
+        contains
+
+            subroutine check_short_list( key )
+                character(len=*), intent(in) :: key
+                type(model_reader) :: child
+                call m%write(fname%to_char())
+                call drop_last_value(fname%to_char(), key)
+                child%fname = fname
+                call child%start(name=string('MODEL_SHORT_'//key))
+                call child%await_final_status()
+                call assert_int(FORK_STATUS_FAILED, child%status(), 'a '//key//' list shorter than the bank stops')
+                call child%destroy
+            end subroutine check_short_list
+
     end subroutine test_model_file_round_trips
+
+    subroutine read_short_model( self, cline )
+        class(model_reader), intent(inout) :: self
+        class(cmdline),      intent(inout) :: cline
+        type(cavg_quality_model) :: r
+        call r%read(self%fname%to_char())
+    end subroutine read_short_model
+
+    !> the model file with the last value of key's list removed
+    subroutine drop_last_value( fname, key )
+        character(len=*), intent(in) :: fname, key
+        character(len=4096), allocatable :: lines(:)
+        character(len=4096) :: line
+        integer :: funit, ios, n, i, icut
+        n = 0
+        allocate(lines(500))
+        open(newunit=funit, file=fname, status='old', action='read')
+        do
+            read(funit,'(A)',iostat=ios) line
+            if( ios /= 0 ) exit
+            n = n + 1
+            lines(n) = line
+        end do
+        close(funit)
+        do i = 1,n
+            if( index(lines(i), key//'=') /= 1 ) cycle
+            icut = scan(trim(lines(i)), ',', back=.true.)
+            if( icut > 0 ) lines(i) = lines(i)(1:icut-1)
+        end do
+        open(newunit=funit, file=fname, status='replace', action='write')
+        do i = 1,n
+            write(funit,'(A)') trim(lines(i))
+        end do
+        close(funit)
+    end subroutine drop_last_value
 
     !> analysis tables of both bank sizes go through learn: the model has the tables' context and bank
     subroutine test_table_round_trip_learn()

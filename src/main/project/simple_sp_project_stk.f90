@@ -130,6 +130,9 @@ contains
         ! copy os
         call self%os_ptcl2D%copy(os, is_ptcl=.true.)
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)
+        ! the input's other keys (CTF constants, keys of a text oritab) belong to the stack, not the particle slots
+        call self%os_ptcl2D%strip_nonslot_keys
+        call self%os_ptcl3D%strip_nonslot_keys
         call self%os_ptcl2D%set_all2single('stkind', 1)
         call self%os_ptcl3D%set_all2single('stkind', 1)
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1) ! default on import
@@ -456,6 +459,9 @@ contains
             ! update
             fromp = top + 1 ! global index
         enddo
+        ! the input's other keys (CTF constants, keys of a text oritab) belong to the stacks, not the particle slots
+        call self%os_ptcl2D%strip_nonslot_keys
+        call self%os_ptcl3D%strip_nonslot_keys
         call o_ptcl%kill
         call o_stk%kill
     end subroutine add_stktab_2

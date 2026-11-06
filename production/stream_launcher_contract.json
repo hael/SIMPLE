@@ -1,0 +1,175 @@
+{
+  "processes": [
+    {
+      "name": "preprocessing",
+      "nthr_master": 4,
+      "prg": "preproc",
+      "static_inputs": [
+        "outdir=preprocessing",
+        "nparts=10",
+        "nthr=4",
+        "ninipick=1000"
+      ],
+      "user_inputs": [
+        "dir_movies",
+        "dir_meta",
+        "gainref",
+        "cs",
+        "fraca",
+        "kv",
+        "smpd",
+        "total_dose",
+        "smpd_downscale"
+      ]
+    },
+    {
+      "name": "optics_assignment",
+      "nthr_master": 4,
+      "prg": "assign_optics",
+      "static_inputs": [
+        "dir_target=preprocessing",
+        "outdir=optics_assignment",
+        "nthr=4"
+      ]
+    },
+    {
+      "name": "initial_analysis",
+      "nthr_master": 32,
+      "prg": "gen_pickrefs",
+      "static_inputs": [
+        "dir_target=preprocessing",
+        "optics_dir=../optics_assignment",
+        "outdir=initial_analysis",
+        "nthr=32"
+      ]
+    },
+    {
+      "name": "reference_based_picking",
+      "nthr_master": 4,
+      "prg": "pick_extract",
+      "static_inputs": [
+        "dir_target=preprocessing",
+        "optics_dir=../optics_assignment",
+        "outdir=reference_based_picking",
+        "nparts=10",
+        "nthr=4"
+      ],
+      "user_inputs": [
+        "pickrefs",
+        "box_extract"
+      ]
+    },
+    {
+      "name": "particle_sieving",
+      "nthr_master": 4,
+      "prg": "sieve_cavgs",
+      "static_inputs": [
+        "dir_target=reference_based_picking",
+        "optics_dir=../optics_assignment",
+        "outdir=particle_sieving",
+        "ncls=100",
+        "nptcls_per_cls=0",
+        "nchunks=2",
+        "nparts=8",
+        "nthr=8",
+        "interactive=yes"
+      ]
+    },
+    {
+      "name": "classification_2D",
+      "nthr_master": 4,
+      "prg": "pool2D",
+      "static_inputs": [
+        "dir_target=particle_sieving",
+        "optics_dir=../optics_assignment",
+        "outdir=classification_2D",
+        "ncls=200",
+        "nparts=10",
+        "nthr=8"
+      ]
+    }
+  ],
+  "user_inputs": [
+    {
+      "help": "Input movies directory",
+      "key": "dir_movies",
+      "keytype": "dir",
+      "label": "Input movies directory",
+      "required": true
+    },
+    {
+      "help": "Input metadata directory",
+      "key": "dir_meta",
+      "keytype": "dir",
+      "label": "Input metadata directory",
+      "required": false
+    },
+    {
+      "help": "Gain reference",
+      "key": "gainref",
+      "keytype": "file",
+      "label": "Gain reference",
+      "required": false
+    },
+    {
+      "default": "2.7",
+      "help": "Spherical aberration (mm)",
+      "key": "cs",
+      "keytype": "float",
+      "label": "Spherical aberration (mm)",
+      "required": true
+    },
+    {
+      "default": "0.1",
+      "help": "Amplitude contrast fraction",
+      "key": "fraca",
+      "keytype": "float",
+      "label": "Amplitude contrast fraction",
+      "required": true
+    },
+    {
+      "default": "300",
+      "help": "Acceleration voltage (kV)",
+      "key": "kv",
+      "keytype": "int",
+      "label": "Acceleration voltage (kV)",
+      "required": true
+    },
+    {
+      "help": "Pixel size (A)",
+      "key": "smpd",
+      "keytype": "float",
+      "label": "Pixel size (A)",
+      "required": true
+    },
+    {
+      "default": "1.29999995                      ",
+      "help": "downscale pixel size (A)",
+      "key": "smpd_downscale",
+      "keytype": "hidden",
+      "label": "downscale pixel size (A)",
+      "required": true
+    },
+    {
+      "help": "Total exposure dose (e/A2)",
+      "key": "total_dose",
+      "keytype": "float",
+      "label": "Total exposure dose (e/A2)",
+      "required": true
+    },
+    {
+      "help": "2D averages for use as picking references (optional)",
+      "key": "pickrefs",
+      "keytype": "file",
+      "label": "2D averages for use as picking references (optional)",
+      "required": false
+    },
+    {
+      "help": "force a box size (px) eg. to match an existing dataset",
+      "key": "box_extract",
+      "keytype": "int",
+      "label": "force box size (px, optional)",
+      "required": false
+    }
+  ]
+}

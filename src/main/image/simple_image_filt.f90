@@ -673,7 +673,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine apply_bfac
 
-    module subroutine apply_filter( self, filter )
+    module subroutine apply_filter_single( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
         integer :: nyq, sh, logi(3), a,b,c
@@ -712,15 +712,15 @@ contains
         end do
         !$omp end parallel do
         if( didft ) call self%ifft()
-    end subroutine apply_filter
+    end subroutine apply_filter_single
 
-    module subroutine apply_filter_2( self, self2, filter )
+    module subroutine apply_filter_pair( self, self2, filter )
         class(image), intent(inout) :: self, self2
         real,         intent(in)    :: filter(:)
         integer :: nyq, sh, logi(3), a, b, c
         logical :: didft_self, didft_self2
         real    :: fwght, wzero
-        if( .not.(self.eqdims.self2) ) THROW_HARD('images to be filtered need to have same dimensions; apply_filter_2')
+        if( .not.(self.eqdims.self2) ) THROW_HARD('images to be filtered need to have same dimensions; apply_filter_pair')
         nyq = size(filter)
         didft_self  = .false.
         didft_self2 = .false.
@@ -755,7 +755,7 @@ contains
         !$omp end parallel do
         if( didft_self )  call self%ifft()
         if( didft_self2 ) call self2%ifft()
-    end subroutine apply_filter_2
+    end subroutine apply_filter_pair
 
     module subroutine apply_filter_serial( self, filter )
         class(image), intent(inout) :: self
@@ -927,7 +927,7 @@ contains
         integer, parameter :: CFR_BOX = 3
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
         real    :: z, pix_avg, sigma2t2
-        integer :: i, j, m, n, pad, ithr
+        integer :: i, j, m, n, pad, ithr, nthr_team
         if( even%is_3d() ) THROW_HARD('2D images only; NLmean2D_eo')
         if( even%ft )      THROW_HARD('Real space only;NLmean2D_eo')
         call noise%copy(even)
@@ -939,7 +939,9 @@ contains
         call avg%mul(0.5)
         pad     = CFR_BOX + 2
         pix_avg = sum(avg%rmat(:avg%ldim(1),:avg%ldim(2),1)) / real(product(avg%ldim))
-        allocate(rmat_threads(nthr_glob,avg%ldim(1),avg%ldim(2),1),   source=0.)
+        nthr_team = 1   ! one sum per thread of the team in use
+        !$ nthr_team = omp_get_max_threads()
+        allocate(rmat_threads(nthr_team,avg%ldim(1),avg%ldim(2),1),   source=0.)
         allocate(rmat_pad(-pad:avg%ldim(1)+pad,-pad:avg%ldim(2)+pad), source=pix_avg)
         rmat_pad(1:avg%ldim(1),1:avg%ldim(2)) = avg%rmat(1:avg%ldim(1),1:avg%ldim(2),1)
         do n = 1,avg%ldim(2)
@@ -973,7 +975,7 @@ contains
         integer, parameter :: CFR_BOX = 10 ! as suggested in the paper, use a box 21x21
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
         real    :: z, sigma, h, h_sq, mmsk, avg
-        integer :: i, j, k, m, n, o, pad, ithr
+        integer :: i, j, k, m, n, o, pad, ithr, nthr_team
         if( self%is_2d() ) THROW_HARD('3D images only; NLmean3D')
         if( self%ft )      THROW_HARD('Real space only; 3DNLmean3D')
         mmsk = real(self%ldim(1)) / 2. - real(DIM_SW)
@@ -991,7 +993,9 @@ contains
         h    = 4.*sigma
         h_sq = h**2.
         avg  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(product(self%ldim))
-        allocate(rmat_threads(nthr_glob,self%ldim(1),self%ldim(2),self%ldim(3)), source=0.)
+        nthr_team = 1   ! one sum per thread of the team in use
+        !$ nthr_team = omp_get_max_threads()
+        allocate(rmat_threads(nthr_team,self%ldim(1),self%ldim(2),self%ldim(3)), source=0.)
         allocate(rmat_pad(-pad:self%ldim(1)+pad,-pad:self%ldim(2)+pad,-pad:self%ldim(3)+pad), source=avg)
         rmat_pad(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         !$omp parallel do schedule(static) default(shared) private(m,n,o,ithr,sw_px,exponentials,i,j,k,z)&
@@ -1028,7 +1032,7 @@ contains
         type(image) :: noise, noise_var
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW,DIM_SW)
         real    :: z, sigma2t2, pixavg
-        integer :: i, j, k, m, n, o, pad, ithr
+        integer :: i, j, k, m, n, o, pad, ithr, nthr_team
         if( even%is_2d() ) THROW_HARD('3D images only; NLmean3D_eo')
         if( even%ft )      THROW_HARD('Real space only; 3DNLmean3D_eo')
         call noise%copy(even)
@@ -1040,7 +1044,9 @@ contains
         call avg%mul(0.5)
         pad     = CFR_BOX + 2
         pixavg  = sum(avg%rmat(:avg%ldim(1),:avg%ldim(2),:avg%ldim(3))) / real(product(avg%ldim))
-        allocate(rmat_threads(nthr_glob,avg%ldim(1),avg%ldim(2),avg%ldim(3)), source=0.)
+        nthr_team = 1   ! one sum per thread of the team in use
+        !$ nthr_team = omp_get_max_threads()
+        allocate(rmat_threads(nthr_team,avg%ldim(1),avg%ldim(2),avg%ldim(3)), source=0.)
         allocate(rmat_pad(-pad:avg%ldim(1)+pad,-pad:avg%ldim(2)+pad,-pad:avg%ldim(3)+pad), source=pixavg)
         rmat_pad(1:avg%ldim(1),1:avg%ldim(2),1:avg%ldim(3)) = avg%rmat(1:avg%ldim(1),1:avg%ldim(2),1:avg%ldim(3))
         !$omp parallel do schedule(static) default(shared) private(m,n,o,ithr,sw_px,exponentials,sigma2t2,i,j,k,z)&

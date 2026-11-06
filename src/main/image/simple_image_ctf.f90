@@ -16,6 +16,7 @@ contains
         type(ctfvars) :: ctfvals ! CTF derived variables
         integer :: h,k,physh,physk
         real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
+        if( .not. ft_maps_match(self%ldim, self%smpd) ) THROW_HARD('CTF Fourier maps not memoised for this box and sampling; ctf2img')
         ! flag image as FT
         call self%set_ft(.true.)
         ! init
@@ -102,6 +103,7 @@ contains
         is_flipneg = (mode == 'flipneg')
         is_neg     = (mode == 'neg')
         is_square  = (mode == 'square')
+        if( .not. ft_maps_match(self%ldim, self%smpd) ) THROW_HARD('CTF Fourier maps not memoised for this box and sampling; apply_ctf')
         ! initialize
         call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
         ctfvals         = tfun%get_ctfvars(ctfparms%phshift)

@@ -10,13 +10,13 @@ public :: estimate_lplim, estimate_lplims2D, estimate_lplim3D
 private
 
 interface estimate_lplim
-    module procedure estimate_lplim_1, estimate_lplim_2
+    module procedure estimate_lplim_find, estimate_lplim_lp
 end interface estimate_lplim
 
 
 contains
 
-    subroutine estimate_lplim_1( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
+    subroutine estimate_lplim_find( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
         class(image),           intent(inout) :: odd, even, mskimg
         integer,                intent(in)    :: kfromto(2)
         integer,                intent(out)   :: best_ind
@@ -68,9 +68,9 @@ contains
         endif
         call odd_copy_cmat%kill
         call odd_filt%kill
-    end subroutine estimate_lplim_1
+    end subroutine estimate_lplim_find
 
-    subroutine estimate_lplim_2( odd, even, mskimg, lpstart, lpstop, lpopt, odd_filt_out )
+    subroutine estimate_lplim_lp( odd, even, mskimg, lpstart, lpstop, lpopt, odd_filt_out )
         class(image),           intent(inout) :: odd, even, mskimg
         real,                   intent(in)    :: lpstart, lpstop
         real,                   intent(out)   :: lpopt
@@ -81,13 +81,13 @@ contains
         box        = ldim(1)
         smpd       = odd%get_smpd()
         if( lpstart < lpstop )then
-            THROW_HARD('Invalid low-pass range ordering in estimate_lplim_2: lpstart must be >= lpstop')
+            THROW_HARD('Invalid low-pass range ordering in estimate_lplim_lp: lpstart must be >= lpstop')
         endif
         kfromto(1) = calc_fourier_index(lpstart, box, smpd)
         kfromto(2) = calc_fourier_index(lpstop, box, smpd)
-        call estimate_lplim_1( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
+        call estimate_lplim_find( odd, even, mskimg, kfromto, best_ind, odd_filt_out )
         lpopt = calc_lowpass_lim(best_ind, box, smpd)
-    end subroutine estimate_lplim_2
+    end subroutine estimate_lplim_lp
 
     subroutine estimate_lplim3D( odd, even, mskvol, lpstart, lpstop, lpopt, odd_filt_out )
         class(image),           intent(in)  :: odd, even, mskvol

@@ -14,9 +14,21 @@ use simple_image,        only: image
 use simple_rnd,          only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_test_utils
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
+!$ use omp_lib,             only: omp_set_num_threads
 implicit none
 private
 public :: run_all_polarft_corr_tests
+
+
+!> a score that breaks a call-order rule of the calculator, which must stop by its check
+integer, parameter :: ORDER_NO_WEIGHTS = 1, ORDER_STALE_SPECTRA = 2, ORDER_STALE_PTCLS = 3
+integer, parameter :: POLAR_BOX = 4, POLAR_MODE = 5, POLAR_PDIM = 6
+type, extends(forked_process) :: order_violation
+    integer :: what = ORDER_NO_WEIGHTS
+contains
+    procedure :: execute => score_out_of_order
+end type order_violation
 
 contains
 
@@ -27,7 +39,101 @@ contains
         call test_ref_pfts_offset_io()
         call test_bank_and_at_pose_kernels()
         call test_posterior_inpl_draw()
+        call test_call_order_refusals()
     end subroutine run_all_polarft_corr_tests
+
+    !> the calculator's call-order rules stop a score that breaks them: a Euclidean score without sigma2
+    !! weights, on spectra newer than the weights, or on particles set after memoize_ptcls (each in a child)
+    subroutine test_call_order_refusals()
+        type(order_violation) :: child
+        character(len=*), parameter :: MSGS(6) = [character(len=64) :: &
+            &'a Euclidean score without sigma2 weights stops', 'a score on spectra newer than the weights stops', &
+            &'a new particle batch scored before memoize_ptcls stops', &
+            &'polarize of an image of another box than the memo stops', &
+            &'polarize_oversamp on a normal-mode memo stops', &
+            &'polarize with other polar dimensions than the memo stops']
+        integer :: what
+        write(*,'(A)') 'test_call_order_refusals'
+        do what = ORDER_NO_WEIGHTS, POLAR_PDIM
+            child%what = what
+            call child%start(name=string('PFTC_ORDER_'//int2str(what)))
+            call child%await_final_status()
+            call assert_int(FORK_STATUS_FAILED, child%status(), trim(MSGS(what)))
+            call assert_int(1, child%get_exit_code(), trim(MSGS(what))//' (by its check, not a crash)')
+            call child%destroy
+        end do
+    end subroutine test_call_order_refusals
+
+    subroutine score_out_of_order( self, cline )
+        class(order_violation), intent(inout) :: self
+        class(cmdline),         intent(inout) :: cline
+        integer, parameter :: BOX = 64
+        real,    parameter :: SMPD = 1.0, LP = 6.0
+        type(parameters), target :: p
+        type(cmdline)       :: cl
+        type(polarft_calc)  :: pftc
+        type(image)         :: img, img_big
+        real,           allocatable, target :: sigma2(:,:)
+        integer(int64),              target :: spectra_gen
+        real,           allocatable :: vals(:)
+        complex,        allocatable :: pft(:,:)
+        integer :: pdim(3), kfromto(2)
+        ! one thread: the parent's OpenMP pool does not exist in a forked child
+        !$ call omp_set_num_threads(1)
+        call cl%set('box',     real(BOX))
+        call cl%set('smpd',    SMPD)
+        call cl%set('mskdiam', 48.)
+        call cl%set('nptcls',  1.)
+        call cl%set('nthr',    1.)
+        call cl%set('ctf',     'no')
+        call cl%set('objfun',  'euclid')
+        call p%new(cl)
+        kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
+        call pftc%new(p, 1, [1,1], kfromto)
+        pdim = pftc%get_pdim_srch()
+        call img%new([BOX,BOX,1], SMPD)
+        call img%gauran(0.0, 1.0)
+        call img%memoize4polarize(pdim)
+        call img%fft
+        select case(self%what)
+            case(POLAR_BOX)
+                call img_big%new([BOX+16,BOX+16,1], SMPD)
+                call img_big%gauran(0.0, 1.0)
+                call img_big%fft
+                call pftc%polarize_ptcl_pft(img_big, 1, pdim=pdim, oversamp=.false.)
+                return
+            case(POLAR_MODE)
+                call pftc%polarize_ptcl_pft(img, 1, pdim=pdim, oversamp=.true.)
+                return
+            case(POLAR_PDIM)
+                allocate(pft(pdim(1), pdim(2):pdim(3)-1))
+                call img%polarize([pdim(1), pdim(2), pdim(3)-1], pft)
+                return
+        end select
+        call pftc%polarize_ref_pft(img, 1, iseven=.true.,  pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ref_pft(img, 1, iseven=.false., pdim=pdim, oversamp=.false.)
+        call pftc%polarize_ptcl_pft(img, 1, pdim=pdim, oversamp=.false.)
+        call pftc%set_eo(1, .true.)
+        if( self%what /= ORDER_NO_WEIGHTS )then
+            allocate(sigma2(kfromto(1):kfromto(2),2), source=1.0)
+            spectra_gen = 1_int64
+            call pftc%assign_sigma2_noise(sigma2, spectra_gen)
+        endif
+        call pftc%memoize_refs
+        call pftc%memoize_ptcls
+        select case(self%what)
+            case(ORDER_STALE_SPECTRA)
+                sigma2      = 2.0
+                spectra_gen = spectra_gen + 1_int64
+            case(ORDER_STALE_PTCLS)
+                pft = pftc%allocate_pft()
+                pft = cmplx(1.,0.)
+                call pftc%set_ptcl_pft(1, pft)
+        end select
+        allocate(vals(pftc%get_nrots()))
+        call pftc%gen_objfun_vals(1, 1, [0.,0.], vals)
+        ! reached only when the score was not refused: a clean exit fails the test
+    end subroutine score_out_of_order
 
     !> The in-plane posterior draw (gen_posterior_val and its bank form, the probability tables' fill): at a huge
     !! temperature the argmin of the same kernel (gen_best_objfun_val, gen_best_euclid_val_bank), with its loss;

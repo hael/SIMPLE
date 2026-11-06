@@ -154,7 +154,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
             endif
         endif
         out_fnames(ib) = refine3D_state_vol_fbody(state)//'_'//trim(BACKENDS(ib))//MRC_EXT
-        call simple_rename(vol_fname, out_fnames(ib), overwrite=.true.)
+        call simple_rename(vol_fname, out_fnames(ib))
         call cline_rec%kill
     enddo
     ! read the two maps

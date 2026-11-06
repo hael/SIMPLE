@@ -4,7 +4,7 @@ module simple_flex_pca_embed
 use simple_core_module_api, only: del_file, dp, dtiny, eigsrt, fclose, file_exists, fileiochk, fopen, fplane_type, &
     &jacobi, logfhandle, maximgbatchsz, ori, simple_exception, simple_rename, string, tic, timer_int_kind, toc
 use simple_flex_pca_records,              only: flex_fit_model, flex_selection, flex_latent
-use simple_srch_sort_loc,                 only: locate_2
+use simple_srch_sort_loc,                 only: locate_int
 use simple_builder,                       only: builder
 use simple_parameters,                    only: parameters
 use simple_linalg,                        only: jacobi, eigsrt
@@ -504,7 +504,7 @@ contains
             ! match on pinds rather than assuming a contiguous layout, so a part boundary that does
             ! not line up cannot silently misplace rows
             do i = 1, pn
-                hit = locate_2(gpinds, nptcls, ppinds(i))
+                hit = locate_int(gpinds, nptcls, ppinds(i))
                 if( hit > 0 )then
                     if( gpinds(hit) /= ppinds(i) ) hit = 0
                 endif
@@ -556,7 +556,7 @@ contains
         call fileiochk('read_embed_stats_part; payload', io_stat)
         call fclose(funit)
         do i = 1, pn
-            hit = locate_2(gpinds, nptcls, ppinds(i))
+            hit = locate_int(gpinds, nptcls, ppinds(i))
             if( hit > 0 )then
                 if( gpinds(hit) /= ppinds(i) ) hit = 0
             endif

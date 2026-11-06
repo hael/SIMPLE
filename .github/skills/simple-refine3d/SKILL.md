@@ -1,6 +1,6 @@
 ---
 name: simple-refine3d
-description: Use when working on SIMPLE's refine3D workflow, including CLI/UI entrypoints, the thin commanders and the strategy routines they wrap (refine3D strategy, volassemble_exec, prob_align_exec, commit_sigma2_exec), the distributed master as project owner, the per-iteration reprojection model, probabilistic pre-alignment and its dense/neighbourhood tables, 3D search and matcher strategies, the particle buffer and partial reconstruction, volume assembly, automasking, nonuniform filtering, multi-state behavior, distributed execution, and related solve3D refinement code paths.
+description: Use when working on SIMPLE's refine3D workflow, including CLI/UI entrypoints, the thin commanders and the strategy routines they wrap (refine3D strategy, volassemble_exec, commit_sigma2_exec), the distributed master as project owner and its sample draw, the per-iteration reprojection model, the probabilistic batch pipeline of refine3D_exec (dense/neighbourhood tables, keyed draws, readout records), 3D search and matcher strategies, the particle buffer and partial reconstruction, volume assembly, automasking, nonuniform filtering, multi-state behavior, distributed execution, and related solve3D refinement code paths.
 ---
 
 # SIMPLE Refine3D
@@ -20,7 +20,7 @@ strategy routine owns assembled-volume work.
 5. `src/main/strategies/parallelization/simple_refine3D_strategy.f90`
 6. `src/main/strategies/search/simple_strategy3D_matcher.f90`
 7. `src/main/strategies/parallelization/simple_volassemble_strategy.f90`
-8. `src/main/strategies/parallelization/simple_prob_align_strategy.f90`
+8. `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` (the batch pipeline's table)
 
 For deeper navigation, read:
 
@@ -34,30 +34,32 @@ For deeper navigation, read:
 - Top-level command: `simple_commanders_refine3D.f90` (thin; `create_refine3D_strategy`)
 - Iteration, execution mode, reprojection model: `simple_refine3D_strategy.f90`
 - Particle-domain update/search: `refine3D_exec` in `simple_strategy3D_matcher.f90` and neighboring `search/` modules
-- Probabilistic pre-alignment: `prob_align_exec` / `prob_align_neigh_exec` (`simple_prob_align_strategy.f90`), table workers `prob_tab` / `prob_tab_neigh` (`simple_commanders_prob.f90`), `search/probabilistic/simple_eul_prob_tab*.f90`
+- Probabilistic alignment: the batch pipeline in `refine3D_exec` (`begin_pipeline`, `pipeline_batch`; tables `search/probabilistic/simple_eul_prob_tab.f90`, `simple_eul_prob_tab_neigh.f90`); the sample is the project owner's (`sample_ptcls4prob3D`)
 - Volume assembly: `volassemble_exec` (`simple_volassemble_strategy.f90`); PCG master: `simple_rec3D_pcg_strategy.f90`
 - Sigma2 commit: `commit_sigma2_exec` (`simple_strategy_sigma2.f90`)
 - Final reconstruction ending shared by all 3D workflows: `simple_final_rec.f90` (`calc_final_rec`)
 
 ## Strategy Routines And The Project Owner
 
-- `volassemble_exec`, `prob_align_exec`, `prob_align_neigh_exec` and
-  `commit_sigma2_exec` run on a caller's `(params, build)` with explicit
-  arguments (thread count, `which_iter`, a `write` flag). They do not run
-  `params%new`, set their own thread count (the caller restores its own) and
-  draw random numbers without reseeding. Volume assembly returns the volume
+- `volassemble_exec` and `commit_sigma2_exec` run on a caller's
+  `(params, build)` with explicit arguments (thread count, `which_iter`, a
+  `write` flag). They do not run `params%new`, set their own thread count (the
+  caller restores its own) and draw random numbers without reseeding; the
+  probabilistic routes draw on the keyed generator (`simple_rnd`), which no
+  reseed moves. Volume assembly returns the volume
   names it wrote (`vols`, `vols_even`, `vols_odd`), not `params%vols`.
-- `commander_volassemble` (`simple_commanders_rec_distr.f90`),
-  `commander_prob_align*` (`simple_commanders_prob.f90`) and
+- `commander_volassemble` (`simple_commanders_rec_distr.f90`) and
   `commander_commit_sigma2` (`simple_commanders_euclid.f90`) are thin
   `execute(cline)` wrappers (`run_*`) for shared-memory `refine3D`,
   `reconstruct3D` and other command-line callers. Put new logic in the
   routine, not the wrapper.
 - The distributed master owns its project. It builds the reprojection model on
   its own builder (`materialize_reprojection_model_master`: general toolbox and
-  segment reads plus `update_projinfo` at the first iteration only) and runs
-  the pre-alignment, the fractional-update draw (`master_draws_sample3D`),
-  gridding assembly (`write=.false.`) and the sigma commit on it. It writes the
+  segment reads plus `update_projinfo` at the first iteration only), draws the
+  iteration's sample (`sample_ptcls4prob3D`, keyed, under `refine=prob*`; else
+  `sample_ptcls4iter3D` when `master_draws_sample3D` holds), merges the parts'
+  readout records in part order (`merge_prob_readouts`) and runs gridding
+  assembly (`write=.false.`) and the sigma commit on it. It writes the
   particle field once before the workers, once after the merge only when a
   polish pass follows, and once at the end of the iteration;
   `merge_algndocs(..., write=.false.)` merges in memory; `out` is written once,
@@ -106,7 +108,8 @@ Preserve that split when refactoring.
   `put_record`, `seal_record_buffer`) and both reconstruction backends take
   them (`take_records`, `get_rec_observation`). Over budget the buffer stays
   empty and each phase reads the stacks once; outputs are the same.
-- Preserve artifact handoffs: `assignment_part.dat`, partition-local partial
+- Preserve artifact handoffs: the parts' readout records
+  (`prob_readout_part<NN>.txt`, `refine=prob*`), partition-local partial
   reconstructions, the reprojection model files, state volumes, even/odd
   volumes, FSC outputs, state automasks and trailing chains are workflow
   contracts.
@@ -132,7 +135,8 @@ Preserve that split when refactoring.
 ## Focused Companion Skills
 
 - For solve3D `nsample`/`update_frac`, `sampled`/`updatecnt`,
-  `prob_align`/`prob_tab` sampling reuse, or trailing-reconstruction weighting,
+  the owner's sample draw and the parts' `sample4update_reprod`, or
+  trailing-reconstruction weighting,
   read `.github/skills/simple-solve3d-importance-sampling/SKILL.md`.
 - For fractional-update contracts, current partial reconstruction handoffs,
   the trailing accumulator chain or previous even/odd/rho compatibility, read
@@ -147,7 +151,7 @@ Preserve that split when refactoring.
 - Shared-memory and distributed routes should differ in launch/orchestration, not scientific ownership boundaries.
 - `volassemble_exec` is the execution site for expensive volume-domain work; keep it out of the refine3D strategy, the matcher and the commander wrapper.
 - `execute_from_project`, `execute_hand_on` and the builder's `spproj_src` are gone; do not reintroduce a handed-on project.
-- The distributed fractional-update sample of a non-probabilistic pass is drawn once by the master over the whole project; workers reproduce it with `sample4update_reprod`.
-- The master's dense table is `dists`/`inpls(nptcls, nrefs)` (each reference's distances contiguous); part-file layouts are in `references/refine3d-code-map.md`.
+- The distributed master draws each iteration's sample over the whole project when `master_draws_sample3D` holds (every `refine=prob*` pass, `sample_ptcls4prob3D`, keyed; else a fractional pass other than polish, `update_missing`, `eval` or `sigma`) and writes it before the parts; they reproduce it with `sample4update_reprod`. Shared memory draws in `refine3D_exec`.
+- There is no global table and no part file: a batch's rows (`batch_rows(nrefs, i_first:i_last)`, the active states' references only) live from `fill_tab_range` to `assign_batch`; what lives across batches is the part's per-particle state (`assgn_map`, `temps`, the seed shifts), the insertion table and the readout counts, from `open_assignment` to `close_assignment`.
 - `refine=cont` is the Cartesian pass (`strategy3D_cont`, `src/main/cftc`): it refines the stored poses, `inpl_cont` is forced off, and `athres_cont` (not `athres`) bounds its rotation. `pose_cont=yes` in a discrete mode makes the iteration strategy follow each discrete pass with a `refine=cont` polish over the same sample; `refine=cont pose_cont=yes` on a command line is refused. `cont_route=shift_then_joint` is a test seam, not a production option. A `refine=cont` run converges by its own motion rule (`check_cont_conv`, `pose_cont_status` slot 42).
 - `refine=prob_state`, `refine3D_states pose_policy=fixed`, the `flex` key and docked `solve3D`/`solve3D_cavgs` are retired with no aliases: `flex_pca` is the only state initializer of `refine3D_states` (state-0/1 input, `nstates>=3`), and multi-state `solve3D` (`nstates>1`) refines independent states.

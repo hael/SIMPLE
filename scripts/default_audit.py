@@ -261,7 +261,7 @@ def extract_parameter_bindings(root: Path) -> dict[str, dict]:
     path = root / "src/main/params/simple_parameters_parse.f90"
     bindings: dict[str, dict] = {}
     pattern = re.compile(
-        r"\bcall\s+reg%add_(char|int|real|file|dir)\s*\(\s*'([^']+)'\s*,\s*self%"
+        r"\bcall\s+reg%add_(char|yesno|int|real|file|dir)\s*\(\s*'([^']+)'\s*,\s*self%"
         r"([a-z_][a-z0-9_]*)(?:\s*\([^)]*\))?",
         re.IGNORECASE,
     )
@@ -273,7 +273,8 @@ def extract_parameter_bindings(root: Path) -> dict[str, dict]:
         component = match.group(3).lower()
         bindings[key] = {
             "component": component,
-            "binding_kind": match.group(1).lower(),
+            # a yes/no key is a character binding that refuses other values
+            "binding_kind": "char" if match.group(1).lower() == "yesno" else match.group(1).lower(),
             "source": source_location(root, path, statement.line),
         }
     return bindings

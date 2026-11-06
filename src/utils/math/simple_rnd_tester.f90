@@ -17,7 +17,7 @@ use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal, see
     &poisson_rnd, ran3, rnd_key, rnd_keyed, rnd_keyed_bits, rnd_keyed_int, rnd_keyed_partial_shuffle, rnd_key_lanes, &
     &rnd_bits_to_unit, rnd_scope, RND_KEY_NLANES, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, &
     &RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_KEYED_VERSION, rnd_run_seed, ensure_run_seed, &
-    &rnd_scope_key, rnd_draw_key
+    &rnd_scope_key, rnd_draw_key, get_rnd_state, put_rnd_state
 use simple_math,       only: hpsort
 use simple_string_utils, only: int2str
 use simple_error,        only: simple_exception
@@ -70,7 +70,26 @@ contains
         call test_keyed_int()
         call test_keyed_partial_shuffle()
         call test_keyed_scope()
+        call test_rnd_state_restore()
     end subroutine run_all_rnd_tests
+
+    !> a routine that reseeds (a parameters object of its own) and restores the saved state leaves its caller's
+    !! stream as if it had not run: the next draw and the reseed count are the caller's
+    subroutine test_rnd_state_restore()
+        integer, allocatable :: seed(:)
+        integer :: ncalls
+        real    :: r_ref, r_after
+        write(*,'(A)') 'test_rnd_state_restore'
+        call seed_rnd_fixed(31337)
+        r_ref = ran3()
+        call seed_rnd_fixed(31337)
+        call get_rnd_state(seed, ncalls)
+        call seed_rnd_fixed(4242)
+        r_after = ran3()
+        call put_rnd_state(seed, ncalls)
+        r_after = ran3()
+        call assert_true(r_after == r_ref, 'put_rnd_state restores the caller''s next draw')
+    end subroutine test_rnd_state_restore
 
     !> Library reseeding and intrinsic draws must replay from the propagated root seed.
     subroutine test_global_seed()

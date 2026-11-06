@@ -29,22 +29,22 @@ the per-stage `refine3D` command line:
 - `sample_ptcls4update3D`: `sample4update_all` when fractional update is
   inactive; `sample4update_rescore` for the cohort schedule
   (`cohort_sampling=yes`, every iteration of a block after its first);
-  `sample4update_class` for the nested square-root quota over the sampling
-  units of `clssmp.bin` (`balance=class|cavg`; shares in proportion to the
-  square root of the populations, `class` the workflow default); `sample4update_cnt` for
+  `sample4update_class` for the nested equal quota over the sampling units of
+  `clssmp.bin` (`balance=class|cavg`); `sample4update_cnt` for
   low-update-count biased sampling (`balance=none`).
-- `master_draws_sample3D`: a distributed non-probabilistic fractional pass is
-  drawn once by the master over the whole project and written; workers
-  reproduce it with `sample4update_reprod`.
+- `master_draws_sample3D`: every distributed `refine=prob*` pass and every
+  fractional pass other than polish, missing, eval or sigma is drawn once by
+  the master over the whole project and written; parts reproduce it with
+  `sample4update_reprod`.
 
-`simple_prob_align_strategy.f90` owns the probabilistic pre-step:
+The probabilistic routes have no pre-step:
 
-- `prob_align_exec` / `prob_align_neigh_exec` sample once (clearing `sampled`
-  and `updatecnt` only at `startit == 1` on its first iteration) and write the
-  subset to the project.
-- `prob_tab`, `prob_tab_neigh` (`simple_commanders_prob.f90`) and
-  `refine3D_exec` reproduce that exact subset with `sample4update_reprod`, as
-  does the `pose_cont=yes` polish pass.
+- `sample_ptcls4prob3D` is their draw, by the project owner (shared-memory
+  `refine3D_exec` or the distributed master), keyed on the run's seed, pass
+  and iteration; it clears `sampled` and `updatecnt` only at `startit == 1` on
+  its first iteration.
+- Distributed parts and the `pose_cont=yes` polish pass reproduce that exact
+  subset with `sample4update_reprod`.
 
 `simple_oris_sampling.f90` and `simple_oris_getters.f90` define the handshake:
 

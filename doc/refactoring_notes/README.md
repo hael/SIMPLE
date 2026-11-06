@@ -44,7 +44,6 @@ this index does not establish a new passing test result.
 | FLEX architecture | [PCA architecture closeout](planned/flex_pca_architecture_audit_and_refactoring_plan_2026_09_18_unfinished.md) | Refactor implemented; baseline capture/replay and optional cleanup remain. |
 | Policy debt | [Gap register](planned/policy_set_audit_2026-10-21.md) | Open decisions and code/coverage debt remain here; the completed audit reports are archived below. |
 | Random seed | [Parameter proposal](planned/rnd_seed_parameter.md) | Awaiting review; production still uses the environment seed. |
-| Agent-friendly code | [Proposal](planned/agent_friendly_code.md) | Folder guides and defect fixes delivered 2026-11-04; section 7 runs as `agent_friendly` on the dell (section 8), items that change `ms_posterior2`'s files deferred until it lands. |
 | Tomography | [refine_tomo](planned/refine_tomo.md) | Reconcile compilation and ground-truth evidence with subsequent workflow work. |
 | Microscope metadata | [Multi-microscope parameters](planned/need2basis/multi_microscope_parameters.md) | First phase delivered; audit remaining CTF construction/merge tests and policy decisions. |
 | MRC naming | [Stack/volume suffixes](planned/need2basis/mrc_stack_volume_output_suffix_refactoring.md) | Decision/basis needed before migration. |
@@ -58,6 +57,7 @@ measurements remain in the records; archiving supplies no new passing result.
 
 | Topic | Record | Delivered scope and retained limits |
 | --- | --- | --- |
+| Agent-friendly code | [Plan](completed/agent_friendly_code.md), [run report](completed/agent_friendly_code_report.md) | Folder guides and defect fixes 2026-11-04; the run `agent_friendly` (2026-11-05, uncommitted for review): the command-line gate check, the small fixes and the checks of 3.1, the medium items, renames, glossary, measurements of I1, O1, O4, S4, and (phase 6, ruled after the report) O1 and O4 adopted, X1/G3 finished, the particle-row slot stop and the sieve fix. The items that change `ms_posterior2`'s files (R4/X4, C3, C4, R6, 3.7 and the phase-6 remainder) go to the follow-up run `agent_friendly2`. |
 | Polar shift-search performance | [Refactoring record](completed/polar_shift_search_performance_refactoring.md) | Integrated in `69a623cb8`, with recorded Debug/Release and simulated-workflow validation. Experimental-data timing/memory and Linux/BOX scaling remain follow-up measurements. |
 | Local refinement | [Workflow and architecture record](completed/refine3d_local_workflow.md) | Workflow and startup/ownership cleanup delivered in `0c4801f61` and `9c9ec1105`. Preserve the dated integration, replay-equivalence and broader scientific-validation limits; the checkout-local evidence artifact remains unavailable here. |
 | Stream architecture | [Stage refactor](completed/stream_refactor.md) | Stage switch-over complete; class-average selection tester registered. Archived by maintainer decision with helper-placement/optics follow-ups and workflow/GUI validation limits retained. |

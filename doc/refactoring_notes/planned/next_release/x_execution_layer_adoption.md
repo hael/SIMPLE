@@ -29,10 +29,10 @@ adds an opt-in key (default off). The user compiles and runs the gates.
 | E5 | Not started | |
 | E6 | Not started | |
 
-E4 pieces that landed incidentally. `generate_script_4` in
+E4 pieces that landed incidentally. `generate_script_jobs` in
 `src/utils/qsys/simple_qsys_ctrl.f90` (around lines 606 to 620) captures
 `${PIPESTATUS[0]}` when `exit_code_fname` is given, so the recorded status is the
-program's and not `tee`'s. `generate_script_1` (batch parts) redirects directly,
+program's and not `tee`'s. `generate_script_part` (batch parts) redirects directly,
 writes `$?` to a per-part exit-code file, and records the scheduler and job id.
 `src/utils/qsys/simple_qsys_job_record.f90` adds lost-job detection (status 254,
 `JOB_LOST_EXIT_CODE`) and cancel of queued jobs (commits `08a46838b` and

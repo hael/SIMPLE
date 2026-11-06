@@ -5,8 +5,8 @@ use simple_parameters, only: parameters
 implicit none
 
 interface qsys_watcher
-    module procedure qsys_watcher_1
-    module procedure qsys_watcher_2
+    module procedure qsys_watcher_file
+    module procedure qsys_watcher_files
 end interface
 
 integer, parameter :: SHORTTIME = 3
@@ -67,7 +67,7 @@ contains
     end subroutine qsys_declare_part_finished
 
     !>  returns when the inputted file exists in cwd
-    subroutine qsys_watcher_1( fname, wtime )
+    subroutine qsys_watcher_file( fname, wtime )
         class(string),     intent(in) :: fname
         integer, optional, intent(in) :: wtime
         integer :: wwtime
@@ -79,10 +79,10 @@ contains
             if( there ) exit
             call sleep(wwtime)
         end do
-    end subroutine qsys_watcher_1
+    end subroutine qsys_watcher_file
 
     !>  returns when the inputted files exist in cwd
-    subroutine qsys_watcher_2( fnames, wtime )
+    subroutine qsys_watcher_files( fnames, wtime )
         class(string),     intent(in) :: fnames(:)
         integer, optional, intent(in) :: wtime
         integer, parameter   :: MAXITS=20000
@@ -103,7 +103,7 @@ contains
                 call sleep(wwtime)
             endif
         end do
-    end subroutine qsys_watcher_2
+    end subroutine qsys_watcher_files
 
     !> Diagnostic watcher with periodic missing-file reporting and timeout hard-stop.
     !! Orthogonal to qsys_watcher so existing behavior elsewhere is untouched.

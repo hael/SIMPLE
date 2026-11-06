@@ -32,6 +32,12 @@ type, extends(pcg_operator) :: dense_pcg_operator
     procedure :: dot     => dense_pcg_dot
 end type dense_pcg_operator
 
+! the first point a minimiser evaluates once armed: simplex's start, DE's first member
+type :: eval_recorder
+    real    :: first(2) = huge(1.)
+    logical :: armed    = .false.
+end type eval_recorder
+
 contains
 
     subroutine run_all_opt_tests()
@@ -43,6 +49,8 @@ contains
         call test_lbfgsb_rosenbrock()
         call test_de_quadratic()
         call test_simplex_quadratic()
+        call test_start_at_origin()
+        call test_de_npop_inipop()
         call test_pcg_dense_spd()
         call test_pcg_diagonal_one_step()
         call test_pcg_cold_restart()
@@ -319,8 +327,9 @@ contains
         call assert_true(lowest_cost < 1.e-5, 'simplex cost at the minimum')
         call assert_true(spec%nevals > 3, 'the simplex vertices and the moves are counted')
         call assert_true(spec%niter > 0, 'the average iteration count over the restarts is reported')
-        ! a zero start is replaced by a random point in the box
-        spec%x = 0.
+        ! no start: a random point in the box
+        spec%x       = 0.
+        spec%nostart = .true.
         call opt%minimize(spec, opt, lowest_cost)
         call assert_real(XMIN(1), spec%x(1), 2.e-3, 'simplex from a random start (x)')
         call assert_real(XMIN(2), spec%x(2), 2.e-3, 'simplex from a random start (y)')
@@ -328,6 +337,77 @@ contains
         deallocate(opt)
         call spec%kill
     end subroutine test_simplex_quadratic
+
+    ! quad2d, recording the first point evaluated after arming
+    function quad2d_rec( fun_self, x, d ) result( r )
+        class(*), intent(inout) :: fun_self
+        integer,  intent(in)    :: d
+        real,     intent(in)    :: x(d)
+        real                    :: r
+        select type(fun_self)
+            type is(eval_recorder)
+                if( fun_self%armed )then
+                    fun_self%first = x(1:2)
+                    fun_self%armed = .false.
+                endif
+        end select
+        r = sum((x - XMIN)**2)
+    end function quad2d_rec
+
+    ! an all-zero x is a start (the origin); nostart says there is none
+    subroutine test_start_at_origin()
+        class(optimizer), pointer :: opt => null()
+        type(opt_factory)   :: ofac
+        type(opt_spec)      :: spec
+        type(eval_recorder) :: rec
+        character(len=7), parameter :: OPTS(2) = ['simplex', 'de     ']
+        real    :: lowest_cost
+        integer :: iopt
+        write(*,'(A)') 'test_start_at_origin'
+        call set_fixed_seed(20261105)
+        do iopt = 1,2
+            call spec%specify(trim(OPTS(iopt)), 2, limits=LIMS2, maxits=200, ftol=1.e-7)
+            call spec%set_costfun(quad2d_rec)
+            call ofac%new(spec, opt)
+            spec%x    = 0.
+            rec%armed = .true.
+            call opt%minimize(spec, rec, lowest_cost)
+            call assert_true(all(rec%first == 0.), trim(OPTS(iopt))//' starts at the origin when x is zero')
+            spec%nostart = .true.
+            rec%armed    = .true.
+            call opt%minimize(spec, rec, lowest_cost)
+            call assert_true(any(rec%first /= 0.), trim(OPTS(iopt))//' draws its start under nostart')
+            call opt%kill
+            deallocate(opt)
+            call spec%kill
+        end do
+    end subroutine test_start_at_origin
+
+    ! DE takes the npop given to specify and puts the members of set_inipop into its population
+    subroutine test_de_npop_inipop()
+        class(optimizer), pointer :: opt => null()
+        type(opt_factory)   :: ofac
+        type(opt_spec)      :: spec
+        type(eval_recorder) :: rec
+        real :: lowest_cost, pop(1,2)
+        write(*,'(A)') 'test_de_npop_inipop'
+        call set_fixed_seed(20261106)
+        call spec%specify('de', 2, limits=LIMS2, maxits=1, npop=20)
+        call spec%set_costfun(quad2d_rec)
+        pop(1,:) = XMIN
+        call spec%set_inipop(pop)
+        call ofac%new(spec, opt)
+        call assert_int(20, spec%npop, 'DE keeps the npop given to specify')
+        spec%nostart = .true.
+        rec%armed    = .true.
+        call opt%minimize(spec, rec, lowest_cost)
+        call assert_true(all(rec%first == XMIN), 'the member given by set_inipop is the first DE evaluates')
+        call assert_true(lowest_cost == 0., 'the given optimum is the best member')
+        call assert_int(21, spec%nevals, 'twenty members and one trial')
+        call opt%kill
+        deallocate(opt)
+        call spec%kill
+    end subroutine test_de_npop_inipop
 
     !---------------- shared PCG engine ----------------
 

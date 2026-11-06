@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost4Dcont
-use simple_memoize_ft_maps,   only: memoize_ft_maps, ft_map_spafreqsq, ft_map_astigang, forget_ft_maps
+use simple_memoize_ft_maps,   only: memoize_ft_maps, ft_map_spafreqsq, ft_map_astigang
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 use simple_timer
@@ -1569,7 +1569,7 @@ contains
             self%ntotpatch = 0
             self%npatches  = 0
         endif
-        call forget_ft_maps
+        ! the process-wide Fourier maps are not the fit's: other users (image CTF kernel, class averager) keep them
         self%exists = .false.
     end subroutine kill
 

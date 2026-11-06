@@ -14,46 +14,46 @@ interface arr2file
 end interface arr2file
 
 interface arr2txtfile
-    module procedure arr2txtfile_1
-    module procedure arr2txtfile_2
+    module procedure arr2txtfile_real
+    module procedure arr2txtfile_int
 end interface arr2txtfile
 
 interface del_files
-    module procedure del_files_1
-    module procedure del_files_2
+    module procedure del_files_numbered
+    module procedure del_files_list
 end interface del_files
 
 interface add2fbody
-    module procedure add2fbody_1
-    module procedure add2fbody_2
-    module procedure add2fbody_3
+    module procedure add2fbody_str
+    module procedure add2fbody_char
+    module procedure add2fbody_str_char
 end interface add2fbody
 
 interface fname_new_ext
-    module procedure fname_new_ext_1
-    module procedure fname_new_ext_2
+    module procedure fname_new_ext_str
+    module procedure fname_new_ext_char
 end interface fname_new_ext
 
 interface filepath
-    module procedure filepath_1
-    module procedure filepath_2
-    module procedure filepath_3
-    module procedure filepath_4
+    module procedure filepath_str
+    module procedure filepath_str_char
+    module procedure filepath_char
+    module procedure filepath_char_str
 end interface filepath
 
 interface append2basename
-    module procedure append2basename_1
-    module procedure append2basename_2
+    module procedure append2basename_str
+    module procedure append2basename_char
 end interface append2basename
 
 interface swap_suffix
-    module procedure swap_suffix_1
-    module procedure swap_suffix_2
+    module procedure swap_suffix_str
+    module procedure swap_suffix_char
 end interface swap_suffix
 
 interface get_fbody
-    module procedure get_fbody_1
-    module procedure get_fbody_2
+    module procedure get_fbody_str
+    module procedure get_fbody_char
 end interface get_fbody
 
 
@@ -387,7 +387,7 @@ contains
         enddo
     end subroutine get_open_funits
 
-    function add2fbody_1( fname, suffix, str ) result( newname )
+    function add2fbody_str( fname, suffix, str ) result( newname )
         class(*),      intent(in)  :: fname
         class(string), intent(in) ::suffix, str
         character(len=:), allocatable :: fname_tmp
@@ -397,9 +397,9 @@ contains
         pos = index(fname_tmp, suffix%to_char()) ! position of suffix
         newname = fname_tmp(:pos-1)//str%to_char()//suffix%to_char()
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function add2fbody_1
+    end function add2fbody_str
 
-    function add2fbody_2( fname, suffix, str ) result( newname )
+    function add2fbody_char( fname, suffix, str ) result( newname )
         class(*),         intent(in)  :: fname
         character(len=*), intent(in)  :: suffix, str
         character(len=:), allocatable :: fname_tmp
@@ -409,9 +409,9 @@ contains
         pos = index(fname_tmp, trim(suffix)) ! position of suffix
         newname = fname_tmp(:pos-1)//trim(str)//trim(suffix)
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function add2fbody_2
+    end function add2fbody_char
 
-    function add2fbody_3( fname, suffix, str ) result( newname )
+    function add2fbody_str_char( fname, suffix, str ) result( newname )
         class(*),         intent(in)  :: fname
         class(string),    intent(in)  :: suffix
         character(len=*), intent(in)  :: str
@@ -422,9 +422,9 @@ contains
         pos = index(fname_tmp, suffix%to_char()) ! position of suffix
         newname = fname_tmp(:pos-1)//trim(str)//suffix%to_char()
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function add2fbody_3
+    end function add2fbody_str_char
 
-    function append2basename_1( fname, suffix ) result( newname )
+    function append2basename_str( fname, suffix ) result( newname )
         class(string), intent(in) :: fname, suffix 
         type(string) :: bname, newname, ext
         bname   = basename(fname)
@@ -432,9 +432,9 @@ contains
         newname = add2fbody(bname, string('.'//ext%to_char()), suffix)
         call bname%kill
         call ext%kill
-    end function append2basename_1
+    end function append2basename_str
 
-    function append2basename_2( fname, suffix ) result( newname )
+    function append2basename_char( fname, suffix ) result( newname )
         class(string),    intent(in) :: fname
         character(len=*), intent(in) :: suffix 
         type(string) :: bname, newname, ext
@@ -443,7 +443,7 @@ contains
         newname = add2fbody(bname, string('.'//ext%to_char()), string(suffix))
         call bname%kill
         call ext%kill
-    end function append2basename_2
+    end function append2basename_char
 
     function rm_from_fbody( fname, suffix, str ) result( newname )
         class(*),      intent(in)  :: fname 
@@ -457,7 +457,7 @@ contains
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function rm_from_fbody
 
-    function swap_suffix_1( fname, suffix, old_suffix ) result( newname )
+    function swap_suffix_str( fname, suffix, old_suffix ) result( newname )
         class(*),      intent(in)  :: fname
         class(string), intent(in)  :: suffix, old_suffix
         character(len=:), allocatable :: fname_tmp
@@ -467,9 +467,9 @@ contains
         pos = index(fname_tmp, old_suffix%to_char()) ! position of old_suffix
         newname = fname_tmp(:pos-1)//suffix%to_char()
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function swap_suffix_1
+    end function swap_suffix_str
 
-    function swap_suffix_2( fname, suffix, old_suffix ) result( newname )
+    function swap_suffix_char( fname, suffix, old_suffix ) result( newname )
         class(*),         intent(in)  :: fname
         character(len=*), intent(in)  :: suffix, old_suffix
         character(len=:), allocatable :: fname_tmp
@@ -479,9 +479,9 @@ contains
         pos = index(fname_tmp, trim(adjustl(old_suffix))) ! position of old_suffix
         newname = fname_tmp(:pos-1)//trim(adjustl(suffix))
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function swap_suffix_2
+    end function swap_suffix_char
 
-    function get_fbody_1( fname, suffix, separator ) result( fbody )
+    function get_fbody_str( fname, suffix, separator ) result( fbody )
         class(*),          intent(in) :: fname
         class(string),     intent(in) :: suffix
         logical, optional, intent(in) :: separator
@@ -499,9 +499,9 @@ contains
         endif
         fbody = fname_tmp(:pos-1)
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function get_fbody_1
+    end function get_fbody_str
 
-    function get_fbody_2( fname, suffix, separator ) result( fbody )
+    function get_fbody_char( fname, suffix, separator ) result( fbody )
         class(*),          intent(in) :: fname
         character(len=*),  intent(in) :: suffix
         logical, optional, intent(in) :: separator
@@ -519,24 +519,24 @@ contains
         endif
         fbody = fname_tmp(:pos-1)
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
-    end function get_fbody_2
+    end function get_fbody_char
 
-    function fname_new_ext_1( fname, suffix ) result( new_fname )
+    function fname_new_ext_str( fname, suffix ) result( new_fname )
         class(string), intent(in) :: fname, suffix
         type(string) :: ext, fbody, new_fname
         ext       = fname2ext(fname)
         fbody     = get_fbody(fname, ext)
         new_fname = fbody%to_char()//'.'//suffix%to_char()
-    end function fname_new_ext_1
+    end function fname_new_ext_str
 
-    function fname_new_ext_2( fname, suffix ) result( new_fname )
+    function fname_new_ext_char( fname, suffix ) result( new_fname )
         class(string),    intent(in) :: fname
         character(len=*), intent(in) :: suffix
         type(string) :: ext, fbody, new_fname
         ext       = fname2ext(fname)
         fbody     = get_fbody(fname, ext)
         new_fname = fbody%to_char()//'.'//trim(adjustl(suffix))
-    end function fname_new_ext_2
+    end function fname_new_ext_char
 
     function fname2ext( fname ) result( ext )
         class(string),    intent(in)  :: fname
@@ -664,7 +664,7 @@ contains
     end function make_filenames
 
     !> concatenate strings together to with '/' to create a filename
-    function filepath_1(s1, s2, s3) result( fname )
+    function filepath_str(s1, s2, s3) result( fname )
         class(string),           intent(in) :: s1, s2
         class(string), optional, intent(in) :: s3
         type(string) :: fname
@@ -673,31 +673,31 @@ contains
         else
             fname = s1%to_char()//PATH_SEPARATOR//s2%to_char()
         endif
-    end function filepath_1
+    end function filepath_str
 
-    function filepath_2(s1, s2) result( fname )
+    function filepath_str_char(s1, s2) result( fname )
         class(string),    intent(in) :: s1
         character(len=*), intent(in) :: s2
         type(string) :: fname
         fname = s1%to_char()//PATH_SEPARATOR//trim(adjustl(s2))
-    end function filepath_2
+    end function filepath_str_char
 
-    function filepath_3(s1, s2) result( fname )
+    function filepath_char(s1, s2) result( fname )
         character(len=*), intent(in) :: s1
         character(len=*), intent(in) :: s2
         type(string) :: fname
         fname = trim(adjustl(s1))//PATH_SEPARATOR//trim(adjustl(s2))
-    end function filepath_3
+    end function filepath_char
 
-    function filepath_4(s1, s2) result( fname )
+    function filepath_char_str(s1, s2) result( fname )
         character(len=*), intent(in) :: s1
         class(string),    intent(in) :: s2
         type(string) :: fname
         fname = trim(adjustl(s1))//PATH_SEPARATOR//s2%to_char()
-    end function filepath_4
+    end function filepath_char_str
 
     !> \brief  is for deleting consecutively numbered files with padded number strings
-    subroutine del_files_1( body, n, ext, numlen, suffix )
+    subroutine del_files_numbered( body, n, ext, numlen, suffix )
         character(len=*),           intent(in) :: body !< input filename body
         integer,                    intent(in) :: n    !< total num for del, formatted as body[n].ext
         character(len=*), optional, intent(in) :: ext  !< input filename extension
@@ -713,16 +713,16 @@ contains
         do ifile=1,n
             if( file_exists(names(ifile)) ) call del_file(names(ifile))
         end do
-    end subroutine del_files_1
+    end subroutine del_files_numbered
 
-    subroutine del_files_2( list )
+    subroutine del_files_list( list )
         class(string), intent(in) :: list(:)
         integer :: ifile, n
         n = size(list)
         do ifile=1,n
             if( file_exists(list(ifile)) ) call del_file(list(ifile))
         end do
-    end subroutine del_files_2
+    end subroutine del_files_list
 
     subroutine move_files_in_cwd( dir, files_that_stay )
         class(string),           intent(in) :: dir
@@ -911,7 +911,7 @@ contains
     end subroutine arr2file_dp
 
     !> \brief  for writing real array
-    subroutine arr2txtfile_1( arr, fnam )
+    subroutine arr2txtfile_real( arr, fnam )
         real,          intent(in) :: arr(:)
         class(string), intent(in) :: fnam
         integer :: i,funit,io_stat
@@ -921,10 +921,10 @@ contains
             write(funit,*) arr(i)
         end do
         call fclose(funit)
-    end subroutine arr2txtfile_1
+    end subroutine arr2txtfile_real
 
     !> \brief  for writing integer array
-    subroutine arr2txtfile_2( arr, fnam )
+    subroutine arr2txtfile_int( arr, fnam )
         integer,       intent(in) :: arr(:)
         class(string), intent(in) :: fnam
         integer :: i,funit,io_stat
@@ -934,7 +934,7 @@ contains
             write(funit,*) arr(i)
         end do
         call fclose(funit)
-    end subroutine arr2txtfile_2
+    end subroutine arr2txtfile_int
 
     !> \brief  for converting a file generated by arr2file_sp back to an array
     function file2rarr( fnam ) result( arr )

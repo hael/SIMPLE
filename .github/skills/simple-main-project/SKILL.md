@@ -27,8 +27,9 @@ Silent ones first: nothing reports these.
 - `write` deletes and recreates the file (`tempfile=.true.`: a `.tmp`, then a rename). No locking:
   another process can read it half-written. Full writes end a command-line step or a run; inside an
   iteration write each changed segment once.
-- `read_segment(..., fromto)` of a `.simple` file reads the whole segment (the range never reaches
-  `segreader`): known defect, ruled for fixing (honour the range).
+- `read_segment(..., fromto)` fills rows `fromto(1):fromto(2)` at their index in the segment; the field keeps
+  the segment's size and its other rows are fresh (defaults, 0 on `get`). Ranges are for `ptcl2D`, `ptcl3D` and
+  `cls3D` only, in `.simple` and text files; another segment with a range stops.
 - Index domains: `os_stk` `fromp`/`top`/`nptcls` count project rows; `indstk` is the image's index
   in its stack file (`1..nptcls_stk`). Active particles are `state > 0`, not `nptcls`. `ptcl2D` and
   `ptcl3D` hold the same rows (several getters stop on a count mismatch). `ptcl2D` `state` is the
@@ -36,9 +37,10 @@ Silent ones first: nothing reports these.
 - `merge_algndocs(nptcls, ndocs, oritype, fbody)` reads `<fbody><i>.simple` (`i` padded to
   `numlen`), each a worker's range written by `binwrite_oritab`, into the in-memory field, and stops
   unless the ranges cover `1..nptcls` without overlap. By default it also writes the segment to the
-  projinfo file: a master that owns its project passes `write=.false.` and writes once. Nothing
-  stops a worker from writing the project file: it must not (ruled for fixing: `write` and
-  `write_segment_inside` are to stop under `l_distr_worker_glob`).
+  projinfo file: a master that owns its project passes `write=.false.` and writes once. A
+  partition worker (`part` given, not a stream job) writes part files only: `write`,
+  `write_segment_inside`, `clear_segment_inside` and `write_non_data_segments` stop on its input
+  project (`worker_projfile_glob`, recorded by `params%new`). A stream job owns its job project.
 - `ensure_field_halves(spproj, oritype, projfile)` is the halves' one maker. The master labels
   unlabelled rows by micrograph group (never relabels), the same in `ptcl2D` and `ptcl3D`, writes the
   changed segments and copies the labels into the loaded fields (stops if their rows differ from the

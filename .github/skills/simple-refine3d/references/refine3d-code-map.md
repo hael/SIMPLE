@@ -10,10 +10,10 @@ For normal 3D refinement, the high-level call chain is:
 
 1. `src/main/commanders/simple/simple_commanders_refine3D.f90`
 2. `src/main/strategies/parallelization/simple_refine3D_strategy.f90`
-3. `src/main/strategies/parallelization/simple_prob_align_strategy.f90` (`refine=prob*`)
-4. `src/main/strategies/search/simple_strategy3D_matcher.f90`
-5. `src/main/strategies/parallelization/simple_volassemble_strategy.f90`
-6. `src/main/strategies/parallelization/simple_strategy_sigma2.f90`
+3. `src/main/strategies/search/simple_strategy3D_matcher.f90` (under `refine=prob*` with
+   the tables of `src/main/strategies/search/probabilistic/`)
+4. `src/main/strategies/parallelization/simple_volassemble_strategy.f90`
+5. `src/main/strategies/parallelization/simple_strategy_sigma2.f90`
 
 Read them in that order unless the task is tightly scoped.
 
@@ -27,10 +27,6 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
   Entry point, defaults, automatic workflow, and execution-strategy selection
   through `create_refine3D_strategy` (`nparts` without `part`: distributed
   master; otherwise shared memory).
-- `simple_commanders_prob.f90`
-  Table workers `prob_tab` / `prob_tab_neigh` (fill a partition's table for the
-  reproduced sample and write its part file) and the thin wrappers
-  `commander_prob_align` / `commander_prob_align_neigh`.
 - `simple_commanders_rec_distr.f90`
   `commander_volassemble`: a thin wrapper that calls `run_volassemble`.
 - `simple_commanders_euclid.f90`
@@ -42,15 +38,12 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
   Shared-memory versus distributed execution, iteration loop, scheduler
   interaction, per-iteration reprojection model
   (`materialize_reprojection_model`, `materialize_reprojection_model_master`),
-  probabilistic pre-step and fractional-sample dispatch, matcher dispatch,
+  the iteration's sample draw (`sample_ptcls4prob3D` under `refine=prob*`,
+  `master_draws_sample3D` otherwise), the run seed (`adopt_run_seed`), the
+  merge of the parts' readout records (`merge_prob_readouts`), matcher dispatch,
   the `pose_cont=yes` polish pass, assembly dispatch (gridding or
   `assemble_refine3D_pcg`), the matching low-pass refresh, convergence and the
   sigma2 commit.
-- `simple_prob_align_strategy.f90`
-  `prob_align_exec` / `prob_align_neigh_exec`: draw the sample once in the
-  caller's particle field and write it, run the table workers (in process or
-  on `nparts`), read the part files, `ref_assign`, write
-  `assignment_part.dat`.
 - `simple_volassemble_strategy.f90`
   `volassemble_exec` (gridding assembly on a caller's `(params, build)`),
   `run_volassemble` (its command-line form) and `filter_pcg_nonuniform_maps`
@@ -68,8 +61,11 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 - `simple_strategy3D_matcher.f90`
   `refine3D_exec`: reads the reprojection model (`read_reprojection_model`),
   reproduces or draws the particle sample (`sample_particles_for_update`),
-  fills the pass buffer or opens the record buffer, runs the search per batch
-  under a dynamic OpenMP schedule, writes orientations and sigma2 ranges,
+  under `refine=prob*` opens the pipeline (`begin_pipeline`), fills the pass
+  buffer or opens the record buffer, per batch fills and draws
+  (`pipeline_batch`: `fill_tab_range`, `assign_batch`) and runs the search
+  under a dynamic OpenMP schedule, closes the assignment after the batches
+  (`close_assignment`; a part writes its readout record), writes orientations and sigma2 ranges,
   releases the model at the assignment barrier, then writes partial
   reconstructions (`write_partial_recs`: `calc_3Drec` or the PCG worker).
 - `simple_matcher_refvol_utils.f90`
@@ -81,9 +77,10 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
   `build_batch_particles3D`.
 - `simple_matcher_smpl_and_lplims.f90`
   `set_bp_range3D`, `sample_ptcls4iter3D`, `sample_ptcls4update3D`,
-  `master_draws_sample3D`.
+  `sample_ptcls4prob3D`, `master_draws_sample3D`, `adopt_run_seed`.
 - `search/probabilistic/simple_strategy3D_prob.f90`
-  Consumer of the precomputed assignment map.
+  Consumer of the batch's assignment map (`assgn_map`, drawn by `assign_batch`
+  just before the search) and of the extra poses (`topk > 1`).
 - `simple_strategy3D_alloc.f90`, `simple_strategy3D_utils.f90`
   Search-space allocation and shared helpers.
 - `simple_strategy3D_*.f90`
@@ -94,16 +91,21 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 ### Probability Tables (`src/main/strategies/search/probabilistic/`)
 
 - `simple_eul_prob_tab.f90`
-  Dense table: worker fill (`fill_tab_range`), part-file write, parallel part
-  read into the master's `dists`/`inpls(nptcls, nrefs)` (active references
-  only), `ref_assign`.
+  Dense table on the matcher's batches: `new_pipeline`, `set_model_from_field`,
+  `fill_tab_range` (keeps the batch's rows), `open_assignment`, `assign_batch`
+  (`assign_rows`), `close_assignment`; the weighted insertion's table
+  (`insert_tab`).
 - `simple_eul_prob_tab_neigh.f90`
-  Neighbourhood table (`prob_neigh`), candidate streams.
+  Neighbourhood table (`prob_neigh`): per-thread candidate buffers gathered
+  into the batch's candidate store (`assign_batch` -> `batch_store_from_buffers`),
+  then drawn (`assign_rows_neigh`).
 - `simple_eul_prob_tab_utils.f90`
   The posterior primitives (`posterior_temperature`, `draw_posterior_row`,
   `posterior_row_stats`, `prob_beta_at`), the SHC strategies' samplers
-  (`angle_sampling`, `sample_bounded_dists`, `sample_power_dists`),
-  part-file entry types.
+  (`angle_sampling`, `sample_bounded_dists`, `sample_power_dists`), the row and
+  candidate entry types (`prob_dense_entry`, `prob_refined_entry`,
+  `prob_candidate`), the readout record (`prob_readout`,
+  `merge_prob_readouts`), the keyed scope (`prob_rnd_scope`).
 
 ### Reconstruction/Postprocessing
 
@@ -128,22 +130,16 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 
 ## Current Artifact Contracts
 
-- `assignment_part.dat` (`ASSIGNMENT_FBODY`) is produced by probabilistic
-  pre-alignment and consumed by `strategy3D_prob`; table part files are
-  `dist_part*.dat` / `dist_part_neigh_*.dat`.
-- Dense part files: header (references, particles, format word -3
-  `PROB_TAB_DENSE_FORMAT`, refined-entry count), active-state list, particle
-  indices, seed table, one (distance, in-plane) row per particle and active
-  reference, refined-entry list. Neighbourhood part files write per-particle
-  candidate counts after the particle indices. The driver checks file size,
-  format, active states and that each particle is in exactly one part, and
-  stops after the parallel read on the first failing part.
+- Probabilistic passes write no table, assignment or insertion file: a
+  distributed part writes `prob_readout_part<NN>.txt` (counts and n_eff sums;
+  zero for an empty part), which the master merges in part order, reports and
+  deletes (`merge_prob_readouts`).
 - The reprojection model (`reprojection_model_{even,odd}.bin`) is written by
-  the strategy before the pre-step and the matcher, and read by both; its
+  the strategy before the matcher, which reads it; its
   header carries the band (`kfromto`). Cartesian passes read
   `cart_refvols_{even,odd}.bin`. `remove_ref_section_files` deletes both sets.
 - Multi-state references are state-major: state `s` occupies
-  `(s-1)*nspace+1 : s*nspace`; the dense table stores active states only.
+  `(s-1)*nspace+1 : s*nspace`; a dense row holds the active states' references only.
 - Cartesian matcher work writes partition-local partial reconstructions;
   stale partials are removed before each matcher iteration. Volume assembly
   reduces them into state/even/odd volumes and does not touch matcher
@@ -168,6 +164,6 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
 - Does it run on the distributed master's `(params, build)`, and does it add a project read or write there?
 - Does this change touch particle-domain work or assembled-volume work?
 - Does a policy doc in `doc/policies/` need to change with the code?
-- Does the reprojection model stay the one source of matching references for the matcher and the table workers?
+- Does the reprojection model stay the one source of matching references for the matcher and its pipeline?
 - Does reconstruction still take its images from the pass buffer or the records instead of a second stack read?
 - If multi-state `solve3D` activates a point group, does the symmetry-axis search remain state-local?

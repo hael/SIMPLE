@@ -10,20 +10,20 @@ use, intrinsic :: iso_c_binding
 implicit none
 
 interface str2format
-    module procedure str2format_1
-    module procedure str2format_2
+    module procedure str2format_real
+    module procedure str2format_dp
 end interface str2format
 
 interface str2int
-    module procedure str2int_1
-    module procedure str2int_2
-    module procedure str2int_3
-    module procedure str2int_4
+    module procedure str2int_char
+    module procedure str2int_str
+    module procedure str2int_str_stat
+    module procedure str2int_char_stat
 end interface str2int
 
 interface str2real
-    module procedure str2real_1
-    module procedure str2real_2
+    module procedure str2real_char
+    module procedure str2real_str
 end interface str2real
 
 interface real2str
@@ -32,18 +32,18 @@ interface real2str
 end interface real2str
 
 interface split
-    module procedure split_1
-    module procedure split_2
+    module procedure split_char
+    module procedure split_string
 end interface split
 
 interface findloc_str
-    module procedure findloc_str_1
-    module procedure findloc_str_2
+    module procedure findloc_str_str
+    module procedure findloc_str_char
 end interface findloc_str
 
 interface lex_sort
-    module procedure lex_sort_1
-    module procedure lex_sort_2
+    module procedure lex_sort_char
+    module procedure lex_sort_str
 end interface lex_sort
 
 contains
@@ -70,18 +70,18 @@ contains
     end function cast_str_types
 
     !> \brief  assesses whether a string represents a filename
-    subroutine str2format_1( str, format, rvar, ivar )
+    subroutine str2format_real( str, format, rvar, ivar )
         character(len=*),              intent(in)  :: str
         character(len=:), allocatable, intent(out) :: format
         real,                          intent(out) :: rvar
         integer,                       intent(out) :: ivar
         real(dp) :: rvar_dp
-        call str2format_2( str, format, rvar_dp, ivar )
+        call str2format_dp( str, format, rvar_dp, ivar )
         rvar = real(rvar_dp)
-    end subroutine str2format_1
+    end subroutine str2format_real
 
     !> \brief  assesses whether a string represents a filename
-    subroutine str2format_2( str, format, rvar, ivar )
+    subroutine str2format_dp( str, format, rvar, ivar )
         character(len=*),              intent(in)  :: str
         character(len=:), allocatable, intent(out) :: format
         real(kind=dp),                 intent(out) :: rvar
@@ -124,7 +124,7 @@ contains
         endif
         ! char is last resort
         allocate( format, source='char' )
-    end subroutine str2format_2
+    end subroutine str2format_dp
 
     pure logical function char_is_a_letter( c )
         character(len=1), intent(in) :: c
@@ -213,7 +213,7 @@ contains
     !!         the string 'str'. The characters before the found delimiter are
     !!         output in 'before'. The characters after the found delimiter are
     !!         output in 'str'.
-    subroutine split_1( str, delim, before )
+    subroutine split_char( str, delim, before )
         character(len=*), intent(inout) :: str
         character(len=*), intent(in)    :: delim
         character(len=*), intent(out)   :: before
@@ -250,9 +250,9 @@ contains
         if(i >= lenstr) str=''
         str=adjustl(str)      ! remove initial spaces
         return
-    end subroutine split_1
+    end subroutine split_char
 
-    subroutine split_2( str_, delim, before_ )
+    subroutine split_string( str_, delim, before_ )
         class(string),    intent(inout) :: str_
         character(len=*), intent(in)    :: delim
         class(string),    intent(out)   :: before_
@@ -293,7 +293,7 @@ contains
         str_    = trim(adjustl(str))
         before_ = trim(adjustl(before))
         return
-    end subroutine split_2
+    end subroutine split_string
 
     !> the integers of a comma-separated list; blanks around an entry and empty entries (a
     !! trailing or doubled comma) are ignored
@@ -405,20 +405,20 @@ contains
         str=adjustl(outstr)
     end subroutine removesp
 
-    function str2real_1( str ) result( rval )
+    function str2real_char( str ) result( rval )
         character(len=*), intent(in) :: str
         type(string) :: str_cast
         real         :: rval
         str_cast = trim(adjustl(str))
         rval = str_cast%to_real()
         call str_cast%kill
-    end function str2real_1
+    end function str2real_char
 
-    function str2real_2( str ) result( rval )
+    function str2real_str( str ) result( rval )
         class(string), intent(in) :: str
         real :: rval
         rval = str%to_real()
-    end function str2real_2
+    end function str2real_str
 
     !> \brief  converts a real number to a string
     function realsp2str( rval ) result( str )
@@ -476,33 +476,33 @@ contains
         deallocate(str_tmp)
     end function int2str_pad
 
-    integer function str2int_1( str )
+    integer function str2int_char( str )
         character(len=*), intent(in) :: str
         type(string) :: str_cast
         str_cast  = trim(adjustl(str))
-        str2int_1 = str_cast%to_int()
+        str2int_char = str_cast%to_int()
         call str_cast%kill
-    end function str2int_1
+    end function str2int_char
 
-    integer function str2int_2( str )
+    integer function str2int_str( str )
         class(string), intent(in) :: str
-        str2int_2 = str%to_int()
-    end function str2int_2
+        str2int_str = str%to_int()
+    end function str2int_str
 
-    integer function str2int_3( str, io_stat )
+    integer function str2int_str_stat( str, io_stat )
         class(string), intent(in)  :: str
         integer,       intent(out) :: io_stat
-        str2int_3 = str%to_int(io_stat)
-    end function str2int_3
+        str2int_str_stat = str%to_int(io_stat)
+    end function str2int_str_stat
 
-    integer function str2int_4( str, io_stat )
+    integer function str2int_char_stat( str, io_stat )
         character(len=*), intent(in)  :: str
         integer,          intent(out) :: io_stat
         type(string) :: str_cast
         str_cast  = trim(adjustl(str))
-        str2int_4 = str_cast%to_int(io_stat)
+        str2int_char_stat = str_cast%to_int(io_stat)
         call str_cast%kill
-    end function str2int_4
+    end function str2int_char_stat
 
     !>  \brief  pad string with spaces
     function str_pad( str_in, len_padded ) result( str_out )
@@ -839,7 +839,7 @@ contains
         endif
     end function cnt_recs_per_line
 
-    pure function findloc_str_1( str_arr, str ) result( pos )
+    pure function findloc_str_str( str_arr, str ) result( pos )
         class(string), intent(in) :: str_arr(:)
         class(string), intent(in) :: str 
         integer :: i, pos
@@ -850,9 +850,9 @@ contains
                 return
             endif
         end do
-    end function findloc_str_1 
+    end function findloc_str_str 
 
-    pure function findloc_str_2( str_arr, str ) result( pos )
+    pure function findloc_str_char( str_arr, str ) result( pos )
         class(string),    intent(in) :: str_arr(:)
         character(len=*), intent(in) :: str 
         integer :: i, pos
@@ -863,13 +863,13 @@ contains
                 return
             endif
         end do
-    end function findloc_str_2
+    end function findloc_str_char
 
     !> Stable lexicographic sort:
     !>  - case-insensitive
     !>  - ignores leading/trailing spaces
     !>  - stable (preserves original order for equal keys)
-    subroutine lex_sort_1( strArr, inds )
+    subroutine lex_sort_char( strArr, inds )
         implicit none
         character(len=*),               intent(inout) :: strArr(:)
         integer, optional, allocatable, intent(out)   :: inds(:)
@@ -967,13 +967,13 @@ contains
             end do
         end function norm_key
 
-    end subroutine lex_sort_1
+    end subroutine lex_sort_char
 
     !> Stable lexicographic sort for SIMPLE string:
     !>  - case-insensitive (ASCII a-z only)
     !>  - ignores leading/trailing spaces
     !>  - stable
-    subroutine lex_sort_2( strArr, inds )
+    subroutine lex_sort_str( strArr, inds )
         type(string),                  intent(inout) :: strArr(:)
         integer, optional, allocatable, intent(out)  :: inds(:)
         integer, allocatable :: idx(:), tmp(:)
@@ -1078,7 +1078,7 @@ contains
             tf = (la < lb)
         end function norm_less
 
-    end subroutine lex_sort_2
+    end subroutine lex_sort_str
 
     !>  \brief  converst to C string
     pure function to_cstring( f_string )result( c_string )

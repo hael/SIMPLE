@@ -114,6 +114,7 @@ contains
         integer                 :: neff_nglob, neff_rank0
         p_ptr => params
         b_ptr => build
+        call check_pass_team('refine3D_exec')
         ! the weighted insertion's cone bounds its rim displacement by the matching low-pass limit when the command
         ! line sets one (the stage entries); without one the pre-step's own parameters held the default limit, which
         ! never bound a cone, while the strategy's lp at a later iteration is the previous iteration's adopted band

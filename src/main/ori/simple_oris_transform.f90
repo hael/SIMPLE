@@ -65,7 +65,7 @@ contains
         end do
     end subroutine introd_ctf_err
 
-    module subroutine rot_1( self, e )
+    module subroutine rot_all( self, e )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: e
         type(ori) :: o_tmp
@@ -75,9 +75,9 @@ contains
              call self%o(i)%set_euler(o_tmp%get_euler())
          end do
          call o_tmp%kill
-    end subroutine rot_1
+    end subroutine rot_all
 
-    module subroutine rot_2( self, i, e )
+    module subroutine rot_by_ind( self, i, e )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         class(ori),  intent(in)    :: e
@@ -85,9 +85,9 @@ contains
         call e%compose(self%o(i), o_tmp)
         call self%o(i)%set_euler(o_tmp%get_euler())
         call o_tmp%kill
-    end subroutine rot_2
+    end subroutine rot_by_ind
 
-    module subroutine rot_transp_1( self, e )
+    module subroutine rot_transp_all( self, e )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: e
         type(ori) :: o_tmp, e_transp
@@ -100,9 +100,9 @@ contains
          end do
          call o_tmp%kill
          call e_transp%kill
-    end subroutine rot_transp_1
+    end subroutine rot_transp_all
 
-    module subroutine rot_transp_2( self, i, e )
+    module subroutine rot_transp_by_ind( self, i, e )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         class(ori),  intent(in)    :: e
@@ -113,19 +113,19 @@ contains
         call self%o(i)%set_euler(o_tmp%get_euler())
         call o_tmp%kill
         call e_transp%kill
-    end subroutine rot_transp_2
+    end subroutine rot_transp_by_ind
 
-    module subroutine map3dshift22d_1( self, sh3d, state )
+    module subroutine map3dshift22d_all( self, sh3d, state )
         class(oris),       intent(inout) :: self
         real,              intent(in)    :: sh3d(3)
         integer, optional, intent(in)    :: state
         integer :: i
         do i=1,self%n
-            call self%map3dshift22d_2(i, sh3d, state)
+            call self%map3dshift22d_by_ind(i, sh3d, state)
         end do
-    end subroutine map3dshift22d_1
+    end subroutine map3dshift22d_all
 
-    module subroutine map3dshift22d_2( self, i, sh3d, state )
+    module subroutine map3dshift22d_by_ind( self, i, sh3d, state )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: i
         real,              intent(in)    :: sh3d(3)
@@ -137,7 +137,7 @@ contains
         else
             call self%o(i)%map3dshift22d(sh3d)
         endif
-    end subroutine map3dshift22d_2
+    end subroutine map3dshift22d_by_ind
 
     module subroutine calc_avg_offset2D( self, class, offset_avg )
         class(oris),    intent(in)    :: self

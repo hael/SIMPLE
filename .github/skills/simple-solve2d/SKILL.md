@@ -1,6 +1,6 @@
 ---
 name: simple-solve2d
-description: Use when working on SIMPLE's solve2D workflow and its refine2D stages, including the public refine2D program and its private worker, 2D search strategies, prob_tab2D/prob_align2D part files, class-sum accumulation in the 2D matcher, class-average restoration and convergence in the 2D strategy, distributed class-average assembly (cavgassemble_exec), carried class sums, the shared-memory particle buffer, cropped class sums, project updates, and streaming/rejection helpers.
+description: Use when working on SIMPLE's solve2D workflow and its refine2D stages, including the public refine2D program and its private worker, 2D search strategies, the probabilistic batch pipeline of refine2D_exec (eul_prob_tab2D, keyed class draws, readout records), class-sum accumulation in the 2D matcher, class-average restoration and convergence in the 2D strategy, distributed class-average assembly (cavgassemble_exec), carried class sums, cropped class sums, project updates, and streaming/rejection helpers.
 ---
 
 # SIMPLE Solve2D
@@ -45,19 +45,23 @@ If fractional update or probabilistic sampling is involved, also read
 - `simple_refine2D_strategy`: execution mode, iteration control, shared-memory
   restoration (`restore_cavgs_inmem`), the one convergence decision of both
   modes (`check_refine2D_convergence`), and the distributed master's own
-  project: it runs `prob_align2D_exec`, `cavgassemble_exec` and
-  `commit_sigma2_exec` on its own `(params, build)` at the thread count each
-  needs and restores its own after.
-- `simple_strategy2D_matcher` (`refine2D_exec`): reproduces the sample,
-  searches, writes orientations and sigma2 rows, accumulates the class sums.
+  project: it draws the iteration's sample (`sample_ptcls4prob2D` under
+  `refine=prob*`, else `sample_ptcls4update2D` when `master_draws_sample2D`
+  holds), merges the parts' readout records (`merge_prob_readouts`) and runs
+  `cavgassemble_exec` and `commit_sigma2_exec` on its own `(params, build)` at
+  the thread count each needs and restores its own after.
+- `simple_strategy2D_matcher` (`refine2D_exec`): draws the sample (shared
+  memory) or reproduces the master's (a part), under `refine=prob*` fills and
+  draws per batch (`pipeline_batch`), searches, writes orientations and sigma2 rows, accumulates the class sums.
   A worker writes its contribution (`cavger_write_contribution`); shared
   memory returns with the sums in the class averager and `l_frac`.
 - `simple_cavgassemble_strategy` (`cavgassemble_exec`; `run_cavgassemble`
   behind `commander_cavgassemble`): reduces the contributions, restores,
   writes, makes the class document; updates the caller's project in memory.
-- `prob_tab2D` (`exec_prob_tab2D` in `simple_commanders_prob.f90`) and
-  `prob_align2D_exec` (`simple_prob_align_strategy.f90`); tables in
-  `strategies/search/probabilistic/simple_eul_prob_tab2D.f90`.
+- Probabilistic pipeline: `eul_prob_tab2D`
+  (`strategies/search/probabilistic/simple_eul_prob_tab2D.f90`) per batch
+  inside `refine2D_exec` (`new_pipeline`, `fill_tab_range`, `assign_batch`,
+  `close_assignment`); a distributed part writes `prob_readout_part<NN>.txt`.
 - `simple_strategy_sigma2`: shared sigma2 helpers
   (`prepare_canonical_sigma_update`, `commit_sigma2_exec`).
 - `src/defs/simple_refine2D_fnames.f90`: class-average file names
@@ -74,34 +78,32 @@ If fractional update or probabilistic sampling is involved, also read
 - Keep command/controller code orchestration-focused and matcher code focused
   on particle-domain alignment and class-sum accumulation; restoration and
   convergence belong to the strategy.
-- Preserve the probabilistic sample-once-and-reuse contract:
-  `prob_align2D` chooses the sampled subset, and `prob_tab2D` plus the matcher
-  reproduce that subset rather than resampling independently.
+- Preserve the sample-once-and-reuse contract: the project owner
+  (distributed master or shared-memory `refine2D_exec`) draws the subset once
+  per iteration (keyed under `refine=prob*`) and distributed parts reproduce
+  it (`sample4update_reprod`) rather than resampling.
 - Preserve `sampled` as the current-round marker and `updatecnt` as cumulative
   update history when 2D workflows share the fractional-update machinery.
 - Preserve the online single-read particle I/O contract: the matcher reads
   each batch once and sums the class averages from the images already held
-  (full size, or Fourier-cropped). In shared memory `prob_tab2D` fills the
-  particle buffer, and the matcher copies its batches from it and releases it
-  (`release_pass_buffer`), so a table iteration reads each particle once.
+  (full size, or Fourier-cropped). The pipeline fills the table on the
+  matcher's prepared batch, so a probabilistic iteration reads and prepares
+  each particle once; 2D has no particle buffer.
 - Keep the cropped-particle decision single: `crop_particles2D` (not
-  `stream2d`, `box_crop < box`, `ptcl2D`) decides for the table and the
-  matcher, which then prepare the cropped particle (in shared memory the
-  table's records feed the matcher). The particle disk cache was retired
-  2026-11-02.
+  `stream2d`, `box_crop < box`, `ptcl2D`) decides how `build_batch_particles2D`
+  prepares the batch, cropped or not, that the fill and the search then share.
+  The particle disk cache was retired 2026-11-02.
 - Under the polar shift map's key (the default) a particle on the disk is
   prepared under the box's mask (`ptcl_on_disk`, `prepimg4align`); keep the
   fill's rule and the preparation's reading the same field (`shsig`).
 - `cavger_update_sums` buckets a batch by (class, half) and runs the buckets
   under a dynamic schedule, each in batch order, so the sums do not depend on
   the thread count. Keep that order in any change to the sums.
-- The 2D part files carry a format word: -6 for the candidate stream
-  (`prob_neigh`, with per-particle counts), -7 for the dense rows (`prob`:
-  distance and in-plane index per entry, then the refined entries); both carry
-  the particle temperatures after the seed table.
-  `prob_align2D` reads them in parallel and checks size, format and that each
-  particle is in exactly one part. Change writer, readers and the tester
-  together.
+- The 2D table keeps no file: the fill's thread buffers become the batch's
+  dense rows (`refine=prob`, `assign_rows_dense`) or candidate store
+  (`refine=prob_neigh`, `assign_rows_sparse`), released after the batch's
+  draws; each class draw is keyed on the particle (`RND_FAM_ASSIGN`). Change
+  the table and `simple_eul_prob_tab2D_tester` together.
 - `check_conv2D` prints no verdict: `check_refine2D_convergence` prints one
   `>>> CONVERGED: yes|no` (`convergence%print_verdict`) after `minits`,
   `maxits` and the full-assignment coverage, and runs after restoration,
@@ -112,8 +114,8 @@ If fractional update or probabilistic sampling is involved, also read
   update (`carryover_needs_full_update`).
 - After distributed assembly the master writes only the `cls2D`, `cls3D`,
   `out` and particle segments; do not reread the particle segment there. It
-  writes `ptcl2D` more than once per iteration (in `merge_algndocs`, after
-  assembly and at the iteration's end; `doc/policies/2D/solve2D_policy.md`,
+  writes `ptcl2D` more than once per iteration (once the sample is drawn, in
+  `merge_algndocs`, after assembly and at the iteration's end; `doc/policies/2D/solve2D_policy.md`,
   "Project segments"): do not add a write.
 - Treat explicit offline or terminal class-average assembly commands as
   separate workflow stages. They may perform their own reads, but that does not
@@ -129,8 +131,8 @@ If fractional update or probabilistic sampling is involved, also read
 
 ## Tests
 
-`simple_test_exec test=unit_pftc_align2D3D` (`2D probability table I/O`) and
-`test=unit_reconstruction` (`class-average carry-over`); for behaviour, a
+`simple_test_exec test=unit_pftc_align2D3D` (`2D probability table`, `3D probability table`),
+`test=unit_numerics` (`random draws`) and `test=unit_reconstruction` (`class-average carry-over`); for behaviour, a
 `solve2D` run in shared memory and distributed.
 
 ## Nearby Skills

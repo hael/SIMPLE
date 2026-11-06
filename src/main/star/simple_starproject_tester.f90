@@ -25,6 +25,7 @@ use simple_type_defs, only: canonical_phshift
 use simple_image,     only: image
 use simple_oris,      only: oris
 use simple_fileio,    only: simple_getcwd
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED, FORK_STATUS_STOPPED
 implicit none
 
 private
@@ -35,6 +36,14 @@ character(len=*), parameter :: TMPDIR = "test_star_tmp"
 real,             parameter :: ORIGINS_SMPDS(2) = [1.3, 0.9]
 real,             parameter :: ORIGINS_PX(2,2) = reshape([2., -1., -3., 0.5], [2,2]) ! (x|y, particle)
 real,             parameter :: ORIGINS_EUL(3,2) = reshape([10., 20., 30., 40., 50., 60.], [3,2])
+
+!> a particle import in a child: 0 finalised once, 1 finalised twice, 2 exported unfinalised
+type, extends(forked_process) :: star_import_child
+    integer      :: what = 0
+    type(string) :: dir, fname
+contains
+    procedure :: execute => run_star_import_child
+end type star_import_child
 
 contains
 
@@ -82,6 +91,8 @@ contains
         call test_import_origins_angstrom()
         call test_roundtrip_origins()
         call test_relion30_layout_refused()
+        call test_finalise_once()
+        call test_export_cls2D_keeps_project()
         write(*,'(A)') "**** Completed big integration tests (Part 4/4) ****"
         call omp_set_num_threads(nthr_orig)
         ! the caller reports and fails the run (simple_test_utils counters are process-wide)
@@ -1029,6 +1040,78 @@ contains
             call proj%kill
         end do
     end subroutine test_import_origins_angstrom
+
+    ! finalise_ptcl_import runs once per import: a second finalise, or an export before it, stops
+    subroutine test_finalise_once()
+        type(star_import_child) :: child
+        type(string) :: stknames(2)
+        integer      :: what
+        character(len=*), parameter :: MSGS(0:2) = [character(len=48) :: &
+            &'an import finalised once runs', 'a second finalise_ptcl_import stops', &
+            &'an export of an unfinalised import stops']
+        write(*,'(A)') 'test_finalise_once'
+        call make_origins_stacks(child%dir, stknames)
+        child%fname = child%dir//'/particles_once.star'
+        call write_origins_star(child%fname, stknames)
+        do what = 0,2
+            child%what = what
+            call child%start(name=string('STAR_FINALISE_'//int2str(what)))
+            call child%await_final_status()
+            if( what == 0 )then
+                call assert_int(FORK_STATUS_STOPPED, child%status(), trim(MSGS(what)))
+            else
+                call assert_int(FORK_STATUS_FAILED, child%status(), trim(MSGS(what)))
+            endif
+            call child%destroy
+        end do
+    end subroutine test_finalise_once
+
+    subroutine run_star_import_child( self, cline )
+        class(star_import_child), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline
+        type(starproject) :: sp
+        type(sp_project)  :: proj
+        type(cmdline)     :: cl
+        call cl%set('import_dir', self%dir%to_char())
+        call sp%import_ptcls2D(cl, proj, self%fname)
+        call proj%os_ptcl3D%copy(proj%os_ptcl2D, is_ptcl=.true.)
+        select case(self%what)
+            case(0)
+                call sp%finalise_ptcl_import(proj)
+            case(1)
+                call sp%finalise_ptcl_import(proj)
+                call sp%finalise_ptcl_import(proj)
+            case(2)
+                call sp%export_mics(proj)
+        end select
+        call sp%kill
+        call proj%kill
+    end subroutine run_star_import_child
+
+    ! export_cls2D writes a copy: the project's cls2D rows gain no ncls and keep their stk; the file
+    ! is written as .tmp and renamed
+    subroutine test_export_cls2D_keeps_project()
+        type(starproject) :: sp
+        type(sp_project)  :: proj
+        integer           :: i
+        write(*,'(A)') 'test_export_cls2D_keeps_project'
+        call proj%os_cls2D%new(3, is_ptcl=.false.)
+        do i = 1,3
+            call proj%os_cls2D%set(i, 'class', i)
+            call proj%os_cls2D%set(i, 'pop',   10*i)
+            call proj%os_cls2D%set(i, 'res',   8.)
+            call proj%os_cls2D%set(i, 'stk',   'cavgs.mrc')
+            call proj%os_cls2D%set_state(i, 1)
+        end do
+        call sp%export_cls2D(proj)
+        call assert_true(.not. proj%os_cls2D%isthere(1, 'ncls'), 'export_cls2D leaves the project without ncls')
+        call assert_true(proj%os_cls2D%isthere(1, 'stk'), 'export_cls2D keeps the rows'' stk')
+        call assert_true(file_exists(string('clusters2D.star')), 'export_cls2D writes clusters2D.star')
+        call assert_true(.not. file_exists(string('clusters2D.star.tmp')), 'export_cls2D leaves no temporary file')
+        call del_file(string('clusters2D.star'))
+        call sp%kill
+        call proj%kill
+    end subroutine test_export_cls2D_keeps_project
 
     ! pixels -> STAR (the writer of export_starproject) -> pixels is the identity, two stacks at
     ! different pixel sizes

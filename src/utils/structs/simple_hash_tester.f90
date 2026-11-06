@@ -29,10 +29,10 @@ contains
     !---------------------------
     subroutine test_constructor_and_kill()
         type(hash) :: h
-        ! constructor_1 via generic hash()
+        ! constructor_default via generic hash()
         h = hash()
-        call assert_true(h%size_of() == 0, 'constructor_1: size_of == 0')
-        call assert_int(0, h%size_of(), 'constructor_1: hash_index == 0')
+        call assert_true(h%size_of() == 0, 'constructor_default: size_of == 0')
+        call assert_int(0, h%size_of(), 'constructor_default: hash_index == 0')
         ! push something and then kill
         call h%set('a', 1.0_dp)
         call assert_int(1, h%size_of(), 'after set, size_of == 1')
@@ -46,30 +46,30 @@ contains
     subroutine test_push_and_set()
         type(hash) :: h
         real(dp)   :: val
-        h = hash(2)  ! constructor_2
-        ! push_1: real(dp)
+        h = hash(2)  ! constructor_by_sz
+        ! push_dp: real(dp)
         call h%push('k1', 1.5_dp)
-        call assert_int(1, h%size_of(), 'push_1: size_of == 1 after first push')
+        call assert_int(1, h%size_of(), 'push_dp: size_of == 1 after first push')
         val = h%get_dp('k1')
-        call assert_double(1.5_dp, val, 'push_1: value for k1')
-        ! push_2: integer
+        call assert_double(1.5_dp, val, 'push_dp: value for k1')
+        ! push_int: integer
         call h%push('k2', 3)
-        call assert_int(2, h%size_of(), 'push_2: size_of == 2 after second push')
+        call assert_int(2, h%size_of(), 'push_int: size_of == 2 after second push')
         val = h%get_dp('k2')
-        call assert_double(3.0_dp, val, 'push_2: value for k2')
-        ! set_1: real
+        call assert_double(3.0_dp, val, 'push_int: value for k2')
+        ! set_real: real
         call h%set('k1', 2.5_dp)
         val = h%get_dp('k1')
-        call assert_double(2.5_dp, val, 'set_1: replace existing real')
-        ! set_2: integer
+        call assert_double(2.5_dp, val, 'set_real: replace existing real')
+        ! set_int: integer
         call h%set('k2', 10)
         val = h%get_dp('k2')
-        call assert_double(10.0_dp, val, 'set_2: replace existing integer')
-        ! set_3: real(dp)
+        call assert_double(10.0_dp, val, 'set_int: replace existing integer')
+        ! set_dp: real(dp)
         call h%set('k3', 4.25_dp)
-        call assert_int(3, h%size_of(), 'set_3: new key increases size')
+        call assert_int(3, h%size_of(), 'set_dp: new key increases size')
         val = h%get_dp('k3')
-        call assert_double(4.25_dp, val, 'set_3: new dp value')
+        call assert_double(4.25_dp, val, 'set_dp: new dp value')
     end subroutine test_push_and_set
 
     !---------------------------
@@ -138,18 +138,18 @@ contains
         ! get_dp()
         vdp = h%get_dp('c')
         call assert_double(3.75_dp, vdp, 'get_dp: c')
-        ! getter_1: real(sp)
+        ! getter_real: real(sp)
         vsp = 0.0
         call h%getter('b', vsp)
-        call assert_double(5.0_dp, real(vsp,dp), 'getter_1 (sp): b')
-        ! getter_2: real(dp)
+        call assert_double(5.0_dp, real(vsp,dp), 'getter_real (sp): b')
+        ! getter_dp: real(dp)
         vdp = 0.0_dp
         call h%getter('b', vdp)
-        call assert_double(5.0_dp, vdp, 'getter_2 (dp): b')
-        ! getter_3: integer
+        call assert_double(5.0_dp, vdp, 'getter_dp (dp): b')
+        ! getter_int: integer
         ival = 0
         call h%getter('b', ival)
-        call assert_int(5, ival, 'getter_3 (int): b')
+        call assert_int(5, ival, 'getter_int (int): b')
         ! get_value_at
         vdp = h%get_value_at(h%lookup('a'))
         call assert_double(1.25_dp, vdp, 'get_value_at: a')

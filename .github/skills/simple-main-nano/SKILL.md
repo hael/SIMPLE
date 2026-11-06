@@ -20,8 +20,7 @@ Silent ones first: nothing reports these.
 - Units: `atoms` holds Å; `nanoparticle` and `nano_density` hold 1-based voxels. Å = (v - 1) smpd and
   v = Å / smpd + 1 (`set_atomic_coords`, `write_centers`, `call_atomic_species`); `convolve` puts voxel j
   at (j - 1) smpd. `set_atomic_coords` from an array takes voxels as given. Widths B in Å². The box
-  centre is ldim/2 smpd from the corner (`center_inbox`); `atoms%center_pdbcoord` uses (ldim-1)/2,
-  half a voxel off: known defect, ruled for fixing to ldim/2.
+  centre is ldim/2 smpd from the corner (`center_inbox`, `center_pdbcoord`).
 - The PDB B-factor column is overloaded. `_ATMS.pdb` of `detect_atoms` holds the fitted width B, occupancy
   I/S and chain A (strong) or B (weak atoms); other `write_centers` outputs put `valid_corr`, `cn_gen`, ... there.
   `_ATMS.pdb` as written, weak atoms included, is a valid `atoms_stats` input (they get no component).
@@ -33,15 +32,13 @@ Silent ones first: nothing reports these.
   falls back to a position-only prior at one width. Rename in all of them.
 - Detection is species-free: `detect_atoms` refuses `element`, `nspecies`, `vol_even`, `vol_odd` and writes
   pseudo-atoms `X1` (`X1`-`X3` are Z 901-903; `convolve` renders them as occupancy x K(beta), no `lp` blur).
-  The element serves `atoms_stats` (`fillin_atominfo` stops without one); an element missing from
-  `get_lattice_params` is analysed as fcc with a = 3.76 Å without a warning (known defect, ruled for
-  fixing: stop instead).
+  The element serves `atoms_stats` (`fillin_atominfo` stops without one); `get_lattice_params` stops on an
+  element its table lacks.
 - Thread-count identity: `convolve` gives each z-plane one writer and adds atoms in input order (`pdb2mrc`
   is byte-identical at 1 and 3 threads); the density fit colours its cells so the result depends on the
   team only through the halo FFTs (capped at `FFT_NTHR_MAX`). Keep both.
-- `init_graphene_subtr` runs its own `params%new` with `nthr=1`: the rest of the process runs one OpenMP
-  thread (`nthr_glob` 1) and the RNG is reseeded. Known defect, ruled for fixing: an initialiser leaves
-  the process's threads and RNG alone.
+- `init_graphene_subtr(params)` runs on the caller's parameters (the cc objective; the calculator points
+  at them until `kill_graphene_subtr`): an initialiser leaves the process's threads and RNG alone.
 - `single_tseries_tracker` and `simple_tseries_graphene_subtr` keep module state: `init_*` -> use ->
   `kill_*`, one at a time. Legacy singletons: do not copy the pattern; convert to a class when
   touched. `init_tracker` keeps pointers to `params` and the frame-name arrays (they must outlive
@@ -54,7 +51,7 @@ Silent ones first: nothing reports these.
 
 - `simple_nanoparticle.f90`: `identify_atomic_pos` (detection), `fit_density_model` (the model and its
   products), `fillin_atominfo` (statistics). `simple_nano_density.f90`: its header gives the model and
-  the fit order (`doc/implementation_notes/planned/atomic_density_model.md`).
+  the fit order (`doc/implementation_notes/completed/atomic_density_model.md`).
 - `simple_atomic_species.f90` (`call_atomic_species`) on the image-free `simple_nano_species.f90`.
 - `simple_atoms.f90` serves all of SIMPLE (simulation, masks, volume ops, `element_exists` in the
   parameter parser, the PCG prior). `convolve`/`pdb2mrc` make the truth maps of the state fixture and

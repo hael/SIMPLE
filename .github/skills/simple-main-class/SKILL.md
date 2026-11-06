@@ -33,8 +33,9 @@ Silent ones first.
 - `cavger_update_sums` buckets a batch by (class, half) and runs the buckets largest first under a dynamic
   schedule, each in batch order, so the sums do not depend on the thread count: keep it so (no tester
   checks it). The master adds contributions in part order: sums differ with `nparts` by rounding.
-- A particle with `eo = -1` (in no half) is summed into the even half; with `ml_reg` it stops (`sigma2_half`).
-  Known defect, ruled for fixing: every such path is to stop; rely on none.
+- An active particle with `eo = -1` (in no half) stops the class sums and the carry-over recount
+  (`oris%get_half`); `ensure_field_halves` does not report such a row (it can come from a reactivated
+  `selection` of a merged chunk project).
   `cavger_transf_oridat(updated_only=.true.)` drops state-0 and never-updated particles without a message.
 - `cavger_init_online(cropped_ptcls=.true.)`: the images handed in are at `box_crop`, noise-normalised at
   the full box and not again; shifts and CTF are scaled to the crop. The caller sizes them (`crop_particles2D`).

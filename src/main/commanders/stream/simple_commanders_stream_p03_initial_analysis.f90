@@ -4,7 +4,7 @@
 !
 ! PURPOSE:
 !   The commander of stream stage 3, initial analysis (the master launches it
-!   as prg=gen_pickrefs, an alias of initial_analysis in simple_stream). It
+!   as prg=gen_pickrefs). It
 !   normalises the command line, then drives a stream_stage_initial_analysis
 !   until the picking references are written, by the 3D route or from a GUI
 !   selection, which stops the process early (the jobs already submitted are

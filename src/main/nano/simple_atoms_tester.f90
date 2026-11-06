@@ -9,6 +9,8 @@ use simple_string, only: string
 use simple_syslib, only: del_file
 use simple_image,  only: image, unmemoize_mask_coords
 use simple_atoms,  only: atoms, parse_element_list
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline, only: cmdline
 !$ use omp_lib,    only: omp_get_max_threads, omp_set_num_threads
 implicit none
 private
@@ -17,6 +19,12 @@ public :: run_all_atoms_tests
 character(len=*), parameter :: TMP_PDB   = 'tmp_atoms_tester.pdb'
 character(len=*), parameter :: TMP_ANISO = 'tmp_atoms_tester_aniso.pdb'
 character(len=*), parameter :: TMP_PSEUDO = 'tmp_atoms_tester_pseudo.pdb'
+
+!> a lattice lookup of an element the table lacks, which must stop
+type, extends(forked_process) :: lattice_lookup
+contains
+    procedure :: execute => lookup_missing_lattice
+end type lattice_lookup
 
 contains
 
@@ -36,7 +44,63 @@ contains
         call test_parse_element_list()
         call test_compound_selector()
         call test_lattice_cutoff()
+        call test_lattice_params_missing()
+        call test_graphene_keeps_process()
     end subroutine run_all_atoms_tests
+
+    !> graphene subtraction runs on the caller's parameters: the process keeps its threads and random stream
+    subroutine test_graphene_keeps_process()
+        use simple_parameters,             only: parameters
+        use simple_tseries_graphene_subtr, only: init_graphene_subtr, kill_graphene_subtr
+        use simple_rnd,                    only: seed_rnd_fixed, ran3
+        class(parameters), allocatable, target :: params
+        class(cmdline),    allocatable         :: cline
+        integer :: nthr_saved, nteam_saved
+        real    :: r_ref, r_after
+        write(*,'(A)') 'test_graphene_keeps_process'
+        nthr_saved  = nthr_glob
+        nteam_saved = 1
+        !$ nteam_saved = omp_get_max_threads()
+        allocate(params, cline)
+        call cline%set('prg',    'dummy')
+        call cline%set('mkdir',  'no')
+        call cline%set('smpd',   0.5)
+        call cline%set('box',    64)
+        call cline%set('nthr',   2)
+        call cline%set('ctf',    'no')
+        call cline%set('objfun', 'cc')
+        call params%new(cline, silent=.true.)
+        call seed_rnd_fixed(4242)
+        r_ref = ran3()
+        call seed_rnd_fixed(4242)
+        call init_graphene_subtr(params)
+        r_after = ran3()
+        call assert_int(2, nthr_glob, 'init_graphene_subtr keeps nthr_glob')
+        !$ call assert_int(2, omp_get_max_threads(), 'init_graphene_subtr keeps the OpenMP team')
+        call assert_true(r_after == r_ref, 'init_graphene_subtr does not reseed')
+        call kill_graphene_subtr
+        call cline%kill
+        nthr_glob = nthr_saved
+        !$ call omp_set_num_threads(nteam_saved)
+    end subroutine test_graphene_keeps_process
+
+    !> an element without lattice parameters stops instead of being analysed as fcc with a = 3.76 A
+    subroutine test_lattice_params_missing()
+        type(lattice_lookup) :: child
+        write(*,'(A)') 'test_lattice_params_missing'
+        call child%start(name=string('LATTICE_MISSING'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'an element without lattice parameters stops')
+        call child%destroy
+    end subroutine test_lattice_params_missing
+
+    subroutine lookup_missing_lattice( self, cline )
+        class(lattice_lookup), intent(inout) :: self
+        class(cmdline),        intent(inout) :: cline
+        character(len=10) :: crystal_system
+        real :: a(3)
+        call get_lattice_params('ZN   ', crystal_system, a)
+    end subroutine lookup_missing_lattice
 
     ! three dummy atoms named C, O and N
     subroutine make_model( a )
@@ -99,8 +163,10 @@ contains
         call assert_true(all(abs(a%get_geom_center() - CEN) < 1.e-6), 'get_geom_center is the mean position')
         call a%translate([1., 2., 3.])
         call assert_true(all(abs(a%get_geom_center() - (CEN + [1., 2., 3.])) < 1.e-6), 'translate moves the centre by the shift')
+        call a%center_pdbcoord([32,32,32], SMPD)
+        call assert_true(all(abs(a%get_geom_center() - 16. * SMPD) < 1.e-5), 'center_pdbcoord puts the centre at ldim/2*smpd')
         call a%center_pdbcoord([33,33,33], SMPD)
-        call assert_true(all(abs(a%get_geom_center() - 16. * SMPD) < 1.e-5), 'center_pdbcoord puts the centre at (ldim-1)/2*smpd')
+        call assert_true(all(abs(a%get_geom_center() - 16. * SMPD) < 1.e-5), 'center_pdbcoord keeps an odd box on its centre voxel')
         call a%center_inbox(2, 20, SMPD)
         call assert_true(all(abs(a%get_coord(2) - 10. * SMPD) < 1.e-6), 'center_inbox puts the atom at box/2*smpd')
         call a%kill

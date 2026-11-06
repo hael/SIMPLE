@@ -10,6 +10,7 @@ use simple_pspecs,            only: pspecs
 use simple_segmentation,      only: otsu_img
 use simple_sp_project,        only: sp_project
 use simple_builder,           only: builder
+use simple_matcher_ptcl_io,   only: pass_team
 implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, id_junk, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
@@ -257,7 +258,7 @@ contains
         allocate(l_non_junk(ncls), source=.false.)
         kfromto(1) = calc_fourier_index(HP_SPEC, ldim(1), smpd)
         kfromto(2) = calc_fourier_index(LP_SPEC, ldim(1), smpd)
-        call alloc_imgarr(nthr_glob, ldim, smpd, cavg_threads)
+        call alloc_imgarr(pass_team(), ldim, smpd, cavg_threads)
         call cavg_threads(1)%memoize_mask_coords
         !$omp parallel do default(shared) proc_bind(close) schedule(static)&
         !$omp private(icls,ithr,pspec,dynrange,l_dens_inoutside,nin,nout,nmsk,cen,ave,sdev,maxv,minv)
@@ -731,7 +732,7 @@ contains
         integer,     parameter           :: MAXITS_SH = 60
         real,        allocatable         :: inpl_corrs(:)
         type(image), allocatable         :: imgs_mirr(:)
-        type(pftc_shsrch_grad)           :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), allocatable ::  grad_shsrch_obj(:)
         type(builder)                    :: build
         type(inpl_struct), allocatable   :: algninfo(:), algninfo_mirr(:)
         integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, irot_seed, n, pdim_srch(3)
@@ -770,7 +771,8 @@ contains
         nrots = build%pftc%get_nrots()
         joint_lims(1:2,:) = lims
         joint_lims(3,:) = [1.-2., real(nrots)+2.]
-        do ithr = 1, nthr_glob
+        allocate(grad_shsrch_obj(pass_team()))   ! one search object per thread of the team in use
+        do ithr = 1, size(grad_shsrch_obj)
             if( trim(params%inpl_cont) == 'yes' )then
                 call grad_shsrch_obj(ithr)%new_joint(build, joint_lims, MAXITS_SH)
             else
@@ -849,9 +851,10 @@ contains
         where( algninfo_mirr(:)%corr > algninfo(:)%corr ) algninfo = algninfo_mirr
         ! destruct
         call dealloc_imgarr(imgs_mirr)
-        do ithr = 1, nthr_glob
+        do ithr = 1, size(grad_shsrch_obj)
             call grad_shsrch_obj(ithr)%kill
         end do
+        deallocate(grad_shsrch_obj)
         call build%pftc%kill
     end function match_imgs2ref
 
@@ -868,7 +871,7 @@ contains
         real,         parameter         :: FRC_CRIT = 0.5
         real,         allocatable       :: inpl_corrs(:), frc(:)
         type(image),  allocatable       :: imgs_targ_mirr(:)
-        type(pftc_shsrch_grad)          :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), allocatable ::  grad_shsrch_obj(:)
         type(builder)                   :: build
         type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, irot_seed, nrefs, ntargets, pdim_srch(3)
@@ -901,7 +904,8 @@ contains
         nrots = build%pftc%get_nrots()
         joint_lims(1:2,:) = lims
         joint_lims(3,:) = [1.-2., real(nrots)+2.]
-        do ithr = 1, nthr_glob
+        allocate(grad_shsrch_obj(pass_team()))   ! one search object per thread of the team in use
+        do ithr = 1, size(grad_shsrch_obj)
             if( trim(params%inpl_cont) == 'yes' )then
                 call grad_shsrch_obj(ithr)%new_joint(build, joint_lims, MAXITS_SH)
             else
@@ -1021,9 +1025,10 @@ contains
             where( algninfo_mirr(:,:)%corr > algninfo(:,:)%corr ) algninfo = algninfo_mirr
         endif
         ! destruct
-        do ithr = 1, nthr_glob
+        do ithr = 1, size(grad_shsrch_obj)
             call grad_shsrch_obj(ithr)%kill
         end do
+        deallocate(grad_shsrch_obj)
         call build%pftc%kill
         deallocate(algninfo_mirr)
     end function match_imgs

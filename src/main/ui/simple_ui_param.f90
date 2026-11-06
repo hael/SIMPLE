@@ -243,9 +243,6 @@ contains
             case('refs')
                 placeholder = 'e.g. references.mrc'
                 return
-            case('rmsd_file')
-                placeholder = 'e.g. atom_rmsd.bin'
-                return
             case('star_mic')
                 placeholder = 'e.g. micrographs.star'
                 return
@@ -266,9 +263,6 @@ contains
                 return
             case('stk_backgr')
                 placeholder = 'e.g. background_pspec.mrcs'
-                return
-            case('stk_traj')
-                placeholder = 'e.g. trajectory.mrcs'
                 return
             case('stktab')
                 placeholder = 'e.g. stktab.txt'

@@ -25,9 +25,10 @@ Silent ones first: nothing reports these.
   `set_sigma2` (euclid) -> `set_ptcl` per slot -> `set_ptcl_inds(pinds)` -> per particle
   `get_ptcl_slot`, `cartft_pose_opt%refine` -> `kill`. Materializer: `new(nstates, box_crop, 1)` ->
   `set_refvol` per state and half -> `write` -> `kill`.
-- A slot keeps the spectra it was prepared with: `set_sigma2` leaves prepared slots as they are, so
-  re-prepare the batch after new spectra (known defect, ruled for fixing: `set_sigma2` is to
-  invalidate the slots). Euclid without any spectra stops (THROW_HARD).
+- A Euclidean slot is whitened by the spectra it was prepared with: `set_sigma2` marks every Euclidean
+  slot stale, and any use of a stale slot stops (`ptcl_is_valid`, so also the pose transaction and the
+  sigma contribution), so prepare slots after setting the spectra; cc slots stay. A degenerate particle
+  (no power) is still an invalid slot without a stop. Euclid without any spectra stops (THROW_HARD).
 - `iptcl` of `set_ptcl`, the evaluators and `refine` is a slot (1..nptcls), not a particle index; map it
   with `set_ptcl_inds`/`get_ptcl_slot`. `new_ptcls` drops the map, and a slot of 0 or an invalid slot
   makes `refine` return `CARTFT_INVALID_PREPARATION`, not an error.

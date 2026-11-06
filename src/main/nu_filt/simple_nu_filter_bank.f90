@@ -21,6 +21,9 @@ contains
         real,    allocatable :: bwfilters_tmp(:,:)
         integer, allocatable :: cutoff_finds_tmp(:)
         integer(timer_int_kind) :: t0
+        ! the previous pair's background clamp and null shell would carry into this one
+        if( nu_l_solvent_clamp ) THROW_HARD('the previous pair''s solvent clamp is still set: cleanup_nu_filter first')
+        if( allocated(nu_null_lmask) ) THROW_HARD('the previous pair''s null shell is still set: cleanup_nu_filter first')
         call init_nu_filter(vol_even, vol_odd, fsc_res)
         if( nu_l_report .and. nu_bank_cap_find > 0 )then
             write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') '>>> NU BANK CAP: FSC=0.143 ', fsc_res, &

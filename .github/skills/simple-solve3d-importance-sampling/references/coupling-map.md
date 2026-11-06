@@ -34,10 +34,8 @@ Important details:
 That same command writes the sampling units to `CLASS_SAMPLING_FILE`
 (`clssmp.bin`, `make_class_samples` in `simple_view_partition_sampling`): one
 unit per selected 2D class with its `group` (0 under `balance=class`, the
-class-average group under `balance=cavg`, formed by average linkage at
-`hp=30`/`lp=6` with groups below 2.5% of the particles merged into their
-nearest group; class units under `none`, used only by the initial draw), and
-prints the unit table with the expected visits per
+class-average group under `balance=cavg`; class units under `none`, used only
+by the initial draw), and prints the unit table with the expected visits per
 particle before the first stage. Stages only read the file. Nothing in this
 layer uses 3D maps, poses or projection directions.
 
@@ -85,9 +83,8 @@ and reconstruction behavior.
 
 Key routines:
 
-- `sample4update_class`: nested square-root quota over the units of `CLASS_SAMPLING_FILE`
-  (over groups, then over the units of a group, in proportion to the square root of the
-  populations and capped at them, then lowest `updatecnt`);
+- `sample4update_class`: nested equal quota over the units of `CLASS_SAMPLING_FILE`
+  (equal over groups, then over the units of a group, then lowest `updatecnt`);
   `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
   draws one full sweep takes (`max ceil(pop/quota)`)
 - `sample4update_rescore`: the latest round again, `sampled`/`updatecnt` advanced
@@ -134,39 +131,33 @@ Behavior:
   is false; `sample4update_rescore` with `cohort_sampling=yes` and
   `which_iter /= startit`; `sample4update_class` for `balance=class|cavg`;
   `sample4update_cnt` for `balance=none`
-- distributed: when `master_draws_sample3D` holds (fractional,
-  non-probabilistic, not polish/missing/eval/sigma) the master draws once over
-  the whole project and writes it; each worker reproduces its range with
+- distributed: when `master_draws_sample3D` holds (every `refine=prob*`
+  pass; else fractional, not polish/missing/eval/sigma) the master draws once
+  over the whole project and writes it; each part reproduces its range with
   `sample4update_reprod`
 
-### 6. Probabilistic refine samples once, then reproduces
+### 6. Probabilistic refine: the owner draws once, parts reproduce
 
-`src/main/strategies/parallelization/simple_prob_align_strategy.f90` is the
-key coupling point.
-
-In `prob_align_exec` and `prob_align_neigh_exec` (run on the caller's
-`(params, build)`; the distributed master's own, or via the
-`commander_prob_align*` wrappers):
+`refine=prob|prob_neigh` run their table inside `refine3D_exec`; there is no
+pre-step. `sample_ptcls4prob3D` (`simple_matcher_smpl_and_lplims.f90`) is run
+by the project owner (the shared-memory matcher, or the distributed master
+before scheduling):
 
 - `updatecnt` and `sampled` are cleared only at `startit == 1` on the first
   iteration
 - the active subset is chosen by `sample_ptcls4update3D` or, on fill-in
-  iterations, `sample_ptcls4fillin`
-- the chosen subset is written to the project file
-- partition jobs then compute probability tables only for that subset
-
-In `exec_prob_tab` and `exec_prob_tab_neigh` (`simple_commanders_prob.f90`):
-
-- no new sampling happens
-- `sample4update_reprod` reproduces the subset created by `prob_align`
-  (the worker stops if the field was never sampled)
+  iterations, `sample_ptcls4fillin`, keyed on the run's seed, the program, the
+  pass and the iteration (`sample_rnd_key`; `adopt_run_seed` records the seed)
+- the distributed master writes it to the project file before the parts start
 
 In `src/main/strategies/search/simple_strategy3D_matcher.f90`
 (`sample_particles_for_update`):
 
-- probabilistic passes, the `pose_cont=yes` polish pass and distributed
-  workers of a master-drawn sample use `sample4update_reprod`
-- this ensures search and assignment operate on the exact same particles
+- distributed parts of a probabilistic or master-drawn pass and the
+  `pose_cont=yes` polish pass use `sample4update_reprod` (it stops if the field
+  was never sampled)
+- the pipeline fills, draws and searches on the same prepared batch, so search
+  and assignment operate on the exact same particles
 - the reconstruction of the subset copies the images (or cropped records) the
   search pass read into the pass buffer instead of re-reading stacks
 
@@ -188,9 +179,9 @@ Important points:
   shift-refines the best `projs_ns` references (`calc_num2sample` on
   `prob_athres` and the mean pose change: a search budget, not a posterior
   quantity; sizing it by the unrefined row's mass broke PorF, 2026-10-25)
-- `ref_assign` draws each particle's projection from the tempered posterior
-  over its row (`draw_posterior_row` at `prob_beta` times the temperature the
-  worker wrote); the state label is the deterministic argmin over states; no
+- `assign_batch` (`assign_rows`, `assign_rows_neigh`) draws each particle's
+  projection from the tempered posterior over its row (`draw_posterior_row` at
+  `prob_beta` times the temperature the fill kept, keyed on the particle); the state label is the deterministic argmin over states; no
   reference is forced to be populated (the balanced frontier was deleted
   2026-10-24)
 - `prob_neigh` restricts this to neighbourhood candidate sets
@@ -232,7 +223,7 @@ For explanations:
 2. `simple_solve3D_controller.f90`
 3. `simple_matcher_smpl_and_lplims.f90`
 4. `simple_oris_sampling.f90`
-5. `simple_prob_align_strategy.f90`
+5. `simple_refine3D_strategy.f90` (the master's draw)
 6. `simple_strategy3D_matcher.f90`
 7. `search/probabilistic/simple_eul_prob_tab*.f90`
 8. `simple_volassemble_strategy.f90`
@@ -241,6 +232,6 @@ For modifications:
 
 1. change policy in solve3D or stage-controller code
 2. confirm `simple_oris` bookkeeping still matches the intended subset semantics
-3. confirm probabilistic and master-drawn paths reproduce rather than resample
+3. confirm distributed parts and the polish pass reproduce the owner's draw rather than resample
 4. confirm trailing reconstruction still uses the intended realized fraction
 5. confirm reconstruction still takes the pass buffer's images or records

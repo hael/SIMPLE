@@ -21,20 +21,24 @@ in the orientation table is a hard assignment, not a full soft responsibility
 vector. The one exception is reconstruction under `m_estimator=flex`, which
 weighs particles by frozen `flex_pca` state weights that alignment never reads.
 
-## Probabilistic Alignment Split
+## Probabilistic Batch Pipeline
 
-The probabilistic path is split into two phases:
+Under `refine=prob*` `refine3D_exec` runs the table per batch, in shared memory
+and in every distributed part alike:
 
-1. `prob_align_exec` or `prob_align_neigh_exec` (`simple_prob_align_strategy.f90`)
-   Sample particles for update once, run the table workers (`prob_tab`,
-   `prob_tab_neigh`) on that sample, read all partitions, assign, and write
-   `assignment_part.dat`.
-2. `strategy3D_prob`
-   Consume the precomputed assignment map and stamp the chosen `(state, projection, in-plane angle, shift)` back into the orientation model.
+1. The sample is the project owner's (`sample_ptcls4prob3D`, keyed: the
+   shared-memory matcher or the distributed master); a part reproduces its
+   share (`sample4update_reprod`).
+2. Per batch, on the prepared particles: `fill_tab_range` fills complete rows,
+   `assign_batch` draws each particle's pose from its row, and the weighted
+   insertion's extras are laid out (`topk > 1`).
+3. `strategy3D_prob` stamps the batch's `assgn_map` entry (`state, projection,
+   in-plane angle, shift`) back into the orientation model.
+4. `close_assignment` reports the readouts; a distributed part writes
+   `prob_readout_part<NN>.txt`, which the master merges in part order.
 
-This split matters. If a task changes how candidates are scored, sampled,
-normalized, or selected, inspect both the table-building phase and the consumer
-phase.
+If a task changes how candidates are scored, sampled, normalized, or selected,
+inspect the fill, the selection and the consumer.
 
 The probabilistic phase is particle-domain work. It reads the strategy's
 reprojection model and must not take over assembled-volume postprocessing.
@@ -57,14 +61,15 @@ Important details:
   sample and can refine shifts (L-BFGS-B, or a quadratic fit to the coarse
   lattice in multi-state tables) after identifying a probabilistic
   neighborhood. Shifts are held in the particle frame.
-- `ref_assign` converts the aggregated table into a single assignment map; the
-  state label is the deterministic argmin over states, and the projection
+- `assign_batch` (`assign_rows`; `assign_rows_neigh` under `prob_neigh`)
+  assigns each row of the batch; the state label is the deterministic argmin over states, and the projection
   within the state is one draw from the tempered posterior over the row,
   `p_r ∝ exp(-prob_beta T_i (L_r - L_min))` with `T_i = pi wsqsum / (2 pftsz)`
   the particle's Gaussian noise temperature (`draw_posterior_row`,
-  `posterior_temperature`). The in-plane rotation of each row entry is the
-  same draw over the grid rotations (`gen_posterior_val`). No reference is
-  forced to be populated.
+  `posterior_temperature`; keyed on the particle, `RND_FAM_ASSIGN`). The
+  in-plane rotation of each row entry is the same kind of draw over the grid
+  rotations, keyed on the particle and the reference (`gen_posterior_val`,
+  `RND_FAM_INPL`). No reference is forced to be populated.
 - `prob_athres` sizes the shift-refined set of the dense fill (`projs_ns`,
   with the mean pose change) and bounds the SHC strategies' candidate draws
   (`angle_sampling`, `sample_bounded_dists`); `npeaks_inpl` sizes the
@@ -84,8 +89,9 @@ The `refine` modes of the 3D matcher:
 - `eval` and `sigma` (no pose search)
 - `cont` (Cartesian continuous pose refinement)
 
-Do not assume all "probabilistic" modes share the same control flow. Some go
-through `prob_align`; some perform probabilistic decisions inside search strategies.
+Do not assume all "probabilistic" modes share the same control flow. Some run
+the table pipeline inside `refine3D_exec` (`refine=prob*`); some perform
+probabilistic decisions inside search strategies.
 
 ## Regularization and Statistical Controls
 
@@ -110,8 +116,8 @@ The iteration strategy materializes one reprojection model per iteration from
 the current Cartesian volumes (`materialize_reprojection_model_from_volumes`,
 `simple_matcher_refvol_utils.f90`): reference read, masking/filtering/centering
 policy, band selection (`set_bp_range3D`), and even/odd polar sections written
-to `reprojection_model_{even,odd}.bin`. The matcher and the table workers read
-it (`read_reprojection_model`) and adopt its band from the header. Volume
+to `reprojection_model_{even,odd}.bin`. The matcher reads it, its pipeline
+included (`read_reprojection_model`), and adopts its band from the header. Volume
 assembly produces Cartesian volumes only; it does not generate or refresh
 matcher references.
 

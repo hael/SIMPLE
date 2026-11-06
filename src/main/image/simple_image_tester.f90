@@ -15,9 +15,19 @@ use simple_syslib,       only: del_file
 use simple_image,        only: image, unmemoize_mask_coords
 use simple_projector,    only: projector
 use simple_ori,          only: ori
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
+use simple_cmdline,      only: cmdline
 implicit none
 private
 public :: run_all_image_tests
+
+!> a CTF application to an image of another box (what=1) or sampling (what=2) than the memoised Fourier maps,
+!! which must stop
+type, extends(forked_process) :: ctf_box_mismatch
+    integer :: what = 1
+contains
+    procedure :: execute => apply_ctf_other_box
+end type ctf_box_mismatch
 
 integer, parameter :: BOX  = 64
 real,    parameter :: SMPD = 1.0
@@ -62,7 +72,76 @@ contains
         call test_padding_after_binary_ops()
         call test_padding_after_pad_and_collage()
         call test_rmat_ptr_is_box()
+        call test_odd_box_shift_constant()
+        call test_ctf_maps_box_check()
     end subroutine run_all_image_tests
+
+    !> the shift constant is 2 pi/n for an odd dimension too: a shift by the box length is the identity
+    subroutine test_odd_box_shift_constant()
+        type(image) :: img
+        real        :: shc(3)
+        complex     :: ph
+        integer     :: h
+        logical     :: l_identity
+        write(*,'(A)') 'test_odd_box_shift_constant'
+        call img%new([65,64,1], SMPD, wthreads=.false.)
+        shc = img%get_shconst()
+        call assert_real(TWOPI/65., shc(1), 1.e-7, 'the shift constant of an odd dimension is 2 pi/n')
+        call assert_real(TWOPI/64., shc(2), 1.e-7, 'the shift constant of an even dimension is 2 pi/n')
+        l_identity = .true.
+        do h = 1, 32
+            ph = img%oshift([real(h),0.,0.], [65.,0.,0.])
+            if( abs(ph - cmplx(1.,0.)) > 1.e-3 ) l_identity = .false.
+        end do
+        call assert_true(l_identity, 'a shift by the box length is the identity on an odd box')
+        call img%kill
+    end subroutine test_odd_box_shift_constant
+
+    !> apply_ctf reads Fourier maps memoised for the image's box: another box stops (in a child)
+    subroutine test_ctf_maps_box_check()
+        use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
+        type(ctf_box_mismatch) :: child
+        write(*,'(A)') 'test_ctf_maps_box_check'
+        call memoize_ft_maps([BOX,BOX,1], SMPD)
+        call child%start(name=string('CTF_BOX_MISMATCH'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'apply_ctf on another box than the memoised maps stops')
+        call assert_int(1, child%get_exit_code(), 'apply_ctf stops by its check')
+        call child%destroy
+        child%what = 2
+        call child%start(name=string('CTF_SMPD_MISMATCH'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'apply_ctf at another sampling than the memoised maps stops')
+        call assert_int(1, child%get_exit_code(), 'apply_ctf stops by its sampling check')
+        call child%destroy
+        call forget_ft_maps
+    end subroutine test_ctf_maps_box_check
+
+    subroutine apply_ctf_other_box( self, cline )
+        use simple_ctf,       only: ctf
+        use simple_type_defs, only: ctfparams
+        class(ctf_box_mismatch), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(image)     :: img
+        type(ctf)       :: tfun
+        type(ctfparams) :: ctfparms
+        if( self%what == 1 )then
+            call img%new([BOX+32,BOX+32,1], SMPD, wthreads=.false.)
+        else
+            call img%new([BOX,BOX,1], 2.*SMPD, wthreads=.false.)
+        endif
+        call img%zero_and_flag_ft
+        tfun = ctf(SMPD, 300., 2.7, 0.1)
+        ctfparms%smpd    = SMPD
+        ctfparms%kv      = 300.
+        ctfparms%cs      = 2.7
+        ctfparms%fraca   = 0.1
+        ctfparms%dfx     = 2.
+        ctfparms%dfy     = 2.
+        ctfparms%angast  = 0.
+        ctfparms%phshift = 0.
+        call img%apply_ctf(tfun, 'ctf', ctfparms)
+    end subroutine apply_ctf_other_box
 
     !---------------- construction and access ----------------
 

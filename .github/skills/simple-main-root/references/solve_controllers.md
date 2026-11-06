@@ -37,7 +37,8 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
    balance, gauref, trailing reconstruction, filtering, automask, envfsc, stage controls and search
    adjustments, a later routine may overwrite an earlier one's field, and `emit_refine3D_stage_cfg`
    writes the cline. Keys the user gave at entry (`refine`, `lp`, `lpstop`, `trs`, `prob_beta_end`)
-   are recorded once as the `l_refine3D_*_override` flags (`prep_class_command_lines`) and honoured
+   are recorded once as the `l_refine3D_*_override` flags and `l_prob_beta_end_override`
+   (`prep_class_command_lines`) and honoured
    in the mode policy, the `lpinfo` set-up and the emit, not re-read from the user's cline.
 3. **Stage numbers are coupled.** `ML_REG_START_STAGE` must match the case split of
    `set_refine3D_stage_controls`; `AGGRESSIVE_MARCH_STAGE`, `VOL_SUPPLIED_STAGE`, `PCG_SOLVENT_START_STAGE`,

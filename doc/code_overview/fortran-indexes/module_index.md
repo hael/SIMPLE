@@ -869,18 +869,25 @@ Files:
 
 Uses:
 - `simple_atoms`
+- `simple_cmdline`
 - `simple_defs`
 - `simple_defs_atoms`
+- `simple_forked_process`
 - `simple_image`
 - `simple_nanoparticle_utils`
+- `simple_parameters`
+- `simple_rnd`
 - `simple_string`
 - `simple_syslib`
 - `simple_test_utils`
+- `simple_tseries_graphene_subtr`
 
 Public symbols:
 - `run_all_atoms_tests` — subroutine
 
 Private symbols:
+- `lattice_lookup` — type
+- `lookup_missing_lattice` — subroutine
 - `make_model` — subroutine
 - `make_pseudo` — subroutine
 - `test_access` — subroutine
@@ -888,7 +895,9 @@ Private symbols:
 - `test_compound_selector` — subroutine
 - `test_element_bfac` — subroutine
 - `test_geometry` — subroutine
+- `test_graphene_keeps_process` — subroutine
 - `test_lattice_cutoff` — subroutine
+- `test_lattice_params_missing` — subroutine
 - `test_parse_element_list` — subroutine
 - `test_pdb_hetatm` — subroutine
 - `test_pdb_roundtrip` — subroutine
@@ -938,10 +947,10 @@ Public symbols:
 - `binoris_seginfo` — type
 
 Private symbols:
-- `add_segment_1` — subroutine
-- `add_segment_2` — subroutine
-- `byte_manager4seg_inside_1` — subroutine
-- `byte_manager4seg_inside_2` — subroutine
+- `add_segment_oris` — subroutine
+- `add_segment_strs` — subroutine
+- `byte_manager4seg_inside_restore` — subroutine
+- `byte_manager4seg_inside_save` — subroutine
 - `clear_segments` — subroutine
 - `close` — subroutine
 - `empty_segment_inside` — subroutine
@@ -959,14 +968,14 @@ Private symbols:
 - `read_header` — subroutine
 - `read_particle_record` — subroutine
 - `read_record` — subroutine
-- `read_segment_1` — subroutine
-- `read_segment_2` — subroutine
+- `read_segment_oris` — subroutine
+- `read_segment_strs` — subroutine
 - `update_byte_ranges` — subroutine
 - `write_header` — subroutine
-- `write_segment_1` — subroutine
-- `write_segment_2` — subroutine
-- `write_segment_inside_1` — subroutine
-- `write_segment_inside_2` — subroutine
+- `write_segment_inside_oris` — subroutine
+- `write_segment_inside_strs` — subroutine
+- `write_segment_oris` — subroutine
+- `write_segment_strs` — subroutine
 
 Local symbols (enclosing procedure scope):
 - `open::open_local` — subroutine
@@ -1143,11 +1152,11 @@ Uses:
 
 Public symbols:
 - `butterworth` — function
-- `butterworth_filter_1` — subroutine
-- `butterworth_filter_2` — subroutine
-- `butterworth_filter_3` — subroutine
-- `butterworth_filter_4` — subroutine
-- `butterworth_filter_5` — subroutine
+- `butterworth_filter_band` — subroutine
+- `butterworth_filter_img` — subroutine
+- `butterworth_filter_krange` — subroutine
+- `butterworth_filter_pair` — subroutine
+- `butterworth_filter_vec` — subroutine
 
 ---
 ## Module: simple_calc_pspec_strategy
@@ -1428,6 +1437,7 @@ Private symbols:
 - `same_predictions` — function
 - `set_euclid_slot` — subroutine
 - `set_unweighted_particle` — subroutine
+- `slot_signature` — subroutine
 - `slot_signatures` — subroutine
 - `test_batch_preparation` — subroutine
 - `test_canonical_sigma_round_trip` — subroutine
@@ -1452,6 +1462,7 @@ Private symbols:
 - `test_reference_volume_file` — subroutine
 - `test_reference_volume_handoff` — subroutine
 - `test_shift_phase_sign` — subroutine
+- `test_sigma2_invalidates_slots` — subroutine
 - `test_sigma_endpoint_contracts` — subroutine
 - `test_sigma_from_shell_residual` — subroutine
 - `test_sigma_owner` — subroutine
@@ -1694,8 +1705,10 @@ Uses:
 - `simple_cavg_quality_model`
 - `simple_cavg_quality_relations`
 - `simple_cavg_quality_types`
+- `simple_cmdline`
 - `simple_defs`
 - `simple_fileio`
+- `simple_forked_process`
 - `simple_image`
 - `simple_oris`
 - `simple_string`
@@ -1708,12 +1721,15 @@ Public symbols:
 
 Private symbols:
 - `class_oris` — subroutine
+- `drop_last_value` — subroutine
 - `gauss` — function
 - `gauss_vec` — function
 - `kill_imgs` — subroutine
 - `make_cavg` — subroutine
+- `model_reader` — type
 - `next_uniform` — function
 - `project_quality` — subroutine
+- `read_short_model` — subroutine
 - `test_band_presence_unmasked` — subroutine
 - `test_bank_by_context` — subroutine
 - `test_diameter_calibration` — subroutine
@@ -1729,6 +1745,7 @@ Private symbols:
 - `write_synthetic_table` — subroutine
 
 Local symbols (enclosing procedure scope):
+- `test_model_file_round_trips::check_short_list` — subroutine
 - `test_nano_preset::gate_is_decision` — function
 - `test_nano_preset::m_probability` — function
 - `test_normalization::median_of` — function
@@ -1926,6 +1943,7 @@ Uses:
 - `simple_image`
 - `simple_imgarr_utils`
 - `simple_parameters`
+- `simple_rnd`
 - `simple_sp_project`
 - `simple_string`
 
@@ -2257,35 +2275,35 @@ Private symbols:
 - `alloc_chash` — subroutine
 - `chash2str` — function
 - `chash_strlen` — function
-- `constructor_1` — function
-- `constructor_2` — function
+- `constructor_by_sz` — function
+- `constructor_default` — function
 - `copy` — subroutine
 - `dealloc_chash` — subroutine
 - `delete` — subroutine
 - `gen_job_descr` — subroutine
-- `get_1` — function
-- `get_2` — function
+- `get_by_ind` — function
+- `get_by_key` — function
 - `get_key` — function
 - `get_static` — subroutine
 - `isthere` — function
 - `kill` — subroutine
 - `lookup` — function
-- `move_key_to_front_1` — subroutine
-- `move_key_to_front_2` — subroutine
-- `new_1` — subroutine
-- `new_2` — subroutine
+- `move_key_to_front_char` — subroutine
+- `move_key_to_front_str` — subroutine
+- `new_by_sz` — subroutine
+- `new_default` — subroutine
 - `parse_cmdline` — subroutine
-- `print_key_val_pair_1` — subroutine
-- `print_key_val_pair_2` — subroutine
+- `print_key_val_pair_by_ind` — subroutine
+- `print_key_val_pair_by_key` — subroutine
 - `print_key_val_pairs` — subroutine
-- `push_1` — subroutine
-- `push_2` — subroutine
-- `push_3` — subroutine
+- `push_char` — subroutine
+- `push_char_str` — subroutine
+- `push_str` — subroutine
 - `realloc_chash` — subroutine
 - `reverselookup` — function
-- `set_1` — subroutine
-- `set_2` — subroutine
-- `set_3` — subroutine
+- `set_char` — subroutine
+- `set_char_str` — subroutine
+- `set_str` — subroutine
 - `size_of` — function
 - `sort` — subroutine
 
@@ -5520,6 +5538,7 @@ Files:
 
 Uses:
 - `simple_ctf`
+- `simple_ctf_estimate_fit`
 - `simple_defs`
 - `simple_fplane_grid`
 - `simple_image`
@@ -5541,6 +5560,7 @@ Private symbols:
 - `test_constructor_and_conventions` — subroutine
 - `test_extrema` — subroutine
 - `test_fast_kernel_and_ft2img` — subroutine
+- `test_fit_kill_keeps_ft_maps` — subroutine
 - `test_phase_shift_policy` — subroutine
 - `test_restoration_contracts` — subroutine
 
@@ -5615,6 +5635,9 @@ Uses:
 
 Files:
 - `defs/simple_defs_atoms.f90`
+
+Uses:
+- `simple_error`
 
 Public symbols:
 - `get_element_Z_and_radius` — subroutine
@@ -5740,7 +5763,7 @@ Private symbols:
 ## Module: simple_dose_series_manifest
 
 Files:
-- `main/volume/simple_dose_series_manifest.f90`
+- `main/motion/simple_dose_series_manifest.f90`
 
 Uses:
 - `ieee_arithmetic`
@@ -5786,7 +5809,7 @@ Private symbols:
 ## Module: simple_dose_series_manifest_tester
 
 Files:
-- `main/volume/simple_dose_series_manifest_tester.f90`
+- `main/motion/simple_dose_series_manifest_tester.f90`
 
 Uses:
 - `ieee_arithmetic`
@@ -7123,18 +7146,18 @@ Uses:
 - `simple_syslib`
 
 Public symbols:
-- `add2fbody_1` — function
-- `add2fbody_2` — function
-- `add2fbody_3` — function
-- `append2basename_1` — function
-- `append2basename_2` — function
+- `add2fbody_char` — function
+- `add2fbody_str` — function
+- `add2fbody_str_char` — function
+- `append2basename_char` — function
+- `append2basename_str` — function
 - `arr2file_dp` — subroutine
 - `arr2file_sp` — subroutine
-- `arr2txtfile_1` — subroutine
-- `arr2txtfile_2` — subroutine
+- `arr2txtfile_int` — subroutine
+- `arr2txtfile_real` — subroutine
 - `basename` — function
-- `del_files_1` — subroutine
-- `del_files_2` — subroutine
+- `del_files_list` — subroutine
+- `del_files_numbered` — subroutine
 - `fclose` — subroutine
 - `file2drarr` — function
 - `file2imat` — subroutine
@@ -7143,20 +7166,20 @@ Public symbols:
 - `file2rmat` — subroutine
 - `fileiochk` — subroutine
 - `filelength` — function
-- `filepath_1` — function
-- `filepath_2` — function
-- `filepath_3` — function
-- `filepath_4` — function
+- `filepath_char` — function
+- `filepath_char_str` — function
+- `filepath_str` — function
+- `filepath_str_char` — function
 - `files_identical` — function
 - `fname2ext` — function
 - `fname2format` — function
 - `fname2iter` — function
-- `fname_new_ext_1` — function
-- `fname_new_ext_2` — function
+- `fname_new_ext_char` — function
+- `fname_new_ext_str` — function
 - `fopen` — subroutine
 - `funit_size` — function
-- `get_fbody_1` — function
-- `get_fbody_2` — function
+- `get_fbody_char` — function
+- `get_fbody_str` — function
 - `get_fpath` — function
 - `get_open_funits` — subroutine
 - `get_relative_path` — function
@@ -7174,8 +7197,8 @@ Public symbols:
 - `rmat2file` — subroutine
 - `simple_copy_file` — subroutine
 - `stemname` — function
-- `swap_suffix_1` — function
-- `swap_suffix_2` — function
+- `swap_suffix_char` — function
+- `swap_suffix_str` — function
 - `wait_for_closure` — subroutine
 - `write_filetable` — subroutine
 - `write_singlelineoftext` — subroutine
@@ -8842,8 +8865,10 @@ Files:
 - `main/volume/simple_frozen_accum_tester.f90`
 
 Uses:
+- `simple_cmdline`
 - `simple_defs`
 - `simple_fileio`
+- `simple_forked_process`
 - `simple_fplane_grid`
 - `simple_frozen_accum`
 - `simple_image`
@@ -8864,18 +8889,22 @@ Public symbols:
 - `run_all_frozen_accum_tests` — subroutine
 
 Private symbols:
+- `accumulator_params` — subroutine
 - `delete_gridding_set` — subroutine
 - `make_context` — subroutine
 - `make_images` — subroutine
 - `make_orientations` — subroutine
 - `max_rel_cdiff` — function
 - `max_rel_rdiff` — function
+- `read_rho_into` — subroutine
 - `read_text` — subroutine
+- `rho_reader` — type
 - `same_text` — function
 - `test_carried_chain` — subroutine
 - `test_context_refusals` — subroutine
 - `test_context_round_trip` — subroutine
 - `test_gridding_union_equals_sum` — subroutine
+- `test_rho_header` — subroutine
 - `truncate_file` — subroutine
 - `write_text` — subroutine
 
@@ -9212,8 +9241,8 @@ Public symbols:
 - `cufftPlan3d` — function
 - `cufftPlanMany` — function
 - `print_gpu_specs` — subroutine
-- `set_offload_device_1` — subroutine
-- `set_offload_device_2` — subroutine
+- `set_offload_device_cline` — subroutine
+- `set_offload_device_id` — subroutine
 
 ---
 ## Module: simple_gridding
@@ -9360,8 +9389,8 @@ Public symbols:
 - `gui_communicator` — type
 
 Private symbols:
-- `add_metadata_1` — subroutine
-- `add_metadata_2` — subroutine
+- `add_metadata_projfile` — subroutine
+- `add_metadata_spproj` — subroutine
 - `communication_worker` — subroutine
 - `gui_comm_args` — type
 - `kill_gui_communicator` — subroutine
@@ -10183,8 +10212,8 @@ Public symbols:
 
 Private symbols:
 - `alloc_hash` — subroutine
-- `constructor_1` — function
-- `constructor_2` — function
+- `constructor_by_sz` — function
+- `constructor_default` — function
 - `copy` — subroutine
 - `dealloc_hash` — subroutine
 - `delete` — subroutine
@@ -10193,23 +10222,23 @@ Private symbols:
 - `get_key` — function
 - `get_keys` — function
 - `get_value_at` — function
-- `getter_1` — subroutine
-- `getter_2` — subroutine
-- `getter_3` — subroutine
+- `getter_dp` — subroutine
+- `getter_int` — subroutine
+- `getter_real` — subroutine
 - `hash2str` — function
 - `hash_strlen` — function
 - `isthere` — function
 - `kill` — subroutine
 - `lookup` — function
-- `new_1` — subroutine
-- `new_2` — subroutine
+- `new_by_sz` — subroutine
+- `new_default` — subroutine
 - `print` — subroutine
-- `push_1` — subroutine
-- `push_2` — subroutine
+- `push_dp` — subroutine
+- `push_int` — subroutine
 - `realloc_hash` — subroutine
-- `set_1` — subroutine
-- `set_2` — subroutine
-- `set_3` — subroutine
+- `set_dp` — subroutine
+- `set_int` — subroutine
+- `set_real` — subroutine
 - `size_of` — function
 
 ---
@@ -10269,11 +10298,11 @@ Private symbols:
 - `KLD` — function
 - `mean` — function
 - `moments` — function
-- `new_1` — subroutine
-- `new_2` — subroutine
-- `new_3` — subroutine
-- `new_4` — subroutine
-- `new_5` — subroutine
+- `new_by_nbins` — subroutine
+- `new_from_hist` — subroutine
+- `new_from_img` — subroutine
+- `new_from_vec` — subroutine
+- `new_from_vec_nbins` — subroutine
 - `npeaks` — function
 - `plot` — subroutine
 - `quantize` — subroutine
@@ -10390,36 +10419,36 @@ Public symbols:
 Private symbols:
 - `acf` — subroutine
 - `acf` — subroutine
-- `add_1` — subroutine
-- `add_1` — subroutine
-- `add_2` — subroutine
-- `add_2` — subroutine
-- `add_3` — subroutine
-- `add_3` — subroutine
-- `add_4` — subroutine
-- `add_4` — subroutine
-- `add_5` — subroutine
-- `add_5` — subroutine
 - `add_cmat_at` — subroutine
 - `add_cmat_at` — subroutine
 - `add_cmats_to_cmat` — subroutine
 - `add_cmats_to_cmat` — subroutine
+- `add_cmplx_at` — subroutine
+- `add_cmplx_at` — subroutine
+- `add_cmplx_at_kdiv` — subroutine
+- `add_cmplx_at_kdiv` — subroutine
 - `add_dble_cmat2mat` — subroutine
 - `add_dble_cmat2mat` — subroutine
 - `add_gauran` — subroutine
 - `add_gauran` — subroutine
-- `add_mat2cmat_1` — subroutine
-- `add_mat2cmat_1` — subroutine
-- `add_mat2cmat_2` — subroutine
-- `add_mat2cmat_2` — subroutine
+- `add_img` — subroutine
+- `add_img` — subroutine
+- `add_mat2cmat_cmplx` — subroutine
+- `add_mat2cmat_cmplx` — subroutine
+- `add_mat2cmat_real` — subroutine
+- `add_mat2cmat_real` — subroutine
+- `add_real_at` — subroutine
+- `add_real_at` — subroutine
 - `add_rmat2mat_workshare` — subroutine
 - `add_rmat2mat_workshare` — subroutine
+- `add_scalar` — subroutine
+- `add_scalar` — subroutine
 - `add_window` — subroutine
 - `add_window` — subroutine
-- `add_workshare_1` — subroutine
-- `add_workshare_1` — subroutine
-- `add_workshare_2` — subroutine
-- `add_workshare_2` — subroutine
+- `add_workshare_img` — subroutine
+- `add_workshare_img` — subroutine
+- `add_workshare_weighted` — subroutine
+- `add_workshare_weighted` — subroutine
 - `add_zero2mask` — subroutine
 - `add_zero2mask` — subroutine
 - `addition` — function
@@ -10440,12 +10469,12 @@ Private symbols:
 - `apply_ctf_wpad` — subroutine
 - `apply_dose_weighing` — subroutine
 - `apply_dose_weighing` — subroutine
-- `apply_filter` — subroutine
-- `apply_filter` — subroutine
-- `apply_filter_2` — subroutine
-- `apply_filter_2` — subroutine
+- `apply_filter_pair` — subroutine
+- `apply_filter_pair` — subroutine
 - `apply_filter_serial` — subroutine
 - `apply_filter_serial` — subroutine
+- `apply_filter_single` — subroutine
+- `apply_filter_single` — subroutine
 - `assign` — subroutine
 - `assign` — subroutine
 - `assign_c2img` — subroutine
@@ -10462,12 +10491,12 @@ Private symbols:
 - `bin2logical` — function
 - `bin_inv` — subroutine
 - `bin_inv` — subroutine
-- `binarize_1` — subroutine
-- `binarize_1` — subroutine
-- `binarize_2` — subroutine
-- `binarize_2` — subroutine
-- `binarize_3` — subroutine
-- `binarize_3` — subroutine
+- `binarize_npix` — subroutine
+- `binarize_npix` — subroutine
+- `binarize_thres` — subroutine
+- `binarize_thres` — subroutine
+- `binarize_thres_mask` — subroutine
+- `binarize_thres_mask` — subroutine
 - `bp` — subroutine
 - `bp` — subroutine
 - `bpgau2D` — subroutine
@@ -10558,30 +10587,30 @@ Private symbols:
 - `dead_hot_positions` — function
 - `density_inoutside` — subroutine
 - `density_inoutside` — subroutine
-- `disc_1` — subroutine
-- `disc_1` — subroutine
-- `disc_2` — subroutine
-- `disc_2` — subroutine
+- `disc_img` — subroutine
+- `disc_img` — subroutine
+- `disc_lmsk` — subroutine
+- `disc_lmsk` — subroutine
 - `disc_sideview` — subroutine
 - `disc_sideview` — subroutine
 - `distance_transform` — subroutine
 - `distance_transform` — subroutine
-- `div_1` — subroutine
-- `div_1` — subroutine
-- `div_2` — subroutine
-- `div_2` — subroutine
-- `div_3` — subroutine
-- `div_3` — subroutine
-- `div_4` — subroutine
-- `div_4` — subroutine
 - `div_below` — subroutine
 - `div_below` — subroutine
-- `div_cmat_at_1` — subroutine
-- `div_cmat_at_1` — subroutine
-- `div_cmat_at_2` — subroutine
-- `div_cmat_at_2` — subroutine
+- `div_cmat_at_cmplx` — subroutine
+- `div_cmat_at_cmplx` — subroutine
+- `div_cmat_at_real` — subroutine
+- `div_cmat_at_real` — subroutine
+- `div_img` — subroutine
+- `div_img` — subroutine
+- `div_kernel_at` — subroutine
+- `div_kernel_at` — subroutine
+- `div_real_at` — subroutine
+- `div_real_at` — subroutine
 - `div_rmat_at` — subroutine
 - `div_rmat_at` — subroutine
+- `div_scalar` — subroutine
+- `div_scalar` — subroutine
 - `division` — function
 - `division` — function
 - `downsample_gain` — subroutine
@@ -10629,10 +10658,10 @@ Private symbols:
 - `gauimg2D` — subroutine
 - `gauimg3D` — subroutine
 - `gauimg3D` — subroutine
-- `gauimg_1` — subroutine
-- `gauimg_1` — subroutine
-- `gauimg_2` — subroutine
-- `gauimg_2` — subroutine
+- `gauimg_center` — subroutine
+- `gauimg_center` — subroutine
+- `gauimg_offset` — subroutine
+- `gauimg_offset` — subroutine
 - `gauran` — subroutine
 - `gauran` — subroutine
 - `gen_argtransf_comp` — function
@@ -10806,28 +10835,28 @@ Private symbols:
 - `minmax` — function
 - `mirror` — subroutine
 - `mirror` — subroutine
-- `mul_1` — subroutine
-- `mul_1` — subroutine
-- `mul_2` — subroutine
-- `mul_2` — subroutine
-- `mul_3` — subroutine
-- `mul_3` — subroutine
-- `mul_4` — subroutine
-- `mul_4` — subroutine
-- `mul_5` — subroutine
-- `mul_5` — subroutine
-- `mul_cmat_1` — subroutine
-- `mul_cmat_1` — subroutine
-- `mul_cmat_2` — subroutine
-- `mul_cmat_2` — subroutine
-- `mul_cmat_at_1` — subroutine
-- `mul_cmat_at_1` — subroutine
-- `mul_cmat_at_2` — subroutine
-- `mul_cmat_at_2` — subroutine
+- `mul_cmat_at_cmplx` — subroutine
+- `mul_cmat_at_cmplx` — subroutine
+- `mul_cmat_at_real` — subroutine
+- `mul_cmat_at_real` — subroutine
+- `mul_cmat_masked` — subroutine
+- `mul_cmat_masked` — subroutine
+- `mul_cmat_unmasked` — subroutine
+- `mul_cmat_unmasked` — subroutine
+- `mul_cmplx_at` — subroutine
+- `mul_cmplx_at` — subroutine
+- `mul_img` — subroutine
+- `mul_img` — subroutine
+- `mul_img_lp` — subroutine
+- `mul_img_lp` — subroutine
+- `mul_real_at` — subroutine
+- `mul_real_at` — subroutine
 - `mul_rmat` — subroutine
 - `mul_rmat` — subroutine
 - `mul_rmat_at` — subroutine
 - `mul_rmat_at` — subroutine
+- `mul_scalar` — subroutine
+- `mul_scalar` — subroutine
 - `multiplication` — function
 - `multiplication` — function
 - `multiplication_const_int` — function
@@ -10882,10 +10911,10 @@ Private symbols:
 - `one_at_edge` — subroutine
 - `open` — subroutine
 - `open` — subroutine
-- `oshift_1` — function
-- `oshift_1` — function
-- `oshift_2` — function
-- `oshift_2` — function
+- `oshift_int` — function
+- `oshift_int` — function
+- `oshift_real` — function
+- `oshift_real` — function
 - `pad` — subroutine
 - `pad` — subroutine
 - `pad_fft` — subroutine
@@ -10894,10 +10923,10 @@ Private symbols:
 - `pad_inplace` — subroutine
 - `pad_mats` — subroutine
 - `pad_mats` — subroutine
-- `pad_mirr_1` — subroutine
-- `pad_mirr_1` — subroutine
-- `pad_mirr_2` — subroutine
-- `pad_mirr_2` — subroutine
+- `pad_mirr_inplace` — subroutine
+- `pad_mirr_inplace` — subroutine
+- `pad_mirr_into` — subroutine
+- `pad_mirr_into` — subroutine
 - `phase_corr` — subroutine
 - `phase_corr` — subroutine
 - `phase_rand` — subroutine
@@ -10909,12 +10938,12 @@ Private symbols:
 - `polarize_oversamp` — subroutine
 - `power_spectrum` — subroutine
 - `power_spectrum` — subroutine
-- `prenorm4real_corr_1` — subroutine
-- `prenorm4real_corr_1` — subroutine
-- `prenorm4real_corr_2` — subroutine
-- `prenorm4real_corr_2` — subroutine
-- `prenorm4real_corr_3` — subroutine
-- `prenorm4real_corr_3` — subroutine
+- `prenorm4real_corr_inplace` — subroutine
+- `prenorm4real_corr_inplace` — subroutine
+- `prenorm4real_corr_sxx` — subroutine
+- `prenorm4real_corr_sxx` — subroutine
+- `prenorm4real_corr_sxx_masked` — subroutine
+- `prenorm4real_corr_sxx_masked` — subroutine
 - `presence` — function
 - `presence` — function
 - `print_cmat` — subroutine
@@ -10937,16 +10966,16 @@ Private symbols:
 - `read_raw_mrc` — subroutine
 - `read_single_mrc_image` — subroutine
 - `read_single_mrc_image` — subroutine
-- `real_corr_1` — function
-- `real_corr_1` — function
-- `real_corr_2` — function
-- `real_corr_2` — function
-- `real_corr_prenorm_1` — function
-- `real_corr_prenorm_1` — function
-- `real_corr_prenorm_2` — function
-- `real_corr_prenorm_2` — function
-- `real_corr_prenorm_3` — function
-- `real_corr_prenorm_3` — function
+- `real_corr_masked` — function
+- `real_corr_masked` — function
+- `real_corr_prenorm_inplace` — function
+- `real_corr_prenorm_inplace` — function
+- `real_corr_prenorm_sxx` — function
+- `real_corr_prenorm_sxx` — function
+- `real_corr_prenorm_sxx_masked` — function
+- `real_corr_prenorm_sxx_masked` — function
+- `real_corr_unmasked` — function
+- `real_corr_unmasked` — function
 - `real_space_filter` — subroutine
 - `real_space_filter` — subroutine
 - `remove_edge` — subroutine
@@ -10971,8 +11000,8 @@ Private symbols:
 - `salt_n_pepper` — subroutine
 - `same_dims` — function
 - `same_dims` — function
-- `same_dims_1` — function
-- `same_dims_1` — function
+- `same_dims_img` — function
+- `same_dims_img` — function
 - `same_smpd` — function
 - `same_smpd` — function
 - `scale_mats` — subroutine
@@ -10981,30 +11010,30 @@ Private symbols:
 - `scale_pixels` — subroutine
 - `scale_pspec4viz` — subroutine
 - `scale_pspec4viz` — subroutine
-- `serialize_2` — function
-- `serialize_2` — function
-- `serialize_3` — function
-- `serialize_3` — function
-- `set_1` — subroutine
-- `set_1` — subroutine
-- `set_2` — subroutine
-- `set_2` — subroutine
+- `serialize_masked` — function
+- `serialize_masked` — function
+- `serialize_thres` — function
+- `serialize_thres` — function
 - `set_cmat` — subroutine
 - `set_cmat` — subroutine
-- `set_cmat_1` — subroutine
-- `set_cmat_1` — subroutine
-- `set_cmat_2` — subroutine
-- `set_cmat_2` — subroutine
-- `set_cmat_3` — subroutine
-- `set_cmat_3` — subroutine
-- `set_cmat_4` — subroutine
-- `set_cmat_4` — subroutine
+- `set_cmat_2d` — subroutine
+- `set_cmat_2d` — subroutine
+- `set_cmat_3d` — subroutine
+- `set_cmat_3d` — subroutine
 - `set_cmat_at` — subroutine
 - `set_cmat_at` — subroutine
+- `set_cmat_img` — subroutine
+- `set_cmat_img` — subroutine
+- `set_cmat_scalar` — subroutine
+- `set_cmat_scalar` — subroutine
 - `set_fcomp` — subroutine
 - `set_fcomp` — subroutine
 - `set_ft` — subroutine
 - `set_ft` — subroutine
+- `set_img` — subroutine
+- `set_img` — subroutine
+- `set_real_at` — subroutine
+- `set_real_at` — subroutine
 - `set_rmat` — subroutine
 - `set_rmat` — subroutine
 - `set_rmat_at` — subroutine
@@ -11021,10 +11050,10 @@ Private symbols:
 - `shift` — subroutine
 - `shift2D_demoivre` — subroutine
 - `shift2D_demoivre` — subroutine
-- `shift2Dserial_1` — subroutine
-- `shift2Dserial_1` — subroutine
-- `shift2Dserial_2` — subroutine
-- `shift2Dserial_2` — subroutine
+- `shift2Dserial_inplace` — subroutine
+- `shift2Dserial_inplace` — subroutine
+- `shift2Dserial_into` — subroutine
+- `shift2Dserial_into` — subroutine
 - `shift_phorig` — subroutine
 - `shift_phorig` — subroutine
 - `skew` — function
@@ -11041,22 +11070,22 @@ Private symbols:
 - `square` — subroutine
 - `square_dims` — function
 - `square_dims` — function
-- `stats_1` — subroutine
-- `stats_1` — subroutine
-- `stats_2` — subroutine
-- `stats_2` — subroutine
-- `subtr_1` — subroutine
-- `subtr_1` — subroutine
-- `subtr_2` — subroutine
-- `subtr_2` — subroutine
-- `subtr_3` — subroutine
-- `subtr_3` — subroutine
-- `subtr_4` — subroutine
-- `subtr_4` — subroutine
+- `stats_mskimg` — subroutine
+- `stats_mskimg` — subroutine
+- `stats_region` — subroutine
+- `stats_region` — subroutine
 - `subtr_backgr` — subroutine
 - `subtr_backgr` — subroutine
 - `subtr_backgr_ramp` — subroutine
 - `subtr_backgr_ramp` — subroutine
+- `subtr_cmplx_at` — subroutine
+- `subtr_cmplx_at` — subroutine
+- `subtr_cmplx_at_kdiv` — subroutine
+- `subtr_cmplx_at_kdiv` — subroutine
+- `subtr_img` — subroutine
+- `subtr_img` — subroutine
+- `subtr_scalar` — subroutine
+- `subtr_scalar` — subroutine
 - `subtract_background` — subroutine
 - `subtract_background` — subroutine
 - `subtraction` — function
@@ -11337,21 +11366,28 @@ Files:
 Uses:
 - `ieee_arithmetic`
 - `ieee_exceptions`
+- `simple_cmdline`
+- `simple_ctf`
 - `simple_defs`
+- `simple_forked_process`
 - `simple_image`
 - `simple_linalg`
+- `simple_memoize_ft_maps`
 - `simple_ori`
 - `simple_projector`
 - `simple_string`
 - `simple_string_utils`
 - `simple_syslib`
 - `simple_test_utils`
+- `simple_type_defs`
 
 Public symbols:
 - `run_all_image_tests` — subroutine
 
 Private symbols:
+- `apply_ctf_other_box` — subroutine
 - `band_equals` — function
+- `ctf_box_mismatch` — type
 - `flat_spectrum` — subroutine
 - `pad_dims` — function
 - `pad_tag` — function
@@ -11364,6 +11400,7 @@ Private symbols:
 - `test_construct_and_access` — subroutine
 - `test_copy_and_inplace_threading` — subroutine
 - `test_corr` — subroutine
+- `test_ctf_maps_box_check` — subroutine
 - `test_dose_weighing_modes` — subroutine
 - `test_fft_roundtrip_and_nyquist` — subroutine
 - `test_file_roundtrip` — subroutine
@@ -11371,6 +11408,7 @@ Private symbols:
 - `test_flip` — subroutine
 - `test_fproject` — subroutine
 - `test_masscen` — subroutine
+- `test_odd_box_shift_constant` — subroutine
 - `test_padding_after_arithmetic` — subroutine
 - `test_padding_after_binary_ops` — subroutine
 - `test_padding_after_entering_real_space` — subroutine
@@ -11686,28 +11724,28 @@ Public symbols:
 - `assert_eq3` — function
 - `assert_eq4` — function
 - `assert_eqn` — function
-- `check4nans2D_1` — subroutine
-- `check4nans2D_2` — subroutine
-- `check4nans3D_1` — subroutine
-- `check4nans3D_2` — subroutine
-- `check4nans_1` — subroutine
-- `check4nans_2` — subroutine
-- `is_a_number_1` — function
-- `is_a_number_2` — function
-- `is_a_number_3` — function
-- `is_a_number_4` — function
-- `is_equal_1` — function
-- `is_equal_2` — function
-- `is_equal_3` — function
-- `is_even_1` — function
-- `is_even_2` — function
-- `is_gt_zero_0` — function
-- `is_gt_zero_1` — function
-- `is_gt_zero_2` — function
+- `check4nans2D_cmplx` — subroutine
+- `check4nans2D_real` — subroutine
+- `check4nans3D_cmplx` — subroutine
+- `check4nans3D_real` — subroutine
+- `check4nans_cmplx` — subroutine
+- `check4nans_real` — subroutine
+- `is_a_number_cmplx` — function
+- `is_a_number_cmplx_dp` — function
+- `is_a_number_dp` — function
+- `is_a_number_real` — function
+- `is_equal_cmplx` — function
+- `is_equal_dp` — function
+- `is_equal_real` — function
+- `is_even_array` — function
+- `is_even_scalar` — function
+- `is_gt_zero_dp` — function
+- `is_gt_zero_int` — function
+- `is_gt_zero_real` — function
 - `is_odd` — function
-- `is_zero_0` — function
-- `is_zero_1` — function
-- `is_zero_2` — function
+- `is_zero_dp` — function
+- `is_zero_int` — function
+- `is_zero_real` — function
 
 ---
 ## Module: simple_jiffys
@@ -11997,8 +12035,8 @@ Private symbols:
 - `kill` — subroutine
 - `merge` — subroutine
 - `merge_ranked` — subroutine
-- `new_1` — subroutine
-- `new_2` — subroutine
+- `new_by_ncls` — subroutine
+- `new_from_labels` — subroutine
 
 ---
 ## Module: simple_linalg
@@ -12042,12 +12080,12 @@ Private symbols:
 - `eigsrt_dp` — subroutine
 - `eigsrt_sp` — subroutine
 - `euclid_dp` — function
-- `euclid_sp_1` — function
-- `euclid_sp_2` — function
-- `hyp_1` — function
-- `hyp_2` — function
-- `hyp_3` — function
-- `hyp_4` — function
+- `euclid_sp_1d` — function
+- `euclid_sp_2d` — function
+- `hyp_int_xy` — function
+- `hyp_int_xyz` — function
+- `hyp_real_xy` — function
+- `hyp_real_xyz` — function
 - `jacobi_dp` — subroutine
 - `jacobi_sp` — subroutine
 - `lapack_stop` — subroutine
@@ -12059,8 +12097,8 @@ Private symbols:
 - `norm_2_sp` — function
 - `pythag_dp` — function
 - `pythag_sp` — function
-- `rad2deg_1` — function
-- `rad2deg_2` — function
+- `rad2deg_dp` — function
+- `rad2deg_sp` — function
 - `sgemm` — subroutine
 - `sgesvd` — subroutine
 - `sgetrf` — subroutine
@@ -12269,8 +12307,8 @@ Public symbols:
 - `print_magic_box_range` — subroutine
 
 Private symbols:
-- `magic_pftsz_1` — function
-- `magic_pftsz_2` — function
+- `magic_pftsz_crop` — function
+- `magic_pftsz_msk` — function
 
 ---
 ## Module: simple_make_cavgs_strategy
@@ -12421,7 +12459,6 @@ Private symbols:
 - `insert_extra_poses` — subroutine
 - `kill_state_half_rec` — subroutine
 - `mark_empty_state` — subroutine
-- `normalized_eo` — function
 - `state_eo_group` — function
 - `update_state_half_rec` — subroutine
 
@@ -12441,6 +12478,7 @@ Uses:
 - `simple_image`
 - `simple_matcher_2dprep`
 - `simple_matcher_ptcl_batch`
+- `simple_matcher_ptcl_io`
 - `simple_parameters`
 - `simple_strategy2d_alloc`
 
@@ -12468,6 +12506,7 @@ Public symbols:
 - `alloc_ptcl_imgs` — subroutine
 - `build_batch_particles2D` — subroutine
 - `build_batch_particles3D` — subroutine
+- `check_pass_team` — subroutine
 - `clean_batch_particles2D` — subroutine
 - `clean_batch_particles3D` — subroutine
 - `crop_particles2D` — function
@@ -12505,6 +12544,7 @@ Public symbols:
 - `open_record_buffer` — function
 - `pass_buffer_bytes` — function
 - `pass_buffer_status_name` — function
+- `pass_team` — function
 - `prep_rec_observation` — subroutine
 - `prep_rec_observation_ptcl` — subroutine
 - `prepimgbatch` — subroutine
@@ -12656,11 +12696,11 @@ Public symbols:
 - `lcm` — function
 - `mode` — subroutine
 - `nextPow2` — function
-- `otsu_1` — subroutine
-- `otsu_2` — subroutine
-- `otsu_3` — subroutine
-- `pixels_dist_1` — function
-- `pixels_dist_2` — function
+- `otsu_binarize` — subroutine
+- `otsu_mask` — subroutine
+- `otsu_thresh` — subroutine
+- `pixels_dist_int` — function
+- `pixels_dist_real` — function
 - `put_last` — subroutine
 - `quadri` — function
 - `quantize_vec` — subroutine
@@ -12717,10 +12757,10 @@ Public symbols:
 - `calc_fourier_index` — function
 - `calc_graphene_mask` — function
 - `calc_lowpass_lim` — function
-- `csq_1` — function
-- `csq_2` — function
-- `csq_fast_1` — function
-- `csq_fast_2` — function
+- `csq_dp` — function
+- `csq_fast_dp` — function
+- `csq_fast_sp` — function
+- `csq_sp` — function
 - `cyci_1d` — function
 - `cyci_1d_static` — function
 - `fdim` — function
@@ -12770,6 +12810,7 @@ Public symbols:
 - `forget_ft_maps` — subroutine
 - `ft_map_get_farray_shape` — function
 - `ft_map_get_lfny` — function
+- `ft_maps_match` — function
 - `memoize_ft_maps` — subroutine
 
 ---
@@ -13332,7 +13373,9 @@ Uses:
 - `iso_fortran_env`
 - `simple_cmdline`
 - `simple_core_module_api`
+- `simple_forked_process`
 - `simple_image`
+- `simple_motion_correct_iter`
 - `simple_motion_correct_utils`
 - `simple_motion_model`
 - `simple_parameters`
@@ -13344,12 +13387,15 @@ Public symbols:
 
 Private symbols:
 - `binary_files_equal` — function
+- `correct_grouped_movie` — subroutine
+- `grouped_movie` — type
 - `test_binary_roundtrip` — subroutine
 - `test_binary_roundtrip_with_optional_arrays` — subroutine
 - `test_binary_roundtrip_with_rejected_patch` — subroutine
 - `test_binary_roundtrip_without_optional_arrays` — subroutine
 - `test_flipgain_lifecycle` — subroutine
 - `test_movie_geometry` — subroutine
+- `test_nframesgrp_outside_tseries` — subroutine
 - `test_refit_polynomial_known_coefficients` — subroutine
 - `write_reference_binary` — subroutine
 - `write_reference_string` — subroutine
@@ -13795,14 +13841,14 @@ Uses:
 - `simple_core_module_api`
 
 Public symbols:
-- `neigh_4_3D_1` — subroutine
-- `neigh_4_3D_2` — subroutine
-- `neigh_8_1` — subroutine
-- `neigh_8_2` — subroutine
-- `neigh_8_3` — subroutine
-- `neigh_8_3D_0` — subroutine
-- `neigh_8_3D_1` — subroutine
-- `neigh_8_3D_2` — subroutine
+- `neigh_4_3D_coords` — subroutine
+- `neigh_4_3D_imat` — subroutine
+- `neigh_8_3D_coords` — subroutine
+- `neigh_8_3D_imat` — subroutine
+- `neigh_8_3D_rmat` — subroutine
+- `neigh_8_coords` — subroutine
+- `neigh_8_imat` — subroutine
+- `neigh_8_rmat` — subroutine
 
 ---
 ## Module: simple_nlcg_solver
@@ -14117,7 +14163,9 @@ Files:
 
 Uses:
 - `simple_butterworth`
+- `simple_cmdline`
 - `simple_core_module_api`
+- `simple_forked_process`
 - `simple_image`
 - `simple_nu_filter`
 - `simple_nu_filter_vars`
@@ -14129,12 +14177,15 @@ Public symbols:
 - `run_all_nu_filter_tests` — subroutine
 
 Private symbols:
+- `clamped_setup` — type
 - `convolve_axis` — subroutine
 - `fill_gaussian` — subroutine
 - `make_pair` — subroutine
 - `reference_tent_smooth` — subroutine
+- `setup_with_clamp` — subroutine
 - `smoothed_field` — function
 - `support_sphere` — subroutine
+- `test_clamp_between_pairs` — subroutine
 - `test_coarser_region` — subroutine
 - `test_composition_per_label` — subroutine
 - `test_evidence_envelope` — subroutine
@@ -14328,8 +14379,8 @@ Public symbols:
 - `estimate_lplims2D` — subroutine
 
 Private symbols:
-- `estimate_lplim_1` — subroutine
-- `estimate_lplim_2` — subroutine
+- `estimate_lplim_find` — subroutine
+- `estimate_lplim_lp` — subroutine
 
 ---
 ## Module: simple_opt_lbfgsb
@@ -14502,13 +14553,16 @@ Private symbols:
 - `dense_pcg_size` — function
 - `dircost` — function
 - `dircost_grad` — subroutine
+- `eval_recorder` — type
 - `quad1d` — function
 - `quad1d_grad` — subroutine
 - `quad2d` — function
 - `quad2d_grad` — subroutine
+- `quad2d_rec` — function
 - `rosenbrock` — function
 - `rosenbrock_grad` — subroutine
 - `set_spd_operator` — subroutine
+- `test_de_npop_inipop` — subroutine
 - `test_de_quadratic` — subroutine
 - `test_lbfgsb_bounded` — subroutine
 - `test_lbfgsb_direction` — subroutine
@@ -14519,6 +14573,7 @@ Private symbols:
 - `test_pcg_diagonal_one_step` — subroutine
 - `test_simplex_quadratic` — subroutine
 - `test_spec_bookkeeping` — subroutine
+- `test_start_at_origin` — subroutine
 
 ---
 ## Module: simple_optics_groups
@@ -14707,9 +14762,9 @@ Private symbols:
 - `get_str` — function
 - `get_top` — function
 - `get_updatecnt` — function
-- `getter_1` — subroutine
-- `getter_2` — subroutine
-- `getter_3` — subroutine
+- `getter_int` — subroutine
+- `getter_real` — subroutine
+- `getter_str` — subroutine
 - `has_been_searched` — function
 - `inplrotdist` — function
 - `is_particle` — function
@@ -14738,29 +14793,29 @@ Private symbols:
 - `read` — subroutine
 - `reject` — subroutine
 - `reset_pparms` — subroutine
-- `rnd_euler_1` — subroutine
-- `rnd_euler_2` — subroutine
-- `rnd_euler_3` — subroutine
-- `rnd_euler_4` — subroutine
-- `rnd_euler_5` — subroutine
+- `rnd_euler_full` — subroutine
+- `rnd_euler_lims` — subroutine
+- `rnd_euler_near` — subroutine
+- `rnd_euler_near_projinpl` — subroutine
+- `rnd_euler_offset` — subroutine
 - `rnd_inpl` — subroutine
 - `rnd_ori` — subroutine
 - `rnd_shift` — subroutine
 - `round_shifts` — subroutine
-- `set_1` — subroutine
-- `set_2` — subroutine
-- `set_3` — subroutine
-- `set_4` — subroutine
-- `set_5` — subroutine
+- `set_char` — subroutine
 - `set_class` — subroutine
 - `set_ctfvars` — subroutine
 - `set_dfx` — subroutine
 - `set_dfy` — subroutine
+- `set_dp` — subroutine
 - `set_euler` — subroutine
+- `set_int` — subroutine
 - `set_ogid` — subroutine
+- `set_real` — subroutine
 - `set_shift` — subroutine
 - `set_state` — subroutine
 - `set_stkind` — subroutine
+- `set_str` — subroutine
 - `str2ori` — subroutine
 - `swape1e3` — subroutine
 - `transfer_2Dparams` — subroutine
@@ -14930,10 +14985,10 @@ Private symbols:
 - `any_active_updated` — function
 - `any_state_zero` — function
 - `any_state_zero` — function
-- `append_1` — subroutine
-- `append_1` — subroutine
-- `append_2` — subroutine
-- `append_2` — subroutine
+- `append_at` — subroutine
+- `append_at` — subroutine
+- `append_oris` — subroutine
+- `append_oris` — subroutine
 - `calc_avg_offset2D` — subroutine
 - `calc_avg_offset2D` — subroutine
 - `calc_avg_offset3D` — subroutine
@@ -14946,33 +15001,33 @@ Private symbols:
 - `compress` — subroutine
 - `constructor` — function
 - `constructor` — function
-- `copy_1` — subroutine
-- `copy_1` — subroutine
-- `copy_2` — subroutine
-- `copy_2` — subroutine
+- `copy_as_kind` — subroutine
+- `copy_as_kind` — subroutine
+- `copy_same_kind` — subroutine
+- `copy_same_kind` — subroutine
 - `count_state_gt_zero` — function
 - `count_state_gt_zero` — function
 - `counts2fracs` — subroutine
 - `delete` — subroutine
 - `delete` — subroutine
-- `delete_2Dclustering_1` — subroutine
-- `delete_2Dclustering_1` — subroutine
-- `delete_2Dclustering_2` — subroutine
-- `delete_2Dclustering_2` — subroutine
+- `delete_2Dclustering_all` — subroutine
+- `delete_2Dclustering_all` — subroutine
+- `delete_2Dclustering_by_ind` — subroutine
+- `delete_2Dclustering_by_ind` — subroutine
 - `delete_3Dalignment` — subroutine
 - `delete_3Dalignment` — subroutine
-- `delete_entry_1` — subroutine
-- `delete_entry_1` — subroutine
-- `delete_entry_2` — subroutine
-- `delete_entry_2` — subroutine
+- `delete_entry_all` — subroutine
+- `delete_entry_all` — subroutine
+- `delete_entry_by_ind` — subroutine
+- `delete_entry_by_ind` — subroutine
 - `detect_peaks` — subroutine
 - `detect_peaks` — subroutine
 - `discretize` — subroutine
 - `discretize` — subroutine
-- `diststat_1` — subroutine
-- `diststat_1` — subroutine
-- `diststat_2` — subroutine
-- `diststat_2` — subroutine
+- `diststat_between` — subroutine
+- `diststat_between` — subroutine
+- `diststat_within` — subroutine
+- `diststat_within` — subroutine
 - `e1get` — function
 - `e1get` — function
 - `e1set` — subroutine
@@ -14988,18 +15043,18 @@ Private symbols:
 - `e3swapsgn` — subroutine
 - `e3swapsgn` — subroutine
 - `empty_allowed` — function
-- `euldist_1` — function
-- `euldist_1` — function
-- `euldist_2` — function
-- `euldist_2` — function
+- `euldist_inds` — function
+- `euldist_inds` — function
+- `euldist_ori` — function
+- `euldist_ori` — function
 - `exists` — function
 - `exists` — function
 - `expand_classes` — subroutine
 - `expand_classes` — subroutine
-- `extract_subset_1` — function
-- `extract_subset_1` — function
-- `extract_subset_2` — function
-- `extract_subset_2` — function
+- `extract_subset_inds` — function
+- `extract_subset_inds` — function
+- `extract_subset_range` — function
+- `extract_subset_range` — function
 - `extract_subspace` — subroutine
 - `extract_subspace` — subroutine
 - `extremal_bound` — function
@@ -15052,6 +15107,8 @@ Private symbols:
 - `get_fromp` — function
 - `get_group_update_counts` — subroutine
 - `get_group_update_counts` — subroutine
+- `get_half` — function
+- `get_half` — function
 - `get_int` — function
 - `get_int` — function
 - `get_mat` — function
@@ -15072,10 +15129,10 @@ Private symbols:
 - `get_ori` — subroutine
 - `get_pinds` — subroutine
 - `get_pinds` — subroutine
-- `get_pop_1` — function
-- `get_pop_1` — function
-- `get_pop_2` — function
-- `get_pop_2` — function
+- `get_pop_array` — function
+- `get_pop_array` — function
+- `get_pop_scalar` — function
+- `get_pop_scalar` — function
 - `get_pops` — subroutine
 - `get_pops` — subroutine
 - `get_proj` — function
@@ -15106,12 +15163,12 @@ Private symbols:
 - `get_update_rows` — subroutine
 - `get_updatecnt` — function
 - `get_updatecnt` — function
-- `getter_1` — subroutine
-- `getter_1` — subroutine
-- `getter_2` — subroutine
-- `getter_2` — subroutine
-- `getter_3` — subroutine
-- `getter_3` — subroutine
+- `getter_int` — subroutine
+- `getter_int` — subroutine
+- `getter_real` — subroutine
+- `getter_real` — subroutine
+- `getter_str` — subroutine
+- `getter_str` — subroutine
 - `group_quotas` — subroutine
 - `has_been_sampled` — function
 - `has_been_sampled` — function
@@ -15131,26 +15188,26 @@ Private symbols:
 - `is_particle` — function
 - `ischar` — function
 - `ischar` — function
-- `isthere_1` — function
-- `isthere_1` — function
-- `isthere_2` — function
-- `isthere_2` — function
+- `isthere_any` — function
+- `isthere_any` — function
+- `isthere_by_ind` — function
+- `isthere_by_ind` — function
 - `keyed_or_intrinsic_partial_shuffle` — subroutine
 - `keyed_or_intrinsic_shuffle` — subroutine
 - `kill` — subroutine
 - `kill` — subroutine
 - `kill_chash` — subroutine
 - `kill_chash` — subroutine
-- `map3dshift22d_1` — subroutine
-- `map3dshift22d_1` — subroutine
-- `map3dshift22d_2` — subroutine
-- `map3dshift22d_2` — subroutine
+- `map3dshift22d_all` — subroutine
+- `map3dshift22d_all` — subroutine
+- `map3dshift22d_by_ind` — subroutine
+- `map3dshift22d_by_ind` — subroutine
 - `mask_from_state` — subroutine
 - `mask_from_state` — subroutine
 - `max_ori_strlen_trim` — function
 - `max_ori_strlen_trim` — function
-- `median_1` — function
-- `median_1` — function
+- `median_key` — function
+- `median_key` — function
 - `merge` — subroutine
 - `merge` — subroutine
 - `merge_classes` — subroutine
@@ -15165,16 +15222,16 @@ Private symbols:
 - `mirror3d` — subroutine
 - `mul_shifts` — subroutine
 - `mul_shifts` — subroutine
-- `nearest_proj_neighbors_1` — subroutine
-- `nearest_proj_neighbors_1` — subroutine
-- `nearest_proj_neighbors_2` — subroutine
-- `nearest_proj_neighbors_2` — subroutine
-- `nearest_proj_neighbors_3` — subroutine
-- `nearest_proj_neighbors_3` — subroutine
-- `new_1` — subroutine
-- `new_1` — subroutine
-- `new_2` — subroutine
-- `new_2` — subroutine
+- `nearest_proj_neighbors_k` — subroutine
+- `nearest_proj_neighbors_k` — subroutine
+- `nearest_proj_neighbors_mat` — subroutine
+- `nearest_proj_neighbors_mat` — subroutine
+- `nearest_proj_neighbors_thres` — subroutine
+- `nearest_proj_neighbors_thres` — subroutine
+- `new_by_n` — subroutine
+- `new_by_n` — subroutine
+- `new_from_arr` — subroutine
+- `new_from_arr` — subroutine
 - `order` — function
 - `order` — function
 - `order_cls` — function
@@ -15241,14 +15298,14 @@ Private symbols:
 - `rnd_proj_space` — subroutine
 - `rnd_states` — subroutine
 - `rnd_states` — subroutine
-- `rot_1` — subroutine
-- `rot_1` — subroutine
-- `rot_2` — subroutine
-- `rot_2` — subroutine
-- `rot_transp_1` — subroutine
-- `rot_transp_1` — subroutine
-- `rot_transp_2` — subroutine
-- `rot_transp_2` — subroutine
+- `rot_all` — subroutine
+- `rot_all` — subroutine
+- `rot_by_ind` — subroutine
+- `rot_by_ind` — subroutine
+- `rot_transp_all` — subroutine
+- `rot_transp_all` — subroutine
+- `rot_transp_by_ind` — subroutine
+- `rot_transp_by_ind` — subroutine
 - `round_shifts` — subroutine
 - `round_shifts` — subroutine
 - `sample4rec` — subroutine
@@ -15271,38 +15328,30 @@ Private symbols:
 - `sample4update_rnd` — subroutine
 - `sample4update_updated` — subroutine
 - `sample4update_updated` — subroutine
-- `sample_balanced_1` — subroutine
-- `sample_balanced_1` — subroutine
-- `sample_balanced_2` — subroutine
-- `sample_balanced_2` — subroutine
+- `sample_balanced_frac_best` — subroutine
+- `sample_balanced_frac_best` — subroutine
 - `sample_balanced_inv` — subroutine
 - `sample_balanced_inv` — subroutine
+- `sample_balanced_mode` — subroutine
+- `sample_balanced_mode` — subroutine
 - `sample_balanced_parts` — subroutine
 - `sample_balanced_parts` — subroutine
 - `sample_ranked_parts` — subroutine
 - `sample_ranked_parts` — subroutine
-- `set_1` — subroutine
-- `set_1` — subroutine
-- `set_2` — subroutine
-- `set_2` — subroutine
-- `set_3` — subroutine
-- `set_3` — subroutine
-- `set_4` — subroutine
-- `set_4` — subroutine
-- `set_5` — subroutine
-- `set_5` — subroutine
-- `set_all2single_1` — subroutine
-- `set_all2single_1` — subroutine
-- `set_all2single_2` — subroutine
-- `set_all2single_2` — subroutine
-- `set_all2single_3` — subroutine
-- `set_all2single_3` — subroutine
-- `set_all_1` — subroutine
-- `set_all_1` — subroutine
-- `set_all_2` — subroutine
-- `set_all_2` — subroutine
-- `set_all_3` — subroutine
-- `set_all_3` — subroutine
+- `set_all2single_char` — subroutine
+- `set_all2single_char` — subroutine
+- `set_all2single_int` — subroutine
+- `set_all2single_int` — subroutine
+- `set_all2single_real` — subroutine
+- `set_all2single_real` — subroutine
+- `set_all_char` — subroutine
+- `set_all_char` — subroutine
+- `set_all_int` — subroutine
+- `set_all_int` — subroutine
+- `set_all_real` — subroutine
+- `set_all_real` — subroutine
+- `set_char` — subroutine
+- `set_char` — subroutine
 - `set_class` — subroutine
 - `set_class` — subroutine
 - `set_ctfvars` — subroutine
@@ -15311,16 +15360,20 @@ Private symbols:
 - `set_dfx` — subroutine
 - `set_dfy` — subroutine
 - `set_dfy` — subroutine
+- `set_dp` — subroutine
+- `set_dp` — subroutine
 - `set_euler` — subroutine
 - `set_euler` — subroutine
 - `set_extremal_vars` — subroutine
 - `set_extremal_vars` — subroutine
-- `set_field2single_1` — subroutine
-- `set_field2single_1` — subroutine
-- `set_field2single_2` — subroutine
-- `set_field2single_2` — subroutine
-- `set_field2single_3` — subroutine
-- `set_field2single_3` — subroutine
+- `set_field2single_char` — subroutine
+- `set_field2single_char` — subroutine
+- `set_field2single_int` — subroutine
+- `set_field2single_int` — subroutine
+- `set_field2single_real` — subroutine
+- `set_field2single_real` — subroutine
+- `set_int` — subroutine
+- `set_int` — subroutine
 - `set_nonzero_updatecnt` — subroutine
 - `set_nonzero_updatecnt` — subroutine
 - `set_ogid` — subroutine
@@ -15329,30 +15382,34 @@ Private symbols:
 - `set_ori` — subroutine
 - `set_projs` — subroutine
 - `set_projs` — subroutine
+- `set_real` — subroutine
+- `set_real` — subroutine
 - `set_shift` — subroutine
 - `set_shift` — subroutine
 - `set_state` — subroutine
 - `set_state` — subroutine
 - `set_stkind` — subroutine
 - `set_stkind` — subroutine
+- `set_str` — subroutine
+- `set_str` — subroutine
 - `set_updatecnt` — subroutine
 - `set_updatecnt` — subroutine
-- `spiral_1` — subroutine
-- `spiral_1` — subroutine
-- `spiral_2` — subroutine
-- `spiral_2` — subroutine
+- `spiral_full` — subroutine
+- `spiral_full` — subroutine
+- `spiral_lims` — subroutine
+- `spiral_lims` — subroutine
 - `split_class` — subroutine
 - `split_class` — subroutine
 - `split_state` — subroutine
 - `split_state` — subroutine
 - `states_exist` — function
 - `states_exist` — function
-- `stats_1` — subroutine
-- `stats_1` — subroutine
-- `stats_2` — subroutine
-- `stats_2` — subroutine
-- `stats_3` — subroutine
-- `stats_3` — subroutine
+- `stats_all` — subroutine
+- `stats_all` — subroutine
+- `stats_masked` — subroutine
+- `stats_masked` — subroutine
+- `stats_range` — subroutine
+- `stats_range` — subroutine
 - `str2ori` — subroutine
 - `str2ori` — subroutine
 - `str2ori_ctfparams_state_eo` — subroutine
@@ -15361,16 +15418,16 @@ Private symbols:
 - `swape1e3` — subroutine
 - `symmetrize` — subroutine
 - `symmetrize` — subroutine
-- `transfer_2Dparams_1` — subroutine
-- `transfer_2Dparams_1` — subroutine
-- `transfer_2Dparams_2` — subroutine
-- `transfer_2Dparams_2` — subroutine
+- `transfer_2Dparams_ori` — subroutine
+- `transfer_2Dparams_ori` — subroutine
+- `transfer_2Dparams_oris` — subroutine
+- `transfer_2Dparams_oris` — subroutine
 - `transfer_2Dshifts` — subroutine
 - `transfer_2Dshifts` — subroutine
-- `transfer_3Dparams_1` — subroutine
-- `transfer_3Dparams_1` — subroutine
-- `transfer_3Dparams_2` — subroutine
-- `transfer_3Dparams_2` — subroutine
+- `transfer_3Dparams_ori` — subroutine
+- `transfer_3Dparams_ori` — subroutine
+- `transfer_3Dparams_oris` — subroutine
+- `transfer_3Dparams_oris` — subroutine
 - `transfer_class_assignment` — subroutine
 - `transfer_class_assignment` — subroutine
 - `transfer_ori` — subroutine
@@ -15378,12 +15435,12 @@ Private symbols:
 - `unit_groups` — subroutine
 - `write2bild` — subroutine
 - `write2bild` — subroutine
-- `write_1` — subroutine
-- `write_1` — subroutine
-- `write_2` — subroutine
-- `write_2` — subroutine
+- `write_by_ind` — subroutine
+- `write_by_ind` — subroutine
 - `write_projdir_heatmap` — subroutine
 - `write_projdir_heatmap` — subroutine
+- `write_range` — subroutine
+- `write_range` — subroutine
 - `zero` — subroutine
 - `zero` — subroutine
 - `zero_projs` — subroutine
@@ -15393,7 +15450,7 @@ Private symbols:
 
 Local symbols (enclosing procedure scope):
 - `alloc_unit_quotas::takes_remainder` — function
-- `spiral_2::gen_c1` — subroutine
+- `spiral_lims::gen_c1` — subroutine
 - `write_projdir_heatmap::calc_heatmap` — subroutine
 - `write_projdir_heatmap::draw_hline` — subroutine
 - `write_projdir_heatmap::draw_smooth_angle_glyph` — subroutine
@@ -15421,7 +15478,9 @@ Files:
 
 Uses:
 - `iso_fortran_env`
+- `simple_cmdline`
 - `simple_core_module_api`
+- `simple_forked_process`
 - `simple_oris`
 - `simple_oris_utils`
 - `simple_rnd`
@@ -15433,7 +15492,9 @@ Public symbols:
 
 Private symbols:
 - `free_units` — subroutine
+- `half_of_unhalved` — type
 - `make_units` — subroutine
+- `take_unhalved` — subroutine
 - `test_assignment` — subroutine
 - `test_blend_mass_scripted` — subroutine
 - `test_blend_weight_cases` — subroutine
@@ -15443,6 +15504,7 @@ Private symbols:
 - `test_constructors_and_basic_props` — subroutine
 - `test_empty_partition_sampling` — subroutine
 - `test_extract_and_copy` — subroutine
+- `test_get_half` — subroutine
 - `test_get_pops_halves` — subroutine
 - `test_getters_setters` — subroutine
 - `test_group_update_counts` — subroutine
@@ -15568,6 +15630,7 @@ Private symbols:
 - `add_file` — subroutine
 - `add_int` — subroutine
 - `add_real` — subroutine
+- `add_yesno` — subroutine
 - `apply_cmdline` — subroutine
 - `char_binding` — type
 - `clear` — subroutine
@@ -15590,17 +15653,28 @@ Files:
 - `main/params/simple_parameters_tester.f90`
 
 Uses:
+- `simple_args`
 - `simple_cmdline`
 - `simple_defs`
+- `simple_forked_process`
 - `simple_parameters`
+- `simple_sp_project`
 - `simple_string`
+- `simple_syslib`
 - `simple_test_utils`
 
 Public symbols:
 - `run_all_parameters_tests` — subroutine
 
 Private symbols:
+- `base_cline` — subroutine
+- `build_parameters` — subroutine
+- `parameters_child` — type
+- `test_accepted_keys` — subroutine
 - `test_suite_binding` — subroutine
+- `test_ui_keys_bound` — subroutine
+- `test_worker_project_recorded` — subroutine
+- `test_yes_no_refused` — subroutine
 
 ---
 ## Module: simple_particle_extractor
@@ -15670,7 +15744,9 @@ Files:
 - `main/preprocess/simple_particle_extractor_tester.f90`
 
 Uses:
+- `simple_cmdline`
 - `simple_defs`
+- `simple_forked_process`
 - `simple_image`
 - `simple_motion_model`
 - `simple_ori`
@@ -15686,6 +15762,8 @@ Public symbols:
 Private symbols:
 - `assert_dose_weighting_report` — subroutine
 - `assert_micrograph_state` — subroutine
+- `convention_extract` — type
+- `extract_other_convention` — subroutine
 - `test_binary_model_constructors` — subroutine
 - `test_init_mic_selects_micrograph_mode` — subroutine
 - `test_missing_motion_model` — subroutine
@@ -15693,6 +15771,7 @@ Private symbols:
 - `test_particle_frame_cache` — subroutine
 
 Local symbols (enclosing procedure scope):
+- `test_binary_model_constructors::check_convention_refused` — subroutine
 - `test_particle_frame_cache::check_cached_sum` — subroutine
 
 ---
@@ -16564,6 +16643,7 @@ Files:
 
 Uses:
 - `simple_core_module_api`
+- `simple_gui_utils`
 - `simple_image`
 - `simple_image_bin`
 - `simple_linked_list`
@@ -16796,10 +16876,16 @@ Private symbols:
 - `assert_polarize_pdim` — subroutine
 - `assign_sigma2_noise` — subroutine
 - `assign_sigma2_noise` — subroutine
+- `bump_ptcl_gen` — subroutine
+- `bump_ptcl_gen` — subroutine
 - `calc_frc` — subroutine
 - `calc_frc` — subroutine
 - `cc_shells_sum` — subroutine
 - `cc_sums` — subroutine
+- `check_euclid_weights` — subroutine
+- `check_euclid_weights` — subroutine
+- `check_ptcl_memo` — subroutine
+- `check_ptcl_memo` — subroutine
 - `check_ref_aln_8` — subroutine
 - `cp_even2odd_ref` — subroutine
 - `cp_even2odd_ref` — subroutine
@@ -16831,18 +16917,18 @@ Private symbols:
 - `gen_best_euclid_val_cross` — subroutine
 - `gen_best_objfun_val` — subroutine
 - `gen_best_objfun_val` — subroutine
-- `gen_corr_cc_for_rot_8_1` — function
-- `gen_corr_cc_for_rot_8_1` — function
-- `gen_corr_cc_for_rot_8_2` — function
-- `gen_corr_cc_for_rot_8_2` — function
+- `gen_corr_cc_for_rot_8_noshift` — function
+- `gen_corr_cc_for_rot_8_noshift` — function
+- `gen_corr_cc_for_rot_8_shifted` — function
+- `gen_corr_cc_for_rot_8_shifted` — function
 - `gen_corr_cc_grad_for_rot_8` — subroutine
 - `gen_corr_cc_grad_for_rot_8` — subroutine
-- `gen_corr_for_rot_8_1` — function
-- `gen_corr_for_rot_8_1` — function
-- `gen_corr_for_rot_8_2` — function
-- `gen_corr_for_rot_8_2` — function
 - `gen_corr_for_rot_8_aln` — function
 - `gen_corr_for_rot_8_aln` — function
+- `gen_corr_for_rot_8_noshift` — function
+- `gen_corr_for_rot_8_noshift` — function
+- `gen_corr_for_rot_8_shifted` — function
+- `gen_corr_for_rot_8_shifted` — function
 - `gen_corr_grad_at_angle` — subroutine
 - `gen_corr_grad_at_angle` — subroutine
 - `gen_corr_grad_for_rot_8_aln` — subroutine
@@ -16856,10 +16942,10 @@ Private symbols:
 - `gen_euclid_dists` — subroutine
 - `gen_euclid_dists_bank` — subroutine
 - `gen_euclid_dists_bank` — subroutine
-- `gen_euclid_for_rot_8_1` — function
-- `gen_euclid_for_rot_8_1` — function
-- `gen_euclid_for_rot_8_2` — function
-- `gen_euclid_for_rot_8_2` — function
+- `gen_euclid_for_rot_8_noshift` — function
+- `gen_euclid_for_rot_8_noshift` — function
+- `gen_euclid_for_rot_8_shifted` — function
+- `gen_euclid_for_rot_8_shifted` — function
 - `gen_euclid_grad_for_rot_8` — subroutine
 - `gen_euclid_grad_for_rot_8` — subroutine
 - `gen_euclid_residual_grad` — subroutine
@@ -16988,10 +17074,10 @@ Private symbols:
 - `memoize_sigma2_weights` — subroutine
 - `memoize_sqsum_ptcl` — subroutine
 - `memoize_sqsum_ptcl` — subroutine
-- `mirror_ref_pft_1` — subroutine
-- `mirror_ref_pft_1` — subroutine
-- `mirror_ref_pft_2` — subroutine
-- `mirror_ref_pft_2` — subroutine
+- `mirror_ref_pft_by_ind` — subroutine
+- `mirror_ref_pft_by_ind` — subroutine
+- `mirror_ref_pft_by_pft` — subroutine
+- `mirror_ref_pft_by_pft` — subroutine
 - `new` — subroutine
 - `new` — subroutine
 - `new_shiftmap` — subroutine
@@ -17082,6 +17168,7 @@ Uses:
 - `simple_cmdline`
 - `simple_core_module_api`
 - `simple_eul_prob_tab_utils`
+- `simple_forked_process`
 - `simple_image`
 - `simple_parameters`
 - `simple_pftc_shsrch_grad`
@@ -17093,7 +17180,10 @@ Public symbols:
 - `run_all_polarft_corr_tests` — subroutine
 
 Private symbols:
+- `order_violation` — type
+- `score_out_of_order` — subroutine
 - `test_bank_and_at_pose_kernels` — subroutine
+- `test_call_order_refusals` — subroutine
 - `test_cross_half_euclid` — subroutine
 - `test_generated_images` — subroutine
 - `test_posterior_inpl_draw` — subroutine
@@ -17204,9 +17294,12 @@ Public symbols:
 - `print_private_cmdline` — subroutine
 
 Private symbols:
+- `add_private_prg` — subroutine
 - `init_cmd_dict` — subroutine
 - `new_private_prgs` — subroutine
+- `push_opt` — subroutine
 - `push_opt_key` — subroutine
+- `push_req` — subroutine
 - `push_req_key` — subroutine
 - `set_name` — subroutine
 - `simple_private_prg` — type
@@ -17507,7 +17600,7 @@ Private symbols:
 ## Module: simple_pspecs
 
 Files:
-- `main/preprocess/simple_pspecs.f90`
+- `main/strategies/search/simple_pspecs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17894,10 +17987,10 @@ Private symbols:
 - `failed_parts` — function
 - `free_all_cunits` — subroutine
 - `generate_array_script` — subroutine
-- `generate_script_1` — subroutine
-- `generate_script_2` — subroutine
-- `generate_script_3` — subroutine
-- `generate_script_4` — subroutine
+- `generate_script_cline` — subroutine
+- `generate_script_job` — subroutine
+- `generate_script_jobs` — subroutine
+- `generate_script_part` — subroutine
 - `get_done_stacksz` — function
 - `get_failed_stacksz` — function
 - `get_jobs_status` — subroutine
@@ -18088,9 +18181,9 @@ Uses:
 Public symbols:
 - `qsys_cleanup` — subroutine
 - `qsys_declare_part_finished` — subroutine
-- `qsys_watcher_1` — subroutine
-- `qsys_watcher_2` — subroutine
 - `qsys_watcher_diag` — subroutine
+- `qsys_watcher_file` — subroutine
+- `qsys_watcher_files` — subroutine
 
 ---
 ## Module: simple_qsys_job_record
@@ -18322,8 +18415,8 @@ Private symbols:
 - `ne_ran_iarr` — subroutine
 - `remove` — subroutine
 - `reset` — subroutine
-- `shuffle_1` — subroutine
-- `shuffle_2` — subroutine
+- `shuffle_int` — subroutine
+- `shuffle_real` — subroutine
 
 ---
 ## Module: simple_rec3D_pcg_strategy
@@ -18442,6 +18535,7 @@ Public symbols:
 - `rec3D_service` — type
 
 Private symbols:
+- `apply_request` — subroutine
 - `assemble_gridding` — subroutine
 - `assemble_pcg` — subroutine
 - `execute` — subroutine
@@ -18450,10 +18544,12 @@ Private symbols:
 - `kill` — subroutine
 - `new` — subroutine
 - `postprocess_states` — subroutine
+- `rec3D_saved_params` — type
 - `register_outputs` — subroutine
 - `remove_pcg_raw_files` — subroutine
 - `rename_outputs` — subroutine
 - `report_weight_set` — subroutine
+- `restore_params` — subroutine
 - `write_pinds` — subroutine
 
 ---
@@ -18463,15 +18559,18 @@ Files:
 - `main/strategies/parallelization/simple_rec3D_service_tester.f90`
 
 Uses:
+- `simple_builder`
 - `simple_cmdline`
 - `simple_commanders_rec`
 - `simple_defs`
+- `simple_eo_partition`
 - `simple_error`
 - `simple_fileio`
 - `simple_flex_pca_application_tester`
 - `simple_halfmap_diagnostics`
 - `simple_image`
 - `simple_parameters`
+- `simple_rec3d_service`
 - `simple_refine3d_fnames`
 - `simple_sp_project`
 - `simple_state_weight_set`
@@ -18496,6 +18595,7 @@ Private symbols:
 - `test_empty_state_carried` — subroutine
 - `test_fractional_phantom` — subroutine
 - `test_labels_equal_hard` — subroutine
+- `test_request_settings` — subroutine
 - `test_trailing_weight_identity` — subroutine
 - `test_unmasked_gridding_export` — subroutine
 - `write_mixture` — subroutine
@@ -18523,6 +18623,7 @@ Public symbols:
 - `rec3D_inmem_strategy` — type
 - `rec3D_pcg_inmem_strategy` — type
 - `rec3D_strategy` — type
+- `run_rec3D` — subroutine
 
 Private symbols:
 - `cleanup_interface` — subroutine
@@ -18766,6 +18867,7 @@ Public symbols:
 - `exp_samples` — type
 - `gridding_half_restore` — type
 - `insert_planes_multi` — subroutine
+- `read_rho_header` — subroutine
 - `reconstructor` — type
 - `wiener_ridge` — function
 
@@ -18775,6 +18877,7 @@ Private symbols:
 - `alloc_rho` — subroutine
 - `apply_weight` — subroutine
 - `apply_weight_sums` — subroutine
+- `check_rho_header` — subroutine
 - `compress_exp` — subroutine
 - `dealloc_exp` — subroutine
 - `dealloc_rho` — subroutine
@@ -19635,7 +19738,6 @@ Uses:
 - `ieee_arithmetic`
 - `simple_builder`
 - `simple_cmdline`
-- `simple_commanders_rec`
 - `simple_core_module_api`
 - `simple_dose_series_manifest`
 - `simple_eo_partition`
@@ -19646,6 +19748,7 @@ Uses:
 - `simple_particle_extractor`
 - `simple_qsys_env`
 - `simple_qsys_funs`
+- `simple_rec3d_strategy`
 - `simple_refine3d_fnames`
 - `simple_sp_project`
 - `simple_stack_io`
@@ -19775,6 +19878,7 @@ Uses:
 
 Public symbols:
 - `ensure_run_seed` — function
+- `get_rnd_state` — subroutine
 - `has_global_seed` — function
 - `irnd_gasdev` — function
 - `irnd_uni` — function
@@ -19782,6 +19886,7 @@ Public symbols:
 - `mnorm_smp` — function
 - `multinomal` — function
 - `poisson_rnd` — function
+- `put_rnd_state` — subroutine
 - `r8po_fa` — subroutine
 - `ran3` — function
 - `rnd_4dim_sphere_pnt` — function
@@ -19802,24 +19907,24 @@ Public symbols:
 - `shcloc` — function
 
 Private symbols:
-- `gasdev_1` — function
-- `gasdev_2` — function
-- `gasdev_3` — function
-- `greedy_sampling_1` — function
-- `greedy_sampling_2` — function
-- `partial_shuffle_1` — subroutine
-- `partial_shuffle_2` — subroutine
+- `gasdev_bounded` — function
+- `gasdev_mean_sdev` — function
+- `gasdev_std` — function
+- `greedy_sampling_alloc` — function
+- `greedy_sampling_prealloc` — function
+- `partial_shuffle_int` — subroutine
+- `partial_shuffle_real` — subroutine
 - `put_fixed_seed` — subroutine
 - `put_simple_seed` — subroutine
-- `ran3arr_1` — subroutine
-- `ran3arr_2` — subroutine
-- `randn_1` — function
-- `randn_2` — function
+- `ran3arr_1d` — subroutine
+- `ran3arr_2d` — subroutine
+- `randn_1d` — function
+- `randn_2d` — function
 - `rnd_mix32` — function
 - `seed_rnd_fixed_i4` — subroutine
 - `seed_rnd_fixed_i8` — subroutine
-- `shuffle_1` — subroutine
-- `shuffle_2` — subroutine
+- `shuffle_int` — subroutine
+- `shuffle_real` — subroutine
 - `simple_seed_base` — function
 
 Local symbols (enclosing procedure scope):
@@ -19857,6 +19962,7 @@ Private symbols:
 - `test_multinomal` — subroutine
 - `test_partial_shuffle` — subroutine
 - `test_poisson` — subroutine
+- `test_rnd_state_restore` — subroutine
 - `test_shuffle` — subroutine
 - `vec_key` — function
 
@@ -19878,8 +19984,8 @@ Uses:
 - `simple_string_utils`
 
 Private symbols:
-- `sauron_ori_parser_1` — subroutine
-- `sauron_ori_parser_2` — subroutine
+- `sauron_ori_parser_hash` — subroutine
+- `sauron_ori_parser_pparms` — subroutine
 - `str2realdp_local` — subroutine
 
 ---
@@ -21032,6 +21138,7 @@ Private symbols:
 - `read_segment` — subroutine
 - `read_segments_info` — subroutine
 - `read_segments_info` — subroutine
+- `refuse_worker_write` — subroutine
 - `remove_entry_from_osout` — subroutine
 - `remove_entry_from_osout` — subroutine
 - `remove_state_artifacts_from_osout` — subroutine
@@ -21118,7 +21225,9 @@ Uses:
 - `json_kinds`
 - `json_module`
 - `simple_binoris_io`
+- `simple_cmdline`
 - `simple_core_module_api`
+- `simple_forked_process`
 - `simple_image`
 - `simple_sp_project`
 - `simple_test_utils`
@@ -21131,6 +21240,8 @@ Private symbols:
 - `assert_segments_equal` — subroutine
 - `cleanup` — subroutine
 - `make_project` — subroutine
+- `range_reader` — type
+- `read_mic_range` — subroutine
 - `test_map_cls3D_states2ptcls` — subroutine
 - `test_partial_docs_merge` — subroutine
 - `test_partial_docs_merge_uneven` — subroutine
@@ -21139,8 +21250,12 @@ Private symbols:
 - `test_print_segment_json` — subroutine
 - `test_prune_particles` — subroutine
 - `test_read_does_not_mutate_projinfo` — subroutine
+- `test_read_segment_range` — subroutine
 - `test_rnd_seed_roundtrip` — subroutine
+- `test_worker_writes_no_project` — subroutine
 - `test_write_read_roundtrip` — subroutine
+- `worker_writer` — type
+- `worker_writes` — subroutine
 - `write_dummy_stack` — subroutine
 - `zero_phase_ctf` — function
 
@@ -21159,23 +21274,23 @@ Uses:
 
 Public symbols:
 - `dists2order` — function
-- `find_1` — subroutine
-- `find_2` — subroutine
-- `hpsort_1` — subroutine
-- `hpsort_2` — subroutine
-- `hpsort_3` — subroutine
-- `hpsort_4` — subroutine
-- `hpsort_5` — subroutine
-- `hpsort_6` — subroutine
-- `locate_1` — function
-- `locate_2` — function
+- `find_int` — subroutine
+- `find_real` — subroutine
+- `hpsort_int` — subroutine
+- `hpsort_int_cmp` — subroutine
+- `hpsort_int_inds` — subroutine
+- `hpsort_real` — subroutine
+- `hpsort_real_inds` — subroutine
+- `hpsort_real_real` — subroutine
+- `locate_int` — function
+- `locate_real` — function
 - `mask2inds` — function
 - `maxnloc` — function
 - `min3` — function
 - `minnloc` — function
 - `peakfinder` — function
-- `reorder_1` — subroutine
-- `reorder_2` — subroutine
+- `reorder_int` — subroutine
+- `reorder_real` — subroutine
 - `reverse_drarr` — subroutine
 - `reverse_f` — subroutine
 - `reverse_iarr` — subroutine
@@ -21186,7 +21301,7 @@ Public symbols:
 - `unique` — subroutine
 
 Local symbols (enclosing procedure scope):
-- `hpsort_3::p1_lt_p2` — function
+- `hpsort_int_cmp::p1_lt_p2` — function
 
 ---
 ## Module: simple_srch_sort_loc_tester
@@ -21269,8 +21384,8 @@ Private symbols:
 - `get_image` — subroutine
 - `get_ldim` — function
 - `get_nptcls` — function
-- `open_1` — subroutine
-- `open_2` — subroutine
+- `open_box` — subroutine
+- `open_ldim` — subroutine
 - `read` — subroutine
 - `read_whole` — subroutine
 - `same_stk` — function
@@ -21711,6 +21826,7 @@ Uses:
 - `simple_cmdline`
 - `simple_defs`
 - `simple_fileio`
+- `simple_forked_process`
 - `simple_image`
 - `simple_oris`
 - `simple_relion`
@@ -21734,7 +21850,11 @@ Private symbols:
 - `make_origins_stacks` — subroutine
 - `make_tiltinfo` — function
 - `read_particle_doubles` — subroutine
+- `run_star_import_child` — subroutine
 - `setup_tmpdir` — subroutine
+- `star_import_child` — type
+- `test_export_cls2D_keeps_project` — subroutine
+- `test_finalise_once` — subroutine
 - `test_import_origins_angstrom` — subroutine
 - `test_large_particle_table_export` — subroutine
 - `test_optics_clustering_basic` — subroutine
@@ -21806,10 +21926,10 @@ Uses:
 Public symbols:
 - `analyze_smat` — subroutine
 - `avg_frac_smallest` — function
-- `avg_sdev_1` — subroutine
-- `avg_sdev_2` — subroutine
-- `avg_sdev_3` — subroutine
-- `avg_sdev_4` — subroutine
+- `avg_sdev_1d` — subroutine
+- `avg_sdev_1d_dp` — subroutine
+- `avg_sdev_2d` — subroutine
+- `avg_sdev_3d` — subroutine
 - `calc_ap_pref` — function
 - `calc_stats` — subroutine
 - `conv2rank_weights` — subroutine
@@ -21819,8 +21939,8 @@ Public symbols:
 - `dmat2smat` — function
 - `kish_ess` — function
 - `kstwo` — subroutine
-- `kurtosis_1` — function
-- `kurtosis_2` — function
+- `kurtosis_1d` — function
+- `kurtosis_2d` — function
 - `logsumexp` — function
 - `mad_dp` — function
 - `mad_gau` — function
@@ -21831,29 +21951,29 @@ Public symbols:
 - `medoid_from_dmat` — subroutine
 - `medoid_from_smat` — subroutine
 - `medoid_ranking_from_smat` — subroutine
-- `merge_dmats_1` — function
-- `merge_dmats_2` — function
+- `merge_dmats_pair` — function
+- `merge_dmats_triple` — function
 - `merge_smats` — function
-- `moment_1` — subroutine
-- `moment_2` — subroutine
-- `moment_3` — subroutine
-- `moment_4` — subroutine
+- `moment_1d` — subroutine
+- `moment_1d_masked` — subroutine
+- `moment_2d` — subroutine
+- `moment_3d` — subroutine
 - `moment_serial` — subroutine
 - `neighfrac2nsmpl` — function
 - `norm_corr` — function
 - `norm_corr_8` — function
-- `normalize_1` — subroutine
-- `normalize_2` — subroutine
-- `normalize_3` — subroutine
-- `normalize_4` — subroutine
-- `normalize_minmax_1` — subroutine
-- `normalize_minmax_2` — subroutine
-- `normalize_sigm_1` — subroutine
-- `normalize_sigm_2` — subroutine
-- `normalize_sigm_3` — subroutine
-- `pearsn_1` — function
-- `pearsn_2` — function
-- `pearsn_3` — function
+- `normalize_1d` — subroutine
+- `normalize_1d_masked` — subroutine
+- `normalize_2d` — subroutine
+- `normalize_3d` — subroutine
+- `normalize_minmax_1d` — subroutine
+- `normalize_minmax_2d` — subroutine
+- `normalize_sigm_1d` — subroutine
+- `normalize_sigm_2d` — subroutine
+- `normalize_sigm_3d` — subroutine
+- `pearsn_1d` — function
+- `pearsn_2d` — function
+- `pearsn_3d` — function
 - `pearsn_serial` — function
 - `pearsn_serial_8` — function
 - `power_sampling` — subroutine
@@ -21868,8 +21988,8 @@ Public symbols:
 - `robust_sigma_thres` — function
 - `robust_z_scores` — function
 - `scores2scores_percen` — subroutine
-- `skewness_1` — function
-- `skewness_2` — function
+- `skewness_1d` — function
+- `skewness_2d` — function
 - `smat2dmat` — function
 - `spear` — function
 - `squared_sampling` — subroutine
@@ -22823,9 +22943,12 @@ Uses:
 - `simple_builder`
 - `simple_cmdline`
 - `simple_core_module_api`
+- `simple_defs`
+- `simple_forked_process`
 - `simple_image`
 - `simple_linked_list`
 - `simple_matcher_2dprep`
+- `simple_matcher_ptcl_batch`
 - `simple_matcher_ptcl_io`
 - `simple_matcher_smpl_and_lplims`
 - `simple_memoize_ft_maps`
@@ -22850,7 +22973,9 @@ Private symbols:
 - `alloc_state` — subroutine
 - `has_search_input` — function
 - `one_particle_fixture` — subroutine
+- `oversized_team_pass` — type
 - `rotate_half_ring` — subroutine
+- `run_oversized_team_pass` — subroutine
 - `test_continuous_seed_beyond_window` — subroutine
 - `test_discrete_seed_storage_and_invalid_predicate` — subroutine
 - `test_grid_seed` — subroutine
@@ -22859,6 +22984,8 @@ Private symbols:
 - `test_joint_storage` — subroutine
 - `test_key_derivation` — subroutine
 - `test_map_initialised_polish` — subroutine
+- `test_pass_state_team_sized` — subroutine
+- `test_pass_team_check` — subroutine
 - `test_previous_shift_is_stored_shift` — subroutine
 - `test_rec_observation_mask` — subroutine
 - `test_resolve_inplane_e3` — subroutine
@@ -23207,11 +23334,11 @@ Public symbols:
 
 Private symbols:
 - `active_status` — function
-- `add_to_json_1` — subroutine
-- `add_to_json_2` — subroutine
-- `add_to_json_3` — subroutine
-- `add_to_json_4` — subroutine
-- `add_to_json_5` — subroutine
+- `add_to_json_char` — subroutine
+- `add_to_json_dp` — subroutine
+- `add_to_json_int` — subroutine
+- `add_to_json_jval` — subroutine
+- `add_to_json_logical` — subroutine
 - `arg_associated` — function
 - `background_heartbeat` — subroutine
 - `create` — subroutine
@@ -23219,21 +23346,21 @@ Private symbols:
 - `destroy_arg` — subroutine
 - `evaluate_checksum` — function
 - `exit_status` — function
-- `get_json_arg_1` — subroutine
-- `get_json_arg_2` — subroutine
-- `get_json_arg_3` — subroutine
-- `get_json_arg_4` — subroutine
-- `get_json_arg_5` — subroutine
+- `get_json_arg_char` — subroutine
+- `get_json_arg_dp` — subroutine
+- `get_json_arg_int` — subroutine
+- `get_json_arg_int_arr` — subroutine
+- `get_json_arg_logical` — subroutine
 - `join_background_heartbeat` — subroutine
 - `remove_from_json_if_present` — subroutine
 - `send_heartbeat` — subroutine
 - `send_jobstats` — subroutine
 - `stop_status` — function
 - `term` — subroutine
-- `update_json_1` — subroutine
-- `update_json_2` — subroutine
-- `update_json_3` — subroutine
-- `update_json_4` — subroutine
+- `update_json_char` — subroutine
+- `update_json_dp` — subroutine
+- `update_json_int` — subroutine
+- `update_json_logical` — subroutine
 
 ---
 ## Module: simple_stream_gui_senders
@@ -23930,6 +24057,7 @@ Uses:
 - `simple_imghead`
 - `simple_pick_strategy`
 - `simple_qsys_async_job`
+- `simple_segdiam_bin_picker`
 - `simple_sp_project`
 - `simple_stream_pipe`
 - `simple_stream_stage_initial_analysis`
@@ -23970,6 +24098,7 @@ Private symbols:
 - `test_published_pickrefs_are_final` — subroutine
 - `test_rebuild_init_mics` — subroutine
 - `test_restore_cavgs_selection` — subroutine
+- `test_segdiam_bins_count_erosion` — subroutine
 - `test_status_messages` — subroutine
 - `write_cavgs_project` — subroutine
 - `write_class_stack` — subroutine
@@ -24924,17 +25053,17 @@ Private symbols:
 - `assign` — subroutine
 - `char2str` — function
 - `dble2str` — function
-- `ends_with_substr_1` — function
-- `ends_with_substr_2` — function
-- `has_substr_1` — function
-- `has_substr_2` — function
+- `ends_with_substr_char` — function
+- `ends_with_substr_str` — function
+- `has_substr_char` — function
+- `has_substr_str` — function
 - `int2str` — function
 - `is_allocated` — function
 - `is_blank` — function
-- `is_equal_1` — function
-- `is_equal_2` — function
-- `is_not_equal_1` — function
-- `is_not_equal_2` — function
+- `is_equal_char` — function
+- `is_equal_str` — function
+- `is_not_equal_char` — function
+- `is_not_equal_str` — function
 - `kill` — subroutine
 - `print` — subroutine
 - `raw` — function
@@ -24946,18 +25075,18 @@ Private symbols:
 - `set_real` — subroutine
 - `strlen` — function
 - `strlen_trim` — function
-- `substr_ind_1` — function
-- `substr_ind_2` — function
+- `substr_ind_char` — function
+- `substr_ind_str` — function
 - `substr_remove` — function
 - `substr_replace` — subroutine
-- `to_char_1` — function
-- `to_char_2` — function
+- `to_char_full` — function
+- `to_char_range` — function
 - `to_dble` — function
 - `to_fnv1a_hash64` — function
 - `to_int` — function
 - `to_real` — function
-- `to_static_1` — subroutine
-- `to_static_2` — subroutine
+- `to_static_full` — subroutine
+- `to_static_range` — subroutine
 - `writeline` — subroutine
 
 Local symbols (enclosing procedure scope):
@@ -25026,8 +25155,8 @@ Public symbols:
 - `cnt_recs_per_line` — function
 - `compact` — subroutine
 - `csv_field` — function
-- `findloc_str_1` — function
-- `findloc_str_2` — function
+- `findloc_str_char` — function
+- `findloc_str_str` — function
 - `first_blank` — function
 - `first_non_blank` — function
 - `fortran_logical` — function
@@ -25037,8 +25166,8 @@ Public symbols:
 - `int2str_pad` — function
 - `is_fortran_symbol_char` — function
 - `is_fortran_symbol_start` — function
-- `lex_sort_1` — subroutine
-- `lex_sort_2` — subroutine
+- `lex_sort_char` — subroutine
+- `lex_sort_str` — subroutine
 - `list_of_ints2arr` — function
 - `list_of_strs2arr` — function
 - `lowercase` — function
@@ -25049,17 +25178,17 @@ Public symbols:
 - `removepunct` — subroutine
 - `removesp` — subroutine
 - `spaces` — function
-- `split_1` — subroutine
-- `split_2` — subroutine
+- `split_char` — subroutine
 - `split_str` — subroutine
-- `str2format_1` — subroutine
-- `str2format_2` — subroutine
-- `str2int_1` — function
-- `str2int_2` — function
-- `str2int_3` — function
-- `str2int_4` — function
-- `str2real_1` — function
-- `str2real_2` — function
+- `split_string` — subroutine
+- `str2format_dp` — subroutine
+- `str2format_real` — subroutine
+- `str2int_char` — function
+- `str2int_char_stat` — function
+- `str2int_str` — function
+- `str2int_str_stat` — function
+- `str2real_char` — function
+- `str2real_str` — function
 - `str_has_substr` — function
 - `str_is_blank` — function
 - `str_is_comment` — function
@@ -25070,14 +25199,14 @@ Public symbols:
 - `uppercase` — function
 
 Local symbols (enclosing procedure scope):
-- `lex_sort_1::key_less` — function
-- `lex_sort_1::merge_idx` — subroutine
-- `lex_sort_1::mergesort_idx` — subroutine
-- `lex_sort_1::norm_key` — function
-- `lex_sort_2::key_less` — function
-- `lex_sort_2::merge_idx` — subroutine
-- `lex_sort_2::mergesort_idx` — subroutine
-- `lex_sort_2::norm_less` — function
+- `lex_sort_char::key_less` — function
+- `lex_sort_char::merge_idx` — subroutine
+- `lex_sort_char::mergesort_idx` — subroutine
+- `lex_sort_char::norm_key` — function
+- `lex_sort_str::key_less` — function
+- `lex_sort_str::merge_idx` — subroutine
+- `lex_sort_str::mergesort_idx` — subroutine
+- `lex_sort_str::norm_less` — function
 - `list_of_ints2arr::add_entry` — subroutine
 - `list_of_strs2arr::add_entry` — subroutine
 
@@ -25099,8 +25228,8 @@ Public symbols:
 
 Private symbols:
 - `apply2all` — subroutine
-- `apply_1` — subroutine
-- `apply_2` — subroutine
+- `apply_euls` — subroutine
+- `apply_ori` — subroutine
 - `apply_sym_with_shift` — subroutine
 - `build_eullims` — subroutine
 - `build_refspiral` — subroutine
@@ -25128,19 +25257,19 @@ Private symbols:
 - `make_t` — subroutine
 - `matcreate` — function
 - `matextract` — function
-- `nearest_proj_neighbors_1` — subroutine
-- `nearest_proj_neighbors_2` — subroutine
+- `nearest_proj_neighbors_k` — subroutine
+- `nearest_proj_neighbors_thres` — subroutine
 - `nearest_sym_neighbors` — subroutine
 - `new` — subroutine
-- `rnd_euler_1` — subroutine
-- `rnd_euler_2` — subroutine
-- `rnd_euler_3` — subroutine
+- `rnd_euler_full` — subroutine
+- `rnd_euler_near` — subroutine
+- `rnd_euler_near_projinpl` — subroutine
 - `rot_to_asym` — subroutine
 - `rotall_to_asym` — subroutine
 - `set_subgrps` — subroutine
 - `sym_dist_table` — subroutine
-- `sym_dists_1` — subroutine
-- `sym_dists_2` — subroutine
+- `sym_dists_euls` — subroutine
+- `sym_dists_ori` — subroutine
 - `symrandomize` — subroutine
 - `within_asymunit` — function
 - `within_platonic_asymunit` — function
@@ -25192,6 +25321,7 @@ Local symbols (enclosing procedure scope):
 - `test_eullims::check_lims` — subroutine
 - `test_neighbour_searches::insertion_sort` — subroutine
 - `test_rnd_euler_within_limits::check_rnd` — subroutine
+- `test_rot_to_asym::check_c1_south_pole` — subroutine
 - `test_rot_to_asym::check_rot` — subroutine
 - `test_symops_form_a_group::check_group` — subroutine
 

@@ -222,7 +222,7 @@ contains
         &'case (1000 and 2500 directions; 1, 2 and 4 states) and team (1, 5 and nthr threads). '//&
         &'A measurement with no thresholds and no CTest entry: rows are appended to ./polar_matching_bench.tsv '//&
         &'(./polar_matching_check.tsv for suite=check); run with OPENBLAS_NUM_THREADS=1 '//&
-        &'(doc/implementation_notes/planned/polar_matching_layout_bench.md)',&
+        &'(doc/implementation_notes/completed/polar_matching_layout_bench.md)',&
         &'simple_test_exec',&                       ! executable
         &.false., display_name='Polar Matching Benchmark')                                       ! requires sp_project
         call polar_matching_bench%add_input(UI_PARM, 'suite', 'str', 'Layout', &

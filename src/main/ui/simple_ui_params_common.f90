@@ -156,7 +156,6 @@ type(ui_param) :: startype
 type(ui_param) :: stepsz
 type(ui_param) :: stk
 type(ui_param) :: stk_backgr
-type(ui_param) :: stk_traj
 type(ui_param) :: stk2
 type(ui_param) :: stktab
 type(ui_param) :: time_per_image
@@ -789,10 +788,6 @@ subroutine set_ui_params
                                    'background power spectra stack', &
                                    'xxx.mrc file with bg spectra', .true., '')
 
-
-    call stk_traj%set_param(       'stk_traj',         'file',   'Tracked NP image stack', &
-                                   'xxx.mrc file with NP time-trajectory', &
-                                   'trajectory.mrcs', .true., '')
 
     call stk2%set_param(           'stk2',            'file',   'Second Particle image stack', &
                                    'Particle image stack', &

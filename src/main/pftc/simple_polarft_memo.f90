@@ -40,6 +40,7 @@ contains
         if( .not. self%existence .or. .not. associated(self%sigma2_noise) ) return
         ! spectra not filled yet (euclid_sigma2 allocates them zeroed): the weights come with the values
         if( any(self%sigma2_noise(self%kfromto(1):self%kfromto(2),:) <= 0.) ) return
+        if( associated(self%sigma2_gen) ) self%sigma2_gen_memo = self%sigma2_gen
         allocate(self%sigma2_wk(self%kfromto(1):self%kfromto(2),2), self%sigma2_wk8(self%kfromto(1):self%kfromto(2),2))
         do ih = 1, 2
             do ik = self%kfromto(1), self%kfromto(2)
@@ -122,7 +123,30 @@ contains
             end do
         enddo
         !$omp end parallel do
+        self%ptcl_gen_memo = self%ptcl_gen
     end subroutine memoize_ptcls
+
+    !> a scorer reads the memoised particle transforms: they must be those of the particles set now
+    module subroutine check_ptcl_memo(self)
+        class(polarft_calc), intent(in) :: self
+        if( self%ptcl_gen_memo /= self%ptcl_gen ) THROW_HARD('particles changed after memoize_ptcls: memoize before scoring')
+    end subroutine check_ptcl_memo
+
+    !> a Euclidean scorer needs the sigma2 weights of the current spectra
+    module subroutine check_euclid_weights(self)
+        class(polarft_calc), intent(in) :: self
+        if( .not. allocated(self%sigma2_wk) ) THROW_HARD('Euclidean score without sigma2 weights: prep_sigmas_objfun after pftc%new')
+        if( associated(self%sigma2_gen) )then
+            if( self%sigma2_gen /= self%sigma2_gen_memo ) THROW_HARD('sigma2 spectra changed after memoize_sigma2_weights')
+        endif
+    end subroutine check_euclid_weights
+
+    !> every particle write (also from threads of a parallel loop) makes the particle memo stale
+    module subroutine bump_ptcl_gen(self)
+        class(polarft_calc), intent(inout) :: self
+        !$omp atomic update
+        self%ptcl_gen = self%ptcl_gen + 1_int64
+    end subroutine bump_ptcl_gen
 
     !> FT of the particle times CTF shifted by -shift in its own (particle) frame, in the layout of ft_ptcl_ctf:
     !! bank(:,k-kfromto(1)+1) for k = kfromto(1):kfromto(2). Scored against an unshifted reference it equals the
@@ -304,14 +328,17 @@ contains
         integer,             optional, intent(in)    :: nmany_refs
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
-        integer             :: ithr
+        integer             :: ithr, nthr_team
         integer(c_int)      :: plan_flags
         logical             :: l_fixed_seed
         call self%kill_memo_workspace
-        allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%cmat_joint_many(nthr_glob),&
-            &self%crmat1_many(nthr_glob), self%crvec1(nthr_glob))
+        ! one workspace per thread of the team in use
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
+        allocate(self%drvec(nthr_team), self%cmat2_many(nthr_team), self%cmat_joint_many(nthr_team),&
+            &self%crmat1_many(nthr_team), self%crvec1(nthr_team))
         ! convenience objects
-        do ithr = 1,nthr_glob
+        do ithr = 1,nthr_team
             self%drvec(ithr)%p = fftw_alloc_real(int(self%nrots, c_size_t))
             call c_f_pointer(self%drvec(ithr)%p, self%drvec(ithr)%r, [self%nrots])
             self%cmat2_many(ithr)%p = fftwf_alloc_complex(int(self%nrots * self%nk, c_size_t))
@@ -396,8 +423,8 @@ contains
                 THROW_HARD('Invalid nmany_refs: '//int2str(nmany_refs))
             endif
             ! R2C plan & memory for 1 particle to all refs evaluations
-            allocate(self%crmat_many(nthr_glob))
-            do ithr = 1,nthr_glob
+            allocate(self%crmat_many(nthr_team))
+            do ithr = 1,nthr_team
                 ! Allocate complex storage for (pftsz+1) * nmany_refs transforms
                 self%crmat_many(ithr)%p = fftwf_alloc_complex(int((self%pftsz+1) * nmany_refs, c_size_t))
                 ! Complex view: (pftsz+1, nmany_refs)

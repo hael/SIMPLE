@@ -45,22 +45,22 @@ type binoris
     procedure          :: close
     procedure, private :: read_header
     procedure          :: write_header
-    procedure, private :: write_segment_inside_1
-    procedure, private :: write_segment_inside_2
-    generic            :: write_segment_inside => write_segment_inside_1, write_segment_inside_2
+    procedure, private :: write_segment_inside_oris
+    procedure, private :: write_segment_inside_strs
+    generic            :: write_segment_inside => write_segment_inside_oris, write_segment_inside_strs
     procedure          :: empty_segment_inside
-    procedure, private :: byte_manager4seg_inside_1
-    procedure, private :: byte_manager4seg_inside_2
-    procedure, private :: write_segment_1
-    procedure, private :: write_segment_2
-    generic            :: write_segment => write_segment_1, write_segment_2
-    procedure, private :: add_segment_1
-    procedure, private :: add_segment_2
-    generic            :: add_segment => add_segment_1, add_segment_2
+    procedure, private :: byte_manager4seg_inside_save
+    procedure, private :: byte_manager4seg_inside_restore
+    procedure, private :: write_segment_oris
+    procedure, private :: write_segment_strs
+    generic            :: write_segment => write_segment_oris, write_segment_strs
+    procedure, private :: add_segment_oris
+    procedure, private :: add_segment_strs
+    generic            :: add_segment => add_segment_oris, add_segment_strs
     procedure          :: update_byte_ranges
     procedure          :: read_first_segment_record
-    procedure, private :: read_segment_1, read_segment_2
-    generic            :: read_segment => read_segment_1, read_segment_2
+    procedure, private :: read_segment_oris, read_segment_strs
+    generic            :: read_segment => read_segment_oris, read_segment_strs
     procedure          :: read_record
     ! getters
     procedure          :: get_segments_info
@@ -170,7 +170,7 @@ contains
         if( io_status .ne. 0 ) call fileiochk('binoris :: write_header, ERROR writing header bytes ', io_status)
     end subroutine write_header
 
-    subroutine write_segment_inside_1( self, isegment, os, fromto )
+    subroutine write_segment_inside_oris( self, isegment, os, fromto )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
@@ -196,15 +196,18 @@ contains
         endif
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! ranges and raw bytes
-        call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        call self%byte_manager4seg_inside_save(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
-        call self%add_segment_1(isegment, os, fromto)
+        call self%add_segment_oris(isegment, os, fromto)
         ! error checks
-        call self%byte_manager4seg_inside_2(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        call self%byte_manager4seg_inside_restore(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! WRITE FILE
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
         if( is_particle_seg(isegment) )then
+#ifdef _DEBUG
+             call check_particle_slots(os, int(self%header(isegment)%fromto))
+#endif
              do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
                 disk_record(1:N_PTCL_ORIPARAMS) = ptcl_record
@@ -244,9 +247,9 @@ contains
         ! write updated header
         write(unit=self%funit,pos=1) self%header
         ! so no need to update header in file after this operation
-    end subroutine write_segment_inside_1
+    end subroutine write_segment_inside_oris
 
-    subroutine write_segment_inside_2( self, isegment, os_strings, fromto, strlen_max )
+    subroutine write_segment_inside_strs( self, isegment, os_strings, fromto, strlen_max )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(string),              intent(in)    :: os_strings(:)
@@ -260,11 +263,11 @@ contains
         if( noris == 0 ) return
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! ranges and raw bytes
-        call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        call self%byte_manager4seg_inside_save(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
-        call self%add_segment_2(isegment, fromto, strlen_max)
+        call self%add_segment_strs(isegment, fromto, strlen_max)
         ! error checks
-        call self%byte_manager4seg_inside_2(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        call self%byte_manager4seg_inside_restore(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! WRITE FILE
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
@@ -298,7 +301,7 @@ contains
         ! write updated header
         write(unit=self%funit,pos=1) self%header
         ! so no need to update header in file after this operation
-    end subroutine write_segment_inside_2
+    end subroutine write_segment_inside_strs
 
     !> Drop the records of one segment from the open file, in place: the segments behind it move forward and
     !! the header marks the segment empty. write_segment_inside leaves the file alone for an empty table,
@@ -312,7 +315,7 @@ contains
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments ) return
         if( self%header(isegment)%n_records <= 0 ) return
-        call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
+        call self%byte_manager4seg_inside_save(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         self%header(isegment) = binoris_seginfo()
         call self%update_byte_ranges
         if( allocated(bytearr_part3) )then
@@ -321,7 +324,7 @@ contains
         write(unit=self%funit,pos=1) self%header
     end subroutine empty_segment_inside
 
-    subroutine byte_manager4seg_inside_1( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
+    subroutine byte_manager4seg_inside_save( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self
         integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
         integer(kind=8),               intent(out)   :: end_part1, start_part3, end_part3
@@ -353,9 +356,9 @@ contains
             allocate( bytearr_part3(start_part3:end_part3) )
             read(unit=self%funit,pos=start_part3) bytearr_part3
         endif
-    end subroutine byte_manager4seg_inside_1
+    end subroutine byte_manager4seg_inside_save
 
-    subroutine byte_manager4seg_inside_2( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
+    subroutine byte_manager4seg_inside_restore( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self
         integer(kind(ENUM_ORISEG)),       intent(in) :: isegment
         integer(kind=8),               intent(in)    :: end_part1, start_part3, end_part3
@@ -388,9 +391,9 @@ contains
                 THROW_HARD('byte sizes of part3 in original and updated do not match')
             endif
         endif
-    end subroutine byte_manager4seg_inside_2
+    end subroutine byte_manager4seg_inside_restore
 
-    subroutine write_segment_1( self, isegment, os, fromto )
+    subroutine write_segment_oris( self, isegment, os, fromto )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(in)    :: os ! indexed from 1 to nptcls
@@ -413,12 +416,15 @@ contains
         endif
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! add segment to stack, this sets all the information needed for allocation
-        call self%add_segment_1(isegment, os, fromto)
+        call self%add_segment_oris(isegment, os, fromto)
         ! update byte ranges in header
         call self%update_byte_ranges
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
+#ifdef _DEBUG
+             call check_particle_slots(os, int(self%header(isegment)%fromto))
+#endif
              do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
                 disk_record(1:N_PTCL_ORIPARAMS) = ptcl_record
@@ -437,9 +443,9 @@ contains
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
         endif
-    end subroutine write_segment_1
+    end subroutine write_segment_oris
 
-    subroutine write_segment_2( self, isegment, fromto, strlen_max, sarr )
+    subroutine write_segment_strs( self, isegment, fromto, strlen_max, sarr )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer,                    intent(in)    :: fromto(2), strlen_max
@@ -448,7 +454,7 @@ contains
         integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         ! add segment to stack
-        call self%add_segment_2(isegment, fromto, strlen_max)
+        call self%add_segment_strs(isegment, fromto, strlen_max)
         ! update byte ranges in header
         call self%update_byte_ranges
         ! write orientation data
@@ -462,9 +468,9 @@ contains
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
-    end subroutine write_segment_2
+    end subroutine write_segment_strs
 
-    subroutine add_segment_1( self, isegment, os, fromto )
+    subroutine add_segment_oris( self, isegment, os, fromto )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(in)    :: os
@@ -495,9 +501,9 @@ contains
         ! set n_records
         self%header(isegment)%n_records = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
         if( self%header(isegment)%n_records < 1 ) THROW_HARD('input oritab (os) empty')
-    end subroutine add_segment_1
+    end subroutine add_segment_oris
 
-    subroutine add_segment_2( self, isegment, fromto, strlen_max )
+    subroutine add_segment_strs( self, isegment, fromto, strlen_max )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer,                    intent(in)    :: fromto(2)
@@ -515,7 +521,7 @@ contains
         self%header(isegment)%n_bytes_per_record = strlen_max
         ! set n_records
         self%header(isegment)%n_records = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
-    end subroutine add_segment_2
+    end subroutine add_segment_strs
 
     subroutine update_byte_ranges( self )
         class(binoris), intent(inout) :: self
@@ -552,7 +558,7 @@ contains
         endif
     end subroutine read_first_segment_record
 
-    subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo, wthreads )
+    subroutine read_segment_oris( self, isegment, os, fromto, only_ctfparams_state_eo, wthreads )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(oris),                intent(inout) :: os
@@ -563,16 +569,15 @@ contains
         integer(kind=8) :: ibytes, ipos
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
         integer         :: fromto_here(2), i, irec, n, nl, nbatches, ibatch, nbatch, nthr
-        logical         :: present_fromto, oonly_ctfparams_state_eo
+        logical         :: oonly_ctfparams_state_eo
         if( .not. self%l_open ) THROW_HARD('file needs to be open: '//self%fname%to_char())
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(logfhandle,*) 'filename', self%fname%to_char()
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
-         fromto_here    = int(self%header(isegment)%fromto)
-        present_fromto = present(fromto)
-        if( present_fromto ) fromto_here = fromto
+        fromto_here = int(self%header(isegment)%fromto)
+        if( present(fromto) ) fromto_here = fromto
         if( fromto_here(1)<self%header(isegment)%fromto(1) .or. fromto_here(1)>self%header(isegment)%fromto(2) )then
             write(logfhandle,*) 'filename', self%fname%to_char()
             THROW_HARD('Invalid fromto(1) index, out of range')
@@ -599,8 +604,9 @@ contains
                 end do
             else
                 ibytes = self%header(isegment)%first_data_byte
-                ! read orientation data as strings
-                 nl       = int(self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1)
+                ibytes = ibytes + (fromto_here(1)-self%header(isegment)%fromto(1))*self%header(isegment)%n_bytes_per_record
+                ! read orientation data as strings: the rows fromto_here, stored at their index in the segment
+                nl       = fromto_here(2) - fromto_here(1) + 1
                 n        = nthr * THREAD_NSTRINGS
                 nbatches = ceiling(real(nl)/real(n))
                 batches  = split_nobjs_even(nl,nbatches)
@@ -613,22 +619,13 @@ contains
                     ! parse
                     ! inactive !omp parallel do default(shared) private(i,irec,ipos) schedule(static) proc_bind(close)
                     do i = 1,nbatch
-                        irec  = batches(ibatch,1) + i - 1
+                        irec  = fromto_here(1) - int(self%header(isegment)%fromto(1)) + batches(ibatch,1) + i - 1
                         ipos  = (i-1) * self%header(isegment)%n_bytes_per_record + 1
                         if( oonly_ctfparams_state_eo )then
-                            if( present_fromto )then
-                                call os%str2ori_ctfparams_state_eo(i,&
-                                    &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
-                            else
-                                call os%str2ori_ctfparams_state_eo(irec,&
-                                    &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
-                            endif
+                            call os%str2ori_ctfparams_state_eo(irec,&
+                                &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
                         else
-                            if( present_fromto )then
-                                call os%str2ori(i, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
-                            else
-                                call os%str2ori(irec, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
-                            endif
+                            call os%str2ori(irec, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
                         endif
                     enddo
                     ! inactive!omp end parallel do
@@ -638,9 +635,9 @@ contains
         else
             ! empty segment, nothing to do
         endif
-    end subroutine read_segment_1
+    end subroutine read_segment_oris
 
-    subroutine read_segment_2( self, isegment, sarr )
+    subroutine read_segment_strs( self, isegment, sarr )
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(string),              intent(inout) :: sarr(:)
@@ -666,7 +663,7 @@ contains
         else
             ! empty segment, nothing to do
         endif
-    end subroutine read_segment_2
+    end subroutine read_segment_strs
 
     subroutine read_record( self, isegment, ibytes, str )
         class(binoris),                intent(inout) :: self
@@ -806,5 +803,24 @@ contains
         ! type(oris) :: os_ptcl3D ! per-particle 3D os, segment 6
         if( isegment == 3 .or. isegment == 6 ) is_particle_seg = .true.
     end function is_particle_seg
+
+#ifdef _DEBUG
+    !> a particle record carries only its named slots: a key the write would drop stops (Debug builds)
+    subroutine check_particle_slots( os, fromto )
+        class(oris), intent(in) :: os
+        integer,     intent(in) :: fromto(2)
+        type(string) :: key
+        character(len=:), allocatable :: msg
+        integer :: i
+        do i = fromto(1), fromto(2)
+            key = os%nonslot_key(i)
+            if( key%strlen_trim() > 0 )then
+                msg = 'particle row '//int2str(i)//' carries the key '//key%to_char()//&
+                    &', which no named slot holds (a project write would drop it)'
+                THROW_HARD(msg)
+            endif
+        enddo
+    end subroutine check_particle_slots
+#endif
 
 end module simple_binoris

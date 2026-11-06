@@ -194,6 +194,7 @@ contains
             write(logfhandle,*)
         endif
         if(.not. self%starfile%initialised) call self%initialise()
+        if( self%starfile%ptcl_import_open ) THROW_HARD('a particle import is not finalised; finalise_ptcl_import first')
         self%starfile%filename = filename
         tmpstr = cline%get_carg("import_dir")
         self%starfile%rootdir = tmpstr%to_char()
@@ -205,6 +206,8 @@ contains
         ! A STAR file without rlnPhaseShift needs no fixup: phshift occupies a fixed
         ! particle slot that is materialized as zero, which is the identity phase.
         call self%import_stardata(self%starfile%particles2D, spproj%os_ptcl2D, .true.)
+        ! copy into the other field, then finalise_ptcl_import once
+        self%starfile%ptcl_import_open = .true.
     end subroutine import_ptcls2D
 
     subroutine import_cls2D(self, cline, spproj, filename)
@@ -239,6 +242,7 @@ contains
             write(logfhandle,*)
         endif
         if(.not. self%starfile%initialised) call self%initialise()
+        if( self%starfile%ptcl_import_open ) THROW_HARD('a particle import is not finalised; finalise_ptcl_import first')
         self%starfile%filename = filename
         tmpstr = cline%get_carg("import_dir")
         self%starfile%rootdir = tmpstr%to_char()
@@ -250,6 +254,8 @@ contains
         ! A STAR file without rlnPhaseShift needs no fixup: phshift occupies a fixed
         ! particle slot that is materialized as zero, which is the identity phase.
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
+        ! copy into the other field, then finalise_ptcl_import once
+        self%starfile%ptcl_import_open = .true.
     end subroutine import_ptcls3D
 
     ! imports into 2D & 3D, preserves poses
@@ -261,6 +267,7 @@ contains
         type(string) :: msg
         write(logfhandle,'(A,A)')'>>> Importing ' , filename%to_char()
         if(.not. self%starfile%initialised) call self%initialise()
+        if( self%starfile%ptcl_import_open ) THROW_HARD('a particle import is not finalised; finalise_ptcl_import first')
         self%starfile%filename = filename
         self%starfile%rootdir  = stemname(filename)
         call self%read_layout(msg)
@@ -291,6 +298,7 @@ contains
         call spproj%os_ptcl2D%set_all2single('e1',0.)
         call spproj%os_ptcl2D%set_all2single('e2',0.)
         ! finalize
+        self%starfile%ptcl_import_open = .true.
         call self%finalise_ptcl_import(spproj)
         if( allocated(self%starfile%stkstates)) call spproj%report_state2stk(self%starfile%stkstates)
         if( spproj%get_nstks() > 0 ) call spproj%prune_particles()
@@ -627,6 +635,8 @@ contains
         real             :: foundval, detpix, mag
         real, allocatable :: optics_ids(:)
         type(string)     :: datapath
+        ! once per import, after the import and the copy into the other field: a second run is not idempotent
+        if( .not. self%starfile%ptcl_import_open ) THROW_HARD('no particle import to finalise; finalise_ptcl_import runs once per import')
         ! a group's row from its id: ids need not be row numbers (stream optics groups keep theirs)
         optics_ids = spproj%os_optics%get_all('ogid')
         do i = 1, spproj%os_stk%get_noris()
@@ -680,6 +690,10 @@ contains
         end do
         call self%origins_to_pixels(spproj)
         call self%coords_to_corners(spproj)
+        ! the optics constants (kv, cs, fraca, smpd, detpix, mag) now sit on the stacks: no particle slot holds them
+        call spproj%os_ptcl2D%strip_nonslot_keys
+        call spproj%os_ptcl3D%strip_nonslot_keys
+        self%starfile%ptcl_import_open = .false.
     end subroutine finalise_ptcl_import
 
     ! STAR origins are in Angstrom, SIMPLE's x and y in pixels of the particle's stack
@@ -762,6 +776,7 @@ contains
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         integer                           :: i
+        if( self%starfile%ptcl_import_open ) THROW_HARD('export of an unfinalised particle import; export_mics')
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "micrographs.star"
         if( VERBOSE_OUTPUT )then
@@ -781,16 +796,18 @@ contains
         call enable_splflags(spproj%os_mic,    self%starfile%micrographs%flags)
         call self%export_stardata(self%starfile%optics%flags, spproj%os_optics, "optics", exclude="rlnImageSize")
         call self%export_stardata(self%starfile%micrographs%flags, spproj%os_mic, "micrographs")
-        call simple_rename(self%starfile%filename, self%starfile%filenamebak, overwrite=.true.)
+        call simple_rename(self%starfile%filename, self%starfile%filenamebak)
     end subroutine export_mics
 
     subroutine export_cls2D(self, spproj, iter)
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         integer, optional,  intent(in)    :: iter
+        type(oris)   :: cls2D
         type(string) :: stkname
         integer      :: i, ncls
         real         :: smpd
+        if( self%starfile%ptcl_import_open ) THROW_HARD('export of an unfinalised particle import; export_cls2D')
         if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         if(present(iter)) then
             self%starfile%filename = CLS2D_STARFBODY//'_iter'//int2str_pad(iter,3)//'.star'
@@ -802,26 +819,31 @@ contains
             write(logfhandle,*) char(9), 'exporting clusters2D to ' // self%starfile%filename%to_char()
             write(logfhandle,*) ''
         endif
+        self%starfile%filenamebak = self%starfile%filename
+        self%starfile%filename    = self%starfile%filenamebak // ".tmp"
         if( file_exists(self%starfile%filename) ) call del_file(self%starfile%filename)
         if(.not. self%starfile%initialised) call self%initialise()
-        if(present(iter)) then 
+        ! the export changes a copy, never the project
+        call cls2D%copy(spproj%os_cls2D)
+        if(present(iter)) then
             stkname = basename(string(CWD_GLOB))//"/"//refine2D_cavgs_fname(iter, MRC_EXT)
-            do i=1, spproj%os_cls2D%get_noris()
-                call spproj%os_cls2D%set(i, "stk", stkname)
+            do i=1, cls2D%get_noris()
+                call cls2D%set(i, "stk", stkname)
             end do
         end if
-        do i=1, spproj%os_cls2D%get_noris()
-            if(.not. spproj%os_cls2D%isthere(i, "stk")) then
+        do i=1, cls2D%get_noris()
+            if(.not. cls2D%isthere(i, "stk")) then
                 call spproj%get_cavgs_stk(stkname, ncls, smpd)
                 if(file_exists(stkname)) then
-                    call spproj%os_cls2D%set(i, "stk", stkname)
+                    call cls2D%set(i, "stk", stkname)
                 endif
             end if
-            call spproj%os_cls2D%set(i, "ncls", spproj%os_cls2D%get_noris())
+            call cls2D%set(i, "ncls", cls2D%get_noris())
         end do
-        call enable_splflags(spproj%os_cls2D, self%starfile%clusters2D%flags)
-        call self%export_stardata(self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters")
-        call spproj%os_cls2D%delete_entry("stk")
+        call enable_splflags(cls2D, self%starfile%clusters2D%flags)
+        call self%export_stardata(self%starfile%clusters2D%flags, cls2D, "clusters")
+        call simple_rename(self%starfile%filename, self%starfile%filenamebak)
+        call cls2D%kill
         call stkname%kill
     end subroutine export_cls2D
 
@@ -832,9 +854,18 @@ contains
         character(len=*),           intent(in)    :: blockname
         character(len=*), optional, intent(in)    :: exclude
         type(string) :: cwd, strtmp
-        integer      :: iflag, iori, ok, fhandle, end
+        character(len=:), allocatable :: fname
+        integer      :: iflag, iori, ok, fhandle, end, n
         real         :: rval
         logical      :: ex, excludeflag
+        ! a writer writes name.tmp and renames it when complete: a reader never meets a partial file
+        fname = self%starfile%filename%to_char()
+        n     = len_trim(fname)
+        if( n < 4 )then
+            THROW_HARD('export_stardata writes a temporary file (.tmp); the caller renames it')
+        else if( fname(n-3:n) /= '.tmp' )then
+            THROW_HARD('export_stardata writes a temporary file (.tmp); the caller renames it')
+        endif
         call simple_getcwd(cwd)
         ex = file_exists(self%starfile%filename)
         if (ex) then
@@ -1023,6 +1054,7 @@ contains
         integer      :: ptclstkid, nmics, nstks
         type(string) :: ogname, cwd, str
         logical      :: beamtilt, l_propagate
+        if( self%starfile%ptcl_import_open ) THROW_HARD('optics groups of an unfinalised particle import; assign_optics')
         beamtilt  = .true.
         l_propagate = .true.
         if(present(propagate)) l_propagate = propagate
@@ -1223,18 +1255,18 @@ contains
         class(starproject), intent(inout) :: self
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: fname_star
-        type(string) :: filename_backup
+        type(string) :: filename_backup, fname_tmp
         integer      :: i, j, fhandle, ok
-        logical      :: ex, pres
-        ex = file_exists(fname_star)
-        if (ex) call del_file(fname_star)
+        logical      :: pres
+        fname_tmp = fname_star//'.tmp'
+        if( file_exists(fname_tmp) ) call del_file(fname_tmp)
         if(.not. self%starfile%initialised) call self%initialise
         filename_backup = self%starfile%filename
-        self%starfile%filename = fname_star
+        self%starfile%filename = fname_tmp
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call self%export_stardata(self%starfile%optics%flags, spproj%os_optics, "optics", exclude="rlnImageSize")
         self%starfile%filename = filename_backup
-        call fopen(fhandle,file=fname_star, position='append', iostat=ok)
+        call fopen(fhandle,file=fname_tmp, position='append', iostat=ok)
         do i=1, maxval(self%tiltinfo%finaltiltgroupid)
             pres = .false.
             do j=1, size(self%tiltinfo)
@@ -1261,6 +1293,7 @@ contains
             end if
         end do
         call fclose(fhandle)
+        call simple_rename(fname_tmp, fname_star)
         if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_star%to_char()
     end subroutine export_opticsgroups
 

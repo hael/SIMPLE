@@ -42,7 +42,7 @@ contains
         integer           :: isym, ldim(3), boxpd, ldim_pd(3)
         real              :: rmat_symaxis(3,3), rmat(3,3), smpd
         ! make point-group object
-        call symobj%new(params%pgrp, icorelion=.true.)
+        call symobj%new(params%pgrp)
         nsym = symobj%get_nsym()
         ! extract the rotation matrices for the symops
         allocate(sym_rmats(nsym,3,3))
@@ -299,7 +299,7 @@ contains
                 call progress(igrp, nsym)
             endif
             ! make point-group object
-            call symobj%new(pgrps(igrp)%str, icorelion=.true.)
+            call symobj%new(pgrps(igrp)%str)
             ! locate the symmetry axis
             if( DEBUG_HERE ) write(logfhandle,*) 'searching for the symmetry axis'
             call find_symaxis(pgrps(igrp)%str)

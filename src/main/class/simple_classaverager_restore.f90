@@ -61,7 +61,7 @@ contains
         integer,            intent(in) :: pinds(nptcls)
         logical,  optional, intent(in) :: updated_only
         class(oris), pointer :: spproj_field
-        integer              :: i, iptcl, stkind
+        integer              :: i, iptcl, stkind, ihalf
         logical              :: l_updated_only
         l_updated_only = .false.
         if( present(updated_only) ) l_updated_only = updated_only
@@ -70,6 +70,16 @@ contains
         if( nptcls < size(precs) ) precs(nptcls+1:)%pind = 0
         ! fetch data from project
         call b_ptr%spproj%ptr2oritype(p_ptr%oritype, spproj_field)
+        ! a summed particle in no even/odd half stops (get_half), before the parallel region
+        do i = 1,nptcls
+            iptcl = pinds(i)
+            if( iptcl == 0 ) cycle
+            if( spproj_field%get_state(iptcl) == 0 ) cycle
+            if( l_updated_only )then
+                if( spproj_field%get_updatecnt(iptcl) == 0 ) cycle
+            endif
+            ihalf = spproj_field%get_half(iptcl)
+        end do
         !$omp parallel do default(shared) private(i,iptcl,stkind) schedule(static) proc_bind(close)
         do i = 1,nptcls
             iptcl = pinds(i)
@@ -337,7 +347,7 @@ contains
 
     contains
 
-        !> the (class, half) bucket of batch particle i, 0 when it is in no sum (even: half label 0 or -1)
+        !> the (class, half) bucket of batch particle i, 0 when it is in no sum (cavger_transf_oridat refused other halves)
         integer function bucket_of( i ) result( ib )
             integer, intent(in) :: i
             integer :: icls_loc
@@ -346,7 +356,7 @@ contains
             icls_loc = precs(i)%class
             if( icls_loc < 1 .or. icls_loc > ncls ) return
             select case(precs(i)%eo)
-                case(0,-1)
+                case(0)
                     ib = 2 * (icls_loc - 1) + 1
                 case(1)
                     ib = 2 * (icls_loc - 1) + 2
@@ -520,15 +530,18 @@ contains
         type(cavgs_set)   :: cavgs_bak
         type(stack)       :: even_tmp, odd_tmp
         type(image)       :: gridcorr_img
-        integer           :: eo_pop(2), icls, ithr, find, pop, filtsz_crop
+        integer           :: eo_pop(2), icls, ithr, find, pop, filtsz_crop, nthr_team
         logical           :: l_regularize_avg
         ! temporary objects for frc calculation & regularization
         filtsz_crop = fdim(ldim_crop(1))-1
         l_regularize_avg   = p_ptr%l_ml_reg
         allocate(frcs(filtsz_crop,ncls),source=0.0)
         call cavgs_bak%new_set(ldim_crop, ncls)
-        call even_tmp%new_stack(ldim_crop, nthr_glob, alloc_ctfsq=.false.)
-        call odd_tmp%new_stack( ldim_crop, nthr_glob, alloc_ctfsq=.false.)
+        ! one work slice per thread of the team in use
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
+        call even_tmp%new_stack(ldim_crop, nthr_team, alloc_ctfsq=.false.)
+        call odd_tmp%new_stack( ldim_crop, nthr_team, alloc_ctfsq=.false.)
         call memoize_ft_maps(ldim_crop(1:2), smpd_crop)
         gridcorr_img = prep2D_inv_instrfun4mul(ldim_crop, ldim_croppd, smpd_crop)
         ! Main loop
@@ -756,7 +769,7 @@ contains
                 if( b_ptr%spproj_field%get_updatecnt(iptcl) <= 0 ) cycle
                 icls = b_ptr%spproj_field%get_class(iptcl)
                 if( icls < 1 .or. icls > ncls ) cycle
-                eo = merge(2, 1, b_ptr%spproj_field%get_eo(iptcl) == 1)
+                eo = b_ptr%spproj_field%get_half(iptcl) + 1
                 eo_pops(eo,icls) = eo_pops(eo,icls) + 1
             enddo
         else
@@ -940,7 +953,8 @@ contains
         type(image), optional,              intent(inout) :: gridcorr  !< the gridding-correction image, for the caller
         class(oris), pointer :: pos
         type(kbinterpol)     :: kbwin
-        type(image)          :: img(nthr_glob), gridcorr_img
+        type(image)          :: gridcorr_img
+        type(image), allocatable :: img(:)
         type(ptcl_read_session) :: reads
         type(ctfparams)      :: ctfparms
         type(ctf)            :: tfun
@@ -950,7 +964,7 @@ contains
         complex :: fcomp, fcompl
         real    :: mat(2,2), shift(2), loc(2), e3, pf2
         integer :: ldim_pd(3), ldim(3),logi_lims(3,2),cyc_lims(3,2),cyc_limsR(2,2),win(2,2)
-        integer :: i,iptcl, l,m, pop, h,k, hh,kk,hp,kp, ithr, iwinsz, wdim, physh,physk
+        integer :: i,iptcl, l,m, pop, h,k, hh,kk,hp,kp, ithr, iwinsz, wdim, physh,physk, nthr_team
         logical :: l_phflip, l_ori_imgs, l_conjg, l_keep_ft
         p_ptr => params
         b_ptr => build
@@ -1026,8 +1040,12 @@ contains
         call alloc_imgarr(pop, ldim, p_ptr%smpd, timgs)
         ! temporary objects
         call prepimgbatch(p_ptr, b_ptr, pop)
+        ! one work image per thread of the team in use
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
+        allocate(img(nthr_team))
         !$omp parallel do private(ithr) default(shared) schedule(static) proc_bind(close)
-        do ithr = 1, nthr_glob
+        do ithr = 1, size(img)
             call img(ithr)%new(ldim_pd, p_ptr%smpd, wthreads=.false.)
         end do
         !$omp end parallel do
@@ -1124,9 +1142,10 @@ contains
         ! cleanup
         call killimgbatch(build)
         call forget_ft_maps
-        do ithr = 1, nthr_glob
+        do ithr = 1, size(img)
             call img(ithr)%kill
         end do
+        deallocate(img)
         call gridcorr_img%kill
         call str%kill
         nullify(pos)

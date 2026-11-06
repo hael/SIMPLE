@@ -19,7 +19,7 @@ contains
         n = product(self%ldim)-self%nforeground()
     end function nbackground
 
-    module subroutine binarize_1( self_in, thres, self_out )
+    module subroutine binarize_thres( self_in, thres, self_out )
         class(image),           intent(inout) :: self_in
         real,                   intent(in)    :: thres
         class(image), optional, intent(inout) :: self_out
@@ -28,7 +28,7 @@ contains
         if( n_foreground < 1 ) THROW_HARD('Binarization produces empty image!')
         if( self_in%ft ) THROW_HARD('only for real images; bin_1')
         if( present(self_out) )then
-            if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; binarize_1')
+            if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; binarize_thres')
             where( self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) >= thres )
                 self_out%rmat(:self_out%ldim(1),:self_out%ldim(2),:self_out%ldim(3)) = 1.
             elsewhere
@@ -41,9 +41,9 @@ contains
                 self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) = 0.
             end where
         endif
-    end subroutine binarize_1
+    end subroutine binarize_thres
 
-    module subroutine binarize_2( self, npix )
+    module subroutine binarize_npix( self, npix )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: npix
         real, allocatable :: forsort(:)
@@ -53,14 +53,14 @@ contains
         npixtot = product(self%ldim)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
         call hpsort(forsort)
-        ! the npix largest values are foreground: binarize_1 keeps >= thres, so thres is
+        ! the npix largest values are foreground: binarize_thres keeps >= thres, so thres is
         ! the npix-th largest
         thres = forsort(npixtot-npix+1)
-        call self%binarize_1( thres )
+        call self%binarize_thres( thres )
         deallocate( forsort )
-    end subroutine binarize_2
+    end subroutine binarize_npix
 
-    module subroutine binarize_3( self, thres, mask )
+    module subroutine binarize_thres_mask( self, thres, mask )
         class(image), intent(inout) :: self
         real,         intent(in)    :: thres
         logical,      intent(inout) :: mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
@@ -70,7 +70,7 @@ contains
         elsewhere
             mask = .false.
         end where
-    end subroutine binarize_3
+    end subroutine binarize_thres_mask
 
     module subroutine cendist( self, c_point )
         class(image),   intent(inout) :: self

@@ -21,7 +21,8 @@ Silent ones first.
   documents first): each half's spectrum is the mean of its active records whose every shell is finite and
   positive. Invalid records are skipped with one warning; an empty half stops.
 - After every load, refresh what caches the spectra: `prep_sigmas_objfun` calls `pftc%memoize_sigma2_weights`
-  after `read_global`; the Cartesian calculator takes them per batch (`cftc%set_sigma2`); `read_global` drops
+  after `read_global` (a Euclidean score on spectra newer than the weights stops: `new_cart`, `read_global`
+  and `kill` bump `spectra_gen`); the Cartesian calculator takes them per batch (`cftc%set_sigma2`); `read_global` drops
   the plane grid that `prep_fplane_grid` rebuilds for class sums and reconstruction.
 - `esig%new(params, pftc, ...)` gives the calculator a pointer to `sigma2_noise`: make it after `pftc%new`,
   which drops the pointer. `fromp`/`top` are copied from `params` at `new`.

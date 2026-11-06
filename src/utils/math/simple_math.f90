@@ -9,11 +9,11 @@ use simple_linalg
 implicit none
 
 interface otsu
-    module procedure otsu_1, otsu_2, otsu_3
+    module procedure otsu_thresh, otsu_binarize, otsu_mask
 end interface otsu
 
 interface pixels_dist
-   module procedure pixels_dist_1, pixels_dist_2
+   module procedure pixels_dist_int, pixels_dist_real
 end interface
 
 interface vis_mat
@@ -791,7 +791,7 @@ contains
     ! Otsu's method
     ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
     ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
-    subroutine otsu_1( n, x, thresh )
+    subroutine otsu_thresh( n, x, thresh )
         integer, intent(in)    :: n
         real,    intent(in)    :: x(n)
         real,    intent(inout) :: thresh ! threshold for binarisation, in the old value range
@@ -863,37 +863,37 @@ contains
         ! T is the last bin of the lower class; bin T holds the values that round to T,
         ! i.e. [T-0.5, T+0.5), so the class boundary in value space is T+0.5
         thresh = (thresh + 0.5) / sc + old_range(1)
-    end subroutine otsu_1
+    end subroutine otsu_thresh
 
     ! Otsu's method, see above
-    subroutine otsu_2(n, x, x_out, thresh)
+    subroutine otsu_binarize(n, x, x_out, thresh)
         integer,        intent(in)    :: n
         real,           intent(inout) :: x(n)
         real,           intent(inout) :: x_out(n)
         real, optional, intent(inout) :: thresh ! selected threshold for binarisation
         real :: threshold ! threshold for binarisation
-        call otsu_1(n, x, threshold)
+        call otsu_thresh(n, x, threshold)
         where(x > threshold)
             x_out = 1.
         elsewhere
             x_out = 0.
         endwhere
         if(present(thresh)) thresh = threshold
-    end subroutine otsu_2
+    end subroutine otsu_binarize
 
     ! Otsu's method, see above
-    subroutine otsu_3(n, x, mask)
+    subroutine otsu_mask(n, x, mask)
         integer, intent(in)    :: n
         real,    intent(inout) :: x(n)
         logical, intent(inout) :: mask(n)
         real :: threshold ! threshold for binarisation
-        call otsu_1(n, x, threshold)
+        call otsu_thresh(n, x, threshold)
         where(x > threshold)
             mask = .true.
         elsewhere
             mask = .false.
         endwhere
-    end subroutine otsu_3
+    end subroutine otsu_mask
 
     function calc_score_thres( n, scores, npeaks ) result( t )
         integer, intent(in) :: n, npeaks
@@ -922,7 +922,7 @@ contains
     !              the selected pixel and all the others
     ! if which == 'sum' then distance is the sum of the distances between the
     !              selected pixel and all the others.
-    function pixels_dist_1( px, vec, which, mask, location) result( dist )
+    function pixels_dist_int( px, vec, which, mask, location) result( dist )
         integer,           intent(in)     :: px(3)
         integer,           intent(in)     :: vec(:,:)
         character(len=*),  intent(in)     :: which
@@ -930,8 +930,8 @@ contains
         integer, optional, intent(out)    :: location(1)
         real    :: dist
         integer :: i
-        if(size(mask,1) .ne. size(vec, dim = 2)) write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_1'
-        if((any(mask .eqv. .false.)) .and. which .eq. 'sum') write(logfhandle,*) 'Attention! Not considering mask for sum; pixels_dist_1'
+        if(size(mask,1) .ne. size(vec, dim = 2)) write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_int'
+        if((any(mask .eqv. .false.)) .and. which .eq. 'sum') write(logfhandle,*) 'Attention! Not considering mask for sum; pixels_dist_int'
         select case(which)
         case('max')
             dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
@@ -946,14 +946,14 @@ contains
             dist =  minval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
             if(present(location)) location =  minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
         case('sum')
-            if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_1'
+            if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_int'
             dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
         case DEFAULT
-            call simple_exception('Unsupported pixels_dist kind: '//trim(which)//'; pixels_dist_1', 'simple_math.f90', __LINE__)
+            call simple_exception('Unsupported pixels_dist kind: '//trim(which)//'; pixels_dist_int', 'simple_math.f90', __LINE__)
         end select
-    end function pixels_dist_1
+    end function pixels_dist_int
 
-    function pixels_dist_2( px, vec, which, mask, location, keep_zero) result( dist )
+    function pixels_dist_real( px, vec, which, mask, location, keep_zero) result( dist )
         real,              intent(in)     :: px(3)
         real,              intent(in)     :: vec(:,:)
         character(len=*),  intent(in)     :: which
@@ -964,12 +964,12 @@ contains
         integer :: i
         logical :: kkeep_zero
         if( size(mask) /= size(vec, dim=2) )then
-            write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_2'
+            write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_real'
             print *, 'size(mask)      : ', size(mask)
             print *, 'size(vec, dim=2): ', size(vec, dim=2)
             stop
         endif
-        if( any(mask .eqv. .false.) .and. which .eq. 'sum' ) write(logfhandle,*) 'Attention! Not considering mask for sum; pixels_dist_2'
+        if( any(mask .eqv. .false.) .and. which .eq. 'sum' ) write(logfhandle,*) 'Attention! Not considering mask for sum; pixels_dist_real'
         select case(which)
             case('max')
                 dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
@@ -990,12 +990,12 @@ contains
                 dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
                 if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
             case('sum')
-                if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_2'
+                if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_real'
                 dist =  sum(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
             case DEFAULT
-                call simple_exception('Unsupported pixels_dist kind: '//trim(which)//'; pixels_dist_2', 'simple_math.f90', __LINE__)
+                call simple_exception('Unsupported pixels_dist kind: '//trim(which)//'; pixels_dist_real', 'simple_math.f90', __LINE__)
         end select
-    end function pixels_dist_2
+    end function pixels_dist_real
 
     ! This subroutine stores in pos the indexes corresponding to
     ! the pixels with value > 0 in the binary matrix imat.

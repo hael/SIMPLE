@@ -91,10 +91,11 @@ contains
         shmat => self%heap_vars(ithr)%shmat
         call self%gen_shmat(ithr, shvec, shmat)
         self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
+        call self%bump_ptcl_gen
     end subroutine shift_ptcl
 
     ! mirror pft about h (mirror about y of cartesian image)
-    module pure subroutine mirror_ref_pft_1( self, pft, pftm )
+    module pure subroutine mirror_ref_pft_by_pft( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self
         complex(sp),         intent(in)  :: pft(1:self%pftsz, self%kfromto(1):self%interpklim)
         complex(sp),         intent(out) :: pftm(1:self%pftsz, self%kfromto(1):self%interpklim)
@@ -115,14 +116,14 @@ contains
                 pftm(j,:) = pft(i,:)
             enddo
         endif
-    end subroutine mirror_ref_pft_1
+    end subroutine mirror_ref_pft_by_pft
 
     ! mirrors the even reference into the odd position
-    module pure subroutine mirror_ref_pft_2( self, iref )
+    module pure subroutine mirror_ref_pft_by_ind( self, iref )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        call self%mirror_ref_pft_1(self%pfts_refs(:,:,iref,REF_EVEN), self%pfts_refs(:,:,iref,REF_ODD))
-    end subroutine mirror_ref_pft_2
+        call self%mirror_ref_pft_by_pft(self%pfts_refs(:,:,iref,REF_EVEN), self%pfts_refs(:,:,iref,REF_ODD))
+    end subroutine mirror_ref_pft_by_ind
 
     module subroutine rotate_ref_8( self, pft, irot, pft_rot)
         class(polarft_calc), intent(in)  :: self

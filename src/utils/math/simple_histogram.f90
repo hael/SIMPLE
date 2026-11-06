@@ -18,8 +18,8 @@ type :: histogram
     logical              :: exists = .false.
   contains
     ! Initialization
-    procedure, private :: new_1, new_2, new_3, new_4, new_5
-    generic            :: new => new_1, new_2, new_3, new_4, new_5
+    procedure, private :: new_by_nbins, new_from_img, new_from_hist, new_from_vec_nbins, new_from_vec
+    generic            :: new => new_by_nbins, new_from_img, new_from_hist, new_from_vec_nbins, new_from_vec
     procedure          :: reset
     procedure          :: zero
     procedure          :: quantize
@@ -54,7 +54,7 @@ end type histogram
 
 contains
 
-    subroutine new_1( self, nbins )
+    subroutine new_by_nbins( self, nbins )
         class(histogram), intent(inout) :: self
         integer,          intent(in)    :: nbins
         logical :: alloc
@@ -78,22 +78,22 @@ contains
             self%ntot   = 0.
         endif
         self%exists = .true.
-    end subroutine new_1
+    end subroutine new_by_nbins
 
-    subroutine new_2( self, img, nbins, minmax, radius )
+    subroutine new_from_img( self, img, nbins, minmax, radius )
         class(histogram),  intent(inout) :: self
         class(image),      intent(in)    :: img
         integer,           intent(in)    :: nbins
         real,    optional, intent(in)    :: minmax(2), radius
-        call self%new_1(nbins)
+        call self%new_by_nbins(nbins)
         call self%quantize(img, minmax, radius)
-    end subroutine new_2
+    end subroutine new_from_img
 
-    subroutine new_3( self, other, copy )
+    subroutine new_from_hist( self, other, copy )
         class(histogram),  intent(inout) :: self
         type(histogram),   intent(in)    :: other
         logical, optional, intent(in)    :: copy
-        call self%new_1(other%nbins)
+        call self%new_by_nbins(other%nbins)
         self%x      = other%x
         self%xrange = other%xrange
         self%dx     = other%dx
@@ -103,16 +103,16 @@ contains
                 self%ntot   = other%ntot
             endif
         endif
-    end subroutine new_3
+    end subroutine new_from_hist
 
-    subroutine new_4( self, nbins, rvec )
+    subroutine new_from_vec_nbins( self, nbins, rvec )
         class(histogram),  intent(inout) :: self
         integer,           intent(in)    :: nbins
         real, allocatable, intent(in)    :: rvec(:)
         real    :: minmax(2), diff
         integer :: i,n,bin
         if( .not.allocated(rvec) ) THROW_HARD('Input vector not allocated')
-        call self%new_1(nbins)
+        call self%new_by_nbins(nbins)
         n         = size(rvec)
         minmax(1) = minval(rvec)
         minmax(2) = maxval(rvec)
@@ -138,16 +138,16 @@ contains
             self%counts(bin) = self%counts(bin) + 1.
         enddo
         self%ntot = sum(self%counts)
-    end subroutine new_4
+    end subroutine new_from_vec_nbins
 
-    subroutine new_5( self, rvec )
+    subroutine new_from_vec( self, rvec )
         class(histogram),  intent(inout) :: self
         real, allocatable, intent(in)    :: rvec(:) ! are the desired bins centers
         real    :: minmax(2), diff
         integer :: i,nbins
         if( .not.allocated(rvec) ) THROW_HARD('Input vector not allocated')
         nbins = size(rvec)
-        call self%new_1(nbins)
+        call self%new_by_nbins(nbins)
         minmax(1) = minval(rvec)
         minmax(2) = maxval(rvec)
         diff      = minmax(2) - minmax(1)
@@ -163,7 +163,7 @@ contains
         enddo
         self%x(self%nbins+1) = minmax(2)
         call self%zero
-    end subroutine new_5
+    end subroutine new_from_vec
 
     pure subroutine reset( self)
         class(histogram), intent(inout) :: self

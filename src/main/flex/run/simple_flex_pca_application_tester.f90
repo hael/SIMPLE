@@ -14,6 +14,7 @@ use simple_string,              only: string
 use simple_syslib,              only: file_exists, simple_abspath, simple_chdir, simple_mkdir
 use simple_timer,               only: tic, timer_int_kind, toc
 use simple_cmdline,             only: cmdline
+!$ use omp_lib,                  only: omp_get_max_active_levels, omp_set_max_active_levels
 use simple_commanders_flex_pca, only: commander_flex_pca
 use simple_commanders_sim,      only: commander_simulate_particles
 use simple_state_weight_set,    only: state_weight_set
@@ -443,14 +444,20 @@ contains
         class(cmdline),            allocatable :: cline
         class(commander_flex_pca), allocatable :: flex_pca
         integer(timer_int_kind) :: started
+        integer :: levels_saved
         allocate(cline, flex_pca)
         result = arm_result()
         call configure_flex_pca_phantom(cline, truth_mean, basis_backend, state_backend, 1, NTHR, nbins=nbins, &
             &box_crop=box_crop)
         call set_fixed_seed(SEED_APP, propagate=.true.)
+        ! the run leaves the process's OpenMP nesting level as it found it
+        !$ levels_saved = omp_get_max_active_levels()
+        !$ call omp_set_max_active_levels(2)
         started = tic()
         call flex_pca%execute(cline)
         result%seconds = real(toc(started))
+        !$ call assert_int(2, omp_get_max_active_levels(), 'flex_pca leaves the OpenMP nesting level as found')
+        !$ call omp_set_max_active_levels(levels_saved)
         call cline%kill
         deallocate(flex_pca, cline)
     end subroutine run_application_arm

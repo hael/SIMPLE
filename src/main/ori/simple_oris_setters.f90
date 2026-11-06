@@ -7,7 +7,7 @@ implicit none
 
 contains
 
-    module subroutine append_1( self, i, ori_in )
+    module subroutine append_at( self, i, ori_in )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: ori_in
         integer,     intent(in)    :: i
@@ -16,9 +16,9 @@ contains
             return
         endif
         call self%o(i)%append_ori(ori_in)
-    end subroutine append_1
+    end subroutine append_at
 
-    module subroutine append_2( self1, self2 )
+    module subroutine append_oris( self1, self2 )
         class(oris), intent(inout) :: self1
         class(oris), intent(in)    :: self2
         integer :: i,nprev
@@ -39,9 +39,9 @@ contains
                 THROW_HARD('self1 and self2 do not have equivalent is_ptcl status')
             endif
         endif
-    end subroutine append_2
+    end subroutine append_oris
 
-    module subroutine copy_1( self_out, self_in, is_ptcl )
+    module subroutine copy_as_kind( self_out, self_in, is_ptcl )
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
         logical,     intent(in)    :: is_ptcl
@@ -50,9 +50,9 @@ contains
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
-    end subroutine copy_1
+    end subroutine copy_as_kind
 
-    module subroutine copy_2( self_out, self_in )
+    module subroutine copy_same_kind( self_out, self_in )
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
         logical :: is_ptcl
@@ -66,7 +66,7 @@ contains
                 self_out%o(i) = self_in%o(i)
             end do
         end if
-    end subroutine copy_2
+    end subroutine copy_same_kind
 
     module subroutine reject( self, i )
         class(oris), intent(inout) :: self
@@ -74,45 +74,45 @@ contains
         call self%o(i)%reject
     end subroutine reject
 
-    module subroutine delete_entry_1( self, key )
+    module subroutine delete_entry_all( self, key )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: i
         do i=1,self%n
             call self%o(i)%delete_entry(key)
         end do
-    end subroutine delete_entry_1
+    end subroutine delete_entry_all
 
-    module subroutine delete_entry_2( self, ind, key )
+    module subroutine delete_entry_by_ind( self, ind, key )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: ind
         character(len=*), intent(in)    :: key
         if( ind < 0 .or. ind > self%n )then
-            THROW_WARN('index out of range; simple_oris % delete_entry_2')
+            THROW_WARN('index out of range; simple_oris % delete_entry_by_ind')
             return
         endif
         call self%o(ind)%delete_entry(key)
-    end subroutine delete_entry_2
+    end subroutine delete_entry_by_ind
 
-    module subroutine delete_2Dclustering_1( self, keepshifts, keepcls )
+    module subroutine delete_2Dclustering_all( self, keepshifts, keepcls )
         class(oris),       intent(inout) :: self
         logical, optional, intent(in)    :: keepshifts, keepcls
         integer :: i
         do i=1,self%n
             call self%o(i)%delete_2Dclustering(keepshifts, keepcls)
         end do
-    end subroutine delete_2Dclustering_1
+    end subroutine delete_2Dclustering_all
 
-    module subroutine delete_2Dclustering_2( self, i, keepshifts, keepcls )
+    module subroutine delete_2Dclustering_by_ind( self, i, keepshifts, keepcls )
         class(oris),       intent(inout) :: self
         integer,           intent(in)    :: i
         logical, optional, intent(in)    :: keepshifts, keepcls
         if( i < 0 .or. i > self%n )then
-            THROW_WARN('index out of range; simple_oris % delete_2Dclustering_2')
+            THROW_WARN('index out of range; simple_oris % delete_2Dclustering_by_ind')
             return
         endif
         call self%o(i)%delete_2Dclustering(keepshifts, keepcls)
-    end subroutine delete_2Dclustering_2
+    end subroutine delete_2Dclustering_by_ind
 
     module subroutine delete_3Dalignment( self, keepshifts )
         class(oris),       intent(inout) :: self
@@ -147,33 +147,33 @@ contains
         enddo
     end subroutine transfer_2Dshifts
 
-    module subroutine transfer_2Dparams_1( self, i, o_in )
+    module subroutine transfer_2Dparams_ori( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
         call self%o(i)%transfer_2Dparams(o_in)
-    end subroutine transfer_2Dparams_1
+    end subroutine transfer_2Dparams_ori
 
-    module subroutine transfer_2Dparams_2( self, i, os_in, i_in )
+    module subroutine transfer_2Dparams_oris( self, i, os_in, i_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i, i_in
         class(oris), intent(in)    :: os_in
         call self%o(i)%transfer_2Dparams(os_in%o(i_in))
-    end subroutine transfer_2Dparams_2
+    end subroutine transfer_2Dparams_oris
 
-    module subroutine transfer_3Dparams_1( self, i, o_in )
+    module subroutine transfer_3Dparams_ori( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
         call self%o(i)%transfer_3Dparams(o_in)
-    end subroutine transfer_3Dparams_1
+    end subroutine transfer_3Dparams_ori
 
-    module subroutine transfer_3Dparams_2( self, i, os_in, i_in )
+    module subroutine transfer_3Dparams_oris( self, i, os_in, i_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i, i_in
         class(oris), intent(in)    :: os_in
         call self%o(i)%transfer_3Dparams(os_in%o(i_in))
-    end subroutine transfer_3Dparams_2
+    end subroutine transfer_3Dparams_oris
 
     module subroutine transfer_class_assignment( self_from, self_to )
         class(oris), intent(in)    :: self_from
@@ -244,45 +244,45 @@ contains
         call self%o(i)%e3set(e3)
     end subroutine e3set
 
-    module subroutine set_1( self, i, key, val )
+    module subroutine set_real( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
         call self%o(i)%set(key, val)
-    end subroutine set_1
+    end subroutine set_real
 
-    module subroutine set_2( self, i, key, val )
+    module subroutine set_char( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         character(len=*), intent(in)    :: val
         call self%o(i)%set(key, val)
-    end subroutine set_2
+    end subroutine set_char
 
-    module subroutine set_3( self, i, key, val )
+    module subroutine set_int( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         integer,          intent(in)    :: val
         call self%o(i)%set(key, val)
-    end subroutine set_3
+    end subroutine set_int
 
-    module subroutine set_4( self, i, key, val )
+    module subroutine set_dp( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real(dp),         intent(in)    :: val
         call self%o(i)%set(key, val)
-    end subroutine set_4
+    end subroutine set_dp
     
-    module subroutine set_5( self, i, key, val )
+    module subroutine set_str( self, i, key, val )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         class(string),    intent(in)    :: val
         call self%o(i)%set(key, val)
-    end subroutine set_5
+    end subroutine set_str
 
     module subroutine set_dfx( self, i, dfx )
         class(oris), intent(inout) :: self
@@ -312,7 +312,7 @@ contains
         self%o(i) = self2transfer%o(i2transfer)
     end subroutine transfer_ori
 
-    module subroutine set_all_1( self, which, vals )
+    module subroutine set_all_real( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: vals(self%n)
@@ -320,9 +320,9 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, vals(i))
         enddo
-    end subroutine set_all_1
+    end subroutine set_all_real
 
-    module subroutine set_all_2( self, which, vals )
+    module subroutine set_all_char( self, which, vals )
         class(oris),           intent(inout) :: self
         character(len=*),      intent(in)    :: which
         character(len=STDLEN), intent(in)    :: vals(self%n)
@@ -330,9 +330,9 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, vals(i))
         enddo
-    end subroutine set_all_2
+    end subroutine set_all_char
 
-    module subroutine set_all_3( self, which, vals )
+    module subroutine set_all_int( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         integer,          intent(in)    :: vals(self%n)
@@ -340,9 +340,9 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, vals(i))
         enddo
-    end subroutine set_all_3
+    end subroutine set_all_int
 
-    module subroutine set_all2single_1( self, which, val )
+    module subroutine set_all2single_real( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(in)    :: val
@@ -350,9 +350,9 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, val)
         end do
-    end subroutine set_all2single_1
+    end subroutine set_all2single_real
 
-    module subroutine set_all2single_2( self, which, val )
+    module subroutine set_all2single_char( self, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         character(len=*), intent(in)    :: val
@@ -360,9 +360,9 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, val)
         end do
-    end subroutine set_all2single_2
+    end subroutine set_all2single_char
 
-    module subroutine set_all2single_3( self, which, ival )
+    module subroutine set_all2single_int( self, which, ival )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         integer,          intent(in)    :: ival
@@ -370,9 +370,9 @@ contains
         do i=1,self%n
             call self%o(i)%set(which, ival)
         end do
-    end subroutine set_all2single_3
+    end subroutine set_all2single_int
 
-    module subroutine set_field2single_1( self, field, ind, which, val )
+    module subroutine set_field2single_real( self, field, ind, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: field
         integer,          intent(in)    :: ind
@@ -384,9 +384,9 @@ contains
             if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, val)
         end do
         !$omp end parallel do 
-    end subroutine set_field2single_1
+    end subroutine set_field2single_real
 
-    module subroutine set_field2single_2( self, field, ind, which, val )
+    module subroutine set_field2single_char( self, field, ind, which, val )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: field
         integer,          intent(in)    :: ind
@@ -398,9 +398,9 @@ contains
             if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, val)
         end do
         !$omp end parallel do 
-    end subroutine set_field2single_2
+    end subroutine set_field2single_char
 
-    module subroutine set_field2single_3( self, field, ind, which, ival )
+    module subroutine set_field2single_int( self, field, ind, which, ival )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: field
         integer,          intent(in)    :: ind
@@ -412,7 +412,7 @@ contains
             if( self%o(i)%get(trim(field)) == ind ) call self%o(i)%set(which, ival)
         end do
         !$omp end parallel do 
-    end subroutine set_field2single_3
+    end subroutine set_field2single_int
 
     module subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
@@ -866,5 +866,14 @@ contains
         parts(nparts,2) = self%n
         deallocate(rstates)
     end subroutine gen_balanced_partitions
+
+    !> removes the keys of every particle row that no named slot holds (a project write would drop them)
+    module subroutine strip_nonslot_keys( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i = 1, self%n
+            call self%o(i)%strip_nonslot_keys
+        enddo
+    end subroutine strip_nonslot_keys
 
 end submodule simple_oris_setters

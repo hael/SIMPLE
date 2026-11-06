@@ -16,6 +16,8 @@ SIMPLE is a scientific application platform, not a narrow library.
 - `src/main/` contains most application/domain logic; `src/main/solve/` holds the `solve2D`/`solve3D` controllers.
 - `src/fileio/`, `src/utils/`, and `src/defs/` provide shared infrastructure.
 - `doc/` contains architecture and policy notes that are often more useful than comments in code.
+- `doc/glossary.md` names the recurring concepts and their code names (even/odd half, state 0, `box_crop`,
+  `kfromto`, segments, `sampled`/`updatecnt`, `_8`, `l_`, ...); new code uses its terms.
 - `nice/` is the optional web/UI layer.
 
 ## Runtime Layering
@@ -37,12 +39,16 @@ The common pattern is:
 Rules for the layers, for where each kind of step lives (program, master step, worker
 step) and for project reads and writes: `doc/policies/layering_and_project_ownership_policy.md`.
 
-Distributed `refine3D`/`refine2D`: the strategy's master owns its project. Volume
-assembly, `prob_align`(`_neigh`), `prob_align2D`, class-average assembly and the
-sigma2 commit are strategy routines in `src/main/strategies/parallelization/`
+Distributed `refine3D`/`refine2D`: the strategy's master owns its project; it draws
+the iteration's sample (always under `refine=prob*`, otherwise when
+`master_draws_sample3D/2D` holds), schedules the parts (a second time when the
+`pose_cont` polish follows) and merges their documents and probabilistic readouts. Volume assembly, class-average assembly and
+the sigma2 commit are strategy routines in `src/main/strategies/parallelization/`
 run on the master's `(params, build)`; their commanders are thin `execute(cline)`
-wrappers for command-line and worker callers. See
-`doc/policies/3D/refine3D_policy.md` (section 4) and `doc/policies/2D/solve2D_policy.md`.
+wrappers for command-line and worker callers. `refine=prob*` is a batch pipeline
+inside `refine3D_exec`/`refine2D_exec`, the same body in shared memory and in every
+part. See `doc/policies/3D/refine3D_policy.md` (sections 4 and 8) and
+`doc/policies/2D/solve2D_policy.md`.
 
 ## Build And Docs
 
@@ -71,8 +77,9 @@ wrappers for command-line and worker callers. See
   number and configure fails on a mismatch; checks go into existing suites.
 - The 15 `fast` suites run on every `compile_*.sh` build (unless
   `--exclude-tests`) through `scripts/run_fast_gate.sh`, after
-  `scripts/check_test_registry.py`, `check_descr.py` and `check_flex_dag.py`;
-  a failed gate installs nothing. `library` runs nightly; `highlevel` only when
+  `scripts/check_test_registry.py`, `check_descr.py`, `check_flex_dag.py`,
+  `check_guide_imports.py` and `check_cli_chain.py` (UI inputs, accepted keys,
+  bindings, yes/no keys, private programs); a failed gate installs nothing. `library` runs nightly; `highlevel` only when
   selected, or as a whole with `simple_test_exec test=nightly` (also
   `test=profile` over seeds and `test=identity` between run directories).
 - A program that only runs commanders or prints results is not a test; use a

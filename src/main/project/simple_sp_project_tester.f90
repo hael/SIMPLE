@@ -13,9 +13,27 @@ use simple_binoris_io,       only: binwrite_oritab
 use simple_image,            only: image
 use json_kinds,              only: RK, IK
 use json_module,             only: json_core, json_value
+use simple_forked_process,   only: forked_process, FORK_STATUS_FAILED, FORK_STATUS_STOPPED
+use simple_cmdline,          only: cmdline
+!$ use omp_lib,              only: omp_set_num_threads
 implicit none
 private
 public :: run_all_sp_project_tests
+
+!> a partition worker of the project in projfile writing what = 1 the project, 2 a part file, 3 a segment
+type, extends(forked_process) :: worker_writer
+    integer      :: what = 1
+    type(string) :: projfile
+contains
+    procedure :: execute => worker_writes
+end type worker_writer
+
+!> reads the mic segment of projfile with a row range, which must stop (ranges are for ptcl2D, ptcl3D, cls3D)
+type, extends(forked_process) :: range_reader
+    type(string) :: projfile
+contains
+    procedure :: execute => read_mic_range
+end type range_reader
 
 integer,          parameter :: NMICS  = 7
 integer,          parameter :: NPTCLS = 300
@@ -36,6 +54,7 @@ contains
         call test_phase_records()
         call test_phase_serialisation()
         call test_write_read_roundtrip()
+        call test_read_segment_range()
         call test_rnd_seed_roundtrip()
         call test_read_does_not_mutate_projinfo()
         call test_map_cls3D_states2ptcls()
@@ -43,8 +62,61 @@ contains
         call test_partial_docs_merge()
         call test_partial_docs_merge_uneven()
         call test_print_segment_json()
+        call test_worker_writes_no_project()
         call cleanup()
     end subroutine run_all_sp_project_tests
+
+    !> one owner per project: a partition worker writes its part files, never its master's project
+    subroutine test_worker_writes_no_project()
+        type(sp_project)    :: proj
+        type(worker_writer) :: child
+        character(len=*), parameter :: WPROJ = 'worker_owner.simple', WPART = 'worker_algndoc_1.simple'
+        write(*,'(A)') 'test_worker_writes_no_project'
+        call proj%os_ptcl2D%new(4, is_ptcl=.true.)
+        call proj%os_ptcl2D%set_all2single('state', 1.)
+        call proj%projinfo%new(1, is_ptcl=.false.)
+        call proj%projinfo%set(1, 'projfile', WPROJ)
+        call proj%write(string(WPROJ))
+        child%projfile = simple_abspath(string(WPROJ))
+        child%what = 1
+        call child%start(name=string('WORKER_WRITES_PROJECT'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a worker writing its master''s project stops')
+        call child%destroy
+        child%what = 2
+        call child%start(name=string('WORKER_WRITES_PART'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_STOPPED, child%status(), 'a worker writes its part file')
+        call child%destroy
+        child%what = 3
+        call child%start(name=string('WORKER_WRITES_SEGMENT'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a worker writing a segment of its master''s project stops')
+        call child%destroy
+        call proj%kill
+        call del_file(string(WPROJ))
+        call del_file(string(WPART))
+    end subroutine test_worker_writes_no_project
+
+    subroutine worker_writes( self, cline )
+        class(worker_writer), intent(inout) :: self
+        class(cmdline),       intent(inout) :: cline
+        type(sp_project) :: proj
+        ! one thread: the writers open OpenMP regions, and the parent's thread pool is not in the child
+        !$ call omp_set_num_threads(1)
+        call proj%read(self%projfile)
+        l_distr_worker_glob  = .true.
+        worker_projfile_glob = self%projfile%to_char()
+        select case(self%what)
+            case(1)
+                call proj%write
+            case(2)
+                call proj%write(string('worker_algndoc_1.simple'))
+            case(3)
+                call proj%write_segment_inside('ptcl2D')
+        end select
+        call proj%kill
+    end subroutine worker_writes
 
     subroutine cleanup()
         call del_file(string(PROJ_FILE))
@@ -287,6 +359,58 @@ contains
         call proj%kill
         call proj_read%kill
     end subroutine test_write_read_roundtrip
+
+    !> read_segment(..., fromto) of a .simple file fills only the range's rows, at their index in the segment, of a
+    !! field sized to the segment: the particle (binary) records and the class (string) records alike
+    subroutine test_read_segment_range()
+        type(sp_project)   :: proj, proj_read
+        type(range_reader) :: child
+        type(string)       :: str1, str2
+        integer            :: i, nbad
+        write(*,'(A)') 'test_read_segment_range'
+        call make_project(proj)
+        call proj%os_cls3D%new(6, is_ptcl=.false.)
+        do i = 1,6
+            call proj%os_cls3D%set(i, 'res',   10. + real(i))
+            call proj%os_cls3D%set(i, 'state', 1.)
+        enddo
+        call del_file(string(PROJ_FILE))
+        call proj%write(string(PROJ_FILE))
+        call proj_read%read_segment('ptcl3D', string(PROJ_FILE), fromto=[3,5])
+        call assert_int(NPTCLS, proj_read%os_ptcl3D%get_noris(), 'a ranged read keeps the field at the segment''s size')
+        nbad = 0
+        do i = 3,5
+            str1 = proj%os_ptcl3D%ori2str(i)
+            str2 = proj_read%os_ptcl3D%ori2str(i)
+            if( str1 /= str2 ) nbad = nbad + 1
+        enddo
+        call assert_int(0, nbad, 'the particle rows of the range are read')
+        call assert_true(abs(proj%os_ptcl3D%get(2, 'e2')) > TOL, 'the fixture''s row 2 has a pose')
+        call assert_real(0., proj_read%os_ptcl3D%get(2, 'e2'), TOL, 'a particle row before the range is not read')
+        call assert_real(0., proj_read%os_ptcl3D%get(6, 'e2'), TOL, 'a particle row after the range is not read')
+        call proj_read%read_segment('cls3D', string(PROJ_FILE), fromto=[2,3])
+        call assert_int(6, proj_read%os_cls3D%get_noris(), 'a ranged class read keeps the field at the segment''s size')
+        call assert_real(12., proj_read%os_cls3D%get(2, 'res'), TOL, 'class row 2 of the range is at index 2')
+        call assert_real(13., proj_read%os_cls3D%get(3, 'res'), TOL, 'class row 3 of the range is at index 3')
+        call assert_false(proj_read%os_cls3D%isthere(1, 'res'), 'a class row before the range is not read')
+        call assert_false(proj_read%os_cls3D%isthere(4, 'res'), 'a class row after the range is not read')
+        child%projfile = string(PROJ_FILE)
+        call child%start(name=string('READ_MIC_RANGE'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'a row range of the mic segment stops')
+        call child%destroy
+        call proj%kill
+        call proj_read%kill
+    end subroutine test_read_segment_range
+
+    subroutine read_mic_range( self, cline )
+        class(range_reader), intent(inout) :: self
+        class(cmdline),      intent(inout) :: cline
+        type(sp_project) :: proj
+        !$ call omp_set_num_threads(1)
+        call proj%read_segment('mic', self%projfile, fromto=[1,2])
+        call proj%kill
+    end subroutine read_mic_range
 
     !> the run seed and the generator version of the keyed draws survive the project file: a 63-bit seed with
     !! all four 16-bit words set and a negative seed (a user's SIMPLE_SEED may be negative) read back exactly, and a

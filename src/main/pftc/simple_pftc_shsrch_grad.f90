@@ -162,7 +162,7 @@ contains
         if( present(coarse_init) ) self%coarse_init = coarse_init
         self%search_mode = SHSRCH_SHIFT
         ! make optimizer spec
-        call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
+        call self%ospec%specify('lbfgsb', 2, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%opt_obj)
@@ -209,7 +209,7 @@ contains
         self%opt_angle      = .false.
         self%search_mode     = SHSRCH_JOINT
         self%coarse_init     = .false.
-        call self%ospec%specify('lbfgsb', 3, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
+        call self%ospec%specify('lbfgsb', 3, ftol=1e-5, gtol=1e-5, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
             &max_step=0.01, maxits=self%maxits)
         call opt_fact%new(self%ospec, self%opt_obj)
         self%ospec%costfun_8    => grad_shsrch_costfun
@@ -1179,7 +1179,7 @@ contains
         class(pftc_shsrch_grad), intent(inout) :: self
         if( associated(self%opt_obj) )then
             call self%opt_obj%kill
-            nullify(self%opt_obj)
+            deallocate(self%opt_obj)
         end if
         call self%ospec%kill
         nullify(self%b_ptr)

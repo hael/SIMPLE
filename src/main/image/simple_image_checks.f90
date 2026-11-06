@@ -41,10 +41,10 @@ contains
         endif
     end function square_dims
 
-    module pure logical function same_dims_1( self1, self2 )
+    module pure logical function same_dims_img( self1, self2 )
         class(image), intent(in) :: self1, self2
-        same_dims_1 = all(self1%ldim == self2%ldim)
-    end function same_dims_1
+        same_dims_img = all(self1%ldim == self2%ldim)
+    end function same_dims_img
 
     module pure logical function same_dims( self, ldim )
         class(image), intent(in) :: self

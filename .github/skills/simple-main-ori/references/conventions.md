@@ -14,7 +14,8 @@ never writes the scaled value back; resampling a stack multiplies them (`mul_shi
 `new` (kills first), `reallocate` (grows only), `append`, `delete`, `compress`, `merge` (also kills
 its 2nd argument), `symmetrize` (repeats rows, no operator).
 
-## Known defect, ruled for fixing
+## The south pole under c1
 
-`sym%rot_to_asym` under c1 with e2 exactly 180 degrees (which `m2euler` returns within 0.026 degrees
-of the south pole) overwrites the record with an uninitialised local: zero angles, other keys lost.
+`sym%rot_to_asym` keeps a record no operator brings into the asymmetric unit: under c1 with e2 exactly
+180 degrees (which `m2euler` returns within 0.026 degrees of the south pole) the record stays whole
+(fixed 2026-11-05; it was overwritten by an uninitialised local, `symmetry` suite).

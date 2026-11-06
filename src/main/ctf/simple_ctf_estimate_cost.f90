@@ -153,7 +153,7 @@ contains
         ! optimizer
         optlims = transpose(limits)
         if( self%ndim >= 3 ) optlims(3,:) = deg2rad(optlims(3,:)) ! astigmatism in radians
-        call self%ospec%specify('lbfgsb', self%ndim, ftol=1e-1, gtol=1e-3,&
+        call self%ospec%specify('lbfgsb', self%ndim, ftol=1e-3, gtol=0.9,&
             &limits=optlims, max_step=0.01, maxits=100)
         call opt_fact%new(self%ospec, self%opt_obj)
         self%ospec%costfun_8    => f_costfun
@@ -514,8 +514,11 @@ contains
     subroutine kill4Dcont( self )
         class(ctf_estimate_cost4Dcont), intent(inout) :: self
         call self%ospec%kill
-        if(associated(self%opt_obj)) call self%opt_obj%kill
-        nullify(self%pspec,self%parms,self%inds,self%opt_obj)
+        if( associated(self%opt_obj) )then
+            call self%opt_obj%kill
+            deallocate(self%opt_obj)
+        endif
+        nullify(self%pspec,self%parms,self%inds)
     end subroutine kill4Dcont
 
 end module simple_ctf_estimate_cost

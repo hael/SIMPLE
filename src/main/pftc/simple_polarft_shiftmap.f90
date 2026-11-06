@@ -230,6 +230,7 @@ contains
         integer, intent(in) :: imap, iref, iptcl
         real(dp) :: t0
         integer :: ithr
+        call self%check_ptcl_memo
         ithr = omp_get_thread_num() + 1
         t0 = omp_get_wtime()
         call gen_shiftmap_kernel(self, imap, iref, iptcl)

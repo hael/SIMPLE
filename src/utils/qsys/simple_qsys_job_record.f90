@@ -3,7 +3,7 @@
 ! MODULE: simple_qsys_job_record
 !
 ! PURPOSE:
-!   An asynchronous job's script (simple_qsys_ctrl, generate_script_2 with an
+!   An asynchronous job's script (simple_qsys_ctrl, generate_script_job with an
 !   exit-status file) records the job when it starts, in
 !   <exit-status file>.job: its pid, its host, and its scheduler and job id
 !   ("slurm <id>", "lsf <id>", "pbs <id>" or "none 0"). cancel_queued_job uses

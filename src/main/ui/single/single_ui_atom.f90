@@ -116,8 +116,6 @@ subroutine new_atoms_register( prgtab )
         &visibility=UI_VIS_STANDARD)
         call atoms_stats%add_input(UI_FILE, 'pdbfile2', 'file', 'PDB', 'subset coords for stats calc', 'e.g. subset.pdb', .false., '', &
         &visibility=UI_VIS_ADVANCED)
-        call atoms_stats%add_input(UI_FILE, 'rmsd_file','file', 'bin', 'per-atom e/o rmsd:s', 'e.g. atom_rmsd.bin', .false., '', &
-        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

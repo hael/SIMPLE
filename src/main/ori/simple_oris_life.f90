@@ -14,7 +14,7 @@ contains
         call self%new(n, is_ptcl)
     end function constructor
 
-    module subroutine new_1( self, n, is_ptcl )
+    module subroutine new_by_n( self, n, is_ptcl )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: n
         logical,     intent(in)    :: is_ptcl
@@ -25,9 +25,9 @@ contains
         do i=1,n
             call self%o(i)%new(is_ptcl)
         end do
-    end subroutine new_1
+    end subroutine new_by_n
 
-    module subroutine new_2( self, o_arr )
+    module subroutine new_from_arr( self, o_arr )
         class(oris), intent(inout) :: self
         class(ori),  intent(in)    :: o_arr(:)
         integer :: i
@@ -37,7 +37,7 @@ contains
         do i=1,self%n
             call self%o(i)%copy(o_arr(i))
         end do
-    end subroutine new_2
+    end subroutine new_from_arr
 
     module subroutine reallocate( self, new_n )
         class(oris), intent(inout) :: self
@@ -57,7 +57,7 @@ contains
         call tmp%kill
     end subroutine reallocate
 
-    module function extract_subset_1( self, from, to ) result( self_sub )
+    module function extract_subset_range( self, from, to ) result( self_sub )
         class(oris), intent(in) :: self
         integer,     intent(in) :: from, to
         type(oris) :: self_sub
@@ -69,9 +69,9 @@ contains
             cnt = cnt + 1
             call self_sub%o(cnt)%copy(self%o(i))
         end do
-    end function extract_subset_1
+    end function extract_subset_range
 
-    module function extract_subset_2( self, inds ) result( self_sub )
+    module function extract_subset_inds( self, inds ) result( self_sub )
         class(oris), intent(in) :: self
         integer,     intent(in) :: inds(:)
         type(oris) :: self_sub
@@ -81,7 +81,7 @@ contains
         do i = 1,n
             call self_sub%o(i)%copy(self%o(inds(i)))
         end do
-    end function extract_subset_2
+    end function extract_subset_inds
 
     module subroutine kill_chash( self )
         class(oris), intent(inout) :: self

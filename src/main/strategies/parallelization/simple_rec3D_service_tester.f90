@@ -55,6 +55,7 @@ contains
         call test_fractional_phantom('pcg')
         call test_trailing_weight_identity()
         call test_empty_state_carried()
+        call test_request_settings()
         call simple_chdir(root)
         call leave_fixture(cwd_saved, root, nfail0)
     end subroutine run_all_rec3D_service_lib_tests
@@ -110,6 +111,76 @@ contains
         call wset%kill
         call project%kill
     end subroutine publish_weights
+
+    !> a request's settings (states, one part, no filter, every state) replace the caller's parameters for the
+    !! reconstruction only: one weight column reconstructs one state under a caller of two states and state=2,
+    !! whose parameters come back unchanged
+    subroutine test_request_settings()
+        use simple_rec3D_service, only: rec3D_service, rec3D_request, REC3D_WEIGHTS_TABLE, REC3D_OUTPUT_RAW, &
+            &REC3D_DISPATCH_INPROC, REC3D_BACKEND_GRIDDING
+        use simple_parameters,    only: parameters
+        use simple_builder,       only: builder
+        use simple_eo_partition,  only: ensure_field_halves
+        use simple_fileio,        only: file_exists
+        class(parameters),   allocatable :: params
+        class(builder),      allocatable :: build
+        class(cmdline),      allocatable :: cline, cline_rec
+        type(rec3D_service), allocatable :: service
+        type(rec3D_request) :: request
+        integer :: truth_labels(FLEX_PHANTOM_NPTCLS), i
+        write(*,'(A)') 'test_request_settings'
+        truth_labels = [(conformer(i), i = 1, FLEX_PHANTOM_NPTCLS)]
+        call make_project('request', truth_labels)
+        allocate(params, build, cline, cline_rec, service)
+        call cline%set('prg',         'reconstruct3D')
+        call cline%set('projfile',    'phantom.simple')
+        call cline%set('mkdir',       'no')
+        call cline%set('nstates',     NSTATES)
+        call cline%set('state',       2)
+        call cline%set('mskdiam',     FLEX_PHANTOM_MSKDIAM)
+        call cline%set('pgrp',        'c1')
+        call cline%set('rec_backend', 'gridding')
+        call cline%set('postprocess', 'no')
+        call cline%set('oritype',     'ptcl3D')
+        call cline%set('objfun',      'cc')
+        call cline%set('nthr',        NTHR)
+        call build%init_params_and_build_general_tbox(cline, params)
+        call build%build_strategy3D_tbox(params)
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
+        ! the command line volume assembly rebuilds its parameters from, as the FLEX caller gives it
+        cline_rec = cline
+        call cline_rec%set('nstates',   1)
+        call cline_rec%set('rho_floor', 'yes')
+        call cline_rec%set('filt_mode', 'none')
+        call cline_rec%set('automsk',   'no')
+        call cline_rec%delete('state')
+        request%pinds = [(i, i = 1, FLEX_PHANTOM_NPTCLS)]
+        allocate(request%weights_table(FLEX_PHANTOM_NPTCLS,1), source=1.)
+        request%weights       = REC3D_WEIGHTS_TABLE
+        request%backend       = REC3D_BACKEND_GRIDDING
+        request%output        = REC3D_OUTPUT_RAW
+        request%prefix        = 'request'
+        request%register      = .false.
+        request%dispatch      = REC3D_DISPATCH_INPROC
+        request%nstates       = 1
+        request%one_part      = .true.
+        request%no_nonuniform = .true.
+        request%no_trail_rec  = .true.
+        request%all_states    = .true.
+        request%no_automsk    = .true.
+        call service%new(params, build, cline_rec, REC3D_DISPATCH_INPROC, NTHR)
+        call service%execute(params, build, cline_rec, request)
+        call service%kill
+        call assert_true(file_exists(string('request_state01_even.mrc')), 'the request''s one state is reconstructed')
+        call assert_false(file_exists(string('request_state02_even.mrc')), 'no second state is reconstructed')
+        call assert_int(NSTATES, params%nstates, 'the caller''s state count comes back')
+        call assert_true(params%l_state_defined, 'the caller''s state selection comes back')
+        call assert_int(2, params%state, 'the caller''s selected state comes back')
+        call build%kill_strategy3D_tbox
+        call build%kill_general_tbox
+        call cline_rec%kill
+        call cline%kill
+    end subroutine test_request_settings
 
     !> reconstruct3D in this process and directory
     subroutine run_rec3D( backend, l_weighted, extra_key, extra_val )

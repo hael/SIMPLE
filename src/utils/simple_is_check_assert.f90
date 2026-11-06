@@ -5,35 +5,35 @@ use simple_error, only: simple_exception
 implicit none
 
 interface is_a_number
-    module procedure is_a_number_1, is_a_number_2, is_a_number_3, is_a_number_4 
+    module procedure is_a_number_real, is_a_number_cmplx, is_a_number_dp, is_a_number_cmplx_dp 
 end interface
 
 interface is_zero
-    module procedure is_zero_0, is_zero_1, is_zero_2
+    module procedure is_zero_int, is_zero_real, is_zero_dp
 end interface is_zero
 
 interface is_gt_zero
-    module procedure is_gt_zero_0, is_gt_zero_1, is_gt_zero_2
+    module procedure is_gt_zero_int, is_gt_zero_real, is_gt_zero_dp
 end interface is_gt_zero
 
 interface is_equal
-    module procedure is_equal_1, is_equal_2, is_equal_3
+    module procedure is_equal_real, is_equal_dp, is_equal_cmplx
 end interface is_equal
 
 interface is_even
-    module procedure is_even_1, is_even_2
+    module procedure is_even_scalar, is_even_array
 end interface is_even
 
 interface check4nans3D
-    module procedure check4nans3D_1, check4nans3D_2
+    module procedure check4nans3D_real, check4nans3D_cmplx
 end interface
 
 interface check4nans2D
-    module procedure check4nans2D_1, check4nans2D_2 
+    module procedure check4nans2D_real, check4nans2D_cmplx 
 end interface
 
 interface check4nans
-    module procedure check4nans_1, check4nans_2
+    module procedure check4nans_real, check4nans_cmplx
 end interface
 
 interface assert_eq
@@ -42,22 +42,22 @@ end interface assert_eq
 
 contains
 
-    elemental logical function is_even_1( val )
+    elemental logical function is_even_scalar( val )
         integer, intent(in) :: val  !< query val
-        is_even_1 = mod(val,2) == 0
-    end function is_even_1
+        is_even_scalar = mod(val,2) == 0
+    end function is_even_scalar
 
-    pure function is_even_2( arr ) result( yep )
+    pure function is_even_array( arr ) result( yep )
         integer, intent(in) :: arr(:)     !< query vector
         logical :: yep
         logical :: test(size(arr))
         integer :: i
         test = .false.
         do i=1,size(arr)
-            test(i) = is_even_1(arr(i))
+            test(i) = is_even_scalar(arr(i))
         end do
         yep = all(test)
-    end function is_even_2
+    end function is_even_array
 
     !>  returns true if the argument is odd
     elemental logical function is_odd(i)
@@ -66,132 +66,132 @@ contains
     end function is_odd
 
     !>   checking for is_a_number
-    elemental logical function is_a_number_1( number )
+    elemental logical function is_a_number_real( number )
         real, intent(in) :: number  !< input variable for checking
-        is_a_number_1 = .true.
+        is_a_number_real = .true.
         if( number > 0. )then
         else if( number <= 0. )then
         else
-            is_a_number_1 = .false.
+            is_a_number_real = .false.
         endif
-    end function is_a_number_1
+    end function is_a_number_real
 
     !>   validity check of complex number (so that it is not nan)
-    elemental logical function is_a_number_2( complex_number )
+    elemental logical function is_a_number_cmplx( complex_number )
         complex, intent(in) :: complex_number !< input variable for checking
-        is_a_number_2 = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
-    end function is_a_number_2
+        is_a_number_cmplx = is_a_number_real(real(complex_number)) .and. is_a_number_real(aimag(complex_number))
+    end function is_a_number_cmplx
 
      !>   checking for is_a_number
-    elemental logical function is_a_number_3( number )
+    elemental logical function is_a_number_dp( number )
         real(dp), intent(in) :: number  !< input variable for checking
-        is_a_number_3 = .true.
+        is_a_number_dp = .true.
         if( number > 0. )then
         else if( number <= 0. )then
         else
-            is_a_number_3 = .false.
+            is_a_number_dp = .false.
         endif
-    end function is_a_number_3
+    end function is_a_number_dp
 
     !>   validity check of complex number (so that it is not nan)
-    elemental logical function is_a_number_4( complex_number )
+    elemental logical function is_a_number_cmplx_dp( complex_number )
         complex(dp), intent(in) :: complex_number !< input variable for checking
 
-        is_a_number_4 = is_a_number_3(real(complex_number)) .and. is_a_number_3(aimag(complex_number))
-    end function is_a_number_4
+        is_a_number_cmplx_dp = is_a_number_dp(real(complex_number)) .and. is_a_number_dp(aimag(complex_number))
+    end function is_a_number_cmplx_dp
 
     !>   to check if val is zero
-    elemental logical function is_zero_0( val )
+    elemental logical function is_zero_int( val )
         integer, intent(in) :: val  !< query val
-        is_zero_0 = abs(val) == 0
-    end function is_zero_0
+        is_zero_int = abs(val) == 0
+    end function is_zero_int
 
     !>   to check if val is zero
-    elemental logical function is_zero_1( val )
+    elemental logical function is_zero_real( val )
         real, intent(in) :: val  !< query val
-        is_zero_1 = abs(val) < TINY
-    end function is_zero_1
+        is_zero_real = abs(val) < TINY
+    end function is_zero_real
 
         !>   to check if val is zero
-    elemental logical function is_zero_2( val )
+    elemental logical function is_zero_dp( val )
         real(8), intent(in) :: val  !< query val
-        is_zero_2 = abs(val) < DTINY
-    end function is_zero_2
+        is_zero_dp = abs(val) < DTINY
+    end function is_zero_dp
 
     !>   to check if val is zero
-    elemental logical function is_gt_zero_0( val )
+    elemental logical function is_gt_zero_int( val )
         integer, intent(in) :: val  !< query val
-        is_gt_zero_0 = val > 0
+        is_gt_zero_int = val > 0
     end function
 
     !>   to check if val is zero
-    elemental logical function is_gt_zero_1( val )
+    elemental logical function is_gt_zero_real( val )
         real, intent(in) :: val  !< query val
-        is_gt_zero_1 = val > TINY
-    end function is_gt_zero_1
+        is_gt_zero_real = val > TINY
+    end function is_gt_zero_real
 
     !>   to check if val is zero
-    elemental logical function is_gt_zero_2( val )
+    elemental logical function is_gt_zero_dp( val )
         real(8), intent(in) :: val  !< query val
-        is_gt_zero_2 = val > DTINY
-    end function is_gt_zero_2
+        is_gt_zero_dp = val > DTINY
+    end function is_gt_zero_dp
 
     !>   to check if val is zero
-    elemental logical function is_equal_1( val1 , val2)
+    elemental logical function is_equal_real( val1 , val2)
         real, intent(in) :: val1, val2  !< query val
-        is_equal_1 = abs(val1-val2) < TINY
+        is_equal_real = abs(val1-val2) < TINY
     end function
 
     !>   to check if val is zero
-    elemental logical function is_equal_2( val1, val2 )
+    elemental logical function is_equal_dp( val1, val2 )
         real(8), intent(in) :: val1, val2  !< query val
-        is_equal_2 = abs(val1-val2) < DTINY
-    end function is_equal_2
+        is_equal_dp = abs(val1-val2) < DTINY
+    end function is_equal_dp
 
     !>   to check if magnitude of difference is zero
-    elemental logical function is_equal_3( val1, val2 )
+    elemental logical function is_equal_cmplx( val1, val2 )
         complex(4), intent(in) :: val1, val2  !< query val
-        is_equal_3 = abs(val1-val2) < TINY
-    end function is_equal_3
+        is_equal_cmplx = abs(val1-val2) < TINY
+    end function is_equal_cmplx
 
     !>    is for checking the numerical soundness of an vector
-    subroutine check4nans3D_1( arr )
+    subroutine check4nans3D_real( arr )
         real, intent(in)  :: arr(:,:,:)   !< query vector
         real, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
-        call check4nans_1(arr1d)
+        call check4nans_real(arr1d)
         deallocate(arr1d)
-    end subroutine check4nans3D_1
+    end subroutine check4nans3D_real
 
     !>    is for checking the numerical soundness of an vector
-    subroutine check4nans3D_2( arr )
+    subroutine check4nans3D_cmplx( arr )
         complex, intent(in)  :: arr(:,:,:)    !< query vector
         complex, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
-        call check4nans_2(arr1d)
+        call check4nans_cmplx(arr1d)
         deallocate(arr1d)
-    end subroutine check4nans3D_2
+    end subroutine check4nans3D_cmplx
 
     !>    is for checking the numerical soundness of an vector
-    subroutine check4nans2D_1( arr )
+    subroutine check4nans2D_real( arr )
         real, intent(in)  :: arr(:,:)   !< query vector
         real, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
-        call check4nans_1(arr1d)
+        call check4nans_real(arr1d)
         deallocate(arr1d)
-    end subroutine check4nans2D_1
+    end subroutine check4nans2D_real
 
     !>    is for checking the numerical soundness of an vector
-    subroutine check4nans2D_2( arr )
+    subroutine check4nans2D_cmplx( arr )
         complex, intent(in)  :: arr(:,:)   !< query vector
         complex, allocatable :: arr1d(:)
         arr1d = pack(arr, .true.)
-        call check4nans_2(arr1d)
+        call check4nans_cmplx(arr1d)
         deallocate(arr1d)
-    end subroutine check4nans2D_2
+    end subroutine check4nans2D_cmplx
 
     !>    is for checking the numerical soundness of an vector
-    subroutine check4nans_1( arr )
+    subroutine check4nans_real( arr )
         real, intent(in) :: arr(:)   !< query vector
         integer :: i, n_nans
         n_nans = 0
@@ -203,26 +203,26 @@ contains
             endif
         end do
         if( n_nans > 0 )then
-            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_1', n_nans
+            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_real', n_nans
         endif
-    end subroutine check4nans_1
+    end subroutine check4nans_real
 
     !>    is for checking the numerical soundness of an vector
-    subroutine check4nans_2( arr )
+    subroutine check4nans_cmplx( arr )
         complex, intent(in) :: arr(:)   !< query vector
         integer :: i, n_nans
         n_nans = 0
         do i=1,size(arr)
-            if( is_a_number_2(arr(i)) )then
+            if( is_a_number_cmplx(arr(i)) )then
                 ! alles gut
             else
                 n_nans = n_nans+1
             endif
         end do
         if( n_nans > 0 )then
-            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_2', n_nans
+            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_cmplx', n_nans
         endif
-    end subroutine check4nans_2
+    end subroutine check4nans_cmplx
 
     function assert_eq2(n1,n2,string)
         implicit none

@@ -136,7 +136,8 @@ contains
     pure function expected_position( z ) result( xyz )
         integer, intent(in) :: z
         real(dp) :: xyz(3)
-        xyz = fixture_position(z) + 0.5_dp * real(EXPECTED_BOX - 1, dp)
+        ! center_pdbcoord puts the geometric centre (the origin of the fixture) at ldim/2*smpd
+        xyz = fixture_position(z) + real(EXPECTED_BOX / 2, dp)
     end function expected_position
 
     subroutine build_analytical_reference( ldim, reference )

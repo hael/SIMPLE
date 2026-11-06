@@ -126,6 +126,7 @@ contains
         class(ori),                  intent(in)    :: omic
         class(parameters), target,   intent(in)    :: params
         class(dose_curve), optional, intent(in)    :: curve
+        type(string) :: mcconvention
         call self%kill
         self%l_mov = .false.
         if( omic%isthere('mcmodel') )then
@@ -138,6 +139,14 @@ contains
             THROW_WARN('Motion model absent; extracting from the integrated micrograph')
             call self%init_mic(params%box, (params%pcontrast .eq. 'black'))
             return
+        endif
+        ! extraction from frames refers motion to the model's central frame: intg must be registered there too
+        if( omic%isthere('mcconvention') )then
+            mcconvention = omic%get_str('mcconvention')
+            select case(mcconvention%to_char())
+                case('first','relion')
+                    THROW_HARD('extractfrommov=yes needs a motion correction with mcconvention=simple; init_mov')
+            end select
         endif
         self%l_neg = (params%pcontrast .eq. 'black')
         self%box   = params%box

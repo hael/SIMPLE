@@ -50,7 +50,7 @@ contains
         &update_frac_trail_rec, realized_update_frac, trail_counts, wset_id, l_floor_rho, l_carry_forward, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, cfar, timings, frozen_rec, frozen_seed, frozen_carry )
-        use simple_reconstructor,       only: reconstructor, gridding_half_restore
+        use simple_reconstructor,       only: reconstructor, gridding_half_restore, RHO_HDR_BYTES, read_rho_header
         use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
             &write_halfmap_diagnostics, write_support_provenance
         type(parameters),       intent(in)    :: params
@@ -499,8 +499,10 @@ contains
             type(imgfile)     :: ioimg_e, ioimg_o
             real, allocatable :: rho_e(:,:,:), rho_o(:,:,:)
             integer :: current_ldim(3), cshape(3), prev_ldim(3)
-            integer :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
+            integer :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy, hdr_ldim(3), hdr_shape(3)
             real    :: current_smpd, prev_smpd
+            real(dp) :: hdr_smpd, extent_prev, extent_current
+            character(len=:), allocatable :: errmsg
             logical :: here(4), l_pad_with_zeros
             current_ldim = even_rec%get_ldim()
             current_smpd = even_rec%get_smpd()
@@ -535,6 +537,30 @@ contains
                 call fileiochk('read_gridding_pair_accumulators opening '//even_rho%to_char(), ierr)
                 call fopen(fhandle_rho_o, file=odd_rho, status='OLD', action='READ', access='STREAM', iostat=ierr)
                 call fileiochk('read_gridding_pair_accumulators opening '//odd_rho%to_char(), ierr)
+                ! the densities' headers are checked here, serially, before the parallel reads
+                if( l_pad_with_zeros )then
+                    ! a smaller previous density is padded: it holds its numerator's box, over the same extent
+                    do i = 1, 2
+                        if( i == 1 )then
+                            call read_rho_header(fhandle_rho_e, even_rho, hdr_ldim, hdr_shape, hdr_smpd)
+                        else
+                            call read_rho_header(fhandle_rho_o, odd_rho,  hdr_ldim, hdr_shape, hdr_smpd)
+                        endif
+                        if( any(hdr_ldim /= prev_ldim) .or. hdr_shape(1) /= fdim(prev_ldim(1)) )then
+                            errmsg = 'previous gridding density does not hold its numerator''s box: '//fbody%to_char()
+                            THROW_HARD(errmsg)
+                        endif
+                        extent_prev    = real(hdr_ldim(1),dp) * hdr_smpd
+                        extent_current = real(current_ldim(1),dp) * real(current_smpd,dp)
+                        if( abs(extent_prev - extent_current) > 0.01_dp * extent_current )then
+                            errmsg = 'previous gridding density covers another physical extent: '//fbody%to_char()
+                            THROW_HARD(errmsg)
+                        endif
+                    enddo
+                else
+                    call even_rec%check_rho_header(fhandle_rho_e, even_rho)
+                    call odd_rec%check_rho_header(fhandle_rho_o, odd_rho)
+                endif
                 if( l_pad_with_zeros )then
                     call ioimg_e%open(even_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
                     call ioimg_o%open(odd_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
@@ -553,10 +579,10 @@ contains
                             case(2)
                                 call prev_vol_o%read_raw_mrc(ioimg_o)
                             case(3)
-                                read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
+                                read(fhandle_rho_e, pos=RHO_HDR_BYTES+1, iostat=ierr) rho_e
                                 if( ierr /= 0 ) call fileiochk('read_gridding_pair_accumulators reading even rho', ierr)
                             case(4)
-                                read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
+                                read(fhandle_rho_o, pos=RHO_HDR_BYTES+1, iostat=ierr) rho_o
                                 if( ierr /= 0 ) call fileiochk('read_gridding_pair_accumulators reading odd rho', ierr)
                         end select
                     enddo

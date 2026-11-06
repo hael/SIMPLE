@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_defs
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_builder,          only: builder
+use simple_matcher_ptcl_io,  only: pass_team
 implicit none
 
 public :: calc_cartesian_corrmat, calc_inpl_invariant_cc_nomirr
@@ -132,7 +133,7 @@ contains
         class(image),      intent(inout) :: imgs(:)
         integer,      parameter     :: MAXITS_SH = 60
         real,         allocatable   :: inpl_corrs(:)
-        type(pftc_shsrch_grad)      :: grad_shsrch_obj(nthr_glob)
+        type(pftc_shsrch_grad), allocatable ::  grad_shsrch_obj(:)
         type(builder)               :: build
         real,         allocatable   :: ccmat(:,:)
         complex,      allocatable   :: pft(:,:)
@@ -156,7 +157,8 @@ contains
         nrots = build%pftc%get_nrots()
         joint_lims(1:2,:) = lims
         joint_lims(3,:) = [1.-2., real(nrots)+2.]
-        do ithr = 1, nthr_glob
+        allocate(grad_shsrch_obj(pass_team()))   ! one search object per thread of the team in use
+        do ithr = 1, size(grad_shsrch_obj)
             if( trim(params%inpl_cont) == 'yes' )then
                 call grad_shsrch_obj(ithr)%new_joint(build, joint_lims, MAXITS_SH)
             else
@@ -168,7 +170,7 @@ contains
         do i = 1, nimgs
             pft = build%pftc%allocate_pft()
             call imgs(i)%fft()
-            call imgs(i)%polarize(pft)
+            call imgs(i)%polarize(build%pftc%get_pdim_srch(), pft)
             call build%pftc%set_ref_pft(i, pft, iseven=.true.)
             call build%pftc%cp_even_ref2ptcl(i, i)
             call imgs(i)%ifft
@@ -209,9 +211,10 @@ contains
         end do
         !$omp end parallel do
         ! destruct
-        do ithr = 1, nthr_glob
+        do ithr = 1, size(grad_shsrch_obj)
             call grad_shsrch_obj(ithr)%kill
         end do
+        deallocate(grad_shsrch_obj)
         call build%pftc%kill
     end function calc_inpl_invariant_cc_nomirr
 

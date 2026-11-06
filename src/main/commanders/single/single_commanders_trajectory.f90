@@ -250,7 +250,7 @@ contains
         use simple_tseries_graphene_subtr
         class(commander_trajectory_graphene_subtr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)   :: params
+        type(parameters), target :: params
         type(builder)      :: build
         type(image)        :: ave_pre, ave_post, img_tmp, img_tmp2, img_tmp3
         real,  allocatable :: angles1(:), angles2(:)
@@ -274,7 +274,7 @@ contains
         endif
         ! initialize subtracter
         allocate(angles1(nptcls),angles2(nptcls),source=0.)
-        call init_graphene_subtr(params%box,params%smpd)
+        call init_graphene_subtr(params)
         ! init images
         call build%img%new(ldim,params%smpd)       ! particle
         call img_tmp%new(ldim,params%smpd)

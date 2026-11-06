@@ -53,6 +53,7 @@ type star_file
     logical              :: initialised   = .false.
     logical              :: origins_angst  = .false. ! imported particle origins still in Angstrom
     logical              :: coords_centred = .false. ! imported particle coordinates still the centre
+    logical              :: ptcl_import_open = .false. ! a particle import awaits finalise_ptcl_import
 end type star_file
 
 type tilt_info

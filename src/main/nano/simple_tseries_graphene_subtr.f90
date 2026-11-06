@@ -15,26 +15,28 @@ real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
 
 type(polarft_calc) :: pftc
 type(image)        :: pspec_img, filter_img
-type(parameters)   :: params
 real               :: angstep
 integer            :: nrots
 
 contains
 
-    subroutine init_graphene_subtr( box, smpd )
-        integer,  intent(in) :: box
-        real,     intent(in) :: smpd
+    !> the caller's parameters (cc objective): no params%new here, so the caller's threads and seed stay;
+    !! the calculator keeps a pointer to them until kill_graphene_subtr
+    subroutine init_graphene_subtr( params )
+        class(parameters), target, intent(in) :: params
         real,      parameter :: gdist = 1.42
         real,      parameter :: gx    = 0.5
         real,      parameter :: gy    = sin(PI/3.)
         type(atoms)          :: sheet
         type(image)          :: vol, img
-        type(cmdline)        :: cline
         real,    allocatable :: x(:)
         logical, allocatable :: resmask(:)
         complex, allocatable :: pft(:,:)
         real    :: l, cen, offset,y
-        integer :: phys2d(3),phys3d(3),lims(3,2),h,k,i,j,nx,ny,cnt,natoms,imgcen,sh,nyq
+        integer :: phys2d(3),phys3d(3),lims(3,2),h,k,i,j,nx,ny,cnt,natoms,imgcen,sh,nyq,box
+        real    :: smpd
+        box  = params%box
+        smpd = params%smpd
         call kill_graphene_subtr
         ! sheet
         imgcen = box/2+1
@@ -111,12 +113,6 @@ contains
         enddo
         call pspec_img%mul(filter_img)
         ! pftc
-        call cline%set('prg',      'dummy')
-        call cline%set('smpd',     smpd)
-        call cline%set('box',      box)
-        call cline%set('nthr',     1)
-        call cline%set('ctf',      'no')
-        call params%new(cline, silent=.true.)
         call pftc%new(params, 1,[1,1], [5,nyq-1])
         angstep = abs(pftc%get_rot(2)-pftc%get_rot(1))
         nrots   = pftc%get_nrots()
@@ -124,12 +120,11 @@ contains
         call  pspec_img%memoize4polarize(pftc%get_pdim_srch())
         call pspec_img%fft
         pft = pftc%allocate_pft()
-        call pspec_img%polarize(pft)
+        call pspec_img%polarize(pftc%get_pdim_srch(), pft)
         call pftc%set_ref_pft(1, pft, iseven=.true.)
         call pftc%memoize_refs
         ! cleanup
         call sheet%kill
-        call cline%kill
         call img%kill
         if( allocated(pft) ) deallocate(pft)
     end subroutine init_graphene_subtr
@@ -148,8 +143,8 @@ contains
         ! polar coordinates
         call pspec_img%fft()
         pft = pftc%allocate_pft()
-        call pspec_img%polarize(pft)
-        call pftc%set_ref_pft(1, pft, iseven=.true.)
+        call pspec_img%polarize(pftc%get_pdim_srch(), pft)
+        call pftc%set_ptcl_pft(1, pft)
         ! rotational correlations
         call pftc%memoize_ptcls
         call pftc%gen_objfun_vals(1,1,[0.,0.],corrs)

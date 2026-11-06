@@ -10,11 +10,11 @@ contains
         class(sp_project), target, intent(inout) :: spproj
         character(len=*),          intent(in)    :: oritype
         integer, optional,         intent(in)    :: pfromto(2)
-        type(ctfparams) :: ctfparms(nthr_glob)
-        type(ctf)       :: tfuns(nthr_glob)
+        type(ctfparams), allocatable :: ctfparms(:)
+        type(ctf),       allocatable :: tfuns(:)
         real(sp)        :: spaFreqSq_mat(self%pftsz,self%kfromto(1):self%interpklim)
         real(sp)        :: ang_mat(self%pftsz,self%kfromto(1):self%interpklim), hinv,kinv
-        integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
+        integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind,nthr_team
         logical         :: present_pfromto
         present_pfromto = present(pfromto)
         ppfromto = self%pfromto
@@ -30,6 +30,10 @@ contains
             end do
         end do
         !$omp end parallel do
+        ! one CTF per thread of the team the loop runs on
+        nthr_team = 1
+        !$ nthr_team = omp_get_max_threads()
+        allocate(ctfparms(nthr_team), tfuns(nthr_team))
         !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr) schedule(static) proc_bind(close)
         do i=ppfromto(1),ppfromto(2)
             if( .not. present_pfromto )then
@@ -49,6 +53,7 @@ contains
             endif
         end do
         !$omp end parallel do
+        call self%bump_ptcl_gen
     end subroutine create_polar_absctfmats
 
 end submodule simple_polarft_ctf

@@ -21,8 +21,8 @@ type stack_io
     real          :: smpd    = 0.
     logical       :: ft = .false., l_read = .false., l_open = .false.
 contains
-    procedure, private :: open_1, open_2
-    generic            :: open => open_1, open_2
+    procedure, private :: open_box, open_ldim
+    generic            :: open => open_box, open_ldim
     procedure          :: stk_is_open
     procedure          :: get_nptcls
     procedure          :: get_ldim
@@ -37,7 +37,7 @@ end type stack_io
 
 contains
 
-    subroutine open_1( self, stkname, smpd, rwaction, is_ft, box, bufsz, wfloat16 )
+    subroutine open_box( self, stkname, smpd, rwaction, is_ft, box, bufsz, wfloat16 )
         class(stack_io),   intent(inout) :: self
         class(string),     intent(in)    :: stkname
         character(len=*),  intent(in)    :: rwaction
@@ -47,13 +47,13 @@ contains
         integer, optional, intent(in)    :: bufsz
         logical, optional, intent(in)    :: wfloat16
         if( present(box) ) then
-            call self%open_2(stkname, smpd, rwaction, [box,box], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
+            call self%open_ldim(stkname, smpd, rwaction, [box,box], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
         else
-            call self%open_2(stkname, smpd, rwaction, [0,0], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
+            call self%open_ldim(stkname, smpd, rwaction, [0,0], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
         endif
-    end subroutine open_1
+    end subroutine open_box
 
-    subroutine open_2( self, stkname, smpd, rwaction, ldim, is_ft, bufsz, wfloat16 )
+    subroutine open_ldim( self, stkname, smpd, rwaction, ldim, is_ft, bufsz, wfloat16 )
         class(stack_io),   intent(inout) :: self
         class(string),     intent(in)    :: stkname
         character(len=*),  intent(in)    :: rwaction
@@ -116,7 +116,7 @@ contains
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)
         call self%buffer%get_rmat_ptr(self%rmat_ptr)
         self%l_open = .true.
-    end subroutine open_2
+    end subroutine open_ldim
 
     logical function stk_is_open( self )
         class(stack_io), intent(in) :: self

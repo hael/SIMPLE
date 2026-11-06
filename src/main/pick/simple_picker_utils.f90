@@ -72,24 +72,31 @@ contains
         call refp_refine%kill
     end subroutine exec_refpick
 
-    subroutine exec_segdiampick( params, micname, boxfile_out, smpd, nptcls, moldiam_max, dir_out )
+    subroutine exec_segdiampick( params, micname, boxfile_out, thumb_den_out, smpd, nptcls, moldiam_max, dir_out )
         class(parameters),          intent(in)  :: params
         class(string),              intent(in)  :: micname
-        class(string),              intent(out) :: boxfile_out
+        class(string),              intent(out) :: boxfile_out, thumb_den_out
         real,                       intent(in)  :: smpd    !< sampling distance in A
         integer,                    intent(out) :: nptcls
         real,                       intent(in)  :: moldiam_max
         class(string), optional,    intent(in)  :: dir_out
-        type(string)      :: boxfile
+        type(string)      :: boxfile, fbody_here, ext, fname_thumb_den
         type(picksegdiam) :: picker
+        fbody_here      = basename(micname)
+        ext             = fname2ext(fbody_here)
+        fbody_here      = get_fbody(fbody_here, ext)
+        fname_thumb_den = fbody_here//DEN_SUFFIX//JPG_EXT
         boxfile = basename(fname_new_ext(micname,'box'))
-        if( present(dir_out) ) boxfile = dir_out//'/'//boxfile%to_char()
-        call picker%pick(micname, SMPD, moldiam_max, params%pcontrast)
+        if( present(dir_out) ) boxfile         = dir_out//'/'//boxfile%to_char()
+        if( present(dir_out) ) fname_thumb_den = dir_out//'/'//fname_thumb_den%to_char()
+        call picker%pick(micname, SMPD, moldiam_max, params%pcontrast, thumbfname=fname_thumb_den)
         call picker%write_pos_and_diams(boxfile, nptcls)
         if( nptcls == 0 )then
-            boxfile_out = ''
+            boxfile_out   = ''
+            thumb_den_out = ''
         else
-            boxfile_out = simple_abspath(boxfile)
+            boxfile_out   = simple_abspath(boxfile)
+            thumb_den_out = simple_abspath(fname_thumb_den)
         endif
     end subroutine exec_segdiampick
 

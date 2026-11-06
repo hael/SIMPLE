@@ -35,8 +35,7 @@ to many importers and are not to grow. What a router or commander does is in `ex
 - A new router module's `use` goes into the API module of its executable, not into the
   `production/` file, which holds only the call (skill `simple-main-exec`). A new worker's
   commander goes into `simple_private_exec_api`; the dispatch is `dispatch_private_prg` in
-  `production/simple_private_exec_driver.f90` (the module's header comment, which says
-  `simple_exec`, is out of date).
+  `production/simple_private_exec_driver.f90` (`simple_private_exec_api`'s header lists the steps).
 - Removing a name from an umbrella is a compile error in each module that used it through the
   umbrella: give that module its own `use ..., only:`.
 

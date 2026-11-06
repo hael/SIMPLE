@@ -41,14 +41,14 @@ type :: stream_http_communicator
     procedure           :: arg_associated
     procedure           :: destroy_arg
     ! JSON MODIFIERS
-    procedure, private  :: update_json_1, update_json_2, update_json_3, update_json_4
-    generic             :: update_json => update_json_1, update_json_2, update_json_3, update_json_4
-    procedure, private  :: add_to_json_1, add_to_json_2, add_to_json_3, add_to_json_4, add_to_json_5
-    generic             :: add_to_json => add_to_json_1, add_to_json_2, add_to_json_3, add_to_json_4, add_to_json_5
+    procedure, private  :: update_json_char, update_json_int, update_json_dp, update_json_logical
+    generic             :: update_json => update_json_char, update_json_int, update_json_dp, update_json_logical
+    procedure, private  :: add_to_json_int, add_to_json_dp, add_to_json_char, add_to_json_jval, add_to_json_logical
+    generic             :: add_to_json => add_to_json_int, add_to_json_dp, add_to_json_char, add_to_json_jval, add_to_json_logical
     procedure           :: remove_from_json_if_present
     ! JSON GETTERS
-    procedure, private  :: get_json_arg_1, get_json_arg_2, get_json_arg_3, get_json_arg_4, get_json_arg_5
-    generic             :: get_json_arg => get_json_arg_1, get_json_arg_2, get_json_arg_3, get_json_arg_4, get_json_arg_5
+    procedure, private  :: get_json_arg_int, get_json_arg_dp, get_json_arg_char, get_json_arg_logical, get_json_arg_int_arr
+    generic             :: get_json_arg => get_json_arg_int, get_json_arg_dp, get_json_arg_char, get_json_arg_logical, get_json_arg_int_arr
 end type stream_http_communicator
 
 contains
@@ -345,69 +345,69 @@ contains
 
     ! JSON MODIFIERS
 
-    subroutine update_json_1(self, key, value, found )
+    subroutine update_json_char(self, key, value, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key, value
         logical,                         intent(out)   :: found
         call self%json%update(self%job_json, trim(key), trim(value), found)
-    end subroutine update_json_1
+    end subroutine update_json_char
 
-    subroutine update_json_2(self, key, ival, found )
+    subroutine update_json_int(self, key, ival, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         integer,                         intent(in)    :: ival
         logical,                         intent(out)   :: found
         call self%json%update(self%job_json, trim(key), ival, found)
-    end subroutine update_json_2
+    end subroutine update_json_int
 
-    subroutine update_json_3(self, key, rval, found )
+    subroutine update_json_dp(self, key, rval, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         real(dp),                        intent(in)    :: rval
         logical,                         intent(out)   :: found
         call self%json%update(self%job_json, trim(key), rval, found)
-    end subroutine update_json_3
+    end subroutine update_json_dp
    
-    subroutine update_json_4(self, key, lval, found )
+    subroutine update_json_logical(self, key, lval, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         logical,                         intent(in)    :: lval
         logical,                         intent(out)   :: found
         call self%json%update(self%job_json, trim(key), lval, found)
-    end subroutine update_json_4
+    end subroutine update_json_logical
 
-    subroutine add_to_json_1( self, key, ival )
+    subroutine add_to_json_int( self, key, ival )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         integer,                         intent(in)    :: ival
         call self%json%add(self%job_json, trim(key), ival)
-    end subroutine add_to_json_1
+    end subroutine add_to_json_int
 
-    subroutine add_to_json_2( self, key, rval )
+    subroutine add_to_json_dp( self, key, rval )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         real(dp),                        intent(in)    :: rval
         call self%json%add(self%job_json, trim(key), rval)
-    end subroutine add_to_json_2
+    end subroutine add_to_json_dp
 
-    subroutine add_to_json_3( self, key, value )
+    subroutine add_to_json_char( self, key, value )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key, value
         call self%json%add(self%job_json, trim(key), trim(value))
-    end subroutine add_to_json_3
+    end subroutine add_to_json_char
 
-    subroutine add_to_json_4( self, jval )
+    subroutine add_to_json_jval( self, jval )
         class(stream_http_communicator), intent(inout) :: self
         type(json_value), pointer,       intent(in)    :: jval
         call self%json%add(self%job_json, jval)
-    end subroutine add_to_json_4
+    end subroutine add_to_json_jval
 
-    subroutine add_to_json_5( self, key, lval )
+    subroutine add_to_json_logical( self, key, lval )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         logical,                         intent(in)    :: lval
         call self%json%add(self%job_json, trim(key), lval)
-    end subroutine add_to_json_5
+    end subroutine add_to_json_logical
 
     subroutine remove_from_json_if_present( self, str )
         class(stream_http_communicator), intent(inout) :: self
@@ -417,45 +417,45 @@ contains
 
     ! JSON GETTERS
 
-    subroutine get_json_arg_1( self, key, ival, found )
+    subroutine get_json_arg_int( self, key, ival, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         integer,                         intent(inout) :: ival
         logical,                         intent(out)   :: found
         call self%json%get(self%update_arguments, trim(key), ival, found)
-    end subroutine get_json_arg_1
+    end subroutine get_json_arg_int
 
-    subroutine get_json_arg_2( self, key, rval, found )
+    subroutine get_json_arg_dp( self, key, rval, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         real(dp),                        intent(inout) :: rval
         logical,                         intent(out)   :: found
         call self%json%get(self%update_arguments, trim(key), rval, found)
-    end subroutine get_json_arg_2
+    end subroutine get_json_arg_dp
 
-    subroutine get_json_arg_3( self, key, str, found )
+    subroutine get_json_arg_char( self, key, str, found )
         class(stream_http_communicator),       intent(inout) :: self
         character(len=*),                      intent(in)    :: key
         character(kind=CK,len=:), allocatable, intent(inout) :: str
         logical,                               intent(out)   :: found
         call self%json%get(self%update_arguments, trim(key), str, found)
-    end subroutine get_json_arg_3
+    end subroutine get_json_arg_char
 
-    subroutine get_json_arg_4( self, key, lval, found )
+    subroutine get_json_arg_logical( self, key, lval, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         logical,                         intent(inout) :: lval
         logical,                         intent(out)   :: found
         call self%json%get(self%update_arguments, trim(key), lval, found)
-    end subroutine get_json_arg_4
+    end subroutine get_json_arg_logical
 
-    subroutine get_json_arg_5( self, key, iarr, found )
+    subroutine get_json_arg_int_arr( self, key, iarr, found )
         class(stream_http_communicator), intent(inout) :: self
         character(len=*),                intent(in)    :: key
         integer, allocatable,            intent(inout) :: iarr(:)
         logical,                         intent(out)   :: found
         if( allocated(iarr) ) deallocate(iarr)
         call self%json%get(self%update_arguments, trim(key), iarr, found)
-    end subroutine get_json_arg_5
+    end subroutine get_json_arg_int_arr
 
 end module simple_stream_communicator

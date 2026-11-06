@@ -450,7 +450,7 @@ contains
                 call o%getter('intg', intg_name)
                 call piter%iterate(params, cline, params%smpd, intg_name, output_dir, boxfile, thumb_den, nptcls_out)
                 call spproj%set_boxfile(imic, boxfile, nptcls=nptcls_out)
-                if( params%nmoldiams == 1 ) call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
+                if( params%nmoldiams == 1 .and. .not. thumb_den%is_blank() ) call spproj%os_mic%set(imic, 'thumb_den', thumb_den)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
