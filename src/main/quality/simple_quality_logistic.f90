@@ -17,6 +17,7 @@ public :: LEARN_ROLE_SKIP, LEARN_ROLE_BALANCED, LEARN_ROLE_RECALL_ONLY, LEARN_RO
 public :: LOGISTIC_LAMBDAS, LOGISTIC_THRESHOLDS, LEARN_ROBUST_TAIL_FRAC, LEARN_ROBUST_TAIL_WEIGHT
 public :: LEARN_BALANCED_GOOD_LOSS_WEIGHT, LEARN_BALANCED_BAD_LOSS_WEIGHT
 public :: run_all_quality_logistic_tests
+public :: stable_sigmoid_8
 
 integer, parameter :: QUALITY_MAX_FEATS        = 16   !< the largest feature bank of any quality model
 integer, parameter :: QUALITY_MAX_INTERACTIONS = (QUALITY_MAX_FEATS * (QUALITY_MAX_FEATS - 1)) / 2
@@ -59,13 +60,6 @@ contains
     procedure :: fdf
     procedure :: kill
 end type quality_logistic_problem
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module real(kind=8) function stable_sigmoid_8( eta )
-        real(kind=8), intent(in) :: eta
-    end function stable_sigmoid_8
-end interface
 
 interface
     !> white-box tests (submodule simple_quality_logistic_tester, built only with BUILD_TESTS=ON)
@@ -271,7 +265,7 @@ contains
         end select
     end subroutine logistic_fdf_wrapper
 
-    module real(kind=8) function stable_sigmoid_8( eta )
+    real(kind=8) function stable_sigmoid_8( eta )
         real(kind=8), intent(in) :: eta
         real(kind=8) :: z
         if( eta >= 0.0d0 )then

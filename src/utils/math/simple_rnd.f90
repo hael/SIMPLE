@@ -17,6 +17,7 @@ public :: rnd_run_seed, ensure_run_seed, set_run_seed, rnd_scope_key, rnd_draw_k
 public :: RND_FAM_SAMPLE, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, RND_FAM_DIAG
 public :: RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_PASS_POLISH, RND_PASS_FINAL, RND_PASS_DIAG
 public :: run_all_rnd_tests
+public :: rnd_keyed_bits, rnd_key_lanes, rnd_bits_to_unit, rnd_scope
 private
 #include "simple_local_flags.inc"
 
@@ -106,26 +107,6 @@ type :: rnd_key
     integer        :: reference = 0                 !< the canonical reference (state, direction or class), where the family has one
     integer        :: ordinal   = 0                 !< the sub-draw's ordinal within the family for the particle
 end type rnd_key
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module pure integer function rnd_scope( program, pass )
-        integer, intent(in) :: program, pass
-    end function rnd_scope
-
-    module pure function rnd_key_lanes( key ) result( lanes )
-        type(rnd_key), intent(in) :: key
-        integer(int64) :: lanes(RND_KEY_NLANES)
-    end function rnd_key_lanes
-
-    module pure integer(int64) function rnd_keyed_bits( key ) result( word )
-        type(rnd_key), intent(in) :: key
-    end function rnd_keyed_bits
-
-    module pure real(dp) function rnd_bits_to_unit( word )
-        integer(int64), intent(in) :: word
-    end function rnd_bits_to_unit
-end interface
 
 interface
     !> white-box tests (submodule simple_rnd_tester, built only with BUILD_TESTS=ON)
@@ -737,14 +718,14 @@ contains
     ! ---- the keyed generator ----
 
     !> the scope of a logical pass: the program (RND_PROG_*) and the pass kind (RND_PASS_*)
-    module pure integer function rnd_scope( program, pass )
+    pure integer function rnd_scope( program, pass )
         integer, intent(in) :: program, pass
         rnd_scope = RND_SCOPE_STRIDE * program + pass
     end function rnd_scope
 
     !> the key's nine 32-bit lanes in the pinned order, each as a non-negative 64-bit integer below 2^32 (a negative
     !! field contributes its two's-complement low word)
-    module pure function rnd_key_lanes( key ) result( lanes )
+    pure function rnd_key_lanes( key ) result( lanes )
         type(rnd_key), intent(in) :: key
         integer(int64) :: lanes(RND_KEY_NLANES)
         lanes(1) = iand(key%seed, RND_MASK32)
@@ -771,7 +752,7 @@ contains
 
     !> the 64-bit word of a key: the lanes absorbed in order into two 32-bit lanes (a takes the lane, b chains on a
     !! and the lane's position), then cross-finalised; a is the word's high 32 bits
-    module pure integer(int64) function rnd_keyed_bits( key ) result( word )
+    pure integer(int64) function rnd_keyed_bits( key ) result( word )
         type(rnd_key), intent(in) :: key
         integer(int64) :: lanes(RND_KEY_NLANES), a, b
         integer :: i
@@ -788,7 +769,7 @@ contains
     end function rnd_keyed_bits
 
     !> the unit variate of a 64-bit word: its top 53 bits over 2^53, in [0,1)
-    module pure real(dp) function rnd_bits_to_unit( word )
+    pure real(dp) function rnd_bits_to_unit( word )
         integer(int64), intent(in) :: word
         rnd_bits_to_unit = real(shiftr(word, 11), dp) / RND_TWO53
     end function rnd_bits_to_unit

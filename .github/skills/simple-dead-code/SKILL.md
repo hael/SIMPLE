@@ -59,7 +59,9 @@ tester (probe, run N)"; a search result is a "candidate".
 
 - Production users: leave it public.
 - Only its own tester: make it private and turn the tester into a submodule
-  (`doc/policies/test_environment_policy.md` section 4.3).
+  (`doc/policies/test_environment_policy.md` section 4.3), except a plain module procedure: it stays
+  public, since gfortran before 16 does not link a private one from the submodule (the Linux
+  builds; the Mac's gfortran 16 links it, `scripts/check_tester_linkage.py` in the gate finds it).
 - Only tests in several files: it stays public, or the tests move: say which.
 - No production users: dead in production, whatever its tests. Policy deletes dead code with its tests;
   for the API of a general-purpose class (`image`, `oris`, `string`, the containers) the owner decides.

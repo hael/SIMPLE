@@ -18,7 +18,7 @@
 # Exit status is the budget checker's.
 #
 # Before ctest, the source-boundary/descriptor, registry, FLEX dependency-DAG,
-# guide-import and command-line-chain checks run; a mismatch, multi-unit source, upward dependency or cycle fails
+# guide-import, command-line-chain and tester-linkage checks run; a mismatch, multi-unit source, upward dependency or cycle fails
 # the gate before any test runs. Source files under src/ and production/ that
 # git does not track are listed as a warning: the library globs its sources, so
 # such a file builds here and is missing from a commit of the tree.
@@ -41,6 +41,7 @@ python3 "$ROOT/scripts/check_descr.py" "$ROOT" || exit 1
 python3 "$ROOT/scripts/check_flex_dag.py" "$ROOT" || exit 1
 python3 "$ROOT/scripts/check_guide_imports.py" "$ROOT" || exit 1
 python3 "$ROOT/scripts/check_cli_chain.py" "$ROOT" || exit 1
+python3 "$ROOT/scripts/check_tester_linkage.py" "$ROOT" || exit 1
 # The nightly build broke twice on commits that left out a new source file
 # (2026-10-28, 2026-10-31). Untracked work in progress is normal: warn, never fail.
 if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then

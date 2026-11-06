@@ -13,6 +13,7 @@ public :: expected_false_count
 public :: fit_gauss_width, local_maxima
 public :: MIN_SEPARATION, MIN_CLASS_ATOMS, MIN_CLASS_FRAC
 public :: run_all_nano_species_tests
+public :: maxima_shape
 private
 #include "simple_local_flags.inc"
 
@@ -32,13 +33,6 @@ integer,  parameter :: NITER_SLOPE     = 20     ! alternations of the class fit 
 real(dp), parameter :: SLOPE_TOL_REL   = 1.d-3  ! the slope has converged when it moves by less than this mean intensity
 real(dp), parameter :: TOL_SLOPE_EM    = 1.d-4  ! EM tolerance of the class fits inside the alternation
 real(dp), parameter :: TOL_SLOPE_FIN   = 1.d-6  ! EM tolerance of the class fit at the slope chosen
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module elemental real function maxima_shape( u )
-        real, intent(in) :: u
-    end function maxima_shape
-end interface
 
 interface
     !> white-box tests (submodule simple_nano_species_tester, built only with BUILD_TESTS=ON)
@@ -172,7 +166,7 @@ contains
 
     ! u dependence of the expected number of maxima above u of a smooth Gaussian field in 3D
     ! (Euler characteristic density): C (u**2 - 1) exp(-u**2 / 2)
-    module elemental real function maxima_shape( u )
+    elemental real function maxima_shape( u )
         real, intent(in) :: u
         maxima_shape = (u * u - 1.) * exp(-0.5 * u * u)
     end function maxima_shape

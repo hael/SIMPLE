@@ -22,27 +22,13 @@ implicit none
 
 public :: match_cavgs_to_states
 public :: run_all_cavgs_state_match_tests
+public :: matched_pose, reduce_state_matches
 private
 #include "simple_local_flags.inc"
 
 real,    parameter :: LP_SAMPLING   = 3.   ! the matched images' pixel size is lp/LP_SAMPLING (or the inputs' when coarser)
 real,    parameter :: HP_MATCH      = 100. ! high-pass limit of the alignment (A)
 integer, parameter :: BOX_MATCH_MIN = 32   ! the matched images' box at least (or the input's when smaller)
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module pure subroutine reduce_state_matches( corr, nstates, nspace, best_state, best_ref, best_corr, margin )
-        real,    intent(in)  :: corr(:,:)
-        integer, intent(in)  :: nstates, nspace
-        integer, intent(out) :: best_state(:), best_ref(:)
-        real,    intent(out) :: best_corr(:), margin(:)
-    end subroutine reduce_state_matches
-
-    module pure function matched_pose( eul_dir, e3_match ) result( euls )
-        real, intent(in) :: eul_dir(3), e3_match
-        real :: euls(3)
-    end function matched_pose
-end interface
 
 interface
     !> white-box tests (submodule simple_cavgs_state_match_tester, built only with BUILD_TESTS=ON)
@@ -210,7 +196,7 @@ contains
     !> From the correlations @p corr of every reference (nstates blocks of @p nspace, state by state)
     !! with every class (columns), per class: its best state, best reference, best correlation, and
     !! the margin of that correlation over the best of any other state (0 with one state).
-    module pure subroutine reduce_state_matches( corr, nstates, nspace, best_state, best_ref, best_corr, margin )
+    pure subroutine reduce_state_matches( corr, nstates, nspace, best_state, best_ref, best_corr, margin )
         real,    intent(in)  :: corr(:,:)
         integer, intent(in)  :: nstates, nspace
         integer, intent(out) :: best_state(:), best_ref(:)
@@ -239,7 +225,7 @@ contains
     !> The 3D pose of an image matched to the projection along @p eul_dir (its in-plane angle
     !! ignored) at in-plane rotation @p e3_match (the alignment's angle, degrees), in refine3D's
     !! convention: the direction's first two angles, and 360 less the rotation.
-    module pure function matched_pose( eul_dir, e3_match ) result( euls )
+    pure function matched_pose( eul_dir, e3_match ) result( euls )
         real, intent(in) :: eul_dir(3), e3_match
         real :: euls(3)
         euls(1) = eul_dir(1)

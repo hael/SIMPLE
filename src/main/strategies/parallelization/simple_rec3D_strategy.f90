@@ -15,6 +15,7 @@ implicit none
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy
 public :: rec3D_pcg_inmem_strategy, run_rec3D
 public :: run_all_rec3D_strategy_tests
+public :: create_rec3D_strategy
 private
 #include "simple_local_flags.inc"
 
@@ -81,14 +82,6 @@ abstract interface
 end interface
 
 interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module function create_rec3D_strategy(cline) result(strategy)
-        class(cmdline), intent(in) :: cline
-        class(rec3D_strategy), allocatable :: strategy
-    end function create_rec3D_strategy
-end interface
-
-interface
     !> white-box tests (submodule simple_rec3D_strategy_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_rec3D_strategy_tests()
     end subroutine run_all_rec3D_strategy_tests
@@ -100,7 +93,7 @@ contains
     ! Strategy selection
     ! --------------------------------------------------------------------
 
-    module function create_rec3D_strategy(cline) result(strategy)
+    function create_rec3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(rec3D_strategy), allocatable :: strategy
         type(string) :: backend

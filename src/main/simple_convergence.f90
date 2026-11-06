@@ -7,6 +7,7 @@ implicit none
 
 public :: convergence
 public :: run_all_convergence_tests
+public :: cont_particle_stable
 private
 
 
@@ -53,14 +54,6 @@ type convergence
     procedure, private :: res_two_back
     procedure, private :: record_res
 end type convergence
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module elemental logical function cont_particle_stable( status, rot_deg, shift_a, rot_lim, shift_lim ) result( stable )
-        integer, intent(in) :: status
-        real,    intent(in) :: rot_deg, shift_a, rot_lim, shift_lim
-    end function cont_particle_stable
-end interface
 
 interface
     !> white-box tests (submodule simple_convergence_tester, built only with BUILD_TESTS=ON)
@@ -886,7 +879,7 @@ contains
 
     !> a particle of a refine=cont pass is stable when its transaction ended accepted or with a finite
     !! no-improvement and it moved by at most rot_lim (degrees) and shift_lim (A)
-    module elemental logical function cont_particle_stable( status, rot_deg, shift_a, rot_lim, shift_lim ) result( stable )
+    elemental logical function cont_particle_stable( status, rot_deg, shift_a, rot_lim, shift_lim ) result( stable )
         use simple_cartft_pose_opt, only: CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT
         integer, intent(in) :: status
         real,    intent(in) :: rot_deg, shift_a, rot_lim, shift_lim

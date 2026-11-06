@@ -28,6 +28,7 @@ public :: strip_refine3D_search_only_args
 public :: stage_refine3D_local_references, stage_refine3D_local_chain, stage_refine3D_local_sigma2
 public :: select_refine3D_state_rows
 public :: run_all_refine3D_staging_tests
+public :: adopt_refine3D_reference, stage_reference_derivatives
 
 private
 #include "simple_local_flags.inc"
@@ -166,25 +167,6 @@ abstract interface
 end interface
 
 interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module subroutine adopt_refine3D_reference( params, cline, state, volume )
-        class(parameters), intent(inout) :: params
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: state
-        class(string),     intent(in)   :: volume
-    end subroutine adopt_refine3D_reference
-
-    module logical function stage_reference_derivatives( params, reference, staged, align_lp, message ) result(reused)
-        use simple_refine3D_provenance, only: refine3D_provenance
-        class(parameters), intent(in)          :: params
-        class(refine3D_provenance), intent(in) :: reference
-        class(string), intent(in)              :: staged
-        real,             intent(out)          :: align_lp
-        character(len=*), intent(out)          :: message
-    end function stage_reference_derivatives
-end interface
-
-interface
     !> white-box tests (submodule simple_refine3D_strategy_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_refine3D_staging_tests()
     end subroutine run_all_refine3D_staging_tests
@@ -193,7 +175,7 @@ end interface
 contains
 
     !> Adopt an assembled reference triplet; no project or map files are written.
-    module subroutine adopt_refine3D_reference( params, cline, state, volume )
+    subroutine adopt_refine3D_reference( params, cline, state, volume )
         class(parameters), intent(inout) :: params
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: state
@@ -381,7 +363,7 @@ contains
     end subroutine stage_refine3D_local_references
 
     ! Only recorded, compatible derivatives travel; embedded NU support needs no matcher remasking.
-    module logical function stage_reference_derivatives( params, reference, staged, align_lp, message ) result(reused)
+    logical function stage_reference_derivatives( params, reference, staged, align_lp, message ) result(reused)
         use simple_refine3D_provenance, only: refine3D_provenance
         use simple_parameters,          only: parameters
         use simple_string,              only: string

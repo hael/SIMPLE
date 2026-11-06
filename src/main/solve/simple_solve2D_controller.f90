@@ -13,6 +13,7 @@ public :: solve2D_first_shift_stage, solve2D_mskdiam_estimate
 public :: solve2D_class_frc05_quantile, solve2D_stage_behind_frc05
 public :: FRC05_SKIP_PTCL_FRAC
 public :: run_all_solve2D_stage_rule_tests
+public :: frc05_ptcl_quantile
 private
 #include "simple_local_flags.inc"
 
@@ -53,18 +54,6 @@ type refine2D_stage_cfg
     logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
     logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
 end type refine2D_stage_cfg
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
-        real,           intent(in)  :: res05s(:) !< FRC=0.5 resolution per class (A)
-        integer,        intent(in)  :: pops(:)   !< population per class
-        real,           intent(in)  :: frac
-        real,           intent(out) :: res05_q
-        real, optional, intent(in)  :: lp
-        real, optional, intent(out) :: frac_past
-    end subroutine frc05_ptcl_quantile
-end interface
 
 interface
     !> white-box tests (submodule simple_solve2D_controller_tester, built only with BUILD_TESTS=ON)
@@ -462,7 +451,7 @@ contains
     !! their FRC=0.5 crossing, the populations cumulated to frac of their total (the lower weighted quantile; 0.5 is
     !! the median particle's class resolution, which a few overfit or empty classes cannot move). frac_past is the
     !! population fraction in classes past lp. A class with pop < 1 is left out; 0 without a populated class.
-    module subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
+    subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
         real,           intent(in)  :: res05s(:) !< FRC=0.5 resolution per class (A)
         integer,        intent(in)  :: pops(:)   !< population per class
         real,           intent(in)  :: frac

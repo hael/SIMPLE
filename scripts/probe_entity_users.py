@@ -187,7 +187,10 @@ def restore(root, backup):
         sys.exit("no backups in " + backup)
     n = 0
     for name in os.listdir(backup):
-        shutil.copy2(os.path.join(backup, name), os.path.join(root, name.replace("__", "/")))
+        dst = os.path.join(root, name.replace("__", "/"))
+        shutil.copyfile(os.path.join(backup, name), dst)
+        # a new time stamp: a tree that compiled the probed file must compile it again
+        os.utime(dst, None)
         n += 1
     shutil.rmtree(backup)
     print("restored %d files" % n)

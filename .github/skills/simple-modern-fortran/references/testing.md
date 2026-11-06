@@ -44,7 +44,9 @@ The rule set is `doc/policies/test_environment_policy.md`; section numbers below
   table imports it from the module. The submodule does not re-`use` a name the module has (also
   through `simple_core_module_api`), declares no procedure or constant with a module's name, and
   cannot restore an intrinsic the module shadows (`TINY` hides `tiny`). Never make an entity public
-  only for a tester.
+  only for a tester, except a plain module procedure the submodule calls: gfortran before 16 gives a
+  private one internal linkage and the Linux build does not link (`check_tester_linkage.py`); a
+  private binding, constant, variable or separate module procedure links.
 - A fixture or check several tests share is a module `simple_test_<x>_fixture` in
   `src/main/commanders/test/`, never a public procedure of a tester.
 - No `stop`, `error stop`, `simple_end` or `report_summary`; `THROW_HARD` only for a broken fixture.
@@ -66,7 +68,7 @@ The rule set is `doc/policies/test_environment_policy.md`; section numbers below
 ## Before handing over (4.5)
 
 - The gate's checks: `scripts/check_descr.py`, `check_test_registry.py`, `check_flex_dag.py`,
-  `check_guide_imports.py`, `check_cli_chain.py`; then the build and the fast gate.
+  `check_guide_imports.py`, `check_cli_chain.py`, `check_tester_linkage.py`; then the build and the fast gate.
 - `SIMPLE_UNIT_ORDER=reverse` on the area suite: sub-suites do not depend on each other.
 - A threaded routine gets a check that forces a team and compares with the serial result; nothing
   else runs the fast tier on more threads.

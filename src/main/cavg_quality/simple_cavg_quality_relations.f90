@@ -18,6 +18,7 @@ private
 public :: CAVG_RELATIONAL_FEATURE_NAME
 public :: cavg_quality_relation_analysis
 public :: run_all_cavg_quality_relations_tests
+public :: calculate_promoted_feature
 
 character(len=*), parameter :: CAVG_RELATIONAL_FEATURE_NAME = 'signal_stats_anchor_topk_mean'
 
@@ -39,15 +40,6 @@ contains
     procedure :: calculate => calculate_relation_analysis
     procedure :: kill      => kill_relation_analysis
 end type cavg_quality_relation_analysis
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module subroutine calculate_promoted_feature( cc, distance, class_inds, k_requested, raw )
-        real,    intent(in)    :: cc(:,:), distance(:,:)
-        integer, intent(in)    :: class_inds(:), k_requested
-        real,    intent(inout) :: raw(:)
-    end subroutine calculate_promoted_feature
-end interface
 
 interface
     !> white-box tests (submodule simple_cavg_quality_relations_tester, built only with BUILD_TESTS=ON)
@@ -121,7 +113,7 @@ contains
         call dealloc_imgarr(fit_imgs)
     end subroutine calculate_relation_analysis
 
-    module subroutine calculate_promoted_feature( cc, distance, class_inds, k_requested, raw )
+    subroutine calculate_promoted_feature( cc, distance, class_inds, k_requested, raw )
         real,    intent(in)    :: cc(:,:), distance(:,:)
         integer, intent(in)    :: class_inds(:), k_requested
         real,    intent(inout) :: raw(:)

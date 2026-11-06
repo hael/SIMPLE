@@ -10,6 +10,7 @@ implicit none
 public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi
 public :: RHO_HDR_BYTES, read_rho_header
 public :: run_all_reconstructor_tests
+public :: wiener_ridge
 private
 #include "simple_local_flags.inc"
 
@@ -110,13 +111,6 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
     procedure          :: kill => kill_reconstructor
 end type reconstructor
-
-interface
-    ! Private module procedures retain linkage for descendant submodules.
-    module pure real function wiener_ridge( tau2, fudge, rho ) result( invtau2 )
-        real, intent(in) :: tau2, fudge, rho
-    end function wiener_ridge
-end interface
 
 interface
     !> white-box tests (submodule simple_reconstructor_tester, built only with BUILD_TESTS=ON)
@@ -1354,7 +1348,7 @@ contains
     !! tau2 = 0.001 sig2 fell under 1e-10 (PfCRT, 2026-10-25: the final map's power beyond the FSC=0.143 cutoff was
     !! 6.7 times the power of its 10 A to cutoff band, pure noise that the postprocess sharpened and the Butterworth
     !! let through as grain)
-    module pure real function wiener_ridge( tau2, fudge, rho ) result( invtau2 )
+    pure real function wiener_ridge( tau2, fudge, rho ) result( invtau2 )
         real, intent(in) :: tau2, fudge, rho
         if( tau2 > 0. )then
             invtau2 = 1.0 / (fudge * tau2)
