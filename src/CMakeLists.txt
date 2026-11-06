@@ -33,7 +33,6 @@ add_custom_target(simple_args
 # Generated UI display-default lookup.  The generator reads the parameter and
 # commander sources but emits a Fortran module consumed only by the UI layer;
 # it never changes command execution.
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(SIMPLE_UI_DEFAULTS_FILE "${SIMPLE_GEN_DIR}/simple_ui_default_values.f90")
 file(GLOB_RECURSE SIMPLE_UI_DEFAULTS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/production/simple_exec.f90"

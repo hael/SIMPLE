@@ -104,6 +104,9 @@ living docs and leave the old ones in dated history docs.
 - The build (option `FORTLS`, on) installs the `fortls` Fortran language server in the build tree and
   registers its Claude Code plugin for the checkout, so sessions get Fortran diagnostics and go-to-definition
   (`scripts/CMakeLists.txt`, `cmake/InstallFortls.cmake`); offline it only warns.
+- Python the build or the fast gate runs uses the standard library and nothing newer than the
+  floor in the top-level `CMakeLists.txt` (`find_package(Python3 3.7 ...)`); newer raises the floor
+  (`doc/policies/test_environment_policy.md`, section 4.5). Passing on macOS does not show a breach.
 - Never commit or push. The maintainer decides what is committed and pushed:
   leave changes in the working tree and say which are ready.
 

@@ -80,7 +80,8 @@ part. See `doc/policies/3D/refine3D_policy.md` (sections 4 and 8) and
   `--exclude-tests`) through `scripts/run_fast_gate.sh`, after
   `scripts/check_test_registry.py`, `check_descr.py`, `check_flex_dag.py`,
   `check_guide_imports.py`, `check_cli_chain.py` (UI inputs, accepted keys,
-  bindings, yes/no keys, private programs) and `check_tester_linkage.py`; a failed gate installs nothing. `library` runs nightly; `highlevel` only when
+  bindings, yes/no keys, private programs) and `check_tester_linkage.py`, which run under the
+  build's Python (`SIMPLE_PYTHON3`, floor 3.7; policy section 4.5); a failed gate installs nothing. `library` runs nightly; `highlevel` only when
   selected, or as a whole with `simple_test_exec test=nightly` (also
   `test=profile` over seeds and `test=identity` between run directories).
 - A program that only runs commanders or prints results is not a test; keep it

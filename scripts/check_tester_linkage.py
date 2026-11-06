@@ -13,7 +13,6 @@ exit status: 0 none found, 1 a tester calls a private plain procedure
 
 import os
 import re
-import subprocess
 import sys
 
 KEYWORDS = {"write", "read", "open", "close", "print", "inquire", "flush", "rewind", "backspace", "format"}
@@ -83,8 +82,8 @@ def private_plain_procedures(lines):
 
 def main():
     root = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
-    files = subprocess.run(["rg", "--files", "-g", "*.f90", "src"], cwd=root, capture_output=True,
-                           text=True).stdout.split()
+    files = sorted(os.path.relpath(os.path.join(d, n), root) for d, _, names in os.walk(os.path.join(root, "src"))
+                   for n in names if n.endswith(".f90"))
     modfile = {}
     for f in files:
         for l in code_lines(os.path.join(root, f)):

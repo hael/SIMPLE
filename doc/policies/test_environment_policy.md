@@ -727,6 +727,13 @@ Before asking for a build:
   private plain procedure of its module (section 4.3). The fast gate runs it
   on every build; a macOS build with gfortran 16 links such a call, so nothing
   else catches it before a Linux build.
+- The gate and the build run their Python scripts with the interpreter CMake
+  found (`find_package(Python3 3.7 ...)` in the top-level `CMakeLists.txt`,
+  `SIMPLE_PYTHON3` in the build's cache), never the `python3` on `PATH` (3.6 on
+  the Linux build machines). A script they run uses the standard library and
+  nothing newer than that floor; using something newer raises the floor in the
+  same change, to a version every build machine has. A run on a machine with a
+  newer Python does not show a breach.
 - The default CMake build regenerates the test inventory and code-base map
   when their source inputs change.
 - `./compile_debug.sh` — the build and the gate.

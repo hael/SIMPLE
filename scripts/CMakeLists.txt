@@ -1,6 +1,5 @@
 
 find_package(Perl REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # Two generated records, rebuilt whenever their inputs change and not committed (.gitignore):
 # the code map (scripts/generate_codeoverview.pl) and the test inventory

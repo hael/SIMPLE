@@ -36,12 +36,15 @@ if command -v nproc >/dev/null 2>&1; then ncpu=$(nproc); else ncpu=$(sysctl -n h
 # Round up so the standard three-core GitHub macOS runner gets two workers
 # instead of serializing the gate and missing the 60 s wall-time budget.
 jobs=$(( (ncpu + 1) / 2 )); [ "$jobs" -lt 1 ] && jobs=1
-python3 "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1
-python3 "$ROOT/scripts/check_descr.py" "$ROOT" || exit 1
-python3 "$ROOT/scripts/check_flex_dag.py" "$ROOT" || exit 1
-python3 "$ROOT/scripts/check_guide_imports.py" "$ROOT" || exit 1
-python3 "$ROOT/scripts/check_cli_chain.py" "$ROOT" || exit 1
-python3 "$ROOT/scripts/check_tester_linkage.py" "$ROOT" || exit 1
+# The build's interpreter (SIMPLE_PYTHON3, CMakeLists.txt): the python3 on PATH is 3.6 on the Linux build machines.
+PY=$(sed -n 's/^SIMPLE_PYTHON3:INTERNAL=//p' "$BUILD/CMakeCache.txt")
+[ -x "$PY" ] || { echo "run_fast_gate: no SIMPLE_PYTHON3 in $BUILD/CMakeCache.txt (reconfigure); using python3" >&2; PY=python3; }
+"$PY" "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1
+"$PY" "$ROOT/scripts/check_descr.py" "$ROOT" || exit 1
+"$PY" "$ROOT/scripts/check_flex_dag.py" "$ROOT" || exit 1
+"$PY" "$ROOT/scripts/check_guide_imports.py" "$ROOT" || exit 1
+"$PY" "$ROOT/scripts/check_cli_chain.py" "$ROOT" || exit 1
+"$PY" "$ROOT/scripts/check_tester_linkage.py" "$ROOT" || exit 1
 # The nightly build broke twice on commits that left out a new source file
 # (2026-10-28, 2026-10-31). Untracked work in progress is normal: warn, never fail.
 if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -55,4 +58,4 @@ fi
 mkdir -p "$BUILD/test_runs"
 LOG="$BUILD/test_runs/ctest_fast.log"
 ( cd "$BUILD" && ctest -L fast --output-on-failure --parallel "$jobs" --timeout 600 2>&1 ) | tee "$LOG"
-python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --budget 60 --quiet
+"$PY" "$ROOT/scripts/ctest_budget.py" "$LOG" --budget 60 --quiet

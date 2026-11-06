@@ -69,6 +69,9 @@ The rule set is `doc/policies/test_environment_policy.md`; section numbers below
 
 - The gate's checks: `scripts/check_descr.py`, `check_test_registry.py`, `check_flex_dag.py`,
   `check_guide_imports.py`, `check_cli_chain.py`, `check_tester_linkage.py`; then the build and the fast gate.
+  The gate runs them with the build's Python (`SIMPLE_PYTHON3`, floor 3.7 in the top-level
+  `CMakeLists.txt`), not the `python3` on `PATH`: standard library only, nothing newer than the
+  floor (policy, section 4.5).
 - `SIMPLE_UNIT_ORDER=reverse` on the area suite: sub-suites do not depend on each other.
 - A threaded routine gets a check that forces a team and compares with the serial result; nothing
   else runs the fast tier on more threads.

@@ -57,6 +57,9 @@ Branch-context files are local development memory and may describe work that is 
   another machine may skip it (policy, section 3.4). `python3 scripts/check_test_registry.py . --verbose`,
   `python3 scripts/check_flex_dag.py . --verbose`, and `python3 scripts/check_descr.py .` check the
   registrations, FLEX dependency DAG, and Fortran file headers/source-unit boundaries without compiling.
+- Python the build or the fast gate runs uses the standard library and nothing newer than the
+  floor in the top-level `CMakeLists.txt` (`find_package(Python3 3.7 ...)`); newer raises the floor
+  (policy, section 4.5). Passing on macOS does not show a breach.
 - The number of CTest entries is fixed by `SIMPLE_CTEST_BUDGET` in `production/CMakeLists.txt`;
   configuration fails on a mismatch. Adding or removing an entry changes the budget and the counts
   in the policy's "process budget" paragraph in the same change. High-level entries are also rows of

@@ -77,7 +77,6 @@ install(TARGETS ${SIMPLE_EXECUTABLES}
 # whenever simple_exec or simple_private_exec is rebuilt, independently of the
 # optional CTest suite. Use the serial front end so metadata validation does not
 # initialize an optional coarray/MPI runtime.
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(UI_JSON_VALIDATION_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/simple_ui.json")
 set(UI_JSON_VALIDATION_STAMP "${CMAKE_CURRENT_BINARY_DIR}/simple_ui.json.valid")
 add_custom_command(

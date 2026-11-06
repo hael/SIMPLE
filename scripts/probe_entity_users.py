@@ -21,7 +21,6 @@ parent's binding, bind(c)).
 import os
 import re
 import shutil
-import subprocess
 import sys
 
 SUFFIX = "_probe"
@@ -37,9 +36,8 @@ def is_test_only(path):
 
 
 def sources(root):
-    out = subprocess.run(["rg", "--files", "-g", "*.f90", "-g", "*.F90", "src", "production"],
-                         cwd=root, capture_output=True, text=True).stdout.split()
-    return sorted(out)
+    return sorted(os.path.relpath(os.path.join(d, n), root) for top in ("src", "production")
+                  for d, _, names in os.walk(os.path.join(root, top)) for n in names if n.endswith((".f90", ".F90")))
 
 
 def read(root, rel):

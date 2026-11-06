@@ -103,6 +103,11 @@ set(SIMPLELIB "SIMPLE${PROJECT_VERSION}")
 set(SIMPLE_COARRAYLIB "${SIMPLELIB}_coarray")
 set(SIMPLE_COARRAY_MODULE_DIRECTORY "${PROJECT_BINARY_DIR}/modules_coarray")
 
+# The interpreter of the build's scripts and of the fast gate (scripts/run_fast_gate.sh reads
+# SIMPLE_PYTHON3), not the python3 on PATH; the floor is the newest Python those scripts need.
+find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
+set(SIMPLE_PYTHON3 "${Python3_EXECUTABLE}" CACHE INTERNAL "Python of the build scripts and the fast gate")
+
 # ------------------------------------------------------------------------------
 # Subdirectories
 # ------------------------------------------------------------------------------
