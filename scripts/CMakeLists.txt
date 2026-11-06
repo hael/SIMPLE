@@ -101,3 +101,54 @@ install(DIRECTORY  ${CMAKE_CURRENT_SOURCE_DIR}
   PATTERN "*.py"
     PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_EXECUTE WORLD_READ
   )
+
+# The Fortran language server for Claude Code: fortls in a virtual environment of the build tree, its
+# configuration and a one-plugin marketplace (fortls-lsp@simple-build) written here with this tree's
+# paths, and the plugin registered for the checkout by cmake/InstallFortls.cmake (target fortls).
+if(FORTLS)
+  set(FORTLS_VENV        "${CMAKE_BINARY_DIR}/tools/fortls")
+  set(FORTLS_MARKETPLACE "${CMAKE_BINARY_DIR}/claude-plugins")
+  set(FORTLS_PLUGIN      "${FORTLS_MARKETPLACE}/fortls-lsp")
+  file(WRITE "${CMAKE_BINARY_DIR}/fortls.json" "{
+  \"source_dirs\": [\"${CMAKE_SOURCE_DIR}/src/**\", \"${CMAKE_SOURCE_DIR}/production\", \"${CMAKE_BINARY_DIR}/lib/simple\"],
+  \"excl_paths\": [\"${CMAKE_BINARY_DIR}/**/CMakeFiles/**\"],
+  \"include_dirs\": [\"${CMAKE_SOURCE_DIR}/src/inc\"],
+  \"pp_suffixes\": [\".f90\"],
+  \"incl_suffixes\": [\".inc\"],
+  \"pp_defs\": {},
+  \"lowercase_intrinsics\": true,
+  \"hover_signature\": true,
+  \"use_signature_help\": true,
+  \"disable_autoupdate\": true,
+  \"nthreads\": 8
+}
+")
+  file(WRITE "${FORTLS_MARKETPLACE}/.claude-plugin/marketplace.json" "{
+  \"name\": \"simple-build\",
+  \"owner\": { \"name\": \"SIMPLE\" },
+  \"plugins\": [ { \"name\": \"fortls-lsp\", \"source\": \"./fortls-lsp\",
+                 \"description\": \"Fortran code intelligence for SIMPLE through fortls\" } ]
+}
+")
+  file(WRITE "${FORTLS_PLUGIN}/.claude-plugin/plugin.json" "{
+  \"name\": \"fortls-lsp\",
+  \"version\": \"1.0.0\",
+  \"description\": \"Fortran code intelligence for SIMPLE through fortls: diagnostics after edits, definitions and references by symbol\"
+}
+")
+  file(WRITE "${FORTLS_PLUGIN}/.lsp.json" "{
+  \"fortls\": {
+    \"command\": \"${FORTLS_VENV}/bin/fortls\",
+    \"args\": [\"--config\", \"${CMAKE_BINARY_DIR}/fortls.json\", \"--disable_autoupdate\"],
+    \"extensionToLanguage\": { \".f90\": \"fortran\", \".F90\": \"fortran\", \".inc\": \"fortran\" }
+  }
+}
+")
+  add_custom_target(fortls ALL
+    COMMAND "${CMAKE_COMMAND}" -DPYTHON=${Python3_EXECUTABLE} -DVENV=${FORTLS_VENV}
+            -DMARKETPLACE=${FORTLS_MARKETPLACE} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P "${CMAKE_SOURCE_DIR}/cmake/InstallFortls.cmake"
+    COMMENT "Fortran language server (fortls) for Claude Code"
+    VERBATIM
+  )
+endif()

@@ -98,6 +98,9 @@ living docs and leave the old ones in dated history docs.
   from scratch. Run the touched area's `build/bin/simple_test_exec test=unit_<area>`
   and the high-level entries a change affects; start long runs in the background.
   Report what was built and run, and the results.
+- The build (option `FORTLS`, on) installs the `fortls` Fortran language server in the build tree and
+  registers its Claude Code plugin for the checkout, so sessions get Fortran diagnostics and go-to-definition
+  (`scripts/CMakeLists.txt`, `cmake/InstallFortls.cmake`); offline it only warns.
 - Never commit or push. The maintainer decides what is committed and pushed:
   leave changes in the working tree and say which are ready.
 

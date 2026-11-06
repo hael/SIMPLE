@@ -31,6 +31,7 @@ option(USE_MPI      "Use MPI for parallelization" OFF)
 option(USE_ARCHOPT  "Use architecture optimization" ON)
 option(BUILD_TESTS  "Build test executables" ON)
 option(NICE         "Install NICE" OFF)
+option(FORTLS       "Install the fortls Fortran language server and its Claude Code plugin in the build tree" ON)
 
 # Always build static library (faster compilation while developing)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build as shared or static" FORCE)
