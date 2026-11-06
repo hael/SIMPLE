@@ -979,15 +979,11 @@ contains
         if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',                      'c1')
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',                'c1')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',         'nonuniform')
-        ! the pcg-backend automasking veto must be read BEFORE the default
-        ! below is injected into the cline; after injection every run looks
-        ! like an explicit automsk=no and the stage policy can never engage
-        l_automsk_off = (cline%defined('automsk') .and. cline%get_carg('automsk') .eq. 'no')
-        if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
+        call cline%set('automsk', 'no') ! spherical support throughout solve3D
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
         ! balance defaults once the project is read (set_balance_default):
         ! class with a 2D solution (input volumes bring random classes), none without one
-        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
+        call cline%set('envfsc', 'no')
         if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
             THROW_HARD('solve3D does not take nsample_start/nsample_stop; set nsample instead')
@@ -1002,6 +998,12 @@ contains
             ! Stop independent multi-state starts after the first prob_neigh stage, before NU, by default.
             if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
             if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
+        endif
+        if( cline%defined('gold_standard') )then
+            if( cline%get_carg('gold_standard') == 'yes' )then
+                if( nstates_on_cline /= 1 ) THROW_HARD('gold_standard=yes requires nstates=1')
+                if( cline%defined('lp') ) THROW_HARD('gold_standard=yes selects an adaptive matching band; use lpstop instead of lp')
+            endif
         endif
         ! make master parameters
         call params%new(cline)
@@ -1155,11 +1157,6 @@ contains
         ! particles no earlier stage updated): it gets the final reconstruction
         ! and its run manifest, so it can be the frozen input of solve3D_addon
         if( cline%defined('nstages') .and. nstages_refine3D >= solve3D_symsrch_stage(l_srch4symaxis) ) l_run_final_rec = .true.
-        ! automasking is per state (state-specific masks), single or multi-state alike
-        l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
-        ! l_automsk_off (the EXPLICIT automsk=no veto of the pcg-backend
-        ! automasking default) is set where the workflow defaults are
-        ! injected, BEFORE automsk=no lands on the cline as a default
         ! prepare class command lines
         call prep_class_command_lines(params, cline, params%projfile)
         ! fall over if there are no particles
@@ -1382,7 +1379,7 @@ contains
                     write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', cline_refine3D%get_rarg('lp'), ' A'
                 endif
             else
-                write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH NU-SELECTED MATCHING LP'
+                write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH HALF-SPECIFIC REFERENCES AND ADAPTIVE MATCHING LP'
             endif
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&

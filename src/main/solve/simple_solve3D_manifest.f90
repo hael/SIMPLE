@@ -30,10 +30,10 @@ integer,          parameter :: KLEN = 24
 !> Keys of the base run's command line, as given at entry (before any default
 !! is injected), that the manifest records: the solution, reconstruction and
 !! search policy plus the entry routes (provenance)
-character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(34) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(35) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'nstates', 'nstages', 'rec_backend', 'maxits_pcg', &
     &'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', &
-    &'objfun', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', &
+    &'objfun', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_standard', &
     &'prob_athres', 'shift_prior', 'bfac', 'gauref', 'balance', 'nclust', &
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']
 
@@ -45,10 +45,10 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(34) = [character(len=KLEN)
 !! the add-on accepts from its own command line are not replayed; neither is
 !! the reconstruction backend, since add-on chains reconstruct by gridding only
 !! and refuse a base run of another backend (get_rec_backend).
-character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(20) = [character(len=KLEN) :: &
+character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(21) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', &
     &'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', 'objfun', 'hp', &
-    &'lp', 'lpstart', 'lpstop', 'force_lp_range', &
+    &'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_standard', &
     &'prob_athres', 'bfac', 'gauref', 'balance', 'nclust', 'lpstart_ini3D', 'lpstop_ini3D']
 
 !> Replayed keys the add-on may override from its own command line: they

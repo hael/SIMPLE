@@ -100,6 +100,7 @@ contains
         call reg%add_yesno('force_lp_range', self%force_lp_range)
         call reg%add_yesno('freq_march_aggressive', self%freq_march_aggressive)
         call reg%add_yesno('gauref', self%gauref)
+        call reg%add_yesno('gold_standard', self%gold_standard)
         call reg%add_yesno('gen_model', self%gen_model)
         call reg%add_char('graph', self%graph)
         call reg%add_yesno('guinier', self%guinier)

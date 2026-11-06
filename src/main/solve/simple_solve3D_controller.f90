@@ -38,11 +38,10 @@ integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch fr
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
+integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
 real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
-integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
-integer,          parameter :: ENVFSC_STAGE            = NSTAGES     ! when to activate enveloppe masking & FSC phase randomized resolution estimation
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
@@ -70,6 +69,7 @@ type :: refine3D_stage_cfg
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
+    logical :: l_gold_standard = .false.
     logical :: l_scan_exit = .false. !< the multi-state rule also converges on the scan alone (scan_exit=yes)
 end type refine3D_stage_cfg
 
@@ -262,6 +262,7 @@ contains
     !! frozen term enters at full mass.
     subroutine set_refine3D_register_policy( cfg )
         type(refine3D_stage_cfg), intent(inout) :: cfg
+        cfg%l_gold_standard = .false.
         cfg%refine          = 'prob'
         cfg%prob_neigh_mode = ''
         cfg%inspace         = NSPACE_REGISTER
@@ -288,6 +289,10 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
+        cfg%l_gold_standard = trim(params%gold_standard) == 'yes' .and. params%nstates == 1 .and. &
+            &.not. l_cavgs .and. istage >= GOLD_STD_STAGE
+        cfg%automsk = 'no'
+        cfg%envfsc  = 'no'
         call init_refine3D_iteration( cfg )
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
@@ -297,8 +302,6 @@ contains
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         call apply_refine3D_search_overrides( cfg, params, istage )
     end subroutine build_refine3D_stage_cfg
@@ -435,9 +438,11 @@ contains
             &(istage >= nu_start_stage(params) .or. &
             &(l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
             cfg%filt_mode = trim(params%filt_mode)
-            ! no gold-standard stage in solve3D: NU filtering keeps the scheduled lp
-            ! (gold-standard refinement belongs to refine3D_auto)
-            if( cfg%filt_mode.eq.'nonuniform' ) cfg%filt_mode = 'nonuniform_lpset'
+            if( cfg%l_gold_standard )then
+                cfg%filt_mode = 'nonuniform'
+            else
+                cfg%filt_mode = 'nonuniform_lpset'
+            endif
         endif
     end subroutine set_refine3D_filtering_policy
 
@@ -448,32 +453,6 @@ contains
         istage = NU_FILTER_STAGE
         if( params%nu_stage > 0 ) istage = params%nu_stage
     end function nu_start_stage
-
-    subroutine set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
-        logical,                  intent(in)    :: l_cavgs
-        cfg%automsk = 'no'
-        if( l_cavgs ) return
-        if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
-        ! automasking follows the same explicit user control on both backends
-    end subroutine set_refine3D_automsk_policy
-
-    subroutine set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
-        type(refine3D_stage_cfg), intent(inout) :: cfg
-        class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
-        logical,                  intent(in)    :: l_cavgs
-        cfg%envfsc = 'no'
-        if( l_cavgs ) return
-        if( istage >= ENVFSC_STAGE ) cfg%envfsc = trim(params%envfsc)
-        ! Active automasking implies envfsc=yes (PCG: the selected envelope is
-        ! solve support; gridding: it masks the FSC pair with phase correction).
-        ! The child's parameters derive it anyway; this keeps the stage
-        ! config truthful (relies on the automsk policy running first).
-        if( cfg%automsk.ne.'no' ) cfg%envfsc = 'yes'
-    end subroutine set_refine3D_envfsc_policy
 
     subroutine set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -574,16 +553,13 @@ contains
         lp_cap = LPSTOP_BOUNDS(1)
         if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
         if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
-        ! Stage-boundary FSC=0.5 advance past FSC05_PROMOTE_MIN_STAGE, one ladder rung, never finer than
-        ! lp_cap: once per boundary, since without gold-standard halves only an FSC beyond the previous
-        ! band is clean. FSC=0.143 must not set a matching band here (no gold-standard stage in solve3D).
-        ! Add-on promotes from the union FSC (solve3D_policy.md sec. 4; solve3D_addon_policy.md sec. 5).
+        ! LP-set stages retain the FSC=0.5 boundary advance, including the union FSC of add-ons.
+        ! Gold-standard stages take their matching band from NU or the independent-half FSC.
         l_fsc05_promoted = .false.
-        if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register ) &
+        if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register .and. .not. cfg%l_gold_standard ) &
             &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
-        ! Matching-band ceiling: the (promoted) stage limit in non-NU stages, none in NU stages unless
-        ! lpstop is given (doc/policies/3D/solve3D_policy.md sec. 4).
-        if( cfg%filt_mode .ne. 'none' )then
+        ! NU and gold-standard stages have only the user's explicit matching ceiling.
+        if( cfg%l_gold_standard .or. cfg%filt_mode .ne. 'none' )then
             lpstop_eff = 0.
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
         else
@@ -655,8 +631,7 @@ contains
         call cline_refine3D%set('trail_rec',              cfg%trail_rec)
         call cline_refine3D%set('filt_mode',              cfg%filt_mode)
         call cline_refine3D%delete('lpstart')
-        ! Non-NU stages: the printed stage limit is the highest resolution
-        ! permitted. NU stages: no ceiling unless the user set lpstop.
+        ! The stage plan caps non-NU LP-set stages; adaptive stages retain only explicit lpstop.
         if( lpstop_eff > TINY )then
             call cline_refine3D%set('lpstop',             lpstop_eff)
         else
@@ -665,7 +640,11 @@ contains
         call cline_refine3D%set('automsk',                cfg%automsk)
         call cline_refine3D%set('envfsc',                 cfg%envfsc)
         call cline_refine3D%set('envmsklp',               params%envmsklp)
-        call cline_refine3D%set('lp',                     lp_eff)
+        if( cfg%l_gold_standard )then
+            call cline_refine3D%delete('lp')
+        else
+            call cline_refine3D%set('lp',                 lp_eff)
+        endif
         call cline_refine3D%set('nspace',                 cfg%inspace)
         if( cfg%inspace_sub > 0 )then
             call cline_refine3D%set('nspace_sub',         cfg%inspace_sub)

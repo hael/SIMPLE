@@ -20,8 +20,6 @@ type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis    = .false., l_symran = .false.
 logical          :: l_ini3D           = .false.
 logical          :: l_cavg_ini        = .false. !< particle stages of a cavg_ini run: the entry stage runs its full budget
-logical          :: l_automsk         = .false.
-logical          :: l_automsk_off     = .false.
 logical          :: l_nonuniform      = .false.
 logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override   = .false.
@@ -203,6 +201,10 @@ contains
         cline_symmap        = cline
         cline_reconstruct3D = cline
         cline_reproject     = cline
+        call cline_refine3D%delete('gold_standard')
+        call cline_symmap%delete('gold_standard')
+        call cline_reconstruct3D%delete('gold_standard')
+        call cline_reproject%delete('gold_standard')
         call strip_sampling_keys(cline_refine3D)
         call strip_sampling_keys(cline_symmap)
         call strip_sampling_keys(cline_reconstruct3D)

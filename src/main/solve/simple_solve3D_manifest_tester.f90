@@ -70,7 +70,7 @@ contains
 
     !> a completed eligible solve3D run of nstates over spproj, built the way
     !! exec_solve3D builds it; its artifacts are those spproj registers
-    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle, nu_stage )
+    subroutine make_manifest( man, spproj, nstates, vol1, rec_backend, bundle, nu_stage, gold_standard )
         type(solve3D_manifest),     intent(inout) :: man
         type(sp_project),           intent(inout) :: spproj
         integer,                    intent(in)    :: nstates
@@ -78,6 +78,7 @@ contains
         logical,          optional, intent(in)    :: rec_backend !< record rec_backend=pcg (default yes)
         character(len=*), optional, intent(in)    :: bundle      !< an add-on's carried bundle manifest
         integer,          optional, intent(in)    :: nu_stage    !< the nu_stage given on the run's command line
+        logical,          optional, intent(in)    :: gold_standard
         type(cmdline) :: cl
         logical :: l_backend
         call man%new(RUN_ID, 'solve3D', .true., spproj)
@@ -98,6 +99,10 @@ contains
             call cl%set('vol1',    '/abs/refs/startvol_state01.mrc')
         endif
         if( present(nu_stage) ) call cl%set('nu_stage', nu_stage)
+        if( present(gold_standard) )then
+            call cl%set('gold_standard', 'no')
+            if( gold_standard ) call cl%set('gold_standard', 'yes')
+        endif
         call cl%set('nthr',        8)    ! not a manifest input key
         call man%record_inputs(cl)
         if( present(bundle) )then
@@ -570,6 +575,7 @@ contains
         call assert_int(10000, cl%get_iarg('nsample'), 'the effective nsample')
         call assert_false(cl%defined('nthr'), 'a key outside the manifest inputs is not replayed')
         call assert_false(cl%defined('nu_stage'), 'a nu_stage the base run did not give is not replayed')
+        call assert_false(cl%defined('gold_standard'), 'an ordinary run retains the default half-map policy')
         call man%kill
         call make_manifest(man, spproj, 2, nu_stage=7)
         call man%replay(cl_nu)
@@ -577,7 +583,17 @@ contains
         call assert_int(7, cl_nu%get_iarg('nu_stage'), 'the NU start stage of the base run is replayed: the add-on filters as its base did')
         call cl_nu%kill
         call man%kill
-        call make_manifest(man, spproj, 2, rec_backend=.false.)
+        call make_manifest(man, spproj, 1, rec_backend=.false., gold_standard=.true.)
+        call man%replay(cl_nu)
+        call assert_true(manifest_records_input('gold_standard'), 'gold_standard is a recorded input')
+        call assert_false(manifest_overridable_input('gold_standard'), 'gold_standard follows the frozen solution')
+        call assert_string_eq('yes', cl_nu%get_carg('gold_standard'), 'the half-map policy is replayed')
+        call man%kill
+        call cl_nu%kill
+        call make_manifest(man, spproj, 1, rec_backend=.false., gold_standard=.false.)
+        call man%replay(cl_nu)
+        call assert_string_eq('no', cl_nu%get_carg('gold_standard'), 'an explicit opt-out is replayed')
+        call cl_nu%kill
         call assert_string_eq('gridding', man%get_rec_backend(), 'no recorded backend is the gridding default')
         call man%kill
         call spproj%kill

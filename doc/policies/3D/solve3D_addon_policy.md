@@ -235,8 +235,11 @@ inherited state are refused.
   it, and uses its last stage only. The stage limit follows the `solve3D`
   rule: FSC=0.5 promotion at the stage boundary from the FSC measured on the
   union, and the NU handoff when the stage is an NU stage. The registration
-  pass keeps the planned limit (no promotion). The stage logs the add-on's
-  limits next to the frozen run's.
+  pass keeps the planned limit (no promotion). The frozen run's
+  `gold_standard` option is replayed: single-state stages 6 and later use
+  half-specific references and NU-selected bandwidth when enabled. The
+  registration pass retains its planned-band matching. The stage logs the
+  add-on's limits next to the frozen run's.
 - **Early stopping.** The add-on context switches stage-3 early stopping on
   (`overlap`, default 0.95) when the last stage is stage 3; the stage
   controller is otherwise unchanged.

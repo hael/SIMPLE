@@ -80,6 +80,7 @@ contains
         accepted = args()
         call assert_true(accepted%is_present('mul'),         'mul is an accepted key')
         call assert_true(accepted%is_present('import_type'), 'import_type is an accepted key')
+        call assert_true(accepted%is_present('gold_standard'), 'gold_standard is an accepted key')
         call assert_true(.not. accepted%is_present('cntfile'),       'cntfile (a dummy argument after the type) is no key')
         call assert_true(.not. accepted%is_present('silent'),        'silent (a dummy argument after the type) is no key')
         call assert_true(.not. accepted%is_present('final_planned'), 'final_planned (a function result) is no key')
@@ -98,10 +99,13 @@ contains
         call cline%set('mul', 2.5)
         call cline%set('import_type', 'mic')
         call cline%set('tiltgroupmax', 3.)
+        call assert_char('no', params%gold_standard, 'gold-standard refinement is opt-in')
+        call cline%set('gold_standard', 'yes')
         call params%new(cline, silent=.true.)
         call assert_real(2.5, params%mul, 1.e-6, 'mul binds (oriops, volops)')
         call assert_char('mic', trim(params%import_type), 'import_type binds (import_starproject)')
         call assert_real(3., params%tiltgroupmax, 1.e-6, 'tiltgroupmax binds')
+        call assert_char('yes', params%gold_standard, 'gold_standard binds')
         call cline%kill()
     end subroutine test_ui_keys_bound
 

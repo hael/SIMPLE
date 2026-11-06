@@ -194,14 +194,15 @@ contains
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
+        call prg%add_input(UI_FILT, 'gold_standard', 'binary', 'Gold-standard refinement from stage 6', &
+            &'Use half-specific references from the first executed stage at or beyond 6; single state only. '//&
+            &'NU selects the matching band; use lpstop for an explicit ceiling(yes|no){no}', &
+            &'', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call prg%add_input(UI_FILT, 'nu_stage', 'num', 'Stage NU filtering starts at', &
             &'solve3D stage that switches on NU filtering (0: the built-in default); &
             &5 is the earliest that works, tested on PfCRT and streptavidin', &
             &'NU start stage', .false., 0., group="filter", visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_FILT, envfsc, group="filter", &
-        &visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_FILT, envmsklp, group="filter", &
-        &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, 'lpstart_ini3D',     'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -210,11 +211,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call prg%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
-        call prg%add_input(UI_MASK, 'automsk', 'multi', 'Refinement envelope mode', &
-            &'Use the density envelope, or prefer the lag-one NU-evidence envelope with density fallback, '//&
-            &'from the staged automasking point(yes|nu|no){no}', &
-            &'', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'nu', 'no']))
         ! computer controls
         call prg%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_COMP, nthr,                                 group="compute", visibility=UI_VIS_STANDARD)

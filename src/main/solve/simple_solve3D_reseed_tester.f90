@@ -15,6 +15,7 @@ contains
         write(*,'(A)') '**** running all solve3D_cavgs stage rule tests ****'
         call test_symsrch_stage()
         call test_stage_skipping()
+        call test_gold_standard_stages()
         call test_symmetry_randomize()
         call test_no_weak_state()
         call test_one_empty_state()
@@ -37,6 +38,147 @@ contains
         call assert_false(solve3D_stage_skipping(2),       'two states: no stage skipped')
         call assert_false(solve3D_stage_skipping(4),       'four states: no stage skipped')
     end subroutine test_stage_skipping
+
+    !> Exercise emitted stage commands, including a skipped transition and stale matching limits.
+    subroutine test_gold_standard_stages()
+        use simple_solve3D_utils, only: lpinfo, cline_refine3D, set_cline_refine3D, solve3D_addon_ctx, &
+            &l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
+            &l_refine3D_mode_override, l_refine3D_lp_override, l_refine3D_lpstop_override, &
+            &l_refine3D_trs_override, l_prob_beta_end_override, update_frac, nptcls_eff, nstages_refine3D
+        use simple_parameters, only: parameters
+        use simple_cmdline,    only: cmdline
+        use simple_type_defs,  only: lp_crop_inf
+        use simple_sp_project, only: sp_project
+        use simple_string,     only: string
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable    :: saved_cline
+        class(sp_project), allocatable :: proj
+        type(lp_crop_inf), allocatable :: saved_lpinfo(:)
+        type(solve3D_addon_ctx) :: addon
+        type(string) :: cwd, root
+        logical :: saved_flags(9)
+        real    :: saved_update_frac
+        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend
+        write(*,'(A)') 'test_gold_standard_stages'
+        nfail0 = tests_failed
+        call enter_fixture('solve3D_gold_standard', cwd, root)
+        allocate(params, saved_cline, proj)
+        saved_cline = cline_refine3D
+        saved_flags = [l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
+            &l_refine3D_mode_override, l_refine3D_lp_override, l_refine3D_lpstop_override, &
+            &l_refine3D_trs_override, l_prob_beta_end_override]
+        saved_update_frac = update_frac
+        saved_nptcls_eff  = nptcls_eff
+        saved_nstages     = nstages_refine3D
+        call move_alloc(lpinfo, saved_lpinfo)
+        allocate(lpinfo(8))
+        lpinfo%lp = [20., 16., 12., 10., 8., 6., 5., 4.5]
+        lpinfo%box_crop = 64
+        lpinfo%trslim   = 2.
+        l_nonuniform = .true.
+        l_srch4symaxis = .false.
+        l_cavg_ini = .false.
+        l_state_continue_mode = .false.
+        l_refine3D_mode_override = .false.
+        l_refine3D_lp_override = .false.
+        l_refine3D_lpstop_override = .false.
+        l_refine3D_trs_override = .false.
+        l_prob_beta_end_override = .false.
+        update_frac = 0.25
+        nptcls_eff = 10000
+        nstages_refine3D = 8
+        params%nsample = 1000
+        params%nstates = 1
+        params%box = 64
+        params%smpd = 2.
+        params%gold_standard = 'yes'
+        params%automsk = 'yes'
+        params%envfsc = 'yes'
+        params%projfile = 'stages.simple'
+        call proj%os_ptcl3D%new(2, is_ptcl=.true.)
+        call proj%os_ptcl3D%set_all2single('state', 1.)
+        call proj%os_ptcl3D%set_all2single('res05', 5.3)
+        call proj%update_projinfo(params%projfile)
+        call proj%write(params%projfile)
+        do backend = 1, 2
+            params%rec_backend = 'gridding'
+            if( backend == 2 ) params%rec_backend = 'pcg'
+            params%filt_mode = 'nonuniform_lpset'
+            call set_cline_refine3D(params, 5, 1, .false.)
+            call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'stage 5 uses merged NU references')
+            call assert_real(6., cline_refine3D%get_rarg('lp'), 1.e-6, 'FSC=0.5 still advances the planned 8 A rung')
+            call assert_false(cline_refine3D%defined('lpstop'), 'NU stage 5 has no added stage ceiling')
+            ! Stage 6 is omitted: stage 7 must clear the preceding LP-set command.
+            call set_cline_refine3D(params, 7, 1, .false.)
+            call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'stage 7 uses half-specific NU references')
+            call assert_false(cline_refine3D%defined('lp'), 'transition clears the preceding scheduled lp')
+            call assert_false(cline_refine3D%defined('lpstop'), 'gold-standard stage has no scheduled ceiling')
+            call assert_real(0.25, cline_refine3D%get_rarg('update_frac'), 1.e-6, 'the transition keeps fractional updates')
+            call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'the transition keeps trailing reconstruction')
+            call assert_string_eq(params%rec_backend, cline_refine3D%get_carg('rec_backend'), 'backend selection is preserved')
+            l_refine3D_lpstop_override = .true.
+            params%lpstop = 7.5
+            call set_cline_refine3D(params, 8, 1, .false.)
+            call assert_false(cline_refine3D%defined('lp'), 'stage 8 still selects its matching band adaptively')
+            call assert_real(7.5, cline_refine3D%get_rarg('lpstop'), 1.e-6, 'explicit user ceiling survives')
+            call assert_string_eq('no', cline_refine3D%get_carg('automsk'), 'every stage keeps spherical support')
+            call assert_string_eq('no', cline_refine3D%get_carg('envfsc'), 'FSC uses no generated envelope')
+            l_refine3D_lpstop_override = .false.
+        enddo
+        params%filt_mode = 'nonuniform'
+        call set_cline_refine3D(params, 6, 1, .false.)
+        call assert_false(cline_refine3D%defined('lp'), 'stage 6 removes scheduled lp with plain NU input')
+        call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'stage 6 keeps plain NU half references')
+        addon%active = .true.
+        addon%l_register = .true.
+        addon%frozen_rec = 'frozen_context.txt'
+        call set_cline_refine3D(params, 7, 1, .false., addon)
+        call assert_true(cline_refine3D%defined('lp'), 'add-on registration keeps its fixed matching band')
+        call assert_string_eq('none', cline_refine3D%get_carg('filt_mode'), 'add-on registration remains unfiltered')
+        addon%l_register = .false.
+        call set_cline_refine3D(params, 7, 1, .false., addon)
+        call assert_false(cline_refine3D%defined('lp'), 'the add-on stage proper restores half-specific matching')
+        call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'the add-on stage uses plain NU')
+        call addon%frozen_rec%kill
+        params%gold_standard = 'no'
+        call set_cline_refine3D(params, 7, 1, .false.)
+        call assert_true(cline_refine3D%defined('lp'), 'opt-out retains scheduled LP-set matching')
+        call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'opt-out retains merged NU references')
+        params%gold_standard = 'yes'
+        params%nstates = 2
+        call set_cline_refine3D(params, 7, 1, .false.)
+        call assert_true(cline_refine3D%defined('lp'), 'extended multi-state schedule retains LP-set matching')
+        call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'state count guards the switch')
+        params%nstates = 1
+        call set_cline_refine3D(params, 7, 1, .true.)
+        call assert_true(cline_refine3D%defined('lp'), 'class-average route retains its scheduled matching band')
+        call assert_string_eq('none', cline_refine3D%get_carg('filt_mode'), 'class-average route keeps NU off')
+        params%filt_mode = 'none'
+        l_nonuniform = .false.
+        call set_cline_refine3D(params, 7, 1, .false.)
+        call assert_false(cline_refine3D%defined('lp'), 'without NU, gold-standard matching uses the half-map FSC')
+        call assert_false(cline_refine3D%defined('lpstop'), 'without NU, gold-standard matching still has no stage ceiling')
+        call cline_refine3D%kill
+        cline_refine3D = saved_cline
+        deallocate(lpinfo)
+        call move_alloc(saved_lpinfo, lpinfo)
+        l_nonuniform = saved_flags(1)
+        l_srch4symaxis = saved_flags(2)
+        l_cavg_ini = saved_flags(3)
+        l_state_continue_mode = saved_flags(4)
+        l_refine3D_mode_override = saved_flags(5)
+        l_refine3D_lp_override = saved_flags(6)
+        l_refine3D_lpstop_override = saved_flags(7)
+        l_refine3D_trs_override = saved_flags(8)
+        l_prob_beta_end_override = saved_flags(9)
+        update_frac = saved_update_frac
+        nptcls_eff = saved_nptcls_eff
+        nstages_refine3D = saved_nstages
+        call saved_cline%kill
+        call proj%kill
+        deallocate(params, saved_cline, proj)
+        call leave_fixture(cwd, root, nfail0)
+    end subroutine test_gold_standard_stages
 
     !> the randomization acts on the poses the stage wrote into the project file, not on the in-memory
     !! copy of the previous stage: every pose in the file ends as itself or its c2 mate
