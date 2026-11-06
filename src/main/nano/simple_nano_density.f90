@@ -164,6 +164,31 @@ contains
 end type nano_density
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module elemental real function gauss_kernel( r2, bfac )
+        real, intent(in) :: r2, bfac
+    end function gauss_kernel
+
+    module subroutine fit_atom( y, r2, sig2n, lnb_mean, lnb_sd, tk, intens, bfac, var_int, var_lnb )
+        real,                    intent(in)  :: y(:), r2(:), sig2n, lnb_mean, lnb_sd
+        class(transfer_kernels), intent(in)  :: tk
+        real,                    intent(out) :: intens, bfac, var_int, var_lnb
+    end subroutine fit_atom
+
+    module subroutine regress_profile( cn, y, v, slope, icept, bin_lo, tau_bin, tau_all )
+        integer,              intent(in)  :: cn(:)
+        real,                 intent(in)  :: y(:), v(:)
+        real,                 intent(out) :: slope, icept, tau_all
+        integer, allocatable, intent(out) :: bin_lo(:)
+        real,    allocatable, intent(out) :: tau_bin(:)
+    end subroutine regress_profile
+
+    module real function robust_spread( x )
+        real, intent(in) :: x(:)
+    end function robust_spread
+end interface
+
+interface
     !> white-box tests (submodule simple_nano_density_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_nano_density_tests()
     end subroutine run_all_nano_density_tests
@@ -176,7 +201,7 @@ contains
     ! KERNELS
 
     ! the unit-integral Gaussian K(r; B) = (4 pi / B)**1.5 exp(-4 pi**2 r**2 / B), r2 in A**2
-    elemental real function gauss_kernel( r2, bfac )
+    module elemental real function gauss_kernel( r2, bfac )
         real, intent(in) :: r2, bfac
         gauss_kernel = (4. * PI / bfac)**1.5 * exp(-4. * PI**2 * r2 / bfac)
     end function gauss_kernel
@@ -505,7 +530,7 @@ contains
     ! I and B of I K_T(B) (the atom through the transfer of tk) fitted to the samples y at squared distances r2 (A**2),
     ! noise variance sig2n, with the prior ((ln B - lnb_mean) / lnb_sd)**2 and I >= 0; var_int and var_lnb are the
     ! measurement variances of I and ln B at the solution under white noise (inverse Fisher information of the data alone)
-    subroutine fit_atom( y, r2, sig2n, lnb_mean, lnb_sd, tk, intens, bfac, var_int, var_lnb )
+    module subroutine fit_atom( y, r2, sig2n, lnb_mean, lnb_sd, tk, intens, bfac, var_int, var_lnb )
         real,                    intent(in)  :: y(:), r2(:), sig2n, lnb_mean, lnb_sd
         class(transfer_kernels), intent(in)  :: tk
         real,                    intent(out) :: intens, bfac, var_int, var_lnb
@@ -612,7 +637,7 @@ contains
     ! y_i = icept + slope (cn_i - 12) + e_i with e_i ~ N(0, tau(cn_i)**2 + v_i): weighted least squares, the spread
     ! tau in bins of cn (at least NBIN_MIN atoms each, from the interior down; the interior bin is the floor),
     ! tau_all over all atoms. bin_lo(k) is the lowest cn of bin k; bin 1 holds the highest.
-    subroutine regress_profile( cn, y, v, slope, icept, bin_lo, tau_bin, tau_all )
+    module subroutine regress_profile( cn, y, v, slope, icept, bin_lo, tau_bin, tau_all )
         integer,              intent(in)  :: cn(:)
         real,                 intent(in)  :: y(:), v(:)
         real,                 intent(out) :: slope, icept, tau_all
@@ -1881,7 +1906,7 @@ contains
     end subroutine gauss_filter3D
 
     ! 1.4826 times the median absolute deviation from the median
-    real function robust_spread( x )
+    module real function robust_spread( x )
         use simple_stat, only: median
         real, intent(in) :: x(:)
         real :: med

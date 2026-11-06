@@ -247,6 +247,13 @@ module simple_ptcl_sieve
   end type ptcl_sieve
 
   interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module pure real function sieve_lpstart( params )
+      type(parameters), intent(in) :: params
+    end function sieve_lpstart
+  end interface
+
+  interface
     !> white-box tests (submodule simple_ptcl_sieve_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_ptcl_sieve_tests()
     end subroutine run_all_ptcl_sieve_tests
@@ -1172,7 +1179,7 @@ contains
   ! none was, and solve2D then derives it from the mask diameter. Parameter validation lifts an
   ! unset lpstart (0) to Nyquist (fny, twice the pixel size), so only a limit above Nyquist counts
   ! as given; testing for a positive value passed Nyquist to every chunk as its starting limit.
-  pure real function sieve_lpstart( params )
+  module pure real function sieve_lpstart( params )
     type(parameters), intent(in) :: params
     sieve_lpstart = 0.
     if( params%lpstart > params%fny ) sieve_lpstart = params%lpstart

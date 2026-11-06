@@ -61,6 +61,13 @@ contains
 end type quality_logistic_problem
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module real(kind=8) function stable_sigmoid_8( eta )
+        real(kind=8), intent(in) :: eta
+    end function stable_sigmoid_8
+end interface
+
+interface
     !> white-box tests (submodule simple_quality_logistic_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_quality_logistic_tests()
     end subroutine run_all_quality_logistic_tests
@@ -264,7 +271,7 @@ contains
         end select
     end subroutine logistic_fdf_wrapper
 
-    real(kind=8) function stable_sigmoid_8( eta )
+    module real(kind=8) function stable_sigmoid_8( eta )
         real(kind=8), intent(in) :: eta
         real(kind=8) :: z
         if( eta >= 0.0d0 )then

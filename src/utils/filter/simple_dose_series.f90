@@ -106,6 +106,13 @@ type :: dose_series
 end type dose_series
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module pure real(dp) function line_tau2( b, d, se ) result( tau2 )
+        real(dp), intent(in) :: b(:), d(:), se(:)
+    end function line_tau2
+end interface
+
+interface
     !> white-box tests (submodule simple_dose_series_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_dose_series_tests()
     end subroutine run_all_dose_series_tests
@@ -188,7 +195,7 @@ contains
     !> Method-of-moments (DerSimonian-Laird) excess variance tau^2 of points b(d) +- se about their weighted
     !! line, untruncated. E[Q] = (k-2) + tau^2 tr(P), P = W - WX(X'WX)^-1 X'W, X = [1, d], W = diag(1/se^2):
     !! the fitted slope takes a second degree of freedom out of the residuals and out of tr(P) alike.
-    pure real(dp) function line_tau2( b, d, se ) result( tau2 )
+    module pure real(dp) function line_tau2( b, d, se ) result( tau2 )
         real(dp), intent(in) :: b(:), d(:), se(:)
         real(dp) :: w(size(b)), s0, s1, s2, t0, t1, t2, sy, sxy, det, b0, slope, q, trp
         integer  :: k

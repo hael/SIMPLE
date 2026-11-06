@@ -41,6 +41,15 @@ contains
 end type cavg_quality_relation_analysis
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module subroutine calculate_promoted_feature( cc, distance, class_inds, k_requested, raw )
+        real,    intent(in)    :: cc(:,:), distance(:,:)
+        integer, intent(in)    :: class_inds(:), k_requested
+        real,    intent(inout) :: raw(:)
+    end subroutine calculate_promoted_feature
+end interface
+
+interface
     !> white-box tests (submodule simple_cavg_quality_relations_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_cavg_quality_relations_tests()
     end subroutine run_all_cavg_quality_relations_tests
@@ -112,7 +121,7 @@ contains
         call dealloc_imgarr(fit_imgs)
     end subroutine calculate_relation_analysis
 
-    subroutine calculate_promoted_feature( cc, distance, class_inds, k_requested, raw )
+    module subroutine calculate_promoted_feature( cc, distance, class_inds, k_requested, raw )
         real,    intent(in)    :: cc(:,:), distance(:,:)
         integer, intent(in)    :: class_inds(:), k_requested
         real,    intent(inout) :: raw(:)

@@ -55,6 +55,18 @@ type refine2D_stage_cfg
 end type refine2D_stage_cfg
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
+        real,           intent(in)  :: res05s(:) !< FRC=0.5 resolution per class (A)
+        integer,        intent(in)  :: pops(:)   !< population per class
+        real,           intent(in)  :: frac
+        real,           intent(out) :: res05_q
+        real, optional, intent(in)  :: lp
+        real, optional, intent(out) :: frac_past
+    end subroutine frc05_ptcl_quantile
+end interface
+
+interface
     !> white-box tests (submodule simple_solve2D_controller_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_solve2D_stage_rule_tests()
     end subroutine run_all_solve2D_stage_rule_tests
@@ -450,7 +462,7 @@ contains
     !! their FRC=0.5 crossing, the populations cumulated to frac of their total (the lower weighted quantile; 0.5 is
     !! the median particle's class resolution, which a few overfit or empty classes cannot move). frac_past is the
     !! population fraction in classes past lp. A class with pop < 1 is left out; 0 without a populated class.
-    subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
+    module subroutine frc05_ptcl_quantile( res05s, pops, frac, res05_q, lp, frac_past )
         real,           intent(in)  :: res05s(:) !< FRC=0.5 resolution per class (A)
         integer,        intent(in)  :: pops(:)   !< population per class
         real,           intent(in)  :: frac

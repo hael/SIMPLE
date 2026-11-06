@@ -34,6 +34,13 @@ real(dp), parameter :: TOL_SLOPE_EM    = 1.d-4  ! EM tolerance of the class fits
 real(dp), parameter :: TOL_SLOPE_FIN   = 1.d-6  ! EM tolerance of the class fit at the slope chosen
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module elemental real function maxima_shape( u )
+        real, intent(in) :: u
+    end function maxima_shape
+end interface
+
+interface
     !> white-box tests (submodule simple_nano_species_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_nano_species_tests()
     end subroutine run_all_nano_species_tests
@@ -165,7 +172,7 @@ contains
 
     ! u dependence of the expected number of maxima above u of a smooth Gaussian field in 3D
     ! (Euler characteristic density): C (u**2 - 1) exp(-u**2 / 2)
-    elemental real function maxima_shape( u )
+    module elemental real function maxima_shape( u )
         real, intent(in) :: u
         maxima_shape = (u * u - 1.) * exp(-0.5 * u * u)
     end function maxima_shape

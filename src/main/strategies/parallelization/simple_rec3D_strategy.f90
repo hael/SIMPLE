@@ -81,6 +81,14 @@ abstract interface
 end interface
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module function create_rec3D_strategy(cline) result(strategy)
+        class(cmdline), intent(in) :: cline
+        class(rec3D_strategy), allocatable :: strategy
+    end function create_rec3D_strategy
+end interface
+
+interface
     !> white-box tests (submodule simple_rec3D_strategy_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_rec3D_strategy_tests()
     end subroutine run_all_rec3D_strategy_tests
@@ -92,7 +100,7 @@ contains
     ! Strategy selection
     ! --------------------------------------------------------------------
 
-    function create_rec3D_strategy(cline) result(strategy)
+    module function create_rec3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(rec3D_strategy), allocatable :: strategy
         type(string) :: backend

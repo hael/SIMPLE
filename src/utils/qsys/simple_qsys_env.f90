@@ -69,6 +69,25 @@ type(qsys_env_ref), allocatable, save :: warmup_envs(:)
 type(qsys_env), pointer, save :: active_persistent_worker_env => null()
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module subroutine register_warmup_env( env, owner )
+        class(qsys_env), target, intent(inout) :: env
+        logical,       optional, intent(in)    :: owner
+    end subroutine register_warmup_env
+
+    module subroutine unregister_warmup_env( env )
+        class(qsys_env), target, intent(in) :: env
+    end subroutine unregister_warmup_env
+
+    module logical function is_warmup_owner( env )
+        class(qsys_env), target, intent(in) :: env
+    end function is_warmup_owner
+
+    module integer function n_warmup_envs()
+    end function n_warmup_envs
+end interface
+
+interface
     !> white-box tests (submodule simple_qsys_env_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_qsys_env_tests()
     end subroutine run_all_qsys_env_tests
@@ -739,7 +758,7 @@ contains
 
     !> Adds @p env to the warm-up registrants (once). It services the callback when it is the
     !! oldest live registrant, or at once with @p owner (the environment that starts the server).
-    subroutine register_warmup_env( env, owner )
+    module subroutine register_warmup_env( env, owner )
         class(qsys_env), target, intent(inout) :: env
         logical,       optional, intent(in)    :: owner
         type(qsys_env_ref), allocatable :: tmp(:)
@@ -766,7 +785,7 @@ contains
 
     !> Removes @p env from the warm-up registrants; if it serviced the callback, the oldest
     !! remaining registrant takes over. Harmless for an environment that is not registered.
-    subroutine unregister_warmup_env( env )
+    module subroutine unregister_warmup_env( env )
         class(qsys_env), target, intent(in) :: env
         type(qsys_env_ref), allocatable :: tmp(:)
         integer :: i, n
@@ -789,7 +808,7 @@ contains
     end subroutine unregister_warmup_env
 
     !> .true. when @p env services the persistent-worker warm-up callback.
-    logical function is_warmup_owner( env )
+    module logical function is_warmup_owner( env )
         class(qsys_env), target, intent(in) :: env
         is_warmup_owner = associated(active_persistent_worker_env, env)
     end function is_warmup_owner
@@ -802,7 +821,7 @@ contains
     end subroutine forget_warmup_envs
 
     !> Number of live warm-up registrants.
-    integer function n_warmup_envs()
+    module integer function n_warmup_envs()
         n_warmup_envs = 0
         if( allocated(warmup_envs) ) n_warmup_envs = size(warmup_envs)
     end function n_warmup_envs

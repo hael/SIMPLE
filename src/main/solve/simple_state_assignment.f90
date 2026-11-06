@@ -145,6 +145,42 @@ type :: assign_stats
 end type assign_stats
 
 interface
+    ! Private module procedures retain linkage for descendant submodules.
+    module pure logical function refs_usable( angdist, overlap, counts, cc_max )
+        real,    intent(in) :: angdist, overlap, cc_max
+        integer, intent(in) :: counts(:)
+    end function refs_usable
+
+    module pure subroutine reject_by_fit( corrs, l_cand, l_rej, med_out, mad_out, thres_out, nmax_out )
+        real,                 intent(in)    :: corrs(:)
+        logical,              intent(in)    :: l_cand(:)
+        logical, allocatable, intent(inout) :: l_rej(:)
+        real,    optional,    intent(out)   :: med_out, mad_out, thres_out
+        integer, optional,    intent(out)   :: nmax_out
+    end subroutine reject_by_fit
+
+    module pure function flag_ambiguous( margins, l_kept ) result( l_amb )
+        real,    intent(in) :: margins(:)
+        logical, intent(in) :: l_kept(:)
+        logical :: l_amb(size(margins))
+    end function flag_ambiguous
+
+    module pure subroutine compact_states( states, newind, nstates )
+        integer,              intent(inout) :: states(:)
+        integer, allocatable, intent(inout) :: newind(:)
+        integer,              intent(out)   :: nstates
+    end subroutine compact_states
+
+    module subroutine write_state_cavgs( cavgs, states, nstates, dir, label, l_rej, l_amb )
+        class(image),      intent(inout) :: cavgs(:)
+        integer,           intent(in)    :: states(:), nstates
+        class(string),     intent(in)    :: dir
+        character(len=*),  intent(in)    :: label
+        logical, optional, intent(in)    :: l_rej(:), l_amb(:)
+    end subroutine write_state_cavgs
+end interface
+
+interface
     !> white-box tests (submodule simple_state_assignment_tester, built only with BUILD_TESTS=ON)
     module subroutine run_all_state_assignment_tests()
     end subroutine run_all_state_assignment_tests
@@ -160,7 +196,7 @@ contains
     !! states @p cc_max at most REFS_PAIR_CC_MAX (distinct states; negative: not compared), and at
     !! least NSTATES_MIN states each holding STATE_FRAC_MIN of the class averages (@p counts per
     !! state).
-    pure logical function refs_usable( angdist, overlap, counts, cc_max )
+    module pure logical function refs_usable( angdist, overlap, counts, cc_max )
         real,    intent(in) :: angdist, overlap, cc_max
         integer, intent(in) :: counts(:)
         integer :: ntot
@@ -177,7 +213,7 @@ contains
     !! candidates' median less FIT_NMAD times their median absolute deviation are rejected
     !! (@p l_rej), the worst first, at most FIT_REJECT_MAX of the candidates (@p nmax_out). The
     !! median, the deviation and the threshold are returned for the log (0 without candidates).
-    pure subroutine reject_by_fit( corrs, l_cand, l_rej, med_out, mad_out, thres_out, nmax_out )
+    module pure subroutine reject_by_fit( corrs, l_cand, l_rej, med_out, mad_out, thres_out, nmax_out )
         real,                 intent(in)    :: corrs(:)
         logical,              intent(in)    :: l_cand(:)
         logical, allocatable, intent(inout) :: l_rej(:)
@@ -222,7 +258,7 @@ contains
 
     !> The classes @p l_kept whose @p margins (best less second-best state) fall below
     !! MARGIN_AMBIGUOUS: ambiguous, assigned as any other.
-    pure function flag_ambiguous( margins, l_kept ) result( l_amb )
+    module pure function flag_ambiguous( margins, l_kept ) result( l_amb )
         real,    intent(in) :: margins(:)
         logical, intent(in) :: l_kept(:)
         logical :: l_amb(size(margins))
@@ -231,7 +267,7 @@ contains
 
     !> The positive states of @p states renumbered from 1 in ascending order, in place; @p newind(s)
     !! is state s's new number (0 for a state none holds) and @p nstates its count.
-    pure subroutine compact_states( states, newind, nstates )
+    module pure subroutine compact_states( states, newind, nstates )
         integer,              intent(inout) :: states(:)
         integer, allocatable, intent(inout) :: newind(:)
         integer,              intent(out)   :: nstates
@@ -1085,7 +1121,7 @@ contains
     !! stack and a tiled JPEG (cavgs_fbody), and, when given, one of the classes @p l_rej marks
     !! (cavgs_rejected) and one of those @p l_amb marks (cavgs_ambiguous); each JPEG logged
     !! (log_jpeg) under @p label. A group without class averages writes nothing and is logged.
-    subroutine write_state_cavgs( cavgs, states, nstates, dir, label, l_rej, l_amb )
+    module subroutine write_state_cavgs( cavgs, states, nstates, dir, label, l_rej, l_amb )
         class(image),      intent(inout) :: cavgs(:)
         integer,           intent(in)    :: states(:), nstates
         class(string),     intent(in)    :: dir
