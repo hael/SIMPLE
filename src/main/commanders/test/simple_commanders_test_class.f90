@@ -28,6 +28,8 @@ use simple_decay_funs_tester,                only: run_all_decay_funs_tests
 use simple_opt_tester,                       only: run_all_opt_tests
 use simple_nlcg_solver_tester,               only: run_all_nlcg_solver_tests
 use simple_lpstages_tester,                  only: run_all_lpstages_tests
+use simple_dose_series_tester,               only: run_all_dose_series_tests
+use simple_dose_curve_tester,                only: run_all_dose_curve_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_nano_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_accum_blend_tester,               only: run_all_accum_blend_tests
@@ -165,6 +167,7 @@ use simple_stream_job_sets_tester,               only: run_all_stream_job_sets_t
 use simple_stream_meta_plots_tester,             only: run_all_stream_meta_plots_tests
 use simple_stream_watcher_tester,                only: run_all_stream_watcher_tests
 use simple_ui,                                   only: validate_ui_json
+use simple_dose_filter3D_tester,              only: run_all_dose_filter3D_tests
 use simple_dose_series_manifest_tester,         only: run_all_dose_series_manifest_tests
 use simple_refine_motion_model_tester,          only: run_all_refine_motion_model_tests, &
     &run_all_refine_motion_model_lib_tests
@@ -391,6 +394,8 @@ contains
         call add_suite(s, n, 'optimisers',              run_all_opt_tests)
         call add_suite(s, n, 'nonlinear conjugate gradient', run_all_nlcg_solver_tests)
         call add_suite(s, n, 'low-pass stages',         run_all_lpstages_tests)
+        call add_suite(s, n, 'dose series',             run_all_dose_series_tests)
+        call add_suite(s, n, 'dose curve',              run_all_dose_curve_tests)
         ! motion-correction shift search on expanded Fourier transforms (an optimiser, not an image test)
         call add_suite(s, n, 'shift search',            run_all_ftexp_shsrch_tests)
         call add_suite(s, n, 'truth metrics',           run_all_truth_metrics_tests)
@@ -623,6 +628,7 @@ contains
         call add_suite(s, n, 'postprocess_pdb', run_all_postprocess_pdb_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
         call add_suite(s, n, 'fraction dose export',    run_all_refine_motion_model_lib_tests)
+        call add_suite(s, n, 'dose filter3D',           run_all_dose_filter3D_tests)
         call add_suite(s, n, 'wave reconstruction',  run_all_rec3D_wave_lib_tests)
         call add_suite(s, n, 'volume programs',      run_all_volops_lib_tests)
     end subroutine suites_lib_reconstruction

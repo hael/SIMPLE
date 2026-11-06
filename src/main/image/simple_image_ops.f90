@@ -796,4 +796,45 @@ contains
         end select
     end subroutine apply_dose_weighing
 
+    !> Weights from a per-frame contrast c and B-factor (A^2), of unit squared sum over frange at every frequency:
+    !! w_f(k) = c_f exp(-B_f k^2/4) / sqrt(sum_g c_g^2 exp(-B_g k^2/2)). Frames outside frange are untouched.
+    module subroutine apply_frame_bfactor_weights( self, nframes, frames, frange, cfrac, bfrac )
+        class(image), intent(inout) :: self      ! the call handle only, as for apply_dose_weighing
+        integer,      intent(in)    :: nframes
+        class(image), intent(inout) :: frames(nframes)
+        integer,      intent(in)    :: frange(2)
+        real(dp),     intent(in)    :: cfrac(nframes), bfrac(nframes)
+        real(dp) :: e(nframes), s, den, limhsq, limksq
+        integer  :: ldim(3), nxphys, nyphys, ldimx_half, ldimy_half, hphys, kphys, h, k, i
+        if( frange(1) < 1 .or. frange(2) > nframes .or. frange(1) > frange(2) ) THROW_HARD('Invalid frame range')
+        if( .not. frames(frange(1))%is_ft() ) THROW_HARD('Frames should be in Fourier space')
+        if( any(cfrac(frange(1):frange(2)) <= 0._dp) ) THROW_HARD('Frame contrasts must be positive')
+        ldim       = frames(frange(1))%ldim
+        limhsq     = (real(ldim(1),dp) * real(frames(frange(1))%smpd,dp))**2
+        limksq     = (real(ldim(2),dp) * real(frames(frange(1))%smpd,dp))**2
+        nxphys     = frames(frange(1))%array_shape(1)
+        nyphys     = frames(frange(1))%array_shape(2)
+        ldimx_half = ldim(1) / 2
+        ldimy_half = ldim(2) / 2
+        !$omp parallel do private(hphys,kphys,h,k,s,e,den,i) default(shared) schedule(static) proc_bind(close)
+        do kphys = 1, nyphys
+            k = kphys - 1 - merge(ldim(2), 0, kphys - 1 > ldimy_half)
+            do hphys = 1, nxphys
+                h   = hphys - 1 - merge(ldim(1), 0, hphys - 1 > ldimx_half)
+                s   = real(h*h,dp) / limhsq + real(k*k,dp) / limksq
+                den = 0._dp
+                do i = frange(1), frange(2)
+                    ! clamped so that the squared sum stays finite
+                    e(i) = cfrac(i) * exp(max(-300._dp, min(300._dp, -bfrac(i) * s / 4._dp)))
+                    den  = den + e(i) * e(i)
+                enddo
+                den = 1._dp / sqrt(den)
+                do i = frange(1), frange(2)
+                    frames(i)%cmat(hphys,kphys,1) = frames(i)%cmat(hphys,kphys,1) * real(e(i) * den, sp)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine apply_frame_bfactor_weights
+
 end submodule simple_image_ops

@@ -29,6 +29,7 @@ type :: parameters
     character(len=3)          :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)          :: backgr_subtr='no'    !< Whether to perform micrograph background subtraction
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
+    character(len=4)          :: bfac_model='line'    !< dose_filter3D: shrink each window's B-factor towards the dose curve or keep its own(line|free){line}
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
     character(len=3)          :: umap='yes'           !< flex_pca: UMAP plot coordinates and figures of the final embedding(yes|no){yes}
@@ -45,6 +46,7 @@ type :: parameters
     character(len=3)          :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)          :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)          :: doprint='no'
+    character(len=8)          :: dose_weighting='gg'  !< reextract: weight the movie fractions by Grant & Grigorieff or by the measured dose curve(gg|measured){gg}
     character(len=3)          :: downscale='yes'      !< wheter to downscale or not in motion correction
     character(len=3)          :: dw='yes'             !< Whether dose weighted micrographs will be generated, for use outside of the motion correction path(yes|no){yes}
     character(len=3)          :: dynreslim='no'       !< Whether the alignement resolution limit should be dynamic in streaming(yes|no){no}
@@ -157,6 +159,7 @@ type :: parameters
     character(len=3)          :: wfloat16='no'        !< write MRC stacks in mode 12 float16 format(yes|no){no}
     character(len=3)          :: write_imgarr='no'    !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
+    character(len=3)          :: zerodose='no'        !< dose_filter3D: also write the zero-dose extrapolation(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     ! default initialization is done in the init_strings method below
     type(string)              :: cache_dir            !< where the flex PCA plane cache and part files live (a fast local disk)
@@ -182,6 +185,7 @@ type :: parameters
     type(string)              :: dir_reject           !< move rejected files to here{rejected}
     type(string)              :: dir_select           !< move selected files to here{selected}
     type(string)              :: dir_target           !< put output here
+    type(string)              :: dose_curve           !< dose curve written by dose_filter3D(.txt)
     type(string)              :: exec_dir             !< auto-named execution directory
     type(string)              :: executable           !< name of executable
     type(string)              :: ext                  !< file extension{.mrc}

@@ -29,6 +29,7 @@ contains
         self%dir_reject='rejected'!< move rejected files to here{rejected}
         self%dir_select='selected'!< move selected files to here{selected}
         self%dir_target=''        !< put output here
+        self%dose_curve=''        !< dose curve written by dose_filter3D(.txt)
         self%exec_dir='./'        !< auto-named execution directory
         self%executable=''        !< name of executable
         self%ext=MRC_EXT          !< file extension{.mrc}

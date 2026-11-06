@@ -120,6 +120,8 @@ contains
     ! --------------------------------------------------------------------
     subroutine validate_reextract_cline(cline)
         class(cmdline), intent(inout) :: cline
+        type(string) :: weighting, curve_fname
+        logical      :: l_movies
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -127,6 +129,23 @@ contains
         endif
         if( cline%defined('osmpd') )then
             if( .not.cline%defined('box') ) THROW_HARD('BOX must be defined with OSMPD!')
+        endif
+        if( cline%defined('dose_weighting') )then
+            l_movies = .false.
+            if( cline%defined('extractfrommov') ) l_movies = cline%get_carg('extractfrommov').eq.'yes'
+            weighting = cline%get_carg('dose_weighting')
+            select case(weighting%to_char())
+                case('gg')
+                case('measured')
+                    if( .not.l_movies ) THROW_HARD('dose_weighting=measured needs extractfrommov=yes')
+                    if( .not.cline%defined('dose_curve') ) THROW_HARD('dose_weighting=measured needs dose_curve')
+                    curve_fname = cline%get_carg('dose_curve')
+                    if( .not.file_exists(curve_fname) ) THROW_HARD('Dose curve not found: '//curve_fname%to_char())
+                    ! absolute, because params%new enters a fresh run directory
+                    call cline%set('dose_curve', simple_abspath(curve_fname))
+                case default
+                    THROW_HARD('dose_weighting must be gg or measured')
+            end select
         endif
     end subroutine validate_reextract_cline
 
@@ -157,6 +176,7 @@ contains
 
     subroutine inmem_execute(self, params, cline)
         use simple_particle_extractor,  only: ptcl_extractor
+        use simple_dose_curve,          only: dose_curve
         class(reextract_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         class(cmdline),                  intent(inout) :: cline
@@ -167,7 +187,8 @@ contains
         type(ctfparams)               :: ctfparms
         type(stack_io)                :: stkio_w
         type(ptcl_extractor)          :: extractor
-        type(string)                  :: mic_name, imgkind, ext
+        type(dose_curve)              :: curve
+        type(string)                  :: mic_name, imgkind, ext, message
         logical,          allocatable :: mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:), boxcoords(:,:), ptcl_inds(:), mic_dims(:,:)
         type(string)                  :: stack
@@ -176,8 +197,9 @@ contains
         integer :: prev_pos(2), new_pos(2), ishift(2), ldim(3), prev_center(2), new_center(2), ldim_sc(3)
         integer :: i, nframes, imic, iptcl, nmics, prev_box, box_foo, cnt, nmics_tot, stk_ind
         integer :: fromp, top, istk, nptcls2extract, nptcls
-        logical :: l_3d, l_scale_particles, l_movie_frames
+        logical :: l_3d, l_scale_particles, l_movie_frames, l_measured
         l_movie_frames    = trim(params%extractfrommov).eq.'yes'
+        l_measured        = trim(params%dose_weighting).eq.'measured'
         l_scale_particles = cline%defined('osmpd')
         if( l_scale_particles )then
             if( .not.cline%defined('box') ) THROW_HARD('BOX must be defined with OSMPD!')
@@ -185,6 +207,11 @@ contains
         endif
         if( l_movie_frames .and. (trim(params%ctf).eq.'flip') )then
             THROW_HARD('extractfrommov=yes does not support ctf=flip!')
+        endif
+        if( l_measured )then
+            if( .not.l_movie_frames ) THROW_HARD('dose_weighting=measured needs extractfrommov=yes')
+            if( .not.curve%read(params%dose_curve, message) ) THROW_HARD(message%to_char())
+            write(logfhandle,'(A)') '>>> WEIGHTING THE MOVIE FRACTIONS BY THE DOSE CURVE '//params%dose_curve%to_char()
         endif
         params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
         l_3d = .true.
@@ -345,7 +372,11 @@ contains
                     enddo
                     ptcl_inds = ptcl_inds - fromp + 1
                     call prepimgbatch_local(nptcls2extract, l_scale_particles)
-                    if( l_movie_frames ) call extractor%init_mov(o_mic, params)
+                    if( l_measured )then
+                        call extractor%init_mov(o_mic, params, curve)
+                    else if( l_movie_frames )then
+                        call extractor%init_mov(o_mic, params)
+                    endif
                     if( extractor%from_mov() )then
                         call extractor%extract_particles(ptcl_inds, boxcoords, build%imgbatch, stk_min,stk_max,stk_mean,stk_sdev)
                     else
@@ -404,6 +435,7 @@ contains
         call micrograph%kill
         call micrograph_sc%kill
         call extractor%kill
+        call curve%kill
         call killimgbatch_local
         call build%kill_general_tbox
         ! OUTPUT project
@@ -503,16 +535,23 @@ contains
     ! ====================================================================
 
     subroutine distr_initialize(self, params, cline)
+        use simple_dose_curve, only: dose_curve
         class(reextract_distr_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         class(cmdline),                  intent(inout) :: cline
-        type(ori)      :: o_mic
-        type(string)   :: mic_name, imgkind
-        integer        :: imic, nmics_tot, state, ipart
-        integer        :: nmics_valid
+        type(ori)        :: o_mic
+        type(dose_curve) :: curve
+        type(string)     :: mic_name, imgkind, message
+        integer          :: imic, nmics_tot, state, ipart
+        integer          :: nmics_valid
         call validate_reextract_cline(cline)
         call set_reextract_defaults(cline)
         call params%new(cline)
+        if( trim(params%dose_weighting).eq.'measured' )then
+            ! a bad curve fails here, before any job is scheduled
+            if( .not.curve%read(params%dose_curve, message) ) THROW_HARD(message%to_char())
+            call curve%kill
+        endif
         ! mirror your original master behavior: avoid nested directory structure in workers
         call cline%set('mkdir', 'no')
         call self%spproj%read(params%projfile)

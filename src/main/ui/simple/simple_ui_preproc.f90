@@ -555,6 +555,19 @@ contains
         call reextract%add_input(UI_PARM, outside, &
         &visibility=UI_VIS_ADVANCED)
         call reextract%add_input(UI_PARM, wfloat16, group="reextract", visibility=UI_VIS_ADVANCED)
+        call reextract%add_input(UI_PARM, 'extractfrommov', 'binary', 'Extract from the movies', &
+        &'Extract the particles from the motion-corrected movie fractions instead of the micrographs(yes|no){no}', &
+        &'(yes|no){no}', .false., 'no', group="reextract", visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call reextract%add_input(UI_PARM, 'dose_weighting', 'multi', 'Movie fraction weights', &
+        &'Weight the movie fractions by Grant & Grigorieff or by the dose curve dose_filter3D measured(gg|measured){gg}', &
+        &'(gg|measured){gg}', .false., 'gg', group="reextract", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('extractfrommov', [character(len=3) :: 'yes']), &
+        &choices=ui_choices([character(len=8) :: 'gg', 'measured']))
+        call reextract%add_input(UI_PARM, 'dose_curve', 'file', 'Measured dose curve', &
+        &'Dose curve written by dose_filter3D, read with dose_weighting=measured', &
+        &'e.g. dose_series_curve.txt', .false., '', group="reextract", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('dose_weighting', [character(len=8) :: 'measured']))
         ! <no additional inputs>
         ! <empty>
         ! search controls

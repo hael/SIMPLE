@@ -45,6 +45,7 @@ contains
         call reg%add_char('backgr_subtr', self%backgr_subtr)
         call reg%add_char('balance', self%balance)
         call reg%add_char('beamtilt', self%beamtilt)
+        call reg%add_char('bfac_model', self%bfac_model)
         call reg%add_char('bin', self%bin)
         call reg%add_char('boxes', self%boxes)
         call reg%add_char('umap', self%umap)
@@ -72,6 +73,7 @@ contains
         call reg%add_char('dir_exec', self%dir_exec)
         call reg%add_char('downscale', self%downscale)
         call reg%add_char('doprint', self%doprint)
+        call reg%add_char('dose_weighting', self%dose_weighting)
         call reg%add_char('dynreslim', self%dynreslim)
         call reg%add_char('dw', self%dw)
         call reg%add_char('element', self%element)
@@ -248,6 +250,7 @@ contains
         call reg%add_char('worker_server', self%worker_server)
         call reg%add_char('write_imgarr', self%write_imgarr)
         call reg%add_char('zero', self%zero)
+        call reg%add_char('zerodose', self%zerodose)
         call reg%add_char('ciffile', self%ciffile)
     end subroutine bind_input_carg
 
@@ -260,6 +263,7 @@ contains
         call reg%add_file('classdoc', self%classdoc,'T')
         call reg%add_file('deftab', self%deftab,'T', 'O')
         call reg%add_file('deselfile', self%deselfile,'T')
+        call reg%add_file('dose_curve', self%dose_curve,'T')
         call reg%add_file('ext', self%ext,notAllowed='T')
         call reg%add_file('filetab', self%filetab,'T')
         call reg%add_file('fname', self%fname)

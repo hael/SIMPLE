@@ -626,6 +626,22 @@ contains
         is_fortran_symbol_char = char_is_a_letter(ch) .or. char_is_a_number(ch) .or. ch == '_'
     end function is_fortran_symbol_char
 
+    !> str as one POSIX shell word: single-quoted, each embedded single quote closed, escaped and reopened
+    pure function posix_quote( str ) result( quoted )
+        character(len=*), intent(in)  :: str
+        character(len=:), allocatable :: quoted
+        integer :: i
+        quoted = "'"
+        do i = 1, len_trim(str)
+            if( str(i:i) == "'" )then
+                quoted = quoted//"'"//achar(92)//"''"
+            else
+                quoted = quoted//str(i:i)
+            endif
+        end do
+        quoted = quoted//"'"
+    end function posix_quote
+
     pure function fortran_quote( str ) result( quoted )
         character(len=*), intent(in) :: str
         character(len=XLONGSTRLEN) :: quoted

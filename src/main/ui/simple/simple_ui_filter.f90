@@ -8,6 +8,7 @@ type(ui_program), target :: filter
 type(ui_program), target :: uniform_filter2D
 type(ui_program), target :: uniform_filter3D
 type(ui_program), target :: nu_filt3D
+type(ui_program), target :: dose_filter3D
 
 contains
 
@@ -17,6 +18,7 @@ contains
         call new_uniform_filter2D(prgtab)
         call new_uniform_filter3D(prgtab)
         call new_nu_filt3D(prgtab)
+        call new_dose_filter3D(prgtab)
     end subroutine construct_filter_programs
 
 subroutine new_filter( prgtab )
@@ -208,5 +210,51 @@ subroutine new_filter( prgtab )
         ! add to ui_hash
         call add_ui_program('nu_filt3D', nu_filt3D, prgtab, UI_CATEGORY)
     end subroutine new_nu_filt3D
+
+    subroutine new_dose_filter3D( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call dose_filter3D%new(&
+        &'dose_filter3D',&                                                      ! name
+        &'Accumulate a dose series of half-map pairs under a measured attenuation model',& ! summary
+        &'is a program that fits one B-factor per dose window and a line of those B-factors in dose, then&
+        & accumulates the windows with the matched-filter weights the fit implies',& ! help
+        &'simple_exec',&                                                        ! executable
+        &.false., &
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Dose Series Filter')                                     ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call dose_filter3D%add_input(UI_IMG, 'filetab', 'file', 'Dose series manifest', &
+        &'Manifest of the per-window half-map pairs and their doses, written by refine_motion_model', &
+        &'dose_series.txt file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call dose_filter3D%add_input(UI_IMG, outvol, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        ! parameter input/output
+        call dose_filter3D%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call dose_filter3D%add_input(UI_PARM, zerodose, &
+        &visibility=UI_VIS_ADVANCED)
+        ! <no additional inputs>
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call dose_filter3D%add_input(UI_FILT, hp, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call dose_filter3D%add_input(UI_FILT, lp, required_override=.false., &
+        &visibility=UI_VIS_STANDARD)
+        call dose_filter3D%add_input(UI_FILT, bfac_model, &
+        &visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call dose_filter3D%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call dose_filter3D%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('dose_filter3D', dose_filter3D, prgtab, UI_CATEGORY)
+    end subroutine new_dose_filter3D
 
 end module simple_ui_filter

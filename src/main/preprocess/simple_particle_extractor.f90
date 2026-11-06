@@ -5,6 +5,7 @@ use simple_image,                only: image
 use simple_eer_factory,          only: eer_decoder
 use simple_motion_correct_utils, only: correct_gain, pix2polycoords, apply_patch_poly
 use simple_motion_model,         only: motion_model
+use simple_dose_curve,           only: dose_curve
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -22,6 +23,7 @@ type :: ptcl_extractor
     type(image),      allocatable :: particles_frames(:,:)
     type(motion_model)            :: mmodel
     real,             allocatable :: weights(:), isoshifts(:,:)
+    real(dp),         allocatable :: frac_c(:), frac_b(:) !< (nframes) contrast and B-factor of the measured dose curve
     integer,          allocatable :: hotpix_coords(:,:)
     logical,          allocatable :: particle_mask(:,:,:)
     type(string)                  :: gainrefname, moviename, docname
@@ -116,13 +118,14 @@ contains
         self%exists = .true.
     end subroutine init_model
 
-    !>  Constructor
-    subroutine init_mov( self, omic, params )
+    !>  Constructor; with a measured dose curve the fractions take its weights instead of Grant & Grigorieff's
+    subroutine init_mov( self, omic, params, curve )
         use simple_ori,        only: ori
         use simple_parameters, only: parameters
-        class(ptcl_extractor),     intent(inout) :: self
-        class(ori),                intent(in)    :: omic
-        class(parameters), target, intent(in)    :: params
+        class(ptcl_extractor),       intent(inout) :: self
+        class(ori),                  intent(in)    :: omic
+        class(parameters), target,   intent(in)    :: params
+        class(dose_curve), optional, intent(in)    :: curve
         call self%kill
         self%l_mov = .false.
         if( omic%isthere('mcmodel') )then
@@ -130,6 +133,8 @@ contains
             if( .not.self%docname%is_blank() ) self%l_mov = file_exists(self%docname)
         endif
         if( .not.self%l_mov )then
+            ! the integrated micrograph is weighted by Grant & Grigorieff, not by the measured curve
+            if( present(curve) ) THROW_HARD('Measured dose weighting needs the motion model of every micrograph')
             THROW_WARN('Motion model absent; extracting from the integrated micrograph')
             call self%init_mic(params%box, (params%pcontrast .eq. 'black'))
             return
@@ -142,6 +147,11 @@ contains
         endif
         call self%prepare_motion(self%mmodel%fixed_frame)
         self%total_dose = real(self%nframes) * self%doseperframe
+        if( present(curve) )then
+            call curve%fraction_weights(self%nframes, real(self%doseperframe,dp), real(self%kv,dp), self%frac_c, self%frac_b)
+            ! the curve was measured on unweighted fraction sums: its weights replace the motion-correction ones
+            self%weights = 1. / real(self%nframes)
+        endif
         call self%read_movie_frames
         call self%apply_gain_correction
         call self%cure_movie_outliers
@@ -310,8 +320,13 @@ contains
             endif
         endif
         if( apply_dose_weighting )then
-            call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
-                &[1,self%nframes], self%total_dose, self%kv, mode='GG')
+            if( allocated(self%frac_c) )then
+                call self%frames(1)%apply_frame_bfactor_weights(self%nframes, self%frames,&
+                    &[1,self%nframes], self%frac_c, self%frac_b)
+            else
+                call self%frames(1)%apply_dose_weighing(self%nframes, self%frames,&
+                    &[1,self%nframes], self%total_dose, self%kv, mode='GG')
+            endif
             !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
             do iframe = 1,self%nframes
                 call self%frames(iframe)%ifft
@@ -355,6 +370,7 @@ contains
         write(logfhandle,*) 'gainrefname    ', self%gainrefname%to_char()
         write(logfhandle,*) 'moviename      ', self%moviename%to_char()
         write(logfhandle,*) 'doseweighting_applied ', self%l_dose_weighted
+        write(logfhandle,*) 'doseweighting_measured ', allocated(self%frac_c)
         write(logfhandle,*) 'total dose     ', self%total_dose
         write(logfhandle,*) 'l_scale        ', self%l_scale
         write(logfhandle,*) 'scale          ', self%scale
@@ -1010,6 +1026,8 @@ contains
         integer :: i
         call self%dealloc_particles_frames
         if( allocated(self%weights) )   deallocate(self%weights)
+        if( allocated(self%frac_c) )    deallocate(self%frac_c)
+        if( allocated(self%frac_b) )    deallocate(self%frac_b)
         if( allocated(self%isoshifts) ) deallocate(self%isoshifts)
         if( allocated(self%frames) )then
             do i = 1,size(self%frames)

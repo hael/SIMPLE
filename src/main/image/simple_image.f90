@@ -379,6 +379,7 @@ contains
     procedure          :: iter_gridcorr
     ! dose weighing
     procedure          :: apply_dose_weighing
+    procedure          :: apply_frame_bfactor_weights
     ! POLARIZATION, file: simple_image_polar.f90
     procedure          :: memoize4polarize
     procedure          :: memoize4polarize_oversamp
@@ -2314,6 +2315,14 @@ interface
         real,             intent(in)    :: voltage
         character(len=*), intent(in)    :: mode
     end subroutine apply_dose_weighing
+
+    module subroutine apply_frame_bfactor_weights( self, nframes, frames, frange, cfrac, bfrac )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: nframes
+        class(image), intent(inout) :: frames(nframes)
+        integer,      intent(in)    :: frange(2)
+        real(dp),     intent(in)    :: cfrac(nframes), bfrac(nframes)
+    end subroutine apply_frame_bfactor_weights
 
     ! ===== polarization procedure interfaces =====
 

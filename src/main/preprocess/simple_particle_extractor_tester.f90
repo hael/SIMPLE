@@ -114,6 +114,7 @@ contains
         use simple_defs,              only: dp
         use simple_image,             only: image
         use simple_motion_model,      only: motion_model
+        use simple_dose_curve,        only: dose_curve
         use simple_string,            only: string
         use simple_syslib,            only: del_file
         use simple_test_utils,        only: assert_real
@@ -121,6 +122,10 @@ contains
         integer, parameter :: NX = 48, NY = 40, NFR = 3, BOX_TEST = 8, REF_FRAME = 2
         integer, parameter :: DRIFT(2,NFR) = reshape([0,0,2,-1,-1,2], [2,NFR])
         real, parameter :: PIXEL_SIZE = 1.5, DOSE = 6., FRAME_WEIGHTS(NFR) = [0.25,0.5,0.25]
+        ! a measured curve with windows at fractions 1 and 2, centres 3 and 9 e/A^2; fraction 3 at 15 continues
+        ! the window-2 values along the line slopes beta = 5 A^2 and gamma = 0.03 per e/A^2
+        real(dp), parameter :: CURVE_C(NFR) = [1._dp, 0.8_dp, 0.8_dp*exp(-0.18_dp)], CURVE_B(NFR) = [0._dp, 40._dp, 70._dp]
+        type(dose_curve) :: curve
         ! Allow single-precision I/O, FFTs and background normalization roundoff.
         real, parameter :: PIXEL_TOL = 1024. * epsilon(1.)
         class(ptcl_extractor), allocatable :: extractor, mic_extractor
@@ -189,12 +194,15 @@ contains
         call expected(1)%new([BOX_TEST,BOX_TEST,1], PIXEL_SIZE, wthreads=.false.)
         call truth_image%new([NX,NY,1], PIXEL_SIZE, wthreads=.false.)
         call mic_extractor%init_mic(BOX_TEST, .false.)
-        do imode = 1,2
+        call curve%new(2, 300._dp, real(DOSE,dp), 20._dp, 4._dp, -40._dp, 5._dp, 0._dp, 0.03_dp)
+        call curve%set_knot(1, 1, 1, 3._dp, CURVE_C(1), CURVE_B(1), .true.)
+        call curve%set_knot(2, 2, 2, 9._dp, CURVE_C(2), CURVE_B(2), .true.)
+        do imode = 1,3
             if( imode == 1 )then
                 call extractor%init_model(omic, params)
                 weights = 1._dp
                 dw = 1._dp
-            else
+            else if( imode == 2 )then
                 call extractor%init_mov(omic, params)
                 weights = real(FRAME_WEIGHTS,dp)
                 ! Two sinusoidal Fourier modes: normalized dose weights in closed form.
@@ -205,13 +213,23 @@ contains
                 do i = 1,size(dw,dim=1)
                     dw(i,:) = dw(i,:) / sqrt(sum(dw(i,:)**2))
                 enddo
+            else
+                ! the measured curve replaces both the dose weights and the motion-correction frame weights
+                call extractor%init_mov(omic, params, curve)
+                weights = 1._dp
+                do iframe = 1,NFR
+                    dw(:,iframe) = CURVE_C(iframe) * exp(-CURVE_B(iframe) * frequency**2 / 4._dp)
+                enddo
+                do i = 1,size(dw,dim=1)
+                    dw(i,:) = dw(i,:) / sqrt(sum(dw(i,:)**2))
+                enddo
             endif
             call assert_true(extractor%does_exist(), 'both binary-model constructors complete initialization')
             call assert_false(extractor%has_particle_frames([1,NFR], 1), 'both constructors invalidate cached particles')
             call assert_true(extractor%from_model(), 'both constructors retain binary-model metadata')
-            call assert_true(extractor%from_mov() .eqv. (imode == 2), 'constructors retain distinct extraction modes')
+            call assert_true(extractor%from_mov() .eqv. (imode >= 2), 'constructors retain distinct extraction modes')
             call assert_int(NFR, extractor%get_nframes(), 'both constructors copy the model frame count')
-            call assert_dose_weighting_report(extractor, imode == 2, .false.)
+            call assert_dose_weighting_report(extractor, imode >= 2, .false.)
             pixels = 0.
             do iframe = 1,NFR
                 shift = DRIFT(:,iframe) - DRIFT(:,REF_FRAME)
@@ -257,6 +275,7 @@ contains
         call extractor%kill()
         call assert_dose_weighting_report(extractor, .false.)
         call mic_extractor%kill()
+        call curve%kill()
         call model%kill()
         call omic%kill()
         call gain_image%kill()

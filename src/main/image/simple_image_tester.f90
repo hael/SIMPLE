@@ -43,6 +43,7 @@ contains
         call test_bandpass()
         call test_apply_filter()
         call test_dose_weighing_modes()
+        call test_frame_bfactor_weights()
         call test_power_spectrum()
         call test_shifts()
         call test_flip()
@@ -431,6 +432,69 @@ contains
             enddo
         enddo
     end subroutine test_dose_weighing_modes
+
+    ! Per-frame contrast and B-factor weights in closed form on a rectangular frame; frames outside the range
+    ! are untouched, and a thread team gives the serial result bit for bit.
+    subroutine test_frame_bfactor_weights()
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+        integer,  parameter :: NFRAMES = 5
+        integer,  parameter :: LDIM(3) = [10,6,1]
+        integer,  parameter :: FRANGE(2) = [2,4]
+        real,     parameter :: PIXEL_SIZE = 1.25
+        real(dp), parameter :: CFRAC(NFRAMES) = [1.0_dp, 0.9_dp, 0.8_dp, 0.6_dp, 0.5_dp]
+        real(dp), parameter :: BFRAC(NFRAMES) = [0._dp, 5._dp, 20._dp, 60._dp, 90._dp]
+        complex,  parameter :: BASE = cmplx(1.25,-0.75)
+        type(image) :: serial(NFRAMES), team(NFRAMES)
+        real(dp) :: s, e(NFRAMES), sumsq, expected
+        real     :: max_error, max_norm_error, max_team_diff, actual_sumsq
+        integer  :: array_shape(3), hphys, kphys, h, k, iframe
+        complex  :: actual
+        !$ integer :: nthr_saved
+        write(*,'(A)') 'test_frame_bfactor_weights'
+        do iframe = 1,NFRAMES
+            call serial(iframe)%new(LDIM, PIXEL_SIZE, wthreads=.false.)
+            call team(iframe)%new(LDIM, PIXEL_SIZE, wthreads=.false.)
+            call serial(iframe)%set_cmat(BASE)
+            call team(iframe)%set_cmat(BASE)
+        enddo
+        !$ nthr_saved = omp_get_max_threads()
+        !$ call omp_set_num_threads(1)
+        call serial(1)%apply_frame_bfactor_weights(NFRAMES, serial, FRANGE, CFRAC, BFRAC)
+        !$ call omp_set_num_threads(4)
+        call team(1)%apply_frame_bfactor_weights(NFRAMES, team, FRANGE, CFRAC, BFRAC)
+        !$ call omp_set_num_threads(nthr_saved)
+        array_shape    = serial(1)%get_array_shape()
+        max_error      = 0.
+        max_norm_error = 0.
+        max_team_diff  = 0.
+        do kphys = 1,array_shape(2)
+            k = kphys - 1 - merge(LDIM(2), 0, kphys - 1 > LDIM(2)/2)
+            do hphys = 1,array_shape(1)
+                h = hphys - 1 - merge(LDIM(1), 0, hphys - 1 > LDIM(1)/2)
+                s = (real(h,dp)/(real(LDIM(1),dp)*real(PIXEL_SIZE,dp)))**2 + &
+                    &(real(k,dp)/(real(LDIM(2),dp)*real(PIXEL_SIZE,dp)))**2
+                e     = CFRAC * exp(-BFRAC * s / 4._dp)
+                sumsq = sum(e(FRANGE(1):FRANGE(2))**2)
+                actual_sumsq = 0.
+                do iframe = 1,NFRAMES
+                    expected = 1._dp
+                    if( iframe >= FRANGE(1) .and. iframe <= FRANGE(2) ) expected = e(iframe) / sqrt(sumsq)
+                    actual        = serial(iframe)%get_cmat_at(hphys,kphys,1)
+                    max_error     = max(max_error, abs(actual - BASE*real(expected)))
+                    max_team_diff = max(max_team_diff, abs(actual - team(iframe)%get_cmat_at(hphys,kphys,1)))
+                    if( iframe >= FRANGE(1) .and. iframe <= FRANGE(2) ) actual_sumsq = actual_sumsq + real(actual/BASE)**2
+                enddo
+                max_norm_error = max(max_norm_error, abs(actual_sumsq - 1.))
+            enddo
+        enddo
+        call assert_real(0., max_error, 2.e-6, 'frame B-factor weights match the closed form; outside frames untouched')
+        call assert_real(0., max_norm_error, 2.e-6, 'frame B-factor weights have unit squared sum')
+        call assert_real(0., max_team_diff, 0., 'frame B-factor weights of a thread team equal the serial ones')
+        do iframe = 1,NFRAMES
+            call serial(iframe)%kill()
+            call team(iframe)%kill()
+        enddo
+    end subroutine test_frame_bfactor_weights
 
     !---------------- power spectrum ----------------
 

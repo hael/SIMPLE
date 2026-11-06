@@ -13,6 +13,7 @@ type(ui_param) :: automsk
 type(ui_param) :: automsk_refine3D
 type(ui_param) :: backgr_subtr
 type(ui_param) :: bfac
+type(ui_param) :: bfac_model
 type(ui_param) :: blocktree
 type(ui_param) :: box
 type(ui_param) :: box_extract
@@ -174,6 +175,7 @@ type(ui_param) :: wcrit
 type(ui_param) :: wfloat16
 type(ui_param) :: width
 type(ui_param) :: winsz
+type(ui_param) :: zerodose
 
 contains
 
@@ -211,6 +213,11 @@ subroutine set_ui_params
     call bfac%set_param(           'bfac',            'num',    'B-factor for sharpening', &
                                    'B-factor for sharpening in Angstroms^2', &
                                    'B-factor in Angstroms^2', .false., 200.)
+
+    call bfac_model%set_param(     'bfac_model',      'multi',  'Per-window B-factor treatment', &
+                                   'Shrink each window B-factor towards the dose curve or keep the window own value(line|free){line}', &
+                                   '(line|free){line}', .false., 'line', &
+    &choices=ui_choices([character(len=4) :: 'line', 'free']))
 
     call blocktree%set_param(      'blocktree',       'file',   'Block tree binary file', &
                                    'Pre-computed block tree binary file (.bin)', &
@@ -857,6 +864,10 @@ subroutine set_ui_params
     call width%set_param(          'width',           'num',    'Falloff of inner mask', &
                                    'Number of cosine edge pixels of inner mask in pixels', &
                                    '# pixels cosine edge{10}', .false., 10.)
+
+    call zerodose%set_param(       'zerodose',        'binary', 'Write the zero-dose extrapolation', &
+                                   'Also write the zero-dose extrapolation of the accumulated map(yes|no){no}', '', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 end subroutine set_ui_params
 
 end module simple_ui_params_common
