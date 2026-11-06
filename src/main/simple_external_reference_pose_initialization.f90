@@ -99,6 +99,10 @@ contains
             call cline_pose_init%delete('box_crop')
             call cline_pose_init%delete('smpd_crop')
         endif
+        if( cline_pose_init%defined('shift_sigma') .and. cline_pose_init%get_carg('objfun').eq.'cc' ) then
+            write(logfhandle, '(A)') '>>> Deactivating SHIFT_SIGMA with OBJFUN=CC'
+            call cline_pose_init%delete('shift_sigma')
+        endif
         call prepare_pose_initialization_coverage(params%projfile)
         cline_sigma_bootstrap = parent_cline
         call cline_sigma_bootstrap%set('prg',                   'calc_pspec')

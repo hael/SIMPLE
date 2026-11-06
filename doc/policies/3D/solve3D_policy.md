@@ -504,7 +504,10 @@ consolidates those residuals for the first Euclidean stage, and reconstructs a
 data-derived checkpoint. Particles outside the capped cohort retain their
 image-bootstrap partition records until later refinement updates them. The
 external maps remain fixed during the CC pass and are not blended into the
-checkpoint.
+checkpoint. The helper copies the planned stage command line but removes its
+explicit `shift_sigma` before the `objfun=cc` pose pass: the polar shift map is
+a Euclidean objective feature, and an explicit key is invalid under CC. The
+stage command line keeps `shift_sigma` for the subsequent Euclidean stages.
 
 Normal particle-based starts treat `solve3D` as the producer of new
 `ptcl3D` orientation and multi-state information. The workflow resets `ptcl3D`
