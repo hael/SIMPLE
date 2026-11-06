@@ -4,22 +4,15 @@
 ! volumes of Gaussian blobs, projected at known poses on the matching grid and once mirrored, matched
 ! against both: each projection goes to its own volume with a positive margin, at its own pose, and
 ! the mirrored one at the opposite view (ori%mirror2d: the image mirrored about y).
-module simple_cavgs_state_match_tester
-use simple_image,             only: image
-use simple_oris,              only: oris
-use simple_simple_volinterp,  only: reproject
-use simple_imgarr_utils,      only: dealloc_imgarr
+submodule (simple_cavgs_state_match) simple_cavgs_state_match_tester
 use simple_linalg,            only: rad2deg
 use simple_ori_utils,         only: euler_dist, euler_inplrotdist, euler_mirror
-use simple_cavgs_state_match, only: match_cavgs_to_states, reduce_state_matches, matched_pose
 use simple_test_utils
 implicit none
-private
-public :: run_all_cavgs_state_match_tests
 
 contains
 
-    subroutine run_all_cavgs_state_match_tests()
+    module subroutine run_all_cavgs_state_match_tests()
         write(*,'(A)') '**** running all class-average state matching tests ****'
         call test_reduce_state_matches()
         call test_matched_pose()
@@ -158,4 +151,4 @@ contains
         call vol%set_rmat(rmat, .false.)
     end subroutine blob_volume
 
-end module simple_cavgs_state_match_tester
+end submodule simple_cavgs_state_match_tester

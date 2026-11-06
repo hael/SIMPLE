@@ -40,6 +40,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: flex_pca_application
+public :: run_all_flex_pca_application_tests
 
 integer,          parameter :: MIN_NSTATES = 3
 !> the raw state half maps the merge gate reads (simple_flex_pca_state_service: <prefix>_stateNN_{even,odd}.mrc)
@@ -56,6 +57,12 @@ type :: flex_pca_application
     procedure, private :: prepare, obtain_embedding, infer_states, reconstruct_states, publish
     procedure, private :: resume_from_cache, embed_all
 end type flex_pca_application
+
+interface
+    !> white-box tests (submodule simple_flex_pca_application_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_flex_pca_application_tests()
+    end subroutine run_all_flex_pca_application_tests
+end interface
 
 contains
 

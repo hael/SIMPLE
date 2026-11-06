@@ -5,29 +5,16 @@
 ! its poses mapped onto its particles) on fixture projects, and the jobs' command lines. The steps on projects
 ! are tested through stream p07's stage (simple_stream_stage_solve3D_tester), the docking in its
 ! library suite.
-module simple_state_assignment_tester
-use simple_string,           only: string
-use simple_fileio,           only: file_exists
-use simple_imghead,          only: find_ldim_nptcls
-use simple_cmdline,          only: cmdline
-use simple_image,            only: image
-use simple_sp_project,       only: sp_project
-use simple_state_assignment, only: NCLS2D_FIRST, LPSTART_CAVGS3D, LPSTOP_CAVGS3D, LP_ASSIGN, NSPACE_ASSIGN,&
-                                  &refs_usable, reject_by_fit, flag_ambiguous, compact_states, expansion_budget,&
-                                  &count_active_classes, fit_mskdiam, cut_whole_stacks, write_state_cavgs,&
-                                  &set_solve2D_route_cline, set_clsexp_cline, set_cavgs3D_cline, set_assign_cline,&
-                                  &set_refine_cont_cline, set_state_cavgs3D_cline, select_state_classes, map_state_poses
+submodule (simple_state_assignment) simple_state_assignment_tester
 use simple_test_utils
 implicit none
-private
-public :: run_all_state_assignment_tests
 
 integer, parameter :: IMG_BOX  = 16
 real,    parameter :: IMG_SMPD = 2.0
 
 contains
 
-    subroutine run_all_state_assignment_tests()
+    module subroutine run_all_state_assignment_tests()
         write(*,'(A)') '**** running all state assignment tests ****'
         call test_check_rules()
         call test_fit_rules()
@@ -299,4 +286,4 @@ contains
         deallocate(cline)
     end subroutine test_job_clines
 
-end module simple_state_assignment_tester
+end submodule simple_state_assignment_tester

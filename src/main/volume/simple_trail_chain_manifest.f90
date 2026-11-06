@@ -8,7 +8,8 @@ use simple_core_module_api
 implicit none
 
 public :: trail_chain_manifest
-public :: TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, TRAIL_MANIFEST_UNREADABLE
+public :: TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING
+public :: run_all_trail_chain_manifest_tests
 private
 #include "simple_local_flags.inc"
 
@@ -47,6 +48,12 @@ type :: trail_chain_manifest
     procedure :: get_wset_id
     procedure :: kill
 end type trail_chain_manifest
+
+interface
+    !> white-box tests (submodule simple_trail_chain_manifest_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_trail_chain_manifest_tests()
+    end subroutine run_all_trail_chain_manifest_tests
+end interface
 
 contains
 

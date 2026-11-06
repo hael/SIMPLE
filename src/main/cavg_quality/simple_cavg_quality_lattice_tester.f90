@@ -1,19 +1,15 @@
 !@descr: unit tests of the nano context of the class-average quality backend: the lattice family, its normalization, the gates, the preset, the bank by context, model and table round trips
-module simple_cavg_quality_lattice_tester
+submodule (simple_cavg_quality_lattice) simple_cavg_quality_lattice_tester
 !$ use omp_lib
 use simple_test_utils
-use simple_defs,                   only: dp, DPI
 use simple_string,                 only: string
 use simple_string_utils,           only: int2str
 use simple_fileio,                 only: file_exists, del_file
 use simple_syslib,                 only: get_process_id
-use simple_image,                  only: image
 use simple_oris,                   only: oris
 use simple_cavg_quality_types,     only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_CONTEXT_NANO, CAVG_QUALITY_CONTEXT_CHUNK, &
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, CAVG_RELATIONAL_NANO_CORR_HP, CAVG_RELATIONAL_NANO_CORR_LP, &
     CAVG_RELATIONAL_NANO_CORR_TRS, CLIP_Z, cavg_quality_result
-use simple_cavg_quality_lattice,   only: cavg_quality_lattice, LAT_NFEATS, LAT_LATTICE_PEAK, LAT_SPOT_COUNT, &
-    LAT_SPOT_ARC, LAT_SPOT_DIAM, LAT_BAND_PRESENCE, LAT_PEAK_MIN, K_MODEL, model_gate_states
 use simple_cavg_quality_feats,     only: cavg_quality_bank_size, cavg_quality_feature_name, cavg_quality_feature_family
 use simple_cavg_quality_analysis,  only: evaluate_cavg_quality_hard_reject, write_cavg_quality_training_table
 use simple_cavg_quality_model,     only: cavg_quality_model, cavg_quality_model_spec, write_cavg_quality_model_builtin_code
@@ -22,8 +18,6 @@ use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
 use simple_forked_process,         only: forked_process, FORK_STATUS_FAILED
 use simple_cmdline,                only: cmdline
 implicit none
-private
-public :: run_all_cavg_quality_lattice_tests
 
 integer,  parameter :: BOX  = 120
 real,     parameter :: SMPD = 0.358
@@ -41,7 +35,7 @@ end type model_reader
 
 contains
 
-    subroutine run_all_cavg_quality_lattice_tests()
+    module subroutine run_all_cavg_quality_lattice_tests()
         write(*,'(A)') '**** running all class-average nano context tests ****'
         call test_bank_by_context()
         call test_lattice_against_noise()
@@ -697,4 +691,4 @@ contains
         next_uniform = (real(rng_state, dp) + 0.5_dp) / 2147483647._dp
     end function next_uniform
 
-end module simple_cavg_quality_lattice_tester
+end submodule simple_cavg_quality_lattice_tester

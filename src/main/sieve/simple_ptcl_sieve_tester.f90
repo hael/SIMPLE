@@ -1,23 +1,10 @@
 !@descr: unit test routines for the ptcl_sieve orchestrator
-module simple_ptcl_sieve_tester
+submodule (simple_ptcl_sieve) simple_ptcl_sieve_tester
 use simple_test_utils
 use simple_core_module_api
-use simple_cmdline,    only: cmdline
-use simple_parameters, only: parameters
-use simple_ptcl_sieve, only: ptcl_sieve, ptcl_sieve_settings, FINAL_INGESTION_MARKER, sieve_lpstart, sieve_settings,&
-                            &CHUNK_INPUT_PROJFILE, CHUNK_ATTEMPT1, CHUNKED_MICS, CHUNK_MICS, CONSUMED_COARSE,&
-                            &read_chunked_mics, rebuild_chunked_mics
-use simple_sp_project, only: sp_project
-use simple_image,      only: image
-use simple_rec_list,   only: rec_list, project_rec
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
-use simple_string,     only: string
-use simple_defs_fname, only: METADATA_EXT, SOLVE2D_FINISHED, FRCS_FILE
-use simple_projfile_utils, only: merge_chunk_projfiles_without_sigma2
 use simple_optics_maps, only: publish_optics_map
 implicit none
-private
-public :: run_all_ptcl_sieve_tests
 
 ! the completed coarse chunk of test_collect_and_reject_hard_gates and test_hand_off_applies_optics_map
 character(len=*), parameter :: CHUNK_STEM = 'chunk_coarse_1'
@@ -36,7 +23,7 @@ end type gapped_chunker
 
 contains
 
-    subroutine run_all_ptcl_sieve_tests()
+    module subroutine run_all_ptcl_sieve_tests()
         write(*,'(A)') '**** running all ptcl_sieve tests ****'
         call test_new_kill_and_empty_queries()
         call test_import_existing_chunks_and_counts()
@@ -955,4 +942,4 @@ contains
         call proj%kill()
     end subroutine make_chunk_project
 
-end module simple_ptcl_sieve_tester
+end submodule simple_ptcl_sieve_tester

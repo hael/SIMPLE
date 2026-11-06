@@ -88,6 +88,7 @@ use simple_stream_gui_senders,                  only: send_cavgs
 implicit none
 
 public :: stream_stage_pool2D
+public :: run_all_stream_stage_pool2D_tests
 private
 #include "simple_local_flags.inc"
 
@@ -174,45 +175,51 @@ contains
     procedure :: finalize
     procedure :: kill
     ! the steps of new(), in order
-    procedure :: init_params
-    procedure :: clean_previous_run
-    procedure :: restore_export_id
-    procedure :: init_gui
+    procedure, private :: init_params
+    procedure, private :: clean_previous_run
+    procedure, private :: restore_export_id
+    procedure, private :: init_gui
     ! the steps of iterate() and their helpers
-    procedure :: attach_upstream
-    procedure :: watch_sets
+    procedure, private :: attach_upstream
+    procedure, private :: watch_sets
     procedure :: read_final_mskdiam
     procedure :: update_pool_progress
     procedure :: import_sets
-    procedure :: transfer_sets
+    procedure, private :: transfer_sets
     procedure :: start_pool
     procedure :: apply_pause_policy
     procedure :: unpause
     procedure :: run_iteration
-    procedure :: apply_final_mskdiam
+    procedure, private :: apply_final_mskdiam
     procedure :: set_mskdiam
-    procedure :: apply_gui_updates
+    procedure, private :: apply_gui_updates
     procedure :: write_snapshot
     procedure :: export_pool_state
-    procedure :: publish_first_set
+    procedure, private :: publish_first_set
     procedure :: publish_first_from_sieve
-    procedure :: collects_sieve_sets
+    procedure, private :: collects_sieve_sets
     procedure :: collect_sieve_set
     procedure :: publish_sieve_set
     ! GUI
-    procedure :: send_status
+    procedure, private :: send_status
     procedure :: send_pool_cavgs
-    procedure :: send_snapshot
+    procedure, private :: send_snapshot
     ! rules that use no stage state
-    procedure, nopass :: pause_rate_factor
-    procedure, nopass :: target_nptcls
-    procedure, nopass :: runs_to_final
-    procedure, nopass :: publishes_final
-    procedure, nopass :: owes_final_run
-    procedure, nopass :: exports_after
-    procedure, nopass :: first_set_due
-    procedure, nopass :: default_mskdiam
+    procedure, nopass, private :: pause_rate_factor
+    procedure, nopass, private :: target_nptcls
+    procedure, nopass, private :: runs_to_final
+    procedure, nopass, private :: publishes_final
+    procedure, nopass, private :: owes_final_run
+    procedure, nopass, private :: exports_after
+    procedure, nopass, private :: first_set_due
+    procedure, nopass, private :: default_mskdiam
 end type stream_stage_pool2D
+
+interface
+    !> white-box tests (submodule simple_stream_stage_pool2D_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_pool2D_tests()
+    end subroutine run_all_stream_stage_pool2D_tests
+end interface
 
 contains
 

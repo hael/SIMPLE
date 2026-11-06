@@ -3,20 +3,13 @@
 ! (E15), both routes' stage records (E16: shift then joint on request, the joint stage alone by
 ! default), rollback (E17), the ori entry point and its scaling (E13, E19, N2), recovery under
 ! each objective (N7) and the bounds trs and athres_cont (O6). Ids: pose_cont plan, section 10.
-module simple_cartft_pose_opt_tester
-use simple_defs,            only: dp, DPI
+submodule (simple_cartft_pose_opt) simple_cartft_pose_opt_tester
+use simple_defs,            only: DPI
 use simple_defs_ori,        only: I_E1, I_E2, I_E3, I_X, I_Y, N_PTCL_ORIPARAMS
 use simple_core_module_api, only: euler2m
-use simple_ori,             only: ori
-use simple_cartft_calc,     only: cartft_calc
-use simple_cartft_pose_opt, only: cartft_pose_opt, right_increment_rotation, CARTFT_STAGE_SHIFT, CARTFT_STAGE_JOINT, &
-    &CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT, &
-    &CARTFT_NO_RELIABLE_UPDATE, CARTFT_BOUND_REJECTED
 use simple_type_defs,       only: ctfparams, CTFFLAG_NO, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
 implicit none
-private
-public :: run_all_cartft_pose_opt_tests
 
 integer,  parameter :: TEST_BOX       = 24
 integer,  parameter :: SMALL_BOX      = 16
@@ -34,7 +27,7 @@ end type fixture_record
 
 contains
 
-    subroutine run_all_cartft_pose_opt_tests()
+    module subroutine run_all_cartft_pose_opt_tests()
         write(*,'(A)') '**** running all pose optimizer tests ****'
         write(*,'(A)') 'test_rotation_increment'
         call test_rotation_increment()
@@ -714,4 +707,4 @@ contains
             &max_rotation_step, max_shift_step, objective_before, objective_after)
     end function opt_stage_status
 
-end module simple_cartft_pose_opt_tester
+end submodule simple_cartft_pose_opt_tester

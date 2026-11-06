@@ -1,30 +1,18 @@
 !@descr: unit tests of the solve3D_addon frozen accumulator sets (simple_frozen_accum)
 ! Frozen set F + cohort equals the direct union (gridding sums/rho and restored maps); a zero
 ! cohort gives F exactly. Plus context round trip and refusals (gridding only). Box 16, seeded noise.
-module simple_frozen_accum_tester
-use simple_defs,              only: OSMPL_PAD_FAC, STDLEN
-use simple_string,            only: string
-use simple_fileio,            only: del_file, fopen, fclose
+submodule (simple_frozen_accum) simple_frozen_accum_tester
 use simple_image,             only: image
 use simple_fplane_grid,       only: fplane_grid
-use simple_ori,               only: ori
-use simple_oris,              only: oris
 use simple_parameters,        only: parameters
 use simple_sp_project,        only: sp_project
-use simple_sym,               only: sym
 use simple_memoize_ft_maps,   only: forget_ft_maps, memoize_ft_maps
-use simple_type_defs,         only: CTFFLAG_NO, OBJFUN_EUCLID, ctfparams, fplane_type
-use simple_reconstructor,     only: reconstructor
-use simple_refine3D_fnames,   only: refine3D_frozen_rec_fbody, refine3D_frozen_manifest_fname, &
-    &refine3D_carried_rec_fbody, refine3D_carried_bundle_fname, refine3D_carried_membership_fname
-use simple_frozen_accum,      only: frozen_accum, carried_bundle, write_carried_membership, read_carried_membership
-use simple_syslib,            only: simple_mkdir, simple_rmdir
+use simple_type_defs,         only: CTFFLAG_NO, OBJFUN_EUCLID
+use simple_refine3D_fnames,   only: refine3D_frozen_manifest_fname, refine3D_carried_bundle_fname
 use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
 use simple_cmdline,           only: cmdline
 use simple_test_utils
 implicit none
-private
-public :: run_all_frozen_accum_tests
 
 !> reads the density file RHO_FNAME into an accumulator of box (and smpd), which must stop when they differ
 type, extends(forked_process) :: rho_reader
@@ -51,7 +39,7 @@ character(len=*), parameter :: RUN_ID    = 'tester_run_1'
 
 contains
 
-    subroutine run_all_frozen_accum_tests()
+    module subroutine run_all_frozen_accum_tests()
         write(*,'(A)') '**** running all frozen accumulator tests ****'
         call test_context_round_trip()
         call test_context_refusals()
@@ -135,12 +123,12 @@ contains
 
     real function max_rel_cdiff( a, b ) result( d )
         complex, intent(in) :: a(:,:,:), b(:,:,:)
-        d = maxval(abs(a - b)) / max(maxval(abs(b)), tiny(1.))
+        d = maxval(abs(a - b)) / max(maxval(abs(b)), TINY)
     end function max_rel_cdiff
 
     real function max_rel_rdiff( a, b ) result( d )
         real, intent(in) :: a(:,:,:), b(:,:,:)
-        d = maxval(abs(a - b)) / max(maxval(abs(b)), tiny(1.))
+        d = maxval(abs(a - b)) / max(maxval(abs(b)), TINY)
     end function max_rel_rdiff
 
     ! ---- run context ----------------------------------------------------------
@@ -695,4 +683,4 @@ contains
         call fbody%kill
     end subroutine delete_gridding_set
 
-end module simple_frozen_accum_tester
+end submodule simple_frozen_accum_tester

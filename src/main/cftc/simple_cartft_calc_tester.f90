@@ -4,12 +4,10 @@
 ! per-shell sigma2 against the polar calculator (noise-only, model power, and the global sigma2 of
 ! noisy particles) and the canonical sigma2 round trip. Test ids (E*, N*) are those of the
 ! pose_cont refactoring plan, section 10.
-module simple_cartft_calc_tester
-use, intrinsic :: ieee_arithmetic, only: ieee_quiet_nan, ieee_value, ieee_is_finite
-use, intrinsic :: iso_fortran_env, only: int64, real32
-use simple_defs,            only: dp, sp, DPI, OSMPL_PAD_FAC
-use simple_core_module_api, only: euler2m, string, file_exists, del_file
-use simple_cartft_calc,     only: cartft_calc, CART_REFVOLS_FORMAT_VERSION
+submodule (simple_cartft_calc) simple_cartft_calc_tester
+use, intrinsic :: iso_fortran_env, only: real32
+use simple_defs,            only: DPI
+use simple_core_module_api, only: euler2m, del_file
 use simple_builder,         only: builder
 use simple_matcher_refvol_utils, only: read_reprojection_model, remove_ref_section_files
 use simple_matcher_ptcl_batch, only: prep_cart_batch, prep_sigmas_objfun
@@ -18,8 +16,6 @@ use simple_euclid_sigma2,   only: euclid_sigma2
 use simple_refine3D_fnames, only: refine3D_cart_refvols_fname
 use simple_cartft_pose_opt, only: cartft_pose_opt, right_increment_rotation, CARTFT_ACCEPTED, CARTFT_BOUND_REJECTED
 use simple_cmdline,         only: cmdline
-use simple_ctf,             only: ctf
-use simple_image,           only: image
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
 use simple_polarft_calc,    only: polarft_calc, vol_pad2ref_pfts_opt
@@ -32,13 +28,10 @@ use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_heade
 use simple_sigma2_state,    only: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_prepare_update, &
     &sigma2_state_assemble_candidate, sigma2_state_reduce
 use simple_matcher_2Dprep,  only: prepimg4align_cart
-use simple_type_defs,       only: ctfparams, ctfvars, CTFFLAG_FLIP, CTFFLAG_NO, CTFFLAG_YES, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
-use simple_sigma2_state_tester, only: write_test_sigma2_store
+use simple_test_sigma2_fixture, only: write_test_sigma2_store
 use simple_forked_process,  only: forked_process, FORK_STATUS_FAILED
 implicit none
-private
-public :: run_all_cartft_calc_tests
 
 !> evaluates a Euclidean slot after new spectra unprepared it, which must stop
 type, extends(forked_process) :: stale_slot_user
@@ -59,7 +52,7 @@ real,     parameter :: LINEARITY_TOL   = 1.e-5
 
 contains
 
-    subroutine run_all_cartft_calc_tests()
+    module subroutine run_all_cartft_calc_tests()
         write(*,'(A)') '**** running all Cartesian calculator tests ****'
         write(*,'(A)') 'test_particle_preparation_contract'
         call test_particle_preparation_contract()
@@ -2668,4 +2661,4 @@ contains
         end do
     end subroutine remove_sigma2_files
 
-end module simple_cartft_calc_tester
+end submodule simple_cartft_calc_tester

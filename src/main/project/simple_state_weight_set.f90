@@ -22,7 +22,8 @@ implicit none
 private
 #include "simple_local_flags.inc"
 
-public :: state_weight_set, discard_state_weight_set, STATE_WEIGHTS_KIND_PARTITION, STATE_WEIGHTS_KIND_KERNEL
+public :: state_weight_set, discard_state_weight_set, STATE_WEIGHTS_KIND_PARTITION
+public :: run_all_state_weight_set_tests
 
 !> a weighted PARTITION row sums to one across the states within this
 real(real64), parameter :: ROW_SUM_TOL    = 1.0e-3_real64
@@ -66,6 +67,12 @@ type :: state_weight_set
     procedure :: kill
     procedure, private :: load_state
 end type state_weight_set
+
+interface
+    !> white-box tests (submodule simple_state_weight_set_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_state_weight_set_tests()
+    end subroutine run_all_state_weight_set_tests
+end interface
 
 contains
 

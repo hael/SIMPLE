@@ -43,6 +43,7 @@ use simple_refine2D_fnames,       only: refine2D_cavgs_fname
 implicit none
 
 public :: stream_pool2D, stream_pool2D_stats
+public :: run_all_stream_pool2D_tests
 private
 #include "simple_local_flags.inc"
 
@@ -143,7 +144,7 @@ contains
     procedure          :: failed
     procedure          :: stats
     ! the state part of start, public for simple_stream_pool2D_tester (a pool without a queue)
-    procedure          :: init_state
+    procedure, private :: init_state
     ! private steps
     procedure, private :: init_queue
     procedure, private :: submit_iteration
@@ -159,6 +160,12 @@ contains
     procedure, private :: rank_cavgs
     procedure, private :: apply_snapshot_selection
 end type stream_pool2D
+
+interface
+    !> white-box tests (submodule simple_stream_pool2D_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_pool2D_tests()
+    end subroutine run_all_stream_pool2D_tests
+end interface
 
 contains
 

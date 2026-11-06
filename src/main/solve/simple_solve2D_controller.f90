@@ -10,8 +10,9 @@ public :: set_solve2D_sampling_policy, solve2D_seed_pass_iter, set_cline_refine2
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
 public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, FIRST_SHIFT_STAGE
 public :: solve2D_first_shift_stage, solve2D_mskdiam_estimate
-public :: frc05_ptcl_quantile, solve2D_class_frc05_quantile, solve2D_stage_behind_frc05
-public :: SKIP_MIN_STAGE, FRC05_SKIP_PTCL_FRAC
+public :: solve2D_class_frc05_quantile, solve2D_stage_behind_frc05
+public :: FRC05_SKIP_PTCL_FRAC
+public :: run_all_solve2D_stage_rule_tests
 private
 #include "simple_local_flags.inc"
 
@@ -52,6 +53,12 @@ type refine2D_stage_cfg
     logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
     logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
 end type refine2D_stage_cfg
+
+interface
+    !> white-box tests (submodule simple_solve2D_controller_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_solve2D_stage_rule_tests()
+    end subroutine run_all_solve2D_stage_rule_tests
+end interface
 
 contains
 

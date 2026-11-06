@@ -1,19 +1,14 @@
 !@descr: portable reference, FSC and accumulator staging checks for the refine3D startup strategy
-module simple_refine3D_strategy_tester
-use simple_string,     only: string
-use simple_sp_project, only: sp_project
+submodule (simple_refine3D_strategy) simple_refine3D_strategy_tester
 use simple_image,      only: image
-use simple_syslib,     only: file_exists
 use simple_test_utils, only: assert_true, assert_false, assert_int, assert_char, enter_fixture, leave_fixture, tests_failed
 implicit none
-private
-public :: run_all_refine3D_staging_tests
 integer, parameter :: BOX = 16
 real, parameter    :: SMPD = 1.5
 
 contains
 
-    subroutine run_all_refine3D_staging_tests()
+    module subroutine run_all_refine3D_staging_tests()
         type(string) :: saved, root
         integer      :: nfail0
         write(*,'(A)') '**** running all refine3D staging tests ****'
@@ -26,12 +21,7 @@ contains
 
     ! An impulse has power in every shell: identical/opposite pairs have FSC +1/-1.
     subroutine test_startup_staging()
-        use, intrinsic :: iso_fortran_env, only: int64
-        use simple_parameters,             only: parameters
-        use simple_fileio,                 only: file2rarr
         use simple_halfmap_diagnostics,    only: write_base_halfmap_fsc
-        use simple_syslib,                 only: simple_abspath
-        use simple_refine3D_strategy,      only: stage_refine3D_local_references
         use simple_refine3D_provenance,    only: refine3D_provenance
         use simple_sigma2_state_file,      only: sigma2_state_digest_file
         type(refine3D_provenance)      :: reference_record
@@ -93,13 +83,7 @@ contains
     end subroutine test_startup_staging
 
     subroutine test_reference_derivatives( params, project )
-        use, intrinsic :: iso_fortran_env, only: int64
-        use simple_parameters,             only: parameters
-        use simple_fileio,                 only: arr2file, file2rarr, add2fbody
-        use simple_syslib,                 only: del_file
-        use simple_defs_fname,             only: MRC_EXT, NUFILT_SUFFIX, NULOCRES_SUFFIX, AUTOMASK_FBODY, NU_ENVMASK_FBODY
         use simple_refine3D_provenance,    only: begin_reference_set, publish_reference_set, refine3D_provenance
-        use simple_refine3D_strategy,      only: stage_reference_derivatives
         use simple_sigma2_state_file,      only: sigma2_state_digest_file
         class(parameters), intent(inout) :: params
         class(sp_project), intent(in)    :: project
@@ -201,12 +185,6 @@ contains
     end subroutine test_reference_derivatives
 
     subroutine test_chain_staging( params, project )
-        use, intrinsic :: iso_fortran_env, only: int64
-        use simple_parameters,             only: parameters
-        use simple_fileio,                 only: arr2file
-        use simple_refine3D_strategy,      only: stage_refine3D_local_chain
-        use simple_refine3D_fnames,        only: refine3D_trail_rec_fname, refine3D_trail_rho_fname, &
-            &refine3D_trail_manifest_fname, refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
         use simple_trail_chain_manifest, only: trail_chain_manifest
         use simple_refine3D_provenance,  only: publish_reuse_provenance, reuse_provenance_matches
         use simple_sigma2_state_file,    only: sigma2_state_digest_file
@@ -285,13 +263,6 @@ contains
 
     ! Known impulses distinguish startup maps, assembled raw halves and assembled NU halves.
     subroutine test_reference_transition()
-        use simple_parameters,           only: parameters
-        use simple_cmdline,              only: cmdline
-        use simple_builder,              only: builder
-        use simple_fileio,               only: add2fbody
-        use simple_defs_fname,           only: MRC_EXT, NUFILT_SUFFIX
-        use simple_refine3D_strategy,    only: adopt_refine3D_reference
-        use simple_matcher_refvol_utils, only: read_mask_filter_reproject_refvols
         class(parameters), allocatable      :: params
         class(cmdline), allocatable         :: cline
         class(builder), allocatable, target :: build
@@ -390,4 +361,4 @@ contains
         end subroutine write_triplet
     end subroutine test_reference_transition
 
-end module simple_refine3D_strategy_tester
+end submodule simple_refine3D_strategy_tester

@@ -239,7 +239,7 @@ contains
 
     !> truth_state<k>.mrc and pgrps.txt in the working directory
     subroutine make_truths( self )
-        use simple_flex_pca_application_tester, only: write_phantom_truths
+        use simple_test_flex_phantom_fixture, only: write_phantom_truths
         class(state_fixture), intent(inout) :: self
         type(string), allocatable :: truths(:)
         type(string) :: tmean, tdiff, cwd

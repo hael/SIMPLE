@@ -5,29 +5,13 @@
 ! no pipe or on a loopback pipe, and zero waits. Nothing is submitted to a queue: job
 ! submission and collection, and gain resolution from movies, are left to the high-level
 ! stream_preproc test.
-module simple_stream_stage_preprocess_tester
+submodule (simple_stream_stage_preprocess) simple_stream_stage_preprocess_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs_fname,                 only: TERM_STREAM, GAIN_THUMBNAIL
-use simple_defs_stream,                only: DIR_STREAM_COMPLETED, STREAM_NMOVS_SET
-use simple_string,                     only: string
 use simple_string_utils,               only: int2str, int2str_pad
-use simple_fileio,                     only: file_exists, del_file, simple_getcwd, simple_touch
-use simple_syslib,                     only: simple_mkdir
-use simple_cmdline,                    only: cmdline
-use simple_image,                      only: image
-use simple_oris,                       only: oris
-use simple_sp_project,                 only: sp_project
-use simple_stream_watcher,             only: stream_watcher
-use simple_gui_metadata_utils,         only: max_metadata_size
-use simple_gui_metadata_types,         only: GUI_METADATA_STREAM_UPDATE_TYPE, GUI_METADATA_STREAM_PREPROCESS_TYPE
-use simple_gui_metadata_stream_update, only: gui_metadata_stream_update
-use simple_stream_pipe,                only: stream_pipe
-use simple_stream_stage_preprocess,    only: stream_stage_preprocess
+use simple_gui_metadata_types,         only: GUI_METADATA_STREAM_UPDATE_TYPE
 implicit none
-private
-public :: run_all_stream_stage_preprocess_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_preprocess_stage.simple'
 real,             parameter :: SMPD = 1.3, CS = 2.7, KV = 300.0, FRACA = 0.1
@@ -35,7 +19,7 @@ real,             parameter :: CTFRES_THRES = 10.0, ICEFRAC_THRES = 1.0, ASTIG_T
 
 contains
 
-    subroutine run_all_stream_stage_preprocess_tests()
+    module subroutine run_all_stream_stage_preprocess_tests()
         write(*,'(A)') '**** running all stream preprocessing stage tests ****'
         call test_init_params_split_mode()
         call test_import_completed()
@@ -523,4 +507,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_preprocess_tester
+end submodule simple_stream_stage_preprocess_tester

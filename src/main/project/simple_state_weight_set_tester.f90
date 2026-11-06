@@ -1,18 +1,8 @@
 !@descr: unit tests of state_weight_set: round trip, refusals, a simulated crash, a work project's derived set, withdrawal and projects of earlier releases
-module simple_state_weight_set_tester
-use, intrinsic :: iso_fortran_env, only: int8, int64, real32, real64
+submodule (simple_state_weight_set) simple_state_weight_set_tester
 use simple_test_utils
-use simple_oris,               only: oris
-use simple_sp_project,         only: sp_project
-use simple_string,             only: string
-use simple_syslib,             only: simple_getcwd, simple_chdir, simple_mkdir, file_exists
-use simple_state_weight_set,   only: state_weight_set, discard_state_weight_set, STATE_WEIGHTS_KIND_PARTITION, &
-    &STATE_WEIGHTS_KIND_KERNEL
-use simple_state_weights_file, only: state_weights_file_header, state_weights_fname, state_weights_write_state_file, &
-    &STATE_WEIGHTS_MANIFEST_FNAME
+use simple_syslib,             only: simple_getcwd, simple_chdir, simple_mkdir
 implicit none
-private
-public :: run_all_state_weight_set_tests
 
 integer,          parameter :: NP      = 12
 integer,          parameter :: NSTATES = 3
@@ -20,7 +10,7 @@ character(len=*), parameter :: PROJ    = 'state_weight_set_test.simple'
 
 contains
 
-    subroutine run_all_state_weight_set_tests()
+    module subroutine run_all_state_weight_set_tests()
         type(string) :: cwd_saved, root
         integer      :: nfail0
         write(*,'(A)') '**** running all state weight set tests ****'
@@ -378,4 +368,4 @@ contains
         call project%write(string(PROJ))
     end subroutine make_project
 
-end module simple_state_weight_set_tester
+end submodule simple_state_weight_set_tester

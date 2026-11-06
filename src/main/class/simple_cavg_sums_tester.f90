@@ -2,14 +2,9 @@
 ! Covers the file contract (round trip, refusals, publication through a temporary name), the
 ! owner-side reduction and blend (independent of the number of parts, centering shift applied
 ! once) and the crop-box upsample of one carried set, on small deterministic arrays.
-module simple_cavg_sums_tester
-use simple_core_module_api
+submodule (simple_cavg_sums) simple_cavg_sums_tester
 use simple_test_utils
-use simple_cavg_sums, only: cavg_sums, cavg_contrib_fname, CAVG_SUMS_STATE, CAVG_SUMS_CONTRIB, &
-                           &CAVG_SUMS_OK, CAVG_SUMS_MISSING, CAVG_SUMS_CORRUPT, CAVG_SUMS_MISMATCH
 implicit none
-private
-public :: run_all_cavg_sums_tests
 
 integer, parameter :: NCLS = 3
 integer, parameter :: BOX  = 16
@@ -18,7 +13,7 @@ real,    parameter :: TOL  = 1.e-5
 
 contains
 
-    subroutine run_all_cavg_sums_tests()
+    module subroutine run_all_cavg_sums_tests()
         write(*,'(A)') '**** running all class-average carry-over tests ****'
         call test_cavg_sums_roundtrip()
         call test_cavg_sums_refusals()
@@ -303,4 +298,4 @@ contains
         call a%kill; call b%kill; call total%kill; call padsum%kill
     end subroutine test_cavg_sums_pad
 
-end module simple_cavg_sums_tester
+end submodule simple_cavg_sums_tester

@@ -37,9 +37,10 @@ Silent ones first: nothing reports these.
 - Load before evaluate, on one thread. `load_ref_aln_8(iref, iptcl)` copies the reference into the
   thread's buffer; `gen_corr_for_rot_8_aln` and `gen_corr_grad_for_rot_8_aln` evaluate against that
   copy and stop on an index or half mismatch; `pftc_shsrch_grad%minimize` does the load. Shift maps
-  likewise: `gen_shiftmap`, then `shiftmap_cross`, `shiftmap_objfun_grid` or `shiftmap_draw` on the
-  same thread. The loaded state spans a whole minimisation: no nested parallel region or untied task
-  inside it.
+  likewise: `gen_shiftmap`, then `shiftmap_mode` (or the private `shiftmap_draw`) on the same
+  thread; `shiftmap_cross`, `shiftmap_objfun_grid` and the other private bindings marked "test hook"
+  have no production caller and serve the kernel's tester. The loaded state spans a whole
+  minimisation: no nested parallel region or untied task inside it.
 - References are stored per half (`pfts_refs(:,:,iref,ieo)`) and picked by the particle's `iseven`;
   sigma2 is two spectra, one per half.
 - Shift matrices span only the searched shells `kfromto(1):kfromto(2)` (`gen_shmat4aln_8`; the
@@ -74,7 +75,8 @@ Silent ones first: nothing reports these.
 ## Tests
 
 - `build/bin/simple_test_exec test=unit_pftc_align2D3D` (about 12 s; `suite=` runs one of: polar
-  correlation, polar shift map, continuous in-plane, refine3D in-plane state, the 2D and 3D
+  correlation, polar shift map (the mechanics), polar shift map kernel (the calculator's
+  kernel, a submodule tester of `simple_polarft_calc`), continuous in-plane, refine3D in-plane state, the 2D and 3D
   probability tables, sigma2 state and bootstrap, ...). The testers are here and in `strategies/search`.
 - New OpenMP code: repeated runs at many threads, not only the one-thread identity; for the tables'
   draws `test=polar_matching_bench suite=fills` (threads, batches and parts give identical entries).

@@ -7,7 +7,7 @@
 ! <case>_PAR holds the particles' e1 e2 e3 x y (pixels) dfx dfy (um) angast (deg) cs (mm) phshift (rad),
 ! SIMPLE's conventions; <case>_IMG the relative intensity minus one, x fastest, band-limited to the interior
 ! 0 < |k| < box/2 - 2 (the mean and the Nyquist edge, where the two discretisations differ, left out).
-module simple_wave_projector_golden_tester
+module simple_test_wave_projector_golden_fixture
 implicit none
 public
     ! box 16: Gaussian blob centres (x, y, z voxels from box/2+1), sigma 1 voxel, 3 V
@@ -1082,4 +1082,4 @@ public
         & 2.54306946e-03,  1.46090859e-03,  2.05140905e-04, -7.27345709e-06,  1.28981984e-03,  3.07524111e-03, &
         & 4.06180781e-03,  3.92731694e-03,  3.00778818e-03,  1.52345086e-03,  2.34584809e-04,  1.76882377e-04, &
         & 8.92200030e-04,  1.60389780e-03,  2.68674820e-03,  3.75430115e-03,  3.91680049e-03,  3.65552944e-03], [24,24,2])
-end module simple_wave_projector_golden_tester
+end module simple_test_wave_projector_golden_fixture

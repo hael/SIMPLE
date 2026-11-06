@@ -88,6 +88,7 @@ use simple_stream_sigterm,                 only: sigterm_received
 implicit none
 
 public :: stream_stage_preprocess
+public :: run_all_stream_stage_preprocess_tests
 private
 #include "simple_local_flags.inc"
 
@@ -152,29 +153,29 @@ contains
     procedure :: finalize
     procedure :: kill
     ! the steps of new(), in order
-    procedure :: init_params
+    procedure, private :: init_params
     procedure :: init_movie_watcher
     procedure :: resume_previous_run
-    procedure :: init_job_dirs
+    procedure, private :: init_job_dirs
     procedure :: init_queue
-    procedure :: resolve_gain
-    procedure :: build_worker_cline
-    procedure :: init_gui
+    procedure, private :: resolve_gain
+    procedure, private :: build_worker_cline
+    procedure, private :: init_gui
     ! the steps of iterate() and their helpers
-    procedure :: import_previous_projects
+    procedure, private :: import_previous_projects
     procedure :: detect_gain_flip
     procedure :: generate_gain_from_movies
     procedure :: next_movie_batch
     procedure :: submit_new_movies
-    procedure :: create_movies_set_project
+    procedure, private :: create_movies_set_project
     procedure :: schedule_jobs
     procedure :: collect_jobs
-    procedure :: import_completed
-    procedure :: process_imports
+    procedure, private :: import_completed
+    procedure, private :: process_imports
     procedure :: send_plots
     procedure :: idle
-    procedure :: send_status
-    procedure :: apply_gui_updates
+    procedure, private :: send_status
+    procedure, private :: apply_gui_updates
     procedure :: set_threshold
     procedure :: apply_thresholds
     procedure :: update_idle_marker
@@ -182,6 +183,12 @@ contains
     procedure :: restore_thresholds
     procedure :: write_mic_star_and_field
 end type stream_stage_preprocess
+
+interface
+    !> white-box tests (submodule simple_stream_stage_preprocess_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_preprocess_tests()
+    end subroutine run_all_stream_stage_preprocess_tests
+end interface
 
 contains
 

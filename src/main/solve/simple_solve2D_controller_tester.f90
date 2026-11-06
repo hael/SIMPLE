@@ -1,18 +1,14 @@
 !@descr: unit tests of the solve2D stage rules: the class FRC=0.5 particle quantile and the stage omission
 ! In-memory class resolutions and populations; no project file or job.
-module simple_solve2D_controller_tester
-use simple_solve2D_controller, only: stage_params, frc05_ptcl_quantile, solve2D_stage_behind_frc05, &
-    &SKIP_MIN_STAGE, FRC05_SKIP_PTCL_FRAC
+submodule (simple_solve2D_controller) simple_solve2D_controller_tester
 use simple_test_utils
 implicit none
-private
-public :: run_all_solve2D_stage_rule_tests
 
 real, parameter :: TOL = 1.e-5
 
 contains
 
-    subroutine run_all_solve2D_stage_rule_tests()
+    module subroutine run_all_solve2D_stage_rule_tests()
         write(*,'(A)') '**** running all solve2D stage rule tests ****'
         call test_quantile_median()
         call test_quantile_junk_classes()
@@ -123,4 +119,4 @@ contains
         call assert_false(solve2D_stage_behind_frc05(stage_parms, 3, 1, 6, hist, 2), 'no planned limit: run')
     end subroutine test_omission_never
 
-end module simple_solve2D_controller_tester
+end submodule simple_solve2D_controller_tester

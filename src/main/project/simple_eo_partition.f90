@@ -10,7 +10,8 @@ use simple_oris,       only: oris
 implicit none
 
 public :: ensure_field_halves, eo_transaction, eo_partition_status, repartition_selected_halves
-public :: EO_COMPLETE, EO_MISSING, EO_PARTIAL, EO_INCONSISTENT, EO_SEED_DEFAULT
+public :: EO_COMPLETE, EO_SEED_DEFAULT
+public :: run_all_eo_partition_tests
 private
 #include "simple_local_flags.inc"
 
@@ -20,6 +21,12 @@ integer(int64), parameter :: MINSTD_A = 48271_int64, MINSTD_M = 2147483647_int64
 integer,        parameter :: MIN_GROUPS_WARN = 20               !< fewer independent groups than this warns
 real,           parameter :: IMBALANCE_WARN  = 0.05             !< halves differing by more of the active warns
 character(len=*), parameter :: KEY_GROUP = 'eo_group', KEY_INDEX = 'eo_byindex'
+
+interface
+    !> white-box tests (submodule simple_eo_partition_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_eo_partition_tests()
+    end subroutine run_all_eo_partition_tests
+end interface
 
 contains
 

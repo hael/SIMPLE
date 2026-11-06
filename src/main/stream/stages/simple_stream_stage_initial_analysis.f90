@@ -139,6 +139,7 @@ use simple_mic_selection,                 only: reject_mics_without_particles
 implicit none
 
 public :: stream_stage_initial_analysis
+public :: run_all_stream_stage_initial_analysis_tests
 private
 #include "simple_local_flags.inc"
 
@@ -234,33 +235,33 @@ contains
     procedure :: finalize
     procedure :: kill
     ! the steps of new(), in order
-    procedure :: init_params
+    procedure, private :: init_params
     procedure :: init_queue
-    procedure :: init_gui
-    procedure :: restore_pickrefs
-    procedure :: clear_previous_run
+    procedure, private :: init_gui
+    procedure, private :: restore_pickrefs
+    procedure, private :: clear_previous_run
     ! the steps of iterate() and their helpers
-    procedure :: attach_upstream
-    procedure :: import_projects
+    procedure, private :: attach_upstream
+    procedure, private :: import_projects
     procedure :: update_upstream_state
     procedure :: pick_extract_all
     procedure :: collect_extractions
     procedure :: start_sieve
-    procedure :: run_cycle1
+    procedure, private :: run_cycle1
     procedure :: run_cycle2
-    procedure :: rebuild_init_mics
+    procedure, private :: rebuild_init_mics
     procedure :: select_and_send
     procedure :: finish_solve3D
     procedure :: publish_reprojections
-    procedure :: apply_gui_updates
+    procedure, private :: apply_gui_updates
     procedure :: save_pickrefs_selection
-    procedure :: publish_pickrefs
+    procedure, private :: publish_pickrefs
     procedure :: send_pickrefs
-    procedure :: send_picking_status
-    procedure :: send_initial_analysis_status
-    procedure :: cycle_projfile
+    procedure, private :: send_picking_status
+    procedure, private :: send_initial_analysis_status
+    procedure, private :: cycle_projfile
     procedure :: balanced_projfile
-    procedure :: all_projfile
+    procedure, private :: all_projfile
     ! steps that use no stage state, bound so the tester can reach them
     procedure, nopass :: balance_classes
     procedure, nopass :: find_final_solve3D_cavgs_dir
@@ -269,6 +270,12 @@ contains
     procedure, nopass :: choose_state
     procedure, nopass :: state_vetoes
 end type stream_stage_initial_analysis
+
+interface
+    !> white-box tests (submodule simple_stream_stage_initial_analysis_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_initial_analysis_tests()
+    end subroutine run_all_stream_stage_initial_analysis_tests
+end interface
 
 contains
 

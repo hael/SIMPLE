@@ -74,8 +74,9 @@ Silent ones first: nothing reports these.
 - `test=flex_pca_blobs nthr=4` (7 min, 8.4 GiB): shared memory and two workers, label accuracy
   floor 0.60 (profile median 0.99); its `cls_expansion` route is a profile at chance level, not a gate.
   Flex initializing `refine3D_states`: `test=multistate_workflows suite=states`.
-- The phantom of `run/simple_flex_pca_application_tester.f90` also feeds `lib_reconstruction`
-  (`fractional_reconstruction`, `fraction_dose_export`) and the high-level state fixture.
+- The application tester's phantom (`commanders/test/simple_test_flex_phantom_fixture.f90`) also
+  feeds `lib_reconstruction` (`fractional_reconstruction`, `fraction_dose_export`) and the high-level
+  state fixture.
 - `trajectory_denoise`: `single_workflow_fcc` and `_wurtzite` run it, which is its coverage.
 
 ## See also

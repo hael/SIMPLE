@@ -1,21 +1,15 @@
 !@descr: unit test routines for the class_compatibility support model
-module simple_class_compatibility_tester
+submodule (simple_class_compatibility) simple_class_compatibility_tester
 use simple_test_utils
 use simple_core_module_api
-use simple_class_compatibility, only: class_compatibility, support_model_metrics
-use simple_sp_project,          only: sp_project
-use simple_imgarr_utils,        only: write_imgarr, dealloc_imgarr
-use simple_image,               only: image
-use simple_string,              only: string
+use simple_imgarr_utils,        only: write_imgarr
 implicit none
-private
-public :: run_all_class_compatibility_tests
 
 real, parameter :: AXIS_TOL = 1.0e-4
 
 contains
 
-    subroutine run_all_class_compatibility_tests()
+    module subroutine run_all_class_compatibility_tests()
         write(*,'(A)') '**** running all class_compatibility tests ****'
         call test_defaults_and_lifecycle()
         call test_train_1_too_small_set_no_fit()
@@ -284,4 +278,4 @@ contains
         end do
     end subroutine paint_square_blob
 
-end module simple_class_compatibility_tester
+end submodule simple_class_compatibility_tester

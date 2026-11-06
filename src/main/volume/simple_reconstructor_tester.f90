@@ -1,23 +1,14 @@
 !@descr: unit tests of the weighted gridding insertion (simple_reconstructor)
 ! Linearity: a plane inserted with weight w equals the plane inserted with weight one and the
 ! accumulators scaled by w, to round-off; weight one is the unweighted insertion bit for bit.
-module simple_reconstructor_tester
-use simple_defs,            only: OSMPL_PAD_FAC
-use simple_image,           only: image
+submodule (simple_reconstructor) simple_reconstructor_tester
 use simple_fplane_grid,     only: fplane_grid
-use simple_ori,             only: ori
-use simple_oris,            only: oris
-use simple_parameters,      only: parameters
 use simple_sp_project,      only: sp_project
-use simple_sym,             only: sym
 use simple_memoize_ft_maps, only: forget_ft_maps, memoize_ft_maps
-use simple_type_defs,       only: CTFFLAG_NO, ctfparams, fplane_type
-use simple_reconstructor,   only: reconstructor, wiener_ridge
+use simple_type_defs,       only: CTFFLAG_NO
 use simple_math_ft,         only: fplane_shift
 use simple_test_utils
 implicit none
-private
-public :: run_all_reconstructor_tests
 
 integer, parameter :: BOX     = 16
 integer, parameter :: NPLANES = 12
@@ -27,7 +18,7 @@ real,    parameter :: RELTOL  = 1.e-6
 
 contains
 
-    subroutine run_all_reconstructor_tests()
+    module subroutine run_all_reconstructor_tests()
         write(*,'(A)') '**** running all reconstructor tests ****'
         call test_weighted_insertion_linearity()
         write(*,'(A)') 'test_fplane_shift'
@@ -85,7 +76,7 @@ contains
         call obs_pad%gen_fplane4rec(SMPD, ctfparms, S1, fpl1, grid)
         call obs_pad%gen_fplane4rec(SMPD, ctfparms, S2, fpl2, grid)
         call fplane_shift(fpl1, S2 - S1, OSMPL_PAD_FAC, fpl12)
-        cerr = maxval(abs(fpl12%cmplx_plane - fpl2%cmplx_plane)) / max(maxval(abs(fpl2%cmplx_plane)), tiny(1.))
+        cerr = maxval(abs(fpl12%cmplx_plane - fpl2%cmplx_plane)) / max(maxval(abs(fpl2%cmplx_plane)), TINY)
         call assert_true(cerr < 1.e-5, 'the plane re-shifted by s2 - s1 is the plane generated at s2')
         call assert_true(all(fpl12%ctfsq_plane == fpl2%ctfsq_plane), 'the CTF^2 plane is shift-free, copied bit for bit')
         call assert_true(all(fpl12%frlims == fpl2%frlims) .and. fpl12%nyq == fpl2%nyq, 'the limits and the Nyquist index are the plane''s')
@@ -102,8 +93,8 @@ contains
         cb = rb%get_cmat()
         call ra%get_rho_copy(da)
         call rb%get_rho_copy(db)
-        cerr = maxval(abs(ca - cb)) / max(maxval(abs(cb)), tiny(1.))
-        derr = maxval(abs(da - db)) / max(maxval(abs(db)), tiny(1.))
+        cerr = maxval(abs(ca - cb)) / max(maxval(abs(cb)), TINY)
+        derr = maxval(abs(da - db)) / max(maxval(abs(db)), TINY)
         call assert_true(cerr < 1.e-5 .and. derr < RELTOL, 'inserting the re-shifted plane equals inserting the plane at s2')
         call ra%kill
         call rb%kill
@@ -206,8 +197,8 @@ contains
             cs = rs%get_cmat()
             call rw%get_rho_copy(dw)
             call rs%get_rho_copy(ds)
-            cerr = maxval(abs(cw - cs)) / max(maxval(abs(cs)), tiny(1.))
-            derr = maxval(abs(dw - ds)) / max(maxval(abs(ds)), tiny(1.))
+            cerr = maxval(abs(cw - cs)) / max(maxval(abs(cs)), TINY)
+            derr = maxval(abs(dw - ds)) / max(maxval(abs(ds)), TINY)
             call assert_true(cerr < RELTOL .and. derr < RELTOL, &
                 &'insertion with weight w equals weight one scaled by w (data and density)')
             cone   = rone%get_cmat()
@@ -229,4 +220,4 @@ contains
         call obs_pad%kill()
     end subroutine test_weighted_insertion_linearity
 
-end module simple_reconstructor_tester
+end submodule simple_reconstructor_tester

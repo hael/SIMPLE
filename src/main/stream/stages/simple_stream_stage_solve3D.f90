@@ -111,8 +111,8 @@ use simple_stream_gui_senders,                        only: send_reproj_tiles
 implicit none
 
 public :: stream_stage_solve3D
-public :: PHASE_IMPORTING, PHASE_SOLVE2D, PHASE_CLSEXP, PHASE_CAVGS3D, PHASE_IDLE, PHASE_EXPAND, PHASE_ASSIGN, PHASE_REFINE
-public :: JOB_NONE, JOB_ROUTE, JOB_FALLBACK, JOB_ASSIGN, ROUTE_TRIES
+public :: PHASE_SOLVE2D, PHASE_CLSEXP, PHASE_EXPAND, PHASE_REFINE
+public :: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
 private
 #include "simple_local_flags.inc"
 
@@ -204,22 +204,22 @@ contains
     procedure :: finalize
     procedure :: kill
     ! the steps of new(), in order
-    procedure :: init_params
+    procedure, private :: init_params
     procedure :: init_queue
-    procedure :: init_gui
+    procedure, private :: init_gui
     ! the steps of iterate() and their helpers
-    procedure :: attach_upstream
-    procedure :: watch_sets
-    procedure :: take_mskdiam
+    procedure, private :: attach_upstream
+    procedure, private :: watch_sets
+    procedure, private :: take_mskdiam
     procedure :: import_sets
-    procedure :: publication_problem
-    procedure :: rows_problem
+    procedure, private :: publication_problem
+    procedure, private :: rows_problem
     procedure :: flag_model_rows
-    procedure :: take_first_publication
+    procedure, private :: take_first_publication
     procedure :: in_first_set
-    procedure :: fit_deselected
-    procedure :: merge_publication
-    procedure :: take_cavgs
+    procedure, private :: fit_deselected
+    procedure, private :: merge_publication
+    procedure, private :: take_cavgs
     procedure :: stack_index
     procedure :: advance_jobs
     procedure :: job_failed
@@ -235,41 +235,49 @@ contains
     procedure :: start_fallback
     procedure :: start_cavgs3D
     procedure :: finish_cavgs3D
-    procedure :: register_attempt
-    procedure :: next_attempt
+    procedure, private :: register_attempt
+    procedure, private :: next_attempt
     procedure :: accept_best
-    procedure :: accept_refs
+    procedure, private :: accept_refs
     procedure :: restore_refs
-    procedure :: n_refs
+    procedure, private :: n_refs
     ! the assignment of a publication
     procedure :: start_expand
     procedure :: finish_expand
     procedure :: start_assign
     procedure :: finish_assign
-    procedure :: take_assignment
+    procedure, private :: take_assignment
     procedure :: write_assignment_cavgs
-    procedure :: prepare_refine_seeds
+    procedure, private :: prepare_refine_seeds
     procedure :: start_refine
     procedure :: finish_refine
-    procedure :: take_refine_result
+    procedure, private :: take_refine_result
     ! records
     procedure :: record_run_publication
-    procedure :: prune_quality_dirs
-    procedure :: prune_run_dirs
+    procedure, private :: prune_quality_dirs
+    procedure, private :: prune_run_dirs
     procedure :: write_stage_project
     ! GUI
-    procedure :: apply_gui_updates
+    procedure, private :: apply_gui_updates
     procedure :: write_snapshot
-    procedure :: send_status
-    procedure :: send_volumes
+    procedure, private :: send_status
+    procedure, private :: send_volumes
     procedure :: send_refs
     procedure :: send_state_volume
     procedure :: read_state_fsc
     ! rules that use no stage state
-    procedure, nopass :: next_job
-    procedure, nopass :: best_attempt
-    procedure, nopass :: is_final_publication
+    procedure, nopass, private :: next_job
+    procedure, nopass, private :: best_attempt
+    procedure, nopass, private :: is_final_publication
 end type stream_stage_solve3D
+
+interface
+    !> white-box tests (submodule simple_stream_stage_solve3D_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_solve3D_tests()
+    end subroutine run_all_stream_stage_solve3D_tests
+    module subroutine run_all_stream_stage_solve3D_lib_tests()
+    end subroutine run_all_stream_stage_solve3D_lib_tests
+end interface
 
 contains
 

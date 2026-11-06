@@ -2,17 +2,13 @@
 ! Four classes with symmetric correlation and distance matrices; with k = 2 the feature of the
 ! first two classes is the mean pairwise distance to their two best-correlated neighbours
 ! (0.15 and 0.20 by hand), and the feature schema carries a name.
-module simple_cavg_quality_relations_tester
-use simple_cavg_quality_relations, only: calculate_promoted_feature
-use simple_cavg_quality_types,     only: CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
+submodule (simple_cavg_quality_relations) simple_cavg_quality_relations_tester
 use simple_test_utils
 implicit none
-private
-public :: run_all_cavg_quality_relations_tests
 
 contains
 
-    subroutine run_all_cavg_quality_relations_tests()
+    module subroutine run_all_cavg_quality_relations_tests()
         write(*,'(A)') '**** running all class-average quality relation tests ****'
         call test_promoted_feature()
     end subroutine run_all_cavg_quality_relations_tests
@@ -46,4 +42,4 @@ contains
         call assert_true(len_trim(CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1) > 0, 'relational feature schema is named')
     end subroutine test_promoted_feature
 
-end module simple_cavg_quality_relations_tester
+end submodule simple_cavg_quality_relations_tester

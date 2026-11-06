@@ -2,19 +2,14 @@
 ! Both backends publish a chain with a manifest recording the applied mass it represents, M(s), its
 ! contributor count and the state weight set identity; the PCG raw header carries the mass and the
 ! identity of each half. A manifest or header of any other version is refused and re-seeded.
-module simple_trail_chain_manifest_tester
-use simple_core_module_api
+submodule (simple_trail_chain_manifest) simple_trail_chain_manifest_tester
 use simple_test_utils
-use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING, &
-                                      &TRAIL_MANIFEST_UNREADABLE
 use simple_reconstructor_pcg,    only: reconstructor_pcg, pcg_raw_accum_compatible, read_pcg_raw_accum_header
 implicit none
-private
-public :: run_all_trail_chain_manifest_tests
 
 contains
 
-    subroutine run_all_trail_chain_manifest_tests()
+    module subroutine run_all_trail_chain_manifest_tests()
         write(*,'(A)') '**** running all trailing chain identity tests ****'
         call test_compatibility()
         call test_gridding_manifest()
@@ -125,4 +120,4 @@ contains
         call os%kill
     end subroutine test_pcg_chain_header
 
-end module simple_trail_chain_manifest_tester
+end submodule simple_trail_chain_manifest_tester

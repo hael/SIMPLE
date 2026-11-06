@@ -1,14 +1,9 @@
 !@descr: unit tests for the measured dose curve: its evaluation per movie fraction, its file and its checks
 ! Every expectation is a closed form of the knots written here.
-module simple_dose_curve_tester
+submodule (simple_dose_curve) simple_dose_curve_tester
 use simple_test_utils, only: assert_true, assert_false
-use simple_defs,       only: dp
-use simple_string,     only: string
 use simple_syslib,     only: del_file
-use simple_dose_curve, only: dose_curve, scaled_dose
 implicit none
-private
-public :: run_all_dose_curve_tests
 
 character(len=*), parameter :: FNAME = 'tmp_dose_curve_tester.txt'
 real(dp),         parameter :: TOL   = 1.e-12_dp
@@ -19,7 +14,7 @@ real(dp),         parameter :: BETA = 10._dp, GAMMA = 0.04_dp
 
 contains
 
-    subroutine run_all_dose_curve_tests()
+    module subroutine run_all_dose_curve_tests()
         write(*,'(A)') '**** running all dose curve tests ****'
         call test_fractions_between_windows()
         call test_fractions_past_the_windows()
@@ -216,4 +211,4 @@ contains
         close(unit)
     end subroutine write_lines
 
-end module simple_dose_curve_tester
+end submodule simple_dose_curve_tester

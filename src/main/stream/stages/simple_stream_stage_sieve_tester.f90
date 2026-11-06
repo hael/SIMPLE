@@ -6,28 +6,16 @@
 ! environment reads. The upstream is a reference-picking directory with completed sets and the
 ! moldiam.txt that make_pickrefs writes. Chunk 2D runs and rejection are covered by the
 ! ptcl_sieve tests and the high-level stream tests.
-module simple_stream_stage_sieve_tester
+submodule (simple_stream_stage_sieve) simple_stream_stage_sieve_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs_fname,                           only: TERM_STREAM, STREAM_MOLDIAM, METADATA_EXT
-use simple_defs_stream,                          only: DIR_STREAM_COMPLETED, STREAM_IDLE_MARKER
-use simple_string,                               only: string
+use simple_defs_fname,                           only: METADATA_EXT
+use simple_defs_stream,                          only: STREAM_IDLE_MARKER
 use simple_string_utils,                         only: int2str_pad
-use simple_fileio,                               only: del_file, file_exists, simple_getcwd, simple_touch
-use simple_syslib,                               only: dir_exists, simple_mkdir
-use simple_cmdline,                              only: cmdline
-use simple_oris,                                 only: oris
-use simple_sp_project,                           only: sp_project
-use simple_gui_metadata_utils,                   only: max_metadata_size
-use simple_gui_metadata_types,                   only: GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE
-use simple_gui_metadata_stream_particle_sieving, only: gui_metadata_stream_particle_sieving
-use simple_stream_pipe,                          only: stream_pipe
-use simple_stream_stage_sieve,                   only: stream_stage_sieve
-use simple_ptcl_sieve,                           only: CHUNKED_MICS, CHUNK_MICS
+use simple_fileio,                               only: simple_getcwd, simple_touch
+use simple_ptcl_sieve,                           only: CHUNK_MICS
 implicit none
-private
-public :: run_all_stream_stage_sieve_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_sieve.simple'
 character(len=*), parameter :: UPSTREAM      = 'refpick'   ! the reference-picking stage directory (dir_target)
@@ -35,7 +23,7 @@ real,             parameter :: MSKDIAM_REFS  = 136.        ! the mask diameter m
 
 contains
 
-    subroutine run_all_stream_stage_sieve_tests()
+    module subroutine run_all_stream_stage_sieve_tests()
         write(*,'(A)') '**** running all stream particle sieving stage tests ****'
         call test_init_params()
         call test_restart_removes_term_stream()
@@ -529,4 +517,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_sieve_tester
+end submodule simple_stream_stage_sieve_tester

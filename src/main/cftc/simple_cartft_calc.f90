@@ -16,7 +16,8 @@ use simple_gridding,          only: kb_stencil_envelope_1d
 use simple_cartesian_fourier, only: center_embed_real3d, gather_packed_bspline3_window_grad, bspline3_stencil_envelope_1d
 implicit none
 private
-public :: cartft_calc, CART_REFVOLS_FORMAT_VERSION
+public :: cartft_calc
+public :: run_all_cartft_calc_tests
 
 #include "simple_local_flags.inc"
 
@@ -84,7 +85,7 @@ contains
     procedure          :: set_refvol
     procedure          :: write
     procedure          :: read
-    procedure          :: cart_refvols_header_compatible
+    procedure, private :: cart_refvols_header_compatible
     ! particles
     procedure          :: set_sigma2
     procedure, private :: set_ptcl_cc
@@ -116,6 +117,12 @@ contains
     procedure, private :: ref_index
     procedure, private :: check_eval_args
 end type cartft_calc
+
+interface
+    !> white-box tests (submodule simple_cartft_calc_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_cartft_calc_tests()
+    end subroutine run_all_cartft_calc_tests
+end interface
 
 contains
 

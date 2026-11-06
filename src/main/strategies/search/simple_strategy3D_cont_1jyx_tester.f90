@@ -38,7 +38,7 @@ use simple_sym,                 only: sym
 use simple_syslib,              only: del_file
 use simple_ui,                  only: make_ui
 use simple_test_utils,          only: assert_false, assert_int, assert_true, set_fixed_seed, tests_failed, tests_run
-use simple_sigma2_state_tester, only: write_test_sigma2_store
+use simple_test_sigma2_fixture, only: write_test_sigma2_store
 implicit none
 private
 

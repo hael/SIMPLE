@@ -1,20 +1,15 @@
 !@descr: unit tests for the bank-free logistic core (simple_quality_logistic) and the rank-based AUC
-module simple_quality_logistic_tester
+submodule (simple_quality_logistic) simple_quality_logistic_tester
 use simple_test_utils
 use simple_defs,               only: dp
-use simple_quality_logistic,   only: quality_logistic_problem, dataset_learn_role, logistic_dataset_class_weights, &
-    robust_macro_score, stable_sigmoid_8, LEARN_ROLE_SKIP, LEARN_ROLE_BALANCED, LEARN_ROLE_RECALL_ONLY, &
-    LEARN_ROLE_SPECIFICITY_ONLY
 use simple_cavg_quality_stats, only: auc_for_values
 implicit none
-private
-public :: run_all_quality_logistic_tests
 
 integer, parameter :: NTOY = 400
 
 contains
 
-    subroutine run_all_quality_logistic_tests()
+    module subroutine run_all_quality_logistic_tests()
         write(*,'(A)') '**** running all quality logistic tests ****'
         call test_toy_plane_recovered()
         call test_fit_repeatable()
@@ -162,4 +157,4 @@ contains
         call prob%finalize()
     end subroutine toy_problem
 
-end module simple_quality_logistic_tester
+end submodule simple_quality_logistic_tester

@@ -5,28 +5,16 @@
 ! in the same second. The upstream is a preprocessing directory with spprojs/ and
 ! spprojs_completed/; its projects hold five micrographs in two beam-shift clusters, near (0,0)
 ! twice and near (5,5) three times, as in the stream optics test of simple_stream_tester.
-module simple_stream_stage_optics_tester
+submodule (simple_stream_stage_optics) simple_stream_stage_optics_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs_fname,                            only: TERM_STREAM, METADATA_EXT, OPTICS_MAP_PREFIX, TXT_EXT
-use simple_defs_stream,                           only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET
-use simple_string,                                only: string
+use simple_defs_fname,                            only: METADATA_EXT, OPTICS_MAP_PREFIX, TXT_EXT
+use simple_defs_stream,                           only: STREAM_NMOVS_SET
 use simple_string_utils,                          only: int2str, int2str_pad
-use simple_fileio,                                only: file_exists, del_file, simple_getcwd, simple_touch
+use simple_fileio,                                only: simple_touch
 use simple_syslib,                                only: simple_mkdir
-use simple_cmdline,                               only: cmdline
-use simple_sp_project,                            only: sp_project
-use simple_gui_metadata_utils,                    only: max_metadata_size
-use simple_gui_metadata_types,                    only: GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE,&
-                                                       &GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE
-use simple_gui_metadata_optics_group,             only: gui_metadata_optics_group
-use simple_gui_metadata_stream_optics_assignment, only: gui_metadata_stream_optics_assignment
-use simple_stream_pipe,                           only: stream_pipe
-use simple_stream_stage_optics,                   only: stream_stage_optics
 implicit none
-private
-public :: run_all_stream_stage_optics_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_optics_stage.simple'
 character(len=*), parameter :: UPSTREAM      = 'preproc'   ! the preprocessing stage directory (dir_target)
@@ -39,7 +27,7 @@ integer,          parameter :: ALL_ACCEPTED(STREAM_NMOVS_SET) = 1
 
 contains
 
-    subroutine run_all_stream_stage_optics_tests()
+    module subroutine run_all_stream_stage_optics_tests()
         write(*,'(A)') '**** running all stream optics assignment stage tests ****'
         call test_new_starts_empty()
         call test_restart_removes_termination_file()
@@ -627,4 +615,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_optics_tester
+end submodule simple_stream_stage_optics_tester

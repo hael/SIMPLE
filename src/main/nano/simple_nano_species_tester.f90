@@ -1,19 +1,14 @@
 !@descr: unit tests for simple_nano_species: intensity mixture and class choice, enclosed Gaussian fraction, threshold calibration
 ! Samples are drawn here at fixed seeds from the class means, spreads and sizes each test states, and the
 ! fits are judged against those generating parameters.
-module simple_nano_species_tester
+submodule (simple_nano_species) simple_nano_species_tester
 use simple_test_utils,   only: assert_true, assert_false, assert_int, assert_real, set_fixed_seed
-use simple_defs,         only: dp, DPI
 use simple_rnd,          only: gasdev
-use simple_nano_species, only: fit_species_mixture, class_posterior, class_separation, enclosed_fraction, maxima_shape,&
-    &calibrate_threshold, expected_false_count, fit_gauss_width, local_maxima, MAX_NSPECIES
 implicit none
-private
-public :: run_all_nano_species_tests
 
 contains
 
-    subroutine run_all_nano_species_tests()
+    module subroutine run_all_nano_species_tests()
         write(*,'(A)') '**** running all nano species tests ****'
         call test_enclosed_fraction()
         call test_one_class()
@@ -428,4 +423,4 @@ contains
         call assert_int(1, size(vals), 'local_maxima: only maxima inside the mask')
     end subroutine test_local_maxima
 
-end module simple_nano_species_tester
+end submodule simple_nano_species_tester

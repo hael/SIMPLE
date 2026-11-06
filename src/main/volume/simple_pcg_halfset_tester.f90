@@ -23,7 +23,7 @@ use simple_test_utils,        only: assert_true, set_fixed_seed
 use ieee_arithmetic,          only: ieee_is_finite
 implicit none
 private
-public :: run_all_pcg_halfset_tests, build_truth_volume, TRUTH_VOLUME_BOX
+public :: run_all_pcg_halfset_tests
 
 integer, parameter :: TRUTH_VOLUME_BOX = 24
 integer, parameter :: BOX = TRUTH_VOLUME_BOX

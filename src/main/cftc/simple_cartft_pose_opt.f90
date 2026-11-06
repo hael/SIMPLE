@@ -15,8 +15,8 @@ public :: cartft_pose_opt, cartft_pose_work, right_increment_rotation
 ! typed per-particle outcomes of a solve or a stage
 public :: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT
 public :: CARTFT_NO_RELIABLE_UPDATE, CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, CARTFT_ITERATION_LIMIT
+public :: run_all_cartft_pose_opt_tests
 ! stage selectors of get_stage
-public :: CARTFT_STAGE_SHIFT, CARTFT_STAGE_JOINT
 
 #include "simple_local_flags.inc"
 
@@ -92,8 +92,8 @@ contains
     ! solves
     procedure          :: refine
     procedure          :: refine_pose
-    procedure          :: refine_shift
-    procedure          :: refine_joint
+    procedure, private :: refine_shift
+    procedure, private :: refine_joint
     ! record of the last solve
     procedure          :: get_status
     procedure          :: get_objectives
@@ -118,6 +118,12 @@ contains
     procedure :: add
     procedure :: write_bench
 end type cartft_pose_work
+
+interface
+    !> white-box tests (submodule simple_cartft_pose_opt_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_cartft_pose_opt_tests()
+    end subroutine run_all_cartft_pose_opt_tests
+end interface
 
 contains
 

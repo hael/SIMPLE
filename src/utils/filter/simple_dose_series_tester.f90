@@ -1,17 +1,10 @@
 !@descr: unit tests for the dose-series attenuation model, its dose curve, its accumulations and its cross-validation
 ! Synthetic series on a small shell grid: the model of doc/implementation_notes/planned/dose_filter3D.md
 ! is generated exactly, so every expectation here is a closed form, not a recorded run.
-module simple_dose_series_tester
+submodule (simple_dose_series) simple_dose_series_tester
 use simple_test_utils      ! assertions etc.
-use simple_defs            ! sp, dp
-use simple_string,      only: string
-use simple_dose_series, only: dose_series, shell_independence, shell_correlation, line_tau2, DOSE_WEIGHTS_MODEL, DOSE_WEIGHTS_CONTROL, &
-                              &DOSE_WEIGHTS_FLAT
-use simple_dose_curve,  only: dose_curve
 !$ use omp_lib,         only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 implicit none
-private
-public :: run_all_dose_series_tests
 
 integer,  parameter :: NSH = 24, NPERSH = 256
 real(dp), parameter :: SMPD = 1.5_dp
@@ -20,7 +13,7 @@ real(dp), parameter :: TOL_LOOSE = 0.15_dp
 
 contains
 
-    subroutine run_all_dose_series_tests()
+    module subroutine run_all_dose_series_tests()
         write(*,'(A)') '**** running all dose series tests ****'
         call test_noise_free_attenuation()
         call test_recovers_the_dose_curve()
@@ -1222,4 +1215,4 @@ contains
         call ds%kill
     end subroutine run_pipeline
 
-end module simple_dose_series_tester
+end submodule simple_dose_series_tester

@@ -2,7 +2,8 @@
 module simple_refine3D_startup
 implicit none
 private
-public :: refine3D_startup, STARTUP_ORDINARY, STARTUP_REUSE_CHAIN, STARTUP_SEED_CHAIN
+public :: refine3D_startup
+public :: run_all_refine3D_startup_tests
 
 integer, parameter :: STARTUP_ORDINARY    = 0
 integer, parameter :: STARTUP_REUSE_CHAIN = 1
@@ -24,6 +25,12 @@ type :: refine3D_startup
     procedure :: begin_iteration
     procedure :: finish_iteration
 end type refine3D_startup
+
+interface
+    !> white-box tests (submodule simple_refine3D_startup_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_refine3D_startup_tests()
+    end subroutine run_all_refine3D_startup_tests
+end interface
 
 contains
 

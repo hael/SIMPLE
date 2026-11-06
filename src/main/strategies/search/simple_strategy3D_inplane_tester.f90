@@ -30,6 +30,7 @@ use simple_memoize_ft_maps,   only: memoize_ft_maps
 use simple_matcher_ptcl_batch, only: check_pass_team, alloc_ptcl_imgs
 use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
 use simple_defs,              only: nthr_glob
+use simple_test_polar_fixture, only: rotate_half_ring
 use simple_test_utils
 !$ use omp_lib,               only: omp_get_max_threads, omp_set_num_threads
 implicit none
@@ -591,12 +592,13 @@ contains
         call del_file(PHANTOM)
     end subroutine test_table_increment_axes
 
-    !> Phase 4's pin: the map-initialised polish (the coarse window map's cell, then the L-BFGS from it in a box of
+    !> Phase 4's pin: the map-initialised polish (the window map's mode, then the L-BFGS from its cell in a box of
     !! one map step about it, minimize_in_cell) reaches the lattice-initialised search's optimum on the
-    !! white-reference fixture, at the same rotation
+    !! white-reference fixture, at the same rotation; the calls of the fills (shiftmap_srch), under euclid
     subroutine test_map_initialised_polish()
         character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
         real,             parameter :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [1.5, -2.0], TRS = 5.
+        real(dp),         parameter :: TEMP = 1.d-3   ! cold: the mode is the data's peak on a noise-free particle
         type(builder),    target :: b
         type(parameters), target :: p
         type(cmdline)            :: cline
@@ -604,15 +606,14 @@ contains
         type(strategy3D_spec)    :: spec
         type(pftc_shsrch_grad)   :: grad_lattice, grad_map
         complex(sp), allocatable :: ref(:,:), ptcl(:,:)
-        real(sp), allocatable :: vals(:,:,:)
-        real     :: lims(2,2), cxy_l(3), cxy_m(3), xy_cell(2), step, val
-        real(dp) :: prior_w, xy_dp(2)
+        real,        allocatable, target :: sigma2(:,:)
+        real     :: lims(2,2), cxy_l(3), cxy_m(3), xy_cell(2), step, loss
+        real(dp) :: prior_w
         integer  :: irot_l, irot_m, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp, kscreen, irho, ialpha
-        integer  :: nrho, nalpha
         logical  :: l_polished
         write(*,'(A)') 'test_map_initialised_polish'
         call set_fixed_seed(20261101)
-        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec)
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, objfun='euclid')
         nrots   = b%pftc%get_nrots()
         pftsz   = b%pftc%get_pftsz()
         kfromto = b%pftc%get_kfromto()
@@ -628,12 +629,13 @@ contains
         call b%pftc%memoize_refs
         lims(:,1) = -TRS
         lims(:,2) =  TRS
+        ! white noise: unit sigma2 in both halves (production reads them from the sigma2 store)
+        allocate(sigma2(kfromto(1):kfromto(2),2), source=1.)
+        call b%pftc%assign_sigma2_noise(sigma2)
         call grad_lattice%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
         call grad_map%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
         call b%pftc%setup_shiftmaps(3.d0, real(TRS, dp), real(TRS, dp), prior_w, kscreen)
         step = real(norm2(b%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 2, 1) - b%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 1, 1)))
-        call b%pftc%shiftmap_dims(SHIFTMAP_WINDOW, nrho, nalpha)
-        allocate(vals(nalpha, nrots, nrho))
         nchecked = 0
         do inpl = 1, nrots, max(1, nrots / 5)
             call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
@@ -643,11 +645,9 @@ contains
             irot_l = inpl
             call grad_lattice%set_indices(1, 1)
             cxy_l = grad_lattice%minimize(irot=irot_l, sh_rot=.true.)
-            ! the map's peak is the initialiser's cell (objective-agnostic, as the fills' greedy draw under euclid)
             call b%pftc%gen_shiftmap(SHIFTMAP_WINDOW, 1, 1)
-            call b%pftc%shiftmap_objfun_grid(SHIFTMAP_WINDOW, vals)
-            call b%pftc%shiftmap_peak(SHIFTMAP_WINDOW, vals, irot_m, xy_dp, val, irho, ialpha)
-            xy_cell = real(xy_dp)
+            call b%pftc%shiftmap_mode(SHIFTMAP_WINDOW, TEMP, prior_w, irot_m, irho, ialpha, loss)
+            xy_cell = real(b%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho, ialpha))
             call grad_map%set_indices(1, 1)
             call grad_map%minimize_in_cell(irot_m, xy_cell, step, cxy_m, l_polished)
             call assert_true(irot_l > 0, 'the lattice-initialised search found a better pose than the start')
@@ -663,7 +663,6 @@ contains
         call grad_map%kill
         call srch%kill
         call clean_strategy3D
-        call b%pftc%kill_shiftmap
         call b%pftc%kill
         call b%kill_strategy3D_tbox
         call b%kill_general_tbox
@@ -831,22 +830,5 @@ contains
         end subroutine record_and_reread
 
     end subroutine test_rec_observation_mask
-
-    !> a polar section rotated by irot in the calculator's convention (the polar shift map tester's helper, checked there
-    !! against the calculator's own rotation)
-    pure subroutine rotate_half_ring( pftsz, nk, pft, irot, pft_rot )
-        integer,     intent(in)  :: pftsz, nk, irot
-        complex(sp), intent(in)  :: pft(pftsz,nk)
-        complex(sp), intent(out) :: pft_rot(pftsz,nk)
-        integer :: p, q
-        do p = 1, pftsz
-            q = modulo(p - irot, 2*pftsz) + 1
-            if( q <= pftsz )then
-                pft_rot(p,:) = pft(q,:)
-            else
-                pft_rot(p,:) = conjg(pft(q-pftsz,:))
-            endif
-        enddo
-    end subroutine rotate_half_ring
 
 end module simple_strategy3D_inplane_tester

@@ -27,7 +27,7 @@ use simple_sigma2_pspec_sums, only: pspec_part_sums_fname, write_pspec_part_sums
 use simple_sigma2_bootstrap,  only: prepare_pspec_cline, prepare_residual_sigma2_pass_cline, &
     &sigma2_estimate_available, ensure_sigma2_for_iteration
 use simple_test_utils
-use simple_sigma2_state_tester, only: patch_sigma2_header_word
+use simple_test_sigma2_fixture, only: patch_sigma2_header_word
 implicit none
 private
 public :: run_all_sigma2_bootstrap_tests

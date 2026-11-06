@@ -11,6 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: pcg_atomic_prior, pcg_atomic_prior_stats
+public :: run_all_pcg_atomic_prior_tests
 
 real,     parameter :: SIGMA_MIN_VOX  = 1.0        !< width of the narrowest kernel (B_min), voxels: the lattice samples it
 real,     parameter :: FOOT_NSIGMA    = 3.0        !< footprint half-width in kernel widths
@@ -83,7 +84,7 @@ type :: pcg_atomic_prior
     procedure :: build
     procedure :: gather
     procedure :: scatter
-    procedure :: solve_gram
+    procedure, private :: solve_gram
     procedure :: project
     procedure :: apply
     procedure :: amplitudes
@@ -103,6 +104,12 @@ type :: pcg_atomic_prior
     procedure, private :: scatter_add
     procedure, private :: model_map
 end type pcg_atomic_prior
+
+interface
+    !> white-box tests (submodule simple_pcg_atomic_prior_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_pcg_atomic_prior_tests()
+    end subroutine run_all_pcg_atomic_prior_tests
+end interface
 
 contains
 

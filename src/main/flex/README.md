@@ -203,8 +203,8 @@ plain `simple_exec prg=reconstruct3D projfile=<projfile> nstates=<n>`.
 
 Self-contained tests live in `simple_flex_pca_tester.f90`,
 `simple_flex_pcg_tester.f90` (asserting the checks of the white-box self-test in
-`fit/simple_flex_pca_pcg_tester.f90`) and `run/simple_flex_pca_application_tester.f90`
-(suites registered in
+`fit/simple_flex_pca_pcg_tester.f90`) and `run/simple_flex_pca_application_tester.f90`, whose
+two-state phantom is `../commanders/test/simple_test_flex_phantom_fixture.f90` (suites registered in
 `../commanders/test/simple_commanders_test_class.f90`) and require no data.
 
 Other integration points: `../exec/simple_exec_denoise.f90`,

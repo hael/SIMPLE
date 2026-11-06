@@ -6,38 +6,15 @@
 ! directory) and carries qsys_name=local for the computing environment of the stage's project.
 ! Picking, extraction, solve2D/3D, the sieve and the reprojection of the references need real
 ! micrographs and jobs; they are left to the high-level stream tests.
-module simple_stream_stage_initial_analysis_tester
-use, intrinsic :: iso_c_binding, only: c_int
+submodule (simple_stream_stage_initial_analysis) simple_stream_stage_initial_analysis_tester
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs,                          only: COSMSKHALFWIDTH, MSK_EXP_FAC
-use simple_defs_fname,                    only: MRC_EXT, STK_EXT, JPG_EXT, METADATA_EXT, SOLVE3D_CAVGS_FINAL_DIR
-use simple_defs_stream,                   only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, INITIAL_ANALYSIS_PICKREFS
-use simple_string,                        only: string
-use simple_string_utils,                  only: int2str, int2str_pad
-use simple_fileio,                        only: file_exists, simple_getcwd, swap_suffix, write_singlelineoftext
-use simple_syslib,                        only: simple_mkdir, dir_exists
-use simple_imghead,                       only: find_ldim_nptcls
-use simple_cmdline,                       only: cmdline
-use simple_image,                         only: image, unmemoize_mask_coords
-use simple_sp_project,                    only: sp_project
-use simple_qsys_async_job,                only: ASYNC_JOB_IDLE
-use simple_gui_metadata_utils,            only: max_metadata_size
-use simple_gui_metadata_types,            only: GUI_METADATA_STREAM_UPDATE_TYPE, GUI_METADATA_STREAM_INITIAL_PICKING_TYPE,&
-                                               &GUI_METADATA_STREAM_INITIAL_ANALYSIS_TYPE, GUI_METADATA_STREAM_INITIAL_ANALYSIS_CLS2D_FINAL_TYPE
-use simple_gui_metadata_stream_update,    only: gui_metadata_stream_update
-use simple_gui_metadata_stream_picking,   only: gui_metadata_stream_picking
-use simple_gui_metadata_stream_initial_analysis, only: gui_metadata_stream_initial_analysis
+use simple_image,                         only: unmemoize_mask_coords
+use simple_gui_metadata_types,            only: GUI_METADATA_STREAM_UPDATE_TYPE
 use simple_pick_strategy,                 only: template_lowpass
-use simple_gui_metadata_cavg2D,           only: gui_metadata_cavg2D
-use simple_stream_pipe,                   only: stream_pipe
-use simple_stream_stage_initial_analysis, only: stream_stage_initial_analysis
 use simple_commanders_stream_p03_initial_analysis, only: set_initial_analysis_cline
-use simple_image_msk,                     only: automask2D_settings
 use simple_default_clines,                only: AUTOMASK2D_NGROW, AUTOMASK2D_WINSZ, AUTOMASK2D_AMSKLP, AUTOMASK2D_EDGE
 implicit none
-private
-public :: run_all_stream_stage_initial_analysis_tests
 
 character(len=*), parameter :: TEST_PROJFILE  = 'test_initial_analysis.simple'
 character(len=*), parameter :: UPSTREAM       = 'preproc'   ! the preprocessing stage directory (dir_target)
@@ -47,12 +24,10 @@ integer,          parameter :: BOX_CAVG       = 16
 real,             parameter :: GRADIENT       = 0.001  ! per pixel along x, so no image is constant
 real,             parameter :: PIXEL_TOL      = 0.01   ! pixel (1,1) is the class value + GRADIENT
 integer,          parameter :: ALL_ACCEPTED(STREAM_NMOVS_SET) = 1
-! cycle 1 steps, as in the stage
-integer,          parameter :: INIT_SETUP = 0, INIT_PICK = 1
 
 contains
 
-    subroutine run_all_stream_stage_initial_analysis_tests()
+    module subroutine run_all_stream_stage_initial_analysis_tests()
         write(*,'(A)') '**** running all stream initial analysis stage tests ****'
         call test_init_params()
         call test_paths()
@@ -78,7 +53,6 @@ contains
     !> the stage's picker assigns a pick to the bin of its diameter with the binarization's 2x erosion
     !! added back (8 A), as its bin decision does: a 95 A pick is 103 A, in the accepted 100-200 A bin
     subroutine test_segdiam_bins_count_erosion()
-        use simple_segdiam_bin_picker, only: segdiam_bin_picker
         class(segdiam_bin_picker), allocatable :: picker
         class(sp_project),         allocatable :: proj
         type(string) :: cwd_saved, root
@@ -1046,4 +1020,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_initial_analysis_tester
+end submodule simple_stream_stage_initial_analysis_tester

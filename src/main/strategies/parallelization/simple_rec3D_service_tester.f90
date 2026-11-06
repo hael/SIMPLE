@@ -1,5 +1,5 @@
 !@descr: library tests of fractional reconstruction through reconstruct3D and the reconstruction service
-! On FLEX's two-conformer phantom (simple_flex_pca_application_tester): fractional state weights that
+! On FLEX's two-conformer phantom (simple_test_flex_phantom_fixture): fractional state weights that
 ! are not a function of the true conformer alone reconstruct each state as the weight mixture of the
 ! truth maps (same frame, 8 A low-pass), at least as well as the hard reconstruction of the same
 ! particles matches its truth, minus 0.01; 0/1 weights equal to the labels reproduce the hard maps
@@ -21,7 +21,7 @@ use simple_trail_chain_manifest,        only: trail_chain_manifest, TRAIL_MANIFE
 use simple_refine3D_fnames,             only: refine3D_state_vol_fname, refine3D_trail_manifest_fname, &
     &refine3D_pcg_trail_manifest_fname
 use simple_test_truth_metrics,          only: compare_to_truth
-use simple_flex_pca_application_tester, only: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, &
+use simple_test_flex_phantom_fixture, only: create_flex_pca_phantom_fixture, build_flex_pca_phantom_project, &
     &FLEX_PHANTOM_BOX, FLEX_PHANTOM_NPTCLS, FLEX_PHANTOM_SMPD, FLEX_PHANTOM_MSKDIAM
 use simple_error,                       only: simple_exception
 use simple_test_utils,                  only: assert_false, assert_int, assert_true, enter_fixture, leave_fixture, tests_failed

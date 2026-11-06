@@ -21,7 +21,8 @@ private
 public :: begin_reference_set, publish_reference_set, refine3D_provenance
 public :: publish_reuse_provenance, reuse_provenance_matches, provenance_file, provenance_pending_file
 public :: local_import_marker
-public :: REFSET_OK, REFSET_LEGACY, REFSET_INVALID
+public :: REFSET_OK, REFSET_LEGACY
+public :: run_all_refine3D_provenance_tests
 #include "simple_local_flags.inc"
 
 integer, parameter :: VERSION = 2, MAX_FILES = 16
@@ -50,6 +51,12 @@ type :: refine3D_provenance
     procedure, private :: read_record
     procedure, private :: reuse_matches
 end type refine3D_provenance
+
+interface
+    !> white-box tests (submodule simple_refine3D_provenance_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_refine3D_provenance_tests()
+    end subroutine run_all_refine3D_provenance_tests
+end interface
 
 contains
 

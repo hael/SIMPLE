@@ -50,26 +50,27 @@ use simple_gui_utils,              only: mrc2jpeg_tiled
 implicit none
 
 ! the method's constants
-public :: MIN_PTCLS_PER_STATE, NCLS2D_FIRST, NCLS_EXPANDED, LPSTART_CAVGS3D, LPSTOP_CAVGS3D
+public :: MIN_PTCLS_PER_STATE, NCLS2D_FIRST, NCLS_EXPANDED
 public :: EO_ANGDIST_MAX, EO_OVERLAP_MIN, STATE_FRAC_MIN, NSTATES_MIN, REFS_PAIR_CC_MAX, DOCK_HP_REFS
-public :: LP_ASSIGN, NSPACE_ASSIGN, FIT_NMAD, FIT_REJECT_MAX, MARGIN_AMBIGUOUS
+public :: FIT_NMAD, FIT_REJECT_MAX, MARGIN_AMBIGUOUS
 ! the jobs' folders and project names, and the files written
 public :: SOLVE2D_DIR, CLSEXP_DIR, CAVGS3D_DIR, ASSIGN_LABEL, REFINE_DIR, REFS_DIR, REFS_RECORD
 public :: QUALITY_DIR, SELECTED_CAVGS, REJECTED_CAVGS
 ! the values of a check and of an assignment
 public :: refs_check, assign_stats
 ! rules
-public :: refs_usable, reject_by_fit, flag_ambiguous, compact_states, expansion_budget, count_active_classes
+public :: expansion_budget, count_active_classes
 public :: fit_mskdiam, median_of, usable_job_2D, cut_whole_stacks
 ! steps
 public :: score_cavgs_with_model, select_route_classes, model_rejected_rows
 public :: check_state_refs, docked_pair_cc, docked_cc_common_grid, read_refs_record
 public :: map_assignment, write_matched_cavgs, select_state_classes, map_state_poses
 public :: set_refine_seeds, write_refine_project, map_refine_result
-public :: write_state_cavgs, cavgs_fbody, log_jpeg
+public :: cavgs_fbody, log_jpeg
 ! the jobs' command lines
 public :: set_solve2D_route_cline, set_clsexp_cline, set_cavgs3D_cline, set_state_cavgs3D_cline, set_assign_cline
 public :: set_refine_cont_cline
+public :: run_all_state_assignment_tests
 private
 #include "simple_local_flags.inc"
 
@@ -142,6 +143,12 @@ type :: assign_stats
     integer :: nfit       = 0  !< by the fit alone
     integer, allocatable :: counts(:) !< particles per state
 end type assign_stats
+
+interface
+    !> white-box tests (submodule simple_state_assignment_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_state_assignment_tests()
+    end subroutine run_all_state_assignment_tests
+end interface
 
 contains
 

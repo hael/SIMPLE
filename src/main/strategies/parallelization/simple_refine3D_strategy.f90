@@ -26,8 +26,8 @@ public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
 public :: create_refine3D_strategy
 public :: strip_refine3D_search_only_args
 public :: stage_refine3D_local_references, stage_refine3D_local_chain, stage_refine3D_local_sigma2
-public :: stage_reference_derivatives, select_refine3D_state_rows
-public :: adopt_refine3D_reference
+public :: select_refine3D_state_rows
+public :: run_all_refine3D_staging_tests
 
 private
 #include "simple_local_flags.inc"
@@ -163,6 +163,12 @@ abstract interface
         class(refine3D_strategy), intent(inout) :: self
         type(parameters),         intent(in)    :: params
     end subroutine cleanup_interface
+end interface
+
+interface
+    !> white-box tests (submodule simple_refine3D_strategy_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_refine3D_staging_tests()
+    end subroutine run_all_refine3D_staging_tests
 end interface
 
 contains

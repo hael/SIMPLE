@@ -1069,7 +1069,7 @@ subroutine exec_test_species_discovery( self, cline )
     subroutine density_case( tag, beta0, gamma0, l_corr, seed, beta_tol, terr_ceil )
         use simple_rnd,                  only: gasdev
         use simple_nano_density,         only: render_atoms, halo_kernel
-        use simple_nano_density_tester,  only: rendered_transfer
+        use simple_test_nano_density_fixture, only: rendered_transfer
         character(len=*), intent(in) :: tag
         real,             intent(in) :: beta0, gamma0, beta_tol, terr_ceil
         logical,          intent(in) :: l_corr

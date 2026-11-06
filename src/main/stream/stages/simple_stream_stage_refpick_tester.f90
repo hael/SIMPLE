@@ -5,28 +5,15 @@
 ! registered program and carries qsys_name=local for the stage project's computing environment.
 ! The upstream is a preprocessing directory whose completed projects hold five micrographs.
 ! Submission, make_pickrefs and the pick_extract jobs are left to the high-level stream tests.
-module simple_stream_stage_refpick_tester
+submodule (simple_stream_stage_refpick) simple_stream_stage_refpick_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs_fname,                  only: TERM_STREAM, METADATA_EXT
-use simple_defs_stream,                 only: DIR_STREAM, DIR_STREAM_COMPLETED, STREAM_NMOVS_SET, STREAM_IDLE_MARKER,&
-                                             &STREAM_FINISHED_MARKER
-use simple_string,                      only: string
+use simple_defs_fname,                  only: METADATA_EXT
+use simple_defs_stream,                 only: STREAM_NMOVS_SET
 use simple_string_utils,                only: int2str, int2str_pad
-use simple_fileio,                      only: file_exists, del_file, simple_getcwd, simple_touch
-use simple_syslib,                      only: dir_exists, simple_mkdir
-use simple_cmdline,                     only: cmdline
-use simple_sp_project,                  only: sp_project
-use simple_gui_metadata_utils,          only: max_metadata_size
-use simple_gui_metadata_types,          only: GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE
-use simple_gui_metadata_stream_picking, only: gui_metadata_stream_picking
-use simple_stream_pipe,                 only: stream_pipe
 use simple_optics_maps,                 only: publish_optics_map
-use simple_stream_stage_refpick,        only: stream_stage_refpick
 implicit none
-private
-public :: run_all_stream_stage_refpick_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_refpick.simple'
 character(len=*), parameter :: UPSTREAM      = 'preproc'               ! the preprocessing stage directory (dir_target)
@@ -36,7 +23,7 @@ integer,          parameter :: ALL_ACCEPTED(STREAM_NMOVS_SET) = 1
 
 contains
 
-    subroutine run_all_stream_stage_refpick_tests()
+    module subroutine run_all_stream_stage_refpick_tests()
         write(*,'(A)') '**** running all stream reference picking stage tests ****'
         call test_init_params()
         call test_attach_upstream()
@@ -693,4 +680,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_refpick_tester
+end submodule simple_stream_stage_refpick_tester

@@ -2,23 +2,16 @@
 ! The installation path is runtime-local: a distributed run takes the environment's SIMPLE_PATH
 ! (set by CTest) for its queue description and executable, never a simple_path a project carries; an empty project gets the minimum job time. Partitions given an active-particle mask
 ! stay contiguous and balance the active particles (split_nobjs_active).
-module simple_qsys_env_tester
-use simple_core_module_api
-use simple_cmdline,    only: cmdline
-use simple_parameters, only: parameters
-use simple_qsys_env,   only: qsys_env, register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs,&
-                            &forget_warmup_envs
+submodule (simple_qsys_env) simple_qsys_env_tester
 use simple_sp_project, only: sp_project
 use simple_test_utils
 implicit none
-private
-public :: run_all_qsys_env_tests
 
 character(len=*), parameter :: FOREIGN_SIMPLE_PATH = '/remote/install/that/is/not/local'
 
 contains
 
-    subroutine run_all_qsys_env_tests()
+    module subroutine run_all_qsys_env_tests()
         write(*,'(A)') '**** running all qsys environment tests ****'
         call test_installation_path_policy()
         call test_missing_project_scheduler()
@@ -280,4 +273,4 @@ contains
         end do
     end function active_counts
 
-end module simple_qsys_env_tester
+end submodule simple_qsys_env_tester

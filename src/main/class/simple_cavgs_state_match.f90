@@ -20,13 +20,20 @@ use simple_strategy2D_utils, only: match_imgs
 use simple_imgarr_utils,     only: dealloc_imgarr
 implicit none
 
-public :: match_cavgs_to_states, reduce_state_matches, matched_pose
+public :: match_cavgs_to_states
+public :: run_all_cavgs_state_match_tests
 private
 #include "simple_local_flags.inc"
 
 real,    parameter :: LP_SAMPLING   = 3.   ! the matched images' pixel size is lp/LP_SAMPLING (or the inputs' when coarser)
 real,    parameter :: HP_MATCH      = 100. ! high-pass limit of the alignment (A)
 integer, parameter :: BOX_MATCH_MIN = 32   ! the matched images' box at least (or the input's when smaller)
+
+interface
+    !> white-box tests (submodule simple_cavgs_state_match_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_cavgs_state_match_tests()
+    end subroutine run_all_cavgs_state_match_tests
+end interface
 
 contains
 

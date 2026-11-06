@@ -6,7 +6,7 @@ use simple_commanders_flex_pca,         only: commander_flex_pca
 use simple_commanders_refine3D,         only: commander_refine3D_auto, commander_refine3D_states_cavgs
 use simple_state_weight_set,            only: state_weight_set
 use simple_sigma2_state_file,           only: sigma2_state_digest_file
-use simple_flex_pca_application_tester, only: configure_flex_pca_phantom, read_state_weight_table, FLEX_PHANTOM_BOX, &
+use simple_test_flex_phantom_fixture, only: configure_flex_pca_phantom, read_state_weight_table, FLEX_PHANTOM_BOX, &
     &FLEX_PHANTOM_NPTCLS, FLEX_PHANTOM_NCOMP, FLEX_PHANTOM_MAX_STATES, &
     &FLEX_PHANTOM_SMPD, FLEX_PHANTOM_MSKDIAM, FLEX_PHANTOM_LABEL_ACCURACY_MIN
 use simple_test_state_fixture,          only: state_fixture, FIX_KNOWN, FIX_VIEWS

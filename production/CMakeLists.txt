@@ -173,7 +173,6 @@ add_custom_target(audit_ui_defaults
 # ------------------------------------------------------------------------------
 # Two gates behind one front door, simple_test_exec:
 #   fast         runs on every compile_*.sh build under a 60 s budget
-#                (Phase 2 declares it; until then `provisional` stands in)
 #   library      nightly, one process per coherent part of the library
 #   highlevel    only by explicit CTest command; long simulated workflows
 #   platform     coarray/MPI/GPU/socket/child-process cases, own launcher

@@ -5,7 +5,8 @@ use simple_cmdline,    only: cmdline
 use simple_progress
 implicit none
 
-public :: convergence, cont_particle_stable
+public :: convergence
+public :: run_all_convergence_tests
 private
 
 
@@ -52,6 +53,12 @@ type convergence
     procedure, private :: res_two_back
     procedure, private :: record_res
 end type convergence
+
+interface
+    !> white-box tests (submodule simple_convergence_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_convergence_tests()
+    end subroutine run_all_convergence_tests
+end interface
 
 contains
 

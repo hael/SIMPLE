@@ -17,7 +17,7 @@ private
 
 public :: CAVG_RELATIONAL_FEATURE_NAME
 public :: cavg_quality_relation_analysis
-public :: calculate_promoted_feature
+public :: run_all_cavg_quality_relations_tests
 
 character(len=*), parameter :: CAVG_RELATIONAL_FEATURE_NAME = 'signal_stats_anchor_topk_mean'
 
@@ -39,6 +39,12 @@ contains
     procedure :: calculate => calculate_relation_analysis
     procedure :: kill      => kill_relation_analysis
 end type cavg_quality_relation_analysis
+
+interface
+    !> white-box tests (submodule simple_cavg_quality_relations_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_cavg_quality_relations_tests()
+    end subroutine run_all_cavg_quality_relations_tests
+end interface
 
 contains
 

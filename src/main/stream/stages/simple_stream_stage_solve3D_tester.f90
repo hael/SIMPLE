@@ -10,40 +10,17 @@
 ! method's rules and the class averages by state: simple_state_assignment_tester), and the
 ! volume messages on a fixture project with a volume and an FSC; a 3D snapshot is written from a
 ! fixture result project, on a request sent through the stage's update pipe.
-module simple_stream_stage_solve3D_tester
+submodule (simple_stream_stage_solve3D) simple_stream_stage_solve3D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use json_module,                 only: json_core, json_value
 use simple_test_utils,                                only: assert_char, assert_false, assert_int, assert_real, assert_true, enter_fixture, leave_fixture, tests_failed
-use simple_defs_fname,                                only: TERM_STREAM, METADATA_EXT
-use simple_refine3D_fnames,                           only: refine3D_reprojs_fname
-use simple_defs_stream,                               only: DIR_STREAM_COMPLETED
-use simple_string,                                    only: string
-use simple_string_utils,                              only: int2str, int2str_pad
-use simple_fileio,                                    only: arr2file, del_file, file_exists, simple_getcwd, simple_touch, add2fbody
-use simple_syslib,                                    only: simple_mkdir, dir_exists
-use simple_math_ft,                                   only: get_resarr
-use simple_cmdline,                                   only: cmdline
+use simple_fileio,                                    only: arr2file, simple_touch
 use simple_image,                                     only: image
 use simple_ori,                                       only: ori
 use simple_strategy3D_cont,                           only: cont_seed_is_valid
-use simple_sp_project,                                only: sp_project
-use simple_rec_list,                                  only: rec_iterator, chunk_rec
-use simple_gui_metadata_utils,                        only: max_metadata_size
-use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_TYPE, GUI_METADATA_VOL3D_TYPE,&
-                                                           &GUI_METADATA_STREAM_SOLVE3D_MULTISTATE_REPROJ_TYPE,&
-                                                           &GUI_METADATA_STREAM_SOLVE3D_SNAPSHOT_TYPE, GUI_METADATA_STREAM_UPDATE_TYPE
-use simple_gui_metadata_stream_solve3D_multistate, only: gui_metadata_stream_solve3D_multistate
-use simple_gui_metadata_stream_snapshot,              only: gui_metadata_stream_snapshot
-use simple_gui_metadata_stream_update,                only: gui_metadata_stream_update
-use simple_gui_metadata_vol3D,                        only: gui_metadata_vol3D
-use simple_stream_pipe,                               only: stream_pipe
-use simple_stream_stage_solve3D,                   only: stream_stage_solve3D, PHASE_IMPORTING, PHASE_CAVGS3D,&
-                                                           &PHASE_IDLE, PHASE_ASSIGN, JOB_NONE, JOB_ROUTE, JOB_FALLBACK,&
-                                                           &JOB_ASSIGN, ROUTE_TRIES
+use simple_gui_metadata_types,                        only: GUI_METADATA_STREAM_UPDATE_TYPE
 implicit none
-private
-public :: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_solve3D.simple'
 character(len=*), parameter :: UPSTREAM      = 'pool2D' ! the pool 2D stage directory (dir_target)
@@ -54,7 +31,7 @@ real,             parameter :: VOL_SMPD      = 2.0
 
 contains
 
-    subroutine run_all_stream_stage_solve3D_tests()
+    module subroutine run_all_stream_stage_solve3D_tests()
         write(*,'(A)') '**** running all stream solve 3D stage tests ****'
         call test_init_params()
         call test_restart_removes_term_stream()
@@ -79,7 +56,7 @@ contains
     end subroutine run_all_stream_stage_solve3D_tests
 
     !> the library tests: what takes the docking's time
-    subroutine run_all_stream_stage_solve3D_lib_tests()
+    module subroutine run_all_stream_stage_solve3D_lib_tests()
         write(*,'(A)') '**** running all stream solve 3D stage library tests ****'
         call test_reference_docking()
     end subroutine run_all_stream_stage_solve3D_lib_tests
@@ -1418,4 +1395,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_solve3D_tester
+end submodule simple_stream_stage_solve3D_tester

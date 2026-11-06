@@ -6,36 +6,19 @@
 ! a queue): sets are handed to the stage's empty pool and checked through the stage's counts; the
 ! pool object's own tests, rows included, are simple_stream_pool2D_tester (its own sub-suite), and
 ! the pool runs are covered by the high-level stream tests.
-module simple_stream_stage_pool2D_tester
+submodule (simple_stream_stage_pool2D) simple_stream_stage_pool2D_tester
 use, intrinsic :: iso_c_binding, only: c_int
 use unix,                        only: c_pipe, c_close, c_fcntl, F_GETFL, F_SETFL, O_NONBLOCK
 use simple_test_utils
-use simple_defs_fname,                          only: TERM_STREAM, METADATA_EXT, USER_PARAMS2D, REFINE2D_FINISHED
-use simple_defs_stream,                         only: DIR_STREAM_COMPLETED, POOL_EXIT_CODE, POOL_INPUT_PROJFILE, NPTCLS_FIRST3D
-use simple_string,                              only: string
-use simple_string_utils,                        only: int2str_pad
-use simple_fileio,                              only: basename, del_file, file_exists, simple_getcwd, simple_touch, add2fbody
-use simple_rec_list,                            only: rec_iterator, chunk_rec
-use simple_syslib,                              only: dir_exists, simple_mkdir
-use simple_cmdline,                             only: cmdline
-use simple_sp_project,                          only: sp_project
-use simple_gui_metadata_utils,                  only: max_metadata_size
-use simple_gui_metadata_types,                  only: GUI_METADATA_STREAM_POOL2D_TYPE, GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE,&
-                                                     &GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE, GUI_METADATA_STREAM_UPDATE_TYPE
-use simple_gui_metadata_stream_pool2D,          only: gui_metadata_stream_pool2D
-use simple_gui_metadata_stream_snapshot,        only: gui_metadata_stream_snapshot
-use simple_gui_metadata_stream_update,          only: gui_metadata_stream_update
-use simple_stream_pipe,                         only: stream_pipe
-use simple_stream_stage_pool2D,                 only: stream_stage_pool2D
-use simple_stream_refine2D_utils,              only: build_pool_publication, pool_publication_nselected,&
-                                                     &build_sieve_publication, combine_sieve_classes
+use simple_defs_fname,                          only: USER_PARAMS2D
+use simple_fileio,                              only: simple_touch
+use simple_gui_metadata_types,                  only: GUI_METADATA_STREAM_UPDATE_TYPE
+use simple_stream_refine2D_utils,              only: build_pool_publication, pool_publication_nselected
 use simple_image,                               only: image
 use simple_class_frcs,                          only: class_frcs
 use simple_imghead,                             only: find_ldim_nptcls
 use simple_optics_maps,                         only: publish_optics_map
 implicit none
-private
-public :: run_all_stream_stage_pool2D_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_pool2D.simple'
 character(len=*), parameter :: UPSTREAM      = 'sieve'  ! the sieve stage directory (dir_target)
@@ -43,7 +26,7 @@ real,             parameter :: MSKDIAM_SIEVE = 180.     ! the mask diameter of t
 
 contains
 
-    subroutine run_all_stream_stage_pool2D_tests()
+    module subroutine run_all_stream_stage_pool2D_tests()
         write(*,'(A)') '**** running all stream pool 2D stage tests ****'
         call test_init_params()
         call test_restart_cleans()
@@ -992,4 +975,4 @@ contains
         fds = -1
     end subroutine close_loopback
 
-end module simple_stream_stage_pool2D_tester
+end submodule simple_stream_stage_pool2D_tester

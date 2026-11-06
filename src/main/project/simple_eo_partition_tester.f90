@@ -1,20 +1,10 @@
 !@descr: unit tests of the project-owned even/odd partition: micrograph groups, routes, appended stacks, earlier releases, refusals, merge and the isolated random stream
-module simple_eo_partition_tester
-use, intrinsic :: iso_fortran_env, only: int64
+submodule (simple_eo_partition) simple_eo_partition_tester
 use simple_test_utils
-use simple_defs,           only: l_distr_worker_glob, STDLEN
-use simple_oris,           only: oris
-use simple_sp_project,     only: sp_project
-use simple_string,         only: string
 use simple_cmdline,        only: cmdline
-use simple_rnd,            only: ran3
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 use simple_projfile_utils, only: merge_selected_project_files
-use simple_eo_partition,   only: ensure_field_halves, eo_transaction, eo_partition_status, EO_COMPLETE, &
-    &EO_MISSING, EO_PARTIAL, EO_INCONSISTENT, repartition_selected_halves
 implicit none
-private
-public :: run_all_eo_partition_tests
 
 integer,          parameter :: REFUSE_WORKER_MISSING = 1, REFUSE_MASTER_INCONSISTENT = 2
 character(len=*), parameter :: EO_PROJ = 'eo_partition_test.simple'
@@ -28,7 +18,7 @@ end type refusing_partition
 
 contains
 
-    subroutine run_all_eo_partition_tests()
+    module subroutine run_all_eo_partition_tests()
         type(string) :: cwd_saved, root
         integer      :: nfail0
         write(*,'(A)') '**** running all eo partition tests ****'
@@ -50,7 +40,6 @@ contains
     end subroutine run_all_eo_partition_tests
 
     subroutine test_selected_score_pairs()
-        use simple_type_defs, only: class_sample
         class(sp_project), allocatable :: project
         type(class_sample) :: groups(3)
         integer, parameter :: FIRST(3) = [1,6,9], LAST(3) = [5,8,9]
@@ -559,4 +548,4 @@ contains
         call proj%kill
     end subroutine test_isolated_stream_and_seed
 
-end module simple_eo_partition_tester
+end submodule simple_eo_partition_tester

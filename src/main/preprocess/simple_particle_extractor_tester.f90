@@ -1,16 +1,10 @@
 !@descr: unit tests for binary-model fallback and initialization in simple_particle_extractor
-module simple_particle_extractor_tester
-use simple_defs,               only: logfhandle
-use simple_ori,                only: ori
+submodule (simple_particle_extractor) simple_particle_extractor_tester
 use simple_parameters,         only: parameters
-use simple_particle_extractor, only: ptcl_extractor
-use simple_syslib,             only: file_exists
 use simple_test_utils,         only: assert_true, assert_false, assert_int
 use simple_forked_process,     only: forked_process, FORK_STATUS_FAILED
 use simple_cmdline,            only: cmdline
 implicit none
-private
-public :: run_all_particle_extractor_tests
 
 !> extraction from the frames of a micrograph motion corrected under another convention, which must stop
 type, extends(forked_process) :: convention_extract
@@ -22,7 +16,7 @@ end type convention_extract
 
 contains
 
-    subroutine run_all_particle_extractor_tests()
+    module subroutine run_all_particle_extractor_tests()
         integer :: saved_log, scratch_log
         write(*,'(A)') '**** running all particle extractor tests ****'
         saved_log = logfhandle
@@ -46,7 +40,7 @@ contains
         !$ saved_omp = omp_get_max_threads()
         !$ call omp_set_num_threads(1)
         allocate(extractor)
-        call extractor%test_movie_outlier_curation(gain_only, combined, flat_gain_only, flat_combined,&
+        call movie_outlier_curation_cases(extractor, gain_only, combined, flat_gain_only, flat_combined,&
             &no_gain, non_eer, clean_gain)
         call assert_true(gain_only, 'movie curation repairs EER gain defects with no saved outliers')
         call assert_true(combined, 'movie curation repairs statistical and gain defects including saved overlap')
@@ -58,6 +52,68 @@ contains
         deallocate(extractor)
         !$ call omp_set_num_threads(saved_omp)
     end subroutine test_movie_outlier_curation
+
+    !> the post-gain step of init_mov on seven cases, without an EER decoder fixture
+    subroutine movie_outlier_curation_cases( self, gain_only, combined, flat_gain_only, flat_combined,&
+        &no_gain, non_eer, clean_gain )
+        class(ptcl_extractor), intent(inout) :: self
+        logical, intent(out) :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
+        integer, parameter :: NX=32, NY=32, NFR=2, GX=13, GY=16, HX=24, HY=16
+        real :: pixels(NX,NY,1), expected(NX,NY,NFR), gain_pixels(NX,NY,1)
+        integer :: icase, iframe, i, j
+        logical :: checks(7)
+        checks = .true.
+        do icase = 1,size(checks)
+            call self%kill
+            self%ldim    = [NX,NY,1]
+            self%nframes = NFR
+            self%l_eer   = icase /= 6
+            self%l_gain  = icase /= 5
+            if( icase == 2 .or. icase == 4 )then
+                self%nhotpix = 1
+                allocate(self%hotpix_coords(2,1))
+                self%hotpix_coords(:,1) = [GX,GY]
+            endif
+            gain_pixels = 1.
+            if( icase /= 7 ) gain_pixels(GX,GY,1) = 0.
+            call self%gain%new(self%ldim, 1., wthreads=.false.)
+            call self%gain%set_rmat(gain_pixels, .false.)
+            allocate(self%frames(NFR))
+            do iframe = 1,NFR
+                do j = 1,NY
+                    do i = 1,NX
+                        pixels(i,j,1) = real(i+j+1)
+                    enddo
+                enddo
+                ! Opposite frames have a constant zero sum but nonzero local medians.
+                if( (icase == 3 .or. icase == 4) .and. iframe == 2 ) pixels = -pixels
+                expected(:,:,iframe) = pixels(:,:,1)
+                if( icase /= 7 ) pixels(GX,GY,1) = 0.
+                if( icase == 2 .or. icase == 7 ) pixels(HX,HY,1) = 100000.
+                if( icase >= 5 ) expected(:,:,iframe) = pixels(:,:,1)
+                call self%frames(iframe)%new(self%ldim, 1., wthreads=.false.)
+                call self%frames(iframe)%set_rmat(pixels, .false.)
+            enddo
+            call self%cure_movie_outliers
+            ! Removing the center of a linear ramp leaves symmetric pairs with the same median.
+            do iframe = 1,NFR
+                do j = 1,NY
+                    do i = 1,NX
+                        checks(icase) = checks(icase) .and.&
+                            &abs(self%frames(iframe)%get([i,j,1]) - expected(i,j,iframe)) < 1.e-5
+                    enddo
+                enddo
+            enddo
+        enddo
+        call self%kill
+        gain_only      = checks(1)
+        combined       = checks(2)
+        flat_gain_only = checks(3)
+        flat_combined  = checks(4)
+        no_gain        = checks(5)
+        non_eer        = checks(6)
+        clean_gain     = checks(7)
+    end subroutine movie_outlier_curation_cases
 
     subroutine test_missing_motion_model()
         character(len=*), parameter :: MISSING_MODEL = 'tmp_particle_extractor_missing.mmodel'
@@ -121,12 +177,6 @@ contains
     end subroutine test_init_mic_selects_micrograph_mode
 
     subroutine test_binary_model_constructors()
-        use simple_defs,              only: dp
-        use simple_image,             only: image
-        use simple_motion_model,      only: motion_model
-        use simple_dose_curve,        only: dose_curve
-        use simple_string,            only: string
-        use simple_syslib,            only: del_file
         use simple_test_utils,        only: assert_real
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
         integer, parameter :: NX = 48, NY = 40, NFR = 3, BOX_TEST = 8, REF_FRAME = 2
@@ -327,10 +377,6 @@ contains
     end subroutine extract_other_convention
 
     subroutine test_particle_frame_cache()
-        use simple_image,        only: image
-        use simple_motion_model, only: motion_model
-        use simple_string,       only: string
-        use simple_syslib,       only: del_file
         use simple_test_utils,   only: assert_real
         !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
         integer, parameter :: NX = 48, NY = 40, NFR = 3, REF_FRAME = 2, NPTCLS = 2
@@ -526,4 +572,4 @@ contains
         endif
     end subroutine assert_micrograph_state
 
-end module simple_particle_extractor_tester
+end submodule simple_particle_extractor_tester

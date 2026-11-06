@@ -11,6 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: ptcl_extractor
+public :: run_all_particle_extractor_tests
 
 integer, parameter :: POLYDIM    = 18
 real,    parameter :: NSIGMAS    = 6.0
@@ -75,13 +76,18 @@ type :: ptcl_extractor
     procedure          :: does_exist
     procedure          :: get_particle_mask
     procedure          :: has_frames, has_isoshifts
-    procedure          :: has_particle_frames
+    procedure, private :: has_particle_frames
     procedure          :: has_weights, has_model_frameweights
     procedure          :: has_hotpix_coords
-    procedure          :: test_movie_outlier_curation
     ! Destructor
     procedure :: kill
 end type ptcl_extractor
+
+interface
+    !> white-box tests (submodule simple_particle_extractor_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_particle_extractor_tests()
+    end subroutine run_all_particle_extractor_tests
+end interface
 
 contains
 
@@ -967,68 +973,6 @@ contains
         class(ptcl_extractor), intent(in) :: self
         has_model_frameweights = allocated(self%mmodel%frameweights)
     end function has_model_frameweights
-
-    ! White-box checks of the post-gain step used by init_mov, without an EER decoder fixture.
-    subroutine test_movie_outlier_curation( self, gain_only, combined, flat_gain_only, flat_combined,&
-        &no_gain, non_eer, clean_gain )
-        class(ptcl_extractor), intent(inout) :: self
-        logical, intent(out) :: gain_only, combined, flat_gain_only, flat_combined, no_gain, non_eer, clean_gain
-        integer, parameter :: NX=32, NY=32, NFR=2, GX=13, GY=16, HX=24, HY=16
-        real :: pixels(NX,NY,1), expected(NX,NY,NFR), gain_pixels(NX,NY,1)
-        integer :: icase, iframe, i, j
-        logical :: checks(7)
-        checks = .true.
-        do icase = 1,size(checks)
-            call self%kill
-            self%ldim    = [NX,NY,1]
-            self%nframes = NFR
-            self%l_eer   = icase /= 6
-            self%l_gain  = icase /= 5
-            if( icase == 2 .or. icase == 4 )then
-                self%nhotpix = 1
-                allocate(self%hotpix_coords(2,1))
-                self%hotpix_coords(:,1) = [GX,GY]
-            endif
-            gain_pixels = 1.
-            if( icase /= 7 ) gain_pixels(GX,GY,1) = 0.
-            call self%gain%new(self%ldim, 1., wthreads=.false.)
-            call self%gain%set_rmat(gain_pixels, .false.)
-            allocate(self%frames(NFR))
-            do iframe = 1,NFR
-                do j = 1,NY
-                    do i = 1,NX
-                        pixels(i,j,1) = real(i+j+1)
-                    enddo
-                enddo
-                ! Opposite frames have a constant zero sum but nonzero local medians.
-                if( (icase == 3 .or. icase == 4) .and. iframe == 2 ) pixels = -pixels
-                expected(:,:,iframe) = pixels(:,:,1)
-                if( icase /= 7 ) pixels(GX,GY,1) = 0.
-                if( icase == 2 .or. icase == 7 ) pixels(HX,HY,1) = 100000.
-                if( icase >= 5 ) expected(:,:,iframe) = pixels(:,:,1)
-                call self%frames(iframe)%new(self%ldim, 1., wthreads=.false.)
-                call self%frames(iframe)%set_rmat(pixels, .false.)
-            enddo
-            call self%cure_movie_outliers
-            ! Removing the center of a linear ramp leaves symmetric pairs with the same median.
-            do iframe = 1,NFR
-                do j = 1,NY
-                    do i = 1,NX
-                        checks(icase) = checks(icase) .and.&
-                            &abs(self%frames(iframe)%get([i,j,1]) - expected(i,j,iframe)) < 1.e-5
-                    enddo
-                enddo
-            enddo
-        enddo
-        call self%kill
-        gain_only      = checks(1)
-        combined       = checks(2)
-        flat_gain_only = checks(3)
-        flat_combined  = checks(4)
-        no_gain        = checks(5)
-        non_eer        = checks(6)
-        clean_gain     = checks(7)
-    end subroutine test_movie_outlier_curation
 
     subroutine kill(self)
         class(ptcl_extractor), intent(inout) :: self

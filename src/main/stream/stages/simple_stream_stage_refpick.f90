@@ -85,6 +85,7 @@ use simple_stream_job_sets,             only: stream_job_sets
 implicit none
 
 public :: stream_stage_refpick
+public :: run_all_stream_stage_refpick_tests
 private
 #include "simple_local_flags.inc"
 
@@ -142,33 +143,39 @@ contains
     procedure :: finalize
     procedure :: kill
     ! the steps of new(), in order
-    procedure :: init_params
-    procedure :: init_job_dirs
-    procedure :: resume_previous_run
+    procedure, private :: init_params
+    procedure, private :: init_job_dirs
+    procedure, private :: resume_previous_run
     procedure :: init_queue
-    procedure :: build_worker_cline
-    procedure :: init_gui
+    procedure, private :: build_worker_cline
+    procedure, private :: init_gui
     ! the steps of iterate() and their helpers
-    procedure :: attach_upstream
-    procedure :: pickrefs_available
+    procedure, private :: attach_upstream
+    procedure, private :: pickrefs_available
     procedure :: submit_new_projects
-    procedure :: create_set_project
+    procedure, private :: create_set_project
     procedure :: prepare_pickrefs
-    procedure :: first_mics_smpd
+    procedure, private :: first_mics_smpd
     procedure :: install_pickrefs
     procedure :: schedule_jobs
     procedure :: collect_jobs
-    procedure :: import_finished_sets
-    procedure :: import_sets
+    procedure, private :: import_finished_sets
+    procedure, private :: import_sets
     procedure :: import_previous_sets
     procedure :: process_imports
     procedure :: idle
-    procedure :: update_idle_marker
+    procedure, private :: update_idle_marker
     procedure :: apply_optics_map
-    procedure :: write_mic_star
-    procedure :: write_project
-    procedure :: send_status
+    procedure, private :: write_mic_star
+    procedure, private :: write_project
+    procedure, private :: send_status
 end type stream_stage_refpick
+
+interface
+    !> white-box tests (submodule simple_stream_stage_refpick_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_refpick_tests()
+    end subroutine run_all_stream_stage_refpick_tests
+end interface
 
 contains
 

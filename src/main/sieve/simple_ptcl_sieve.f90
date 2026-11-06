@@ -45,8 +45,7 @@ module simple_ptcl_sieve
 
   implicit none
   public :: ptcl_sieve, ptcl_sieve_settings, sieve_settings
-  public :: CHUNK_INPUT_PROJFILE, CHUNK_ATTEMPT1
-  public :: CHUNKED_MICS, CHUNK_MICS, CONSUMED_COARSE, read_chunked_mics, rebuild_chunked_mics
+  public :: CHUNKED_MICS, CHUNK_MICS, read_chunked_mics, rebuild_chunked_mics
   public :: DEFAULT_COARSE_POP_THRESHOLD
   public :: DEFAULT_FINE_POP_THRESHOLD
   public :: DEFAULT_NCLS
@@ -57,8 +56,7 @@ module simple_ptcl_sieve
   public :: DEFAULT_LPSTART
   public :: DEFAULT_COARSE_LP
   public :: DEFAULT_FINE_LP
-  public :: FINAL_INGESTION_MARKER
-  public :: sieve_lpstart
+  public :: run_all_ptcl_sieve_tests
 
   private
 #include "simple_local_flags.inc"
@@ -214,9 +212,9 @@ module simple_ptcl_sieve
     procedure :: reconcile_consumed_coarse
     procedure :: restore_counters
     procedure :: get_n_chunks_coarse
-    procedure :: get_n_chunks_fine
-    procedure :: get_n_chunks_running
-    procedure :: get_n_pass_1_non_rejected_ptcls
+    procedure, private :: get_n_chunks_fine
+    procedure, private :: get_n_chunks_running
+    procedure, private :: get_n_pass_1_non_rejected_ptcls
     procedure :: get_n_pass_2_non_rejected_ptcls
     procedure :: get_n_coarse_accepted_ptcls
     procedure :: get_n_coarse_rejected_ptcls
@@ -233,20 +231,26 @@ module simple_ptcl_sieve
     procedure :: unset_final_ingestion
     procedure :: append_chunk_coarse
     procedure :: append_chunk_fine
-    procedure :: generate_chunks_coarse
+    procedure, private :: generate_chunks_coarse
     procedure :: generate_chunk_coarse_cline
     procedure :: generate_chunks_fine
     procedure :: generate_chunk_fine_cline
     procedure :: combine_completed_chunks
     procedure :: submit
     procedure :: cancel
-    procedure :: collect_and_reject
+    procedure, private :: collect_and_reject
     procedure :: reject_cavgs
     procedure :: fail_chunk
     procedure :: cleanup_chunk
     procedure :: hand_off
     procedure :: hand_off_final_set
   end type ptcl_sieve
+
+  interface
+    !> white-box tests (submodule simple_ptcl_sieve_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_ptcl_sieve_tests()
+    end subroutine run_all_ptcl_sieve_tests
+  end interface
 
 contains
 

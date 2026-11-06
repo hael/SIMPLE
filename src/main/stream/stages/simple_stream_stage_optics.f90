@@ -56,6 +56,7 @@ use simple_stream_meta_plots,                     only: recent_shifts_by_optics_
 implicit none
 
 public :: stream_stage_optics
+public :: run_all_stream_stage_optics_tests
 private
 
 integer, parameter :: MAX_PROJECTS_IMPORT = 50 ! completed upstream projects taken per pass
@@ -94,14 +95,20 @@ contains
     procedure :: finished
     procedure :: finalize
     procedure :: kill
-    procedure :: attach_upstream
-    procedure :: import_new_projects
-    procedure :: assign_and_publish
+    procedure, private :: attach_upstream
+    procedure, private :: import_new_projects
+    procedure, private :: assign_and_publish
     procedure :: restore_groups
     procedure :: end_restore
-    procedure :: send_group_shifts
-    procedure :: send_status
+    procedure, private :: send_group_shifts
+    procedure, private :: send_status
 end type stream_stage_optics
+
+interface
+    !> white-box tests (submodule simple_stream_stage_optics_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_optics_tests()
+    end subroutine run_all_stream_stage_optics_tests
+end interface
 
 contains
 

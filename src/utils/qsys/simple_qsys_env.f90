@@ -19,7 +19,8 @@ use simple_qsys_sge,                 only: qsys_sge
 implicit none
 
 public :: qsys_env
-public :: register_warmup_env, unregister_warmup_env, is_warmup_owner, n_warmup_envs, forget_warmup_envs
+public :: forget_warmup_envs
+public :: run_all_qsys_env_tests
 private
 #include "simple_local_flags.inc"
 
@@ -66,6 +67,12 @@ type :: qsys_env_ref
 end type qsys_env_ref
 type(qsys_env_ref), allocatable, save :: warmup_envs(:)
 type(qsys_env), pointer, save :: active_persistent_worker_env => null()
+
+interface
+    !> white-box tests (submodule simple_qsys_env_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_qsys_env_tests()
+    end subroutine run_all_qsys_env_tests
+end interface
 
 contains
 

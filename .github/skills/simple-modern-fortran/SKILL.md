@@ -56,7 +56,8 @@ Follow the local style instead of introducing foreign patterns.
 - Do not rely on integer overflow (wrap-around hashes or random generators): it
   is undefined and the Release build is `-O3`. Use 64-bit integers and explicit
   `modulo`.
-- Delete dead code and state nothing reads; do not keep it for safety.
+- Delete dead code and state nothing reads; do not keep it for safety. Prove it
+  dead with the compiler probe of skill `simple-dead-code`, not with a search.
 - Release 4 keeps no backwards compatibility: no aliases, shims or old-format
   readers. The one exception is reading `.simple` project files of earlier
   releases.
@@ -150,12 +151,16 @@ thread safety. For every parallel region you add or change:
 
 ## Testers
 
+- Writing or editing a test: [references/testing.md](references/testing.md), the policy's rules in short.
 - A tester (`simple_<x>_tester.f90`, entry `run_all_<x>_tests`) runs only from a
   suite table in `src/main/commanders/test/simple_commanders_test_class.f90`
   (`add_suite`). Nothing reports a tester that no table calls; the fast gate's
   `scripts/check_test_registry.py` checks only that the tables, the test UI's
   `suite=` help, the routers and CTest agree. Rules:
   `doc/policies/test_environment_policy.md`.
+- No entity is public only for its tester: a tester that needs private entities
+  is a submodule of the module it tests, and fixtures several tests share are
+  `simple_test_<x>_fixture` modules in `src/main/commanders/test/` (policy 4.3).
 
 ## Debugging And Build Notes
 

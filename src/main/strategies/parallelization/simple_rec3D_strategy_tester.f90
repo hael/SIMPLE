@@ -4,30 +4,21 @@
 ! branch: shared-memory gridding, distributed gridding (nparts without part), shared-memory
 ! PCG, distributed PCG (nparts > 1) and the worker part of either backend; the PCG worker's entries of the
 ! weighted insertion (topk > 1).
-module simple_rec3D_strategy_tester
-use simple_cmdline,        only: cmdline
-use simple_parameters,     only: parameters
-use simple_rec3D_strategy, only: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, &
-    &rec3D_pcg_inmem_strategy, create_rec3D_strategy
-use simple_rec3D_service,  only: rec3D_backend_id, rec3D_backend_is_wired, REC3D_BACKEND_INVALID, &
-    &REC3D_BACKEND_GRIDDING, REC3D_BACKEND_PCG
+submodule (simple_rec3D_strategy) simple_rec3D_strategy_tester
+use simple_rec3D_service,  only: rec3D_backend_is_wired, REC3D_BACKEND_INVALID
 use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_LAMBDA
 use simple_rec3D_pcg_strategy, only: pcg_extra_entries, accumulate_pcg_extras
 use simple_eul_prob_tab_utils, only: prob_insert_poses
-use simple_ori,                only: ori
-use simple_oris,               only: oris
-use simple_type_defs,          only: ctfparams, CTFFLAG_NO
-use simple_rnd,                only: ran3, seed_rnd_fixed
+use simple_type_defs,          only: CTFFLAG_NO
+use simple_rnd,                only: seed_rnd_fixed
 use simple_test_utils
 implicit none
-private
-public :: run_all_rec3D_strategy_tests
 
 integer, parameter :: KIND_INMEM = 1, KIND_DISTR = 2, KIND_PCG_INMEM = 3, KIND_OTHER = 0
 
 contains
 
-    subroutine run_all_rec3D_strategy_tests()
+    module subroutine run_all_rec3D_strategy_tests()
         write(*,'(A)') '**** running all rec3D_strategy tests ****'
         call test_defaults()
         call test_backend_resolution()
@@ -230,4 +221,4 @@ contains
         call cline%kill
     end subroutine test_factory_branches
 
-end module simple_rec3D_strategy_tester
+end submodule simple_rec3D_strategy_tester

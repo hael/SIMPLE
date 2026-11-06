@@ -18,9 +18,10 @@ private
 #include "simple_local_flags.inc"
 
 public :: cavg_quality_lattice
-public :: LAT_NFEATS, LAT_LATTICE_PEAK, LAT_SPOT_COUNT, LAT_SPOT_ARC, LAT_SPOT_DIAM, LAT_SPOT_SNR, LAT_BAND_PRESENCE
+public :: LAT_NFEATS, LAT_LATTICE_PEAK, LAT_SPOT_DIAM, LAT_SPOT_SNR
 public :: LAT_PEAK_MIN, LAT_PEAK_MIN_RAW, K_MODEL
 public :: model_gate_states
+public :: run_all_cavg_quality_lattice_tests
 
 ! the six lattice features, in the order of the nano bank
 integer, parameter :: LAT_NFEATS = 6
@@ -73,6 +74,12 @@ contains
     procedure, private :: measure
     procedure :: kill
 end type cavg_quality_lattice
+
+interface
+    !> white-box tests (submodule simple_cavg_quality_lattice_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_cavg_quality_lattice_tests()
+    end subroutine run_all_cavg_quality_lattice_tests
+end interface
 
 contains
 

@@ -19,21 +19,21 @@ implicit none
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
           set_nu_solvent_envelope, clear_nu_solvent_envelope, &
           set_nu_evidence_null_shell, clear_nu_evidence_null_shell, &
-          cleanup_nu_filter, pack_filtmap_lowpass_limits,&
+          cleanup_nu_filter, &
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, analyze_filtmap_neighbor_continuity,&
           get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp, get_nu_filter_timings,&
           write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
-          nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
+          nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, &
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
-          nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
+          nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, &
           NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
-          get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
+          print_nu_evidence_summary,&
           assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
-          NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC,&
-          NU_EVIDENCE_MAX_NULL_FRAC, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
+          NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
+public :: run_all_nu_filter_tests
 private
 #include "simple_local_flags.inc"
 
@@ -581,6 +581,12 @@ interface
         type(nu_envmask_stats), intent(in) :: stats
     end subroutine print_nu_envmask_stats
 
+end interface
+
+interface
+    !> white-box tests (submodule simple_nu_filter_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_nu_filter_tests()
+    end subroutine run_all_nu_filter_tests
 end interface
 
 end module simple_nu_filter

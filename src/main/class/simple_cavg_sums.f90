@@ -9,8 +9,9 @@ implicit none
 
 public :: cavg_sums
 public :: CAVG_SUMS_STATE, CAVG_SUMS_CONTRIB
-public :: CAVG_SUMS_OK, CAVG_SUMS_MISSING, CAVG_SUMS_CORRUPT, CAVG_SUMS_MISMATCH
+public :: CAVG_SUMS_OK
 public :: cavg_contrib_fname
+public :: run_all_cavg_sums_tests
 private
 #include "simple_local_flags.inc"
 
@@ -61,6 +62,12 @@ type :: cavg_sums
     procedure          :: read
     procedure          :: kill
 end type cavg_sums
+
+interface
+    !> white-box tests (submodule simple_cavg_sums_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_cavg_sums_tests()
+    end subroutine run_all_cavg_sums_tests
+end interface
 
 contains
 

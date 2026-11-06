@@ -28,8 +28,8 @@ use simple_decay_funs_tester,                only: run_all_decay_funs_tests
 use simple_opt_tester,                       only: run_all_opt_tests
 use simple_nlcg_solver_tester,               only: run_all_nlcg_solver_tests
 use simple_lpstages_tester,                  only: run_all_lpstages_tests
-use simple_dose_series_tester,               only: run_all_dose_series_tests
-use simple_dose_curve_tester,                only: run_all_dose_curve_tests
+use simple_dose_series,                      only: run_all_dose_series_tests
+use simple_dose_curve,                       only: run_all_dose_curve_tests
 use simple_image_msk_tester,                 only: run_all_mask_tests, run_all_nano_mask_tests, run_all_image_bin_tests
 use simple_segmentation_tester,              only: run_all_segmentation_tests
 use simple_accum_blend_tester,               only: run_all_accum_blend_tests
@@ -40,11 +40,11 @@ use simple_starproject_stream_tester,        only: run_all_starproject_stream_te
 use simple_binoris_tester,                   only: run_all_binoris_tests
 use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
-use simple_state_weight_set_tester,          only: run_all_state_weight_set_tests
+use simple_state_weight_set,                 only: run_all_state_weight_set_tests
 use simple_cavgs_work_project_tester,        only: run_all_cavgs_work_project_tests
-use simple_eo_partition_tester,              only: run_all_eo_partition_tests
-use simple_class_compatibility_tester,       only: run_all_class_compatibility_tests
-use simple_ptcl_sieve_tester,                only: run_all_ptcl_sieve_tests
+use simple_eo_partition,                     only: run_all_eo_partition_tests
+use simple_class_compatibility,              only: run_all_class_compatibility_tests
+use simple_ptcl_sieve,                       only: run_all_ptcl_sieve_tests
 use simple_mic_import_tester,                only: run_all_mic_import_tests
 use simple_mic_selection_tester,             only: run_all_mic_selection_tests
 use simple_mic_subset_tester,                only: run_all_mic_subset_tests
@@ -53,64 +53,64 @@ use simple_optics_groups_tester,             only: run_all_optics_groups_tests
 use simple_optics_maps_tester,               only: run_all_optics_maps_tests
 use simple_motion_gain_tester,               only: run_all_motion_gain_tests
 use simple_motion_model_tester,              only: run_all_motion_model_tests
-use simple_particle_extractor_tester,        only: run_all_particle_extractor_tests
+use simple_particle_extractor,               only: run_all_particle_extractor_tests
 use simple_gui_metadata_tester,              only: run_all_gui_metadata_tests
 use simple_gui_assembler_tester,             only: run_all_gui_assembler_tests
 use simple_ui_hash_tester,                   only: run_all_ui_hash_tests
 use simple_ui_visibility_tester,             only: run_all_ui_visibility_tests
-use simple_rnd_tester,                       only: run_all_rnd_tests
+use simple_rnd,                              only: run_all_rnd_tests
 use simple_qsys_ctrl_tester,                 only: run_all_qsys_ctrl_tests
-use simple_qsys_env_tester,                  only: run_all_qsys_env_tests
-use simple_cavg_quality_relations_tester,    only: run_all_cavg_quality_relations_tests
+use simple_qsys_env,                         only: run_all_qsys_env_tests
+use simple_cavg_quality_relations,           only: run_all_cavg_quality_relations_tests
 use simple_cavg_quality_selection_tester,    only: run_all_cavg_quality_selection_tests
-use simple_cavg_quality_lattice_tester,      only: run_all_cavg_quality_lattice_tests
-use simple_quality_logistic_tester,          only: run_all_quality_logistic_tests
-use simple_sigma2_state_tester,              only: run_all_sigma2_state_tests
+use simple_cavg_quality_lattice,             only: run_all_cavg_quality_lattice_tests
+use simple_quality_logistic,                 only: run_all_quality_logistic_tests
+use simple_sigma2_state,                     only: run_all_sigma2_state_tests
 use simple_sigma2_bootstrap_tester,          only: run_all_sigma2_bootstrap_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
 use simple_eul_prob_tab_tester,              only: run_all_eul_prob_tab_tests
-use simple_cavg_sums_tester,                 only: run_all_cavg_sums_tests
-use simple_trail_chain_manifest_tester,      only: run_all_trail_chain_manifest_tests
+use simple_cavg_sums,                        only: run_all_cavg_sums_tests
+use simple_trail_chain_manifest,             only: run_all_trail_chain_manifest_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
-use simple_rec3D_strategy_tester,            only: run_all_rec3D_strategy_tests
-use simple_frozen_accum_tester,              only: run_all_frozen_accum_tests
-use simple_reconstructor_tester,             only: run_all_reconstructor_tests
+use simple_rec3D_strategy,                   only: run_all_rec3D_strategy_tests
+use simple_frozen_accum,                     only: run_all_frozen_accum_tests
+use simple_reconstructor,                    only: run_all_reconstructor_tests
 use simple_rec3D_service_tester,             only: run_all_rec3D_service_lib_tests
 use simple_rec3D_wave_strategy_tester,       only: run_all_rec3D_wave_lib_tests
 use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
-use simple_solve2D_controller_tester,        only: run_all_solve2D_stage_rule_tests
-use simple_state_assignment_tester,          only: run_all_state_assignment_tests
+use simple_solve2D_controller,               only: run_all_solve2D_stage_rule_tests
+use simple_state_assignment,                 only: run_all_state_assignment_tests
 use simple_project_superset_tester,          only: run_all_project_superset_tests
 use simple_solve3D_addon_report_tester,      only: run_all_solve3D_addon_report_tests
 use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
-use simple_nu_filter_tester,                 only: run_all_nu_filter_tests
+use simple_nu_filter,                        only: run_all_nu_filter_tests
 use simple_halfmap_enhancer_tester,          only: run_all_halfmap_enhancer_tests
 use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
-use simple_pcg_atomic_prior_tester,          only: run_all_pcg_atomic_prior_tests
+use simple_pcg_atomic_prior,                 only: run_all_pcg_atomic_prior_tests
 use simple_pcg_lattice_tester,               only: run_all_pcg_lattice_tests
 use simple_wave_field_tester,                only: run_all_wave_field_tests
 use simple_wave_imaging_tester,              only: run_all_wave_imaging_tests
 use simple_wave_multislice_tester,           only: run_all_wave_multislice_tests
-use simple_wave_projector_tester,            only: run_all_wave_projector_tests
+use simple_wave_projector,                   only: run_all_wave_projector_tests
 use simple_simulator_tester,                 only: run_all_simulator_tests
 use simple_pftc_inplane_tester,              only: run_all_pftc_inplane_tests
 use simple_strategy3D_inplane_tester,        only: run_all_strategy3D_inplane_tests
 use simple_refine3D_local_tester, only: run_all_refine3D_local_tests
-use simple_refine3D_startup_tester,              only: run_all_refine3D_startup_tests
+use simple_refine3D_startup,                     only: run_all_refine3D_startup_tests
 use simple_strategy3D_cont_tester,           only: run_all_strategy3D_cont_tests
-use simple_convergence_tester,               only: run_all_convergence_tests
+use simple_convergence,                      only: run_all_convergence_tests
 use simple_strategy3D_cont_1jyx_tester,      only: run_all_strategy3D_cont_1jyx_tests
 use simple_cartesian_fourier_tester,         only: run_all_cartesian_fourier_tests
-use simple_cartft_calc_tester,               only: run_all_cartft_calc_tests
-use simple_cartft_pose_opt_tester,           only: run_all_cartft_pose_opt_tests
+use simple_cartft_calc,                      only: run_all_cartft_calc_tests
+use simple_cartft_pose_opt,                  only: run_all_cartft_pose_opt_tests
 use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
 use simple_flex_cls_expansion_tester,        only: run_all_flex_cls_expansion_tests
 use simple_flex_cls_kernel,                  only: run_all_flex_cls_kernel_tests
-use simple_flex_pca_application_tester,      only: run_all_flex_pca_application_tests
+use simple_flex_pca_application,             only: run_all_flex_pca_application_tests
 use simple_flex_pcg_tester,                  only: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, &
     &run_all_flex_pcg_sweep_tests
 use simple_ipc_tcp_socket_tester,            only: run_all_ipc_tcp_socket_tests
@@ -140,28 +140,29 @@ use simple_xd_gmm_tester,                    only: run_all_xd_gmm_tests
 use simple_atoms_tester,                     only: run_all_atoms_tests
 use simple_cif2mrc_tester,                   only: run_all_cif2mrc_tests
 use simple_calpha_finder_tester,             only: run_all_calpha_finder_tests
-use simple_nano_species_tester,              only: run_all_nano_species_tests
+use simple_nano_species,                     only: run_all_nano_species_tests
 use simple_commanders_postprocess_pdb_tester, only: run_all_postprocess_pdb_tests
 use simple_commanders_volops_tester,          only: run_all_volops_lib_tests
-use simple_nano_density_tester,              only: run_all_nano_density_tests, run_all_nano_density_lib_tests
+use simple_nano_density,                     only: run_all_nano_density_tests, run_all_nano_density_lib_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
-use simple_cavgs_state_match_tester,         only: run_all_cavgs_state_match_tests
+use simple_cavgs_state_match,                only: run_all_cavgs_state_match_tests
 use simple_polarft_corr_tester,              only: run_all_polarft_corr_tests
-use simple_polar_shiftmap_tester,            only: run_all_polar_shiftmap_tests
+use simple_polar_shiftmap,                   only: run_all_polar_shiftmap_tests
+use simple_polarft_calc,                      only: run_all_polarft_shiftmap_tests
 use simple_openmp_offload_tester,            only: run_openmp_offload_tests
 use simple_stream_tester,                    only: run_all_stream_optics_tests, run_all_stream_pickrefs_tests, &
     &run_all_stream_pick_extract_tests
 use simple_stream_chain_tester,                  only: run_all_stream_chain_sieve_tests, run_all_stream_chain_movie_tests
-use simple_stream_stage_preprocess_tester,       only: run_all_stream_stage_preprocess_tests
-use simple_stream_stage_optics_tester,           only: run_all_stream_stage_optics_tests
-use simple_stream_stage_initial_analysis_tester, only: run_all_stream_stage_initial_analysis_tests
-use simple_stream_stage_refpick_tester,          only: run_all_stream_stage_refpick_tests
-use simple_stream_stage_sieve_tester,            only: run_all_stream_stage_sieve_tests
-use simple_stream_stage_pool2D_tester,           only: run_all_stream_stage_pool2D_tests
-use simple_stream_pool2D_tester,                 only: run_all_stream_pool2D_tests
-use simple_stream_stage_solve3D_tester,          only: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
+use simple_stream_stage_preprocess,              only: run_all_stream_stage_preprocess_tests
+use simple_stream_stage_optics,                  only: run_all_stream_stage_optics_tests
+use simple_stream_stage_initial_analysis,        only: run_all_stream_stage_initial_analysis_tests
+use simple_stream_stage_refpick,                 only: run_all_stream_stage_refpick_tests
+use simple_stream_stage_sieve,                   only: run_all_stream_stage_sieve_tests
+use simple_stream_stage_pool2D,                  only: run_all_stream_stage_pool2D_tests
+use simple_stream_pool2D,                        only: run_all_stream_pool2D_tests
+use simple_stream_stage_solve3D,                 only: run_all_stream_stage_solve3D_tests, run_all_stream_stage_solve3D_lib_tests
 use simple_stream_master_tester,                 only: run_all_stream_master_tests, run_stream_heartbeat_tests
 use simple_stream_job_sets_tester,               only: run_all_stream_job_sets_tests
 use simple_stream_meta_plots_tester,             only: run_all_stream_meta_plots_tests
@@ -169,10 +170,10 @@ use simple_stream_watcher_tester,                only: run_all_stream_watcher_te
 use simple_ui,                                   only: validate_ui_json
 use simple_dose_filter3D_tester,              only: run_all_dose_filter3D_tests
 use simple_dose_series_manifest_tester,         only: run_all_dose_series_manifest_tests
-use simple_refine_motion_model_tester,          only: run_all_refine_motion_model_tests, &
+use simple_refine_motion_model_strategy,        only: run_all_refine_motion_model_tests, &
     &run_all_refine_motion_model_lib_tests
-use simple_refine3D_provenance_tester,           only: run_all_refine3D_provenance_tests
-use simple_refine3D_strategy_tester,             only: run_all_refine3D_staging_tests
+use simple_refine3D_provenance,                  only: run_all_refine3D_provenance_tests
+use simple_refine3D_strategy,                    only: run_all_refine3D_staging_tests
 use simple_parameters_tester,                    only: run_all_parameters_tests
 implicit none
 #include "simple_local_flags.inc"
@@ -488,6 +489,7 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'polar correlation',        run_all_polarft_corr_tests)
         call add_suite(s, n, 'polar shift map',          run_all_polar_shiftmap_tests)
+        call add_suite(s, n, 'polar shift map kernel',   run_all_polarft_shiftmap_tests)
         call add_suite(s, n, 'continuous in-plane',      run_all_pftc_inplane_tests)
         call add_suite(s, n, 'refine3D in-plane state',  run_all_strategy3D_inplane_tests)
         call add_suite(s, n, '2D probability table',     run_all_eul_prob_tab2D_tests)

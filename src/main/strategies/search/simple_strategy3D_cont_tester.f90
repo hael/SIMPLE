@@ -19,7 +19,7 @@ use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid, cont_refe
 use simple_cartft_pose_opt, only: CARTFT_ACCEPTED
 use simple_type_defs,       only: ctfparams, CTFFLAG_NO, OBJFUN_CC, OBJFUN_EUCLID
 use simple_test_utils
-use simple_sigma2_state_tester, only: write_test_sigma2_store
+use simple_test_sigma2_fixture, only: write_test_sigma2_store
 implicit none
 private
 public :: run_all_strategy3D_cont_tests

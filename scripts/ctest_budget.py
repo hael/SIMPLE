@@ -16,7 +16,7 @@ only when there is something to fix. Exits 1 on a failed entry,
 2 if the log holds no ctest results. A run over budget exits successfully
 when all entries pass.
 
-usage: scripts/ctest_budget.py LOG [--budget 30] [--no-budget] [--quiet]
+usage: scripts/ctest_budget.py LOG [--budget 60] [--no-budget] [--quiet]
 """
 import argparse
 import re

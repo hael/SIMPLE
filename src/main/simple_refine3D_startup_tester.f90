@@ -1,13 +1,10 @@
 !@descr: startup handoff and first-update sampling contract
-module simple_refine3D_startup_tester
+submodule (simple_refine3D_startup) simple_refine3D_startup_tester
 implicit none
-private
-public :: run_all_refine3D_startup_tests
 
 contains
 
-    subroutine run_all_refine3D_startup_tests()
-        use simple_refine3D_startup, only: refine3D_startup, STARTUP_ORDINARY, STARTUP_REUSE_CHAIN, STARTUP_SEED_CHAIN
+    module subroutine run_all_refine3D_startup_tests()
         use simple_cmdline,          only: cmdline
         use simple_parameters,       only: parameters
         use simple_test_utils,       only: assert_true, assert_false, assert_real, assert_int
@@ -68,4 +65,4 @@ contains
         call cline%kill
     end subroutine run_all_refine3D_startup_tests
 
-end module simple_refine3D_startup_tester
+end submodule simple_refine3D_startup_tester

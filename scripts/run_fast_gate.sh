@@ -4,7 +4,7 @@
 #
 #   scripts/run_fast_gate.sh [BUILD_DIR]        (default: build)
 #
-# Runs only `ctest -L "fast|provisional"` in BUILD_DIR with half the cores,
+# Runs only `ctest -L fast` in BUILD_DIR with half the cores,
 # rounded up. The long `highlevel` label is intentionally excluded and must be
 # requested explicitly. Tees
 # the output to BUILD_DIR/test_runs/ctest_fast.log and hands it to
@@ -34,7 +34,7 @@ case "$BUILD" in /*) ;; *) BUILD="$ROOT/$BUILD" ;; esac
 [ -f "$BUILD/CTestTestfile.cmake" ] || { echo "run_fast_gate: no CTest configuration in $BUILD (built with --exclude-tests? rebuild without it)" >&2; exit 2; }
 if command -v nproc >/dev/null 2>&1; then ncpu=$(nproc); else ncpu=$(sysctl -n hw.ncpu); fi
 # Round up so the standard three-core GitHub macOS runner gets two workers
-# instead of serializing the gate and missing the 30 s wall-time budget.
+# instead of serializing the gate and missing the 60 s wall-time budget.
 jobs=$(( (ncpu + 1) / 2 )); [ "$jobs" -lt 1 ] && jobs=1
 python3 "$ROOT/scripts/check_test_registry.py" "$ROOT" || exit 1
 python3 "$ROOT/scripts/check_descr.py" "$ROOT" || exit 1
@@ -53,12 +53,5 @@ if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 mkdir -p "$BUILD/test_runs"
 LOG="$BUILD/test_runs/ctest_fast.log"
-# GATE_DECLARED went to yes in Phase 2 (2026-09-22): the fast area suites
-# exist and SIMPLE_CTEST_BUDGET is armed in production/CMakeLists.txt.
-GATE_DECLARED=yes
-( cd "$BUILD" && ctest -L "fast|provisional" --output-on-failure --parallel "$jobs" --timeout 600 2>&1 ) | tee "$LOG"
-if [ "$GATE_DECLARED" = yes ]; then
-    python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --budget 60 --quiet
-else
-    python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --no-budget --quiet
-fi
+( cd "$BUILD" && ctest -L fast --output-on-failure --parallel "$jobs" --timeout 600 2>&1 ) | tee "$LOG"
+python3 "$ROOT/scripts/ctest_budget.py" "$LOG" --budget 60 --quiet

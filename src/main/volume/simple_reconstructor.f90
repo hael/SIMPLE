@@ -7,8 +7,9 @@ use simple_parameters, only: parameters
 use simple_gridding,   only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 implicit none
 
-public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi, wiener_ridge
+public :: reconstructor, gridding_half_restore, exp_samples, insert_planes_multi
 public :: RHO_HDR_BYTES, read_rho_header
+public :: run_all_reconstructor_tests
 private
 #include "simple_local_flags.inc"
 
@@ -109,6 +110,12 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
     procedure          :: kill => kill_reconstructor
 end type reconstructor
+
+interface
+    !> white-box tests (submodule simple_reconstructor_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_reconstructor_tests()
+    end subroutine run_all_reconstructor_tests
+end interface
 
 contains
 

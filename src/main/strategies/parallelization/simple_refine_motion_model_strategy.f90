@@ -17,6 +17,7 @@ public :: refine_motion_model_inmem_strategy
 public :: refine_motion_model_distr_strategy
 public :: create_refine_motion_model_strategy
 public :: prepare_fraction_dose_manifest, reconstruct_motion_fractions
+public :: run_all_refine_motion_model_tests, run_all_refine_motion_model_lib_tests
 private
 #include "simple_local_flags.inc"
 
@@ -99,6 +100,14 @@ abstract interface
         class(refine_motion_model_strategy), intent(in) :: self
         character(len=:), allocatable :: msg
     end function endmsg_interface
+end interface
+
+interface
+    !> white-box tests (submodule simple_refine_motion_model_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_refine_motion_model_tests()
+    end subroutine run_all_refine_motion_model_tests
+    module subroutine run_all_refine_motion_model_lib_tests()
+    end subroutine run_all_refine_motion_model_lib_tests
 end interface
 
 contains

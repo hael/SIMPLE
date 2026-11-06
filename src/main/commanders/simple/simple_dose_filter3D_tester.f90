@@ -1,15 +1,15 @@
 !@descr: integration of dose_filter3D with a reconstructed fraction dose-series manifest
 module simple_dose_filter3D_tester
-use simple_defs,                        only: CWD_GLOB
-use simple_string,                      only: string
-use simple_cmdline,                     only: cmdline
-use simple_fileio,                      only: file_exists
-use simple_syslib,                      only: simple_chdir
-use simple_commanders_resolest,         only: commander_dose_filter3D
-use simple_dose_curve,                  only: dose_curve
-use simple_refine_motion_model_tester,  only: check_fraction_dose_export
-use simple_flex_pca_application_tester, only: create_flex_pca_phantom_fixture, FLEX_PHANTOM_SMPD, FLEX_PHANTOM_MSKDIAM
-use simple_test_utils,                  only: assert_true, enter_fixture, leave_fixture, tests_failed
+use simple_defs,                       only: CWD_GLOB
+use simple_string,                     only: string
+use simple_cmdline,                    only: cmdline
+use simple_fileio,                     only: file_exists
+use simple_syslib,                     only: simple_chdir
+use simple_commanders_resolest,        only: commander_dose_filter3D
+use simple_dose_curve,                 only: dose_curve
+use simple_test_fraction_dose_fixture, only: check_fraction_dose_export
+use simple_test_flex_phantom_fixture,  only: create_flex_pca_phantom_fixture, FLEX_PHANTOM_SMPD, FLEX_PHANTOM_MSKDIAM
+use simple_test_utils,                 only: assert_true, enter_fixture, leave_fixture, tests_failed
 implicit none
 private
 public :: run_all_dose_filter3D_tests

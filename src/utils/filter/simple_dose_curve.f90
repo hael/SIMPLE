@@ -12,6 +12,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 public :: dose_curve, scaled_dose
+public :: run_all_dose_curve_tests
 private
 
 character(len=*), parameter :: VERSION_LINE = '# SIMPLE dose curve 1'
@@ -34,12 +35,18 @@ type :: dose_curve
     procedure :: set_knot
     procedure :: write
     procedure :: read
-    procedure :: check_movie
+    procedure, private :: check_movie
     procedure :: fraction_weights
     procedure :: kill
     procedure, private :: validate
     procedure, private :: evaluate
 end type dose_curve
+
+interface
+    !> white-box tests (submodule simple_dose_curve_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_dose_curve_tests()
+    end subroutine run_all_dose_curve_tests
+end interface
 
 contains
 

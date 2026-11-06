@@ -12,8 +12,9 @@ use simple_rec3D_service,     only: rec3D_service, rec3D_request, rec3D_backend_
     &REC3D_BACKEND_PCG, REC3D_DISPATCH_INPROC, REC3D_DISPATCH_QUEUE, REC3D_WEIGHTS_HARD, REC3D_WEIGHTS_SET
 implicit none
 
-public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
+public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy
 public :: rec3D_pcg_inmem_strategy, run_rec3D
+public :: run_all_rec3D_strategy_tests
 private
 #include "simple_local_flags.inc"
 
@@ -77,6 +78,12 @@ abstract interface
         type(builder),         intent(inout) :: build
         class(cmdline),        intent(inout) :: cline
     end subroutine cleanup_interface
+end interface
+
+interface
+    !> white-box tests (submodule simple_rec3D_strategy_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_rec3D_strategy_tests()
+    end subroutine run_all_rec3D_strategy_tests
 end interface
 
 contains

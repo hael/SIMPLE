@@ -421,29 +421,6 @@ contains
         enddo
     end subroutine shiftmap_objfun_grid
 
-    !> the grid optimum of a shiftmap_objfun_grid (the largest correlation, the smallest loss): its rotation, its shift
-    !! in the optimizer's frame, its value and its grid indices
-    module subroutine shiftmap_peak( self, imap, vals, irot, xy, val, irho, ialpha )
-        class(polarft_calc), intent(in)  :: self
-        integer,             intent(in)  :: imap
-        real(sp),            intent(in)  :: vals(:,:,:)
-        integer,             intent(out) :: irot
-        real(dp),            intent(out) :: xy(2)
-        real(sp),            intent(out) :: val
-        integer,             intent(out) :: irho, ialpha
-        integer :: loc(3)
-        if( self%p_ptr%cc_objfun == OBJFUN_CC )then
-            loc = maxloc(vals)
-        else
-            loc = minloc(vals)
-        endif
-        ialpha = loc(1)
-        irot   = loc(2)
-        irho   = loc(3)
-        val    = vals(ialpha, irot, irho)
-        xy     = self%shiftmap(imap)%get_shift(irho, ialpha)
-    end subroutine shiftmap_peak
-
     !> The prior over map imap's grid: a Gaussian of weight prior_w = 1 / (2 sigma^2) on the cell's shift, the
     !! increment from the particle's stored shift (the prior moves with the particle: the image is prepared at its
     !! stored shift, which the class centring moves too), times the cell's area, over every (direction, rotation,

@@ -20,9 +20,9 @@ use simple_error, only: simple_exception
 implicit none
 
 public :: nano_density, transfer_kernels
-public :: gauss_kernel, halo_kernel, render_atoms, fit_atom, regress_profile
-public :: gauss_filter3D, robust_spread
-public :: CN_FULL
+public :: halo_kernel, render_atoms
+public :: gauss_filter3D
+public :: run_all_nano_density_tests, run_all_nano_density_lib_tests
 private
 #include "simple_local_flags.inc"
 
@@ -81,11 +81,11 @@ type :: transfer_kernels
     real, allocatable :: reach(:)                  ! (nb): radius (A) beyond which |K_T| < REACH_FRAC of its peak
 contains
     procedure :: new => new_kernels
-    procedure :: is_plain
-    procedure :: ntab
+    procedure, private :: is_plain
+    procedure, private :: ntab
     procedure :: halo_at
-    procedure :: kernel_at
-    procedure :: profile
+    procedure, private :: kernel_at
+    procedure, private :: profile
     procedure :: t_of
     procedure :: kill => kill_kernels
 end type transfer_kernels
@@ -162,6 +162,14 @@ contains
     procedure, private :: width_prior
     procedure, private :: set_variances
 end type nano_density
+
+interface
+    !> white-box tests (submodule simple_nano_density_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_nano_density_tests()
+    end subroutine run_all_nano_density_tests
+    module subroutine run_all_nano_density_lib_tests()
+    end subroutine run_all_nano_density_lib_tests
+end interface
 
 contains
 

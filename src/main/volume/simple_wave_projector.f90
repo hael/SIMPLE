@@ -20,6 +20,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: wave_projector
+public :: run_all_wave_projector_tests
 
 !> one thread's work arrays of a pass, allocated once (the cubes only for multislice, ct only for line_losses)
 type :: pass_work
@@ -71,9 +72,9 @@ type, extends(pcg_lattice) :: wave_projector
     procedure :: get_grad
     procedure :: predict
     procedure :: loss_grad
-    procedure :: adjoint_planes
+    procedure, private :: adjoint_planes
     procedure :: curvature
-    procedure :: linearize_planes
+    procedure, private :: linearize_planes
     procedure :: line_losses
     procedure :: gain_terms
     procedure :: get_exit_wave
@@ -94,6 +95,12 @@ end type wave_projector
 
 integer, parameter :: PASS_LOSS_GRAD = 1, PASS_ADJOINT = 2, PASS_CURVATURE = 3, PASS_PREDICT = 4, PASS_LINEAR = 5
 integer, parameter :: PASS_GAIN = 6
+
+interface
+    !> white-box tests (submodule simple_wave_projector_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_wave_projector_tests()
+    end subroutine run_all_wave_projector_tests
+end interface
 
 contains
 

@@ -17,6 +17,7 @@ use simple_refine3D_fnames,   only: refine3D_frozen_rec_fbody, refine3D_carried_
 implicit none
 
 public :: frozen_accum, carried_bundle, write_carried_membership, read_carried_membership
+public :: run_all_frozen_accum_tests
 private
 #include "simple_local_flags.inc"
 
@@ -50,14 +51,14 @@ type :: frozen_accum
     procedure          :: validate
     procedure          :: load
     procedure          :: set_weighting
-    procedure          :: set_dir
+    procedure, private :: set_dir
     procedure          :: get_nfrozen_state
     ! gridding sets
     procedure, private :: component
     procedure, private :: set_manifest
     procedure, private :: write_set_manifest
     procedure          :: write_gridding_set
-    procedure          :: gridding_set_status
+    procedure, private :: gridding_set_status
     procedure          :: add_gridding_set
     procedure          :: import_gridding_set
     procedure          :: kill
@@ -85,6 +86,12 @@ type :: carried_bundle
     procedure :: validate => validate_bundle
     procedure :: kill   => kill_bundle
 end type carried_bundle
+
+interface
+    !> white-box tests (submodule simple_frozen_accum_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_frozen_accum_tests()
+    end subroutine run_all_frozen_accum_tests
+end interface
 
 contains
 

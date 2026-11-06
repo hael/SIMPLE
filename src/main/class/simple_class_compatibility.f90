@@ -19,6 +19,7 @@ use simple_srch_sort_loc,         only: hpsort
 implicit none
 
 public :: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
+public :: run_all_class_compatibility_tests
 
 private
 #include "simple_local_flags.inc"
@@ -85,7 +86,7 @@ type :: class_compatibility
 contains
     procedure, public  :: new
     procedure, public  :: kill
-    procedure, public  :: kill_support_model
+    procedure, private :: kill_support_model
     procedure, public  :: train_1
     procedure, public  :: train_2
     procedure, public  :: infer
@@ -97,6 +98,12 @@ contains
     procedure, private :: preprocess_img
     generic,   public  :: train => train_1, train_2
 end type class_compatibility
+
+interface
+    !> white-box tests (submodule simple_class_compatibility_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_class_compatibility_tests()
+    end subroutine run_all_class_compatibility_tests
+end interface
 
 contains
 

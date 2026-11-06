@@ -11,11 +11,12 @@ private
 #include "simple_local_flags.inc"
 
 public :: quality_logistic_problem
-public :: dataset_learn_role, logistic_dataset_class_weights, robust_macro_score, stable_sigmoid_8
+public :: dataset_learn_role, logistic_dataset_class_weights, robust_macro_score
 public :: QUALITY_MAX_FEATS, QUALITY_MAX_INTERACTIONS
 public :: LEARN_ROLE_SKIP, LEARN_ROLE_BALANCED, LEARN_ROLE_RECALL_ONLY, LEARN_ROLE_SPECIFICITY_ONLY
 public :: LOGISTIC_LAMBDAS, LOGISTIC_THRESHOLDS, LEARN_ROBUST_TAIL_FRAC, LEARN_ROBUST_TAIL_WEIGHT
 public :: LEARN_BALANCED_GOOD_LOSS_WEIGHT, LEARN_BALANCED_BAD_LOSS_WEIGHT
+public :: run_all_quality_logistic_tests
 
 integer, parameter :: QUALITY_MAX_FEATS        = 16   !< the largest feature bank of any quality model
 integer, parameter :: QUALITY_MAX_INTERACTIONS = (QUALITY_MAX_FEATS * (QUALITY_MAX_FEATS - 1)) / 2
@@ -58,6 +59,12 @@ contains
     procedure :: fdf
     procedure :: kill
 end type quality_logistic_problem
+
+interface
+    !> white-box tests (submodule simple_quality_logistic_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_quality_logistic_tests()
+    end subroutine run_all_quality_logistic_tests
+end interface
 
 contains
 

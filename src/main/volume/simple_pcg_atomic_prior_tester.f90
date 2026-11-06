@@ -2,17 +2,12 @@
 ! The projector onto the atom kernels on a synthetic box, the prior term, the width fit, and in the reconstructor:
 ! strength zero bit-identical, the term identical in both operator modes, amplitudes fitted through the data.
 ! Tolerances follow from single-precision maps (~1e-7) and the relative Gram ridge (1e-7), not from a run.
-module simple_pcg_atomic_prior_tester
-use simple_defs,              only: dp, PI
+submodule (simple_pcg_atomic_prior) simple_pcg_atomic_prior_tester
 use simple_oris,              only: oris
-use simple_image,             only: image
-use simple_pcg_atomic_prior,  only: pcg_atomic_prior, pcg_atomic_prior_stats
 use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL, PCG_OP_MATRIXFREE, PCG_LAMBDA
 use simple_test_utils,        only: assert_true
 use ieee_arithmetic,          only: ieee_is_finite
 implicit none
-private
-public :: run_all_pcg_atomic_prior_tests
 
 integer,  parameter :: BOX          = 32
 real,     parameter :: SMPD         = 0.4
@@ -22,7 +17,7 @@ integer,  parameter :: NATOMS       = 60
 real,     parameter :: SUPPORT_RAD  = 15.0   !< px: the solve support
 real(dp), parameter :: PROJ_TOL     = 1.0e-5_dp  !< projector identities, relative
 real(dp), parameter :: SYM_TOL      = 1.0e-6_dp  !< symmetry of the prior term, relative
-real(dp), parameter :: GRAM_TOL     = 1.0e-6_dp  !< Gram solve against a known solution, relative
+real(dp), parameter :: GRAM_CHECK   = 1.0e-6_dp  !< Gram solve against a known solution, relative
 real,     parameter :: WIDTH_TOL    = 0.05       !< width fit on a noise-free map, relative
 ! reconstructor fixture
 integer,  parameter :: RBOX         = 32
@@ -37,7 +32,7 @@ real(dp), parameter :: AMP_CORR_MIN = 0.99_dp    !< fitted against true amplitud
 
 contains
 
-    subroutine run_all_pcg_atomic_prior_tests()
+    module subroutine run_all_pcg_atomic_prior_tests()
         write(*,'(A)') '**** running all pcg_atomic_prior tests ****'
         call test_projector()
         call test_apply_symmetric()
@@ -365,7 +360,7 @@ contains
         call prior%solve_gram(y, c, nit, rres)
         err = sqrt(sum((c - c_true)**2) / sum(c_true**2))
         write(*,'(A,I0,A,2ES11.3)') '  iterations ', nit, ', residual and solution error: ', rres, err
-        call assert_true(err <= GRAM_TOL, 'the Gram solve is accurate')
+        call assert_true(err <= GRAM_CHECK, 'the Gram solve is accurate')
         call prior%kill
     end subroutine test_gram_solve
 
@@ -561,4 +556,4 @@ contains
         call prior%kill
     end subroutine test_reconstructor_amplitudes
 
-end module simple_pcg_atomic_prior_tester
+end submodule simple_pcg_atomic_prior_tester

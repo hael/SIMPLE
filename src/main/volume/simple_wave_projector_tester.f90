@@ -32,27 +32,17 @@
 !   axis would swap the two errors; the two signs themselves differ by only about 2% in this box, so the factor
 !   stays well below the separation's (about 9).
 ! - Thread identity as above for multislice, whose gradient passes run in chunks of one particle per thread.
-! - specter's golden images (simple_wave_projector_golden_tester) to the KB lattice's accuracy: see TOL_GOLDEN.
-module simple_wave_projector_tester
-use simple_defs,              only: dp, PI
-use simple_type_defs,         only: ctfparams, CTFFLAG_YES
-use simple_ori,               only: ori
-use simple_oris,              only: oris
-use simple_sym,               only: sym
+! - specter's golden images (simple_test_wave_projector_golden_fixture) to the KB lattice's accuracy: see TOL_GOLDEN.
+submodule (simple_wave_projector) simple_wave_projector_tester
+use simple_type_defs,         only: CTFFLAG_YES
 use simple_math_ctf,          only: electron_interaction_constant
-use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
 use simple_reconstructor_pcg, only: reconstructor_pcg
-use simple_wave_imaging,      only: WAVE_PROJECTION, WAVE_FIRST_BORN, WAVE_RYTOV, WAVE_MSLICE
-use simple_wave_projector,    only: wave_projector
-use simple_image,             only: image
-use simple_wave_projector_golden_tester, only: CENTRES16, CENTRES24, G16_PROJECTION_PAR, G16_PROJECTION_IMG, &
+use simple_test_wave_projector_golden_fixture, only: CENTRES16, CENTRES24, G16_PROJECTION_PAR, G16_PROJECTION_IMG, &
     &G16_FB_NEG_PAR, G16_FB_NEG_IMG, G16_FB_POS_PAR, G16_FB_POS_IMG, G16_RY_NEG_PAR, G16_RY_NEG_IMG, G16_RY_POS_PAR, &
     &G16_RY_POS_IMG, G24_PROJECTION_PAR, G24_PROJECTION_IMG, G24_RY_NEG_PAR, G24_RY_NEG_IMG, G24_FB_POS_PAR, G24_FB_POS_IMG
 use simple_test_utils,        only: assert_true, fix_test_seed
 !$ use omp_lib,                only: omp_get_max_threads, omp_set_num_threads
 implicit none
-private
-public :: run_all_wave_projector_tests
 
 integer, parameter :: BOX = 24, R = BOX/2, NP = 4
 ! the golden images' bounds, the plan's tolerance: the KB lattice's error, measured at zero curvature where
@@ -66,7 +56,7 @@ real,    parameter :: SMPD = 1.0, KV = 300., GAIN = 6.0
 
 contains
 
-    subroutine run_all_wave_projector_tests()
+    module subroutine run_all_wave_projector_tests()
         integer :: model, kappa
         write(*,'(A)') '**** running all wave projector tests ****'
         call fix_test_seed()
@@ -429,7 +419,7 @@ contains
         call os%kill
     end subroutine test_oversampling_one
 
-    !> specter's golden images (simple_wave_projector_golden_tester): the interior relative intensity of the same
+    !> specter's golden images (simple_test_wave_projector_golden_fixture): the interior relative intensity of the same
     !! tapered blob potential, poses and CTF, per particle, within TOL_GOLDEN
     subroutine test_golden()
         real    :: err(8)
@@ -782,4 +772,4 @@ contains
         end do
     end function random_planes
 
-end module simple_wave_projector_tester
+end submodule simple_wave_projector_tester

@@ -40,8 +40,9 @@ run overnight; high-level tests run only when explicitly selected with CTest.
 
 **The fast gate is part of the build.** Every `compile_*.sh` build
 runs `scripts/run_fast_gate.sh` between `make` and `make install`. It first
-runs `scripts/check_test_registry.py`, `scripts/check_descr.py` and
-`scripts/check_flex_dag.py` (section 4.5), then
+runs `scripts/check_test_registry.py`, `scripts/check_descr.py`,
+`scripts/check_flex_dag.py`, `scripts/check_guide_imports.py` and
+`scripts/check_cli_chain.py` (section 4.5), then
 `ctest -L fast` with half the cores rounded up, then
 `scripts/ctest_budget.py`, which
 fails the build when an entry fails and only warns when the gate takes more
@@ -104,13 +105,13 @@ tester module (section 4.1).
 | `unit_core` | ANSI formatting, string, syslib, fileio, EPU XML (the beam shift of EPU metadata), stack I/O, class sample I/O, character hash, hash, value-reference hash, linked list, record list, command line, parameters |
 | `unit_ori` | orientation, orientation collection, symmetry, Euler shift |
 | `unit_image` | image, mrc2jpeg, mrc validate, image header, Fourier iterator, B-spline smoother, masks, nano mask, volume shape, binary image, segmentation, trailing-reconstruction blend, CTF, image serialisation |
-| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, `search, sort, locate`, decay schedules, cavg quality relations, cavg quality selection, cavg quality nano, quality logistic, optimisers, nonlinear conjugate gradient (the engine of `reconstruct3D_wave` on analytic objectives), low-pass stages, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
+| `unit_numerics` | online variance, random draws, affinity propagation, hierarchical clustering, k-means, k-center, Gaussian mixture, extreme deconvolution, statistics, linear algebra, Kaiser-Bessel kernel, `search, sort, locate`, decay schedules, cavg quality relations, cavg quality selection, cavg quality nano, quality logistic, optimisers, nonlinear conjugate gradient (the engine of `reconstruct3D_wave` on analytic objectives), low-pass stages, dose series, dose curve, shift search, truth metrics (state matching, adjusted Rand index, the null accuracy, map matching, discrimination, the frame, hand and point-group conventions of poses) |
 | `unit_project` | STAR file, STAR project, STAR stream export, binoris, project records, project merge, class compatibility, particle sieve, micrograph import, micrograph selection, micrograph subset, particle subset, optics groups, optics maps, solve3D manifest, project superset, solve3D addon report, solve3D chunks plan, state weight set, cavgs work project, eo partition |
 | `unit_motion` | motion gain, motion model, particle extractor, fraction dose metadata |
 | `unit_ui` | UI JSON, GUI metadata, GUI assembler, UI hash, UI visibility |
 | `unit_ipc` | IPC TCP socket, HTTP POST, persistent worker message, persistent worker server, stream pipe (localhost only) |
 | `unit_reconstruction` | rec3D backend, observation noise, class-average carry-over, trailing chain identity, refine3D provenance, dose series manifest, frozen accumulator, weighted insertion, volume pair metrics, nonuniform filtering, half-map enhancement, solve3D_cavgs stage rules, state assignment rules, atomic prior, PCG lattice (the gather and scatter of planes on the Ewald paraboloid and of a particle's spectrum cube), wave field, wave imaging, wave multislice, wave projector (the wave operators of `reconstruct3D_wave` and `simulate_scattering`: adjoint and finite-difference checks, the weak-phase identity, the curvature's sign and size, specter's golden images, thread identity at 1, 11, 16 and 24 threads; `doc/policies/3D/wave_model_policy.md`), wave simulation (the wave mode of `simulate_particles`: its weak-signal limit against the Fourier-projection particle, the second order, per-particle B-factors, the detector's noise statistics) |
-| `unit_pftc_align2D3D` | polar correlation, polar shift map, continuous in-plane, refine3D in-plane state, 2D probability table, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match, solve2D stage rules |
+| `unit_pftc_align2D3D` | polar correlation, polar shift map, polar shift map kernel, continuous in-plane, refine3D in-plane state, 2D probability table, 3D probability table, sigma2 state, sigma2 bootstrap, cavg registration, cavgs state match, solve2D stage rules |
 | `unit_cart_align3D` | local startup, local staging, startup state, Cartesian Fourier, cart calculator, pose optimizer, pose strategy, pose statistics |
 | `unit_heterogeneity` | flex PCA, flex PCG operator, flex cls_expansion, flex cls_expansion kernel |
 | `unit_parallel` | qsys control, qsys environment, test tools (the profile statistics, packing, identity rules and the registry of the suite runner) |
@@ -124,9 +125,9 @@ convenience and deliberately not a CTest entry.
 
 | entry | label | what it runs |
 | --- | --- | --- |
-| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame; PDB-masked sharpening: identical and opposite half-maps give FSC +1 and -1 and retain or suppress the output accordingly; fractional reconstruction; wave reconstruction: a phantom imaged by multislice at 100 kV and reconstructed by `reconstruct3D_wave` with Rytov, which must beat its flat start and the opposite curvature sign against the truth beyond the curvature limit (about five minutes); volume programs: `symaxis_search` aligns a turned D2 phantom to a map invariant under D2, `dock_volpair` docks a turned and shifted copy back, `centervol` brings a displaced phantom's centre of mass back within a voxel (each with the unmoved input as its control) |
+| `lib_reconstruction` | library | PCG half-set: independent half-set PCG solves against gridding; PCG sparse sampling: an atomic phantom from a tilt series, a preferred orientation and a dense control, PCG at two iterations against gridding; addon report docking: the solve3D_addon report docks a map rotated by 90 degrees and recovers the rotation; truth map docking: a map docked in both hands onto a truth made from its mirror, and every particle's pose and shift carried into the truth's frame; postprocess_pdb (PDB-masked sharpening): identical and opposite half-maps give FSC +1 and -1 and retain or suppress the output accordingly; fractional reconstruction; fraction dose export: reconstructions of motion-model frame fractions written to a dose-series manifest, refused for a missing dose or changed state membership; dose filter3D: `dose_filter3D` on a reconstructed fraction dose series; wave reconstruction: a phantom imaged by multislice at 100 kV and reconstructed by `reconstruct3D_wave` with Rytov, which must beat its flat start and the opposite curvature sign against the truth beyond the curvature limit (about five minutes); volume programs: `symaxis_search` aligns a turned D2 phantom to a map invariant under D2, `dock_volpair` docks a turned and shifted copy back, `centervol` brings a displaced phantom's centre of mass back within a voxel (each with the unmoved input as its control) |
 | `lib_cart_align3D` | library | pose 1JYX recovery: 1 000 simulated 1JYX particles perturbed by 10 degrees and 2 pixels (inside the 15° rotation bound), refined by the Cartesian 3D strategy (`strategy3D_cont`) under `objfun=cc` and `euclid` at 8 and 4 A, gated on the ground-truth orientations |
-| `lib_heterogeneity` | library | flex PCA on a two-state phantom, flex PCA deconvolution of 20 000 particles, the PCG operator at box 64, the PCG solve sweep |
+| `lib_heterogeneity` | library | flex PCA two-state phantom, flex PCA deconvolution 20k (20 000 particles), flex PCG operator 64 (the PCG operator at box 64), flex PCG solve sweep |
 | `lib_single` | library | pdb2mrc coverage of the built-in molecular models; density particles (the full fit of rendered nanoparticles with known and measured transfer, uniform and varying widths, noise, profile recovery and repeat/thread identity) |
 | `lib_stream` | library | optics assignment, picking references, pick and extract, and solve 3D reference docking |
 | `stream_chains` | highlevel | worker-backed sieve-to-3D and p01-p07 movie-to-3D chains; both compare recovered state maps with planted two-state truth, and the movie route covers initial analysis |
@@ -557,12 +558,14 @@ you: **before you push, build with `./compile_debug.sh` and
 let the gate pass.** This is a strong recommendation, not a lock: nothing in
 Git or CI blocks a push, because sometimes a push only moves code to another
 machine (a cluster node, say). Then run the gate before the work counts as
-done. The nightly GitHub Actions workflows build and gate master on Linux and
-macOS using clean Release, Debug, NICE GUI, and coarray configurations, and
-they run the broader platform, library, and high-level CTest labels. A separate
+done. Every push to master that touches code is built on Linux with the fast gate
+within minutes (`ci_push.yml`), which catches a file left out of a commit, a
+compile error under another compiler version and a gate failure. The nightly
+workflows build Debug, NICE GUI, bundled-numerics and coarray configurations
+and run the platform, library and high-level labels; a separate
 benchmark-dataset workflow runs short real-data subsets and publishes its FSC
-and resolution gates. The README badges and linked workflow/report pages show
-the next morning what slipped through. Do not keep work on a branch in the
+and resolution gates. What the longer tiers find shows the next morning on the
+README badges and the linked pages (section 6.3). Do not keep work on a branch in the
 online repository: nobody checks it, it drifts away from master, and the
 merge gets harder every day it waits. A branch pushed to the online
 repository is the exception and needs a strong reason (for example a
@@ -603,8 +606,8 @@ A unit test is a subroutine in a tester module next to the code it tests.
 - **The header** is a single `!@descr:` line naming what the module tests and
   the production modules it covers; more description goes below it in plain
   `!` lines (`scripts/check_descr.py`, section 4.5).
-- **The module** uses `simple_test_utils`, is `private`, and exports one
-  entry, `run_all_<thing>_tests`, which prints
+- **The module** (or the submodule of section 4.3) uses `simple_test_utils`,
+  is `private`, and exports one entry, `run_all_<thing>_tests`, which prints
   `**** running all <thing> tests ****` and calls each test. Each
   `test_<what>` subroutine prints its own name first.
 - **No process control in a tester**: no `stop`, `error stop`, `simple_end` or
@@ -642,15 +645,35 @@ A unit test is a subroutine in a tester module next to the code it tests.
 - A tester that loops over something printing through `logfhandle` diverts
   `logfhandle` to a scratch unit and restores it.
 
-### 4.3 White-box self-tests
+### 4.3 White-box testers and self-tests
 
-A self-test that must read private components of a type goes in a submodule
-of the production module, in a file named `*_tester.f90` (so it is built only
-with `BUILD_TESTS=ON`); the module declares its interface. It takes an
-out-argument per check, and a tester asserts those by name
-(`test_flex_pcg_operator`, declared in `simple_flex_pca_pcg` and implemented
-in its submodule `simple_flex_pca_pcg_tester`, is the model). Every other
-self-test belongs in a tester module: the review moved the self-tests of
+A module never makes an entity public only for its tester. A tester that needs
+private entities of the module it tests (components, type-bound procedures,
+module procedures, constants) is a submodule of that module; a tester that uses
+only the public interface stays a module (both forms are current, by need):
+
+- `submodule (simple_<thing>) simple_<thing>_tester` in the same
+  `*_tester.f90` file (built only with `BUILD_TESTS=ON`). The module declares
+  `module subroutine run_all_<thing>_tests()` in an interface block and makes
+  it public; the suite table imports it from the module. The tester's entry is
+  `module subroutine run_all_<thing>_tests()`.
+- The submodule sees everything the module sees. It does not `use` a name the
+  module already has (gfortran rejects it, also through an umbrella module),
+  and it does not declare a procedure or constant with a module's name. An
+  intrinsic the module shadows (`TINY` from `simple_defs` hides `tiny`)
+  cannot be restored with `intrinsic ::`.
+- A submodule exports nothing. A fixture or check that several tests use is a
+  module `simple_test_<x>_fixture` in `src/main/commanders/test/` (test-only by
+  folder; `simple_test_flex_phantom_fixture`, `simple_test_sigma2_fixture`),
+  never a public procedure of a tester. An entity another tester uses stays
+  public in its module.
+
+`simple_flex_cls_kernel_tester` and `simple_ptcl_sieve_tester` are models. A
+self-test that must stay in the production module's scope is declared there
+and implemented in the submodule, with an out-argument per check that a tester
+asserts by name (`test_flex_pcg_operator` in `simple_flex_pca_pcg`, implemented
+in `simple_flex_pca_pcg_tester`). Every other
+self-test belongs in a tester: the review moved the self-tests of
 `image`, `imghead`, `atoms`, `oris`, `ftiter`, `ftexp_shsrch`,
 `bspline_smoother`, `online_var` and `aff_prop`, the flex PCA, UI hash,
 cavg-quality and class-average registration self-tests out of their
@@ -687,6 +710,11 @@ Before asking for a build:
 - `python3 scripts/check_flex_dag.py . --verbose` — each FLEX source declares
   one module or submodule, and the production graph follows its declared layers
   and remains acyclic. The fast gate runs it on every build.
+- `python3 scripts/check_guide_imports.py .` — every `@` import of a folder's
+  `CLAUDE.md` names an existing guide. The fast gate runs it on every build.
+- `python3 scripts/check_cli_chain.py .` — the command-line chain (accepted
+  keys, parameter bindings, UI inputs, stream launcher keys, private programs)
+  is consistent. The fast gate runs it on every build.
 - The default CMake build regenerates the test inventory and code-base map
   when their source inputs change.
 - `./compile_debug.sh` — the build and the gate.
@@ -871,62 +899,53 @@ their data reaches the machine (section 6.6).
   every draw is keyed; a run whose classic draws meet the threads is still a
   draw from a distribution, which is why its floors come from a profile.
 
-### 6.3 The nightly GitHub Actions runs
+### 6.3 The GitHub Actions runs
 
-Nightly integration runs on GitHub-hosted Linux and macOS runners through two
-scheduled workflows. Both workflows can also be started manually with
-`workflow_dispatch`.
+Three workflows build and test `master` on GitHub-hosted runners; each can also
+be started by hand (`workflow_dispatch`).
 
-The build workflow, `.github/workflows/ci_build.yml`, checks that the supported
-build configurations remain viable:
+**On every push**, `.github/workflows/ci_push.yml` builds a push to `master`
+that touches code (`src/`, `production/`, `cmake/`, `scripts/`, the CMake
+files, `compile_clean.sh`) on Linux: a clean checkout and `./compile_clean.sh`,
+so the Release build and the fast gate, in about 8 minutes. It catches a commit
+that leaves out a file the local build compiled (the library globs its
+sources), a compile error under Ubuntu's gfortran and a fast-gate failure
+minutes after the push. A newer push cancels the build of an older one.
 
-1. It checks out the selected commit and installs the platform dependencies.
-2. It builds SIMPLE in Debug mode with `./compile_debug.sh`.
-3. It builds the NICE SIMPLE GUI with `./compile_gui.sh`.
-4. In a separate matrix job, it builds the coarray-enabled configuration with
-   `./compile_coarrays.sh` where the platform dependencies are available.
-5. Each build script includes the test code and runs the `fast` CTest gate by
-   default before installation. A compilation or fast-gate failure makes that
-   matrix job and the build workflow fail.
+**Nightly**, two scheduled workflows run at midnight (America/New_York):
 
-The test workflow, `.github/workflows/ci_test.yml`, owns the broader CTest
-execution:
+- `ci_build.yml` checks that the build configurations stay viable: on Linux and
+  macOS a Debug build with `./compile_debug.sh` and the NICE GUI with
+  `./compile_gui.sh`; on Linux a Debug build against the bundled
+  BLAS/LAPACK/ARPACK (`SIMPLE_FORCE_BUNDLED_NUMERICS=ON`) with its fast gate;
+  and the coarray configuration with `./compile_coarrays.sh` where the platform
+  has it. Each compile script runs the fast gate before installing.
+- `ci_test.yml` runs the longer labels as a matrix of groups, each a job of its
+  own on Linux and macOS with its own clean Release build (`./compile_clean.sh`,
+  fast gate included; a failed build runs no tests) and its own time limit:
 
-1. It checks out the same branch on GitHub-hosted Linux and macOS runners and
-   installs the platform dependencies.
-2. It performs a clean release build with `./compile_clean.sh`. This build runs
-   the `fast` gate before installation; a failure stops the job, so none of the
-   longer labels run against a failed build.
-3. From `build/`, it runs the capability-dependent platform entries with
-   `ctest -L platform --no-tests=error --output-on-failure`.
-4. It runs the longer in-process library suites with
-   `ctest -L library --no-tests=error --output-on-failure`.
-5. It explicitly runs the end-to-end workflow gates with
-   `ctest -L highlevel --no-tests=error --output-on-failure`.
+  | group | CTest selection |
+  | --- | --- |
+  | `library` | `-L 'platform\|library'` |
+  | `workflows` | `-L highlevel -R '^(simulated_workflow\|single_workflow)_'` |
+  | `rest` | `-L highlevel`, every high-level entry the other groups do not name, so a new entry runs without a change to the workflow |
+  | `multistate_workflows` | `-L highlevel -R '^multistate_workflows$'`, Linux only (about 1.5 h on the 4-core Linux runner; it timed out on most macOS nights) |
 
-The build and test workflows are separate scheduled workflows and may execute
-at the same time. The high-level gate is ordered after—and depends on—the clean
-build and fast gate inside `ci_test.yml`; it does not wait for the independent
-Debug, NICE GUI, or coarray jobs in `ci_build.yml`.
+  The groups do not wait for one another and fail independently
+  (`fail-fast: false`). In a group, CTest packs the entries by their
+  `PROCESSORS` reservations on the runner's cores. Every job uploads its JUnit
+  file, the CTest logs, the suite reports and the `metrics.tsv` files
+  (kept 14 days).
 
-GitHub Actions retains the command output, CTest failure output, duration, job
-status, commit, operating system, and dependency-installation log for each
-matrix entry. A nonzero build-script or CTest status fails the corresponding
-job and therefore the workflow. Tests must not use `continue-on-error` or shell
-constructs that hide those exit codes.
+GitHub Actions keeps the output, failures, durations and status of every job. A
+nonzero build-script or CTest status fails the job and the workflow. Tests must
+not use `continue-on-error` or shell constructs that hide those exit codes.
 
-The repository README reports the nightly state through two workflow badges:
-
-- **Build SIMPLE** links to `ci_build.yml` and summarizes the Debug, NICE GUI,
-  and coarray build workflow.
-- **Test SIMPLE** links to `ci_test.yml` and summarizes the clean build, fast
-  gate, platform, library, and high-level test workflow.
-
-The badges are workflow-level summaries for the `master` branch. Detailed
-results remain on the linked GitHub Actions pages; a badge does not replace the
-per-job Linux/macOS results or the metric output produced by a high-level gate.
-Every CTest entry retains its declared `TIMEOUT`, and changes that weaken a
-timeout or scientific threshold require review.
+The README shows two nightly badges for `master`: **Build SIMPLE**
+(`ci_build.yml`) and **Test SIMPLE** (`ci_test.yml`). A badge summarises a
+workflow; the per-job results and the metric output of a high-level gate are on
+the linked Actions pages. Every CTest entry keeps its declared `TIMEOUT`, and a
+change that weakens a timeout or a scientific threshold needs review.
 
 ### 6.4 Benchmark-dataset workflow and webpage
 
@@ -1187,6 +1206,28 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   defocus must fail the ceiling.
 - Profile (byte-identical on the merged code): defocus worst 0.134 µm.
 - Cost: 82 s at 8 threads (reserving 2 cores), its jobs one thread each.
+
+**`stream_chains`**
+
+- Claim: the production stage types, chained in one process without the master and submitting
+  their jobs to the local queue, take planted two-state data to two state maps that match the
+  planted states. "sieve to 3D": simulated particles in completed reference-picking sets through
+  p05-p07. "movies to 3D": 40 simulated movies through p01-p07, with real picking and extraction in
+  initial analysis and fixture references for reference picking.
+- Checks: each stage's hand-over (the sieve accepts particles and its intake ends at the finished
+  marker upstream, the pool takes the final set and publishes for 3D, the final publication holds
+  enough particles for 3D, 3D reconstructs its first assignment within the 3 h limit); for the movie
+  chain also every movie preprocessed with its finished marker, an optics map, initial analysis
+  reaching extraction at the input sampling, and reference picking extracting particles. The two
+  maps dock in both hands onto both truths; under the better one-to-one assignment each truth's map
+  correlates at least 0.10 (`TRUTH_CORR_MIN`, a signal floor).
+- Path: every stage's own folder and jobs; no restart (`doc/policies/stream/restart_policy.md`).
+  Control: none yet; the one-to-one assignment is the only guard against one map matching both
+  truths.
+- Profile: none. The 0.10 floor predates the floor rule (section 6.2); a 20-seed profile is owed.
+- Cost: 790 s for both chains in the run of
+  `doc/implementation_notes/completed/prob_align_batch_pipeline.md`; the driver one thread, its
+  worker jobs four threads (reserving 5 cores), deadline 3 h.
 
 **`flex_pca_blobs`**
 

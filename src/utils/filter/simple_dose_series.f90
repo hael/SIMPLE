@@ -11,7 +11,8 @@ use simple_dose_curve,   only: dose_curve, scaled_dose
 implicit none
 #include "simple_local_flags.inc"
 
-public :: dose_series, shell_independence, shell_correlation, line_tau2, DOSE_WEIGHTS_MODEL, DOSE_WEIGHTS_CONTROL, DOSE_WEIGHTS_FLAT
+public :: dose_series, shell_independence, shell_correlation, DOSE_WEIGHTS_MODEL, DOSE_WEIGHTS_CONTROL, DOSE_WEIGHTS_FLAT
+public :: run_all_dose_series_tests
 private
 
 !> the accumulation schemes: the measured model, the Grant & Grigorieff control, the flat mean (a = 1)
@@ -103,6 +104,12 @@ type :: dose_series
     procedure, private :: sharpest
     procedure, private :: rel_se
 end type dose_series
+
+interface
+    !> white-box tests (submodule simple_dose_series_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_dose_series_tests()
+    end subroutine run_all_dose_series_tests
+end interface
 
 contains
 

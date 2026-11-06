@@ -4,26 +4,16 @@
 ! history and the dimension updates are covered by the high-level stream tests. The rows a set
 ! adds are checked on a plain project (append_project_sets, which the pool's append_sets calls).
 ! Sub-suite "pool 2D object" of unit_stream.
-module simple_stream_pool2D_tester
+submodule (simple_stream_pool2D) simple_stream_pool2D_tester
 use simple_test_utils
-use simple_defs,                  only: COSMSKHALFWIDTH
-use simple_string,                only: string
-use simple_fileio,                only: file_exists
-use simple_cmdline,               only: cmdline
-use simple_parameters,            only: parameters
-use simple_sp_project,            only: sp_project
 use simple_stream_utils,          only: create_stream_project
-use simple_stream_refine2D_utils, only: append_project_sets, draw_new_classes
-use simple_stream_pool2D,         only: stream_pool2D, stream_pool2D_stats
 implicit none
-private
-public :: run_all_stream_pool2D_tests
 
 character(len=*), parameter :: TEST_PROJFILE = 'test_pool2D_object.simple'
 
 contains
 
-    subroutine run_all_stream_pool2D_tests()
+    module subroutine run_all_stream_pool2D_tests()
         write(*,'(A)') '**** running all stream pool 2D object tests ****'
         call test_new_kill()
         call test_append_project_sets()
@@ -331,4 +321,4 @@ contains
         endif
     end subroutine make_set
 
-end module simple_stream_pool2D_tester
+end submodule simple_stream_pool2D_tester

@@ -7,21 +7,13 @@
 ! converges on the state overlap and the scan together; with scan_exit=yes (solve3D's multi-state
 ! shc stage 2, fracsrch=95) the scan alone also ends it, and without the key (stage 1, fracsrch=99,
 ! and every other user) a low overlap holds it. Expected values are hand-counted from the fixtures.
-module simple_convergence_tester
-use simple_core_module_api, only: oris, del_file
-use simple_cmdline,         only: cmdline
-use simple_convergence,     only: convergence, cont_particle_stable
+submodule (simple_convergence) simple_convergence_tester
 use simple_parameters,      only: parameters
-use simple_defs,            only: PROB_BETA_TAIL
-use simple_defs_fname,      only: STATS_FILE
-use simple_defs_conv,       only: CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A, CONT_CONV_FRAC
 use simple_cartft_pose_opt, only: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, &
     &CARTFT_NO_IMPROVEMENT, CARTFT_NO_RELIABLE_UPDATE, CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, &
     &CARTFT_ITERATION_LIMIT
 use simple_test_utils
 implicit none
-private
-public :: run_all_convergence_tests
 
 integer, parameter :: NPTCLS = 6
 integer, parameter :: NCONT  = 10   !< particles of the refine=cont rule fixture (90% is nine)
@@ -29,7 +21,7 @@ real,    parameter :: TOL    = 1.e-5
 
 contains
 
-    subroutine run_all_convergence_tests()
+    module subroutine run_all_convergence_tests()
         write(*,'(A)') '**** running all convergence tests ****'
         write(*,'(A)') 'test_cartesian_pass_scores'
         call test_cartesian_pass_scores()
@@ -815,4 +807,4 @@ contains
         deallocate(params)
     end function cont_converged
 
-end module simple_convergence_tester
+end submodule simple_convergence_tester

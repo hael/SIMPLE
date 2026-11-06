@@ -1,18 +1,14 @@
 !@descr: reference, sigma and chain provenance identity and mutation checks
-module simple_refine3D_provenance_tester
-use simple_string,     only: string
-use simple_sp_project, only: sp_project
+submodule (simple_refine3D_provenance) simple_refine3D_provenance_tester
 use simple_image,      only: image
 use simple_test_utils, only: assert_true, assert_false, assert_int, enter_fixture, leave_fixture, tests_failed
 implicit none
-private
-public :: run_all_refine3D_provenance_tests
 integer, parameter :: BOX = 16
 real, parameter    :: SMPD = 1.5
 
 contains
 
-    subroutine run_all_refine3D_provenance_tests()
+    module subroutine run_all_refine3D_provenance_tests()
         type(string) :: saved, root
         integer      :: nfail0
         write(*,'(A)') '**** running all refine3D provenance tests ****'
@@ -51,13 +47,7 @@ contains
 
     ! Small files exercise identity and interrupted publication without a refinement run.
     subroutine test_provenance()
-        use simple_parameters,          only: parameters
         use simple_fileio,              only: arr2file
-        use simple_syslib,              only: del_file
-        use simple_halfmap_diagnostics, only: support_provenance_fname
-        use simple_refine3D_provenance, only: publish_reuse_provenance, reuse_provenance_matches, &
-            &begin_reference_set, publish_reference_set, refine3D_provenance, &
-            &provenance_pending_file, REFSET_OK, REFSET_INVALID, REFSET_LEGACY
         type(refine3D_provenance)      :: reference_record
         class(sp_project), allocatable :: project
         class(parameters), allocatable :: params
@@ -216,4 +206,4 @@ contains
         call project%kill()
         call volume%kill()
     end subroutine test_provenance
-end module simple_refine3D_provenance_tester
+end submodule simple_refine3D_provenance_tester

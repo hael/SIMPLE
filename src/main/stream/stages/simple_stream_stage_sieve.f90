@@ -70,6 +70,7 @@ use simple_stream_gui_senders,                   only: send_cavgs
 implicit none
 
 public :: stream_stage_sieve
+public :: run_all_stream_stage_sieve_tests
 private
 #include "simple_local_flags.inc"
 
@@ -117,20 +118,26 @@ contains
     procedure :: finalize
     procedure :: kill
     ! the steps of new(), in order
-    procedure :: init_params
+    procedure, private :: init_params
     procedure :: init_queue
-    procedure :: init_gui
-    procedure :: restore_imports
+    procedure, private :: init_gui
+    procedure, private :: restore_imports
     ! the steps of iterate() and their helpers
-    procedure :: attach_upstream
-    procedure :: import_projects
-    procedure :: start_sieve
-    procedure :: update_final_ingestion
-    procedure :: resumable
-    procedure :: read_mask_diameter
-    procedure :: send_status
+    procedure, private :: attach_upstream
+    procedure, private :: import_projects
+    procedure, private :: start_sieve
+    procedure, private :: update_final_ingestion
+    procedure, private :: resumable
+    procedure, private :: read_mask_diameter
+    procedure, private :: send_status
     procedure :: send_latest_cavgs
 end type stream_stage_sieve
+
+interface
+    !> white-box tests (submodule simple_stream_stage_sieve_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_stream_stage_sieve_tests()
+    end subroutine run_all_stream_stage_sieve_tests
+end interface
 
 contains
 

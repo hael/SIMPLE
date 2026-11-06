@@ -4,25 +4,14 @@
 ! the left and coarsely on the right, unit sdev, plus independent per-half noise, more of it on the right), and
 ! the evidence state and envelope on the neutral fixture (a sphere of band-limited common signal in a noise
 ! support). Expected values: closed forms, the fixtures' construction, floors from a numpy emulation.
-module simple_nu_filter_tester
-use simple_core_module_api
-use simple_image,     only: image
-use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, pack_filtmap_lowpass_limits, &
-                           &cleanup_nu_filter, set_nu_filter_report, build_nu_evidence_state, nu_evidence_state, &
-                           &nu_evidence_summary, get_nu_evidence_summary, unpack_nu_evidence_state, &
-                           &nu_evidence_state_is_valid, calc_nu_evidence_margin, nu_evidence_envelope, &
-                           &nu_envmask_params, nu_envmask_stats, NU_EVIDENCE_NBANDS, NU_EVIDENCE_SOURCE_BASE, &
-                           &NU_EVIDENCE_MIN_NULL_FRAC, NU_EVIDENCE_MAX_NULL_FRAC, set_nu_solvent_envelope
+submodule (simple_nu_filter) simple_nu_filter_tester
 use simple_test_utils
-use simple_tent_smooth, only: tent_smooth_3d
 use simple_rnd,         only: seed_rnd_fixed
 !$ use omp_lib,          only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 use simple_cmdline,        only: cmdline
 implicit none
 
-public :: run_all_nu_filter_tests
-private
 #include "simple_local_flags.inc"
 
 integer, parameter :: BOX        = 64
@@ -52,7 +41,7 @@ end type clamped_setup
 
 contains
 
-    subroutine run_all_nu_filter_tests()
+    module subroutine run_all_nu_filter_tests()
         write(logfhandle,'(A)') '**** running all nonuniform filter tests ****'
         call test_objective_closed_form()
         call test_noise_scale()
@@ -576,8 +565,6 @@ contains
     !> the composed pair of the split phantom, filtered again from the input halves: every voxel is its label's
     !! candidate (the edge-tapered half Butterworth-filtered at the label's cutoff; label 1 outside the support), exactly
     subroutine test_composition_per_label()
-        use simple_nu_filter_vars, only: filtmap, cutoff_finds, nu_lmask
-        use simple_butterworth,    only: butterworth_filter
         type(image) :: even, odd, even_nu, odd_nu
         real, allocatable :: bwfilter(:)
         integer :: icut, ndiff
@@ -822,4 +809,4 @@ contains
 
     end subroutine test_evidence_envelope
 
-end module simple_nu_filter_tester
+end submodule simple_nu_filter_tester

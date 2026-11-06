@@ -571,7 +571,7 @@ module subroutine exec_test_simulate_particles( self, cline )
     !! the largest fractions), and every image correlates best with the projection of its own
     !! state's volume at its true pose
     subroutine check_mixture( pops, n, counts, tag )
-        use simple_flex_pca_application_tester, only: write_phantom_truths
+        use simple_test_flex_phantom_fixture, only: write_phantom_truths
         use simple_simple_volinterp,            only: reproject
         character(len=*), intent(in) :: pops, tag
         integer,          intent(in) :: n, counts(3)

@@ -3,17 +3,12 @@
 ! the notch transfer 1 - a exp(-B_h s**2/4) whose kernel is K(B) - a K(B + B_h)) or the parameters a particle was
 ! rendered with: a 147-atom cuboctahedral fcc cluster, d_NN 2.75 A at 0.358 A, whose coordination numbers follow from
 ! its geometry, rendered through the notch, with noise at the real maps' level drawn at fixed seeds.
-module simple_nano_density_tester
+submodule (simple_nano_density) simple_nano_density_tester
 use simple_test_utils,   only: assert_true, assert_int, assert_real, set_fixed_seed
-use simple_defs,         only: dp, PI
-use simple_error,        only: simple_exception
 use simple_rnd,          only: gasdev
-use simple_nano_density, only: nano_density, transfer_kernels, gauss_kernel, halo_kernel, render_atoms, fit_atom,&
-    &regress_profile, gauss_filter3D, robust_spread, CN_FULL
+use simple_test_nano_density_fixture, only: rendered_transfer
 !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
 implicit none
-private
-public :: run_all_nano_density_tests, run_all_nano_density_lib_tests, rendered_transfer
 #include "simple_local_flags.inc"
 
 integer, parameter :: BOX      = 88      ! the particle box, 31.5 A
@@ -43,7 +38,7 @@ real,    parameter :: INT_SCATTER_OUT = 0.03   ! the same at the surface (real m
 
 contains
 
-    subroutine run_all_nano_density_tests()
+    module subroutine run_all_nano_density_tests()
         write(*,'(A)') '**** running all nano density tests ****'
         call test_kernels()
         call test_transfer_kernels()
@@ -57,7 +52,7 @@ contains
         call test_atom_set()
     end subroutine run_all_nano_density_tests
 
-    subroutine run_all_nano_density_lib_tests()
+    module subroutine run_all_nano_density_lib_tests()
         write(*,'(A)') '**** running all nano density library tests ****'
         call test_particle_uniform()
         call test_particle_gradient()
@@ -634,53 +629,6 @@ contains
         call assert_true(err <= T_TOL, tag//': the measured transfer is the rendered one within 0.06 where the atoms have power')
     end subroutine check_transfer
 
-    ! the transfer a particle was rendered with, as a perfect measurement returns it: the atoms (xyz in voxels, ints,
-    ! bfacs) rendered without a transfer in a box of nbox at smpd, then per Fourier shell of width ds (nsh shells from
-    ! the origin, the origin left out) the notch 1 - amp exp(-bh s**2/4) averaged over the shell's coefficients with
-    ! their power |F|**2 as weights (t_ref); have marks the shells holding at least 1% of the peak power
-    subroutine rendered_transfer( xyz, ints, bfacs, nbox, smpd_r, amp, bh, ds, nsh, t_ref, have )
-        use simple_image, only: image
-        real,                 intent(in)  :: xyz(:,:), ints(:), bfacs(:), smpd_r, amp, bh, ds
-        integer,              intent(in)  :: nbox, nsh
-        real,    allocatable, intent(out) :: t_ref(:)
-        logical, allocatable, intent(out) :: have(:)
-        type(image) :: img
-        real,     allocatable :: arr(:,:,:)
-        complex,  allocatable :: c(:,:,:)
-        real(dp), allocatable :: pw(:), pwt(:)
-        integer :: cs(3), i, j, l, h, k, m, ish
-        real    :: sf, w
-        allocate(arr(nbox,nbox,nbox))
-        call render_atoms(arr, smpd_r, xyz, ints, bfacs, 0., 0.)
-        call img%new([nbox,nbox,nbox], smpd_r, wthreads=.false.)
-        call img%set_rmat(arr, .false.)
-        call img%fft()
-        c  = img%get_cmat()
-        cs = shape(c)
-        call img%kill
-        allocate(pw(nsh), pwt(nsh), source=0._dp)
-        do l = 1,cs(3)
-            m = l - 1
-            if( m > nbox / 2 ) m = m - nbox
-            do j = 1,cs(2)
-                k = j - 1
-                if( k > nbox / 2 ) k = k - nbox
-                do i = 1,cs(1)
-                    h = i - 1
-                    if( h == 0 .and. k == 0 .and. m == 0 ) cycle
-                    sf  = sqrt(real(h**2 + k**2 + m**2)) / (real(nbox) * smpd_r)
-                    ish = min(int(sf / ds) + 1, nsh)
-                    w   = 2.
-                    if( h == 0 .or. 2 * h == nbox ) w = 1.
-                    pw(ish)  = pw(ish)  + real(w * abs(c(i,j,l))**2, dp)
-                    pwt(ish) = pwt(ish) + real(w * abs(c(i,j,l))**2 * (1. - amp * exp(-bh * sf**2 / 4.)), dp)
-                enddo
-            enddo
-        enddo
-        have  = pw >= 0.01_dp * maxval(pw) .and. pw > 0._dp
-        t_ref = real(pwt / max(pw, tiny(1._dp)))
-    end subroutine rendered_transfer
-
     ! the notch 1 - HAMP exp(-HBFAC s**2/4) at the centres of shells of width ds out to the corner of the box
     function notch_table( ds ) result( t )
         real, intent(in)  :: ds
@@ -843,4 +791,4 @@ contains
         enddo
     end subroutine make_particle
 
-end module simple_nano_density_tester
+end submodule simple_nano_density_tester

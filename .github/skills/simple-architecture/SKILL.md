@@ -64,7 +64,8 @@ part. See `doc/policies/3D/refine3D_policy.md` (sections 4 and 8) and
 - `simple_test_exec` is the only test executable (`BUILD_TESTS=ON`, the
   `compile_*.sh` default; `--exclude-tests` turns it off). Every test is a
   procedure in the library reached through `simple_test_exec test=<name>`.
-- A unit test is a subroutine in a `simple_<thing>_tester.f90` module next to the
+- A unit test is a subroutine in a `simple_<thing>_tester.f90` module (or a
+  submodule of the tested module, when it needs private entities) next to the
   code it tests, asserting through `simple_test_utils`, registered with
   `add_suite` in the `suites_<area>` table of
   `src/main/commanders/test/simple_commanders_test_class.f90` and listed in the
@@ -82,8 +83,9 @@ part. See `doc/policies/3D/refine3D_policy.md` (sections 4 and 8) and
   bindings, yes/no keys, private programs); a failed gate installs nothing. `library` runs nightly; `highlevel` only when
   selected, or as a whole with `simple_test_exec test=nightly` (also
   `test=profile` over seeds and `test=identity` between run directories).
-- A program that only runs commanders or prints results is not a test; use a
-  branch or a developer-visibility program.
+- A program that only runs commanders or prints results is not a test; keep it
+  in a local git worktree (scratch branches are not pushed) or make it a
+  developer-visibility program (policy section 3.4).
 
 ## Working Style
 

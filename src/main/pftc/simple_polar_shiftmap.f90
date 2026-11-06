@@ -10,6 +10,7 @@ use simple_error, only: simple_exception
 implicit none
 
 public :: polar_shiftmap, shiftmap_ndirections
+public :: run_all_polar_shiftmap_tests
 private
 #include "simple_local_flags.inc"
 
@@ -57,6 +58,12 @@ type :: polar_shiftmap
     procedure :: eval_rotcoeffs
     procedure, private :: cell_areas
 end type polar_shiftmap
+
+interface
+    !> white-box tests (submodule simple_polar_shiftmap_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_polar_shiftmap_tests()
+    end subroutine run_all_polar_shiftmap_tests
+end interface
 
 contains
 

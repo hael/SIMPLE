@@ -20,7 +20,8 @@ editing code.**
 - `simple-modern-fortran`: Fortran style, lifecycle, generated sources, modules.
 - Workflow skills: `simple-solve2d`, `simple-refine3d`,
   `simple-solve3d-importance-sampling`, `simple-cluster-cavgs-quality`,
-  `simple-frac-update-trailing`, `simple-nonuniform-regularization`.
+  `simple-frac-update-trailing`, `simple-nonuniform-regularization`,
+  `simple-dead-code`.
 - Folder guides: `simple-main-<folder>` for most `src/main` folders, with
   `strategies` split into `-parallelization`, `-search` and `-probabilistic`;
   `preprocess` is in `motion`, `image_processing` in `image`, `quality` and
@@ -41,6 +42,8 @@ Routing:
   IPC, restart) before changing that contract.
 - `model_cavgs_rejection` / class-average quality backend →
   `simple-cluster-cavgs-quality`.
+- Calling code dead, unused or test-only, or making it private, deleting or
+  renaming it → `simple-dead-code` (a search is not proof).
 
 Do not guess ownership from filenames. Follow the flow:
 `ui -> exec -> commander -> strategy/domain object`.

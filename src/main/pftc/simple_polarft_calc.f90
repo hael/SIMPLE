@@ -7,7 +7,8 @@ implicit none
 
 public :: polarft_calc
 public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
-public :: SHERRSQ, SHIFTMAP_FULL, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
+public :: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
+public :: run_all_polarft_shiftmap_tests
 private
 #include "simple_local_flags.inc"
 
@@ -168,7 +169,7 @@ type :: polarft_calc
     procedure          :: reallocate_ptcls
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
-    procedure          :: set_ptcl_ctfmat
+    procedure, private :: set_ptcl_ctfmat      ! test hook
     procedure          :: polarize_ref_pft
     procedure          :: polarize_ptcl_pft
     procedure          :: set_ref_fcomp
@@ -270,21 +271,20 @@ type :: polarft_calc
     procedure          :: gen_many_euclids_gpu
     procedure          :: gen_many2many_euclids_cufft
     ! ===== SHIFT MAP: simple_polarft_shiftmap.f90
-    procedure          :: new_shiftmap
+    procedure, private :: new_shiftmap
     procedure          :: setup_shiftmaps
-    procedure          :: kill_shiftmap
+    procedure, private :: kill_shiftmap
     procedure, private :: kill_one_shiftmap
-    procedure          :: has_shiftmap
-    procedure          :: shiftmap_dims
+    procedure, private :: has_shiftmap
+    procedure, private :: shiftmap_dims        ! test hook
     procedure          :: shiftmap_shift
-    procedure          :: shiftmap_cell_area
+    procedure, private :: shiftmap_cell_area   ! test hook
     procedure          :: wsqsum_ptcl_band
     procedure          :: gen_shiftmap
-    procedure          :: shiftmap_cross
-    procedure          :: shiftmap_objfun_grid
-    procedure          :: shiftmap_peak
-    procedure          :: shiftmap_prior
-    procedure          :: shiftmap_draw
+    procedure, private :: shiftmap_cross       ! test hook
+    procedure, private :: shiftmap_objfun_grid ! test hook
+    procedure, private :: shiftmap_prior       ! test hook
+    procedure, private :: shiftmap_draw
     procedure          :: shiftmap_mode
     procedure          :: get_shiftmap_profile
     ! ===== I/O: simple_polarft_ops_io.f90
@@ -1084,16 +1084,6 @@ interface
         real(sp),                    intent(out)   :: vals(:,:,:)
     end subroutine shiftmap_objfun_grid
 
-    module subroutine shiftmap_peak( self, imap, vals, irot, xy, val, irho, ialpha )
-        class(polarft_calc), intent(in)  :: self
-        integer,             intent(in)  :: imap
-        real(sp),            intent(in)  :: vals(:,:,:)
-        integer,             intent(out) :: irot
-        real(dp),            intent(out) :: xy(2)
-        real(sp),            intent(out) :: val
-        integer,             intent(out) :: irho, ialpha
-    end subroutine shiftmap_peak
-
     module subroutine shiftmap_prior( self, imap, prior_w, lse_prior, logp0 )
         class(polarft_calc), intent(in)  :: self
         integer,             intent(in)  :: imap
@@ -1157,6 +1147,12 @@ interface
         integer, optional,   intent(in)    :: iref_from
     end subroutine read_ref_pfts
 
+end interface
+
+interface
+    !> white-box tests of the shift-map kernel (submodule simple_polarft_shiftmap_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_polarft_shiftmap_tests()
+    end subroutine run_all_polarft_shiftmap_tests
 end interface
 
 ! CLASS PARAMETERS/VARIABLES

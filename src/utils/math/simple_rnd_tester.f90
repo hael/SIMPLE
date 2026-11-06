@@ -11,21 +11,11 @@
 ! draw's bins, and the keyed partial Fisher-Yates permutation's distribution (every subset and every order
 ! equally likely over many keys). The vectors below were produced on the Dell (GCC 15.2.1, 2026-11-04) and
 ! agree between the Debug and the Release build; they are recorded in the plan's Progress for the Mac check.
-module simple_rnd_tester
-use simple_defs,       only: dp
-use simple_rnd,        only: irnd_uni, shuffle, partial_shuffle, multinomal, seed_rnd, seed_rnd_fixed, has_global_seed, &
-    &poisson_rnd, ran3, rnd_key, rnd_keyed, rnd_keyed_bits, rnd_keyed_int, rnd_keyed_partial_shuffle, rnd_key_lanes, &
-    &rnd_bits_to_unit, rnd_scope, RND_KEY_NLANES, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, &
-    &RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_KEYED_VERSION, rnd_run_seed, ensure_run_seed, &
-    &rnd_scope_key, rnd_draw_key, get_rnd_state, put_rnd_state
+submodule (simple_rnd) simple_rnd_tester
 use simple_math,       only: hpsort
 use simple_string_utils, only: int2str
-use simple_error,        only: simple_exception
 use simple_test_utils
-use, intrinsic :: iso_fortran_env, only: int64
 implicit none
-private
-public :: run_all_rnd_tests
 #include "simple_local_flags.inc"
 
 integer, parameter :: N = 100, NPARTIAL = 17, NDRAWS = 1000
@@ -55,7 +45,7 @@ integer, parameter :: RND_SCOPE_EXPECTED = 17 !< rnd_scope(RND_PROG_REFINE3D, RN
 
 contains
 
-    subroutine run_all_rnd_tests()
+    module subroutine run_all_rnd_tests()
         write(*,'(A)') '**** running all random draw tests ****'
         call test_global_seed()
         call test_irnd_uni()
@@ -619,4 +609,4 @@ contains
         call fix_test_seed()
     end subroutine test_keyed_scope
 
-end module simple_rnd_tester
+end submodule simple_rnd_tester

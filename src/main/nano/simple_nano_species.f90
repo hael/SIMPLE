@@ -8,10 +8,11 @@ use simple_srch_sort_loc, only: hpsort
 use simple_xd_gmm,        only: xd_gmm
 implicit none
 
-public :: fit_species_mixture, class_posterior, class_separation, enclosed_fraction, maxima_shape, calibrate_threshold
+public :: fit_species_mixture, class_posterior, class_separation, enclosed_fraction, calibrate_threshold
 public :: expected_false_count
 public :: fit_gauss_width, local_maxima
-public :: MAX_NSPECIES, MIN_SEPARATION, MIN_CLASS_ATOMS, MIN_CLASS_FRAC
+public :: MIN_SEPARATION, MIN_CLASS_ATOMS, MIN_CLASS_FRAC
+public :: run_all_nano_species_tests
 private
 #include "simple_local_flags.inc"
 
@@ -31,6 +32,12 @@ integer,  parameter :: NITER_SLOPE     = 20     ! alternations of the class fit 
 real(dp), parameter :: SLOPE_TOL_REL   = 1.d-3  ! the slope has converged when it moves by less than this mean intensity
 real(dp), parameter :: TOL_SLOPE_EM    = 1.d-4  ! EM tolerance of the class fits inside the alternation
 real(dp), parameter :: TOL_SLOPE_FIN   = 1.d-6  ! EM tolerance of the class fit at the slope chosen
+
+interface
+    !> white-box tests (submodule simple_nano_species_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_nano_species_tests()
+    end subroutine run_all_nano_species_tests
+end interface
 
 contains
 

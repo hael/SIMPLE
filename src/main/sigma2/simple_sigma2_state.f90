@@ -28,9 +28,16 @@ public :: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_nex
 public :: sigma2_state_prepare_update, sigma2_state_assemble_candidate, sigma2_state_concatenate
 public :: sigma2_state_reduce, sigma2_state_validate_identity
 public :: sigma2_state_extend, sigma2_state_union_means
+public :: run_all_sigma2_state_tests
 
 integer, parameter :: BLOCK_ROWS = 4096
 character(len=*), parameter :: SIGMA2_RANGE_FBODY = 'sigma2_state_range_part'
+
+interface
+    !> white-box tests (submodule simple_sigma2_state_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_sigma2_state_tests()
+    end subroutine run_all_sigma2_state_tests
+end interface
 
 contains
 

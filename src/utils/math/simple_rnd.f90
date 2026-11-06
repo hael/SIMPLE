@@ -11,11 +11,12 @@ public :: get_rnd_state, put_rnd_state
 public :: seed_rnd, seed_rnd_fixed, ran3, ran3arr, randn, multinomal, greedy_sampling, gasdev, irnd_uni, irnd_uni_pair
 public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa, rnd_inds
 public :: shuffle, partial_shuffle, has_global_seed, poisson_rnd
-public :: rnd_key, rnd_keyed, rnd_keyed_bits, rnd_keyed_int, rnd_keyed_partial_shuffle, rnd_key_lanes, rnd_bits_to_unit
-public :: rnd_scope, RND_KEYED_VERSION, RND_KEY_NLANES
+public :: rnd_key, rnd_keyed, rnd_keyed_int, rnd_keyed_partial_shuffle
+public :: RND_KEYED_VERSION
 public :: rnd_run_seed, ensure_run_seed, set_run_seed, rnd_scope_key, rnd_draw_key
 public :: RND_FAM_SAMPLE, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, RND_FAM_DIAG
 public :: RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_PASS_POLISH, RND_PASS_FINAL, RND_PASS_DIAG
+public :: run_all_rnd_tests
 private
 #include "simple_local_flags.inc"
 
@@ -105,6 +106,12 @@ type :: rnd_key
     integer        :: reference = 0                 !< the canonical reference (state, direction or class), where the family has one
     integer        :: ordinal   = 0                 !< the sub-draw's ordinal within the family for the particle
 end type rnd_key
+
+interface
+    !> white-box tests (submodule simple_rnd_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_rnd_tests()
+    end subroutine run_all_rnd_tests
+end interface
 
 contains
 
