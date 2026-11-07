@@ -66,6 +66,7 @@ type :: pmb_fill_result
     real(sp), allocatable :: assign_vals(:,:) !< (4, nptcls) its distance, shift and posterior shift width
     real(sp), allocatable :: extras(:,:,:)    !< (5, topk, nptcls) the weighted insertion's extras: reference, in-plane, shift, weight (3D)
     integer :: nptcls = 0, nrefs = 0, nentries = 0 !< entries of the rows (dense: references x particles; sparse: the candidates)
+    integer :: projs_ns = 0                         !< the dense 3D fill's refined-reference budget (the iteration's model)
 end type pmb_fill_result
 
 ! the BLAS of the build, called inside the OpenMP team: run with a single-threaded BLAS (OPENBLAS_NUM_THREADS=1)
@@ -1109,6 +1110,7 @@ contains
         endif
         call cone%new([(PMB_RES05, i=1,self%nstates)], PMB_MSKDIAM, PMB_SMPD)
         call alloc_result
+        res%projs_ns = projs_ns_model
         do ipart = 1,nparts
             pinds = [(i, i=parts(ipart,1),parts(ipart,2))]
             nloc  = size(pinds)
@@ -1317,6 +1319,7 @@ contains
         res%nptcls   = 0
         res%nrefs    = 0
         res%nentries = 0
+        res%projs_ns = 0
     end subroutine kill_fill_result
 
     !> the counts of differing entries between two fill results, by particle and reference identity: the rows'

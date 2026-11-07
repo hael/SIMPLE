@@ -59,13 +59,16 @@ end type refine3D_ctrl
 
 contains
 
-    subroutine refine3D_exec( params, build, cline, which_iter, converged, l_write_partial_recs )
+    !> readout: the probabilistic assignment's readout record (the caller stores the state readout for the statistics
+    !! file); empty in the other modes
+    subroutine refine3D_exec( params, build, cline, which_iter, converged, l_write_partial_recs, readout )
         class(parameters), target, intent(inout) :: params
         class(builder),    target, intent(inout) :: build
         class(cmdline),            intent(inout) :: cline
         integer,                   intent(in)    :: which_iter
         logical,                   intent(inout) :: converged
         logical,                   intent(in) :: l_write_partial_recs
+        type(prob_readout), optional, intent(out) :: readout
         class(parameters), pointer :: p_ptr
         class(builder),    pointer :: b_ptr
         class(eul_prob_tab), allocatable, target :: eulprob_obj_part !< the part's assignment (a neighbourhood table on the pipeline's prob_neigh route)
@@ -289,6 +292,7 @@ contains
         enddo
         if( ctrl%do_pipeline )then
             call eulprob_obj_part%close_assignment
+            if( present(readout) ) readout = eulprob_obj_part%get_readout()
             if( ctrl%do_bench ) fill_prof = eulprob_obj_part%get_fill_profile()
         endif
         call reads%kill

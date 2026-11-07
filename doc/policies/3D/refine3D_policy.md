@@ -504,24 +504,29 @@ in-plane rotation, after stochastic candidate selection. The stored
 assignment distance is then the refined/profiled objective value. This is
 intended current behavior, not a full soft-assignment EM update.
 
-### Dense-table assignment (`ref_assign`)
+### Dense-table assignment (`assign_rows`)
 
 Under `prob` the matcher assigns each batch's particles from their rows
 (`simple_eul_prob_tab.f90`, `assign_batch`) by one draw per particle from its
 tempered row posterior (since 2026-10-23; the only assignment since
 2026-10-24, when the reference-balanced frontier was deleted from every
 table). Particles are assigned to references; no reference is forced to be
-populated. The particle's state is the state of its closest
-reference over all states (an exact tie goes to the lowest reference index),
-and its direction is one draw within that state's block of its row with p
-proportional to exp(-T_i (L - L_min)), T_i the particle's own temperature
-pi wsqsum_i / (2 pftsz) (the Euclidean loss's noise scale), which the fill
-computes and keeps with the row. The drawn reference's dense candidate is
-committed (its in-plane, its refined shift when refined, the seed shift
-recorded, `frac` 100); the draw is keyed on the particle, so shared-memory and
-distributed runs draw alike. A particle without a valid distance takes
-reference 1. The row's values are the fill's (the top set refined), so the
-draw is a direction sampler on that row. The in-plane rotation of every row
+populated. The particle's state and direction are one draw over its whole row,
+every active state's block, with p proportional to exp(-T_i (L - L_min)), T_i
+the particle's own temperature pi wsqsum_i / (2 pftsz) (the Euclidean loss's
+noise scale), which the fill computes and keeps with the row; the state is the
+drawn reference's (`assign_rows`, since 2026-11-05,
+`doc/implementation_notes/completed/multistate_posterior_state_draw.md`). The
+draw uses the keyed variate the selection already draws, so with one active
+state, where the row is the block, the call, the variate and every output are
+those of the rule before. That rule took the state of the closest reference
+over all states (an exact tie to the lowest reference index) and drew the
+direction within its block. The drawn reference's dense candidate is committed
+(its in-plane, its refined shift when refined, the seed shift recorded, `frac`
+100); the draw is keyed on the particle, so shared-memory and distributed runs
+draw alike. A particle without a valid distance takes reference 1. The row's
+values are the fill's (the top set refined), so the draw is a pose sampler on
+that row. The in-plane rotation of every row
 entry is drawn by the same rule: the posterior over all grid rotations of
 the reference against the seeded particle at the particle's temperature
 (`gen_posterior_val`, its bank form; `score_ref`, `score_ref_bank`), no
@@ -534,7 +539,19 @@ conditional on the seed shift and the previous band and the shift
 refinement is what re-ranks it; raising the cap (20, 40 degrees) did not
 help either, since refining more candidates hands more particles to a
 wrong reference whose shift search found a noise optimum (the bench
-histogram `refined argmin by decile of the cap`, item 11). With
+histogram `refined argmin by decile of the cap`, item 11). With more than one
+active state the budget is split over the states' blocks (2026-11-05):
+`ceil(projs_ns / n_active)` refined entries per block, at most `n_active - 1`
+more in all. The window search polishes each block's best. The polar shift map
+keeps its screen's pool size (up to rounding), takes each block's share of it at
+the origin, tracks the screen's width cutoff per block and polishes each block's
+share of its own screen. So every block gets the same number of screen and
+polish attempts, and no block is left with stored-shift losses only because
+another state leads. With one state the split is the identity. The polar shift map records a
+polish only where it beats the stored shift's distance (a rule kept for the
+single-state results), so a block can end without a recorded polish for a
+particle; the fill harness checks each block's share and the budget
+(`test=polar_matching_bench suite=fills`). With
 `shift_prior=yes` (the default since 2026-10-29; `no` turns it off) the tables' shift searches
 and seed estimates carry a Gaussian on the shift's distance from the
 search's start, width the previous iteration's shift variance per axis
@@ -665,8 +682,15 @@ iteration's STATS_FILE record), then ramps geometrically from `prob_beta` to
 parameters and the workers' command line, and the settings box of the
 convergence report shows it, `POSTERIOR DRAW BETA`, with the tail's progress)
 and ends when the tail is complete; a budget too short for a stall
-anneals over its last five iterations regardless. `prob_beta_end=0` (the
-default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
+anneals over its last five iterations regardless. With more than one state the
+stall is every populated state's (2026-11-05, `states_stalled`): the
+convergence object keeps each state's last two resolutions, and the tail starts
+when no populated state gained. A state counts as not gaining when both its
+crossings are in this check and in the previous iteration's record and neither
+improved; a state lacking a value is skipped; when every state is skipped, the
+best state's test decides. The weighted insertion's two-iteration margin
+applies per state, and the resolution exit stays on the best state.
+`prob_beta_end=0` (the default) is a flat run. solve3D sets `prob_beta_end=1` on its last stage
 unless the user set it, so the stages search hot and the final map is
 weighted at the physical posterior; the other stages run flat at
 `prob_beta`. Neither `prob_beta` nor `prob_beta_end` is a UI input
@@ -709,6 +733,27 @@ and pinning n_eff cancelled exactly that; the flat factor keeps it. The
 schedule is therefore `prob_beta` flat with the tail to 1, and the readout
 is how it is watched. Unit-tested on synthetic rows against a numpy
 emulation (`test_neff_readout`).
+
+**The state readout (`PROB_TAB_STATE_DRAW`, `PROB_TAB_STATE_MASS`,
+2026-11-05).** With more than one active state both 3D tables log, after
+`PROB_TAB_ASSIGN`:
+- over the rows the n_eff readout subsamples: the effective number of states,
+  exp(entropy) of the row's state marginal, at the draw's factor and at 1, the
+  mean largest state posterior, and per state the share of the block's tempered
+  mass on entries the fill did not refine;
+- over every row: the share of draws in the row mode's state.
+
+The values are carried in the parts' readout records as sums and counts and
+summed by the master in part order (`prob_state_readout` in
+`simple_eul_prob_tab_utils`). The refine3D strategy stores them on the
+convergence object, which writes `STATE_NEFF_DRAW`, `STATE_NEFF_PHYS`,
+`STATE_MODE_FRAC` and `STATE_MASS_UNREFINEDnn` to the statistics file once per
+readout. It is a readout, not a control. A state n_eff near the number of
+states with the labels at chance says the state draw is too hot, unless the
+n_eff at 1 is broad too, when maps that cannot yet tell the states apart give
+the same picture. Near 1 from the first iterations is the lock-on signature of
+the retired closest-state rule. A large unrefined share says the marginal rests
+on stored-shift losses.
 
 Terminal diagnostics read `>>> LABEL (qualifiers): values`: the greppable
 label first, the state or topk in parentheses, then unpadded numbers with
@@ -846,20 +891,30 @@ and the exits' margin (`test_posterior_exits_weighted_insertion`). The
 readout: the four sets at `topk=10`, stage-3 maps and finals against the
 control, with the cone's occupancy line read beside them.
 
-### Neighbourhood-table assignment (`ref_assign_neigh`)
+### Neighbourhood-table assignment (`assign_rows_neigh`)
 
 The neighbourhood tables (`refine=prob_neigh`, solve3D's stages 1-2 and
 6-8; section 4.5 of the note, built 2026-10-23) follow the same rule on
 their candidate store, whatever the neighbourhood (`prob_neigh_mode`). A
 particle without a valid candidate is first re-seeded at its previous
 orientation (its state's reference at its closest direction, scored at the
-seed shift; `seed_fallback_if_empty`). Then the particle's state is the
-state of its closest valid candidate over all states (an active reference
-with an in-plane index), and within that state one draw from
-exp(-beta T_i (L - L_min)) over its valid candidates
-(`assign_particles_posterior`), the drawn candidate committed with its
-shift, `frac` the evaluated fraction; a particle whose state emptied mid-run
-keeps its orientation. The in-plane rotation of every candidate is the
+seed shift; `seed_fallback_if_empty`). Then the particle's state and
+candidate are one draw from exp(-beta T_i (L - L_min)) over its valid
+candidates of every state together (an active reference with an in-plane
+index; the pooled row of `assign_rows_neigh`, since 2026-11-05), the drawn
+candidate committed with its shift, `frac` the evaluated fraction. A particle
+whose valid candidates all carry a non-finite distance, or whose state emptied
+mid-run, keeps its orientation. The weighted insertion's extras gather the
+committed state's candidates alone, and the committed candidate is found among
+them by its position in the candidate store, so the cone and the
+renormalisation are the committed state's and the committed entry is never an
+extra. In `prob_neigh_mode=state` the pooled neighbourhood is the same for every
+state and in `geom` one subspace serves every state, so the candidate sets are
+comparable. In `shc|snhc` the candidates are hill-climb proposals with unequal
+counts per state, so the draw acts as an acceptance step over the proposals and
+the incumbent, and it chooses the state as well. Until 2026-11-05 the state was that of the
+closest valid candidate over all states and the draw ran within it, and the
+extras' gathering chose that state again on its own. The in-plane rotation of every candidate is the
 posterior draw over all grid rotations (`score_seeded_ref`,
 `gen_posterior_val` and its bank form), as in the dense and 2D tables; the
 re-seeding draws its in-plane the same way. T_i stays with the candidate row

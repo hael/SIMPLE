@@ -30,7 +30,7 @@ public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
-public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS
+public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS, prob_state_readout
 public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readout, add_prob_readout, report_prob_readout
 public :: merge_prob_readouts
 public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
@@ -93,9 +93,38 @@ contains
     procedure :: kill      => neff_readout_kill
 end type prob_neff_readout
 
+!> The state readout of the dense table's draw over states and directions together (more than one active state):
+!! over the n_eff readout's rows, the effective number of states exp(entropy) of the row's state marginal at the
+!! draw's factor and at 1, the largest state posterior at the draw's factor and, per state, the share of the
+!! block's tempered mass on entries the fill did not refine; over every row, the draws in the row mode's state.
+!! Sums and counts, so the parts' records add in part order (doc/implementation_notes/planned/
+!! multistate_posterior_state_draw.md, section 7)
+type :: prob_state_readout
+    integer  :: nstates = 0              !< the requested states (indexed as the particles' labels); 0: no readout
+    integer  :: nrows   = 0              !< rows of the n_eff subsample offered
+    integer  :: ndraws  = 0              !< draws counted
+    integer  :: nmode   = 0              !< draws in the state of the row mode
+    real(dp) :: sum_neff_draw = 0.d0     !< sum over the rows of the state n_eff at the draw's factor
+    real(dp) :: sum_neff_phys = 0.d0     !< the same at factor 1
+    real(dp) :: sum_maxp      = 0.d0     !< sum over the rows of the largest state posterior at the draw's factor
+    real(dp), allocatable :: unref_sum(:) !< (nstates) the blocks' unrefined-mass shares summed over the rows
+    integer,  allocatable :: unref_n(:)   !< (nstates) the rows each sum holds
+contains
+    procedure :: new        => state_readout_new
+    procedure :: offer      => state_readout_offer
+    procedure :: count_draw => state_readout_count_draw
+    procedure :: add        => state_readout_add
+    procedure :: neff_draw  => state_readout_neff_draw
+    procedure :: neff_phys  => state_readout_neff_phys
+    procedure :: mode_frac  => state_readout_mode_frac
+    procedure :: unref_share => state_readout_unref_share
+    procedure :: report     => state_readout_report
+    procedure :: kill       => state_readout_kill
+end type prob_state_readout
+
 !> the per-part publication of the readouts an assignment prints (plan section 5): the counts, the insert report's
-!! sums and the n_eff readout's kept rows and sums, written by a distributed part as prob_readout_part<NN>.txt,
-!! read and summed by the master in part order, then reported as the owner reports its own
+!! sums, the n_eff readout's kept rows and sums and the state readout, written by a distributed part as
+!! prob_readout_part<NN>.txt, read and summed by the master in part order, then reported as the owner reports its own
 integer, parameter :: PROB_READOUT_3D_DENSE = 1, PROB_READOUT_3D_NEIGH = 2, PROB_READOUT_2D_DENSE = 3, PROB_READOUT_2D_SPARSE = 4
 type :: prob_readout
     integer        :: route = 0            !< PROB_READOUT_*
@@ -114,6 +143,7 @@ type :: prob_readout
     integer        :: neff_nrows = 0
     real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
     real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
+    type(prob_state_readout) :: states     !< the dense 3D table's state readout (nstates 0: none)
 end type prob_readout
 
 !> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
@@ -666,6 +696,201 @@ contains
         self%nvals = 0
     end subroutine neff_readout_kill
 
+    ! ---- the state readout ---------------------------------------------------------------------------------
+
+    !> an empty readout over nstates requested states
+    subroutine state_readout_new( self, nstates )
+        class(prob_state_readout), intent(inout) :: self
+        integer,                   intent(in)    :: nstates
+        call self%kill
+        self%nstates = nstates
+        allocate(self%unref_sum(nstates), source=0.d0)
+        allocate(self%unref_n(nstates),   source=0)
+    end subroutine state_readout_new
+
+    !> one row of the n_eff subsample: n entries, each with its state (the particles' label, 1..nstates; 0: none), its
+    !! distance and whether the fill refined it, the particle's temperature and the draw's factor beta; kept as the
+    !! n_eff readout keeps it (PROB_NEFF_NMIN valid distances). The state marginal sums each state's weights
+    !! exp(-beta temp (d - dmin)) above the row's minimum; a state's unrefined share is taken above its own minimum
+    subroutine state_readout_offer( self, n, states_c, dists, l_refined, temp, beta )
+        class(prob_state_readout), intent(inout) :: self
+        integer,                   intent(in)    :: n, states_c(n)
+        real,                      intent(in)    :: dists(n), temp, beta
+        logical,                   intent(in)    :: l_refined(n)
+        real(dp) :: m_draw(self%nstates), m_phys(self%nstates), dmin_s(self%nstates), wsum(self%nstates)
+        real(dp) :: wunref(self%nstates), dmin
+        real     :: invalid
+        integer  :: r, s, nvalid
+        if( self%nstates < 1 ) return
+        if( .not. (temp > 0.) ) return
+        invalid = 0.1 * huge(invalid)
+        dmin   = huge(dmin)
+        dmin_s = huge(dmin)
+        nvalid = 0
+        do r = 1,n
+            if( .not. valid(r) ) cycle
+            dmin   = min(dmin, real(dists(r),dp))
+            dmin_s(states_c(r)) = min(dmin_s(states_c(r)), real(dists(r),dp))
+            nvalid = nvalid + 1
+        enddo
+        if( nvalid < PROB_NEFF_NMIN ) return
+        m_draw = 0.d0
+        m_phys = 0.d0
+        wsum   = 0.d0
+        wunref = 0.d0
+        do r = 1,n
+            if( .not. valid(r) ) cycle
+            s = states_c(r)
+            m_draw(s) = m_draw(s) + weight(real(beta,dp) * real(temp,dp) * (real(dists(r),dp) - dmin))
+            m_phys(s) = m_phys(s) + weight(real(temp,dp) * (real(dists(r),dp) - dmin))
+            ! the state's own tempered mass, above its minimum: its mode weighs 1, so wsum >= 1
+            wsum(s) = wsum(s) + weight(real(beta,dp) * real(temp,dp) * (real(dists(r),dp) - dmin_s(s)))
+            if( .not. l_refined(r) ) wunref(s) = wunref(s) + &
+                &weight(real(beta,dp) * real(temp,dp) * (real(dists(r),dp) - dmin_s(s)))
+        enddo
+        do s = 1,self%nstates
+            if( wsum(s) <= 0.d0 ) cycle
+            self%unref_sum(s) = self%unref_sum(s) + wunref(s) / wsum(s)
+            self%unref_n(s)   = self%unref_n(s)   + 1
+        enddo
+        self%nrows = self%nrows + 1
+        self%sum_neff_draw = self%sum_neff_draw + exp(entropy(m_draw))
+        self%sum_neff_phys = self%sum_neff_phys + exp(entropy(m_phys))
+        self%sum_maxp      = self%sum_maxp      + maxval(m_draw) / sum(m_draw)
+
+      contains
+
+        !> a finite distance below the invalid marker, of a state in range
+        logical function valid( r_loc )
+            integer, intent(in) :: r_loc
+            valid = .false.
+            if( states_c(r_loc) < 1 .or. states_c(r_loc) > self%nstates ) return
+            valid = ieee_is_finite(dists(r_loc)) .and. dists(r_loc) < invalid
+        end function valid
+
+        !> exp(-a), 0 below exp(-80) as in draw_posterior_row
+        real(dp) function weight( a )
+            real(dp), intent(in) :: a
+            weight = 0.d0
+            if( a < 80.d0 ) weight = exp(-a)
+        end function weight
+
+        !> the entropy of the normalised masses (the row mode's state holds at least weight 1)
+        real(dp) function entropy( m )
+            real(dp), intent(in) :: m(:)
+            real(dp) :: h, p
+            integer  :: k
+            h = 0.d0
+            do k = 1,size(m)
+                if( m(k) <= 0.d0 ) cycle
+                p = m(k) / sum(m)
+                h = h - p * log(p)
+            enddo
+            entropy = h
+        end function entropy
+
+    end subroutine state_readout_offer
+
+    !> one draw: whether its state is the row mode's
+    subroutine state_readout_count_draw( self, l_mode )
+        class(prob_state_readout), intent(inout) :: self
+        logical,                   intent(in)    :: l_mode
+        if( self%nstates < 1 ) return
+        self%ndraws = self%ndraws + 1
+        if( l_mode ) self%nmode = self%nmode + 1
+    end subroutine state_readout_count_draw
+
+    !> another part's readout added (a part without one adds nothing)
+    subroutine state_readout_add( self, other )
+        class(prob_state_readout), intent(inout) :: self
+        class(prob_state_readout), intent(in)    :: other
+        if( other%nstates < 1 ) return
+        if( self%nstates < 1 ) call self%new(other%nstates)
+        if( other%nstates /= self%nstates ) THROW_HARD('the parts'' state readouts disagree on the states; state_readout_add')
+        self%nrows         = self%nrows         + other%nrows
+        self%ndraws        = self%ndraws        + other%ndraws
+        self%nmode         = self%nmode         + other%nmode
+        self%sum_neff_draw = self%sum_neff_draw + other%sum_neff_draw
+        self%sum_neff_phys = self%sum_neff_phys + other%sum_neff_phys
+        self%sum_maxp      = self%sum_maxp      + other%sum_maxp
+        self%unref_sum     = self%unref_sum     + other%unref_sum
+        self%unref_n       = self%unref_n       + other%unref_n
+    end subroutine state_readout_add
+
+    !> the mean state n_eff at the draw's factor over the rows (0 without rows)
+    real function state_readout_neff_draw( self ) result( v )
+        class(prob_state_readout), intent(in) :: self
+        v = 0.
+        if( self%nrows > 0 ) v = real(self%sum_neff_draw / real(self%nrows,dp))
+    end function state_readout_neff_draw
+
+    !> the mean state n_eff at factor 1 over the rows (0 without rows)
+    real function state_readout_neff_phys( self ) result( v )
+        class(prob_state_readout), intent(in) :: self
+        v = 0.
+        if( self%nrows > 0 ) v = real(self%sum_neff_phys / real(self%nrows,dp))
+    end function state_readout_neff_phys
+
+    !> the fraction of the draws in the row mode's state (0 without draws)
+    real function state_readout_mode_frac( self ) result( v )
+        class(prob_state_readout), intent(in) :: self
+        v = 0.
+        if( self%ndraws > 0 ) v = real(self%nmode) / real(self%ndraws)
+    end function state_readout_mode_frac
+
+    !> state s's mean share of its block's tempered mass on unrefined entries (-1 without rows)
+    real function state_readout_unref_share( self, s ) result( v )
+        class(prob_state_readout), intent(in) :: self
+        integer,                   intent(in) :: s
+        v = -1.
+        if( s < 1 .or. s > self%nstates ) return
+        if( self%unref_n(s) > 0 ) v = real(self%unref_sum(s) / real(self%unref_n(s),dp))
+    end function state_readout_unref_share
+
+    !> the readout lines (PROB_TAB_STATE_DRAW, PROB_TAB_STATE_MASS per state with rows); the n_eff and the largest
+    !! posterior from PROB_NEFF_MIN_ROWS rows on, as the n_eff readout
+    subroutine state_readout_report( self, beta_draw )
+        class(prob_state_readout), intent(in) :: self
+        real,                      intent(in) :: beta_draw
+        character(len=32) :: s_draw, s_phys, s_pct, s_maxp, s_beta, s_share
+        integer :: s
+        if( self%nstates < 2 .or. self%ndraws < 1 ) return
+        write(s_pct,'(F32.1)') 100. * self%mode_frac()
+        if( self%nrows >= PROB_NEFF_MIN_ROWS )then
+            write(s_draw,'(F32.2)') self%neff_draw()
+            write(s_phys,'(F32.2)') self%neff_phys()
+            write(s_beta,'(F32.2)') beta_draw
+            write(s_maxp,'(F32.3)') real(self%sum_maxp / real(self%nrows,dp))
+            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_STATE_DRAW: n_eff over states '//trim(adjustl(s_draw))//&
+                &' at beta '//trim(adjustl(s_beta))//' / '//trim(adjustl(s_phys))//' at beta 1.00, '//&
+                &trim(adjustl(s_pct))//'% at the state mode, mean max state posterior '//trim(adjustl(s_maxp))//&
+                &' (', self%nrows, ' rows)'
+            do s = 1,self%nstates
+                if( self%unref_n(s) < 1 ) cycle
+                write(s_share,'(F32.3)') self%unref_share(s)
+                write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_STATE_MASS (state ', s, '): '//trim(adjustl(s_share))//&
+                    &' of the block''s tempered mass on unrefined entries'
+            enddo
+        else
+            write(logfhandle,'(A)') '>>> PROB_TAB_STATE_DRAW: '//trim(adjustl(s_pct))//&
+                &'% at the state mode (too few rows for the state n_eff)'
+        endif
+        call flush(logfhandle)
+    end subroutine state_readout_report
+
+    subroutine state_readout_kill( self )
+        class(prob_state_readout), intent(inout) :: self
+        if( allocated(self%unref_sum) ) deallocate(self%unref_sum)
+        if( allocated(self%unref_n)   ) deallocate(self%unref_n)
+        self%nstates = 0
+        self%nrows   = 0
+        self%ndraws  = 0
+        self%nmode   = 0
+        self%sum_neff_draw = 0.d0
+        self%sum_neff_phys = 0.d0
+        self%sum_maxp      = 0.d0
+    end subroutine state_readout_kill
+
     ! ---- the weighted insertion's table ------------------------------------------------------------------------
 
     !> nptcls particles (the global table's), every one at its committed pose with weight 1 until add says otherwise
@@ -865,7 +1090,7 @@ contains
     subroutine write_prob_readout( rec, fname )
         type(prob_readout), intent(in) :: rec
         class(string),      intent(in) :: fname
-        integer :: funit, io_stat
+        integer :: funit, io_stat, istate
         call fopen(funit, fname, status='replace', action='write', iostat=io_stat)
         call fileiochk('write_prob_readout; fopen '//fname%to_char(), io_stat)
         write(funit,'(a,1x,i0)')      'route',         rec%route
@@ -886,6 +1111,19 @@ contains
         write(funit,'(a,1x,i0)')      'neff_nrows',    rec%neff_nrows
         write(funit,'(a,1x,es24.16)') 'neff_sum_draw', rec%neff_sum_draw
         write(funit,'(a,1x,es24.16)') 'neff_sum_phys', rec%neff_sum_phys
+        write(funit,'(a,1x,i0)')      'state_nstates', rec%states%nstates
+        if( rec%states%nstates > 0 )then
+            write(funit,'(a,1x,i0)')      'state_nrows',         rec%states%nrows
+            write(funit,'(a,1x,i0)')      'state_ndraws',        rec%states%ndraws
+            write(funit,'(a,1x,i0)')      'state_nmode',         rec%states%nmode
+            write(funit,'(a,1x,es24.16)') 'state_sum_neff_draw', rec%states%sum_neff_draw
+            write(funit,'(a,1x,es24.16)') 'state_sum_neff_phys', rec%states%sum_neff_phys
+            write(funit,'(a,1x,es24.16)') 'state_sum_maxp',      rec%states%sum_maxp
+            do istate = 1,rec%states%nstates
+                write(funit,'(a,1x,es24.16)') 'state_unref_sum', rec%states%unref_sum(istate)
+                write(funit,'(a,1x,i0)')      'state_unref_n',   rec%states%unref_n(istate)
+            enddo
+        endif
         call fclose(funit)
     end subroutine write_prob_readout
 
@@ -893,7 +1131,7 @@ contains
         type(prob_readout), intent(out) :: rec
         class(string),      intent(in)  :: fname
         character(len=64) :: line_value
-        integer :: funit, io_stat
+        integer :: funit, io_stat, nstates, istate
         if( .not. file_exists(fname) ) THROW_HARD('a part published no readout record: '//fname%to_char())
         call fopen(funit, fname, status='old', action='read', iostat=io_stat)
         call fileiochk('read_prob_readout; fopen '//fname%to_char(), io_stat)
@@ -915,6 +1153,20 @@ contains
         call read_int('neff_nrows',    rec%neff_nrows)
         call read_dp ('neff_sum_draw', rec%neff_sum_draw)
         call read_dp ('neff_sum_phys', rec%neff_sum_phys)
+        call read_int('state_nstates', nstates)
+        if( nstates > 0 )then
+            call rec%states%new(nstates)
+            call read_int('state_nrows',         rec%states%nrows)
+            call read_int('state_ndraws',        rec%states%ndraws)
+            call read_int('state_nmode',         rec%states%nmode)
+            call read_dp ('state_sum_neff_draw', rec%states%sum_neff_draw)
+            call read_dp ('state_sum_neff_phys', rec%states%sum_neff_phys)
+            call read_dp ('state_sum_maxp',      rec%states%sum_maxp)
+            do istate = 1,nstates
+                call read_dp ('state_unref_sum', rec%states%unref_sum(istate))
+                call read_int('state_unref_n',   rec%states%unref_n(istate))
+            enddo
+        endif
         call fclose(funit)
 
         contains
@@ -981,13 +1233,16 @@ contains
         acc%neff_nrows    = acc%neff_nrows    + rec%neff_nrows
         acc%neff_sum_draw = acc%neff_sum_draw + rec%neff_sum_draw
         acc%neff_sum_phys = acc%neff_sum_phys + rec%neff_sum_phys
+        call acc%states%add(rec%states)
     end subroutine add_prob_readout
 
     !> the distributed master's merge of its parts' records in part order, reported as the owner reports its own
-    !! (plan section 5: sums and counts, never means of means); the records are deleted after the merge
-    subroutine merge_prob_readouts( nparts, numlen, prob_beta )
-        integer, intent(in) :: nparts, numlen
-        real,    intent(in) :: prob_beta
+    !! (plan section 5: sums and counts, never means of means) and returned in merged; the records are deleted after
+    !! the merge
+    subroutine merge_prob_readouts( nparts, numlen, prob_beta, merged )
+        integer,                      intent(in)  :: nparts, numlen
+        real,                         intent(in)  :: prob_beta
+        type(prob_readout), optional, intent(out) :: merged
         type(prob_readout) :: acc, rec
         type(string)       :: fname
         integer :: ipart
@@ -998,6 +1253,7 @@ contains
             call del_file(fname)
         enddo
         call report_prob_readout(acc, prob_beta)
+        if( present(merged) ) merged = acc
     end subroutine merge_prob_readouts
 
     !> the lines an assignment prints, from a record (the owner's own, or the parts' sum): the n_eff readout, the
@@ -1022,6 +1278,7 @@ contains
                 write(mode_pct,'(F32.1)') 100. * real(rec%nmode) / real(max(1,nassigned))
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_ASSIGN: ', nassigned, ' particles x ', rec%nrefs,&
                     &' references, '//trim(adjustl(mode_pct))//'% at the row mode'
+                call rec%states%report(prob_beta)
                 if( rec%route == PROB_READOUT_3D_NEIGH )then
                     if( rec%nkept > 0 ) write(logfhandle,'(A,I0)') &
                         &'WARNING: particles without a valid neighbourhood candidate, orientation kept: ', rec%nkept

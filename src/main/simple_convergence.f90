@@ -39,6 +39,15 @@ type convergence
     integer :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
     real    :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
     real    :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
+    real, allocatable :: res05_hist_s(:,:)    !< (2, nstates) per state FSC=0.5 of the same two checks (nstates > 1)
+    real, allocatable :: res143_hist_s(:,:)   !< (2, nstates) per state FSC=0.143
+    ! the state readout of the probabilistic assignment's joint draw over states and directions (set_state_readout),
+    ! written to STATS_FILE by the next check_conv3D and cleared there
+    logical :: l_state_readout        = .false.
+    real    :: state_neff_draw        = 0. !< mean effective number of states at the draw's factor
+    real    :: state_neff_phys        = 0. !< the same at factor 1
+    real    :: state_mode_frac        = 0. !< fraction of the draws in the row mode's state
+    real, allocatable :: state_mass_unref(:) !< per state its block's tempered mass share on unrefined entries (< 0: none)
   contains
     procedure :: check_conv2D
     procedure, nopass :: print_verdict
@@ -51,7 +60,10 @@ type convergence
     procedure :: check_cont_conv
     procedure :: get
     procedure :: anneal_tail_start
+    procedure :: set_state_readout
     procedure, private :: res_two_back
+    procedure, private :: res_two_back_state
+    procedure, private :: states_stalled
     procedure, private :: record_res
 end type convergence
 
@@ -323,7 +335,7 @@ contains
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         character(len=96) :: beta_str
         real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff
-        logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin
+        logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
@@ -617,16 +629,23 @@ contains
                 if( self%prob_beta_tail_start == 0 )then
                     l_stalled = .false.
                     if( params%which_iter > params%startit .and. res05_now > TINY .and. res143_now > TINY )then
-                        res05_prev  = prev_iter_res(params, 'RESOLUTION_FSC05_STATE')
-                        res143_prev = prev_iter_res(params, 'RESOLUTION_STATE')
-                        l_stalled   = res05_prev > TINY .and. res143_prev > TINY .and. &
-                            &res05_now >= res05_prev - TINY .and. res143_now >= res143_prev - TINY
-                        ! the weighted insertion (topk > 1) makes the halves agree a shell earlier than the single
-                        ! draw's noise allows, so a stall is two iterations without gain, not one (l_margin)
-                        if( l_stalled .and. l_margin )then
-                            call self%res_two_back(params, res05_prev2, res143_prev2)
-                            l_stalled = res05_prev2 > TINY .and. res143_prev2 > TINY .and. &
-                                &res05_prev >= res05_prev2 - TINY .and. res143_prev >= res143_prev2 - TINY
+                        ! several states: the stall holds when no populated state gained (states_stalled); when no
+                        ! state can be compared, the best state's test below
+                        l_states_checked = .false.
+                        if( params%nstates > 1 ) l_stalled = self%states_stalled(params, res05_state_avg, &
+                            &res_state_avg, l_margin, l_states_checked)
+                        if( .not. l_states_checked )then
+                            res05_prev  = prev_iter_res(params, 'RESOLUTION_FSC05_STATE')
+                            res143_prev = prev_iter_res(params, 'RESOLUTION_STATE')
+                            l_stalled   = res05_prev > TINY .and. res143_prev > TINY .and. &
+                                &res05_now >= res05_prev - TINY .and. res143_now >= res143_prev - TINY
+                            ! the weighted insertion (topk > 1) makes the halves agree a shell earlier than the single
+                            ! draw's noise allows, so a stall is two iterations without gain, not one (l_margin)
+                            if( l_stalled .and. l_margin )then
+                                call self%res_two_back(params, res05_prev2, res143_prev2)
+                                l_stalled = res05_prev2 > TINY .and. res143_prev2 > TINY .and. &
+                                    &res05_prev >= res05_prev2 - TINY .and. res143_prev >= res143_prev2 - TINY
+                            endif
                         endif
                     endif
                     if( l_stalled )then
@@ -672,7 +691,7 @@ contains
                 endif
             endif
         endif
-        call self%record_res(params, res05_now, res143_now)
+        call self%record_res(params, res05_now, res143_now, res05_state_avg, res_state_avg)
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &
@@ -690,6 +709,17 @@ contains
         call ostats%set(1,'ITERATION',                   params%which_iter)
         call ostats%set(1,'ORIENTATION_OVERLAP',         self%mi_proj)
         if( params%nstates > 1 ) call ostats%set(1,'STATE_OVERLAP', self%mi_state)
+        if( self%l_state_readout )then
+            call ostats%set(1,'STATE_NEFF_DRAW', self%state_neff_draw)
+            call ostats%set(1,'STATE_NEFF_PHYS', self%state_neff_phys)
+            call ostats%set(1,'STATE_MODE_FRAC', self%state_mode_frac)
+            do istate = 1, size(self%state_mass_unref)
+                if( self%state_mass_unref(istate) < 0. ) cycle
+                write(res_key,'(A,I2.2)') 'STATE_MASS_UNREFINED', istate
+                call ostats%set(1, trim(res_key), self%state_mass_unref(istate))
+            end do
+            self%l_state_readout = .false.
+        endif
         call ostats%set(1,'PERCEN_PARTICLES_SAMPLED',    percen_sampled)
         call ostats%set(1,'PERCEN_PARTICLES_UPDATED',    percen_updated)
         call ostats%set(1,'PERCEN_PARTICLES_AVERAGED',   percen_avg)
@@ -770,12 +800,13 @@ contains
         enddo
     end subroutine res_two_back
 
-    !> this check's iteration and resolutions into the history, the latest first
-    subroutine record_res( self, params, res05_now, res143_now )
+    !> this check's iteration and resolutions into the history, the latest first: the best state's and, with
+    !! several states, every state's (a state is its index, stable within a run; 0. where it has none)
+    subroutine record_res( self, params, res05_now, res143_now, res05_states, res143_states )
         use simple_parameters, only: parameters
         class(convergence), intent(inout) :: self
         class(parameters),  intent(in)    :: params
-        real,               intent(in)    :: res05_now, res143_now
+        real,               intent(in)    :: res05_now, res143_now, res05_states(:), res143_states(:)
         if( self%res_hist_iter(1) == params%which_iter ) return ! the same iteration checked twice: the first stands
         self%res_hist_iter(2) = self%res_hist_iter(1)
         self%res05_hist(2)    = self%res05_hist(1)
@@ -783,7 +814,73 @@ contains
         self%res_hist_iter(1) = params%which_iter
         self%res05_hist(1)    = res05_now
         self%res143_hist(1)   = res143_now
+        if( params%nstates < 2 ) return
+        if( allocated(self%res05_hist_s) )then
+            if( size(self%res05_hist_s,2) /= size(res05_states) ) deallocate(self%res05_hist_s, self%res143_hist_s)
+        endif
+        if( .not. allocated(self%res05_hist_s) )then
+            allocate(self%res05_hist_s(2,size(res05_states)), self%res143_hist_s(2,size(res143_states)), source=0.)
+        endif
+        self%res05_hist_s(2,:)  = self%res05_hist_s(1,:)
+        self%res143_hist_s(2,:) = self%res143_hist_s(1,:)
+        self%res05_hist_s(1,:)  = res05_states
+        self%res143_hist_s(1,:) = res143_states
     end subroutine record_res
+
+    !> state s's resolutions of the check two iterations back (0. when the history does not hold it)
+    subroutine res_two_back_state( self, params, s, res05_prev2, res143_prev2 )
+        use simple_parameters, only: parameters
+        class(convergence), intent(in)  :: self
+        class(parameters),  intent(in)  :: params
+        integer,            intent(in)  :: s
+        real,               intent(out) :: res05_prev2, res143_prev2
+        integer :: k
+        res05_prev2  = 0.
+        res143_prev2 = 0.
+        if( .not. allocated(self%res05_hist_s) ) return
+        if( s < 1 .or. s > size(self%res05_hist_s,2) ) return
+        do k = 1,2
+            if( self%res_hist_iter(k) /= params%which_iter - 2 ) cycle
+            if( self%res_hist_iter(k) < params%startit ) cycle
+            res05_prev2  = self%res05_hist_s(k,s)
+            res143_prev2 = self%res143_hist_s(k,s)
+            return
+        enddo
+    end subroutine res_two_back_state
+
+    !> the annealing tail's stall over every populated state: a state not gaining holds both its crossings in this
+    !! check and the previous iteration's record and improved neither (under the weighted insertion's margin also
+    !! not over the iteration before); a state missing a value in either record is skipped (l_checked: some state
+    !! was compared); stalled when a state was compared and none gained
+    logical function states_stalled( self, params, res05_states, res143_states, l_margin, l_checked ) result( l_stalled )
+        use simple_parameters, only: parameters
+        class(convergence), intent(in)  :: self
+        class(parameters),  intent(in)  :: params
+        real,               intent(in)  :: res05_states(:), res143_states(:)
+        logical,            intent(in)  :: l_margin
+        logical,            intent(out) :: l_checked
+        real, allocatable :: prev05(:), prev143(:)
+        real    :: prev05_2, prev143_2
+        integer :: s
+        logical :: l_flat
+        prev05  = prev_iter_res_states(params, 'RESOLUTION_FSC05_STATE', size(res05_states))
+        prev143 = prev_iter_res_states(params, 'RESOLUTION_STATE',       size(res143_states))
+        l_checked = .false.
+        l_stalled = .true.
+        do s = 1, size(res05_states)
+            if( res05_states(s) <= TINY .or. res143_states(s) <= TINY ) cycle
+            if( prev05(s) <= TINY .or. prev143(s) <= TINY ) cycle
+            l_checked = .true.
+            l_flat = res05_states(s) >= prev05(s) - TINY .and. res143_states(s) >= prev143(s) - TINY
+            if( l_flat .and. l_margin )then
+                call self%res_two_back_state(params, s, prev05_2, prev143_2)
+                l_flat = prev05_2 > TINY .and. prev143_2 > TINY .and. &
+                    &prev05(s) >= prev05_2 - TINY .and. prev143(s) >= prev143_2 - TINY
+            endif
+            if( .not. l_flat ) l_stalled = .false.
+        end do
+        if( .not. l_checked ) l_stalled = .false.
+    end function states_stalled
 
     !> the previous iteration's best populated state's resolution in STATS_FILE (key_prefix RESOLUTION_FSC05_STATE
     !! for FSC=0.5, RESOLUTION_STATE for FSC=0.143), read
@@ -813,6 +910,34 @@ contains
         endif
         call ostats%kill
     end function prev_iter_res
+
+    !> the previous iteration's resolution of every state in STATS_FILE (key_prefix as prev_iter_res), read before
+    !! check_conv3D overwrites it; 0. for a state without one or unless the file is from an earlier iteration of
+    !! this stage
+    function prev_iter_res_states( params, key_prefix, nstates ) result( res_prev )
+        use simple_parameters, only: parameters
+        class(parameters), intent(in) :: params
+        character(len=*),  intent(in) :: key_prefix
+        integer,           intent(in) :: nstates
+        real :: res_prev(nstates)
+        type(oris)            :: ostats
+        character(len=KEYLEN) :: res_key
+        integer :: istate, iter_prev
+        res_prev = 0.
+        if( .not. file_exists(STATS_FILE) ) return
+        call ostats%new(1, is_ptcl=.false.)
+        call ostats%read(string(STATS_FILE))
+        iter_prev = 0
+        if( ostats%isthere('ITERATION') ) iter_prev = nint(ostats%get(1,'ITERATION'))
+        if( iter_prev >= params%startit .and. iter_prev < params%which_iter )then
+            do istate = 1, nstates
+                write(res_key,'(A,I2.2)') key_prefix, istate
+                if( .not. ostats%isthere(trim(res_key)) ) cycle
+                res_prev(istate) = ostats%get(1, trim(res_key))
+            end do
+        endif
+        call ostats%kill
+    end function prev_iter_res_states
 
 
     !> refine=cont: the sample (mask) passes when cont_conv_frac of every populated state is stable
@@ -1119,6 +1244,20 @@ contains
         class(convergence), intent(in) :: self
         it = self%prob_beta_tail_start
     end function anneal_tail_start
+
+    !> the state readout of the probabilistic assignment's joint draw, for the statistics file of the next
+    !! check_conv3D: the mean state n_eff at the draw's factor and at 1, the draws' fraction in the row mode's state
+    !! and per state the unrefined share of its block's tempered mass (below zero: the state had no rows)
+    subroutine set_state_readout( self, neff_draw, neff_phys, mode_frac, mass_unref )
+        class(convergence), intent(inout) :: self
+        real,               intent(in)    :: neff_draw, neff_phys, mode_frac, mass_unref(:)
+        self%state_neff_draw = neff_draw
+        self%state_neff_phys = neff_phys
+        self%state_mode_frac = mode_frac
+        if( allocated(self%state_mass_unref) ) deallocate(self%state_mass_unref)
+        allocate(self%state_mass_unref(size(mass_unref)), source=mass_unref)
+        self%l_state_readout = .true.
+    end subroutine set_state_readout
 
     real function get( self, which )
         class(convergence), intent(in) :: self

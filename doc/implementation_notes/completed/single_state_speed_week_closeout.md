@@ -17,7 +17,7 @@ their development date; the table records their current disposition.
 | 4. Parallel state assembly | Parked multi-state experiment, subject to the existing memory and numerical constraints; not an unfinished single-state implementation item. |
 | 5. One worker per iteration | Superseded by the [batch-pipeline plan](../completed/prob_align_batch_pipeline.md). The earlier waiting-worker fold was implemented and dropped; its protocol below is historical. |
 | 6. Representative benchmarks | Matched PfCRT and I/O-heavy-dataset timing, peak memory and quality evidence remains outstanding; msp1 is the separate multi-state case. Old savings estimates are not measured gains. |
-| 7. Refined-reference budget across states | Separate multi-state work, now addressed by the budget split in the [posterior-state proposal](../planned/multistate_posterior_state_draw.md); not a new single-state task. |
+| 7. Refined-reference budget across states | Separate multi-state work, now addressed by the budget split in the [posterior-state plan](../completed/multistate_posterior_state_draw.md) (built 2026-11-05); not a new single-state task. |
 
 ## Historical status and scope
 

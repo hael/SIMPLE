@@ -2,7 +2,7 @@
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_matchbench
 use simple_polar_matching_bench, only: polar_matching_bench, PMB_PER_PAIR, PMB_REPLICA, PMB_BLOCKED, PMB_STATES_INNER,&
     &PMB_MATRIX, PMB_MATRIX_T, PMB_PER_PAIR_CC, PMB_NKINDS, pmb_fill_result, PMB_NROUTES, PMB_NDIFF, PMB_DIFF_NAMES,&
-    &pmb_route_name, kill_fill_result, compare_fill_results
+    &pmb_route_name, kill_fill_result, compare_fill_results, PMB_ROUTE_3D_DENSE
 implicit none
 #include "simple_local_flags.inc"
 
@@ -449,6 +449,7 @@ subroutine fills_case( nspace, nstates, nptcls, nthr_max )
         call report_case(bench, nspace, nstates)
         write(logfhandle,'(4x,a)') 'route '//route//': the reference fill at one thread, one batch, one part'
         call bench%run_fill(1, nptcls, 1, ref)
+        if( iroute == PMB_ROUTE_3D_DENSE ) call check_dense_polish(ref, nspace, nstates)
         do iconf = 1,NCONF
             wall = 0._dp
             !$ wall = omp_get_wtime()
@@ -491,6 +492,38 @@ subroutine fills_case( nspace, nstates, nptcls, nthr_max )
     if( nfail > 0 ) THROW_HARD('the fill harness differs between configurations; see '//FILLS_TSV)
     write(logfhandle,'(a)') '>>> the fill harness gives identical rows, selections and extras in every configuration'
 end subroutine fills_case
+
+!> the dense 3D fill's polish on the reference fill: the budget projs_ns split over the states' blocks, so no block
+!! holds more polished entries than its share (ceil(projs_ns / nstates)) and no particle more than projs_ns up to
+!! rounding; the shift map records a polish only where it beats the stored shift, so the particles left without a
+!! polished entry in some block are reported, not held to zero
+subroutine check_dense_polish( res, nspace, nstates )
+    type(pmb_fill_result), intent(in) :: res
+    integer,               intent(in) :: nspace, nstates
+    integer :: i, s, nlack, nover, nref_s, ntot, nmax, nper, nmax_blk
+    nper = res%projs_ns
+    if( nstates > 1 ) nper = min(nspace, (res%projs_ns + nstates - 1) / nstates)
+    nlack    = 0
+    nover    = 0
+    nmax     = 0
+    nmax_blk = 0
+    do i = 1,res%nptcls
+        ntot = 0
+        do s = 1,nstates
+            nref_s = count(res%shifts(1,(s-1)*nspace+1:s*nspace,i) < 0.5 * huge(1._sp))
+            if( nref_s == 0 ) nlack = nlack + 1
+            if( nref_s > nper ) nover = nover + 1
+            nmax_blk = max(nmax_blk, nref_s)
+            ntot = ntot + nref_s
+        enddo
+        nmax = max(nmax, ntot)
+        if( ntot > res%projs_ns + nstates - 1 ) nover = nover + 1
+    enddo
+    write(logfhandle,'(4x,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') '3D_dense polish: budget ', res%projs_ns, &
+        &', states ', nstates, ', share per state ', nper, ', most polished per particle ', nmax, ' and per state ', &
+        &nmax_blk, ', over the share or budget ', nover, ', particles without a polished entry in a state ', nlack
+    if( nover > 0 ) THROW_HARD('the dense fill polishes more than a state''s share or the budget')
+end subroutine check_dense_polish
 
 subroutine report_case( bench, nspace, nstates )
     class(polar_matching_bench), intent(in) :: bench

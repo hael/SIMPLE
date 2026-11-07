@@ -97,6 +97,14 @@ populated.
 | `local` | Search state, projection direction, in-plane angle, and translations inside the current geometric neighborhood | `refine=prob_neigh`, `prob_neigh_mode=geom` |
 | `global` | Search every pose degree of freedom through full state-pooled probabilistic matching | `refine=prob_neigh`, `prob_neigh_mode=state` |
 
+Under both policies the state is part of the neighbourhood table's draw: one
+draw from the particle's tempered posterior over its valid candidates of every
+state together. The weighted insertion's extras come from the drawn state's
+candidates alone, so the labels stay hard (since 2026-11-05;
+[refine3D policy](../3D/refine3D_policy.md), "Neighbourhood-table assignment").
+Before, the state was that of the particle's closest candidate, and the draw ran
+within it.
+
 Fixed-pose classification (keeping every projection direction and choosing
 only the state) is not a pose policy: it is what `flex_pca` does when it
 initializes the states.

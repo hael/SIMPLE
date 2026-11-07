@@ -1071,6 +1071,23 @@ contains
         call fclose(fnr)
     end subroutine write_strategy_bench_report
 
+    !> the probabilistic assignment's state readout (more than one state drawn) on the convergence object, for the
+    !! statistics file of this iteration's check_conv3D; from as many rows as the log line needs
+    subroutine store_state_readout( conv, rec )
+        use simple_eul_prob_tab_utils, only: prob_readout, PROB_NEFF_MIN_ROWS
+        type(convergence),  intent(inout) :: conv
+        type(prob_readout), intent(in)    :: rec
+        real, allocatable :: share(:)
+        integer :: s
+        if( rec%states%nstates < 2 .or. rec%states%nrows < PROB_NEFF_MIN_ROWS ) return
+        allocate(share(rec%states%nstates))
+        do s = 1, rec%states%nstates
+            share(s) = rec%states%unref_share(s)
+        enddo
+        call conv%set_state_readout(rec%states%neff_draw(), rec%states%neff_phys(), rec%states%mode_frac(), share)
+        deallocate(share)
+    end subroutine store_state_readout
+
     subroutine write_iteration_states( params, build )
         type(parameters), intent(in) :: params
         type(builder),    intent(in) :: build
@@ -1188,11 +1205,13 @@ contains
         use simple_strategy3D_matcher,   only: refine3D_exec
         use simple_volassemble_strategy, only: volassemble_exec
         use simple_rnd,                  only: seed_rnd
+        use simple_eul_prob_tab_utils,   only: prob_readout
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
+        type(prob_readout)                :: readout
         type(cmdline)                     :: cline_volassemble
         type(cmdline)                     :: cline_polish
         integer(timer_int_kind)           :: t_recphase
@@ -1264,7 +1283,9 @@ contains
         ! with the polish (pose_cont=yes) one reconstruction per iteration comes from the polished
         ! poses: the discrete pass writes no partial reconstructions
         l_polish = polish_follows(params)
-        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_polish)
+        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_polish, &
+            &readout=readout)
+        call store_state_readout(self%conv, readout)
         if( l_polish )then
             ! The polish consumes the committed poses and sample on this same project.
             cline_polish = cline
@@ -1561,8 +1582,9 @@ contains
                 call ensure_canonical_sigma2(params, build, cline, params%startit)
             endif
         else
-            ! STATE LABEL INIT (none in a pass that searches no state)
-            if( self%l_multistates .and. labels_may_change(params) )then
+            ! STATE LABEL INIT at a fresh multi-state start (the first iteration; none in a pass that searches no state),
+            ! as the shared-memory strategy: a later stage or pass, whose states may have emptied, continues from its labels
+            if( self%l_multistates .and. params%startit == 1 .and. labels_may_change(params) )then
                 call seed_multistate_startup_labels(build, params, cline)
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
@@ -1665,7 +1687,7 @@ contains
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_volassemble_strategy, only: volassemble_exec
         use simple_commanders_volops,    only: commander_postprocess
-        use simple_eul_prob_tab_utils,   only: merge_prob_readouts, prob_insert_cone, insert_cone_from_fsc
+        use simple_eul_prob_tab_utils,   only: merge_prob_readouts, prob_insert_cone, insert_cone_from_fsc, prob_readout
         !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
         use simple_fsc,                     only: plot_fsc
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4iter3D, master_draws_sample3D, sample_ptcls4prob3D
@@ -1685,6 +1707,7 @@ contains
         logical, allocatable :: l_no_new_map(:)
         type(chash) :: job_descr_pass
         type(prob_insert_cone) :: insert_cone
+        type(prob_readout)     :: readout
         real    :: lp_cone
         integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
         logical :: l_polish, l_force_full_first
@@ -1768,7 +1791,10 @@ contains
         if( l_polish ) call job_descr_pass%set('volrec', 'no')
         call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! the parts' readouts of the probabilistic assignment, merged in part order and reported as the owner's
-        if( params%l_prob_align_mode ) call merge_prob_readouts(params%nparts, params%numlen, params%prob_beta)
+        if( params%l_prob_align_mode )then
+            call merge_prob_readouts(params%nparts, params%numlen, params%prob_beta, merged=readout)
+            call store_state_readout(self%conv, readout)
+        endif
         ! merge alignment docs (a residual-only sigma pass, refine=sigma,
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) call build%spproj%merge_algndocs(params%nptcls, params%nparts, &

@@ -1,9 +1,9 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), the n_eff readout
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), the n_eff and state readouts
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
-! The pipeline's batch assignment draws every particle's reference from its tempered row posterior on synthetic dense
-! batches of one and of several states, with ties, a flat and an invalid particle. A particle's state is the state of its closest
-! reference; an exact tie goes to the lowest reference index.
+! The pipeline's batch assignment draws every particle's reference, state and direction together, from its tempered
+! posterior over the whole row on synthetic dense batches of one and of several states, with ties, a flat and an
+! invalid particle; exact ties are drawn uniformly.
 module simple_eul_prob_tab_tester
 use simple_core_module_api
 use simple_builder,            only: builder
@@ -14,8 +14,9 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, &
-    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best
-use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed
+    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, &
+    &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout
+use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_sym,                only: sym
 use simple_oris,               only: oris
@@ -58,10 +59,15 @@ contains
         call test_insert_extras_multistate()
         write(*,'(A)') 'test_ref_assign_posterior'
         call test_ref_assign_posterior()
+        write(*,'(A)') 'test_joint_state_draw'
+        call test_joint_state_draw()
         write(*,'(A)') 'test_prob_beta_at'
         call test_prob_beta_at()
         write(*,'(A)') 'test_ref_assign_neigh_posterior'
         call test_ref_assign_neigh_posterior()
+        write(*,'(A)') 'test_neigh_pooled_extras'
+        call test_neigh_pooled_extras('state')
+        call test_neigh_pooled_extras('geom')
         write(*,'(A)') 'test_neff_readout'
         call test_neff_readout()
         call test_neff_report()
@@ -255,15 +261,18 @@ contains
     !> the neighbourhood table's posterior assignment (the pipeline's batch; the same draw on every
     !! neighbourhood mode): a synthetic candidate store of 150 particles over 3 states x 20 directions (1 to 12
     !! candidates each, some without an in-plane index; every particle has a valid one, since a particle without one
-    !! is re-seeded through the calculator, which this test has not). At a huge temperature every particle takes the
-    !! state of its closest valid candidate and the argmin within it, with its in-plane index and distance and the
-    !! evaluated fraction. At T = 2 some particles leave the mode and none its state; the same seed gives the same
-    !! assignment, another seed another.
+    !! is re-seeded through the calculator, which this test has not). The store is a stochastic (snhc) one, the
+    !! candidates per state unequal in number. At a huge temperature every particle takes its closest valid candidate
+    !! over all states, with its in-plane index and distance and the evaluated fraction. At T = 2 the draw over the
+    !! pooled candidates leaves the mode for some particles and the argmin's state for some; the same seed gives the
+    !! same assignment, another seed another. Particle 1's candidates all carry a non-finite distance: it is kept
+    !! (no assignment, counted in the readout's kept particles).
     subroutine test_ref_assign_neigh_posterior()
         integer, parameter :: NSPACE = 20, NSTATES = 3, NP = 150
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
         type(eul_prob_tab_neigh) :: tab
+        type(prob_readout)       :: rec
         type(prob_candidate), allocatable :: cands(:)
         integer, allocatable :: counts(:), pinds(:), state_best(:), ref_best(:), run1(:), run2(:)
         real,    allocatable :: dist_best(:)
@@ -298,6 +307,7 @@ contains
                 cands(n)%inpl = 1 + int(ran3() * real(NROTS))
                 cands(n)%dist = 4. * ran3()
                 if( k > 1 .and. ran3() < 0.1 ) cands(n)%inpl = 0    ! not a candidate
+                if( i == 1 ) cands(n)%dist = huge(1.)                ! no finite distance
             enddo
         enddo
         ! the expected argmin per particle: the closest valid candidate over all states
@@ -338,6 +348,9 @@ contains
             n = n + counts(i)
         enddo
         call assert_int(0, nwrong, 'a huge temperature gives every particle its closest valid neighbourhood candidate')
+        call assert_int(0, tab%assgn_map(1)%istate, 'a particle without a finite candidate distance is not assigned')
+        rec = tab%get_readout()
+        call assert_int(1, rec%nkept, 'a particle without a finite candidate distance is counted as kept')
         call tab%kill
         ! T = 2: some particles leave the mode, none its state; seeds
         call set_store(2.)
@@ -352,7 +365,7 @@ contains
             if( tab%assgn_map(i)%istate == state_best(i) ) nstate_ok = nstate_ok + 1
         enddo
         call assert_true(nmoved > 0 .and. nmoved < NP, 'at T = 2 some particles leave the mode')
-        call assert_int(NP, nstate_ok, 'the state is the argmin''s state under the draw')
+        call assert_true(nstate_ok < NP, 'at T = 2 the pooled draw leaves the argmin''s state for some particles')
         call tab%kill
         call set_store(2.)
         call set_fixed_seed(SEED_DRAW, propagate=.true.)
@@ -395,6 +408,173 @@ contains
         end subroutine assign_store
 
     end subroutine test_ref_assign_neigh_posterior
+
+    !> The neighbourhood table's pooled draw and its extras (prob_neigh_mode state and geom, whose candidates are
+    !! shift-refined): a store of 40 particles over 2 states x 50 directions, each particle's candidates a random
+    !! subset of the references (about half), a tenth of them refined with their distances lowered by 50 so that the
+    !! committed draw lands on a refined one, a cone over the whole sphere, hot rows (temperature 1). Every extra is a
+    !! refined candidate of the committed state and not the committed reference; a particle's weights sum to 1; some
+    !! particles commit a state other than their argmin's and get extras; the state readout counts every draw. The
+    !! extras' parallel selection gives the one-thread result bit for bit on the machine's full team, twice
+    subroutine test_neigh_pooled_extras( mode )
+        character(len=*), intent(in) :: mode
+        integer, parameter :: NSPACE_NB = 50, NSTATES_NB = 2, NP_NB = 40
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab_neigh) :: tab
+        type(prob_insert_cone)   :: cone
+        type(prob_insert_pose)   :: pose
+        type(prob_readout)       :: rec
+        type(prob_insert_poses)  :: poses
+        type(prob_dense_entry), allocatable :: rows(:,:)
+        real,                   allocatable :: shifts(:,:,:), seeds(:,:)
+        logical,                allocatable :: refined(:,:), incand(:,:)
+        integer,                allocatable :: pinds(:), argmin_state(:)
+        integer :: i, k, ri, nrefs, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nextra_tot
+        integer :: iref_committed, istate, nnot_argmin, nextra_not_argmin, nthr_max, nthr_saved, rep_team
+        real    :: wsum, dbest
+        real, allocatable :: ext1(:,:,:), extn(:,:,:)
+        call make_dense_rows(params, build, NSPACE_NB, NSTATES_NB, NP_NB, rows, shifts, refined, seeds)
+        nrefs = NSPACE_NB * NSTATES_NB
+        params%topk            = 3
+        params%prob_neigh_mode = mode
+        params%prob_beta       = 1.
+        allocate(build%subspace_inds(1), source=1)
+        allocate(incand(nrefs,NP_NB), argmin_state(NP_NB))
+        do i = 1,NP_NB
+            do ri = 1,nrefs
+                incand(ri,i) = ran3() < 0.5 .or. refined(ri,i)
+            enddo
+            ! the argmin over the particle's candidates (the refined ones lowered by 50)
+            dbest = huge(1.)
+            argmin_state(i) = 0
+            do ri = 1,nrefs
+                if( .not. incand(ri,i) ) cycle
+                if( entry_dist(ri, i) < dbest )then
+                    dbest = entry_dist(ri, i)
+                    argmin_state(i) = (ri - 1) / NSPACE_NB + 1
+                endif
+            enddo
+        enddo
+        pinds = [(i, i=1,NP_NB)]
+        call tab%new_neigh_pipeline(params, build, pinds)
+        tab%seed_nrots = 36
+        call cone%new([1000., 1000.], 100., 1.)
+        call tab%set_insert_cone(cone)
+        do i = 1,NP_NB
+            do ri = 1,nrefs
+                if( .not. incand(ri,i) ) cycle
+                call tab%candidate_buffers(1)%append(i, prob_candidate(ri, rows(ri,i)%inpl, entry_dist(ri, i), &
+                    &shifts(1,ri,i), shifts(2,ri,i), refined(ri,i)))
+            enddo
+        enddo
+        tab%temps = 1.
+        call set_fixed_seed(SEED_DRAW, propagate=.true.)
+        call tab%open_assignment
+        call tab%assign_batch(1, NP_NB)
+        call tab%close_assignment
+        ! the weights and extras the search reads
+        call poses%setup_range(tab%insert_tab, pinds, 1, NP_NB)
+        nextra_tot = 0; nwrong_state = 0; nwrong_refined = 0; nwrong_committed = 0; nwrong_weight = 0
+        nnot_argmin = 0; nextra_not_argmin = 0
+        do i = 1,NP_NB
+            istate         = tab%assgn_map(i)%istate
+            iref_committed = (istate - 1) * NSPACE_NB + tab%assgn_map(i)%iproj
+            wsum           = poses%wc(i)
+            if( istate /= argmin_state(i) )then
+                nnot_argmin       = nnot_argmin + 1
+                nextra_not_argmin = nextra_not_argmin + poses%nextra(i)
+            endif
+            do k = 1,poses%nextra(i)
+                pose       = tab%insert_tab%get_extra(i, k)
+                nextra_tot = nextra_tot + 1
+                wsum       = wsum + pose%w
+                if( (pose%iref - 1) / NSPACE_NB + 1 /= istate ) nwrong_state     = nwrong_state + 1
+                if( .not. refined(pose%iref, i) )                nwrong_refined   = nwrong_refined + 1
+                if( pose%iref == iref_committed )                nwrong_committed = nwrong_committed + 1
+            enddo
+            if( abs(wsum - 1.) > 1.e-5 ) nwrong_weight = nwrong_weight + 1
+        enddo
+        call assert_true(nextra_tot > 0, 'pooled neighbourhood extras ('//mode//'): hot rows give extra poses')
+        call assert_int(0, nwrong_state,     'pooled neighbourhood extras ('//mode//'): every extra in the committed state')
+        call assert_int(0, nwrong_refined,   'pooled neighbourhood extras ('//mode//'): every extra a refined candidate')
+        call assert_int(0, nwrong_committed, 'pooled neighbourhood extras ('//mode//'): no extra is the committed candidate')
+        call assert_int(0, nwrong_weight,    'pooled neighbourhood extras ('//mode//'): weights sum to 1')
+        call assert_true(nnot_argmin > 0, 'pooled neighbourhood draw ('//mode//'): some particles leave the argmin''s state')
+        call assert_true(nextra_not_argmin > 0, 'pooled neighbourhood draw ('//mode//'): such particles get extras')
+        rec = tab%get_readout()
+        call assert_int(NP_NB, rec%states%ndraws, 'pooled neighbourhood draw ('//mode//'): the state readout counts every draw')
+        call poses%kill
+        call tab%kill
+        ! the extras' parallel selection: one thread against the full team, twice
+        nthr_saved = 1
+        nthr_max   = 1
+        !$ nthr_saved = omp_get_max_threads()
+        !$ nthr_max   = omp_get_num_procs()
+        call assign_team(1, ext1)
+        do rep_team = 1,2
+            call assign_team(nthr_max, extn)
+            call assert_true(all(extn == ext1), 'pooled neighbourhood extras ('//mode//'): the full team gives the one-thread '//&
+                &'assignment and extras bit for bit')
+        enddo
+        !$ call omp_set_num_threads(nthr_saved)
+        deallocate(ext1, extn)
+        call cone%kill
+        call build%spproj_field%kill
+        deallocate(build%spproj_field)
+        call build%eulspace%kill
+        call build%pgrpsyms%kill
+        deallocate(params, build, rows, shifts, refined, seeds, pinds, incand, argmin_state)
+
+    contains
+
+        !> a fresh table's assignment of the same store on a team of nthr_team threads: per particle the committed
+        !! state, direction and in-plane index, then its extras' reference, in-plane index, shift and weight
+        subroutine assign_team( nthr_team, ext )
+            integer,           intent(in)    :: nthr_team
+            real, allocatable, intent(inout) :: ext(:,:,:)
+            type(eul_prob_tab_neigh) :: t
+            type(prob_insert_pose)   :: pz
+            type(prob_insert_poses)  :: pzs
+            integer :: ip, rr, kk
+            !$ call omp_set_num_threads(nthr_team)
+            if( allocated(ext) ) deallocate(ext)
+            allocate(ext(5, params%topk, NP_NB), source=0.)
+            call t%new_neigh_pipeline(params, build, pinds)
+            t%seed_nrots = 36
+            call t%set_insert_cone(cone)
+            do ip = 1,NP_NB
+                do rr = 1,nrefs
+                    if( .not. incand(rr,ip) ) cycle
+                    call t%candidate_buffers(1)%append(ip, prob_candidate(rr, rows(rr,ip)%inpl, entry_dist(rr, ip), &
+                        &shifts(1,rr,ip), shifts(2,rr,ip), refined(rr,ip)))
+                enddo
+            enddo
+            t%temps = 1.
+            call set_fixed_seed(SEED_DRAW, propagate=.true.)
+            call t%open_assignment
+            call t%assign_batch(1, NP_NB)
+            call t%close_assignment
+            call pzs%setup_range(t%insert_tab, pinds, 1, NP_NB)
+            do ip = 1,NP_NB
+                ext(1:3,1,ip) = [real(t%assgn_map(ip)%istate), real(t%assgn_map(ip)%iproj), real(t%assgn_map(ip)%inpl)]
+                do kk = 1,pzs%nextra(ip)
+                    pz = t%insert_tab%get_extra(ip, kk)
+                    ext(:,kk+1,ip) = [real(pz%iref), real(pz%inpl), pz%x, pz%y, pz%w]
+                enddo
+            enddo
+            call pzs%kill
+            call t%kill
+        end subroutine assign_team
+
+        !> the entry's distance, a refined one lowered by 50
+        real function entry_dist( ri_loc, i_loc )
+            integer, intent(in) :: ri_loc, i_loc
+            entry_dist = rows(ri_loc,i_loc)%dist
+            if( refined(ri_loc,i_loc) ) entry_dist = entry_dist - 50.
+        end function entry_dist
+
+    end subroutine test_neigh_pooled_extras
 
     !> The draw from a row posterior (draw_posterior_row) with its variate given: against an independent
     !! cumulative-posterior oracle on hand-built rows (the mode's mass, ties at the minimum, an invalid entry,
@@ -521,13 +701,13 @@ contains
     !> the pipeline's batch assignment on synthetic dense tables (one state of 200 directions, three states of 200, two states of one
     !! direction; random distances with the tie cases: particle 1 flat, particle 2 tied at its minimum between a
     !! reference of state 2 and one of state 3, particle 3 between state 1 and state 3, particle 4 with invalid
-    !! distances only, particles 5 and 6 identical): with a huge
-    !! temperature every particle whose row minimum is unique takes it; the flat particle 1 takes a uniformly
-    !! drawn direction in state 1 (the state label is the lowest-index argmin's) and the invalid particle 4
-    !! takes reference 1; the state-2/state-3 and state-1/state-3 ties of particles 2 and 3 go to the lower
-    !! state, where their minimum is unique. At a temperature of 2 with distances in [0, 5] the draw leaves the
-    !! mode for a fraction of the particles, and the state is always the argmin's; the draw is seeded, so two
-    !! runs from the same seed agree and two seeds differ
+    !! distances only, particles 5 and 6 identical): with a huge temperature every particle whose row minimum is
+    !! unique takes it, the flat particle 1 a reference of the row and the invalid particle 4 reference 1; over 200
+    !! seeds the ties of particles 2 and 3 land on their two tied references only, each about half the time (the
+    !! deterministic tie rule is gone). At a temperature of 2 with distances in [0, 5] the draw leaves the mode for a
+    !! fraction of the particles and, with several states, the argmin's state for some; with one state it is the
+    !! previous rule's draw within the argmin's block, draw for draw (the same keyed variate), and with several it
+    !! is not. The draw is keyed, so two runs from the same seed agree and two seeds differ
     subroutine test_ref_assign_posterior()
         call check_posterior_assignment(nspace=200, nstates=1)
         call check_posterior_assignment(nspace=200, nstates=3)
@@ -541,7 +721,11 @@ contains
         type(eul_prob_tab) :: tab
         real,    allocatable :: dists(:,:)
         integer, allocatable :: pinds(:), iref_argmin(:), iref_run1(:), iref_run2(:), iref_run3(:)
-        integer :: nrefs, i, iref, nsame, nstate_ok, nmoved
+        integer, parameter   :: NTIE = 200
+        real,    allocatable :: w(:)
+        integer :: nrefs, i, iref, nsame, nstate_moved, nmoved, k, ntie2_a, ntie2_b, ntie3_a, ntie3_b, nold_same
+        integer :: ifirst, which, iref_old, i2a, i2b, i3a, i3b
+        real    :: d
         character(len=64) :: label
         write(label,'(A,I0,A,I0)') 'nspace ', nspace, ', nstates ', nstates
         nrefs = nspace * nstates
@@ -594,27 +778,68 @@ contains
             if( assigned_ref(tab, i, nspace) == iref_argmin(i) ) nsame = nsame + 1
         enddo
         call assert_int(NPTCLS_TAB - 1, nsame, 'a huge temperature assigns every particle with a unique minimum its row argmin ('//trim(label)//')')
-        call assert_int(1, tab%assgn_map(1)%istate, 'a flat particle takes the state of reference 1 ('//trim(label)//')')
+        call assert_true(tab%assgn_map(1)%istate >= 1 .and. tab%assgn_map(1)%istate <= nstates, &
+            &'a flat particle takes a state of the row ('//trim(label)//')')
         call assert_true(tab%assgn_map(1)%iproj >= 1 .and. tab%assgn_map(1)%iproj <= nspace, &
-            &'a flat particle takes a direction of its state ('//trim(label)//')')
+            &'a flat particle takes a direction of the row ('//trim(label)//')')
         call assert_int(1, tab%assgn_map(4)%istate, 'an invalid particle takes the state of reference 1 ('//trim(label)//')')
         call assert_int(1, tab%assgn_map(4)%iproj,  'an invalid particle takes reference 1 ('//trim(label)//')')
         if( nstates >= 3 )then
-            call assert_int(2, tab%assgn_map(2)%istate, 'a state 2 / state 3 tie goes to state 2 ('//trim(label)//')')
-            call assert_int(1, tab%assgn_map(3)%istate, 'a state 1 / state 3 tie goes to state 1 ('//trim(label)//')')
+            ! the ties across states, drawn uniformly over seeds
+            i2a = nspace + min(5,nspace)
+            i2b = 2*nspace + min(7,nspace)
+            i3a = min(10,nspace)
+            i3b = 2*nspace + 1
+            ntie2_a = 0; ntie2_b = 0; ntie3_a = 0; ntie3_b = 0
+            do k = 1,NTIE
+                call set_fixed_seed(SEED_DRAW + 100 + k, propagate=.true.)
+                call assign_rows_all
+                if( assigned_ref(tab, 2, nspace) == i2a ) ntie2_a = ntie2_a + 1
+                if( assigned_ref(tab, 2, nspace) == i2b ) ntie2_b = ntie2_b + 1
+                if( assigned_ref(tab, 3, nspace) == i3a ) ntie3_a = ntie3_a + 1
+                if( assigned_ref(tab, 3, nspace) == i3b ) ntie3_b = ntie3_b + 1
+            enddo
+            call assert_int(NTIE, ntie2_a + ntie2_b, 'a state 2 / state 3 tie lands on its tied references ('//trim(label)//')')
+            call assert_int(NTIE, ntie3_a + ntie3_b, 'a state 1 / state 3 tie lands on its tied references ('//trim(label)//')')
+            call assert_true(abs(real(ntie2_a)/real(NTIE) - 0.5) < 0.12, &
+                &'a state 2 / state 3 tie is drawn uniformly over seeds ('//trim(label)//')')
+            call assert_true(abs(real(ntie3_a)/real(NTIE) - 0.5) < 0.12, &
+                &'a state 1 / state 3 tie is drawn uniformly over seeds ('//trim(label)//')')
         endif
-        ! the particles' temperatures: a draw that leaves the mode for some, never the argmin's state
+        ! the particles' temperatures: a draw that leaves the mode for some and, with several states, the argmin's
+        ! state for some
         tab%temps = 2.
         call set_fixed_seed(SEED_DRAW, propagate=.true.)
         call assign_rows_all
-        nstate_ok = 0
-        nmoved    = 0
+        nstate_moved = 0
+        nmoved       = 0
         do i = 1,NPTCLS_TAB
             iref_run1(i) = assigned_ref(tab, i, nspace)
-            if( tab%assgn_map(i)%istate == (iref_argmin(i) - 1)/nspace + 1 ) nstate_ok = nstate_ok + 1
+            if( tab%assgn_map(i)%istate /= (iref_argmin(i) - 1)/nspace + 1 ) nstate_moved = nstate_moved + 1
             if( iref_run1(i) /= iref_argmin(i) ) nmoved = nmoved + 1
         enddo
-        call assert_int(NPTCLS_TAB, nstate_ok, 'the state is the argmin''s state under the draw ('//trim(label)//')')
+        if( nstates > 1 )then
+            call assert_true(nstate_moved > 0, 'at temperature 2 the draw leaves the argmin''s state for some ('//trim(label)//')')
+        else
+            call assert_int(0, nstate_moved, 'one state: every particle in it ('//trim(label)//')')
+        endif
+        ! the previous rule, the argmin's state and a draw within its block with the same keyed variate
+        allocate(w(nspace))
+        nold_same = 0
+        do i = 1,NPTCLS_TAB
+            ifirst = ((iref_argmin(i) - 1) / nspace) * nspace + 1
+            call draw_posterior_row(nspace, dists(ifirst:ifirst+nspace-1,i), params%prob_beta * tab%temps(i), w, &
+                &rnd_keyed(rnd_draw_key(tab%rnd_scope, pinds(i), RND_FAM_ASSIGN)), which, d)
+            iref_old = iref_argmin(i)
+            if( which > 0 ) iref_old = ifirst - 1 + which
+            if( iref_old == iref_run1(i) ) nold_same = nold_same + 1
+        enddo
+        deallocate(w)
+        if( nstates == 1 )then
+            call assert_int(NPTCLS_TAB, nold_same, 'one state: the draw is the previous rule''s, draw for draw ('//trim(label)//')')
+        else
+            call assert_true(nold_same < NPTCLS_TAB, 'several states: the draw is not the previous rule''s ('//trim(label)//')')
+        endif
         ! the tempering factor: temps 4 at prob_beta 0.5 is temps 2 at 1, draw for draw
         params%prob_beta = 0.5
         tab%temps = 4.
@@ -627,12 +852,8 @@ contains
         call assert_int(NPTCLS_TAB, nsame, 'prob_beta scales the temperature of the draw ('//trim(label)//')')
         params%prob_beta = 1.
         tab%temps = 2.
-        if( nspace > 1 )then
-            call assert_true(nmoved > 0, 'at temperature 2 on distances in [0,5] some particles leave the mode ('//trim(label)//')')
-            call assert_true(nmoved < NPTCLS_TAB, 'at temperature 2 some particles stay at the mode ('//trim(label)//')')
-        else
-            call assert_int(0, nmoved, 'with one direction per state nothing moves ('//trim(label)//')')
-        endif
+        call assert_true(nmoved > 0, 'at temperature 2 on distances in [0,5] some particles leave the mode ('//trim(label)//')')
+        call assert_true(nmoved < NPTCLS_TAB, 'at temperature 2 some particles stay at the mode ('//trim(label)//')')
         call set_fixed_seed(SEED_DRAW, propagate=.true.)
         call assign_rows_all
         do i = 1,NPTCLS_TAB
@@ -669,6 +890,114 @@ contains
         end subroutine assign_rows_all
 
     end subroutine check_posterior_assignment
+
+    !> The state marginal of the joint draw and its readout on a two-state batch of NJ identical rows (four
+    !! directions; state 1 holds the row minimum 0 and an entry at 1, state 2 three entries at 0.5; the rest far; the
+    !! first entry of each block refined), at temperature 1: every particle's keyed draw is its own, so the
+    !! frequency of state 1 estimates its marginal p1 = (1 + e^-1) / (1 + e^-1 + 3 e^-1/2) = 0.4291 (the argmin
+    !! rule would give state 1 always): within 0.04 (3.6 binomial standard deviations). The state readout over the
+    !! n_eff subsample: the state n_eff is exp(entropy) of (p1, 1 - p1) at the draw's factor and at 1 (prob_beta
+    !! 1), the mean largest posterior 1 - p1, the mode fraction the frequency of state 1, the unrefined shares
+    !! e^-1 / (1 + e^-1) and 2/3. The same rows over two parts (each its own table and share, the global rank
+    !! offset) give records whose sum is the whole's, and a record round-trips its file
+    subroutine test_joint_state_draw()
+        integer, parameter :: NJ = 2000, NSP = 4
+        class(parameters), allocatable, target :: params
+        class(builder),    allocatable, target :: build
+        type(eul_prob_tab) :: tab, tab_a, tab_b
+        type(prob_readout) :: rec_all, rec_a, rec_b, rec_sum, rec_read
+        type(string)       :: fname
+        real    :: dists(2*NSP), p1, h, n1
+        integer :: i, ri
+        integer, allocatable :: pinds(:)
+        allocate(params, build)
+        params%nspace      = NSP
+        params%nstates     = 2
+        params%prob_athres = 10.
+        params%l_doshift   = .false.
+        params%prob_beta   = 1.
+        params%which_iter  = 1
+        allocate(build%spproj_field)
+        call build%spproj_field%new(NJ, is_ptcl=.true.)
+        do i = 1,NJ
+            call build%spproj_field%set_state(i, mod(i-1, 2) + 1)
+        enddo
+        dists = [0., 1., 60., 60., 0.5, 0.5, 0.5, 60.]
+        p1 = (1. + exp(-1.)) / (1. + exp(-1.) + 3. * exp(-0.5))
+        h  = -(p1 * log(p1) + (1. - p1) * log(1. - p1))
+        pinds = [(i, i=1,NJ)]
+        call set_fixed_seed(SEED_DRAW, propagate=.true.)
+        call tab%new_pipeline(params, build, pinds)
+        call assign_part(tab, 1, NJ, 0)
+        n1 = real(count(tab%assgn_map(:)%istate == 1))
+        call assert_true(abs(n1 / real(NJ) - p1) < 0.04, 'the joint draw: the frequency of a state is its marginal')
+        rec_all = tab%get_readout()
+        call assert_int(2, rec_all%states%nstates, 'the state readout: two states')
+        call assert_int(NJ, rec_all%states%ndraws, 'the state readout: every draw counted')
+        call assert_int(1000, rec_all%states%nrows, 'the state readout: the n_eff subsample''s rows')
+        call assert_real(exp(h), rec_all%states%neff_draw(), 1.e-4, 'the state readout: the state n_eff at the draw''s factor')
+        call assert_real(exp(h), rec_all%states%neff_phys(), 1.e-4, 'the state readout: the state n_eff at factor 1')
+        call assert_real(1. - p1, real(rec_all%states%sum_maxp / real(rec_all%states%nrows,dp)), 1.e-4, &
+            &'the state readout: the mean largest state posterior')
+        call assert_real(n1 / real(NJ), rec_all%states%mode_frac(), 1.e-6, 'the state readout: the mode fraction')
+        call assert_real(exp(-1.) / (1. + exp(-1.)), rec_all%states%unref_share(1), 1.e-4, &
+            &'the state readout: state 1''s unrefined share')
+        call assert_real(2./3., rec_all%states%unref_share(2), 1.e-4, 'the state readout: state 2''s unrefined share')
+        ! two parts: the records add up to the whole's
+        call tab_a%new_pipeline(params, build, pinds(1:NJ/2))
+        call assign_part(tab_a, 1, NJ/2, 0)
+        call tab_b%new_pipeline(params, build, pinds(NJ/2+1:NJ))
+        call assign_part(tab_b, NJ/2+1, NJ, NJ/2)
+        rec_a = tab_a%get_readout()
+        rec_b = tab_b%get_readout()
+        call add_prob_readout(rec_sum, rec_a)
+        call add_prob_readout(rec_sum, rec_b)
+        call assert_int(rec_all%states%nrows,  rec_sum%states%nrows,  'two parts: the rows of the whole')
+        call assert_int(rec_all%states%nmode,  rec_sum%states%nmode,  'two parts: the mode draws of the whole')
+        call assert_true(abs(rec_sum%states%sum_neff_draw - rec_all%states%sum_neff_draw) <= 1.d-9 * rec_all%states%sum_neff_draw, &
+            &'two parts: the n_eff sum of the whole')
+        call assert_true(all(rec_sum%states%unref_n == rec_all%states%unref_n), 'two parts: the share counts of the whole')
+        ! the record's file
+        fname = 'test_prob_readout_states.txt'
+        call write_prob_readout(rec_all, fname)
+        call read_prob_readout(rec_read, fname)
+        call del_file(fname)
+        call assert_int(rec_all%states%nstates, rec_read%states%nstates, 'the record: the states read back')
+        call assert_int(rec_all%states%nrows,   rec_read%states%nrows,   'the record: the rows read back')
+        call assert_true(rec_read%states%sum_neff_draw == rec_all%states%sum_neff_draw, 'the record: the n_eff sum read back')
+        call assert_true(all(rec_read%states%unref_sum == rec_all%states%unref_sum), 'the record: the shares read back')
+        call tab%kill
+        call tab_a%kill
+        call tab_b%kill
+        call build%spproj_field%kill
+        deallocate(build%spproj_field)
+        deallocate(params, build)
+
+    contains
+
+        !> particles i1..i2 of the identical rows as one batch of the table t (the table's particles 1..), the first
+        !! entry of each block refined; rank0 the global rank before the share
+        subroutine assign_part( t, i1, i2, rank0 )
+            type(eul_prob_tab), intent(inout) :: t
+            integer,            intent(in)    :: i1, i2, rank0
+            integer :: n, ii
+            n = i2 - i1 + 1
+            allocate(t%batch_rows(2*NSP,n), t%batch_refined(2,n), t%batch_nrefined(n))
+            do ii = 1,n
+                do ri = 1,2*NSP
+                    t%batch_rows(ri,ii) = prob_dense_entry(dists(ri), 0)
+                enddo
+                t%batch_refined(1,ii) = prob_refined_entry(ii, 1,     0., 0., dists(1),     -1.)
+                t%batch_refined(2,ii) = prob_refined_entry(ii, NSP+1, 0., 0., dists(NSP+1), -1.)
+            enddo
+            t%batch_nrefined = 2
+            t%temps = 1.
+            call t%open_assignment(nglob=NJ, rank0=rank0)
+            call t%assign_batch(1, n)
+            call t%close_assignment
+        end subroutine assign_part
+
+    end subroutine test_joint_state_draw
 
     !> the reference index (state block, direction) a particle was assigned
     integer function assigned_ref( tab, i, nspace ) result( iref )
@@ -721,7 +1050,8 @@ contains
     !! order, a tenth of the entries refined, their distances lowered by 50 so that the committed draw lands on a
     !! refined entry, the condition for extras): every extra lies in the committed state's block, is a refined entry
     !! and is not the committed reference; a particle's weights sum to 1, its extras come in descending weight and
-    !! none is below PROB_INSERT_WMIN; extras do occur at a hot temperature; a second assignment gives the same
+    !! none is below PROB_INSERT_WMIN; extras do occur at a hot temperature, some particles draw a state other than
+    !! their row argmin's and their extras still come from the drawn state; a second assignment gives the same
     !! extras (the selection is deterministic); topk = 1 records no extra and weight 1 everywhere
     subroutine test_insert_extras_multistate()
         integer, parameter :: NSPACE_MS = 50, NSTATES_MS = 2, NPTCLS_MS = 40
@@ -734,9 +1064,9 @@ contains
         type(prob_dense_entry), allocatable :: rows(:,:)
         real,                   allocatable :: shifts(:,:,:), seeds(:,:)
         logical,                allocatable :: refined(:,:)
-        integer,                allocatable :: pinds(:), nextra_first(:)
+        integer,                allocatable :: pinds(:), nextra_first(:), argmin_state(:)
         integer :: i, k, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed
-        integer :: istate, nwrong_order, nwrong_again, nptcls, npose, ncapped, kmax
+        integer :: istate, nwrong_order, nwrong_again, nptcls, npose, ncapped, kmax, nnot_argmin, nextra_not_argmin
         integer(int64) :: nelig
         real(dp)       :: wc_sum
         real    :: wsum
@@ -772,13 +1102,17 @@ contains
         call set_fixed_seed(SEED_DRAW, propagate=.true.)
         call assign_master
         nextra_tot = 0; nwrong_state = 0; nwrong_refined = 0; nwrong_committed = 0; nwrong_weight = 0; nwrong_dup = 0
-        nwrong_order = 0
+        nwrong_order = 0; nnot_argmin = 0; nextra_not_argmin = 0
         allocate(nextra_first(NPTCLS_MS), source=0)
         do i = 1,NPTCLS_MS
             istate          = master%assgn_map(i)%istate
             iref_committed  = (istate - 1) * NSPACE_MS + master%assgn_map(i)%iproj
             wsum            = poses%wc(i)
             nextra_first(i) = poses%nextra(i)
+            if( istate /= argmin_state(i) )then
+                nnot_argmin       = nnot_argmin + 1
+                nextra_not_argmin = nextra_not_argmin + poses%nextra(i)
+            endif
             do k = 1,poses%nextra(i)
                 pose       = master%insert_tab%get_extra(i, k)
                 nextra_tot = nextra_tot + 1
@@ -797,6 +1131,8 @@ contains
             if( poses%nextra(i) > 2 ) nwrong_weight = nwrong_weight + 1
         enddo
         call assert_true(nextra_tot > 0, 'multi-state extras: hot rows give extra poses')
+        call assert_true(nnot_argmin > 0, 'multi-state extras: some particles draw a state other than their argmin''s')
+        call assert_true(nextra_not_argmin > 0, 'multi-state extras: such particles have extras (from the drawn state)')
         call assert_int(0, nwrong_state,     'multi-state extras: every extra is in the committed state''s block')
         call assert_int(0, nwrong_refined,   'multi-state extras: every extra is a refined entry')
         call assert_int(0, nwrong_committed, 'multi-state extras: no extra is the committed reference')
@@ -831,16 +1167,17 @@ contains
         deallocate(build%spproj_field)
         call build%eulspace%kill
         call build%pgrpsyms%kill
-        deallocate(params, build, rows, shifts, refined, seeds, pinds)
+        deallocate(params, build, rows, shifts, refined, seeds, pinds, argmin_state)
 
     contains
 
         !> the batch of every row from the synthetic rows (in the table's particle order), the refined entries with
-        !! their shifts and their distances lowered by 50, the seeds; assigned
+        !! their shifts and their distances lowered by 50, the seeds; each row's argmin state recorded; assigned
         subroutine assign_master
             integer :: ii, ri, n, nrefs
             nrefs = NSPACE_MS * NSTATES_MS
             allocate(master%batch_rows(nrefs,NPTCLS_MS), master%batch_refined(nrefs,NPTCLS_MS), master%batch_nrefined(NPTCLS_MS))
+            if( .not. allocated(argmin_state) ) allocate(argmin_state(NPTCLS_MS))
             master%batch_nrefined = 0
             do ii = 1,NPTCLS_MS
                 n = 0
@@ -855,6 +1192,7 @@ contains
                 master%batch_nrefined(ii)  = n
                 master%seed_shifts(:,ii)   = seeds(:,pinds(ii))
                 master%seed_has_sh(ii)     = .true.
+                argmin_state(ii) = (minloc(master%batch_rows(:,ii)%dist, dim=1) - 1) / NSPACE_MS + 1
             enddo
             call master%open_assignment
             call master%assign_batch(1, NPTCLS_MS)

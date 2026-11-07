@@ -1,7 +1,7 @@
-!@descr: the multi-state workflow tests of simple_commanders_test_highlevel: solve3D and refine3D_states on beta-galactosidase states against their known labels
-! Three workflows on the compositional beta-galactosidase states of the state fixture (the tetramer,
-! the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %), each judged against the
-! truth with the metrics of the multi-state assignment test:
+!@descr: the multi-state workflow tests of simple_commanders_test_highlevel: solve3D, refine3D and refine3D_states on beta-galactosidase states against their known labels
+! The multi-state workflows on the compositional beta-galactosidase states of the state fixture (the
+! tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %), each judged
+! against the truth with the metrics of the multi-state assignment test:
 !   cavgs   solve3D_cavgs nstates=3 on simulated images of the states imported as its class
 !           averages (import_cavgs; rulings of 2026-10-17 and 2026-10-18): 600 images of known state,
 !           view and shift, populations 50, 30 and 20 %, without CTF, each the average of an even and
@@ -13,7 +13,16 @@
 !           one prob_neigh march refines them;
 !   consensus  the route used on real data (ruling of 2026-10-18): single-state solve3D in C1 from
 !           the particles, then refine3D_states nstates=3 on its solution, flex_pca initializing the
-!           states from it.
+!           states from it;
+!   labels  the state assignment alone (plan of 2026-11-04, multistate_posterior_state_draw.md): the
+!           true poses, labels drawn at random with balanced populations (the uniform labelling of
+!           refine3D's fresh multi-state start), the starting maps reconstructed from them, then one
+!           refine3D refine=prob block (nstates=3, 2 in hard_labels) at a fixed band, direction
+!           count and budget whose last iterations anneal to the physical posterior
+!           (prob_beta_end=1) as solve3D's last stage does. The labels of every iteration are scored
+!           against the truth and printed (LABELS PER ITERATION); whether every true state is
+!           resolved is a success (a random start may drain a state: see the floors below), the
+!           labels, the population error and the poses are held to the floors of its profile.
 ! The maps of a de novo run have their own frame and hand, so every estimated map is docked in both
 ! hands onto every truth: the docked correlations give the map mapping, the docking onto its mapped
 ! truth the frame in which maps, poses (up to the truth's declared point group) and shifts are
@@ -22,10 +31,11 @@
 ! the states and consensus routes; in the de novo multi-state routes (shc, cavgs) it is decided by the
 ! early stages, which take the best-scoring state outright from random labels, and a single run may
 ! miss it (ruling of 2026-10-18): there it is a success, which test=profile holds to the fraction of
-! 20 seeds below, and the labels are reported. The default (the CTest entry) runs the four routes;
+! 20 seeds below, and the labels are reported. The default (the CTest entry) runs the five routes;
 ! suite=<route> runs one, suite=<route>_identical a route on identical states, suite=hard_<route>
 ! on the conformational states (a chain rotated by 10 degrees, low SNR, a small second state), a
-! robustness profile.
+! robustness profile. labels_identical reports the populations and the mutual correlations of the
+! maps (nothing to recover); every labels variant reports them.
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_msworkflows
 use simple_test_gate,          only: test_gate
 use simple_test_state_fixture, only: state_fixture, FIX_SEARCH, FIX_KNOWN
@@ -126,9 +136,36 @@ real,    parameter :: SHC_RESOLVED_FLOOR = 0.30, CAVGS_RESOLVED_FLOOR = 0.10
 ! The maintainer's Mac has not profiled this route yet.
 real,    parameter :: CONSENSUS_LABEL_FLOORS(5) = [0.40, 0.70, -1., 0.30, -1.]
 real,    parameter :: CONSENSUS_MAX_ROT_ERR = 2.5, CONSENSUS_MAX_SH_ERR = 0.15
-character(len=*), parameter :: SUITES = 'cavgs, shc, states, consensus, cavgs_identical, shc_identical, '//&
-    &'states_identical, consensus_identical, hard_cavgs, hard_shc, hard_states, hard_consensus, cavgs_single, '//&
-    &'cavgs_as_particles'
+! The label-recovery route (labels): one refine3D refine=prob block from the true poses and random
+! balanced labels, at a fixed band and direction count (the direction count of solve3D's stages 3-4)
+! and an iteration budget that leaves the annealing tail (PROB_BETA_TAIL iterations) its room after a
+! flat search at prob_beta; the update fraction and balance of solve3D's multi-state prob stages
+! without a 2D solution. Chosen so that the route takes about five minutes at eight threads (2026-11-04).
+! Its floors, by the floor rule, from the profile of the finished state draw of 2026-11-05 (dell2,
+! scratch/profiles/labels_p3 of the run ms_posterior2, 20 seed offsets at 8 threads): every true state
+! resolved in 13 of 20 runs (shuffled labels 0 of 20), so 13 - 3 x 2.13 = 6.6, floor 6 (0.30); the
+! other 7 drained an estimated state in the flat iterations, merging two true states, as the argmin
+! state rule of the code before the draw does at the three of those seeds checked (a drained state's
+! reseeding is out of scope: plan multistate_posterior_state_draw.md, section 6). As median, s, worst
+! and the floor rule's bound: adjusted Rand index 0.9966, 0.0050, 0.744, to 0.739 (shuffled 0.00, +3s
+! 0.004): floor 0.70; accuracy 0.999, 0.0015, 0.793, to 0.792 (collapsed predictor 0.50, the null's
+! 99.9th percentile 0.40): floor 0.75; largest population error 0.001, 0.0015, 0.200, from 0.2015 (the collapsed
+! predictor's 0.50): ceiling 0.30; the smallest recall (worst 0) and the discrimination margin (worst
+! -2, a missing map) are reported, the map differences' sign checked (above 0.50 in every run with
+! every map); median rotation error 1.763 deg, 0.039, 1.837, from 1.879 (random poses about 90):
+! ceiling 2.0; median shift error 0.0574 px, 0.0033, 0.0612, from 0.0674 (zero shifts about 2 px):
+! ceiling 0.10
+integer, parameter :: LABELS_NSPACE      = 1000
+real,    parameter :: LABELS_LP          = 8.   !< A
+integer, parameter :: LABELS_MAXITS      = 10
+real,    parameter :: LABELS_UPDATE_FRAC = 0.9
+real,    parameter :: LABELS_RESOLVED_FLOOR = 0.30
+real,    parameter :: LABELS_LABEL_FLOORS(5) = [0.70, 0.75, -1., 0.30, -1.]
+real,    parameter :: LABELS_MAX_ROT_ERR = 2.0, LABELS_MAX_SH_ERR = 0.10
+character(len=*), parameter :: LABELS_START = 'states_start.txt' !< the drawn labels, as refine3D prints its iterations'
+character(len=*), parameter :: SUITES = 'labels, cavgs, shc, states, consensus, labels_identical, '//&
+    &'cavgs_identical, shc_identical, states_identical, consensus_identical, hard_labels, hard_cavgs, hard_shc, '//&
+    &'hard_states, hard_consensus, cavgs_single, cavgs_as_particles'
 !> suite=cavgs_single (by hand): the single-state class-average start, solve3D_cavgs nstates=1 on the
 !! class averages of the tetramer alone, its poses and map reported; prob_athres= passed to the test is
 !! passed on (prob_athres=90 is the default before the ruling of 2026-10-18, 10 after it).
@@ -158,9 +195,9 @@ module subroutine exec_test_multistate_workflows( self, cline )
         case('list')
             write(logfhandle,'(a)') 'Available suites for multistate_workflows: '//SUITES
             return
-        case('', 'cavgs', 'shc', 'states', 'consensus', 'cavgs_identical', 'shc_identical', 'states_identical', &
-            &'consensus_identical', 'hard_cavgs', 'hard_shc', 'hard_states', 'hard_consensus', 'cavgs_single', &
-            &'cavgs_as_particles')
+        case('', 'labels', 'cavgs', 'shc', 'states', 'consensus', 'labels_identical', 'cavgs_identical', &
+            &'shc_identical', 'states_identical', 'consensus_identical', 'hard_labels', 'hard_cavgs', 'hard_shc', &
+            &'hard_states', 'hard_consensus', 'cavgs_single', 'cavgs_as_particles')
         case default
             THROW_HARD('no sub-suite '//suite//' in multistate_workflows; use suite=list')
     end select
@@ -177,15 +214,16 @@ module subroutine exec_test_multistate_workflows( self, cline )
     call simple_mkdir(root)
     select case(suite)
         case('')
+            call run_case(root, 'labels', 'labels', 'compositional', nthr, gate)
             call run_case(root, 'cavgs',  'cavgs',  'compositional', nthr, gate)
             call run_case(root, 'shc',    'shc',    'compositional', nthr, gate)
             call run_case(root, 'states', 'states', 'compositional', nthr, gate)
             call run_case(root, 'consensus', 'consensus', 'compositional', nthr, gate)
-        case('cavgs', 'shc', 'states', 'consensus')
+        case('labels', 'cavgs', 'shc', 'states', 'consensus')
             call run_case(root, suite, suite, 'compositional', nthr, gate)
-        case('cavgs_identical', 'shc_identical', 'states_identical', 'consensus_identical')
+        case('labels_identical', 'cavgs_identical', 'shc_identical', 'states_identical', 'consensus_identical')
             call run_case(root, suite, suite(1:index(suite, '_') - 1), 'identical', nthr, gate)
-        case('hard_cavgs', 'hard_shc', 'hard_states', 'hard_consensus')
+        case('hard_labels', 'hard_cavgs', 'hard_shc', 'hard_states', 'hard_consensus')
             call run_case(root, suite, suite(6:), 'conformational', nthr, gate)
         case('cavgs_single')
             call run_case(root, suite, 'cavgs', 'identical', nthr, gate)
@@ -206,8 +244,8 @@ module subroutine exec_test_multistate_workflows( self, cline )
     endif
 end subroutine exec_test_multistate_workflows
 
-!> one workflow (route cavgs, shc, states or consensus) in root/<tag> on the betagal states of kind, and its
-!! metrics, named after tag
+!> one workflow (route labels, cavgs, shc, states or consensus) in root/<tag> on the betagal states of kind,
+!! and its metrics, named after tag
 subroutine run_case( root, tag, route, kind, nthr, gate )
     use simple_bench_io, only: bench_report_fname
     class(string),    intent(in)    :: root
@@ -226,7 +264,7 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
     call simple_chdir(dir, status)
     if( status /= 0 ) THROW_HARD('could not enter '//dir%to_char())
     CWD_GLOB = dir%to_char()
-    ! the dataset, from the cache when it is there; the states route starts from the true poses
+    ! the dataset, from the cache when it is there; the states and labels routes start from the true poses
     if( kind == 'conformational' )then
         nst_fix = HARD_NSTATES
         pops_fix(1:HARD_NSTATES) = HARD_POPS
@@ -241,12 +279,26 @@ subroutine run_case( root, tag, route, kind, nthr, gate )
         pops_fix(1:NSTATES) = POPS
         snr_fix = SNR
     endif
-    call fix%new('betagal', merge(FIX_KNOWN, FIX_SEARCH, route == 'states'), nst_fix, NPTCLS, snr_fix, nthr, &
-        &kind=kind, pops=pops_fix(1:nst_fix))
+    call fix%new('betagal', merge(FIX_KNOWN, FIX_SEARCH, route == 'states' .or. route == 'labels'), nst_fix, NPTCLS, &
+        &snr_fix, nthr, kind=kind, pops=pops_fix(1:nst_fix))
     ! the states the programs are asked for: refine3D_states takes a ceiling of at least three
     nstates_run = fix%nstates
     if( route == 'states' .or. route == 'consensus' ) nstates_run = max(3, fix%nstates)
     select case(route)
+        case('labels')
+            call fix%build
+            projfile = fix%project_fname()
+            call run_labels_route(fix, projfile, nstates_run, nthr)
+            ! one prob block over LABELS_NSPACE directions, every iteration with every state
+            call check_path(tag, ['prob      '], [LABELS_NSPACE], nstates_run, gate)
+            call report_label_trajectory(fix, tag, gate)
+            ! the labels start at random, so whether every true state is resolved is a success; the labels and
+            ! the poses held to the profile's floors on the compositional states, reported on the others
+            call evaluate(fix, projfile, tag, l_control, gate, gated=kind == 'compositional', &
+                &max_rot_err=LABELS_MAX_ROT_ERR, max_sh_err=LABELS_MAX_SH_ERR, labels_gated=kind == 'compositional', &
+                &label_floors=LABELS_LABEL_FLOORS, de_novo=.true., &
+                &resolved_floor=merge(LABELS_RESOLVED_FLOOR, 0., kind == 'compositional'))
+            call report_label_maps(fix, projfile, tag, nstates_run, gate)
         case('cavgs')
             ! the truth maps of the fixture; the images are simulated here
             call fix%build
@@ -560,6 +612,216 @@ subroutine run_refine3D_states( fix, projfile, nstates_run, nthr )
     deallocate(xstates, cl)
 end subroutine run_refine3D_states
 
+!> The label-recovery route on the true poses: the uniform labelling of refine3D's fresh multi-state
+!! start drawn here (the shared-memory refine3D draws it only together with given maps, which must be
+!! the labels' own), the starting maps reconstructed from it and named as the distributed master's
+!! fresh start names its own, then refine3D refine=prob nstates=nstates_run with the annealing tail;
+!! its final maps copied to the names evaluate reads (rec_final_stateNN.mrc)
+subroutine run_labels_route( fix, projfile, nstates_run, nthr )
+    use simple_commanders_rec,      only: commander_rec3D
+    use simple_commanders_refine3D, only: commander_refine3D
+    use simple_refine3D_fnames,     only: refine3D_state_vol_fname, refine3D_state_halfvol_fname, &
+        &refine3D_startvol_fname, refine3D_startvol_half_fname
+    use simple_sp_project,          only: sp_project
+    use simple_cluster_seed,        only: gen_labelling
+    use simple_halfmap_diagnostics, only: rename_support_provenance
+    use simple_test_utils,          only: set_fixed_seed
+    class(state_fixture), intent(in) :: fix
+    class(string),        intent(in) :: projfile
+    integer,              intent(in) :: nstates_run, nthr
+    class(commander_rec3D),    allocatable :: xrec
+    class(commander_refine3D), allocatable :: xrefine
+    class(cmdline),            allocatable :: cl
+    class(sp_project),         allocatable :: proj
+    character(len=*), parameter :: HALVES(2) = ['even', 'odd ']
+    integer :: s, h, funit, iptcl
+    ! balanced random labels over every particle (all in state 1 in the fixture's project)
+    allocate(proj)
+    call proj%read(projfile)
+    call set_fixed_seed(fix%seed + 2, propagate=.true.)
+    call gen_labelling(proj%os_ptcl3D, nstates_run, 'uniform')
+    call proj%write(projfile)
+    call fopen(funit, file=string(LABELS_START), status='replace', action='write')
+    write(funit,'(a)') '# pind state updatecnt'
+    do iptcl = 1, proj%os_ptcl3D%get_noris()
+        write(funit,'(i0,1x,i0,1x,i0)') iptcl, proj%os_ptcl3D%get_state(iptcl), 0
+    enddo
+    call fclose(funit)
+    call proj%kill
+    deallocate(proj)
+    ! the starting maps of the drawn labels
+    allocate(xrec, cl)
+    call cl%set('prg',      'reconstruct3D')
+    call cl%set('projfile', projfile)
+    call cl%set('mkdir',    'no')
+    call cl%set('oritype',  'ptcl3D')
+    call cl%set('nstates',  nstates_run)
+    call cl%set('pgrp',     'c1')
+    call cl%set('mskdiam',  fix%mskdiam())
+    call cl%set('objfun',   'cc')
+    call cl%set('nthr',     nthr)
+    call xrec%execute(cl)
+    call cl%kill
+    deallocate(xrec)
+    do s = 1, nstates_run
+        if( .not. file_exists(refine3D_state_vol_fname(s)) ) THROW_HARD('a starting map of the drawn labels is missing')
+        call simple_rename(refine3D_state_vol_fname(s), refine3D_startvol_fname(s))
+        call rename_support_provenance(refine3D_state_vol_fname(s), refine3D_startvol_fname(s))
+        do h = 1, 2
+            call simple_copy_file(refine3D_state_halfvol_fname(s, trim(HALVES(h))), &
+                &refine3D_startvol_half_fname(s, trim(HALVES(h)), unfil=.true.))
+            call simple_rename(refine3D_state_halfvol_fname(s, trim(HALVES(h))), &
+                &refine3D_startvol_half_fname(s, trim(HALVES(h))))
+        enddo
+    enddo
+    ! the state assignment on the true poses, as in solve3D's multi-state prob stages without a 2D solution
+    allocate(xrefine)
+    call cl%set('prg',          'refine3D')
+    call cl%set('projfile',     projfile)
+    call cl%set('mkdir',        'no')
+    call cl%set('refine',       'prob')
+    call cl%set('nstates',      nstates_run)
+    do s = 1, nstates_run
+        call cl%set('vol'//int2str(s), refine3D_startvol_fname(s))
+    enddo
+    call cl%set('pgrp',         'c1')
+    call cl%set('mskdiam',      fix%mskdiam())
+    call cl%set('lp',           LABELS_LP)
+    call cl%set('nspace',       LABELS_NSPACE)
+    call cl%set('update_frac',  LABELS_UPDATE_FRAC)
+    call cl%set('balance',      'none')
+    call cl%set('maxits',       LABELS_MAXITS)
+    call cl%set('objfun',       'euclid')
+    call cl%set('ml_reg',       'yes')
+    call cl%set('prob_beta_end', 1.)
+    call cl%set('center',       'no')
+    call cl%set('bfac',         0.)
+    call cl%set('print_states', 'yes')
+    call cl%set('iterstats',    'yes')
+    call cl%set('nthr',         nthr)
+    call xrefine%execute(cl)
+    call cl%kill
+    deallocate(xrefine, cl)
+    do s = 1, nstates_run
+        if( file_exists(refine3D_state_vol_fname(s)) ) call simple_copy_file(refine3D_state_vol_fname(s), &
+            &string('rec_final_state'//int2str_pad(s, 2)//'.mrc'))
+    enddo
+end subroutine run_labels_route
+
+!> The labels of every iteration of the labels route against the truth (the drawn start, then
+!! refine3D's states_iter<NNN>.txt): accuracy under the best matching, adjusted Rand index, the
+!! smallest per-state recall, the state readout of the iteration's draw (its statistics row: state
+!! n_eff at prob_beta and at 1, the fraction at the state mode; -1 without one) and the populations,
+!! printed as a table; the number of iterations run is reported
+subroutine report_label_trajectory( fix, tag, gate )
+    use simple_test_truth_metrics, only: match_states, mapped_accuracy, adjusted_rand_index, state_recalls
+    use simple_oris,               only: oris
+    class(state_fixture), intent(in)    :: fix
+    character(len=*),     intent(in)    :: tag
+    type(test_gate),      intent(inout) :: gate
+    type(oris)   :: truth, itstats
+    type(string) :: fname
+    integer, allocatable :: tstates(:), estates(:), map(:)
+    character(len=256) :: line
+    character(len=16)  :: buf
+    integer :: iter, funit, ios, ipind, iupd, nest, e, nrows, nits, k
+    real    :: acc, ari, recall, rd(3)
+    call truth%new(fix%nptcls, is_ptcl=.true.)
+    call truth%read(fix%truth_doc(), [1, fix%nptcls])
+    tstates = nint(truth%get_all('state'))
+    call truth%kill
+    allocate(estates(fix%nptcls))
+    ! refine3D's statistics row of every iteration (iterstats=yes)
+    nits = 0
+    if( file_exists(ITERSTATS_FILE) )then
+        nits = nlines(string(ITERSTATS_FILE))
+        call itstats%new(nits, is_ptcl=.false.)
+        call itstats%read(string(ITERSTATS_FILE))
+    endif
+    write(logfhandle,'(a)') 'LABELS PER ITERATION '//tag//' (iteration, accuracy, adjusted Rand index, '//&
+        &'smallest recall, state n_eff at prob_beta, at 1, fraction at the state mode, populations)'
+    iter = 0
+    do
+        if( iter == 0 )then
+            fname = LABELS_START
+        else
+            fname = 'states_iter'//int2str_pad(iter, 3)//'.txt'
+        endif
+        if( .not. file_exists(fname) ) exit
+        estates = 0
+        nrows   = 0
+        call fopen(funit, file=fname, status='old', action='read')
+        do
+            read(funit, '(a)', iostat=ios) line
+            if( ios /= 0 ) exit
+            if( index(adjustl(line), '#') == 1 ) cycle
+            nrows = nrows + 1
+            if( nrows > fix%nptcls ) exit
+            read(line, *) ipind, estates(nrows), iupd
+        enddo
+        call fclose(funit)
+        if( nrows /= fix%nptcls ) THROW_HARD('a label file does not hold one row per particle: '//fname%to_char())
+        nest   = max(1, maxval(estates))
+        map    = match_states(tstates, estates, fix%nstates, nest)
+        acc    = mapped_accuracy(tstates, estates, map)
+        ari    = adjusted_rand_index(tstates, estates)
+        recall = minval(state_recalls(tstates, estates, map, fix%nstates))
+        line = ''
+        do e = 1, nest
+            write(buf,'(i6)') count(estates == e)
+            line = trim(line)//trim(buf)
+        enddo
+        rd = -1.
+        do k = 1, nits
+            if( nint(itstats%get(k, 'ITERATION')) /= iter ) cycle
+            if( .not. itstats%isthere(k, 'STATE_NEFF_DRAW') ) cycle
+            rd = [itstats%get(k, 'STATE_NEFF_DRAW'), itstats%get(k, 'STATE_NEFF_PHYS'), itstats%get(k, 'STATE_MODE_FRAC')]
+        enddo
+        write(logfhandle,'(i6,6f9.4,a)') iter, acc, ari, recall, rd, trim(line)
+        iter = iter + 1
+    enddo
+    call gate%report(tag//'_iterations', real(iter - 1))
+    call itstats%kill
+    call fname%kill
+end subroutine report_label_trajectory
+
+!> The populations of the estimated states (fractions of the particles) and the mutual real-space
+!! correlations of their final maps (the poses are the truth's, so the maps share its frame)
+subroutine report_label_maps( fix, projfile, tag, nstates_run, gate )
+    use simple_sp_project,         only: sp_project
+    use simple_test_truth_metrics, only: compare_to_truth
+    class(state_fixture), intent(in)    :: fix
+    class(string),        intent(in)    :: projfile
+    character(len=*),     intent(in)    :: tag
+    integer,              intent(in)    :: nstates_run
+    type(test_gate),      intent(inout) :: gate
+    class(sp_project), allocatable :: proj
+    integer, allocatable :: estates(:)
+    type(string) :: fi, fj
+    real    :: corr, fsc05, fsc0143
+    integer :: i, j
+    allocate(proj)
+    call proj%read_segment('ptcl3D', projfile)
+    estates = nint(proj%os_ptcl3D%get_all('state'))
+    call proj%kill
+    deallocate(proj)
+    do i = 1, nstates_run
+        call gate%report(tag//'_population_state'//int2str(i), real(count(estates == i)) / real(size(estates)))
+    enddo
+    do i = 1, nstates_run - 1
+        fi = 'rec_final_state'//int2str_pad(i, 2)//'.mrc'
+        if( .not. file_exists(fi) ) cycle
+        do j = i + 1, nstates_run
+            fj = 'rec_final_state'//int2str_pad(j, 2)//'.mrc'
+            if( .not. file_exists(fj) ) cycle
+            call compare_to_truth(fi, fj, fix%mskdiam(), corr, fsc05, fsc0143)
+            call gate%report(tag//'_map_mutual_corr_s'//int2str(i)//'_s'//int2str(j), corr)
+        enddo
+    enddo
+    call fi%kill
+    call fj%kill
+end subroutine report_label_maps
+
 !> The path the refinements took, from the refine3D strategy's record of every iteration (refine
 !! mode, directions, states): the blocks of consecutive iterations with one mode and one number of
 !! directions must contain the expected ones in order; every iteration runs nstates_exp states
@@ -656,8 +918,9 @@ subroutine evaluate( fix, projfile, tag, l_control, gate, gated, images_truth, n
     logical,          optional, intent(in) :: images_are_particles !< the judged images are the particle segment
     real,             optional, intent(in) :: max_rot_err, max_sh_err !< the ceilings when gated (the shc route's by default)
     logical,          optional, intent(in) :: labels_gated !< the labels and the discrimination held to the states route's floors
-    !> a de novo route: whether every true state is resolved is a success, held by test=profile to the
-    !! fraction resolved_floor of its runs, not a check of the run
+    !> a route whose labels start at random (the de novo routes and labels): whether every true state is
+    !! resolved is a success, held by test=profile to the fraction resolved_floor of its runs, not a
+    !! check of the run
     logical,          optional, intent(in) :: de_novo
     real,             optional, intent(in) :: resolved_floor
     !> the floors of gated labels: adjusted Rand index, accuracy, smallest recall (negative: reported),

@@ -83,7 +83,9 @@ Stage policy includes:
 - the tempering of the draws is not a user input: every stage searches at
   `prob_beta` (the parameter's default, the stage command does not carry the
   key) and the last stage anneals to `prob_beta_end=1`, which the controller
-  sets (`prob_beta_ini`, the stages 1-2 override, was removed 2026-10-29)
+  sets (`prob_beta_ini`, the stages 1-2 override, was removed 2026-10-29); in a
+  multi-state run the same factor tempers the state, drawn with the direction,
+  and the tail starts when no populated state gains (section 6)
 - the multi-state direction cap: with `nstates > 1` no stage exceeds 2,500
   directions, so stages 7 and 8 (5,000 in single state) run at 2,500
 - the multi-state stage-2 exit: stage 2 of a multi-state particle run (`shc`)
@@ -618,6 +620,52 @@ fraction of that class. The outer particle target remains the fixed
 above that threshold the workflow runs full active-particle updates each
 stage.
 
+**The state assignment** (2026-11-05; design and validation in
+`doc/implementation_notes/completed/multistate_posterior_state_draw.md`). In the
+`prob` stages a particle's state is part of the posterior draw: one draw from
+its tempered posterior over every active state's block of its row, at the
+stage's `prob_beta`, so the state and the direction come from the same draw
+(refine3D policy, "Dense-table assignment"). From stage 6, when a run is
+extended to it, the neighbourhood table draws the same way over its pooled
+candidates. Before, the state was the
+particle's closest reference over all states and the direction one draw within
+it. The labels stay hard: one state per particle per iteration, one half-map,
+the weighted insertion's extras from the drawn state alone. The table's
+refined-reference budget is split over the states' blocks within the
+per-particle budget `projs_ns`. So every state gets the same number of
+shift-refinement attempts, and no block is left with stored-shift losses only
+because another state leads. Stages 1-2 keep their hill climb over states and directions. The
+annealing tail of the last stage starts when no populated state gained on the
+previous iteration (refine3D policy, the annealing tail), not when the best
+state alone stalls.
+
+Every probabilistic iteration of a multi-state run logs the state readout
+beside `PROB_TAB_ASSIGN`, and the iteration's statistics record holds it
+(`STATE_NEFF_DRAW`, `STATE_NEFF_PHYS`, `STATE_MODE_FRAC`,
+`STATE_MASS_UNREFINEDnn`):
+- `PROB_TAB_STATE_DRAW`: the effective number of states (exp(entropy) of the
+  state marginal) at the draw's factor and at 1, the share of draws at the
+  state mode, and the mean largest state posterior;
+- `PROB_TAB_STATE_MASS` per state: the share of the block's tempered mass on
+  entries the fill did not refine.
+
+Read beside the populations and `STATE OVERLAP`, a state n_eff near the number
+of states while the labels stay at chance says the state draw is too hot,
+unless the n_eff at 1 is broad as well: then maps that cannot yet tell the
+states apart give the same picture. Near 1 from the first iterations is the
+lock-on signature of the retired closest-state rule. A large unrefined share
+says the marginal rests on stored-shift losses.
+
+On the simulated beta-galactosidase states of `multistate_workflows`, the `shc`
+route resolved every state in 15 of 20 seeds and the `labels` route (true
+poses, random labels) in 13 of 20 (2026-11-05). On 20,000 particles of
+Afan's simulated three-state Ribosembly benchmark, three de novo runs did not
+separate the states: accuracy, the share of particles in the found state
+matched to their true one, was 0.42-0.59. There stage 3 showed a broad state
+posterior (2.2-2.7 effective states at 0.3, 1.3-1.7 at 1) with accuracy near
+chance and a quarter to over half of each block's mass on unrefined entries
+(2026-11-06, the plan's Phase 4).
+
 Prior-orientation multi-state refinement belongs in `refine3D_states`, not in
 particle-based solve3D startup.
 
@@ -732,10 +780,23 @@ stage or later (stage 3; stage 4 when the run searches an axis, section 7); the
 run manifest follows it, so such a run can be the frozen input of
 `solve3D_addon`, which then runs that stage. Single-state schedules stopped
 before it skip this final all-particle reconstruction.
-Before the final reconstruction, single- or multi-state, a greedy
-missing-update pass (`refine=greedy`) assigns every active particle that no
-stage updated; the final reconstruction leaves out rows without an update, so
-without it a run whose sampling did not reach every particle would drop them.
+Before the final reconstruction, every active particle must carry an update;
+the final reconstruction leaves out rows without one, so a run whose sampling
+did not reach every particle would drop them. A single-state run assigns the
+rows no stage updated by a greedy missing-update pass (`refine=greedy`). A
+multi-state run instead gives every active particle its final label against the
+final maps at the physical posterior (2026-11-05, `run_multistate_final_assignment`).
+It is one `refine3D` iteration over all active particles from the last stage's
+command line (its band, crop and maps) with `refine=prob`, `prob_beta=1` and no
+tail, `update_frac=1`, `balance=none`, `fillin=no`, `trail_rec=no`, `volrec=no`
+and `topk=1`. Because it samples every active particle, the final
+reconstruction uses labels of one provenance, each drawn at beta 1 against the
+last stage's maps; a particle that fits two states alike lands in one of them at
+random, which is the honest hard label. The coverage check after either pass
+(`SOLVE3D ASSIGNMENT COVERAGE`) must find no active particle that the run never
+updated. For multi-state runs it replaced the greedy missing-update pass. On the
+20,000-particle benchmark subset it took 8-12.5 minutes and changed 1-3 % of the
+labels.
 
 The final reconstruction inherits only the scientific reconstruction policy it
 needs. It keeps `envfsc=no` and `automsk=no`, so the original-sampling

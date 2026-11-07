@@ -12,7 +12,7 @@ use simple_eul_prob_tab_utils, only: update_screen_best, &
     &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, temperature_or_argmin, &
     &prob_insert_table, prob_insert_cone, screen_pool_size, shift_needs_disk, disk_radius_px, insert_pose_loss, &
     &prob_rnd_scope, calc_num2sample, shift_prior_sigma2, prob_readout, prob_readout_fname, write_prob_readout, &
-    &report_prob_readout, PROB_READOUT_3D_DENSE
+    &report_prob_readout, PROB_READOUT_3D_DENSE, prob_state_readout
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
@@ -58,6 +58,8 @@ type :: eul_prob_tab
     integer,                  allocatable :: batch_nrefined(:)  !< (i_first:i_last)
     ! the assignment across the batches (open_assignment .. close_assignment): the readout and the counts
     type(prob_neff_readout)     :: neff
+    type(prob_state_readout)    :: state_rd                 !< the state readout of the joint draw (more than one active state)
+    type(prob_readout)          :: rec_last                 !< the last closed assignment's readout record (get_readout)
     logical                     :: l_assign_open = .false.
     logical                     :: l_extras      = .false.  !< the weighted insertion's extras are selected (topk > 1, a cone)
     integer                     :: kmax = 1                 !< poses per particle of the weighted insertion
@@ -80,6 +82,7 @@ type :: eul_prob_tab
     procedure, private :: max_refined
     procedure, private :: write_posterior_diag
     procedure :: get_fill_profile
+    procedure :: get_readout
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure :: set_insert_cone
     ! REFERENCE INDEX MAPPING
@@ -226,7 +229,7 @@ contains
         real,                      allocatable :: post_wx(:,:)       !< per thread: its posterior, sorted
         integer,                   allocatable :: post_indsx(:,:)    !< per thread: its reference order
         logical :: l_post
-        integer :: i, iptcl, projs_ns, ithr
+        integer :: i, iptcl, projs_ns, ithr, nper, ncap
         integer :: inpl_refs(self%nrefs,nthr_glob)
         real    :: lims(2,2), lims_init(2,2)
         real    :: dists_refs(self%nrefs,nthr_glob)
@@ -273,9 +276,17 @@ contains
         self%rnd_scope = prob_rnd_scope(self%p_ptr%which_iter, .false.)
         call self%b_ptr%pftc%set_rnd_scope(self%rnd_scope)
         projs_ns = self%projs_ns_model
+        ! the refined-reference budget split over the active states' blocks: nper per block, ncap in all (projs_ns
+        ! up to rounding), so that no block of the joint draw's row is left without polished entries
+        nper = projs_ns
+        ncap = projs_ns
+        if( self%nstates > 1 )then
+            nper = min(self%p_ptr%nspace, (projs_ns + self%nstates - 1) / self%nstates)
+            ncap = nper * self%nstates
+        endif
         if( allocated(locn) ) deallocate(locn)
-        allocate(locn(projs_ns,nthr_glob), source=0)
-        allocate(rows_batch(self%nrefs,i_first:i_last), refined_batch(max(1,projs_ns),i_first:i_last))
+        allocate(locn(ncap,nthr_glob), source=0)
+        allocate(rows_batch(self%nrefs,i_first:i_last), refined_batch(max(1,ncap),i_first:i_last))
         allocate(nrefined_batch(i_first:i_last), source=0)
         ! the pose posterior is defined by the Euclidean objective only
         l_post = self%p_ptr%l_prob_post_diag .and. self%p_ptr%cc_objfun == OBJFUN_EUCLID
@@ -365,8 +376,8 @@ contains
         self%fill_profile%nrefs     = self%nrefs
         self%fill_profile%nptcls    = self%fill_profile%nptcls + int(i_last - i_first + 1, int64)
         if( self%p_ptr%l_doshift )then
-            self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, projs_ns)
-            self%fill_profile%nrefined = self%fill_profile%nrefined + int(i_last - i_first + 1, int64) * int(projs_ns, int64)
+            self%fill_profile%projs_ns = max(self%fill_profile%projs_ns, ncap)
+            self%fill_profile%nrefined = self%fill_profile%nrefined + int(i_last - i_first + 1, int64) * int(ncap, int64)
             self%fill_profile%rank_counts = self%fill_profile%rank_counts + sum(rank_ithr, dim=2)
         endif
         do ithr = 1,nthr_glob
@@ -464,15 +475,16 @@ contains
         !! its coarse optimum; the projs_ns best of the screen polished at full resolution in a box of one coarse step
         !! about that optimum (minimize_in_cell). The box is the disk (l_disk), under the map's prior at the particle's
         !! first centring (l_prior) and without it after, or the window without it. Rows the polished losses, as the
-        !! window path's; the refined entries carry the posterior loss for the insertion
+        !! window path's; the refined entries carry the posterior loss for the insertion. With several active states
+        !! the screen's pool and the polish are split over the states' blocks, each block its share of both
         subroutine process_particle_with_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             logical, intent(in) :: l_disk, l_prior
             type(pftc_shsrch_grad), pointer :: gso
             integer, allocatable :: pool(:)
             real(dp) :: t0, temp_i, temp_s, xcell(2), prior_w_map
-            real     :: loss_cell, loss_pose, dist_loc, cxy(3), width_best(max(1,projs_ns))
-            integer  :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest
+            real     :: loss_cell, loss_pose, dist_loc, cxy(3), width_best(max(1,nper),self%nstates)
+            integer  :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest, nblk, si_loc, nb_loc
             logical  :: l_polished
             imap        = SHIFTMAP_WINDOW
             prior_w_map = 0.d0
@@ -503,17 +515,29 @@ contains
             ! the screen: the coarse map at the origin's best references, each keeping its coarse optimum
             pool  = minnloc(dists_refs(:,ithr_loc), self%nrefs)
             npool = min(self%nrefs, max(2 * projs_ns, screen_pool_size(dists_refs(pool,ithr_loc), self%nrefs, temp_i)))
+            if( self%nstates > 1 )then
+                ! the pool's size divided over the blocks, each block's best at the origin
+                nblk = min(self%p_ptr%nspace, (npool + self%nstates - 1) / self%nstates)
+                deallocate(pool)
+                allocate(pool(nblk * self%nstates))
+                do si_loc = 1, self%nstates
+                    pool((si_loc-1)*nblk+1:si_loc*nblk) = minnloc(dists_refs((si_loc-1)*self%p_ptr%nspace+1:&
+                        &si_loc*self%p_ptr%nspace,ithr_loc), nblk) + (si_loc - 1) * self%p_ptr%nspace
+                enddo
+                npool = nblk * self%nstates
+            endif
             scr_loss(:,ithr_loc) = huge(1.0)
             width_best = huge(1.)
             do k_loc = 1, npool
                 ri_loc = pool(k_loc)
                 if( ri_loc < 1 ) cycle
+                si_loc = (ri_loc - 1) / self%p_ptr%nspace + 1
                 call self%b_ptr%pftc%gen_shiftmap(imap, self%ref_full(ri_loc), iptcl_loc)
                 call self%b_ptr%pftc%shiftmap_mode(imap, temp_s, prior_w_map, &
                     &irot_loc, irho_loc, ialpha_loc, loss_cell, &
                     &temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=scr_sdev(ri_loc,ithr_loc), &
-                    &width_cutoff=maxval(width_best))
-                call update_screen_best(loss_cell, width_best)
+                    &width_cutoff=maxval(width_best(:,si_loc)))
+                call update_screen_best(loss_cell, width_best(:,si_loc))
                 scr_irot(ri_loc,ithr_loc) = irot_loc
                 scr_xy(:,ri_loc,ithr_loc) = real(self%b_ptr%pftc%shiftmap_shift(imap, irho_loc, ialpha_loc))
                 scr_loss(ri_loc,ithr_loc) = loss_cell
@@ -522,9 +546,20 @@ contains
             deallocate(pool)
             ! the polish of the screen's best: the box's optimum if it beat the origin, minimize's baseline; else the
             ! coarse optimum, scored at full resolution, if it beats the origin's row; else that row stands
-            nbest = min(projs_ns, npool)
             locn(:,ithr_loc) = 0
-            locn(1:nbest,ithr_loc) = minnloc(scr_loss(:,ithr_loc), nbest)
+            if( self%nstates > 1 )then
+                ! each block's nper best of its screen
+                nb_loc = min(nper, nblk)
+                nbest  = 0
+                do si_loc = 1, self%nstates
+                    locn(nbest+1:nbest+nb_loc,ithr_loc) = minnloc(scr_loss((si_loc-1)*self%p_ptr%nspace+1:&
+                        &si_loc*self%p_ptr%nspace,ithr_loc), nb_loc) + (si_loc - 1) * self%p_ptr%nspace
+                    nbest = nbest + nb_loc
+                enddo
+            else
+                nbest = min(projs_ns, npool)
+                locn(1:nbest,ithr_loc) = minnloc(scr_loss(:,ithr_loc), nbest)
+            endif
             do j_loc = 1, nbest
                 ri_loc = locn(j_loc,ithr_loc)
                 if( ri_loc < 1 ) cycle
@@ -827,13 +862,22 @@ contains
                 &self%b_ptr%pftc%ptcl_posterior_temp(iptcl_loc), dist_loc, irot_loc)
         end subroutine score_ref_bank
 
+        !> the projs_ns best references of the row refined; with several active states each state's block its nper
+        !! best (locn holds the blocks' lists one after the other, each ascending)
         subroutine refine_best_refs( i_loc, iptcl_loc, ithr_loc, shift_seed )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             real,    intent(in) :: shift_seed(3)
-            integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc, jbest
+            integer :: j_loc, ri_loc, istate_loc, iproj_loc, irot_loc, jbest, si_loc, rank_loc
             real    :: refined_shift(3), xy_start(2), dbest
-            locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns) ! ascending: j is the unrefined rank
-            do j_loc = 1,projs_ns
+            if( self%nstates > 1 )then
+                do si_loc = 1, self%nstates
+                    locn((si_loc-1)*nper+1:si_loc*nper,ithr_loc) = minnloc(dists_refs((si_loc-1)*self%p_ptr%nspace+1:&
+                        &si_loc*self%p_ptr%nspace,ithr_loc), nper) + (si_loc - 1) * self%p_ptr%nspace
+                enddo
+            else
+                locn(:,ithr_loc) = minnloc(dists_refs(:,ithr_loc), projs_ns) ! ascending: j is the unrefined rank
+            endif
+            do j_loc = 1,ncap
                 ri_loc     = locn(j_loc,ithr_loc)
                 istate_loc = self%ref_state(ri_loc)
                 iproj_loc  = self%ref_proj(ri_loc)
@@ -858,9 +902,10 @@ contains
                 endif
             enddo
             ! the bench record of whether the budget binds: the unrefined rank of the entry lowest after refinement
+            ! (within its state's block)
             jbest = 0
             dbest = huge(dbest)
-            do j_loc = 1,projs_ns
+            do j_loc = 1,ncap
                 if( rows_batch(locn(j_loc,ithr_loc),i_loc)%dist < dbest )then
                     dbest = rows_batch(locn(j_loc,ithr_loc),i_loc)%dist
                     jbest = j_loc
@@ -869,8 +914,9 @@ contains
             if( jbest < 1 .or. minval(rows_batch(:,i_loc)%dist) < dbest )then
                 rank_ithr(11,ithr_loc) = rank_ithr(11,ithr_loc) + 1_int64
             else
-                if( jbest == 1 ) rank_ithr(0,ithr_loc) = rank_ithr(0,ithr_loc) + 1_int64
-                j_loc = min(10, (jbest - 1) * 10 / projs_ns + 1)
+                rank_loc = mod(jbest - 1, nper) + 1
+                if( rank_loc == 1 ) rank_ithr(0,ithr_loc) = rank_ithr(0,ithr_loc) + 1_int64
+                j_loc = min(10, (rank_loc - 1) * 10 / nper + 1)
                 rank_ithr(j_loc,ithr_loc) = rank_ithr(j_loc,ithr_loc) + 1_int64
             endif
         end subroutine refine_best_refs
@@ -943,6 +989,13 @@ contains
             call self%b_ptr%pftc%get_shiftmap_profile(profile%map_times, profile%map_counts, profile%map_geometry)
         endif
     end function get_fill_profile
+
+    !> the readout record of the last closed assignment (the state readout travels to the statistics file in it)
+    function get_readout( self ) result( rec )
+        class(eul_prob_tab), intent(in) :: self
+        type(prob_readout) :: rec
+        rec = self%rec_last
+    end function get_readout
 
     !> the batch's rows and refined entries, kept for assign_batch; the fill's arrays move in
     subroutine keep_batch_rows( self, rows, refined, nrefined )
@@ -1022,7 +1075,9 @@ contains
             call self%insert_cone%set_space(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%seed_nrots)
         endif
         call self%neff%new(nglob_here, PROB_NEFF_ROWS, PROB_NEFF_NMIN, rank0=rank0_here)
-        ! the draw within the state's block, keyed on the particle
+        call self%state_rd%kill
+        if( self%nstates > 1 ) call self%state_rd%new(self%p_ptr%nstates)
+        ! the draw over the row, keyed on the particle
         self%rnd_scope     = prob_rnd_scope(self%p_ptr%which_iter, .false.)
         self%nmode         = 0
         self%ntemp_missing = 0
@@ -1063,36 +1118,46 @@ contains
         rec%neff_nrows    = self%neff%nkept()
         rec%neff_sum_draw = self%neff%sum_neff(self%p_ptr%prob_beta)
         rec%neff_sum_phys = self%neff%sum_neff(1.)
+        rec%states        = self%state_rd
         call self%neff%kill
+        call self%state_rd%kill
         if( self%p_ptr%l_distr_worker )then
             call write_prob_readout(rec, prob_readout_fname(self%p_ptr%part, self%p_ptr%numlen))
         else
             call report_prob_readout(rec, self%p_ptr%prob_beta)
         endif
+        self%rec_last      = rec
         self%l_assign_open = .false.
     end subroutine close_assignment
 
-    !> the selection over the rows i_first..i_last of the batch: per particle
-    !! the state of its closest reference, the direction drawn in that state's block, the drawn entry committed with
-    !! its refined shift (the seed shift otherwise), then the extras of the weighted insertion over the same rows
+    !> the selection over the rows i_first..i_last of the batch: per particle one draw from the tempered posterior
+    !! over the whole row, every active state's block, so the state and the direction are drawn together; the drawn
+    !! entry committed with its refined shift (the seed shift otherwise), then the extras of the weighted insertion
+    !! from the drawn state's block over the same rows
     subroutine assign_rows( self, i_first, i_last )
         class(eul_prob_tab), intent(inout) :: self
         integer,             intent(in)    :: i_first, i_last
         type(prob_dense_entry),   allocatable :: row(:)
         type(prob_refined_entry), allocatable :: refined(:)
         type(prob_candidate) :: candidate
-        logical, allocatable :: l_refined(:)
+        logical, allocatable :: l_refined(:), l_ref_entry(:)
+        integer, allocatable :: ref_states(:)
         real,    allocatable :: w(:)
-        integer :: i, iref, iref_best, si, ifirst, ilast, nblock, which, assigned_iref, nrefined, maxref
+        integer :: i, j, iref, iref_best, which, assigned_iref, nrefined, maxref
         real    :: score, score_best, dist, temp, invalid_dist
+        logical :: l_neff_row
         if( .not. self%l_assign_open ) THROW_HARD('no open assignment; eul_prob_tab%assign_rows')
         invalid_dist = 0.1 * huge(invalid_dist)
         maxref = self%max_refined()
-        allocate(row(self%nrefs), refined(max(1,maxref)), w(self%nrefs), l_refined(i_first:i_last))
+        allocate(row(self%nrefs), refined(max(1,maxref)), w(self%nrefs), l_refined(i_first:i_last), l_ref_entry(self%nrefs))
+        allocate(ref_states(self%nrefs))
+        do iref = 1,self%nrefs
+            ref_states(iref) = self%ref_state(iref)
+        enddo
         l_refined = .false.
         do i = i_first,i_last
             call self%get_row(i, row, refined, nrefined)
-            ! the state label: the particle's closest reference over all states
+            ! the row mode over all states: the readouts' mode, and the reference of a row without a valid distance
             iref_best  = 1
             score_best = valid_score(row(1)%dist)
             do iref = 2,self%nrefs
@@ -1103,26 +1168,34 @@ contains
                 endif
             enddo
             call count_row_validity
-            si     = self%state_to_active_rank(self%ref_state(iref_best))
-            ifirst = (si - 1) * self%p_ptr%nspace + 1
-            ilast  = si * self%p_ptr%nspace
-            nblock = ilast - ifirst + 1
             ! the n_eff readout takes the rows it wants in particle order
-            if( self%neff%wanted(i) ) call self%neff%offer(nblock, row(ifirst:ilast)%dist, self%temps(i))
+            l_neff_row = self%neff%wanted(i)
+            if( l_neff_row ) call self%neff%offer(self%nrefs, row(:)%dist, self%temps(i))
             temp = self%p_ptr%prob_beta * self%temps(i)
             if( .not. (temp > 0.) )then
                 ! no temperature from the fill: the argmin, as the particle has no scale to draw at
                 self%ntemp_missing = self%ntemp_missing + 1
                 temp = huge(temp)
             endif
-            call draw_posterior_row(nblock, row(ifirst:ilast)%dist, temp, w, &
+            call draw_posterior_row(self%nrefs, row(:)%dist, temp, w, &
                 &rnd_keyed(rnd_draw_key(self%rnd_scope, self%pinds(i), RND_FAM_ASSIGN)), which, dist)
             if( which < 1 )then
-                assigned_iref = iref_best ! no valid distance in the block: the balanced rule's reference
+                assigned_iref = iref_best ! no valid distance in the row: its first reference
             else
-                assigned_iref = ifirst - 1 + which
+                assigned_iref = which
             endif
             if( assigned_iref == iref_best ) self%nmode = self%nmode + 1
+            if( self%nstates > 1 )then
+                call self%state_rd%count_draw(self%ref_state(assigned_iref) == self%ref_state(iref_best))
+                if( l_neff_row )then
+                    l_ref_entry = .false.
+                    do j = 1,nrefined
+                        l_ref_entry(refined(j)%ri) = .true.
+                    enddo
+                    call self%state_rd%offer(self%nrefs, ref_states, row(:)%dist, l_ref_entry, self%temps(i), &
+                        &self%p_ptr%prob_beta)
+                endif
+            endif
             candidate = entry_candidate(self, assigned_iref, row, refined, nrefined)
             ! the extras of the weighted insertion are weighed against the committed entry's distance, so the
             ! committed entry must be a refined one too (an unrefined entry's distance is at the seed shift)
@@ -1132,7 +1205,7 @@ contains
             self%assgn_map(i)%frac = 100.
         enddo
         if( self%l_extras ) call select_extras
-        deallocate(row, refined, w, l_refined)
+        deallocate(row, refined, w, l_refined, l_ref_entry, ref_states)
 
     contains
 
@@ -1320,6 +1393,8 @@ contains
         if( allocated(self%batch_refined)  ) deallocate(self%batch_refined)
         if( allocated(self%batch_nrefined) ) deallocate(self%batch_nrefined)
         call self%neff%kill
+        call self%state_rd%kill
+        self%rec_last      = prob_readout()
         self%l_assign_open = .false.
         self%l_extras      = .false.
         self%kmax          = 1

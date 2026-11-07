@@ -49,8 +49,64 @@ contains
         call test_posterior_anneal_tail2D()
         write(*,'(A)') 'test_posterior_exits_weighted_insertion'
         call test_posterior_exits_weighted_insertion()
+        write(*,'(A)') 'test_state_readout_keys'
+        call test_state_readout_keys()
+        write(*,'(A)') 'test_posterior_anneal_tail_states'
+        call test_posterior_anneal_tail_states()
         call del_file(STATS_FILE)
     end subroutine run_all_convergence_tests
+
+    !> the state readout of the joint draw in STATS_FILE: set before a check, its n_eff at the draw's factor and at 1,
+    !! the mode fraction and the unrefined mass share of every state with rows are written (a state without rows,
+    !! share below zero, is not); the next check without a new readout writes none of them
+    subroutine test_state_readout_keys()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        type(oris)        :: os, ostats
+        logical :: l_conv
+        call del_file(STATS_FILE)
+        allocate(params)
+        params%nstates           = 1
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 0.3
+        params%startit           = 1
+        params%maxits            = 25
+        params%topk              = 1
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        params%which_iter = 1
+        call frozen_field(os, 7.5, 6.5)
+        call conv%set_state_readout(2.25, 1.5, 0.75, [0.125, -1., 0.5])
+        l_conv = conv%check_conv3D(params, cline, os, 40.)
+        call os%kill
+        call ostats%new(1, is_ptcl=.false.)
+        call ostats%read(string(STATS_FILE))
+        call assert_true(ostats%isthere('STATE_NEFF_DRAW'), 'the state readout: STATE_NEFF_DRAW written')
+        call assert_real(2.25,  ostats%get(1,'STATE_NEFF_DRAW'),          TOL, 'the state readout: the n_eff at the draw''s factor')
+        call assert_real(1.5,   ostats%get(1,'STATE_NEFF_PHYS'),          TOL, 'the state readout: the n_eff at factor 1')
+        call assert_real(0.75,  ostats%get(1,'STATE_MODE_FRAC'),          TOL, 'the state readout: the mode fraction')
+        call assert_real(0.125, ostats%get(1,'STATE_MASS_UNREFINED01'),   TOL, 'the state readout: state 1''s unrefined share')
+        call assert_false(ostats%isthere('STATE_MASS_UNREFINED02'), 'the state readout: a state without rows has no share')
+        call assert_real(0.5,   ostats%get(1,'STATE_MASS_UNREFINED03'),   TOL, 'the state readout: state 3''s unrefined share')
+        call ostats%kill
+        params%which_iter = 2
+        call frozen_field(os, 7.5, 6.5)
+        l_conv = conv%check_conv3D(params, cline, os, 40.)
+        call os%kill
+        call ostats%new(1, is_ptcl=.false.)
+        call ostats%read(string(STATS_FILE))
+        call assert_false(ostats%isthere('STATE_NEFF_DRAW'), 'the state readout: not written again without a new readout')
+        call assert_false(ostats%isthere('STATE_MASS_UNREFINED01'), 'the state readout: no stale share')
+        call ostats%kill
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+    end subroutine test_state_readout_keys
 
     !> the polar shift map's centring exit (shift_sigma > 0 with the window's radius): two consecutive iterations
     !! with no sampled particle carrying posterior mass beyond the window converge an otherwise unconverged run, an
@@ -221,6 +277,99 @@ contains
         deallocate(params)
         call del_file(STATS_FILE)
     end subroutine test_posterior_anneal_tail
+
+    !> the annealing tail's stall over every populated state (two states, the single draw's rule): a state still
+    !! gaining keeps the tail from starting although the best state stalls (state 1 flat from iteration 3, state 2
+    !! gaining until 4: the tail starts at 5); a state without a resolution is skipped (state 2 without one: state 1's
+    !! stall at iteration 3 starts the tail at 4); when no state is in both records, the best state's test decides
+    !! (state 2 alone at iteration 1, state 1 alone at 2, 8.5 / 7.5 A not finer than 8.0 / 7.0 A: the tail at 3)
+    subroutine test_posterior_anneal_tail_states()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        real    :: s1(2,4), s2(2,4)
+        logical :: l_conv
+        integer :: it
+        allocate(params)
+        params%nstates           = 2
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 1.
+        params%startit           = 1
+        params%maxits            = 25
+        params%topk              = 1
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        ! one state gaining holds the tail
+        call del_file(STATS_FILE)
+        s1 = reshape([7.5,6.5, 7.0,6.0, 7.0,6.0, 7.0,6.0], [2,4])
+        s2 = reshape([9.0,8.0, 8.5,7.5, 8.0,7.0, 8.0,7.0], [2,4])
+        do it = 1, 4
+            params%which_iter = it
+            call frozen_field_states(os, s1(:,it), s2(:,it))
+            l_conv = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+            if( it == 3 ) call assert_int(0, conv%anneal_tail_start(), 'a state still gaining keeps the tail from starting')
+        enddo
+        call assert_int(5, conv%anneal_tail_start(), 'no state gaining starts the tail at the next iteration')
+        ! a state without a resolution is skipped
+        call del_file(STATS_FILE)
+        conv = convergence()
+        s2 = 0.
+        do it = 1, 3
+            params%which_iter = it
+            call frozen_field_states(os, s1(:,it), s2(:,it))
+            l_conv = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_int(4, conv%anneal_tail_start(), 'a state without a resolution is skipped')
+        ! no state in both records: the best state's test
+        call del_file(STATS_FILE)
+        conv = convergence()
+        s1(:,1) = 0.
+        s1(:,2) = [8.5, 7.5]
+        s2(:,1) = [8.0, 7.0]
+        s2(:,2) = 0.
+        do it = 1, 2
+            params%which_iter = it
+            call frozen_field_states(os, s1(:,it), s2(:,it))
+            l_conv = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_int(3, conv%anneal_tail_start(), 'every state skipped: the best state''s test decides')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+    end subroutine test_posterior_anneal_tail_states
+
+    !> NPTCLS frozen particles (full scan, overlap 1), the first half in state 1 and the second in state 2, at each
+    !! state's FSC=0.5 and FSC=0.143 resolutions r(1:2) (0: none)
+    subroutine frozen_field_states( os_loc, r_s1, r_s2 )
+        type(oris), intent(inout) :: os_loc
+        real,       intent(in)    :: r_s1(2), r_s2(2)
+        integer :: i
+        call os_loc%new(NPTCLS, is_ptcl=.true.)
+        do i = 1, NPTCLS
+            call os_loc%set(i, 'updatecnt', 1.)
+            call os_loc%set(i, 'sampled',   1.)
+            call os_loc%set(i, 'frac',      100.)
+            call os_loc%set(i, 'mi_proj',   1.)
+            call os_loc%set(i, 'corr',      0.5)
+            if( i <= NPTCLS / 2 )then
+                call os_loc%set_state(i, 1)
+                call os_loc%set(i, 'res05', r_s1(1))
+                call os_loc%set(i, 'res',   r_s1(2))
+            else
+                call os_loc%set_state(i, 2)
+                call os_loc%set(i, 'res05', r_s2(1))
+                call os_loc%set(i, 'res',   r_s2(2))
+            endif
+        end do
+    end subroutine frozen_field_states
 
     !> NPTCLS frozen particles (full scan, overlap 1) at the given FSC=0.5 and FSC=0.143 resolutions
     subroutine frozen_field( os_loc, r05, r143 )

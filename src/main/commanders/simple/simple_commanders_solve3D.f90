@@ -2210,15 +2210,25 @@ contains
             if( nactive < 1 ) THROW_HARD('No active particles selected in ptcl2D for solve3D')
         end subroutine reset_ptcl3D_from_ptcl2D_selection
 
-        !> every active particle carries a pose (and a label) before the final reconstruction, which leaves out
-        !! the rows no stage updated: a greedy pass against the last references assigns the rows the stages missed
+        !> every active particle carries a pose and a label before the final reconstruction, which leaves out the
+        !! rows no stage updated. A multi-state run gives every active particle its final label in one assignment at
+        !! the physical posterior against the last stage's maps (run_multistate_final_assignment), so the final
+        !! reconstruction reads labels of one provenance; a single-state run assigns the rows the stages missed by a
+        !! greedy pass against the last references (run_missing_update). The coverage check after either must find
+        !! no active particle without an update
         subroutine ensure_all_particle_assignments
             integer :: nactive, nupdated, nmissing
             call read_update_coverage(nactive, nupdated, nmissing)
             if( nactive < 1 )then
                 THROW_HARD('solve3D has no active particles after staged refinement')
             endif
-            if( nmissing > 0 )then
+            if( params%nstates > 1 )then
+                call run_multistate_final_assignment(nactive)
+                call read_update_coverage(nactive, nupdated, nmissing)
+                if( nmissing > 0 )then
+                    THROW_HARD('multistate solve3D final assignment failed to update every active particle')
+                endif
+            else if( nmissing > 0 )then
                 call run_missing_update(nmissing, nactive)
                 call read_update_coverage(nactive, nupdated, nmissing)
                 if( nmissing > 0 )then
@@ -2280,6 +2290,39 @@ contains
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
         end subroutine run_missing_update
+
+        !> one refine3D iteration over every active particle at the last stage's keys (band, crop, references), the
+        !! dense table at the physical posterior (prob_beta=1, no annealing tail), the committed pose alone (topk 1),
+        !! no reconstruction: every active particle gets a label drawn against the final maps
+        subroutine run_multistate_final_assignment( nactive )
+            integer, intent(in) :: nactive
+            type(cmdline) :: cline_final
+            integer       :: iter_final
+            iter_final = next_refine3D_iteration()
+            write(logfhandle,'(A,I0,A,I0,A,I0)') &
+                &'>>> SOLVE3D MULTISTATE FINAL ASSIGNMENT AT PROB_BETA=1 NSTATES=', params%nstates, &
+                &' ACTIVE/ITER: ', nactive, '/', iter_final
+            call flush(logfhandle)
+            cline_final = cline_refine3D
+            call cline_final%set('prg',         'refine3D')
+            call cline_final%set('mkdir',       'no')
+            call cline_final%set('refine',      'prob')
+            call cline_final%set('prob_beta',   1.0)
+            call cline_final%delete('prob_beta_end')
+            call cline_final%set('balance',     'none')
+            call cline_final%set('fillin',      'no')
+            call cline_final%set('update_frac', 1.0)
+            call cline_final%set('trail_rec',   'no')
+            call cline_final%set('volrec',      'no')
+            call cline_final%set('topk',        1)
+            call cline_final%set('maxits',      1)
+            call cline_final%set('startit',     iter_final)
+            call cline_final%set('which_iter',  iter_final)
+            call cline_final%set('extr_iter',   iter_final)
+            call cline_final%delete('endit')
+            call xrefine3D%execute(cline_final)
+            call cline_final%kill
+        end subroutine run_multistate_final_assignment
 
         integer function next_refine3D_iteration() result(iter)
             iter = 1

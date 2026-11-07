@@ -764,6 +764,8 @@ contains
         endif
         call self%insert_tab%new(self%nptcls, self%pinds, merge(self%kmax, 1, self%l_extras))
         call self%neff%new(nglob_here, PROB_NEFF_ROWS, PROB_NEFF_NMIN, rank0=rank0_here)
+        call self%state_rd%kill
+        if( self%nstates > 1 ) call self%state_rd%new(self%p_ptr%nstates)
         ! the keyed draws of the assignment: the fallback's in-plane draw on the calculator, the draw per particle
         self%rnd_scope = prob_rnd_scope(self%p_ptr%which_iter, .false.)
         call self%b_ptr%pftc%set_rnd_scope(self%rnd_scope)
@@ -835,22 +837,24 @@ contains
         rec%neff_nrows    = self%neff%nkept()
         rec%neff_sum_draw = self%neff%sum_neff(self%p_ptr%prob_beta)
         rec%neff_sum_phys = self%neff%sum_neff(1.)
+        rec%states        = self%state_rd
         call self%neff%kill
+        call self%state_rd%kill
         if( self%p_ptr%l_distr_worker )then
             call write_prob_readout(rec, prob_readout_fname(self%p_ptr%part, self%p_ptr%numlen))
         else
             call report_prob_readout(rec, self%p_ptr%prob_beta)
         endif
+        self%rec_last      = rec
         self%l_assign_open = .false.
     end subroutine close_assignment_neigh
 
-    !> ptcl -> (proj, state) over the rows i_first..i_last of the batch's candidate store, by one draw per particle from its tempered posterior over its evaluated candidates. The
-    !! particle's state is the state of its closest valid candidate over all states (an active reference with an
-    !! in-plane index; ties to the first in store order), as the dense table labels it; within that state p_c
-    !! proportional to exp(-T_i (L_c - L_min)) over the valid candidates, T_i the particle's temperature from the fill
-    !! (temps) scaled by prob_beta; the mean n_eff of a subsample of the rows is logged at the close. The drawn
-    !! candidate is committed with its shift, the seed shift recorded, frac the evaluated fraction; no reference is
-    !! forced to be populated. A particle without a valid candidate (a state emptied mid-run) is first re-seeded at its
+    !> ptcl -> (proj, state) over the rows i_first..i_last of the batch's candidate store, by one draw per particle
+    !! from its tempered posterior over its valid candidates of every state (an active reference with an in-plane
+    !! index), p_c proportional to exp(-T_i (L_c - L_min)), T_i the particle's temperature from the fill scaled by
+    !! prob_beta: the state and the direction are drawn together, as the dense table draws them. The drawn candidate is
+    !! committed with its shift, the seed shift recorded, frac the evaluated fraction; the extras come from the drawn
+    !! state's candidates. A particle without a valid candidate (a state emptied mid-run) is first re-seeded at its
     !! previous orientation when its state is active, else keeps its orientation; one without a temperature (none
     !! expected) takes its argmin. The draws are keyed on the particle.
     subroutine assign_rows_neigh( self, i_first, i_last )
@@ -869,39 +873,38 @@ contains
     contains
 
 
-        !> ptcl -> (proj, state) by one draw per particle from its tempered posterior over its evaluated candidates
-        !! The particle's state is the
-        !! state of its closest valid candidate over all states (an active reference with an in-plane index; ties
-        !! to the first in store order), as the dense table labels it; within that state p_c proportional to
-        !! exp(-T_i (L_c - L_min)) over the valid candidates, T_i the particle's temperature from the fill (temps)
-        !! scaled by prob_beta; the mean n_eff of a subsample of the rows at the draw's factor and at beta 1 is
-        !! logged (prob_neff_readout). The drawn candidate is committed with its shift, the seed shift recorded, frac the
-        !! evaluated fraction; no reference is forced to be populated. A particle without a valid candidate (a
-        !! state emptied mid-run) keeps its orientation; one without a temperature (none expected) takes its
-        !! argmin with a warning. The draws are keyed on the particle.
+        !> ptcl -> (proj, state) by one draw per particle from its tempered posterior over its pooled row (the valid
+        !! candidates of every state, in store order); the mean n_eff of a subsample of the rows at the draw's factor
+        !! and at beta 1 is logged (prob_neff_readout), beside the state readout of the draw. The extras' selection
+        !! takes the committed candidate by its store position. A particle without a valid candidate (a state emptied
+        !! mid-run) keeps its orientation; one without a temperature (none expected) takes its argmin with a warning
         subroutine assign_particles_posterior()
             real,    allocatable :: w(:), dists_c(:)
-            integer, allocatable :: pos_c(:), which_pos(:)
-            logical, allocatable :: l_refined(:)
-            integer :: i_loc, n_loc, which, ibest, maxcand, istate_best
+            integer, allocatable :: pos_c(:), which_pos(:), states_c(:)
+            logical, allocatable :: l_refined(:), l_ref_c(:)
+            integer :: i_loc, n_loc, which, ibest, maxcand, r_loc
             real    :: temp, dist
+            logical :: l_neff_row
             maxcand = 0
             do i_loc = i_first,i_last
                 maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
             enddo
-            allocate(w(max(1,maxcand)), dists_c(max(1,maxcand)), pos_c(max(1,maxcand)))
+            allocate(w(max(1,maxcand)), dists_c(max(1,maxcand)), pos_c(max(1,maxcand)), states_c(max(1,maxcand)), &
+                &l_ref_c(max(1,maxcand)))
             if( self%l_extras )then
                 allocate(l_refined(i_first:i_last), source=.false.)
                 allocate(which_pos(i_first:i_last), source=0)
             endif
             do i_loc = i_first,i_last
-                call gather_state_row(i_loc, dists_c, pos_c, n_loc, ibest, istate_best)
-                if( istate_best == 0 )then
+                call gather_pooled_row(i_loc, dists_c, pos_c, n_loc, ibest)
+                ! no valid candidate with a finite distance
+                if( ibest == 0 )then
                     self%nkept = self%nkept + 1
                     cycle
                 endif
                 ! the n_eff readout takes the rows it wants in particle order
-                if( self%neff%wanted(i_loc) ) call self%neff%offer(n_loc, dists_c(1:n_loc), self%temps(i_loc))
+                l_neff_row = self%neff%wanted(i_loc)
+                if( l_neff_row ) call self%neff%offer(n_loc, dists_c(1:n_loc), self%temps(i_loc))
                 temp = self%p_ptr%prob_beta * self%temps(i_loc)
                 if( .not. (temp > 0.) )then
                     self%ntemp_missing = self%ntemp_missing + 1
@@ -911,25 +914,35 @@ contains
                     &rnd_keyed(rnd_draw_key(self%rnd_scope, self%pinds(i_loc), RND_FAM_ASSIGN)), which, dist)
                 if( which < 1 ) which = ibest
                 if( which == ibest ) self%nmode = self%nmode + 1
+                if( self%nstates > 1 )then
+                    do r_loc = 1,n_loc
+                        states_c(r_loc) = self%ref_state(valid_compact_ref(pos_c(r_loc)))
+                        l_ref_c(r_loc)  = self%candidate_store%candidates(pos_c(r_loc))%has_sh
+                    enddo
+                    call self%state_rd%count_draw(states_c(which) == states_c(ibest))
+                    if( l_neff_row ) call self%state_rd%offer(n_loc, states_c(1:n_loc), dists_c(1:n_loc), &
+                        &l_ref_c(1:n_loc), self%temps(i_loc), self%p_ptr%prob_beta)
+                endif
                 call self%assign_candidate(i_loc, self%candidate_store%candidates(pos_c(which)))
                 if( self%l_extras )then
                     ! the extras of the weighted insertion are weighed against the committed candidate's distance,
                     ! so the committed candidate must be a refined one too (an unrefined one's distance is at the
-                    ! seed shift); its position in the row's gathered order is kept for the selection
+                    ! seed shift); its store position identifies it in the committed state's row
                     l_refined(i_loc) = self%candidate_store%candidates(pos_c(which))%has_sh
-                    which_pos(i_loc) = which
+                    which_pos(i_loc) = pos_c(which)
                 endif
                 call record_seed_shift(self%assgn_map(i_loc), self%seed_shifts(:,i_loc), self%seed_has_sh(i_loc),&
                     &self%p_ptr%l_doshift)
                 self%assgn_map(i_loc)%frac = search_frac(i_loc)
             enddo
             if( self%l_extras ) call select_extras(self%kmax, l_refined, which_pos, maxcand)
-            deallocate(w, dists_c, pos_c)
+            deallocate(w, dists_c, pos_c, states_c, l_ref_c)
             if( allocated(l_refined) ) deallocate(l_refined, which_pos)
         end subroutine assign_particles_posterior
 
-        !> the extras of the weighted insertion: for every particle whose committed candidate is refined, the refined
-        !! candidates of its state's row whose pose lies within the insertion cone of the committed one (the rotation
+        !> the extras of the weighted insertion: for every particle whose committed candidate (which_pos, its store
+        !! position) is refined, the refined candidates of the committed state's row whose pose lies within the
+        !! insertion cone of the committed one (the rotation
         !! modulo the point group and the shift together moving the rim by less than the map resolves), the kmax - 1 of
         !! highest posterior at the particle's own temperature, with the weights that posterior renormalised over the
         !! kept set (top_posterior_extras): the draw decides the hypothesis, the extras only spread the particle over
@@ -945,7 +958,7 @@ contains
             integer, allocatable :: kpos(:,:), kinds(:,:), nkeep(:), nelig(:), pos_c(:,:)
             real,    allocatable :: kw(:,:), dists_c(:,:)
             logical, allocatable :: eligible(:,:)
-            integer  :: i_loc, n_loc, ibest, istate_best, r_loc, proj_r, k, ithr, nthr_team
+            integer  :: i_loc, n_loc, ibest, istate_com, r_loc, proj_r, k, ithr, nthr_team, rcom
             real(dp) :: prior_w_ins
             logical  :: l_prior_ins
             l_prior_ins = self%p_ptr%l_centring
@@ -958,14 +971,20 @@ contains
             allocate(dists_c(max(1,maxcand),nthr_team), source=0.)
             allocate(eligible(max(1,maxcand),nthr_team), source=.false.)
             !$omp parallel do default(shared) proc_bind(close) schedule(static) &
-            !$omp private(i_loc,n_loc,ibest,istate_best,r_loc,proj_r,k,ithr)
+            !$omp private(i_loc,n_loc,ibest,istate_com,r_loc,proj_r,k,ithr,rcom)
             do i_loc = i_first,i_last
                 nkeep(i_loc) = 1
                 kw(1,i_loc)  = 1.
                 if( .not. l_refined(i_loc) ) cycle
                 ithr = omp_get_thread_num() + 1
-                call gather_state_row(i_loc, dists_c(:,ithr), pos_c(:,ithr), n_loc, ibest, istate_best)
-                if( istate_best == 0 ) cycle
+                istate_com = self%assgn_map(i_loc)%istate
+                call gather_state_row(i_loc, istate_com, dists_c(:,ithr), pos_c(:,ithr), n_loc, ibest)
+                ! the committed candidate's position in its state's row
+                rcom = 0
+                do r_loc = 1,n_loc
+                    if( pos_c(r_loc,ithr) == which_pos(i_loc) ) rcom = r_loc
+                enddo
+                if( rcom == 0 ) cycle
                 do r_loc = 1,n_loc
                     eligible(r_loc,ithr) = self%candidate_store%candidates(pos_c(r_loc,ithr))%has_sh
                     if( .not. eligible(r_loc,ithr) ) cycle
@@ -973,13 +992,13 @@ contains
                         &real([self%candidate_store%candidates(pos_c(r_loc,ithr))%x,&
                         &self%candidate_store%candidates(pos_c(r_loc,ithr))%y], dp), prior_w_ins, self%temps(i_loc))
                     proj_r = modulo(self%candidate_store%candidates(pos_c(r_loc,ithr))%iref - 1, self%p_ptr%nspace) + 1
-                    eligible(r_loc,ithr) = self%insert_cone%within(istate_best, self%assgn_map(i_loc)%iproj, &
+                    eligible(r_loc,ithr) = self%insert_cone%within(istate_com, self%assgn_map(i_loc)%iproj, &
                         &self%assgn_map(i_loc)%inpl, [self%assgn_map(i_loc)%x, self%assgn_map(i_loc)%y], proj_r, &
                         &self%candidate_store%candidates(pos_c(r_loc,ithr))%inpl, &
                         &[self%candidate_store%candidates(pos_c(r_loc,ithr))%x, self%candidate_store%candidates(pos_c(r_loc,ithr))%y])
                 enddo
                 call top_posterior_extras(n_loc, dists_c(1:n_loc,ithr), temperature_or_argmin(self%temps(i_loc)), &
-                    &eligible(1:n_loc,ithr), which_pos(i_loc), kmax, PROB_INSERT_WMIN, nkeep(i_loc), kinds(:,ithr), &
+                    &eligible(1:n_loc,ithr), rcom, kmax, PROB_INSERT_WMIN, nkeep(i_loc), kinds(:,ithr), &
                     &kw(:,i_loc), nelig(i_loc))
                 ! the extras as store positions, which the serial pass reads without gathering the row again
                 do k = 2,nkeep(i_loc)
@@ -997,33 +1016,43 @@ contains
             deallocate(kpos, kinds, nkeep, nelig, pos_c, kw, dists_c, eligible)
         end subroutine select_extras
 
-        !> the particle's row: its state (the closest valid candidate over all states; 0 without one) and,
-        !! into dists_row/pos_row, its valid candidates of that state with the position of the best
-        subroutine gather_state_row( i_row, dists_row, pos_row, n_row, ibest_row, istate_row )
+        !> the particle's pooled row: into dists_row/pos_row its valid candidates of every state in store order, with
+        !! the position of the best (the first of equal minima); none without a valid candidate
+        subroutine gather_pooled_row( i_row, dists_row, pos_row, n_row, ibest_row )
             integer, intent(in)    :: i_row
             real,    intent(inout) :: dists_row(:)
             integer, intent(inout) :: pos_row(:)
-            integer, intent(out)   :: n_row, ibest_row, istate_row
+            integer, intent(out)   :: n_row, ibest_row
+            call gather_row(i_row, 0, dists_row, pos_row, n_row, ibest_row)
+        end subroutine gather_pooled_row
+
+        !> the particle's row of state istate_row: its valid candidates of that state in store order, with the position
+        !! of the best
+        subroutine gather_state_row( i_row, istate_row, dists_row, pos_row, n_row, ibest_row )
+            integer, intent(in)    :: i_row, istate_row
+            real,    intent(inout) :: dists_row(:)
+            integer, intent(inout) :: pos_row(:)
+            integer, intent(out)   :: n_row, ibest_row
+            call gather_row(i_row, istate_row, dists_row, pos_row, n_row, ibest_row)
+        end subroutine gather_state_row
+
+        !> the valid candidates of the particle's store of state istate_row (0: every state)
+        subroutine gather_row( i_row, istate_row, dists_row, pos_row, n_row, ibest_row )
+            integer, intent(in)    :: i_row, istate_row
+            real,    intent(inout) :: dists_row(:)
+            integer, intent(inout) :: pos_row(:)
+            integer, intent(out)   :: n_row, ibest_row
             integer :: pos_loc, ri_loc
             real    :: best_loc
-            istate_row = 0
-            best_loc   = huge(1.0)
-            do pos_loc = int(self%candidate_store%offsets(i_row)), int(self%candidate_store%offsets(i_row+1))-1
-                ri_loc = valid_compact_ref(pos_loc)
-                if( ri_loc < 1 ) cycle
-                if( self%candidate_store%candidates(pos_loc)%dist < best_loc )then
-                    best_loc   = self%candidate_store%candidates(pos_loc)%dist
-                    istate_row = self%ref_state(ri_loc)
-                endif
-            enddo
             n_row     = 0
             ibest_row = 0
-            if( istate_row == 0 ) return
-            best_loc = huge(1.0)
+            best_loc  = huge(1.0)
             do pos_loc = int(self%candidate_store%offsets(i_row)), int(self%candidate_store%offsets(i_row+1))-1
                 ri_loc = valid_compact_ref(pos_loc)
                 if( ri_loc < 1 ) cycle
-                if( self%ref_state(ri_loc) /= istate_row ) cycle
+                if( istate_row > 0 )then
+                    if( self%ref_state(ri_loc) /= istate_row ) cycle
+                endif
                 n_row            = n_row + 1
                 dists_row(n_row) = self%candidate_store%candidates(pos_loc)%dist
                 pos_row(n_row)   = pos_loc
@@ -1032,7 +1061,7 @@ contains
                     ibest_row = n_row
                 endif
             enddo
-        end subroutine gather_state_row
+        end subroutine gather_row
 
         !> the compact reference of a store entry when it is a valid candidate (an active reference with an
         !! in-plane index), 0 otherwise
