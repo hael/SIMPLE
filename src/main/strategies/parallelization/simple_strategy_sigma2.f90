@@ -164,7 +164,7 @@ contains
             if( rt_tot > TINY ) rt_accounted = 100. * (rt_assemble + rt_publish) / rt_tot
             call open_bench_report(fnr, 'SIGMA2_COMMIT', iter=which_iter)
             write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
-            write(fnr,'(a,a)')  'sigma2 commit program               : ', params%prg%to_char()
+            write(fnr,'(a,a)')  'sigma2 commit caller program        : ', params%prg%to_char()
             write(fnr,'(a,i0)') 'sigma2 commit which_iter            : ', which_iter
             write(fnr,'(a,i0)') 'sigma2 commit nparts (range files)  : ', params%nparts
             write(fnr,'(a,i0)') 'sigma2 store particles              : ', header%nptcls

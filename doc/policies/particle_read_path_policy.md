@@ -92,9 +92,13 @@ search (`prob_align_batch_pipeline.md`), so a 2D iteration reads each particle
 once without the buffer.
 The buffer's budget is half the task memory a queue system grants; otherwise
 it is the node's physical memory (`MemTotal` on Linux, `hw.memsize` on macOS)
-divided by twice the number of processes the node runs; the 3D pipeline holds
-its alignment context (the references, the thread scratch, one batch's rows)
-to the same budget (`ptcl_buffer_budget`).
+divided by twice the number of processes the node runs (`ptcl_buffer_budget`).
+The probabilistic pipeline first reserves its estimated alignment context
+(references, thread scratch, assignment state and the chosen batch's arrays)
+from this budget; the retained observation buffer gets the remainder. The
+capacity planner reduces the preferred batch before allocation when necessary.
+The estimates cover dominant arrays; the other half of task memory remains
+available to project state, plans and the separate reconstruction/restoration phase.
 A share above the budget, or an allocation that fails, leaves the buffer empty,
 and the batches are read from the stacks as before. The outputs are the same
 either way.

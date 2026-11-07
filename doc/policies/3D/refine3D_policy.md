@@ -147,10 +147,9 @@ These are strategy routines on a caller's `(params, build)` with explicit
 arguments for what differs from the caller's own settings (the thread count,
 `which_iter`, a write flag). The commanders `volassemble` and `commit_sigma2`
 are thin wrappers: their `execute(cline)` builds parameters and a builder from
-the command line and calls the routine. Shared-memory `refine3D` calls the
-`commit_sigma2` commander; it and `reconstruct3D` call `run_volassemble`, the
-routine's own entry that builds from the command line. The other command-line
-callers use the commanders. A routine that runs on the caller's parameters does
+the command line and calls the routine. Both refine3D execution modes call
+`volassemble_exec` and `commit_sigma2_exec` on their own project. Standalone
+reconstruction and command-line callers retain the `run_*` wrappers. A routine that runs on the caller's parameters does
 not run `params%new`: it sets the thread count it needs and the caller restores
 its own afterwards, and it draws from the random generator without a reseed
 (ruling of 2026-10-20); the probabilistic routes draw through the keyed,
@@ -168,10 +167,27 @@ The project is durable workflow state. The `builder` owns derived execution
 state for one parsed command line and must not be treated as durable policy
 state.
 
-Shared-memory `refine3D` rebuilds its strategy toolbox each iteration after
-the iteration command line has settled. Persist any initial project mutations,
-such as random orientations, sampling-counter cleanup, or state initialization,
-before the next rebuild reads the project.
+Shared-memory `refine3D` owns one parsed command, project and general toolbox
+for its whole run. Each iteration refreshes the volumes, search toolbox, band
+and prepared model; it retains symmetry, direction geometry and masks. The
+matcher releases all-state alignment data before reconstruction. A Cartesian
+polish consumes the same in-memory project and sample, with its own parameters
+constructed once and its iteration/sampling settings refreshed explicitly.
+Gridding assembly updates the owner's project without publishing it, and sigma2
+consolidation uses that same project. The completed particle field is written
+at iteration finalization; no project-file handoff is needed between phases.
+The PCG master retains its additional particle-field write below. Startup
+mutations needed by sigma2 bootstrap are still published before bootstrap.
+
+Shared-memory strategies explicitly reset the intrinsic random stream at their
+alignment, polish, gridding-assembly and sigma-commit phase boundaries, preserving
+the reseed sequence of their command-based execution. Owner routines never
+reseed. The probabilistic generator and its key version are unchanged.
+
+The shared-memory strategy retains the requested shift window and restores it
+before each alignment pass. Convergence may propose a wider window, but the
+former per-iteration parameter construction reset it to the command's request;
+keeping the parameters resident preserves that behavior explicitly.
 
 Distributed `refine3D` keeps prototype command lines for the workers, the start
 reconstruction, postprocessing and the thread count of the sigma commit; the
@@ -893,6 +909,15 @@ file and no master table exist: the dense (format word -4), neighbourhood and
 2D (-6, -7) part files, the parallel part reads, the assignment and
 insertion-pose files and their deleter were retired on 2026-11-05 with the
 `prob_align` step and the table workers (`prob_align_batch_pipeline.md`).
+
+Before allocating a probabilistic matcher's particle slots, `simple_matcher_memory`
+estimates dominant fixed and per-particle storage from geometry, the interpolation
+and scoring bands, references, team size and candidate staging. Its byte counts
+are 64-bit. The preferred thread-based batch capacity is reduced when necessary;
+the retained 3D observation buffer receives only the remaining alignment budget.
+These are planning estimates, not a bound on library plans or total process RSS.
+Fixed storage that already exceeds the budget retains the existing warning and
+the minimum one-particle batch, with no retained observation buffer.
 
 The shift search of the tables keeps a double-precision copy of the
 reference for one minimisation (`load_ref_aln_8`, which records the

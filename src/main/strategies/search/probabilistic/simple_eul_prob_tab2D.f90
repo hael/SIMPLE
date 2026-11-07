@@ -1046,15 +1046,14 @@ contains
         deallocate(filled)
     end subroutine batch_rows_from_buffers
 
-    !> the thread buffers of a sparse batch as the candidate store of the part: the particles outside the batch hold
-    !! no candidate; a particle's candidates come in its thread's append order
+    !> The current batch alone owns the sparse store; each particle keeps its thread's append order.
     subroutine batch_store_from_buffers( self, i_first, i_last )
         class(eul_prob_tab2D), intent(inout) :: self
         integer,               intent(in)    :: i_first, i_last
         integer, allocatable :: counts(:), filled(:)
-        integer :: ithr, j, i_loc
+        integer :: ithr, j, i_loc, i_batch
         integer(int64) :: pos
-        allocate(counts(self%nptcls), filled(self%nptcls), source=0)
+        allocate(counts(i_first:i_last), filled(i_first:i_last), source=0)
         do ithr = 1,size(self%candidate_buffers)
             do j = 1,self%candidate_buffers(ithr)%nused
                 i_loc = self%candidate_buffers(ithr)%particle_indices(j)
@@ -1062,19 +1061,16 @@ contains
                 counts(i_loc) = counts(i_loc) + 1
             enddo
         enddo
-        call self%candidate_store%new_ragged(self%pinds, counts)
+        call self%candidate_store%new_ragged(self%pinds(i_first:i_last), counts)
         do ithr = 1,size(self%candidate_buffers)
             do j = 1,self%candidate_buffers(ithr)%nused
                 i_loc = self%candidate_buffers(ithr)%particle_indices(j)
+                i_batch = i_loc - i_first + 1
                 filled(i_loc) = filled(i_loc) + 1
-                pos = self%candidate_store%offsets(i_loc) + int(filled(i_loc) - 1,int64)
+                pos = self%candidate_store%offsets(i_batch) + int(filled(i_loc) - 1,int64)
                 self%candidate_store%candidates(pos) = self%candidate_buffers(ithr)%candidates(j)
             enddo
             call self%candidate_buffers(ithr)%kill
-        enddo
-        do i_loc = i_first,i_last
-            self%candidate_store%seed_shifts(:,i_loc) = self%seed_shifts(:,i_loc)
-            self%candidate_store%seed_has_sh(i_loc)   = self%seed_has_sh(i_loc)
         enddo
         deallocate(counts, filled)
     end subroutine batch_store_from_buffers
@@ -1130,16 +1126,21 @@ contains
         integer,               intent(in)    :: i_first, i_last
         real,    allocatable :: w(:), dists_c(:)
         integer, allocatable :: pos_c(:)
-        integer :: i_loc, n_loc, which, ibest, maxcand, npeaks_loc
+        integer :: i_loc, i_batch, n_loc, which, ibest, maxcand, npeaks_loc
         real    :: temp, dist
         if( .not. self%l_assign_open ) THROW_HARD('no open assignment; eul_prob_tab2D%assign_rows_sparse')
+        if( size(self%candidate_store%pinds) /= i_last - i_first + 1 ) &
+            &THROW_HARD('sparse store is not this batch; eul_prob_tab2D%assign_rows_sparse')
+        if( any(self%candidate_store%pinds /= self%pinds(i_first:i_last)) ) &
+            &THROW_HARD('sparse store particle IDs differ; eul_prob_tab2D%assign_rows_sparse')
         maxcand = 0
-        do i_loc = i_first,i_last
-            maxcand = max(maxcand, int(self%candidate_store%offsets(i_loc+1) - self%candidate_store%offsets(i_loc)))
+        do i_batch = 1,i_last-i_first+1
+            maxcand = max(maxcand, int(self%candidate_store%offsets(i_batch+1) - self%candidate_store%offsets(i_batch)))
         enddo
         allocate(w(max(1,maxcand)), dists_c(max(1,maxcand)), pos_c(max(1,maxcand)))
         do i_loc = i_first,i_last
-            call gather_row(i_loc, dists_c, pos_c, n_loc, ibest)
+            i_batch = i_loc - i_first + 1
+            call gather_row(i_batch, dists_c, pos_c, n_loc, ibest)
             if( n_loc < 1 )&
                 &THROW_HARD('Failed sparse posterior particle assignment in eul_prob_tab2D%assign_rows_sparse')
             if( self%neff%wanted(i_loc) ) call self%neff%offer(n_loc, dists_c(1:n_loc), self%temps(i_loc))
@@ -1153,7 +1154,7 @@ contains
                 &rnd_keyed(rnd_draw_key(self%rnd_scope, self%pinds(i_loc), RND_FAM_ASSIGN)), which, dist)
             if( which < 1 ) which = ibest ! no valid distance: the best candidate
             if( which == ibest ) self%nmode = self%nmode + 1
-            npeaks_loc = count_npeaks(i_loc)
+            npeaks_loc = count_npeaks(i_batch)
             call self%finalize_candidate_assignment(i_loc, self%candidate_store%candidates(pos_c(which)),&
                 &100. * real(npeaks_loc) / real(self%nclasses), npeaks_loc)
             self%nassigned = self%nassigned + 1

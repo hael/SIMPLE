@@ -50,7 +50,7 @@ end interface
 ! use hybrid or combined search strategies can then be implemented as extensions
 ! of the relevant strategy2D base class
 type :: strategy2D_per_ptcl
-    class(strategy2D), pointer :: ptr => null()
+    class(strategy2D), allocatable :: ptr
 end type strategy2D_per_ptcl
 
 end module simple_strategy2D

@@ -187,13 +187,12 @@ contains
     subroutine inmem_execute_iteration( self, params, build, cline, converged)
         use simple_strategy2D_matcher, only: refine2D_exec
         use simple_starproject,        only: starproject
-        use simple_commanders_euclid,  only: commander_commit_sigma2
+        use simple_rnd,                only: seed_rnd
         class(refine2D_inmem_strategy), intent(inout) :: self
         type(parameters),                intent(inout) :: params
         type(builder),                   intent(inout) :: build
         type(cmdline),                   intent(inout) :: cline
         logical,                         intent(out)   :: converged
-        type(commander_commit_sigma2) :: xcommit_sigma2
         type(starproject) :: starproj
         real              :: update_frac_req
         logical           :: l_full_update, l_update_frac_req, l_frac
@@ -243,15 +242,14 @@ contains
         endif
         ! Euclid sigma2 consolidation for next iteration
         if( params%cc_objfun==OBJFUN_EUCLID )then
-            call cline%set('which_iter', sigma2_commit_iter(params%which_iter, matcher_completed=.true.))
             if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-            call xcommit_sigma2%execute(cline)
+            call seed_rnd
+            call commit_sigma2_exec(params, build, sigma2_commit_iter(params%which_iter, matcher_completed=.true.), params%nthr)
             if( L_BENCH_GLOB )then
                 self%bench%rt_sigma = toc(self%bench%t_sigma)
                 call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
                 &self%bench%sigma2_nbytes, self%bench%sigma2_nrows_updated)
             endif
-            call cline%set('which_iter', params%which_iter)
         endif
         ! Write starfile
         if( L_BENCH_GLOB ) self%bench%t = tic()
@@ -423,7 +421,7 @@ contains
         endif
         ! Merge alignment docs
         if( L_BENCH_GLOB ) self%bench%t = tic()
-        call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
+        call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY, write=.false.)
         if( L_BENCH_GLOB ) self%bench%rt_merge = toc(self%bench%t)
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
@@ -731,7 +729,6 @@ contains
         call build%spproj%write_segment_inside('cls2D',        params%projfile)
         call build%spproj%write_segment_inside('cls3D',        params%projfile)
         call build%spproj%write_segment_inside('out',          params%projfile)
-        call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call cline_cavgassemble%kill
     end subroutine run_distributed_cavg_assembly
 

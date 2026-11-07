@@ -34,7 +34,8 @@ use simple_strategy3D_srch,            only: strategy3D_spec
 use simple_shiftmap_srch,              only: setup_shiftmap_srch
 use simple_matcher_2Dprep,             only: ptcl_on_disk
 use simple_strategy3D,                 only: strategy3D
-use simple_type_defs,                  only: OBJFUN_EUCLID, ptcl_ref
+use simple_type_defs,                  only: OBJFUN_EUCLID
+use simple_matcher_memory,             only: matcher_memory_terms, matcher_batch_capacity
 implicit none
 
 public :: refine3D_exec
@@ -65,8 +66,8 @@ contains
         integer,                   intent(in)    :: which_iter
         logical,                   intent(inout) :: converged
         logical,                   intent(in) :: l_write_partial_recs
-        class(parameters), pointer :: p_ptr => null()
-        class(builder),    pointer :: b_ptr => null()
+        class(parameters), pointer :: p_ptr
+        class(builder),    pointer :: b_ptr
         class(eul_prob_tab), allocatable, target :: eulprob_obj_part !< the part's assignment (a neighbourhood table on the pipeline's prob_neigh route)
         type(prob_insert_poses), target :: extra_poses  !< the weighted insertion's poses of this part (topk > 1)
         type :: strategy3D_per_ptcl
@@ -104,7 +105,7 @@ contains
         type(cartft_pose_work)  :: cont_work_sum
         real(dp),   allocatable :: ts_thr(:)
         real(dp)                :: ts_search, wall_search, t_region, t_ptcl
-        integer(int64)          :: cart_ref_bytes, pipeline_bytes, pipeline_budget
+        integer(int64)          :: cart_ref_bytes, pipeline_bytes, pipeline_budget, fixed_bytes, particle_bytes
         integer                 :: nthr_team
         real(timer_int_kind)    :: rt_fill_tab, rt_assign
         type(prob_fill_profile) :: fill_prof
@@ -231,7 +232,9 @@ contains
             t_fill     = tic()
             reads_fill = ptcl_read_counts_now()
         endif
-        buffer_budget = ptcl_buffer_budget(p_ptr, b_ptr)
+        ! the alignment context takes its estimated share of the budget first; the buffer gets the remainder
+        buffer_budget = pipeline_budget
+        if( ctrl%do_pipeline ) buffer_budget = max(0_int64,buffer_budget-pipeline_bytes)
         if( ctrl%do_buffer_records )then
             buffer_status = open_record_buffer(p_ptr, nptcls2update, pinds, buffer_budget)
         else
@@ -511,12 +514,30 @@ contains
             endif
         end subroutine sample_particles_for_update
 
+        !> the batches; the pipeline's capacity is planned from the parameters as they are here: the band is the
+        !! command's (the model's, adopted in prepare_refs_sigmas_and_pftc, may differ) and the diagnostic's second
+        !! model is assumed whenever it could be read, so the estimate is conservative, not exact
         subroutine prepare_particles_batches( nptcls )
             integer, intent(in) :: nptcls
-            batchsz_max = min(nptcls, p_ptr%nthr * BATCHTHRSZ)
-            nbatches    = ceiling(real(nptcls) / real(batchsz_max))
+            integer :: nrefs, nthreads, preferred
+            batchsz_max     = min(nptcls, p_ptr%nthr * BATCHTHRSZ)
+            pipeline_budget = ptcl_buffer_budget(p_ptr, b_ptr)
+            if( ctrl%do_pipeline )then
+                nrefs = p_ptr%nspace * p_ptr%nstates
+                if( p_ptr%l_prob_post_diag .and. trim(p_ptr%mirr_proj) == 'no' ) nrefs = 2*nrefs
+                nthreads = 1
+                !$ nthreads = omp_get_max_threads()
+                call matcher_memory_terms(p_ptr, nrefs, nptcls, nthreads, 0, fixed_bytes, particle_bytes)
+                preferred   = batchsz_max
+                batchsz_max = matcher_batch_capacity(nptcls, preferred, pipeline_budget, fixed_bytes, particle_bytes)
+                if( batchsz_max < preferred ) write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
+                    &'>>> MEMORY BUDGET: alignment batch reduced from ', preferred, ' to ', batchsz_max, &
+                    &' particles (', pipeline_budget, ' bytes); refine3D_exec'
+            endif
+            nbatches    = 1 + (nptcls - 1) / batchsz_max
             batches     = split_nobjs_even(nptcls, nbatches)
             batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
+            if( ctrl%do_pipeline ) pipeline_bytes = fixed_bytes + int(batchsz_max,int64)*particle_bytes
         end subroutine prepare_particles_batches
 
         subroutine prepare_refs_sigmas_and_pftc()
@@ -559,32 +580,11 @@ contains
             if( p_ptr%topk > 1 ) call eulprob_obj_part%set_insert_cone(insert_cone_from_fsc(p_ptr%nstates, &
                 &p_ptr%box, p_ptr%smpd, p_ptr%mskdiam, lp_cone, l_report=.not. p_ptr%l_distr_worker))
             call eulprob_obj_part%open_assignment(nglob=neff_nglob, rank0=neff_rank0)
-            pipeline_budget = ptcl_buffer_budget(p_ptr, b_ptr)
-            pipeline_bytes  = pipeline_context_bytes()
             if( pipeline_bytes > pipeline_budget )then
                 write(logfhandle,'(A,I0,A,I0,A)') 'WARNING: the alignment context (', pipeline_bytes, &
                     &' bytes) exceeds the memory budget (', pipeline_budget, ' bytes); refine3D_exec'
             endif
         end subroutine begin_pipeline
-
-        !> the context's memory, its dominant terms in checked 64-bit arithmetic: the polar references of both halves
-        !! and their memoized transforms, the batch's polar particles with their CTF terms and memos, the batch's
-        !! rows and refined entries, the part's assignment map
-        integer(int64) function pipeline_context_bytes() result( nbytes )
-            integer(int64), parameter :: CSZ = 8_int64 !< a single-precision complex
-            type(ptcl_ref) :: entry
-            integer(int64) :: nrefs, pftsz, nk, kfromto(2)
-            nrefs   = int(b_ptr%pftc%get_nrefs(), int64)
-            pftsz   = int(b_ptr%pftc%get_pftsz(), int64)
-            kfromto = int(b_ptr%pftc%get_kfromto(), int64)
-            nk      = kfromto(2) - kfromto(1) + 1_int64
-            nbytes = 2_int64 * nrefs * pftsz * nk * CSZ                 ! the references, even and odd
-            nbytes = nbytes + 4_int64 * nrefs * (pftsz + 1_int64) * nk * CSZ  ! their memoized transforms, two per half
-            nbytes = nbytes + 3_int64 * int(batchsz_max,int64) * (pftsz + 1_int64) * nk * CSZ ! the batch's particles and memos
-            nbytes = nbytes + int(batchsz_max,int64) * nrefs * 8_int64  ! the batch's rows (distance, in-plane index)
-            nbytes = nbytes + int(batchsz_max,int64) * int(max(1,eulprob_obj_part%projs_ns_model),int64) * 24_int64
-            nbytes = nbytes + int(nptcls2update,int64) * int(storage_size(entry)/8,int64)
-        end function pipeline_context_bytes
 
         !> the batch's fill and selection: its rows filled on the prepared batch, each particle's pose drawn from its
         !! row, the extras laid out for the search to resolve

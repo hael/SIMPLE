@@ -434,8 +434,14 @@ The probability table has a bounded-memory contract: the fill keeps
 thread-local compact candidates for the current batch alone, the assignment
 turns them into the batch's dense rows (`refine=prob`, one entry per class) or
 ragged candidate store (`refine=prob_neigh`) and releases them after the
-batch's draws; the assignment map (`ptcl_ref`) is the part's only state across
+batch's draws. Sparse counts, offsets and particle IDs cover the current batch
+only, with an explicit translation to the part's assignment indices. The part
+retains its assignment map, seed shifts, temperatures and readout state across
 batches. No partition file and no global table exist (retired 2026-11-05).
+The probabilistic matcher's capacity is selected before allocating particle
+slots using `simple_matcher_memory` and the task's alignment budget. The 2D
+matcher owns and deallocates every polymorphic search object; pass images,
+parameter/builder aliases and timers are procedure-local.
 
 Both table fills (`fill_tab_range` for `refine=prob`: the last stage and the
 seed pass; `fill_tab_prob_neigh_range` for the `prob_neigh` stages) hold the
@@ -587,7 +593,7 @@ call and rereads the segments they wrote after it. What writes what, as built:
 | --- | --- |
 | `solve2D` | `ptcl2D` at the start (fresh start: after the clustering is deleted; `cls_init=prev`: after the seed partition); `ptcl3D` at the end unless the project holds a valid 3D alignment; `out` after the final class averages. It rereads `cls2D` and `out` after every stage, and `ptcl2D` and `ptcl3D` before the end. |
 | `refine2D`, shared memory | `cls2D` and `cls3D` every iteration (`restore_cavgs_inmem`); `ptcl2D` and `out` at the end of the invocation. |
-| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (the probabilistic modes and the sampled modes under fractional updates), by the merge of the workers' documents, after class-average assembly (with `cls2D`, `cls3D` and `out`), and in the iteration's finalization; `out` at the end of the run. |
+| `refine2D`, distributed master | `ptcl2D` once the sample is drawn (the probabilistic modes and the sampled modes under fractional updates), then at iteration finalization; `cls2D`, `cls3D` and `out` after class-average assembly; `out` at the end of the run. Merge and assembly leave particle changes in memory for the owner to publish. |
 | `refine2D` worker | no project segment: its alignment document, sigma2 part, `cavg_contrib_part<N>.bin` and, under the probabilistic modes, its readout record `prob_readout_part<N>.txt`. |
 | `make_cavgs`, shared memory | `ptcl2D` (class remap, halves), then `cls2D` and `out`. |
 | `make_cavgs`, distributed | the master, before the workers start: `ptcl2D` (class remap, expansion, time-series split, halves); the workers: no project segment; the assembly (`run_cavgassemble`): the whole project. |

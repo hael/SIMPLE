@@ -79,9 +79,10 @@ end type refine3D_bench_state
 
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(refine3D_bench_state), private :: bench
-    type(cmdline)     :: cline_commit_sigma2
     type(convergence) :: conv
     type(parameters), allocatable :: params_polish !< the parameters of the polish pass (pose_cont=yes)
+    real, private :: requested_trs = 0.
+    logical, private :: requested_doshift = .false.
     logical :: l_sigma
 contains
     procedure :: initialize         => inmem_initialize
@@ -556,15 +557,6 @@ contains
         end select
     end function polish_follows
 
-    !> Gridding volassemble rereads the project file, so this iteration's particle field goes to
-    !! disk first; the polish branch publishes its own and a sigma pass writes no orientations.
-    logical function publish_before_file_assembly( params, l_write_partial_recs, l_polish ) result( l_publish )
-        type(parameters), intent(in) :: params
-        logical,          intent(in) :: l_write_partial_recs, l_polish
-        l_publish = l_write_partial_recs .and. .not. l_polish .and. trim(params%refine) /= 'sigma' .and. &
-            &(params%l_cart_refine .or. trim(params%rec_backend) == 'gridding')
-    end function publish_before_file_assembly
-
     !> Remove refine3D matcher-only options before invoking child workflows.
     !! The parent and distributed matcher workers retain these options.
     subroutine strip_refine3D_search_only_args( cline )
@@ -743,31 +735,31 @@ contains
                     endif
             end select
         else
-        select case(trim(params%oritype))
-            case('cls3D')
-                call lp_project%read_segment(params%oritype, params%projfile)
-                if( lp_project%os_cls3D%get_noris() >= params%fromp )then
-                    l_has_lp = lp_project%os_cls3D%isthere(params%fromp, 'lp')
-                    if( l_has_lp ) project_lp = lp_project%os_cls3D%get(params%fromp, 'lp')
-                endif
-            case('ptcl3D')
-                ! the particle record fromp alone: the whole segment of a large project would be read for it
-                call bos%open(params%projfile)
-                if( bos%get_n_records(PTCL3D_SEG) >= params%fromp )then
-                    call os_rec%new(params%fromp, is_ptcl=.true.)
-                    call bos%read_segment(PTCL3D_SEG, os_rec, fromto=[params%fromp,params%fromp])
-                    l_has_lp = os_rec%isthere(params%fromp, 'lp')
-                    if( l_has_lp ) project_lp = os_rec%get(params%fromp, 'lp')
-                    call os_rec%kill
-                endif
-                call bos%close
-            case DEFAULT
-                call lp_project%read_segment(params%oritype, params%projfile)
-                if( lp_project%os_ptcl3D%get_noris() >= params%fromp )then
-                    l_has_lp = lp_project%os_ptcl3D%isthere(params%fromp, 'lp')
-                    if( l_has_lp ) project_lp = lp_project%os_ptcl3D%get(params%fromp, 'lp')
-                endif
-        end select
+            select case(trim(params%oritype))
+                case('cls3D')
+                    call lp_project%read_segment(params%oritype, params%projfile)
+                    if( lp_project%os_cls3D%get_noris() >= params%fromp )then
+                        l_has_lp = lp_project%os_cls3D%isthere(params%fromp, 'lp')
+                        if( l_has_lp ) project_lp = lp_project%os_cls3D%get(params%fromp, 'lp')
+                    endif
+                case('ptcl3D')
+                    ! the particle record fromp alone: the whole segment of a large project would be read for it
+                    call bos%open(params%projfile)
+                    if( bos%get_n_records(PTCL3D_SEG) >= params%fromp )then
+                        call os_rec%new(params%fromp, is_ptcl=.true.)
+                        call bos%read_segment(PTCL3D_SEG, os_rec, fromto=[params%fromp,params%fromp])
+                        l_has_lp = os_rec%isthere(params%fromp, 'lp')
+                        if( l_has_lp ) project_lp = os_rec%get(params%fromp, 'lp')
+                        call os_rec%kill
+                    endif
+                    call bos%close
+                case DEFAULT
+                    call lp_project%read_segment(params%oritype, params%projfile)
+                    if( lp_project%os_ptcl3D%get_noris() >= params%fromp )then
+                        l_has_lp = lp_project%os_ptcl3D%isthere(params%fromp, 'lp')
+                        if( l_has_lp ) project_lp = lp_project%os_ptcl3D%get(params%fromp, 'lp')
+                    endif
+            end select
         endif
         if( l_has_lp .and. project_lp > TINY )then
             call build%spproj_field%set_all2single('lp', project_lp)
@@ -971,7 +963,6 @@ contains
         type(builder),    intent(inout) :: build
         call set_bp_range3D(params, build, cline)
         call materialize_reprojection_model_from_volumes(params, build, cline, cleanup_pftc=.true.)
-        call build%spproj%write_segment_inside(params%oritype)
     end subroutine materialize_reprojection_model
 
     !> The distributed master's reprojection model on its own builder: the general toolbox is made at the first
@@ -1124,8 +1115,9 @@ contains
         logical                               :: l_proj_dirty
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
-        ! the execution directory exists now: every iteration rebuilds its parameters from cline,
-        ! which must not create (and enter) a nested one
+        self%requested_trs = params%trs
+        self%requested_doshift = params%l_doshift
+        ! Child command lines stay in the execution directory owned by this run.
         call cline%set('mkdir', 'no')
         call check_polish_request(params)
         call check_cls3D_field(params, build)
@@ -1180,9 +1172,6 @@ contains
         if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
         ! objfun=euclid initialisation
         self%l_sigma = sigma_update_enabled(params)
-        self%cline_commit_sigma2 = cline
-        call strip_refine3D_search_only_args(self%cline_commit_sigma2)
-        call self%cline_commit_sigma2%set('prg', 'commit_sigma2')
         if( self%l_sigma )then
             ! Ensure e/o partitioning prior to calc_pspec
             call ensure_field_halves(build%spproj, params%oritype, params%projfile)
@@ -1197,16 +1186,15 @@ contains
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
         use simple_strategy3D_matcher,   only: refine3D_exec
-        use simple_commanders_euclid,    only: commander_commit_sigma2
-        use simple_volassemble_strategy, only: run_volassemble
+        use simple_volassemble_strategy, only: volassemble_exec
+        use simple_rnd,                  only: seed_rnd
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
-        type(commander_commit_sigma2) :: xcommit_sigma2
         type(cmdline)                     :: cline_volassemble
-        type(cmdline)                     :: cline_build, cline_polish
+        type(cmdline)                     :: cline_polish
         integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
         logical                           :: l_write_partial_recs, l_polish, l_force_full_first
@@ -1221,18 +1209,16 @@ contains
         extr_iter = params%extr_iter
         l_force_full_first = self%startup%begin_iteration(params, cline)
         call self%conv%print_iteration(params%which_iter)
-        ! In shared-memory mode, rebuild the toolbox from the settled
-        ! per-iteration settings. Keep the stage startit in params so
-        ! final-iteration planning still sees the whole refine3D stage.
-        cline_build = cline
-        call cline_build%set('startit',    params%startit)
-        call cline_build%set('which_iter', iter)
-        call cline_build%set('extr_iter',  extr_iter)
-        call build%kill_strategy3D_tbox
-        call build%kill_general_tbox
-        call build%init_params_and_build_strategy3D_tbox(cline_build, params)
-        params%which_iter = iter
-        params%extr_iter  = extr_iter
+        ! Geometry and the authoritative project live for the command; model payloads live for a pass.
+        ! Keep the shared-memory alignment phase's intrinsic random stream explicit.
+        call seed_rnd
+        !$ call omp_set_num_threads(params%nthr)
+        nthr_glob = params%nthr
+        ! The run's requested bounds are separate from convergence's next-step proposal.
+        params%trs = self%requested_trs
+        params%l_doshift = self%requested_doshift
+        call build%new_vols(params)
+        call build%build_strategy3D_tbox(params)
         params%outfile    = 'algndoc'//METADATA_EXT
         ! communicate iteration counters
         call cline%set('startit',    params%startit)
@@ -1279,28 +1265,27 @@ contains
         ! poses: the discrete pass writes no partial reconstructions
         l_polish = polish_follows(params)
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_polish)
-        if( publish_before_file_assembly(params, l_write_partial_recs, l_polish) ) &
-            &call build%spproj%write_segment_inside(params%oritype)
         if( l_polish )then
-            ! the polish pass (C8, C19): refine=cont over the discrete pass's particle sample, from
-            ! the poses it committed, against the Cartesian references this iteration materialized;
-            ! its toolbox is built from the project the discrete pass leaves on disk
-            call build%spproj%write_segment_inside(params%oritype)
-            cline_polish = cline_build
+            ! The polish consumes the committed poses and sample on this same project.
+            cline_polish = cline
             call cline_polish%set('refine',    'cont')
             call cline_polish%set('pose_cont', 'yes')
             call cline_polish%set('shift_sigma', 0.) ! the map does not run in the Cartesian pass
-            call build%kill_strategy3D_tbox
-            call build%kill_general_tbox
-            if( .not. allocated(self%params_polish) ) allocate(self%params_polish)
-            call build%init_params_and_build_strategy3D_tbox(cline_polish, self%params_polish)
+            if( .not. allocated(self%params_polish) )then
+                allocate(self%params_polish)
+                call self%params_polish%new(cline_polish)
+            else
+                call seed_rnd
+            endif
             self%params_polish%which_iter = iter
             self%params_polish%extr_iter  = extr_iter
             self%params_polish%outfile    = params%outfile
+            self%params_polish%update_frac   = params%update_frac
+            self%params_polish%l_update_frac = params%l_update_frac
+            self%params_polish%l_trail_rec   = params%l_trail_rec
+            call build%build_strategy3D_tbox(self%params_polish)
             ! no new sigma2 transaction: the polish rewrites the discrete pass's ranges from them
             call refine3D_exec(self%params_polish, build, cline_polish, iter, converged, l_write_partial_recs)
-            ! the assembly reads the polished poses from the project file
-            call build%spproj%write_segment_inside(params%oritype)
             call cline_polish%kill
         endif
 
@@ -1321,7 +1306,10 @@ contains
                 call assemble_refine3D_pcg(cline, params, build)
             else
                 call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
-                call run_volassemble(cline_volassemble)
+                call seed_rnd
+                call build%new_vols(params)
+                call volassemble_exec(params, build, cline_volassemble, params%nthr, write=.false.)
+                call cline_volassemble%kill
             endif
             call report_rec_master_phase(params, t_recphase, params%nthr)
             if( trim(params%volrec) .eq. 'yes' )then
@@ -1332,7 +1320,7 @@ contains
                 end do
             endif
         endif
-        if( l_write_partial_recs ) call refresh_matching_lp_from_project(params, build, cline)
+        if( l_write_partial_recs ) call refresh_matching_lp_from_project(params, build, cline, l_memory=.true.)
         if( l_write_partial_recs ) call refresh_resolution_fields_from_fsc(params, build)
         converged = .false.
         select case(trim(params%refine))
@@ -1347,9 +1335,9 @@ contains
             if( canonical_sigma_commit_deferred(params, converged) )then
                 write(logfhandle,'(A)') '>>> SIGMA2 UPDATE: deferring final canonical commit to the stage owner'
             else
-                call self%cline_commit_sigma2%set('which_iter', params%which_iter)
                 if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
-                call xcommit_sigma2%execute(self%cline_commit_sigma2)
+                call seed_rnd
+                call commit_sigma2_exec(params, build, params%which_iter, params%nthr)
                 if( L_BENCH_GLOB ) self%bench%rt_sigma = toc(self%bench%t_sigma)
             endif
             if( L_BENCH_GLOB ) call read_sigma2_bench_counts(build, self%bench%sigma2_nptcls, self%bench%sigma2_nshells,&
@@ -1363,8 +1351,7 @@ contains
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
         type(builder),                  intent(inout) :: build
-        ! Shared-memory rebuilds the builder every iteration, so persist the
-        ! updated orientations before the next rebuild reads the project file.
+        ! Publish the completed iteration; the next iteration consumes this same project in memory.
         if( trim(params%refine) /= 'sigma' ) call build%spproj%write_segment_inside(params%oritype)
         call write_strategy_bench_report(params, self%bench, 'shared-memory')
     end subroutine inmem_finalize_iteration

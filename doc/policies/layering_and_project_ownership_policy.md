@@ -61,11 +61,9 @@ external-reference pose initialization) may, to run whole programs (section 4).
 The strategy modules of the three master steps (volume assembly, class-average
 assembly, the sigma2 commit) never import the commander that wraps them: a body
 that needs an in-process commander takes it as a `commander_base` dummy
-**(ruled)**. Shared-memory `refine3D` and `refine2D` run those steps through the
-commanders' `execute(cline)` **(ruled 2026-10-20)**; that is the one accepted
-exception, and it ends for a step when the step gets a shared-memory entry on the
-caller's `(params, build)`. It ended for the probabilistic alignment step on
-2026-11-04: the probabilistic routes run as one batch pipeline inside the
+**(ruled)**. Shared-memory `refine3D` and `refine2D` now use owner routines on
+the caller's `(params, build)` for assembly and sigma2 consolidation. Their
+former commander exception is retired. The probabilistic routes run as one batch pipeline inside the
 matchers (`refine3D_exec`, `refine2D_exec`) in shared memory and in every
 distributed part alike, and the `prob_align` step, its commanders and its table
 workers were retired on 2026-11-05.
@@ -230,9 +228,8 @@ precedent. The entries the batch pipeline of probabilistic alignment closed
 write-and-reread around the `prob_align` step) are gone from the list.
 
 - **Concrete commander modules imported by strategies.**
-  `simple_refine3D_strategy` (`commit_sigma2` by the shared-memory ruling; also
-  `rec3D` and `postprocess`), `simple_refine2D_strategy` (`commit_sigma2` by the
-  same ruling; also `make_cavgs`, `make_cavgs_distr`, `scale`), `simple_calc_pspec_strategy`
+  `simple_refine3D_strategy` (`rec3D` and `postprocess`),
+  `simple_refine2D_strategy` (`make_cavgs`, `make_cavgs_distr`, `scale`), `simple_calc_pspec_strategy`
   (`calc_pspec_assemble`), `simple_pick_strategy` (`cluster_cavgs`) and
   `simple_rec3D_service` (`postprocess_volume_from_files`, a routine that lives
   in `simple_commanders_volops`). The controllers import them by design
@@ -244,18 +241,6 @@ write-and-reread around the `prob_align` step) are gone from the list.
   gridding path has (`simple_rec3D_pcg_strategy.f90`, after the `res`, `res05`,
   `cfar` update), so a distributed `rec_backend=pcg` iteration writes the field
   once more than `3D/refine3D_policy.md` section 4 counts.
-- **Shared memory hands over through the file.** A shared-memory `refine3D`
-  iteration writes the particle field at up to four points (after the model,
-  before a file-based assembly, around a polish pass, at the iteration's end),
-  because each commander it calls builds its own `params` and builder from the
-  file; the write before the probabilistic step and the re-read after it ended
-  with the pipeline (2026-11-04).
-- **The 2D master writes `ptcl2D` more than once.** The distributed `refine2D`
-  master writes it in `merge_algndocs` (called without `write=.false.`), after
-  assembly (`run_distributed_cavg_assembly`) and in `distr_finalize_iteration`,
-  and once more before the parts when it draws the iteration's sample (the
-  sampled and the probabilistic modes): three writes per iteration, four with a
-  sample, against the one of section 5.4.
 - **A domain module imports a strategy module.** `ptcl_read_session` lives in
   `strategies/search/simple_matcher_ptcl_io.f90` but `class/`, `volume/` and
   `flex/` use it.

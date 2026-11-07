@@ -34,6 +34,7 @@ contains
         params%prob_beta    = 1.
         call test_dense_batch()
         call test_sparse_batch()
+        call test_sparse_uneven_batches()
         call test_sparse_shared_best_class()
         call test_dense_posterior_assignment()
         call test_sparse_posterior_assignment()
@@ -310,6 +311,68 @@ contains
         call assert_assignment('sparse batch',[1,2,1],[0.1,0.2,0.3],[1,1,2],[50.,50.,100.])
         call table%kill
     end subroutine test_sparse_batch
+
+    !> Uneven batches preserve global IDs, seed/refined shifts and untouched rows outside the current batch.
+    subroutine test_sparse_uneven_batches()
+        integer, parameter :: NP = 11, BS = 4
+        class(eul_prob_tab2D), allocatable :: tab
+        type(prob_candidate) :: candidate
+        integer :: ids(NP), i, first, last, best_class
+        real    :: expected_x, expected_y
+        write(*,'(A)') 'test_sparse_uneven_batches'
+        allocate(tab)
+        params%refine    = 'prob_neigh'
+        params%l_doshift = .true.
+        ids = [(100 + 7*i, i=1,NP)]
+        call tab%new_pipeline(params, build, ids)
+        tab%temps = 1.e9
+        do i = 1,NP
+            tab%seed_shifts(:,i) = [real(i), -real(i)]
+            tab%seed_has_sh(i) = .true.
+        enddo
+        call tab%open_assignment
+        do first = 1,NP,BS
+            last = min(NP, first + BS - 1)
+            do i = first,last
+                best_class = 1 + mod(i, NCLASSES)
+                candidate = prob_candidate()
+                candidate%iref = best_class
+                candidate%inpl = best_class
+                candidate%dist = 0.1
+                if( mod(i,2) == 0 )then
+                    candidate%has_sh = .true.
+                    candidate%x = 0.5 * real(i)
+                    candidate%y = 0.25 * real(i)
+                endif
+                call tab%candidate_buffers(1)%append(i, candidate)
+                candidate = prob_candidate()
+                candidate%iref = 3 - best_class
+                candidate%inpl = 3 - best_class
+                candidate%dist = 0.9
+                call tab%candidate_buffers(1)%append(i, candidate)
+            enddo
+            call tab%assign_batch(first, last)
+            if( last < NP ) call assert_true(all(tab%assgn_map(last+1:)%icls == 0), 'sparse batch leaves later rows untouched')
+        enddo
+        call tab%close_assignment
+        do i = 1,NP
+            call assert_int(ids(i), tab%assgn_map(i)%pind, 'uneven sparse batches preserve global particle IDs')
+            call assert_int(1 + mod(i,NCLASSES), tab%assgn_map(i)%icls, 'uneven sparse batches draw the unique minimum')
+            call assert_int(2, tab%assgn_map(i)%npeaks, 'uneven sparse batches preserve candidate counts')
+            expected_x = real(i)
+            expected_y = -real(i)
+            if( mod(i,2) == 0 )then
+                expected_x = 0.5 * real(i)
+                expected_y = 0.25 * real(i)
+            endif
+            call assert_true(tab%assgn_map(i)%has_sh, 'uneven sparse batches retain seeded and refined shifts')
+            call assert_true(tab%assgn_map(i)%x == expected_x .and. tab%assgn_map(i)%y == expected_y, &
+                &'uneven sparse batches map shifts to the right particle')
+        enddo
+        call tab%kill
+        deallocate(tab)
+        params%l_doshift = .false.
+    end subroutine test_sparse_uneven_batches
 
     !> two particles share their best class: at the sharp temperature both draw it, no class forced to be populated
     subroutine test_sparse_shared_best_class()
