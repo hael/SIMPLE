@@ -177,7 +177,6 @@ contains
     procedure          :: get_spat_freq
     procedure          :: get_find
     ! Flags
-    procedure          :: is_wthreads
     procedure          :: set_ft
     ! Serialization / misc
     procedure, private :: serialize_masked, serialize_thres
@@ -329,7 +328,6 @@ contains
     procedure          :: mask3D_hard
     procedure          :: taper_edges, taper_edges_hann, taper_edges_particle, taper_edges_vol
     ! CTF, file: simple_image_ctf.f90
-    procedure          :: ctf2img
     procedure          :: apply_ctf_wpad
     procedure          :: apply_ctf
     procedure          :: apply_ctf_wiener
@@ -396,7 +394,6 @@ contains
     generic            :: gauimg => gauimg_center, gauimg_offset
     procedure          :: gauimg2D
     procedure          :: gauimg3D
-    procedure          :: square
     ! pad/clip/crop
     procedure          :: pad
     procedure          :: pad_inplace
@@ -1204,11 +1201,6 @@ interface
     end function get_find
 
     !--- Flags ---!
-
-    module function is_wthreads( self ) result( is )
-        class(image), intent(in) :: self
-        logical :: is
-    end function is_wthreads
 
     module subroutine set_ft( self, is )
         class(image), intent(inout) :: self
@@ -2079,12 +2071,6 @@ interface
 
     ! ===== image CTF procedure interfaces =====
 
-    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in, phshift )
-        class(image), intent(inout) :: self
-        class(ctf),   intent(inout) :: tfun
-        real,         intent(in)    :: dfx_in, dfy_in, angast_in, phshift
-    end subroutine ctf2img
-
     module subroutine apply_ctf_wpad( self, tfun, dfx, mode, phshift, dfy, angast, bfac )
         class(image),     intent(inout) :: self   !< instance
         class(ctf),       intent(inout) :: tfun   !< CTF object
@@ -2419,11 +2405,6 @@ interface
         real, optional, intent(in)    :: cutoff
     end subroutine gauimg3D
     
-    module subroutine square( self, sqrad )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: sqrad
-    end subroutine square
-
     !--- pad/clip/crop ---!
 
     module subroutine pad( self_in, self_out, backgr, antialiasing )

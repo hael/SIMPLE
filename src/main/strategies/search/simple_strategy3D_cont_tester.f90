@@ -5,6 +5,7 @@
 ! status, convergence fields), the euclid sigma2 residual at the committed pose, threaded batches
 ! equal to serial, particles outside the sample untouched, polish fields, the athres_cont bound.
 module simple_strategy3D_cont_tester
+use simple_test_cftc_fixture, only: objective_gradient
 use simple_core_module_api, only: dp, euler2m, string, rad2deg, del_file
 !$ use omp_lib,             only: omp_get_max_threads, omp_get_num_procs, omp_set_num_threads
 use simple_defs_ori,        only: N_PTCL_ORIPARAMS
@@ -318,7 +319,7 @@ contains
             call assert_true(rotation_distance(real(after%get_mat(), dp), truth) < ROTATION_TOL .and. &
                 &all(abs(after%get_2Dshift() - ([0.31, -0.24] + 0.15)) < SHIFT_TOL), 'an accepted solve did not commit the pose')
             islot = b%cftc%get_ptcl_slot(3)
-            call b%cftc%objective_gradient(1, .false., islot, real(after%get_mat(), dp), &
+            call objective_gradient(b%cftc, 1, .false., islot, real(after%get_mat(), dp), &
                 &real(after%get_2Dshift() - before%get_2Dshift(), dp), objective, gradient)
             expected_score = b%cftc%score(islot, objective)
             call assert_true(abs(after%get('corr_cart') - real(expected_score)) < 1.e-4, &
@@ -353,7 +354,7 @@ contains
             ! the rejection outcomes are the codes above CARTFT_ACCEPTED
             call assert_true(after%get('pose_cont_status') > real(CARTFT_ACCEPTED), 'a rejected solve did not record its status')
             islot = b%cftc%get_ptcl_slot(4)
-            call b%cftc%objective_gradient(1, .true., islot, real(before%get_mat(), dp), [0._dp, 0._dp], objective, gradient)
+            call objective_gradient(b%cftc, 1, .true., islot, real(before%get_mat(), dp), [0._dp, 0._dp], objective, gradient)
             call assert_true(abs(after%get('corr_cart') - real(b%cftc%score(islot, objective))) < 1.e-4, &
                 &'a rejected solve did not write corr_cart at the seed')
             call assert_true(after%get('corr') == 0.42, 'a rejected Cartesian solve wrote corr')

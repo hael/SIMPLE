@@ -38,7 +38,7 @@ Silent ones first: nothing reports these.
   0.026 degrees of a pole e3 is folded into e1 and set to 0. A 2D record's in-plane angle is `e3` with
   e1 = e2 = 0: set it with `e3set`, never `set_euler`.
 - **Distance units differ.** `.euldist.`, `.inplrotdist.`, `geodesic_dist_trace`, `oris%euldist`:
-  radians. `min_euldist`, `find_angres`, the angle of `nearest_proj_neighbors`: degrees.
+  radians. `min_euldist`, the angle of `nearest_proj_neighbors`: degrees.
 - **Shifts** `x, y` are pixels of the particle's stack in the particle frame; an image is centred by
   shifting it by minus `[x, y]`. Cropping and resampling: `references/conventions.md`.
 - **Labels.** `state` 0 excludes a row (`ptcl2D`'s selects, `ptcl3D`'s is the 3D label); `class` and

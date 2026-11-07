@@ -5,6 +5,7 @@
 ! then at 4 A from the 8 A poses. Pinned: objective, rotation and shift errors fall, the refined
 ! map beats the perturbed one, and the floors declared below. Fixture files are removed.
 module simple_strategy3D_cont_1jyx_tester
+use simple_test_cftc_fixture, only: objective_gradient
 use ieee_arithmetic,            only: ieee_is_finite
 !$  use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 use simple_atoms,               only: atoms
@@ -24,7 +25,8 @@ use simple_imghead,             only: find_ldim_nptcls
 use simple_stat,                only: median
 use simple_image,               only: image
 use simple_memoize_ft_maps,     only: forget_ft_maps, memoize_ft_maps
-use simple_molecule_data,       only: betagal_1jyx, molecule_data
+use simple_molecule_data,       only: molecule_data
+use simple_test_molecule_fixture, only: betagal_1jyx
 use simple_ori,                 only: ori
 use simple_oris,                only: oris
 use simple_parameters,          only: parameters
@@ -535,7 +537,7 @@ contains
                     &noise_mask, taper, initial_shifts(:, iparticle), objfun, upper_shell, &
                     &raw_work(thread_index), fourier_work(thread_index), iparticle)
                 call b%spproj_field%get_ori(iparticle, seed)
-                call b%cftc%objective_gradient(1, .true., iparticle, real(seed%get_mat(), dp), [0._dp, 0._dp], &
+                call objective_gradient(b%cftc, 1, .true., iparticle, real(seed%get_mat(), dp), [0._dp, 0._dp], &
                     &objectives_before(iparticle), gradient)
                 spec%iptcl = iparticle
                 spec%iptcl_map = iparticle
@@ -546,12 +548,12 @@ contains
                 deallocate (strat)
                 terminal_rotations(:, :, iparticle) = real(b%spproj_field%get_mat(iparticle), dp)
                 terminal_shifts(:, iparticle) = real(b%spproj_field%get_2Dshift(iparticle), dp)
-                call b%cftc%objective_gradient(1, .true., iparticle, terminal_rotations(:, :, iparticle), &
+                call objective_gradient(b%cftc, 1, .true., iparticle, terminal_rotations(:, :, iparticle), &
                     &terminal_shifts(:, iparticle) - real(seed%get_2Dshift(), dp), objectives_after(iparticle), gradient)
                 statuses(iparticle) = merge(CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT, &
                     &b%spproj_field%get(iparticle, 'pose_cont_improved') > 0.5)
                 ! diagnostic: the objective at the truth pose, relative to the centred observation
-                call b%cftc%objective_gradient(1, .true., iparticle, truth_rotations(:, :, iparticle), &
+                call objective_gradient(b%cftc, 1, .true., iparticle, truth_rotations(:, :, iparticle), &
                     &truth_shifts(:, iparticle) - real(seed%get_2Dshift(), dp), objectives_truth(iparticle), gradient)
             end do
 !$omp end do

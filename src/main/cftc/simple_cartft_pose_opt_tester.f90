@@ -4,6 +4,7 @@
 ! default), rollback (E17), the ori entry point and its scaling (E13, E19, N2), recovery under
 ! each objective (N7) and the bounds trs and athres_cont (O6). Ids: pose_cont plan, section 10.
 submodule (simple_cartft_pose_opt) simple_cartft_pose_opt_tester
+use simple_test_cftc_fixture, only: objective_gradient
 use simple_defs,            only: DPI
 use simple_defs_ori,        only: I_E1, I_E2, I_E3, I_X, I_Y, N_PTCL_ORIPARAMS
 use simple_core_module_api, only: euler2m
@@ -239,7 +240,7 @@ contains
             &'shift-only LM violated its accepted-step contract')
         call assert_true(niter < 20, 'shift-only LM exhausted its iteration limit after converging')
         shift = fix%truth_shift
-        call calc%objective_gradient(1, .true., 1, fix%truth_rotation, shift, objective_before, gradient_exact)
+        call objective_gradient(calc, 1, .true., 1, fix%truth_rotation, shift, objective_before, gradient_exact)
         call assert_true(objective_before <= real(epsilon(1.), dp)**2, &
             &'exact shift fixture exceeds the single-precision residual floor')
         call opt%refine_shift(calc, 1, .true., 1, fix%truth_rotation, shift)
@@ -267,9 +268,9 @@ contains
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20, rotation_scale=0.10_dp, shift_step_bound=1._dp)
         rotation = fix%seed_rotation
         shift    = fix%seed_shift
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_before, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_before, gradient)
         call opt%refine_joint(calc, 1, .true., 1, rotation, shift)
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_after, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_after, gradient)
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, status, niter, nattempted, naccepted, nbound_hits, &
             &max_rotation_step, max_shift_step, stage_before, stage_after)
         call assert_true(status == CARTFT_ACCEPTED .and. objective_after < objective_before, &
@@ -289,9 +290,9 @@ contains
         shift           = fix%seed_shift
         frozen_rotation = rotation
         frozen_shift    = shift
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_before, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_before, gradient)
         call opt%refine_joint(calc, 1, .true., 1, rotation, shift, active=[.false., .false., .false., .true., .true.])
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_after, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_after, gradient)
         call assert_true(opt_stage_status(opt, CARTFT_STAGE_JOINT) == CARTFT_ACCEPTED .and. &
             &objective_after < objective_before .and. sqrt(sum((shift - frozen_shift)**2)) > 1.e-10_dp .and. &
             &all(rotation == frozen_rotation), 'shift-only joint solve did not improve only active shifts')
@@ -300,9 +301,9 @@ contains
         shift           = fix%seed_shift
         frozen_rotation = rotation
         frozen_shift    = shift
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_before, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_before, gradient)
         call opt%refine_joint(calc, 1, .true., 1, rotation, shift, active=[.true., .true., .true., .false., .false.])
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_after, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_after, gradient)
         call assert_true(opt_stage_status(opt, CARTFT_STAGE_JOINT) == CARTFT_ACCEPTED .and. &
             &objective_after < objective_before .and. rotation_distance(rotation, frozen_rotation) > 1.e-10_dp .and. &
             &all(shift == frozen_shift), 'rotation-only joint solve did not improve only active rotations')
@@ -313,9 +314,9 @@ contains
         shift           = fix%seed_shift
         frozen_rotation = rotation
         frozen_shift    = shift
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_before, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_before, gradient)
         call opt%refine_joint(calc, 1, .true., 1, rotation, shift, anchor_rotmat=frozen_rotation, anchor_shift=frozen_shift)
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_after, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_after, gradient)
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, status, niter, nattempted, naccepted, nbound_hits, &
             &max_rotation_step, max_shift_step, stage_before, stage_after)
         call assert_true(nbound_hits > 0, 'cumulative guard test did not exercise an out-of-bound proposal')
@@ -379,9 +380,9 @@ contains
         frozen_rotation = rotation
         initial_shift   = shift
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20, rotation_scale=0.10_dp, shift_step_bound=1.e-8_dp)
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_before, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_before, gradient)
         call opt%refine_joint(calc, 1, .true., 1, rotation, shift, active=[.false., .false., .false., .true., .true.])
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_after, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_after, gradient)
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, status, niter, nattempted, naccepted, nbound_hits, &
             &max_rotation_step, max_shift_step, stage_before, stage_after)
         relative_reduction = (objective_before - objective_after)/objective_before
@@ -405,9 +406,9 @@ contains
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20, rotation_scale=0.10_dp, shift_step_bound=1._dp)
         rotation = fix%seed_rotation
         shift    = fix%seed_shift
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_before, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_before, gradient)
         call opt%refine_joint(calc, 1, .true., 1, rotation, shift)
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective_after, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective_after, gradient)
         call assert_true(opt_stage_status(opt, CARTFT_STAGE_JOINT) == CARTFT_ACCEPTED .and. objective_after < objective_before, &
             &'Cartesian NCC LM did not accept a correlation-improving pose')
         call assert_true(rotation_distance(rotation, fix%truth_rotation) < ROTATION_TOL .and. &

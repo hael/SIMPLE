@@ -72,17 +72,6 @@ contains
         call flush(logfhandle)
     end subroutine paired_reduce_parts
 
-    !> Write one fit through the same container and payload codec used by paired parts.
-    module subroutine write_probe_part( fname, part )
-        class(string),         intent(in) :: fname
-        type(flex_probe_part), intent(in) :: part
-        type(string) :: tmp_fname
-        integer :: funit
-        call open_probe_part_write(fname, 1, funit, tmp_fname)
-        call write_probe_part_fit(funit, part)
-        call close_probe_part_write(funit, tmp_fname, fname)
-    end subroutine write_probe_part
-
     !> Fold single-fit parts through the shared streaming codec.
     module subroutine reduce_probe_parts( params, rounds, part )
         class(parameters),     intent(in)    :: params
@@ -107,7 +96,7 @@ contains
     !> Open one part for writing and emit the file header. The caller then writes one
     !! block per fit with write_probe_part_fit, in fit order, and closes with
     !! close_probe_part_write (which renames the .tmp so the master only ever sees
-    !! complete files -- same contract as write_probe_part).
+    !! complete files).
     module subroutine open_probe_part_write( fname, nfits, funit, tmp_fname )
         class(string), intent(in)  :: fname
         integer,       intent(in)  :: nfits

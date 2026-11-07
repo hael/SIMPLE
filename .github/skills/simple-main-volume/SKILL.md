@@ -32,8 +32,8 @@ Silent ones first: nothing reports these.
   sigma2; PCG `prep_particles` takes one spectrum: one half per call, or the others are whitened
   wrongly. CTF at `smpd_crop`, shifts in `box_crop` pixels, planes padded by `OSMPL_PAD_FAC`.
 - A gridding density file (`rho_*`, partials, chains, frozen sets) starts with a header (magic, box,
-  density shape, sampling; `RHO_HDR_BYTES`): `read_rho` and the readers of open units
-  (`check_rho_header`, serially, before `read_raw_rho`) stop on another box or sampling, and on a file
+  density shape, sampling; `RHO_HDR_BYTES`): its readers (`check_rho_header` on the open unit,
+  serially, before `read_raw_rho`) stop on another box or sampling, and on a file
   without the header; the `update_frac` padding of a smaller chain checks the header's box against its
   numerator and the physical extent. The numerator (`<fbody>_even/odd.mrc`) is still read in the reader's
   shape without its MRC header. PCG raw artifacts stop on any header mismatch. Frozen-set contexts of the
@@ -65,7 +65,7 @@ Call orders (callers `calc_3Drec`, `restore_state_from_parts`, `accumulate_pcg_s
 
 - `build/bin/simple_test_exec test=unit_reconstruction` (about 7 s; `suite=list`, e.g.
   `weighted_insertion`, `frozen_accumulator`); `test=unit_image suite=trailing_reconstruction_blend`.
-- `test=pcg_recon` (14 gated stages): a change to the PCG kernel, scale, masks, symmetry, weights,
+- `test=pcg_recon` (12 gated stages): a change to the PCG kernel, scale, masks, symmetry, weights,
   preconditioner or box conversion adds a kernel-versus-matrix-free gate there.
 - Nightly: `test=lib_reconstruction` (`pcg_half_set`, `pcg_sparse_sampling`,
   `fractional_reconstruction`, ...), `test=pcg_frac_update`; `flex/`: `test=unit_heterogeneity`.

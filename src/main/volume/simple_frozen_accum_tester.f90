@@ -8,7 +8,8 @@ use simple_parameters,        only: parameters
 use simple_sp_project,        only: sp_project
 use simple_memoize_ft_maps,   only: forget_ft_maps, memoize_ft_maps
 use simple_type_defs,         only: CTFFLAG_NO, OBJFUN_EUCLID
-use simple_refine3D_fnames,   only: refine3D_frozen_manifest_fname, refine3D_carried_bundle_fname
+use simple_refine3D_fnames,   only: refine3D_carried_bundle_fname
+use simple_reconstructor,     only: RHO_HDR_BYTES, read_rho_header
 use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
 use simple_cmdline,           only: cmdline
 use simple_test_utils
@@ -24,6 +25,7 @@ end type rho_reader
 
 integer, parameter :: BOX      = 16
 character(len=*), parameter :: RHO_FNAME = 'tmp_frozen_accum_tester_rho.mrc'
+character(len=*), parameter :: RHO_COPY_FNAME = 'tmp_frozen_accum_tester_rho_copy.mrc'
 integer, parameter :: NFROZEN  = 14   ! frozen planes (even/odd alternate)
 integer, parameter :: NCOHORT  = 10   ! cohort planes
 integer, parameter :: SEED     = 20260926
@@ -296,14 +298,14 @@ contains
         call ctx%add_gridding_set(1, c_even, c_odd, scratch_e, scratch_o)
         cmat_c = c_even%get_cmat()
         cmat_u = u_even%get_cmat()
-        call c_even%get_rho_copy(rho_c)
-        call u_even%get_rho_copy(rho_u)
+        call get_density(c_even, rho_c)
+        call get_density(u_even, rho_u)
         call assert_true(max_rel_cdiff(cmat_c, cmat_u) < RAW_RELTOL, 'gridding even sums: C + F equals F u C')
         call assert_true(max_rel_rdiff(rho_c, rho_u)   < RAW_RELTOL, 'gridding even densities: C + F equals F u C')
         cmat_c = c_odd%get_cmat()
         cmat_u = u_odd%get_cmat()
-        call c_odd%get_rho_copy(rho_c)
-        call u_odd%get_rho_copy(rho_u)
+        call get_density(c_odd, rho_c)
+        call get_density(u_odd, rho_u)
         call assert_true(max_rel_cdiff(cmat_c, cmat_u) < RAW_RELTOL, 'gridding odd sums: C + F equals F u C')
         call assert_true(max_rel_rdiff(rho_c, rho_u)   < RAW_RELTOL, 'gridding odd densities: C + F equals F u C')
         ! restored halves
@@ -321,8 +323,8 @@ contains
         call ctx%add_gridding_set(1, c_even, c_odd, scratch_e, scratch_o)
         cmat_c = c_even%get_cmat()
         cmat_f = f_even%get_cmat()
-        call c_even%get_rho_copy(rho_c)
-        call f_even%get_rho_copy(rho_f)
+        call get_density(c_even, rho_c)
+        call get_density(f_even, rho_f)
         call assert_true(all(cmat_c(:BOX/2,:,:) == cmat_f(:BOX/2,:,:)) .and. all(rho_c == rho_f), &
             &'zero cohort + F is F exactly (coefficient one)')
         call delete_gridding_set(2)
@@ -532,14 +534,14 @@ contains
         call ctx_u%add_gridding_set(1, u_e, u_o, scratch_e, scratch_o)
         cmat_c = g3_e%get_cmat()
         cmat_u = u_e%get_cmat()
-        call g3_e%get_rho_copy(rho_c)
-        call u_e%get_rho_copy(rho_u)
+        call get_density(g3_e, rho_c)
+        call get_density(u_e, rho_u)
         call assert_true(max_rel_cdiff(cmat_c, cmat_u) < RAW_RELTOL, 'carried chain even sums equal the direct union')
         call assert_true(max_rel_rdiff(rho_c, rho_u)   < RAW_RELTOL, 'carried chain even densities equal the direct union')
         cmat_c = g3_o%get_cmat()
         cmat_u = u_o%get_cmat()
-        call g3_o%get_rho_copy(rho_c)
-        call u_o%get_rho_copy(rho_u)
+        call get_density(g3_o, rho_c)
+        call get_density(u_o, rho_u)
         call assert_true(max_rel_cdiff(cmat_c, cmat_u) < RAW_RELTOL, 'carried chain odd sums equal the direct union')
         call assert_true(max_rel_rdiff(rho_c, rho_u)   < RAW_RELTOL, 'carried chain odd densities equal the direct union')
         call map_c%new([BOX,BOX,BOX], SMPD, wthreads=.false.)
@@ -609,9 +611,9 @@ contains
         call rec_w%new_accumulator(params, project, expand=.false., wthreads=.false.)
         call rec_r%new_accumulator(params, project, expand=.false., wthreads=.false.)
         call rec_w%write_rho(string(RHO_FNAME))
-        call rec_r%read_rho(string(RHO_FNAME))
-        call rec_w%get_rho_copy(rho_w)
-        call rec_r%get_rho_copy(rho_r)
+        call read_density(rec_r, string(RHO_FNAME))
+        call get_density(rec_w, rho_w)
+        call get_density(rec_r, rho_r)
         call assert_true(all(rho_w == rho_r), 'a density file reads back on its own grid')
         child%box  = BOX - 2
         child%smpd = SMPD
@@ -659,8 +661,40 @@ contains
         !$ call omp_set_num_threads(1)
         call accumulator_params(params, self%box, self%smpd)
         call rec%new_accumulator(params, project, expand=.false., wthreads=.false.)
-        call rec%read_rho(string(RHO_FNAME))
+        call read_density(rec, string(RHO_FNAME))
     end subroutine read_rho_into
+
+    !> a density file into rec as production reads one: the header checked against rec, then the payload
+    subroutine read_density( rec, fname )
+        class(reconstructor), intent(inout) :: rec
+        class(string),        intent(in)    :: fname
+        integer :: funit, io_stat
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=io_stat)
+        call fileiochk('read_density opening '//fname%to_char(), io_stat)
+        call rec%check_rho_header(funit, fname)
+        call rec%read_raw_rho(funit)
+        call fclose(funit)
+    end subroutine read_density
+
+    !> the density of rec as its file holds it (write_rho), the payload after the header
+    subroutine get_density( rec, rho )
+        class(reconstructor), intent(in)  :: rec
+        real, allocatable,    intent(out) :: rho(:,:,:)
+        type(string) :: fname
+        real(dp)     :: smpd_file
+        integer      :: funit, io_stat, ldim_file(3), rho_shape(3)
+        fname = string(RHO_COPY_FNAME)
+        call rec%write_rho(fname)
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=io_stat)
+        call fileiochk('get_density opening '//fname%to_char(), io_stat)
+        call read_rho_header(funit, fname, ldim_file, rho_shape, smpd_file)
+        allocate(rho(rho_shape(1),rho_shape(2),rho_shape(3)))
+        read(funit, pos=RHO_HDR_BYTES+1, iostat=io_stat) rho
+        call fileiochk('get_density reading '//fname%to_char(), io_stat)
+        call fclose(funit)
+        call del_file(fname)
+        call fname%kill
+    end subroutine get_density
 
     subroutine truncate_file( fname )
         class(string), intent(in) :: fname
@@ -679,7 +713,7 @@ contains
         call del_file(fbody//'_odd.mrc')
         call del_file(string('rho_')//fbody//'_even.mrc')
         call del_file(string('rho_')//fbody//'_odd.mrc')
-        call del_file(refine3D_frozen_manifest_fname(state, BOX))
+        call del_file(fbody//TXT_EXT)
         call fbody%kill
     end subroutine delete_gridding_set
 

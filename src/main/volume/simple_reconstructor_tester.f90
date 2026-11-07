@@ -91,8 +91,8 @@ contains
         call rb%compress_exp()
         ca = ra%get_cmat()
         cb = rb%get_cmat()
-        call ra%get_rho_copy(da)
-        call rb%get_rho_copy(db)
+        da = ra%rho
+        db = rb%rho
         cerr = maxval(abs(ca - cb)) / max(maxval(abs(cb)), TINY)
         derr = maxval(abs(da - db)) / max(maxval(abs(db)), TINY)
         call assert_true(cerr < 1.e-5 .and. derr < RELTOL, 'inserting the re-shifted plane equals inserting the plane at s2')
@@ -195,16 +195,16 @@ contains
             call rplain%compress_exp()
             cw = rw%get_cmat()
             cs = rs%get_cmat()
-            call rw%get_rho_copy(dw)
-            call rs%get_rho_copy(ds)
+            dw = rw%rho
+            ds = rs%rho
             cerr = maxval(abs(cw - cs)) / max(maxval(abs(cs)), TINY)
             derr = maxval(abs(dw - ds)) / max(maxval(abs(ds)), TINY)
             call assert_true(cerr < RELTOL .and. derr < RELTOL, &
                 &'insertion with weight w equals weight one scaled by w (data and density)')
             cone   = rone%get_cmat()
             cplain = rplain%get_cmat()
-            call rone%get_rho_copy(done)
-            call rplain%get_rho_copy(dplain)
+            done   = rone%rho
+            dplain = rplain%rho
             call assert_true(all(cone == cplain) .and. all(done == dplain), &
                 &'insertion with weight one equals the unweighted insertion bit for bit')
             call rw%kill

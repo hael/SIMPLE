@@ -9,7 +9,8 @@ contains
 module subroutine exec_test_mini_stream_quantitative( self, cline )
     use simple_atoms,         only: atoms
     use simple_imghead,       only: find_ldim_nptcls
-    use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_molecule_data, only: molecule_data
+    use simple_test_molecule_fixture, only: betagal_1jyx, sars_cov2_spkgp_6vxx
     use simple_oris,          only: oris
     use simple_string_utils,  only: lowercase
     use simple_ui,            only: make_ui
@@ -368,7 +369,8 @@ end subroutine exec_test_mini_stream_quantitative
 !! variance, orientation diversity, shifts, and CTF metadata are checked.
 module subroutine exec_test_simulate_particles( self, cline )
     use simple_atoms,         only: atoms
-    use simple_molecule_data, only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_molecule_data, only: molecule_data
+    use simple_test_molecule_fixture, only: sars_cov2_spkgp_6vxx
     use simple_imghead,       only: find_ldim_nptcls, find_img_smpd
     use simple_oris,          only: oris
     use simple_test_gate,     only: test_gate

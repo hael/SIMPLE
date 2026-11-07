@@ -15,7 +15,8 @@ module subroutine exec_test_simulated_workflow( self, cline )
     use simple_atoms,              only: atoms
     use simple_test_truth_metrics, only: validate_reconstructed_volume
     use simple_test_gate,          only: test_gate
-    use simple_molecule_data,      only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+    use simple_molecule_data,      only: molecule_data
+    use simple_test_molecule_fixture, only: betagal_1jyx, sars_cov2_spkgp_6vxx
     use simple_refine3D_fnames,    only: refine3D_state_vol_fname
     use simple_string_utils,       only: lowercase
     use simple_ui,                 only: make_ui

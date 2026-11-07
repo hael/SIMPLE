@@ -17,8 +17,8 @@ or gradient: check those first.
 
 Silent ones first: nothing reports these.
 
-- Order: `ospec%specify(str_opt, ndim, ...)` -> cost pointers (`set_costfun`, `set_gcostfun`,
-  `set_fdfcostfun` or the `_8` set) -> `opt_factory%new(ospec, ptr)` -> per solve `ospec%x` (start)
+- Order: `ospec%specify(str_opt, ndim, ...)` -> cost pointers (`set_costfun`, `set_fdfcostfun` or the
+  `_8` set) -> `opt_factory%new(ospec, ptr)` -> per solve `ospec%x` (start)
   and limits -> `ptr%minimize(ospec, fun_self, lowest_cost)`; the result is `ospec%x`. `specify` starts
   with `kill`: it nulls the cost pointers and the callback and zeroes `x`.
 - Every optimiser minimises: return a cost (a negated correlation), flip `lowest_cost` back.
@@ -41,8 +41,8 @@ Silent ones first: nothing reports these.
   the `lbfgsb` check, then every evaluation returns f = 0, g = 0 with a printed error only. Simplex and
   DE take only the single-precision `costfun`.
 - DE takes F and CR from `str_mode` (`specify('de')` sets `multimodal`) and the population size from
-  `specify(npop=)`, else from the mode; the start, then the members given by `set_inipop`, replace its
-  first random members (all members are drawn first, so the random stream does not depend on them).
+  `specify(npop=)`, else from the mode; the start replaces its first random member (all members are
+  drawn first, so the random stream does not depend on it).
 - `fun_self` is the client's object (`class(*)`), resolved in the cost by `select type` with a
   `class default` `THROW_HARD`. `opt_callback` runs at each accepted `lbfgsb` iterate, `x` updated, and
   may change the objective (the discrete in-plane angle of `pftc_shsrch_grad`).

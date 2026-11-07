@@ -6,6 +6,7 @@
 ! pose_cont refactoring plan, section 10.
 submodule (simple_cartft_calc) simple_cartft_calc_tester
 use, intrinsic :: iso_fortran_env, only: real32
+use simple_test_cftc_fixture, only: objective_gradient
 use simple_defs,            only: DPI
 use simple_core_module_api, only: euler2m, del_file
 use simple_builder,         only: builder
@@ -24,9 +25,9 @@ use simple_oris,            only: oris
 use simple_sp_project,      only: sp_project
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, sigma2_state_create_candidate, &
     &sigma2_state_write_local_range, sigma2_state_read_particles, sigma2_state_read_global, sigma2_state_read_header, &
-    &sigma2_state_write_particles, sigma2_state_publish, SIGMA2_PROV_RESIDUAL
+    &sigma2_state_write_particles, sigma2_state_write_global, sigma2_state_publish, SIGMA2_PROV_RESIDUAL
 use simple_sigma2_state,    only: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_prepare_update, &
-    &sigma2_state_assemble_candidate, sigma2_state_reduce
+    &sigma2_state_assemble_candidate
 use simple_matcher_2Dprep,  only: prepimg4align_cart
 use simple_test_utils
 use simple_test_sigma2_fixture, only: write_test_sigma2_store
@@ -244,7 +245,7 @@ contains
         call set_unweighted_particle(calc, prediction, [2, TEST_BOX/2 - 1])
         call assert_true(calc%ptcl_is_valid(1), 'valid unweighted particle was rejected')
         call assert_true(all(calc%get_ptcl_kfromto(1) == [2, TEST_BOX/2 - 1]), 'prepared particle retained the wrong shell range')
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective, gradient)
         ! the thresholds of the unnormalized half squared residual this check was written for,
         ! carried into the normalized loss: L = 2E/P and grad L = 2 grad E/P, P the whitened power
         power = whitened_power(prediction, [2, TEST_BOX/2 - 1])
@@ -279,13 +280,13 @@ contains
             end do
         end do
         call set_euclid_slot(calc, 1, raw_observed, ctfparms, sigma2, [2, TEST_BOX/2 - 1])
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective, gradient)
         power = whitened_power(raw_observed, [2, TEST_BOX/2 - 1], sigma2)
         call assert_true(objective*power/2._dp < 1.e-9_dp .and. maxval(abs(gradient))*power/2._dp < 1.e-7_dp, &
             &'CTF and shell whitening changed an exact phase-flipped particle match')
         ! the same exact match under the correlation objective, prepared without sigma2
         call calc%set_ptcl(1, raw_observed, ctfparms, [2, TEST_BOX/2 - 1])
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective, gradient)
         call assert_true(abs(objective) < 1.e-6_dp .and. maxval(abs(gradient)) < 1.e-5_dp, &
             &'CTF changed an exact phase-flipped particle match under cc')
         ctfparms%ctfflag = CTFFLAG_FLIP
@@ -299,7 +300,7 @@ contains
             end do
         end do
         call set_euclid_slot(calc, 1, raw_observed, ctfparms, sigma2, [2, TEST_BOX/2 - 1])
-        call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, rotation, shift, objective, gradient)
         power = whitened_power(raw_observed, [2, TEST_BOX/2 - 1], sigma2)
         call assert_true(objective*power/2._dp < 1.e-9_dp .and. maxval(abs(gradient))*power/2._dp < 1.e-7_dp, &
             &'phase-flipped CTF changed an exact particle match')
@@ -395,7 +396,7 @@ contains
         do i = 1, size(scales)
             call calc%set_ptcl(1, real(scales(i), kind=kind(observed))*observed, no_ctf, [2, 4])
             call assert_int(OBJFUN_CC, calc%get_ptcl_objfun(1), 'a slot prepared without sigma2 is not a cc slot')
-            call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, objective, gradient)
+            call objective_gradient(calc, 1, .true., 1, candidate_rotation, candidate_shift, objective, gradient)
             cross_sum        = cmplx(0._dp, 0._dp, kind=dp)
             particle_power   = 0._dp
             prediction_power = 0._dp
@@ -455,7 +456,7 @@ contains
         sigma2 = [(0.5 + 0.1*real(shell), shell = 0, TEST_BOX/2)]
         call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, kfromto)
         call assert_int(OBJFUN_EUCLID, calc%get_ptcl_objfun(1), 'a slot prepared with sigma2 is not a euclid slot')
-        call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, candidate_rotation, candidate_shift, objective, gradient)
         residual_sum = 0._dp
         particle_sum = 0._dp
         do k = -TEST_BOX/2, TEST_BOX/2
@@ -474,11 +475,11 @@ contains
             &'Cartesian euclid loss disagrees with the brute-force sum')
         call assert_true(abs(calc%score(1, objective) - exp(-oracle)) < FORMULA_TOL, 'euclid score is not exp(-L)')
         call set_euclid_slot(calc, 1, observed, no_ctf, 3.7*sigma2, kfromto)
-        call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, scaled_objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, candidate_rotation, candidate_shift, scaled_objective, gradient)
         call assert_true(abs(scaled_objective - objective) < SCALING_TOL*objective, &
             &'euclid loss changed under a uniform scaling of sigma2')
         call set_euclid_slot(calc, 1, observed, no_ctf, [(sigma2(shell)*(1. + 0.5*real(shell)), shell = 0, TEST_BOX/2)], kfromto)
-        call calc%objective_gradient(1, .true., 1, candidate_rotation, candidate_shift, reshaped_objective, gradient)
+        call objective_gradient(calc, 1, .true., 1, candidate_rotation, candidate_shift, reshaped_objective, gradient)
         call assert_true(abs(reshaped_objective - objective) > 1.e-3_dp*objective, &
             &'euclid loss did not change under a shell-dependent scaling of sigma2')
         call calc%kill
@@ -539,7 +540,7 @@ contains
                 else
                     call set_euclid_slot(calc, 1, observed, ctfparms, sigma2, [2, 6])
                 endif
-                call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
+                call objective_gradient(calc, 1, .true., 1, rotation, shift, objective, gradient)
                 do axis = 1, 5
                     basis          = 0._dp
                     minus_rotation = rotation
@@ -556,9 +557,9 @@ contains
                         minus_shift(axis-3) = minus_shift(axis-3) - step
                         plus_shift(axis-3)  = plus_shift(axis-3)  + step
                     endif
-                    call calc%objective_gradient(1, .true., 1, minus_rotation, minus_shift, objective_minus, gradient)
-                    call calc%objective_gradient(1, .true., 1, plus_rotation,  plus_shift,  objective_plus,  gradient)
-                    call calc%objective_gradient(1, .true., 1, rotation, shift, objective, gradient)
+                    call objective_gradient(calc, 1, .true., 1, minus_rotation, minus_shift, objective_minus, gradient)
+                    call objective_gradient(calc, 1, .true., 1, plus_rotation,  plus_shift,  objective_plus,  gradient)
+                    call objective_gradient(calc, 1, .true., 1, rotation, shift, objective, gradient)
                     errors(axis) = abs((objective_plus - objective_minus)/(2._dp*step) - gradient(axis))/&
                         &max(1.e-5_dp, abs(gradient(axis)))
                 end do
@@ -746,7 +747,7 @@ contains
             disp    = 0._dp
             disp(i) = si*steps(i)
             if( j > 0 ) disp(j) = disp(j) + sj*steps(j)
-            call calc%objective_gradient(1, .true., 1, right_increment_rotation(rotation, disp(1:3)), &
+            call objective_gradient(calc, 1, .true., 1, right_increment_rotation(rotation, disp(1:3)), &
                 &shift + disp(4:5), value, grad)
             objective_at = value
         end function objective_at
@@ -1146,7 +1147,7 @@ contains
             allocate(vals(nrots), cart_objectives(nrots))
             call pftc%gen_objfun_vals(1, 1, [0., 0.], vals)
             do irot = 1, nrots
-                call calc%objective_gradient(1, .true., 1, grid_rotation(irot), [0._dp, 0._dp], objective, gradient)
+                call objective_gradient(calc, 1, .true., 1, grid_rotation(irot), [0._dp, 0._dp], objective, gradient)
                 cart_objectives(irot) = objective
             end do
             call assert_int(PLACED_INDEX, maxloc(vals, dim=1), 'polar objective does not peak at the placed grid pose')
@@ -1583,7 +1584,7 @@ contains
         integer,           intent(in)  :: i
         real(dp),          intent(out) :: values(6)
         real(dp) :: gradient(5)
-        call calc%objective_gradient(1, .true., i, real(euler2m([20., 36.2, 28.7]), dp), [0.1_dp, -0.2_dp], &
+        call objective_gradient(calc, 1, .true., i, real(euler2m([20., 36.2, 28.7]), dp), [0.1_dp, -0.2_dp], &
             &values(1), gradient)
         values(2:6) = gradient
     end subroutine slot_signature
@@ -1820,7 +1821,7 @@ contains
             do j = 1, NP
                 rotation = real(euler2m([10.*real(j) + 1., 31., 5.*real(j)]), dp)
                 shift    = [0.1_dp, 0._dp]
-                call calc%objective_gradient(1, .true., j, rotation, shift, res(1,j), gradient)
+                call objective_gradient(calc, 1, .true., j, rotation, shift, res(1,j), gradient)
                 res(2:6,j) = gradient
                 call calc%pose_normal_terms(1, .true., j, rotation, shift, res(7,j), gradient, hessian)
                 res(8:12,j)  = gradient
@@ -2143,13 +2144,12 @@ contains
         call cline%set('mskdiam', 2.*MSKRAD*SMPD)
         call cline%set('nptcls',  1.0)
         call cline%set('nthr',    1.0)
-        call cline%set('ctf',     'no')
+        call cline%set('ctf',     'yes')
         call cline%set('objfun',  'euclid')
         call p%new(cline, silent=.true.)
         p%nspace = 1
         call set_fixed_seed(20261002)
         call pftc%new(p, 1, [1,1], KFROMTO)
-        call pftc%set_with_ctf(.true.)
         pdim      = pftc%get_pdim_interp()
         step      = 360./real(pftc%get_nrots())
         e3        = 360. - pftc%get_rot(PLACED_INDEX)
@@ -2330,13 +2330,12 @@ contains
         call cline%set('mskdiam', 2.*MSKRAD*SMPD)
         call cline%set('nptcls',  real(NG))
         call cline%set('nthr',    1.0)
-        call cline%set('ctf',     'no')
+        call cline%set('ctf',     'yes')
         call cline%set('objfun',  'euclid')
         call p%new(cline, silent=.true.)
         p%nspace = NG
         call set_fixed_seed(20261003)
         call pftc%new(p, NG, [1,NG], KFROMTO)
-        call pftc%set_with_ctf(.true.)
         pdim = pftc%get_pdim_interp()
         step = 360./real(pftc%get_nrots())
         e3   = 360. - pftc%get_rot(PLACED_INDEX)
@@ -2613,8 +2612,7 @@ contains
         class(builder),  target, intent(inout) :: build
         type(sigma2_state_header) :: header
         type(string) :: candidate
-        real(real32) :: spectra(box/2,np)
-        logical      :: active(np)
+        real(real32) :: spectra(box/2,np), globals(box/2,2)
         integer      :: eo(np), i, status
         character(len=128) :: message
         call remove_sigma2_files(path, 3)
@@ -2625,10 +2623,11 @@ contains
         spectra = real(seed, real32)
         call sigma2_state_write_particles(candidate%to_char(), 1, spectra, status, message)
         call assert_int(0, status, 'sigma2 fixture records: '//trim(message))
-        active = .true.
-        eo     = [(modulo(i-1, 2), i = 1, np)]
-        call sigma2_state_reduce(candidate%to_char(), active, eo, status, message)
-        call assert_int(0, status, 'sigma2 fixture reduction: '//trim(message))
+        ! every record is seed, so is the mean of either half
+        globals = real(seed, real32)
+        call sigma2_state_write_global(candidate%to_char(), globals, status, message)
+        call assert_int(0, status, 'sigma2 fixture global spectra: '//trim(message))
+        eo = [(modulo(i-1, 2), i = 1, np)]
         call sigma2_state_publish(candidate%to_char(), path, status, message)
         call assert_int(0, status, 'sigma2 fixture commit: '//trim(message))
         call build%spproj%set_sigma2_state_path(string(path))

@@ -409,9 +409,10 @@ contains
     end subroutine test_bank_and_at_pose_kernels
 
     !> A reprojection model written by a two-reference object (write_ref_pfts) and read back by a
-    !! four-reference one at iref_from 1 and 3 (read_ref_pfts): the sections of both halves land at
-    !! the offset unchanged, as the pose-posterior diagnostic loads the real halves after the matcher's
-    !! references; the plain read of a matching object is the iref_from 1 case.
+    !! four-reference one at iref_from 1 and 3 (read_ref_pfts): the sections of both halves, as the
+    !! four-reference object writes them, land at the offset unchanged, as the pose-posterior diagnostic
+    !! loads the real halves after the matcher's references; the plain read of a matching object is the
+    !! iref_from 1 case.
     subroutine test_ref_pfts_offset_io()
         integer, parameter :: BOX = 64, NREFS = 2, NPTCLS = 1
         real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
@@ -419,8 +420,8 @@ contains
         type(cmdline)       :: cline
         type(polarft_calc)  :: pftc_src, pftc_dst, pftc_same
         type(image)         :: imgs(2*NREFS)
-        type(string)        :: fname_even, fname_odd
-        complex, allocatable :: pft_src(:,:), pft_dst(:,:)
+        type(string)        :: fname_even, fname_odd, fname_dst_even, fname_dst_odd
+        complex(sp), allocatable :: secs_even(:,:,:), secs_odd(:,:,:), dst_even(:,:,:), dst_odd(:,:,:)
         integer :: pdim(3), kfromto(2), i, iref, ioff
         logical :: iseven
         write(*,'(A)') 'test_ref_pfts_offset_io'
@@ -464,15 +465,20 @@ contains
         call pftc_dst%read_ref_pfts(fname_odd,  .false., iref_from=1)
         call pftc_dst%read_ref_pfts(fname_even, .true.,  iref_from=NREFS+1)
         call pftc_dst%read_ref_pfts(fname_odd,  .false., iref_from=NREFS+1)
-        allocate(pft_src(pftc_src%get_pftsz(),kfromto(1):kfromto(2)), pft_dst(pftc_src%get_pftsz(),kfromto(1):kfromto(2)))
+        fname_dst_even = string('test_reproj_model_offset_dst_even.bin')
+        fname_dst_odd  = string('test_reproj_model_offset_dst_odd.bin')
+        call pftc_dst%write_ref_pfts(fname_dst_even, .true.)
+        call pftc_dst%write_ref_pfts(fname_dst_odd,  .false.)
+        call read_model_sections(fname_even,     secs_even)
+        call read_model_sections(fname_odd,      secs_odd)
+        call read_model_sections(fname_dst_even, dst_even)
+        call read_model_sections(fname_dst_odd,  dst_odd)
         do ioff = 0,NREFS,NREFS
             do iref = 1,NREFS
-                call pftc_src%get_ref_pft(iref, .true., pft_src)
-                call pftc_dst%get_ref_pft(iref+ioff, .true., pft_dst)
-                call assert_true(all(pft_src == pft_dst), 'even section '//int2str(iref)//' lands at offset '//int2str(ioff)//' unchanged')
-                call pftc_src%get_ref_pft(iref, .false., pft_src)
-                call pftc_dst%get_ref_pft(iref+ioff, .false., pft_dst)
-                call assert_true(all(pft_src == pft_dst), 'odd section '//int2str(iref)//' lands at offset '//int2str(ioff)//' unchanged')
+                call assert_true(all(secs_even(:,:,iref) == dst_even(:,:,iref+ioff)), &
+                    &'even section '//int2str(iref)//' lands at offset '//int2str(ioff)//' unchanged')
+                call assert_true(all(secs_odd(:,:,iref) == dst_odd(:,:,iref+ioff)), &
+                    &'odd section '//int2str(iref)//' lands at offset '//int2str(ioff)//' unchanged')
             end do
         end do
         call assert_false(pftc_dst%ref_slots_identical(NREFS+1), 'the loaded halves keep their distinct slots')
@@ -480,19 +486,33 @@ contains
         call pftc_same%new(p, NREFS, [1,NPTCLS], kfromto)
         call pftc_same%read_ref_pfts(fname_even, .true.)
         call pftc_same%read_ref_pfts(fname_odd,  .false.)
-        call pftc_src%get_ref_pft(NREFS, .false., pft_src)
-        call pftc_same%get_ref_pft(NREFS, .false., pft_dst)
-        call assert_true(all(pft_src == pft_dst), 'the plain read of a matching object reproduces the sections')
+        call pftc_same%write_ref_pfts(fname_dst_odd, .false.)
+        call read_model_sections(fname_dst_odd, dst_odd)
+        call assert_true(all(dst_odd == secs_odd), 'the plain read of a matching object reproduces the sections')
         call del_file(fname_even)
         call del_file(fname_odd)
+        call del_file(fname_dst_even)
+        call del_file(fname_dst_odd)
         do i = 1,2*NREFS
             call imgs(i)%kill
         end do
         call pftc_src%kill
         call pftc_dst%kill
         call pftc_same%kill
-        deallocate(pft_src, pft_dst)
     end subroutine test_ref_pfts_offset_io
+
+    !> the sections of one half of a reprojection model file, as write_ref_pfts lays it out: a header
+    !! (pftsz, kfromto, nrefs), then (pftsz, k, nrefs)
+    subroutine read_model_sections( fname, secs )
+        class(string),            intent(in)  :: fname
+        complex(sp), allocatable, intent(out) :: secs(:,:,:)
+        integer :: funit, header(4)
+        open(newunit=funit, file=fname%to_char(), access='stream', form='unformatted', action='read', status='old')
+        read(funit) header
+        allocate(secs(header(1),header(2):header(3),header(4)))
+        read(funit) secs
+        close(funit)
+    end subroutine read_model_sections
 
     !> The Euclidean loss against the other half's reference (gen_best_euclid_val_cross): with image 1 as
     !! the even reference and an unrelated image 3 as the odd one, an even particle that is image 1 has

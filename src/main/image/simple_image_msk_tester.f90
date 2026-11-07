@@ -1,6 +1,7 @@
 !@descr: unit test routines for masks: mask bounds, graphene shells, real-space masks and binary images
 module simple_image_msk_tester
 use simple_test_utils ! assertions etc.
+use simple_test_image_fixture, only: draw_square
 use simple_defs       ! COSMSKHALFWIDTH, GRAPHENE_BAND1/2/3, TINY
 use simple_image,     only: image, unmemoize_mask_coords
 use simple_image_bin, only: image_bin
@@ -362,9 +363,9 @@ contains
         integer :: lb(3), ub(3), lo(3), hi(3), i
         write(*,'(A)') 'test_bounds_from_mask3D'
         call cube%new([BOX,BOX,BOX], 1.0)
-        call cube%square(RAD)
+        call draw_square(cube, RAD)
         mask = cube%bin2logical()
-        call assert_int((2*RAD)**3, count(mask), 'square() sets (2*rad)^3 voxels')
+        call assert_int((2*RAD)**3, count(mask), 'draw_square sets (2*rad)^3 voxels')
         call bounds_from_mask3D(mask, lb, ub)
         call brute_force_bounds(mask, lo, hi)
         do i = 1,3
@@ -658,10 +659,9 @@ contains
     !---------------- the original image_bin examples, with their answers ----------------
 
     subroutine test_image_bin_examples()
-        type(image_bin) :: bimg, bimg3D, ccimg
+        type(image_bin) :: bimg, ccimg
         integer, allocatable :: labels(:,:,:)
-        integer :: imat(4,4,1), imat3D(3,3,2), nccs
-        real    :: dist
+        integer :: imat(4,4,1), nccs
         write(*,'(A)') 'test_image_bin_examples'
         call bimg%new_bimg([4,4,1], 1.0)
         imat = 0
@@ -670,8 +670,6 @@ contains
         imat(2,3,1) = 1
         imat(4,4,1) = 1
         call bimg%set_imat(imat)
-        call bimg%max_dist(dist)
-        call assert_real(sqrt(8.0), dist, 1.0e-5,        'max_dist: farthest set pixel from the centre (2,2)')
         call bimg%find_ccs(ccimg)
         call ccimg%get_nccs(nccs)
         call assert_int(3, nccs,                          'find_ccs: three 8-connected components')
@@ -684,28 +682,16 @@ contains
         ! all ones
         imat = 1
         call bimg%set_imat(imat)
-        call bimg%max_dist(dist)
-        call assert_real(sqrt(8.0), dist, 1.0e-5,        'max_dist: full 4x4 image')
         call bimg%find_ccs(ccimg)
         call ccimg%get_nccs(nccs)
         call assert_int(1, nccs,                          'find_ccs: a full image is one component')
         ! all zeros
         imat = 0
         call bimg%set_imat(imat)
-        call bimg%max_dist(dist)
-        call assert_real(0.0, dist, 1.0e-5,              'max_dist: empty image is 0')
         call bimg%find_ccs(ccimg)
         call ccimg%get_nccs(nccs)
         call assert_int(0, nccs,                          'find_ccs: an empty image has no components')
-        ! 3D: one voxel in the far corner of a 3x3x2 box, centre (2,2,1)
-        call bimg3D%new_bimg([3,3,2], 1.0)
-        imat3D = 0
-        imat3D(3,3,2) = 1
-        call bimg3D%set_imat(imat3D)
-        call bimg3D%max_dist(dist)
-        call assert_real(sqrt(3.0), dist, 1.0e-5,        'max_dist: 3D far corner')
         call bimg%kill_bimg
-        call bimg3D%kill_bimg
         call ccimg%kill_bimg
         deallocate(labels)
     end subroutine test_image_bin_examples
@@ -969,16 +955,6 @@ contains
         call assert_int(25, sum(imat),              'cc2bin: only the chosen component remains')
         call assert_int(1,  maxval(imat),           'cc2bin: as a 0/1 image')
         call assert_int(1,  imat(12,22,1),          'cc2bin: the chosen component is where it was')
-        ! elim_ccs by size: keep the sizes in [10,50], relabel contiguously
-        call bimg%find_ccs(ccimg)
-        call ccimg%elim_ccs([10, 50])
-        call ccimg%get_nccs(nccs)
-        call assert_int(1, nccs,                    'elim_ccs: one component survives the size window')
-        sz = ccimg%size_ccs()
-        call assert_int(1,  size(sz),               'elim_ccs: sizes of the survivors only')
-        call assert_int(25, sz(1),                  'elim_ccs: the survivor is blob B')
-        call ccimg%get_imat(imat)
-        call assert_int(1, imat(12,22,1),           'elim_ccs: the survivor is relabelled 1')
         ! order_ccs closes the gaps in the labelling
         imat = 0
         imat( 5: 6,  5: 6, 1) = 3

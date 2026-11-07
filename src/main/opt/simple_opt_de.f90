@@ -91,16 +91,11 @@ contains
                 self%pop(j,i) = spec%limits(j,1) + ran3() * L
             end do
         end do
-        ! the start (unless nostart), then the members of set_inipop, replace the first random members
+        ! the start (unless nostart) replaces the first random member
         k = 0
         if( .not. spec%nostart )then
             k = 1
             self%pop(:,1) = spec%x
-        endif
-        if( allocated(spec%inipopulation) )then
-            do i = 1,min(size(spec%inipopulation,dim=1), spec%npop-k)
-                self%pop(:,k+i) = spec%inipopulation(i,:)
-            end do
         endif
         ! calculate initial costs
         do i=1,spec%npop

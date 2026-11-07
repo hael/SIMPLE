@@ -35,28 +35,4 @@ contains
         mindist = rad2deg(dists(loc(1)))
     end subroutine min_euldist
 
-    !> the largest angle (degrees) from a direction of the set to its third-nearest neighbour;
-    !! simple_exec prg=measure_projspace_angres measures it for a 3D search space (with its point group).
-    !! Full-sphere spiral (oris%spiral) of n directions, n angres: 500 9.95, 1000 7.01, 2000 4.98, 3000 4.08,
-    !! 5000 3.17, 7500 2.59, 10000 2.25, 15000 1.83, 20000 1.58 (about 223/sqrt(n))
-    module function find_angres( self ) result( res )
-        class(oris), intent(in) :: self
-        real    :: dists(self%n), dists_max(self%n), x, nearest3(3), res
-        integer :: i, j
-        !$omp parallel do default(shared) proc_bind(close) private(j,i,dists,nearest3)
-        do j=1,self%n
-            do i=1,self%n
-                if( i == j )then
-                    dists(i) = huge(x)
-                else
-                    dists(i) = self%o(i).euldist.self%o(j)
-                endif
-            end do
-            nearest3     = min3(dists)
-            dists_max(j) = maxval(nearest3)
-        end do
-        !$omp end parallel do
-        res = rad2deg(maxval(dists_max))
-    end function find_angres
-
 end submodule simple_oris_dists

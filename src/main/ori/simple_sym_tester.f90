@@ -478,8 +478,8 @@ contains
 
     !---------------- neighbour searches over a symmetric projection set ----------------
 
-    ! find_closest_proj, nearest_proj_neighbors (threshold and count forms), sym_dists and
-    ! find_angres against a brute-force scan over the symmetry-expanded distances; for c1 the
+    ! find_closest_proj, nearest_proj_neighbors (threshold and count forms) and sym_dists
+    ! against a brute-force scan over the symmetry-expanded distances; for c1 the
     ! sym forms delegate to the oris forms, which the same references cover
     subroutine test_neighbour_searches()
         integer, parameter :: NSP = 200, NNN = 5, NPROBE = 3
@@ -488,9 +488,9 @@ contains
         real,    parameter :: THRES_DEG = 15.0
         character(len=2), parameter :: GROUPS(3) = ['c1', 'c2', 'd2']
         type(sym)  :: se
-        type(oris) :: os, os_dense
+        type(oris) :: os
         type(ori)  :: o, oasym, osym, orep
-        real       :: dmin(NSP), sorted(NSP), euls(3), euldist, inpldist, kth, angres, angres_dense
+        real       :: dmin(NSP), sorted(NSP), euls(3), euldist, inpldist, kth
         integer    :: ig, ip, i, isym, closest, oris_closest, nsel
         logical    :: lnns(NSP), lnns_oris(NSP), expected(NSP), ok
         write(*,'(A)') 'test_neighbour_searches'
@@ -570,14 +570,6 @@ contains
                     call assert_true((orep.euldist.oasym) < 1.0e-3, 'sym_dists: the representative is the direction itself for c1')
                 endif
             end do
-            ! angular resolution: positive, of the order of the spiral spacing, smaller for a denser spiral
-            angres = os%find_angres()
-            call assert_true(angres > 3.0 .and. angres < 40.0, 'find_angres: of the order of the spiral spacing '//GROUPS(ig))
-            call os_dense%new(2 * NSP, is_ptcl=.false.)
-            call se%build_refspiral(os_dense)
-            angres_dense = os_dense%find_angres()
-            call assert_true(angres_dense < angres, 'find_angres: a denser spiral resolves finer '//GROUPS(ig))
-            call os_dense%kill
             call os%kill
             call se%kill
         end do

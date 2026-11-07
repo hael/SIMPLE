@@ -31,7 +31,6 @@ public :: refine3D_trail_rho_fname
 public :: refine3D_trail_manifest_fname
 public :: refine3D_frozen_context_fname
 public :: refine3D_frozen_rec_fbody
-public :: refine3D_frozen_manifest_fname
 public :: refine3D_carried_rec_fbody, refine3D_carried_context_fname, refine3D_carried_bundle_fname
 public :: refine3D_carried_membership_fname
 public :: refine3D_reproj_model_fname
@@ -232,17 +231,11 @@ contains
         fname = string('solve3D_addon_frozen_context')//TXT_EXT
     end function refine3D_frozen_context_fname
 
-    !> Gridding frozen set: <fbody>_{even,odd}.mrc and rho_<fbody>_{even,odd}.mrc
+    !> Gridding frozen set: <fbody>_{even,odd}.mrc, rho_<fbody>_{even,odd}.mrc and the manifest <fbody>.txt
     type(string) function refine3D_frozen_rec_fbody( state, box ) result(fname)
         integer, intent(in) :: state, box
         fname = string('frozen_state')//state_tag(state)//'_box'//int2str_pad(box, 4)
     end function refine3D_frozen_rec_fbody
-
-    !> Manifest of one gridding frozen set, written last
-    type(string) function refine3D_frozen_manifest_fname( state, box ) result(fname)
-        integer, intent(in) :: state, box
-        fname = refine3D_frozen_rec_fbody(state, box)//TXT_EXT
-    end function refine3D_frozen_manifest_fname
 
     ! The carried bundle an add-on publishes for the next add-on of its chain: the union's raw sums
     ! (carried frozen sums plus this run's particles) per state at the stage box and the native box,

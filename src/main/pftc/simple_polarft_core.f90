@@ -101,8 +101,7 @@ contains
                 &self%kshell_sqsums_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%heap_vars(nthr_team))
         do ithr=1,nthr_team
-            allocate(self%heap_vars(ithr)%argvec(self%pftsz),&
-                    &self%heap_vars(ithr)%shvec(self%pftsz),&
+            allocate(self%heap_vars(ithr)%shvec(self%pftsz),&
                     &self%heap_vars(ithr)%shmat(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%pft_ref_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
@@ -134,7 +133,7 @@ contains
         integer :: ithr
         if( self%existence )then
             do ithr=1,size(self%heap_vars)
-                deallocate(self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
+                deallocate(self%heap_vars(ithr)%shvec,&
                     &self%heap_vars(ithr)%shmat,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_ref_aln_8,&
@@ -327,12 +326,6 @@ contains
         self%iseven(self%pinds(iptcl)) = is_even
     end subroutine set_eo
 
-    module subroutine set_with_ctf(self, l_wctf)
-        class(polarft_calc), intent(inout) :: self
-        logical,             intent(in)    :: l_wctf
-        self%with_ctf = l_wctf
-    end subroutine set_with_ctf
-
     !> the scope of the keyed posterior draws (gen_posterior_val, gen_posterior_val_bank, shiftmap_draw)
     module subroutine set_rnd_scope(self, scope)
         class(polarft_calc), intent(inout) :: self
@@ -354,38 +347,6 @@ contains
         call self%memoize_sigma2_weights
     end subroutine assign_sigma2_noise
 
-    module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven)
-        use simple_projector,           only: projector
-        use simple_projector_pft_batch, only: fproject_polar_batch, fproject_polar_batch_mirr
-        class(polarft_calc), intent(inout) :: self
-        class(projector),    intent(in)    :: vol_pad
-        class(oris),         intent(inout) :: eulspace
-        integer,             intent(in)    :: state
-        logical,             intent(in)    :: iseven
-        real(sp) :: hcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
-        real(sp) :: kcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
-        integer  :: iref_from, iref_to, kproj(2), ieo
-        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
-        iref_from = (state - 1) * self%p_ptr%nspace + 1
-        iref_to   = iref_from + self%p_ptr%nspace - 1
-        if( iref_to > self%nrefs ) THROW_HARD('reference range exceeds allocated bank in vol_pad2ref_pfts')
-        ! The refine3D driver materializes exactly the search shell range
-        ! used for this iteration; downstream workers consume that contract.
-        kproj     = self%kfromto
-        hcoords   = transpose(self%polar(1, kproj(1):kproj(2), 1:self%pftsz))
-        kcoords   = transpose(self%polar(2, kproj(1):kproj(2), 1:self%pftsz))
-        ieo       = merge(REF_EVEN, REF_ODD, iseven)
-        if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
-            ! extract all the slices
-            call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
-                &hcoords, kcoords, self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo))
-        else
-            ! extract half the slices and generate the other half by mirroring
-            call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
-                &hcoords, kcoords, self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo))
-        endif
-    end subroutine vol_pad2ref_pfts
-
     module subroutine vol_pad2ref_pfts_opt(self, vol_pad, eulspace, state, iseven)
         use simple_projector,           only: projector
         use simple_projector_pft_batch, only: fproject_polar_batch_opt
@@ -399,7 +360,7 @@ contains
         iref_to   = iref_from + self%p_ptr%nspace - 1
         kproj     = self%kfromto
         ieo       = merge(REF_EVEN, REF_ODD, iseven)
-        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
+        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts_opt')
         if( iref_to > self%nrefs ) THROW_HARD('reference range exceeds allocated bank in vol_pad2ref_pfts_opt')
         if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
             ! extract all the slices

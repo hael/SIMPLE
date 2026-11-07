@@ -251,16 +251,6 @@ contains
         losses(1:self%nrots) = 1. + self%crvec1(ithr)%r(1:self%nrots) / A_sp
     end subroutine gen_raw_euclid_vals_impl
 
-    module subroutine gen_raw_euclid_vals( self, iref, iptcl, shift, losses )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: losses(self%nrots)
-        ! Keep this public raw-loss entry point thin so the legacy and
-        ! streaming paths cannot acquire different numerical logic.
-        call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses)
-    end subroutine gen_raw_euclid_vals
-
     !> cross=.true. scores against the other half's reference; the particle's own noise weights (ih) and
     !! self-term are unchanged (prob_post_diag: the posterior against a reference the particle did not enter)
     subroutine gen_euclid_crvec( self, iref, iptcl, shift, norm, ithr, cross )

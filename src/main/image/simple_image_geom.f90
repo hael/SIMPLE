@@ -431,33 +431,6 @@ contains
         call self%zero_padding
     end subroutine gauimg3D
 
-    !>  \brief square just a binary square for testing purposes
-    !! \param sqrad half width of square
-    module subroutine square( self, sqrad )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: sqrad
-        integer :: i, j, k
-        self%rmat = 0.
-        if( all(self%ldim(1:2) .gt. sqrad) .and. self%ldim(3) == 1 ) then
-            do i=self%ldim(1)/2-sqrad+1,self%ldim(1)/2+sqrad
-                do j=self%ldim(2)/2-sqrad+1,self%ldim(2)/2+sqrad
-                    self%rmat(i,j,1) = 1.
-                end do
-            end do
-        else if( all(self%ldim .gt. sqrad) .and. self%ldim(3) > 1 )then
-            do i=self%ldim(1)/2-sqrad+1,self%ldim(1)/2+sqrad
-                do j=self%ldim(2)/2-sqrad+1,self%ldim(2)/2+sqrad
-                    do k=self%ldim(3)/2-sqrad+1,self%ldim(3)/2+sqrad
-                        self%rmat(i,j,k) = 1.
-                    end do
-                end do
-            end do
-        else
-            THROW_HARD('image is to small to fit the square; square')
-        endif
-        self%ft = .false.
-    end subroutine square
-
     ! pad/clip/crop
 
     module subroutine pad( self_in, self_out, backgr, antialiasing )

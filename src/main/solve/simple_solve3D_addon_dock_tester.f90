@@ -5,18 +5,10 @@
 ! rotation. The docking search takes seconds, so this is a library sub-suite
 ! (lib_reconstruction); the rest of the report is unit-tested in
 ! simple_solve3D_addon_report_tester.
-module simple_solve3D_addon_dock_tester
-use simple_syslib,               only: del_file
-use simple_defs,                 only: logfhandle
-use simple_string,               only: string
-use simple_image,                only: image
-use simple_solve3D_addon_report, only: solve3D_addon_report
-use simple_test_utils,           only: assert_real, assert_true, set_fixed_seed
+submodule (simple_solve3D_addon_report) simple_solve3D_addon_dock_tester
+use simple_image,      only: image
+use simple_test_utils, only: assert_real, assert_true, set_fixed_seed
 implicit none
-
-public :: run_all_solve3D_addon_dock_tests
-private
-#include "simple_local_flags.inc"
 
 real,             parameter :: SMPD    = 2.
 real,             parameter :: MSKDIAM = 100.
@@ -27,7 +19,7 @@ character(len=*), parameter :: F_ROT   = 'tmp_addon_dock_rot.mrc'
 
 contains
 
-    subroutine run_all_solve3D_addon_dock_tests()
+    module subroutine run_all_solve3D_addon_dock_tests()
         write(logfhandle,'(A)') '**** running all solve3D add-on docking tests ****'
         call write_fixtures()
         call test_rotated_frame()
@@ -84,10 +76,11 @@ contains
         write(logfhandle,'(A)') '-- test_rotated_frame'
         call report%new(1, 8, SMPD, MSKDIAM)
         call report%compare_maps(1, string(F_MAP), string(F_ROT))
-        ! 0.9 is DOCK_CORR_FLOOR of simple_solve3D_addon_report (private there): below it the report docks; the 10 deg below is not derived
-        call assert_true(report%get_corr(1) < 0.9, 'a rotated map does not correlate in the base frame')
-        call assert_real(90., report%get_dock_angle(1), 10., 'docking recovers the 90 degree rotation')
+        ! the 10 deg tolerance is not derived
+        call assert_true(report%get_corr(1) < DOCK_CORR_FLOOR, 'a rotated map does not correlate in the base frame')
+        call assert_true(report%states(1)%l_docked, 'the rotated map is docked')
+        call assert_real(90., report%states(1)%dock_angle, 10., 'docking recovers the 90 degree rotation')
         call report%kill
     end subroutine test_rotated_frame
 
-end module simple_solve3D_addon_dock_tester
+end submodule simple_solve3D_addon_dock_tester

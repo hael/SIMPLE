@@ -5,7 +5,7 @@
 !   1e-5, every model and both curvature signs, with point-group replication.
 ! - The gradient of the misfit against a fourth-order central difference to 1e-3, every model and both signs,
 !   on a potential of about a radian of phase (the nonlinear regime), data predicted at V + dV plus noise.
-! - The weak-phase identity: at V = 0 the linearisation is 2 g sigma a N times PCG's forward_plane times
+! - The weak-phase identity: at V = 0 the linearisation is 2 g sigma a N times PCG's plane gather times
 !   build_transfer (CTF, shift) of the same deapodised volume, to 1e-5.
 ! - Rytov with no curvature is projection, bitwise; first Born is the linearisation of Rytov at V = 0; at V = 0
 !   every model predicts the vacuum, relative intensity 1 (p = -g at the origin, 0 elsewhere), to 1e-5.
@@ -37,6 +37,7 @@ submodule (simple_wave_projector) simple_wave_projector_tester
 use simple_type_defs,         only: CTFFLAG_YES
 use simple_math_ctf,          only: electron_interaction_constant
 use simple_reconstructor_pcg, only: reconstructor_pcg
+use simple_cartesian_fourier, only: center_embed_real3d
 use simple_test_wave_projector_golden_fixture, only: CENTRES16, CENTRES24, G16_PROJECTION_PAR, G16_PROJECTION_IMG, &
     &G16_FB_NEG_PAR, G16_FB_NEG_IMG, G16_FB_POS_PAR, G16_FB_POS_IMG, G16_RY_NEG_PAR, G16_RY_NEG_IMG, G16_RY_POS_PAR, &
     &G16_RY_POS_IMG, G24_PROJECTION_PAR, G24_PROJECTION_IMG, G24_RY_NEG_PAR, G24_RY_NEG_IMG, G24_FB_POS_PAR, G24_FB_POS_IMG
@@ -142,14 +143,15 @@ contains
         deallocate(wp)
     end subroutine test_adjoint_and_gradient
 
-    !> J(0) dV = 2 g sigma a N * build_transfer * forward_plane of the deapodised dV
+    !> J(0) dV = 2 g sigma a N * build_transfer * the PCG plane gather of the deapodised dV
     subroutine test_weak_phase_identity()
         class(wave_projector),    allocatable :: wp
         class(reconstructor_pcg), allocatable :: rp
-        type(oris) :: os
-        type(ori)  :: o
+        type(oris)  :: os
+        type(ori)   :: o
+        type(image) :: padded
         real,    allocatable :: v0(:,:,:), dv(:,:,:), inv1d(:), dvd(:,:,:)
-        complex, allocatable :: jdv(:,:,:), plane(:,:), tr(:,:), expected(:,:)
+        complex, allocatable :: jdv(:,:,:), plane(:,:), tr(:,:), expected(:,:), cmat(:,:,:)
         type(ctfparams)  :: cp
         real    :: scale, err, errmax
         integer :: i, j, k, model
@@ -169,7 +171,12 @@ contains
                 end do
             end do
         end do
-        call rp%set_volume(dvd)
+        ! the PCG operator's padded transform of dvd, as it gathers its sections
+        call padded%new([rp%boxpd,rp%boxpd,rp%boxpd], SMPD)
+        call padded%set_rmat(center_embed_real3d(dvd, rp%boxpd), .false.)
+        call padded%fft()
+        cmat = padded%get_cmat()
+        call padded%kill
         allocate(plane(-R:R,-R:R), tr(-R:R,-R:R), expected(-R:R,-R:R), jdv(-R:R,-R:R,NP))
         scale = 2. * GAIN * electron_interaction_constant(KV) * SMPD * real(BOX)
         errmax = 0.
@@ -183,7 +190,7 @@ contains
             do i = 1, NP
                 call os%get_ori(i, o)
                 cp = o%get_ctfvars()
-                call rp%forward_plane(o, plane)
+                call rp%gather_plane(cmat, o%get_mat(), 0., plane)
                 tr = rp%build_transfer(cp, o%get_2Dshift())
                 expected = scale * tr * plane
                 err = maxval(abs(jdv(:,:,i) - expected)) / maxval(abs(expected))
@@ -192,7 +199,7 @@ contains
             call wp%kill
             deallocate(wp)
         end do
-        write(*,'(A,ES10.3)') '    weak-phase identity against forward_plane and build_transfer: ', errmax
+        write(*,'(A,ES10.3)') '    weak-phase identity against the PCG gather and build_transfer: ', errmax
         call assert_true(errmax <= 1.0e-5, 'the linearisation at zero is 2 g sigma a N CTF S of the PCG backend')
         call rp%kill
         call os%kill

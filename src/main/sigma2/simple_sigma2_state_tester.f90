@@ -15,7 +15,8 @@ use simple_fileio,            only: simple_copy_file
 use simple_syslib,            only: file_exists, simple_mkdir, simple_rmdir
 use simple_sigma2_state_file, only: sigma2_state_init_header, sigma2_state_create_candidate,&
                                    &sigma2_state_write_local_range, sigma2_state_read_local_range,&
-                                   &sigma2_state_write_particles, SIGMA2_PROV_PSPEC
+                                   &sigma2_state_write_particles, sigma2_state_read_particles,&
+                                   &sigma2_state_write_global, SIGMA2_PROV_PSPEC
 use simple_ptcl_layout,       only: ptcl_layout_digest
 use simple_test_sigma2_fixture, only: patch_sigma2_header_word
 use simple_test_utils
@@ -465,7 +466,7 @@ contains
         call require(header%file_bytes == header%particle_offset + 3_int64*4_int64*4_int64 - 1_int64, &
             &'the particle section is the last section of the state file')
 
-        call sigma2_state_reduce(CANDIDATE, active, eo, status, message)
+        call reduce_store(CANDIDATE, active, eo, status, message)
         call require_ok(status, message)
         call sigma2_state_validate_file(CANDIDATE, status, message)
         call require_ok(status, message)
@@ -777,7 +778,7 @@ contains
         call require_ok(status, message)
         call sigma2_state_write_particles(trim(path)//'.next', 1, spectra, status, message)
         call require_ok(status, message)
-        call sigma2_state_reduce(trim(path)//'.next', active, eo, status, message)
+        call reduce_store(trim(path)//'.next', active, eo, status, message)
         call require_ok(status, message)
         call sigma2_state_publish(trim(path)//'.next', path, status, message)
         call require_ok(status, message)
@@ -795,7 +796,7 @@ contains
         integer :: status
         call sigma2_state_read_global(candidate, streamed, status, message)
         call require_ok(status, message)
-        call sigma2_state_reduce(candidate, active, eo, status, message)
+        call reduce_store(candidate, active, eo, status, message)
         call require_ok(status, message)
         call sigma2_state_read_global(candidate, reduced, status, message)
         call require_ok(status, message)
@@ -803,6 +804,49 @@ contains
             &8.0_real64*epsilon(1.0_real32)*max(1.0_real64,abs(real(reduced,real64)))), &
             &'the streamed global spectra equal a full reduction of the records')
     end subroutine require_full_reduction
+
+    !> the full reduction of the store at path, its global spectra written: per half, the mean of the
+    !! valid records (every shell finite and positive) of the active particles, every record re-read
+    subroutine reduce_store(path, active, eo, status, message)
+        character(len=*), intent(in)  :: path
+        logical,          intent(in)  :: active(:)
+        integer,          intent(in)  :: eo(:)
+        integer,          intent(out) :: status
+        character(len=*), intent(out) :: message
+        type(sigma2_state_header) :: header
+        real(real32), allocatable :: spectra(:,:), global(:,:)
+        real(real64), allocatable :: sums(:,:)
+        integer(int64) :: counts(2)
+        integer :: i, half, nshell
+        call sigma2_state_read_header(path, header, status, message)
+        if( status /= 0 ) return
+        if( size(active) /= header%nptcls .or. size(eo) /= header%nptcls )then
+            status = 1; message = 'sigma2 even/odd metadata has the wrong size'; return
+        endif
+        call sigma2_state_read_particles(path, 1, int(header%nptcls), spectra, status, message)
+        if( status /= 0 ) return
+        nshell = int(header%kto-header%kfrom+1)
+        allocate(sums(nshell,2), source=0.0_real64)
+        counts = 0_int64
+        do i = 1, int(header%nptcls)
+            if( .not. active(i) ) cycle
+            if( .not. (all(ieee_is_finite(spectra(:,i))) .and. all(spectra(:,i) > 0.0_real32)) ) cycle
+            if( eo(i) < 0 .or. eo(i) > 1 )then
+                status = 1; message = 'active particle has invalid even/odd assignment'; return
+            endif
+            half = eo(i) + 1
+            sums(:,half) = sums(:,half) + real(spectra(:,i), real64)
+            counts(half) = counts(half) + 1_int64
+        enddo
+        if( any(counts == 0_int64) )then
+            status = 1; message = 'sigma2 reduction has an empty even/odd half'; return
+        endif
+        allocate(global(nshell,2))
+        do half = 1, 2
+            global(:,half) = real(sums(:,half)/real(counts(half),real64), real32)
+        enddo
+        call sigma2_state_write_global(path, global, status, message)
+    end subroutine reduce_store
 
     subroutine assert_committed_generation(path, expected)
         character(len=*), intent(in) :: path

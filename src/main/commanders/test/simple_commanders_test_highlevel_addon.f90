@@ -161,7 +161,8 @@ end subroutine exec_generate_solve3D_addon_snapshots
 !  integrity, manifests, cohort coverage and poses, union map vs truth and base; metrics.tsv.
 subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     use simple_atoms,                   only: atoms
-    use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
+    use simple_molecule_data,           only: molecule_data
+    use simple_test_molecule_fixture,   only: sars_cov2_spkgp_6vxx
     use simple_ui,                      only: make_ui
     use simple_commanders_solve3D,      only: commander_solve3D_addon
     use simple_solve3D_manifest,        only: solve3D_manifest

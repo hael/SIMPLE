@@ -32,7 +32,6 @@ type, extends(image) :: image_bin
     ! CONNECTED COMPONENTS
     procedure          :: diameter_cc
     procedure          :: elim_cc
-    procedure          :: elim_ccs
     procedure          :: set_largestcc2background
     procedure          :: set_edgecc2background
     procedure          :: find_ccs
@@ -47,7 +46,6 @@ type, extends(image) :: image_bin
     procedure          :: feret_minmax
     procedure          :: inv_bimg 
     procedure          :: grow_bins
-    procedure          :: max_dist
     procedure          :: apply_mask
     procedure          :: vol_shape_descr
     
@@ -365,48 +363,6 @@ contains
         end if
     end subroutine elim_cc
 
-    ! This subroutine takes in input a connected component (cc) image
-    ! and sets to 0 the cc which has size (# pixels) smaller than minmaxsz(1)
-    ! or bigger than minmaxsz(2).
-    ! It is created in order to prepare a micrograph for picking particles.
-    subroutine elim_ccs( self, minmaxsz, min_nccs )
-        class(image_bin),   intent(inout) :: self
-        integer,           intent(in)    :: minmaxsz(2)
-        integer, optional, intent(in)    :: min_nccs ! min number of ccs to have after elimination
-        integer, allocatable :: sz(:), bimat_copy(:,:,:)
-        integer              :: n_cc, cnt, minccs
-        if(.not. any(self%bimat > 0)) then
-          THROW_WARN('Inputted non-existent cc; elim_ccs')
-          return
-        endif
-        sz = self%size_ccs()
-        allocate(bimat_copy(self%bldim(1), self%bldim(2), self%bldim(3)), source = self%bimat)
-        cnt = 0 ! number of remaining ccs
-        do n_cc = 1, size(sz) ! for each cc
-            if(sz(n_cc) < minmaxsz(1) .or. sz(n_cc) > minmaxsz(2)) then ! if the cc has size < min_sz or > max_sz
-                where(self%bimat == n_cc)  ! rmat == label
-                    bimat_copy = 0         ! set to 0
-                endwhere
-            else
-                cnt = cnt + 1
-            endif
-        enddo
-        minccs = 1 ! default
-        if(present(min_nccs)) minccs = min_nccs
-        if(cnt < minccs) then ! if too many connected components have been removed
-            THROW_WARN('Connected components haven t been size-filtered, otherwise img would be empty; elim_ccs')
-            return
-        else
-            call self%set_imat(bimat_copy)
-        endif
-        ! re-oder cc
-        call self%order_ccs()
-        ! update number of connected components
-        self%nccs = maxval(self%bimat)
-        deallocate(sz)
-        call self%update_img_rmat
-    end subroutine elim_ccs
-
     ! This function is reorders the connected components (ccs)
     ! after some of them have been eliminated, so that they have contiguous
     ! labelling (1,2,3..) without absenses (NOT 1,2,5..).
@@ -542,29 +498,6 @@ contains
 
         deallocate(xpts, ypts)
     end subroutine feret_minmax
-
-    subroutine max_dist( self, dist )
-        class(image_bin), intent(inout) :: self
-        real,            intent(out)   :: dist
-        integer :: i, j, k
-        real    :: center_coord(3), distsq, maxdistsq 
-        center_coord = nint(self%bldim/2.)
-        !print *, 'CENTER COORD IS = ', center_coord
-        maxdistsq = 0.
-        do i = 1, self%bldim(1)
-            do j = 1, self%bldim(2)
-                do k = 1, self%bldim(3)
-                    if ( self%bimat(i,j,k) < 1 ) cycle
-                    distsq = sum((center_coord - real([i,j,k]))**2)
-                    if( distsq > maxdistsq ) then
-                        maxdistsq = distsq
-                        !print *, 'CURRENT FARTHEST COORD IS = ', [i,j,k]
-                    endif
-                end do
-            end do
-        end do
-        dist = sqrt(maxdistsq)
-    end subroutine max_dist
 
     subroutine apply_mask(self, mask )
         class(image_bin), intent(inout) :: self

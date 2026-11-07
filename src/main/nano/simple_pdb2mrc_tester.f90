@@ -5,7 +5,8 @@ use simple_string,        only: string
 use simple_syslib,        only: del_file, file_exists
 use simple_imghead,       only: find_img_smpd, find_ldim_nptcls
 use simple_atoms,         only: atoms
-use simple_molecule_data, only: molecule_data, betagal_1jyx, sars_cov2_spkgp_6vxx
+use simple_molecule_data,         only: molecule_data
+use simple_test_molecule_fixture, only: betagal_1jyx, sars_cov2_spkgp_6vxx
 use simple_fileio,        only: files_identical
 use simple_test_utils,    only: assert_real, assert_true
 !$ use omp_lib,           only: omp_get_max_threads, omp_set_num_threads

@@ -58,7 +58,7 @@ parallel caller or a new section cutter.
 | --- | --- | --- | --- |
 | mask coordinates | `memoize_mask_coords` | `mask2D_*`, `mask3D_*`; the fused `mask_fft`, `mask_pad_fft`, `ifft_mask_fft`, `ifft_mask_pad_fft` | THROW_HARD inside a region; `mask2D_*`/`mask3D_*` re-memoize on a box change outside a region and stop inside; the fused kernels do not check |
 | power-spectrum geometry | `memoize_powspec_coords(mskrad)` | `norm_noise_mask_fft_powspec` | the same, keyed on box and mskrad |
-| CTF Fourier maps | `memoize_ft_maps(ldim, smpd)` (`simple_memoize_ft_maps.f90`), `forget_ft_maps` | `ctf2img`, `apply_ctf`, `apply_ctf_wpad` (in real space it pads to 2*ldim and needs the maps of that box), the `*_ctf_flip` kernels, `ft_map_ctf_kernel` | THROW_HARD inside a region; `ctf2img` and `apply_ctf` stop on another box (`ft_maps_match`; `prepimg4align_cart` checks by `ft_map_get_farray_shape`), the `*_ctf_flip` kernels do not check |
+| CTF Fourier maps | `memoize_ft_maps(ldim, smpd)` (`simple_memoize_ft_maps.f90`), `forget_ft_maps` | `apply_ctf`, `apply_ctf_wpad` (in real space it pads to 2*ldim and needs the maps of that box), the `*_ctf_flip` kernels, `ft_map_ctf_kernel` | THROW_HARD inside a region; `apply_ctf` stops on another box (`ft_maps_match`; `prepimg4align_cart` checks by `ft_map_get_farray_shape`), the `*_ctf_flip` kernels do not check |
 | polarizer geometry | `memoize4polarize(pdim)` (KB alpha 1, unpadded image; kept for corrmat, `strategy2D_utils`, graphene subtraction), `memoize4polarize_oversamp(pdim)` (KBALPHA, image padded by OSMPL_PAD_FAC, result times pf^2) | `polarize`, `polarize_oversamp` (given the caller's `pdim`) | THROW_HARD inside a region; the readers stop unless box, `pdim` and mode match (`polar_memo_valid`); one geometry per process |
 | per-thread work images | `construct_thread_safe_tmp_imgs(nthr)` | `calc_shiftcen_serial` (index `omp_get_thread_num()+1`) | THROW_HARD inside a region; a box mismatch stops, an index beyond nthr does not |
 | ft_expanded transfer matrix | `ftexp_transfmat_init(img, lp)` | `ft_expanded%shift`, the shift-search costs | none |
@@ -80,7 +80,7 @@ pdim = [pftsz, kfrom, kto]. Rotation i = 1..pftsz at angle (i-1)*pi/pftsz; sampl
   halo array `cmat_exp` with KB(KBWINSZ, KBALPHA).
 - `interp_fcomp(loc)`: KB gather at loc in the volume's own units (`fproject`, `fproject_serial`:
   Cartesian planes). `interp_fcomp_oversamp(loc)`: loc in native units, multiplied by OSMPL_PAD_FAC,
-  result times pf^3 (`fproject_polar_batch*`: the polar reference bank). All gathers are pure.
+  result times pf^3 (no production caller; a cartft test's reference). All gathers are pure.
 - `fproject_polar_batch_opt` evaluates weights inline and holds at most 3 taps (THROW_HARD);
   it compiles for GPU offload only with `USE_OPENMP_OFFLOAD`.
 

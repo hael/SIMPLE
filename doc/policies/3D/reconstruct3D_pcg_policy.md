@@ -197,7 +197,7 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 | File | Contents |
 | --- | --- |
 | `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type, raw accumulator format, `PCG_WEIGHT_THRESHOLD` |
-| `src/main/volume/simple_pcg_lattice.f90` | `pcg_lattice`, which `reconstructor_pcg` extends: padded-lattice geometry, KB window, wrap table and solve support (`set_window_sphere`, `set_window_volume`); the plane gather and scatter (`gather_plane`, `scatter_plane`, under `forward_plane` and `adjoint_plane_add`), the wrap test and rim radius (`win_wraps`, `rim_free`, `sq_rim`) and the fold of the scatter accumulator (`fold_lattice_accum`); shared with the FLEX PCG operator and the wave operators, which sample the Ewald paraboloid with the same gather at a nonzero curvature (`doc/policies/3D/wave_model_policy.md`); at zero curvature, the PCG backend's case, the code is the PCG code bitwise |
+| `src/main/volume/simple_pcg_lattice.f90` | `pcg_lattice`, which `reconstructor_pcg` extends: padded-lattice geometry, KB window, wrap table and solve support (`set_window_sphere`, `set_window_volume`); the plane gather and scatter (`gather_plane`, `scatter_plane`), the wrap test and rim radius (`win_wraps`, `rim_free`, `sq_rim`) and the fold of the scatter accumulator (`fold_lattice_accum`); shared with the FLEX PCG operator and the wave operators, which sample the Ewald paraboloid with the same gather at a nonzero curvature (`doc/policies/3D/wave_model_policy.md`); at zero curvature, the PCG backend's case, the code is the PCG code bitwise |
 | `src/main/opt/simple_pcg_solver.f90` | the preconditioned conjugate-gradient engine and `pcg_solver_outcome` |
 | `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | PCG worker accumulation and master reduction and solve, for both execution modes |
 | `src/main/strategies/parallelization/simple_rec3D_service.f90` | reconstruction service: weight source, dispatch, naming, registration |
@@ -431,7 +431,7 @@ convention and deapodization changes.
 
 Load-bearing conventions. Changing any of them requires re-passing §9.
 
-**Full-symmetric-disk planes.** `forward_plane`/`adjoint_plane_add` always use
+**Full-symmetric-disk planes.** `gather_plane`/`scatter_plane` always use
 an unpacked, both-sign-`h` disk, never the packed half. This makes them an exact
 adjoint pair for *any* orientation, at 2x plane work. The packed half-plane's
 Nyquist-bin bookkeeping is an orientation-dependent silent energy-loss trap that
@@ -475,8 +475,8 @@ removing edge artefacts where deapodization amplifies hardest, it shrinks the
 problem: at `mskdiam` 180 in a 256 box the sphere is ~18% of the volume. Edge
 profile is production's `cosedge_r2_3d`.
 
-**Scatter reproducibility.** The production accumulations
-(`accumulate_rhs_density`, `accumulate_absT2`) are parallelized by slab
+**Scatter reproducibility.** The production accumulation
+(`accumulate_rhs_density`) is parallelized by slab
 ownership (`pcg_lattice`, `slab_count`/`slab_planes`/`slab_k_range`): the
 accumulator's third axis, its slowest in memory, is cut into slabs `wdim`
 planes thick, a window belongs to the slab its first plane lies in, even
@@ -501,7 +501,7 @@ run-to-run reproducibility is what makes a residual trace usable as a regression
 signal. The rim is a thin outer shell, so the serial cost is small.
 
 **Half-lattice accumulation of Hermitian planes.** The `B` and `D` accumulators
-of the production route (`accumulate_rhs_density`, `accumulate_absT2`) are
+of the production route (`accumulate_rhs_density`) are
 read only as their `h >= 0` half plus the wrapped Nyquist mate at
 `lims3(1,1)` (`fold_and_ifft`, `finalize_density_accum`). The planes they
 deposit are Hermitian (central sections of real images, real even `|T|^2`), so
@@ -509,7 +509,7 @@ the mirrored window of each plane point's Friedel mate deposits the conjugate
 and the `h < 0` half carries nothing the fold needs. Windows wholly inside that
 dead half are therefore skipped (`win_below_fold`, 2026-10-26), halving the
 scatter with bit-identical sums; the raw artifact (above) carries only the
-read half. The exact adjoint pair `forward_plane`/`adjoint_plane_add` and the
+read half. The exact adjoint pair `gather_plane`/`scatter_plane` and the
 matrix-free reference operator keep the full both-sign-`h` scatter, as does the
 two-cap fold of a wave model (`l_hermitian`).
 
@@ -546,7 +546,8 @@ the sub-pixel frequency offsets that distinguish the operator from gridding. (A
 literal impulse-response kernel does not work: KB weights sum to 1, so it
 reduces exactly to gridding and PCG converges in one step to the gridding
 answer.) Overall scale is the analytic constant `padsc^2`;
-`measure_kernel_scale` is a test-only check that it is right.
+`test=pcg_recon` stage 3 checks it against the least-squares scale of the
+kernel to the matrix-free operator.
 
 The kernelized operator is shift-invariant and the true operator is not, so it
 stays an approximation (~3.4% interior error). The matrix-free path is the exact
@@ -574,14 +575,14 @@ and FSC; a similar operator is not enough.
 
 Point-group symmetry is applied by **coordinate replication** inside the
 operator: each plane pixel is gathered and scattered at all `M` orientations
-`R_i . S_g`. Replication is applied to `H` (`accumulate_absT2`,
-`apply_normal_matrixfree`) and to `b` (`scatter_plane` of `pcg_lattice`, reached from
-`apply_adjoint_all` and `accumulate_rhs_density`), so the system solved is consistently
-symmetrized.
+`R_i . S_g`. Replication is applied to `H` (`apply_normal_matrixfree` and the `D`
+of `accumulate_rhs_density`) and to `b` (`apply_adjoint_all`, through `scatter_plane`
+of `pcg_lattice`, and the `B` of `accumulate_rhs_density`), so the system solved is
+consistently symmetrized.
 
 **Composition order is production's.** `matmul(R_i, S_g)` in the row-vector
 convention `loc = matmul([h,k,0], rot)` is exactly what `sym%apply` produces and
-what `reconstructor%insert_fplane` scatters at. `test=pcg_recon` stage 9 asserts
+what `reconstructor%insert_fplane` scatters at. `test=pcg_recon` stage 7 asserts
 this by composing the reference path through `sym%apply` rather than repeating
 the operator's own expression.
 
@@ -623,7 +624,7 @@ A second criterion, `dx/x <= PCG_XTOL`, exits on diminishing returns: on noisy
 real data `||r||/||b||` plateaus above `rtol` while the map keeps settling, so
 `dx/x` is what actually terminates a real solve. It is **suppressed by
 `rtol <= 0`**, the caller's way of demanding exactly `maxits` iterations —
-stage 7 depends on that, since comparing two solves stopped by a data-dependent
+stage 5 depends on that, since comparing two solves stopped by a data-dependent
 criterion asserts nothing.
 
 Successful completion returns a typed `pcg_solver_outcome` identifying `rtol`,
@@ -660,31 +661,33 @@ orientations explicitly.
 
 ## 9. Tests
 
-`test=pcg_recon` in `simple_commanders_test_highlevel_pcg.f90` — one gate, 14
-fail-fast stages (plus stage 3b), in memory with no project I/O. Each stage gates the ones after
+`test=pcg_recon` in `simple_commanders_test_highlevel_pcg.f90` — one gate, 12
+fail-fast stages (plus stage 1b), in memory with no project I/O. Each stage gates the ones after
 it; a visually plausible map is not evidence that the CTF/sigma adjoint is
-correct.
+correct. The operators come from the production accumulation
+(`begin_accum`/`accumulate_batch`/`end_accum`).
 
 | # | Stage |
 | --- | --- |
-| 1 | adjoint dot-product identity, `T_i = 1` |
-| 2 | same with nonzero shift, astigmatic CTF and sigma2 — isolates `build_transfer` |
-| 3 | normal-operator symmetry and positive-definiteness; 3b: the same for the masked operator `P H P` |
-| 4 | heterogeneous phantom recovery |
-| 5 | kernelized-vs-matrix-free operator, scale/energy, and fixed-iteration solution baseline |
-| 6 | kernel shift-invariance, CTF-dependence, and the preconditioner |
-| 7 | streaming batches and serialized fixed-order raw reduction reproduce monolithic accumulation |
-| 8 | deapodization against envelope-free data — the one stage without an inverse crime |
-| 9 | symmetry replication equals a c1 build of the symmetry-expanded particle set |
-| 10 | relative lambda: duplicated data (two raw artifacts, fixed-order reduction) doubles data scale and lambda and leaves a fixed-iteration solve unchanged |
-| 11 | full vs cropped raw B/D agree in the common band; cropped kernel vs matrix-free |
-| 12 | FSC/SSNR ML prior: nonzero positive-semidefinite diagonal, consistent summary, kernel/matrix-free parity, positive energy |
-| 13 | gridding and PCG prepare the same cropped observation (`box_crop < box`) |
-| 14 | support semantics: masked output zero outside the support; repeated warm starts keep the soft window band |
+| 1 | normal-operator symmetry and positive-definiteness; 1b: the same for the masked operator `P H P` |
+| 2 | heterogeneous phantom recovery |
+| 3 | kernelized-vs-matrix-free operator, scale/energy, and fixed-iteration solution baseline |
+| 4 | kernel shift-invariance, CTF-dependence, and the preconditioner |
+| 5 | streaming batches reproduce the monolithic solve; batched and serialized fixed-order raw reduction reproduce the single-pass raw accumulators (B, D) and kernel |
+| 6 | deapodization: from envelope-free sections the solve returns the phantom, closer to it than `x env` or `x/env` |
+| 7 | symmetry replication equals a c1 build of the symmetry-expanded particle set |
+| 8 | relative lambda: duplicated data (two raw artifacts, fixed-order reduction) doubles data scale and lambda and leaves a fixed-iteration solve unchanged |
+| 9 | full vs cropped raw B/D agree in the common band; cropped kernel vs matrix-free |
+| 10 | FSC/SSNR ML prior: consistent summary of its positive bins, kernel/matrix-free parity, positive energy |
+| 11 | gridding and PCG prepare the same cropped observation (`box_crop < box`) |
+| 12 | support semantics: masked output zero outside the support; repeated warm starts keep the soft window band |
 
-Outside stages 8 and 13, observations are generated with `forward_plane`, so the gather envelope
-cancels; those stages gate operator *algebra* only. Envelope correctness for real
-particles is gated solely by stage 8.
+Deapodization is always on, as shipped: the gate never turns it off. Observations are the
+operator's gather (`gather_plane`) of `phantom/env`, the envelope-free sections (stage 11
+prepares images), so every solve targets the phantom itself; stage 6 gates the envelope
+correction. The adjoint pair `gather_plane`/`scatter_plane` is gated in `unit_reconstruction`
+(`simple_pcg_lattice_tester.f90`), the envelope and its inverse factors in `unit_cart_align3D`
+(`simple_cartesian_fourier_tester.f90`).
 
 Matrix-free is the oracle for kernel development. Any change to kernel
 construction, scale, masks, symmetry, resolution limiting, weights,
@@ -719,7 +722,7 @@ guards the unmeasured-voxel rule of the preconditioner (section 5).
 
 Not covered, and worth remembering before trusting a change: the backend's own
 particle I/O loop, and replicated symmetry through the matrix-free operator
-(stage 9 compares kernel to kernel).
+(stage 7 compares kernel to kernel).
 
 ## 10. Current backend exclusions
 
@@ -858,7 +861,7 @@ it ships. The one-mask contract that came with it:
   `window >= PCG_SUPPORT_DIV_MIN` (zero below) instead of projecting again;
   the former entry projection squared the edge on every restarted iteration
   and compounded over a stage. Regressions:
-  `test=pcg_recon` stage 14 (band profile of the constrained solve against
+  `test=pcg_recon` stage 12 (band profile of the constrained solve against
   the windowed unconstrained one; band stability under repeated starts);
 - the matcher still applies `mask3D_soft(msk_crop)` to its reprojection
   reference after Fourier filtering (both backends, `mask_matching_reference`).
@@ -880,7 +883,7 @@ time, compute cost and memory:
   native box, Fourier-crop, taper at the cropped box; gridding pads and
   transforms in its fused routine, PCG takes the native plane of the tapered
   observation. Without a crop the observation is tapered first and normalized
-  second on both backends. `test=pcg_recon` stage 13 gates the two routes in
+  second on both backends. `test=pcg_recon` stage 11 gates the two routes in
   real space at 1e-5 relative;
 - **the volume and its support sidecar are one artifact.** Stage-boundary
   renames, final copies, symmetric-map copies and the refine3D start-volume
@@ -908,7 +911,7 @@ even/odd assignment, sampling and sigma state, stage schedule and resolution
 limits, `nparts`, threads, queue and hardware between the paired runs; each
 backend in its own clone of the starting project; `maxits_pcg`, `rtol` and the
 operator mode fixed and recorded. Gates before interpreting results:
-prepared-observation parity (stage 13), the support regressions (stage 14),
+prepared-observation parity (stage 11), the support regressions (stage 12),
 no reconstruction losing provenance across a stage boundary, and wall time,
 thread-seconds and peak RSS recomputable from the emitted records. Judge
 quality on paired replicas (at least 10 seeds), never on a single run.

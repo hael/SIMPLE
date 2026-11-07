@@ -30,7 +30,7 @@ use simple_memoize_ft_maps,   only: memoize_ft_maps
 use simple_matcher_ptcl_batch, only: check_pass_team, alloc_ptcl_imgs
 use simple_forked_process,    only: forked_process, FORK_STATUS_FAILED
 use simple_defs,              only: nthr_glob
-use simple_test_polar_fixture, only: rotate_half_ring
+use simple_test_polar_fixture, only: rotate_half_ring, shift_args
 use simple_test_utils
 !$ use omp_lib,               only: omp_get_max_threads, omp_set_num_threads
 implicit none
@@ -521,6 +521,16 @@ contains
         call srch%prep4prob
     end subroutine one_particle_fixture
 
+    !> a half ring shifted by s with the calculator's phase (shift_args), as a particle at shift s
+    pure subroutine shift_half_ring( pftsz, kfromto, box, s, pft )
+        integer,     intent(in)    :: pftsz, kfromto(2), box
+        real,        intent(in)    :: s(2)
+        complex(sp), intent(inout) :: pft(pftsz,kfromto(1):kfromto(2))
+        real(dp) :: ax(pftsz,kfromto(1):kfromto(2)), ay(pftsz,kfromto(1):kfromto(2))
+        call shift_args(pftsz, kfromto, box, ax, ay)
+        pft = pft * cmplx(cos(ax * s(1) + ay * s(2)), sin(ax * s(1) + ay * s(2)), kind=sp)
+    end subroutine shift_half_ring
+
     !> One convention for the table's increments (review R1): every increment is in the particle's axes. The window
     !! path writes minimize(sh_rot=.true.), the optimizer's shift rotated from the reference's axes at the rotation it
     !! was found at; the map path writes the drawn cell rotated the same way; the consumer adds the increment to the
@@ -561,8 +571,8 @@ contains
         nchecked = 0
         do inpl = 1, nrots, max(1, nrots / 5)
             call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call shift_half_ring(pftsz, kfromto, p%box, S_TRUE, ptcl(:,kfromto(1):kfromto(2)))
             call b%pftc%set_ptcl_pft(1, ptcl)
-            call b%pftc%shift_ptcl(1, S_TRUE)
             call b%pftc%memoize_ptcls
             irot_n = inpl
             irot_r = inpl
@@ -639,8 +649,8 @@ contains
         nchecked = 0
         do inpl = 1, nrots, max(1, nrots / 5)
             call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call shift_half_ring(pftsz, kfromto, p%box, S_TRUE, ptcl(:,kfromto(1):kfromto(2)))
             call b%pftc%set_ptcl_pft(1, ptcl)
-            call b%pftc%shift_ptcl(1, S_TRUE)
             call b%pftc%memoize_ptcls
             irot_l = inpl
             call grad_lattice%set_indices(1, 1)
@@ -709,8 +719,8 @@ contains
         nchecked = 0
         do inpl = 1, nrots, max(1, nrots / 5)
             call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call shift_half_ring(pftsz, kfromto, p%box, S_TRUE, ptcl(:,kfromto(1):kfromto(2)))
             call b%pftc%set_ptcl_pft(1, ptcl)
-            call b%pftc%shift_ptcl(1, S_TRUE)
             call b%pftc%memoize_ptcls
             irot = inpl
             call grad_disk%set_indices(1, 1)

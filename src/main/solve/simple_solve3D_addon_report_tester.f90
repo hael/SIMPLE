@@ -118,7 +118,6 @@ contains
         call report%compare_fsc(1, fsc_curve(size(res), 15.), fsc_curve(size(res), 18.), res)
         call report%compare_maps(1, string(F_MAP), string(F_MAP))
         call assert_real(1., report%get_corr(1), 1.e-4, 'a map correlates fully with itself')
-        call assert_real(-1., report%get_dock_angle(1), 0., 'a map in the base frame is not docked')
         call report%compare_cohort(1, string(F_MAP), string(F_MAP))
         call assert_true(report%get_cohort_res0143(1) > 0., 'the cohort map resolution is found')
         call report%compare_maps(1, string(F_MAP), string('tmp_addon_report_absent.mrc'))

@@ -7,6 +7,7 @@
 module simple_stream_tester
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
+use simple_test_image_fixture, only: draw_square
 use simple_cmdline,    only: cmdline
 use simple_sp_project, only: sp_project
 use simple_image,      only: image
@@ -179,9 +180,9 @@ contains
         ! three compact asymmetric images: a centred square and an off-centre feature
         do i = 1, NSOURCE_REFS
             call reference%new([SOURCE_BOX, SOURCE_BOX, 1], SMPD, wthreads=.false.)
-            call reference%square(5 + i)
+            call draw_square(reference, 5 + i)
             call feature%new([SOURCE_BOX, SOURCE_BOX, 1], SMPD, wthreads=.false.)
-            call feature%square(2 + i)
+            call draw_square(feature, 2 + i)
             call feature%shift([real(7 + 2 * i), real(-5 + i), 0.])
             call reference%add(feature)
             call reference%write(string(SOURCE_STACK), i, del_if_exists=(i == 1))
@@ -273,9 +274,9 @@ contains
         call enter_fixture('test_pick_extract', cwd_saved, fixture_root)
         ! an asymmetric reference, three exact copies on a weak-noise micrograph
         call reference%new([PICKREF_BOX, PICKREF_BOX, 1], SMPD, wthreads=.false.)
-        call reference%square(7)
+        call draw_square(reference, 7)
         call feature%new([PICKREF_BOX, PICKREF_BOX, 1], SMPD, wthreads=.false.)
-        call feature%square(3)
+        call draw_square(feature, 3)
         call feature%shift([11., -7., 0.])
         call reference%add(feature)
         call reference%mul(5.)

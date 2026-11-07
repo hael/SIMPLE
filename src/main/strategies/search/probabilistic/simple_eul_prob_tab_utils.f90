@@ -88,7 +88,6 @@ contains
     procedure :: wanted    => neff_readout_wanted
     procedure :: offer     => neff_readout_offer
     procedure :: nkept     => neff_readout_nkept
-    procedure :: mean_neff => neff_readout_mean_neff
     procedure :: sum_neff  => neff_readout_sum_neff
     procedure :: report    => neff_readout_report
     procedure :: kill      => neff_readout_kill
@@ -143,13 +142,8 @@ contains
     procedure :: report => insert_table_report
     procedure :: counts => insert_table_counts
     procedure :: get_nptcls   => insert_table_get_nptcls
-    procedure :: get_kmax     => insert_table_get_kmax
     procedure :: get_pind     => insert_table_get_pind
-    procedure :: get_committed_weight => insert_table_get_committed_weight
-    procedure :: get_nextra   => insert_table_get_nextra
     procedure :: get_extra    => insert_table_get_extra
-    procedure :: get_mean_eligible => insert_table_get_mean_eligible
-    procedure :: get_frac_capped   => insert_table_get_frac_capped
     procedure :: kill   => insert_table_kill
 end type prob_insert_table
 
@@ -513,7 +507,7 @@ contains
 
     !> The temperature of the pose posterior over a particle's table row. The row holds the normalized
     !! Euclidean loss L_r = sum_k (k/sigma2_k) sum_p |X_kp - CTF R_kp|^2 / wsqsum(X), summed over the pftsz
-    !! polar samples of each ring (gen_raw_euclid_vals). The Gaussian negative log-likelihood runs over the
+    !! polar samples of each ring (gen_euclid_dists). The Gaussian negative log-likelihood runs over the
     !! Cartesian half-plane components, pi*k of them in ring k, so each polar sample stands for pi*k/pftsz
     !! of them, and sigma2 is the variance per real or imaginary part (gen_sigma_contrib):
     !!   NLL_r = sum_k (pi k/pftsz) sum_p |r_kp|^2 / (2 sigma2_k) = pi wsqsum(X) L_r / (2 pftsz).
@@ -613,14 +607,6 @@ contains
         class(prob_neff_readout), intent(in) :: self
         nrows = self%nrows
     end function neff_readout_nkept
-
-    !> the mean over the kept rows of exp(entropy) of the row posterior at tempering factor beta
-    real function neff_readout_mean_neff( self, beta ) result( neff )
-        class(prob_neff_readout), intent(in) :: self
-        real,                     intent(in) :: beta
-        neff = 0.
-        if( self%nrows > 0 ) neff = real(self%sum_neff(beta) / real(self%nrows,dp))
-    end function neff_readout_mean_neff
 
     !> the sum over the kept rows of exp(entropy) of the row posterior at tempering factor beta:
     !! p_r proportional to exp(-beta T d_r), d_r the distance above the row minimum; in one pass per row,
@@ -1073,47 +1059,16 @@ contains
         call flush(logfhandle)
     end subroutine report_prob_readout
 
-    !> the eligible entries per particle, over the particles added
-    pure real function insert_table_get_mean_eligible( self )
-        class(prob_insert_table), intent(in) :: self
-        insert_table_get_mean_eligible = 0.
-        if( self%nptcls > 0 ) insert_table_get_mean_eligible = real(self%nelig_sum) / real(self%nptcls)
-    end function insert_table_get_mean_eligible
-
-    !> the fraction of particles with more eligible entries than kmax - 1
-    pure real function insert_table_get_frac_capped( self )
-        class(prob_insert_table), intent(in) :: self
-        insert_table_get_frac_capped = 0.
-        if( self%nptcls > 0 ) insert_table_get_frac_capped = real(self%ncapped) / real(self%nptcls)
-    end function insert_table_get_frac_capped
-
     pure integer function insert_table_get_nptcls( self )
         class(prob_insert_table), intent(in) :: self
         insert_table_get_nptcls = self%nptcls
     end function insert_table_get_nptcls
-
-    pure integer function insert_table_get_kmax( self )
-        class(prob_insert_table), intent(in) :: self
-        insert_table_get_kmax = self%kmax
-    end function insert_table_get_kmax
 
     pure integer function insert_table_get_pind( self, i )
         class(prob_insert_table), intent(in) :: self
         integer,                  intent(in) :: i
         insert_table_get_pind = self%pinds(i)
     end function insert_table_get_pind
-
-    pure real function insert_table_get_committed_weight( self, i )
-        class(prob_insert_table), intent(in) :: self
-        integer,                  intent(in) :: i
-        insert_table_get_committed_weight = self%wc(i)
-    end function insert_table_get_committed_weight
-
-    pure integer function insert_table_get_nextra( self, i )
-        class(prob_insert_table), intent(in) :: self
-        integer,                  intent(in) :: i
-        insert_table_get_nextra = self%nextra(i)
-    end function insert_table_get_nextra
 
     !> particle i's k-th extra pose
     pure function insert_table_get_extra( self, i, k ) result( pose )

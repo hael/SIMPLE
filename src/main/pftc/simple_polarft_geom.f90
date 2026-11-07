@@ -4,16 +4,6 @@ implicit none
 
 contains
 
-    !>  Generate polar shift matrix by means of de Moivre's formula
-    module subroutine gen_shmat(self, ithr, shift, shmat)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(sp),             intent(in)    :: shift(2)
-        complex(sp), pointer, intent(inout) :: shmat(:,:)
-        call self%gen_shmat_8(ithr, real(shift,dp), self%heap_vars(ithr)%shmat_8)
-        shmat = cmplx(self%heap_vars(ithr)%shmat_8)
-    end subroutine gen_shmat
-
     !>  Generate polar shift matrix by means of de Moivre's formula, for alignment: only the searched shells
     !>  [kfromto(1);kfromto(2)] are set, the only ones its consumers read
     module subroutine gen_shmat4aln(self, ithr, shift, shmat)
@@ -24,31 +14,6 @@ contains
         call self%gen_shmat4aln_8(ithr, real(shift,dp), self%heap_vars(ithr)%shmat_8)
         shmat(:,self%kfromto(1):self%kfromto(2)) = cmplx(self%heap_vars(ithr)%shmat_8(:,self%kfromto(1):self%kfromto(2)))
     end subroutine gen_shmat4aln
-
-    !>  Generate polar shift matrix by means of de Moivre's formula, double precision
-    module subroutine gen_shmat_8(self, ithr, shift_8, shmat_8)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(dp),             intent(in)    :: shift_8(2)
-        complex(dp), pointer, intent(inout) :: shmat_8(:,:)
-         integer :: k
-        ! first shell, analytic
-        self%heap_vars(ithr)%argvec = self%argtransf(:self%pftsz,  self%kfromto(1)) * shift_8(1) +&
-                                    & self%argtransf(self%pftsz+1:,self%kfromto(1)) * shift_8(2)
-        shmat_8(:,self%kfromto(1))  = dcmplx(dcos(self%heap_vars(ithr)%argvec), dsin(self%heap_vars(ithr)%argvec))
-        ! one shell to the next
-        self%heap_vars(ithr)%argvec = self%argtransf_shellone(:self%pftsz)   * shift_8(1) +&
-                                    & self%argtransf_shellone(self%pftsz+1:) * shift_8(2)
-        self%heap_vars(ithr)%shvec  = dcmplx(dcos(self%heap_vars(ithr)%argvec), dsin(self%heap_vars(ithr)%argvec))
-        ! remaining shells, cos(kx)+isin(kx) = (cos(x)+isin(x))**k-1 * (cos(x)+isin(x))
-        do k = self%kfromto(1)+1,self%interpklim
-            shmat_8(:,k) = shmat_8(:,k-1) * self%heap_vars(ithr)%shvec
-        enddo
-        ! alternative to:
-        ! argmat  => self%heap_vars(ithr)%argmat_8
-        ! argmat  =  self%argtransf(:self%pftsz,:)*shvec(1) + self%argtransf(self%pftsz + 1:,:)*shvec(2)
-        ! shmat   =  cmplx(cos(argmat),sin(argmat),dp)
-    end subroutine gen_shmat_8
 
     !>  Generate polar shift matrix by means of de Moivre's formula, double precision
     !>  To be used only for alignment as it is band-passed within [kfromto(1);kfromto(2)]
@@ -79,20 +44,6 @@ contains
             enddo
         enddo
     end subroutine gen_shmat4aln_8
-
-    module subroutine shift_ptcl( self, iptcl, shvec)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        real(sp),            intent(in)    :: shvec(2)
-        complex(sp), pointer :: shmat(:,:)
-        integer :: ithr, i
-        ithr  = omp_get_thread_num() + 1
-        i     = self%pinds(iptcl)
-        shmat => self%heap_vars(ithr)%shmat
-        call self%gen_shmat(ithr, shvec, shmat)
-        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
-        call self%bump_ptcl_gen
-    end subroutine shift_ptcl
 
     ! mirror pft about h (mirror about y of cartesian image)
     module pure subroutine mirror_ref_pft_by_pft( self, pft, pftm )

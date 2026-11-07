@@ -102,7 +102,8 @@ end subroutine exec_test_cont_refine3D_1jxy
 subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     use simple_atoms,              only: atoms
-    use simple_molecule_data,      only: molecule_data, betagal_1jyx
+    use simple_molecule_data,      only: molecule_data
+    use simple_test_molecule_fixture, only: betagal_1jyx
     use simple_ui,                 only: make_ui
     use simple_image,              only: image
     use simple_commanders_refine3D, only: commander_refine3D, commander_refine3D_auto, commander_refine3D_local
@@ -889,7 +890,8 @@ end subroutine exec_test_cont_refine3D_bench
 !! the truth go to metrics.tsv as reports.
 subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     use simple_atoms,               only: atoms
-    use simple_molecule_data,       only: molecule_data, betagal_1jyx
+    use simple_molecule_data,       only: molecule_data
+    use simple_test_molecule_fixture, only: betagal_1jyx
     use simple_commanders_rec,      only: commander_rec3D
     use simple_commanders_refine3D, only: commander_refine3D
     use simple_refine3D_fnames,     only: refine3D_state_vol_fname

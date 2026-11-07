@@ -7,6 +7,7 @@ module simple_image_tester
 use, intrinsic :: ieee_exceptions, only: ieee_get_flag, ieee_set_flag, ieee_divide_by_zero
 use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_nan
 use simple_test_utils
+use simple_test_image_fixture, only: draw_square
 use simple_defs
 use simple_linalg,       only: hyp
 use simple_string,       only: string
@@ -203,24 +204,19 @@ contains
 
         call dest%new(COPY_DIMS, SMPD, wthreads=.false.)
         call dest%copy(threaded)
-        call assert_true(dest%is_wthreads(), 'copy inherits a threaded source policy')
         call assert_true(all(dest%get_rmat() == input), 'copy clones real-space data from a threaded source')
         call dest%new(COPY_DIMS, SMPD, wthreads=.true.)
         call dest%copy(serial)
-        call assert_false(dest%is_wthreads(), 'copy inherits a serial source policy')
         call assert_true(all(dest%get_rmat() == input + 100.), 'copy clones real-space data from a serial source')
 
         call assigned%new(COPY_DIMS, SMPD, wthreads=.false.)
         assigned = threaded
-        call assert_true(assigned%is_wthreads(), 'defined assignment inherits a threaded source policy')
         call assert_true(all(assigned%get_rmat() == input), 'defined assignment clones the source data')
         call assigned%new(COPY_DIMS, SMPD, wthreads=.true.)
         assigned = serial
-        call assert_false(assigned%is_wthreads(), 'defined assignment inherits a serial source policy')
 
         call dest%new(COPY_DIMS, SMPD, wthreads=.false.)
         call dest%copy_fast(threaded)
-        call assert_false(dest%is_wthreads(), 'copy_fast keeps a serial destination policy')
         call assert_true(all(dest%get_rmat() == input), 'copy_fast copies real-space data')
         call threaded%fft
         call dest%copy_fast(threaded)
@@ -230,7 +226,6 @@ contains
         call assert_true(all(dest_ft == source_ft), 'copy_fast copies Fourier-space data')
         call dest%new(COPY_DIMS, SMPD, wthreads=.true.)
         call dest%copy_fast(serial)
-        call assert_true(dest%is_wthreads(), 'copy_fast keeps a threaded destination policy')
         call assert_true(all(dest%get_rmat() == input + 100.), 'copy_fast copies into a threaded destination')
 
         do imode = 1,size(THREAD_MODES)
@@ -239,7 +234,6 @@ contains
             call padded%set_rmat(input, .false.)
             call padded%pad_mirr([6,6,1])
             output = padded%get_rmat()
-            call assert_true(padded%is_wthreads() .eqv. THREAD_MODES(imode), 'pad_mirr keeps the receiver policy')
             call assert_true(all(output(2:5,2:5,1) == input(:,:,1)), 'pad_mirr keeps the source pixels centred')
             call padded%kill
 
@@ -247,8 +241,6 @@ contains
             call filtered%new([4,4,1], SMPD, wthreads=THREAD_MODES(imode))
             call filtered%set_rmat(input, .false.)
             call filtered%real_space_filter(1, 'average')
-            call assert_true(filtered%is_wthreads() .eqv. THREAD_MODES(imode), &
-                &'real_space_filter keeps the receiver policy')
             call assert_true(all(abs(filtered%get_rmat() - 3.) < 1.e-6), &
                 &'an average real-space filter keeps a constant image')
             call filtered%kill
@@ -257,8 +249,6 @@ contains
             call upsampled%new([4,4,1], SMPD, wthreads=THREAD_MODES(imode))
             call upsampled%set_rmat(input, .false.)
             call upsampled%upsample_square_background([8,8])
-            call assert_true(upsampled%is_wthreads() .eqv. THREAD_MODES(imode), &
-                &'upsample_square_background keeps the receiver policy')
             call assert_true(all(upsampled%get_ldim() == [8,8,1]), 'upsample_square_background changes the dimensions')
             call assert_real(2. * SMPD, upsampled%get_smpd(), 0., 'upsample_square_background changes the sampling')
             call assert_true(all(abs(upsampled%get_rmat() - 0.5) < 1.e-6), &
@@ -652,7 +642,7 @@ contains
         integer :: loc(3)
         write(*,'(A)') 'test_acf'
         call a%new([BOX,BOX,1], SMPD, wthreads=.false.)
-        call a%square(10)
+        call draw_square(a, 10)
         call b%copy(a)
         call b%shift([5., -5., 0.])
         call a%acf
@@ -765,7 +755,7 @@ contains
         call assert_true(maxval(abs(r1(:,:,1) - r0(:,:,1)), mask=in_disc(30)) < 1.e-3 * maxval(r0), &
             &'roavg of an isotropic Gaussian is the Gaussian inside radius 30')
         call sq%new([BOX,BOX,1], SMPD, wthreads=.false.)
-        call sq%square(10)
+        call draw_square(sq, 10)
         r0 = sq%get_rmat()
         call sq%roavg(5, avg)
         r1 = avg%get_rmat()
@@ -954,7 +944,7 @@ contains
         call back%new([BOX,BOX,1], SMPD, wthreads=.false.)
         call del_all
         do i = 1,NIMGS
-            call img%square(4 + 2*i)
+            call draw_square(img, 4 + 2*i)
             call img%write(string(STK_SPI), i)
             call img%write(string(STK_MRC), i)
         end do
@@ -966,7 +956,7 @@ contains
         end do
         ok = .true.
         do i = 1,NIMGS
-            call img%square(4 + 2*i)
+            call draw_square(img, 4 + 2*i)
             ref = img%get_rmat()
             call back%read(string(STK_SPI), i)
             got = back%get_rmat()
@@ -984,7 +974,7 @@ contains
         call assert_true(ok, 'SPIDER and MRC stacks and their conversions read back every image exactly')
         call vol%new([B3,B3,B3], SMPD, wthreads=.false.)
         call vback%new([B3,B3,B3], SMPD, wthreads=.false.)
-        call vol%square(6)
+        call draw_square(vol, 6)
         ref = vol%get_rmat()
         call vol%write(string(VOL_SPI))
         call vol%write(string(VOL_MRC))
@@ -1326,7 +1316,7 @@ contains
             call img%new(ldim, SMPD, wthreads=.false.)
             call img2%new(ldim, SMPD, wthreads=.false.)
             ! a binary image: a centred square (or cube) of ones
-            call img%square(8)
+            call draw_square(img, 8)
             call img%bin_inv
             call assert_real(0., img%max_abs_padding(), 0., tag//': the padding is zero after bin_inv')
             rmat = img%get_rmat()

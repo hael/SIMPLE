@@ -48,7 +48,6 @@ type :: flex_pca_plane_cache
     procedure, public :: new      => cache_new
     procedure, public :: kill     => cache_kill
     procedure, public :: delete   => cache_delete
-    procedure, public :: pristine => cache_pristine
     procedure, public :: available => cache_available
     procedure, public :: ensure    => plane_cache_ensure
     procedure, public :: adopt     => plane_cache_adopt
@@ -91,13 +90,6 @@ contains
         endif
         call self%kill
     end subroutine cache_delete
-
-    logical function cache_pristine( self )
-        class(flex_pca_plane_cache), intent(in) :: self
-        cache_pristine = self%funit == 0 .and. self%nph == 0 .and. self%npd == 0 .and. &
-            &self%reclen == 0 .and. .not. self%l_probed .and. .not. self%l_avail .and. &
-            &.not. allocated(self%blk) .and. self%fname%is_blank()
-    end function cache_pristine
 
     logical function cache_available( self )
         class(flex_pca_plane_cache), intent(in) :: self

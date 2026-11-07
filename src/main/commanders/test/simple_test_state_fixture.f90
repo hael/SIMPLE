@@ -325,7 +325,8 @@ contains
     !> the beta-galactosidase states in one frame: the D2 axes on x, y, z, the tetramer's centre on
     !! the box centre (its density centre checked and corrected once), then each state's atoms
     subroutine make_betagal_truths( self )
-        use simple_molecule_data, only: molecule_data, betagal_1jyx
+        use simple_molecule_data, only: molecule_data
+        use simple_test_molecule_fixture, only: betagal_1jyx
         use simple_atoms,         only: atoms
         class(state_fixture), intent(inout) :: self
         type(molecule_data) :: mol, sub

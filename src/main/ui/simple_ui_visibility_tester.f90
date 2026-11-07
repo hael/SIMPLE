@@ -13,7 +13,7 @@ module simple_ui_visibility_tester
 use simple_test_utils
 use simple_linked_list,   only: linked_list, list_iterator
 use simple_string,        only: string
-use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr, count_prgs_in_category
+use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
 use simple_ui_param,      only: UI_PLACEHOLDER_MAX_LEN, ui_param
 use simple_ui_program,    only: UI_DISPLAY_NAME_MAX_LEN, UI_FILE, UI_PARM, UI_SUMMARY_MAX_LEN, &
     &category_descriptor, ui_cli_param_choices, ui_cli_param_summary, ui_program, ui_program_input, &
@@ -207,11 +207,9 @@ contains
         call assert_registered_category('refine3D_states_cavgs', 'heterogeneity', 'Heterogeneity Analysis', 65)
         call assert_registered_category('classify3D_refs', 'heterogeneity', 'Heterogeneity Analysis', 65)
         call assert_registered_category('ptcl3D_state_consensus', 'heterogeneity', 'Heterogeneity Analysis', 65)
-        call assert_int(5, count_prgs_in_category('heterogeneity'), 'heterogeneity program count')
         call assert_registered_category('reconstruct3D', 'reconstruct3d', 'Reconstruct 3D Workflows', 68)
         call assert_registered_category('bootstrap_rec3D', 'reconstruct3d', 'Reconstruct 3D Workflows', 68)
         call assert_registered_category('reconstruct3D_wave', 'reconstruct3d', 'Reconstruct 3D Workflows', 68)
-        call assert_int(3, count_prgs_in_category('reconstruct3d'), 'reconstruct3d program count')
         call assert_registered_category('postprocess', 'postprocess', 'Post-processing', 69)
         call assert_registered_category('postprocess_nu', 'postprocess', 'Post-processing', 69)
         call assert_registered_category('enhance', 'postprocess', 'Post-processing', 69)
@@ -219,7 +217,6 @@ contains
             &[character(len=15) :: 'vol_even', 'vol_odd', 'outvol', 'nthr'])
         call assert_registered_category('postprocess_pdb', 'postprocess', 'Post-processing', 69)
         call assert_registered_required_keys('postprocess_pdb', [character(len=7) :: 'vol1', 'pdbfile', 'nthr'])
-        call assert_int(4, count_prgs_in_category('postprocess'), 'postprocess program count')
         call assert_registered_category('automask', 'mask', 'Masking', 100)
         call assert_registered_category('cls_expansion', 'refine2d', 'Refine 2D Workflows', 30)
         call assert_registered_category('reimport_particles', 'project', 'Project Management', 10)

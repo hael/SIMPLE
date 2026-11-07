@@ -41,7 +41,7 @@ Silent ones first: nothing reports these.
 - Process-wide memos (mask coordinates, `memoize_ft_maps` for every CTF application, the polarizer's
   geometry, `construct_thread_safe_tmp_imgs`, `ftexp_transfmat_init`): make them serially, before the
   parallel loop, for the box in use (`apply_ctf_wpad` on a real-space image works at twice the box).
-  `apply_ctf` and `ctf2img` stop on maps of another box or sampling (`ft_maps_match`); some readers still do not
+  `apply_ctf` stops on maps of another box or sampling (`ft_maps_match`); some readers still do not
   check (the `*_ctf_flip` kernels).
 - Polarizer: one geometry per process, the last `memoize4polarize`/`_oversamp` wins (both forms stay);
   `polarize*` take the caller's `pdim` and stop unless box, `pdim` and mode match the memo, and the

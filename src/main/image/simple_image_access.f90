@@ -392,12 +392,6 @@ contains
     ! Flags
     !===========================
 
-    module function is_wthreads( self ) result( is )
-        class(image), intent(in) :: self
-        logical :: is
-        is = self%wthreads
-    end function is_wthreads
-
     module subroutine set_ft( self, is )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: is

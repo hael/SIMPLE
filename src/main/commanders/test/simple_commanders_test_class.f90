@@ -88,7 +88,7 @@ use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
 use simple_nu_filter,                        only: run_all_nu_filter_tests
 use simple_halfmap_enhancer_tester,          only: run_all_halfmap_enhancer_tests
-use simple_solve3D_addon_dock_tester,        only: run_all_solve3D_addon_dock_tests
+use simple_solve3D_addon_report,             only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
 use simple_pcg_atomic_prior,                 only: run_all_pcg_atomic_prior_tests
@@ -111,6 +111,7 @@ use simple_cartft_pose_opt,                  only: run_all_cartft_pose_opt_tests
 use simple_flex_pca_tester,                  only: run_all_flex_pca_tests, run_all_flex_pca_lib_tests
 use simple_flex_cls_expansion_tester,        only: run_all_flex_cls_expansion_tests
 use simple_flex_cls_kernel,                  only: run_all_flex_cls_kernel_tests
+use simple_flex_probe_fit,                   only: run_all_flex_probe_fit_tests
 use simple_flex_pca_application,             only: run_all_flex_pca_application_tests
 use simple_flex_pcg_tester,                  only: run_all_flex_pcg_tests, run_all_flex_pcg_lib_tests, &
     &run_all_flex_pcg_sweep_tests
@@ -605,6 +606,7 @@ contains
         type(unit_suite), intent(inout) :: s(:)
         integer,          intent(inout) :: n
         call add_suite(s, n, 'flex PCA',          run_all_flex_pca_tests)
+        call add_suite(s, n, 'flex probe fit',    run_all_flex_probe_fit_tests)
         call add_suite(s, n, 'flex PCG operator', run_all_flex_pcg_tests)
         call add_suite(s, n, 'flex cls_expansion', run_all_flex_cls_expansion_tests)
         call add_suite(s, n, 'flex cls_expansion kernel', run_all_flex_cls_kernel_tests)

@@ -8,7 +8,7 @@
 ! power-spectrum bootstrap reproduce the seed spectra of the row-wise assembly (a floored spectrum and a
 ! repaired shell included) and carry the number of images summed for the average image (the floored one
 ! left out), and the global spectra summed while the records are written (a retained prefix with an
-! invalid record included) equal a full reduction of the store.
+! invalid record included) equal the means of the valid records.
 module simple_sigma2_bootstrap_tester
 use, intrinsic :: iso_fortran_env, only: int64, real32, real64
 use simple_defs,              only: STDLEN, DTINY
@@ -20,8 +20,7 @@ use simple_sp_project,        only: sp_project
 use simple_ptcl_layout,       only: ptcl_layout_digest
 use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_init_header, &
     &sigma2_state_create_candidate, sigma2_state_write_particles, sigma2_state_write_global, &
-    &sigma2_state_publish, sigma2_state_read_global, SIGMA2_PROV_PSPEC
-use simple_sigma2_state,      only: sigma2_state_reduce
+    &sigma2_state_publish, SIGMA2_PROV_PSPEC
 use simple_sigma2_pspec_sums, only: pspec_part_sums_fname, write_pspec_part_sums, read_pspec_part_sums, &
     &bootstrap_seed_spectra, sum_valid_records
 use simple_sigma2_bootstrap,  only: prepare_pspec_cline, prepare_residual_sigma2_pass_cline, &
@@ -48,19 +47,18 @@ contains
     end subroutine run_all_sigma2_bootstrap_tests
 
     !> the bootstrap in per-half sums against the row-wise assembly it replaces, and the global spectra
-    !! summed while writing against a full reduction
+    !! summed while writing against the means of the valid records
     subroutine test_pspec_sums()
         integer, parameter :: NP = 24, NSH = 6, NPART = 2, BLOCKROWS = 7, NPREFIX = 10
         integer, parameter :: SAMPLED(10) = [1, 2, 3, 4, 7, 8, 10, 13, 14, 20]
-        character(len=*), parameter :: STORE = 'tmp_sigma2_bootstrap_tester_sums.bin'
         real(real64), allocatable :: part_sums(:,:)
-        real(real32), allocatable :: block(:,:), state_globals(:,:)
-        type(sigma2_state_header) :: header
+        real(real32), allocatable :: block(:,:)
         real(real64) :: rows(NSH,NP), row_sums(NSH,2), sums(NSH,2), expected(NSH,2), seeds(NSH,2), gsums(NSH,2)
-        real(real32) :: records(NSH,NP), means(NSH,2)
+        real(real64) :: valid_sum(NSH)
+        real(real32) :: records(NSH,NP), means(NSH,2), valid_means(NSH,2)
         real    :: pspec_ave(NSH)
         logical :: active(NP)
-        integer :: eo(NP), nactive(2), i, k, ipart, fromp, top, first_row, half, status, part_nimgs, nimgs
+        integer :: eo(NP), nactive(2), i, k, ipart, fromp, top, first_row, half, status, part_nimgs, nimgs, nvalid
         integer(int64) :: counts(2), ninvalid
         character(len=STDLEN) :: msg
         write(*,'(A)') 'test_pspec_sums'
@@ -149,20 +147,20 @@ contains
         do half = 1, 2
             means(:,half) = real(gsums(:,half)/real(counts(half),real64), real32)
         enddo
-        ! a full reduction of the same records
-        call del_file(STORE)
-        call sigma2_state_init_header(header, 1, NSH, NP, 2*NSH, SMPD, 1_int64, 4242_int64, SIGMA2_PROV_PSPEC)
-        call sigma2_state_create_candidate(STORE, header, status, msg)
-        call assert_int(0, status, 'create the reduction store: '//trim(msg))
-        call sigma2_state_write_particles(STORE, 1, records, status, msg)
-        call assert_int(0, status, 'write its records: '//trim(msg))
-        call sigma2_state_reduce(STORE, active, eo, status, msg)
-        call assert_int(0, status, 'reduce it: '//trim(msg))
-        call sigma2_state_read_global(STORE, state_globals, status, msg)
-        call assert_int(0, status, 'read its global spectra: '//trim(msg))
-        if( status == 0 ) call assert_true(all(abs(state_globals - means) <= 1.e-6*abs(means)), &
-            &'the global spectra summed while writing equal a full reduction')
-        call del_file(STORE)
+        ! per half, the mean of the active records with every shell positive
+        do half = 1, 2
+            valid_sum = 0.d0
+            nvalid    = 0
+            do i = 1, NP
+                if( .not. active(i) .or. eo(i) /= half-1 ) cycle
+                if( .not. all(records(:,i) > 0.) ) cycle
+                valid_sum = valid_sum + real(records(:,i), real64)
+                nvalid    = nvalid + 1
+            enddo
+            valid_means(:,half) = real(valid_sum/real(nvalid,real64), real32)
+        enddo
+        call assert_true(all(abs(valid_means - means) <= 1.e-6*abs(means)), &
+            &'the global spectra summed while writing equal the means of the valid records')
     end subroutine test_pspec_sums
 
     !> a partition's sums file is refused, before anything is allocated, when it was summed over another

@@ -103,7 +103,6 @@ contains
     procedure          :: get_ptcl_slot
     ! evaluation
     procedure          :: predict
-    procedure          :: objective_gradient
     procedure          :: shift_normal_terms
     procedure          :: pose_normal_terms
     procedure          :: shift_normal_terms_full_disk
@@ -638,20 +637,6 @@ contains
             end do
         end associate
     end subroutine predict
-
-    !> Objective of particle slot iptcl against one reference and its five derivatives (three
-    !! right-increment rotation components in radians, two shifts in pixels), for the
-    !! objective the slot was prepared for: 1 - cc (OBJFUN_CC) or the normalized loss L
-    !! (OBJFUN_EUCLID). THROW_HARD for an invalid slot or an absent reference.
-    subroutine objective_gradient( self, state, iseven, iptcl, rotmat, shift, objective, gradient )
-        class(cartft_calc), intent(in)  :: self
-        integer,            intent(in)  :: state, iptcl
-        logical,            intent(in)  :: iseven
-        real(dp),           intent(in)  :: rotmat(3,3), shift(2)
-        real(dp),           intent(out) :: objective, gradient(5)
-        real(dp) :: hessian(5,5)
-        call self%pose_normal_terms(state, iseven, iptcl, rotmat, shift, objective, gradient, hessian)
-    end subroutine objective_gradient
 
     !> Objective, two-vector shift gradient and 2x2 Gauss-Newton block at a fixed rotation,
     !! for the optimizer's shift stage, over the half plane of the slot's band (every summand is

@@ -196,7 +196,6 @@ type :: oris
     procedure, private :: euldist_inds, euldist_ori
     generic            :: euldist => euldist_inds, euldist_ori
     procedure          :: min_euldist
-    procedure          :: find_angres
     !======================================================================
     ! PRINT & FILE I/O (simple_oris_io.f90)
     !======================================================================
@@ -1431,11 +1430,6 @@ interface
         class(ori),  intent(in)    :: o_in
         real,        intent(inout) :: mindist
     end subroutine min_euldist
-
-    module function find_angres( self ) result( res )
-        class(oris), intent(in) :: self
-        real :: res
-    end function find_angres
 
     !======================================================================
     ! PRINT & FILE I/O (simple_oris_io.f90)

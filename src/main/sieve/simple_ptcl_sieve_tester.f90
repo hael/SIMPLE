@@ -1,6 +1,7 @@
 !@descr: unit test routines for the ptcl_sieve orchestrator
 submodule (simple_ptcl_sieve) simple_ptcl_sieve_tester
 use simple_test_utils
+use simple_test_image_fixture, only: draw_square
 use simple_core_module_api
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED
 use simple_optics_maps, only: publish_optics_map
@@ -744,7 +745,7 @@ contains
         call cavg_good%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
         call cavg_good%gauran(0., 0.02)
         call feature%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
-        call feature%square(8)
+        call draw_square(feature, 8)
         call feature%mul(5.)
         call cavg_good%add(feature)
         call cavg_good%write(cavg_path, 1, del_if_exists=.true.)

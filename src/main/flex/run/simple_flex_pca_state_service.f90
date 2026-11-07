@@ -25,27 +25,16 @@ private
 
 public :: apply_latent_deconvolution, prune_underpopulated_states, place_states_with_population_floor
 public :: cv_select_bandwidths, reconstruct_state_halves, state_half_fname, delete_state_halves
-public :: auto_box_crop, auto_min_neff, auto_state_count
 public :: infile_path
-public :: FLEX_AUTO_K_START, FLEX_AUTO_K_MIN, AUTO_NSTATES
+public :: AUTO_NSTATES
 
 !> a weighted PARTITION row sums to one across the states within this (as in simple_state_weight_set)
 real(dp), parameter :: PARTITION_ROW_TOL = 1.0e-3_dp
 
-!> Cap and floor of auto_state_count (tester only; preimage_auto's ceiling is AUTO_NSTATES). The cap
-!! is bounded by cost: gate 2 of the state merge compares K(K-1)/2 map pairs.
-integer, parameter :: FLEX_AUTO_K_START        = 32
-integer, parameter :: FLEX_AUTO_K_MIN          = 8
-!> Nyquist margin for a derived box_crop; columns are selected inside that band.
-real,    parameter :: FLEX_AUTO_BOX_SAFETY     = 1.25
-!> Occupancy share of an equal split. Paired with an SNR term because neither alone reproduces both
-!! validation datasets.
-real,    parameter :: FLEX_AUTO_NEFF_OCCUPANCY = 0.10
 ! npreimages is a PROVISION CEILING, not a target: state placement lays down that many kernels and
 ! the two-gate merge collapses the indistinct ones, so the recovered K is only ever <= it.
 ! preimage_auto=yes raises that ceiling to AUTO_NSTATES and turns the merge on, since over-provisioning
 ! is the only regime in which the merge can recover K at all.
-!> provision cap of the population floor (min_state_frac > 0, refine3D_states flex initialization); independent of AUTO_NSTATES
 integer, parameter :: AUTO_NSTATES             = 8
 !> provision cap of the population floor (min_state_frac > 0, refine3D_states flex initialization); independent of AUTO_NSTATES
 integer, parameter :: POP_FLOOR_MAX_NSTATES    = 32
@@ -425,41 +414,6 @@ contains
         states%nstates = nkeep
         deallocate(keep, map, occ)
     end subroutine prune_underpopulated_states
-
-    !> Smallest even crop that still resolves lp with margin: smpd_crop = smpd*box/box_crop and the
-    !! crop's Nyquist is 2*smpd_crop, so lp needs box_crop > 2*box*smpd/lp.
-    pure integer function auto_box_crop( box, smpd, lp ) result( bc )
-        integer, intent(in) :: box
-        real,    intent(in) :: smpd, lp
-        if( lp <= 0. .or. smpd <= 0. .or. box <= 0 )then
-            bc = box
-            return
-        endif
-        bc = 2*nint(0.5*FLEX_AUTO_BOX_SAFETY*2.0*real(box)*smpd/lp)   ! nearest even
-        bc = max(32, min(box, bc))
-    end function auto_box_crop
-
-    !> Minimum effective particles per state: the larger of the SNR requirement (~1/s particles for
-    !! unit conformational SNR) and an occupancy floor. IgG is limited by the first, Ribosembly the
-    !! second, so neither term alone suffices.
-    pure integer function auto_min_neff( nptcls, nstates, snr_best ) result( mn )
-        integer,  intent(in) :: nptcls, nstates
-        real(dp), intent(in) :: snr_best          !< best per-component conformational SNR, 0 if unknown
-        integer :: n_snr, n_occ
-        n_snr = 20
-        if( snr_best > 0.d0 ) n_snr = max(20, nint(1.d0/snr_best))
-        n_occ = 20
-        if( nstates > 0 ) n_occ = nint(FLEX_AUTO_NEFF_OCCUPANCY*real(nptcls)/real(nstates))
-        mn = max(20, min(nptcls, max(n_snr, n_occ)))
-    end function auto_min_neff
-
-    !> Over-provisioned state count: FLEX_AUTO_K_START, capped by nptcls/(4*min_neff) and floored at FLEX_AUTO_K_MIN.
-    pure integer function auto_state_count( nptcls, min_neff ) result( k )
-        integer, intent(in) :: nptcls, min_neff
-        k = FLEX_AUTO_K_START
-        if( min_neff > 0 ) k = min(k, nptcls/(4*min_neff))
-        k = max(FLEX_AUTO_K_MIN, k)
-    end function auto_state_count
 
     subroutine place_states_with_population_floor( latent, model, nkern, axis, min_neff, min_state_frac, states, equal_occ )
         use simple_rnd, only: irnd_uni

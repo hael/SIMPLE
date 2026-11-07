@@ -3,8 +3,7 @@
 ! rows of the committed store and each writes a local range file; the master then streams a fresh candidate
 ! (sigma2_state_assemble_candidate), each row from the range that covers it or else from the committed
 ! store, summing the active, valid rows per half as they pass, and publishes it (sigma2_state_publish).
-! The merges of stores (sigma2_state_concatenate) stream the same way. sigma2_state_reduce is the full
-! reduction of a store's records, which the tests hold the streamed global spectra against.
+! The merges of stores (sigma2_state_concatenate) stream the same way.
 ! solve3D_addon's copy-on-write transaction of the growing union: sigma2_state_extend makes the run's own
 ! candidate (the retained frozen records copied, every cohort row started from the global curve of its half),
 ! and sigma2_state_union_means republishes a store with both global means taken over the union.
@@ -15,8 +14,7 @@ use simple_defs,              only: logfhandle
 use simple_string,            only: string
 use simple_string_utils,      only: int2str, int2str_pad
 use simple_syslib,            only: del_file
-use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, &
-    &sigma2_state_read_particles, sigma2_state_write_global, sigma2_state_validate_file, &
+use simple_sigma2_state_file, only: sigma2_state_header, sigma2_state_read_header, sigma2_state_validate_file, &
     &sigma2_state_open_candidate, sigma2_state_write_particles_unit, sigma2_state_close_candidate, &
     &sigma2_state_open_store, sigma2_state_read_particles_unit, sigma2_state_open_local_range, &
     &sigma2_state_read_local_range_rows, sigma2_state_read_global, sigma2_state_publish, &
@@ -26,7 +24,7 @@ private
 
 public :: sigma2_state_candidate_path, sigma2_state_range_path, sigma2_state_next_generation
 public :: sigma2_state_prepare_update, sigma2_state_assemble_candidate, sigma2_state_concatenate
-public :: sigma2_state_reduce, sigma2_state_validate_identity
+public :: sigma2_state_validate_identity
 public :: sigma2_state_extend, sigma2_state_union_means
 public :: run_all_sigma2_state_tests
 
@@ -403,41 +401,6 @@ contains
         end subroutine close_units
 
     end subroutine sigma2_state_concatenate
-
-    !> The full reduction of the candidate at path, its global spectra written: per half, the mean of
-    !! the valid records of the active particles of that half, every record re-read from the file
-    subroutine sigma2_state_reduce(path, active, eo, status, message)
-        character(len=*), intent(in) :: path
-        logical,          intent(in) :: active(:)
-        integer,          intent(in) :: eo(:)
-        integer,          intent(out) :: status
-        character(len=*), intent(out) :: message
-        type(sigma2_state_header) :: header
-        real(real32), allocatable :: spectra(:,:), global(:,:)
-        real(real64), allocatable :: sums(:,:)
-        integer(int64) :: counts(2), ninvalid
-        integer :: first_row, last_row, nshell
-        call sigma2_state_read_header(path, header, status, message)
-        if( status /= 0 ) return
-        if( size(active) /= header%nptcls .or. size(eo) /= header%nptcls )then
-            status = 1; message = 'sigma2 even/odd metadata has the wrong size'; return
-        endif
-        nshell = int(header%kto-header%kfrom+1)
-        allocate(sums(nshell,2), source=0.0_real64)
-        counts   = 0_int64
-        ninvalid = 0_int64
-        do first_row = 1, int(header%nptcls), BLOCK_ROWS
-            last_row = min(int(header%nptcls), first_row+BLOCK_ROWS-1)
-            call sigma2_state_read_particles(path, first_row, last_row, spectra, status, message)
-            if( status /= 0 ) return
-            call add_records(spectra, first_row, active, eo, sums, counts, ninvalid, status, message)
-            if( status /= 0 ) return
-            deallocate(spectra)
-        enddo
-        call form_global(sums, counts, ninvalid, global, status, message)
-        if( status /= 0 ) return
-        call sigma2_state_write_global(path, global, status, message)
-    end subroutine sigma2_state_reduce
 
     subroutine sigma2_state_validate_identity(path, box, smpd, kfrom, kto, nptcls, layout_digest, &
         &status, message, expected_state)

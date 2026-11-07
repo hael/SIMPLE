@@ -88,15 +88,10 @@ contains
     procedure          :: select_best_discrete_angle
     procedure          :: kill            => grad_shsrch_kill
     procedure          :: does_opt_angle
-    procedure          :: uses_joint_inplane
     procedure          :: set_limits
     procedure          :: minimize_in_cell
     procedure          :: set_shift_prior
-    procedure          :: clear_shift_prior
-    procedure          :: has_shift_prior
     procedure          :: set_prior_centre
-    procedure          :: shift_prior_penalty
-    procedure          :: shift_prior_penalty_ptcl
     procedure, private :: prior_centre_rot
     procedure, private :: prior_centre_angle
     procedure, private :: prior_factor
@@ -222,11 +217,6 @@ contains
         does_opt_angle = self%opt_angle
     end function does_opt_angle
 
-    pure logical function uses_joint_inplane( self )
-        class(pftc_shsrch_grad), intent(in) :: self
-        uses_joint_inplane = self%search_mode == SHSRCH_JOINT
-    end function uses_joint_inplane
-
     subroutine set_limits( self, lims )
         class(pftc_shsrch_grad), intent(inout) :: self              !< instance
         real,                    intent(in)    :: lims(self%ospec%ndim,2) !< new limits
@@ -275,17 +265,6 @@ contains
         if( .not. (sigma2 > 0. .and. temp > 0.) ) THROW_HARD('set_shift_prior needs a positive variance and temperature')
         self%prior_w = 1.d0 / (2.d0 * real(sigma2,dp) * real(temp,dp))
     end subroutine set_shift_prior
-
-    subroutine clear_shift_prior( self )
-        class(pftc_shsrch_grad), intent(inout) :: self
-        self%prior_w  = 0.d0
-        self%prior_u0 = 0.d0
-    end subroutine clear_shift_prior
-
-    pure logical function has_shift_prior( self )
-        class(pftc_shsrch_grad), intent(in) :: self
-        has_shift_prior = self%prior_w > 0.d0
-    end function has_shift_prior
 
     !> cos and sin of every grid rotation, for the prior's centre at a rotation (R(irot) u0)
     subroutine build_rot_table( self )
@@ -376,24 +355,6 @@ contains
         prior_factor_ptcl = 1.d0
         if( self%prior_w > 0.d0 ) prior_factor_ptcl = exp(-self%prior_w * sum((u - self%prior_u0)**2))
     end function prior_factor_ptcl
-
-    !> the prior's loss term, in nats, at the optimizer-frame shift xy evaluated at grid rotation irot:
-    !! prior_w |xy - R(irot) u0|^2 = prior_w |u - u0|^2 (0 without a prior)
-    pure real(dp) function shift_prior_penalty( self, xy, irot )
-        class(pftc_shsrch_grad), intent(in) :: self
-        real(dp),                intent(in) :: xy(2)
-        integer,                 intent(in) :: irot
-        shift_prior_penalty = 0.d0
-        if( self%prior_w > 0.d0 ) shift_prior_penalty = self%prior_w * sum((xy - self%prior_centre_rot(irot))**2)
-    end function shift_prior_penalty
-
-    !> the prior's loss term, in nats, at a stored (particle-frame) shift u: prior_w |u - u0|^2
-    pure real(dp) function shift_prior_penalty_ptcl( self, u )
-        class(pftc_shsrch_grad), intent(in) :: self
-        real(dp),                intent(in) :: u(2)
-        shift_prior_penalty_ptcl = 0.d0
-        if( self%prior_w > 0.d0 ) shift_prior_penalty_ptcl = self%prior_w * sum((u - self%prior_u0)**2)
-    end function shift_prior_penalty_ptcl
 
     ! Objective dispatch for the joint continuous route. Evaluators return a
     ! quantity to minimize: raw Euclidean loss or -cc.

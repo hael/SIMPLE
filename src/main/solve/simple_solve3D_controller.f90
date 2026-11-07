@@ -12,7 +12,7 @@ integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
 ! freq_march_aggressive=yes: the march from AGGRESSIVE_MARCH_STAGE needs finer angular sampling than the
-! planned rungs. A spiral of n directions resolves about 223/sqrt(n) degrees (oris%find_angres); the step
+! planned rungs. A spiral of n directions resolves about 223/sqrt(n) degrees (measure_projspace_angres); the step
 ! a band lp needs on a particle of diameter D is about lp/D radians: 12 A on 120 A is 5.7 degrees
 ! (n ~ 1500), 9 A is 4.3 degrees (n ~ 2700). The global stages before the march keep their nspace.
 integer,          parameter :: NSPACE_AGGRESSIVE(8)    = [500,1000,2500,2500,2500,2500,5000,5000]

@@ -196,7 +196,7 @@ contains
         call cline%set('nstates',  real(nstates))
         call cline%set('nptcls',   real(nptcls))
         call cline%set('nthr',     real(nthr_max))
-        call cline%set('ctf',      'no')
+        call cline%set('ctf',      'yes')
         if( self%l_cc )then
             call cline%set('objfun', 'cc')
         else
@@ -237,7 +237,11 @@ contains
         else
             call self%pftc%new(self%params, 1, [1,nptcls], self%kfromto)
         endif
-        call self%pftc%set_with_ctf(.true.)
+        ! the fill harness's calculator, given the same references and particles
+        if( self%fill_route > 0 )then
+            allocate(self%build)
+            call self%build%pftc%new(self%params, self%nrefs, [1,nptcls], self%kfromto)
+        endif
         self%pftsz      = self%pftc%get_pftsz()
         self%nrots      = self%pftc%get_nrots()
         self%nk         = self%kfromto(2) - self%kfromto(1) + 1
@@ -267,6 +271,7 @@ contains
             do ieo = 1,2
                 call fill_band(pft)
                 if( prod_refs ) call self%pftc%set_ref_pft(iref, pft, iseven=(ieo == 1))
+                if( self%fill_route > 0 ) call self%build%pftc%set_ref_pft(iref, pft, iseven=(ieo == 1))
                 if( memo .or. gmat ) call memoize_ref(iref, ieo)
             enddo
         enddo
@@ -276,6 +281,10 @@ contains
             call self%pftc%set_ptcl_pft(i, pft)
             self%iseven(i) = mod(i,2) == 1
             call self%pftc%set_eo(i, self%iseven(i))
+            if( self%fill_route > 0 )then
+                call self%build%pftc%set_ptcl_pft(i, pft)
+                call self%build%pftc%set_eo(i, self%iseven(i))
+            endif
         enddo
         ! per-particle astigmatic CTFs through the production path: a one-stack project
         allocate(dfxs(nptcls), dfys(nptcls), angasts(nptcls))
@@ -435,26 +444,7 @@ contains
         ! bookkeeping calc_num2sample reads and the centring status of the polar shift map (odd particles not yet
         ! centred take the disk, even ones the window); the direction space is the point group's spiral
         subroutine build_fill_toolbox
-            complex(sp), allocatable :: pft_band(:,:)
             integer :: istate
-            allocate(self%build)
-            call self%build%pftc%new(self%params, self%nrefs, [1,nptcls], self%kfromto)
-            call self%build%pftc%set_with_ctf(.true.)
-            allocate(pft_band(self%pftsz,self%kfromto(1):self%kfromto(2)))
-            pft = cmplx(0.,0.,kind=sp)
-            do iref = 1,self%nrefs
-                do ieo = 1,2
-                    call self%pftc%get_ref_pft(iref, ieo == 1, pft_band)
-                    pft(:,self%kfromto(1):self%kfromto(2)) = pft_band
-                    call self%build%pftc%set_ref_pft(iref, pft, iseven=(ieo == 1))
-                enddo
-            enddo
-            do i = 1,nptcls
-                call self%pftc%get_ptcl_pft(i, pft_band)
-                pft(:,self%kfromto(1):self%kfromto(2)) = pft_band
-                call self%build%pftc%set_ptcl_pft(i, pft)
-                call self%build%pftc%set_eo(i, self%iseven(i))
-            enddo
             call self%build%pftc%create_polar_absctfmats(spproj, 'ptcl3D')
             call self%build%pftc%assign_sigma2_noise(self%sigma2)
             call self%build%pftc%memoize_refs
@@ -476,7 +466,6 @@ contains
             call self%build%spproj%os_ptcl2D%copy(self%build%spproj%os_ptcl3D, is_ptcl=.true.)
             call self%build%pgrpsyms%new('c1')
             call self%build%build_eulspace(self%params)
-            deallocate(pft_band)
         end subroutine build_fill_toolbox
 
     end subroutine new
@@ -1073,8 +1062,8 @@ contains
         use simple_eul_prob_tab,       only: eul_prob_tab
         use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
         use simple_eul_prob_tab2D,     only: eul_prob_tab2D
-        use simple_eul_prob_tab_utils, only: prob_insert_cone, prob_insert_pose, calc_num2sample, shift_prior_sigma2, &
-            &prob_candidate_buffer
+        use simple_eul_prob_tab_utils, only: prob_insert_cone, prob_insert_pose, prob_insert_poses, calc_num2sample, &
+            &shift_prior_sigma2, prob_candidate_buffer
         use simple_map_reduce,         only: split_nobjs_even
         use simple_test_utils,         only: set_fixed_seed
         use simple_oris,               only: oris
@@ -1229,7 +1218,8 @@ contains
         !> the temperatures, seeds, assignment and extras of a 3D pipeline table at its close
         subroutine gather_tab3D( tab )
             class(eul_prob_tab), intent(in) :: tab
-            type(prob_insert_pose) :: pose
+            type(prob_insert_pose)  :: pose
+            type(prob_insert_poses) :: poses
             integer :: k
             do i = 1,nloc
                 res%temps(ioff+i)         = tab%temps(i)
@@ -1240,12 +1230,15 @@ contains
                 res%assign_vals(:,ioff+i) = [tab%assgn_map(i)%dist, tab%assgn_map(i)%x, tab%assgn_map(i)%y, tab%assgn_map(i)%sdev]
             enddo
             if( tab%insert_tab%get_nptcls() == nloc )then
+                ! the extras as the search reads them, through the part's layout
+                call poses%setup_range(tab%insert_tab, pinds, 1, nloc)
                 do i = 1,nloc
-                    do k = 1,min(tab%insert_tab%get_nextra(i), size(res%extras,2))
+                    do k = 1,min(poses%nextra(i), size(res%extras,2))
                         pose = tab%insert_tab%get_extra(i, k)
                         res%extras(:,k,ioff+i) = [real(pose%iref), real(pose%inpl), pose%x, pose%y, pose%w]
                     enddo
                 enddo
+                call poses%kill
             endif
         end subroutine gather_tab3D
 

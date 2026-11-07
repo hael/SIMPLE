@@ -318,7 +318,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Heterogeneity')
         call unit_heterogeneity%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (flex_pca, flex_pcg_operator, flex_cls_expansion, flex_cls_expansion_kernel)', '', .false., '')
+            &'One sub-suite of this area to run alone (flex_pca, flex_probe_fit, flex_pcg_operator, flex_cls_expansion, flex_cls_expansion_kernel)', '', .false., '')
         call add_ui_program('unit_heterogeneity', unit_heterogeneity, tsttab, UI_CATEGORY)
     end subroutine new_unit_heterogeneity
 

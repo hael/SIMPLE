@@ -11,13 +11,14 @@ use simple_syslib,                  only: del_file
 use simple_builder,                 only: builder
 use simple_image,                   only: image
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
-use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts
+use simple_polarft_calc,            only: polarft_calc, vol_pad2ref_pfts_opt
 use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad, fit_quadratic_step, grid_stencil_exists, FIT_CURVATURE, FIT_STEP, &
     &shift_ptcl2ref, shift_ref2ptcl
 use simple_strategy2D_srch,         only: strategy2D_srch, strategy2D_spec
 use simple_eul_prob_tab_utils,      only: posterior_temperature, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 use simple_oris,                    only: oris
 use simple_rnd,                     only: rnd_scope_key, RND_PROG_REFINE3D, RND_PASS_ALIGN
+use simple_test_polar_fixture,      only: shift_args
 use simple_test_utils
 use, intrinsic :: ieee_arithmetic,  only: ieee_is_finite, ieee_value, ieee_quiet_nan
 use, intrinsic :: iso_fortran_env,  only: int64
@@ -73,7 +74,6 @@ contains
         call test_grid_fit_search()
         call test_particle_bank()
         call test_grid_ptcl_search()
-        call test_shmat_searched_shells()
         call test_search_threads()
         call test_loaded_reference()
         call test_posterior_threads()
@@ -111,6 +111,7 @@ contains
     !> reference at e3 = 0 and one particle at (truth_angle, shift) from the phantom; with nrefs, references 2..nrefs
     !! are the phantom's projections along the other directions of the spiral
     subroutine build_fixture( b, p, objfun, lp, truth_angle, shift, hard_edge, nrefs, nthr )
+        use simple_projector_pft_batch, only: fproject_polar_batch_opt
         type(builder),    target, intent(inout) :: b
         type(parameters), target, intent(inout) :: p
         integer,                  intent(in)    :: objfun
@@ -119,6 +120,8 @@ contains
         integer,        optional, intent(in)    :: nrefs, nthr
         type(cmdline) :: cline
         type(ori)     :: o_ref, o_particle
+        complex(sp), allocatable :: sections(:,:,:), pft(:,:)
+        integer :: pftsz, kfromto(2), pdim(3)
         call cline%set('vol1',    PHANTOM_FILE)
         call cline%set('mskdiam', MSKDIAM)
         call cline%set('smpd',    SMPD)
@@ -126,7 +129,7 @@ contains
         call cline%set('trs',     TRS)
         call cline%set('nptcls',  1.)
         ! the smallest even projection-direction count (build_refspiral needs an even
-        ! nspace); vol_pad2ref_pfts fills nspace references, the fixture uses the first
+        ! nspace); vol_pad2ref_pfts_opt fills nspace references, the fixture uses the first
         call cline%set('nspace',  2)
         if( present(nrefs) ) call cline%set('nspace', nrefs)
         if( present(nthr)  ) call cline%set('nthr',   nthr)
@@ -157,15 +160,21 @@ contains
         call o_ref%e3set(0.0)
         o_particle = o_ref
         call o_particle%e3set(truth_angle)
+        ! the particle: the section at the truth angle, rotated first, then shifted by the calculator's
+        ! phase: the recovered shift is expressed in the rotated frame, R(truth_angle) * shift
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim    = b%pftc%get_pdim_interp()
+        allocate(sections(pftsz,kfromto(1):kfromto(2),p%nspace), pft(pdim(1),pdim(2):pdim(3)))
         call b%eulspace%set_ori(1, o_particle)
-        call vol_pad2ref_pfts(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
-        call b%pftc%cp_even_ref2ptcl(1, 1)
+        call fproject_polar_batch_opt(b%vol_pad, b%eulspace, p%nspace, b%pftc, sections)
+        pft = cmplx(0.,0.,kind=sp)
+        pft(:,kfromto(1):kfromto(2)) = sections(:,:,1)
+        if( sum(abs(shift)) > 0. ) call shift_half_ring(pftsz, kfromto, p%box, shift, pft(:,kfromto(1):kfromto(2)))
+        call b%pftc%set_ptcl_pft(1, pft)
         call b%eulspace%set_ori(1, o_ref)
-        call vol_pad2ref_pfts(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
+        call vol_pad2ref_pfts_opt(b%pftc, b%vol_pad, b%eulspace, 1, iseven=.true.)
         call b%pftc%set_eo(1, .true.)
-        ! the particle is rotated first, then shifted by the production phase: the
-        ! recovered shift is expressed in the rotated frame, R(truth_angle) * shift
-        if( sum(abs(shift)) > 0. ) call b%pftc%shift_ptcl(1, shift)
         call b%pftc%memoize_refs
         call b%pftc%memoize_ptcls
         call b%pftc%set_rnd_scope(rnd_scope_key(20261104_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 1))
@@ -175,6 +184,16 @@ contains
         call b%pftc%memoize_sqsum_ptcl(1)
         call cline%kill
     end subroutine build_fixture
+
+    !> a half ring shifted by s with the calculator's phase (shift_args), as a particle at shift s
+    pure subroutine shift_half_ring( pftsz, kfromto, box, s, pft )
+        integer,     intent(in)    :: pftsz, kfromto(2), box
+        real,        intent(in)    :: s(2)
+        complex(sp), intent(inout) :: pft(pftsz,kfromto(1):kfromto(2))
+        real(dp) :: ax(pftsz,kfromto(1):kfromto(2)), ay(pftsz,kfromto(1):kfromto(2))
+        call shift_args(pftsz, kfromto, box, ax, ay)
+        pft = pft * cmplx(cos(ax * s(1) + ay * s(2)), sin(ax * s(1) + ay * s(2)), kind=sp)
+    end subroutine shift_half_ring
 
     subroutine kill_fixture( b )
         type(builder), intent(inout) :: b
@@ -282,6 +301,18 @@ contains
         call assert_true(worst <= IDENTITY_ATOL, label//': -f equals the gen_objfun_vals score at grid angles (1e-4)')
     end subroutine grid_identity
 
+    !> the raw Euclidean loss at every grid angle, by the scalar discrete route
+    subroutine raw_euclid_losses( b, shift, losses )
+        type(builder), intent(inout) :: b
+        real(dp),      intent(in)    :: shift(2)
+        real(dp),      intent(out)   :: losses(:)
+        real(dp) :: grad(2)
+        integer  :: irot
+        do irot = 1,size(losses)
+            call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, shift, irot, losses(irot), grad)
+        enddo
+    end subroutine raw_euclid_losses
+
     real(dp) function angle_of( pftc, rotind )
         class(polarft_calc), intent(in) :: pftc
         real(dp),            intent(in) :: rotind
@@ -300,10 +331,11 @@ contains
         type(builder),    target :: b
         type(parameters), target :: p
         type(pftc_shsrch_grad) :: fixed_search, joint_search
-        real(sp), allocatable :: scores(:), raw_losses(:)
+        real(sp), allocatable :: scores(:)
+        real(dp), allocatable :: raw_losses(:)
         real(dp), parameter   :: PARITY_SHIFTS(2,3) = reshape([1.7d0,-2.3d0, -0.6d0,0.4d0, 3.1d0,1.2d0], [2,3])
-        real(dp) :: f_cont, g_cont(3), f_disc, g_disc(2), scalar_loss, grad2(2)
-        real(dp) :: max_legacy, max_scalar, parity_err, parity_scale, tol
+        real(dp) :: f_cont, g_cont(3), f_disc, g_disc(2)
+        real(dp) :: max_legacy, parity_err, parity_scale, tol
         real(dp) :: series_min, stale_parity, fresh_parity
         real(dp) :: grid_loss, joint_loss, initial_loss, joint_coord, recovered(2), expected(2), theta, g3(3)
         real(dp) :: grid_angle_err, joint_angle_err, shift_rms
@@ -315,20 +347,15 @@ contains
         nrots = b%pftc%get_nrots()
         call assert_true(nrots > 8, 'polar grid has rotations')
         allocate(scores(nrots), raw_losses(nrots))
-        ! (a) the vector scoring routes share one loss: score = exp(-raw loss), and the
-        !     scalar discrete route returns the same raw loss
+        ! (a) the vector scoring route and the scalar discrete route share one loss: score = exp(-raw loss)
         call b%pftc%gen_objfun_vals(1, 1, [0.0_sp, 0.0_sp], scores)
-        call b%pftc%gen_raw_euclid_vals(1, 1, [0.0_sp, 0.0_sp], raw_losses)
+        call raw_euclid_losses(b, [0.d0, 0.d0], raw_losses)
         max_legacy = 0.d0
-        max_scalar = 0.d0
         do irot = 1, nrots
-            max_legacy = max(max_legacy, abs(real(scores(irot),dp) - exp(-real(raw_losses(irot),dp))))
-            call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, [0.0_dp, 0.0_dp], irot, scalar_loss, grad2)
-            max_scalar = max(max_scalar, abs(scalar_loss - real(raw_losses(irot),dp)))
+            max_legacy = max(max_legacy, abs(real(scores(irot),dp) - exp(-raw_losses(irot))))
         enddo
-        tol = 5.0d-4 * (1.d0 + maxval(abs(real(raw_losses,dp))))
-        call assert_true(max_legacy <= tol, 'gen_objfun_vals = exp(-gen_raw_euclid_vals) at every angle')
-        call assert_true(max_scalar <= tol, 'gen_raw_euclid_grad_for_rot_8 returns the vector route loss')
+        tol = 5.0d-4 * (1.d0 + maxval(abs(raw_losses)))
+        call assert_true(max_legacy <= tol, 'gen_objfun_vals = exp(-gen_raw_euclid_grad_for_rot_8) at every angle')
         ! (b) the continuous evaluator at integer angles equals the discrete reference
         igrid = minloc(raw_losses, dim=1)
         irots = [igrid, modulo(igrid-1+nrots/3, nrots)+1, modulo(igrid-1+(2*nrots)/3, nrots)+1]
@@ -406,9 +433,7 @@ contains
         enddo
         call b%pftc%assign_sigma2_noise(sigma2_fixture)
         call series_floor_scan(b, igrid, series_min, stale_parity)
-        call b%pftc%gen_raw_euclid_vals(1, 1, [1.7_sp, -2.3_sp], raw_losses)
         call b%pftc%gen_objfun_vals(1, 1, [1.7_sp, -2.3_sp], scores)
-        series_min = min(series_min, real(minval(raw_losses),dp))
         call assert_true(ieee_is_finite(series_min) .and. series_min > -GRAD_FD_RTOL, &
             &'loss series stays non-negative under near-noiseless sigma2 with stale square sums')
         call assert_true(all(ieee_is_finite(scores)) .and. minval(scores) >= 0._sp .and. maxval(scores) <= 1._sp, &
@@ -447,7 +472,7 @@ contains
     subroutine test_euclid_band_edges()
         type(builder),    target :: b
         type(parameters), target :: p
-        real(sp), allocatable :: raw_losses(:)
+        real(dp), allocatable :: raw_losses(:)
         real(dp) :: f, g(3)
         integer  :: nrots, igrid
         write(*,'(A)') 'test_euclid_band_edges'
@@ -455,7 +480,7 @@ contains
         call build_fixture(b, p, OBJ_EUCLID, LP_FULL, 359.375, [0.,0.], .true.)
         nrots = b%pftc%get_nrots()
         allocate(raw_losses(nrots))
-        call b%pftc%gen_raw_euclid_vals(1, 1, [0._sp,0._sp], raw_losses)
+        call raw_euclid_losses(b, [0.d0,0.d0], raw_losses)
         igrid = minloc(raw_losses, dim=1)
         call assert_true(all(ieee_is_finite(raw_losses)), 'full-band losses are finite')
         call assert_true(angular_error(angle_of(b%pftc, real(igrid,dp)), -359.375d0) <= 1.5d0*real(b%pftc%get_dang(),dp), &
@@ -469,10 +494,10 @@ contains
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, 0., [0.,0.], .false.)
         nrots = b%pftc%get_nrots()
         allocate(raw_losses(nrots))
-        call b%pftc%gen_raw_euclid_vals(1, 1, [0._sp,0._sp], raw_losses)
+        call raw_euclid_losses(b, [0.d0,0.d0], raw_losses)
         igrid = minloc(raw_losses, dim=1)
         call assert_int(1, igrid, 'an unrotated, unshifted particle selects the first grid angle')
-        call assert_true(raw_losses(1) <= 1.d-3*max(1.d0, real(maxval(raw_losses),dp)), 'the loss vanishes at the truth pose')
+        call assert_true(raw_losses(1) <= 1.d-3*max(1.d0, maxval(raw_losses)), 'the loss vanishes at the truth pose')
         call gradient_probe_set(b, OBJ_EUCLID, igrid, 'euclid zero angle')
         call kill_fixture(b)
     end subroutine test_euclid_band_edges
@@ -507,8 +532,8 @@ contains
         call kill_fixture(b)
     end subroutine test_cc_evaluator
 
-    !> strategy2D_srch constructs the joint optimiser only under inpl_cont=yes and always
-    !! keeps the alternating seed-search angle update (selection parity)
+    !> strategy2D_srch polishes continuously, with a joint optimiser that solves, only under inpl_cont=yes and
+    !! always keeps the alternating seed-search angle update (selection parity)
     subroutine test_strategy2D_route_flags()
         type(builder),    target :: b
         type(parameters), target :: p
@@ -530,24 +555,37 @@ contains
         p%inpl_cont         = 'no'
         call srch%new(p, spec, b)
         call assert_false(srch%uses_continuous_refinement(), 'inpl_cont=no: no continuous polish')
-        call assert_false(srch%joint_inpl_optimizer%uses_joint_inplane(), 'inpl_cont=no: no joint optimiser')
         call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), 'inpl_cont=no: alternating seed search updates the angle')
         call srch%kill
         p%inpl_cont = 'yes'
         call srch%new(p, spec, b)
         call assert_true(srch%uses_continuous_refinement(), 'inpl_cont=yes: continuous polish')
-        call assert_true(srch%joint_inpl_optimizer%uses_joint_inplane(), 'inpl_cont=yes: joint optimiser constructed')
+        call assert_true(joint_solve_valid(), 'inpl_cont=yes: joint optimiser constructed (a valid joint solve)')
         call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), &
             &'inpl_cont=yes: alternating seed search still updates the angle (selection parity)')
         call srch%kill
         p%l_prob_align_mode = .true.
         call srch%new(p, spec, b)
         call assert_true(srch%uses_continuous_refinement(), 'probabilistic route: continuous polish of the selected candidate')
-        call assert_true(srch%joint_inpl_optimizer%uses_joint_inplane(), 'probabilistic route: joint optimiser constructed')
+        call assert_true(joint_solve_valid(), 'probabilistic route: joint optimiser constructed (a valid joint solve)')
         call srch%kill
         p%l_prob_align_mode = .false.
         p%inpl_cont         = 'no'
         call kill_fixture(b)
+
+    contains
+
+        !> the search's joint optimiser solves from the first grid cell, by the calls of the committed pose's polish
+        !! (minimize_joint stops on an optimiser that is not a joint one)
+        logical function joint_solve_valid()
+            real     :: cxy(3)
+            real(dp) :: rotind_frac
+            integer  :: irot
+            call srch%joint_inpl_optimizer%set_indices(1, 1)
+            cxy = srch%joint_inpl_optimizer%minimize_joint(irot, [0.,0.], sh_rot=.true., rotind_frac=rotind_frac, &
+                &evaluation_valid=joint_solve_valid, irot_in=1)
+        end function joint_solve_valid
+
     end subroutine test_strategy2D_route_flags
 
     ! ---- quadratic shift step from the coarse grid (multi-state table) -------
@@ -866,48 +904,7 @@ contains
 
     end subroutine test_grid_ptcl_search
 
-    ! ---- exact checks: shift matrix range, loaded reference, the tables' kernels across threads ----
-
-    !> the alignment shift matrix holds only the searched shells: the scores are the same, bit for bit, whatever the
-    !! shells above kfromto(2) hold (shift_ptcl fills them with another shift; the searched shells are then reset)
-    subroutine test_shmat_searched_shells()
-        type(builder),    target :: b
-        type(parameters), target :: p
-        complex(sp), allocatable :: pft(:,:), pft_full(:,:)
-        real(sp),    allocatable :: v1(:), v2(:)
-        integer :: iobj, ish, nrots, kfromto(2), ndiff
-        write(*,'(A)') 'test_shmat_searched_shells'
-        do iobj = OBJ_EUCLID, OBJ_CC
-            call build_fixture(b, p, iobj, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
-            nrots   = b%pftc%get_nrots()
-            kfromto = b%pftc%get_kfromto()
-            allocate(v1(nrots), v2(nrots), pft(b%pftc%get_pftsz(),kfromto(1):kfromto(2)))
-            pft_full = b%pftc%allocate_ptcl_pft()
-            call b%pftc%get_ptcl_pft(1, pft)
-            pft_full(:,kfromto(1):kfromto(2)) = pft
-            ndiff = 0
-            do ish = 1,size(PROBE_SHIFTS,2)
-                call reset_particle
-                call b%pftc%gen_objfun_vals(1, 1, real(PROBE_SHIFTS(:,ish),sp), v1)
-                call b%pftc%shift_ptcl(1, [3.1, -2.7] * real(ish))
-                call reset_particle
-                call b%pftc%gen_objfun_vals(1, 1, real(PROBE_SHIFTS(:,ish),sp), v2)
-                ndiff = ndiff + count(v1 /= v2)
-            enddo
-            call assert_int(0, ndiff, 'the scores do not depend on the shells above the searched band (exact)')
-            deallocate(v1, v2, pft, pft_full)
-            call kill_fixture(b)
-        enddo
-
-    contains
-
-        !> the searched shells back, nothing above them, and the particle memoised afresh
-        subroutine reset_particle
-            call b%pftc%set_ptcl_pft(1, pft_full)
-            call b%pftc%memoize_ptcls
-        end subroutine reset_particle
-
-    end subroutine test_shmat_searched_shells
+    ! ---- exact checks: loaded reference, the tables' kernels across threads ----
 
     !> the evaluations of the shift search with the reference loaded once equal those that copy it every time and those
     !! after a fresh load, exactly, also when other evaluations and loads come in between
@@ -1048,7 +1045,7 @@ contains
     end subroutine test_posterior_threads
 
     !> The shift prior of the probability tables' searches (shift_prior=yes): off, the search is the search
-    !! (bitwise, also after a prior was set and cleared); on, the correlation a search reports is the raw
+    !! (bitwise, also on an object made anew after a prior was set); on, the correlation a search reports is the raw
     !! correlation at its shift times exp(-|u - u0|^2 / (2 sigma^2 T)) with u0 the start as a stored shift and u the
     !! candidate's stored shift at its rotation (the frame rule of test_shift_prior_frame), so the in-plane choice
     !! is the argmax of the raw objective times the rotation's factor; a prior far wider than the move leaves the
@@ -1083,19 +1080,18 @@ contains
         sigma2_strong = 1.e-3 / temp
         call srch%new_alternating(b, limits, lims_init=lims_init, maxits=p%maxits_sh, coarse_init=.true.)
         call srch%set_indices(1, 1)
-        call assert_false(srch%has_shift_prior(), 'a new search object has no prior')
-        ! the free search from the start, twice: the second after a prior was set and cleared
+        ! the free search from the start, twice: the second on the object made anew after a prior was set
         irot_free = 1
         cxy_free  = srch%minimize(irot_free, sh_rot=.false., xy_in=START)
         call assert_true(irot_free > 0, 'the free search moves from the start')
         call assert_true(norm2(cxy_free(2:3) - START) > 0.5, 'and moves it by more than half a pixel')
         call srch%set_shift_prior(1., temp)
-        call assert_true(srch%has_shift_prior(), 'set_shift_prior arms the prior')
-        call srch%clear_shift_prior
+        call srch%new_alternating(b, limits, lims_init=lims_init, maxits=p%maxits_sh, coarse_init=.true.)
+        call srch%set_indices(1, 1)
         irot_again = 1
         cxy_again  = srch%minimize(irot_again, sh_rot=.false., xy_in=START)
         call assert_true(irot_again == irot_free .and. all(transfer(cxy_again,0,3) == transfer(cxy_free,0,3)), &
-            &'a cleared prior leaves the search bit for bit as it was')
+            &'a search object made anew drops the prior: the search bit for bit as it was')
         ! the factor identity at the prior's own result: the centre is START as a stored shift (expressed at
         ! rotation 1 on entry), so at rotation i the factor is exp(-w |xy - R(i) u0|^2); the in-plane choice is
         ! the argmax of the raw objective times that factor and the reported correlation is the product
@@ -1187,19 +1183,20 @@ contains
 
     !> The frame of the shift prior (2026-10-28): the optimizer's shift x at rotation irot is the stored shift
     !! rotated into the reference's frame, x = R(irot) u, so the prior's centre is kept as the stored shift u0 and
-    !! the penalty at rotation irot is w |x - R(irot) u0|^2 = w |u - u0|^2. With a nonzero seed u0 expressed at
-    !! irot_seed: no penalty at the seed; none at another rotation for the x that keeps the stored shift; the
-    !! stored displacement's cost, w (2 |u0| sin(dtheta/2))^2, for the seed's own x at another rotation (which
-    !! paid nothing before, the centre being x itself); the particle-frame penalty of that candidate's stored
-    !! shift is the same number; a zero seed is the same centre in every frame. And the search: a narrow prior
-    !! keeps the stored shift at the seed whatever rotation it ends on
+    !! the factor at rotation irot is exp(-w |x - R(irot) u0|^2) = exp(-w |u - u0|^2). With a nonzero seed u0
+    !! expressed at irot_seed, the search's objective (its in-plane choice and value) at the seed's own x and at
+    !! the x that keeps the stored shift at another rotation is the raw objective times that factor at every
+    !! rotation; a zero seed is the same centre in every frame. And the search: a narrow prior keeps the stored
+    !! shift at the seed whatever rotation it ends on
     subroutine test_shift_prior_frame()
-        real, parameter :: U0(2) = [2.0, -1.5]
+        real,     parameter :: U0(2) = [2.0, -1.5]
+        real(dp), parameter :: W_FRAME = 0.1d0 ! per px^2: a factor from 1 to exp(-2.5) over the rotations at |U0|
         type(builder),    target :: b
         type(parameters), target :: p
         type(pftc_shsrch_grad)   :: srch
-        real     :: limits(2,2), temp, xy_seed(2), xy_other(2), rot_seed, rot_other, cxy(3), sigma2_strong
-        real(dp) :: w, pen, expected, u(2), scale
+        real, allocatable :: scores(:)
+        real     :: limits(2,2), temp, xy_seed(2), xy_other(2), cxy(3), sigma2, sigma2_strong
+        real(dp) :: w
         integer  :: irot_seed, irot_other, irot, nrots
         write(*,'(A)') 'test_shift_prior_frame'
         limits(:,1) = -TRS
@@ -1207,37 +1204,21 @@ contains
         call build_fixture(b, p, OBJ_EUCLID, LP_LOW, TRUTH_ANGLE, TRUTH_SHIFT, .false.)
         temp  = posterior_temperature(b%pftc%wsqsum_ptcl_now(1), b%pftc%get_pftsz())
         nrots = b%pftc%get_nrots()
+        allocate(scores(nrots))
         call srch%new_alternating(b, limits, maxits=p%maxits_sh)
         call srch%set_indices(1, 1)
-        call srch%set_shift_prior(1., temp)
-        w     = 1.d0 / (2.d0 * real(temp,dp))
-        scale = w * sum(real(U0,dp)**2) ! the penalty's natural size
+        sigma2 = real(1.d0 / (2.d0 * W_FRAME * real(temp,dp)))
+        call srch%set_shift_prior(sigma2, temp)
+        w          = 1.d0 / (2.d0 * real(sigma2,dp) * real(temp,dp))
         irot_seed  = 1 + nrots / 8
         irot_other = 1 + nrots / 3
-        rot_seed   = b%pftc%get_rot(irot_seed)
-        rot_other  = b%pftc%get_rot(irot_other)
-        xy_seed    = shift_ptcl2ref(U0, rot_seed)   ! the seed as the caller passes it: expressed at its rotation
-        xy_other   = shift_ptcl2ref(U0, rot_other)  ! the same stored shift at another rotation
+        xy_seed    = shift_ptcl2ref(U0, b%pftc%get_rot(irot_seed))   ! the seed as the caller passes it: expressed at its rotation
+        xy_other   = shift_ptcl2ref(U0, b%pftc%get_rot(irot_other))  ! the same stored shift at another rotation
         call srch%set_prior_centre(real(xy_seed,dp), irot_seed)
-        call assert_true(srch%shift_prior_penalty(real(xy_seed,dp), irot_seed) <= 1.d-5 * scale, &
-            &'no penalty at the seed')
-        call assert_true(srch%shift_prior_penalty(real(xy_other,dp), irot_other) <= 1.d-5 * scale, &
-            &'no penalty at another rotation for the shift that keeps the stored shift')
-        pen      = srch%shift_prior_penalty(real(xy_seed,dp), irot_other)
-        expected = w * (2.d0 * norm2(real(U0,dp)) * sin(0.5d0 * real(rot_other - rot_seed,dp) * DPI / 180.d0))**2
-        call assert_true(pen > 0.1d0 * scale, 'the seed''s own shift at another rotation pays: the stored shift moved')
-        call assert_true(abs(pen - expected) <= 1.d-5 * scale, 'and pays the stored displacement, 2 |u0| sin(dtheta/2)')
-        u = real(shift_ref2ptcl(xy_seed, rot_other), dp)
-        call assert_true(abs(srch%shift_prior_penalty_ptcl(u) - pen) <= 1.d-5 * scale, &
-            &'the particle-frame penalty of that candidate''s stored shift is the same number')
-        call assert_true(srch%shift_prior_penalty_ptcl(real(U0,dp)) <= 1.d-5 * scale, &
-            &'and zero at the seed''s stored shift')
+        call check_objective(xy_seed,  U0, 'the seed''s shift')
+        call check_objective(xy_other, U0, 'the shift that keeps the stored shift at another rotation')
         call srch%set_prior_centre([0.d0, 0.d0], irot_seed)
-        call assert_true(srch%shift_prior_penalty([0.d0, 0.d0], irot_other) <= 1.d-12, &
-            &'a zero seed is the same centre at every rotation')
-        pen = srch%shift_prior_penalty(real(xy_seed,dp), irot_other)
-        call assert_true(abs(pen - w * sum(real(xy_seed,dp)**2)) <= 1.d-5 * scale, &
-            &'and its penalty is the plain squared shift')
+        call check_objective(xy_seed, [0., 0.], 'a zero seed')
         ! the search from the seed with a narrow prior (w (0.1 px)^2 > 5 nats) keeps the stored shift at the seed,
         ! whatever rotation it ends on (the returned shift is the stored one with sh_rot)
         sigma2_strong = 1.e-3 / temp
@@ -1248,6 +1229,35 @@ contains
             &'a narrow prior keeps the stored shift at a nonzero seed whatever the rotation the search ends on')
         call srch%kill
         call kill_fixture(b)
+        deallocate(scores)
+
+    contains
+
+        !> the search's objective at x (select_best_discrete_angle: its in-plane choice and value) against the raw
+        !! objective times exp(-w |x - R(i) u0|^2) at every rotation i
+        subroutine check_objective( x, u0_loc, label )
+            real,             intent(in) :: x(2), u0_loc(2)
+            character(len=*), intent(in) :: label
+            real(dp) :: g, best
+            real     :: corr
+            integer  :: i, ibest, irot_srch
+            call b%pftc%gen_objfun_vals(1, 1, x, scores)
+            best  = -huge(best)
+            ibest = 0
+            do i = 1,nrots
+                g = exp(-w * sum((real(x,dp) - real(shift_ptcl2ref(u0_loc, b%pftc%get_rot(i)),dp))**2))
+                if( real(scores(i),dp) * g > best )then
+                    best  = real(scores(i),dp) * g
+                    ibest = i
+                endif
+            enddo
+            call srch%select_best_discrete_angle(x, irot_srch, corr)
+            call assert_int(ibest, irot_srch, &
+                &'prior frame, '//label//': the in-plane choice is the argmax of the raw objective times the factor')
+            call assert_true(abs(real(corr,dp) - best) <= 1.d-5, &
+                &'prior frame, '//label//': the objective is the raw one times the factor')
+        end subroutine check_objective
+
     end subroutine test_shift_prior_frame
 
     !> The shift prior through the quadratic grid step (grid_fit, the multi-state table's search), whose exact

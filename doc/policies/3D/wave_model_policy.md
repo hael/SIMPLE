@@ -134,7 +134,7 @@ the project's per-particle `fraca`. The rules:
 
 **The weak-phase identity** ties every convention to code refinement has used
 for years: at zero potential the linearisation is `2 g sigma a N` times the PCG
-backend's `forward_plane` times its `build_transfer` (CTF with shift, defocus,
+backend's plane gather (`gather_plane`) times its `build_transfer` (CTF with shift, defocus,
 astigmatism and amplitude contrast). The `wave projector` and `wave imaging`
 tests hold it to `1e-5`.
 

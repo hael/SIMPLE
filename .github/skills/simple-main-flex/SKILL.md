@@ -66,7 +66,7 @@ Silent ones first: nothing reports these.
 
 ## Tests
 
-- `build/bin/simple_test_exec test=unit_heterogeneity` (2 s; `suite=` `flex_pca`, `flex_pcg_operator`,
+- `build/bin/simple_test_exec test=unit_heterogeneity` (2 s; `suite=` `flex_pca`, `flex_probe_fit`, `flex_pcg_operator`,
   `flex_cls_expansion`, `flex_cls_expansion_kernel`); `python3 scripts/check_flex_dag.py . --verbose`.
 - `test=lib_heterogeneity` (nightly, 35 s; `suite=` `flex_pca_two_state_phantom`,
   `flex_pca_deconvolution_20k`, `flex_pcg_operator_64`, `flex_pcg_solve_sweep`); with a

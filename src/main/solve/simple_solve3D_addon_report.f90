@@ -10,7 +10,7 @@ use simple_ori,             only: ori
 use simple_oris,            only: oris
 implicit none
 
-public :: solve3D_addon_report, ADDON_REPORT_FNAME
+public :: solve3D_addon_report, ADDON_REPORT_FNAME, run_all_solve3D_addon_dock_tests
 private
 #include "simple_local_flags.inc"
 
@@ -54,7 +54,6 @@ type :: solve3D_addon_report
     procedure :: get_verdict
     procedure :: get_dshell
     procedure :: get_corr
-    procedure :: get_dock_angle
     procedure :: get_cohort_res0143
     procedure :: any_regressed
     procedure :: print
@@ -65,6 +64,12 @@ type :: solve3D_addon_report
     procedure, private :: corr_lp
     procedure, private :: dock
 end type solve3D_addon_report
+
+interface
+    !> white-box test of the docking branch (submodule simple_solve3D_addon_dock_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_solve3D_addon_dock_tests()
+    end subroutine run_all_solve3D_addon_dock_tests
+end interface
 
 contains
 
@@ -198,16 +203,6 @@ contains
         call self%check_state(s)
         get_corr = self%states(s)%corr
     end function get_corr
-
-    !> the rotation (deg) that docked the union map onto the base map, -1 when
-    !! the maps were not docked
-    real function get_dock_angle( self, s )
-        class(solve3D_addon_report), intent(in) :: self
-        integer,                        intent(in) :: s
-        call self%check_state(s)
-        get_dock_angle = -1.
-        if( self%states(s)%l_docked ) get_dock_angle = self%states(s)%dock_angle
-    end function get_dock_angle
 
     !> the FSC=0.143 resolution of the cohort-only map against the base map
     !! (A; 0 when not compared)

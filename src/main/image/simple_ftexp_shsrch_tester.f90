@@ -7,6 +7,7 @@
 ! particle shifted by image%shift(s), the cost is lowest at vec = s, and minimize returns s.
 module simple_ftexp_shsrch_tester
 use simple_test_utils
+use simple_test_image_fixture, only: draw_square
 use simple_defs
 use simple_rnd,          only: ran3
 use simple_image,        only: image, unmemoize_mask_coords
@@ -43,7 +44,7 @@ contains
         integer  :: itst, x, y, xsh, ysh, xbest, ybest, nwrong, d
         write(*,'(A)') 'test_correlator'
         call img%new(LDIM, SMPD)
-        call img%square(SQRAD)
+        call draw_square(img, SQRAD)
         call ftexp_ref%new(img, HP, LP, .true.)
         call ftexp_transfmat_init(img, LP)
         call img_shifted%new(LDIM, SMPD)

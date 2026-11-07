@@ -33,7 +33,6 @@ contains
         call test_readline_long_line()
         call test_readline_eof_behavior()
         call test_writeline_unallocated()
-        call test_readfile()
         call test_list_of_ints2arr()
         call test_ansi_format_str()
         ! call report_summary()
@@ -474,23 +473,6 @@ contains
         call assert_int(-1, ios, 'writeline on unallocated sets ios=-1')
         close(unit)
     end subroutine test_writeline_unallocated
-
-    subroutine test_readfile()
-        type(string) :: s_in, s_out
-        integer      :: unit, ios
-        write(*,'(A)') 'test_readfile'
-        ! s_in is multiline string
-        s_in = "line1" // new_line('a') // "line2" // new_line('a')
-        call assert_true(s_in%is_allocated(), 'multiline string not allocated')
-        open(newunit=unit, status='scratch', action='readwrite', iostat=ios)
-        call assert_int(0, ios, 'open scratch file (readfile)')
-        call s_in%writeline(unit, ios)
-        call assert_int(0, ios, 'writeline on multiline string')
-        rewind(unit)
-        call s_out%readfile(unit)
-        call assert_char(s_in%to_char(), s_out%to_char(), 'multiline content preserved')
-        close(unit)
-    end subroutine test_readfile
 
     !---------------- comma-separated integer lists (simple_string_utils) ----------------
 

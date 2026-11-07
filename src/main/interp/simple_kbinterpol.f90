@@ -31,7 +31,6 @@ type :: kbinterpol
     procedure          :: apod_mat_2d_fast
     procedure          :: apod_mat_3d
     procedure          :: apod_mat_3d_fast
-    procedure          :: apod_mat_3d_fast_grad
     procedure          :: instr
 end type kbinterpol
 
@@ -321,65 +320,6 @@ contains
             end do
         end do
     end subroutine apod_mat_3d_fast
-
-    !>  \brief  Standard fast normalized 3-D KB stencil and fixed-cell gradient.
-    !!
-    !! dw_dloc(:,:,:,a) differentiates the normalized stencil with respect to
-    !! loc(a), holding i0 fixed. switch_margin reports the distance to the next
-    !! half-integer nint switch on each axis; it is zero at a switch. No
-    !! derivative across a switch is implied.
-    pure subroutine apod_mat_3d_fast_grad(self, loc, iwinsz, wdim, i0, switch_margin, kbw, dw_dloc)
-        class(kbinterpol), intent(in)  :: self
-        real(sp),          intent(in)  :: loc(3)
-        integer,           intent(in)  :: iwinsz, wdim
-        integer,           intent(out) :: i0(3)
-        real(sp),          intent(out) :: switch_margin(3)
-        real(sp),          intent(out) :: kbw(wdim,wdim,wdim)
-        real(sp),          intent(out) :: dw_dloc(wdim,wdim,wdim,3)
-        real(sp) :: base(3), draw(3), raw(3)
-        real(sp) :: dx(wdim), dy(wdim), dz(wdim)
-        real(sp) :: wx(wdim), wy(wdim), wz(wdim)
-        real(sp) :: sx, sy, sz, dsx, dsy, dsz
-        integer  :: i, j
-        ! Select the fixed stencil lower corner.
-        i0            = nint(loc) - iwinsz
-        ! Measure the distance to the next stencil switch.
-        switch_margin = 0.5_sp - abs(loc - real(nint(loc), sp))
-        ! Form signed kernel arguments grid - loc.
-        base           = real(i0, sp) - loc
-        do i = 1, wdim
-            ! Evaluate raw axis weights and dK/dx.
-            call self%apod_fast_value_deriv(base + real(i-1, sp), raw, draw)
-            wx(i) = raw(1)
-            wy(i) = raw(2)
-            wz(i) = raw(3)
-            ! Convert dK/dx to dK/dloc.
-            dx(i) = -draw(1)
-            dy(i) = -draw(2)
-            dz(i) = -draw(3)
-        enddo
-        ! Sum raw weights and derivatives on each axis.
-        sx  = sum(wx); sy  = sum(wy); sz  = sum(wz)
-        dsx = sum(dx); dsy = sum(dy); dsz = sum(dz)
-        ! Normalize the three one-dimensional weight vectors.
-        wx  = wx / sx; wy = wy / sy; wz = wz / sz
-        ! Differentiate each normalized weight vector.
-        dx  = (dx - wx * dsx) / sx
-        dy  = (dy - wy * dsy) / sy
-        dz  = (dz - wz * dsz) / sz
-        do j = 1, wdim
-            do i = 1, wdim
-                ! Form the separable normalized 3-D stencil.
-                kbw(:,i,j)          = wx(:) * (wy(i) * wz(j))
-                ! Differentiate the x-axis factor.
-                dw_dloc(:,i,j,1)    = dx(:) * (wy(i) * wz(j))
-                ! Differentiate the y-axis factor.
-                dw_dloc(:,i,j,2)    = wx(:) * (dy(i) * wz(j))
-                ! Differentiate the z-axis factor.
-                dw_dloc(:,i,j,3)    = wx(:) * (wy(i) * dz(j))
-            enddo
-        enddo
-    end subroutine apod_mat_3d_fast_grad
 
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )

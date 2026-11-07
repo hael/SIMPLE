@@ -1,6 +1,6 @@
 !@descr: unit test routines for the Kaiser-Bessel interpolation kernel (simple_kbinterpol)
 ! The apodisation function and its polynomial fast form, the value/derivative pair, the separable 2D/3D
-! stencils (exact, fast, fast with gradient) and the instrument function, pinned on closed-form values of
+! stencils (exact and fast) and the instrument function, pinned on closed-form values of
 ! the standard KBWINSZ=1.5, KBALPHA=2 kernel.
 module simple_kbinterpol_tester
 use simple_test_utils    ! assertions etc.
@@ -32,7 +32,6 @@ contains
         call test_apod_mat_2d()
         call test_apod_mat_3d()
         call test_fast_stencils()
-        call test_apod_mat_3d_fast_grad()
         call test_instr()
     end subroutine run_all_kbinterpol_tests
 
@@ -302,39 +301,6 @@ contains
             call assert_real(1.0, sum(f3), 1.e-5, 'apod_mat_3d_fast sums to one without the final renormalisation, location '//int2str(iloc))
         enddo
     end subroutine test_fast_stencils
-
-    ! the gradient of the fixed-cell stencil against central differences of apod_mat_3d_fast
-    subroutine test_apod_mat_3d_fast_grad()
-        real, parameter :: LOC(3) = [0.3, -0.7, 1.2]
-        type(kbinterpol) :: kb
-        real    :: kbw(WDIM,WDIM,WDIM), fast(WDIM,WDIM,WDIM), dw(WDIM,WDIM,WDIM,3)
-        real    :: plus(WDIM,WDIM,WDIM), minus(WDIM,WDIM,WDIM), fd(WDIM,WDIM,WDIM), shifted(3), margin(3)
-        integer :: i0(3), axis
-        write(*,'(A)') 'test_apod_mat_3d_fast_grad'
-        kb = standard_kernel()
-        call kb%apod_mat_3d_fast_grad(LOC, IWINSZ, WDIM, i0, margin, kbw, dw)
-        call assert_true(all(i0 == nint(LOC) - IWINSZ), 'apod_mat_3d_fast_grad: stencil corner is nint(loc) - iwinsz')
-        call assert_true(maxval(abs(margin - (0.5 - abs(LOC - real(nint(LOC)))))) < 1.e-6, &
-            &'apod_mat_3d_fast_grad: switch margin is the distance to the next nint switch')
-        call kb%apod_mat_3d_fast(LOC, IWINSZ, WDIM, fast)
-        call assert_true(maxval(abs(kbw - fast)) < 1.e-6, 'apod_mat_3d_fast_grad: the stencil is apod_mat_3d_fast')
-        do axis = 1,3
-            call assert_real(0.0, sum(dw(:,:,:,axis)), 1.e-5, 'apod_mat_3d_fast_grad: the gradient of a normalised stencil sums to zero, axis '//int2str(axis))
-            shifted = LOC
-            shifted(axis) = LOC(axis) + FD_STEP
-            call kb%apod_mat_3d_fast(shifted, IWINSZ, WDIM, plus)
-            shifted(axis) = LOC(axis) - FD_STEP
-            call kb%apod_mat_3d_fast(shifted, IWINSZ, WDIM, minus)
-            fd = (plus - minus) / (2. * FD_STEP)
-            call assert_true(maxval(abs(fd - dw(:,:,:,axis))) < 1.e-3, 'apod_mat_3d_fast_grad: gradient matches central differences, axis '//int2str(axis))
-            call assert_true(maxval(abs(dw(:,:,:,axis))) > 0.1, 'apod_mat_3d_fast_grad: the gradient is not trivially small, axis '//int2str(axis))
-        enddo
-        ! on a half-integer the margin is zero
-        call kb%apod_mat_3d_fast_grad([0.5, 1.0, -2.5], IWINSZ, WDIM, i0, margin, kbw, dw)
-        call assert_real(0.0, margin(1), 1.e-7, 'apod_mat_3d_fast_grad: zero margin at a half-integer coordinate')
-        call assert_real(0.5, margin(2), 1.e-7, 'apod_mat_3d_fast_grad: half margin on a grid point')
-        call assert_real(0.0, margin(3), 1.e-7, 'apod_mat_3d_fast_grad: zero margin at a negative half-integer')
-    end subroutine test_apod_mat_3d_fast_grad
 
     !---------------- the instrument function ----------------
 

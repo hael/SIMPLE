@@ -13,8 +13,8 @@ private
 #include "simple_local_flags.inc"
 
 public :: pcg_lattice, PCG_FFT_MEASURE_MIN_BOXPD
-public :: plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, scatter_window_real, scatter_window_pair
-public :: scatter_window_nowrap, scatter_window_pair_nowrap, scatter_window_cmplx_nowrap
+public :: plane_loc, rim_free, win_wraps, win_below_fold, scatter_window, scatter_window_pair
+public :: scatter_window_pair_nowrap, scatter_window_cmplx_nowrap
 public :: slab_count, slab_planes, slab_k_range
 
 !> padded boxes from here get measured FFTW plans for an operator's work image (the size from which the
@@ -678,27 +678,6 @@ contains
         end do
     end subroutine scatter_window
 
-    !> real-valued counterpart for the density accumulator
-    pure subroutine scatter_window_real( self, i0, w, val, vol_accum )
-        class(pcg_lattice),       intent(in)    :: self
-        integer,                  intent(in)    :: i0(3)
-        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim), val
-        real,                     intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                            &self%lims3(2,1):self%lims3(2,2),&
-                                                            &self%lims3(3,1):self%lims3(3,2))
-        integer :: di, dj, dk, hh, kk, mm
-        do dk = 1, self%wdim
-            mm = self%wrap(i0(3)+dk-1)
-            do dj = 1, self%wdim
-                kk = self%wrap(i0(2)+dj-1)
-                do di = 1, self%wdim
-                    hh = self%wrap(i0(1)+di-1)
-                    vol_accum(hh,kk,mm) = vol_accum(hh,kk,mm) + w(di,dj,dk) * val
-                end do
-            end do
-        end do
-    end subroutine scatter_window_real
-
     !> B and D through one wrapped KB-window traversal
     pure subroutine scatter_window_pair( self, i0, w, bval, dval, bacc, dacc )
         class(pcg_lattice),       intent(in)    :: self
@@ -724,29 +703,6 @@ contains
             end do
         end do
     end subroutine scatter_window_pair
-
-    !> interior-only scatter for windows proven not to wrap: self%wrap is the
-    !! identity there, so direct indexing is bit-identical and the inner run contiguous
-    pure subroutine scatter_window_nowrap( self, i0, w, val, vol_accum )
-        class(pcg_lattice),       intent(in)    :: self
-        integer,                  intent(in)    :: i0(3)
-        real,                     intent(in)    :: w(self%wdim,self%wdim,self%wdim)
-        real,                     intent(in)    :: val
-        real,                     intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                            &self%lims3(2,1):self%lims3(2,2),&
-                                                            &self%lims3(3,1):self%lims3(3,2))
-        integer :: di, dj, dk, h0, kk, mm
-        h0 = i0(1)
-        do dk = 1, self%wdim
-            mm = i0(3) + dk - 1
-            do dj = 1, self%wdim
-                kk = i0(2) + dj - 1
-                do di = 1, self%wdim
-                    vol_accum(h0+di-1,kk,mm) = vol_accum(h0+di-1,kk,mm) + w(di,dj,dk) * val
-                end do
-            end do
-        end do
-    end subroutine scatter_window_nowrap
 
     !> B and D through one non-wrapping, contiguous KB-window traversal
     pure subroutine scatter_window_pair_nowrap( self, i0, w, bval, dval, bacc, dacc )
@@ -774,7 +730,8 @@ contains
         end do
     end subroutine scatter_window_pair_nowrap
 
-    !> complex counterpart of scatter_window_nowrap, for the RHS scatter
+    !> interior-only complex scatter for windows proven not to wrap: self%wrap is the identity there,
+    !! so direct indexing is bit-identical and the inner run contiguous
     pure subroutine scatter_window_cmplx_nowrap( self, i0, w, val, vol_accum )
         class(pcg_lattice),       intent(in)    :: self
         integer,                  intent(in)    :: i0(3)

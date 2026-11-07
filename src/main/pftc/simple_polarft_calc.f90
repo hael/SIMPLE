@@ -6,7 +6,7 @@ use simple_rnd,            only: rnd_key
 implicit none
 
 public :: polarft_calc
-public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
+public :: vol_pad2ref_pfts_opt
 public :: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
 public :: run_all_polarft_shiftmap_tests
 private
@@ -42,7 +42,6 @@ type fftw_crvec
 end type fftw_crvec
 
 type heap_vars
-    real(dp),    pointer :: argvec(:)           => null()
     complex(sp), pointer :: shmat(:,:)          => null()
     complex(dp), pointer :: pft_ref_8(:,:)      => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
@@ -179,7 +178,6 @@ type :: polarft_calc
     procedure          :: cp_even_ref2ptcl
     procedure          :: cp_refs
     procedure          :: set_eo
-    procedure          :: set_with_ctf
     procedure          :: set_rnd_scope
     procedure          :: assign_sigma2_noise
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
@@ -197,8 +195,6 @@ type :: polarft_calc
     procedure          :: get_dang
     procedure          :: get_coord
     procedure          :: get_polar_coords
-    procedure          :: get_ref_pft
-    procedure          :: get_ptcl_pft
     procedure          :: get_ptcl_line
     procedure          :: get_nrefs
     procedure          :: exists
@@ -207,14 +203,11 @@ type :: polarft_calc
     procedure          :: get_pinds
     procedure          :: is_with_ctf
     procedure          :: allocate_pft
-    procedure          :: allocate_ptcl_pft
     procedure          :: get_precalc_objfun_vals
     ! ===== CTF: simple_polarft_ctf.f90
     procedure          :: create_polar_absctfmats
     ! ===== GEOM: simple_polarft_geom.f90
-    procedure, private :: gen_shmat, gen_shmat4aln
-    procedure, private :: gen_shmat_8, gen_shmat4aln_8
-    procedure          :: shift_ptcl
+    procedure, private :: gen_shmat4aln, gen_shmat4aln_8
     procedure, private :: mirror_ref_pft_by_pft, mirror_ref_pft_by_ind
     generic            :: mirror_ref_pft => mirror_ref_pft_by_pft, mirror_ref_pft_by_ind
     procedure, private :: rotate_ref_8
@@ -259,7 +252,6 @@ type :: polarft_calc
     procedure          :: load_ref_aln_8
     procedure          :: gen_corr_for_rot_8_aln
     procedure          :: gen_corr_grad_for_rot_8_aln
-    procedure          :: gen_raw_euclid_vals
     procedure          :: gen_raw_euclid_grad_for_rot_8
     procedure          :: gen_raw_euclid_grad_at_angle
     procedure          :: gen_corr_grad_at_angle
@@ -387,11 +379,6 @@ interface
         logical,             intent(in)    :: is_even
     end subroutine set_eo
 
-    module subroutine set_with_ctf(self, l_wctf)
-        class(polarft_calc), intent(inout) :: self
-        logical,             intent(in)    :: l_wctf
-    end subroutine set_with_ctf
-
     module subroutine set_rnd_scope(self, scope)
         class(polarft_calc), intent(inout) :: self
         type(rnd_key),       intent(in)    :: scope
@@ -402,15 +389,6 @@ interface
         real, allocatable,               target, intent(inout) :: sigma2_noise(:,:)
         integer(int64), optional, target,        intent(inout) :: spectra_gen
     end subroutine assign_sigma2_noise
-
-    module subroutine vol_pad2ref_pfts(self, vol_pad, eulspace, state, iseven)
-        use simple_projector, only: projector
-        class(polarft_calc), intent(inout) :: self
-        class(projector),    intent(in)    :: vol_pad
-        class(oris),         intent(inout) :: eulspace
-        integer,             intent(in)    :: state
-        logical,             intent(in)    :: iseven
-    end subroutine vol_pad2ref_pfts
 
     module subroutine vol_pad2ref_pfts_opt(self, vol_pad, eulspace, state, iseven)
         use simple_projector, only: projector
@@ -492,19 +470,6 @@ interface
         real(sp),            intent(out) :: coords(self%kfromto(1):self%interpklim,self%pftsz)
     end subroutine get_polar_coords
 
-    module subroutine get_ref_pft(self, iref, iseven, pft)
-        class(polarft_calc), intent(in)    :: self
-        integer,             intent(in)    :: iref
-        logical,             intent(in)    :: iseven
-        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-    end subroutine get_ref_pft
-
-    module subroutine get_ptcl_pft(self, iptcl, pft)
-        class(polarft_calc), intent(in)    :: self
-        integer,             intent(in)    :: iptcl
-        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-    end subroutine get_ptcl_pft
-
     module subroutine get_ptcl_line(self, iptcl, irot, line)
         class(polarft_calc), intent(in)    :: self
         integer,             intent(in)    :: iptcl, irot
@@ -542,11 +507,6 @@ interface
         complex(sp), allocatable :: pft(:,:)
     end function allocate_pft
 
-    module function allocate_ptcl_pft( self ) result( pft )
-        class(polarft_calc),  intent(in)  :: self
-        complex(sp), allocatable :: pft(:,:)
-    end function allocate_ptcl_pft
-
     module pure subroutine get_precalc_objfun_vals(self, ind, ithr, vals)
         class(polarft_calc),  intent(in)  :: self
         integer,              intent(in)  :: ind, ithr
@@ -564,13 +524,6 @@ interface
 
     ! ===== GEOM (rotation & shift of matrices) =====
 
-    module subroutine gen_shmat(self, ithr, shift, shmat)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(sp),             intent(in)    :: shift(2)
-        complex(sp), pointer, intent(inout) :: shmat(:,:)
-    end subroutine gen_shmat
-
     module subroutine gen_shmat4aln(self, ithr, shift, shmat)
         class(polarft_calc),  intent(inout) :: self
         integer,              intent(in)    :: ithr
@@ -578,25 +531,12 @@ interface
         complex(sp), pointer, intent(inout) :: shmat(:,:)
     end subroutine gen_shmat4aln
 
-    module subroutine gen_shmat_8(self, ithr, shift_8, shmat_8)
-        class(polarft_calc),  intent(inout) :: self
-        integer,              intent(in)    :: ithr
-        real(dp),             intent(in)    :: shift_8(2)
-        complex(dp), pointer, intent(inout) :: shmat_8(:,:)
-    end subroutine gen_shmat_8
-
     module subroutine gen_shmat4aln_8(self, ithr, shift_8, shmat_8)
         class(polarft_calc),  intent(inout) :: self
         integer,              intent(in)    :: ithr
         real(dp),             intent(in)    :: shift_8(2)
         complex(dp), pointer, intent(inout) :: shmat_8(:,:)
     end subroutine gen_shmat4aln_8
-
-    module subroutine shift_ptcl( self, iptcl, shvec)
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        real(sp),            intent(in)    :: shvec(2)
-    end subroutine shift_ptcl
 
     module pure subroutine mirror_ref_pft_by_pft( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self
@@ -796,13 +736,6 @@ interface
         real,                        intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids
-
-    module subroutine gen_raw_euclid_vals(self, iref, iptcl, shift, losses)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        real(sp),                    intent(out)   :: losses(self%nrots)
-    end subroutine gen_raw_euclid_vals
 
     module subroutine gen_best_euclid_val(self, iref, iptcl, shift, dist, irot)
         class(polarft_calc), target, intent(inout) :: self

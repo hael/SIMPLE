@@ -46,7 +46,6 @@ type :: opt_spec
     real(dp), allocatable     :: x_8(:)                               !< double precision value for best/final solution
     real, allocatable         :: xi(:)                                !< search direction used in linmin
     real, allocatable         :: xt(:)                                !< test point, used in linmin
-    real, allocatable         :: inipopulation(:,:)                   !< input population for the evolutionary approaches
     real, allocatable         :: population(:,:)                      !< output solution population from the evolutionary approaches
     real, allocatable         :: peaks(:,:)                           !< output peaks (local optimal solutions)
     real, allocatable         :: grad_4_tmp(:)                        !< temporary storage for single precision gradient
@@ -58,16 +57,13 @@ type :: opt_spec
     logical                   :: exists    = .false.                  !< to indicate existence
   contains
     procedure :: specify
-    procedure :: change_opt
     procedure :: set_limits
     procedure :: set_limits_init
     procedure :: set_costfun
-    procedure :: set_gcostfun
     procedure :: set_fdfcostfun
     procedure :: set_costfun_8
     procedure :: set_gcostfun_8
     procedure :: set_fdfcostfun_8
-    procedure :: set_inipop
     procedure :: eval_f_4
     procedure :: eval_df_4
     procedure :: eval_fdf_4
@@ -259,13 +255,6 @@ contains
         self%exists   = .true.
     end subroutine specify
 
-    !>  \brief  to change optimizer
-    subroutine change_opt( self, str_opt )
-        class(opt_spec), intent(inout) :: self    !< instance
-        character(len=*), intent(in)   :: str_opt !< string descriptor (of optimization routine to be used)
-        self%str_opt = str_opt
-    end subroutine change_opt
-
     !>  \brief  sets the optimizer limits
     subroutine set_limits( self, lims )
         class(opt_spec), intent(inout) :: self              !< instance
@@ -301,17 +290,6 @@ contains
         if( allocated(self%limits_init) ) deallocate(self%limits_init)
         allocate( self%limits_init(self%ndim,2), source=lims_init )
     end subroutine set_limits_init
-
-    !>  \brief  sets the initialization population for de
-    subroutine set_inipop( self, pop )
-        class(opt_spec), intent(inout) :: self              !< instance
-        real,            intent(in)    :: pop(:,:)
-        if(self%str_opt.ne.'de')THROW_HARD('only for use with DE; set_inipop')
-        if(size(pop,dim=1) > self%npop)THROW_HARD('non-congruent initial population 1; set_inipop')
-        if(size(pop,dim=2) .ne. self%ndim)THROW_HARD('non-congruent initial population 2; set_inipop')
-        if(allocated(self%inipopulation))deallocate(self%inipopulation)
-        self%inipopulation = pop
-    end subroutine set_inipop
 
     !> \brief  evaluate the cost function
     function eval_f_4( self, fun_self, x ) result(f)
@@ -457,21 +435,6 @@ contains
         self%costfun => fun
     end subroutine set_costfun
 
-    !>  \brief  sets the gradient function in the spec object
-    subroutine set_gcostfun( self, fun )
-        class(opt_spec), intent(inout) :: self !< instance
-        interface
-            !< defines cost function gradient interface
-            subroutine fun( fun_self, vec, grad, D )
-                class(*), intent(inout) :: fun_self
-                integer,  intent(in)    :: D
-                real,     intent(inout) :: vec( D )
-                real,     intent(out)   :: grad( D )
-            end subroutine fun
-        end interface
-        self%gcostfun => fun
-    end subroutine set_gcostfun
-
     !>  \brief  sets the cost and simultaneous gradient function in the spec object
     subroutine set_fdfcostfun( self, fun )
         class(opt_spec), intent(inout) :: self !< instance
@@ -546,7 +509,6 @@ contains
             if( allocated(self%xi)            ) deallocate(self%xi)
             if( allocated(self%xt)            ) deallocate(self%xt)
             if( allocated(self%population)    ) deallocate(self%population)
-            if( allocated(self%inipopulation) ) deallocate(self%inipopulation)
             if( allocated(self%peaks)         ) deallocate(self%peaks)
             if( allocated(self%grad_4_tmp)    ) deallocate(self%grad_4_tmp)
             if( allocated(self%x_4_tmp)       ) deallocate(self%x_4_tmp)

@@ -30,6 +30,11 @@ All seen in this code base:
 - Imports: `use simple_core_module_api` and other unqualified uses re-export whole modules; renames
   (`local => remote`); names are case-insensitive; continuation lines; `!$` sentinel lines; macros
   (`THROW_HARD` is a call of `simple_exception`).
+- Host association: a submodule sees every name its ancestor modules import (`simple_sp_project_io`
+  gets `starfile` from `simple_sp_project`'s `use`), with no `use` of its own.
+- Re-exports: a module that imports a name and makes it public (`simple_reconstructor_pcg` and
+  `PCG_STOP_INDEFINITE` of `simple_pcg_solver`) is not its home; probe the defining module (`apply`
+  refuses a re-export).
 - Name-alikes: another module's procedure of the same name (`robust_spread` of `simple_test_profile_stats`).
 - Procedure arguments and pointers (`add_suite(s, n, '...', run_all_x)`, `p => f`): a word search sees
   them, a `%` search does not.

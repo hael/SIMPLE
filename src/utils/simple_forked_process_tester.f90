@@ -165,6 +165,8 @@ contains
   subroutine test_logfile_redirection()
     type(forked_process) :: proc
     type(string)         :: log_contents, log_hash, log_fname
+    character(len=8192)  :: line   ! XLONGSTRLEN, the length the hash was taken with
+    character(len=:), allocatable :: buf
     integer              :: ios, unit
     write(*,'(A)') 'test_logfile_redirection'
     log_fname = 'test_logfile_redirection.log'
@@ -175,8 +177,15 @@ contains
     call assert_true(file_exists(log_fname),             'logfile exists after run')
     open(newunit=unit, file=log_fname%to_char(), action='read', iostat=ios)
     call assert_int(ios, 0,                              'logfile opens for reading')
-    call log_contents%readfile(unit)
+    ! the hash is over the non-blank lines, trimmed and left-adjusted, each ended by a newline
+    buf = ''
+    do
+      read(unit, '(A)', iostat=ios) line
+      if( ios /= 0 ) exit
+      if( len_trim(line) > 0 ) buf = buf // trim(adjustl(line)) // new_line('a')
+    end do
     close(unit)
+    log_contents = buf
     call assert_true(log_contents%strlen() > 0,          'logfile has content')
     log_hash = log_contents%to_fnv1a_hash64()
     call assert_char(log_hash%to_char(), '0A8F18CBEE2D2351', 'logfile content hash matches')

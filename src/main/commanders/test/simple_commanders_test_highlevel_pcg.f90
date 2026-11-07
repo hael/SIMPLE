@@ -5,16 +5,20 @@ implicit none
 
 contains
 
-!>  \brief  Fail-fast gate of the PCG operator and solver: stages 1-14 plus 3b; stages after a failure are skipped.
-!  Stage table: doc/policies/3D/reconstruct3D_pcg_policy.md sec. 9. Operator data are forward_plane projections
-!  (inverse crime: algebra only); stage 8 projects phantom/env and is the only envelope check.
+!>  \brief  Fail-fast gate of the PCG operator and solver: stages 1-12 plus 1b; stages after a failure are skipped.
+!  Stage table: doc/policies/3D/reconstruct3D_pcg_policy.md sec. 9. Operator data are the operator's own lattice
+!  gather of phantom/env, the envelope-free sections, so the deapodized solve targets the phantom; stage 6 checks it.
 module subroutine exec_test_pcg_recon( self, cline )
     use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, &
-        &PCG_OP_MATRIXFREE, PCG_OP_KERNEL, PCG_STOP_INDEFINITE
+        &PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+    use simple_pcg_solver,        only: PCG_STOP_INDEFINITE
+    use simple_test_pcg_fixture,  only: compare_raw
     use simple_sym,               only: sym
     use simple_image,             only: image
     use simple_matcher_ptcl_io,   only: prep_rec_observation
     use simple_test_gate,         only: test_gate
+    use simple_cartesian_fourier, only: center_embed_real3d
+    use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
     integer,          parameter :: BOX = 32, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
@@ -22,17 +26,17 @@ module subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
     real,             parameter :: CROP_SMPD = SMPD * real(BOX) / real(CROP_BOX)
     real,             parameter :: MASS_LAMBDA_REL = 1.0e-3
-    ! round-off tolerances on exact identities (not derived); the profile gives adjoint errors near 1e-9;
+    ! round-off tolerance on an exact identity (not derived);
     ! the phantom recovery measured 0.9998 against RECON_CORR_THRES (not derived)
-    real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
+    real,             parameter :: NORMAL_OP_RELTOL = 1.0e-4
     real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
     ! kernel interior tolerance: single-precision roundoff loosened for the kernel's
     ! shift-invariance approximation, not tuned on a reconstruction
     real,             parameter :: EPS_INTERIOR = 5.0e-2
-    ! measure_kernel_scale returns 1.0 when calibrate_kernel's analytic padsc**2 is right
+    ! the least-squares kernel/matrix-free scale is 1.0 when calibrate_kernel's analytic padsc**2 is right
     real,             parameter :: KSCALE_TOL = 2.0e-2
-    ! Fused and monolithic accumulation differ at single-precision roundoff;
-    ! gate B and Khat directly and strictly. The preconditioner is a guarded reciprocal of D, and 20 Krylov
+    ! Batched and single-pass accumulation differ at single-precision roundoff;
+    ! gate Khat directly and strictly. The preconditioner is a guarded reciprocal of D, and 20 Krylov
     ! recurrences amplify that harmless perturbation; give the final volume a
     ! separate 5e-4 bound so solver conditioning cannot hide an accumulator
     ! defect or manufacture a false failure.
@@ -44,10 +48,10 @@ module subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: CROP_RAW_RELTOL     = 2.0e-5
     integer,          parameter :: STREAM_ITS          = 20
     integer,          parameter :: KERNEL_COMPARE_ITS  = 8
-    ! stage 13: the two backends' cropped observations differ only by the
+    ! stage 11: the two backends' cropped observations differ only by the
     ! single-precision FFT round trips of the fused gridding route
     real,             parameter :: OBS_PARITY_RELTOL   = 1.0e-5
-    ! stage 14: window band = mask3D_soft's soft ramp (values in
+    ! stage 12: window band = mask3D_soft's soft ramp (values in
     ! [SUPPORT_BAND_LO,SUPPORT_BAND_HI]); repeated output-space warm starts
     ! must not apply the soft window more than once and shrink this band.
     ! SUPPORT_ITS stays at a production-sized budget: much longer solves of the small hard-masked
@@ -88,28 +92,27 @@ module subroutine exec_test_pcg_recon( self, cline )
     real,    allocatable    :: recon_mf(:,:,:), recon_kernel(:,:,:)
     real,    allocatable    :: recon_mass(:,:,:), recon_mass_dup(:,:,:)
     real,    allocatable    :: p_crop(:,:,:), hm_crop(:,:,:), hk_crop(:,:,:)
-    real,    allocatable    :: hm_ml(:,:,:), hk_ml(:,:,:), ml_prior_diag(:,:,:)
-    real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
-    real,    allocatable    :: env(:,:,:), invenv(:,:,:)
+    real,    allocatable    :: hm_ml(:,:,:), hk_ml(:,:,:)
+    real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:)
+    real,    allocatable    :: invenv(:,:,:), inv1d(:), g_probe(:,:,:)
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
-    real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:)
+    real,    allocatable    :: sig2arr(:)
     real,    allocatable    :: sig2_crop(:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
-    complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
-    complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
+    complex, allocatable    :: y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
     complex, allocatable    :: braw_full(:,:,:), braw_crop(:,:,:)
-    integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters
-    integer :: R, margin, lo, hi, ifrom, nb, nsym, nraw, nraw_total, ml_prior_npositive
+    integer :: lims2(2,2), i, j, k, b, g, c, niters
+    integer :: R, margin, lo, hi, nb, nsym, nraw, nraw_total, ml_prior_npositive
     integer :: lims2_crop(2,2), lims3_crop(3,2), raw_lim, hraw, kraw, mraw
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
-    real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, rhs_err, kscale
+    real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, kscale
     real    :: solution_err, solution_norm_ratio, energy_ratio
-    real    :: corr_on, corr_off, env_ctr, env_edge, recip_err
+    real    :: corr_on, corr_apod, corr_over
     real    :: data_scale, data_scale_dup, lambda_eff, lambda_eff_dup
     real    :: mass_scale_err, mass_lambda_err, mass_solution_err
-    real    :: crop_b_err, crop_d_err, crop_kernel_err, crop_factor
-    real    :: ml_kernel_err, ml_prior_min, ml_prior_max
+    real    :: crop_b_err, crop_d_err, crop_kernel_err, crop_factor, b_err, d_err
+    real    :: ml_kernel_err
     real    :: ml_prior_positive_min, ml_prior_positive_max, ml_prior_to_khat_l1, ml_prior_to_khat_rms
-    real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
+    real(dp):: dp_p_hq, dp_hp_q, dp_p_hp
     real(dp):: crop_b_num, crop_b_den, crop_d_num, crop_d_den, ml_prior_energy
     type(test_gate)         :: gate
     type(string)            :: cwd_saved
@@ -139,82 +142,29 @@ module subroutine exec_test_pcg_recon( self, cline )
     end do
 
     call pcgop%new(BOX, SMPD, LAMBDA)
-    ! Deapodization OFF for stages 1-7 -- see the inverse-crime note in the
-    ! header. Stage 8 turns it back on and supplies envelope-free data.
-    call pcgop%set_deapod(.false.)
+    ! 1/env as build_env makes it, the product of the centred-crop inverse factors (the envelope itself is
+    ! gated in unit_cart_align3D suite=cartesian_fourier); the gather of x/env is FT[x], no inverse crime
+    call kb_stencil_centered_crop_inv_envelope_1d(pcgop%kbwin, pcgop%boxpd, BOX, inv1d)
+    allocate(invenv(BOX,BOX,BOX))
+    do k = 1, BOX
+        do j = 1, BOX
+            do i = 1, BOX
+                invenv(i,j,k) = inv1d(i) * inv1d(j) * inv1d(k)
+            end do
+        end do
+    end do
+    allocate(xdiv(BOX,BOX,BOX))
+    xdiv = phantom * invenv
     lims2 = pcgop%get_lims2()
-    lims3 = pcgop%get_lims3()
     R     = lims2(1,2)
     allocate(sig2arr(0:R))
     do i = 0, R
         sig2arr(i) = 1.0 + 0.15*real(i)
     end do
     call e%new(.false.)
+    ! the adjoint pair of the plane gather and scatter is gated in unit_reconstruction suite=pcg_lattice
 
-    ! ================= STAGE 1: adjoint identity, T = 1 =================
-    write(logfhandle,'(a)') '>>> STAGE 1: adjoint dot-product identity (T = 1)'
-    call e%set_euler([30.,55.,70.])
-    allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    call pcgop%set_volume(phantom)
-    call pcgop%forward_plane(e, gx_plane)
-    allocate(qplane_re(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    allocate(qplane_im(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    call random_number(qplane_re); call random_number(qplane_im)
-    allocate(qplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    qplane = cmplx(qplane_re-0.5, qplane_im-0.5)
-    lhs = sum(real(conjg(gx_plane)*qplane, dp))
-    allocate(adj_out(lims3(1,1):lims3(1,2), lims3(2,1):lims3(2,2), lims3(3,1):lims3(3,2)), source=cmplx(0.,0.))
-    call pcgop%adjoint_plane_add(qplane, e, adj_out)
-    ! <x, G^dagger q> over the operator's own oversampled lattice; fourier_dot
-    ! keeps that lattice and its Friedel packing an implementation detail
-    rhs = pcgop%fourier_dot(adj_out)
-    adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
-    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <Gx,q>=', real(lhs), ' <x,G^Tq>=', real(rhs), &
-        &' rel_err=', adjoint_err
-    call gate%metric('adjoint_rel_error', adjoint_err, ADJOINT_RELTOL, .not. adjoint_err > ADJOINT_RELTOL, upper=.true.)
-    if( .not. (adjoint_err <= ADJOINT_RELTOL) )then
-        write(logfhandle,'(a)') '    FAIL: adjoint dot-product identity violated'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: adjoint dot-product identity holds'
-    endif
-
-    ! ============ STAGE 2: adjoint identity, weighted transfer ============
-    ! The T = 1 case above is trivially self-adjoint and cannot exercise
-    ! build_transfer; this one carries a real astigmatic CTF, a nonzero shift
-    ! and a sigma2 profile.
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 2: adjoint identity with T = C*S/sqrt(sigma2)'
-        ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
-        ctfparms%dfx = DFX_VALS(1); ctfparms%dfy = DFX_VALS(1)+ASTIG_VALS(1)
-        ctfparms%angast = ANGAST_VALS(1); ctfparms%phshift = 0.
-        shift = [1.7, -2.3]
-        allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-        Ti = pcgop%build_transfer(ctfparms, shift, 1.0/sqrt(sig2arr))
-        allocate(mplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-        mplane = Ti * gx_plane
-        lhs = sum(real(conjg(mplane)*qplane, dp))
-        allocate(wplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-        wplane  = conjg(Ti) * qplane
-        adj_out = cmplx(0.,0.)
-        call pcgop%adjoint_plane_add(wplane, e, adj_out)
-        rhs = pcgop%fourier_dot(adj_out)
-        adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
-        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <T*Gx,q>=', real(lhs), &
-            &' <x,G^T(conjg(T)*q)>=', real(rhs), ' rel_err=', adjoint_err
-        call gate%metric('weighted_adjoint_rel_error', adjoint_err, ADJOINT_RELTOL, .not. adjoint_err > ADJOINT_RELTOL, &
-            &upper=.true.)
-        if( .not. (adjoint_err <= ADJOINT_RELTOL) )then
-            write(logfhandle,'(a)') '    FAIL: weighted adjoint identity violated (build_transfer)'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: weighted adjoint identity holds'
-        endif
-    else
-        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 failed'
-    endif
-
-    ! ---- heterogeneous selection used by stages 3-7 ----
+    ! ---- heterogeneous selection used by stages 1-5 ----
     call projdirs%new(NPROJS, .false.)
     call projdirs%spiral
     do i = 1, NPROJS
@@ -228,11 +178,11 @@ module subroutine exec_test_pcg_recon( self, cline )
         call projdirs%set_ori(i, e)
     end do
 
-    ! ========== STAGE 3: normal operator, symmetry and PSD ==========
+    ! ========== STAGE 1: normal operator, symmetry and PSD ==========
     ! CG requires both. Symmetry is checked by the dot-product identity across
     ! two independent random probes; PSD by a single quadratic form.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 3: normal-operator symmetry and positive-definiteness'
+        write(logfhandle,'(a)') '>>> STAGE 1: normal-operator symmetry and positive-definiteness'
         call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         allocate(p_probe(BOX,BOX,BOX), q_probe(BOX,BOX,BOX))
         call random_number(p_probe); call random_number(q_probe)
@@ -265,7 +215,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         ! with (see set_window_sphere: x = P u gives (P H P) u = P b). The soft edge
         ! makes P non-idempotent, so a one-sided or asymmetric mask application
         ! breaks the dot-product identity where the unmasked check cannot see it.
-        write(logfhandle,'(a)') '>>> STAGE 3b: masked-operator (P H P) symmetry and positive-definiteness'
+        write(logfhandle,'(a)') '>>> STAGE 1b: masked-operator (P H P) symmetry and positive-definiteness'
         call pcgop%set_window_sphere(real(BOX)/3.0)
         hp = pcgop%apply_normal(p_probe)
         hq = pcgop%apply_normal(q_probe)
@@ -293,27 +243,19 @@ module subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: masked normal operator is positive-definite'
         endif
-        call pcgop%set_window_sphere(0.0)   ! stages 4+ assert on the unmasked operator
+        call pcgop%set_window_sphere(0.0)   ! stages 2+ assert on the unmasked operator
     else
-        write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 1 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============== STAGE 4: heterogeneous synthetic recovery ==============
+    ! ============== STAGE 2: heterogeneous synthetic recovery ==============
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 4: synthetic recovery through CTF + shift + sigma'
+        write(logfhandle,'(a)') '>>> STAGE 2: synthetic recovery through CTF + shift + sigma'
         allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
-        call pcgop%set_volume(phantom)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), 1.0/sqrt(sig2arr))
-            y_planes(:,:,i) = Ti * gx_plane
-        end do
-        ! build_operators here rather than a bare solve, so stage 7 can compare
-        ! the two accumulation paths with identical preconditioner state
-        call pcgop%build_operators(.false.)
+        call project_planes(xdiv, projdirs, y_planes, .true.)
+        call accumulate_all(pcgop, y_planes, NPROJS, .false.)
         allocate(recon(BOX,BOX,BOX), source=0.0)
-        call pcgop%solve(y_planes, recon, maxits=40, rtol=1.0e-3, &
+        call pcgop%solve_accum(recon, maxits=40, rtol=1.0e-3, &
             &rel_res_hist=rel_res_hist, niters=niters)
         write(logfhandle,'(a,i0,a)') '    PCG ran ', niters, ' iterations'
         l_stage_ok = .true.
@@ -335,13 +277,13 @@ module subroutine exec_test_pcg_recon( self, cline )
             write(logfhandle,'(a)') '    PASS: recovered volume correlates with the known phantom'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 4 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: an earlier stage failed'
     endif
 
-    ! ===== STAGE 5: kernel vs matrix-free operator and solve baseline =====
+    ! ===== STAGE 3: kernel vs matrix-free operator and solve baseline =====
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 5: kernelized vs matrix-free normal operator'
-        call pcgop%build_kernel
+        write(logfhandle,'(a)') '>>> STAGE 3: kernelized vs matrix-free normal operator'
+        call accumulate_all(pcgop, y_planes, NPROJS, .true.)
         hm = pcgop%apply_normal_matrixfree(p_probe)
         hk = pcgop%apply_normal_kernel(p_probe)
         den_all = max(1.0, sqrt(sum(hm*hm)))
@@ -364,10 +306,29 @@ module subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: kernelized operator agrees with the reference in the interior'
         endif
+        dp_p_hq = pcgop%dot_real_volume(p_probe, hm)
+        dp_hp_q = pcgop%dot_real_volume(p_probe, hk)
+        energy_ratio = real(dp_hp_q / max(abs(dp_p_hq), epsilon(1.0_dp)))
+        write(logfhandle,'(a,es14.6)') '    kernel/matrix-free probe energy ratio = ', energy_ratio
         ! A scale error of a few percent would pass the interior check above but
         ! is exactly what a drift in the analytic constant would look like, so
-        ! assert on it directly.
-        kscale = pcgop%measure_kernel_scale()
+        ! assert on it directly: the least-squares scale of the data terms (the
+        ! lambda ridge is common to both) on a centred Gaussian probe
+        allocate(g_probe(BOX,BOX,BOX))
+        do k = 1, BOX
+            do j = 1, BOX
+                do i = 1, BOX
+                    dx = real(i)-ctr; dy = real(j)-ctr; dz = real(k)-ctr
+                    g_probe(i,j,k) = exp(-(dx*dx+dy*dy+dz*dz)/(2.0*(0.15*real(BOX))**2))
+                end do
+            end do
+        end do
+        lambda_eff = pcgop%get_effective_lambda()
+        hm = pcgop%apply_normal_matrixfree(g_probe) - lambda_eff * g_probe
+        hk = pcgop%apply_normal_kernel(g_probe)     - lambda_eff * g_probe
+        kscale = 1.0
+        if( sum(real(hk,dp)**2) > 0.0_dp ) kscale = real(sum(real(hm,dp)*real(hk,dp)) / sum(real(hk,dp)**2))
+        deallocate(g_probe)
         write(logfhandle,'(a,f10.6)') '    measured kernel scale (1.0 = analytic padsc**2 exact) = ', kscale
         call gate%metric('kernel_scale_deviation', abs(kscale - 1.0), KSCALE_TOL, .not. abs(kscale - 1.0) > KSCALE_TOL, &
             &upper=.true.)
@@ -377,19 +338,15 @@ module subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: analytic kernel scale is correct'
         endif
-        dp_p_hq = pcgop%dot_real_volume(p_probe, hm)
-        dp_hp_q = pcgop%dot_real_volume(p_probe, hk)
-        energy_ratio = real(dp_hp_q / max(abs(dp_p_hq), epsilon(1.0_dp)))
-        write(logfhandle,'(a,es14.6)') '    kernel/matrix-free probe energy ratio = ', energy_ratio
 
         ! Fixed-iteration solve comparison: reported, not gated.
         ! Same RHS, initial state and iteration count prevent convergence-stop
         ! jitter from masquerading as an operator difference.
         allocate(recon_mf(BOX,BOX,BOX), recon_kernel(BOX,BOX,BOX), source=0.0)
         call pcgop%set_op_mode(PCG_OP_MATRIXFREE)
-        call pcgop%solve(y_planes, recon_mf, maxits=KERNEL_COMPARE_ITS, rtol=0.0)
+        call pcgop%solve_accum(recon_mf, maxits=KERNEL_COMPARE_ITS, rtol=0.0)
         call pcgop%set_op_mode(PCG_OP_KERNEL)
-        call pcgop%solve(y_planes, recon_kernel, maxits=KERNEL_COMPARE_ITS, rtol=0.0)
+        call pcgop%solve_accum(recon_kernel, maxits=KERNEL_COMPARE_ITS, rtol=0.0)
         solution_err = sqrt(sum((recon_kernel-recon_mf)**2)) / &
             &max(1.0, sqrt(sum(recon_mf*recon_mf)))
         solution_norm_ratio = sqrt(sum(recon_kernel*recon_kernel)) / &
@@ -399,12 +356,12 @@ module subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a,es14.6)') '    fixed-iteration solution norm ratio = ', solution_norm_ratio
         deallocate(recon_mf, recon_kernel)
     else
-        write(logfhandle,'(a)') '>>> STAGE 5 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
     endif
 
-    ! ========= STAGE 6: kernel invariants and preconditioner =========
+    ! ========= STAGE 4: kernel invariants and preconditioner =========
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 6: kernel invariants and preconditioner'
+        write(logfhandle,'(a)') '>>> STAGE 4: kernel invariants and preconditioner'
         khat_a = pcgop%apply_normal_kernel(p_probe)
         ! changing ONLY the shifts must leave the normal operator unchanged: the
         ! shift is a unit-modulus phase and cancels in |T|^2
@@ -414,7 +371,7 @@ module subroutine exec_test_pcg_recon( self, cline )
             call projdirs%set_ori(i, e)
         end do
         call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
-        call pcgop%build_kernel
+        call accumulate_all(pcgop, y_planes, NPROJS, .true.)
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,es14.6)') '    relative change after shift-only edit = ', kdiff
@@ -436,7 +393,7 @@ module subroutine exec_test_pcg_recon( self, cline )
             call projdirs%set_ori(i, e)
         end do
         call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
-        call pcgop%build_kernel
+        call accumulate_all(pcgop, y_planes, NPROJS, .true.)
         khat_b = pcgop%apply_normal_kernel(p_probe)
         kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
         write(logfhandle,'(a,es14.6)') '    relative change after CTF edit        = ', kdiff
@@ -448,39 +405,33 @@ module subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: kernel tracks the CTF'
         endif
+        ! the accumulation of the edited CTFs rebuilt the preconditioner too
         call pcgop%set_op_mode(PCG_OP_MATRIXFREE)
-        call pcgop%build_precond
         hm = pcgop%apply_normal_matrixfree(p_probe)
-        call gate%check('operator_finite_after_build_precond', .not. any(hm /= hm))
+        call gate%check('operator_finite_after_rebuild', .not. any(hm /= hm))
         if( any(hm /= hm) )then
-            write(logfhandle,'(a)') '    FAIL: operator produced non-finite values after build_precond'
+            write(logfhandle,'(a)') '    FAIL: operator produced non-finite values after the rebuild'
             all_ok = .false.
         else
-            write(logfhandle,'(a)') '    PASS: preconditioner built, operator still finite'
+            write(logfhandle,'(a)') '    PASS: preconditioner rebuilt, operator still finite'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 6 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 4 SKIPPED: an earlier stage failed'
     endif
 
-    ! ================== STAGE 7: streaming accumulation ==================
+    ! ================== STAGE 5: streaming accumulation ==================
     ! begin_accum/accumulate_batch/end_accum/solve_accum must reproduce what
-    ! solve() produces from all planes at once. The accumulated B and D-derived
-    ! kernel must agree near single-precision roundoff; the fixed-step solution
-    ! has its own bound because the reciprocal preconditioner and CG recurrence
-    ! amplify that input perturbation.
+    ! solve() produces from all planes at once, and the kernel must not depend
+    ! on the batching. The kernels must agree near single-precision roundoff;
+    ! the fixed-step solution has its own bound because the reciprocal
+    ! preconditioner and CG recurrence amplify that input perturbation.
     ! BATCHSZ is deliberately not a divisor of NPROJS so the short final batch
     ! is exercised.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 7: streaming accumulation vs monolithic solve'
+        write(logfhandle,'(a)') '>>> STAGE 5: streaming accumulation vs monolithic solve'
         call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
-        ! regenerate observations: stage 6 edited the shifts and CTFs
-        call pcgop%set_volume(phantom)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), 1.0/sqrt(sig2arr))
-            y_planes(:,:,i) = Ti * gx_plane
-        end do
+        ! regenerate observations: stage 4 edited the shifts and CTFs
+        call project_planes(xdiv, projdirs, y_planes, .true.)
         ! BOTH paths run a FIXED number of iterations with the tolerance
         ! disabled. Comparing two tolerance-stopped solves is meaningless:
         ! round-off in the accumulators can put the stopping decision one
@@ -488,12 +439,12 @@ module subroutine exec_test_pcg_recon( self, cline )
         ! solution by O(rtol) -- orders of magnitude above anything worth
         ! asserting. Forcing identical steps leaves accumulator round-off as the
         ! only difference between the two paths, which is what is being tested.
-        ! reference path: one shot
-        call pcgop%build_operators(.false.)
+        ! reference path: one shot (the right-hand side of apply_adjoint_all), with the
+        ! preconditioner of a single-batch accumulation
+        call accumulate_all(pcgop, y_planes, NPROJS, .false.)
         recon = 0.0
         call pcgop%solve(y_planes, recon, maxits=STREAM_ITS, rtol=0.0, &
             &niters=niters, outcome=solver_outcome)
-        call pcgop%get_rhs(b_mono)
         write(logfhandle,'(a,i0,a)') '    monolithic: ', niters, ' iterations'
         call gate%check('fixed_iteration_solver_outcome', .not. (trim(solver_outcome%stop_reason) /= 'fixed_iterations' &
             &.or. solver_outcome%iteration_count /= STREAM_ITS .or. solver_outcome%converged))
@@ -505,10 +456,11 @@ module subroutine exec_test_pcg_recon( self, cline )
             write(logfhandle,'(a)') '    PASS: fixed-iteration solver outcome is explicit'
         endif
         ! Two streaming runs, so a failure localizes itself rather than just
-        ! reporting a number: ONE batch covering everything isolates the
-        ! begin/end_accum machinery, and many batches adds the per-batch
-        ! indexing on top. If single-batch agrees and multi-batch does not, the
-        ! fault is in the batch range handling; if neither agrees, it is in the
+        ! reporting a number: ONE batch covering everything shares the
+        ! reference's preconditioner and isolates the fused right-hand side, and
+        ! many batches add the per-batch indexing of B and D on top. If
+        ! single-batch agrees and multi-batch does not, the fault is in the
+        ! batch range handling; if neither agrees, it is in the
         ! accumulate/fold path shared by both.
         allocate(recon_str(BOX,BOX,BOX))
         do j = 1, 2
@@ -517,30 +469,14 @@ module subroutine exec_test_pcg_recon( self, cline )
             else
                 nb = BATCHSZ                    ! many batches, short final one
             endif
-            call pcgop%begin_accum
-            do ifrom = 1, NPROJS, nb
-                k = min(nb, NPROJS - ifrom + 1)
-                call pcgop%accumulate_batch(y_planes(:,:,ifrom:ifrom+k-1), k, ifrom)
-            end do
-            call pcgop%end_accum(.false.)
-            ! compare the RHS before the solve: if b already differs the fault is
-            ! in fused B accumulation or the fold; if b agrees but the solutions
-            ! do not, it is in the fused D accumulator feeding the preconditioner
-            call pcgop%get_rhs(b_str)
-            rhs_err = sqrt(sum((b_str-b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
+            call accumulate_all(pcgop, y_planes, nb, .false.)
             recon_str = 0.0
             call pcgop%solve_accum(recon_str, maxits=STREAM_ITS, rtol=0.0, niters=niters)
             stream_err = sqrt(sum((recon_str-recon)**2)) / max(1.0, sqrt(sum(recon*recon)))
-            write(logfhandle,'(a,i3,a,es14.6,a,es14.6)') '    batch size ', nb, &
-                &': rel_err(b) = ', rhs_err, '   rel_err(x) = ', stream_err
-            call gate%metric('fused_rhs_rel_error_batch'//int2str(nb), rhs_err, STREAM_ACCUM_RELTOL, .not. rhs_err > STREAM_ACCUM_RELTOL, &
-                &upper=.true.)
+            write(logfhandle,'(a,i3,a,es14.6)') '    batch size ', nb, ': rel_err(x) = ', stream_err
             call gate%metric('fused_solve_rel_error_batch'//int2str(nb), stream_err, STREAM_SOLVE_RELTOL, &
                 &.not. stream_err > STREAM_SOLVE_RELTOL, upper=.true.)
-            if( .not. (rhs_err <= STREAM_ACCUM_RELTOL) )then
-                write(logfhandle,'(a)') '    FAIL: fused RHS does not reproduce monolithic accumulation'
-                all_ok = .false.
-            else if( .not. (stream_err <= STREAM_SOLVE_RELTOL) )then
+            if( .not. (stream_err <= STREAM_SOLVE_RELTOL) )then
                 write(logfhandle,'(a)') '    FAIL: fused accumulation changes the fixed-step solve beyond tolerance'
                 all_ok = .false.
             else
@@ -549,36 +485,23 @@ module subroutine exec_test_pcg_recon( self, cline )
         end do
         ! Production always uses the kernel operator, which reaches it through
         ! end_accum(.true.) -- a branch the runs above never touch, since they
-        ! pass .false. Deriving Khat from a streamed accumulator must match
-        ! deriving it from a monolithic one, or the default path is untested.
-        call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
-        call pcgop%build_kernel
+        ! pass .false. Deriving Khat from a batched accumulator must match
+        ! deriving it from a single pass, or the default path is untested.
+        call accumulate_all(pcgop, y_planes, NPROJS, .true.)
         khat_a = pcgop%apply_normal_kernel(p_probe)
-        do j = 1, 2
-            if( j == 1 )then
-                nb = NPROJS
-            else
-                nb = BATCHSZ
-            endif
-            call pcgop%begin_accum
-            do ifrom = 1, NPROJS, nb
-                k = min(nb, NPROJS - ifrom + 1)
-                call pcgop%accumulate_batch(y_planes(:,:,ifrom:ifrom+k-1), k, ifrom)
-            end do
-            call pcgop%end_accum(.true.)
-            khat_b = pcgop%apply_normal_kernel(p_probe)
-            kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
-            write(logfhandle,'(a,i3,a,es14.6)') '    kernel batch size ', nb, &
-                &': streamed vs monolithic rel_err = ', kdiff
-            call gate%metric('streamed_kernel_rel_diff_batch'//int2str(nb), kdiff, STREAM_ACCUM_RELTOL, .not. kdiff > STREAM_ACCUM_RELTOL, &
-                &upper=.true.)
-            if( .not. (kdiff <= STREAM_ACCUM_RELTOL) )then
-                write(logfhandle,'(a)') '    FAIL: kernel built from a streamed accumulator differs'
-                all_ok = .false.
-            else
-                write(logfhandle,'(a)') '    PASS: kernel is identical either way'
-            endif
-        end do
+        call accumulate_all(pcgop, y_planes, BATCHSZ, .true.)
+        khat_b = pcgop%apply_normal_kernel(p_probe)
+        kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
+        write(logfhandle,'(a,i3,a,es14.6)') '    kernel batch size ', BATCHSZ, &
+            &': batched vs single-pass rel_err = ', kdiff
+        call gate%metric('streamed_kernel_rel_diff_batch'//int2str(BATCHSZ), kdiff, STREAM_ACCUM_RELTOL, &
+            &.not. kdiff > STREAM_ACCUM_RELTOL, upper=.true.)
+        if( .not. (kdiff <= STREAM_ACCUM_RELTOL) )then
+            write(logfhandle,'(a)') '    FAIL: kernel built from a batched accumulator differs'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: kernel is identical either way'
+        endif
         ! Distributed contract: workers publish raw, unfolded B and D. The
         ! master adds artifacts in ascending part order and only then folds and
         ! finalizes. Split the same particle sequence into two artifacts so the
@@ -594,30 +517,35 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcgop%write_raw_accum(raw_part2, 1, 0, 2, 2, NPROJS/2, 'pcg_recon_test_v1')
         call pcgop%end_accum(.false.)
         call pcg_reduce%new(BOX, SMPD, LAMBDA)
-        call pcg_reduce%set_deapod(.false.)
         call pcg_reduce%begin_reduction
         nraw_total = 0
         call pcg_reduce%add_raw_accum(raw_part1, 1, 0, 1, 2, 'pcg_recon_test_v1', nraw)
         nraw_total = nraw_total + nraw
         call pcg_reduce%add_raw_accum(raw_part2, 1, 0, 2, 2, 'pcg_recon_test_v1', nraw)
         nraw_total = nraw_total + nraw
+        ! the reduced raw sums against one pass over every particle, both accumulators still open
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_planes(:,:,1:NPROJS), NPROJS, 1)
+        call compare_raw(pcg_reduce, pcgop, b_err, d_err)
+        call pcgop%end_accum(.false.)
         call pcg_reduce%end_accum(.true.)
-        call pcg_reduce%get_rhs(b_str)
         khat_b = pcg_reduce%apply_normal_kernel(p_probe)
-        rhs_err = sqrt(sum((b_str-b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
-        kdiff   = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
-        write(logfhandle,'(a,i0,a,es14.6,a,es14.6)') '    raw reduction particles ', nraw_total, &
-            &': rel_err(b) = ', rhs_err, '   rel_err(kernel) = ', kdiff
-        call gate%metric('raw_reduction_rhs_rel_error', rhs_err, STREAM_ACCUM_RELTOL, &
-            &.not. rhs_err > STREAM_ACCUM_RELTOL, upper=.true.)
+        kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
+        write(logfhandle,'(a,i0,3(a,es14.6))') '    raw reduction particles ', nraw_total, &
+            &': rel_err(B) = ', b_err, '   rel_err(D) = ', d_err, '   rel_err(kernel) = ', kdiff
+        call gate%metric('raw_reduction_rhs_rel_error', b_err, STREAM_ACCUM_RELTOL, &
+            &.not. b_err > STREAM_ACCUM_RELTOL, upper=.true.)
+        call gate%metric('raw_reduction_density_rel_error', d_err, STREAM_ACCUM_RELTOL, &
+            &.not. d_err > STREAM_ACCUM_RELTOL, upper=.true.)
         call gate%metric('raw_reduction_kernel_rel_diff', kdiff, STREAM_ACCUM_RELTOL, &
             &.not. kdiff > STREAM_ACCUM_RELTOL, upper=.true.)
         call gate%check('raw_reduction_holds_every_projection', nraw_total == NPROJS)
-        if( nraw_total /= NPROJS .or. .not. (rhs_err <= STREAM_ACCUM_RELTOL .and. kdiff <= STREAM_ACCUM_RELTOL) )then
-            write(logfhandle,'(a)') '    FAIL: raw fixed-order reduction differs from monolithic accumulation'
+        if( nraw_total /= NPROJS .or. .not. (b_err <= STREAM_ACCUM_RELTOL .and. d_err <= STREAM_ACCUM_RELTOL .and. &
+            &kdiff <= STREAM_ACCUM_RELTOL) )then
+            write(logfhandle,'(a)') '    FAIL: raw fixed-order reduction differs from single-pass accumulation'
             all_ok = .false.
         else
-            write(logfhandle,'(a)') '    PASS: raw fixed-order reduction reproduces monolithic accumulation'
+            write(logfhandle,'(a)') '    PASS: raw fixed-order reduction reproduces single-pass accumulation'
         endif
         call pcg_reduce%kill
         call del_file(raw_part1)
@@ -625,100 +553,57 @@ module subroutine exec_test_pcg_recon( self, cline )
         call raw_part1%kill
         call raw_part2%kill
     else
-        write(logfhandle,'(a)') '>>> STAGE 7 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 5 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 8: deapodization, the honest stage ============
-    ! It flips deapod state and rebuilds the selection.
-    ! forward_plane(x/env) = FT[env . (x/env)] = FT[x], i.e. the true
-    ! envelope-free central section -- no inverse crime.
+    ! ==================== STAGE 6: deapodization ====================
+    ! From envelope-free sections the deapodized solve must return the phantom: closer to it than
+    ! its apodized (x env) or doubly corrected (x/env) versions, which a missing or doubled
+    ! correction would return.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 8: deapodization against envelope-free observations'
-        env    = pcgop%get_env()
-        invenv = pcgop%get_invenv()
-        c         = BOX/2 + 1
-        env_ctr   = env(c,c,c)
-        env_edge  = env(1,c,c)
-        recip_err = maxval(abs(env*invenv - 1.0))
-        ! maxval passes over a NaN element
-        if( any(env /= env) .or. any(invenv /= invenv) ) recip_err = huge(1.0)
-        write(logfhandle,'(a,f10.6)')  '    envelope at centre       = ', env_ctr
-        write(logfhandle,'(a,f10.6)')  '    envelope at edge (1,c,c) = ', env_edge
-        write(logfhandle,'(a,es14.6)') '    max|env*invenv - 1|      = ', recip_err
-        call gate%metric('envelope_centre_deviation', abs(env_ctr - 1.0), 1.0e-5, .not. abs(env_ctr - 1.0) > 1.0e-5, &
-            &upper=.true.)
-        call gate%check('envelope_decays_from_centre', env_edge < env_ctr)
-        call gate%metric('envelope_reciprocal_error', recip_err, 1.0e-4, .not. recip_err > 1.0e-4, upper=.true.)
-        if( .not. (abs(env_ctr - 1.0) <= 1.0e-5) )then
-            write(logfhandle,'(a)') '    FAIL: envelope is not unity at the box centre'
-            all_ok = .false.
-        else if( .not. (env_edge < env_ctr) )then
-            write(logfhandle,'(a)') '    FAIL: envelope does not decay away from the centre'
-            all_ok = .false.
-        else if( .not. (recip_err <= 1.0e-4) )then
-            write(logfhandle,'(a)') '    FAIL: invenv is not the reciprocal of env'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: envelope measured, normalized and invertible'
-        endif
-    endif
-    if( all_ok )then
-        allocate(xdiv(BOX,BOX,BOX))
-        xdiv = phantom * invenv
+        write(logfhandle,'(a)') '>>> STAGE 6: deapodization against envelope-free observations'
         call projdirs%new(NPROJS, .false.)
         call projdirs%spiral
-        call pcgop%set_volume(xdiv)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, y_planes(:,:,i))
-        end do
-        call pcgop%set_deapod(.true.)
+        call project_planes(xdiv, projdirs, y_planes, .false.)
         call pcgop%prep_particles(projdirs)
         allocate(recon_on(BOX,BOX,BOX), source=0.0)
         call pcgop%solve(y_planes, recon_on, maxits=40, rtol=1.0e-3, niters=niters)
-        corr_on = corr_of(recon_on, phantom)
-        write(logfhandle,'(a,i0,a,f9.5)') '    deapod ON : ', niters, ' iters, corr = ', corr_on
-        call pcgop%set_deapod(.false.)
-        call pcgop%prep_particles(projdirs)
-        allocate(recon_off(BOX,BOX,BOX), source=0.0)
-        call pcgop%solve(y_planes, recon_off, maxits=40, rtol=1.0e-3, niters=niters)
-        corr_off = corr_of(recon_off, phantom)
-        write(logfhandle,'(a,i0,a,f9.5)') '    deapod OFF: ', niters, ' iters, corr = ', corr_off
-        call gate%metric('deapodization_corr_gain', corr_on - corr_off, 0., corr_on > corr_off)
-        if( .not. (corr_on > corr_off) )then
-            write(logfhandle,'(a)') '    FAIL: deapodization did not improve recovery of the true volume'
+        corr_on   = corr_of(recon_on, phantom)
+        corr_apod = corr_of(recon_on / invenv, phantom)
+        corr_over = corr_of(recon_on * invenv, phantom)
+        write(logfhandle,'(a,i0,a,3f9.5)') '    deapodized solve: ', niters, &
+            &' iters, corr (x, x env, x/env) = ', corr_on, corr_apod, corr_over
+        call gate%metric('deapodization_corr_gain', corr_on - max(corr_apod, corr_over), 0., &
+            &corr_on > max(corr_apod, corr_over))
+        if( .not. (corr_on > max(corr_apod, corr_over)) )then
+            write(logfhandle,'(a)') '    FAIL: the deapodized solve does not return the envelope-free volume'
             all_ok = .false.
         else
-            write(logfhandle,'(a)') '    PASS: deapodization recovers the true volume better'
+            write(logfhandle,'(a)') '    PASS: the deapodized solve returns the envelope-free volume'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 8 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 6 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 9: symmetry by coordinate replication ============
+    ! ============ STAGE 7: symmetry by coordinate replication ============
     ! Replication over c2 must build the same Khat and b as the c2-expanded particle set at c1 (policy
     ! sec. 6). Compared at operator level, not through a solve: the kernelized operator is only nearly SPD.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 9: symmetry replication == particle-set expansion (c2, kernel)'
+        write(logfhandle,'(a)') '>>> STAGE 7: symmetry replication == particle-set expansion (c2, kernel)'
         call c1sym%new('c1')
         call c2sym%new('c2')
         nsym = c2sym%get_nsym()
         call pcgop%set_op_mode(PCG_OP_KERNEL)
-        call pcgop%set_deapod(.true.)   ! stage 8 leaves it OFF; test the shipped config
         ! fresh, well-conditioned data: spiral projections of the phantom, T = 1
         call projdirs%new(NPROJS, .false.)
         call projdirs%spiral
         if( allocated(y_planes) ) deallocate(y_planes)
         allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
-        call pcgop%set_volume(phantom)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, y_planes(:,:,i))
-        end do
+        call project_planes(xdiv, projdirs, y_planes, .false.)
         ! Path A: in-operator replication over c2 on NPROJS particles
         call pcgop%set_sym(c2sym)
         call pcgop%prep_particles(projdirs)
-        call pcgop%build_operators(.true.)
+        call accumulate_all(pcgop, y_planes, NPROJS, .true.)
         khat_a = pcgop%apply_normal_kernel(p_probe)
         b_mono = pcgop%apply_adjoint_all(y_planes)
         ! Path B: explicit c1 build of the c2-expanded particle set. The mate
@@ -743,7 +628,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         end do
         call pcgop%set_sym(c1sym)          ! back to no replication
         call pcgop%prep_particles(projdirs_exp)
-        call pcgop%build_operators(.true.)
+        call accumulate_all(pcgop, y_exp, NPROJS*nsym, .true.)
         khat_b = pcgop%apply_normal_kernel(p_probe)
         b_str  = pcgop%apply_adjoint_all(y_exp)
         kdiff      = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
@@ -763,27 +648,22 @@ module subroutine exec_test_pcg_recon( self, cline )
             write(logfhandle,'(a)') '    PASS: symmetry replication equals the expanded-set build'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 9 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 7 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 10: lambda scaling with effective data mass ============
+    ! ============ STAGE 8: lambda scaling with effective data mass ============
     ! If every weighted observation is duplicated, B and H_data both double.
     ! A fixed absolute lambda would then become half as strong. Relative lambda
     ! must double with D so the complete normal system is scaled uniformly and
     ! a fixed-iteration PCG solve remains invariant.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 10: lambda scaling with effective data mass'
+        write(logfhandle,'(a)') '>>> STAGE 8: lambda scaling with effective data mass'
         call pcgop%kill
         call pcgop%new(BOX, SMPD, 0.0)
-        call pcgop%set_deapod(.false.)
         call pcgop%set_lambda_relative(MASS_LAMBDA_REL)
         call projdirs%new(NPROJS, .false.)
         call projdirs%spiral
-        call pcgop%set_volume(phantom)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, y_planes(:,:,i))
-        end do
+        call project_planes(xdiv, projdirs, y_planes, .false.)
         call pcgop%prep_particles(projdirs)
         call pcgop%begin_accum
         call pcgop%accumulate_batch(y_planes, NPROJS, 1)
@@ -812,7 +692,6 @@ module subroutine exec_test_pcg_recon( self, cline )
         raw_part2 = 'test_pcg_mass_part2.dat'
         call pcgop%kill
         call pcgop%new(BOX, SMPD, 0.0)
-        call pcgop%set_deapod(.false.)
         call pcgop%prep_particles(projdirs_exp)
         call pcgop%begin_accum
         call pcgop%accumulate_batch(y_exp(:,:,1:NPROJS), NPROJS, 1)
@@ -822,7 +701,6 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcgop%write_raw_accum(raw_part2, 1, 0, 2, 2, NPROJS, 'pcg_lambda_mass_v1')
         call pcgop%kill
         call pcg_reduce%new(BOX, SMPD, 0.0)
-        call pcg_reduce%set_deapod(.false.)
         call pcg_reduce%set_lambda_relative(MASS_LAMBDA_REL)
         call pcg_reduce%begin_reduction
         call pcg_reduce%add_raw_accum(raw_part1, 1, 0, 1, 2, 'pcg_lambda_mass_v1', nraw)
@@ -862,20 +740,19 @@ module subroutine exec_test_pcg_recon( self, cline )
         call raw_part1%kill
         call raw_part2%kill
     else
-        write(logfhandle,'(a)') '>>> STAGE 10 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 8 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 11: cropped accumulator and kernel invariants ============
+    ! ============ STAGE 9: cropped accumulator and kernel invariants ============
     ! A cropped reconstruction covers the same physical extent with fewer
     ! Fourier samples. Native and cropped operators must therefore deposit the
     ! same raw sufficient statistics inside the common band, provided the crop
     ! boundary and the KB stencil are excluded. The cropped Khat must also
     ! retain the matrix-free equivalence already required at the native box.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 11: full vs cropped raw accumulators and cropped kernel'
+        write(logfhandle,'(a)') '>>> STAGE 9: full vs cropped raw accumulators and cropped kernel'
         call pcgop%kill
         call pcgop%new(BOX, SMPD, 0.0)
-        call pcgop%set_deapod(.false.)
         call projdirs%kill
         call projdirs%new(NPROJS, .false.)
         call projdirs%spiral
@@ -896,22 +773,15 @@ module subroutine exec_test_pcg_recon( self, cline )
             call e%set_shift(shift*crop_factor)
             call projdirs_crop%set_ori(i, e)
         enddo
-        call pcgop%set_volume(phantom)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, gx_plane)
-            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), 1.0/sqrt(sig2arr))
-            y_planes(:,:,i) = Ti * gx_plane
-        enddo
+        call project_planes(xdiv, projdirs, y_planes, .true.)
         call pcgop%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcgop%begin_accum
         call pcgop%accumulate_batch(y_planes, NPROJS, 1)
         call pcgop%get_raw_accum(braw_full, draw_full)
 
         call pcg_crop%new(CROP_BOX, CROP_SMPD, 0.0)
-        call pcg_crop%set_deapod(.true.)
         lims2_crop = pcg_crop%get_lims2()
-        lims3_crop = pcg_crop%get_lims3()
+        lims3_crop = pcg_crop%lims3
         allocate(sig2_crop(0:CROP_BOX/2), source=sig2arr(0:CROP_BOX/2))
         allocate(y_crop(lims2_crop(1,1):lims2_crop(1,2), &
                        &lims2_crop(2,1):lims2_crop(2,2), NPROJS))
@@ -977,17 +847,16 @@ module subroutine exec_test_pcg_recon( self, cline )
             write(logfhandle,'(a)') '    PASS: cropped kernel agrees with the matrix-free reference'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 11 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 9 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 12: FSC/SSNR ML prior operator ============
+    ! ============ STAGE 10: FSC/SSNR ML prior operator ============
     ! Replay the cropped raw artifact so the prior is derived only after D is
     ! available, as the production two-map path does after the base
     ! independent-half FSC has been measured.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 12: FSC/SSNR ML prior positivity and operator parity'
+        write(logfhandle,'(a)') '>>> STAGE 10: FSC/SSNR ML prior positivity and operator parity'
         call pcg_ml%new(CROP_BOX, CROP_SMPD, 0.0)
-        call pcg_ml%set_deapod(.true.)
         call pcg_ml%prep_particles(projdirs_crop, use_ctf=.true., inv_sig2=1.0/sig2_crop)
         call pcg_ml%begin_reduction
         call pcg_ml%add_raw_accum(raw_ml, 1, 0, 1, 1, 'pcg_ml_prior_v1', nraw)
@@ -997,28 +866,14 @@ module subroutine exec_test_pcg_recon( self, cline )
         enddo
         call pcg_ml%set_ml_prior(fsc_prior, 1.0, 100.0)
         call pcg_ml%end_accum(.true.)
-        call pcg_ml%get_ml_prior(ml_prior_diag)
+        ! the summary stops on a prior without positive bins and on non-finite ratios
         call pcg_ml%get_ml_prior_stats(ml_prior_npositive, ml_prior_positive_min, ml_prior_positive_max, &
             &ml_prior_to_khat_l1, ml_prior_to_khat_rms)
-        ml_prior_min = minval(ml_prior_diag)
-        ml_prior_max = maxval(ml_prior_diag)
-        write(logfhandle,'(a,es14.6,a,es14.6)') '    prior diagonal min = ', ml_prior_min, &
-            &' max = ', ml_prior_max
-        ! minval and maxval pass over a NaN element
-        l_stage_ok = ml_prior_min >= 0.0 .and. ml_prior_max > 0.0 .and. .not. any(ml_prior_diag /= ml_prior_diag)
-        call gate%check('ml_prior_nonzero_positive_semidefinite', l_stage_ok)
-        if( .not. l_stage_ok )then
-            write(logfhandle,'(a)') '    FAIL: ML prior is not a nonzero positive-semidefinite diagonal'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: ML prior is a nonzero positive-semidefinite diagonal'
-        endif
         write(logfhandle,'(a,i0,4(a,es14.6))') '    positive bins = ', ml_prior_npositive, &
             &' min+ = ', ml_prior_positive_min, ' max+ = ', ml_prior_positive_max, &
             &' prior/Khat L1 = ', ml_prior_to_khat_l1, ' RMS = ', ml_prior_to_khat_rms
-        l_stage_ok = ml_prior_npositive == count(ml_prior_diag > 0.0) .and. &
-            &abs(ml_prior_positive_min-minval(ml_prior_diag, mask=ml_prior_diag > 0.0)) <= 0.0 .and. &
-            &abs(ml_prior_positive_max-ml_prior_max) <= 0.0 .and. &
+        l_stage_ok = ml_prior_npositive > 0 .and. ml_prior_positive_min > 0.0 .and. &
+            &ml_prior_positive_max >= ml_prior_positive_min .and. &
             &ml_prior_to_khat_l1 > 0.0 .and. ml_prior_to_khat_rms > 0.0
         call gate%check('ml_prior_summary_consistent', l_stage_ok)
         if( .not. l_stage_ok )then
@@ -1052,17 +907,17 @@ module subroutine exec_test_pcg_recon( self, cline )
         call del_file(raw_ml)
         call raw_ml%kill
     else
-        write(logfhandle,'(a)') '>>> STAGE 12 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 10 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 13: prepared-observation parity (gridding vs PCG) ============
+    ! ============ STAGE 11: prepared-observation parity (gridding vs PCG) ============
     ! Cropping and edge tapering do not commute, so both backends prepare a
     ! cropped particle through prep_rec_observation. The gridding route is the
     ! fused crop/taper/pad/FFT chain of prep_imgs4rec; that routine leaves its
     ! cropped input in the tapered real-space state. Compare that input with
     ! the PCG preparation before backend-specific transforms or accumulation.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 13: prepared-observation parity for box_crop < box'
+        write(logfhandle,'(a)') '>>> STAGE 11: prepared-observation parity for box_crop < box'
         call ptcl_native%new([BOX,BOX,1], SMPD)
         call ptcl_work%new([BOX,BOX,1], SMPD)
         call obs_g%new([CROP_BOX,CROP_BOX,1], CROP_SMPD)
@@ -1113,18 +968,17 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pad_g%kill
         deallocate(proj2d, rm_pad, obsg, obsp, lmsk_native, lmsk_crop)
     else
-        write(logfhandle,'(a)') '>>> STAGE 13 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 11 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 14: support semantics and warm-start band stability ============
+    ! ============ STAGE 12: support semantics and warm-start band stability ============
     ! The shipped PCG map is window*u with u solved on the hard domain window > 0.
     ! Verify that the shipped map has no leakage outside that domain and that
     ! repeated output-space warm starts do not shrink the soft window band (an
     ! extra window multiplication on solver entry would).
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 14: support semantics and warm-start band stability'
+        write(logfhandle,'(a)') '>>> STAGE 12: support semantics and warm-start band stability'
         call pcg_c%new(BOX, SMPD, LAMBDA)
-        call pcg_c%set_deapod(.false.)
         call pcg_c%set_window_sphere(SUPPORT_MSKRAD)
         call pcg_c%prep_particles(projdirs, use_ctf=.true., inv_sig2=1.0/sig2arr)
         call pcg_c%begin_accum
@@ -1179,7 +1033,7 @@ module subroutine exec_test_pcg_recon( self, cline )
         call pcg_c%kill
         deallocate(x_c, window)
     else
-        write(logfhandle,'(a)') '>>> STAGE 14 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 12 SKIPPED: an earlier stage failed'
     endif
 
     call pcgop%kill
@@ -1202,6 +1056,48 @@ module subroutine exec_test_pcg_recon( self, cline )
     endif
 
   contains
+
+    !> observations of vol at the orientations of os: the operator's gather of vol's padded transform
+    !! (envelope-free for vol = phantom/env), times the transfer of each orientation when l_transfer
+    subroutine project_planes( vol, os, planes, l_transfer )
+        real,        intent(in)    :: vol(:,:,:)
+        class(oris), intent(inout) :: os
+        complex,     intent(inout) :: planes(lims2(1,1):,lims2(2,1):,:)
+        logical,     intent(in)    :: l_transfer
+        type(image)          :: padded
+        type(ori)            :: o
+        complex, allocatable :: cmat(:,:,:)
+        integer :: iori
+        call padded%new([pcgop%boxpd,pcgop%boxpd,pcgop%boxpd], SMPD)
+        call padded%set_rmat(center_embed_real3d(vol, pcgop%boxpd), .false.)
+        call padded%fft()
+        cmat = padded%get_cmat()
+        call padded%kill
+        call o%new(.false.)
+        do iori = 1, os%get_noris()
+            call os%get_ori(iori, o)
+            call pcgop%gather_plane(cmat, o%get_mat(), 0., planes(:,:,iori))
+            if( l_transfer ) planes(:,:,iori) = planes(:,:,iori) * &
+                &pcgop%build_transfer(o%get_ctfvars(), o%get_2Dshift(), 1.0/sqrt(sig2arr))
+        end do
+        call o%kill
+    end subroutine project_planes
+
+    !> the right-hand side, preconditioner and (l_kernel) kernel of op from planes, accumulated in
+    !! batches of nb as a worker does
+    subroutine accumulate_all( op, planes, nb, l_kernel )
+        class(reconstructor_pcg), intent(inout) :: op
+        complex,                  intent(in)    :: planes(lims2(1,1):,lims2(2,1):,:)
+        integer,                  intent(in)    :: nb
+        logical,                  intent(in)    :: l_kernel
+        integer :: ib, nbatch
+        call op%begin_accum
+        do ib = 1, size(planes,3), nb
+            nbatch = min(nb, size(planes,3) - ib + 1)
+            call op%accumulate_batch(planes(:,:,ib:ib+nbatch-1), nbatch, ib)
+        end do
+        call op%end_accum(l_kernel)
+    end subroutine accumulate_all
 
     real function corr_of( a, b )
         real, intent(in) :: a(:,:,:), b(:,:,:)

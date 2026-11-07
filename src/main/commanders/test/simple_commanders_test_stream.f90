@@ -8,6 +8,7 @@
 ! test should compare with the simulation truth.
 module simple_commanders_test_stream
 use simple_commanders_api
+use simple_test_image_fixture, only: draw_square
 use simple_commanders_sim, only: commander_simulate_movie
 implicit none
 #include "simple_local_flags.inc"
@@ -95,9 +96,9 @@ subroutine exec_test_stream_preproc( self, cline )
     ! distributes these particles, applies known CTF parameters, adds motion and
     ! noise, and therefore provides realistic input to both preprocessing steps.
     call particle%new([PARTICLE_BOX, PARTICLE_BOX, 1], SMPD, wthreads=.false.)
-    call particle%square(7)
+    call draw_square(particle, 7)
     call feature%new([PARTICLE_BOX, PARTICLE_BOX, 1], SMPD, wthreads=.false.)
-    call feature%square(4)
+    call draw_square(feature, 4)
     call feature%shift([12., -8., 0.])
     call particle%add(feature)
     do i = 1, NPARTICLES

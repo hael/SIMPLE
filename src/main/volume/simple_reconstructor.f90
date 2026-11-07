@@ -87,11 +87,10 @@ type, extends(image) :: reconstructor
     procedure          :: pad_with_zeros
     ! GETTERS
     procedure          :: get_kbwin
-    procedure          :: get_rho_copy
     ! I/O
     procedure          :: write_raw_accum
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
-    procedure          :: read_rho, read_raw_rho, check_rho_header
+    procedure          :: read_raw_rho, check_rho_header
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane_oversamp
     procedure          :: sampl_dens_correct
@@ -272,14 +271,6 @@ contains
         wf = kbinterpol(KBWINSZ, KBALPHA)
     end function get_kbwin
 
-    !> copy of the sampling density; test/diagnostic boundary only
-    subroutine get_rho_copy( self, rho )
-        class(reconstructor), intent(in)  :: self
-        real, allocatable,    intent(out) :: rho(:,:,:)
-        if( .not. self%rho_allocated ) THROW_HARD('gridding accumulator density is not allocated')
-        allocate(rho(self%rho_shape(1),self%rho_shape(2),self%rho_shape(3)), source=self%rho)
-    end subroutine get_rho_copy
-
     ! I/O
 
     !> Write one raw gridding accumulator without imposing state/half naming
@@ -312,18 +303,6 @@ contains
         call fclose(filnum)
     end subroutine write_rho
 
-    !> Read sampling density matrix, after its header is checked against this accumulator
-    subroutine read_rho( self, kernam )
-        class(reconstructor), intent(inout) :: self !< this instance
-        class(string),        intent(in)    :: kernam !< kernel name
-        integer :: filnum, ierr
-        call fopen(filnum, file=kernam, status='OLD', action='READ', access='STREAM', iostat=ierr)
-        call fileiochk('read_rho; simple_reconstructor opening '//kernam%to_char(), ierr)
-        call self%check_rho_header(filnum, kernam)
-        call self%read_raw_rho(filnum)
-        call fclose(filnum)
-    end subroutine read_rho
-
     !> Read the payload of a density file given an open unit; the caller checks its header first
     !! (check_rho_header), serially
     subroutine read_raw_rho( self, fhandle )
@@ -332,7 +311,7 @@ contains
         integer :: ierr
         read(fhandle, pos=RHO_HDR_BYTES+1, iostat=ierr) self%rho
         if( ierr .ne. 0 ) &
-            call fileiochk('simple_reconstructor::raw read_rho; simple_reconstructor reading from pipe', ierr)
+            call fileiochk('simple_reconstructor::read_raw_rho reading from pipe', ierr)
     end subroutine read_raw_rho
 
     !> The box (ldim), density shape and sampling recorded in a density file's header; stops on a file

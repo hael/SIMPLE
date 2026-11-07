@@ -5,6 +5,7 @@
 submodule (simple_pcg_atomic_prior) simple_pcg_atomic_prior_tester
 use simple_oris,              only: oris
 use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL, PCG_OP_MATRIXFREE, PCG_LAMBDA
+use simple_cartesian_fourier, only: extract_native_fourier_plane
 use simple_test_utils,        only: assert_true
 use ieee_arithmetic,          only: ieee_is_finite
 implicit none
@@ -459,7 +460,7 @@ contains
             call project_atoms(pos, c_true, os%get_mat(i), img(:,:,1))
             call proj%set_rmat(img, .false.)
             call proj%fft()
-            planes(:,:,i) = pcgop%extract_native_plane(proj)
+            planes(:,:,i) = extract_native_fourier_plane(proj, lims2, pcgop%sqlp)
         end do
         call proj%kill()
         call pcgop%set_window_sphere(R_SUPPORT)

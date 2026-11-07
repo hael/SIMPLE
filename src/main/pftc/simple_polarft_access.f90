@@ -108,28 +108,6 @@ contains
         endif
     end subroutine get_polar_coords
 
-    module subroutine get_ref_pft(self, iref, iseven, pft)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: iref
-        logical,             intent(in) :: iseven
-        complex(sp), intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        integer :: ieo
-        ieo = merge(REF_EVEN, REF_ODD, iseven)
-        pft = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-    end subroutine get_ref_pft
-
-    module subroutine get_ptcl_pft(self, iptcl, pft)
-        class(polarft_calc), intent(in) :: self
-        integer,             intent(in) :: iptcl
-        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
-            write(logfhandle,*) 'iptcl: ', iptcl
-            write(logfhandle,*) 'pfromto: ', self%pfromto
-            THROW_HARD('iptcl is out of range; get_ptcl_pft')
-        endif
-        pft = self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),self%pinds(iptcl))
-    end subroutine get_ptcl_pft
-
     module subroutine get_ptcl_line(self, iptcl, irot, line)
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl, irot
@@ -184,12 +162,6 @@ contains
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%pftsz,self%kfromto(1):self%interpklim), source=CMPLX_ZERO)
     end function allocate_pft
-
-    module function allocate_ptcl_pft( self ) result( pft )
-        class(polarft_calc),  intent(in)  :: self
-        complex(sp), allocatable :: pft(:,:)
-        allocate(pft(self%pftsz,self%kfromto(1):self%interpklim), source=CMPLX_ZERO)
-    end function allocate_ptcl_pft
 
     module pure subroutine get_precalc_objfun_vals(self, ind, ithr, vals)
         class(polarft_calc),  intent(in)  :: self

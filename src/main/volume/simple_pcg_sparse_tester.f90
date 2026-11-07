@@ -10,6 +10,7 @@ use simple_fplane_grid,       only: fplane_grid
 use simple_ori,               only: ori
 use simple_oris,              only: oris
 use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL, PCG_LAMBDA
+use simple_cartesian_fourier, only: extract_native_fourier_plane
 use simple_reconstructor,     only: reconstructor
 use simple_parameters,        only: parameters
 use simple_sp_project,        only: sp_project
@@ -166,7 +167,7 @@ contains
         do i = 1, n
             call proj%set_rmat(images(:,:,i:i), .false.)
             call proj%fft()
-            planes(:,:,i) = pcgop%extract_native_plane(proj)
+            planes(:,:,i) = extract_native_fourier_plane(proj, lims2, pcgop%sqlp)
         end do
         call proj%kill()
         call pcgop%set_window_sphere(MSKRAD)

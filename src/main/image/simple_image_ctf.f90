@@ -8,39 +8,6 @@ implicit none
 
 contains
  
-    !>  \brief  is for generating an image of CTF
-    module subroutine ctf2img( self, tfun, dfx_in, dfy_in, angast_in, phshift )
-        class(image), intent(inout) :: self
-        class(ctf),   intent(inout) :: tfun
-        real,         intent(in)    :: dfx_in, dfy_in, angast_in, phshift
-        type(ctfvars) :: ctfvals ! CTF derived variables
-        integer :: h,k,physh,physk
-        real    :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
-        if( .not. ft_maps_match(self%ldim, self%smpd) ) THROW_HARD('CTF Fourier maps not memoised for this box and sampling; ctf2img')
-        ! flag image as FT
-        call self%set_ft(.true.)
-        ! init
-        call tfun%init(dfx_in, dfy_in, angast_in) ! conversions
-        ctfvals         = tfun%get_ctfvars(phshift)
-        wl              = ctfvals%wl
-        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
-        sum_df          = ctfvals%dfx + ctfvals%dfy
-        diff_df         = ctfvals%dfx - ctfvals%dfy
-        angast          = ctfvals%angast
-        amp_contr_const = ctfvals%amp_contr_const
-        do h = ft_map_lims(1,1), ft_map_lims(1,2)
-            do k = ft_map_lims(2,1), ft_map_lims(2,2)
-                ! calculate CTF
-                tval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
-                    &amp_contr_const, wl, half_wl2_cs)
-                ! set cmat
-                physh = ft_map_phys_addrh(h,k)
-                physk = ft_map_phys_addrk(h,k)
-                call self%set_cmat_at(physh,physk,1, cmplx(tval,0.))
-            end do
-        end do
-    end subroutine ctf2img
-
     !>  \brief  is for applying CTF to an image
     module subroutine apply_ctf_wpad( self, tfun, dfx, mode, phshift, dfy, angast, bfac )
         class(image),     intent(inout) :: self   !< instance

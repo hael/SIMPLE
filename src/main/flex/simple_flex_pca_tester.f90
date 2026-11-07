@@ -20,24 +20,22 @@ use simple_rnd,                           only: seed_rnd_fixed
 use simple_flex_pca_embedding_io,         only: write_embedding_cache, read_embedding_cache, write_noise_scale, &
     &read_noise_scale, write_deconv_block, read_deconv_block
 use simple_flex_pca_records,              only: flex_selection, flex_fit_model, flex_latent, flex_state_set
-use simple_flex_pca_state_service,        only: place_states_with_population_floor, prune_underpopulated_states, &
-    &auto_box_crop, auto_min_neff, auto_state_count, FLEX_AUTO_K_MIN, FLEX_AUTO_K_START
+use simple_flex_pca_state_service,        only: place_states_with_population_floor, prune_underpopulated_states
 use simple_flex_pca_util,                 only: kernel_weights_at_bandwidth
 use simple_flex_pca_weights,              only: build_covariance_state_weights
 use simple_flex_pca_deconv,               only: calibrate_noise_scale, deconvolve_latent
-use simple_flex_pca_fit_types,            only: flex_fit, flex_probe_part, xfsc_ctx_t, cleanup_plane
+use simple_flex_pca_fit_types,            only: flex_fit, xfsc_ctx_t, cleanup_plane
 use simple_flex_pca_posterior,            only: probe_solve_plain
 use simple_flex_pca_polar,                only: polar_grid_build, polar_project_recs
-use simple_flex_pca_plane_cache,          only: flex_pca_plane_cache, plane_cache_contract_header, &
+use simple_flex_pca_plane_cache,          only: plane_cache_contract_header, &
     &plane_cache_master_matches, plane_cache_worker_matches
 use simple_flex_reconstructor_latent_ops, only: project_fplanes_mean_basis, &
     &solve_coupled_basis_exp, LATENT_WDIM
 use simple_flex_pca_pcg,                  only: flex_pcg_t, flex_pcg_outcome_t
 use simple_flex_pca_basis,                only: cross_half_subspace_angles
-use simple_flex_pca_rounds,               only: flex_pca_rounds_shmem
 use simple_flex_pca_crossfsc,             only: COV_XFSC_FNAME
-use simple_flex_probe_fit,                only: flex_probe_fit, fit_estep_former_polar, write_probe_part, &
-    &reduce_probe_parts, xfsc_paired_record, polar_ring_gram, polar_ring_selfpower
+use simple_flex_probe_fit,                only: flex_probe_fit, fit_estep_former_polar, xfsc_paired_record, &
+    &polar_ring_gram, polar_ring_selfpower
 use simple_test_utils,                    only: assert_false, assert_int, assert_real, assert_true, set_fixed_seed
 implicit none
 private
@@ -50,10 +48,8 @@ contains
         call test_posterior_solve()
         call test_estep_former()
         call test_crossfit_fsc()
-        call test_probe_codec()
         call test_embedding_cache_io()
         call test_plane_cache_contract()
-        call test_auto_settings()
         call test_population_floor()
         call test_prune_states()
         call test_kernel_bandwidth()
@@ -100,13 +96,6 @@ contains
         call assert_true(noise_pass, 'independent random half bases stay at the cross-fit FSC noise floor')
         write(*,'(A,ES11.3,A,ES11.3)') '  noise mean=',noise_mean,' derived floor=',noise_floor
     end subroutine test_crossfit_fsc
-
-    subroutine test_probe_codec()
-        logical :: pass
-        write(*,'(A)') 'test_probe_codec'
-        call test_probe_part_codec(pass)
-        call assert_true(pass, 'probe-part codec round trip is bit exact for every payload block')
-    end subroutine test_probe_codec
 
     !> The PPCA posterior against Gaussian elimination independent of the Cholesky implementation.
     subroutine test_posterior_solve()
@@ -271,14 +260,11 @@ contains
         integer, parameter :: PBASE(4) = [2, 4, 6, 8], PCHANGED(4) = [2, 4, 7, 8]
         integer, parameter :: PWORKER_OK(2) = [2, 8], PWORKER_BAD(2) = [2, 9]
         integer(8), allocatable :: base(:), changed_selection(:), changed_project(:), changed_stamp(:)
-        class(flex_pca_plane_cache), allocatable :: first, second
-        type(string) :: first_name, second_name
         write(*,'(A)') 'test_plane_cache_contract'
         base = plane_cache_contract_header('/data/a.simple', 101_8, 12, 24, 12, 1.5, PBASE)
         changed_selection = plane_cache_contract_header('/data/a.simple', 101_8, 12, 24, 12, 1.5, PCHANGED)
         changed_project = plane_cache_contract_header('/data/b.simple', 101_8, 12, 24, 12, 1.5, PBASE)
         changed_stamp = plane_cache_contract_header('/data/a.simple', 102_8, 12, 24, 12, 1.5, PBASE)
-        allocate(first, second)
         call assert_true(plane_cache_master_matches(base, base), &
             &'plane cache master accepts its exact project, geometry and selection')
         call assert_true(.not. plane_cache_master_matches(base, changed_selection), &
@@ -291,40 +277,8 @@ contains
             &'plane cache worker adopts a partition covered by the completed cache')
         call assert_true(.not. plane_cache_worker_matches(base, base, PWORKER_BAD), &
             &'plane cache worker refuses a partition beyond the completed cache')
-        first_name = 'first-cache.bin'; second_name = 'second-cache.bin'
-        call first%new(first_name); call second%new(second_name)
-        call first%kill
-        call assert_true(first%pristine() .and. .not. second%pristine(), &
-            &'plane cache kill resets one session without touching the next')
-        call second%kill
-        call second%new(second_name); call first%new(first_name)
-        call second%kill
-        call assert_true(second%pristine() .and. .not. first%pristine(), &
-            &'plane cache sessions are pristine in the opposite lifecycle order')
-        call first%kill
-        call first_name%kill; call second_name%kill
-        deallocate(first, second)
         deallocate(base, changed_selection, changed_project, changed_stamp)
     end subroutine test_plane_cache_contract
-
-    !> derived settings reproduce the validated runs and move in the right direction
-    subroutine test_auto_settings()
-        write(*,'(A)') 'test_auto_settings'
-        ! box_crop: IgG-RL and Ribosembly are box 128 at 3.0 A/px run at lp=15 with box_crop=64
-        call assert_int(64, auto_box_crop(128, 3.0, 15.0), 'auto box_crop reproduces the validated 64')
-        call assert_true(auto_box_crop(128, 3.0,  8.0) > 64,   'auto box_crop grows with finer lp')
-        call assert_true(auto_box_crop(128, 3.0, 30.0) < 64,   'auto box_crop shrinks with coarser lp')
-        call assert_true(auto_box_crop(128, 3.0, 15.0) <= 128, 'auto box_crop never exceeds the native box')
-        ! min_neff: Ribosembly is occupancy-limited, IgG is SNR-limited
-        call assert_true(abs(auto_min_neff(335240, 16, 0.d0) - 2095) <= 50, 'auto min_neff reproduces the Ribosembly scale')
-        call assert_true(auto_min_neff(100000, 20, 0.0178d0) >= 56, 'auto min_neff meets the IgG SNR requirement')
-        call assert_true(auto_min_neff(10000, 20, 1.d-3) > auto_min_neff(10000, 20, 1.d-1), &
-            &'auto min_neff grows as conformational SNR falls')
-        ! state count: over-provision, never below the floor nor above the validated level
-        call assert_int(32, auto_state_count(335240, 2000), 'auto state count over-provisions to the validated level')
-        call assert_int(FLEX_AUTO_K_MIN,   auto_state_count(1000, 2000),     'auto state count keeps the small-dataset floor')
-        call assert_int(FLEX_AUTO_K_START, auto_state_count(100000000, 100), 'auto state count keeps the over-provision cap')
-    end subroutine test_auto_settings
 
     !> two clusters plus a far outlier group: every particle gets a state, every state the floor
     subroutine test_population_floor()
@@ -1030,85 +984,6 @@ contains
         end subroutine init_context
 
     end subroutine test_flex_crossfsc
-
-    subroutine test_probe_part_codec( pass )
-        logical, intent(out) :: pass
-        type(flex_probe_part) :: src, dst
-        type(flex_pca_rounds_shmem) :: rounds
-        class(parameters), allocatable :: params
-        type(string) :: fname
-        integer :: i, j, k, q, p
-        real :: xr, xi
-        src%ncomp  = 2
-        src%nval   = 17
-        src%nll_sum = 1.25d0
-        allocate(src%cmat_e(3,2,2,2), src%cmat_o(3,2,2,2))
-        allocate(src%rho_ex(3,2,2,2), src%rho_ox(3,2,2,2))
-        allocate(src%rho_e(3,3,2,2), src%rho_o(3,3,2,2), src%gam_sum(2))
-        allocate(src%mix_sr(2), src%mix_sm(2,2), src%mix_smm(2,2,2), src%mix_sainv(2,2))
-        allocate(src%z_sub(5,2)); src%nz = 5
-        allocate(src%kpk_e(3,4), src%kpk_o(3,4), src%rpk_e(2,4), src%rpk_o(2,4))
-        dst%ncomp = src%ncomp
-        allocate(dst%cmat_e(3,2,2,2), dst%cmat_o(3,2,2,2), source=cmplx(0.,0.))
-        allocate(dst%rho_ex(3,2,2,2), dst%rho_ox(3,2,2,2), source=0.)
-        allocate(dst%rho_e(3,3,2,2), dst%rho_o(3,3,2,2), source=0.)
-        allocate(dst%gam_sum(2), source=0.d0)
-        allocate(dst%mix_sr(2), dst%mix_sm(2,2), dst%mix_smm(2,2,2), dst%mix_sainv(2,2), source=0.d0)
-        allocate(dst%z_sub(5,2), source=0.d0)
-        allocate(dst%kpk_e(3,4), dst%kpk_o(3,4), source=0.)
-        allocate(dst%rpk_e(2,4), dst%rpk_o(2,4), source=cmplx(0.,0.))
-        call seed_rnd_fixed(20261008)
-        do q = 1, 2
-            do k = 1, 2
-                do j = 1, 2
-                    do i = 1, 3
-                        call random_number(xr); call random_number(xi)
-                        src%cmat_e(i,j,k,q) = cmplx(xr,xi)
-                        call random_number(xr); call random_number(xi)
-                        src%cmat_o(i,j,k,q) = cmplx(xr,xi)
-                        call random_number(src%rho_ex(i,j,k,q))
-                        call random_number(src%rho_ox(i,j,k,q))
-                    end do
-                end do
-            end do
-        end do
-        call random_number(src%rho_e); call random_number(src%rho_o)
-        call random_number(src%gam_sum); call random_number(src%mix_sr)
-        call random_number(src%mix_sm); call random_number(src%mix_smm)
-        call random_number(src%mix_sainv); call random_number(src%z_sub)
-        call random_number(src%kpk_e); call random_number(src%kpk_o)
-        do p = 1, 4
-            do q = 1, 2
-                call random_number(xr); call random_number(xi)
-                src%rpk_e(q,p) = cmplx(xr,xi)
-                call random_number(xr); call random_number(xi)
-                src%rpk_o(q,p) = cmplx(xr,xi)
-            end do
-        end do
-        allocate(params)
-        params%numlen = 4
-        fname = rounds%part_fname('probe', 1, params%numlen)
-        call write_probe_part(fname, src)
-        call reduce_probe_parts(params, rounds, dst)
-        ! The reducer owns normal cleanup; keep the fixture idempotent if that lifecycle
-        ! changes or an implementation returns after a successful read without deleting.
-        call del_file(fname)
-        pass = src%ncomp == dst%ncomp .and. src%nval == dst%nval .and. src%nll_sum == dst%nll_sum
-        pass = pass .and. src%nz == dst%nz
-        pass = pass .and. all(src%cmat_e == dst%cmat_e) .and. all(src%cmat_o == dst%cmat_o)
-        pass = pass .and. all(src%rho_ex == dst%rho_ex) .and. all(src%rho_ox == dst%rho_ox)
-        pass = pass .and. all(src%rho_e == dst%rho_e) .and. all(src%rho_o == dst%rho_o)
-        pass = pass .and. all(src%gam_sum == dst%gam_sum)
-        pass = pass .and. all(src%mix_sr == dst%mix_sr) .and. all(src%mix_sm == dst%mix_sm)
-        pass = pass .and. all(src%mix_smm == dst%mix_smm) .and. all(src%mix_sainv == dst%mix_sainv)
-        pass = pass .and. all(src%z_sub == dst%z_sub)
-        pass = pass .and. all(src%kpk_e == dst%kpk_e) .and. all(src%kpk_o == dst%kpk_o)
-        pass = pass .and. all(src%rpk_e == dst%rpk_e) .and. all(src%rpk_o == dst%rpk_o)
-        call fname%kill
-        call src%kill
-        call dst%kill
-        deallocate(params)
-    end subroutine test_probe_part_codec
 
     !> Coupled two-component M-step on known noiseless planes, with a dense PCG reference.
     subroutine test_mstep_toy()

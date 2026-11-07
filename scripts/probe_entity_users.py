@@ -68,6 +68,22 @@ def module_family(root, files, module):
     return family
 
 
+def rename_code(pattern, repl, text):
+    """re.sub of pattern (case-insensitive) outside string literals"""
+    lit = r"'[^'\n]*'|\"[^\"\n]*\""
+    return re.sub(r"(?i)(%s)|%s" % (lit, pattern),
+                  lambda m: m.group(1) if m.group(1) is not None else repl(m), text)
+
+
+def imported_from(text, name):
+    """the module a use statement of text imports name from, or None"""
+    text = re.sub(r"&[ \t]*\n[ \t]*&?", " ", re.sub(r"!.*", "", text))
+    for u in re.finditer(r"(?im)^\s*use\s+(\w+)\s*,\s*only\s*:(.*)$", text):
+        if any(it.split("=>")[0].strip().lower() == name.lower() for it in u.group(2).split(",")):
+            return u.group(1)
+    return None
+
+
 def type_home(root, files, tname):
     t_re = re.compile(r"(?im)^\s*type\s*(?:,[^:\n]*)?::\s*%s\b" % re.escape(tname))
     hits = [f for f in files if not is_test_only(f) and t_re.search(read(root, f))]
@@ -135,10 +151,14 @@ def apply(root, entities, accepted, backup):
                               new_body)
             edits[home] = text[:blk.start()] + new_body + text[blk.end():]
             for f in family + accepted:
-                edits[f] = re.sub(r"(?i)%%(\s*)%s\b" % re.escape(b), r"%\g<1>" + b + SUFFIX, text_of(f))
+                edits[f] = rename_code(r"%%(\s*)%s\b" % re.escape(b), lambda m: "%" + m.group(2) + b + SUFFIX,
+                                       text_of(f))
         else:
             module, name = ent.split(":", 1)
             family = module_family(root, files, module)
+            src = imported_from(read(root, family[0]), name)
+            if src:
+                sys.exit("%s:%s is imported from %s (a re-export): probe %s:%s" % (module, name, src, src, name))
             for f in family:
                 t = text_of(f)
                 if re.search(r"(?im)^.*\bbind\s*\(\s*c\b.*\b%s\b" % re.escape(name), t):
@@ -149,7 +169,7 @@ def apply(root, entities, accepted, backup):
                         warnings.append("%s:%s is a specific of generic %s: calls through the generic "
                                         "reach it; probe the generic too" % (module, name, blk.group(1)))
             for f in family + accepted:
-                edits[f] = re.sub(r"(?i)\b%s\b" % re.escape(name), name + SUFFIX, text_of(f))
+                edits[f] = rename_code(r"\b%s\b" % re.escape(name), lambda m: name + SUFFIX, text_of(f))
     for f, t in edits.items():
         dst = os.path.join(backup, f.replace("/", "__"))
         shutil.copy2(os.path.join(root, f), dst)

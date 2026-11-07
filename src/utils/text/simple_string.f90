@@ -52,7 +52,6 @@ type :: string
     generic            :: operator(.ne.) => is_not_equal_str, is_not_equal_char
     generic            :: operator(/=) => is_not_equal_str, is_not_equal_char
     procedure          :: readline
-    procedure          :: readfile
     procedure          :: writeline
     procedure          :: print
     procedure, private :: set_real, set_dble, set_int
@@ -509,23 +508,6 @@ contains
         read(fhandle, '(A)', iostat=ios) buffer_static
         if( ios == 0 ) self%buffer = trim(adjustl(buffer_static))
     end subroutine readline
-
-    subroutine readfile( self, fhandle )
-        class(string),    intent(inout) :: self
-        integer,          intent(in)    :: fhandle
-        character(len=:), allocatable   :: tmp
-        character(len=XLONGSTRLEN)      :: buffer_static 
-        integer                         :: ios
-        call self%kill
-        do
-            read(fhandle, '(A)', iostat=ios) buffer_static
-            if( ios /= 0 ) exit
-            if( len(trim(buffer_static)) > 0 ) then
-                tmp = self%buffer // trim(adjustl(buffer_static)) // new_line('a')
-                call move_alloc(tmp, self%buffer)
-            endif
-        end do  
-    end subroutine readfile
 
     subroutine writeline( self, fhandle, ios )
         class(string), intent(inout) :: self

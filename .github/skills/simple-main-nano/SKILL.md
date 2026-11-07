@@ -6,8 +6,8 @@ description: Use when working in SIMPLE's src/main/nano subsystem (SINGLE), incl
 # `src/main/nano`: nanoparticle atomic models and the SINGLE domain objects
 
 Owns `nanoparticle` (detection, the density-model fit, the `atoms_stats` analyses), the density model
-(`simple_nano_density`), the species numerics and call, the `atoms` type, the C-alpha finder, the test
-molecules and two time-series singletons. Nothing here touches an `sp_project`. Not here: the programs
+(`simple_nano_density`), the species numerics and call, the `atoms` type, the C-alpha finder, the
+`molecule_data` record and two time-series singletons. Nothing here touches an `sp_project`. Not here: the programs
 (`commanders/simple/simple_commanders_atoms.f90`, `commanders/single/`), the PCG atomic prior
 (`strategies/parallelization/simple_rec3D_pcg_strategy.f90`), the nano movie aligner (`motion/`), the
 `tseries` 2D search, time-series class-average rejection (`cavg_quality`), `trajectory_denoise` (`flex/`),
@@ -55,7 +55,8 @@ Silent ones first: nothing reports these.
 - `simple_atomic_species.f90` (`call_atomic_species`) on the image-free `simple_nano_species.f90`.
 - `simple_atoms.f90` serves all of SIMPLE (simulation, masks, volume ops, `element_exists` in the
   parameter parser, the PCG prior). `convolve`/`pdb2mrc` make the truth maps of the state fixture and
-  the simulated workflows; `simple_molecule_data` reads `testdata/pdb` under `SIMPLE_SOURCE_PATH`.
+  the simulated workflows; the test molecules (`commanders/test/simple_test_molecule_fixture.f90`) read
+  `testdata/pdb` under `SIMPLE_SOURCE_PATH`.
 
 ## Tests
 

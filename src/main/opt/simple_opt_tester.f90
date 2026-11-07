@@ -50,7 +50,7 @@ contains
         call test_de_quadratic()
         call test_simplex_quadratic()
         call test_start_at_origin()
-        call test_de_npop_inipop()
+        call test_de_npop()
         call test_pcg_dense_spd()
         call test_pcg_diagonal_one_step()
         call test_pcg_cold_restart()
@@ -152,15 +152,11 @@ contains
         if( allocated(spec%limits) ) call assert_real(5., spec%limits(2,2), 1.e-6, 'the limits are stored as given')
         call assert_false(associated(spec%costfun), 'no cost function until set')
         call spec%set_costfun(quad2d)
-        call spec%set_gcostfun(quad2d_grad)
         call assert_true(associated(spec%costfun),  'set_costfun attaches the cost function')
-        call assert_true(associated(spec%gcostfun), 'set_gcostfun attaches the gradient')
         lims(:,1) = -1.
         lims(:,2) =  1.
         call spec%set_limits(lims)
         call assert_real(1., spec%limits(1,2), 1.e-6, 'set_limits replaces the limits')
-        call spec%change_opt('simplex')
-        call assert_char('simplex', spec%str_opt, 'change_opt renames the optimiser')
         call spec%specify('de', 3, maxits=250, nrestarts=4, ftol=1.e-3, limits=reshape([-1.,-1.,-1.,1.,1.,1.],[3,2]))
         call assert_int(3,   spec%ndim,      're-specify: new dimension')
         call assert_int(250, spec%maxits,    're-specify: maxits as given')
@@ -181,7 +177,7 @@ contains
         lims(1,:) = [-5., 5.]
         call spec%specify('lbfgsb', 1, limits=lims)
         call spec%set_costfun(quad1d)
-        call spec%set_gcostfun(quad1d_grad)
+        spec%gcostfun => quad1d_grad
         call ofac%new(spec, opt)
         spec%x = 0.5
         call opt%minimize(spec, opt, lowest_cost)
@@ -205,7 +201,7 @@ contains
         lims(1,:) = [-5., 0.5]
         call spec%specify('lbfgsb', 1, limits=lims)
         call spec%set_costfun(quad1d)
-        call spec%set_gcostfun(quad1d_grad)
+        spec%gcostfun => quad1d_grad
         call ofac%new(spec, opt)
         spec%x = -3.
         call opt%minimize(spec, opt, lowest_cost)
@@ -228,7 +224,7 @@ contains
         lims(:,2) =  10.
         call spec%specify('lbfgsb', 2, limits=lims, maxits=500)
         call spec%set_costfun(dircost)
-        call spec%set_gcostfun(dircost_grad)
+        spec%gcostfun => dircost_grad
         call ofac%new(spec, opt)
         spec%x = [-5., -7.5]
         call opt%minimize(spec, opt, lowest_cost)
@@ -252,7 +248,7 @@ contains
         write(*,'(A)') 'test_lbfgsb_rosenbrock'
         call spec%specify('lbfgsb', 2, limits=LIMS2, maxits=1000)
         call spec%set_costfun(rosenbrock)
-        call spec%set_gcostfun(rosenbrock_grad)
+        spec%gcostfun => rosenbrock_grad
         call ofac%new(spec, opt)
         spec%x = [-1.2, 1.0]
         call opt%minimize(spec, opt, lowest_cost)
@@ -383,31 +379,26 @@ contains
         end do
     end subroutine test_start_at_origin
 
-    ! DE takes the npop given to specify and puts the members of set_inipop into its population
-    subroutine test_de_npop_inipop()
+    ! DE takes the npop given to specify
+    subroutine test_de_npop()
         class(optimizer), pointer :: opt => null()
         type(opt_factory)   :: ofac
         type(opt_spec)      :: spec
         type(eval_recorder) :: rec
-        real :: lowest_cost, pop(1,2)
-        write(*,'(A)') 'test_de_npop_inipop'
+        real :: lowest_cost
+        write(*,'(A)') 'test_de_npop'
         call set_fixed_seed(20261106)
         call spec%specify('de', 2, limits=LIMS2, maxits=1, npop=20)
         call spec%set_costfun(quad2d_rec)
-        pop(1,:) = XMIN
-        call spec%set_inipop(pop)
         call ofac%new(spec, opt)
         call assert_int(20, spec%npop, 'DE keeps the npop given to specify')
         spec%nostart = .true.
-        rec%armed    = .true.
         call opt%minimize(spec, rec, lowest_cost)
-        call assert_true(all(rec%first == XMIN), 'the member given by set_inipop is the first DE evaluates')
-        call assert_true(lowest_cost == 0., 'the given optimum is the best member')
         call assert_int(21, spec%nevals, 'twenty members and one trial')
         call opt%kill
         deallocate(opt)
         call spec%kill
-    end subroutine test_de_npop_inipop
+    end subroutine test_de_npop
 
     !---------------- shared PCG engine ----------------
 

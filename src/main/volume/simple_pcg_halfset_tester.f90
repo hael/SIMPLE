@@ -13,6 +13,7 @@ use simple_ori,               only: ori
 use simple_oris,              only: oris
 use simple_projector,         only: projector
 use simple_reconstructor_pcg, only: reconstructor_pcg
+use simple_cartesian_fourier, only: center_embed_real3d, extract_native_fourier_plane
 use simple_reconstructor,     only: reconstructor
 use simple_parameters,        only: parameters
 use simple_sp_project,        only: sp_project
@@ -161,7 +162,7 @@ contains
             call projection%get_rmat_sub(clean)
             clean_images(:,:,i) = clean(:,:,1)
             call projection%fft()
-            clean_planes(:,:,i) = sampler%extract_native_plane(projection)
+            clean_planes(:,:,i) = extract_native_fourier_plane(projection, lims2, sampler%sqlp)
             call projection%ifft()
             call projection%add_gauran(snr)
             call projection%get_rmat_sub(noisy)
@@ -172,7 +173,7 @@ contains
             signal_power = signal_power + sum((real(clean(:,:,1),dp)-clean_mean)**2)
             noise_power  = noise_power  + sum((real(noise(:,:,i),dp)-noise_mean)**2)
             call projection%fft()
-            planes(:,:,i) = sampler%extract_native_plane(projection)
+            planes(:,:,i) = extract_native_fourier_plane(projection, lims2, sampler%sqlp)
         enddo
         realized_snr = signal_power / noise_power
         call o%kill()
@@ -198,11 +199,20 @@ contains
         call pcgop%new(BOX, SMPD, lambda)
         if( mskrad > 0. ) call pcgop%set_window_sphere(mskrad)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
-        call pcgop%build_operators(.false.)
+        call accumulate_planes(pcgop, planes)
         allocate(reconstruction(BOX,BOX,BOX), source=0.)
-        call pcgop%solve(planes, reconstruction, maxits=maxits, rtol=0., niters=niters)
+        call pcgop%solve_accum(reconstruction, maxits=maxits, rtol=0., niters=niters)
         call pcgop%kill()
     end subroutine reconstruct_half
+
+    !> the right-hand side and preconditioner of the planes, through the production accumulation
+    subroutine accumulate_planes( pcgop, planes )
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        complex,                  intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(planes, size(planes,3), 1)
+        call pcgop%end_accum(.false.)
+    end subroutine accumulate_planes
 
     !> matched clean and noisy solves of one half with one operator and residuals ||Ax-y||/||y||
     subroutine reconstruct_half_pair( orientations, clean_planes, noisy_planes, lambda, maxits, &
@@ -218,35 +228,42 @@ contains
         call pcgop%new(BOX, SMPD, lambda)
         call pcgop%set_window_sphere(MSKRAD)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
-        call pcgop%build_operators(.false.)
         allocate(clean_rec(BOX,BOX,BOX), source=0.)
         allocate(noisy_rec(BOX,BOX,BOX), source=0.)
-        call pcgop%solve(clean_planes, clean_rec, maxits=maxits, rtol=0., niters=niters(1))
-        call pcgop%solve(noisy_planes, noisy_rec, maxits=maxits, rtol=0., niters=niters(2))
+        call accumulate_planes(pcgop, clean_planes)
+        call pcgop%solve_accum(clean_rec, maxits=maxits, rtol=0., niters=niters(1))
+        call accumulate_planes(pcgop, noisy_planes)
+        call pcgop%solve_accum(noisy_rec, maxits=maxits, rtol=0., niters=niters(2))
         call forward_residual(pcgop, orientations, clean_planes, clean_rec, residuals(1))
         call forward_residual(pcgop, orientations, noisy_planes, noisy_rec, residuals(2))
         call pcgop%kill()
     end subroutine reconstruct_half_pair
 
-    !> ||A x - y|| / ||y|| over the lims2 disk with the same forward operator
+    !> ||A x - y|| / ||y|| over the lims2 disk with the operator's gather (A x: the lattice gather of
+    !! x's padded transform)
     subroutine forward_residual( pcgop, orientations, planes, volume, rel_resid )
         class(reconstructor_pcg), intent(inout) :: pcgop
         type(oris),               intent(inout) :: orientations
         complex,                  intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
         real,                     intent(in)    :: volume(BOX,BOX,BOX)
         real(dp),                 intent(out)   :: rel_resid
-        type(ori) :: o
-        complex, allocatable :: predicted(:,:)
+        type(ori)   :: o
+        type(image) :: padded
+        complex, allocatable :: predicted(:,:), cmat(:,:,:)
         real(dp) :: num, den
         integer  :: h, i, k
         allocate(predicted(-BOX/2:BOX/2,-BOX/2:BOX/2))
         call o%new(.false.)
-        call pcgop%set_volume(volume)
+        call padded%new([pcgop%boxpd,pcgop%boxpd,pcgop%boxpd], SMPD, wthreads=.false.)
+        call padded%set_rmat(center_embed_real3d(volume, pcgop%boxpd), .false.)
+        call padded%fft()
+        cmat = padded%get_cmat()
+        call padded%kill()
         num = 0._dp
         den = 0._dp
         do i = 1, orientations%get_noris()
             call orientations%get_ori(i, o)
-            call pcgop%forward_plane(o, predicted)
+            call pcgop%gather_plane(cmat, o%get_mat(), 0., predicted)
             do k = -BOX/2, BOX/2
                 do h = -BOX/2, BOX/2
                     if( h*h + k*k > (BOX/2)**2 ) cycle
@@ -272,11 +289,11 @@ contains
         call pcgop%new(BOX, SMPD, LAMBDA)
         if( mskrad > 0. ) call pcgop%set_window_sphere(mskrad)
         call pcgop%prep_particles(orientations, use_ctf=.false.)
-        call pcgop%build_operators(.false.)
+        call accumulate_planes(pcgop, planes)
         allocate(recs(BOX,BOX,BOX,size(its)), source=0.)
         allocate(niters(size(its)), source=0)
         do i = 1, size(its)
-            call pcgop%solve(planes, recs(:,:,:,i), maxits=its(i), rtol=0., niters=niters(i))
+            call pcgop%solve_accum(recs(:,:,:,i), maxits=its(i), rtol=0., niters=niters(i))
         enddo
         call pcgop%kill()
     end subroutine reconstruct_half_trajectory

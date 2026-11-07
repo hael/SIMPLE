@@ -1367,7 +1367,7 @@ written as `sub-suite` (entry).
 | old test | now |
 | --- | --- |
 | `abinitio2D_stream` | deleted; `solve2D` runs nightly in `simulated_workflow_6vxx` and `simulated_workflow_1jxy` |
-| `angres` | the program `simple_exec prg=measure_projspace_angres nspace=<n>`; the table of values is a comment above `find_angres` |
+| `angres` | the program `simple_exec prg=measure_projspace_angres nspace=<n>` (about 223/sqrt(n) degrees for c1) |
 | `ansi_colors` | `string` (`unit_core`) |
 | `assign_optics` | `optics assignment` (`lib_stream`) |
 | `atomfit` | deleted, with `atoms%fit_bfactors`, which nothing called |

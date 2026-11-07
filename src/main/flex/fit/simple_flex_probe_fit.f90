@@ -15,10 +15,9 @@ private
 #include "simple_local_flags.inc"
 
 public :: flex_probe_fit, flex_mean_ref, probe_subspace_iteration, fit_engine_iterate
-! Narrow seams used by the adjacent tester.  The fixtures live in
-! simple_flex_pca_tester so test-only code is not part of these production submodules.
 public :: fit_estep_former_polar, polar_ring_gram, polar_ring_selfpower
-public :: write_probe_part, reduce_probe_parts, xfsc_paired_record
+public :: xfsc_paired_record
+public :: run_all_flex_probe_fit_tests
 
 !> Mean principal-angle cosine vs the previous basis at which a rank-1 fit stops early. Higher ranks
 !! run the full n_probe_iters budget (the paired merge needs the last two iterations' frames).
@@ -193,10 +192,9 @@ interface
         type(flex_probe_fit),   intent(inout) :: fits(2)
     end subroutine paired_reduce_parts
 
-    module subroutine write_probe_part( fname, part )
-        class(string),         intent(in) :: fname
-        type(flex_probe_part), intent(in) :: part
-    end subroutine write_probe_part
+    !> white-box tests (submodule simple_flex_probe_fit_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_flex_probe_fit_tests()
+    end subroutine run_all_flex_probe_fit_tests
 
     module subroutine reduce_probe_parts( params, rounds, part )
         class(parameters),     intent(in)    :: params

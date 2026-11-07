@@ -52,11 +52,14 @@ subroutine validate_rec3D_pcg_fractional_updates( params, build, cline )
     use simple_builder,            only: builder
     use simple_parameters,         only: parameters
     use simple_image,              only: image
-    use simple_reconstructor_pcg,  only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, PCG_LAMBDA
+    use simple_reconstructor_pcg,  only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_LAMBDA
+    use simple_pcg_solver,         only: PCG_STOP_INDEFINITE
     use simple_rec3D_pcg_strategy, only: validate_pcg_common
     use simple_matcher_ptcl_io,    only: prepimgbatch, ptcl_read_session, killimgbatch, prep_rec_observation
+    use simple_cartesian_fourier,  only: extract_native_fourier_plane
     use simple_sigma2_files,       only: load_sigma2
     use simple_euclid_sigma2,      only: sigma2_half
+    use simple_test_pcg_fixture,   only: compare_raw
     class(parameters), intent(inout) :: params
     class(builder),    intent(inout) :: build
     class(cmdline),   intent(inout) :: cline
@@ -230,14 +233,14 @@ contains
         call op_blend%write_raw_accum(f_chain1, state_here, eo_here, 1, 1, size(full_pinds), provenance)
         call op_blend%scale_raw_accum(f1)
         call load_weighted(op_ref, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
-        call op_blend%compare_raw_accum(op_ref, berr, derr)
+        call compare_raw(op_blend, op_ref, berr, derr)
         call require_raw('bootstrap working-mass restore', berr, derr, REPLAY_TOL)
         call op_blend%kill
         call op_ref%kill
         call load_weighted(op_replay, f_chain1, state_here, eo_here, 1, 1, provenance, 1.0)
         call load_weighted(op_oracle, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
         call op_oracle%scale_raw_accum(1.0/f1)
-        call op_replay%compare_raw_accum(op_oracle, berr, derr)
+        call compare_raw(op_replay, op_oracle, berr, derr)
         call require_raw('bootstrap full-mass chain seed', berr, derr, REPLAY_TOL)
         call op_replay%kill
         call op_oracle%kill
@@ -249,7 +252,7 @@ contains
         nraw_total = nraw_total + nraw
         if( nraw_total /= size(full_pinds) ) THROW_HARD('complementary raw PCG particle counts do not close')
         call load_weighted(op_ref, f_full, state_here, eo_here, 1, 1, provenance, 1.0)
-        call op_sum%compare_raw_accum(op_ref, berr, derr)
+        call compare_raw(op_sum, op_ref, berr, derr)
         call require_raw('complementary additivity', berr, derr, RAW_TOL)
         call op_sum%kill
         call op_ref%kill
@@ -258,13 +261,13 @@ contains
         call load_weighted(op_oracle, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
         call op_oracle%scale_raw_accum(u/f1)
         call add_weighted(op_oracle, f_full, state_here, eo_here, 1, 1, provenance, 1.0-u)
-        call op_blend%compare_raw_accum(op_oracle, berr, derr)
+        call compare_raw(op_blend, op_oracle, berr, derr)
         call require_raw('subset1 u/f blend', berr, derr, REPLAY_TOL)
         call op_blend%write_raw_accum(f_chain1, state_here, eo_here, 1, 1, size(full_pinds), provenance)
         call op_oracle%kill
 
         call load_weighted(op_replay, f_chain1, state_here, eo_here, 1, 1, provenance, 1.0)
-        call op_blend%compare_raw_accum(op_replay, berr, derr)
+        call compare_raw(op_blend, op_replay, berr, derr)
         call require_raw('continuation write/read', berr, derr, REPLAY_TOL)
         call finalize_and_solve(op_blend, x_direct, hist, niters)
         deallocate(hist)
@@ -280,7 +283,7 @@ contains
         call load_weighted(op_oracle, f_sub2, state_here, eo_here, 2, 2, provenance, 1.0)
         call op_oracle%scale_raw_accum(u/f2)
         call add_weighted(op_oracle, f_full, state_here, eo_here, 1, 1, provenance, 1.0-u)
-        call op_blend%compare_raw_accum(op_oracle, berr, derr)
+        call compare_raw(op_blend, op_oracle, berr, derr)
         call require_raw('subset2 u/f blend', berr, derr, REPLAY_TOL)
         call op_blend%write_raw_accum(f_chain2, state_here, eo_here, 1, 1, size(full_pinds), provenance)
         call op_blend%kill
@@ -289,7 +292,7 @@ contains
         call load_weighted(op_ensemble, f_chain1, state_here, eo_here, 1, 1, provenance, f1)
         call add_weighted(op_ensemble, f_chain2, state_here, eo_here, 1, 1, provenance, f2)
         call load_weighted(op_ref, f_full, state_here, eo_here, 1, 1, provenance, 1.0)
-        call op_ensemble%compare_raw_accum(op_ref, berr, derr)
+        call compare_raw(op_ensemble, op_ref, berr, derr)
         call require_raw('full-mass weighted ensemble', berr, derr, RAW_TOL)
         call op_ensemble%kill
         call finalize_and_solve(op_ref, x_full, hist, niters)
@@ -368,7 +371,7 @@ contains
                 ! the backend-neutral observation (normalize, crop, taper), see prep_rec_observation
                 call prep_rec_observation(build%imgbatch(ii), build%lmsk, obs, .true.)
                 call obs%fft
-                y_batch(:,:,ii) = op%extract_native_plane(obs)
+                y_batch(:,:,ii) = extract_native_fourier_plane(obs, lims2, op%sqlp)
             enddo
             call op%accumulate_batch(y_batch, batchsz, batchlims(1))
         enddo

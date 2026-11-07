@@ -74,7 +74,6 @@ contains
             call imgs_ref(i)%rtsq(real(i - 1) * 30., 0., 0.)
             call imgs_targ(i)%copy(imgs_ref(i))
         enddo
-        call assert_true(imgs_ref(1)%is_wthreads(), 'registration fixtures use threaded source images')
         call alloc_imgarr(NIMGS, [BOX,BOX,1], SMPD, imgs_ref_serial, wthreads=.false.)
         call alloc_imgarr(NIMGS, [BOX,BOX,1], SMPD, imgs_targ_serial, wthreads=.false.)
         do i = 1,NIMGS

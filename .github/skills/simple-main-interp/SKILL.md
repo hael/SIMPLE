@@ -1,6 +1,6 @@
 ---
 name: simple-main-interp
-description: Use when working in SIMPLE's src/main/interp subsystem, including the Kaiser-Bessel kernel (KBWINSZ, KBALPHA, OSMPL_PAD_FAC, beta, the fast polynomial and device forms, normalized 2D/3D stencils and their gradients, the instrument function), gridding deapodization (the stencil envelope at the insertion period), window functions and square windows, and the neutral Cartesian Fourier lattice layer (centred embed and crop, native plane extraction, packed KB and B-spline gathers) used by reconstruction, PCG, class averaging, polarization and Cartesian alignment.
+description: Use when working in SIMPLE's src/main/interp subsystem, including the Kaiser-Bessel kernel (KBWINSZ, KBALPHA, OSMPL_PAD_FAC, beta, the fast polynomial and device forms, normalized 2D/3D stencils, the instrument function), gridding deapodization (the stencil envelope at the insertion period), window functions and square windows, and the neutral Cartesian Fourier lattice layer (centred embed and crop, native plane extraction, packed KB and B-spline gathers) used by reconstruction, PCG, class averaging, polarization and Cartesian alignment.
 ---
 
 # `src/main/interp`: interpolation kernels and the Cartesian Fourier lattice

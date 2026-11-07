@@ -623,7 +623,7 @@ contains
 
     !> Angular resolution of the nspace search directions (built as the builder does, build_refspiral): the
     !! largest angle from a direction to its third-nearest among all symmetry copies of the other directions,
-    !! i.e. oris%find_angres across the asymmetric-unit border. With moldiam, also resang at the particle rim.
+    !! across the asymmetric-unit border. With moldiam, also resang at the particle rim.
     subroutine exec_measure_projspace_angres( self, cline )
         class(commander_measure_projspace_angres), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline

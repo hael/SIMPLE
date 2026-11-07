@@ -1,6 +1,6 @@
 !@descr: unit test routines for the contrast transfer function (simple_ctf)
 ! The CTFFIND4 wavelength, defocus and phase conventions, the additive phase-shift policy (canonicalisation
-! modulo 2pi, never pi), the extrema count and the zeros, the fast image-layer kernel (ctf2img, ft2img placement) and the
+! modulo 2pi, never pi), the extrema count and the zeros, the fast image-layer kernel (apply_ctf, ft2img placement) and the
 ! H*y / |H|*y restoration contracts of gen_fplane4rec; the closed-form values are evaluated in double
 ! precision from the same formulas (Rohou & Grigorieff 2015).
 module simple_ctf_tester
@@ -242,12 +242,13 @@ contains
 
     !---------------- image-layer kernel ----------------
 
-    ! The image-layer fast kernel must agree with the scalar CTF for conventional,
-    ! intermediate, and near-quadrature phase shifts; ft2img places component (h,k) at
+    ! The image-layer fast kernel (apply_ctf on a unit spectrum) must agree with the scalar CTF for
+    ! conventional, intermediate, and near-quadrature phase shifts; ft2img places component (h,k) at
     ! (h+mh+1, k+mk+1) where mh, mk are the lower Fourier limits
     subroutine test_fast_kernel_and_ft2img()
         type(image) :: img, img_spec
         type(ctf)   :: tfun
+        type(ctfparams) :: parms
         real        :: s2, ang, expected, actual, conventional, shifted
         integer     :: iph, lims(3,2), mh, mk
         write(*,'(A)') 'test_fast_kernel_and_ft2img'
@@ -257,10 +258,15 @@ contains
         call memoize_ft_maps(LDIM, SMPD)
         s2   = spafreqsq(H,K)
         ang  = angle(H,K)
-        conventional = 0.
-        shifted      = 0.
+        conventional  = 0.
+        shifted       = 0.
+        parms%dfx     = DFX
+        parms%dfy     = DFY
+        parms%angast  = ANGAST
         do iph = 1,size(PHASES)
-            call img%ctf2img(tfun, DFX, DFY, ANGAST, PHASES(iph))
+            parms%phshift = PHASES(iph)
+            call img%set_cmat(cmplx(1.,0.))
+            call img%apply_ctf(tfun, 'ctf', parms)
             call tfun%init(DFX, DFY, ANGAST)
             expected = ctf_at(tfun, s2, ang, PHASES(iph))
             actual   = real(img%get_fcomp2D(H,K))
@@ -268,7 +274,9 @@ contains
             if( iph == 1 ) conventional = actual
             if( iph == size(PHASES) ) shifted = actual
         enddo
-        call img%ctf2img(tfun, DFX, DFY, ANGAST, 0.)
+        parms%phshift = 0.
+        call img%set_cmat(cmplx(1.,0.))
+        call img%apply_ctf(tfun, 'ctf', parms)
         call assert_real(conventional, real(img%get_fcomp2D(H,K)), TOL, &
             &'explicit zero phase shift preserves conventional CTF behavior')
         call assert_true(abs(shifted-conventional) > 0.1, &

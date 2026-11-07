@@ -13,7 +13,7 @@ use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
 use simple_eul_prob_tab_utils, only: record_seed_shift, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
-    &prob_insert_table, prob_insert_pose, prob_insert_cone, &
+    &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, &
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best
 use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed
 use, intrinsic :: iso_fortran_env, only: int64
@@ -161,9 +161,9 @@ contains
         row = [(0.25 * real(k - 1), k = 1,NCAND_NC)]   ! a = 2 * 0.25 = 0.5 at beta 1
         call neff_ro%offer(NCAND_NC, row, 2.)
         call assert_int(1, neff_ro%nkept(), 'n_eff readout: one row kept')
-        call assert_real(5.493135, neff_ro%mean_neff(1.), 1.e-4, 'n_eff readout: exp(entropy) of a geometric row (numpy)')
-        call assert_real(real(NCAND_NC), neff_ro%mean_neff(1.e-6), 1.e-2, 'n_eff readout: a cold factor of 1e-6 is the uniform row')
-        call assert_real(1., neff_ro%mean_neff(1.e3), 1.e-4, 'n_eff readout: a huge factor is the argmin')
+        call assert_real(5.493135, mean_neff(1.), 1.e-4, 'n_eff readout: exp(entropy) of a geometric row (numpy)')
+        call assert_real(real(NCAND_NC), mean_neff(1.e-6), 1.e-2, 'n_eff readout: a cold factor of 1e-6 is the uniform row')
+        call assert_real(1., mean_neff(1.e3), 1.e-4, 'n_eff readout: a huge factor is the argmin')
         call neff_ro%kill
         ! the 200 rows, all wanted (stride 1)
         call neff_ro%new(NROWS_NC, NROWS_NC, 6)
@@ -173,14 +173,14 @@ contains
             call neff_ro%offer(NCAND_NC, row, 2.)
         enddo
         call assert_int(NROWS_NC, neff_ro%nkept(), 'n_eff readout: 200 rows kept')
-        call assert_real(49.9721,  neff_ro%mean_neff(1.e-3), 1.e-2, 'n_eff readout: mean n_eff at 0.001 (numpy)')
-        call assert_real(6.023447, neff_ro%mean_neff(0.5),   1.e-3, 'n_eff readout: mean n_eff at 0.5 (numpy)')
-        call assert_real(3.582882, neff_ro%mean_neff(1.),    1.e-3, 'n_eff readout: mean n_eff at 1 (numpy)')
-        call assert_real(2.243834, neff_ro%mean_neff(2.),    1.e-3, 'n_eff readout: mean n_eff at 2 (numpy)')
+        call assert_real(49.9721,  mean_neff(1.e-3), 1.e-2, 'n_eff readout: mean n_eff at 0.001 (numpy)')
+        call assert_real(6.023447, mean_neff(0.5),   1.e-3, 'n_eff readout: mean n_eff at 0.5 (numpy)')
+        call assert_real(3.582882, mean_neff(1.),    1.e-3, 'n_eff readout: mean n_eff at 1 (numpy)')
+        call assert_real(2.243834, mean_neff(2.),    1.e-3, 'n_eff readout: mean n_eff at 2 (numpy)')
         l_monotone = .true.
         prev       = huge(prev)
         do k = -30,30
-            neff = neff_ro%mean_neff(10.**(real(k)/10.))
+            neff = mean_neff(10.**(real(k)/10.))
             if( neff > prev ) l_monotone = .false.
             prev = neff
         enddo
@@ -194,7 +194,7 @@ contains
             row = [(0.01 * real(r) * real(k - 1), k = 1,NCAND_NC)]
             call neff_ro%offer(NCAND_NC, row, 4.)
         enddo
-        call assert_real(3.582882, neff_ro%mean_neff(0.5), 1.e-3, 'n_eff readout: the mean scales with beta times the temperature')
+        call assert_real(3.582882, mean_neff(0.5), 1.e-3, 'n_eff readout: the mean scales with beta times the temperature')
         call neff_ro%kill
         ! the stride, the minimum row size, the temperature, invalid distances
         call neff_ro%new(1000, 100, 6)
@@ -212,10 +212,19 @@ contains
         row(7:NCAND_NC) = huge(1.)
         call neff_ro%offer(NCAND_NC, row, 2.)
         call assert_int(1, neff_ro%nkept(), 'n_eff readout: six valid distances among invalid ones are kept')
-        call assert_real(6., neff_ro%mean_neff(1.e-6), 1.e-3, 'n_eff readout: the invalid distances are dropped')
+        call assert_real(6., mean_neff(1.e-6), 1.e-3, 'n_eff readout: the invalid distances are dropped')
         call assert_true(PROB_NEFF_MIN_ROWS > 1, 'n_eff readout: nothing is reported below PROB_NEFF_MIN_ROWS rows')
         call neff_ro%report(0.3) ! below the minimum: silent
         call neff_ro%kill
+
+    contains
+
+        !> the mean n_eff over the kept rows, from the sum and the count a part's record carries
+        real function mean_neff( beta )
+            real, intent(in) :: beta
+            mean_neff = real(neff_ro%sum_neff(beta) / real(neff_ro%nkept(),dp))
+        end function mean_neff
+
     end subroutine test_neff_readout
 
     !> The tempering ramp (prob_beta_at): beta0 at the first iteration, beta1 at the last, the geometric
@@ -674,8 +683,12 @@ contains
     !! the readout line prints
     subroutine test_insert_table()
         type(prob_insert_table) :: tab
+        type(prob_insert_poses) :: poses
         type(prob_insert_pose)  :: pose
         type(prob_candidate)    :: cands(2)
+        integer(int64) :: nelig
+        real(dp)       :: wc_sum
+        integer        :: nptcls, npose, ncapped, kmax
         call tab%new(4, [11, 12, 13, 14], 3)
         cands(1) = prob_candidate(101, 7, 0.4, 0.5, 1.5, .true.)
         cands(2) = prob_candidate(102, 8, 0.6, -1.0, 2.0, .true.)
@@ -685,13 +698,18 @@ contains
         call tab%add(1, 1.0, 0, cands(1:0), [real ::], 0)
         call tab%add(3, 1.0, 0, cands(1:0), [real ::], 0)
         call assert_int(4, tab%get_nptcls(), 'insert table: four particles')
-        call assert_int(3, tab%get_kmax(),   'insert table: kmax 3')
-        call assert_real(1.5,  tab%get_mean_eligible(), 1.e-6, 'insert table: the eligible entries per particle')
-        call assert_real(0.25, tab%get_frac_capped(),   1.e-6, 'insert table: the fraction of particles above the cap')
-        call assert_real(1., tab%get_committed_weight(1), 0., 'insert table: a particle without extras keeps weight 1')
-        call assert_int(0, tab%get_nextra(1), 'insert table: and no extras')
-        call assert_real(0.6, tab%get_committed_weight(2), 0., 'insert table: the committed weight recorded')
-        call assert_int(2, tab%get_nextra(2), 'insert table: two extras recorded')
+        ! the counts of the report
+        call tab%counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
+        call assert_int(3, kmax, 'insert table: kmax 3')
+        call assert_real(1.5,  real(nelig) / real(nptcls),   1.e-6, 'insert table: the eligible entries per particle')
+        call assert_real(0.25, real(ncapped) / real(nptcls), 1.e-6, 'insert table: the fraction of particles above the cap')
+        ! the weights and extras the search reads, through the part's layout
+        call poses%setup_range(tab, [11, 12, 13, 14], 1, 4)
+        call assert_real(1., poses%wc(1), 0., 'insert table: a particle without extras keeps weight 1')
+        call assert_int(0, poses%nextra(1), 'insert table: and no extras')
+        call assert_real(0.6, poses%wc(2), 0., 'insert table: the committed weight recorded')
+        call assert_int(2, poses%nextra(2), 'insert table: two extras recorded')
+        call poses%kill
         pose = tab%get_extra(2, 2)
         call assert_true(pose%iref == 102 .and. pose%inpl == 8 .and. pose%x == -1.0 .and. pose%y == 2.0 .and. pose%w == 0.1, &
             &'insert table: the second extra of particle 2')
@@ -710,6 +728,7 @@ contains
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
         type(eul_prob_tab)      :: master
+        type(prob_insert_poses) :: poses
         type(prob_insert_pose)  :: pose, pose_a
         type(prob_insert_cone)  :: cone
         type(prob_dense_entry), allocatable :: rows(:,:)
@@ -717,7 +736,9 @@ contains
         logical,                allocatable :: refined(:,:)
         integer,                allocatable :: pinds(:), nextra_first(:)
         integer :: i, k, nextra_tot, nwrong_state, nwrong_refined, nwrong_committed, nwrong_weight, nwrong_dup, iref_committed
-        integer :: istate, nwrong_order, nwrong_again
+        integer :: istate, nwrong_order, nwrong_again, nptcls, npose, ncapped, kmax
+        integer(int64) :: nelig
+        real(dp)       :: wc_sum
         real    :: wsum
         call make_dense_rows(params, build, NSPACE_MS, NSTATES_MS, NPTCLS_MS, rows, shifts, refined, seeds)
         pinds = [(i, i=NPTCLS_MS,1,-1)]
@@ -730,8 +751,8 @@ contains
         call assign_master
         nextra_tot = 0
         do i = 1,NPTCLS_MS
-            nextra_tot = nextra_tot + master%insert_tab%get_nextra(i)
-            if( master%insert_tab%get_committed_weight(i) /= 1. ) nextra_tot = nextra_tot + 1
+            nextra_tot = nextra_tot + poses%nextra(i)
+            if( poses%wc(i) /= 1. ) nextra_tot = nextra_tot + 1
         enddo
         call assert_int(0, nextra_tot, 'no insertion cone: no extra pose and the committed weight 1 everywhere')
         ! a cone of a ten-thousandth of an Angstrom: no pose but the committed one passes, so no extra pose
@@ -741,7 +762,7 @@ contains
         call assign_master
         nextra_tot = 0
         do i = 1,NPTCLS_MS
-            nextra_tot = nextra_tot + master%insert_tab%get_nextra(i)
+            nextra_tot = nextra_tot + poses%nextra(i)
         enddo
         call assert_int(0, nextra_tot, 'a cone of the committed pose alone: no extra pose')
         ! a resolution past the rim: the whole sphere, every in-plane angle and shift pass, the extras are the state's
@@ -756,9 +777,9 @@ contains
         do i = 1,NPTCLS_MS
             istate          = master%assgn_map(i)%istate
             iref_committed  = (istate - 1) * NSPACE_MS + master%assgn_map(i)%iproj
-            wsum            = master%insert_tab%get_committed_weight(i)
-            nextra_first(i) = master%insert_tab%get_nextra(i)
-            do k = 1,master%insert_tab%get_nextra(i)
+            wsum            = poses%wc(i)
+            nextra_first(i) = poses%nextra(i)
+            do k = 1,poses%nextra(i)
                 pose       = master%insert_tab%get_extra(i, k)
                 nextra_tot = nextra_tot + 1
                 wsum       = wsum + pose%w
@@ -773,7 +794,7 @@ contains
                 endif
             enddo
             if( abs(wsum - 1.) > 1.e-5 ) nwrong_weight = nwrong_weight + 1
-            if( master%insert_tab%get_nextra(i) > 2 ) nwrong_weight = nwrong_weight + 1
+            if( poses%nextra(i) > 2 ) nwrong_weight = nwrong_weight + 1
         enddo
         call assert_true(nextra_tot > 0, 'multi-state extras: hot rows give extra poses')
         call assert_int(0, nwrong_state,     'multi-state extras: every extra is in the committed state''s block')
@@ -782,13 +803,14 @@ contains
         call assert_int(0, nwrong_dup,       'multi-state extras: the extras of a particle are distinct')
         call assert_int(0, nwrong_order,     'multi-state extras: the extras of a particle come in descending weight')
         call assert_int(0, nwrong_weight,    'multi-state extras: weights sum to 1, no extra below 1%, at most topk - 1 extras')
-        call assert_true(master%insert_tab%get_mean_eligible() > 0., 'multi-state extras: the cone''s occupancy is counted')
+        call master%insert_tab%counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
+        call assert_true(nelig > 0_int64, 'multi-state extras: the cone''s occupancy is counted')
         ! the same assignment again: the same extras (the selection is deterministic, the draws reseeded)
         call set_fixed_seed(SEED_DRAW, propagate=.true.)
         call assign_master
         nwrong_again = 0
         do i = 1,NPTCLS_MS
-            if( master%insert_tab%get_nextra(i) /= nextra_first(i) ) nwrong_again = nwrong_again + 1
+            if( poses%nextra(i) /= nextra_first(i) ) nwrong_again = nwrong_again + 1
         enddo
         call assert_int(0, nwrong_again, 'multi-state extras: a second assignment selects the same extras')
         deallocate(nextra_first)
@@ -798,10 +820,11 @@ contains
         call assign_master
         nextra_tot = 0
         do i = 1,NPTCLS_MS
-            nextra_tot = nextra_tot + master%insert_tab%get_nextra(i)
-            if( master%insert_tab%get_committed_weight(i) /= 1. ) nextra_tot = nextra_tot + 1
+            nextra_tot = nextra_tot + poses%nextra(i)
+            if( poses%wc(i) /= 1. ) nextra_tot = nextra_tot + 1
         enddo
         call assert_int(0, nextra_tot, 'topk 1: no extra pose and the committed weight 1 everywhere')
+        call poses%kill
         call master%kill
         call cone%kill
         call build%spproj_field%kill
@@ -836,6 +859,8 @@ contains
             call master%open_assignment
             call master%assign_batch(1, NPTCLS_MS)
             call master%close_assignment
+            ! the weights and extras the search reads
+            call poses%setup_range(master%insert_tab, pinds, 1, NPTCLS_MS)
         end subroutine assign_master
     end subroutine test_insert_extras_multistate
 
