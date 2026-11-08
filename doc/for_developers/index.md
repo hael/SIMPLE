@@ -32,6 +32,7 @@ describe the software as it is, rather than the history of one change:
 - [Architecture design guide](guides/architecture_design_dev_guide.docx)
 - [Test environment policy](../policies/test_environment_policy.md)
 - [Memory estimator and benchmark guide](../how2s/memory_estimator.md)
+- [Setting up a machine for development with Claude Code](../how2s/how2set_up_claude_code_dev.md)
 - [Developer onboarding](onboarding/)
 
 ## Work that still needs attention

@@ -794,3 +794,252 @@ the truth for that step.
   `simple_eul_prob_tab.f90` (`score_ref`, `deterministic_best`), `simple_polarft_corr.f90`
   (`gen_posterior_val`, `gen_best_objfun_val`), `simple_oris_sampling.f90` (`sample4update_cnt`,
   `sample_balanced_mode`) and `simple_strategy3D_cont.f90` (the fixed-state search).
+
+## 16. The run on the Dell
+
+The development runs as the autonomous run `pose_student` on the Dell, with the engine of
+`~/agent_runs/ms_regression/engine` and the spec in `~/tasks/pose_student_spec/` (run.conf,
+prompt.md, phases.md with the launch procedure, rulings.md), the run root
+`/data2/agent_runs/pose_student` behind the link `~/agent_runs/pose_student`. It is launched by
+hand on the Dell after Hans has committed the synced tree and this note; the multi-state posterior
+work runs on dell2 meanwhile and the two share no file. Sections 1 to 15 are the design; this
+section is the run: the machine and the data, the phases with their exits, the rules, the file
+table the fence enforces, and the Progress record the phases fill.
+
+### 16.1 The machine and the data
+
+**The Dell** (Oracle Linux 8.10, user elmlundho): Core Ultra 9 285, 24 cores (8 performance cores,
+CPUs 0-7, and 16 efficiency cores; no hyperthreading), 62 GB; `/data2` 1.2 TB free, `/home` 16 GB
+free, so nothing of the run goes under `/home`. GCC 15.2 from gcc-toolset-15, CMake 3.26,
+`python3.12` for CMake (`python3` is 3.6, no numpy); `OPENBLAS_CORETYPE=Haswell` and
+`TMPDIR=$HOME/tmp` are exported. The maintainer uses the machine during the run: timed
+measurements record the load and are repeated under load; his checkout `~/src/SIMPLE` and its
+`build/` are read-only for the run.
+
+**Builds:** `./compile_clean.sh` (Release, tests on, the fast gate, install into `build/`) in about
+4 minutes; increments by `make -C build -j20`, `scripts/run_fast_gate.sh build` (15 suites, 1-2
+minutes), `make -C build install`. The source glob of `src/main` is recursive without
+`CONFIGURE_DEPENDS`: reconfigure once after adding the `src/main/learn/` sources. The base HEAD is
+exported with `git archive` into `scratch/keep/src_base` and built in `scratch/keep/build_base` for
+the identity checks of phase 2; HEAD is never moved.
+
+**Timings for planning** (the Dell, 2026-11-03): `refine3D` of trpv1, three iterations at 4 parts
+by 6 threads, 17 minutes; `simulated_workflow_1jxy` 5 minutes at one thread; `test=nightly` about
+2 hours; a table fill at 1,000 directions in the 15 Å band is unmeasured and is phase 0's first
+measurement, on 2,000 particles before the whole half.
+
+**Data** (read-only; projects copied into the run directory, `mkdir=yes`):
+
+- The Ribosembly benchmark, `~/multistate_bench` (5.2 GB): `particles.mrcs` (80,000 particles, box
+  128 at 3 Å per pixel), `bench.simple` with the true poses and shifts and the CTFs,
+  `ground_truth_labels.txt` (one label per particle in stack order: 1 the small assembly, 24,000
+  particles; 2 the medium, 48,000; 3 the large, 8,000), `reconstructed_volumes/` with the truth maps
+  per label. The medium assembly is the run's first truth set, the small one the second. Its README
+  gives the SNR (0.01), the shifts (uniform to plus or minus 10 pixels) and the CTF draw.
+- `/data/simulated_vcrnapol`: two states with truth at SNR 0.1; `generate.sh` says how its
+  `stack_0.1.mrcs`, `oris.txt` and `labels.txt` were made; state 1 (17,000 particles) is tier 3.
+- trpv1: `/data2/trpv1_c2/5_solve3D/trpv1_c2.simple` (35,645 particles, c2, with its poses and
+  `recvol_state01.mrc`), the stack `/data/trpv1/flipnew.mrc` (9.3 GB, box 256 at 1.2156 Å),
+  `mskdiam=175`.
+- bgal: `/data2/bgal_addon/15_abinitio3D/` (the solve3D of the selection; 5,513 particles, 2,756
+  active, `mskdiam=180`), small enough only for the low end of the training-set size curve.
+- streptavidin, `/data/10335-streptav/run_data.star` (RELION poses, `rlnAngleRot` present), and the
+  small membrane protein FlhB, `/data/exp_gate_FlhB/BestFlhBparticles.star` with
+  `BestFlhBparticles.mrcs`: imported with `import_starproject`; whether the FlhB file carries
+  angles is checked in phase 3, and without them the set is aligned once with the standard machinery
+  before the protocol or recorded as skipped.
+- CESPED from Zenodo into `/data2/cesped/<entry>/`: the TEST entry (records 10998049 and 10998591,
+  1 GB per half) for the smoke test of the import, then 10648 (records 8387534 and 8390711, 23 GB per
+  half; the record's title reads 10647) and 11120 (records 8352296 and 8352300, 42 GB per half). Each
+  half is a `particles_<h>.star`, an `info_<h>.json` and the stack in `particles_<h>.mrcs.chunk_N`
+  pieces, concatenated in chunk order into one `.mrcs`, as `cesped/zenodo/downloadFromZenodo.py` in
+  `~/src/cesped` does; the halves are the benchmark's own and are kept as such. Downloads start in
+  phase 0 in the background and are used in phase 3 as far as they have arrived.
+
+**The split-half protocol as the run instantiates it.** The view-balanced halves come from
+`ptcl_subset` with `eo_rebalance=yes`, which reassigns the selected particles' halves by direction
+and score from the poses the project holds: the truth poses on the truth sets, the existing
+alignment on the real sets (trpv1's solve3D, bgal's, the RELION poses of the imports). The training
+half's map is `reconstruct3D` from the training half's rows alone; the test half's reference poses
+are the same alignment's, and on the truth sets the truth. A de novo solve3D of the training half
+is the stricter variant and is run on the medium assembly in phase 3 if time allows.
+
+### 16.2 The phases of the run
+
+**Phase 0: foundations and the teacher's rows.**
+
+1. Build the tree and the base export.
+2. `src/main/learn/`: `learn.inf`; `simple_polar_feats` (the tensor of section 3 from the
+   calculator: the band, the CTF-multiplied half ring packed by `sqrt(w_k)`, the ring-averaged CTF
+   squared beside it, the conjugate-wrap padding, the shift augmentation through the calculator's
+   shift matrices and the rotation by cyclic shift, the disk cache with the plane cache's contract)
+   and its tester (a shifted image against the calculator's phase ramp; the wrap; the packed product
+   against the objective's Hermitian product; the cache refusing a changed project, selection or
+   geometry), registered as a suite of `unit_numerics` per the test policy.
+3. The rows: a getter of a particle's posterior row from the dense table after the fill (the
+   entries of largest mass with the tail's mass preserved) beside `posterior_row_stats`; the
+   matcher's reference and calculator preparation exposed as a routine where the trainer needs it;
+   `learn_pose_student` in its first form, a strategy routine `run_learn_pose_student(cline)` on
+   `(params, build)` with a thin commander, registered as a private program: it prepares the
+   references and the calculator at the student grid (`nspace`) and band (`lp`), fills the rows of
+   the project's selected particles in batches with the production fill, writes them to the model
+   directory with their resolvability (`pmax`, `neff`, `k99` per row and their distributions) and
+   the cost per particle, and stops there until phase 1 adds the training.
+4. The medium assembly's split-half data: its project from `bench.simple` and the labels, the
+   view-balanced halves by `ptcl_subset eo_rebalance=yes`, the training half's map from its truth
+   poses; the rows of the training half at 15, 10 and 8 Å; the teacher's resolvability per band,
+   the row mode's error against the truth, and the cost per particle per band.
+5. The CESPED TEST entry downloaded and imported; the downloads of 10648 and 11120 started in the
+   background under `/data2/cesped`.
+
+Exit: both builds pass the fast gate, the new suite included; the rows program runs on the medium
+assembly's training half; the resolvability, the error against the truth and the costs are in
+Progress.
+
+**Phase 1: the network.**
+
+1. `simple_circ_cnn`: the Hermitian layers of section 6 (real kernels applied alike to the real and
+   imaginary channels, the conjugate wrap, the modulus gate with the first block's CTF
+   normalisation, pooling along the rings, the angular mean of the real part and of the modulus,
+   the dense layers and the softmax), forward and backward as im2col plus `sgemm`, Adam, the
+   chunk-ordered reduction that is bit-identical on any thread count, read and write; its tester
+   (the gradient check of every layer, the toy problem, the Hermitian contract of section 10's
+   tier 1, the same model bit for bit at one thread and at a team of 4, the round trip), registered
+   as a suite of `unit_numerics`.
+2. `learn_pose_student` trains: the soft-target cross-entropy on the rows, early stopping on
+   held-out micrographs, the model file with its record; `predict_poses` in its first form writes
+   per particle the mode direction, the cone holding 99% of the posterior and the confidence to a
+   text table in the model directory, no project write yet.
+3. On the medium assembly: the student trained on the training half's rows at 15 Å with 16
+   channels, predicted on the test half; the mode within 2 grid steps of the truth, the cone's
+   coverage of the truth, the cone sizes; the first points of the training-set size curve at 200,
+   1,000, 5,000 and all particles, with the training and prediction times.
+
+Exit: the fast gate passes with the new suite; the exploratory numbers and the first points of the
+curve are in Progress.
+
+**Phase 2: the programs and the hand-off.**
+
+1. `simple_pose_student` (the model: the grid, the threshold, the file I/O); `learn_pose_student`
+   complete: held-out micrographs for early stopping, for the choice of width and band (the paired
+   difference over micrographs, resampled by micrograph, the cheaper design kept unless the other
+   recovers clearly more seeds) and for the confidence threshold; the selection table and the
+   record of section 6.
+2. `predict_poses` complete: the mode written as the particle's orientation, the cone's width, the
+   confidence `pconf` and the route into a part file the caller merges, through new numbered ori
+   slots in `simple_defs_ori`; a particle whose cone exceeds `KMAX_STUDENT` (64) directions or whose
+   confidence is below the threshold marked for the dense search.
+3. The neighbourhood search's cone per particle: `refine=prob_neigh prob_neigh_mode=geom` takes a
+   particle's cone from its record where present and `prob_athres` otherwise, so that a project
+   without student records runs exactly as before. Identity against the base build at a fixed seed
+   and one thread on `simulated_workflow_1jxy` and on three `refine3D prob_neigh` iterations of
+   trpv1, byte for byte on the declared outputs.
+4. The split-half protocol end to end on the medium assembly: prediction, one iteration of
+   `refine3D refine=prob_neigh` with the students' cones (the dense search for the marked rows),
+   one iteration of `refine=cont`, the test half reconstructed; the reads of section 10 against the
+   truth, at 15, 10 and 8 Å and the widths the choice rule picks; the complete training-set size
+   curve at 15 Å with the cycle times (rows, training, prediction, neighbourhood search,
+   refinement); the same on the small assembly and on vcrnapol's state 1.
+
+Exit: the suites and the fast gate pass; the identity holds; the protocol's reads on the three
+truth sets and the full curve are in Progress.
+
+**Phase 3: real data and cost.**
+
+1. The protocol on trpv1, bgal, streptavidin, FlhB where it has poses, the CESPED TEST entry, and
+   10648 and 11120 as far as downloaded; the training-set size curves on trpv1 and 10648; the
+   stricter variant with a de novo solve3D of the medium assembly's training half if time allows.
+2. The cost table: every step of the student route on the test half (rows on the training half,
+   training, prediction, neighbourhood search, refinement) against the dense search of the test
+   half, as wall time, core time and peak memory on the quiet machine, three runs where wall time
+   is reported; and the in-loop cycle time per subset size against one `refine3D` iteration on the
+   same particles.
+
+Exit: the reads and the costs are in Progress; no suite regressed.
+
+**Phase 4: the nightly route and the documents.**
+
+1. The `pose_student` nightly route: the split-half protocol in miniature on the simulated
+   single-state set of the high-level tests, asserting cone coverage, seed recovery and fallback,
+   registered in the registry, the test UI's help, the router and the CTest entry so that
+   `scripts/check_test_registry.py` passes; its runtime recorded.
+2. `doc/algorithms/pose_student.md`; this note's sections brought to what was built, the
+   measurements in Progress, and the proposal on consumer 2 from the measured cycle, taken by Hans,
+   not the run; skill text proposed in the report, not edited.
+3. `test=nightly` on the final tree.
+
+Exit: the nightly green, base failures recorded as such; the documents written.
+
+**Phase 5: the report.** The review report beside the completed note
+(`doc/implementation_notes/completed/learned_pose_state_assignment_report.md`), leading with what
+was learned in plain words, then the evidence, the measurements, the skill text and what is left to
+the maintainer, ending with a commit message; the note moved to `completed/` with `mv` and its row
+of `doc/implementation_notes/README.md` updated.
+
+### 16.3 The rules of the run
+
+- Nothing is committed; git is read-only; the base is a `git archive` export.
+- No new command-line key, public or internal: the band is `lp`, the grid `nspace`, the model
+  `infile` and `fname`, the search's cone a per-particle record; if the work seems to need a key,
+  stop and write it up.
+- The existing routes are untouched in behaviour: a project without student records runs byte for
+  byte as the base, checked in phase 2 and kept through phases 3 and 4. No edits to the stream, the
+  flex folder, the quality model or the sampling policy.
+- Single-state only; the multi-state extension and consumer 2's integration are out of scope, and
+  the run measures what they would need.
+- No floor is set from the first run of the code that is judged; the run measures, Progress
+  reports, and Hans rules on the numbers (decision 16 of section 12 is his). The thresholds the
+  programs set on held-out micrographs are recorded with their evidence.
+- New or changed OpenMP code gets a tester at 16 threads, repeated, compared bit for bit with one
+  thread; no string temporaries inside parallel regions; work arrays sized by the team in use; the
+  BLAS on the calling thread inside a region.
+- No `goto`; THROW macros never continued with `//&`; no `.and.` short circuit on allocatable
+  arrays; `use ..., only:`; no large type as a plain component; a tester that needs private
+  entities is a submodule of the module it tests.
+- The datasets are read-only; copies live under `scratch`; bulky outputs are deleted once their
+  numbers are in Progress; `scratch/keep/` holds the base export and build, the models and tables
+  of the measurements and their logs; the CESPED downloads stay under `/data2/cesped`.
+- Timed work runs with the load recorded; a measurement under load is repeated.
+- Write prose for people: Progress entries and the report read without other documents, with
+  SIMPLE terms explained and acronyms spelled out on first use; no item IDs in the report.
+
+### File table
+
+| file | why | phase |
+| --- | --- | --- |
+| `doc/implementation_notes/planned/learned_pose_state_assignment.md` | this plan and its progress | each |
+| `doc/implementation_notes/README.md` | the note's row when it moves to completed | 5 |
+| `doc/algorithms/pose_student.md` | the algorithm page | 4 |
+| `src/main/learn/learn.inf` | the folder's description line | 0 |
+| `src/main/learn/simple_polar_feats.f90` | the input tensor, the augmentation, the cache | 0 1 2 3 |
+| `src/main/learn/simple_polar_feats_tester.f90` | its tests | 0 1 2 3 |
+| `src/main/learn/simple_circ_cnn.f90` | the Hermitian network, its trainer and I/O | 1 2 3 |
+| `src/main/learn/simple_circ_cnn_tester.f90` | its tests | 1 2 3 |
+| `src/main/learn/simple_pose_student.f90` | the model: the grid, the threshold, the record | 1 2 3 4 |
+| `src/main/learn/simple_pose_student_tester.f90` | its tests | 1 2 3 4 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90` | the posterior row getter | 0 2 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | the row record | 0 2 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90` | the cone per particle | 2 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_tester.f90` | the getter's and the cone's tests | 0 2 |
+| `src/main/strategies/search/simple_strategy3D_matcher.f90` | the reference and calculator preparation exposed to the trainer | 0 2 |
+| `src/main/strategies/parallelization/simple_strategy_pose_student.f90` | the strategy routines of the two programs | 0 1 2 3 4 |
+| `src/main/commanders/simple/simple_commanders_pose_student.f90` | the thin commanders | 0 1 2 3 4 |
+| `src/main/apis/simple_private_exec_api.f90` | the commanders' registration | 0 2 |
+| `production/simple_private_exec_driver.f90` | the programs' cases | 0 2 |
+| `src/main/ui/simple_private_prgs.f90` | the private programs' required keys | 0 2 |
+| `src/defs/simple_defs_ori.f90` | the ori slots of the confidence, the route and the cone | 2 |
+| `src/main/ori/simple_ori.f90` | the slots' names | 2 |
+| `src/main/ori/simple_ori_tester.f90` | the slots' tests | 2 |
+| `src/main/commanders/test/simple_commanders_test_class.f90` | the suite tables | 0 1 2 |
+| `src/main/ui/simple_test/simple_test_ui_class.f90` | the suites' help | 0 1 2 |
+| `src/main/commanders/test/simple_commanders_test_highlevel_pose.f90` | the nightly route | 4 |
+| `src/main/commanders/test/simple_commanders_test_highlevel.f90` | its interface | 4 |
+| `src/main/commanders/test/simple_test_registry.f90` | its registry entry | 4 |
+| `src/main/ui/simple_test/simple_test_ui_highlevel.f90` | its help | 4 |
+| `src/main/exec/simple_test_exec_highlevel.f90` | its router case | 4 |
+| `src/main/params/simple_parameters_tester.f90` | the test names the parameters tester lists | 4 |
+| `production/CMakeLists.txt` | its CTest entry | 4 |
+
+## Progress
+
+(filled by the run, one entry per phase)
