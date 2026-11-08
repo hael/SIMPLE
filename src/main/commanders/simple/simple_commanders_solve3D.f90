@@ -725,7 +725,7 @@ contains
             end select
             if( ui_addon%accepts(key) ) cycle
             select case(key)
-                case('rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_solvent', 'pcg_solvent_lambda', 'pcg_solvent_check')
+                case('rec_backend', 'maxits_pcg', 'maxits_ml', 'pcg_order', 'pcg_order_lambda')
                     msg = key//': solve3D_addon reconstructs by gridding only and takes no backend or PCG control'
                     THROW_HARD(trim(msg))
             end select

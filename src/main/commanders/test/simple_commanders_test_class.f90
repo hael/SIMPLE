@@ -88,6 +88,8 @@ use simple_solve3D_chunks_plan_tester,  only: run_all_solve3D_chunks_plan_tests
 use simple_volpair_metrics_tester,           only: run_all_volpair_metrics_tests
 use simple_nu_filter,                        only: run_all_nu_filter_tests
 use simple_halfmap_enhancer_tester,          only: run_all_halfmap_enhancer_tests
+use simple_pcg_order_prior,                  only: run_all_pcg_order_prior_tests
+use simple_order_prior_offline,              only: run_all_order_prior_offline_tests
 use simple_solve3D_addon_report,             only: run_all_solve3D_addon_dock_tests
 use simple_pcg_halfset_tester,               only: run_all_pcg_halfset_tests
 use simple_pcg_sparse_tester,                only: run_all_pcg_sparse_tests
@@ -474,6 +476,8 @@ contains
         call add_suite(s, n, 'volume pair metrics',       run_all_volpair_metrics_tests)
         call add_suite(s, n, 'nonuniform filtering',      run_all_nu_filter_tests)
         call add_suite(s, n, 'half-map enhancement',      run_all_halfmap_enhancer_tests)
+        call add_suite(s, n, 'order prior',               run_all_pcg_order_prior_tests)
+        call add_suite(s, n, 'order prior offline',       run_all_order_prior_offline_tests)
         call add_suite(s, n, 'solve3D_cavgs stage rules', run_all_solve3D_reseed_tests)
         call add_suite(s, n, 'state assignment rules',    run_all_state_assignment_tests)
         call add_suite(s, n, 'atomic prior',              run_all_pcg_atomic_prior_tests)

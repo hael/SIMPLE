@@ -41,7 +41,7 @@ the ML coupling are skill `simple-nonuniform-regularization`.
 
 Each half of the source pair is tapered, transformed and filtered per label; the coarsest filter
 seeds the whole grid, support voxels take their own label's filter, auxiliary voxels are copied from
-the stashed pair. An apply pair other than the setup pair (`pcg_solvent=yes`) receives the setup
+the stashed pair. An apply pair other than the setup pair (`pcg_order=yes`) receives the setup
 pair's label field.
 
 ## Masks

@@ -29,7 +29,7 @@ Silent ones first: nothing reports these.
 - The source pair of `nu_filter_vols` stays alive and unchanged from setup to composition: it is
   filtered again per label, and the composed voxels must be the candidates scored. Keep
   `prepare_nu_candidate_fts`/`filter_nu_candidate` and `compose_nu_labels_from_volume` on one taper,
-  transform and Butterworth filter. Another pair (`pcg_solvent=yes`) gets the base pair's labels.
+  transform and Butterworth filter. Another pair (`pcg_order=yes`) gets the base pair's labels.
 - Label index runs coarse to fine; an auxiliary pair is appended last, only at or beyond the finest
   retained rung, at that rung's Potts coordinate. The level loop, the Potts cap (a voxel only moves
   coarser), the clamp (label 1) and the handoff (`get_nu_filter_bank_finest_lp`, the last label)

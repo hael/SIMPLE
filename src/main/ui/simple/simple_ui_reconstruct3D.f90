@@ -75,21 +75,18 @@ contains
         &'Coupled PCG iterations of the ML-regularized system from the closed-form Wiener start; 0 = closed form only', 'iterations{0}', &
         &.false., 0., visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call reconstruct3D%add_input(UI_FILT, 'pcg_solvent', 'binary', 'PCG soft solvent prior', &
-        &'Soft solvent prior on the PCG base solve: a real-space ridge pulling solvent toward zero, solvent identified '//&
-        &'per half from a prior-free solve of that half (smoothed absolute density, Otsu, logistic weight), then the '//&
-        &'same cold solve again with the ridge; half-independent, so the pair stays gold standard; the support is untouched(yes|no){no}', '', .false., 'no', &
+        call reconstruct3D%add_input(UI_FILT, 'pcg_order', 'binary', 'PCG order prior', &
+        &'Order prior on the PCG base solve: a real-space ridge on what lacks NU evidence of order (solvent, and '//&
+        &'disordered density such as detergent); the ordered fraction and the strength are chosen each iteration '//&
+        &'so the protein core keeps its signal, from the previous iteration''s NU evidence; then the same cold solve again. '//&
+        &'For the references only: the prior-free pair keeps the FSC(yes|no){no}', '', .false., 'no', &
         &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_lambda', 'num', 'PCG solvent prior strength', &
-        &'Ridge coefficient of the solvent prior relative to the data scale (1 = as strong as the low-band data term); '//&
-        &'not given = estimated per state and iteration by cross-validation of the prior-free half pair', 'coefficient{auto}', &
+        call reconstruct3D%add_input(UI_FILT, 'pcg_order_lambda', 'num', 'PCG order prior strength', &
+        &'Ridge coefficient of the order prior relative to the data precision per voxel (1 halves a fully penalized voxel); '//&
+        &'not given = chosen per state and iteration; given = applied every iteration, the ordered fraction still chosen', 'coefficient{auto}', &
         &.false., 1.0, visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
-        call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_check', 'binary', 'PCG solvent prior strength check', &
-        &'Validation of the automatic solvent-prior strength: re-solve the whole strength grid for real and print the re-solve objective and residuals beside the closed-form estimate; eight extra pair solves per state and iteration, no effect on the result(yes|no){no}', '', .false., 'no', &
-        &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &activation=ui_activation_equals_any('pcg_solvent', [character(len=3) :: 'yes']))
+        &activation=ui_activation_equals_any('pcg_order', [character(len=3) :: 'yes']))
         call reconstruct3D%add_input(UI_FILT, 'atm_prior', 'binary', 'PCG atomicity prior', &
         &'Atomicity prior: after the prior-free base solve, each half is solved again with the map outside the span of '//&
         &'the atom kernels of pdbfile penalized; the base pair stays the FSC authority(yes|no){no}', '', .false., 'no', &

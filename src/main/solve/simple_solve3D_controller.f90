@@ -27,7 +27,6 @@ integer,          parameter :: NSPACE_MULTI_MAX        = 2500 ! multi-state cap 
 ! Stage transition policy
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
-integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
 integer,          parameter :: SYMSRCH_STAGE           = 4           ! search symmetry axis after this stage (3 until 2026-10-17)
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
@@ -37,8 +36,9 @@ integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first sta
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
-integer,          parameter :: PCG_SOLVENT_START_STAGE = NSTAGES     ! requested PCG solvent prior only in the final stage
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
+integer,          parameter :: PCG_REC_START_STAGE     = GOLD_STD_STAGE ! first stage on the requested PCG backend (gridding before: cheaper)
+integer,          parameter :: PCG_ORDER_START_STAGE   = GOLD_STD_STAGE ! the requested PCG order prior from the gold-standard phase
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
 real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
@@ -596,26 +596,19 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
-        ! The soft solvent prior starts only in the final stage, after the NU
-        ! label field it is applied to has settled. The strength is forwarded only when given; an
-        ! unset pcg_solvent_lambda keeps the per-iteration estimate.
-        if( params%l_pcg_solvent .and. istage >= PCG_SOLVENT_START_STAGE .and. &
+        ! The order prior starts with the gold-standard phase, on the NU evidence of the previous iteration.
+        ! The strength is forwarded only when given; an unset pcg_order_lambda keeps the per-iteration choice.
+        if( params%l_pcg_order .and. istage >= PCG_ORDER_START_STAGE .and. &
             &trim(cfg%rec_backend%to_char()) == 'pcg' )then
-            call cline_refine3D%set('pcg_solvent', 'yes')
-            if( params%l_pcg_solvent_lambda_auto )then
-                call cline_refine3D%delete('pcg_solvent_lambda')
+            call cline_refine3D%set('pcg_order', 'yes')
+            if( params%l_pcg_order_lambda_auto )then
+                call cline_refine3D%delete('pcg_order_lambda')
             else
-                call cline_refine3D%set('pcg_solvent_lambda', params%pcg_solvent_lambda)
-            endif
-            if( params%l_pcg_solvent_check )then
-                call cline_refine3D%set('pcg_solvent_check', 'yes')
-            else
-                call cline_refine3D%delete('pcg_solvent_check')
+                call cline_refine3D%set('pcg_order_lambda', params%pcg_order_lambda)
             endif
         else
-            call cline_refine3D%delete('pcg_solvent')
-            call cline_refine3D%delete('pcg_solvent_lambda')
-            call cline_refine3D%delete('pcg_solvent_check')
+            call cline_refine3D%delete('pcg_order')
+            call cline_refine3D%delete('pcg_order_lambda')
         endif
         if( cfg%refine.eq.'prob_neigh' )then
             call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)

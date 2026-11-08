@@ -105,9 +105,13 @@ Stage policy includes:
 - staged NU filtering from `NU_FILTER_STAGE`
 - optional single-state gold-standard matching from stage 6 (`gold_standard=yes`)
 - spherical support throughout, with `automsk=no` and `envfsc=no`
-- an explicitly requested PCG solvent prior from `PCG_SOLVENT_START_STAGE`
-  (stage 8, the final stage), so the NU label field the prior'd pair receives
-  has settled over stages 5-7 without the prior
+- a requested PCG backend (`rec_backend=pcg`) from stage 6
+  (`PCG_REC_START_STAGE = GOLD_STD_STAGE`), gridding before: the PCG
+  accumulation and solves are the cost, so they start with the gold-standard
+  phase
+- an explicitly requested PCG order prior (`pcg_order=yes`) from the same
+  stage (`PCG_ORDER_START_STAGE`), on the NU evidence and labels of the
+  previous iteration (section 9)
 
 The downscaled particle cache is a 2D-only feature: `solve3D` rejects
 `cache=yes`, and each stage uses its own crop from the low-pass/downscaling
@@ -713,7 +717,6 @@ Staged `solve3D` uses the same static-ladder NU competition as
 (`mskdiam`). The workflow forces `automsk=no` and `envfsc=no` in every stage
 and in the final reconstruction; it generates no density or NU-evidence
 envelope for masking. The UI offers no envelope controls for this workflow.
-Solvent-prior development is separate from this matching-policy change.
 
 `gold_standard=no` is the default. NU-enabled stages use
 `nonuniform_lpset`, a merged registration reference and the scheduled `lp`.
@@ -812,9 +815,15 @@ rebuild entry before the regularized map is produced.
 On the PCG backend, a final ML-regularized stage uses the ordinary `P_tau`
 replay in `bootstrap_rec3D`; the `Q_NU` prior, its calibration pass and its
 controllers were removed on 2026-09-06.
-When `pcg_solvent=yes`, the staged controller withholds the soft solvent prior
-from every stage before stage 8 and enables it only in stage 8. A workflow
-that stops before stage 8 does not use the prior.
+When `pcg_order=yes`, the staged controller forwards the order prior to every
+PCG stage from stage 6 and withholds it before; `pcg_order_lambda` is forwarded
+only when given, so an unset strength is chosen per state and iteration. The
+prior reads the previous iteration's `_nu_evidence` and `_nu_locres` maps of
+the same state and box, and the evidence map is written only under
+`pcg_order=yes`: the first iteration of stage 6, and the first at a new box,
+run without it (logged). The
+final reconstruction is prior-free. Design and evidence:
+`doc/implementation_notes/planned/pcg_order_prior.md`.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged

@@ -8,6 +8,7 @@ type(ui_program), target :: filter
 type(ui_program), target :: uniform_filter2D
 type(ui_program), target :: uniform_filter3D
 type(ui_program), target :: nu_filt3D
+type(ui_program), target :: order_prior
 type(ui_program), target :: dose_filter3D
 
 contains
@@ -18,6 +19,7 @@ contains
         call new_uniform_filter2D(prgtab)
         call new_uniform_filter3D(prgtab)
         call new_nu_filt3D(prgtab)
+        call new_order_prior(prgtab)
         call new_dose_filter3D(prgtab)
     end subroutine construct_filter_programs
 
@@ -210,6 +212,51 @@ subroutine new_filter( prgtab )
         ! add to ui_hash
         call add_ui_program('nu_filt3D', nu_filt3D, prgtab, UI_CATEGORY)
     end subroutine new_nu_filt3D
+
+    subroutine new_order_prior( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call order_prior%new(&
+        &'order_prior',&                                                         ! name
+        &'Generate and apply the PCG order prior to an even/odd pair, offline',&  ! summary
+        &'is a program for testing the PCG order prior (pcg_order) outside the refinement loop: a ridge on what&
+        & lacks NU evidence of order, its ordered fraction and strength chosen in closed form as in the loop (the&
+        & protein core keeps 95 % of its cross-half signal),&
+        & checked against full solves of a Fourier surrogate of the PCG re-solve. Feed the unregularized (_unfil)&
+        & half pair',&                                                           ! help
+        &'simple_exec',&                                                         ! executable
+        &.false., &
+        &visibility=UI_VIS_ADVANCED, &
+        &display_name='Order Prior (offline)')                                  ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call order_prior%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Unregularized odd half map',  'vol1.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call order_prior%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Unregularized even half map', 'vol2.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call order_prior%add_input(UI_IMG, outvol, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        ! parameter input/output
+        call order_prior%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! filter controls
+        call order_prior%add_input(UI_FILT, 'pcg_order_lambda', 'num', 'Order prior strength', &
+        &'Ridge coefficient relative to the data precision per voxel; not given = chosen in closed form with the ordered fraction; '//&
+        &'given = applied, the ordered fraction still chosen', &
+        &'coefficient{auto}', .false., 1.0, visibility=UI_VIS_ADVANCED)
+        call order_prior%add_input(UI_FILT, 'amsklp', 'num', 'NU evidence scale',&
+        &'Physical scale for smoothing the NU evidence margin of the order weight, in Angstroms{8}', &
+        &'evidence scale in Angstroms{8}', .false., 8., &
+        &visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call order_prior%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call order_prior%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('order_prior', order_prior, prgtab, UI_CATEGORY)
+    end subroutine new_order_prior
 
     subroutine new_dose_filter3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab

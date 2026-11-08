@@ -127,7 +127,7 @@ contains
         end select
         if( model == WAVE_PROJECTION .and. kappa /= 0 ) THROW_HARD('wave_model=projection samples the central section: ewald=no')
         if( model == WAVE_MSLICE .and. kappa == 0 ) THROW_HARD('wave_model=multislice propagates through the box: ewald=neg or pos')
-        if( params%l_pcg_solvent ) THROW_HARD('reconstruct3D_wave has no solvent prior: pcg_solvent=no')
+        if( params%l_pcg_order ) THROW_HARD('reconstruct3D_wave has no order prior: pcg_order=no')
         if( params%total_dose <= 0. ) THROW_HARD('total_dose must be positive; reconstruct3D_wave')
         if( trim(params%automsk) /= 'no' ) THROW_HARD('reconstruct3D_wave solves on the mskdiam sphere or pcg_mskfile: automsk=no')
         ! the gain from relative intensity to the particles, normalised to unit noise at the native box

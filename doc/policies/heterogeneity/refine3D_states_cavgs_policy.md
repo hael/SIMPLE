@@ -74,7 +74,7 @@ The route fixes:
 - `autoscale=yes` (the frequency planner owns downscaling)
 
 A different user value of `filt_mode`, `automsk`, `envfsc`, `combine_eo`,
-`trail_rec`, `objfun` or `pcg_solvent` is refused, and so are
+`trail_rec`, `objfun` or `pcg_order` is refused, and so are
 `m_estimator` other than `no`, `nsample`, `update_frac`, `cohort_sampling`,
 `trail_seed`, `pcg_mskfile`, `vol1..volN`, `multivol_mode` and
 `prob_neigh_mode`.

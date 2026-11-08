@@ -1,7 +1,8 @@
 !@descr: assembly-owned nonuniform (NU) filtering of one state's half-map pair
 ! Shared by gridding volassemble and the PCG master: bank from the base pair with the ML pair as optional
 ! auxiliary member (setup_nu_dmats), the automsk background (density, or valid NU evidence for automsk=nu),
-! _nu_filt references (composed from the apply pair when given, pcg_solvent=yes), _nu_locres, and the
+! _nu_filt references (composed from the apply pair when given, pcg_order=yes), _nu_locres (and the evidence map
+! the next iteration's order prior reads, pcg_order=yes), and the
 ! handoff (finest bank member). Contract: doc/policies/NU/nonuniform_filtering_policy.md.
 module simple_nu_state_filter
 use simple_core_module_api
@@ -12,7 +13,7 @@ use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
     &get_nu_filter_bank_finest_lp, &
-    &write_nu_local_resolution_map, write_nu_evidence_envmask, &
+    &write_nu_local_resolution_map, write_nu_evidence_envmask, write_nu_evidence_map, NU_ENVMASK_RELATIVE, &
     &set_nu_evidence_null_shell, set_nu_solvent_envelope, get_nu_filter_timings
 implicit none
 
@@ -147,7 +148,7 @@ contains
         if( l_apply )then
             call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_apply_even, vol_apply_odd)
             if( params%part == 1 ) write(logfhandle,'(A,I0,A)') '>>> NU REFERENCES: STATE ', state, &
-                &', LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR'
+                &', LABEL FIELD OF THE BASE PAIR APPLIED TO THE ORDER-PRIOR PAIR'
         else
             call nu_filter_vols(vol_even_nu, vol_odd_nu, vol_base_even, vol_base_odd)
         endif
@@ -200,6 +201,9 @@ contains
             call vol_even_nu%mul(0.5)
             call vol_even_nu%write(volname_nu, del_if_exists=.true.)
             call write_nu_local_resolution_map(locres_name)
+            ! the order prior of the next iteration reads this evidence and the local resolution (lag one)
+            if( params%l_pcg_order ) call write_nu_evidence_map(add2fbody(volname, MRC_EXT, NUEVIDENCE_SUFFIX), &
+                &params%amsklp, NU_ENVMASK_RELATIVE)
             call wait_for_closure(volname_nu)
             call wait_for_closure(locres_name)
             call eonames_nu(1)%kill

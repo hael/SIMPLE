@@ -369,25 +369,52 @@ contains
         deallocate(stepdiff_counts)
     end subroutine analyze_filtmap_neighbor_continuity
 
+    module subroutine get_nu_local_resolution_map( resmap )
+        class(image), intent(inout) :: resmap
+        real(kind=c_float), pointer :: rmat(:,:,:)
+        real    :: lp_angstrom
+        integer :: i, j, k, imask, ilabel
+        if( .not.allocated(filtmap) ) &
+            &THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_local_resolution_map')
+        if( .not.allocated(cutoff_finds) ) &
+            &THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before get_nu_local_resolution_map')
+        call require_valid_stats_mask(caller='get_nu_local_resolution_map')
+        call resmap%new(ldim, smpd, wthreads=.false.)
+        call resmap%get_rmat_ptr(rmat)
+        rmat(:ldim(1),:ldim(2),:ldim(3)) = 0.
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,ilabel,lp_angstrom) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            ilabel = int(filtmap(i,j,k))
+            if( ilabel < 1 .or. ilabel > size(cutoff_finds) ) cycle
+            lp_angstrom = nu_label_lowpass_limit(ilabel)
+            if( lp_angstrom <= TINY ) cycle
+            rmat(i,j,k) = lp_angstrom
+        end do
+        !$omp end parallel do
+        nullify(rmat)
+    end subroutine get_nu_local_resolution_map
+
     module subroutine write_nu_local_resolution_map( fname, mask )
         class(string),     intent(in) :: fname
         logical, optional, intent(in) :: mask(:,:,:)
         real(kind=c_float),   pointer :: rmat(:,:,:)
         type(image) :: resmap
         real        :: lp_angstrom
-        integer     :: i, j, k, imask, ilabel, n_written
-        if( .not.allocated(filtmap) ) &
-            &THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before write_nu_local_resolution_map')
-        if( .not.allocated(cutoff_finds) ) &
-            &THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before write_nu_local_resolution_map')
-        call require_valid_stats_mask(mask, 'write_nu_local_resolution_map')
-        call resmap%new(ldim, smpd, wthreads=.false.)
-        call resmap%get_rmat_ptr(rmat)
-        rmat(:ldim(1),:ldim(2),:ldim(3)) = 0.
-        n_written = 0
+        integer     :: i, j, k, ilabel, n_written
         if( present(mask) )then
+            if( .not.allocated(filtmap) ) &
+                &THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before write_nu_local_resolution_map')
+            if( .not.allocated(cutoff_finds) ) &
+                &THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before write_nu_local_resolution_map')
+            call require_valid_stats_mask(mask, 'write_nu_local_resolution_map')
+            call resmap%new(ldim, smpd, wthreads=.false.)
+            call resmap%get_rmat_ptr(rmat)
+            rmat(:ldim(1),:ldim(2),:ldim(3)) = 0.
             !$omp parallel do collapse(3) schedule(static) default(shared) &
-            !$omp private(i,j,k,ilabel,lp_angstrom) reduction(+:n_written) proc_bind(close)
+            !$omp private(i,j,k,ilabel,lp_angstrom) proc_bind(close)
             do k = 1, ldim(3)
                 do j = 1, ldim(2)
                     do i = 1, ldim(1)
@@ -397,30 +424,18 @@ contains
                         lp_angstrom = nu_label_lowpass_limit(ilabel)
                         if( lp_angstrom <= TINY ) cycle
                         rmat(i,j,k) = lp_angstrom
-                        n_written = n_written + 1
                     end do
                 end do
             end do
             !$omp end parallel do
         else
-            !$omp parallel do schedule(static) default(shared) &
-            !$omp private(imask,i,j,k,ilabel,lp_angstrom) reduction(+:n_written) proc_bind(close)
-            do imask = 1, n_nu_mask
-                i = nu_mask_vox(1,imask)
-                j = nu_mask_vox(2,imask)
-                k = nu_mask_vox(3,imask)
-                ilabel = int(filtmap(i,j,k))
-                if( ilabel < 1 .or. ilabel > size(cutoff_finds) ) cycle
-                lp_angstrom = nu_label_lowpass_limit(ilabel)
-                if( lp_angstrom <= TINY ) cycle
-                rmat(i,j,k) = lp_angstrom
-                n_written = n_written + 1
-            end do
-            !$omp end parallel do
+            call get_nu_local_resolution_map(resmap)
+            call resmap%get_rmat_ptr(rmat)
         endif
+        n_written = count(rmat(:ldim(1),:ldim(2),:ldim(3)) > 0.)
+        nullify(rmat)
         call resmap%write(fname, del_if_exists=.true.)
         call resmap%kill
-        nullify(rmat)
         if( NU_DEV_OUTPUT .and. nu_l_report )then
             write(logfhandle,'(A,1X,A)') '>>> Wrote NU local resolution frequency map:', fname%to_char()
             write(logfhandle,'(A,I12)') '    Nonzero voxels: ', n_written

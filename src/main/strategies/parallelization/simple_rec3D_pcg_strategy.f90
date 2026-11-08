@@ -19,8 +19,7 @@ use simple_refine3D_provenance,  only: begin_reference_set, publish_reference_se
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
     &write_support_provenance
 use simple_image_msk,           only: image_msk
-use simple_pcg_solvent_sidecar, only: solvent_prior_cross_half_objective, PCG_SOLVENT_LAMBDA_GRID, &
-    &write_pcg_solvent_pair, prepare_solvent_prior_on_pair, solvent_prior_provenance, build_solvent_check_support
+use simple_pcg_order_prior,     only: write_pcg_order_pair, prepare_order_prior_on_pair, order_prior_provenance
 use simple_nu_state_filter,     only: nonuniform_filter_state, nu_aux_member, nu_state_filter_timings
 use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
@@ -96,9 +95,9 @@ contains
             call evaluate_halfmap_pair(params, state_here, even, odd, avg, diagnostics, 'pcg', &
                 &l_pair_support_constrained=l_pair_support_constrained, support_kind=support_kind, mask_kind='none')
         endif
-        ! the resolution document names the solvent prior beside the FSC mode
-        if( params%l_pcg_solvent ) diagnostics%fsc_mode = &
-            &trim(diagnostics%fsc_mode)//' solvent_prior=soft(per_half,base_pair)'
+        ! the resolution document names the order prior beside the FSC mode
+        if( params%l_pcg_order ) diagnostics%fsc_mode = &
+            &trim(diagnostics%fsc_mode)//' order_prior=shared_weight,base_pair'
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
             &' FSC=0.500 RESOLUTION = ', diagnostics%res_fsc05
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
@@ -586,7 +585,7 @@ contains
         class(cmdline),   intent(inout) :: cline
         real,    optional, intent(out)  :: nu_align_lps(:)
         type(pcg_assemble_bench), optional, intent(inout) :: bench
-        type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, solvent_even, solvent_odd, atm_even, atm_odd
+        type(image)  :: half_even, half_odd, ml_even, ml_odd, merged, order_even, order_odd, atm_even, atm_odd
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         type(string) :: fname_restxt, eonames(2)
         type(halfmap_diagnostics_result) :: hm_diag
@@ -607,12 +606,11 @@ contains
         integer :: pcg_master_nthreads, pcg_half_nthreads
         type(distributed_half_job) :: even_job, odd_job
         type(image_msk) :: state_support_msk
-        type(image)     :: solvent_weight(2)
+        type(image)     :: order_weight(2)
         logical :: l_state_support, l_base_support_constrained, l_nu_base_constrained
         logical :: l_has_updates, l_sample_seed, l_chain_carry, l_even_chain, l_odd_chain
-        logical :: l_shipped_support_constrained, l_solvent_weight
-        real    :: res0143_prior_free
-        real    :: solvent_lambda_eff !< the solvent ridge in force for the current state
+        logical :: l_shipped_support_constrained, l_order_weight
+        real    :: order_lambda_eff !< the order ridge in force for the current state
         ! atm_prior=yes: the prior shared by both half operators, its strength and the products of the current state
         type(pcg_atomic_prior), target :: atm_prior
         type(image)  :: atm_res
@@ -627,7 +625,7 @@ contains
 
         if( L_BENCH_GLOB ) t_bench = tic()
         call validate_pcg_common(params)
-        solvent_lambda_eff = 0.
+        order_lambda_eff = 0.
         ! add-on chains reconstruct by gridding only: the frozen-set handshakes have no PCG side
         if( cline%defined('frozen_rec') .or. cline%defined('frozen_seed') )then
             THROW_HARD('frozen sets are gridding only; rec_backend=pcg takes no frozen_rec or frozen_seed')
@@ -780,7 +778,7 @@ contains
             if( L_BENCH_GLOB ) t_bench = tic()
             call build_pcg_state_support(params, state, state_support_msk, l_state_support, state_support_kind)
             if( L_BENCH_GLOB ) bt%rt_support = bt%rt_support + toc(t_bench)
-            l_solvent_weight = .false.
+            l_order_weight = .false.
             l_base_support_constrained = l_state_support
             base_support_kind = 'sphere'
             if( l_base_support_constrained ) base_support_kind = state_support_kind
@@ -789,7 +787,7 @@ contains
             chain_contrib = 0
             l_atm_resolved = .false.
             call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base', &
-                &solvent_even=solvent_even, solvent_odd=solvent_odd, atm_even=atm_even, atm_odd=atm_odd)
+                &order_even=order_even, order_odd=order_odd, atm_even=atm_even, atm_odd=atm_odd)
             ! the chain pair written by the base reductions is published by its manifest, last
             if( all(chain_written) ) call write_chain_manifest(state)
             if( params%l_trail_rec .and. .not. l_chain_carry )then
@@ -846,9 +844,9 @@ contains
                 call half_odd%write(fname_odd_unfil, del_if_exists=.true.)
                 time_map_output = real(toc(t_state_phase),dp)
             endif
-            if( l_solvent_weight )then
+            if( l_order_weight )then
                 if( L_BENCH_GLOB ) t_bench = tic()
-                call write_pcg_solvent_pair(params, state, solvent_even, solvent_odd)
+                call write_pcg_order_pair(params, state, order_even, order_odd)
                 if( L_BENCH_GLOB ) bt%rt_map_output = bt%rt_map_output + toc(t_bench)
             endif
             t_state_phase = tic()
@@ -868,10 +866,10 @@ contains
 
             if( params%l_ml_reg )then
                 ! the ordinary global-ML replay (P_tau from the FSC pair), of
-                ! the solvent-prior'd pair when the prior is on
-                if( l_solvent_weight )then
+                ! the order-prior'd pair when the prior is on
+                if( l_order_weight )then
                     call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
-                        &solvent_even, solvent_odd)
+                        &order_even, order_odd)
                 else
                     call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
                         &half_even, half_odd)
@@ -903,14 +901,14 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             ! the sidecar follows the published map, never precedes it
-            if( params%l_ml_reg .and. l_solvent_weight )then
+            if( params%l_ml_reg .and. l_order_weight )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind, &
-                    &solvent_prior=solvent_prior_provenance(params, solvent_lambda_eff))
+                    &order_prior=order_prior_provenance(params, order_lambda_eff))
             else if( params%l_ml_reg )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized', shipped_support_kind)
-            else if( l_solvent_weight )then
+            else if( l_order_weight )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind, &
-                    &solvent_prior=solvent_prior_provenance(params, solvent_lambda_eff))
+                    &order_prior=order_prior_provenance(params, order_lambda_eff))
             else if( l_atm_resolved )then
                 call write_support_provenance(fname_vol, l_shipped_support_constrained, 'base', shipped_support_kind, &
                     &atomic_prior=atomic_prior_provenance())
@@ -927,13 +925,13 @@ contains
                 ! a constrained base pair hands its support over (the evidence null
                 ! on the dilation ring)
                 l_nu_base_constrained = l_base_support_constrained
-                if( l_solvent_weight )then
+                if( l_order_weight )then
                     ! label field from the base pair, applied to the prior'd pair
                     call nonuniform_filter_state(params, state, half_even, half_odd, &
                         &ml_even, ml_odd, nu_aux_member(params), &
                         &res0143s(state), fname_vol, eonames, align_lps(state), timings=bt%nu, &
                         &base_support=state_support_msk, l_base_constrained=l_nu_base_constrained, &
-                        &vol_apply_even=solvent_even, vol_apply_odd=solvent_odd)
+                        &vol_apply_even=order_even, vol_apply_odd=order_odd)
                 else
                     call nonuniform_filter_state(params, state, half_even, half_odd, &
                         &ml_even, ml_odd, nu_aux_member(params), &
@@ -960,8 +958,8 @@ contains
             state_written(state) = .true.
             call half_even%kill
             call half_odd%kill
-            call solvent_even%kill
-            call solvent_odd%kill
+            call order_even%kill
+            call order_odd%kill
             call atm_even%kill
             call atm_odd%kill
             call atm_res%kill
@@ -974,8 +972,8 @@ contains
                 call fname_odd_unfil%kill
             endif
             call merged%kill
-            call solvent_weight(1)%kill
-            call solvent_weight(2)%kill
+            call order_weight(1)%kill
+            call order_weight(2)%kill
             call fname_even%kill
             call fname_odd%kill
             call fname_vol%kill
@@ -1277,50 +1275,6 @@ contains
             if( l_valid ) chain_gen_prev = man%get_gen()
             call man%kill
         end function chain_manifest_valid
-
-        !> check_solvent_lambda_by_resolve through the prepared half jobs, which
-        !! are left zeroed with the production strength installed
-        subroutine check_solvent_lambda_by_resolve_distributed( state_here, even_job, odd_job, base_even, base_odd )
-            integer,                    intent(in)    :: state_here
-            type(distributed_half_job), intent(inout) :: even_job, odd_job
-            type(image),                intent(in)    :: base_even, base_odd
-            type(image) :: cand_even, cand_odd, support
-            real    :: j, jref
-            integer :: ig
-            call build_solvent_check_support(params, state_support_msk, l_state_support, support)
-            call cand_even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            call cand_odd%new( [params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            jref = solvent_prior_cross_half_objective(base_even, base_odd, base_even, base_odd, support)
-            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT PRIOR LAMBDA CHECK: STATE ', state_here, &
-                &', the same grid by real re-solves (pcg_solvent_check=yes)'
-            write(logfhandle,'(A)') '    lambda_rel     J/J(0) (re-solve)   RESID even/odd   MRES even/odd'
-            do ig = 1, size(PCG_SOLVENT_LAMBDA_GRID)
-                call even_job%pcgop%set_solvent_prior(solvent_weight(1), PCG_SOLVENT_LAMBDA_GRID(ig))
-                call odd_job%pcgop%set_solvent_prior( solvent_weight(2), PCG_SOLVENT_LAMBDA_GRID(ig))
-                even_job%x = 0.0
-                odd_job%x  = 0.0
-                even_job%l_nonzero = .false.
-                odd_job%l_nonzero  = .false.
-                call solve_distributed_half_pair(even_job, odd_job)
-                call cand_even%set_rmat(even_job%x, .false.)
-                call cand_odd%set_rmat( odd_job%x,  .false.)
-                j = solvent_prior_cross_half_objective(base_even, base_odd, cand_even, cand_odd, support)
-                write(logfhandle,'(A,F8.3,A,F10.4,A,2(1X,ES9.3),A,2(1X,ES9.3))') '     ', PCG_SOLVENT_LAMBDA_GRID(ig), &
-                    &'  ', j / max(TINY, jref), '        ', even_job%result%final_rel_residual, &
-                    &odd_job%result%final_rel_residual, '  ', even_job%result%final_rel_residual_m, &
-                    &odd_job%result%final_rel_residual_m
-            enddo
-            ! restore the production strength, leave the jobs cold
-            call even_job%pcgop%set_solvent_prior(solvent_weight(1), solvent_lambda_eff)
-            call odd_job%pcgop%set_solvent_prior( solvent_weight(2), solvent_lambda_eff)
-            even_job%x = 0.0
-            odd_job%x  = 0.0
-            even_job%l_nonzero = .false.
-            odd_job%l_nonzero  = .false.
-            call cand_even%kill
-            call cand_odd%kill
-            call support%kill
-        end subroutine check_solvent_lambda_by_resolve_distributed
 
         !> atm_prior=yes, between the prior-free base solve and its re-solve: the model of pdbfile on the solve support,
         !! its kernel width fitted on the merged base map (or bfac_data), the strength from the base pair's moments (or
@@ -1629,17 +1583,17 @@ contains
                 &merge('yes','no ',atm_prior%uses_fitted_model())
         end function atomic_prior_provenance
 
-        !> pcg_solvent=yes: solvent_even/odd receive the ridge re-solve, even/odd
+        !> pcg_order=yes: order_even/odd receive the ridge re-solve, even/odd
         !! the prior-free base pair (FSC, NU, evidence, _unfil)
         subroutine reduce_solve_state_pair( state_here, even, odd, n_even_here, n_odd_here, solve_kind, &
-                &fsc_prior, warm_even, warm_odd, solvent_even, solvent_odd, atm_even, atm_odd )
+                &fsc_prior, warm_even, warm_odd, order_even, order_odd, atm_even, atm_odd )
             integer,          intent(in)    :: state_here
             character(len=*), intent(in)    :: solve_kind
             type(image),      intent(inout) :: even, odd
             integer,          intent(out)   :: n_even_here, n_odd_here
             real, optional,   intent(in)    :: fsc_prior(:)
             type(image), optional, intent(in) :: warm_even, warm_odd
-            type(image), optional, intent(inout) :: solvent_even, solvent_odd
+            type(image), optional, intent(inout) :: order_even, order_odd
             type(image), optional, intent(inout) :: atm_even, atm_odd !< atm_prior=yes: the prior'd pair
             integer(timer_int_kind) :: t_pair
             integer :: ikind
@@ -1675,22 +1629,22 @@ contains
                 t_pair = tic()
             endif
 
-            if( .not. present(fsc_prior) .and. params%l_pcg_solvent )then
-                ! pcg_solvent=yes: weights from the prior-free pair, the ridge on
-                ! both operators, the same cold solve again into the solvent pair
+            if( .not. present(fsc_prior) .and. params%l_pcg_order )then
+                ! pcg_order=yes: weights from the prior-free pair and the previous NU evidence, the
+                ! ridge on both operators, the same cold solve again into the order pair
                 if( even_job%ready .and. odd_job%ready )then
                     call report_pcg_solve('DISTRIBUTED', state_here, 'even', 'pre', even_job%nptcls, &
                         &even_job%niters, even_job%time_solve, even_job%result)
                     call report_pcg_solve('DISTRIBUTED', state_here, 'odd', 'pre', odd_job%nptcls, &
                         &odd_job%niters, odd_job%time_solve, odd_job%result)
-                    call prepare_solvent_prior_on_pair(params, state_here, even_job%pcgop, odd_job%pcgop, &
+                    call prepare_order_prior_on_pair(params, state_here, even_job%pcgop, odd_job%pcgop, &
                         &even_job%x, odd_job%x, state_support_msk, l_state_support, &
-                        &solvent_weight, l_solvent_weight, res0143_prior_free, solvent_lambda_eff)
-                    if( l_solvent_weight )then
-                        if( .not.(present(solvent_even) .and. present(solvent_odd)) ) &
-                            &THROW_HARD('the solvent-prior re-solve needs its output pair; reduce_solve_state_pair')
+                        &order_weight, l_order_weight, order_lambda_eff)
+                    if( l_order_weight )then
+                        if( .not.(present(order_even) .and. present(order_odd)) ) &
+                            &THROW_HARD('the order-prior re-solve needs its output pair; reduce_solve_state_pair')
                         ! the prior-free pair is the base pair; the re-solve
-                        ! with the ridge goes to the solvent pair
+                        ! with the ridge goes to the order pair
                         call validate_solved_map(even_job%x, 'distributed', state_here, 'even', 'pre')
                         call validate_solved_map(odd_job%x,  'distributed', state_here, 'odd',  'pre')
                         call even%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
@@ -1701,8 +1655,6 @@ contains
                         odd_job%x  = 0.0
                         even_job%l_nonzero = .false.
                         odd_job%l_nonzero  = .false.
-                        if( params%l_pcg_solvent_check ) &
-                            &call check_solvent_lambda_by_resolve_distributed(state_here, even_job, odd_job, even, odd)
                         call solve_distributed_half_pair(even_job, odd_job)
                         l_resolved = .true.
                     endif
@@ -1762,8 +1714,8 @@ contains
                 call finish_distributed_half_job(even_job, even, warm_even)
                 call finish_distributed_half_job(odd_job, odd, warm_odd)
             else if( l_resolved )then
-                call finish_distributed_half_job(even_job, solvent_even)
-                call finish_distributed_half_job(odd_job, solvent_odd)
+                call finish_distributed_half_job(even_job, order_even)
+                call finish_distributed_half_job(odd_job, order_odd)
             else
                 call finish_distributed_half_job(even_job, even)
                 call finish_distributed_half_job(odd_job, odd)
@@ -1997,11 +1949,11 @@ contains
             integer(timer_int_kind) :: t_phase, t_end, t_rate
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
-            if( job%l_ml_solve .and. l_solvent_weight )then
-                ! closed form, then coupled iterations with the soft solvent prior
+            if( job%l_ml_solve .and. l_order_weight )then
+                ! closed form, then coupled iterations with the order prior
                 call job%pcgop%solve_regularized(job%x, params%maxits_ml, job%rel_res_hist, &
-                    &job%niters, job%result, job%x_cf, solvent_weight=solvent_weight(job%eo+1), &
-                    &solvent_lambda_rel=solvent_lambda_eff)
+                    &job%niters, job%result, job%x_cf, order_weight=order_weight(job%eo+1), &
+                    &order_lambda_rel=order_lambda_eff)
             else if( job%l_ml_solve )then
                 ! closed form, then maxits_ml coupled iterations from it
                 call job%pcgop%solve_regularized(job%x, params%maxits_ml, job%rel_res_hist, &

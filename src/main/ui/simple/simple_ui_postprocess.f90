@@ -38,9 +38,8 @@ contains
         ! parameter input/output
         call postprocess%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind; unfil = the unfiltered (base) pair average beside the volume, '//&
-            &'solvent = the solvent-prior pair average (pcg_solvent=yes){vol}', &
-            &'project output kind: vol, vol_cavg, unfil or solvent', .false., 'vol', &
+        call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind; unfil = the unfiltered (base) pair average beside the volume{vol}', &
+            &'project output kind: vol, vol_cavg or unfil', .false., 'vol', &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>

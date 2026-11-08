@@ -98,8 +98,8 @@ None of these is registered in the project here: `add_vol2os_out`/`add_fsc2os_ou
 - Wave model: `simple_wave_projector` (projection, first Born, Rytov, multislice on `pcg_lattice`,
   native sampling; its own parallel regions, stops inside another) and `simple_wave_multislice`
   (one thread's sweep). Contract: `doc/policies/3D/wave_model_policy.md`.
-- PCG priors: `simple_pcg_solvent_sidecar` (`pcg_solvent=yes`: per-half weight, re-solve, the
-  apply pair of NU) and `simple_pcg_atomic_prior` (`atm_prior=yes`, shared by both halves, owned by
+- PCG priors: `simple_pcg_order_prior` (`pcg_order=yes`: per-half order weight on the previous
+  iteration's NU evidence, closed-form choice, re-solve, the apply pair of NU) and `simple_pcg_atomic_prior` (`atm_prior=yes`, shared by both halves, owned by
   the caller).
 - `simple_halfmap_enhancer` (local Wiener sharpening, `halfmap_enhance`), `simple_volpair_metrics`
   (two maps of one frame: FSC and band correlation), `simple_vol_pproc_policy` (mask artifact box and

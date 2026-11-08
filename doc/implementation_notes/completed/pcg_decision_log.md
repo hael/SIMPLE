@@ -1000,3 +1000,52 @@ not Hermitian and `get_grad` folds both halves. Expected on the benchmark:
 the per-part partial reconstruction near gridding's, the raw I/O halved,
 the solves bounded by measured FFTs. To verify on the cluster: the same `solve3D`
 with `rec_backend=pcg`, the REC3D and PCG_ASSEMBLE bench records.
+
+**2026-11-08 -- the solvent prior becomes the order prior (`pcg_order`); solve3D starts PCG at stage 6.**
+The density ridge of `pcg_solvent` kept the micelle of small membrane proteins: at the
+weight's smoothing scale a micelle is as dense as the protein. The offline rounds of
+2026-11-07 (`doc/implementation_notes/planned/pcg_order_prior.md`, sections 9-10) showed
+that NU evidence of order separates them and that whole-map cross-half agreement cannot
+choose a removal (it counts the detergent as signal). Decisions (Hans):
+
+- **One ridge, one model for every molecule:** `lambda h (1 - w_ord)`, `w_ord` a
+  logistic on the NU-evidence margin at ordered fraction `f`, `h` the data precision
+  per voxel (the operator's real-space diagonal). The name follows what it keeps:
+  `pcg_order`, `pcg_order_lambda`; `pcg_solvent`, `pcg_solvent_lambda` and the
+  `pcg_solvent_check` re-solve diagnostic are gone, with no aliases. Two corrections
+  the same day, after Hans read the offline maps ("excessively low-pass filtered";
+  "we cannot design a system where we need to set a different regularization
+  parameter for different kinds of molecules"): the density weight `w` of
+  `pcg_solvent` left the penalty (`1 - w w_ord` before), because it put penalty on
+  12-25 % of the protein core's voxels; and the strength moved from the low-band
+  data scale to `h`, which had made one `lambda_rel` act 0.46 to 11.8 times as
+  strongly from molecule to molecule.
+- **The strength rule:** `f` and `lambda_rel` (0.1 to 20) in closed form, among the
+  settings that keep 95 % of the protein core's cross-half signal: the most removed
+  from the dense density around the core, or with none around it (a soluble
+  protein) the strongest `lambda_rel`; else no prior that iteration. It replaces the
+  NU-objective strength estimate of 2026-09-22. The closed form is banded: octave bands of Fourier shells, each shrunk per voxel
+  against the operator's diagonal over its shells. A first version with one
+  real-space diagonal disagreed with full surrogate solves on PorF and tat (the
+  core kept 87 % and 76 % where it predicted 97 % and 96 %), and its fallback
+  applied the weakest strength even when the core lost a third
+  (`pcg_order_prior.md` section 11).
+- **Gold standard:** the order weight is shared by the halves (the evidence of
+  order is cross-half), a smooth shared soft mask like the NU label field; accepted
+  for the tests. Strict two-fold independence would need quarter reconstructions.
+- **Lag one:** the prior reads the previous iteration's `_nu_evidence` (written by
+  `nonuniform_filter_state` under `pcg_order=yes`) and `_nu_locres` of the same
+  state and box; the first iteration at a box runs without it.
+- **solve3D:** PCG from stage 6 (`PCG_REC_START_STAGE`, 3 before), gridding before;
+  the order prior from the same stage (the solvent prior was stage 8 only). The
+  final reconstruction stays prior-free.
+
+- **Auto is the default** with `pcg_order=yes` (Hans, on the offline auto maps:
+  "absolutely fine"; to be revised on the loop tests). A set `pcg_order_lambda`,
+  for testing, is applied as given at the smallest ordered fraction that keeps
+  95 % of the core.
+
+The offline program `order_prior` checks the closed-form choice against full solves
+of a Fourier surrogate of the operator, with the same rule (`choose_order_setting`).
+Untested in the loop; first runs: `solve3D rec_backend=pcg gold_standard=yes`,
+`pcg_order` no against yes (auto), on PfCRT, PorF and streptavidin.

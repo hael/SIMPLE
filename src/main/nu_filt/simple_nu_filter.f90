@@ -23,9 +23,10 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, analyze_filtmap_neighbor_continuity,&
           get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp, get_nu_filter_timings,&
-          write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
+          get_nu_local_resolution_map, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, &
-          write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
+          get_nu_evidence_map, write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA,&
+          NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, &
           NU_ALIGN_LP_MIN_ASSIGNED_PCT, NU_ALIGN_LP_MIN_SIGNAL_PCT,&
@@ -425,12 +426,11 @@ interface
     end subroutine assert_nu_evidence_replay_ready
 
     ! In submodule: simple_nu_filter_sharpen.f90
-    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp, apply_even, apply_odd )
+    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp )
         type(nu_evidence_state), intent(in)    :: state
         type(image),             intent(in)    :: vol_even, vol_odd
         real,                    intent(in)    :: fsc(:)
         type(image),             intent(inout) :: vol_sharp
-        type(image), optional,   intent(in)    :: apply_even, apply_odd
     end subroutine nu_evidence_sharpen_vol
 
     ! In submodule: simple_nu_filter_potts.f90
@@ -472,7 +472,7 @@ interface
 
     ! In submodule: simple_nu_filter_apply.f90
     !> Filtered even/odd references from the current label field: the source pair (the competition pair, or
-    !! with pcg_solvent=yes the solvent-prior pair) filtered per label; the auxiliary label from the auxiliary pair.
+    !! with pcg_order=yes the order-prior pair) filtered per label; the auxiliary label from the auxiliary pair.
     module subroutine nu_filter_vols( vol_even, vol_odd, vol_src_even, vol_src_odd )
         class(image), intent(out) :: vol_even, vol_odd
         class(image), intent(in)  :: vol_src_even, vol_src_odd
@@ -513,6 +513,11 @@ interface
     module subroutine analyze_filtmap_neighbor_continuity( mask )
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine analyze_filtmap_neighbor_continuity
+
+    !> the label field's low-pass limit per voxel (A) as a volume, zero outside the NU sphere
+    module subroutine get_nu_local_resolution_map( resmap )
+        class(image), intent(inout) :: resmap
+    end subroutine get_nu_local_resolution_map
 
     module subroutine write_nu_local_resolution_map( fname, mask )
         class(string), intent(in) :: fname
@@ -563,10 +568,17 @@ interface
         class(image), optional, target, intent(in) :: vol_dens
     end subroutine nu_evidence_envelope
 
+    !> the smoothed evidence margin of the live bank as a volume, zero outside the NU sphere
+    module subroutine get_nu_evidence_map( evmap, lp_smooth, l_relative )
+        class(image), intent(inout) :: evmap
+        real,         intent(in)    :: lp_smooth
+        logical,      intent(in)    :: l_relative
+    end subroutine get_nu_evidence_map
+
     module subroutine write_nu_evidence_map( fname, lp_smooth, l_relative )
-        class(string),     intent(in) :: fname
-        real,    optional, intent(in) :: lp_smooth
-        logical, optional, intent(in) :: l_relative
+        class(string), intent(in) :: fname
+        real,          intent(in) :: lp_smooth
+        logical,       intent(in) :: l_relative
     end subroutine write_nu_evidence_map
 
     module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, mask_out, l_valid )

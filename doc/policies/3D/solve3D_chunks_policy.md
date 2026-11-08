@@ -34,7 +34,7 @@ automatically within the limits below. It has no cadence gate and no rollback.
 | the other `solve3D` inputs a stream base run has (`nstates`, `nstages`, `pgrp`, `mskdiam`, `nclust`, `lpstart`, `lpstop`, ...) | as in `solve3D`; they go to the base run; `nstages` must reach the symmetry-search stage (section 9) |
 | compute keys (`nparts`, `nthr`) and the execution-environment keys | accepted; they go to the base run and every add-on |
 | `nsample` | not accepted; derived (section 3) |
-| `rec_backend`, `maxits_pcg`, `maxits_ml`, `pcg_solvent`, `pcg_solvent_lambda`, `pcg_solvent_check` | not accepted; reconstruction is always `rec_backend=gridding` |
+| `rec_backend`, `maxits_pcg`, `maxits_ml`, `pcg_order`, `pcg_order_lambda` | not accepted; reconstruction is always `rec_backend=gridding` |
 | `nptcls_base` | not accepted; the plan replaces it |
 | `vol1`, `cavg_ini`, `cavg_ini_ext`, `state`, `projfile_frozen` | not accepted |
 

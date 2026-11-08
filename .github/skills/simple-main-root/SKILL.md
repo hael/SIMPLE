@@ -49,7 +49,8 @@ Silent ones first: nothing reports these.
   iteration must reach `finish_iteration`, or the rest of the run stays at full update.
 - `calc_final_rec` reads the whole project into the caller's `spproj` (unsaved edits are lost),
   writes back `out`, and builds its child cline from nothing (`prep_final_rec_cline`): a refinement
-  key the final map must honour (`m_estimator`, `automsk`, `pcg_solvent`) is passed there or lost.
+  key the final map must honour (`m_estimator`, `automsk`) is passed there or lost; `pcg_order` is
+  withheld on purpose (the final map is prior-free).
 - `solve/`: run state is module-level in `simple_solve3D_utils` (`lpinfo`, `cline_refine3D`,
   `update_frac`, override flags) and `solve3D_chunks` runs solve3D then solve3D_addon in one
   process: set new state at every entry. Ruled to be converted to a type owned by each run: add no

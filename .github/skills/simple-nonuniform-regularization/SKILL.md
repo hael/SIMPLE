@@ -57,8 +57,8 @@ reference volumes.
   filter writes no scratch files.
 - Keep the source pair alive and unchanged from `setup_nu_dmats` to
   `nu_filter_vols`: the composition filters it again per label. With
-  `pcg_solvent=yes` the label field of the base pair is applied to the
-  solvent-prior pair instead.
+  `pcg_order=yes` the label field of the base pair is applied to the
+  order-prior pair instead.
 - When `ml_reg=yes`, use the `_unfil` even/odd pair as the base nonuniform
   input and offer the ML-regularized pair as the auxiliary member. It is
   appended as the last label, sharing the finest retained rung's Potts
@@ -140,6 +140,23 @@ The intended behavior is:
 - avoid applying another normal low-pass filter when `l_nonuniform_mode` is active
   and the `_nu_filt` references exist; the raw half-map fallback gets the
   FSC-optimal filter
+
+### Change the PCG order prior or the evidence weight
+
+Try it offline first: `simple_exec prg=order_prior` (`simple_order_prior_offline`
+in `src/main/volume`) runs the loop's closed-form choice (`select_order_prior` in
+`simple_pcg_order_prior`) on an `_unfil` pair and checks it against full solves
+of a Fourier surrogate of the PCG re-solve. The prior is one ridge
+`lambda h (1 - w_ord)`: `w_ord` a logistic on the NU-evidence margin at ordered
+fraction `f`, `h` the data precision per voxel, so one `lambda` means the same for
+every molecule; `f` and `lambda` keep 95 % of the protein core's cross-half signal
+and remove the most around it. No density weight in the penalty: it low-passed
+the protein. Whole-map agreement cannot judge removal: it counts the
+detergent as signal. In the loop it reads the previous iteration's
+`_nu_evidence` and `_nu_locres` maps (lag one), which `nonuniform_filter_state`
+writes under `pcg_order=yes`. Design and results:
+`doc/implementation_notes/planned/pcg_order_prior.md`; tests:
+`unit_reconstruction suite=order_prior` and `suite=order_prior_offline`.
 
 ## Language To Prefer
 

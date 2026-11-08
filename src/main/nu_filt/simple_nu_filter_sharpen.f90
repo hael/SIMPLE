@@ -16,15 +16,12 @@ contains
     !! Henderson, RELION's default) is applied inside every local passband
     !! stretched so that its FSC=0.143 crossing sits at the voxel's evidenced
     !! cutoff, and the Guinier B-factor from HPLIM_GUINIER) and APPLIED to the
-    !! apply pair (apply_even/odd, the solvent-prior'd base pair when there is
-    !! one; absent, the evidence pair is sharpened). Neither pair is
-    !! ML-shrunk, so the weighting is applied exactly once.
-    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp, apply_even, apply_odd )
+    !! same pair's average. It is not ML-shrunk, so the weighting is applied exactly once.
+    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, fsc, vol_sharp )
         type(nu_evidence_state), intent(in)    :: state
         type(image),             intent(in)    :: vol_even, vol_odd
         real,                    intent(in)    :: fsc(:)
         type(image),             intent(inout) :: vol_sharp
-        type(image), optional,   intent(in)    :: apply_even, apply_odd
         type(nu_evidence_summary) :: summ
         type(image) :: vol_merged, vol_work, vol_filt, vol_supp
         real,    allocatable :: cutoffs(:), cutoff_map(:,:,:), distinct(:), filt(:), optlp(:), res(:)
@@ -32,7 +29,6 @@ contains
         logical, allocatable :: supp_lmask(:,:,:)
         real    :: finest, bfac, mean_half, c_here, fsc05, fsc0143, kscaled, frac
         integer :: ldim(3), i, j, k, imask, nyq, ndist, icut, cutoff_find, nnull, k0143, kk, klo
-        logical :: l_apply
         if( .not.nu_evidence_state_is_valid(state) ) &
             &THROW_HARD('cannot sharpen from an invalid NU evidence state; nu_evidence_sharpen_vol')
         call get_nu_evidence_summary(state, summ)
@@ -40,13 +36,6 @@ contains
         if( any(vol_even%get_ldim() /= ldim) .or. any(vol_odd%get_ldim() /= ldim) ) &
             &THROW_HARD('half-map dimensions do not match the frozen evidence state; nu_evidence_sharpen_vol')
         nyq = vol_even%get_filtsz()
-        l_apply = present(apply_even) .and. present(apply_odd)
-        if( present(apply_even) .neqv. present(apply_odd) ) &
-            &THROW_HARD('the apply pair needs both halves; nu_evidence_sharpen_vol')
-        if( l_apply )then
-            if( any(apply_even%get_ldim() /= ldim) .or. any(apply_odd%get_ldim() /= ldim) ) &
-                &THROW_HARD('apply pair dimensions do not match the frozen evidence state; nu_evidence_sharpen_vol')
-        endif
         if( size(fsc) < nyq ) THROW_HARD('FSC has fewer shells than the volume; nu_evidence_sharpen_vol')
         optlp = fsc2cref(fsc(1:nyq))
         res = get_resarr(ldim(1), summ%smpd)
@@ -94,18 +83,11 @@ contains
         nnull  = count(cutoff_map <= TINY .and. supp_lmask)
         ! classical Guinier B-factor of the evidence (unregularized) pair
         ! average, anchored to the finest evidenced cutoff, gated exactly like
-        ! the standard postprocess; the merged map that is sharpened is the
-        ! apply pair's when there is one
+        ! the standard postprocess; that average is the map sharpened
         call vol_work%copy(vol_even)
         call vol_work%add(vol_odd)
         call vol_work%mul(0.5)
-        if( l_apply )then
-            call vol_merged%copy(apply_even)
-            call vol_merged%add(apply_odd)
-            call vol_merged%mul(0.5)
-        else
-            call vol_merged%copy(vol_work)
-        endif
+        call vol_merged%copy(vol_work)
         bfac = 0.0
         if( finest < NU_SHARP_BFAC_FINEST_A )then
             bfac = vol_work%guinier_bfac(HPLIM_GUINIER, finest)
@@ -116,7 +98,6 @@ contains
         endif
         write(logfhandle,'(A)')       '>>> NU EVIDENCE SHARPENING (postprocess_nu v2): B-sharpen, '//&
             &'FSC-weighted (sqrt(2FSC/(1+FSC)) stretched to each local cutoff), then local low-pass'
-        if( l_apply ) write(logfhandle,'(A)') '    estimated on the unregularized pair, applied to the solvent-prior pair'
         write(logfhandle,'(A,I0,A)')  '    evidenced local cutoffs: ', ndist, ' distinct'
         write(logfhandle,'(A,I0)')    '    null-claimed voxels flattened to the mean: ', nnull
         ! sharpen the MERGED map: every v2 operation is linear, so this is

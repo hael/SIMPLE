@@ -1,7 +1,7 @@
 !@descr: NU-evidence nonuniform postprocessing (isolated from the standard postprocess path)
 ! Evidence pair: the state's _even_unfil/_odd_unfil. With _even/_odd present the refinement's competition
-! is rerun for <vol>_locres_nu. nu_evidence_sharpen_vol then sharpens the _solvent pair if present, else
-! the unfil pair, to <vol>_pproc_nu (+_mirr). Display maps only, never FSC/resolution inputs.
+! is rerun for <vol>_locres_nu. nu_evidence_sharpen_vol then sharpens the unfil pair to <vol>_pproc_nu
+! (+_mirr). Display maps only, never FSC/resolution inputs.
 ! Design: doc/implementation_notes/completed/nu_evidence_local_sharpening.md.
 module simple_commanders_postprocess_nu
 use simple_commanders_api
@@ -26,14 +26,13 @@ contains
         type(parameters)        :: params
         type(sp_project)        :: spproj
         type(nu_evidence_state) :: evstate
-        type(image)             :: even, odd, vol_sharp, sol_even, sol_odd
+        type(image)             :: even, odd, vol_sharp
         type(image), allocatable :: aux_even(:), aux_odd(:)
         type(string)            :: vol_out, fname, fname_vol, fname_even_unfil, fname_odd_unfil, fname_even, fname_odd
-        type(string)            :: fname_even_solvent, fname_odd_solvent
         real, allocatable       :: corrs(:), res(:)
         real                    :: fsc05, fsc0143, handoff_lp, populated_lp, raw_lp, smpd
         integer                 :: n_signal, state, box, ldim(3), nptcls
-        logical                 :: l_aux, l_solvent
+        logical                 :: l_aux
         ! operates on the project like postprocess: the state's volume from
         ! the out segment, its unregularized pair (_even_unfil/_odd_unfil)
         ! as the evidence input and its regularized pair (_even/_odd) as the
@@ -129,30 +128,9 @@ contains
         call cleanup_nu_filter()
         call assert_nu_evidence_replay_ready(evstate)
         call print_nu_evidence_summary(evstate)
-        ! estimate on the unregularized pair, sharpen the solvent-prior pair (_even_solvent/_odd_solvent,
-        ! pcg_solvent=yes) when present, else the unregularized pair; one merged product
-        fname_even_solvent = add2fbody(fname_vol, params%ext, '_even_solvent')
-        fname_odd_solvent  = add2fbody(fname_vol, params%ext, '_odd_solvent')
-        l_solvent = file_exists(fname_even_solvent) .and. file_exists(fname_odd_solvent)
-        if( l_solvent )then
-            call find_ldim_nptcls(fname_even_solvent, ldim, nptcls)
-            l_solvent = ldim(1) == box
-        endif
         ! the unregularized pair's FSC weights every local passband (sqrt(2FSC/(1+FSC)) stretched to the
-        ! local cutoff) and its average sets the B-factor
-        if( l_solvent )then
-            write(logfhandle,'(A)') '>>> POSTPROCESS_NU: SHARPENING THE SOLVENT-PRIOR PAIR '//&
-                &fname_odd_solvent%to_char()//' '//fname_even_solvent%to_char()//' WITH THE EVIDENCE OF THE UNREGULARIZED PAIR'
-            call sol_even%new([box,box,box], smpd)
-            call sol_odd%new([box,box,box], smpd)
-            call sol_even%read(fname_even_solvent)
-            call sol_odd%read(fname_odd_solvent)
-            call nu_evidence_sharpen_vol(evstate, even, odd, corrs, vol_sharp, apply_even=sol_even, apply_odd=sol_odd)
-            call sol_even%kill
-            call sol_odd%kill
-        else
-            call nu_evidence_sharpen_vol(evstate, even, odd, corrs, vol_sharp)
-        endif
+        ! local cutoff), its average sets the B-factor and is the map sharpened
+        call nu_evidence_sharpen_vol(evstate, even, odd, corrs, vol_sharp)
         if( cline%defined('outvol') )then
             vol_out = params%outvol
         else
@@ -176,8 +154,6 @@ contains
         call fname_odd_unfil%kill
         call fname_even%kill
         call fname_odd%kill
-        call fname_even_solvent%kill
-        call fname_odd_solvent%kill
         if( allocated(corrs) ) deallocate(corrs)
         if( allocated(res)   ) deallocate(res)
         call simple_end('**** SIMPLE_POSTPROCESS_NU NORMAL STOP ****')

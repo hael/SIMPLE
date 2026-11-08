@@ -981,27 +981,19 @@ contains
             if( .not. file_exists(self%pcg_mskfile) ) &
                 &THROW_HARD('pcg_mskfile does not exist: '//self%pcg_mskfile%to_char())
         endif
-        ! opt-in soft solvent prior of the PCG regularized solve (simple_pcg_solvent_sidecar)
-        select case(trim(self%pcg_solvent))
+        ! opt-in order prior of the PCG base solve (simple_pcg_order_prior)
+        select case(trim(self%pcg_order))
             case('yes')
-                self%l_pcg_solvent = .true.
+                self%l_pcg_order = .true.
             case('no')
-                self%l_pcg_solvent = .false.
+                self%l_pcg_order = .false.
             case DEFAULT
-                THROW_HARD('pcg_solvent must be yes or no')
+                THROW_HARD('pcg_order must be yes or no')
         end select
-        if( self%l_pcg_solvent .and. trim(self%rec_backend) /= 'pcg' ) &
-            &THROW_HARD('pcg_solvent=yes requires rec_backend=pcg')
-        if( self%pcg_solvent_lambda <= 0. ) THROW_HARD('pcg_solvent_lambda must be positive')
-        self%l_pcg_solvent_lambda_auto = .not. cline%defined('pcg_solvent_lambda')
-        select case(trim(self%pcg_solvent_check))
-            case('yes')
-                self%l_pcg_solvent_check = self%l_pcg_solvent
-            case('no')
-                self%l_pcg_solvent_check = .false.
-            case DEFAULT
-                THROW_HARD('pcg_solvent_check must be yes or no')
-        end select
+        if( self%l_pcg_order .and. trim(self%rec_backend) /= 'pcg' ) &
+            &THROW_HARD('pcg_order=yes requires rec_backend=pcg')
+        if( self%pcg_order_lambda <= 0. ) THROW_HARD('pcg_order_lambda must be positive')
+        self%l_pcg_order_lambda_auto = .not. cline%defined('pcg_order_lambda')
         ! opt-in atomicity prior of the PCG reconstruction (simple_pcg_atomic_prior)
         select case(trim(self%atm_prior))
             case('yes')
@@ -1020,7 +1012,7 @@ contains
                     &THROW_HARD('atm_prior=yes requires the atom model pdbfile; program is '//trim(self%prg%to_char()))
             endif
             if( self%l_ml_reg )    THROW_HARD('atm_prior=yes requires ml_reg=no')
-            if( self%l_pcg_solvent ) THROW_HARD('atm_prior=yes and pcg_solvent=yes are exclusive')
+            if( self%l_pcg_order ) THROW_HARD('atm_prior=yes and pcg_order=yes are exclusive')
             if( self%l_nonuniform ) THROW_HARD('atm_prior=yes takes no nonuniform filtering')
         endif
         if( self%lambda_atm < 0. ) THROW_HARD('lambda_atm must be non-negative (0 = estimated)')

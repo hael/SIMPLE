@@ -957,7 +957,7 @@ contains
             call require_value('envfsc',      'no')
             call require_value('combine_eo',  'no')
             call require_value('trail_rec',   'no')
-            call require_value('pcg_solvent', 'no')
+            call require_value('pcg_order',   'no')
             call require_value('objfun',      'euclid')
             if( cline%defined('rec_backend') )then
                 val = cline%get_carg('rec_backend')

@@ -3,9 +3,18 @@
 Contract of the code that runs today: the opt-in CTF- and sigma-weighted
 preconditioned-conjugate-gradient (PCG) reconstruction path. Unless asked, the
 PCG backend carries no regularization of its own beyond the ordinary FSC/SSNR
-`P_tau` replay. The two opt-in priors are the soft solvent prior (`pcg_solvent`,
-`simple_pcg_solvent_sidecar`; `pcg_decision_log.md`) and the atomicity prior
-(`atm_prior`, `simple_pcg_atomic_prior`; `single_pcg_integration_completed.md`).
+`P_tau` replay. The two opt-in priors are the order prior (`pcg_order`,
+`simple_pcg_order_prior`; `doc/implementation_notes/planned/pcg_order_prior.md`),
+which replaced the soft solvent prior `pcg_solvent` on 2026-11-08
+(`pcg_decision_log.md`), and the atomicity prior (`atm_prior`,
+`simple_pcg_atomic_prior`; `single_pcg_integration_completed.md`). The order
+prior re-solves the base pair with a ridge `lambda h (1 - w_ord)` on what lacks
+NU evidence of order (`h` the data precision per voxel), its ordered fraction and
+strength chosen in closed form on the previous iteration's NU evidence (none when
+no setting keeps the protein core); the prior-free pair keeps the FSC, the
+NU competition and the `_unfil` files; the prior'd pair (`_order`), its ML
+replay and the NU references composed from it are the iteration's references;
+the final reconstruction is prior-free.
 Nonuniform filtering is the same assembly-owned competition as on the
 gridding backend (`simple_nu_state_filter`, policy 2026-09-06). The record of
 the removed prior experiments -- the binary-envelope solvent prior (2026-08-27)
@@ -789,7 +798,8 @@ full both-sign-h lattice (section 4).
 A `rec_backend=gridding` versus `rec_backend=pcg` comparison in solve3D
 is meaningful because the two paths share everything but the estimator:
 
-- stages 1-2 are gridding on both (`PCG_REC_START_STAGE=3`); the stage
+- stages 1-5 are gridding on both (`PCG_REC_START_STAGE=6` since 2026-11-08,
+  3 before); the stage
   ladder, the FSC=0.5 promotion, the uncapped NU-stage handoff, early
   stopping, the sigma2 handling, the matching references and the final
   bootstrap_rec3D sequence (gridding bootstrap map, residual sigma pass)

@@ -41,7 +41,8 @@ resuming an old command or experiment.
 | Nanoparticle rejection | [Separate trajectory workflow](planned/trajectory_cavgs_rejection.md) | The earlier nano-context run and report are completed; the separate workflow retains its own proposal and acceptance criteria. |
 | Wave-model integration | [Wave summary](planned/wave_model_summary.md) | Operators and simulator delivered; refinement coupling remains to be planned. |
 | NU auxiliary candidates | [Blush competition](planned/blush_auxiliary_competition.md) | Proposed experiment; precomputed-map controls precede native inference. |
-| NU masking | [Cross-validated threshold](planned/nu_evidence_mask_cross_validated_threshold.md) | Proposal; start with the diagnostic table. |
+| Order prior | [PCG order prior](planned/pcg_order_prior.md) | `pcg_order=yes` in the loop (2026-11-08; replaced `pcg_solvent`), solve3D from stage 6 with PCG; offline check `order_prior`. Next: the six offline pairs, then a solve3D run on PfCRT and a soluble control (section 11). |
+| NU masking | [Cross-validated threshold](planned/nu_evidence_mask_cross_validated_threshold.md) | Its first step is now the order weight of the PCG order prior (row above). |
 | Distributed execution | [Coarray SPMD](planned/coarray_spmd_execution.md) | Proposal; complete measurements and lifecycle gates before implementation. |
 | Probabilistic alignment pipeline | [Batch pipeline](completed/prob_align_batch_pipeline.md) | Done by the run `prob_pipeline` on the Dell (2026-11-04/05): keyed draws, one batch pipeline for shared memory and the parts, the table programs retired; the Progress section holds the evidence and the measurements. |
 | Threading | [Safety and budget](planned/thread_budget_and_safety.md) | Policy decisions and safety work remain planned; the delivered BLAS configuration is archived below with its qualification limits. |

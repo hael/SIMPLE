@@ -553,7 +553,7 @@ contains
             state = 1
         endif
         ! check volume, get correct smpd & box
-        if( cline%defined('imgkind') .and. trim(params%imgkind) /= 'unfil' .and. trim(params%imgkind) /= 'solvent' )then
+        if( cline%defined('imgkind') .and. trim(params%imgkind) /= 'unfil' )then
             call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
         else
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
@@ -563,15 +563,12 @@ contains
         endif
         ! using the input volume for postprocessing
         if( cline%defined('vol'//int2str(state)) ) fname_vol = params%vols(state)
-        ! imgkind=unfil|solvent: postprocess the average of a half pair
-        ! beside the project volume, written as <vol>_unfil.mrc or
-        ! <vol>_solvent.mrc: the unfiltered (prior-free base) pair, or the
-        ! solvent-prior'd base pair of pcg_solvent=yes, for
-        ! comparison with the shipped regularized map. The cutoff still comes
-        ! from the _unfil pair beside the project volume (pair_stem).
+        ! imgkind=unfil: postprocess the average of the unfiltered (prior-free base) half pair beside the project
+        ! volume, written as <vol>_unfil.mrc, for comparison with the shipped regularized map. The cutoff still
+        ! comes from the _unfil pair beside the project volume (pair_stem).
         pair_stem = fname_vol
         if( cline%defined('imgkind') )then
-            if( trim(params%imgkind) == 'unfil' .or. trim(params%imgkind) == 'solvent' )then
+            if( trim(params%imgkind) == 'unfil' )then
                 fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_'//trim(params%imgkind))
                 fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_'//trim(params%imgkind))
                 if( .not. file_exists(fname_even_unfil) .or. .not. file_exists(fname_odd_unfil) )then

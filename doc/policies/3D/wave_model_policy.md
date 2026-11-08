@@ -248,7 +248,7 @@ Per state, in shared memory:
    registered in the `out` segment, written once at the end. The particle field
    is not written.
 
-Refused: `nparts`; `automsk` other than `no`; `pcg_solvent=yes`; a missing or
+Refused: `nparts`; `automsk` other than `no`; `pcg_order=yes`; a missing or
 non-positive `total_dose`; `objfun=euclid` without the project's noise spectra;
 `wave_model=projection` with a curvature and `multislice` without one; a state
 with particles in one half only; particles of a state at different voltages;

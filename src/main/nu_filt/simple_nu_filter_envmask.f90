@@ -475,17 +475,13 @@ contains
         if( allocated(l_env) ) deallocate(l_env)
     end subroutine write_nu_evidence_envmask
 
-    module subroutine write_nu_evidence_map( fname, lp_smooth, l_relative )
-        class(string),     intent(in) :: fname
-        real,    optional, intent(in) :: lp_smooth
-        logical, optional, intent(in) :: l_relative
-        type(image) :: evmap
+    module subroutine get_nu_evidence_map( evmap, lp_smooth, l_relative )
+        class(image), intent(inout) :: evmap
+        real,         intent(in)    :: lp_smooth
+        logical,      intent(in)    :: l_relative
         real(kind=c_float), pointer :: rmat(:,:,:) => null()
         real, allocatable :: margin(:)
-        logical :: l_rel
         integer :: imask, i, j, k
-        l_rel = .false.
-        if( present(l_relative) ) l_rel = l_relative
         call calc_nu_evidence_margin(margin, lp_smooth, l_relative)
         call evmap%new(ldim, smpd, wthreads=.false.)
         call evmap%get_rmat_ptr(rmat)
@@ -498,15 +494,24 @@ contains
             rmat(i,j,k) = margin(imask)
         end do
         !$omp end parallel do
+        nullify(rmat)
+        deallocate(margin)
+    end subroutine get_nu_evidence_map
+
+    module subroutine write_nu_evidence_map( fname, lp_smooth, l_relative )
+        class(string), intent(in) :: fname
+        real,          intent(in) :: lp_smooth
+        logical,       intent(in) :: l_relative
+        type(image) :: evmap
+        call get_nu_evidence_map(evmap, lp_smooth, l_relative)
         call evmap%write(fname, del_if_exists=.true.)
         write(logfhandle,'(A,A)') '>>> WROTE NU EVIDENCE MARGIN MAP: ', fname%to_char()
-        if( l_rel )then
+        if( l_relative )then
             write(logfhandle,'(A)') '    Values are dimensionless baseline-to-best squared-error cost-improvement ratios.'
         else
             write(logfhandle,'(A)') '    Units are noise-normalized squared-error improvement over the coarsest candidate.'
         endif
         call evmap%kill
-        deallocate(margin)
     end subroutine write_nu_evidence_map
 
     module subroutine print_nu_envmask_stats( stats )

@@ -294,9 +294,8 @@ contains
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('maxits_ml')
         call child_cline%delete('rtol')
-        call child_cline%delete('pcg_solvent')
-        call child_cline%delete('pcg_solvent_lambda')
-        call child_cline%delete('pcg_solvent_check')
+        call child_cline%delete('pcg_order')
+        call child_cline%delete('pcg_order_lambda')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -317,21 +316,18 @@ contains
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
         endif
-        ! The stage controller decides whether the solvent prior is active.
+        ! The stage controller decides whether the order prior is active.
         ! Forward it only when that stage is PCG; otherwise remove the user's
-        ! top-level pcg_solvent=yes inherited by copied child command lines.
+        ! top-level pcg_order=yes inherited by copied child command lines.
         l_pcg_stage = cline_refine3D%defined('rec_backend')
         if( l_pcg_stage ) l_pcg_stage = cline_refine3D%get_carg('rec_backend') .eq. 'pcg'
-        if( l_pcg_stage .and. cline_refine3D%defined('pcg_solvent') )then
-            call child_cline%set('pcg_solvent', cline_refine3D%get_carg('pcg_solvent'))
-            if( cline_refine3D%defined('pcg_solvent_lambda') ) &
-                &call child_cline%set('pcg_solvent_lambda', cline_refine3D%get_rarg('pcg_solvent_lambda'))
-            if( cline_refine3D%defined('pcg_solvent_check') ) &
-                &call child_cline%set('pcg_solvent_check', cline_refine3D%get_carg('pcg_solvent_check'))
+        if( l_pcg_stage .and. cline_refine3D%defined('pcg_order') )then
+            call child_cline%set('pcg_order', cline_refine3D%get_carg('pcg_order'))
+            if( cline_refine3D%defined('pcg_order_lambda') ) &
+                &call child_cline%set('pcg_order_lambda', cline_refine3D%get_rarg('pcg_order_lambda'))
         else
-            call child_cline%delete('pcg_solvent')
-            call child_cline%delete('pcg_solvent_lambda')
-            call child_cline%delete('pcg_solvent_check')
+            call child_cline%delete('pcg_order')
+            call child_cline%delete('pcg_order_lambda')
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))
@@ -862,7 +858,7 @@ contains
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
-        type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil, vol_even_solvent, vol_odd_solvent
+        type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil, vol_even_order, vol_odd_order
         type(string)      :: tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         integer           :: state, sigma_iter
@@ -948,8 +944,8 @@ contains
                 else
                     call simple_copy_file(vol_even, dest)
                 endif
-                vol_even_solvent = add2fbody(vol_even, MRC_EXT, '_solvent')
-                if( file_exists(vol_even_solvent) ) call simple_rename(vol_even_solvent, tmpl//'_even_solvent'//MRC_EXT)
+                vol_even_order = add2fbody(vol_even, MRC_EXT, '_order')
+                if( file_exists(vol_even_order) ) call simple_rename(vol_even_order, tmpl//'_even_order'//MRC_EXT)
                 dest = tmpl//'_even'//MRC_EXT
                 call simple_rename(vol_even, dest)
                 dest_even = dest
@@ -964,8 +960,8 @@ contains
                 else
                     call simple_copy_file(vol_odd, dest)
                 endif
-                vol_odd_solvent = add2fbody(vol_odd, MRC_EXT, '_solvent')
-                if( file_exists(vol_odd_solvent) ) call simple_rename(vol_odd_solvent, tmpl//'_odd_solvent'//MRC_EXT)
+                vol_odd_order = add2fbody(vol_odd, MRC_EXT, '_order')
+                if( file_exists(vol_odd_order) ) call simple_rename(vol_odd_order, tmpl//'_odd_order'//MRC_EXT)
                 dest = tmpl//'_odd'//MRC_EXT
                 call simple_rename(vol_odd, dest)
                 dest_odd = dest

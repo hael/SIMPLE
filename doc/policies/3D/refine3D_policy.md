@@ -1692,10 +1692,9 @@ the FSC reaches zero (steeper) and applies no low-pass by default; SIMPLE
 fits the unweighted unfiltered pair up to the FSC=0.143 cutoff (a
 conservative B) and closes with the Butterworth there. No
 density-windowed pair estimate. With
-`pcg_solvent=yes` the `_unfil` pair is the prior-free base pair and the
-sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil` and
-`imgkind=solvent` postprocess the respective pair averages with the same
-cutoff.
+`pcg_order=yes` the `_unfil` pair is the prior-free base pair and the
+sharpened map is the shipped (prior'd, replayed) map; `imgkind=unfil`
+postprocesses the base pair average with the same cutoff.
 
 The transaction files of the sigma2 store (the candidate and the workers' range
 files) are run-local. They are written and consumed inside a running

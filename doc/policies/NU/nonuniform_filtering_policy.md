@@ -345,15 +345,17 @@ measured not slower than the reads (`nu_filt3D` on a box-300 pair, 9.9 s
 against 10.5 s, 2026-10-17); the caller keeps the source pair alive until the
 composition (`nonuniform_filter_state` releases the base pair after it).
 
-With `pcg_solvent=yes` (PCG) the label field is estimated on the
-prior-free base pair and APPLIED to the solvent-prior'd pair when the
+With `pcg_order=yes` (PCG) the label field is estimated on the
+prior-free base pair and APPLIED to the order-prior pair when the
 `_nu_filt` references are composed (`nu_filter_vols` source pair,
-2026-09-21): per-label Butterworth of the prior'd halves scattered by the
-field, the auxiliary label from the ML pair as always. The competition,
-its noise level (a solvent-dominated MAD the prior would collapse), the
-evidence null, the handoff and the `_nu_locres` map never see the prior'd
-pair; the references do, in every voxel. Log: `>>> NU REFERENCES: STATE n,
-LABEL FIELD OF THE BASE PAIR APPLIED TO THE SOLVENT-PRIOR PAIR`.
+2026-09-21 for the solvent prior it replaced): per-label Butterworth of the
+prior'd halves scattered by the field, the auxiliary label from the ML pair
+as always. The competition, its noise level, the evidence null, the handoff
+and the `_nu_locres` map never see the prior'd pair; the references do, in
+every voxel. Log: `>>> NU REFERENCES: STATE n, LABEL FIELD OF THE BASE PAIR
+APPLIED TO THE ORDER-PRIOR PAIR`. Under `pcg_order=yes` the state filter also
+writes `<vol>_nu_evidence.mrc` (the evidence margin at `amsklp`, relative),
+which the next iteration's order prior reads with `_nu_locres`.
 
 The bank is the static ladder `[20, 15, 12, 10, 8, 6, 5, 4]` A (the
 NU machinery of the ed36eb4c build used by solve3D, the only NU mechanism since

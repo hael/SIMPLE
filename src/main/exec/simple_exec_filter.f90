@@ -6,6 +6,7 @@ use simple_commanders_resolest, only: commander_uniform_filter2D, commander_unif
 use simple_commanders_imgops,   only: commander_filter
 use simple_commanders_postprocess_nu,  only: commander_postprocess_nu
 use simple_commanders_halfmap_enhance, only: commander_enhance
+use simple_commanders_order_prior,     only: commander_order_prior
 use simple_commanders_volops,          only: commander_postprocess_pdb
 implicit none
 
@@ -20,6 +21,7 @@ type(commander_dose_filter3D)    :: xdose_filter3D
 type(commander_postprocess_nu)   :: xpostprocess_nu
 type(commander_postprocess_pdb)  :: xpostprocess_pdb
 type(commander_enhance)          :: xenhance
+type(commander_order_prior)      :: xorder_prior
 
 contains
 
@@ -48,6 +50,8 @@ contains
                 call xpostprocess_pdb%execute(cline)
             case( 'enhance' )
                 call xenhance%execute(cline)
+            case( 'order_prior' )
+                call xorder_prior%execute(cline)
             case default
                 l_did_execute = .false.
         end select
