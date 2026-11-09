@@ -456,16 +456,16 @@ contains
         class(ui_hash), intent(inout) :: tsttab
         call single_workflow%new(&
         &'single_workflow',&
-        &'validate SINGLE reconstruction for FCC Pt and wurtzite CdSe',&
-        &'runs focused Pt and CdSeW nanoparticle suites and validates each final map against its known truth; fcc runs '//&
+        &'validate SINGLE reconstruction for FCC Pt, FCC Pt/Ni and wurtzite CdSe',&
+        &'runs focused Pt, random-site Pt/Ni and CdSeW nanoparticle suites and validates each final map against its known truth; fcc runs '//&
         &'trajectory_solve3D and checks that its gates lose at most 5% of the frames, '//&
-        &'wurtzite runs the stages by hand with the atomicity-prior refinement',&
+        &'alloy and wurtzite run the stages by hand with the atomicity-prior refinement',&
         &'simple_test_exec',&
         &.false., display_name='SINGLE Workflow Validation')
         call single_workflow%add_input(UI_PARM, 'suite', 'multi', 'Nanoparticle suite', &
-        &'The simulated nanoparticle: fcc (platinum) or wurtzite (CdSe); list prints the accepted '//&
-        &'names(fcc|wurtzite|list)', '', .true., '', &
-        &choices=ui_choices([character(len=8) :: 'fcc', 'wurtzite', 'list']))
+        &'The simulated nanoparticle: fcc (platinum), alloy (FCC with a random quarter Ni), or wurtzite (CdSe); '//&
+        &'list prints the accepted names(fcc|alloy|wurtzite|list)', '', .true., '', &
+        &choices=ui_choices([character(len=9) :: 'fcc', 'alloy', 'wurtzite', 'list']))
         call single_workflow%add_input(UI_PARM, 'smpd', 'num', 'Sampling distance', &
         &'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms{0.358}', .false., 0.358)
         call add_ui_program('single_workflow', single_workflow, tsttab, UI_CATEGORY)

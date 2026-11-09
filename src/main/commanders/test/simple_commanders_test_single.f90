@@ -1733,6 +1733,7 @@ subroutine exec_test_species_discovery( self, cline )
 end subroutine exec_test_species_discovery
 
 subroutine exec_test_single_workflow( self, cline )
+    use simple_atoms,                    only: atoms
     use single_commanders_nano2D,       only: commander_analysis2D_nano
     use simple_commanders_sim,          only: commander_simulate_nanoparticle
     use simple_commanders_reproject,    only: commander_reproject
@@ -1775,11 +1776,14 @@ subroutine exec_test_single_workflow( self, cline )
     type(string)                          :: simulated_vol, reprojections, trajectory, denoised_trajectory
     type(string)                          :: autorefine_dir, final_volume, run_dir, atomic_product
     type(test_gate)                       :: gate
+    type(atoms)                           :: alloy_atoms
     character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
     character(len=*), parameter           :: TRAJECTORY_STK    = 'simulated_trajectory.mrc'
     character(len=*), parameter           :: DENOISED_STK      = 'denoised_trajectory.mrc'
     character(len=*), parameter           :: TRAJECTORY_ORITAB = 'glc_trajectory_oris.txt'
     character(len=*), parameter           :: SIMULATION_DIR    = '1_simulate_nanoparticle'
+    character(len=*), parameter           :: LATTICE_PDB       = 'simatms.pdb'
+    character(len=*), parameter           :: ALLOY_PDB         = 'alloy.pdb'
     character(len=*), parameter           :: REPROJECTION_DIR  = '2_generate_reprojections'
     character(len=*), parameter           :: TRAJECTORY_DIR    = '3_generate_trajectory'
     character(len=*), parameter           :: DENOISE_DIR       = '4_trajectory_denoise'
@@ -1822,6 +1826,12 @@ subroutine exec_test_single_workflow( self, cline )
     ! fcc (trajectory_solve3D.md, ruling 8): trajectory_solve3D on the simulated trajectory as it is; its two gates
     ! may lose at most MAX_FRAMES_LOST of the frames
     real,             parameter           :: MAX_FRAMES_LOST = 0.05
+    integer,          parameter           :: ALLOY_NATOMS = 285, ALLOY_NNI = 71, ALLOY_NPT = 214
+    integer,          parameter           :: ALLOY_NI_SITES(ALLOY_NNI) = [ &
+        2, 3, 6, 12, 13, 22, 23, 27, 39, 42, 45, 50, 51, 54, 57, 60, 64, 68, 70, 79, 80, 83, &
+        89, 90, 93, 94, 96, 97, 99, 101, 106, 107, 110, 112, 113, 114, 123, 128, 130, 132, 134, &
+        136, 144, 148, 155, 159, 170, 182, 188, 195, 197, 208, 213, 219, 220, 224, 226, 231, &
+        241, 247, 249, 252, 253, 254, 255, 263, 265, 266, 271, 273, 278 ]
     integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
     real,             parameter           :: MIN_VOL_CORR      = 0.90
@@ -1838,19 +1848,25 @@ subroutine exec_test_single_workflow( self, cline )
     logical                            :: l_gates_ok
     real                               :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     logical                            :: volume_ok
+    logical                            :: alloy_ni_mask(ALLOY_NATOMS), alloy_positions_ok
+    integer                            :: iatom, natoms, nni, npt
     allocate(cline_sim, cline_reproject, cline_trajectory, cline_denoise, cline_nproj, cline_imptcls, cline_an2Dnano, cline_aref3Dnano, params, cline_cont, run_proj)
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
-    if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=fcc or suite=wurtzite')
+    if( .not. cline%defined('suite') ) THROW_HARD('The suite keyword is required; use suite=fcc, suite=alloy or suite=wurtzite')
     suite_name = cline%get_carg('suite')
     suite_name = lowercase(suite_name%to_char())
     if( suite_name == 'list' )then
         write(logfhandle,'(a)') 'Available suites for single_workflow:'
         write(logfhandle,'(a)') '  fcc'
+        write(logfhandle,'(a)') '  alloy'
         write(logfhandle,'(a)') '  wurtzite'
         return
     endif
     select case(suite_name%to_char())
         case('fcc')
+            call cline%set('element', 'Pt')
+        case('alloy')
+            ! Pt supplies the FCC lattice used by analysis2D_nano; the simulated truth is rerendered below with Ni sites.
             call cline%set('element', 'Pt')
         case('wurtzite')
             call cline%set('element', 'CdSeW')
@@ -1887,6 +1903,50 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_sim%set('element',                    params%element)
     call cline_sim%set('nthr',                          params%nthr)
     call xsim_nptcl%execute(cline_sim)
+    if( suite_name == 'alloy' )then
+        call alloy_atoms%new(string(LATTICE_PDB))
+        natoms = alloy_atoms%get_n()
+        call gate%check('alloy FCC fixture has the expected number of lattice sites', natoms == ALLOY_NATOMS)
+        if( natoms /= ALLOY_NATOMS ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: alloy lattice site count changed')
+        alloy_ni_mask = .false.
+        alloy_ni_mask(ALLOY_NI_SITES) = .true.
+        do iatom = 1,ALLOY_NATOMS
+            if( .not. alloy_ni_mask(iatom) ) cycle
+            call alloy_atoms%set_name(iatom, 'Ni  ')
+            call alloy_atoms%set_element(iatom, 'Ni')
+        enddo
+        call alloy_atoms%writepdb(string(ALLOY_PDB))
+        call alloy_atoms%kill
+        call cline_sim%kill
+        call cline_sim%set('prg',          'simulate_nanoparticle')
+        call cline_sim%set('pdbfile',                 ALLOY_PDB)
+        call cline_sim%set('pdbout',                LATTICE_PDB)
+        call cline_sim%set('outvol',                 'outvol.mrc')
+        call cline_sim%set('box',                            BOX)
+        call cline_sim%set('smpd',                   params%smpd)
+        call cline_sim%set('nthr',                   params%nthr)
+        call xsim_nptcl%execute(cline_sim)
+        call alloy_atoms%new(string(LATTICE_PDB))
+        nni = 0
+        npt = 0
+        alloy_positions_ok = alloy_atoms%get_n() == ALLOY_NATOMS
+        if( alloy_positions_ok )then
+            do iatom = 1,ALLOY_NATOMS
+                if( uppercase(alloy_atoms%get_element(iatom)) == 'NI' ) nni = nni + 1
+                if( uppercase(alloy_atoms%get_element(iatom)) == 'PT' ) npt = npt + 1
+                if( alloy_ni_mask(iatom) )then
+                    if( uppercase(alloy_atoms%get_element(iatom)) /= 'NI' ) alloy_positions_ok = .false.
+                else
+                    if( uppercase(alloy_atoms%get_element(iatom)) /= 'PT' ) alloy_positions_ok = .false.
+                endif
+            enddo
+        endif
+        call gate%check('alloy truth has exactly 71 Ni and 214 Pt atoms', nni == ALLOY_NNI .and. npt == ALLOY_NPT)
+        call gate%check('alloy truth preserves the fixed Ni and Pt lattice-site mask', alloy_positions_ok)
+        if( nni /= ALLOY_NNI .or. npt /= ALLOY_NPT .or. .not. alloy_positions_ok ) &
+            &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: deterministic alloy fixture was not preserved')
+        call alloy_atoms%kill
+    endif
     call return_to_project_dir
 
     call enter_workflow_stage(REPROJECTION_DIR, projfile)
@@ -1970,7 +2030,7 @@ subroutine exec_test_single_workflow( self, cline )
         final_volume = filepath(filepath(autorefine_dir, 'final_results'), &
             &refine3D_state_vol_fbody(1)//'_iter'//int2str_pad(NREFINE_ITERS, 3)//MRC_EXT)
     endif
-    if( suite_name == 'wurtzite' )then
+    if( suite_name /= 'fcc' )then
         atomic_product = add2fbody(final_volume, MRC_EXT, '_base')
         if( .not. file_exists(atomic_product) ) THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: atomic-loop base map is missing')
         atomic_product = add2fbody(final_volume, MRC_EXT, '_res')
@@ -2073,10 +2133,10 @@ contains
                 &euler2m(dock_eul), dock_shift, rc(:,:,n), shc)
             rt(:,:,n) = truth_oris%get_mat(iframe)
         enddo
-        if( suite_name == 'fcc' )then
-            ops = group_operators('o')
-        else
+        if( suite_name == 'wurtzite' )then
             ops = group_operators('d6')
+        else
+            ops = group_operators('o')
         endif
         err = median(group_errors(rc(:,:,1:n), rt(:,:,1:n), ops, projection_inversion=.true.))
     end function group_pose_error

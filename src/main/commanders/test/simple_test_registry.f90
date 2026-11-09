@@ -85,6 +85,8 @@ contains
             &outputs_of(SIMWF//'1jxy', SIMWF_OUT), mem_gb=5.0, disk_gb=5.5, scales=.false.), &
         &test_entry('single_workflow_fcc', 'single_workflow', 'suite=fcc smpd=0.358', 1, 0, 0, 2, 7200, ENTRY_GATE, &
             &outputs_of(SINGLEWF//'fcc', SINGLEWF_FCC_OUT), mem_gb=2.0, disk_gb=1.0, scales=.false.), &
+        &test_entry('single_workflow_alloy', 'single_workflow', 'suite=alloy smpd=0.358', 1, 0, 0, 2, 7200, ENTRY_GATE, &
+            &outputs_of(SINGLEWF//'alloy', SINGLEWF_OUT), mem_gb=3.0, disk_gb=3.0, scales=.false.), &
         &test_entry('single_workflow_wurtzite', 'single_workflow', 'suite=wurtzite smpd=0.358', 1, 0, 0, 2, 7200, &
             &ENTRY_GATE, outputs_of(SINGLEWF//'wurtzite', SINGLEWF_OUT), mem_gb=3.0, disk_gb=3.0, scales=.false.), &
         &test_entry('simulate_particles', 'simulate_particles', 'nthr=8', 8, 0, 0, 8, 3600, ENTRY_GATE, &
