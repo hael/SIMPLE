@@ -231,6 +231,11 @@ benchmarks: `doc/implementation_notes/completed/flex_cls_expansion_2026_10_01.md
 
 ## `trajectory_denoise`
 
+The full-field `tseries_prep4tracking` program also calls this kernel through
+`../nano/simple_tseries_denoise.f90`, on unmasked rectangular frames in batches
+of at most 100. Project ownership and tracking products belong to
+`../strategies/parallelization/simple_tseries_prep_strategy.f90`.
+
 `simple_flex_traj_denoise.f90`: every frame of a trajectory the kernel pre-image of the frames that
 look like it (the latents of class models on the fit band's two coefficient sets) and lie near it in
 time, with rank, latent bandwidth and temporal bandwidth chosen by coefficient-split

@@ -41,6 +41,7 @@ validation, says so in its first lines.
 | Heterogeneity | [heterogeneity/refine3D_states_policy.md](heterogeneity/refine3D_states_policy.md) | particle-level conformational state refinement |
 | Heterogeneity | [heterogeneity/refine3D_states_cavgs_policy.md](heterogeneity/refine3D_states_cavgs_policy.md) | sorting sub-class averages into states |
 | Sampling | [importance_sampling_fractional_update_policy.md](importance_sampling_fractional_update_policy.md) | sampled updates, probabilistic candidate sampling, fractional class-average restoration, trailing reconstruction |
+| SINGLE | [tseries_tracking_external_gui_contract.md](tseries_tracking_external_gui_contract.md) | the Nanotation GUI handoff, `track_fname`/`fromt`/`tot`, coordinate mapping and annotation ingestion |
 | Streaming | [stream/README.md](stream/README.md) | any stream stage, the pool, the IPC, restart |
 | Sieving | [sieving_and_rejection/index.md](sieving_and_rejection/index.md) | particle sieve, class-average rejection, size compatibility |
 

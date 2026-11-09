@@ -7,6 +7,10 @@ simple_exec prg=list
 
 ## Workflow Guides
 
+- [SINGLE–Nanotation tracking handoff](../policies/tseries_tracking_external_gui_contract.md) —
+  prepare display images and project metadata for the external
+  [Nanotation GUI](https://github.com/cyrilreboul/nanotation), with the annotation
+  format and current SINGLE re-entry status.
 - [reproject](reproject.md) — generate projections from a volume.
 - [simulate_movie](simulate_movie.md) — generate a movie and its aligned
   average micrograph from a projection stack, with a PDB-to-movie tutorial.

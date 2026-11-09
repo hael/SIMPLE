@@ -26,6 +26,7 @@ the rules around each term.
 | project, `projfile`, `sp_project` | The `.simple` file and its in-memory type: segments of records |
 | segment, `oritype` | A table of the project: `mic` (micrographs), `stk` (particle stacks), `ptcl2D` and `ptcl3D` (one row per particle, for 2D and 3D work), `cls2D` and `cls3D` (one row per class average), `out` (registered outputs), `optics`, `projinfo` |
 | `ori`, `oris` | One record (a row) and a table of records; particle records have fixed named slots (`I_*`), others a typed hash |
+| `track_fname`, `fromt`, `tot` | `mic` fields for the external [Nanotation tracking handoff](policies/tseries_tracking_external_gui_contract.md): display-image identity and inclusive original-frame range used to match returned annotations |
 | `state` | The 3D label of a particle (`ptcl3D`) or its selection (`ptcl2D`); state 0 excludes the row (rejected) |
 | `class`, `proj` | The 2D class of a particle; a projection direction (an index into the direction grid). 0 means unassigned |
 | even/odd half: `eo`, `ieo`, `iseven` | The two independent halves of the data behind the gold-standard FSC. The key `'eo'` is 0 even, 1 odd, -1 none; loops use `ieo` (1 even, 2 odd) and `iseven` (logical). `get_half` returns 0 or 1 and stops on -1 |

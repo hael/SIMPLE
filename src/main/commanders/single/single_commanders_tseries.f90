@@ -24,7 +24,33 @@ type, extends(commander_base) :: commander_tseries_make_pickavg
     procedure :: execute      => exec_tseries_make_pickavg
 end type commander_tseries_make_pickavg
 
+type, extends(commander_base) :: commander_tseries_prep4tracking
+  contains
+    procedure :: execute => exec_tseries_prep4tracking
+end type commander_tseries_prep4tracking
+
 contains
+
+    !> Prepare tracking products and update the copied project's mic segment once.
+    subroutine exec_tseries_prep4tracking( self, cline )
+        use simple_cmdline,               only: cmdline
+        use simple_jiffys,                only: simple_end
+        use simple_parameters,            only: parameters
+        use simple_tseries_prep_strategy, only: tseries_prep4tracking_exec
+        class(commander_tseries_prep4tracking), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(parameters) :: params
+        call cline%set('mkdir',   'yes')
+        call cline%set('oritype', 'mic')
+        if( .not. cline%defined('neigs')   ) call cline%set('neigs',   32)
+        if( .not. cline%defined('halfwin') ) call cline%set('halfwin',  0)
+        if( .not. cline%defined('eo_pool') ) call cline%set('eo_pool', 'no')
+        if( cline%get_iarg('neigs') <= 0 ) call cline%set('neigs', 32)
+        if( cline%get_iarg('halfwin') < 0 ) THROW_HARD('halfwin must be nonnegative; tseries_prep4tracking')
+        call params%new(cline)
+        call tseries_prep4tracking_exec(params)
+        call simple_end('**** SIMPLE_TSERIES_PREP4TRACKING NORMAL STOP ****')
+    end subroutine exec_tseries_prep4tracking
 
     subroutine exec_tseries_import( self, cline )
         class(commander_tseries_import), intent(inout) :: self

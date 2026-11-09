@@ -8,6 +8,7 @@ type(ui_program), target :: tseries_track_particles
 type(ui_program), target :: tseries_import
 type(ui_program), target :: tseries_make_pickavg
 type(ui_program), target :: tseries_motion_correct
+type(ui_program), target :: tseries_prep4tracking
 
 contains
 
@@ -17,6 +18,7 @@ contains
         call new_tseries_import(prgtab)
         call new_tseries_make_pickavg(prgtab)
         call new_tseries_motion_correct(prgtab)
+        call new_tseries_prep4tracking(prgtab)
     end subroutine construct_single_tseries_programs
 
 subroutine new_tseries_track_particles( prgtab )
@@ -218,5 +220,29 @@ subroutine new_tseries_track_particles( prgtab )
         ! add to ui_hash
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab, UI_CATEGORY)
     end subroutine new_tseries_motion_correct
+
+    !> filtered frame averages and project metadata for point-and-click tracking
+    subroutine new_tseries_prep4tracking( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call tseries_prep4tracking%new(&
+            &'tseries_prep4tracking', &
+            &'Prepare time-series images and metadata for Nanotation', &
+            &'Prepare FLEX-denoised display images for Nanotation and track_fname metadata for the return handoff '//&
+            &'(https://github.com/cyrilreboul/nanotation). See doc/policies/tseries_tracking_external_gui_contract.md '//&
+            &'for the handoff and current SINGLE re-entry status.', &
+            &'single_exec', .true., visibility=UI_VIS_DEVELOPER, &
+            &display_name='Prepare Time Series for Tracking')
+        call tseries_prep4tracking%add_input(UI_FILT, 'neigs', 'num', 'Largest latent rank', &
+            &'Largest latent rank offered to denoising cross-validation (0 selects 32)', '# components', .false., 0., &
+            &visibility=UI_VIS_ADVANCED)
+        call tseries_prep4tracking%add_input(UI_FILT, 'halfwin', 'num', 'Temporal window half-width', &
+            &'Frames pool within this many frames of their block; 0 allows the whole processing batch', &
+            &'# frames', .false., 0., visibility=UI_VIS_ADVANCED)
+        call tseries_prep4tracking%add_input(UI_FILT, 'eo_pool', 'binary', 'Pool by row parity', &
+            &'Restrict denoising to frames of the same row parity (yes|no){no}', '', .false., 'no', &
+            &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call tseries_prep4tracking%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab, UI_CATEGORY)
+    end subroutine new_tseries_prep4tracking
 
 end module single_ui_tseries

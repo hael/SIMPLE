@@ -253,7 +253,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: SINGLE')
         call unit_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (atoms, cif2mrc, c_alpha_finder, species, density)', '', .false., '')
+            &'One sub-suite of this area to run alone (atoms, cif2mrc, c_alpha_finder, species, density, tracking_denoise)', '', .false., '')
         call add_ui_program('unit_single', unit_single, tsttab, UI_CATEGORY)
     end subroutine new_unit_single
 
@@ -266,7 +266,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: SINGLE')
         call lib_single%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pdb2mrc, density_particles)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pdb2mrc, density_particles, prep4tracking)', '', .false., '')
         call add_ui_program('lib_single', lib_single, tsttab, UI_CATEGORY)
     end subroutine new_lib_single
     

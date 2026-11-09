@@ -84,7 +84,7 @@ contains
         logical,  allocatable :: fitmask(:), seta(:), setb(:)
         integer,  allocatable :: times(:)
         integer(timer_int_kind) :: t0
-        integer :: n, ncoeff, nsh, b, nb, c0, c1, ctr, lo, hi, t
+        integer :: n, ncoeff, nsh, b, nb, nblock, c0, c1, ctr, lo, hi, t
         n      = size(ym,2)
         ncoeff = size(ym,1)
         nsh    = maxval(shell)
@@ -115,11 +115,13 @@ contains
         else
             ! the blocks are independent: one per thread (the work inside each runs on that thread)
             t0 = tic()
-            nb = (n + BLOCKSZ - 1) / BLOCKSZ
+            ! Every target must belong to the window centred on its block.
+            nblock = min(BLOCKSZ, 2 * halfwin + 1)
+            nb = (n + nblock - 1) / nblock
             !$omp parallel do default(shared) private(b,c0,c1,ctr,lo,hi,t) schedule(dynamic,1)
             do b = 1, nb
-                c0  = (b - 1) * BLOCKSZ + 1
-                c1  = min(n, b * BLOCKSZ)
+                c0  = (b - 1) * nblock + 1
+                c1  = min(n, b * nblock)
                 ctr = (c0 + c1) / 2
                 lo  = max(1, ctr - halfwin)
                 hi  = min(n, ctr + halfwin)

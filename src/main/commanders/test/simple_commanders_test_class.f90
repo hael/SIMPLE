@@ -148,6 +148,8 @@ use simple_nano_species,                     only: run_all_nano_species_tests
 use simple_commanders_postprocess_pdb_tester, only: run_all_postprocess_pdb_tests
 use simple_commanders_volops_tester,          only: run_all_volops_lib_tests
 use simple_nano_density,                     only: run_all_nano_density_tests, run_all_nano_density_lib_tests
+use simple_tseries_denoise_tester,           only: run_all_tseries_denoise_tests
+use simple_tseries_prep4tracking_tester,     only: run_all_tseries_prep4tracking_tests
 use simple_pdb2mrc_tester,                   only: run_all_pdb2mrc_tests
 use simple_image_serialize_tester,           only: run_all_image_serialize_tests
 use simple_cavg_registration_tester,         only: run_all_cavg_registration_tests
@@ -321,7 +323,7 @@ type :: unit_suite
     procedure(no_arg_test), pointer, nopass :: run => null()
 end type unit_suite
 
-integer, parameter :: MAX_SUITES = 160   ! must hold every sub-suite of `units`; add_suite stops on overflow
+integer, parameter :: MAX_SUITES = 180   ! must hold every sub-suite of `units`; add_suite stops on overflow
 
 contains
 
@@ -543,6 +545,7 @@ contains
         call add_suite(s, n, 'C-alpha finder', run_all_calpha_finder_tests)
         call add_suite(s, n, 'species',        run_all_nano_species_tests)
         call add_suite(s, n, 'density',        run_all_nano_density_tests)
+        call add_suite(s, n, 'tracking denoise', run_all_tseries_denoise_tests)
     end subroutine suites_single
 
     !> nightly molecular maps and full-particle atomic density fits
@@ -551,6 +554,7 @@ contains
         integer,          intent(inout) :: n
         call add_suite(s, n, 'pdb2mrc', run_all_pdb2mrc_tests)
         call add_suite(s, n, 'density particles', run_all_nano_density_lib_tests)
+        call add_suite(s, n, 'prep4tracking', run_all_tseries_prep4tracking_tests)
     end subroutine suites_lib_single
 
     !> STREAM stages (src/main/stream/stages), step by step without a queue or waits:

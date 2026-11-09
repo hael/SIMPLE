@@ -45,6 +45,7 @@ contains
         call test_mirrored_references_contract()
         call test_solve3D_trs_contract()
         call test_refine_motion_model_contract()
+        call test_tseries_prep4tracking_contract()
     end subroutine run_all_ui_visibility_tests
 
     subroutine test_visibility_levels()
@@ -233,7 +234,7 @@ contains
         call assert_program_not_registered('export_manifoldem_starproject')
         call assert_program_not_registered('ppca_denoise')
         call assert_program_not_registered('ppca_denoise_classes')
-        call assert_program_not_registered('tseries_prep4tracking')
+        call assert_registered_category('tseries_prep4tracking', 'tseries', 'Time-series Pre-processing', 10)
         call assert_program_not_registered('tseries_extractor')
         call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
         call assert_registered_category('pool2D', 'stream', 'Stream Workflows', 10)
@@ -451,6 +452,24 @@ contains
         call assert_registered_required_keys('refine_motion_model', &
             &[character(len=7) :: 'pgrp', 'mskdiam', 'nparts', 'nthr'])
     end subroutine test_refine_motion_model_contract
+
+    !> tracking preparation stays a project workflow with existing FLEX controls
+    subroutine test_tseries_prep4tracking_contract()
+        write(*,'(A)') 'test_tseries_prep4tracking_contract'
+        call make_ui
+        program_name = 'tseries_prep4tracking'
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), 'tracking preparation is registered')
+        if( .not. associated(registered_prg) ) return
+        call assert_char('single_exec', registered_prg%executable%to_char(), 'tracking preparation executable')
+        call assert_true(registered_prg%sp_required, 'tracking preparation requires a project')
+        call assert_int(UI_VIS_DEVELOPER, registered_prg%visibility, 'tracking preparation developer visibility')
+        call assert_ui_param(registered_prg%filt_ctrls, 'neigs', 'tseries_prep4tracking', expected_type='num')
+        call assert_ui_param(registered_prg%filt_ctrls, 'halfwin', 'tseries_prep4tracking', expected_type='num')
+        call assert_ui_param(registered_prg%filt_ctrls, 'eo_pool', 'tseries_prep4tracking', &
+            &expected_type='binary', expected_default='no')
+        call assert_false(program_has_key(registered_prg, 'pca_mode'), 'tracking preparation has no retired PCA selector')
+    end subroutine test_tseries_prep4tracking_contract
 
     !> whether any input list of the program holds `key`
     logical function program_has_key( prg, key )
