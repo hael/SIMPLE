@@ -369,6 +369,17 @@ work starts. Reference preparation:
 3. determines the active high-pass/low-pass shell range
 4. writes even/odd PFTC reference sections for the matcher
 
+`mirr_proj=yes` is an advanced, opt-in reference-preparation setting (default
+`no`). The optimized polar projector interpolates half the directions and
+fills their mirror partners using the orientation frame correction. Reference
+frames with general angles use angular Fourier rotation; zero/180-degree
+corrections use exact reversal/conjugation. Reference
+memoisation applies the same pairing separately within every state's
+`nspace` bank, including the additional real-half banks used by
+`prob_post_diag=yes`. Even/odd references remain independent. Mirroring requires
+an even `nspace`; its projection differences are bounded by interpolation
+error. Cartesian-only local refinement does not expose this setting.
+
 With `automsk=yes` or `nu`, the matching references carry the selected envelope
 after filtering (`automasking_policy.md`, "Reconstruction and reference use").
 NU assembly multiplies the `_nu_filt` references by it: the density envelope

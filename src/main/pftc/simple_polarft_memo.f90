@@ -182,99 +182,75 @@ contains
     end subroutine memoize_shifted_ptcl
 
     module subroutine memoize_refs(self, eulspace)
+        use simple_ori_utils, only: canonical_mirror_frame_angle
         class(polarft_calc),           intent(inout) :: self
         class(oris),         optional, intent(in)    :: eulspace
-        real     :: psi
-        integer :: k, kk, k0, ithr, iref, mref, ieo
-        logical :: l_even_inds(self%pftsz+1,1:self%nk)
-        logical :: l_mirr_proj, l_rot
-        if( OMP_IN_PARALLEL() )then
-            THROW_HARD('No memoization inside OpenMP regions')
-        endif
-        l_mirr_proj = trim(self%p_ptr%mirr_proj)=='yes'
-        if( l_mirr_proj ) then
-            ! sanity checks
-            if( .not.present(eulspace) )then
-                THROW_HARD('Reference orientations object is required for projection mirroring')
-            endif
-            if( .not.eulspace%isthere('mirr') )then
-                THROW_HARD('Mirror reprojections indices absent from Reference orientations object')
-            endif
-            ! filling even/odd index map
-            l_even_inds(2:self%pftsz+1:2,:) = .true.
-            l_even_inds(1:self%pftsz+1:2,:) = .false.
-            ! mirror reprojection indices
-            !$omp parallel do private(iref,ithr,mref,psi,l_rot,ieo) default(shared) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs/2
-                ithr = omp_get_thread_num() + 1
-                ! index of mirror reprojection
-                mref  = eulspace%get_int(iref,'mirr')
-                psi   = eulspace%get(mref,'psi')
-                l_rot = (psi>0.1) .and. (psi<359.9)
-                do ieo = REF_EVEN, REF_ODD
-                    self%cmat2_many(ithr)%c(1:self%pftsz, 1:self%nk) = &
-                        self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:self%nk) = &
-                        conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:self%nk))
-                    call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                    self%ft_ref(:,self%kfromto(1):self%kfromto(2),iref,ieo) = &
-                        self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk)
-                    if( l_rot )then
-                        self%ft_ref(:,:,mref,ieo) = conjg(merge(&
-                            -self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk), &
-                             self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk), l_even_inds))
+        integer :: ithr, iref, mref, bank, iproj, offset, nhalf, nspace
+        integer, allocatable :: partners(:)
+        real, allocatable :: frame_angles(:)
+        real(dp) :: psi
+        logical :: l_mirr_proj, half_turn
+        if( OMP_IN_PARALLEL() ) THROW_HARD('No memoization inside OpenMP regions')
+        if( .not. self%existence ) THROW_HARD('reference memoisation requires an initialized polar calculator')
+        if( .not. associated(self%p_ptr) ) THROW_HARD('reference memoisation requires polar parameters')
+        if( omp_get_max_threads() > size(self%cmat2_many) ) THROW_HARD('reference memoisation team exceeds its workspace')
+        l_mirr_proj = .false.
+        if( present(eulspace) ) l_mirr_proj = trim(self%p_ptr%mirr_proj)=='yes'
+        if( l_mirr_proj )then
+            call eulspace%get_mirror_pairs(partners, frame_angles)
+            nspace = self%p_ptr%nspace
+            nhalf  = size(partners)
+            if( 2*nhalf /= nspace ) THROW_HARD('mirror orientation count differs from nspace')
+            if( mod(self%nrefs,nspace) /= 0 ) THROW_HARD('mirrored references must contain complete nspace banks')
+            !$omp parallel do collapse(2) private(bank,iproj,offset,iref,mref,ithr,psi,half_turn) default(shared) proc_bind(close) schedule(static)
+            do bank = 0,self%nrefs/nspace-1
+                do iproj = 1,nhalf
+                    ithr = omp_get_thread_num()+1
+                    offset = bank*nspace
+                    iref = offset+iproj
+                    mref = offset+partners(iproj)
+                    call memoize_one_ref(self,iref,ithr)
+                    psi = canonical_mirror_frame_angle(frame_angles(iproj))
+                    half_turn = psi == 180._dp
+                    if( psi == 0._dp .or. half_turn )then
+                        self%ft_ref(:,:,mref,:) = conjg(self%ft_ref(:,:,iref,:))
+                        if( half_turn ) self%ft_ref(2:self%pftsz+1:2,:,mref,:) = -self%ft_ref(2:self%pftsz+1:2,:,mref,:)
+                        self%ft_ref2(:,:,mref,:) = conjg(self%ft_ref2(:,:,iref,:))
                     else
-                        self%ft_ref(:,:,mref,ieo) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk))
+                        ! Form the power memo from the resampled reference, preserving its actual squared modulus.
+                        call memoize_one_ref(self,mref,ithr)
                     endif
-
-                    self%crmat1_many(ithr)%r(1:self%pftsz,1:self%nk) = real(&
-                        self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo) * &
-                        conjg(self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)))
-                    self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,1:self%nk) = &
-                        self%crmat1_many(ithr)%r(1:self%pftsz,1:self%nk)
-                    call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
-                    self%ft_ref2(:,self%kfromto(1):self%kfromto(2),iref,ieo) = &
-                        conjg(self%crmat1_many(ithr)%c(:,1:self%nk))
-                    self%ft_ref2(:,self%kfromto(1):self%kfromto(2),mref,ieo) = &
-                        self%crmat1_many(ithr)%c(:,1:self%nk)
                 enddo
             enddo
             !$omp end parallel do
         else
-            k0 = self%kfromto(1)
-            !$omp parallel do private(iref,k,kk,ithr,ieo) default(shared) proc_bind(close) schedule(static)
-            do iref = 1, self%nrefs
-                ithr = omp_get_thread_num() + 1
-                do ieo = REF_EVEN, REF_ODD
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        self%cmat2_many(ithr)%c(1:self%pftsz,kk) = self%pfts_refs(:,k,iref,ieo)
-                        self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,kk) = &
-                            conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
-                    enddo
-                    call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        self%ft_ref(:,k,iref,ieo) = self%cmat2_many(ithr)%c(1:self%pftsz+1,kk)
-                    enddo
-
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        self%crmat1_many(ithr)%r(1:self%pftsz,kk) = real(&
-                            self%pfts_refs(:,k,iref,ieo) * conjg(self%pfts_refs(:,k,iref,ieo)))
-                        self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,kk) = &
-                            self%crmat1_many(ithr)%r(1:self%pftsz,kk)
-                    enddo
-                    call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
-                    do k = self%kfromto(1), self%kfromto(2)
-                        kk = k - k0 + 1
-                        self%ft_ref2(:,k,iref,ieo) = conjg(self%crmat1_many(ithr)%c(:,kk))
-                    enddo
-                enddo
+            !$omp parallel do private(iref,ithr) default(shared) proc_bind(close) schedule(static)
+            do iref = 1,self%nrefs
+                ithr = omp_get_thread_num()+1
+                call memoize_one_ref(self,iref,ithr)
             enddo
             !$omp end parallel do
         endif
     end subroutine memoize_refs
+
+    !> Transform one reference's two halves using the calling thread's existing FFT workspace.
+    subroutine memoize_one_ref(self, iref, ithr)
+        class(polarft_calc), intent(inout) :: self
+        integer,            intent(in)    :: iref, ithr
+        integer :: ieo
+        do ieo = REF_EVEN,REF_ODD
+            self%cmat2_many(ithr)%c(1:self%pftsz,:) = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+            self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,:) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz,:))
+            call fftwf_execute_dft(self%plan_fwd1_many,self%cmat2_many(ithr)%c,self%cmat2_many(ithr)%c)
+            self%ft_ref(:,:,iref,ieo) = self%cmat2_many(ithr)%c(1:self%pftsz+1,:)
+            self%crmat1_many(ithr)%r(1:self%pftsz,:) = real( &
+                self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)* &
+                conjg(self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)))
+            self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,:) = self%crmat1_many(ithr)%r(1:self%pftsz,:)
+            call fftwf_execute_dft_r2c(self%plan_mem_r2c_many,self%crmat1_many(ithr)%r,self%crmat1_many(ithr)%c)
+            self%ft_ref2(:,:,iref,ieo) = conjg(self%crmat1_many(ithr)%c)
+        enddo
+    end subroutine memoize_one_ref
 
     module subroutine alloc_memo_ptcls(self)
         class(polarft_calc), intent(inout) :: self

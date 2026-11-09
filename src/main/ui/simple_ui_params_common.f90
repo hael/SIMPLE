@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_ui_param, only: ui_param
 use simple_ui_descriptor_types, only: ui_choices
 implicit none
+#include "simple_local_flags.inc"
 ! declare common params here, with name same as flag
 type(ui_param) :: algorithm
 type(ui_param) :: angerr
@@ -94,6 +95,7 @@ type(ui_param) :: nsample
 type(ui_param) :: nsearch
 type(ui_param) :: nsig
 type(ui_param) :: nspace
+type(ui_param) :: mirr_proj
 type(ui_param) :: nstates
 type(ui_param) :: nthr
 type(ui_param) :: numlen
@@ -179,6 +181,14 @@ type(ui_param) :: zerodose
 contains
 
 subroutine set_ui_params
+    use simple_ui_default_values, only: get_ui_default
+    character(len=3) :: mirror_default
+    logical :: found
+    call get_ui_default('', '', 'mirr_proj', found, mirror_default)
+    if( .not. found ) THROW_HARD('UI default for mirr_proj is unavailable')
+    call mirr_proj%set_param('mirr_proj', 'binary', 'Mirror reference projections', &
+        'Project half the 3D reference directions and generate their paired views by mirroring', &
+        '', .false., mirror_default, choices=ui_choices([character(len=3) :: 'no', 'yes']))
     call algorithm%set_param(      'algorithm',       'multi',  'Algorithm for motion correction', &
                                    'Algorithm for motion correction(iso|patch){patch}','', .false., 'patch', &
     &choices=ui_choices([character(len=5) :: 'iso', 'patch']))

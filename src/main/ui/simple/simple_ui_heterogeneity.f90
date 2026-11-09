@@ -213,6 +213,7 @@ call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
         &visibility=UI_VIS_STANDARD, display_name='Conformational State Refinement')
         call refine3D_states%add_input(UI_SRCH, maxits, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_STANDARD)
+        call refine3D_states%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states%add_input(UI_SRCH, 'min_state_frac', 'num', 'Minimum flex state population fraction', &
         &'For state=0/1 input, initialized by flex PCA (nstates>=3), every initial state must hold at least this fraction of the particles; under-populated &
         &flex clusters are dropped and their particles randomized over the delivered states{0.1}', &
@@ -274,6 +275,7 @@ call flex_pca%add_input(UI_FILT, 'min_state_frac', 'num', &
         &visibility=UI_VIS_DEVELOPER, display_name='Class-Average State Refinement')
         call refine3D_states_cavgs%add_input(UI_SRCH, maxits, required_override=.false., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states_cavgs%add_input(UI_SRCH, nstates, required_override=.false., group='search', visibility=UI_VIS_STANDARD)
+        call refine3D_states_cavgs%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_states_cavgs%add_input(UI_SRCH, 'min_state_frac', 'num', 'Minimum flex state population fraction', &
         &'For class averages without multi-state labels, initialized by flex PCA (nstates>=3), every initial state must hold &
         &at least this fraction of the class-average rows{0.1}', &

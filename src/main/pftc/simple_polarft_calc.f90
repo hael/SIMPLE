@@ -8,7 +8,7 @@ implicit none
 public :: polarft_calc
 public :: vol_pad2ref_pfts_opt
 public :: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
-public :: run_all_polarft_shiftmap_tests
+public :: run_all_polarft_shiftmap_tests, run_all_polarft_mirr_tests
 private
 #include "simple_local_flags.inc"
 
@@ -207,9 +207,9 @@ type :: polarft_calc
     ! ===== CTF: simple_polarft_ctf.f90
     procedure          :: create_polar_absctfmats
     ! ===== GEOM: simple_polarft_geom.f90
+    procedure          :: mirror_ref_bank
     procedure, private :: gen_shmat4aln, gen_shmat4aln_8
     procedure, private :: mirror_ref_pft_by_pft, mirror_ref_pft_by_ind
-    generic            :: mirror_ref_pft => mirror_ref_pft_by_pft, mirror_ref_pft_by_ind
     procedure, private :: rotate_ref_8
     procedure, private :: rotate_ptcl
     procedure, private :: rotate_ctf
@@ -537,6 +537,13 @@ interface
         real(dp),             intent(in)    :: shift_8(2)
         complex(dp), pointer, intent(inout) :: shmat_8(:,:)
     end subroutine gen_shmat4aln_8
+
+    module subroutine mirror_ref_bank(self, refs, partners, frame_angles)
+        class(polarft_calc), intent(inout) :: self
+        complex(sp),        intent(inout) :: refs(:,:,:)
+        integer,            intent(in)    :: partners(:)
+        real,               intent(in)    :: frame_angles(:)
+    end subroutine mirror_ref_bank
 
     module pure subroutine mirror_ref_pft_by_pft( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self
@@ -1084,6 +1091,9 @@ end interface
 
 interface
     !> white-box tests of the shift-map kernel (submodule simple_polarft_shiftmap_tester, built only with BUILD_TESTS=ON)
+    module subroutine run_all_polarft_mirr_tests()
+    end subroutine run_all_polarft_mirr_tests
+
     module subroutine run_all_polarft_shiftmap_tests()
     end subroutine run_all_polarft_shiftmap_tests
 end interface

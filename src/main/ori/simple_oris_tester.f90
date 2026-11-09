@@ -25,6 +25,7 @@ contains
         write(*,'(A)') '**** running all oris tests ****'
         call test_constructors_and_basic_props()
         call test_getters_setters()
+        call test_mirror_pairs()
         call test_extract_and_copy()
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
@@ -81,6 +82,35 @@ contains
         eo = os%get_half(1)
         call os%kill
     end subroutine take_unhalved
+
+    !> Read a prescribed pairing without a polar calculator or parameter object.
+    subroutine test_mirror_pairs()
+        integer, parameter :: PAIRS(6) = [6,4,5,2,3,1]
+        class(oris), allocatable :: os
+        integer, allocatable :: partners(:)
+        real, allocatable :: frame_angles(:)
+        integer :: i
+        allocate(os)
+        call os%new(6,is_ptcl=.false.)
+        do i = 1,6
+            call os%set(i,'mirr',PAIRS(i))
+        enddo
+        call os%set(4,'psi',-180.)
+        call os%set(5,'psi',720.)
+        call os%set(6,'psi',359.95)
+        call os%get_mirror_pairs(partners,frame_angles)
+        call assert_int(3,size(partners),'one partner per first-half orientation')
+        call assert_true(all(partners==[6,4,5]),'mirror pairs retain their orientation indices')
+        call assert_real(0.,maxval(abs(frame_angles-[359.95,180.,0.])),1.e-4,'mirror frames retain normalized angles')
+        call assert_real(-180.,os%get(4,'psi'),0.,'mirror queries leave stored frame angles unchanged')
+        call os%set(4,'psi',73.25)
+        call os%set(5,'psi',-15.)
+        call os%set(6,'psi',393.5)
+        call os%get_mirror_pairs(partners,frame_angles)
+        call assert_true(all(partners==[6,4,5]),'repeated mirror queries replace output arrays')
+        call assert_real(0.,maxval(abs(frame_angles-[33.5,73.25,345.])),1.e-4,'mirror queries support general frame angles')
+        call os%kill()
+    end subroutine test_mirror_pairs
 
     !> The keyed fractional-update samplers: given a key, sample4update_rnd, _cnt, _fillin and _class draw the
     !! same subset again whatever the intrinsic stream drew in between, another iteration's key draws another

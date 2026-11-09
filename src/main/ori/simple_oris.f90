@@ -34,6 +34,7 @@ type :: oris
     procedure          :: e3get
     procedure          :: get_euler
     procedure          :: get_noris
+    procedure          :: get_mirror_pairs
     procedure          :: get_ori
     procedure          :: get
     procedure          :: get_int
@@ -353,6 +354,12 @@ interface
         logical, optional, intent(in) :: consider_state
         integer :: n
     end function get_noris
+
+    module subroutine get_mirror_pairs(self, partners, frame_angles)
+        class(oris),          intent(in)  :: self
+        integer, allocatable, intent(out) :: partners(:)
+        real, allocatable,    intent(out) :: frame_angles(:)
+    end subroutine get_mirror_pairs
 
     module subroutine get_ori( self, i, o )
         class(oris), intent(in)    :: self

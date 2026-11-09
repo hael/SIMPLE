@@ -145,8 +145,6 @@ contains
         endif
         l_diag_halves = .false.
         if( present(diag_halves) ) l_diag_halves = diag_halves
-        ! the mirrored memoization assumes nrefs/2 references: no second model under mirr_proj
-        if( l_diag_halves ) l_diag_halves = trim(params%mirr_proj) == 'no'
         if( l_diag_halves )then
             call read_reprojection_model_header(header)
             l_diag_halves = reprojection_model_diag_available(header)
@@ -230,7 +228,7 @@ contains
             refs_odd  = refine3D_reproj_model_fname('odd')
             call build%pftc%write_ref_pfts(refs_even, .true.)
             call build%pftc%write_ref_pfts(refs_odd,  .false.)
-            if( params%l_prob_post_diag .and. trim(params%mirr_proj) == 'no' )then
+            if( params%l_prob_post_diag )then
                 ! the pose-posterior diagnostic's model of the real halves, prepared like the
                 ! matcher's but from the independent even/odd maps, never the merged one
                 call read_mask_filter_reproject_refvols(params, build, cline, map_shift=.false., diag_halves=.true.)

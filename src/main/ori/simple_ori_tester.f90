@@ -41,6 +41,7 @@ contains
         call test_transfer_3Dparams()
         call test_mirror3d_involution()
         call test_mirror2d_involution()
+        call test_mirror_frame_angles()
         call test_transp_involution()
         call test_geodesic_metrics()
         call test_euler_compose_vs_compeuler()
@@ -57,6 +58,23 @@ contains
         call test_cartesian_score_fields()
         ! call report_summary()
     end subroutine run_all_ori_tests
+
+    !> Mirror-frame roundoff is snapped without changing resolved rotations.
+    subroutine test_mirror_frame_angles()
+        use simple_ori_utils, only: canonical_mirror_frame_angle
+        call assert_double(0._dp,canonical_mirror_frame_angle(0.),'zero mirror frame')
+        call assert_double(0._dp,canonical_mirror_frame_angle(5.e-5),'positive zero-frame roundoff')
+        call assert_double(0._dp,canonical_mirror_frame_angle(-5.e-5),'negative zero-frame roundoff')
+        call assert_double(0._dp,canonical_mirror_frame_angle(720.),'wrapped zero mirror frame')
+        call assert_double(180._dp,canonical_mirror_frame_angle(-180.),'wrapped half-turn mirror frame')
+        call assert_double(180._dp,canonical_mirror_frame_angle(180.+3.e-5),'positive half-turn roundoff')
+        call assert_double(180._dp,canonical_mirror_frame_angle(-180.-3.e-5),'negative half-turn roundoff')
+        call assert_double(17.25_dp,canonical_mirror_frame_angle(377.25),'wrapped general mirror frame')
+        call assert_double(272.75_dp,canonical_mirror_frame_angle(-87.25),'negative general mirror frame')
+        call assert_double(real(2.e-4,dp),canonical_mirror_frame_angle(2.e-4),'resolved near-zero mirror frame')
+        call assert_double(real(180.001,dp),canonical_mirror_frame_angle(180.001),'resolved near-half-turn mirror frame')
+        call assert_true(all(canonical_mirror_frame_angle([0.,180.,73.5]) == [0._dp,180._dp,73.5_dp]),'mirror-frame canonicalization is elemental')
+    end subroutine test_mirror_frame_angles
 
     !---------------- basic lifecycle / flags ----------------
 

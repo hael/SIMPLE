@@ -356,19 +356,18 @@ contains
         integer,             intent(in)    :: state
         logical,             intent(in)    :: iseven
         integer  :: iref_from, iref_to, kproj(2), ieo
+        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts_opt')
+        if( trim(self%p_ptr%mirr_proj) == 'yes' )then
+            if( self%p_ptr%nspace < 1 ) THROW_HARD('mirrored reference banks require positive nspace')
+            if( mod(self%nrefs,self%p_ptr%nspace) /= 0 ) THROW_HARD('mirrored references must contain complete nspace banks')
+        endif
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
         kproj     = self%kfromto
         ieo       = merge(REF_EVEN, REF_ODD, iseven)
-        if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts_opt')
         if( iref_to > self%nrefs ) THROW_HARD('reference range exceeds allocated bank in vol_pad2ref_pfts_opt')
-        if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
-            ! extract all the slices
-            call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
-                &self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo))
-        else
-            THROW_HARD('not supported yet for optimized polarft extraction; vol_pad2ref_pfts_opt')
-        endif
+        call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
+            &self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo), trim(self%p_ptr%mirr_proj)=='yes')
     end subroutine vol_pad2ref_pfts_opt
 
 end submodule simple_polarft_core

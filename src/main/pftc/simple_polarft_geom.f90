@@ -1,8 +1,64 @@
 !@descr: polarft class submodule for geometry-related things: shift, rotate, mirror etc.
 submodule (simple_polarft_calc) simple_polarft_geom
+#include "simple_local_flags.inc"
 implicit none
 
 contains
+
+    !> Mirror one bank into its canonical frames; general angles use trigonometric interpolation.
+    module subroutine mirror_ref_bank(self, refs, partners, frame_angles)
+        use simple_ori_utils, only: canonical_mirror_frame_angle
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        class(polarft_calc), intent(inout) :: self
+        complex(sp),        intent(inout) :: refs(:,:,:)
+        integer,            intent(in)    :: partners(:)
+        real,               intent(in)    :: frame_angles(:)
+        integer :: iproj, m, ir, jr, kk, ithr, mode, freq, nhalf
+        real(dp) :: psi, arg
+        complex(sp) :: phase
+        logical :: half_turn
+        nhalf = size(partners)
+        if( OMP_IN_PARALLEL() ) THROW_HARD('No bank mirroring inside OpenMP regions')
+        if( .not. self%existence ) THROW_HARD('bank mirroring requires an initialized polar calculator')
+        if( size(refs,1) /= self%pftsz .or. size(refs,2) /= self%nk ) THROW_HARD('mirror bank polar dimensions differ')
+        if( size(refs,3) /= 2*nhalf .or. size(frame_angles) /= nhalf ) THROW_HARD('mirror bank pair dimensions differ')
+        if( .not. all(ieee_is_finite(frame_angles)) ) THROW_HARD('mirror frame angles must be finite')
+        if( omp_get_max_threads() > size(self%cmat2_many) ) THROW_HARD('mirror bank team exceeds its workspace')
+        !$omp parallel do default(shared) private(iproj,m,ir,jr,kk,ithr,mode,freq,psi,arg,phase,half_turn) schedule(static) proc_bind(close)
+        do iproj = 1,nhalf
+            ithr = omp_get_thread_num()+1
+            m = partners(iproj)
+            psi = canonical_mirror_frame_angle(frame_angles(iproj))
+            half_turn = psi == 180._dp
+            if( psi == 0._dp .or. half_turn )then
+                do kk = 1,self%nk
+                    refs(1,kk,m) = merge(refs(1,kk,iproj),conjg(refs(1,kk,iproj)),half_turn)
+                    do ir = 2,self%pftsz
+                        jr = self%pftsz-ir+2
+                        refs(ir,kk,m) = merge(conjg(refs(jr,kk,iproj)),refs(jr,kk,iproj),half_turn)
+                    enddo
+                enddo
+            else
+                self%cmat2_many(ithr)%c(1:self%pftsz,:) = refs(:,:,iproj)
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,:) = conjg(refs(:,:,iproj))
+                call fftwf_execute_dft(self%plan_fwd1_many,self%cmat2_many(ithr)%c,self%cmat2_many(ithr)%c)
+                psi = psi*DPI/180._dp
+                do mode = 0,self%nrots-1
+                    freq = mode
+                    if( mode > self%pftsz ) freq = mode-self%nrots
+                    arg = real(freq,dp)*psi
+                    phase = cmplx(cos(arg),sin(arg),sp)
+                    ! Split the aliased +/- Nyquist modes equally to preserve Hermitian half-turn symmetry.
+                    if( mode == self%pftsz ) phase = cmplx(cos(arg),0._dp,sp)
+                    self%cmat2_many(ithr)%c(mode+1,:) = self%cmat2_many(ithr)%c(mode+1,:)*phase
+                enddo
+                ! conjg(FFT(A*exp(+im*psi)))/n evaluates the reflected ring in the zero-e3 frame.
+                call fftwf_execute_dft(self%plan_fwd1_many,self%cmat2_many(ithr)%c,self%cmat2_many(ithr)%c)
+                refs(:,:,m) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz,:))/real(self%nrots,sp)
+            endif
+        enddo
+        !$omp end parallel do
+    end subroutine mirror_ref_bank
 
     !>  Generate polar shift matrix by means of de Moivre's formula, for alignment: only the searched shells
     !>  [kfromto(1);kfromto(2)] are set, the only ones its consumers read

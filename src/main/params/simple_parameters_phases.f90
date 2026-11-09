@@ -669,6 +669,15 @@ contains
         character(len=2), allocatable :: symbols(:)
         character(len=5)              :: selector
         integer                       :: binwidth_min
+        select case(trim(self%mirr_proj))
+            case('no','yes')
+            case DEFAULT
+                THROW_HARD('mirr_proj must be no or yes')
+        end select
+        if( self%mirr_proj == 'yes' )then
+            if( self%nspace < 2 ) THROW_HARD('mirr_proj=yes requires positive even nspace')
+            if( mod(self%nspace,2) /= 0 ) THROW_HARD('mirr_proj=yes requires even nspace')
+        endif
         if( self%prg == 'select_micrographs' )then
             if( self%nmics < 1 .or. self%state < 1 .or. self%nspace < 1 .or. self%subset_max_nodes < 1 )then
                 THROW_HARD('select_micrographs requires positive nmics, state, nspace and subset_max_nodes')

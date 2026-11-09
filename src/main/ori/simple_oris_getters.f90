@@ -62,6 +62,29 @@ contains
         endif
     end function get_noris
 
+    !> Return reciprocal half-set partners and the in-plane angles removed from their stored frames.
+    module subroutine get_mirror_pairs(self, partners, frame_angles)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        class(oris),          intent(in)  :: self
+        integer, allocatable, intent(out) :: partners(:)
+        real, allocatable,    intent(out) :: frame_angles(:)
+        integer :: nhalf, i, m
+        if( self%n < 2 ) THROW_HARD('mirror orientations require a positive even count')
+        if( mod(self%n,2) /= 0 ) THROW_HARD('mirror orientations require an even count')
+        if( .not. self%isthere('mirr') ) THROW_HARD('mirror-pair indices absent from orientations')
+        nhalf = self%n/2
+        allocate(partners(nhalf), frame_angles(nhalf))
+        do i = 1, nhalf
+            m = self%get_int(i,'mirr')
+            if( m <= nhalf .or. m > self%n ) THROW_HARD('mirror partner must lie in the second half of orientations')
+            if( self%get_int(m,'mirr') /= i ) THROW_HARD('mirror-pair indices must be reciprocal')
+            partners(i) = m
+            frame_angles(i) = self%get(m,'psi')
+            if( .not. ieee_is_finite(frame_angles(i)) ) THROW_HARD('mirror frame angle must be finite')
+            frame_angles(i) = modulo(frame_angles(i),360.)
+        enddo
+    end subroutine get_mirror_pairs
+
     module subroutine get_ori( self, i, o )
         class(oris), intent(in)    :: self
         integer,     intent(in)    :: i

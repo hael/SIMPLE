@@ -100,6 +100,7 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, pgrp, group="model", visibility=UI_VIS_STANDARD)
+        call prg%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, pgrp_start, group="model", &
         &visibility=UI_VIS_ADVANCED)
         if( l_include_nsample )then
@@ -248,6 +249,7 @@ contains
         &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
         ! search controls
         call solve3D_addon%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
+        call solve3D_addon%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call solve3D_addon%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of the searched particles'' assignments for early stopping when the last stage is stage 3{0.95}', &
         &'overlap fraction', .false., .95, group="search", visibility=UI_VIS_ADVANCED)
@@ -321,6 +323,7 @@ contains
         &'# particles{100000}', .false., 100000., visibility=UI_VIS_ADVANCED)
         ! search controls
         call solve3D_pyramid%add_input(UI_SRCH, nstates, required_override=.true., group="search", visibility=UI_VIS_STANDARD)
+        call solve3D_pyramid%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call solve3D_pyramid%add_input(UI_SRCH, 'use_model', 'binary', 'Select the first classes with the model', &
         &'Select the classes of the reference particles'' solve2D with the class-average model; with no, every populated '//&
         &'class is used(yes|no){yes}', '', .false., 'yes', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -360,6 +363,7 @@ contains
         call solve3D_cavgs%add_input(UI_SRCH, pgrp_start, &
         &visibility=UI_VIS_ADVANCED)
         call solve3D_cavgs%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
+        call solve3D_cavgs%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call solve3D_cavgs%add_input(UI_SRCH, 'reseed_states', 'binary', 'Reseed emptied states', &
         &'Between stages, a state left (nearly) empty takes the worst-fitting class averages of the most populated state, &
         &so a state cannot collapse for good; with nstates>1(yes|no){no}', '', .false., 'no', &

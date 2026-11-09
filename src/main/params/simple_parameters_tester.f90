@@ -33,6 +33,7 @@ contains
         call test_ui_keys_bound()
         call test_yes_no_refused()
         call test_worker_project_recorded()
+        call test_mirr_proj_binding()
         call leave_fixture(saved, root, nfail0)
         ! The constructor must not leave directory globals pointing into the removed fixture.
         if( allocated(CWD_GLOB) ) deallocate(CWD_GLOB)
@@ -51,6 +52,24 @@ contains
         call cline%set('mskdiam', 12.)
         call cline%set('nthr', 1)
     end subroutine base_cline
+
+    subroutine test_mirr_proj_binding()
+        use simple_parameters, only: parameters
+        use simple_cmdline,    only: cmdline
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable :: cline
+        allocate(params, cline)
+        call cline%set('box',32)
+        call cline%set('smpd',SMPD)
+        call cline%set('mskdiam',12.)
+        call cline%set('nthr',1)
+        call params%new(cline,silent=.true.)
+        call assert_char('no',params%mirr_proj,'projection mirroring defaults to no')
+        call cline%set('mirr_proj','yes')
+        call params%new(cline,silent=.true.)
+        call assert_char('yes',params%mirr_proj,'projection mirroring survives parameter construction')
+        call cline%kill()
+    end subroutine test_mirr_proj_binding
 
     ! The parameter constructor must retain the selector before the expensive simulation.
     subroutine test_suite_binding()

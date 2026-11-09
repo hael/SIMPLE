@@ -167,7 +167,7 @@ contains
         pdim    = b%pftc%get_pdim_interp()
         allocate(sections(pftsz,kfromto(1):kfromto(2),p%nspace), pft(pdim(1),pdim(2):pdim(3)))
         call b%eulspace%set_ori(1, o_particle)
-        call fproject_polar_batch_opt(b%vol_pad, b%eulspace, p%nspace, b%pftc, sections)
+        call fproject_polar_batch_opt(b%vol_pad, b%eulspace, p%nspace, b%pftc, sections, mirr_proj=.false.)
         pft = cmplx(0.,0.,kind=sp)
         pft(:,kfromto(1):kfromto(2)) = sections(:,:,1)
         if( sum(abs(shift)) > 0. ) call shift_half_ring(pftsz, kfromto, p%box, shift, pft(:,kfromto(1):kfromto(2)))

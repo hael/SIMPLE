@@ -42,6 +42,7 @@ contains
         call test_registered_test_programs()
         call test_phshift_contract()
         call test_cont_surface_contract()
+        call test_mirrored_references_contract()
         call test_solve3D_trs_contract()
         call test_refine_motion_model_contract()
     end subroutine run_all_ui_visibility_tests
@@ -374,6 +375,30 @@ contains
         call assert_program_not_registered('refine3D_pose_cont')
         call choices%kill
     end subroutine test_cont_surface_contract
+
+    subroutine test_mirrored_references_contract()
+        character(len=24), parameter :: PROGRAMS(*) = [character(len=24) :: &
+            'refine3D', 'refine3D_auto', 'refine3D_states', 'refine3D_states_cavgs', &
+            'solve3D', 'solve3D_cavgs', 'solve3D_addon', 'solve3D_chunks', 'solve3D_pyramid']
+        type(string) :: choices
+        logical :: found
+        integer :: i
+        call make_ui
+        do i = 1, size(PROGRAMS)
+            program_name = trim(PROGRAMS(i))
+            call get_prg_ptr(program_name, registered_prg)
+            call assert_true(associated(registered_prg), trim(PROGRAMS(i))//' is registered')
+            if( .not. associated(registered_prg) ) cycle
+            call assert_ui_param(registered_prg%srch_ctrls, 'mirr_proj', PROGRAMS(i), &
+                expected_type='binary', expected_default='no', expected_visibility=UI_VIS_ADVANCED)
+            call find_ui_param(registered_prg%srch_ctrls, 'mirr_proj', found, choices)
+            call assert_char('|no|yes', choices%to_char(), trim(PROGRAMS(i))//' mirr_proj choices')
+        enddo
+        program_name = 'refine3D_local'
+        call get_prg_ptr(program_name, registered_prg)
+        if( associated(registered_prg) ) call assert_false(program_has_key(registered_prg,'mirr_proj'), 'Cartesian local refinement has no projection-mirroring input')
+        call choices%kill
+    end subroutine test_mirrored_references_contract
 
     subroutine test_solve3D_trs_contract()
         character(len=16), parameter :: OTHER_PROGRAMS(3) = &
@@ -737,10 +762,11 @@ contains
     end subroutine assert_input_binding
 
     !> the input `key` exists in `params`, with the expected type and default when given
-    subroutine assert_ui_param( params, key, prg_name, expected_type, expected_default )
+    subroutine assert_ui_param( params, key, prg_name, expected_type, expected_default, expected_visibility )
         type(linked_list), intent(in) :: params
         character(len=*),  intent(in) :: key, prg_name
         character(len=*),  intent(in), optional :: expected_type, expected_default
+        integer,           intent(in), optional :: expected_visibility
         type(list_iterator)   :: iterator
         class(*), allocatable :: value
         logical :: found
@@ -752,6 +778,7 @@ contains
                 type is( ui_program_input )
                     if( param%param%key%to_char() == key )then
                         found = .true.
+                        if( present(expected_visibility) ) call assert_int(expected_visibility, param%visibility, trim(prg_name)//': '//key//' visibility')
                         if( present(expected_type) )then
                             call assert_char(expected_type, param%param%keytype%to_char(), &
                                 &trim(prg_name)//': '//key//' UI type')

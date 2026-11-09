@@ -13,7 +13,7 @@ contains
     !> Fully fused oversampled projection of one state's full reference bank.
     !> OpenMP CPU & GPU accelerated
     !> refs_state is indexed (irot, k_local, iproj) where k_local = k-kfromto(1)+1.
-    subroutine fproject_polar_batch_opt( vol_pad, eulspace, nspace, pftc, refs_state )
+    subroutine fproject_polar_batch_opt( vol_pad, eulspace, nspace, pftc, refs_state, mirr_proj )
         use simple_kbinterpol,   only: apod_fast_device
         use simple_polarft_calc, only: polarft_calc
         class(projector),    intent(in)    :: vol_pad
@@ -21,13 +21,16 @@ contains
         integer,             intent(in)    :: nspace
         class(polarft_calc), intent(inout) :: pftc
         complex(sp),         intent(inout) :: refs_state(:,:,:)
+        logical,             intent(in)    :: mirr_proj
         integer,       parameter :: PAD_FAC         = OSMPL_PAD_FAC
         real,          parameter :: PAD_FAC_SCALING = real(PAD_FAC**3)
         type(kbinterpol)         :: kb
         real,        allocatable :: rotmats(:,:,:),hkcoords(:,:,:), tmp(:,:)
+        integer,     allocatable :: partners(:)
+        real,        allocatable :: frame_angles(:)
         real    :: rotmat(3,3)
         integer :: clb(3), cub(3), cdim(3), kfromto(2)
-        integer :: kfrom, kto, iproj, pftsz, noris, iwinsz, wdim, nk
+        integer :: kfrom, kto, iproj, pftsz, noris, iwinsz, wdim, nk, nproj
         ! Dimensions and boundaries
         pftsz   = pftc%get_pftsz()
         kfromto = pftc%get_kfromto()
@@ -40,11 +43,17 @@ contains
         if( size(refs_state,1) /= pftsz  ) THROW_HARD('refs_state dim(1) mismatch in fproject_polar_batch_opt')
         if( size(refs_state,2) /= nk     ) THROW_HARD('refs_state dim(2) mismatch in fproject_polar_batch_opt')
         if( size(refs_state,3) /= nspace ) THROW_HARD('refs_state dim(3) mismatch in fproject_polar_batch_opt')
+        nproj = nspace
+        if( mirr_proj )then
+            call eulspace%get_mirror_pairs(partners, frame_angles)
+            nproj = size(partners)
+            if( 2*nproj /= nspace ) THROW_HARD('mirror geometry differs from requested projection count')
+        endif
         kb     = vol_pad%get_kbwin()
         iwinsz = ceiling(kb%get_winsz() - 0.5)
         wdim   = kb%get_wdim()
         if( wdim > 3 ) THROW_HARD('increase fixed KB weight storage in fproject_polar_batch_opt')
-        allocate(tmp(kfrom:kto,pftsz), rotmats(2,3,nspace), hkcoords(2,pftsz,nk))
+        allocate(tmp(kfrom:kto,pftsz), rotmats(2,3,nproj), hkcoords(2,pftsz,nk))
         ! format polar coordinates
         call pftc%get_polar_coords(1, tmp)
         hkcoords(1,:,:) = transpose(tmp)
@@ -55,7 +64,7 @@ contains
         hkcoords = real(PAD_FAC) * hkcoords
         ! format rotation matrices
         !$omp parallel do default(shared) proc_bind(close) schedule(static) private(iproj,rotmat)
-        do iproj = 1, nspace
+        do iproj = 1, nproj
             rotmat = eulspace%get_mat(iproj)
             rotmats(:,:,iproj) = rotmat(1:2,:)
         enddo
@@ -66,6 +75,7 @@ contains
         cdim = cub - clb + 1
         ! Interpolation kernel
         call fproject_polar_batch_opt_kernel(vol_pad%cmat_exp, refs_state)
+        if( mirr_proj ) call pftc%mirror_ref_bank(refs_state, partners, frame_angles)
         ! cleanup
         deallocate(rotmats, hkcoords)
         contains
@@ -79,14 +89,14 @@ contains
 #ifdef USE_OPENMP_OFFLOAD
                 !$omp target teams distribute parallel do collapse(3) &
                 !$omp& map(to:cmat_exp(1:cdim(1),1:cdim(2),1:cdim(3)), &
-                !$omp& rotmats(1:2,1:3,1:nspace), hkcoords(1:2,1:pftsz,1:nk)) &
-                !$omp& map(from:refs(1:pftsz,1:nk,1:nspace)) &
+                !$omp& rotmats(1:2,1:3,1:nproj), hkcoords(1:2,1:pftsz,1:nk)) &
+                !$omp& map(from:refs(1:pftsz,1:nk,1:nproj)) &
 #else
                 !$omp parallel do collapse(3) proc_bind(close) default(shared) schedule(static) &
 #endif
-                !$omp& firstprivate(kb,nspace,nk,pftsz,iwinsz,wdim,clb) &
+                !$omp& firstprivate(kb,nproj,nk,pftsz,iwinsz,wdim,clb) &
                 !$omp& private(iproj,kk,irot,px,py,locpd,i0p,base,sx,sy,sz,wx,wy,wz,fc,i,j,l,ix,iy,iz)
-                do iproj = 1, nspace
+                do iproj = 1, nproj
                     do kk = 1, nk
                         do irot = 1, pftsz
                             ! padded coordinates

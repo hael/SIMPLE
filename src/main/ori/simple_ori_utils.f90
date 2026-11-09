@@ -9,11 +9,25 @@ implicit none
 public :: euler2m, m2euler, dm2euler, euler_dist, euler_inplrotdist, euler_compose, euler_mirror
 public :: make_transfmat, rnd_romat, geodesic_frobdev, rotmat2d
 public :: genfire2euler, euler2genfire
+public :: canonical_mirror_frame_angle
 private
 
 real, parameter :: zvec(3) = [0.,0.,1.]
 
 contains
+
+    !> Normalize a finite frame angle, snapping only roundoff near zero and half turns.
+    pure elemental function canonical_mirror_frame_angle(angle) result(psi)
+        real, intent(in) :: angle
+        real, parameter :: MIRROR_FRAME_TOL = 1.e-4
+        real(dp) :: psi
+        psi = modulo(real(angle,dp),360._dp)
+        if( min(psi,360._dp-psi) <= MIRROR_FRAME_TOL )then
+            psi = 0._dp
+        else if( abs(psi-180._dp) <= MIRROR_FRAME_TOL )then
+            psi = 180._dp
+        endif
+    end function canonical_mirror_frame_angle
 
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
     pure function euler2m( euls ) result( r )

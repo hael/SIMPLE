@@ -45,6 +45,7 @@ contains
         ! search controls
         call refine3D%add_input(UI_SRCH, nspace, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, trs, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
@@ -198,6 +199,7 @@ contains
         &.true.,&                                                                                   ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='Automated 3D Refinement')
         call add_refine3D_workflow_inputs(refine3D_auto)
+        call refine3D_auto%add_input(UI_SRCH, mirr_proj, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'ref_pose_init', 'multi', 'External-reference pose initialization', &
         &'When vol1 has independent provenance, run one fixed-reference CC pose-initialization pass at 15 Angstroms &
         &before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &

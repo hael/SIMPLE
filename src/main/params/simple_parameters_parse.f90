@@ -125,7 +125,7 @@ contains
         call reg%add_yesno('memreport', self%memreport)
         call reg%add_char('mic_old_root', self%mic_old_root)
         call reg%add_char('mirr', self%mirr)
-        call reg%add_char('mirr_proj', self%mirr_proj)
+        call reg%add_yesno('mirr_proj', self%mirr_proj)
         call reg%add_yesno('mkdir', self%mkdir)
         call reg%add_yesno('ml_reg', self%ml_reg)
         call reg%add_yesno('unfil_unmasked', self%unfil_unmasked)
