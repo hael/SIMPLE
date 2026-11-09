@@ -367,6 +367,7 @@ contains
             if( has_angast  ) ctfparms%angast  = orientation%get('angast')
             if( has_phshift ) ctfparms%phshift = orientation%get('phshift')
             call orientation%set_ctfvars(ctfparms)
+            call orientation%set_state(1)
             call selection%set_ori(i, orientation)
         enddo
         write(logfhandle,'(A)') '>>> GENERATING WAVE-SCATTERING IMAGES: '//trim(params%wave_model)
