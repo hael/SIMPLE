@@ -339,6 +339,13 @@ if(BUILD_TESTS)
   # 2026-09-30): a refinement mode independent of the polar workflows the other entries run.
   simple_add_test(cont_refine3D_1jxy highlevel 7200 8 PROCESSORS 10
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=cont_refine3D_1jxy nthr=8)
+  # the pose student (learn_pose_student, predict_poses, the per-particle cone of refine3D
+  # refine=prob_neigh prob_neigh_mode=geom) on 2 000 blob-phantom particles of the multi-state fixture:
+  # the split-half protocol in miniature, gated on the machinery's contracts and the fallback's identity,
+  # the reads against the truth reported. Its own entry by the owner's plan (learned_pose_state_assignment.md,
+  # section 16.2 phase 4 and its file table): a route of its own programs, independent of the entries above.
+  simple_add_test(pose_student highlevel 2400 8 PROCESSORS 8
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pose_student nthr=8)
   # the multi-state workflows on simulated beta-galactosidase states, judged against the known state
   # of every particle: the class-average route, solve3D nstates=3 from the particles, refine3D_states
   # from the true poses, and single-state solve3D followed by refine3D_states (the de novo routes'
@@ -428,7 +435,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 42)   # 15 fast + 1 platform + 19 highlevel + 7 library
+  set(SIMPLE_CTEST_BUDGET 43)   # 15 fast + 1 platform + 20 highlevel + 7 library
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

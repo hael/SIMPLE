@@ -83,8 +83,8 @@ found. It can also be rerun explicitly after a coarray build with
 `cd build && ctest -R '^coarrays$' --no-tests=error --output-on-failure`.
 
 **The process budget.** The number of CTest entries is fixed in
-`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 42: 15 fast,
-7 library, 19 highlevel and 1 platform) and configuration fails when it does not
+`SIMPLE_CTEST_BUDGET` (`production/CMakeLists.txt`, currently 43: 15 fast,
+7 library, 20 highlevel and 1 platform) and configuration fails when it does not
 match. A CTest entry is an isolation unit, not a place for one more check:
 checks are added inside existing suites. A new entry needs a stated reason and
 the owner's agreement, and is recorded in the plan.
@@ -140,6 +140,7 @@ convenience and deliberately not a CTest entry.
 | `state_fixture` | highlevel | the multi-state test fixture (`simple_test_state_fixture`): blob phantoms in its search, known-pose and exact-view modes (built twice, the second from the cache) and the compositional and conformational beta-galactosidase states, each truth holding its declared point group and no larger one (its correlation over the group at least 0.99 and at least 0.01 above its correlation over the next larger group) |
 | `solve3D_addon` | highlevel | `solve3D` on a seeded selection of a first set of simulated particles of a symmetry-broken 6VXX map (a 2000-row frozen project), then `solve3D_addon` on a 3000-row current project that appends a second set, checked against the simulation truth (poses, map) and the base run; its own entry by owner decision (2026-09-26) |
 | `cont_refine3D_1jxy` | highlevel | continuous Cartesian pose refinement on 1 000 simulated 1JYX particles from perturbed poses: `refine3D refine=cont` (euclid, cc, distributed), `refine3D_local`, the polish `pose_cont=yes` in `refine3D` and `refine3D_auto`, and the continuation of a polar `refine3D_auto`, gated on the ground-truth orientations; the positive NU-bundle handoff case also runs alone with `suite=nu_handoff`, checking staged constituents, first matching LP and source preservation |
+| `pose_student` | highlevel | the pose student's split-half protocol in miniature on 2 000 blob-phantom particles of the multi-state fixture with their truth poses: `learn_pose_student` on the training half against the truth map, `predict_poses` on the blank test half, `refine3D refine=prob_neigh prob_neigh_mode=geom` from the students' cones and the coarse cells, the half reconstructed; the route's and the fold's contracts and the fallback's identity to a search without student records are the gates, the reads against the truth are reported (ruling R3 of the pose student plan: no floor from a student that seeds nobody) |
 | `multistate_workflows` | highlevel | the multi-state workflows on 3 000 simulated particles of three beta-galactosidase states (the tetramer, the tetramer less chain D, the A-B dimer; populations 50, 30 and 20 %, SNR 1), in five routes: `labels`, the state assignment alone (`refine3D refine=prob nstates=3` from the true poses and random balanced labels, with the starting maps reconstructed from those labels and the last iterations annealed to the physical posterior; plan of 2026-11-04, `multistate_posterior_state_draw.md`); `cavgs`, `solve3D_cavgs` on 600 simulated images of the three states (class-average stand-ins: even and odd halves that are independent noise realisations of the same state, view and shift, each at SNR 2.5, no CTF, shifts within a pixel) imported with `import_cavgs` (owner ruling 2026-10-17); `shc`, `solve3D` from the particles; `states`, `refine3D_states` from the true poses and the consensus map; `consensus`, single-state `solve3D` in C1 followed by `refine3D_states`, the route used on real data (owner ruling 2026-10-18). Each is judged against the simulation truth: the path each refinement took (refine mode, directions and states per iteration, from the refine3D strategy's record), the state labels, the maps docked in both hands, their discrimination and the poses, with the shuffled-label and duplicated-maps controls. The de novo routes `shc` and `cavgs` resolve every true state in only part of the runs (13 and 9 of 20 in the profile of 2026-10-19; `shc` 15 of 20 with the posterior state draw, 2026-11-05), a limitation of the method: whether they do is a `success` row, held by `test=profile` to 6 and 2 of 20 seeds, and their labels are reported; their path, checks and pose ceilings are gates. The `labels` route prints the accuracy of the labels and the state readout of the draw at every iteration; whether it resolves every true state is a `success` row (13 of 20 in its profile of 2026-11-05: a random start drains a state in the others, as the closest-state rule does), held to 6 of 20, and its labels, population error and poses are held to the floors of that profile. The `states` and `consensus` routes resolve every state in every run: that is checked, and their labels, populations and poses are held to floors. `states` also holds the discrimination margin to its floor; `consensus` reports that stale-profile margin and checks that its pairwise map differences agree with the truth, while duplicated-map controls must fail discrimination. The entry runs all five (2 692 s at eight threads alone on dell2, 2026-11-05, `labels` about 230 s of them); `suite=<route>` runs one, `suite=cavgs_single` (the single-state class-average start, `prob_athres=` passed on), `suite=cavgs_as_particles` (the same simulated halves through particle `solve3D`), `suite=<route>_identical` (identical states; `labels_identical` reports the populations and the mutual correlations of the maps) and `suite=hard_<route>` (a chain rotated by 10 degrees, SNR 0.5, populations 80 and 20 %) are run by hand |
 | `single_atoms_stats` | highlevel | simulated Pt nanoparticle atom detection (`detect_atoms`, species-free), the products of the atomic density model (`_FIT`, `_RES`, `_atoms.csv`, `_model.txt`, occupancy and width in `_ATMS.pdb`, the contact-score ceiling derived from the data, reported) and statistics (`atoms_stats` with the element) |
 | `single_atoms_stats_cdsew`, `single_atoms_stats_cdsez`, `single_atoms_stats_cdser` | highlevel | the same test on simulated wurtzite, zincblende and rocksalt CdSe nanoparticles (`element=CdSeW`, `CdSeZ`, `CdSeR`), whose lattice lookups use the compound selector; also asserts the coordination number of the interior atoms (4, 4, 6) and the fitted lattice constant within 2% of the table |
@@ -1145,6 +1146,30 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
   With the continuous gather (same day): 20 of 20, every floor admissible (stage a worst 1.02°).
 - Cost: a median of 390 s at 8 threads with stages i and j (the 2026-10-20 profile; reserving 10
   cores), up to 11 GiB; about 37 minutes at one thread (2026-10-19, before stages i and j).
+
+**`pose_student`**
+
+- Claim: the pose student's programs and the per-particle cone of the neighbourhood search work end to
+  end on 2 000 blob-phantom particles with known poses (one state, SNR 1, no shift): the training half
+  trains the student against the truth map, the test half is predicted from blank poses, every test row
+  is aligned by `refine3D refine=prob_neigh prob_neigh_mode=geom` from its cone or its coarse cell, the
+  same search runs without student records, the dense search runs as the protocol's fallback, and the
+  half is reconstructed from the protocol's merge and from the dense search.
+- Checks (the machinery, ruling R3 of the pose student plan): the model records a threshold and a bound;
+  every test row routed; every seeded row's cone within the bound at or above the threshold; every dense
+  row without a cone; every folded cone radius at most 90°; every searched pose finite; the rows without
+  a cone bit for bit the no-student search's; the seeded rows changed by their cones (when any is
+  seeded). Reported (no floor, by that ruling: no floor from a student that seeds nobody): the held-out
+  record, the seeded fraction, the truth inside the cone and the mode within 12° for the seeded rows,
+  the agreement with the truth per route beside the dense search's on the same rows, the maps' FSC
+  against the truth, every step's wall time.
+- Path: the three searches and the two reconstructions complete in place. Control: the seeded rows'
+  poses must differ from the no-student search's (the cone path did something) while the other rows'
+  do not.
+- Profile: none yet; the reports are the material for one (the floor rule) once the student's seeding
+  on this phantom is settled (1.5% of the test half on 2026-11-08, with 68% held-out mode agreement).
+- Cost: 6:49 at 8 threads on the dell (2026-11-08; reserving 8 cores), 1.6 GB, 0.7 GB of run directory;
+  the training of two designs takes 394 s of it.
 
 **`multistate_assignment`** (retired 2026-11-02)
 

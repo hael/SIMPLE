@@ -172,6 +172,11 @@ explains which workflow fits each source of particle poses and state models.
     pool whose coarse-to-fine schedule is written in iterations rather than
     stages.
 
+16. [The pose student](pose_student.md). A Hermitian network over the polar
+    Fourier half ring, trained per dataset on the probabilistic search's own
+    posterior rows, that proposes a direction, a cone and a confidence for an
+    unseen particle and hands them to refine3D's neighbourhood search.
+
 Two cross-cutting chapters stand outside the pipeline order.
 [Continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)
 polishes a committed pose to sub-grid angular precision using the fact that

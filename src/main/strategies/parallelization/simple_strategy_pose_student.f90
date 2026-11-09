@@ -1,0 +1,1036 @@
+!@descr: the pose student's strategy routines: the teacher's rows of the selected particles at the student grid and band, their resolvability and their features, the student's training (learn_pose_student), and its prediction of the mode, the cone and the confidence (predict_poses)
+! The teacher is the probabilistic machinery's posterior (doc/implementation_notes/completed/learned_pose_state_assignment.md,
+! section 4): the dense table's rows as the production fill computes them against the references prepared as
+! refine3D's matcher prepares them, batch by batch, each row read before the batch's assignment releases it.
+module simple_strategy_pose_student
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+use, intrinsic :: iso_fortran_env, only: int32
+use simple_core_module_api
+use simple_builder,            only: builder
+use simple_cmdline,            only: cmdline
+use simple_parameters,         only: parameters
+use simple_image,              only: image
+use simple_ori,                only: ori
+use simple_eo_partition,       only: ensure_field_halves
+use simple_eul_prob_tab,       only: eul_prob_tab
+use simple_eul_prob_tab_utils, only: prob_row_record, prob_row_file, prob_fill_profile, write_fill_profile_bench, &
+    &temperature_or_argmin
+use simple_matcher_refvol_utils,    only: materialize_reprojection_model_from_volumes, read_reprojection_model, &
+    &complete_volume_source_available
+use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D, &
+    &check_pass_team
+use simple_matcher_ptcl_io,         only: ptcl_read_session
+use simple_matcher_smpl_and_lplims, only: set_bp_range3D, adopt_run_seed
+use simple_sigma2_bootstrap,        only: ensure_sigma2_for_iteration
+use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, &
+    &polar_feats_hash_ints, POLAR_FEATS_NHEAD
+use simple_pose_student, only: pose_student, student_pred, NSPACE_STUDENT, KMAX_STUDENT
+use simple_rnd,          only: rnd_run_seed
+use simple_math,         only: hpsort
+use simple_type_defs,    only: OBJFUN_EUCLID, PTCL3D_SEG
+use simple_binoris_io,   only: binwrite_oritab
+implicit none
+
+public :: run_learn_pose_student, learn_pose_student_exec, run_predict_poses, predict_poses_exec, KMAX_ROW
+private
+#include "simple_local_flags.inc"
+
+integer, parameter :: KMAX_ROW       = 256  !< the row record's kept entries, the tail's mass beside them
+integer, parameter :: STUDENT_WIDTHS(3) = [16, 32, 64] !< the designs, cheapest first: the first block's channels
+integer, parameter :: MAX_STEPS      = 2500 !< the training budget in optimiser steps (30 epochs of the training half at batch 256)
+integer, parameter :: PATIENCE_STEPS = 250  !< steps without a held-out improvement before the training stops
+integer, parameter :: HOLDOUT_EVERY  = 10   !< every tenth micrograph (stack) is held out, every tenth selected particle of a single stack
+real,    parameter :: CONF_FRACTION  = 0.95 !< the confidence threshold: above it the teacher's direction lies in the cone for this fraction of the held-out particles
+integer, parameter :: NBOOT          = 1000 !< resamples by micrograph of the paired difference between two designs
+real,    parameter :: BOOT_QUANTILE  = 0.05 !< a wider design is kept when this quantile of its resampled recovery gain is above zero
+real,    parameter :: SHIFT_AUG_NSIG = 3.   !< the augmentation's disk: this many prior widths (the dynamic centring's disk)
+integer, parameter :: SHIFT_CHECK_NPTCLS  = 256           !< ruling R2's shift check: the first selected particles predicted again
+real,    parameter :: SHIFT_CHECK_MAGS(3) = [2., 5., 10.] !< shifted through the calculator's phase ramps by these pixels
+integer, parameter :: SHIFT_CHECK_NDIR    = 4             !< in this many directions (0, 90, 180, 270 degrees)
+integer, parameter :: SHIFT_CHECK_NGROUPS = 1             !< the readout map as one feature group (ruling R3's readout replaced the pooled features)
+
+contains
+
+    ! ===== LEARN_POSE_STUDENT =====
+
+    !> learn_pose_student on its own parameters and builder, built from cline
+    subroutine run_learn_pose_student( cline )
+        class(cmdline), intent(inout) :: cline
+        type(parameters), target :: params
+        type(builder)            :: build
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call learn_pose_student_exec(params, build, cline)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_LEARN_POSE_STUDENT NORMAL STOP ****', print_simple=.false.)
+    end subroutine run_learn_pose_student
+
+    !> The teacher's rows of the project's selected particles (state 1 of ptcl3D) at the student grid (nspace) and
+    !! band (lp) against the references vol1, prepared as refine3D's matcher prepares them, filled batch by batch
+    !! with the production fill; each row's record with its resolvability, its whole row, its error against the
+    !! particle's stored direction and its feature tensor are written beside fname. Then the student is trained on
+    !! the rows and the features (every tenth particle held out for the early stopping) and written as the model
+    !! fname with its weights beside it. Project: reads the particle field; writes what refine3D's setup writes
+    !! (the halves, the sigma2 bootstrap, the run seed), nothing else
+    subroutine learn_pose_student_exec( params, build, cline )
+        type(parameters), target, intent(inout) :: params
+        type(builder),    target, intent(inout) :: build
+        class(cmdline),           intent(inout) :: cline
+        class(eul_prob_tab), allocatable :: tab
+        type(ptcl_read_session)  :: reads
+        type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
+        type(polar_feats)        :: feats
+        type(polar_feat)         :: feat
+        type(polar_feats_cache)  :: cache
+        type(prob_row_file)      :: rows
+        type(prob_row_record)    :: rec
+        type(prob_fill_profile)  :: profile
+        type(pose_student)       :: student
+        type(ori)                :: o
+        type(string)             :: base, fname_rows, fname_feats, fname_stats, fname_header, fname_grid, projpath
+        real,    allocatable     :: dists(:), wk(:,:)
+        real,    allocatable     :: x_all(:,:,:,:), ctf2_all(:,:), side_all(:), dists_all(:,:), temps_all(:), xrefs(:,:,:,:), ctf_one(:,:)
+        complex, allocatable     :: pft_ref(:,:)
+        real,    allocatable     :: prob(:,:), conf_held(:), radius_held(:), gain(:), boot_means(:)
+        logical, allocatable     :: held(:), recov(:,:)
+        integer, allocatable     :: pinds(:), batches(:,:), statbuf(:), mode_all(:), held_inds(:), group_held(:)
+        integer, allocatable     :: k99_held(:), mode_held_s(:), order(:), groups(:), group_of(:)
+        type(student_pred)       :: pred
+        integer(int64)           :: key(POLAR_FEATS_NHEAD), mtime, vol_hash, lehmer
+        integer(timer_int_kind)  :: t0, t_all
+        real(timer_int_kind)     :: rt_prep, rt_batch, rt_fill, rt_rows, rt_all, rt_train, rt_cand(size(STUDENT_WIDTHS))
+        real     :: euls_ref(3), euls_mode(3), euls_sym(3), euldist, inpldist, temp, dmin, w_ref, invalid, shift_aug
+        real     :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
+        real     :: conf_threshold, heldout_seeded, heldout_recovered, cone_bound
+        real(dp) :: z, gsum
+        integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, iproj_ref, iproj_mode, rank_ref
+        integer  :: stat_unit, grid_unit, head_unit, io_stat, status, stat_status, j, nvalid_ref, nk, nstks, nheld
+        integer  :: nptcls_train, nheldout, epochs_run, best_epoch, nweights, iw, iw_best, ngroups, ib, ig, nthr_here
+        integer  :: ithr, epoch_cand(size(STUDENT_WIDTHS)), held_unit
+        real     :: loss_train, loss_held, mode_held, time_train_s
+        logical  :: l_rebuilt, l_cache, l_by_stack
+        t_all = tic()
+        call check_pass_team('learn_pose_student')
+        ! the contract
+        if( params%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('the teacher is the Euclidean posterior: objfun=euclid; learn_pose_student')
+        if( .not. params%l_lpset ) THROW_HARD('the band is lp; learn_pose_student')
+        if( params%nstates /= 1 ) THROW_HARD('the pose student is single-state; learn_pose_student')
+        if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('the rows are ptcl3D''s; learn_pose_student')
+        if( .not. complete_volume_source_available(params) ) THROW_HARD('the references are vol1; learn_pose_student')
+        base = fname_base(params%fname)
+        fname_rows   = base%to_char()//'_rows.bin'
+        fname_feats  = base%to_char()//'_feats.bin'
+        fname_stats  = base%to_char()//'_rows.txt'
+        fname_header = base%to_char()//'_rows_header.txt'
+        fname_grid   = base%to_char()//'_grid.txt'
+        ! the selected particles
+        call build%spproj_field%get_pinds(1, 'state', pinds)
+        if( .not. allocated(pinds) ) THROW_HARD('no selected particle; learn_pose_student')
+        nptcls = size(pinds)
+        if( nptcls < 1 ) THROW_HARD('no selected particle; learn_pose_student')
+        write(logfhandle,'(A,I0,A,I0,A,F7.2,A)') '>>> POSE STUDENT ROWS: ', nptcls, ' particles at nspace ', params%nspace, &
+            &' and lp ', params%lp, ' A'
+        ! the held-out micrographs: every tenth stack of a project with several, every tenth selected particle of one
+        nstks      = build%spproj%os_stk%get_noris()
+        l_by_stack = nstks > 1
+        allocate(held(nptcls), source=.false.)
+        allocate(group_of(nptcls), source=0)
+        do i = 1,nptcls
+            if( l_by_stack )then
+                group_of(i) = build%spproj_field%get_int(pinds(i), 'stkind')
+                held(i)     = mod(group_of(i), HOLDOUT_EVERY) == 0
+            else
+                group_of(i) = i
+                held(i)     = mod(i, HOLDOUT_EVERY) == 0
+            endif
+        enddo
+        ! refine3D's setup: the halves (their one maker), the sigma2 state, the run seed of the keyed draws
+        t0 = tic()
+        call ensure_field_halves(build%spproj, params%oritype, params%projfile)
+        call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, 1, params%box, params%smpd, &
+            &'POSE STUDENT SIGMA2', l_rebuilt)
+        if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
+        call adopt_run_seed(params, build)
+        ! the band and the references at the student grid: the matcher's reprojection model from the volume
+        call set_bp_range3D(params, build, cline)
+        call materialize_reprojection_model_from_volumes(params, build, cline, cleanup_pftc=.true.)
+        ! the batches and the calculator, as refine3D_exec prepares them
+        batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
+        nbatches    = 1 + (nptcls - 1) / batchsz_max
+        batches     = split_nobjs_even(nptcls, nbatches)
+        batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
+        call read_reprojection_model(params, build, batchsz_max)
+        call prep_sigmas_objfun(params, build)
+        call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, batchsz_max)
+        call build%vol%kill
+        call build%vol_odd%kill
+        call build%vol2%kill
+        call build%pftc%memoize_refs(eulspace=build%eulspace)
+        ! the features' geometry and the frozen weights: the calculator's band and the spectra the rows are whitened with
+        call build%pftc%get_sigma2_weights(wk)
+        call feats%new(build%pftc%get_pftsz(), params%kfromto, params%box, wk)
+        nk = params%kfromto(2) - params%kfromto(1) + 1
+        ! the grid's reprojections through the features (no CTF): the readout's templates start from them (ruling R3)
+        allocate(xrefs(feats%get_pftsz(), nk, 2, params%nspace), source=0.)
+        allocate(pft_ref(feats%get_pftsz(), params%kfromto(1):params%kfromto(2)))
+        allocate(ctf_one(feats%get_pftsz(), params%kfromto(1):params%kfromto(2)), source=1.)
+        do i = 1,params%nspace
+            call build%pftc%get_ref_pft(i, .true., pft_ref)
+            call feats%build_from_pft(pft_ref, ctf_one, .true., feat)
+            xrefs(:,:,:,i) = feat%x
+        enddo
+        deallocate(pft_ref, ctf_one)
+        projpath = simple_abspath(params%projfile)
+        call simple_file_stat(projpath, stat_status, statbuf)
+        if( stat_status /= 0 ) THROW_HARD('could not stat the project file; learn_pose_student')
+        mtime = int(statbuf(10),int64)
+        key   = polar_feats_contract(projpath%to_char(), mtime, build%spproj_field%get_noris(), params%box, params%box_crop, &
+            &params%smpd, pinds, build%pftc%get_pftsz(), params%kfromto, wk, trim(params%ctf) /= 'no')
+        call cache%new(fname_feats)
+        call cache%create(feats, maxval(pinds), status)
+        l_cache   = status == 0
+        vol_hash  = file_hash(params%vols(1))
+        ! the table of the pass: the iteration's model from the complete field, the assignment opened
+        allocate(eul_prob_tab :: tab)
+        call tab%new_pipeline(params, build, pinds)
+        call tab%set_model_from_field
+        call tab%open_assignment
+        call rows%open_write(fname_rows, nptcls, params%nspace)
+        call fopen(stat_unit, fname_stats, status='replace', action='write', iostat=io_stat)
+        call fileiochk('learn_pose_student; open '//fname_stats%to_char(), io_stat)
+        write(stat_unit,'(A)') '# iptcl eo temp nvalid iproj_mode pmax neff k99 nkept wtail lmin inpl_mode x_mode y_mode '//&
+            &'dist_mode_deg iproj_ref w_ref rank_ref in_cone in_k99 wsq logpow dfx tazim'
+        call write_grid
+        ! the training set in memory: the tensors, the rows' losses and temperatures
+        allocate(x_all(feats%get_pftsz(), nk, 2, nptcls), ctf2_all(nk, nptcls), side_all(nptcls), source=0.)
+        allocate(dists_all(params%nspace, nptcls), temps_all(nptcls), source=0.)
+        allocate(mode_all(nptcls), source=0)
+        rt_prep  = toc(t0)
+        rt_batch = 0.
+        rt_fill  = 0.
+        rt_rows  = 0.
+        allocate(dists(params%nspace))
+        call reads%new(params)
+        call reads%expect(pinds)
+        invalid = 0.1 * huge(invalid)
+        do ibatch = 1,nbatches
+            b0      = batches(ibatch,1)
+            b1      = batches(ibatch,2)
+            batchsz = b1 - b0 + 1
+            t0 = tic()
+            call build_batch_particles3D(params, build, batchsz, pinds(b0:b1), ptcl_imgs, ptcl_imgs_pad, reads)
+            rt_batch = rt_batch + toc(t0)
+            t0 = tic()
+            call tab%fill_tab_range(b0, b1)
+            rt_fill = rt_fill + toc(t0)
+            t0 = tic()
+            do i = b0,b1
+                iptcl = pinds(i)
+                call tab%get_posterior_row(i, params%prob_beta, KMAX_ROW, rec, dists)
+                call rows%put(rec, dists)
+                call feats%build(build%pftc, iptcl, feat)
+                if( l_cache ) call cache%put(iptcl, feat)
+                x_all(:,:,:,i)  = feat%x
+                ctf2_all(:,i)   = feat%ctf2
+                side_all(i)     = feat%logpow
+                dists_all(:,i)  = dists(1:params%nspace)
+                temps_all(i)    = rec%temp
+                if( rec%imin > 0 ) mode_all(i) = tab%ref_proj(rec%imin)
+                call write_stats_line
+            enddo
+            rt_rows = rt_rows + toc(t0)
+            call tab%assign_batch(b0, b1)
+        enddo
+        call tab%close_assignment
+        profile = tab%get_fill_profile()
+        call rows%close
+        call fclose(stat_unit)
+        if( l_cache ) call cache%seal(key)
+        call reads%kill
+        call feat%kill
+        call rec%kill
+        call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
+        call tab%kill
+        deallocate(tab)
+        call build%pftc%kill
+        call build%esig%kill
+        write(logfhandle,'(A,F9.2,A,F9.2,A)') '>>> POSE STUDENT ROWS: fill ', rt_fill, ' s wall, ', &
+            &rt_fill / real(nptcls,timer_int_kind) * 1000., ' ms per particle'
+        ! the students, cheapest first, trained on the rows with the shift augmentation of the centring's disk; a wider
+        ! design replaces the kept one when it recovers clearly more held-out seeds (a seed recovered, ruling R1: the
+        ! teacher's direction or its mirror partner inside a folded cone within the cap and within the route's bound,
+        ! the dense search's cell prob_athres or the grid's spacing), the paired difference over the micrographs
+        ! resampled by micrograph
+        t0 = tic()
+        shift_aug = 0.
+        if( params%l_shift_map ) shift_aug = SHIFT_AUG_NSIG * params%shift_sigma / params%smpd
+        nheld = count(held)
+        allocate(held_inds(max(1,nheld)), group_held(max(1,nheld)), k99_held(max(1,nheld)), mode_held_s(max(1,nheld)), &
+            &order(max(1,nheld)), source=0)
+        allocate(conf_held(max(1,nheld)), radius_held(max(1,nheld)), source=0.)
+        allocate(recov(max(1,nheld), size(STUDENT_WIDTHS)), source=.false.)
+        cone_bound = 0.
+        j = 0
+        do i = 1,nptcls
+            if( .not. held(i) ) cycle
+            j = j + 1
+            held_inds(j)  = i
+            group_held(j) = group_of(i)
+        enddo
+        nthr_here = params%nthr
+        !$ nthr_here = omp_get_max_threads()
+        allocate(prob(params%nspace, nthr_here), source=0.)
+        iw_best    = 0
+        recov_cand = 0.
+        loss_cand  = 0.
+        gain_q     = 0.
+        rt_cand    = 0.
+        epoch_cand = 0
+        do iw = 1,size(STUDENT_WIDTHS)
+            call student%new(feats%get_pftsz(), params%kfromto, params%box, params%box_crop, params%smpd, params%mskdiam, &
+                &trim(params%pgrp), params%nspace, params%lp, wk, trim(params%ctf) /= 'no', STUDENT_WIDTHS(iw), rnd_run_seed())
+            call student%init_readout(xrefs)
+            if( l_by_stack )then
+                call student%set_provenance(projpath%to_char(), polar_feats_hash_ints(pinds), vol_hash, 'every_10th_stack')
+            else
+                call student%set_provenance(projpath%to_char(), polar_feats_hash_ints(pinds), vol_hash, 'every_10th_selected_particle')
+            endif
+            if( iw == 1 ) cone_bound = max(params%prob_athres, student%grid_spacing())
+            call student%set_cone_bound(cone_bound)
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,F6.2,A)') '>>> POSE STUDENT TRAINING: width ', STUDENT_WIDTHS(iw), ', ', &
+                &nptcls - nheld, ' rows, ', nheld, ' held out, shifts augmented within ', shift_aug, ' px'
+            call student%train(nptcls, x_all, ctf2_all, side_all, dists_all, temps_all, held, params%prob_beta, &
+                &shift_aug, MAX_STEPS, PATIENCE_STEPS, params%nthr, logfhandle)
+            call student%get_record(nptcls_train, nheldout, epochs_run, best_epoch, loss_train, loss_held, mode_held, &
+                &time_train_s, nweights)
+            rt_cand(iw)    = time_train_s
+            loss_cand(iw)  = loss_held
+            epoch_cand(iw) = best_epoch
+            ! the held-out seeds this design recovers
+            call student%prepare_predict(nthr_here)
+            !$omp parallel do default(shared) private(j,i,ithr,pred) schedule(dynamic) proc_bind(close)
+            do j = 1,nheld
+                i    = held_inds(j)
+                ithr = 1
+                !$ ithr = omp_get_thread_num() + 1
+                call student%predict_tensor(ithr, x_all(:,:,:,i), ctf2_all(:,i), side_all(i), prob(:,ithr))
+                call student%cone_of(prob(:,ithr), pred)
+                conf_held(j)   = pred%conf
+                k99_held(j)    = pred%k99
+                radius_held(j) = pred%radius
+                mode_held_s(j) = pred%mode
+                recov(j,iw)    = l_recovered(pred, mode_all(i))
+            enddo
+            !$omp end parallel do
+            if( nheld > 0 ) recov_cand(iw) = real(count(recov(1:nheld,iw))) / real(nheld)
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,F9.5,A,F7.4,A,F7.4,A,F9.1,A)') '>>> POSE STUDENT TRAINED: width ', &
+                &STUDENT_WIDTHS(iw), ', best epoch ', best_epoch, ' of ', epochs_run, ', held-out loss ', loss_held, &
+                &', held-out mode agreement ', mode_held, ', held-out seeds recovered ', recov_cand(iw), ', ', time_train_s, ' s'
+            if( iw == 1 )then
+                iw_best = 1
+                call student%write(params%fname)
+                cycle
+            endif
+            ! the paired difference of recovery over the micrographs, resampled by micrograph
+            call resampled_gain(iw, iw_best, gain_q(iw))
+            write(logfhandle,'(A,I0,A,I0,A,F8.5,A,F5.2,A,F8.5)') '>>> POSE STUDENT CHOICE: width ', STUDENT_WIDTHS(iw), &
+                &' against ', STUDENT_WIDTHS(iw_best), ': recovery gain ', recov_cand(iw) - recov_cand(iw_best), &
+                &', its resampled quantile ', BOOT_QUANTILE, ' = ', gain_q(iw)
+            if( gain_q(iw) > 0. )then
+                iw_best = iw
+                call student%write(params%fname)
+            else
+                exit
+            endif
+        enddo
+        ! the kept design back from its file (the loop's last candidate may have lost), its threshold on the held-out
+        ! rows and the held-out table
+        call student%kill
+        call student%read(params%fname)
+        call student%prepare_predict(nthr_here)
+        !$omp parallel do default(shared) private(j,i,ithr,pred) schedule(dynamic) proc_bind(close)
+        do j = 1,nheld
+            i    = held_inds(j)
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            call student%predict_tensor(ithr, x_all(:,:,:,i), ctf2_all(:,i), side_all(i), prob(:,ithr))
+            call student%cone_of(prob(:,ithr), pred)
+            conf_held(j)      = pred%conf
+            k99_held(j)       = pred%k99
+            radius_held(j)    = pred%radius
+            mode_held_s(j)    = pred%mode
+            recov(j,iw_best)  = l_recovered(pred, mode_all(i))
+        enddo
+        !$omp end parallel do
+        call student%set_cone_bound(cone_bound)
+        call set_conf_threshold
+        call student%set_threshold(conf_threshold, CONF_FRACTION, heldout_seeded, heldout_recovered)
+        call student%write(params%fname)
+        call write_heldout_table
+        call student%get_record(nptcls_train, nheldout, epochs_run, best_epoch, loss_train, loss_held, mode_held, &
+            &time_train_s, nweights)
+        rt_train = toc(t0)
+        write(logfhandle,'(A,I0,A,F8.5,A,F8.4,A,F8.4,A,F6.2,A,F9.1,A)') '>>> POSE STUDENT KEPT: width ', STUDENT_WIDTHS(iw_best), &
+            &', confidence threshold ', conf_threshold, ' seeding ', heldout_seeded, ' of the held-out rows with ', &
+            &heldout_recovered, ' of their teacher directions in the folded cone (its radius within ', cone_bound, &
+            &' deg); the designs ', rt_train, ' s'
+        rt_all = toc(t_all)
+        call write_header
+        call student%kill
+        call feats%kill
+        call cache%kill
+        call o%kill
+        deallocate(dists, pinds, batches, wk, x_all, ctf2_all, side_all, dists_all, temps_all, held, mode_all, group_of, xrefs)
+        deallocate(held_inds, group_held, conf_held, radius_held, k99_held, mode_held_s, order, recov, prob)
+        if( allocated(groups) )     deallocate(groups)
+        if( allocated(gain) )       deallocate(gain)
+        if( allocated(boot_means) ) deallocate(boot_means)
+        if( allocated(statbuf) ) deallocate(statbuf)
+
+    contains
+
+        !> The paired difference of held-out recovery between the candidate iw and the kept design: per micrograph
+        !! (per particle on a single stack) the mean difference, over the micrographs resampled NBOOT times with
+        !! replacement by a Lehmer generator seeded from the run seed; q the BOOT_QUANTILE of the resampled means
+        subroutine resampled_gain( iw_new, iw_old, q )
+            integer, intent(in)  :: iw_new, iw_old
+            real,    intent(out) :: q
+            integer :: jj, gg, ng_here, iq
+            integer, allocatable :: gsize(:), gfirst(:)
+            ! the micrographs of the held-out rows, numbered in order of appearance
+            if( .not. allocated(groups) ) allocate(groups(max(1,nheld)), source=0)
+            allocate(gfirst(max(1,nheld)), source=0)
+            ng_here = 0
+            do jj = 1,nheld
+                gg = 0
+                do ig = 1,ng_here
+                    if( group_held(gfirst(ig)) == group_held(jj) )then
+                        gg = ig
+                        exit
+                    endif
+                enddo
+                if( gg == 0 )then
+                    ng_here = ng_here + 1
+                    groups(jj) = ng_here
+                    gfirst(ng_here) = jj
+                else
+                    groups(jj) = gg
+                endif
+            enddo
+            ngroups = ng_here
+            if( .not. allocated(gain) ) allocate(gain(max(1,ngroups)), source=0.)
+            if( .not. allocated(boot_means) ) allocate(boot_means(NBOOT), source=0.)
+            allocate(gsize(max(1,ngroups)), source=0)
+            gain = 0.
+            do jj = 1,nheld
+                gg = groups(jj)
+                gsize(gg) = gsize(gg) + 1
+                gain(gg)  = gain(gg) + merge(1., 0., recov(jj,iw_new)) - merge(1., 0., recov(jj,iw_old))
+            enddo
+            do gg = 1,ngroups
+                gain(gg) = gain(gg) / real(max(1,gsize(gg)))
+            enddo
+            lehmer = modulo(rnd_run_seed(), 2147483646_int64) + 1_int64
+            do ib = 1,NBOOT
+                gsum = 0.d0
+                do gg = 1,ngroups
+                    lehmer = modulo(48271_int64 * lehmer, 2147483647_int64)
+                    gsum   = gsum + real(gain(1 + int(modulo(lehmer, int(ngroups,int64)))),dp)
+                enddo
+                boot_means(ib) = real(gsum / real(ngroups,dp))
+            enddo
+            call hpsort(boot_means)
+            iq = max(1, min(NBOOT, nint(BOOT_QUANTILE * real(NBOOT))))
+            q  = boot_means(iq)
+            deallocate(gsize, gfirst)
+        end subroutine resampled_gain
+
+        !> The confidence threshold on the held-out rows: the rows with a cone within the cap sorted by confidence,
+        !! the longest prefix whose recovered fraction is at least CONF_FRACTION; the threshold is its last confidence
+        !! (above every confidence when no prefix qualifies); the seeded share of the held-out rows and the recovered
+        !! fraction among them recorded
+        !> a held-out seed recovered (ruling R1): the folded cone within the cap and the route's bound, and the
+        !! teacher's direction or its mirror partner among the cone's folded directions
+        logical function l_recovered( pred_loc, imode_loc )
+            type(student_pred), intent(in) :: pred_loc
+            integer,            intent(in) :: imode_loc
+            integer :: jj, ip
+            l_recovered = .false.
+            if( pred_loc%k99 > KMAX_STUDENT .or. pred_loc%radius > cone_bound ) return
+            ip = student%fold_index(imode_loc)
+            do jj = 1,pred_loc%ncone
+                if( student%fold_index(pred_loc%cone(jj)) == ip ) l_recovered = .true.
+            enddo
+        end function l_recovered
+
+        subroutine set_conf_threshold
+            integer :: jj, nq_here, nrec_here, nbest, kk
+            real, allocatable :: negconf(:)
+            conf_threshold    = 1.00001
+            heldout_seeded    = 0.
+            heldout_recovered = 0.
+            if( nheld < 1 ) return
+            allocate(negconf(nheld))
+            do jj = 1,nheld
+                order(jj)   = jj
+                negconf(jj) = -conf_held(jj)
+            enddo
+            call hpsort(negconf, order(1:nheld))
+            nq_here   = 0
+            nrec_here = 0
+            nbest     = 0
+            do kk = 1,nheld
+                jj = order(kk)
+                if( k99_held(jj) > KMAX_STUDENT .or. radius_held(jj) > cone_bound ) cycle
+                nq_here = nq_here + 1
+                if( recov(jj,iw_best) ) nrec_here = nrec_here + 1
+                if( real(nrec_here) >= CONF_FRACTION * real(nq_here) )then
+                    nbest          = nq_here
+                    conf_threshold = conf_held(jj)
+                    heldout_recovered = real(nrec_here) / real(nq_here)
+                endif
+            enddo
+            if( nbest > 0 ) heldout_seeded = real(nbest) / real(nheld)
+            deallocate(negconf)
+        end subroutine set_conf_threshold
+
+        !> the held-out table: per held-out row its micrograph, confidence, 99% set size, the teacher's and the
+        !! student's modes and whether the teacher's lies in the cone, for the kept design
+        subroutine write_heldout_table
+            type(string) :: fname_held
+            integer :: jj, i_here
+            fname_held = base%to_char()//'_heldout.txt'
+            call fopen(held_unit, fname_held, status='replace', action='write', iostat=io_stat)
+            call fileiochk('learn_pose_student; open '//fname_held%to_char(), io_stat)
+            write(held_unit,'(A)') '# iptcl group conf k99 radius_deg teacher_mode student_mode recovered'
+            do jj = 1,nheld
+                i_here = held_inds(jj)
+                write(held_unit,'(I0,1X,I0,1X,F8.5,1X,I0,1X,F8.3,1X,I0,1X,I0,1X,I0)') pinds(i_here), group_held(jj), conf_held(jj), &
+                    &k99_held(jj), radius_held(jj), mode_all(i_here), mode_held_s(jj), merge(1, 0, recov(jj,iw_best))
+            enddo
+            call fclose(held_unit)
+            call fname_held%kill
+        end subroutine write_heldout_table
+
+        !> the row's statistics and its error against the particle's stored direction (the truth on a truth set, the
+        !! reference alignment on a real one): the angle between the mode's direction and the stored one across the
+        !! point group, the stored direction's nearest grid point with its mass and rank in the row, whether it lies in
+        !! the cone (the KMAX_STUDENT entries of largest mass) and in the 99% set
+        subroutine write_stats_line
+            call build%spproj_field%get_ori(iptcl, o)
+            euls_ref   = o%get_euler()
+            iproj_ref  = build%eulspace%find_closest_proj(o)
+            iproj_mode = 0
+            euldist    = -1.
+            if( rec%imin > 0 )then
+                iproj_mode = tab%ref_proj(rec%imin)
+                euls_mode  = build%eulspace%get_euler(iproj_mode)
+                call build%pgrpsyms%sym_dists(euls_mode, euls_ref, euls_sym, euldist, inpldist)
+            endif
+            ! the stored direction's mass and rank in the row
+            temp       = temperature_or_argmin(rec%temp)
+            w_ref      = 0.
+            rank_ref   = 0
+            nvalid_ref = 0
+            if( rec%imin > 0 .and. valid_dist(dists(iproj_ref)) )then
+                dmin = dists(rec%imin)
+                z    = 0.d0
+                do j = 1,params%nspace
+                    if( .not. valid_dist(dists(j)) ) cycle
+                    nvalid_ref = nvalid_ref + 1
+                    if( temp * (dists(j) - dmin) < 80. ) z = z + exp(-real(temp,dp) * real(dists(j) - dmin,dp))
+                    if( dists(j) < dists(iproj_ref) ) rank_ref = rank_ref + 1
+                enddo
+                rank_ref = rank_ref + 1
+                if( z > 0.d0 .and. temp * (dists(iproj_ref) - dmin) < 80. )&
+                    &w_ref = real(exp(-real(temp,dp) * real(dists(iproj_ref) - dmin,dp)) / z)
+            endif
+            write(stat_unit,'(I0,1X,I0,1X,ES13.6,1X,I0,1X,I0,1X,F8.5,1X,F10.3,1X,I0,1X,I0,1X,ES11.4,1X,ES13.6,1X,I0,1X,F8.3,1X,F8.3,'//&
+                &'1X,F8.3,1X,I0,1X,ES11.4,1X,I0,1X,I0,1X,I0,1X,ES13.6,1X,F9.4,1X,F8.4,1X,F8.5)') &
+                &iptcl, build%spproj_field%get_eo(iptcl), rec%temp, rec%nvalid, iproj_mode, rec%pmax, rec%neff, rec%k99, &
+                &rec%nkept, rec%wtail, rec%lmin, rec%inpl_mode, rec%x_mode, rec%y_mode, euldist, iproj_ref, w_ref, rank_ref, &
+                &merge(1, 0, rank_ref >= 1 .and. rank_ref <= KMAX_STUDENT), merge(1, 0, rank_ref >= 1 .and. rank_ref <= rec%k99), &
+                &feat%wsq, feat%logpow, build%spproj_field%get(iptcl, 'dfx'), feat%tazim
+        end subroutine write_stats_line
+
+        logical function valid_dist( d )
+            real, intent(in) :: d
+            valid_dist = ieee_is_finite(d) .and. d < invalid
+        end function valid_dist
+
+        !> the student grid: one line per direction, its index and Euler angles
+        subroutine write_grid
+            integer :: iproj
+            real    :: euls(3)
+            call fopen(grid_unit, fname_grid, status='replace', action='write', iostat=io_stat)
+            call fileiochk('learn_pose_student; open '//fname_grid%to_char(), io_stat)
+            write(grid_unit,'(A)') '# iproj e1 e2 e3'
+            do iproj = 1,build%eulspace%get_noris()
+                euls = build%eulspace%get_euler(iproj)
+                write(grid_unit,'(I0,3(1X,F10.4))') iproj, euls
+            enddo
+            call fclose(grid_unit)
+        end subroutine write_grid
+
+        !> the rows' provenance and cost: the project, the selection, the grid, the band, the references and their
+        !! hash, the objective's temperatures and shell weights, the fill's budget and its cost per particle, and the
+        !! training's record
+        subroutine write_header
+            integer :: k
+            call fopen(head_unit, fname_header, status='replace', action='write', iostat=io_stat)
+            call fileiochk('learn_pose_student; open '//fname_header%to_char(), io_stat)
+            write(head_unit,'(A)')        '# pose student teacher rows'
+            write(head_unit,'(A)')        'rows_version=1'
+            write(head_unit,'(A,A)')      'projfile=', projpath%to_char()
+            write(head_unit,'(A,I0)')     'project_mtime=', mtime
+            write(head_unit,'(A,I0)')     'project_rows=', build%spproj_field%get_noris()
+            write(head_unit,'(A,I0)')     'nptcls=', nptcls
+            write(head_unit,'(A,I0)')     'selection_hash=', polar_feats_hash_ints(pinds)
+            write(head_unit,'(A,I0)')     'nspace=', params%nspace
+            write(head_unit,'(A,A)')      'pgrp=', trim(params%pgrp)
+            write(head_unit,'(A,F10.4)')  'lp=', params%lp
+            write(head_unit,'(A,I0,A,I0)') 'kfromto=', params%kfromto(1), ',', params%kfromto(2)
+            write(head_unit,'(A,I0)')     'pftsz=', feats%get_pftsz()
+            write(head_unit,'(A,I0)')     'nrots=', feats%get_nrots()
+            write(head_unit,'(A,I0)')     'box=', params%box
+            write(head_unit,'(A,I0)')     'box_crop=', params%box_crop
+            write(head_unit,'(A,F10.5)')  'smpd=', params%smpd
+            write(head_unit,'(A,F10.3)')  'mskdiam=', params%mskdiam
+            write(head_unit,'(A,A)')      'ctf=', trim(params%ctf)
+            write(head_unit,'(A,A)')      'objfun=', trim(params%objfun)
+            write(head_unit,'(A,F8.4)')   'prob_beta=', params%prob_beta
+            write(head_unit,'(A,F8.3)')   'trs=', params%trs
+            write(head_unit,'(A,F8.3)')   'shift_sigma=', params%shift_sigma
+            write(head_unit,'(A,F8.3)')   'prob_athres=', params%prob_athres
+            write(head_unit,'(A,I0)')     'projs_ns=', profile%projs_ns
+            write(head_unit,'(A,I0)')     'kmax_row=', KMAX_ROW
+            write(head_unit,'(A,I0)')     'kmax_student=', KMAX_STUDENT
+            write(head_unit,'(A,A)')      'vol1=', params%vols(1)%to_char()
+            write(head_unit,'(A,I0)')     'vol1_hash=', vol_hash
+            write(head_unit,'(A,L1)')     'feats_cached=', l_cache
+            write(head_unit,'(A,I0)')     'nthr=', params%nthr
+            write(head_unit,'(A,F10.3)')  'time_prep_s=', rt_prep
+            write(head_unit,'(A,F10.3)')  'time_batch_prep_s=', rt_batch
+            write(head_unit,'(A,F10.3)')  'time_fill_s=', rt_fill
+            write(head_unit,'(A,F10.3)')  'time_rows_feats_s=', rt_rows
+            write(head_unit,'(A,F10.3)')  'time_train_s=', rt_train
+            write(head_unit,'(A,F10.3)')  'time_total_s=', rt_all
+            write(head_unit,'(A,F12.5)')  'fill_s_per_ptcl=', rt_fill / real(nptcls,timer_int_kind)
+            write(head_unit,'(A,F12.5)')  'total_s_per_ptcl=', rt_all / real(nptcls,timer_int_kind)
+            write(head_unit,'(A,A)')      'model=', params%fname%to_char()
+            write(head_unit,'(A,I0)')     'student_width=', STUDENT_WIDTHS(iw_best)
+            write(head_unit,'(A,I0)')     'student_nweights=', nweights
+            do iw = 1,size(STUDENT_WIDTHS)
+                if( rt_cand(iw) <= 0. ) cycle
+                write(head_unit,'(A,I0,A,I0,A,F8.5,A,F9.5,A,I0,A,F9.1,A,F8.5)') 'candidate_width_', STUDENT_WIDTHS(iw), '=', &
+                    &STUDENT_WIDTHS(iw), ' recovered=', recov_cand(iw), ' loss_heldout=', loss_cand(iw), ' best_epoch=', &
+                    &epoch_cand(iw), ' time_s=', rt_cand(iw), ' gain_quantile=', gain_q(iw)
+            enddo
+            write(head_unit,'(A,A)')      'holdout_rule=', trim(merge('every_10th_stack            ', 'every_10th_selected_particle', l_by_stack))
+            write(head_unit,'(A,F8.5)')   'conf_threshold=', conf_threshold
+            write(head_unit,'(A,F8.5)')   'conf_fraction=', CONF_FRACTION
+            write(head_unit,'(A,F8.5)')   'heldout_seeded=', heldout_seeded
+            write(head_unit,'(A,F8.5)')   'heldout_recovered=', heldout_recovered
+            write(head_unit,'(A,F8.3)')   'cone_bound_deg=', cone_bound
+            write(head_unit,'(A)')        'recovery=folded_sphere_within_cap_and_bound'
+            write(head_unit,'(A,I0)')     'train_rows=', nptcls_train
+            write(head_unit,'(A,I0)')     'heldout_rows=', nheldout
+            write(head_unit,'(A,F8.3)')   'shift_aug_px=', shift_aug
+            write(head_unit,'(A,I0)')     'max_steps=', MAX_STEPS
+            write(head_unit,'(A,I0)')     'patience_steps=', PATIENCE_STEPS
+            write(head_unit,'(A,I0)')     'epochs_run=', epochs_run
+            write(head_unit,'(A,I0)')     'best_epoch=', best_epoch
+            write(head_unit,'(A,ES14.6)') 'loss_train=', loss_train
+            write(head_unit,'(A,ES14.6)') 'loss_heldout=', loss_held
+            write(head_unit,'(A,F8.5)')   'mode_heldout=', mode_held
+            write(head_unit,'(A)', advance='no') 'wk_even='
+            do k = params%kfromto(1),params%kfromto(2)
+                if( k > params%kfromto(1) ) write(head_unit,'(A)', advance='no') ','
+                write(head_unit,'(ES14.6)', advance='no') wk(k,1)
+            enddo
+            write(head_unit,*)
+            write(head_unit,'(A)', advance='no') 'wk_odd='
+            do k = params%kfromto(1),params%kfromto(2)
+                if( k > params%kfromto(1) ) write(head_unit,'(A)', advance='no') ','
+                write(head_unit,'(ES14.6)', advance='no') wk(k,2)
+            enddo
+            write(head_unit,*)
+            call write_fill_profile_bench(head_unit, 'rows', profile, params%nstates)
+            call fclose(head_unit)
+        end subroutine write_header
+
+    end subroutine learn_pose_student_exec
+
+    ! ===== PREDICT_POSES =====
+
+    !> predict_poses on its own parameters and builder: the model's grid, point group and band are set on the
+    !! command line from its header before the parameters are made
+    subroutine run_predict_poses( cline )
+        class(cmdline), intent(inout) :: cline
+        type(parameters), target :: params
+        type(builder)            :: build
+        type(pose_student)       :: student
+        type(string)             :: infile
+        infile = cline%get_carg('infile')
+        call student%read(infile)
+        call cline%set('nspace', student%get_nspace())
+        call cline%set('pgrp',   student%get_pgrp())
+        call cline%set('lp',     student%get_lp())
+        call student%kill
+        call infile%kill
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call predict_poses_exec(params, build, cline)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_PREDICT_POSES NORMAL STOP ****', print_simple=.false.)
+    end subroutine run_predict_poses
+
+    !> The student's prediction for the project's selected particles: per particle the features under the model's
+    !! band and weights, the forward pass, the mode, the cone holding 99% of the posterior (at most KMAX_STUDENT
+    !! directions) and the confidence, with the error against the particle's stored direction, written to the text
+    !! table <fname>_pred.txt. Project: reads the particle field and the stacks; writes nothing
+    subroutine predict_poses_exec( params, build, cline )
+        type(parameters), target, intent(inout) :: params
+        type(builder),    target, intent(inout) :: build
+        class(cmdline),           intent(inout) :: cline
+        type(pose_student)       :: student
+        type(ptcl_read_session)  :: reads
+        type(image), allocatable :: ptcl_imgs(:), ptcl_imgs_pad(:)
+        type(polar_feats)        :: feats
+        type(string)             :: base, fname_pred
+        real,    allocatable     :: wk(:,:), prob(:,:)
+        integer, allocatable     :: pinds(:), batches(:,:)
+        type(student_pred), allocatable :: preds(:)
+        real,    allocatable     :: dist_mode(:), dist_cone(:)
+        integer, allocatable     :: iproj_ref(:), rank_ref(:), in_cone(:)
+        integer(timer_int_kind)  :: t0, t_all
+        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_all
+        integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
+        integer  :: n_in_cone, n_within_two, n_capped, n_seeded, n_in_cone_seeded, route, n_wide, nchk, nfeat, chk_unit
+        real(dp) :: ncone_sum, conf_sum, radius_sum
+        real     :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered, spacing, cone, euls(3), cone_bound
+        real,    allocatable :: chk_tv(:,:), chk_jacc(:,:), chk_fchg(:,:,:), chk_sorted(:)
+        integer, allocatable :: chk_mode(:,:), chk_cone(:,:)
+        type(string)         :: fname_chk
+        logical  :: l_part
+        t_all = tic()
+        call check_pass_team('predict_poses')
+        if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('the poses are ptcl3D''s; predict_poses')
+        ! a part of a distributed caller writes its range to outfile; otherwise the run's own project copy is written
+        l_part = cline%defined('part')
+        if( l_part .and. .not. cline%defined('outfile') ) THROW_HARD('a part needs outfile; predict_poses')
+        t0 = tic()
+        call student%read(params%infile)
+        kfromto = student%get_kfromto()
+        if( student%get_pftsz() /= params%pftsz ) THROW_HARD('the model''s half ring differs from this project''s (mskdiam, box); predict_poses')
+        if( student%get_box() /= params%box ) THROW_HARD('the model''s box differs from this project''s; predict_poses')
+        if( (trim(params%ctf) /= 'no') .neqv. student%get_with_ctf() ) THROW_HARD('the model''s CTF treatment differs from this project''s; predict_poses')
+        params%kfromto = kfromto
+        params%lp      = student%get_lp()
+        call student%get_weights(wk)
+        call feats%new(student%get_pftsz(), kfromto, params%box, wk)
+        base = fname_base(params%fname)
+        fname_pred = base%to_char()//'_pred.txt'
+        ! the selected particles (a part's range of them)
+        call build%spproj_field%get_pinds(1, 'state', pinds)
+        if( .not. allocated(pinds) ) THROW_HARD('no selected particle; predict_poses')
+        if( l_part ) pinds = pack(pinds, pinds >= params%fromp .and. pinds <= params%top)
+        nptcls = size(pinds)
+        if( nptcls < 1 ) THROW_HARD('no selected particle; predict_poses')
+        call student%get_threshold(conf_threshold, conf_fraction, heldout_seeded, heldout_recovered)
+        spacing    = student%grid_spacing()
+        cone_bound = student%get_cone_bound()
+        if( .not. (cone_bound > 0.) )then
+            ! a model trained before ruling R1 carries no bound: the parameter's, with the threshold calibrated without it
+            cone_bound = max(params%prob_athres, spacing)
+            THROW_WARN('the model carries no cone bound (trained before ruling R1): the route takes prob_athres or the grid spacing; its threshold was calibrated without the bound')
+        endif
+        fname_chk = base%to_char()//'_shiftcheck.txt'
+        write(logfhandle,'(A,I0,A,I0,A,F7.2,A)') '>>> POSE STUDENT PREDICTION: ', nptcls, ' particles at nspace ', &
+            &student%get_nspace(), ' and lp ', params%lp, ' A'
+        ! the batches and the calculator (one reference slot: the features need the particles alone)
+        batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
+        nbatches    = 1 + (nptcls - 1) / batchsz_max
+        batches     = split_nobjs_even(nptcls, nbatches)
+        batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
+        call build%pftc%new(params, 1, [1,batchsz_max], kfromto)
+        call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, batchsz_max)
+        nthr = params%nthr
+        !$ nthr = omp_get_max_threads()
+        call student%prepare_predict(nthr)
+        allocate(preds(nptcls), prob(student%get_nspace(), batchsz_max))
+        allocate(dist_mode(nptcls), dist_cone(nptcls), source=-1.)
+        allocate(iproj_ref(nptcls), rank_ref(nptcls), in_cone(nptcls), source=0)
+        ! ruling R2's shift check on the first selected particles: the posterior and the pooled features of each
+        ! particle shifted through the calculator's phase ramps against its own
+        nchk  = min(nptcls, SHIFT_CHECK_NPTCLS)
+        nfeat = student%get_nfeat()
+        allocate(chk_tv(nchk, size(SHIFT_CHECK_MAGS)), chk_jacc(nchk, size(SHIFT_CHECK_MAGS)), &
+            &chk_fchg(nchk, size(SHIFT_CHECK_MAGS), SHIFT_CHECK_NGROUPS), source=0.)
+        allocate(chk_mode(nchk, size(SHIFT_CHECK_MAGS)), chk_cone(nchk, size(SHIFT_CHECK_MAGS)), source=0)
+        rt_prep  = toc(t0)
+        rt_batch = 0.
+        rt_pred  = 0.
+        call reads%new(params)
+        call reads%expect(pinds)
+        do ibatch = 1,nbatches
+            b0      = batches(ibatch,1)
+            b1      = batches(ibatch,2)
+            batchsz = b1 - b0 + 1
+            t0 = tic()
+            call build_batch_particles3D(params, build, batchsz, pinds(b0:b1), ptcl_imgs, ptcl_imgs_pad, reads)
+            rt_batch = rt_batch + toc(t0)
+            t0 = tic()
+            !$omp parallel do default(shared) private(i) schedule(dynamic) proc_bind(close)
+            do i = b0,b1
+                call predict_one(i, pinds(i), i - b0 + 1)
+            enddo
+            !$omp end parallel do
+            rt_pred = rt_pred + toc(t0)
+        enddo
+        call reads%kill
+        call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
+        call build%pftc%kill
+        ! the table and its summary
+        call fopen(pred_unit, fname_pred, status='replace', action='write', iostat=io_stat)
+        call fileiochk('predict_poses; open '//fname_pred%to_char(), io_stat)
+        write(pred_unit,'(A)') '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg dist_cone_deg rank_ref in_cone route'
+        n_in_cone    = 0
+        n_within_two = 0
+        n_capped     = 0
+        n_seeded     = 0
+        n_in_cone_seeded = 0
+        n_wide       = 0
+        ncone_sum    = 0.d0
+        conf_sum     = 0.d0
+        radius_sum   = 0.d0
+        do i = 1,nptcls
+            iptcl = pinds(i)
+            ! the route (ruling R1): the neighbourhood search from the student's folded cone when the cone is within
+            ! the cap, its radius within the model's bound (the dense search's cell) and the confidence at or above
+            ! the model's threshold; the dense search otherwise. A seeded particle takes the mode (the heavier of the
+            ! pair) as its direction (the in-plane rotation and the shift stay the search's; the search tries the
+            ! antipode too), the cone's radius at least the grid's spacing; the confidence and the route in their slots
+            route = 2
+            if( preds(i)%k99 <= KMAX_STUDENT .and. preds(i)%radius <= cone_bound .and. preds(i)%conf >= conf_threshold ) route = 1
+            cone = 0.
+            if( route == 1 )then
+                euls = student%grid_euler(preds(i)%mode)
+                euls(3) = build%spproj_field%e3get(iptcl)
+                call build%spproj_field%set_euler(iptcl, euls)
+                cone = max(preds(i)%radius, spacing)
+                n_seeded = n_seeded + 1
+                n_in_cone_seeded = n_in_cone_seeded + in_cone(i)
+            endif
+            call build%spproj_field%set(iptcl, 'cone',  cone)
+            call build%spproj_field%set(iptcl, 'pconf', preds(i)%conf)
+            call build%spproj_field%set(iptcl, 'route', real(route))
+            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,F8.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,I0,1X,I0)') &
+                &iptcl, build%spproj_field%get_eo(iptcl), preds(i)%mode, preds(i)%pmax, preds(i)%k99, preds(i)%ncone, &
+                &preds(i)%conf, preds(i)%radius, iproj_ref(i), dist_mode(i), dist_cone(i), rank_ref(i), in_cone(i), route
+            n_in_cone = n_in_cone + in_cone(i)
+            if( dist_mode(i) >= 0. .and. dist_mode(i) <= 12. ) n_within_two = n_within_two + 1
+            if( preds(i)%k99 > KMAX_STUDENT ) n_capped = n_capped + 1
+            if( preds(i)%radius > cone_bound ) n_wide = n_wide + 1
+            ncone_sum  = ncone_sum  + real(preds(i)%ncone,dp)
+            conf_sum   = conf_sum   + real(preds(i)%conf,dp)
+            radius_sum = radius_sum + real(preds(i)%radius,dp)
+        enddo
+        call fclose(pred_unit)
+        ! the records: a part's range to its document, the run's own project copy otherwise
+        if( l_part )then
+            call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [params%fromp, params%top], isegment=PTCL3D_SEG)
+        else
+            call build%spproj%write_segment_inside(params%oritype)
+        endif
+        rt_all = toc(t_all)
+        write(logfhandle,'(A,F8.4,A,F8.5,A,F8.4,A)') '>>> POSE STUDENT PREDICTION: seeded (the neighbourhood search from the cone) ', &
+            &real(n_seeded) / real(nptcls), ' at the confidence threshold ', conf_threshold, ', the stored direction in the cone of ', &
+            &real(n_in_cone_seeded) / real(max(1,n_seeded)), ' of the seeded'
+        write(logfhandle,'(A,F8.4,A,F8.4,A,F8.4,A,F8.4,A,F6.2,A)') '>>> POSE STUDENT PREDICTION: stored direction in the folded cone ', &
+            &real(n_in_cone) / real(nptcls), ', folded mode within two grid steps (12 deg) ', real(n_within_two) / real(nptcls), &
+            &', cone capped at KMAX_STUDENT ', real(n_capped) / real(nptcls), ', cone wider than the bound ', &
+            &real(n_wide) / real(nptcls), ' (', cone_bound, ' deg)'
+        write(logfhandle,'(A,F8.2,A,F8.4,A,F8.2,A)') '>>> POSE STUDENT PREDICTION: mean cone size ', ncone_sum / real(nptcls,dp), &
+            &', mean confidence ', conf_sum / real(nptcls,dp), ', mean cone radius ', radius_sum / real(nptcls,dp), ' deg'
+        write(logfhandle,'(A,F9.2,A,F9.2,A,F9.2,A,F9.2,A)') '>>> POSE STUDENT PREDICTION: prep ', rt_prep, ' s, particles ', &
+            &rt_batch, ' s, features and forward ', rt_pred, ' s, total ', rt_all, ' s'
+        write(logfhandle,'(A,F9.3,A)') '>>> POSE STUDENT PREDICTION: ', rt_pred / real(nptcls,timer_int_kind) * 1000., &
+            &' ms per particle (features and forward)'
+        call write_shift_check
+        call student%kill
+        call feats%kill
+        deallocate(preds, prob, dist_mode, dist_cone, iproj_ref, rank_ref, in_cone, pinds, batches, wk)
+        deallocate(chk_tv, chk_jacc, chk_fchg, chk_mode, chk_cone)
+        call fname_chk%kill
+
+    contains
+
+        !> one particle's features, forward pass, folded cone and error against its stored direction (the smaller of a
+        !! direction's and its mirror partner's angle), on the calling thread; the shift check on the first particles
+        subroutine predict_one( i_here, iptcl_here, islot )
+            integer, intent(in) :: i_here, iptcl_here, islot
+            type(polar_feat) :: feat_here
+            type(ori)        :: o_here
+            real    :: euls_ref(3), d
+            integer :: ithr_here, j, ip_ref
+            ithr_here = 1
+            !$ ithr_here = omp_get_thread_num() + 1
+            call feats%build(build%pftc, iptcl_here, feat_here)
+            call student%predict_feat(ithr_here, feat_here, prob(:,islot))
+            call student%cone_of(prob(:,islot), preds(i_here))
+            if( i_here <= nchk ) call shift_check(i_here, ithr_here, islot, feat_here)
+            call build%spproj_field%get_ori(iptcl_here, o_here)
+            euls_ref          = o_here%get_euler()
+            iproj_ref(i_here) = student%grid_closest(o_here)
+            ip_ref            = student%fold_index(iproj_ref(i_here))
+            dist_mode(i_here) = min(student%angle_between(preds(i_here)%mode, euls_ref), &
+                &student%angle_between(student%mirror_of(preds(i_here)%mode), euls_ref))
+            rank_ref(i_here)  = 1 + count(prob(:,islot) > prob(ip_ref,islot))   ! the pair's mass sits on its unmirrored direction
+            in_cone(i_here)   = 0
+            dist_cone(i_here) = huge(d)
+            do j = 1,preds(i_here)%ncone
+                if( student%fold_index(preds(i_here)%cone(j)) == ip_ref ) in_cone(i_here) = 1
+                d = min(student%angle_between(preds(i_here)%cone(j), euls_ref), &
+                    &student%angle_between(student%mirror_of(preds(i_here)%cone(j)), euls_ref))
+                dist_cone(i_here) = min(dist_cone(i_here), d)
+            enddo
+            call feat_here%kill
+            call o_here%kill
+        end subroutine predict_one
+
+        !> ruling R2's shift check of one particle: its tensor shifted through the calculator's phase ramps by each
+        !! magnitude in each direction, predicted again; per magnitude the largest total variation of the posterior,
+        !! how many directions keep the folded mode and keep the unshifted mode inside the shifted cone, the mean
+        !! Jaccard index of the cones' folded sets, and the relative change of each pooled feature group
+        subroutine shift_check( i_here, ithr_here, islot, feat_here )
+            integer,          intent(in) :: i_here, ithr_here, islot
+            type(polar_feat), intent(in) :: feat_here
+            type(student_pred) :: pred_sh
+            real    :: x_sh(size(feat_here%x,1), size(feat_here%x,2), 2), prob_sh(size(prob,1)), f0(nfeat), f1(nfeat)
+            real    :: shift(2), ang, tv, num, den
+            integer :: im, id, g, lo, hi, nint_set, nuni, j, k, ip0
+            integer :: set0(KMAX_STUDENT), set1(KMAX_STUDENT), n0, n1
+            logical :: l_in
+            call student%get_features(ithr_here, f0)
+            n0 = 0
+            do j = 1,preds(i_here)%ncone
+                n0 = n0 + 1
+                set0(n0) = student%fold_index(preds(i_here)%cone(j))
+            enddo
+            ip0 = student%fold_index(preds(i_here)%mode)
+            do im = 1,size(SHIFT_CHECK_MAGS)
+                chk_tv(i_here,im)   = 0.
+                chk_jacc(i_here,im) = 0.
+                chk_mode(i_here,im) = 0
+                chk_cone(i_here,im) = 0
+                chk_fchg(i_here,im,:) = 0.
+                do id = 1,SHIFT_CHECK_NDIR
+                    ang   = real(id - 1) * 360. / real(SHIFT_CHECK_NDIR) * (PI / 180.)
+                    shift = SHIFT_CHECK_MAGS(im) * [cos(ang), sin(ang)]
+                    call feats%shift_feat(feat_here%x, shift, x_sh)
+                    call student%predict_tensor(ithr_here, x_sh, feat_here%ctf2, feat_here%logpow, prob_sh)
+                    call student%get_features(ithr_here, f1)
+                    call student%cone_of(prob_sh, pred_sh)
+                    tv = 0.5 * sum(abs(prob_sh - prob(:,islot)))
+                    chk_tv(i_here,im) = max(chk_tv(i_here,im), tv)
+                    if( student%fold_index(pred_sh%mode) == ip0 ) chk_mode(i_here,im) = chk_mode(i_here,im) + 1
+                    n1   = 0
+                    l_in = .false.
+                    do j = 1,pred_sh%ncone
+                        n1 = n1 + 1
+                        set1(n1) = student%fold_index(pred_sh%cone(j))
+                        if( set1(n1) == ip0 ) l_in = .true.
+                    enddo
+                    if( l_in ) chk_cone(i_here,im) = chk_cone(i_here,im) + 1
+                    nint_set = 0
+                    do j = 1,n0
+                        do k = 1,n1
+                            if( set0(j) == set1(k) ) nint_set = nint_set + 1
+                        enddo
+                    enddo
+                    nuni = n0 + n1 - nint_set
+                    if( nuni > 0 ) chk_jacc(i_here,im) = chk_jacc(i_here,im) + real(nint_set) / real(nuni)
+                    do g = 1,SHIFT_CHECK_NGROUPS
+                        lo  = 1
+                        hi  = nfeat
+                        num = sum(abs(f1(lo:hi) - f0(lo:hi)))
+                        den = sum(abs(f0(lo:hi)))
+                        if( den > 0. ) chk_fchg(i_here,im,g) = chk_fchg(i_here,im,g) + num / den
+                    enddo
+                enddo
+                chk_jacc(i_here,im)   = chk_jacc(i_here,im)   / real(SHIFT_CHECK_NDIR)
+                chk_fchg(i_here,im,:) = chk_fchg(i_here,im,:) / real(SHIFT_CHECK_NDIR)
+            enddo
+        end subroutine shift_check
+
+        !> the shift check's table and summary: per shift magnitude over the checked particles
+        subroutine write_shift_check
+            integer :: im, io_here, g
+            real    :: tv_mean, tv_q90, mode_frac, cone_frac, jacc_mean, fchg(SHIFT_CHECK_NGROUPS)
+            if( nchk < 1 ) return
+            call fopen(chk_unit, fname_chk, status='replace', action='write', iostat=io_here)
+            call fileiochk('predict_poses; open '//fname_chk%to_char(), io_here)
+            write(chk_unit,'(A,I0,A,I0,A)') '# ruling R2 shift check: ', nchk, ' particles shifted through the calculator''s phase ramps in ', &
+                &SHIFT_CHECK_NDIR, ' directions; per magnitude the posterior''s largest total variation (mean, 90th percentile), the share of'
+            write(chk_unit,'(A)') '# shifted copies keeping the folded mode and holding the unshifted mode in their cone, the cones'' mean Jaccard index,'
+            write(chk_unit,'(A)') '# and the relative change of the readout map (ruling R3''s template readout)'
+            write(chk_unit,'(A)') '# shift_px tv_mean tv_q90 mode_kept cone_holds_mode jaccard fchg_readout_map'
+            allocate(chk_sorted(nchk))
+            do im = 1,size(SHIFT_CHECK_MAGS)
+                chk_sorted = chk_tv(:,im)
+                call hpsort(chk_sorted)
+                tv_mean   = sum(chk_tv(:,im)) / real(nchk)
+                tv_q90    = chk_sorted(max(1, nint(0.9 * real(nchk))))
+                mode_frac = real(sum(chk_mode(:,im))) / real(nchk * SHIFT_CHECK_NDIR)
+                cone_frac = real(sum(chk_cone(:,im))) / real(nchk * SHIFT_CHECK_NDIR)
+                jacc_mean = sum(chk_jacc(:,im)) / real(nchk)
+                do g = 1,SHIFT_CHECK_NGROUPS
+                    fchg(g) = sum(chk_fchg(:,im,g)) / real(nchk)
+                enddo
+                write(chk_unit,'(F6.2,1X,F8.5,1X,F8.5,1X,F8.5,1X,F8.5,1X,F8.5,1X,F9.5)') SHIFT_CHECK_MAGS(im), &
+                    &tv_mean, tv_q90, mode_frac, cone_frac, jacc_mean, fchg(1)
+                write(logfhandle,'(A,F5.1,A,F7.4,A,F7.4,A,F7.4,A,F7.4,A,F7.4,A,F8.5)') &
+                    &'>>> POSE STUDENT SHIFT CHECK: ', SHIFT_CHECK_MAGS(im), ' px: posterior TV mean ', tv_mean, ' q90 ', tv_q90, &
+                    &', folded mode kept ', mode_frac, ', cone holds the mode ', cone_frac, ', cones'' Jaccard ', jacc_mean, &
+                    &'; readout map change ', fchg(1)
+            enddo
+            call fclose(chk_unit)
+            deallocate(chk_sorted)
+        end subroutine write_shift_check
+
+    end subroutine predict_poses_exec
+
+    ! ===== HELPERS =====
+
+    !> the hash of a file's bytes, read as 32-bit words (the references' provenance)
+    function file_hash( fname ) result( h )
+        class(string), intent(in) :: fname
+        integer(int32), allocatable :: words(:)
+        integer(int64) :: h, nbytes
+        integer        :: funit, io_stat, nwords
+        if( .not. file_exists(fname) ) THROW_HARD('no such file: '//fname%to_char()//'; file_hash')
+        call fopen(funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
+        call fileiochk('file_hash; open '//fname%to_char(), io_stat)
+        inquire(unit=funit, size=nbytes)
+        nwords = int(nbytes / 4_int64)
+        allocate(words(max(1,nwords)), source=0_int32)
+        if( nwords > 0 ) read(funit) words(1:nwords)
+        call fclose(funit)
+        h = polar_feats_hash_ints(words)
+        deallocate(words)
+    end function file_hash
+
+    !> fname without a trailing .txt
+    function fname_base( fname ) result( base )
+        class(string), intent(in) :: fname
+        type(string) :: base
+        character(len=:), allocatable :: s
+        integer :: n
+        s = fname%to_char()
+        n = len_trim(s)
+        if( n > 4 )then
+            if( s(n-3:n) == '.txt' ) s = s(1:n-4)
+        endif
+        base = trim(s)
+    end function fname_base
+
+end module simple_strategy_pose_student

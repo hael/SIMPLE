@@ -12,7 +12,7 @@ use simple_eul_prob_tab_utils, only: update_screen_best, &
     &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, temperature_or_argmin, &
     &prob_insert_table, prob_insert_cone, screen_pool_size, shift_needs_disk, disk_radius_px, insert_pose_loss, &
     &prob_rnd_scope, calc_num2sample, shift_prior_sigma2, prob_readout, prob_readout_fname, write_prob_readout, &
-    &report_prob_readout, PROB_READOUT_3D_DENSE, prob_state_readout
+    &report_prob_readout, PROB_READOUT_3D_DENSE, prob_state_readout, prob_row_record
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_type_defs,          only: OBJFUN_EUCLID
 use simple_defs,               only: PROB_INSERT_WMIN
@@ -66,33 +66,34 @@ type :: eul_prob_tab
     integer                     :: nmode = 0, ntemp_missing = 0, nbad = 0, nflat = 0
     contains
     ! CONSTRUCTOR
-    procedure :: new_pipeline
+    procedure          :: new_pipeline
     procedure, private :: new_common
     procedure, private :: initialize_storage
     ! PARTITION-WISE PROCEDURES (used only by partition-wise eul_prob_tab objects)
-    procedure :: set_iteration_model
-    procedure :: set_model_from_field
-    procedure :: fill_tab_range
+    procedure          :: set_iteration_model
+    procedure          :: set_model_from_field
+    procedure          :: fill_tab_range
     procedure, private :: keep_batch_rows
-    procedure :: open_assignment
-    procedure :: assign_batch
-    procedure :: close_assignment
+    procedure          :: open_assignment
+    procedure          :: assign_batch
+    procedure          :: close_assignment
     procedure, private :: assign_rows
     procedure, private :: get_row
+    procedure          :: get_posterior_row
     procedure, private :: max_refined
     procedure, private :: write_posterior_diag
-    procedure :: get_fill_profile
-    procedure :: get_readout
+    procedure          :: get_fill_profile
+    procedure          :: get_readout
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
-    procedure :: set_insert_cone
+    procedure          :: set_insert_cone
     ! REFERENCE INDEX MAPPING
-    procedure :: ref_state
-    procedure :: ref_proj
-    procedure :: ref_full
-    procedure :: full_to_compact_ref
-    procedure :: assign_candidate
+    procedure          :: ref_state
+    procedure          :: ref_proj
+    procedure          :: ref_full
+    procedure          :: full_to_compact_ref
+    procedure          :: assign_candidate
     ! DESTRUCTOR
-    procedure :: kill
+    procedure          :: kill
 end type eul_prob_tab
 
 contains
@@ -1024,6 +1025,64 @@ contains
             refined(j) = self%batch_refined(j,i)
         enddo
     end subroutine get_row
+
+    !> The posterior of row i of the batch the fill kept (read between fill_tab_range and assign_batch) at beta times
+    !! the particle's own temperature, the factor the table draws at: the nkept entries of largest mass, at most kmax,
+    !! in descending mass with their compact references, the tail's mass (what the kept entries leave of the row), the
+    !! row's statistics over every valid entry (posterior_row_stats), the mode's drawn in-plane rotation and the shift
+    !! the fill refined it at, when it did; the optional dists return the whole row's losses. A row without a
+    !! temperature (a particle without a scale) is read at its argmin, as the assignment draws it
+    subroutine get_posterior_row( self, i, beta, kmax, rec, dists )
+        class(eul_prob_tab),   intent(in)    :: self
+        integer,               intent(in)    :: i, kmax
+        real,                  intent(in)    :: beta
+        type(prob_row_record), intent(inout) :: rec
+        real, optional,        intent(inout) :: dists(:)
+        real,    allocatable :: w(:)
+        integer, allocatable :: inds(:)
+        real(dp) :: tot
+        integer  :: j, k, n
+        if( .not. allocated(self%batch_rows) ) THROW_HARD('no rows kept; eul_prob_tab%get_posterior_row')
+        if( i < lbound(self%batch_rows,2) .or. i > ubound(self%batch_rows,2) )&
+            &THROW_HARD('the row is not in the kept batch; eul_prob_tab%get_posterior_row')
+        if( kmax < 1 ) THROW_HARD('kmax must be positive; eul_prob_tab%get_posterior_row')
+        call rec%kill
+        n = self%nrefs
+        allocate(w(n), inds(n))
+        rec%iptcl = self%pinds(i)
+        rec%temp  = beta * self%temps(i)
+        call posterior_row_stats(n, self%batch_rows(:,i)%dist, temperature_or_argmin(rec%temp), w, inds, &
+            &rec%imin, rec%pmax, rec%neff, rec%k99, rec%nvalid)
+        ! w ascending with its references in inds: the mass sits at the top
+        rec%nkept = min(kmax, rec%nvalid)
+        if( rec%nkept > 0 )then
+            allocate(rec%inds(rec%nkept), rec%w(rec%nkept))
+            do j = 1,rec%nkept
+                k = n - j + 1
+                rec%inds(j) = inds(k)
+                rec%w(j)    = w(k)
+            enddo
+            tot = sum(real(rec%w,dp))
+            rec%wtail = real(max(0.d0, 1.d0 - tot))
+        endif
+        if( rec%imin > 0 )then
+            rec%lmin      = self%batch_rows(rec%imin,i)%dist
+            rec%inpl_mode = self%batch_rows(rec%imin,i)%inpl
+            do j = 1,self%batch_nrefined(i)
+                if( self%batch_refined(j,i)%ri == rec%imin )then
+                    rec%x_mode = self%batch_refined(j,i)%x
+                    rec%y_mode = self%batch_refined(j,i)%y
+                    rec%has_sh = .true.
+                    exit
+                endif
+            enddo
+        endif
+        if( present(dists) )then
+            if( size(dists) < n ) THROW_HARD('the row buffer is shorter than nrefs; eul_prob_tab%get_posterior_row')
+            dists(1:n) = self%batch_rows(:,i)%dist
+        endif
+        deallocate(w, inds)
+    end subroutine get_posterior_row
 
     !> the most refined entries any row of the batch holds: the fill's budget
     integer function max_refined( self )

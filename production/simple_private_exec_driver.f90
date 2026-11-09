@@ -219,8 +219,10 @@ contains
         type(commander_refine3D_distr_worker)   :: xrefine3D_worker
         type(commander_calc_pspec)              :: xcalc_pspec
         type(commander_calc_pspec_assemble)     :: xcalc_pspec_assemble
-        type(commander_commit_sigma2)       :: xcommit_sigma2
-        type(commander_flex_pca_worker)           :: xflex_pca
+        type(commander_commit_sigma2)           :: xcommit_sigma2
+        type(commander_flex_pca_worker)         :: xflex_pca
+        type(commander_learn_pose_student)      :: xlearn_pose_student
+        type(commander_predict_poses)           :: xpredict_poses
         ! RECONSTRUCTION PROGRAMS
         type(commander_volassemble)             :: xvolassemble
         type(commander_rec3D_worker)            :: xrec3D
@@ -315,6 +317,10 @@ contains
                 call xcommit_sigma2%execute(cline)
             case( 'flex_pca' )
                 call xflex_pca%execute(cline)
+            case( 'learn_pose_student' )
+                call xlearn_pose_student%execute(cline)
+            case( 'predict_poses' )
+                call xpredict_poses%execute(cline)
             ! RECONSTRUCTION PROGRAMS
             case( 'reconstruct3D' )
                 call xrec3D%execute(cline)

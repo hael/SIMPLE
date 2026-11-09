@@ -11,6 +11,7 @@ type(ui_program), target :: solve3D_addon
 type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: cont_refine3D_bench
+type(ui_program), target :: pose_student
 type(ui_program), target :: polar_matching_bench
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
@@ -39,6 +40,7 @@ contains
         call new_solve3D_addon_snapshots(tsttab)
         call new_cont_refine3D_1jxy(tsttab)
         call new_cont_refine3D_bench(tsttab)
+        call new_pose_student(tsttab)
         call new_polar_matching_bench(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
@@ -67,6 +69,7 @@ contains
         write(logfhandle,'(A)') solve3D_addon_snapshots%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_bench%name%to_char()
+        write(logfhandle,'(A)') pose_student%name%to_char()
         write(logfhandle,'(A)') polar_matching_bench%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
@@ -181,6 +184,20 @@ contains
         ! add to ui_hash
         call add_ui_program('cont_refine3D_1jxy', cont_refine3D_1jxy, tsttab, UI_CATEGORY)
     end subroutine new_cont_refine3D_1jxy
+
+    subroutine new_pose_student( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call pose_student%new(&
+        &'pose_student',&                           ! name
+        &'validate the pose student''s split-half protocol in miniature on simulated blob-phantom particles',&
+        &'learn_pose_student on the training half of 2 000 simulated blob-phantom particles against the truth map, '//&
+        &'predict_poses on the blank test half, refine3D refine=prob_neigh prob_neigh_mode=geom from the students'' '//&
+        &'cones and the coarse cells, the half reconstructed: the route''s and the fold''s contracts, the fallback '//&
+        &'identical to a search without student records, the reads against the truth reported',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Pose Student Validation')                                           ! requires sp_project
+        call add_ui_program('pose_student', pose_student, tsttab, UI_CATEGORY)
+    end subroutine new_pose_student
 
     subroutine new_cont_refine3D_bench( tsttab )
         class(ui_hash), intent(inout) :: tsttab

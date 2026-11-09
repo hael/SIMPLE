@@ -59,17 +59,20 @@ enum, bind(c)
     enumerator :: I_SHINCR              = 54 ! polar shift map: the magnitude of the last shift increment
     enumerator :: I_SHSIG               = 55 ! polar shift map: the particle's prior width for its next shift search (below zero: not yet centred in this workflow)
     enumerator :: I_FRAME               = 56 ! time series: the particle's frame in its trajectory (0: none)
+    enumerator :: I_PCONF               = 57 ! pose student: the posterior mass inside the particle's cone (0: no student record)
+    enumerator :: I_CONE                = 58 ! pose student: the cone's angular radius about the mode in degrees (0: no student record)
+    enumerator :: I_ROUTE               = 59 ! pose student: the particle's route, 1 the neighbourhood search from the student's cone, 2 the dense search (0: no student record)
 end enum
 
-! A particle carries the named slots 1-56 in memory (ori%pparms).
-! On disk its record is N_PTCL_RECORD_REALS wide: slots 57-64 are zero padding reserved
+! A particle carries the named slots 1-59 in memory (ori%pparms).
+! On disk its record is N_PTCL_RECORD_REALS wide: slots 60-64 are zero padding reserved
 ! for later fields, so adding a field does not change the project file's record width,
 ! while resident particles pay only for the named slots. Projects written by earlier
 ! releases (narrower records) still read, with zeros in the missing slots
 ! (simple_binoris). A spare slot has no flag and is never "there".
-integer, parameter :: N_PTCL_ORIPARAMS      = 56
+integer, parameter :: N_PTCL_ORIPARAMS      = 59
 integer, parameter :: N_PTCL_RECORD_REALS   = 64
-integer, parameter :: I_LAST_NAMED_ORIPARAM = I_FRAME
+integer, parameter :: I_LAST_NAMED_ORIPARAM = I_ROUTE
 
 contains
 
@@ -187,6 +190,12 @@ contains
                 get_oriparam_ind = I_SHSIG
             case('frame')
                 get_oriparam_ind = I_FRAME
+            case('pconf')
+                get_oriparam_ind = I_PCONF
+            case('cone')
+                get_oriparam_ind = I_CONE
+            case('route')
+                get_oriparam_ind = I_ROUTE
         end select
     end function get_oriparam_ind
 
@@ -304,6 +313,12 @@ contains
                 flag = 'shsig'
             case(I_FRAME)
                 flag = 'frame'
+            case(I_PCONF)
+                flag = 'pconf'
+            case(I_CONE)
+                flag = 'cone'
+            case(I_ROUTE)
+                flag = 'route'
             case DEFAULT
                 flag = 'unknown'
         end select
@@ -333,6 +348,12 @@ contains
             case(I_INDSTK)
                 oriparam_isthere = abs(val) > TINY
             case(I_FRAME)
+                oriparam_isthere = abs(val) > TINY
+            case(I_PCONF)
+                oriparam_isthere = abs(val) > TINY
+            case(I_CONE)
+                oriparam_isthere = abs(val) > TINY
+            case(I_ROUTE)
                 oriparam_isthere = abs(val) > TINY
             case(I_INPL)
                 oriparam_isthere = abs(val) > TINY

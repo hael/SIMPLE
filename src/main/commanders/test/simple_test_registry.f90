@@ -92,6 +92,10 @@ contains
         &test_entry('solve3D_addon', 'solve3D_addon', 'nthr=8', 8, 0, 0, 11, 7200, ENTRY_GATE, '', mem_gb=1.5, disk_gb=2.0), &
         ! its distributed step runs two workers of four threads
         &test_entry('cont_refine3D_1jxy', 'cont_refine3D_1jxy', 'nthr=8', 8, 2, 4, 10, 7200, ENTRY_GATE, '', mem_gb=11.0, disk_gb=8.0), &
+        ! the pose student's split-half protocol in miniature (learn_pose_student, predict_poses, prob_neigh geom
+        ! twice, prob, reconstruct3D twice) on 2 000 blob-phantom particles, one process of eight threads: 6:49 on
+        ! the dell at 8 threads, 1.6 GB, 0.7 GB of run directory (2026-11-08)
+        &test_entry('pose_student', 'pose_student', 'nthr=8', 8, 0, 0, 8, 2400, ENTRY_GATE, '', mem_gb=2.0, disk_gb=1.0), &
         ! its reconstruction overlaps the eight search threads (peak 10.8 cores); its five routes take
         ! 45 minutes alone on dell2 (2026-11-05, the labels route 4 of them), an hour beside other
         ! entries (2026-10-19), about 1.5 h on a 4-core runner

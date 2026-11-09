@@ -9,7 +9,7 @@ use simple_string,    only: string
 use simple_type_defs, only: ctfparams, CTFFLAG_YES, CTFFLAG_FLIP
 use simple_chash,     only: chash
 use simple_defs_ori,  only: N_PTCL_ORIPARAMS, I_CORR_CART, I_POSE_CONT_IMPROVED, I_CFAR, I_SHINCR, I_SHSIG, &
-    &I_FRAME, get_oriparam_ind, get_oriparam_flag, oriparam_isthere
+    &I_FRAME, I_PCONF, I_CONE, I_ROUTE, get_oriparam_ind, get_oriparam_flag, oriparam_isthere
 use json_kinds
 use json_module
 implicit none
@@ -993,6 +993,29 @@ contains
         call assert_true(trim(get_oriparam_flag(I_FRAME)) == 'frame', 'slot 56 carries its flag name')
         call assert_true(oriparam_isthere(I_FRAME, 3.) .and. .not. oriparam_isthere(I_FRAME, 0.), &
             &'frame is there when set, absent at 0')
+        ! the pose student's record: the confidence, the cone and the route, absent at 0
+        call assert_int(57, I_PCONF, 'pconf sits in slot 57')
+        call assert_int(58, I_CONE,  'cone sits in slot 58')
+        call assert_int(59, I_ROUTE, 'route sits in slot 59')
+        call assert_int(I_PCONF, get_oriparam_ind('pconf'), 'flag pconf names slot 57')
+        call assert_int(I_CONE,  get_oriparam_ind('cone'),  'flag cone names slot 58')
+        call assert_int(I_ROUTE, get_oriparam_ind('route'), 'flag route names slot 59')
+        call assert_true(trim(get_oriparam_flag(I_PCONF)) == 'pconf' .and. trim(get_oriparam_flag(I_CONE)) == 'cone' .and. &
+            &trim(get_oriparam_flag(I_ROUTE)) == 'route', 'slots 57-59 carry their flag names')
+        call assert_true(oriparam_isthere(I_PCONF, 0.9) .and. .not. oriparam_isthere(I_PCONF, 0.), &
+            &'pconf is there when set, absent at 0')
+        call assert_true(oriparam_isthere(I_CONE, 12.) .and. .not. oriparam_isthere(I_CONE, 0.), &
+            &'cone is there when set, absent at 0')
+        call assert_true(oriparam_isthere(I_ROUTE, 1.) .and. .not. oriparam_isthere(I_ROUTE, 0.), &
+            &'route is there when set, absent at 0')
+        call o%set('pconf', 0.9)
+        call o%set('cone', 12.)
+        call o%set('route', 1.)
+        call o%ori2prec(prec)
+        call o2%prec2ori(prec)
+        call assert_real(0.9, o2%get('pconf'), EPS, 'pconf record round trip')
+        call assert_real(12., o2%get('cone'),  EPS, 'cone record round trip')
+        call assert_real(1.,  o2%get('route'), EPS, 'route record round trip')
         call o%kill
         call o2%kill
     end subroutine test_cartesian_score_fields

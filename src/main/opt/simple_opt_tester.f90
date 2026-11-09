@@ -82,14 +82,6 @@ contains
         r = sum((x - XMIN)**2)
     end function quad2d
 
-    subroutine quad2d_grad( fun_self, x, grad, d )
-        class(*), intent(inout) :: fun_self
-        integer,  intent(in)    :: d
-        real,     intent(inout) :: x(d)
-        real,     intent(out)   :: grad(d)
-        grad = 2. * (x - XMIN)
-    end subroutine quad2d_grad
-
     ! 1 - cos(angle between x and YDIR): the smooth form of the old cosine test (acos has an infinite
     ! derivative at the optimum), minimised by any positive multiple of YDIR
     function dircost( fun_self, x, d ) result( r )

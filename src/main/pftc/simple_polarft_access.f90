@@ -125,6 +125,49 @@ contains
         line = self%pfts_ptcls(irot,self%kfromto(1):self%kfromto(2),self%pinds(iptcl))
     end subroutine get_ptcl_line
 
+    !> the particle's CTF matrix over the searched shells (ones without a CTF)
+    module subroutine get_ref_pft(self, iref, iseven, pft)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iref
+        logical,             intent(in) :: iseven
+        complex(sp), intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        integer :: ieo
+        ieo = merge(REF_EVEN, REF_ODD, iseven)
+        pft = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+    end subroutine get_ref_pft
+
+    module subroutine get_ptcl_pft(self, iptcl, pft)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
+            write(logfhandle,*) 'iptcl: ', iptcl
+            write(logfhandle,*) 'pfromto: ', self%pfromto
+            THROW_HARD('iptcl is out of range; get_ptcl_pft')
+        endif
+        pft = self%pfts_ptcls(:,self%kfromto(1):self%kfromto(2),self%pinds(iptcl))
+    end subroutine get_ptcl_pft
+
+    module subroutine get_ptcl_ctfmat(self, iptcl, ctfmat)
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(inout) :: ctfmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+        if( iptcl < self%pfromto(1) .or. iptcl > self%pfromto(2) )then
+            write(logfhandle,*) 'iptcl: ', iptcl
+            write(logfhandle,*) 'pfromto: ', self%pfromto
+            THROW_HARD('iptcl is out of range; get_ptcl_ctfmat')
+        endif
+        ctfmat = self%ctfmats(:,self%kfromto(1):self%kfromto(2),self%pinds(iptcl))
+    end subroutine get_ptcl_ctfmat
+
+    !> the Euclidean shell weights k/sigma2(k) of the two halves (shell, half), as memoize_sigma2_weights formed them
+    module subroutine get_sigma2_weights(self, wk)
+        class(polarft_calc),   intent(in)  :: self
+        real(sp), allocatable, intent(out) :: wk(:,:)
+        if( .not. allocated(self%sigma2_wk) ) THROW_HARD('no sigma2 weights memoized; get_sigma2_weights')
+        allocate(wk(self%kfromto(1):self%kfromto(2),2), source=self%sigma2_wk)
+    end subroutine get_sigma2_weights
+
     module pure integer function get_nrefs(self)
         class(polarft_calc), intent(in) :: self
         get_nrefs = self%nrefs

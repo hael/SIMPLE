@@ -195,6 +195,10 @@ type :: polarft_calc
     procedure          :: get_dang
     procedure          :: get_coord
     procedure          :: get_polar_coords
+    procedure          :: get_ref_pft
+    procedure          :: get_ptcl_pft
+    procedure          :: get_ptcl_ctfmat
+    procedure          :: get_sigma2_weights
     procedure          :: get_ptcl_line
     procedure          :: get_nrefs
     procedure          :: exists
@@ -209,6 +213,7 @@ type :: polarft_calc
     ! ===== GEOM: simple_polarft_geom.f90
     procedure          :: mirror_ref_bank
     procedure, private :: gen_shmat4aln, gen_shmat4aln_8
+    procedure          :: shift_ptcl
     procedure, private :: mirror_ref_pft_by_pft, mirror_ref_pft_by_ind
     procedure, private :: rotate_ref_8
     procedure, private :: rotate_ptcl
@@ -470,6 +475,30 @@ interface
         real(sp),            intent(out) :: coords(self%kfromto(1):self%interpklim,self%pftsz)
     end subroutine get_polar_coords
 
+    module subroutine get_ref_pft(self, iref, iseven, pft)
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iref
+        logical,             intent(in)    :: iseven
+        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+    end subroutine get_ref_pft
+
+    module subroutine get_ptcl_pft(self, iptcl, pft)
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl
+        complex(sp),         intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
+    end subroutine get_ptcl_pft
+
+    module subroutine get_ptcl_ctfmat(self, iptcl, ctfmat)
+        class(polarft_calc), intent(in)    :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(inout) :: ctfmat(self%pftsz,self%kfromto(1):self%kfromto(2))
+    end subroutine get_ptcl_ctfmat
+
+    module subroutine get_sigma2_weights(self, wk)
+        class(polarft_calc),   intent(in)  :: self
+        real(sp), allocatable, intent(out) :: wk(:,:)
+    end subroutine get_sigma2_weights
+
     module subroutine get_ptcl_line(self, iptcl, irot, line)
         class(polarft_calc), intent(in)    :: self
         integer,             intent(in)    :: iptcl, irot
@@ -544,6 +573,12 @@ interface
         integer,            intent(in)    :: partners(:)
         real,               intent(in)    :: frame_angles(:)
     end subroutine mirror_ref_bank
+
+    module subroutine shift_ptcl( self, iptcl, shvec)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: shvec(2)
+    end subroutine shift_ptcl
 
     module pure subroutine mirror_ref_pft_by_pft( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self

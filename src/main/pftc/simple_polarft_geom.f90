@@ -101,6 +101,23 @@ contains
         enddo
     end subroutine gen_shmat4aln_8
 
+    !> the particle's band multiplied by the shift matrix of shvec (the feature module's tests use it as the oracle of their phase ramp)
+    module subroutine shift_ptcl( self, iptcl, shvec)
+        class(polarft_calc), intent(inout) :: self
+        integer,             intent(in)    :: iptcl
+        real(sp),            intent(in)    :: shvec(2)
+        complex(sp), pointer :: shmat(:,:)
+        integer :: ithr, i, klo, khi
+        ithr  = omp_get_thread_num() + 1
+        i     = self%pinds(iptcl)
+        klo   = self%kfromto(1)
+        khi   = self%kfromto(2)
+        shmat => self%heap_vars(ithr)%shmat
+        call self%gen_shmat4aln(ithr, shvec, shmat)
+        self%pfts_ptcls(:,klo:khi,i) = self%pfts_ptcls(:,klo:khi,i) * shmat(:,klo:khi)
+        call self%bump_ptcl_gen
+    end subroutine shift_ptcl
+
     ! mirror pft about h (mirror about y of cartesian image)
     module pure subroutine mirror_ref_pft_by_pft( self, pft, pftm )
         class(polarft_calc), intent(in)  :: self

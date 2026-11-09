@@ -118,7 +118,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Numerics')
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, cavg_quality_relations, cavg_quality_selection, cavg_quality_nano, quality_logistic, optimisers, nonlinear_conjugate_gradient, low_pass_stages, dose_series, dose_curve, shift_search, truth_metrics)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, cavg_quality_relations, cavg_quality_selection, cavg_quality_nano, quality_logistic, optimisers, nonlinear_conjugate_gradient, low_pass_stages, dose_series, dose_curve, shift_search, truth_metrics, polar_features, hhcnn, pose_student)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 

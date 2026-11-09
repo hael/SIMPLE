@@ -29,6 +29,7 @@ public :: sample_bounded_dists, sample_power_dists
 public :: prob_candidate, prob_candidate_buffer, prob_candidate_store, prob_fill_profile
 public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
+public :: prob_row_record, prob_row_file, PROB_ROW_FILE_VERSION
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS, prob_state_readout
 public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readout, add_prob_readout, report_prob_readout
@@ -233,6 +234,53 @@ type :: prob_dense_entry
     real    :: dist
     integer :: inpl
 end type prob_dense_entry
+
+!> A particle's posterior row as the pose student's teacher reads it (eul_prob_tab%get_posterior_row): the nkept
+!! entries of largest mass in descending order with their compact references inds and masses w, the tail's mass
+!! wtail (what the kept entries leave of the row), the row's statistics over every valid entry, the temperature the
+!! masses are taken at, and the mode's drawn in-plane rotation with the shift the fill refined it at when it did
+type :: prob_row_record
+    integer :: iptcl     = 0
+    integer :: nvalid    = 0
+    integer :: imin      = 0    !< the mode's compact reference
+    integer :: k99       = 0    !< the references holding 99% of the mass
+    integer :: nkept     = 0
+    integer :: inpl_mode = 0
+    real    :: temp      = 0.   !< the posterior's temperature (the tempering factor times the particle's own)
+    real    :: pmax      = 0.
+    real    :: neff      = 0.
+    real    :: wtail     = 0.
+    real    :: lmin      = 0.   !< the mode's loss
+    real    :: x_mode    = 0., y_mode = 0.
+    logical :: has_sh    = .false.
+    integer, allocatable :: inds(:)
+    real,    allocatable :: w(:)
+contains
+    procedure :: kill => row_record_kill
+end type prob_row_record
+
+!> The teacher's rows file: a stream of row records, each followed by the whole row's losses (nrefs reals), after a
+!! header of the magic, the version, the record count and nrefs; written record by record as the fill produces
+!! them, read back in the same order
+integer(int64), parameter :: PROB_ROW_FILE_MAGIC   = 7245692431_int64
+integer(int64), parameter :: PROB_ROW_FILE_VERSION = 1_int64
+type :: prob_row_file
+    private
+    integer :: funit    = -1
+    integer :: nrecs    = 0
+    integer :: nrefs    = 0
+    integer :: ndone    = 0
+    logical :: l_open   = .false.
+    logical :: l_write  = .false.
+contains
+    procedure :: open_write => row_file_open_write
+    procedure :: open_read  => row_file_open_read
+    procedure :: put        => row_file_put
+    procedure :: get        => row_file_get
+    procedure :: get_nrecs  => row_file_get_nrecs
+    procedure :: get_nrefs  => row_file_get_nrefs
+    procedure :: close      => row_file_close
+end type prob_row_file
 
 ! A refined entry of the dense table: the particle (the table's local index),
 ! the compact reference, the shift of its search and the loss at that pose (the row's distance under the window
@@ -564,6 +612,131 @@ contains
         frac = real(max(1, min(iter, niters)) - 1) / real(niters - 1)
         beta = beta0 * (beta1 / beta0)**frac
     end function prob_beta_at
+
+    ! ---- the teacher's row records and their file --------------------------------------------------------------
+
+    subroutine row_record_kill( self )
+        class(prob_row_record), intent(inout) :: self
+        if( allocated(self%inds) ) deallocate(self%inds)
+        if( allocated(self%w)    ) deallocate(self%w)
+        self%iptcl     = 0
+        self%nvalid    = 0
+        self%imin      = 0
+        self%k99       = 0
+        self%nkept     = 0
+        self%inpl_mode = 0
+        self%temp      = 0.
+        self%pmax      = 0.
+        self%neff      = 0.
+        self%wtail     = 0.
+        self%lmin      = 0.
+        self%x_mode    = 0.
+        self%y_mode    = 0.
+        self%has_sh    = .false.
+    end subroutine row_record_kill
+
+    !> a rows file opened for writing nrecs records of nrefs references; the header first
+    subroutine row_file_open_write( self, fname, nrecs, nrefs )
+        class(prob_row_file), intent(inout) :: self
+        class(string),        intent(in)    :: fname
+        integer,              intent(in)    :: nrecs, nrefs
+        integer :: io_stat
+        if( self%l_open ) THROW_HARD('the rows file is open; prob_row_file%open_write')
+        if( nrecs < 1 .or. nrefs < 1 ) THROW_HARD('nrecs and nrefs must be positive; prob_row_file%open_write')
+        call fopen(self%funit, fname, 'replace', 'write', iostat=io_stat, access='stream', form='unformatted')
+        call fileiochk('prob_row_file%open_write; open '//fname%to_char(), io_stat)
+        write(self%funit) PROB_ROW_FILE_MAGIC, PROB_ROW_FILE_VERSION, int(nrecs,int64), int(nrefs,int64)
+        self%nrecs   = nrecs
+        self%nrefs   = nrefs
+        self%ndone   = 0
+        self%l_open  = .true.
+        self%l_write = .true.
+    end subroutine row_file_open_write
+
+    !> a rows file opened for reading; its record count and nrefs from the header (get_nrecs, get_nrefs)
+    subroutine row_file_open_read( self, fname )
+        class(prob_row_file), intent(inout) :: self
+        class(string),        intent(in)    :: fname
+        integer(int64) :: magic, version, nrecs, nrefs
+        integer :: io_stat
+        if( self%l_open ) THROW_HARD('the rows file is open; prob_row_file%open_read')
+        if( .not. file_exists(fname) ) THROW_HARD('no rows file '//fname%to_char()//'; prob_row_file%open_read')
+        call fopen(self%funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
+        call fileiochk('prob_row_file%open_read; open '//fname%to_char(), io_stat)
+        read(self%funit) magic, version, nrecs, nrefs
+        if( magic /= PROB_ROW_FILE_MAGIC )     THROW_HARD(fname%to_char()//' is no rows file; prob_row_file%open_read')
+        if( version /= PROB_ROW_FILE_VERSION ) THROW_HARD(fname%to_char()//' has another version; prob_row_file%open_read')
+        self%nrecs   = int(nrecs)
+        self%nrefs   = int(nrefs)
+        self%ndone   = 0
+        self%l_open  = .true.
+        self%l_write = .false.
+    end subroutine row_file_open_read
+
+    !> one record and its whole row of losses appended
+    subroutine row_file_put( self, rec, dists )
+        class(prob_row_file),   intent(inout) :: self
+        type(prob_row_record),  intent(in)    :: rec
+        real,                   intent(in)    :: dists(:)
+        integer :: ihas
+        if( .not. (self%l_open .and. self%l_write) ) THROW_HARD('the rows file is not open for writing; prob_row_file%put')
+        if( self%ndone >= self%nrecs ) THROW_HARD('more records than the header counts; prob_row_file%put')
+        if( size(dists) < self%nrefs ) THROW_HARD('the row is shorter than nrefs; prob_row_file%put')
+        if( rec%nkept > 0 )then
+            if( .not. (allocated(rec%inds) .and. allocated(rec%w)) ) THROW_HARD('a kept record without its entries; prob_row_file%put')
+        endif
+        ihas = merge(1, 0, rec%has_sh)
+        write(self%funit) rec%iptcl, rec%nvalid, rec%imin, rec%k99, rec%nkept, rec%inpl_mode, ihas, &
+            &rec%temp, rec%pmax, rec%neff, rec%wtail, rec%lmin, rec%x_mode, rec%y_mode
+        if( rec%nkept > 0 ) write(self%funit) rec%inds(1:rec%nkept), rec%w(1:rec%nkept)
+        write(self%funit) dists(1:self%nrefs)
+        self%ndone = self%ndone + 1
+    end subroutine row_file_put
+
+    !> the next record and its row (dists of size at least nrefs)
+    subroutine row_file_get( self, rec, dists )
+        class(prob_row_file),   intent(inout) :: self
+        type(prob_row_record),  intent(inout) :: rec
+        real,                   intent(inout) :: dists(:)
+        integer :: ihas
+        if( .not. (self%l_open .and. .not. self%l_write) ) THROW_HARD('the rows file is not open for reading; prob_row_file%get')
+        if( self%ndone >= self%nrecs ) THROW_HARD('no record left; prob_row_file%get')
+        if( size(dists) < self%nrefs ) THROW_HARD('the row buffer is shorter than nrefs; prob_row_file%get')
+        call rec%kill
+        read(self%funit) rec%iptcl, rec%nvalid, rec%imin, rec%k99, rec%nkept, rec%inpl_mode, ihas, &
+            &rec%temp, rec%pmax, rec%neff, rec%wtail, rec%lmin, rec%x_mode, rec%y_mode
+        rec%has_sh = ihas == 1
+        if( rec%nkept > 0 )then
+            allocate(rec%inds(rec%nkept), rec%w(rec%nkept))
+            read(self%funit) rec%inds, rec%w
+        endif
+        read(self%funit) dists(1:self%nrefs)
+        self%ndone = self%ndone + 1
+    end subroutine row_file_get
+
+    pure integer function row_file_get_nrecs( self )
+        class(prob_row_file), intent(in) :: self
+        row_file_get_nrecs = self%nrecs
+    end function row_file_get_nrecs
+
+    pure integer function row_file_get_nrefs( self )
+        class(prob_row_file), intent(in) :: self
+        row_file_get_nrefs = self%nrefs
+    end function row_file_get_nrefs
+
+    !> closed; a file written short of its count stops
+    subroutine row_file_close( self )
+        class(prob_row_file), intent(inout) :: self
+        if( .not. self%l_open ) return
+        call fclose(self%funit)
+        if( self%l_write .and. self%ndone /= self%nrecs ) THROW_HARD('the rows file holds fewer records than its header counts; prob_row_file%close')
+        self%funit   = -1
+        self%nrecs   = 0
+        self%nrefs   = 0
+        self%ndone   = 0
+        self%l_open  = .false.
+        self%l_write = .false.
+    end subroutine row_file_close
 
     ! ---- the n_eff readout -----------------------------------------------------------------------------------
 

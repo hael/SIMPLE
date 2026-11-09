@@ -45,6 +45,8 @@ use simple_commanders_project_ptcl, only: commander_prune_project, commander_sca
 ! refine3D commanders, low-level methods for refine3D for solve3D (de novo map determination) and 3D refinement
 use simple_commanders_refine3D, only: commander_refine3D_distr_worker
 use simple_commanders_flex_pca,          only: commander_flex_pca_worker
+! pose student commanders, the learned pose assignment's teacher rows
+use simple_commanders_pose_student,      only: commander_learn_pose_student, commander_predict_poses
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
 use simple_commanders_euclid,       only: commander_calc_pspec,commander_commit_sigma2
 use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble

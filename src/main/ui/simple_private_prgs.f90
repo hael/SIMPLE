@@ -147,6 +147,7 @@ contains
         call cmd_dict%push('ncls',          '# clusters')
         call cmd_dict%push('neg',           'invert contrast of images(yes|no)')
         call cmd_dict%push('nparts',        '# partitions in distributed exection')
+        call cmd_dict%push('part',          'partition index in distributed execution')
         call cmd_dict%push('nptcls',        '# images in stk/# orientations in oritab')
         call cmd_dict%push('nrots',         '# rotations in 2D analysis{0}')
         call cmd_dict%push('nspace',        '# projection directions')
@@ -159,6 +160,8 @@ contains
         call cmd_dict%push('scale',         'image scale factor')
         call cmd_dict%push('smpd',          'sampling distance(in A)')
         call cmd_dict%push('dir_target',    'output directory')
+        call cmd_dict%push('fname',         'file name')
+        call cmd_dict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i){c1}')
         call cmd_dict%push('pickrefs',       'MRC stack of picking references')
         call cmd_dict%push('projfile',      'SIMPLE *.simple project file')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')
@@ -368,6 +371,35 @@ contains
         call push_opt('scale')
         call push_opt('smpd')
         call push_opt('dir_target')
+
+        ! LEARN_POSE_STUDENT, the pose student's teacher: the probabilistic table's rows of the selected particles at
+        ! the student grid (nspace) and band (lp) against the references vol1, written beside fname
+        call add_private_prg('learn_pose_student')
+        ! required keys
+        call push_req('projfile')
+        call push_req('vol1')
+        call push_req('lp')
+        call push_req('mskdiam')
+        ! optional keys
+        call push_opt('nspace')
+        call push_opt('pgrp')
+        call push_opt('nthr')
+        call push_opt('fname')
+        call push_opt('trs')
+
+        ! PREDICT_POSES, the pose student's prediction (the mode, the cone, the confidence) for the selected
+        ! particles under the model infile, written beside fname
+        call add_private_prg('predict_poses')
+        ! required keys
+        call push_req('projfile')
+        call push_req('infile')
+        call push_req('mskdiam')
+        ! optional keys
+        call push_opt('nthr')
+        call push_opt('fname')
+        call push_opt('part')
+        call push_opt('nparts')
+        call push_opt('outfile')
     end subroutine new_private_prgs
 
 end module simple_private_prgs
