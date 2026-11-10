@@ -398,6 +398,7 @@ contains
 
     subroutine exec_simulate_movie( self, cline )
         use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
+        use simple_fileio,          only: fopen, fclose
         class(commander_simulate_movie), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)     :: params
@@ -405,7 +406,7 @@ contains
         type(image)          :: base_image, shifted_base_image
         type(ctf)            :: tfun
         real                 :: snr_pink, snr_detector, fracarea, x, y, sherr, dfx, dfy, deferr, angast
-        integer              :: i, ptclarea, mgrapharea, fixed_frame
+        integer              :: i, ptclarea, mgrapharea, fixed_frame, funit
         integer, allocatable :: ptcl_positions(:,:)
         real,    allocatable :: shifts(:,:)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
@@ -439,6 +440,13 @@ contains
             call build%img%read(params%stk, i)
             call build%img%insert(ptcl_positions(i,:), base_image)
         end do
+        ! the planted particles as a box file in the pick convention (base-0 corner, centre = corner + box/2),
+        ! in stack order: the truth of a simulated pick
+        call fopen(funit, string('simulate_movie_ptcls.box'), status='replace', action='write')
+        do i=1,params%nptcls
+            write(funit,'(4(i0,1x))') ptcl_positions(i,1)-params%box/2-1, ptcl_positions(i,2)-params%box/2-1, params%box, params%box
+        end do
+        call fclose(funit)
         if( params%vis .eq. 'yes' ) call base_image%vis()
         ! calculate snr:s
         snr_pink     = params%snr/0.2

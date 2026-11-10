@@ -12,7 +12,7 @@ use simple_oris,               only: oris
 use simple_test_utils,         only: assert_true, assert_int, assert_real, set_fixed_seed
 use simple_test_truth_metrics, only: match_states, adjusted_rand_index, mapped_accuracy, accuracy_null, &
     &collapsed_accuracy, population_errors, match_maps, discrimination, carry_pose, group_errors, group_operators, &
-    &axis_operator, dock_both_hands, finite_min, offdiag, maps_distinct, state_recalls
+    &axis_operator, dock_both_hands, finite_min, offdiag, maps_distinct, state_recalls, sym_pair_pose_error
 implicit none
 
 public :: run_all_truth_metrics_tests, run_all_truth_docking_tests
@@ -32,6 +32,7 @@ contains
         call test_discrimination()
         call test_frame_rule()
         call test_group_error()
+        call test_sym_pair_pose_error()
         call test_nonfinite()
     end subroutine run_all_truth_metrics_tests
 
@@ -366,6 +367,47 @@ contains
         call assert_real(0., maxval(errs), 0.1, 'the in-plane partner scores zero under projection inversion')
         call vs%kill
     end subroutine test_group_error
+
+    !> the pair pose error of a de novo result: zero up to a global frame on the right, the
+    !! symmetry mate of each particle and the mirrored hand; large under a frame per particle
+    subroutine test_sym_pair_pose_error()
+        real, parameter :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
+        real, parameter :: MX(3,3) = reshape([-1.,0.,0., 0.,1.,0., 0.,0.,1.], [3,3])
+        type(oris) :: truth, est
+        real, allocatable :: ops(:,:,:)
+        real    :: rt(3,3), w(3,3), err, frac5
+        integer :: j, inds(12)
+        write(*,'(A)') 'test_sym_pair_pose_error'
+        ops  = group_operators('d2')
+        inds = [(j, j = 1, 12)]
+        w    = axis_operator([0.6, 0.8, 0.], 30.)
+        call truth%new(12, is_ptcl=.false.)
+        call est%new(12, is_ptcl=.false.)
+        do j = 1, 12
+            rt = euler2m([30.*real(j), 15.*real(j), 360. - 25.*real(j)])
+            call truth%set_euler(j, m2euler(rt))
+            call est%set_euler(j, m2euler(matmul(matmul(rt, ops(:,:,1 + mod(j, 4))), w)))
+        enddo
+        err = sym_pair_pose_error(est, truth, inds, 'd2', frac5)
+        call assert_real(0., err, 0.1, 'poses in another frame, each on a symmetry mate, score zero')
+        call assert_real(1., frac5, 1.e-6, 'every pair is within 5 degrees')
+        do j = 1, 12
+            rt = euler2m([30.*real(j), 15.*real(j), 360. - 25.*real(j)])
+            call est%set_euler(j, m2euler(matmul(MZ, matmul(matmul(matmul(rt, ops(:,:,1 + mod(j, 4))), w), MX))))
+        enddo
+        err = sym_pair_pose_error(est, truth, inds, 'd2', frac5)
+        call assert_real(0., err, 0.1, 'the mirrored hand scores zero')
+        do j = 1, 12
+            rt = euler2m([30.*real(j), 15.*real(j), 360. - 25.*real(j)])
+            call est%set_euler(j, m2euler(matmul(rt, axis_operator([0., 0.6, 0.8], 40.*real(j)))))
+        enddo
+        err = sym_pair_pose_error(est, truth, inds, 'd2', frac5)
+        call assert_true(err > 20. .and. frac5 < 0.5, 'a frame per particle is an error')
+        err = sym_pair_pose_error(truth, truth, inds, 'c1', frac5)
+        call assert_real(0., err, 0.1, 'identical poses score zero under c1')
+        call truth%kill
+        call est%kill
+    end subroutine test_sym_pair_pose_error
 
     !> a non-finite metric fails its gate row
     subroutine test_nonfinite()

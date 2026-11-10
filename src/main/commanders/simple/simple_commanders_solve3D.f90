@@ -150,10 +150,10 @@ contains
         endif
         ! read project
         call spproj%read(params%projfile)
-        ! set low-pass limits and downscaling info from FRCs
+        ! set low-pass limits and downscaling info from the mask diameter
         if( params%l_freq_march_aggressive ) THROW_HARD('freq_march_aggressive=yes plans the ladder of the particle route; the class-average route keeps its own')
         if( cline%defined('lpstart_ini3D').or.cline%defined('lpstop_ini3D') )then
-            ! overrides resolution limits scheme based on frcs
+            ! overrides the size-planned resolution limits
             if( cline%defined('lpstart_ini3D').and.cline%defined('lpstop_ini3D') )then
                 l_cavgs_mode = .true.
                 if( allocated(lpinfo) ) deallocate(lpinfo)
@@ -166,13 +166,13 @@ contains
             call cline%delete('lpstop_ini3D')
         else
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
+                call set_lplims_from_size(params, spproj, l_cavgs=.true., lpstart=params%lpstart, lpstop=params%lpstop)
             else if( cline%defined('lpstart') )then
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.true., lpstart=params%lpstart)
+                call set_lplims_from_size(params, spproj, l_cavgs=.true., lpstart=params%lpstart)
             else if( cline%defined('lpstop') )then
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.true., lpstop=params%lpstop)
+                call set_lplims_from_size(params, spproj, l_cavgs=.true., lpstop=params%lpstop)
             else
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.true.)
+                call set_lplims_from_size(params, spproj, l_cavgs=.true.)
             endif
         endif
         ! whether to use classes generated from 2D or 3D
@@ -1043,7 +1043,7 @@ contains
         endif
         ! a project without a usable 2D solution runs under balance=none only:
         ! the selection is still the ptcl2D state flags (set at import), but no
-        ! class exists to balance over and no class FRC to plan the ladder from.
+        ! class exists to balance over; its ladder comes from lpstart/lpstop.
         ! ptcl2D rows that carry labels or shifts do not make a 2D solution on
         ! their own: it needs the classes (cls2D) and their FRCs as well
         l_virgin2D = spproj%is_virgin_field('ptcl2D')
@@ -1206,16 +1206,16 @@ contains
                 call spproj%write_segment_inside('ptcl3D', params%projfile)
             endif
         endif
-        ! set low-pass limits and downscaling info from FRCs
+        ! set low-pass limits and downscaling info from the mask diameter
         if( params%l_freq_march_aggressive .and. (l_addon .or. l_vol_ini_ext .or. l_no2D) )then
             THROW_HARD('freq_march_aggressive=yes plans the ladder of the particle route with a 2D solution; not with an &
                 &input volume, without a 2D solution or in an add-on, whose limits are explicit')
         endif
         if( l_addon )then
-            ! the base run's ladder at the limits it emitted; never planned from class FRCs
+            ! the base run's ladder at the limits it emitted; never planned again
             call set_lplims_from_manifest(man_addon)
         else if( l_vol_ini_ext .or. l_no2D )then
-            ! limits based on dimensions or input: no class FRCs to plan from
+            ! limits based on dimensions or input
             call mskdiam2lplimits( params%mskdiam, lprange(1), lprange(2), params%cenlp )
             if( .not.cline%defined('lpstart') ) params%lpstart = lprange(1)
             if( .not.cline%defined('lpstop')  )then
@@ -1230,13 +1230,13 @@ contains
             endif
         else
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
+                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
             else if( cline%defined('lpstart') )then
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
+                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstart=params%lpstart)
             else if( cline%defined('lpstop') )then
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
+                call set_lplims_from_size(params, spproj, l_cavgs=.false., lpstop=params%lpstop)
             else
-                call set_lplims_from_frcs(params, spproj, l_cavgs=.false.)
+                call set_lplims_from_size(params, spproj, l_cavgs=.false.)
             endif
         endif
         if( l_user_lpstop ) write(logfhandle,'(A,F8.3,A)') &

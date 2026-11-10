@@ -71,7 +71,7 @@ Stage policy includes:
 - cropped box and sampling from the low-pass plan
 - stage 1 starts with `nspace=500`; stages 2 through 4 use `nspace=1000`
 - every stage gets its low-pass and crop information independently from the
-  normal FRC/input schedule
+  size/input schedule
 - staged search by state count:
   - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
     in stages 1-2, middle `prob`, and late `prob_neigh`
@@ -178,8 +178,8 @@ selection is unchanged: `ptcl3D%state` is reset from the `ptcl2D` state flags
 (set at import or by a selection). The 2D shifts are transferred when
 `ptcl2D` was searched and otherwise the shifts `ptcl3D` holds stay. No class sampling file is written; the initial
 greedy draw and every stage sample the global lowest `updatecnt` tiers
-(`sample4update_cnt`), as every `balance=none` stage does. The ladder cannot
-be planned from class FRCs: `lpstart`/`lpstop` are taken from the command line
+(`sample4update_cnt`), as every `balance=none` stage does. The ladder is
+planned from input limits: `lpstart`/`lpstop` are taken from the command line
 and otherwise `lpstart` from `mskdiam` (`mskdiam2lplimits`) and `lpstop` is the
 ladder bound `LPSTOP_BOUNDS(1)`, 4.5 A, as on the input-volume
 route; an add-on takes its ladder from the frozen run's manifest regardless.
@@ -223,8 +223,17 @@ every run seeds and owns its sigmas in its own directory.
 ## 4. Low-Pass and Cropping
 
 `lpinfo(istage)%lp` controls staged search/reference scheduling. Stage limits
-are derived from class FRCs by default, with `lpstart`/`lpstop` overrides and a
-`force_lp_range=yes` path that uses the requested range directly.
+follow the molecule's size (`set_lplims_from_size`, since 2026-11-10): linear
+in A from `mskdiam/8`, at least 20 A, to `mskdiam/26.7` within
+`LPSTOP_BOUNDS` (4.5-6 A); PfCRT's 160 A gives 20, 18, 16, 14, 12, 10, 8, 6 A.
+`lpstart` replaces the first limit, `lpstop` can only coarsen the last, and
+`force_lp_range=yes` uses the requested range directly. The crops are those of
+`lpstages_setlims`: the end stages at a third of their limit (at least 2 A per
+pixel), a linear box ramp between. The ladder was planned from the class FRCs
+until then; gold-standard solve2D (from stage 2) made those FRCs honest and
+lower, which coarsened PfCRT's mid ladder (stage 4 from 12.4 to 18.3 A) and
+cost the global search the rung its orientations settled at
+(section 3, stage omission, has the run numbers).
 
 The same ladder plans a stage-dependent residual translation-search half-width.
 On the main particle `solve3D` interface, an explicitly positive `trs` replaces
@@ -244,11 +253,11 @@ half-width is raised and no stage ends on the centring. A run manifest records t
 an add-on replays the frozen solution's search policy without acquiring a
 separate public control.
 
-Where the ladder is planned by `lpstages` or `lpstages_fast`, stage 1 of
-`solve3D` never runs with a low-pass limit finer than 20 A: both apply this
-floor before generating the remaining low-pass and crop ladder, preserving
-gradual frequency marching. `force_lp_range=yes` and the routes planned by
-`lpstages_setlims` (input volumes, no 2D solution) take `lpstart` as given.
+On the size-planned ladder and where `lpstages_fast` plans it, stage 1 of
+`solve3D` never runs with a low-pass limit finer than 20 A unless `lpstart`
+asks for it, preserving gradual frequency marching. `force_lp_range=yes`, an
+explicit `lpstart` and the routes planned from input limits (input volumes, no
+2D solution) take `lpstart` as given.
 
 **Aggressive frequency marching (`freq_march_aggressive=yes`, 2026-10-21;
 experimental, default `no`).** For a small membrane target the class FRCs
@@ -258,8 +267,8 @@ not discriminate orientations: on the `latest6` reference its overlap peaks
 at the fourth iteration and declines for the remaining thirteen (the
 iteration-budget note below). The signal that fixes a small particle's
 orientation sits in the 5-10 A band, which the default schedule withholds
-until stage 4. With the key on, the particle route plans its ladder from the
-class FRCs as usual and then `lpstages_aggressive` overwrites the rungs from
+until stage 4. With the key on, the particle route plans its size ladder as usual and then
+`lpstages_aggressive` overwrites the rungs from
 `AGGRESSIVE_MARCH_STAGE` (= `PROB_REFINE_STAGE`, 3) on: linear in spatial
 frequency from `LPSTART_AGGRESSIVE` (12 A, no coarser than the kept stage-2
 rung) to the standard final limit `lpfinal`, so every march stage admits the

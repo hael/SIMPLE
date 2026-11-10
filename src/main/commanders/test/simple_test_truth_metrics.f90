@@ -26,6 +26,7 @@ use simple_test_gate,       only: test_gate
 implicit none
 
 public :: dock_both_hands, compare_to_truth, validate_reconstructed_volume, pair_pose_error, add_gaussian_blob
+public :: sym_pair_pose_error
 public :: match_states, adjusted_rand_index, mapped_accuracy, accuracy_null, collapsed_accuracy, population_errors
 public :: match_maps, rot_angle, carry_pose, group_errors, group_operators, axis_operator, discrimination
 public :: finite_min, offdiag, maps_distinct, state_recalls, farthest_truth_error
@@ -319,6 +320,53 @@ contains
         call ta%kill
         call tb%kill
     end function pair_pose_error
+
+    !> Median over all pairs of inds of the rotation angle between the estimated relative pose
+    !! E_i E_j^T and the true one up to the point group of pgrp and the hand (min over g of
+    !! angle(E_i E_j^T, T_i g T_j^T) and of its z-mirror conjugate): the frame of a de novo map
+    !! multiplies poses on the right (carry_pose), the mirrored hand conjugates them, so the error
+    !! needs no docking; frac5 is the fraction of pairs within 5 degrees
+    real function sym_pair_pose_error( estimated, truth, inds, pgrp, frac5 ) result( err )
+        class(oris),      intent(in)  :: estimated, truth
+        integer,          intent(in)  :: inds(:)
+        character(len=*), intent(in)  :: pgrp
+        real,             intent(out) :: frac5
+        real, parameter :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
+        real, allocatable :: ops(:,:,:), errs(:), re(:,:,:), rtg(:,:,:,:)
+        real    :: rel_e(3,3), rel_t(3,3), e
+        integer :: n, i, j, g, k, npairs, nsym
+        n    = size(inds)
+        ops  = group_operators(pgrp)
+        nsym = size(ops, 3)
+        allocate(re(3,3,n), rtg(3,3,nsym,n))
+        do i = 1, n
+            re(:,:,i) = estimated%get_mat(inds(i))
+            do g = 1, nsym
+                rtg(:,:,g,i) = matmul(truth%get_mat(inds(i)), ops(:,:,g))
+            enddo
+        enddo
+        npairs = n * (n - 1) / 2
+        allocate(errs(max(1, npairs)), source=0.)
+        k = 0
+        do i = 1, n - 1
+            do j = i + 1, n
+                k     = k + 1
+                rel_e = matmul(re(:,:,i), transpose(re(:,:,j)))
+                e     = huge(1.)
+                do g = 1, nsym
+                    rel_t = matmul(rtg(:,:,g,i), transpose(rtg(:,:,1,j)))
+                    e     = min(e, rot_angle(rel_e, rel_t), rot_angle(rel_e, matmul(MZ, matmul(rel_t, MZ))))
+                enddo
+                errs(k) = e
+            enddo
+        enddo
+        err   = huge(1.)
+        frac5 = 0.
+        if( npairs > 0 )then
+            err   = median(errs(1:npairs))
+            frac5 = real(count(errs(1:npairs) < 5.)) / real(npairs)
+        endif
+    end function sym_pair_pose_error
 
     !> Add a Gaussian blob to the map in fname (in place): centre pos (A,
     !! relative to the box centre), width sigma (A) and peak amp times the

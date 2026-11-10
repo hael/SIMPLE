@@ -13,8 +13,10 @@ module subroutine exec_test_simulated_workflow( self, cline )
     !$ use omp_lib, only: omp_set_num_threads
     use simple_test_utils,         only: offset_seed
     use simple_atoms,              only: atoms
-    use simple_test_truth_metrics, only: validate_reconstructed_volume
+    use simple_test_truth_metrics, only: validate_reconstructed_volume, sym_pair_pose_error
     use simple_test_gate,          only: test_gate
+    use simple_oris,               only: oris
+    use simple_fileio,             only: fopen, fclose
     use simple_molecule_data,      only: molecule_data
     use simple_test_molecule_fixture, only: betagal_1jyx, sars_cov2_spkgp_6vxx
     use simple_refine3D_fnames,    only: refine3D_state_vol_fname
@@ -29,6 +31,8 @@ module subroutine exec_test_simulated_workflow( self, cline )
     character(len=*), parameter :: SUBSET_FILE    = 'random_reprojections.mrcs'
     character(len=*), parameter :: OPTIMAL_FILE   = 'optimal_movie_average.mrc'
     character(len=*), parameter :: PARAMS_FILE    = 'simulate_movie_params.txt'
+    character(len=*), parameter :: PTCLS_FILE     = 'simulate_movie_ptcls.box'
+    character(len=*), parameter :: REPROJ_ORIS    = 'reproject_oris.txt'
     character(len=*), parameter :: PICKREFS_FILE  = 'pickrefs.mrc'
     character(len=*), parameter :: FILETAB_FILE   = 'simulated_movies.txt'
     character(len=*), parameter :: VOL_DIR        = '0_pdb2mrc'
@@ -71,6 +75,13 @@ module subroutine exec_test_simulated_workflow( self, cline )
     ! maintainer's Mac measured a 6vxx correlation of 0.780 at the earlier sizes (2026-10-17, one
     ! thread); these sizes have not been profiled there yet.
     real,             parameter :: MIN_VOL_CORR   = 0.80
+    ! pose recovery against the planted particles (pose_recovery): the median pair pose error up to
+    ! the frame, hand and point group, and the fraction of pairs within 5 degrees. Provisional
+    ! floors from the first runs of 2026-11-10, to be set by the floor rule on a profile. A pick
+    ! matches the planted centre within MATCH_TOL pixels
+    real,             parameter :: MAX_PAIR_POSE_ERR = 10.0
+    real,             parameter :: MIN_PAIR_FRAC5    = 0.5
+    integer,          parameter :: MATCH_TOL         = EXTRACT_BOX / 4
     real,             parameter :: MAX_FSC0143    = 40.0
     real,             parameter :: DOCK_HP        = 100.0
     real,             parameter :: DOCK_LP        = 20.0
@@ -95,9 +106,10 @@ module subroutine exec_test_simulated_workflow( self, cline )
     type(test_gate)                     :: gate
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
     type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
-    type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
+    type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname, ptcls_fname
+    type(oris)                          :: reproj_poses
     type(string)                        :: truth_volume, solve3D_dir, final_volume, wrong_truth
-    type(string), allocatable           :: movie_files(:), bench_parts(:)
+    type(string), allocatable           :: movie_files(:), bench_parts(:), ptcls_files(:)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
     integer, allocatable                :: proj_inds(:), projection_order(:)
@@ -150,7 +162,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
             THROW_HARD('no sub-suite '//system_name%to_char()//' in simulated_workflow; use suite=list')
     end select
     nper_movie = nprojs / nmovies
-    allocate(movie_files(nmovies), proj_inds(nper_movie), projection_order(nprojs))
+    allocate(movie_files(nmovies), ptcls_files(nmovies), proj_inds(nper_movie), projection_order(nprojs))
     ! Serial execution fixes draw order, including work before the first commander.
     !$ call omp_set_num_threads(NTHR)
     call set_fixed_seed(test_seed, propagate=.true.)
@@ -211,6 +223,9 @@ module subroutine exec_test_simulated_workflow( self, cline )
     reproj_path = simple_abspath(string(REPROJ_DIR//'/'//reproj_file%to_char()))
     call find_ldim_nptcls(reproj_path, ldim, nprojs_stk)
     call require('reprojection_count', nprojs_stk == NREPROJS, 'Unexpected number of generated reprojections')
+    call require('reprojection_poses', file_exists(REPROJ_DIR//'/'//REPROJ_ORIS), 'The reprojection orientations were not written')
+    call reproj_poses%new(NREPROJS, is_ptcl=.false.)
+    call reproj_poses%read(string(REPROJ_DIR//'/'//REPROJ_ORIS))
     reproj_box = ldim(1)
     ldim(3) = 1
     call projection%new(ldim, SMPD)
@@ -259,11 +274,15 @@ module subroutine exec_test_simulated_workflow( self, cline )
         subset_fname = string('random_reprojections_')//int2str_pad(i,3)//'.mrcs'
         optimal_fname = string('optimal_movie_average_')//int2str_pad(i,3)//MRC_EXT
         params_fname = string('simulate_movie_params_')//int2str_pad(i,3)//TXT_EXT
+        ptcls_fname  = string('simulate_movie_ptcls_')//int2str_pad(i,3)//'.box'
+        call require('movie'//int2str(i)//'_planted', file_exists(PTCLS_FILE), 'The planted particle positions were not written')
         call simple_rename(MOVIE_FILE, movie_fname)
         call simple_rename(subset_path, subset_fname)
         call simple_rename(OPTIMAL_FILE, optimal_fname)
         call simple_rename(PARAMS_FILE, params_fname)
+        call simple_rename(PTCLS_FILE, ptcls_fname)
         movie_files(i) = simple_abspath(movie_fname)
+        ptcls_files(i) = simple_abspath(ptcls_fname)
         call cline_sim_mov%kill()
     enddo
     call projection%kill()
@@ -470,12 +489,84 @@ module subroutine exec_test_simulated_workflow( self, cline )
             &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, tag, corr, fsc0143, &
             &dcorr_direct, dcorr_mirrored, dcorr_selected, ok, corr_gated=.false., fsc_gated=.false.)
         call wrong_truth_control(tag)
+        call pose_recovery(tag)
         ! the distributed step ran its parts: the record of the second part's work exists
         if( nparts > 1 )then
             call simple_list_files(solve3D_dir%to_char()//'/BENCH/*PART'//int2str(nparts)//'*', bench_parts)
             call gate%check(tag//'_ran_'//int2str(nparts)//'_parts', size(bench_parts) > 0)
         endif
     end subroutine run_solve3D_step
+
+    !> the recovered poses against the planted ones: every active particle of the solve3D project is
+    !! matched to the planted centre nearest its pick in its movie (the pick stores the base-0 corner,
+    !! the simulator the same convention), its truth pose is the reprojection planted there, and the
+    !! pair pose error up to the frame, hand and point group of a de novo map is gated
+    subroutine pose_recovery( tag )
+        character(len=*), intent(in) :: tag
+        class(sp_project), allocatable :: proj
+        type(oris)                     :: truth_poses
+        type(string)                   :: stkname
+        character(len=:), allocatable  :: stk
+        integer,          allocatable  :: inds(:), planted(:,:,:)
+        real    :: err, frac5
+        integer :: funit, i, j, imov, istk, nptcls3D, coords(2), centre(2), corner(2), bx, by
+        integer :: best, d2, d2best, nmatched, pos, ios
+        ! the planted centres (base-0) of every movie, in the order of its reprojection subset
+        allocate(planted(2, nper_movie, nmovies), source=-1)
+        do imov = 1, nmovies
+            call fopen(funit, ptcls_files(imov), status='old', action='read')
+            do j = 1, nper_movie
+                read(funit, *, iostat=ios) corner(1), corner(2), bx, by
+                if( ios /= 0 ) exit
+                planted(:, j, imov) = corner + bx / 2
+            enddo
+            call fclose(funit)
+        enddo
+        allocate(proj)
+        call proj%read(filepath(solve3D_dir, PROJFILE))
+        nptcls3D = proj%os_ptcl3D%get_noris()
+        call truth_poses%new(nptcls3D, is_ptcl=.false.)
+        allocate(inds(nptcls3D), source=0)
+        nmatched = 0
+        do i = 1, nptcls3D
+            if( proj%os_ptcl3D%get_state(i) == 0 ) cycle
+            istk    = proj%os_ptcl2D%get_int(i, 'stkind')
+            stkname = proj%os_stk%get_str(istk, 'stk')
+            stk     = stkname%to_char()
+            pos     = index(stk, 'simulate_movie_')
+            if( pos == 0 ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: stack not named after its movie: '//stk)
+            read(stk(pos+15:pos+17), *, iostat=ios) imov
+            if( ios /= 0 .or. imov < 1 .or. imov > nmovies ) THROW_HARD('TEST_SIMULATED_WORKFLOW FAILED: no movie number in '//stk)
+            call proj%get_boxcoords(i, coords)
+            centre = coords + EXTRACT_BOX / 2
+            best   = 0
+            d2best = MATCH_TOL**2
+            do j = 1, nper_movie
+                if( planted(1, j, imov) < 0 ) cycle
+                d2 = sum((centre - planted(:, j, imov))**2)
+                if( d2 <= d2best )then
+                    d2best = d2
+                    best   = j
+                endif
+            enddo
+            if( best == 0 ) cycle   ! a pick with no planted particle: noise
+            nmatched       = nmatched + 1
+            inds(nmatched) = i
+            call truth_poses%set_euler(i, reproj_poses%get_euler(projection_order((imov - 1) * nper_movie + best)))
+        enddo
+        call gate%report(tag//'_matched_particles', real(nmatched))
+        call gate%report(tag//'_matched_fraction',  real(nmatched) / real(max(1, nptcls3D)))
+        err   = huge(1.)
+        frac5 = 0.
+        if( nmatched >= 4 ) err = sym_pair_pose_error(proj%os_ptcl3D, truth_poses, inds(1:nmatched), pgrp%to_char(), frac5)
+        call gate%metric(tag//'_pair_pose_error_deg', err, MAX_PAIR_POSE_ERR, err <= MAX_PAIR_POSE_ERR, upper=.true.)
+        call gate%metric(tag//'_pair_pose_frac5',     frac5, MIN_PAIR_FRAC5, frac5 >= MIN_PAIR_FRAC5)
+        write(logfhandle,'(a,a,a,i0,a,i0,a,f7.2,a,f6.3)') '>>> POSE RECOVERY ', tag, ': matched ', nmatched, ' of ', &
+            &nptcls3D, ' particles, median pair pose error ', err, ' deg, fraction within 5 deg ', frac5
+        call truth_poses%kill
+        call proj%kill
+        deallocate(proj)
+    end subroutine pose_recovery
 
     !> the negative control: the final map docked onto the other suite's molecule must fail the
     !! correlation floor

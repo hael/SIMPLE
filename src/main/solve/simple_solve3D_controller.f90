@@ -49,7 +49,9 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
-real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
+real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size-planned ladder: first limit mskdiam/8, at least LPSTART_FLOOR
+real,             parameter :: LPSTART_FLOOR           = 20.
+real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
 real,             parameter :: LPSTART_AGGRESSIVE      = 12.  ! freq_march_aggressive=yes: the march's first rung (about res05/1.5 after the global stages on PfCRT)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
@@ -84,10 +86,13 @@ contains
         bounds = LPSTOP_BOUNDS
     end function solve3D_lpstop_bounds
 
-    module function solve3D_lpstart_bounds() result(bounds)
-        real :: bounds(2)
-        bounds = LPSTART_BOUNDS
-    end function solve3D_lpstart_bounds
+    !> first and last limit of the size-planned ladder, from the mask diameter (A)
+    module function solve3D_size_lplims( mskdiam ) result( lims )
+        real, intent(in) :: mskdiam
+        real :: lims(2)
+        lims(1) = max(mskdiam / LPSTART_MSKDIAM_DIV, LPSTART_FLOOR)
+        lims(2) = min(max(mskdiam / LPSTOP_MSKDIAM_DIV, LPSTOP_BOUNDS(1)), LPSTOP_BOUNDS(2))
+    end function solve3D_size_lplims
 
     module function solve3D_lpstart_aggressive() result(lp)
         real :: lp

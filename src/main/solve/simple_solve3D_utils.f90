@@ -3,7 +3,6 @@ module simple_solve3D_utils
 use simple_commanders_api
 use simple_sigma2_bootstrap,     only: ensure_sigma2_for_iteration, sigma2_estimate_available
 use simple_commanders_volops,    only: commander_symmetrize_map
-use simple_class_frcs,           only: class_frcs
 use simple_matcher_refvol_utils, only: remove_ref_section_files
 use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
@@ -65,9 +64,10 @@ interface
         real :: bounds(2)
     end function solve3D_lpstop_bounds
 
-    module function solve3D_lpstart_bounds() result(bounds)
-        real :: bounds(2)
-    end function solve3D_lpstart_bounds
+    module function solve3D_size_lplims( mskdiam ) result( lims )
+        real, intent(in) :: mskdiam
+        real :: lims(2)
+    end function solve3D_size_lplims
 
     module function solve3D_lpstart_aggressive() result(lp)
         real :: lp
@@ -470,91 +470,53 @@ contains
         endif
     end subroutine set_symmetry_class_vars
 
-    subroutine set_lplims_from_frcs( params, spproj, l_cavgs, lpstart, lpstop )
+    !> the stage ladder from the molecule's size: linear in A from mskdiam/8 (at least 20 A) to
+    !! mskdiam/26.7 (4.5-6 A); lpstart replaces the first limit, lpstop coarsens the last
+    subroutine set_lplims_from_size( params, spproj, l_cavgs, lpstart, lpstop )
         class(parameters), intent(inout) :: params
         class(sp_project), intent(in)    :: spproj
         logical,           intent(in)    :: l_cavgs
         real, optional,    intent(in)    :: lpstart, lpstop
-        real,         allocatable :: frcs_avg(:)
-        integer,      allocatable :: states(:)
-        type(string)     :: frcs_fname
-        type(class_frcs) :: clsfrcs
-        real             :: lpfinal
-        real             :: lpstart_bounds(2), lpstop_bounds(2)
-        real             :: trslim_override
-        integer          :: filtsz, nstages, imarch
+        type(string) :: frcs_fname
+        real         :: lims(2), trslim_override
+        integer      :: nstages, imarch
         l_cavgs_mode = l_cavgs
         trslim_override = 0.
         if( l_refine3D_trs_override .and. .not. l_cavgs ) trslim_override = params%trs
         nstages = active_lp_schedule_nstages()
+        if( allocated(lpinfo) ) deallocate(lpinfo)
+        allocate(lpinfo(nstages))
         if( trim(params%force_lp_range).eq.'yes' )then
             if( .not.(present(lpstart) .and. present(lpstop)) )then
                 THROW_HARD('force_lp_range=yes requires both lpstart and lpstop')
             endif
-            if( allocated(lpinfo) ) deallocate(lpinfo)
-            allocate(lpinfo(nstages))
             call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo, force_lpstart=.true., &
                 &trslim_override=trslim_override)
             return
         endif
-        ! retrieve FRC info
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-        ! work out low-pass limits and downscaling parameters
         params%frcs = frcs_fname
-        call clsfrcs%read(frcs_fname)
-        filtsz = clsfrcs%get_filtsz()
-        allocate(frcs_avg(filtsz), source=0.)
-        states = nint(spproj%os_cls2D%get_all('state'))
-        call clsfrcs%avg_frc_getter(frcs_avg, states)
-        if( allocated(lpinfo) ) deallocate(lpinfo)
-        allocate(lpinfo(nstages))
-        lpstop_bounds  = solve3D_lpstop_bounds()
-        lpstart_bounds = solve3D_lpstart_bounds()
-        lpfinal = max(lpstop_bounds(1),calc_lplim_final_stage(3))
-        lpfinal = min(lpstop_bounds(2),lpfinal)
-        if( present(lpstop) ) lpfinal = max(lpstop,lpfinal)
-        if( present(lpstart) )then
-            call lpstages(params%box, nstages, frcs_avg, params%smpd,&
-            &lpstart, lpstart, lpfinal, lpinfo, l_cavgs, verbose=.true., trslim_override=trslim_override)
-        else
-            call lpstages(params%box, nstages, frcs_avg, params%smpd,&
-            &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true., &
-            &trslim_override=trslim_override)
-        endif
+        lims = solve3D_size_lplims(params%mskdiam)
+        if( present(lpstart) ) lims(1) = max(lpstart, lims(2))
+        if( present(lpstop)  ) lims(2) = max(lpstop,  lims(2))
+        write(logfhandle,'(A,F6.1,A,F6.2,A,F6.2,A)') '>>> SOLVE3D LOW-PASS LADDER FROM MSKDIAM ', params%mskdiam, &
+            &' A: ', lims(1), ' -> ', lims(2), ' A'
+        call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override)
         if( .not. l_cavgs .and. params%l_freq_march_aggressive )then
             ! aggressive frequency marching (doc/policies/3D/solve3D_policy.md sec. 4): the global stages
-            ! before the march keep their FRC-planned rungs (the search from random orientations needs
-            ! them; PfCRT latest10, 2026-10-21); from the first prob stage on the class FRCs set neither
-            ! the start nor the rungs, and the final limit is the standard one
+            ! keep their planned rungs; from the first prob stage on the rungs are linear in spatial frequency
             imarch = solve3D_aggressive_march_stage()
             if( imarch <= nstages )then
                 write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING FROM STAGE ', imarch, ': ', &
-                    &solve3D_lpstart_aggressive(), ' -> ', lpfinal, ' A, rungs linear in spatial frequency'
-                call lpstages_aggressive(params%box, nstages, params%smpd, solve3D_lpstart_aggressive(), lpfinal, lpinfo, &
+                    &solve3D_lpstart_aggressive(), ' -> ', lims(2), ' A, rungs linear in spatial frequency'
+                call lpstages_aggressive(params%box, nstages, params%smpd, solve3D_lpstart_aggressive(), lims(2), lpinfo, &
                     &verbose=.true., first_stage=imarch, trslim_override=trslim_override)
             else
                 write(logfhandle,'(A,I0,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING: no stage at or past ', imarch, &
                     &', the planned ladder stands'
             endif
         endif
-        ! cleanup
-        call clsfrcs%kill
-        contains
-
-            function calc_lplim_final_stage( nbest ) result( lplim )
-                integer, intent(in)  :: nbest
-                real,    allocatable :: res(:), tmp_rarr(:)
-                integer, allocatable :: tmp_iarr(:)
-                real :: lplim
-                tmp_rarr  = spproj%os_cls2D%get_all('res')
-                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-                call hpsort(res)
-                lplim = median_nocopy(res(:nbest))
-                deallocate(tmp_rarr, tmp_iarr, res)
-            end function calc_lplim_final_stage
-
-    end subroutine set_lplims_from_frcs
+    end subroutine set_lplims_from_size
 
     subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )
         class(parameters), intent(inout) :: params

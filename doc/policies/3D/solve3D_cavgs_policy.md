@@ -83,7 +83,8 @@ The number of particles in the temporary project is twice the number of class
 averages. If distributed execution requested more partitions than temporary
 entries, `nparts` is reduced to the number of even/odd class-average entries.
 
-Stage low-pass limits are derived from class FRCs by default. Explicit
+Stage low-pass limits follow the molecule's size by default, as on the particle
+route (`solve3D_policy.md` section 4; class FRCs until 2026-11-10). Explicit
 `lpstart_ini3D` and `lpstop_ini3D` override that schedule together; supplying
 only one is an error.
 

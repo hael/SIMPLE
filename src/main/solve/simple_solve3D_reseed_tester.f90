@@ -3,7 +3,7 @@
 ! class averages; no volume or job. The symmetry randomization test writes one small project file.
 module simple_solve3D_reseed_tester
 use simple_solve3D_utils, only: reseed_state_labels, solve3D_symsrch_stage, solve3D_stage_skipping, &
-    &symmetry_randomize_poses
+    &symmetry_randomize_poses, solve3D_size_lplims
 use simple_test_utils
 implicit none
 private
@@ -15,6 +15,7 @@ contains
         write(*,'(A)') '**** running all solve3D_cavgs stage rule tests ****'
         call test_symsrch_stage()
         call test_stage_skipping()
+        call test_size_lplims()
         call test_gold_standard_stages()
         call test_symmetry_randomize()
         call test_no_weak_state()
@@ -30,6 +31,21 @@ contains
         call assert_int(3, solve3D_symsrch_stage(.false.), 'no axis search: stage 3')
         call assert_int(4, solve3D_symsrch_stage(.true.),  'axis search after stage 4')
     end subroutine test_symsrch_stage
+
+    !> the size-planned ladder ends: mskdiam/8 floored at 20 A, mskdiam/26.7 within 4.5-6 A
+    subroutine test_size_lplims()
+        real :: lims(2)
+        write(*,'(A)') 'test_size_lplims'
+        lims = solve3D_size_lplims(160.)
+        call assert_real(20.,    lims(1), 1.e-4, '160 A mask: starts at 20 A')
+        call assert_real(6.,     lims(2), 1.e-4, '160 A mask: ends at 6 A')
+        lims = solve3D_size_lplims(100.)
+        call assert_real(20.,    lims(1), 1.e-4, '100 A mask: the 20 A floor')
+        call assert_real(4.5,    lims(2), 1.e-4, '100 A mask: the 4.5 A bound')
+        lims = solve3D_size_lplims(250.)
+        call assert_real(31.25,  lims(1), 1.e-4, '250 A mask: starts at mskdiam/8')
+        call assert_real(6.,     lims(2), 1.e-4, '250 A mask: the 6 A bound')
+    end subroutine test_size_lplims
 
     !> stage omission and the mid-stage resolution exit: single-state runs only
     subroutine test_stage_skipping()
