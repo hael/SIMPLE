@@ -255,6 +255,15 @@ contains
         &'Projection directions of the polar local search (refine=prob_neigh)', '# projections{20000}', &
         &.false., 20000., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, trs, group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_prior', 'multi', 'Continuous local refinement prior', &
+        &'Regularize shift or pose updates around each particle seed(none|shift|pose){none}', '', .false., 'none', &
+        &group='search', choices=ui_choices([character(len=5) :: 'none', 'shift', 'pose']), visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_prior_shift_sigma', 'num', 'Fixed shift prior standard deviation', &
+        &'Native pixels; zero estimates the width from all active stored shift increments', '', .false., 0., &
+        &group='search', visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'cont_prior_rot_sigma', 'num', 'Rotation prior standard deviation', &
+        &'Fixed per-axis standard deviation in degrees; required for cont_prior=pose', '', .false., 0., &
+        &group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
         &'A continuous pose (refine3D_local) is stable when it moved by at most this rotation since its last pose', &
         &'in degrees{0.5}', .false., 0.5, group='search', visibility=UI_VIS_ADVANCED)

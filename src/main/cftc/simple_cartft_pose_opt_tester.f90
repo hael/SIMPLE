@@ -30,6 +30,22 @@ contains
 
     module subroutine run_all_cartft_pose_opt_tests()
         write(*,'(A)') '**** running all pose optimizer tests ****'
+        write(*,'(A)') 'test_shift_prior_terms'
+        call test_shift_prior_terms()
+        write(*,'(A)') 'test_shift_prior_lifecycle'
+        call test_shift_prior_lifecycle()
+        write(*,'(A)') 'test_shift_prior_transaction'
+        call test_prior_transactions()
+        write(*,'(A)') 'test_prior_identifiability'
+        call test_prior_identifiability()
+        write(*,'(A)') 'test_prior_off_reuse'
+        call test_prior_off_reuse()
+        write(*,'(A)') 'test_prior_widths_and_rollback'
+        call test_prior_widths_and_rollback()
+        write(*,'(A)') 'test_rotation_prior_terms'
+        call test_rotation_prior_terms()
+        write(*,'(A)') 'test_prior_likelihood_units'
+        call test_prior_likelihood_units()
         write(*,'(A)') 'test_rotation_increment'
         call test_rotation_increment()
         write(*,'(A)') 'test_shift_solver'
@@ -55,6 +71,232 @@ contains
         write(*,'(A)') 'test_parameter_bounds'
         call test_parameter_bounds()
     end subroutine run_all_cartft_pose_opt_tests
+
+    !> Closed-form values and finite differences at a nonzero transaction seed.
+    subroutine test_shift_prior_terms()
+        real(dp), parameter :: weight = 0.25_dp, step = 1.e-5_dp
+        real(dp) :: seed(2), shift(2), trial(2), penalty, gradient(2), hessian(2,2)
+        real(dp) :: plus, minus, trial_gradient(2), plus_gradient(2), trial_hessian(2,2)
+        integer :: axis
+        seed = [3._dp, -2._dp]
+        shift = [5._dp, 1._dp]
+        call shift_prior_terms(weight, shift, seed, penalty, gradient, hessian)
+        call assert_true(penalty == 3.25_dp, 'shift prior penalty must use the seed-relative displacement')
+        call assert_true(all(gradient == [1._dp, 1.5_dp]), 'shift prior gradient must match the closed form')
+        call assert_true(hessian(1,1) == 0.5_dp .and. hessian(2,2) == 0.5_dp .and. &
+            &hessian(1,2) == 0._dp .and. hessian(2,1) == 0._dp, 'shift prior Hessian must be diagonal')
+        do axis = 1, 2
+            trial = shift
+            trial(axis) = trial(axis) + step
+            call shift_prior_terms(weight, trial, seed, plus, trial_gradient, trial_hessian)
+            plus_gradient = trial_gradient
+            trial(axis) = shift(axis) - step
+            call shift_prior_terms(weight, trial, seed, minus, trial_gradient, trial_hessian)
+            call assert_true(abs((plus-minus)/(2._dp*step)-gradient(axis)) < 1.e-9_dp, &
+                &'shift prior gradient must agree with finite differences')
+            call assert_true(maxval(abs((plus_gradient-trial_gradient)/(2._dp*step)-hessian(:,axis))) < 1.e-9_dp, &
+                &'shift prior Hessian must agree with finite differences')
+        end do
+        call shift_prior_terms(weight, seed, seed, penalty, gradient, hessian)
+        call assert_true(penalty == 0._dp .and. all(gradient == 0._dp), 'shift prior must be zero at its seed')
+    end subroutine test_shift_prior_terms
+
+    !> The configured width is in native pixels and does not survive clear or reinitialization.
+    subroutine test_shift_prior_lifecycle()
+        type(cartft_pose_opt) :: opt
+        call opt%new(24, 12, 5., 15.)
+        call opt%set_shift_prior(4._dp, 8._dp)
+        call assert_true(opt%shift_prior_weight == 0.25_dp, 'prior weight must include native to crop scaling')
+        call opt%set_rotation_prior(5._dp, 8._dp)
+        call opt%clear_priors()
+        call assert_true(opt%shift_prior_weight == 0._dp, 'clearing the prior must disable it')
+        call assert_true(opt%rotation_prior_weight == 0._dp, 'clearing priors must disable rotation too')
+        call opt%set_shift_prior(4._dp, 8._dp)
+        call opt%new(24, 24, 5., 15.)
+        call assert_true(opt%shift_prior_weight == 0._dp, 'optimizer reinitialization must clear the prior')
+        call opt%set_shift_prior(4._dp, 8._dp)
+        call assert_true(opt%shift_prior_weight == 0.0625_dp, 'prior weight must use the current crop scale')
+        call opt%kill
+    end subroutine test_shift_prior_lifecycle
+
+    !> The stage reports the penalized objective, while the transaction reports data loss.
+    subroutine test_prior_transactions()
+        type(cartft_calc) :: calc
+        type(cartft_pose_opt) :: opt
+        type(fixture_record) :: fix
+        real, allocatable :: volume(:,:,:)
+        real(dp) :: rotation(3,3), shift(2), seed(2), before, after
+        real(dp) :: rstep, sstep, stage_before, stage_after, expected_penalty
+        integer :: status, niter, nattempted, naccepted, nbound_hits, mode
+        call build_test_volume(volume)
+        call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
+        do mode = 1, 2
+            if( mode == 1 )then
+                write(*,'(A)') 'shift prior transaction'
+            else
+                write(*,'(A)') 'pose prior transaction'
+            endif
+            call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20)
+            call opt%set_shift_prior(4._dp, calc%get_ptcl_power(1))
+            if( mode == 2 ) call opt%set_rotation_prior(5._dp, calc%get_ptcl_power(1))
+            rotation = fix%seed_rotation
+            shift = fix%seed_shift
+            seed = shift
+            call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+            call opt%get_objectives(before, after)
+            call get_stage_counts(opt, CARTFT_STAGE_JOINT, status, niter, nattempted, naccepted, nbound_hits, &
+                &rstep, sstep, stage_before, stage_after)
+            call assert_true(status == CARTFT_ACCEPTED .and. after < before, 'prior transaction must improve data loss')
+            expected_penalty = opt%shift_prior_weight*sum((shift-seed)**2) + &
+                &0.5_dp*opt%rotation_prior_weight*sum((rotation-fix%seed_rotation)**2)
+            call assert_true(abs(stage_after-after-expected_penalty) < 1.e-12_dp, &
+                &'stage and transaction objectives must differ by the final penalty')
+            call assert_true(stage_after < stage_before, 'accepted prior transaction must reduce total loss')
+            call opt%kill
+        end do
+        call calc%kill
+    end subroutine test_prior_transactions
+
+    !> A shift prior must not rescue a data system with an unobservable active shift.
+    subroutine test_prior_identifiability()
+        real(dp) :: gradient(5), hessian(5,5), sg(5), sh(5,5), direction(5)
+        logical :: identifiable, rescued
+        integer :: i
+        gradient = 0._dp
+        hessian = 0._dp
+        do i = 1, 5
+            hessian(i,i) = 1._dp
+        end do
+        hessian(4,4) = 0._dp
+        call prepare_pose_data_system(gradient, hessian, 1._dp, [.true.,.true.,.true.,.true.,.true.], &
+            &sg, sh, identifiable)
+        call assert_true(.not. identifiable, 'data-only singular shift must be rejected')
+        sh(4,4) = 2._dp
+        call solve_pose_cholesky(sh, sg, direction, rescued)
+        call assert_true(rescued, 'fixture must become identifiable if prior curvature is added first')
+        call prepare_pose_data_system(gradient, hessian, 1._dp, [.true.,.true.,.true.,.false.,.true.], &
+            &sg, sh, identifiable)
+        call assert_true(identifiable, 'a frozen singular shift must not invalidate the active system')
+    end subroutine test_prior_identifiability
+
+    !> Configuring and clearing a prior must retain the same prior-off transaction bit for bit.
+    subroutine test_prior_off_reuse()
+        type(cartft_calc) :: calc
+        type(cartft_pose_opt) :: first, second
+        type(fixture_record) :: fix
+        real, allocatable :: volume(:,:,:)
+        real(dp) :: rot_a(3,3), rot_b(3,3), shift_a(2), shift_b(2)
+        real(dp) :: before_a, after_a, before_b, after_b, rm_a, sm_a, rm_b, sm_b
+        call build_test_volume(volume)
+        call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
+        call first%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20)
+        call second%new(TEST_BOX, TEST_BOX, 5., 15., maxits=20)
+        call second%set_shift_prior(4._dp, calc%get_ptcl_power(1))
+        call second%clear_priors()
+        rot_a = fix%seed_rotation
+        rot_b = rot_a
+        shift_a = fix%seed_shift
+        shift_b = shift_a
+        call first%refine_pose(calc, 1, .true., 1, rot_a, shift_a)
+        call second%refine_pose(calc, 1, .true., 1, rot_b, shift_b)
+        call first%get_objectives(before_a, after_a)
+        call second%get_objectives(before_b, after_b)
+        call first%get_motion(rm_a, sm_a)
+        call second%get_motion(rm_b, sm_b)
+        call assert_true(first%get_status() == second%get_status() .and. all(rot_a == rot_b) .and. &
+            &all(shift_a == shift_b), 'cleared prior must preserve the prior-off pose and status')
+        call assert_true(before_a == before_b .and. after_a == after_b .and. rm_a == rm_b .and. sm_a == sm_b, &
+            &'cleared prior must preserve prior-off objectives and motion')
+        call first%kill
+        call second%kill
+        call calc%kill
+    end subroutine test_prior_off_reuse
+
+    !> A tighter prior should limit shift motion; an exact seed must remain unchanged.
+    subroutine test_prior_widths_and_rollback()
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        type(cartft_calc) :: calc
+        type(cartft_pose_opt) :: opt
+        type(fixture_record) :: fix
+        real, allocatable :: volume(:,:,:)
+        real(dp) :: rotation(3,3), shift(2), seed(2), tight_motion, loose_motion, before, after
+        call build_test_volume(volume)
+        call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
+        call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=40)
+        seed = fix%seed_shift
+        rotation = fix%seed_rotation
+        shift = seed
+        call opt%set_shift_prior(0.01_dp, calc%get_ptcl_power(1))
+        call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+        call opt%get_objectives(before, after)
+        call assert_true(any(opt%get_status() == [CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT]), &
+            &'tight prior must return a valid optimization outcome before comparing motion')
+        call assert_true(all(ieee_is_finite(rotation)) .and. all(ieee_is_finite(shift)) .and. &
+            &ieee_is_finite(before) .and. ieee_is_finite(after), 'tight prior pose and data losses must remain finite')
+        tight_motion = sqrt(sum((shift-seed)**2))
+        rotation = fix%seed_rotation
+        shift = seed
+        call opt%set_shift_prior(10000._dp, calc%get_ptcl_power(1))
+        call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+        loose_motion = sqrt(sum((shift-seed)**2))
+        call assert_true(opt%get_status() == CARTFT_ACCEPTED .and. loose_motion > tight_motion, &
+            &'a loose prior should allow more shift movement than a tight prior')
+        rotation = fix%truth_rotation
+        shift = fix%truth_shift
+        call opt%set_shift_prior(0.01_dp, calc%get_ptcl_power(1))
+        call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
+        call opt%get_objectives(before, after)
+        call assert_true(opt%get_status() /= CARTFT_ACCEPTED .and. all(rotation == fix%truth_rotation) .and. &
+            &all(shift == fix%truth_shift) .and. before == after, 'a non-improving prior transaction must preserve the seed')
+        call opt%kill
+        call calc%kill
+    end subroutine test_prior_widths_and_rollback
+
+    !> Finite differences use the established right-increment update at a nonidentity seed.
+    subroutine test_rotation_prior_terms()
+        real(dp), parameter :: weight = 0.5_dp, step = 1.e-6_dp
+        real(dp) :: seed(3,3), rotation(3,3), trial(3,3), offset(3)
+        real(dp) :: penalty, gradient(3), hessian(3,3), plus, minus, tg(3), th(3,3)
+        integer :: i
+        seed = right_increment_rotation(identity_rotation(), [0.2_dp,-0.1_dp,0.3_dp])
+        rotation = right_increment_rotation(seed, [0.1_dp,0.05_dp,-0.02_dp])
+        call rotation_prior_terms(weight, rotation, seed, penalty, gradient, hessian)
+        call assert_true(penalty > 0._dp, 'rotation prior must penalize displacement from its seed')
+        do i = 1, 3
+            offset = 0._dp
+            offset(i) = step
+            trial = right_increment_rotation(rotation, offset)
+            call rotation_prior_terms(weight, trial, seed, plus, tg, th)
+            offset(i) = -step
+            trial = right_increment_rotation(rotation, offset)
+            call rotation_prior_terms(weight, trial, seed, minus, tg, th)
+            call assert_true(abs((plus-minus)/(2._dp*step)-gradient(i)) < 1.e-9_dp, &
+                &'Matrix-Fisher gradient must match right-increment finite differences')
+            call assert_true(abs(hessian(i,i)-2._dp*weight) < 1.e-12_dp, &
+                &'Matrix-Fisher Gauss-Newton diagonal must equal twice its weight')
+        end do
+        call rotation_prior_terms(weight, seed, seed, penalty, gradient, hessian)
+        call assert_true(penalty == 0._dp .and. all(gradient == 0._dp), 'rotation prior must vanish exactly at its seed')
+    end subroutine test_rotation_prior_terms
+
+    !> One independent complex residual (3,4), variance 4 per component, has NLL 25/8.
+    subroutine test_prior_likelihood_units()
+        real(dp), parameter :: power = 52.25_dp
+        real(dp) :: loss, temperature, penalty, gradient(2), hessian(2,2)
+        type(cartft_pose_opt) :: opt
+        temperature = power/4._dp
+        loss = (2._dp*25._dp/4._dp)/power
+        call assert_true(temperature*loss == 3.125_dp, 'conjugate-pair loss must recover Gaussian NLL')
+        ! The zero-frequency (DC) pixel has no conjugate partner; this conversion gives it half weight.
+        loss = (9._dp/4._dp)/power
+        call assert_true(temperature*loss == 0.5625_dp, 'DC scaling retains the documented half-weight approximation')
+        call opt%new(24, 12, 5., 15.)
+        call opt%set_shift_prior(4._dp, power)
+        call shift_prior_terms(opt%shift_prior_weight, [1._dp,0._dp], [0._dp,0._dp], penalty, gradient, hessian)
+        call assert_true(abs(temperature*penalty-0.5_dp) < 1.e-14_dp, &
+            &'one cropped-pixel displacement must equal two native pixels in the Gaussian prior')
+        call opt%kill
+    end subroutine test_prior_likelihood_units
 
     ! FIXTURES
 

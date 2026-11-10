@@ -138,6 +138,9 @@ type :: parameters
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
+    character(len=16)         :: cont_prior='none' !< prior for continuous local refinement (none|shift|pose){none}
+    real                      :: cont_prior_shift_sigma=0. !< fixed shift-prior standard deviation in native pixels; zero uses all-active increments
+    real                      :: cont_prior_rot_sigma=0. !< fixed per-axis rotation-prior standard deviation in degrees; required for cont_prior=pose
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
     character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}

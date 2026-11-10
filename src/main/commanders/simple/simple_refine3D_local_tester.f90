@@ -16,10 +16,10 @@ public :: run_all_refine3D_local_tests
 
 integer, parameter :: BOX = 16
 real, parameter :: SMPD = 1.5
-character(len=24), parameter :: CASES(16) = [character(len=24) :: &
+character(len=24), parameter :: CASES(18) = [character(len=24) :: &
     &'missing_even', 'missing_odd', 'bad_dimensions', 'bad_sampling', 'bad_extent', 'bad_projection', &
     &'bad_angle', 'bad_shift', 'fractional_half', 'unassigned_half', 'one_half', 'no_active', &
-    &'merged_lp', 'merged_nu', 'reference_halves', 'reference_state']
+    &'merged_lp', 'merged_nu', 'reference_halves', 'reference_state', 'polar_shift_prior', 'polar_pose_prior']
 character(len=20), parameter :: INPUTS(4) = [character(len=20) :: &
     &'source.simple', 'reference.mrc', 'reference_even.mrc', 'reference_odd.mrc']
 type :: file_snapshot
@@ -111,6 +111,13 @@ contains
         call cline%set('maxits', 1)
         call cline%set('mkdir', 'yes')
         select case(which)
+            case('polar_shift_prior', 'polar_pose_prior')
+                call cline%set('refine', 'prob_neigh')
+                call cline%set('cont_prior', 'shift')
+                if( which == 'polar_pose_prior' )then
+                    call cline%set('cont_prior', 'pose')
+                    call cline%set('cont_prior_rot_sigma', 5.)
+                endif
             case('merged_lp')
                 call cline%set('filt_mode', 'none')
                 call cline%set('lp', 8.)
@@ -207,6 +214,8 @@ contains
         character(len=*), intent(in) :: which
         character(len=96) :: reason
         select case(which)
+            case('polar_shift_prior', 'polar_pose_prior')
+                reason = 'Cartesian priors require refine3D_local refine=cont'
             case('missing_even')
                 reason = 'Continuous startup requires an existing reference: reference_even.mrc'
             case('missing_odd')

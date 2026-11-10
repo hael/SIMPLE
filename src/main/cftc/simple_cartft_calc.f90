@@ -94,6 +94,7 @@ contains
     procedure          :: ptcl_is_valid
     procedure          :: get_ptcl_kfromto
     procedure          :: get_ptcl_npix
+    procedure          :: get_ptcl_power
     procedure          :: get_ptcl_objfun
     procedure          :: get_ptcl_taper
     procedure          :: get_box
@@ -523,6 +524,14 @@ contains
         if( iptcl < 1 .or. iptcl > self%nptcls ) return
         get_ptcl_npix = self%ptcls(iptcl)%npix
     end function get_ptcl_npix
+
+    !> Normalizing power of a valid particle slot, whitened for Euclidean loss.
+    real(dp) function get_ptcl_power( self, iptcl )
+        class(cartft_calc), intent(in) :: self
+        integer,            intent(in) :: iptcl
+        if( .not. self%ptcl_is_valid(iptcl) ) THROW_HARD('cartft_calc power requires a valid particle slot')
+        get_ptcl_power = self%ptcls(iptcl)%power
+    end function get_ptcl_power
 
     !> Objective the particle slot iptcl was prepared for (0 when never prepared).
     pure integer function get_ptcl_objfun( self, iptcl )

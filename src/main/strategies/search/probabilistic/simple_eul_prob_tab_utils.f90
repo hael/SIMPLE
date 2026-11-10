@@ -32,6 +32,7 @@ public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
 public :: prob_row_record, prob_row_file, PROB_ROW_FILE_VERSION
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
+public :: shift_increment_variance, cart_shift_prior_sigma2
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS, prob_state_readout
 public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readout, add_prob_readout, report_prob_readout
 public :: merge_prob_readouts
@@ -551,6 +552,42 @@ contains
         num_smpl = min(num_all,max(1,int(athres * real(num_all) / 180.)))
     end subroutine calc_num2sample
 
+    !> Shared per-axis mean square of 2D shift magnitudes, accumulated in double precision.
+    pure real(dp) function shift_increment_variance( vals ) result( variance )
+        real, intent(in) :: vals(:)
+        variance = 0._dp
+        !                                       sum(increment²)       / (2N)
+        if( size(vals) > 0 ) variance = 0.5d0 * sum(real(vals,dp)**2) / real(size(vals),dp)
+    end function shift_increment_variance
+
+    !> Cartesian width from all active stored increments in native pixels.
+    real(dp) function cart_shift_prior_sigma2( os, lp_pix ) result( sigma2 )
+        class(oris), intent(in) :: os
+        real(dp), intent(in) :: lp_pix
+        real, allocatable :: vals(:)
+        real :: increment
+        integer :: i, n
+        if( .not. ieee_is_finite(lp_pix) .or. lp_pix <= 0._dp ) &
+            &THROW_HARD('Cartesian shift prior requires a positive finite low-pass in pixels')
+        allocate(vals(os%get_noris()))
+        n = 0
+        do i = 1, os%get_noris()
+            if( os%get_state(i) <= 0 ) cycle
+            increment = os%get(i, 'shincarg')
+            if( .not. ieee_is_finite(increment) .or. increment < 0. )then
+                write(logfhandle,'(a,i0)') 'Invalid Cartesian shift increment for particle: ', i
+                THROW_HARD('active Cartesian shift increment must be finite and nonnegative')
+            endif
+            n = n + 1
+            vals(n) = increment
+        end do
+        !         max(1 pixel, low-pass/4)
+        sigma2 = max(1._dp, lp_pix/4._dp)**2
+        if( n > 0 ) sigma2 = max(sigma2, shift_increment_variance(vals(:n)))
+        if( .not. ieee_is_finite(sigma2) ) THROW_HARD('Cartesian shift prior variance must be finite')
+        write(logfhandle,'(a,i0)') '>>> CARTESIAN SHIFT PRIOR ACTIVE PARTICLES: ', n
+    end function cart_shift_prior_sigma2
+
     !> The width of the shift prior (shift_prior=yes): the variance per axis of the shift increments the sampled
     !! particles made in their last search (shincarg, the increment's length, zero when the search kept the shift
     !! and zero for a particle never searched, which a particle record cannot tell apart: for a 2D Gaussian the
@@ -568,7 +605,7 @@ contains
         sigma_min = max(SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC * lp_pix)
         sigma2    = sigma_min**2
         vals      = os%get_all_sampled('shincarg')
-        if( size(vals) > 0 ) sigma2 = max(sigma2, real(0.5d0 * sum(real(vals,dp)**2) / real(size(vals),dp)))
+        if( size(vals) > 0 ) sigma2 = max(sigma2, real(shift_increment_variance(vals)))
     end function shift_prior_sigma2
 
     function calc_athres( os, field_str, prob_athres, state ) result( athres )

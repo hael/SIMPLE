@@ -13,6 +13,7 @@ use simple_ori,              only: ori
 use simple_oris,             only: oris
 use simple_parameters,       only: parameters
 use simple_strategy3D,       only: strategy3D
+use simple_strategy3D_alloc, only: s3D
 use simple_strategy3D_srch,  only: strategy3D_spec
 use simple_type_defs,        only: OBJFUN_CC, OBJFUN_EUCLID
 use simple_cartft_pose_opt,  only: cartft_pose_opt, cartft_pose_work, CARTFT_ACCEPTED, CARTFT_NOT_ATTEMPTED, &
@@ -178,6 +179,15 @@ contains
         if( .not. self%b_ptr%cftc%ref_exists(state, iseven) ) THROW_HARD('strategy3D_cont reference state/half is unavailable')
         islot = self%b_ptr%cftc%get_ptcl_slot(self%spec%iptcl)
         if( islot < 1 ) THROW_HARD('strategy3D_cont particle is not in the prepared batch')
+        ! Continuous local refinement with priors: the seed and widths stay fixed during this LM run.
+        call self%opt%clear_priors()
+        if( trim(self%p_ptr%cont_prior) /= 'none' )then
+            if( self%b_ptr%cftc%ptcl_is_valid(islot) )then
+                call self%opt%set_shift_prior(s3D%cont_shift_prior_sigma2, self%b_ptr%cftc%get_ptcl_power(islot))
+                if( trim(self%p_ptr%cont_prior) == 'pose' ) call self%opt%set_rotation_prior( &
+                    &real(self%p_ptr%cont_prior_rot_sigma,dp), self%b_ptr%cftc%get_ptcl_power(islot))
+            endif
+        endif
         ! one transaction; result_ori changes only when the solve is accepted
         self%result_ori = self%seed_ori
         call self%opt%refine(self%b_ptr%cftc, islot, self%result_ori)

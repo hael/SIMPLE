@@ -14,6 +14,7 @@ type strategy3D_alloc
     ! global parameters
     real,           allocatable :: smpl_inpl_athres(:)      !< angular threshold of in-plane rotation sampling
     real                        :: shift_prior_sigma2 = 0.  !< the shift prior's variance per axis (shift_prior=yes, the prob modes' polish)
+    real(dp)                    :: cont_shift_prior_sigma2 = 0._dp !< Cartesian variance in native pixels
     logical,        allocatable :: state_exists(:)          !< indicates state existence
     ! per thread allocation
     type(ran_tabu), allocatable :: rts(:)                   !< stochastic search order generators
@@ -35,7 +36,7 @@ logical                :: srch_order_allocated = .false.
 contains
 
     subroutine prep_strategy3D( params, build )
-        use simple_eul_prob_tab_utils, only: calc_athres, shift_prior_sigma2
+        use simple_eul_prob_tab_utils, only: calc_athres, shift_prior_sigma2, cart_shift_prior_sigma2
         !$ use omp_lib,                only: omp_get_max_threads
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -48,7 +49,20 @@ contains
         nteam = nthr_glob
         !$ nteam = omp_get_max_threads()
         ! a Cartesian pass (l_cart_refine) searches no projection grid: no polar search state
-        if( params%l_cart_refine ) return
+        if( params%l_cart_refine )then
+            if( trim(params%cont_prior) /= 'none' )then
+                if( params%smpd <= 0. ) THROW_HARD('Cartesian shift prior requires positive sampling')
+                if( params%cont_prior_shift_sigma > 0. )then
+                    s3D%cont_shift_prior_sigma2 = real(params%cont_prior_shift_sigma,dp)**2
+                else
+                    s3D%cont_shift_prior_sigma2 = cart_shift_prior_sigma2(build%spproj_field, &
+                        &real(params%lp,dp)/real(params%smpd,dp))
+                endif
+                write(logfhandle,'(a,f10.4)') '>>> CARTESIAN SHIFT PRIOR VARIANCE (native pixels squared): ', &
+                    &s3D%cont_shift_prior_sigma2
+            endif
+            return
+        endif
         ! parameters
         nrefs     = params%nspace     * params%nstates
         nrefs_sub = params%nspace_sub * params%nstates
@@ -128,6 +142,7 @@ contains
 
     subroutine clean_strategy3D
         integer :: ithr
+        s3D%cont_shift_prior_sigma2 = 0._dp
         if( allocated(s3D%state_exists)        ) deallocate(s3D%state_exists)
         if( allocated(s3D%srch_order)          ) deallocate(s3D%srch_order)
         if( allocated(s3D%inpl_order)          ) deallocate(s3D%inpl_order)

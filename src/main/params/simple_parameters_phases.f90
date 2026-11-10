@@ -1090,6 +1090,27 @@ contains
             case DEFAULT
         end select
         ! the representation switch of a pass, derived once (plan section 6.4)
+        select case(trim(self%cont_prior))
+            case('none','shift','pose')
+            case DEFAULT
+                THROW_HARD('cont_prior must be none, shift or pose')
+        end select
+        if( .not. ieee_is_finite(self%cont_prior_shift_sigma) .or. self%cont_prior_shift_sigma < 0. ) &
+            &THROW_HARD('cont_prior_shift_sigma must be finite and nonnegative')
+        if( trim(self%cont_prior) /= 'none' )then
+            if( trim(self%prg%to_char()) == 'refine3D_auto' ) &
+                &THROW_HARD('Cartesian priors are not supported by refine3D_auto')
+            if( trim(self%pose_cont) == 'yes' ) THROW_HARD('Cartesian priors do not support continuous polishing')
+            if( trim(self%cont_prior) == 'pose' )then
+                if( .not. ieee_is_finite(self%cont_prior_rot_sigma) .or. self%cont_prior_rot_sigma <= 0. ) &
+                    &THROW_HARD('cont_prior=pose requires positive finite cont_prior_rot_sigma in degrees')
+            endif
+            if( trim(self%cont_route) /= 'joint' ) THROW_HARD('Cartesian prior requires cont_route=joint')
+            if( self%cc_objfun /= OBJFUN_EUCLID ) THROW_HARD('Cartesian prior requires objfun=euclid')
+            if( self%nstates /= 1 ) THROW_HARD('Cartesian prior requires one state')
+            if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%refine) /= 'cont' ) &
+                &THROW_HARD('Cartesian prior requires refine=cont')
+        endif
         self%l_cart_refine = trim(self%refine) == 'cont'
         self%l_cont_polish = .false.
         if( self%l_cart_refine )then

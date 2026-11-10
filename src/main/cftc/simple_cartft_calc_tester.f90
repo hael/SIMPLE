@@ -65,6 +65,8 @@ contains
         call test_cc_objective_formula()
         write(*,'(A)') 'test_euclid_objective_formula'
         call test_euclid_objective_formula()
+        write(*,'(A)') 'test_particle_power'
+        call test_particle_power()
         write(*,'(A)') 'test_five_parameter_gradient'
         call test_five_parameter_gradient()
         write(*,'(A)') 'test_curvature_scale'
@@ -425,6 +427,44 @@ contains
         end do
         call calc%kill
     end subroutine test_cc_objective_formula
+
+    !> Known Hermitian samples on the nine pixels of shells 0 and 1 give a closed-form whitened power.
+    subroutine test_particle_power()
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: no_ctf
+        real, allocatable :: volume(:,:,:)
+        complex :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real :: sigma2(0:TEST_BOX/2), amplitude
+        real(dp) :: expected
+        integer :: h, k
+        call build_test_volume(volume)
+        call new_test_calc(calc, volume)
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2 = 4.
+        observed = cmplx(3., 4.)
+        do k = -TEST_BOX/2, TEST_BOX/2
+            do h = -TEST_BOX/2, TEST_BOX/2
+                if( h < 0 .or. (h == 0 .and. k < 0) ) observed(h,k) = cmplx(3., -4.)
+            end do
+        end do
+        ! The zero-frequency (DC) pixel represents average image intensity and is real.
+        observed(0,0) = cmplx(3., 0.)
+        ! These binary-exact samples, whitening and sums require no rounding tolerance.
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, [0,1])
+        call assert_true(calc%get_ptcl_power(1) == (8._dp*25._dp + 9._dp)/4._dp, &
+            &'particle power must count DC once and each Fourier pair twice')
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, [1,1])
+        call assert_true(calc%get_ptcl_power(1) == 8._dp*25._dp/4._dp, &
+            &'particle power must exclude DC when outside the active band')
+        amplitude = scale(1., 64)
+        observed = cmplx(amplitude, 0.)
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, [0,1])
+        expected = 9._dp*(real(amplitude,dp)/2._dp)**2
+        call assert_true(expected > real(huge(1.),dp), 'power fixture must exceed single-precision range')
+        call assert_true(calc%get_ptcl_power(1) == expected, &
+            &'finite input power must accumulate in double precision before squaring')
+        call calc%kill
+    end subroutine test_particle_power
 
     ! N4: the euclid loss L = sum |X - M|^2/sigma2 / sum |X|^2/sigma2 over the shells of the
     ! range, against a brute-force sum with a shell-dependent sigma2; the score exp(-L); L is

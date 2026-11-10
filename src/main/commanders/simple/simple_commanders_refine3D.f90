@@ -122,6 +122,10 @@ contains
                 end select
             endif
             if( l_local_polar )then
+                if( cline%defined('cont_prior') )then
+                    if( cline%get_carg('cont_prior') /= 'none' ) &
+                        THROW_HARD('Cartesian priors require refine3D_local refine=cont')
+                endif
                 if( cline%defined('prob_neigh_mode') )then
                     if( cline%get_carg('prob_neigh_mode') /= 'geom' ) &
                         THROW_HARD('refine3D_local refine=prob_neigh searches about the stored poses: prob_neigh_mode=geom')

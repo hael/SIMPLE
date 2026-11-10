@@ -9,12 +9,17 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_quiet_nan, ieee_va
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api, only: dp, PI, ori, dm2euler, simple_exception
 use simple_cartft_calc,     only: cartft_calc
+use simple_type_defs,       only: OBJFUN_EUCLID
 implicit none
 private
 public :: cartft_pose_opt, cartft_pose_work, right_increment_rotation
 ! typed per-particle outcomes of a solve or a stage
 public :: CARTFT_NOT_ATTEMPTED, CARTFT_INVALID_PREPARATION, CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT
 public :: CARTFT_NO_RELIABLE_UPDATE, CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, CARTFT_ITERATION_LIMIT
+! Export these numerical helpers for the test submodule: gfortran can discard private
+! symbols after inlining their production calls, leaving submodule calls unresolved.
+public :: shift_prior_terms, rotation_prior_terms
+public :: prepare_pose_data_system, solve_pose_cholesky
 public :: run_all_cartft_pose_opt_tests
 ! stage selectors of get_stage
 
@@ -49,7 +54,7 @@ real(dp), parameter :: RATIO_EDGES(NRATIO_BINS-1) = [0.75_dp, 1.25_dp, 1.75_dp, 
 character(len=*), parameter :: RATIO_LABELS(NRATIO_BINS) = [character(len=9) :: '0.25-0.75', '0.75-1.25', &
     &'1.25-1.75', '1.75-2.5', '>= 2.5']
 
-!> Record of one LM stage.
+!> Record of one LM stage; objectives include the configured prior penalty.
 type :: cartft_stage
     integer  :: status         = CARTFT_NOT_ATTEMPTED
     integer  :: niter          = 0
@@ -72,6 +77,8 @@ type :: cartft_pose_opt
     ! policy
     logical  :: refine_shifts = .true.     !< false when trs = 0: shifts frozen
     logical  :: shift_first   = .false.    !< the shift-only stage before the joint stage
+    real(dp) :: shift_prior_weight = 0._dp !< zero disables the Cartesian shift prior
+    real(dp) :: rotation_prior_weight = 0._dp !< fixed-width Matrix-Fisher prior
     integer  :: maxits   = DEFAULT_MAXITS  !< iteration cap of each stage
     real(dp) :: rotation_scale     = 0._dp !< radians per joint proposal (scaling and cap)
     real(dp) :: max_total_rotation = 0._dp !< radians from the seed (athres_cont)
@@ -89,6 +96,9 @@ contains
     ! lifecycle
     procedure          :: new
     procedure          :: kill
+    procedure          :: set_rotation_prior
+    procedure          :: set_shift_prior
+    procedure          :: clear_priors
     ! solves
     procedure          :: refine
     procedure          :: refine_pose
@@ -172,6 +182,8 @@ contains
         self%box_crop           = 0
         self%refine_shifts      = .true.
         self%shift_first        = .false.
+        self%shift_prior_weight = 0._dp
+        self%rotation_prior_weight = 0._dp
         self%maxits             = DEFAULT_MAXITS
         self%rotation_scale     = 0._dp
         self%max_total_rotation = 0._dp
@@ -217,6 +229,45 @@ contains
         call o%set_shift(o%get_2Dshift() + real(shift_increment)*real(self%box)/real(self%box_crop))
     end subroutine refine
 
+    !> Configure the seed-centred shift prior using native-pixel variance and whitened power.
+    !! Gaussian negative-log penalty; SIMPLE crop/power scaling is derived in the plan Numerical contract.
+    subroutine set_shift_prior( self, variance, power )
+        class(cartft_pose_opt), intent(inout) :: self
+        real(dp),               intent(in)    :: variance, power
+        real(dp) :: crop_scale, weight
+        if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
+        if( self%shift_first ) THROW_HARD('cartft_pose_opt shift prior requires the joint route')
+        if( .not. positive_finite(variance) .or. .not. positive_finite(power) ) &
+            &THROW_HARD('cartft_pose_opt shift prior requires positive finite variance and power')
+        crop_scale = real(self%box_crop,dp)/real(self%box,dp)
+        weight = ((2._dp/variance)/crop_scale)/crop_scale/power
+        if( .not. positive_finite(weight) ) THROW_HARD('cartft_pose_opt shift prior weight must be positive and finite')
+        self%shift_prior_weight = weight
+    end subroutine set_shift_prior
+
+    !> Configure a fixed per-axis rotation width in degrees, converted to physical radians.
+    !! Isotropic Matrix-Fisher model: Lee (2018), doi:10.1109/TAC.2018.2797162; local scaling in the plan.
+    subroutine set_rotation_prior( self, sigma_degrees, power )
+        class(cartft_pose_opt), intent(inout) :: self
+        real(dp), intent(in) :: sigma_degrees, power
+        real(dp) :: sigma, weight
+        if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
+        if( self%shift_first ) THROW_HARD('Cartesian rotation prior requires the joint route')
+        if( .not. positive_finite(sigma_degrees) .or. .not. positive_finite(power) ) &
+            &THROW_HARD('Cartesian rotation prior requires positive finite width and power')
+        sigma = sigma_degrees*(acos(-1._dp)/180._dp)
+        weight = (2._dp/sigma)/sigma/power
+        if( .not. positive_finite(weight) ) THROW_HARD('Cartesian rotation prior weight must be positive and finite')
+        self%rotation_prior_weight = weight
+    end subroutine set_rotation_prior
+
+    !> Disable the prior when the optimizer is reused for a different particle.
+    subroutine clear_priors( self )
+        class(cartft_pose_opt), intent(inout) :: self
+        self%shift_prior_weight = 0._dp
+        self%rotation_prior_weight = 0._dp
+    end subroutine clear_priors
+
     !> The transaction of refine in calculator coordinates: rotmat and shift (cropped pixels,
     !! the model shift relative to the slot's observation) are the seed on entry and the
     !! committed pose on return (the seed unless accepted). With trs = 0 only the rotation is
@@ -229,7 +280,8 @@ contains
         logical,                intent(in)    :: iseven
         real(dp),               intent(inout) :: rotmat(3,3), shift(2)
         real(dp) :: staged_rotmat(3,3), staged_shift(2), gradient(5), hessian(5,5)
-        real(dp) :: shift_objective_after, joint_objective_after, sine_half
+        real(dp) :: shift_objective_after, joint_objective_after, sine_half, prior_penalty
+        real(dp) :: prior_gradient(5), prior_hessian(5,5)
         real(dp), allocatable :: staged_residual(:), joint_residual(:)
         integer  :: kfromto(2)
         if( .not. self%exists ) THROW_HARD('cartft_pose_opt used before new')
@@ -239,6 +291,9 @@ contains
             self%status = CARTFT_INVALID_PREPARATION
             return
         endif
+        if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) .and. &
+            &calc%get_ptcl_objfun(iptcl) /= OBJFUN_EUCLID ) &
+            &THROW_HARD('cartft_pose_opt shift prior requires Euclidean loss')
         ! the seed objective is the single acceptance baseline of the transaction; its terms also
         ! seed the joint stage on the joint route, and its shell residual is the returned pose's
         ! until a staged pose is committed
@@ -300,6 +355,18 @@ contains
                 return
             endif
         end associate
+        ! The transaction seed has zero penalty; final acceptance uses the penalized loss.
+        if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) )then
+            call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, staged_rotmat, staged_shift, &
+                &rotmat, shift, prior_penalty, prior_gradient, prior_hessian)
+            self%stages(CARTFT_STAGE_JOINT)%objective_after = joint_objective_after + prior_penalty
+            if( .not. ieee_is_finite(self%stages(CARTFT_STAGE_JOINT)%objective_after) .or. &
+                &self%stages(CARTFT_STAGE_JOINT)%objective_after >= self%objective_before )then
+                self%status = CARTFT_NO_IMPROVEMENT
+                self%objective_after = self%objective_before
+                return
+            endif
+        endif
         ! commit the staged pose only if its final objective beats the seed
         self%objective_after = joint_objective_after
         if( .not. ieee_is_finite(self%objective_before) .or. .not. ieee_is_finite(self%objective_after) )then
@@ -496,6 +563,8 @@ contains
         real(dp) :: diagonal(5), scaled_direction(5), direction(5)
         real(dp) :: trial_rotmat(3,3), trial_shift(2)
         real(dp) :: objective, trial_objective, mu, rejection_multiplier
+        real(dp) :: total_objective, trial_total, penalty, prior_gradient(5), prior_hessian(5,5)
+        real(dp) :: total_gradient(5), total_hessian(5,5)
         real(dp) :: predicted, actual, ratio, rotation_norm, shift_norm
         real(dp) :: relative_reduction, cumulative_rotation, cumulative_shift, sine_half
         integer  :: iteration, naccepted, consecutive_rejections
@@ -507,6 +576,8 @@ contains
         if( .not. any(l_active) ) THROW_HARD('cartft_pose_opt joint stage requires one active parameter')
         if( present(anchor_rotmat) .neqv. present(anchor_shift) ) &
             &THROW_HARD('cartft_pose_opt joint stage requires both anchors or none')
+        if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) .and. .not. present(anchor_shift) ) &
+            &THROW_HARD('cartft_pose_opt shift prior requires a transaction anchor')
         cumulative_guard = present(anchor_rotmat)
         if( cumulative_guard )then
             if( any(.not. ieee_is_finite(anchor_rotmat)) .or. any(.not. ieee_is_finite(anchor_shift)) ) &
@@ -551,16 +622,35 @@ contains
             rejection_multiplier = LM_INITIAL_REJECTION_MULT
             do iteration = 1, self%maxits
                 st%niter = iteration
-                ! form and solve the small damped LM system, inexpensive next to a Fourier-plane evaluation
-                call build_pose_lm_system(gradient, hessian, self%rotation_scale, mu, l_active, scaled_gradient, &
-                    &scaled_hessian, diagonal, solve_matrix, scaled_direction, direction, identifiable, &
-                    &stationary, reliable, bounded_step, self%shift_step_bound)
-                ! stop when the local system is stationary, unidentifiable or numerically
-                ! unreliable; retain any improvement already accepted
+                ! Check the data system before adding prior curvature.
+                call prepare_pose_data_system(gradient, hessian, self%rotation_scale, l_active, &
+                    &scaled_gradient, scaled_hessian, identifiable)
                 if( .not. identifiable )then
                     st%status = merge(CARTFT_ACCEPTED, CARTFT_NO_RELIABLE_UPDATE, naccepted > 0)
                     exit
                 endif
+                total_objective = objective
+                total_gradient = gradient
+                total_hessian = hessian
+                if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) )then
+                    call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, rotmat, shift, &
+                        &anchor_rotmat, anchor_shift, penalty, prior_gradient, prior_hessian)
+                    total_objective = objective + penalty
+                    total_gradient = gradient + prior_gradient
+                    total_hessian = hessian + prior_hessian
+                    call scale_pose_system(total_gradient, total_hessian, self%rotation_scale, l_active, &
+                        &scaled_gradient, scaled_hessian)
+                    if( .not. ieee_is_finite(total_objective) .or. any(.not. ieee_is_finite(total_gradient)) .or. &
+                        &any(.not. ieee_is_finite(total_hessian)) )then
+                        st%status = CARTFT_INVALID_NUMERICS
+                        exit
+                    endif
+                endif
+                ! Form and solve the small damped LM system.
+                call build_pose_lm_system(scaled_gradient, scaled_hessian, self%rotation_scale, mu, &
+                    &diagonal, solve_matrix, scaled_direction, direction, stationary, reliable, bounded_step, &
+                    &self%shift_step_bound)
+                ! Retain any improvement already accepted when the solve stops.
                 if( stationary )then
                     st%status = merge(CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT, naccepted > 0)
                     exit
@@ -580,7 +670,7 @@ contains
                 st%max_rotation_step = max(st%max_rotation_step, rotation_norm)
                 st%max_shift_step    = max(st%max_shift_step, shift_norm)
                 ! reduction predicted by the local quadratic model: -g^T d - 1/2 d^T H d
-                predicted = -dot_product(gradient, direction) - 0.5_dp*dot_product(direction, matmul(hessian, direction))
+                predicted = -dot_product(total_gradient, direction) - 0.5_dp*dot_product(direction, matmul(total_hessian, direction))
                 if( .not. ieee_is_finite(predicted) )then
                     st%status = CARTFT_INVALID_NUMERICS
                     exit
@@ -595,7 +685,7 @@ contains
                 endif
                 ! stop unevaluated below what the objective resolves; the undamped step predicts more,
                 ! so this also ends a converged stage (status as at the rejection limit)
-                if( predicted < LM_PREDICTED_RELATIVE_TOL*max(abs(objective), NUMERIC_FLOOR) )then
+                if( predicted < LM_PREDICTED_RELATIVE_TOL*max(abs(total_objective), NUMERIC_FLOOR) )then
                     st%status = rejection_terminal_status(naccepted, bounded_trial)
                     exit
                 endif
@@ -637,11 +727,17 @@ contains
                     cycle
                 endif
                 ! accept a trustworthy improvement; otherwise damp and retry from the last accepted pose
-                actual = objective - trial_objective
+                trial_total = trial_objective
+                if( (self%shift_prior_weight > 0._dp .or. self%rotation_prior_weight > 0._dp) )then
+                    call pose_prior_terms(self%shift_prior_weight, self%rotation_prior_weight, trial_rotmat, trial_shift, &
+                        &anchor_rotmat, anchor_shift, penalty, prior_gradient, prior_hessian)
+                    trial_total = trial_objective + penalty
+                endif
+                actual = total_objective - trial_total
                 ratio  = actual/predicted
                 accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
                 if( accept_trial )then
-                    relative_reduction = actual/max(abs(objective), NUMERIC_FLOOR)
+                    relative_reduction = actual/max(abs(total_objective), NUMERIC_FLOOR)
                     st%nratio(ratio_bin(ratio)) = st%nratio(ratio_bin(ratio)) + 1
                     rotmat    = trial_rotmat
                     shift     = trial_shift
@@ -701,6 +797,7 @@ contains
     end subroutine get_motion
 
     !> Record of one stage (CARTFT_STAGE_SHIFT or CARTFT_STAGE_JOINT) of the last solve.
+    !! Objectives include the prior penalty; transaction getters retain data-only loss.
     !! objective_before/after are set by a transaction (-1 after a stage-only call).
     pure subroutine get_stage( self, istage, status, niter, nattempted, naccepted, nbound_hits, &
         &max_rotation_step, max_shift_step, objective_before, objective_after )
@@ -915,20 +1012,86 @@ contains
         rejection_multiplier = min(2._dp*rejection_multiplier, LM_MAX_DAMPING)
     end subroutine increase_lm_damping
 
-    !> One scaled, damped and independently bounded pose proposal.
-    pure subroutine build_pose_lm_system( gradient, hessian, rotation_scale, mu, active, &
-        &scaled_gradient, scaled_hessian, damping_diagonal, solve_matrix, scaled_step, &
-        &physical_step, identifiable, stationary, reliable, bounded, shift_step_bound )
-        real(dp), intent(in)  :: gradient(5), hessian(5,5), rotation_scale, mu
+    !> Combine enabled priors once, in physical pose coordinates and normalized loss units.
+    pure subroutine pose_prior_terms( shift_weight, rotation_weight, rotation, shift, seed_rotation, seed_shift, &
+        &penalty, gradient, hessian )
+        real(dp), intent(in) :: shift_weight, rotation_weight, rotation(3,3), shift(2), seed_rotation(3,3), seed_shift(2)
+        real(dp), intent(out) :: penalty, gradient(5), hessian(5,5)
+        real(dp) :: shift_penalty, rotation_penalty, sg(2), sh(2,2), rg(3), rh(3,3)
+        gradient = 0._dp
+        hessian = 0._dp
+        shift_penalty = 0._dp
+        rotation_penalty = 0._dp
+        if( shift_weight > 0._dp )then
+            call shift_prior_terms(shift_weight, shift, seed_shift, shift_penalty, sg, sh)
+            gradient(4:5) = sg
+            hessian(4:5,4:5) = sh
+        endif
+        if( rotation_weight > 0._dp )then
+            call rotation_prior_terms(rotation_weight, rotation, seed_rotation, rotation_penalty, rg, rh)
+            gradient(1:3) = rg
+            hessian(1:3,1:3) = rh
+        endif
+        penalty = shift_penalty + rotation_penalty
+    end subroutine pose_prior_terms
+
+    !> Matrix-Fisher residual with right-increment gradient and Gauss-Newton curvature.
+    pure subroutine rotation_prior_terms( weight, rotation, seed, penalty, gradient, hessian )
+        real(dp), intent(in) :: weight, rotation(3,3), seed(3,3)
+        real(dp), intent(out) :: penalty, gradient(3), hessian(3,3)
+        real(dp) :: residual(3,3), jacobian(3,3,3), generators(3,3,3)
+        integer :: i, j
+        generators = 0._dp
+        generators(3,2,1) = 1._dp
+        generators(2,3,1) = -1._dp
+        generators(1,3,2) = 1._dp
+        generators(3,1,2) = -1._dp
+        generators(2,1,3) = 1._dp
+        generators(1,2,3) = -1._dp
+        residual = rotation - seed
+        penalty = 0.5_dp*weight*sum(residual**2)
+        do i = 1, 3
+            jacobian(:,:,i) = matmul(rotation, generators(:,:,i))
+            gradient(i) = weight*sum(residual*jacobian(:,:,i))
+        end do
+        do j = 1, 3
+            do i = 1, 3
+                hessian(i,j) = weight*sum(jacobian(:,:,i)*jacobian(:,:,j))
+            end do
+        end do
+    end subroutine rotation_prior_terms
+
+    !> Gaussian shift penalty in normalized data-loss units, anchored to the transaction seed.
+    pure subroutine shift_prior_terms( weight, shift, seed, penalty, gradient, hessian )
+        real(dp), intent(in)  :: weight, shift(2), seed(2)
+        real(dp), intent(out) :: penalty, gradient(2), hessian(2,2)
+        real(dp) :: delta(2)
+        delta = shift - seed
+        penalty = weight*dot_product(delta, delta)
+        gradient = 2._dp*weight*delta
+        hessian = 0._dp
+        hessian(1,1) = 2._dp*weight
+        hessian(2,2) = 2._dp*weight
+    end subroutine shift_prior_terms
+
+    !> Scale and test the data-only pose system before constructing a damped proposal.
+    pure subroutine prepare_pose_data_system( gradient, hessian, rotation_scale, active, &
+        &scaled_gradient, scaled_hessian, identifiable )
+        real(dp), intent(in)  :: gradient(5), hessian(5,5), rotation_scale
         logical,  intent(in)  :: active(5)
         real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
-        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
-        real(dp), intent(out) :: scaled_step(5), physical_step(5)
-        logical,  intent(out) :: identifiable, stationary, reliable, bounded
-        real(dp), intent(in)  :: shift_step_bound
-        real(dp) :: coordinate_scale(5), ignored_step(5), hessian_scale
-        real(dp) :: rotation_norm, shift_norm
-        integer  :: axis, jaxis
+        logical,  intent(out) :: identifiable
+        real(dp) :: ignored_step(5)
+        call scale_pose_system(gradient, hessian, rotation_scale, active, scaled_gradient, scaled_hessian)
+        call solve_pose_cholesky(scaled_hessian, -scaled_gradient, ignored_step, identifiable)
+    end subroutine prepare_pose_data_system
+
+    pure subroutine scale_pose_system( gradient, hessian, rotation_scale, active, scaled_gradient, scaled_hessian )
+        real(dp), intent(in) :: gradient(5), hessian(5,5), rotation_scale
+        logical, intent(in) :: active(5)
+        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
+        real(dp) :: coordinate_scale(5)
+        integer :: axis, jaxis
         coordinate_scale = [rotation_scale, rotation_scale, rotation_scale, 1._dp, 1._dp]
         do axis = 1, 5
             scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
@@ -937,7 +1100,20 @@ contains
             end do
         end do
         call apply_pose_parameter_mask(scaled_gradient, scaled_hessian, active)
-        call solve_pose_cholesky(scaled_hessian, -scaled_gradient, ignored_step, identifiable)
+    end subroutine scale_pose_system
+
+    !> One scaled, damped and independently bounded pose proposal.
+    pure subroutine build_pose_lm_system( scaled_gradient, scaled_hessian, rotation_scale, mu, &
+        &damping_diagonal, solve_matrix, scaled_step, physical_step, stationary, reliable, bounded, shift_step_bound )
+        real(dp), intent(in)  :: scaled_gradient(5), scaled_hessian(5,5), rotation_scale, mu
+        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
+        real(dp), intent(out) :: scaled_step(5), physical_step(5)
+        logical,  intent(out) :: stationary, reliable, bounded
+        real(dp), intent(in)  :: shift_step_bound
+        real(dp) :: coordinate_scale(5), hessian_scale
+        real(dp) :: rotation_norm, shift_norm
+        integer  :: axis
+        coordinate_scale = [rotation_scale, rotation_scale, rotation_scale, 1._dp, 1._dp]
         stationary       = sqrt(dot_product(scaled_gradient, scaled_gradient)) < 1.e-8_dp
         damping_diagonal = 0._dp
         solve_matrix     = scaled_hessian
@@ -945,7 +1121,7 @@ contains
         physical_step    = 0._dp
         reliable         = .false.
         bounded          = .false.
-        if( .not. identifiable .or. stationary ) return
+        if( stationary ) return
         hessian_scale = max(maxval(abs(scaled_hessian)), NUMERIC_FLOOR)
         do axis = 1, 5
             damping_diagonal(axis) = max(scaled_hessian(axis,axis), sqrt(epsilon(1._dp))*hessian_scale, NUMERIC_FLOOR)

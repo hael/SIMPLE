@@ -14,10 +14,36 @@ contains
         write(*,'(A)') '**** running all refine3D staging tests ****'
         nfail0 = tests_failed
         call enter_fixture('local_staging', saved, root)
+        call test_prior_child_scope()
         call test_startup_staging()
         call test_reference_transition()
         call leave_fixture(saved, root, nfail0)
     end subroutine run_all_refine3D_staging_tests
+
+    !> Reconstruction children must not inherit pose regularization controls.
+    subroutine test_prior_child_scope()
+        use simple_chash, only: chash
+        class(cmdline), allocatable :: cline
+        class(chash), allocatable :: job
+        allocate(cline, job)
+        call cline%set('cont_prior', 'shift')
+        call cline%set('cont_prior_rot_sigma', 5.)
+        call cline%set('cont_prior_shift_sigma', 2.)
+        call cline%set('pose_cont', 'no')
+        call cline%set('objfun', 'euclid')
+        call cline%gen_job_descr(job)
+        call assert_true(job%isthere('cont_prior'), 'matcher worker serialization retains Cartesian prior')
+        call assert_true(job%isthere('cont_prior_rot_sigma'), 'matcher worker retains rotation prior width')
+        call assert_true(job%isthere('cont_prior_shift_sigma'), 'matcher worker retains fixed shift prior width')
+        call job%kill
+        call strip_refine3D_search_only_args(cline)
+        call assert_false(cline%defined('cont_prior'), 'assembly child removes Cartesian prior')
+        call assert_false(cline%defined('cont_prior_rot_sigma'), 'assembly child removes rotation prior width')
+        call assert_false(cline%defined('cont_prior_shift_sigma'), 'assembly child removes fixed shift prior width')
+        call assert_false(cline%defined('pose_cont'), 'assembly child removes continuous-pose control')
+        call assert_true(cline%defined('objfun'), 'assembly child retains reconstruction objective')
+        call cline%kill()
+    end subroutine test_prior_child_scope
 
     ! An impulse has power in every shell: identical/opposite pairs have FSC +1/-1.
     subroutine test_startup_staging()

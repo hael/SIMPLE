@@ -15,10 +15,15 @@ use simple_ori,             only: ori
 use simple_oris,            only: oris
 use simple_cartft_calc,     only: cartft_calc
 use simple_strategy3D,      only: strategy3D
+use simple_strategy3D_alloc, only: s3D, clean_strategy3D
+use simple_eul_prob_tab_utils, only: cart_shift_prior_sigma2, shift_increment_variance
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid, cont_reference_geometry_is_valid, check_cont_seeds
 use simple_cartft_pose_opt, only: CARTFT_ACCEPTED
 use simple_type_defs,       only: ctfparams, CTFFLAG_NO, OBJFUN_CC, OBJFUN_EUCLID
+use simple_forked_process, only: forked_process, FORK_STATUS_FAILED, FORK_STATUS_RUNNING
+use simple_cmdline, only: cmdline
+use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_positive_inf
 use simple_test_utils
 use simple_test_sigma2_fixture, only: write_test_sigma2_store
 implicit none
@@ -31,10 +36,30 @@ integer, parameter :: KFROMTO(2) = [2, BOX/2 - 1]
 real(dp), parameter :: ROTATION_TOL = 2.e-3_dp
 real,     parameter :: SHIFT_TOL    = 5.e-3
 
+type, extends(forked_process) :: invalid_prior_width_child
+contains
+    procedure :: execute => reject_invalid_prior_width
+end type invalid_prior_width_child
+
+type, extends(forked_process) :: prior_failure_master_child
+contains
+    procedure :: execute => reject_failed_prior_part
+end type prior_failure_master_child
+
 contains
 
     subroutine run_all_strategy3D_cont_tests()
         write(*,'(A)') '**** running all Cartesian 3D strategy tests ****'
+        s3D%cont_shift_prior_sigma2 = 9._dp
+        call clean_strategy3D()
+        call assert_true(s3D%cont_shift_prior_sigma2 == 0._dp, 'Cartesian prior width must reset between passes')
+        write(*,'(A)') 'test_shift_prior_width'
+        call test_shift_prior_width()
+        write(*,'(A)') 'test_invalid_prior_width (expected child rejections)'
+        call test_invalid_prior_width()
+        write(*,'(A)') 'test_prior_master_failure (expected worker and master rejections)'
+        call test_prior_master_failure()
+        call test_prior_strategy_commit()
         write(*,'(A)') 'test_seed_contract'
         call test_seed_contract()
         call test_reference_geometry()
@@ -53,6 +78,156 @@ contains
         write(*,'(A)') 'test_rotation_bound'
         call test_rotation_bound()
     end subroutine run_all_strategy3D_cont_tests
+
+    !> All active records, including zeros, contribute independently of sampling markers.
+    subroutine test_shift_prior_width()
+        type(oris) :: os
+        call os%new(4, is_ptcl=.true.)
+        call os%set_state(1, 1)
+        call os%set_state(2, 1)
+        call os%set_state(3, 1)
+        call os%set_state(4, 0)
+        call os%set(1, 'shincarg', 0.)
+        call os%set(2, 'shincarg', 3.)
+        call os%set(3, 'shincarg', 3.)
+        call os%set(4, 'shincarg', 100.)
+        call assert_true(shift_increment_variance([0.,3.,3.]) == 3._dp, &
+            &'shared shift formula must retain zero increments in the denominator')
+        call assert_true(cart_shift_prior_sigma2(os, 4._dp) == 3._dp, &
+            &'Cartesian variance must use all active records and exclude inactive records')
+        call os%set(2, 'shincarg', 0.)
+        call os%set(3, 'shincarg', 0.)
+        call assert_true(cart_shift_prior_sigma2(os, 8._dp) == 4._dp, &
+            &'zero history must use the low-pass floor')
+        call os%kill
+    end subroutine test_shift_prior_width
+
+    subroutine test_invalid_prior_width()
+        type(invalid_prior_width_child) :: child
+        class(cmdline), allocatable :: cline
+        integer :: i
+        allocate(cline)
+        do i = 1, 3
+            call cline%set('which_iter', i)
+            call child%start(name=string('INVALID_PRIOR_WIDTH'), cline=cline)
+            call child%await_final_status()
+            call assert_int(FORK_STATUS_FAILED, child%status(), 'invalid active width increment must fail its worker')
+            call assert_int(1, child%get_exit_code(), 'invalid width must fail through the reported error path')
+            call child%destroy
+        end do
+        call cline%kill()
+    end subroutine test_invalid_prior_width
+
+    subroutine reject_invalid_prior_width( self, cline )
+        class(invalid_prior_width_child), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+        type(oris) :: os
+        real(dp) :: variance
+        real :: increment
+        increment = -1.
+        select case(cline%get_iarg('which_iter'))
+            case(2)
+                increment = ieee_value(1., ieee_quiet_nan)
+            case(3)
+                increment = ieee_value(1., ieee_positive_inf)
+        end select
+        call os%new(1, is_ptcl=.true.)
+        call os%set_state(1, 1)
+        call os%set(1, 'shincarg', increment)
+        variance = cart_shift_prior_sigma2(os, 4._dp)
+        write(*,'(a,es14.6)') 'Unexpected valid width: ', variance
+        call os%kill
+    end subroutine reject_invalid_prior_width
+
+    !> Relay a real invalid-width worker exit through the production queue status boundary.
+    !! The master must stop before merge; a watchdog makes a missed failure a bounded test.
+    subroutine test_prior_master_failure()
+        type(invalid_prior_width_child) :: worker
+        type(prior_failure_master_child) :: master
+        type(string) :: saved, root
+        class(cmdline), allocatable :: cline
+        integer :: nfail0, unit, i, state
+        logical :: merged, timed_out
+        nfail0 = tests_failed
+        call enter_fixture('prior_master_failure', saved, root)
+        allocate(cline)
+        call cline%set('which_iter', 1)
+        call worker%start(name=string('PRIOR_FAILED_PART'), cline=cline)
+        call worker%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, worker%status(), 'invalid prior part must fail')
+        open(newunit=unit, file='EXIT_CODE_JOB_1', status='replace', action='write')
+        write(unit,'(i0)') worker%get_exit_code()
+        close(unit)
+        call worker%destroy
+        call master%start(name=string('PRIOR_FAILED_MASTER'))
+        timed_out = .true.
+        do i = 1, 10
+            state = master%status()
+            if( state /= FORK_STATUS_RUNNING )then
+                timed_out = .false.
+                exit
+            endif
+            call sleep(1)
+        end do
+        if( timed_out ) call master%kill()
+        call master%await_final_status()
+        call assert_true(.not. timed_out, 'master must detect the failed prior part within ten seconds')
+        call assert_int(FORK_STATUS_FAILED, master%status(), 'queue master must fail on the worker error')
+        inquire(file='PRIOR_MERGE_REACHED', exist=merged)
+        call assert_true(.not. merged, 'master must stop before merge after invalid prior input')
+        call master%destroy
+        call cline%kill()
+        call leave_fixture(saved, root, nfail0)
+    end subroutine test_prior_master_failure
+
+    subroutine reject_failed_prior_part( self, cline )
+        use simple_qsys_ctrl, only: qsys_ctrl
+        use simple_qsys_local, only: qsys_local
+        class(prior_failure_master_child), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+        class(qsys_ctrl), allocatable :: ctrl
+        class(qsys_local), allocatable, target :: queue
+        integer, allocatable, target :: parts(:,:)
+        logical, allocatable :: done(:), submitted(:)
+        integer :: unit
+        allocate(ctrl, queue, parts(1,2))
+        parts(1,:) = [1,1]
+        call queue%new()
+        call ctrl%new(string('false'), queue, parts, [1,1], 1, .false.)
+        call ctrl%get_jobs_status(done, submitted)
+        done = .false.
+        submitted = .true.
+        call ctrl%set_jobs_status(done, submitted)
+        call ctrl%schedule_jobs()
+        open(newunit=unit, file='PRIOR_MERGE_REACHED', status='replace')
+        close(unit)
+        call ctrl%kill()
+        call queue%kill()
+    end subroutine reject_failed_prior_part
+
+    !> Exercise the production strategy with prior on and independently recompute its data score.
+    subroutine test_prior_strategy_commit()
+        class(builder), allocatable, target :: b
+        class(parameters), allocatable, target :: p
+        type(ori) :: result
+        real(dp) :: objective, gradient(5)
+        integer :: slot
+        allocate(b, p)
+        call build_fixture(b, p, OBJFUN_EUCLID)
+        p%cont_prior = 'pose'
+        p%cont_prior_rot_sigma = 5.
+        s3D%cont_shift_prior_sigma2 = 4._dp
+        call run_particle(b, p, 3)
+        call b%spproj_field%get_ori(3, result)
+        slot = b%cftc%get_ptcl_slot(3)
+        call objective_gradient(b%cftc, 1, .false., slot, real(result%get_mat(),dp), &
+            &real(result%get_2Dshift()-[-0.08,0.06],dp), objective, gradient)
+        call assert_true(abs(result%get('corr_cart')-real(b%cftc%score(slot,objective))) < 1.e-4, &
+            &'prior strategy must publish data-only score at the returned pose')
+        call result%kill
+        call kill_fixture(b)
+        call clean_strategy3D()
+    end subroutine test_prior_strategy_commit
 
     ! FIXTURE
 

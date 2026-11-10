@@ -562,6 +562,9 @@ contains
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
         call cline%delete('pose_cont')
+        call cline%delete('cont_prior')
+        call cline%delete('cont_prior_rot_sigma')
+        call cline%delete('cont_prior_shift_sigma')
     end subroutine strip_refine3D_search_only_args
 
     !> Strategy selection based on command-line shape.

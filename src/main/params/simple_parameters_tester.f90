@@ -28,6 +28,8 @@ contains
         if( allocated(CWD_GLOB) ) cwd_before = CWD_GLOB
         if( allocated(CWD_GLOB_ORIG) ) origin_before = CWD_GLOB_ORIG
         call enter_fixture('parameters', saved, root)
+        call test_cont_prior_binding()
+        call test_cont_prior_rejections()
         call test_suite_binding()
         call test_accepted_keys()
         call test_ui_keys_bound()
@@ -42,6 +44,58 @@ contains
         if( allocated(cwd_before) ) CWD_GLOB = cwd_before
         if( allocated(origin_before) ) CWD_GLOB_ORIG = origin_before
     end subroutine run_all_parameters_tests
+
+    !> The explicit prior survives the same constructor used by serialized worker commands.
+    subroutine test_cont_prior_binding()
+        use simple_parameters, only: parameters
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable :: cline
+        allocate(params, cline)
+        call base_cline(cline)
+        call params%new(cline, silent=.true.)
+        call assert_char('none', trim(params%cont_prior), 'Cartesian prior defaults off')
+        call cline%set('objfun', 'euclid')
+        call cline%set('refine', 'cont')
+        call cline%set('cont_prior', 'shift')
+        call params%new(cline, silent=.true.)
+        call assert_char('shift', trim(params%cont_prior), 'Cartesian prior survives parameter construction')
+        call cline%set('cont_prior', 'pose')
+        call cline%set('cont_prior_rot_sigma', 5.)
+        call cline%set('cont_prior_shift_sigma', 2.)
+        call params%new(cline, silent=.true.)
+        call assert_char('pose', trim(params%cont_prior), 'pose prior survives parameter construction')
+        call assert_real(5., params%cont_prior_rot_sigma, 0., 'rotation prior width survives construction')
+        call assert_real(2., params%cont_prior_shift_sigma, 0., 'fixed shift prior width survives construction')
+        call cline%kill()
+    end subroutine test_cont_prior_binding
+
+    !> Invalid controls and the retiring split route fail before matching.
+    subroutine test_cont_prior_rejections()
+        type(parameters_child) :: child
+        class(cmdline), allocatable :: cline
+        allocate(cline)
+        call base_cline(cline)
+        call cline%set('objfun', 'euclid')
+        call cline%set('refine', 'cont')
+        call cline%set('cont_prior', 'pose')
+        call child%start(name=string('PRIOR_RESERVED'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'pose prior without a width is rejected')
+        call child%destroy
+        call cline%set('cont_prior', 'shift')
+        call cline%set('cont_route', 'shift_then_joint')
+        call child%start(name=string('PRIOR_ROUTE'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'shift prior rejects split route')
+        call child%destroy
+        call cline%set('cont_route', 'joint')
+        call cline%set('objfun', 'cc')
+        call child%start(name=string('PRIOR_OBJECTIVE'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'shift prior rejects correlation scaling')
+        call child%destroy
+        call cline%kill()
+    end subroutine test_cont_prior_rejections
 
     !> the command line every test here starts from
     subroutine base_cline( cline )
