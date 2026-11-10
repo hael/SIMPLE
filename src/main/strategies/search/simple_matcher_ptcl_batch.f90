@@ -201,7 +201,7 @@ contains
         end do
         if( params%cc_objfun == OBJFUN_EUCLID )then
             if( .not. allocated(build%esig%sigma2_noise) ) THROW_HARD('a Euclidean Cartesian batch requires sigma2')
-            call build%cftc%set_sigma2(lbound(build%esig%sigma2_noise,1), build%esig%sigma2_noise, params%l_jacobian)
+            call build%cftc%set_sigma2(lbound(build%esig%sigma2_noise,1), build%esig%sigma2_noise)
             allocate(halves(nptcls_here))
             do i = 1, nptcls_here
                 halves(i) = sigma2_half(build%spproj_field%get_eo(pinds_here(i)))

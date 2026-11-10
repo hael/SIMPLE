@@ -11,7 +11,7 @@ use simple_parameters,         only: parameters
 use simple_builder,            only: builder
 use simple_polarft_calc,       only: SHIFTMAP_SCREEN, SHIFTMAP_WINDOW, NSHIFTMAPS
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
-use simple_eul_prob_tab_utils, only: update_screen_best, shift_needs_disk, disk_radius_px, screen_pool_size,&
+use simple_eul_prob_tab_utils, only: update_screen_best, shift_needs_disk, disk_radius_px, posterior_temperature, screen_pool_size,&
     &eulprob_dist_switch
 implicit none
 
@@ -95,6 +95,7 @@ contains
         class(shiftmap_srch), intent(inout) :: self
         integer,              intent(in)    :: iptcl
         real    :: shsig
+        integer :: pftsz
         if( kscreen_run < 1 ) THROW_HARD('setup_shiftmap_srch first; shiftmap_srch%prep')
         self%iptcl   = iptcl
         shsig        = self%b_ptr%spproj_field%get(iptcl, 'shsig')
@@ -105,10 +106,11 @@ contains
             self%imap = SHIFTMAP_SCREEN
             if( shsig < 0. ) self%prior_w = prior_w_run
         endif
+        pftsz       = self%b_ptr%pftc%get_pftsz()
         self%temp_i = real(self%p_ptr%prob_beta, dp) *&
-            &real(self%b_ptr%pftc%ptcl_phys_temp(iptcl), dp)
+            &real(posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), pftsz), dp)
         self%temp_s = real(self%p_ptr%prob_beta, dp) *&
-            &real(self%b_ptr%pftc%ptcl_phys_temp(iptcl, kscreen_run), dp)
+            &real(posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen_run), pftsz), dp)
         self%nres   = 0
     end subroutine prep
 

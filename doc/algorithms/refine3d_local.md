@@ -51,9 +51,7 @@ L(w, s) = sum_(h,k) |y(h,k) - m(h,k)|^2 / sigma2(k)  /  sum_(h,k) |y(h,k)|^2 / s
 The sums run over the Cartesian pixels of the current band, and `sigma2(k)` is
 the noise power of the particle's half at shell `k`. Cartesian pixels already
 count each shell in proportion to its circumference, so the `k` weight of the
-polar form is implicit. With `jacobian=no` a pixel of shell `k` weighs
-`1/(k sigma2(k))`, every shell alike, as in the polar searches; the noise
-contribution stays the unweighted residual power. The score `exp(-L)` is stored per particle. It is not
+polar form is implicit. The score `exp(-L)` is stored per particle. It is not
 comparable with the polar score.
 
 **Differentiable sampling.** The model must be differentiable in the pose,

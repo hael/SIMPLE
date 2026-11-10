@@ -4,7 +4,7 @@ use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: record_shift_state, shift_box_radius, prob_rnd_scope
+use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius, prob_rnd_scope
 use simple_rnd,              only: rnd_keyed_int, rnd_draw_key, RND_FAM_ASSIGN
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_shiftmap_srch,    only: shiftmap_srch
@@ -164,7 +164,7 @@ contains
         ! the shift prior on the polish of the committed class (the prob modes), at the particle's temperature
         if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s2D%shift_prior_sigma2 > 0. ) &
             &call self%joint_inpl_optimizer%set_shift_prior(s2D%shift_prior_sigma2, &
-            &self%b_ptr%pftc%ptcl_phys_temp(self%iptcl))
+            &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
         ! find previous discrete alignment parameters
         self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter, os%isthere(self%iptcl,'class'))
         if( self%l_fresh_start )then

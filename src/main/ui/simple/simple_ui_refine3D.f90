@@ -101,7 +101,6 @@ contains
         call refine3D%add_input(UI_SRCH, pgrp, group="search", visibility=UI_VIS_STANDARD)
         call refine3D%add_input(UI_SRCH, nstates, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, jacobian, group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, objfun, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', &
@@ -308,7 +307,6 @@ contains
         call prg%add_input(UI_SRCH, 'minits', 'num', 'Minimum automatic iterations', &
         &'Minimum number of iterations used when automatic refinement calculates its iteration budget', &
         &'minimum iterations', .false., 10., group="search", visibility=UI_VIS_DEVELOPER)
-        call prg%add_input(UI_SRCH, jacobian, group='search', visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'nsample', 'num', 'Particle samples', &
         &'Number of particles sampled per refinement iteration', 'number of samples', .false., 25000., &
         &group="search", visibility=UI_VIS_DEVELOPER)

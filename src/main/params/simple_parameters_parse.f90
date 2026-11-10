@@ -223,7 +223,6 @@ contains
         call reg%add_yesno('scan_exit', self%scan_exit)
         call reg%add_yesno('prob_post_diag', self%prob_post_diag)
         call reg%add_yesno('shift_prior', self%shift_prior)
-        call reg%add_yesno('jacobian',    self%jacobian)
         call reg%add_char('cont_route', self%cont_route)
         call reg%add_yesno('sigma_commit_deferred', self%sigma_commit_deferred)
         call reg%add_char('ref_pose_init', self%ref_pose_init)

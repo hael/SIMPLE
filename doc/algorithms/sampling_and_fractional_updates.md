@@ -118,10 +118,7 @@ T_i = pi wsqsum_i / (2 pftsz),
 
 the particle's noise temperature, several hundred to a thousand on PfCRT
 (measured 2026-10-22, doc/implementation_notes/completed/pose_marginalization.md,
-sections 3 and 14). With `jacobian=no` the loss weighs every shell alike, and
-`wsqsum_i` (now unweighted) is multiplied by the band's mean shell index: the
-posterior keeps the physical model's number of independent observations,
-spread evenly over the shells. A draw from `n` candidates uses
+sections 3 and 14). A draw from `n` candidates uses
 
 ```text
 w_j = exp[-beta T_i (d_j - d_min)],     p_j = w_j / sum_l w_l,

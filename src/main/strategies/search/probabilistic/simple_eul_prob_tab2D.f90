@@ -12,7 +12,7 @@ use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: update_screen_best, eulprob_dist_switch, record_seed_shift,&
     &prob_candidate,&
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
-    &draw_posterior_row, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN,&
+    &posterior_temperature, draw_posterior_row, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN,&
     &screen_pool_size, shift_needs_disk, disk_radius_px, prob_rnd_scope, keyed_candidate_order, shift_prior_sigma2,&
     &prob_readout, prob_readout_fname, write_prob_readout, report_prob_readout, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
@@ -274,7 +274,7 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 t0    = omp_get_wtime()
-                self%temps(i) = self%b_ptr%pftc%ptcl_phys_temp(iptcl)
+                self%temps(i) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
                 call self%b_ptr%spproj_field%get_ori(iptcl, o_prev)      ! previous ori
                 icls_prev = nint(self%b_ptr%spproj_field%get(iptcl, 'class'))
                 cxy    = 0.
@@ -295,11 +295,12 @@ contains
                         ndisk(ithr) = ndisk(ithr) + 1_int64
                     endif
                     temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i), dp)
-                    temp_s = real(self%p_ptr%prob_beta, dp) * real(self%b_ptr%pftc%ptcl_phys_temp(iptcl, kscreen), dp)
+                    temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
+                        &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
                 else
                     ! (1) identify shifts using the previously assigned best class
                     if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr)%set_shift_prior(sigma2_prior,&
-                        &self%b_ptr%pftc%ptcl_phys_temp(iptcl))
+                        &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz()))
                     irot0 = self%b_ptr%pftc%get_roind(360. - o_prev%e3get()) ! in-plane angle index seed
                     if( icls_prev >= 1 .and. icls_prev <= self%nclasses )then
                         if( class_active(icls_prev) )then
@@ -396,7 +397,7 @@ contains
                 iptcl = self%pinds(i)
                 ithr  = omp_get_thread_num() + 1
                 t0    = omp_get_wtime()
-                self%temps(i) = self%b_ptr%pftc%ptcl_phys_temp(iptcl)
+                self%temps(i) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl), self%b_ptr%pftc%get_pftsz())
                 do iref_n = 1, nactive
                     icls = active_cls(iref_n)
                     call self%b_ptr%pftc%gen_posterior_val(icls, iptcl, [0.,0.], self%b_ptr%pftc%ptcl_posterior_temp(iptcl),&
@@ -540,9 +541,9 @@ contains
                 l_disk_loc  = shift_needs_disk(shsig_loc, self%p_ptr%trs)
                 l_prior_loc = shsig_loc < 0.
             endif
-            self%temps(i_loc) = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
-                &self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc))
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             if( l_with_shift .and. .not. l_map .and. icls_prev_loc >= 1 .and. icls_prev_loc <= self%nclasses )then
                 irot0_loc = self%b_ptr%pftc%get_roind(360. - o_prev_loc%e3get())
                 irot_loc  = irot0_loc
@@ -614,7 +615,8 @@ contains
             if( neval_loc < 1 ) return
             gso => grad_shsrch_obj(ithr_loc)
             if( l_map )then
-                temp_s_loc  = real(self%p_ptr%prob_beta, dp) * real(self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc, kscreen), dp)
+                temp_s_loc  = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
+                    &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
                 imap_loc    = SHIFTMAP_WINDOW
                 prior_w_loc = 0.d0
                 if( l_disk_loc )then

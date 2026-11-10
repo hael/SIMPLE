@@ -84,7 +84,6 @@ contains
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, trs, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, objfun, group="search", visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, jacobian, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, cls_init, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="search", &
@@ -141,7 +140,6 @@ contains
         &.false., 'prob_neigh', group="search", &
         &choices=ui_choices([character(len=10) :: 'prob_neigh', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, jacobian, group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &

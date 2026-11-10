@@ -8,7 +8,7 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab_utils, only: update_screen_best, &
     &eulprob_dist_switch, record_seed_shift, &
     &prob_candidate, prob_dense_entry, prob_refined_entry, prob_fill_profile, &
-    &prob_posterior_stat, posterior_row_stats, draw_posterior_row, &
+    &prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, &
     &prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, temperature_or_argmin, &
     &prob_insert_table, prob_insert_cone, screen_pool_size, shift_needs_disk, disk_radius_px, insert_pose_loss, &
     &prob_rnd_scope, calc_num2sample, shift_prior_sigma2, prob_readout, prob_readout_fname, write_prob_readout, &
@@ -436,7 +436,7 @@ contains
             t0 = omp_get_wtime()
             ! the shift prior at the particle's own temperature: the seed estimate and every refinement of the particle
             if( self%p_ptr%l_shift_prior ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
-                &self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc))
+                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
             call estimate_shift_seed(iptcl_loc, ithr_loc, prev_state, prev_proj, o_prev_loc, shift_seed, irot_seed)
             ! the seed is one particle-frame shift from here on: the estimate converted at its rotation (a zero seed
             ! without the single-state seeding)
@@ -465,7 +465,7 @@ contains
             t0 = omp_get_wtime()
             call refine_best_refs(i_loc, iptcl_loc, ithr_loc, shift_seed)
             ts_refine(ithr_loc) = ts_refine(ithr_loc) + (omp_get_wtime() - t0)
-            self%temps(i_loc) = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, shift_seed(2:3), l_bank_seed)
             call o_prev_loc%kill
         end subroutine process_particle_with_shift
@@ -497,9 +497,10 @@ contains
                 ndisk_thr(ithr_loc) = ndisk_thr(ithr_loc) + 1_int64
             endif
             t0 = omp_get_wtime()
-            self%temps(i_loc) = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i_loc), dp)
-            temp_s = real(self%p_ptr%prob_beta, dp) * real(self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc, kscreen), dp)
+            temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
+                &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl_loc, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
             self%seed_shifts(:,i_loc) = 0.
             self%seed_has_sh(i_loc)   = .true.
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
@@ -592,7 +593,7 @@ contains
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
             enddo
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
-            self%temps(i_loc) = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
+            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( l_post ) call posterior_diag(i_loc, iptcl_loc, ithr_loc, [0.,0.], .false.)
         end subroutine process_particle_without_shift
 
@@ -618,7 +619,7 @@ contains
             integer  :: imin, k99, nvalid, ri_loc, istate_min, iproj_min, irot_loc, irot_min, j_loc
             integer  :: imin_d, k99_d, nvalid_d, imin_h, k99_h, nvalid_h, imin_x, k99_x, nvalid_x
             integer  :: prev_state, prev_proj, irot_prev, irot_ctrl, iref_prev, nrots_loc
-            temp = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
+            temp = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             call posterior_row_stats(self%nrefs, rows_batch(:,i_loc)%dist, temp, post_w(:,ithr_loc), &
                 &post_inds(:,ithr_loc), imin, pmax, neff, k99, nvalid)
             post_batch(i_loc)%iptcl  = iptcl_loc

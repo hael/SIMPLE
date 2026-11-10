@@ -170,7 +170,6 @@ contains
         &'from its seed(yes|no){yes}', '', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call prg%add_input(UI_SRCH, jacobian, group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); in every stage '//&
         &'with shifts the probability tables centre each particle as it needs: one not yet centred in this workflow, '//&

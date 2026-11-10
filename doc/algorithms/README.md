@@ -82,12 +82,7 @@ Correlation:  cc_i(pose) = <y_i, C_i [S P x]> / (||y_i|| ||C_i [S P x]||)
 
 summed over the Fourier band currently admitted. The Euclidean form is the
 whitened negative log-likelihood, normalized by the particle's own energy so
-that particles are on one scale. Its weight `k` is the Jacobian of the polar
-grid: a ring of radius `k` stands for about `pi k` Cartesian pixels, so the
-continuous Cartesian search has the same weighting implicitly. `jacobian=no`
-weighs every shell alike in both (`1/sigma2` per polar sample, `1/(k sigma2)`
-per Cartesian pixel), a softer objective that leans less on the noisiest
-shells; that common scale is what allows the
+that particles are on one scale; that common scale is what allows the
 importance weights `exp(-L)` of the probabilistic modes and the signal priors
 of ML regularization to use the same numbers. The correlation form is
 scale-free and is used before a noise model exists.

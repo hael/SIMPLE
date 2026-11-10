@@ -531,9 +531,7 @@ table). Particles are assigned to references; no reference is forced to be
 populated. The particle's state and direction are one draw over its whole row,
 every active state's block, with p proportional to exp(-T_i (L - L_min)), T_i
 the particle's own temperature pi wsqsum_i / (2 pftsz) (the Euclidean loss's
-noise scale; with `jacobian=no` the unweighted self-term times the band's mean
-shell index, `polarft_calc%ptcl_phys_temp`), which the fill computes and keeps
-with the row; the state is the
+noise scale), which the fill computes and keeps with the row; the state is the
 drawn reference's (`assign_rows`, since 2026-11-05,
 `doc/implementation_notes/completed/multistate_posterior_state_draw.md`). The
 draw uses the keyed variate the selection already draws, so with one active

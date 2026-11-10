@@ -137,7 +137,6 @@ type :: parameters
     character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
-    character(len=3)          :: jacobian='yes'       !< polar Euclidean objective weighs shell k by k, the Cartesian pixel count (the physical likelihood); no weighs every shell alike(yes|no){yes}
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
@@ -668,7 +667,6 @@ type :: parameters
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone; not a command-line key
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics; not a command-line key
     logical :: l_shift_prior     = .false. !< shift_prior=yes; not a command-line key
-    logical :: l_jacobian        = .true.  !< jacobian=yes; not a command-line key
     logical :: l_shift_map       = .false. !< shift_sigma > 0 under objfun=euclid: the polar shift map's key is on (the workflows pass it to their stages); not a command-line key
     logical :: l_centring        = .false. !< l_shift_map in a run that centres: a probability table or a classic polar mode with a shift search (the searches, the preparation and the consumers read this one); not a command-line key
     logical :: l_trail_rec       = .false. !< not a command-line key

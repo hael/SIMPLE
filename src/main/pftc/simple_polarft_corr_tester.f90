@@ -36,7 +36,6 @@ contains
         write(*,'(A)') '**** running all polar correlation tests ****'
         call test_generated_images()
         call test_cross_half_euclid()
-        call test_jacobian_switch()
         call test_ref_pfts_offset_io()
         call test_bank_and_at_pose_kernels()
         call test_posterior_inpl_draw()
@@ -616,103 +615,6 @@ contains
         call pftc%kill
         deallocate(sigma2)
     end subroutine test_cross_half_euclid
-
-    !> jacobian=no: on a band of one shell the weight is a constant factor, so the loss and the posterior's
-    !! temperature are those of jacobian=yes; on the full band the loss changes and the temperature is the
-    !! unweighted self-term's times the band's mean shell index (the physical count of observations)
-    subroutine test_jacobian_switch()
-        use simple_eul_prob_tab_utils, only: posterior_temperature
-        integer, parameter :: BOX = 64, NREFS = 1, NPTCLS = 1
-        real,    parameter :: SMPD = 1.0, MSKDIAM = 48.0, LP = 6.0, MSKRAD = 22.0
-        type(parameters), target :: p
-        type(cmdline)       :: cline
-        type(image)         :: img_ref, img_ptcl
-        real    :: d_yes, d_no, t_yes, t_no, kbar
-        integer :: kfromto(2), kband(2), ib, irot, kstop
-        write(*,'(A)') 'test_jacobian_switch'
-        call cline%set('box',     real(BOX))
-        call cline%set('smpd',    SMPD)
-        call cline%set('mskdiam', MSKDIAM)
-        call cline%set('nptcls',  real(NPTCLS))
-        call cline%set('nthr',    1.0)
-        call cline%set('ctf',     'no')
-        call cline%set('objfun',  'euclid')
-        call p%new(cline)
-        call set_fixed_seed(20261110)
-        call smooth_image(img_ref)
-        call smooth_image(img_ptcl)
-        kfromto = [2, calc_fourier_index(LP, BOX, SMPD)]
-        do ib = 1, 2
-            kband = kfromto
-            if( ib == 1 ) kband = [kfromto(2) - 2, kfromto(2) - 2]
-            call losses(kband, .true.,  d_yes, t_yes)
-            call losses(kband, .false., d_no,  t_no)
-            if( ib == 1 )then
-                call assert_real(d_yes, d_no, 1.e-5 * max(1., d_yes), 'jacobian=no on one shell: the loss of jacobian=yes')
-                call assert_real(t_yes, t_no, 1.e-5 * t_yes, 'jacobian=no on one shell: the temperature of jacobian=yes')
-            else
-                call assert_true(abs(d_no - d_yes) > 1.e-4 * d_yes, 'jacobian=no on a band of shells: another loss')
-            endif
-        end do
-        call img_ref%kill
-        call img_ptcl%kill
-
-    contains
-
-        !> the best loss and the physical temperature of the particle against the reference on band kb, plus the
-        !! temperature identities on the whole and on a part of the band
-        subroutine losses( kb, l_jac, dist, temp )
-            integer, intent(in)  :: kb(2)
-            logical, intent(in)  :: l_jac
-            real,    intent(out) :: dist, temp
-            type(polarft_calc) :: pftc
-            real, allocatable, target :: sigma2(:,:)
-            integer :: pdim(3), k
-            p%l_jacobian = l_jac
-            call pftc%new(p, NREFS, [1,NPTCLS], kb)
-            pdim = pftc%get_pdim_srch()
-            call img_ref%memoize4polarize(pdim)
-            call pftc%polarize_ref_pft(img_ref,  1, iseven=.true., pdim=pdim, oversamp=.false.)
-            call pftc%polarize_ref_pft(img_ref,  1, iseven=.false., pdim=pdim, oversamp=.false.)
-            call pftc%polarize_ptcl_pft(img_ptcl, 1, pdim=pdim, oversamp=.false.)
-            call pftc%set_eo(1, .true.)
-            allocate(sigma2(kb(1):kb(2),2))
-            do k = kb(1), kb(2)
-                sigma2(k,:) = 1. + 0.2 * real(k)
-            end do
-            call pftc%assign_sigma2_noise(sigma2)
-            call pftc%memoize_refs
-            call pftc%memoize_ptcls
-            call pftc%gen_best_objfun_val(1, 1, [0.0,0.0], dist, irot)
-            temp = pftc%ptcl_phys_temp(1)
-            kbar = 1.
-            if( .not. l_jac ) kbar = 0.5 * real(kb(1) + kb(2))
-            call assert_real(posterior_temperature(real(kbar,dp) * pftc%wsqsum_ptcl_now(1), pftc%get_pftsz()), temp, &
-                &1.e-5 * temp, 'the temperature is the self-term''s, times the mean shell index with jacobian=no')
-            if( kb(2) > kb(1) )then
-                kstop = (kb(1) + kb(2)) / 2
-                if( .not. l_jac ) kbar = 0.5 * real(kb(1) + kstop)
-                call assert_real(posterior_temperature(real(kbar,dp) * pftc%wsqsum_ptcl_band(1, kstop), pftc%get_pftsz()), &
-                    &pftc%ptcl_phys_temp(1, kstop), 1.e-5 * temp, 'the band temperature counts the band''s own shells')
-            endif
-            call pftc%kill
-            deallocate(sigma2)
-        end subroutine losses
-
-        !> a smooth, masked, zero-mean image in Fourier space
-        subroutine smooth_image( img )
-            type(image), intent(inout) :: img
-            call img%new([BOX,BOX,1], SMPD)
-            call img%gauran(0.0, 1.0)
-            call img%fft
-            call img%bpgau2D(0.0, LP)
-            call img%ifft
-            call img%memoize_mask_coords
-            call img%mask2D_soft(MSKRAD, backgr=0.0)
-            call img%fft
-        end subroutine smooth_image
-
-    end subroutine test_jacobian_switch
 
     subroutine test_generated_images()
         integer, parameter :: BOX = 64, NREFS = 3, NPTCLS = 5

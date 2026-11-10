@@ -102,7 +102,6 @@ type(ui_param) :: numlen
 type(ui_param) :: nxpatch
 type(ui_param) :: nypatch
 type(ui_param) :: objfun
-type(ui_param) :: jacobian
 type(ui_param) :: oritab
 type(ui_param) :: oritab2
 type(ui_param) :: oritype
@@ -569,12 +568,6 @@ subroutine set_ui_params
     call objfun%set_param(         'objfun',          'multi',  'Objective function', &
                                    'Objective function(euclid|cc|prob){euclid}','', .false., 'euclid', &
     &choices=ui_choices([character(len=6) :: 'euclid', 'cc', 'prob']))
-
-    call jacobian%set_param(       'jacobian',        'binary', 'Shell Jacobian in the Euclidean objective', &
-                                   'Weigh Fourier shell k by k, its pixel count: the physical likelihood. No weighs every '//&
-                                   &'shell alike (polar and Cartesian searches), with the posterior''s temperature '//&
-                                   &'keeping the physical count of observations(yes|no){yes}', &
-                                   '', .false., 'yes', choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call oritab%set_param(         'oritab',          'file',   'Orientation and CTF parameter file', &
                                    'Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', &

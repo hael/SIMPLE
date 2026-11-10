@@ -477,8 +477,7 @@ tables (`refine3D_policy.md`,
 for `refine=prob` and `refine=prob_neigh`: no class is forced to be
 populated. At the fill, every class's in-plane rotation is one draw from the
 posterior over all grid rotations of the class against the seeded particle at
-the particle's temperature T_i = pi wsqsum_i / (2 pftsz) (with `jacobian=no` the unweighted
-self-term times the band's mean shell index; `gen_posterior_val`,
+the particle's temperature T_i = pi wsqsum_i / (2 pftsz) (`gen_posterior_val`,
 its bank form; `score_seeded_class`, the shift-free direct call), no angular
 threshold; the fill keeps T_i with the row. At the batch's assignment
 (`assign_batch`), each particle's class is one draw from the posterior over its
