@@ -100,7 +100,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
     integer, allocatable                :: proj_inds(:), projection_order(:)
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
-    real                                :: pickref_smpd, pickref_width
+    real                                :: pickref_smpd, pickref_width, truth_center_offset(3)
     real                                :: volume_corr, volume_fsc0143
     real                                :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     real                                :: distr_corr, distr_fsc0143
@@ -174,12 +174,15 @@ module subroutine exec_test_simulated_workflow( self, cline )
     select case(system_name%to_char())
         case('6vxx')
             mol = sars_cov2_spkgp_6vxx()
+            ! Preserve the fixture's geometric-midpoint placement relative to the selected grid origin.
+            truth_center_offset = (real(EXTRACT_BOX-1)/2. - real(EXTRACT_BOX/2)) * SMPD
         case('1jxy')
             ! SIMPLE's embedded provider uses the underlying 1JYX PDB identifier.
             mol = betagal_1jyx()
+            truth_center_offset = 0.
     end select
     call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true., &
-        &vol_dim=[EXTRACT_BOX, EXTRACT_BOX, EXTRACT_BOX])
+        &vol_dim=[EXTRACT_BOX, EXTRACT_BOX, EXTRACT_BOX], center_offset=truth_center_offset)
     truth_volume = simple_abspath(vol_file)
     ! the negative control's truth: the other suite's molecule on the same grid
     select case(system_name%to_char())

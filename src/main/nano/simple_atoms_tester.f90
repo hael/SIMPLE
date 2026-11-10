@@ -167,6 +167,9 @@ contains
         call assert_true(all(abs(a%get_geom_center() - 16. * SMPD) < 1.e-5), 'center_pdbcoord puts the centre at ldim/2*smpd')
         call a%center_pdbcoord([33,33,33], SMPD)
         call assert_true(all(abs(a%get_geom_center() - 16. * SMPD) < 1.e-5), 'center_pdbcoord keeps an odd box on its centre voxel')
+        call a%center_pdbcoord([32,33,34], SMPD, center_offset=[-0.75,0.,0.75])
+        call assert_true(all(abs(a%get_geom_center() - [23.25,24.,26.25]) < 1.e-5), &
+            &'explicit physical displacement is measured from each axis grid origin')
         call a%center_inbox(2, 20, SMPD)
         call assert_true(all(abs(a%get_coord(2) - 10. * SMPD) < 1.e-6), 'center_inbox puts the atom at box/2*smpd')
         call a%kill

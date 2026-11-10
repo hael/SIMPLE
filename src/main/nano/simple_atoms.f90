@@ -1370,7 +1370,7 @@ contains
         call self%pdb2mrc(pdbfile=pdbfile, volfile=volfile, smpd=smpd) 
     end subroutine cif2mrc
 
-    subroutine pdb2mrc( self, pdbfile, volfile, smpd, center_pdb, pdb_out, vol_dim, mol )
+    subroutine pdb2mrc( self, pdbfile, volfile, smpd, center_pdb, pdb_out, vol_dim, mol, center_offset )
         use simple_image, only: image
         class(atoms),                  intent(inout) :: self
         type(string),        optional, intent(in)    :: pdbfile, volfile
@@ -1379,6 +1379,7 @@ contains
         logical,             optional, intent(in)    :: center_pdb
         integer,             optional, intent(in)    :: vol_dim(3)
         type(molecule_data), optional, intent(in)    :: mol
+        real,                optional, intent(in)    :: center_offset(3) ! displacement from the grid origin, in Angstrom
         type(string)                                 :: pdb_file, vol_file
         type(string) :: pdbfile_centered
         type(image)  :: vol
@@ -1442,7 +1443,7 @@ contains
                 pdbfile_centered = get_fbody(pdb_file,string('pdb'))//'_centered.pdb'
             endif
             ! 0,0,0 in PDB space is map to the center of the volume 
-            call self%center_pdbcoord(ldim, smpd)
+            call self%center_pdbcoord(ldim, smpd, center_offset)
             call self%writepdb(pdbfile_centered)
         endif
         call self%convolve(vol, cutoff = 8*smpd)
@@ -1452,14 +1453,16 @@ contains
     end subroutine pdb2mrc
 
     !>brief translate PDB coordinates to center of the volume
-    subroutine center_pdbcoord( self, ldim, smpd )
+    subroutine center_pdbcoord( self, ldim, smpd, center_offset )
         class(atoms),  intent(inout) :: self
         integer, intent(in) :: ldim(3)
         real, intent(in)    :: smpd
+        real, optional, intent(in) :: center_offset(3) ! displacement from the grid origin, in Angstrom
         real                :: center(3), half_box(3)
         center      = self%get_geom_center()
         ! the box centre is voxel ldim/2+1, at ldim/2*smpd (integer division keeps an odd box on its centre voxel)
         half_box(:) = real(ldim/2) * smpd
+        if( present(center_offset) ) half_box = half_box + center_offset
         call self%translate(-center+half_box)
         THROW_WARN('PDB atomic center moved to the center of the box; center_pdbcoord')
     end subroutine center_pdbcoord
