@@ -52,6 +52,7 @@ integer, parameter :: NCAVGS     = 600  !< the simulated images imported as clas
 real,    parameter :: CAVG_SNR   = 2.5  !< of each half of an imported image
 real,    parameter :: CAVG_SHERR = 1.0  !< pixels: the largest shift of an image (both halves share it)
 integer, parameter :: NSHUFFLE = 1000
+integer, parameter :: GOLD_STD_3D = 9 ! past the 8 solve3D stages: no gold-standard stage (single state only)
 real,    parameter :: POPS(NSTATES) = [0.5, 0.3, 0.2]
 real,    parameter :: SNR      = 1.0
 ! the hard profile: the tetramer and the tetramer with chain D rotated by 10 degrees
@@ -543,6 +544,7 @@ subroutine run_solve3D( fix, projfile, nstates_run, nthr, l_cavg_ini_ext )
     call cl%set('mskdiam',     fix%mskdiam())
     call cl%set('print_states', 'yes')
     call cl%set('nthr',        nthr)
+    if( nstates_run == 1 ) call cl%set('gold_std_stage', GOLD_STD_3D)
     if( l_cavg_ini_ext ) call cl%set('cavg_ini_ext', 'yes')
     call xsolve%execute(cl)
     call cl%kill

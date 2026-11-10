@@ -22,6 +22,10 @@ contains
             write(logfhandle,*) 'ydim: ', ldim(2)
             THROW_HARD('nonsquare particle images not supported; add_stk')
         endif
+        if( mod(ldim(1),2) /= 0 )then
+            write(logfhandle,*) 'box: ', ldim(1)
+            THROW_HARD('odd particle box not supported, working grids are even; add_stk')
+        endif
         ! updates_fields
         n_os_stk    = self%os_stk%get_noris() + 1
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
@@ -150,6 +154,10 @@ contains
             write(logfhandle,*) 'ydim: ', ldim(2)
             THROW_HARD('nonsquare particle images not supported; add_single_stk')
         endif
+        if( mod(ldim(1),2) /= 0 )then
+            write(logfhandle,*) 'box: ', ldim(1)
+            THROW_HARD('odd particle box not supported, working grids are even; add_single_stk')
+        endif
         ! records
         call self%os_stk%new(1, is_ptcl=.false.)
         call self%os_stk%set(1, 'stk',        stk_abspath)
@@ -232,6 +240,11 @@ contains
                 write(logfhandle,*) 'xdim:     ', ldim(1)
                 write(logfhandle,*) 'ydim:     ', ldim(2)
                 THROW_HARD('nonsquare particle images not supported; add_stktab')
+            endif
+            if( mod(ldim(1),2) /= 0 )then
+                write(logfhandle,*) 'stk name: ', stkfnames(istk)%to_char()
+                write(logfhandle,*) 'box:      ', ldim(1)
+                THROW_HARD('odd particle box not supported, working grids are even; add_stktab')
             endif
             ! check variable presence
             if( .not. o_stk%isthere('ctf') )    THROW_HARD('ERROR! ctf flag missing in os input; add_stktab')
@@ -352,6 +365,11 @@ contains
                 write(logfhandle,*) 'xdim:     ', ldim(1)
                 write(logfhandle,*) 'ydim:     ', ldim(2)
                 THROW_HARD('nonsquare particle images not supported; add_stktab')
+            endif
+            if( mod(ldim(1),2) /= 0 )then
+                write(logfhandle,*) 'stk name: ', stkfnames(istk)%to_char()
+                write(logfhandle,*) 'box:      ', ldim(1)
+                THROW_HARD('odd particle box not supported, working grids are even; add_stktab')
             endif
             ! stash number of images
             nptcls_arr(istk) = nptcls

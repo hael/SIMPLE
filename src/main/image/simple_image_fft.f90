@@ -1613,13 +1613,8 @@ contains
         class(image), intent(in) :: self
         complex, allocatable :: fplane(:,:)
         integer :: xdim, ydim, h, k, phys(3)
-        if(is_even(self%ldim(1)))then
-            xdim = self%ldim(1)/2
-            ydim = self%ldim(2)/2
-        else
-            xdim = (self%ldim(1)-1)/2
-            ydim = (self%ldim(2)-1)/2
-        endif
+        xdim = self%ldim(1)/2
+        ydim = self%ldim(2)/2
         allocate(fplane(-xdim:xdim,-ydim:ydim))
         fplane = cmplx(0.,0.)
         do h=-xdim,xdim

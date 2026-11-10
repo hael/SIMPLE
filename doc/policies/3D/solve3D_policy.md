@@ -343,7 +343,17 @@ envelope FSC, trailing reconstruction) and, **only when an axis is actually
 searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` can be omitted: with
 `pgrp == pgrp_start` the `symmetrize` call is a complete no-op, since
 `l_symran` is set only when `pgrp_start` has more symmetry than `pgrp` and
-therefore implies `l_srch4symaxis`. Omitted
+therefore implies `l_srch4symaxis`. Also excluded (2026-11-10): the first NU
+stage (`nu_start_stage`) when it precedes the first gold-standard stage
+(`gold_std_start_stage`) and NU filtering is on. The omission test compares
+`res05` with the planned limit, not with the crop, and the NU stage's crop
+resolves far past its planned limit; it is the one merged-reference stage whose
+NU-promoted band takes the map to the resolution half-specific matching starts
+from. PfCRT, 2026-11-10: honest gold-standard solve2D FRCs coarsened the ladder
+(planned 20.7, 19.4, 19.4, 18.3, 14.1, 12.9, 11.5, 6 A against 20.0, 19.4, 18.3,
+12.4, 11.5, 10.7, 9.4, 6 A), stage 5 was omitted at `res05` 13.5 A, stage 6
+entered gold standard from that map and ended at FSC=0.5/0.143 9.7/7.6 A
+against 7.4/4.0 A when stage 5 ran. Omitted
 stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
 the add-on manifest already treat as "not run". The one-rung advance above
 therefore applies to the stages that cannot be omitted: the entry stage when it

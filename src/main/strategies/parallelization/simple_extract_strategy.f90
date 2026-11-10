@@ -299,6 +299,10 @@ contains
             ! done
         else
             if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
+            if( mod(params%box,2) /= 0 )then
+                write(logfhandle,*) 'box: ', params%box
+                THROW_HARD('odd box not supported, working grids are even: give an even box=; exec_extract')
+            endif
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
             if( trim(params%extractfrommov).ne.'yes' ) call extractor%init_mic(params%box, (params%pcontrast .eq. 'black'))
             iptcl_glob = 0

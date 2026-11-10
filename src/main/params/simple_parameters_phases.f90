@@ -669,6 +669,7 @@ contains
         character(len=2), allocatable :: symbols(:)
         character(len=5)              :: selector
         integer                       :: binwidth_min
+        logical                       :: l_box_from_stk
         select case(trim(self%mirr_proj))
             case('no','yes')
             case DEFAULT
@@ -903,9 +904,17 @@ contains
                 self%binwidth = binwidth_min
             endif
         endif
+        ! even working grids only (doc/policies/even_working_grid_policy.md); a box read from a
+        ! plain stk= header is checked by the transform, so image utilities still take any image
+        l_box_from_stk = cline%defined('stk') .and. .not. cline%defined('box')
+        if( .not. l_box_from_stk )then
+            if( mod(self%box,2) /= 0 ) THROW_HARD('box must be even; working grids are transformed with an even phase origin')
+            if( mod(self%box_crop,2) /= 0 ) THROW_HARD('box_crop must be even; working grids are transformed with an even phase origin')
+        else if( cline%defined('box_crop') )then
+            if( mod(self%box_crop,2) /= 0 ) THROW_HARD('box_crop must be even; working grids are transformed with an even phase origin')
+        endif
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
-            if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
         endif
         ! pose_cont: no|yes on refine3D (yes, the scheduled polish, from Phase 9 of the pose_cont
         ! refactoring); continuation uses refine3D_local, which derives refine

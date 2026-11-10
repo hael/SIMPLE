@@ -201,6 +201,7 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     integer, parameter :: NSAMPLE     = 500    ! sampled in the base run and in the add-on (trailing from stage 5)
     real,    parameter :: GATE_LPSTART = 20.
     real,    parameter :: GATE_LPSTOP  = 8.
+    integer, parameter :: GOLD_STD_3D = 9      ! past the 8 solve3D stages: no gold-standard stage
     integer, parameter :: NCLS2D      = 10     ! class labels for class-balanced sampling
     integer, parameter :: NPAIRS      = 20000
     integer, parameter :: GATE_SEED   = 20260926
@@ -410,6 +411,7 @@ subroutine run_solve3D_addon_gate( nthr, metrics_file, all_ok )
     call cl%set('force_lp_range', 'yes')
     call cl%set('lpstart',        GATE_LPSTART)
     call cl%set('lpstop',         GATE_LPSTOP)
+    call cl%set('gold_std_stage', GOLD_STD_3D)
     call xsolve3D%execute(cl)
     call cl%kill
     call simple_getcwd(frozen_run_proj)

@@ -32,6 +32,7 @@ contains
         call test_accepted_keys()
         call test_ui_keys_bound()
         call test_yes_no_refused()
+        call test_odd_box_refused()
         call test_worker_project_recorded()
         call test_mirr_proj_binding()
         call leave_fixture(saved, root, nfail0)
@@ -152,6 +153,32 @@ contains
         call child%destroy
         call cline%kill()
     end subroutine test_yes_no_refused
+
+    !> working grids are even: an odd box or box_crop stops at new (doc/policies/even_working_grid_policy.md)
+    subroutine test_odd_box_refused()
+        type(parameters_child)      :: child
+        class(cmdline), allocatable :: cline
+        write(*,'(A)') 'test_odd_box_refused'
+        allocate(cline)
+        call base_cline(cline)
+        call cline%set('box', 33)
+        call child%start(name=string('PARAMETERS_ODD_BOX'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'an odd box stops')
+        call child%destroy
+        call cline%set('box', 32)
+        call cline%set('box_crop', 31)
+        call child%start(name=string('PARAMETERS_ODD_BOX_CROP'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'an odd box_crop stops')
+        call child%destroy
+        call cline%set('box_crop', 30)
+        call child%start(name=string('PARAMETERS_EVEN_BOX_CROP'), cline=cline)
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_STOPPED, child%status(), 'an even box_crop passes')
+        call child%destroy
+        call cline%kill()
+    end subroutine test_odd_box_refused
 
     !> a partition worker's project is recorded at new (the project writers refuse it); a stream job's is not
     subroutine test_worker_project_recorded()

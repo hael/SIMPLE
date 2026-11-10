@@ -28,6 +28,13 @@ contains
     procedure :: execute => worker_writes
 end type worker_writer
 
+!> adds a stack of box-pixel images through add_stk, which must stop on an odd box (working grids are even)
+type, extends(forked_process) :: stack_adder
+    integer :: box = 8
+contains
+    procedure :: execute => add_stack
+end type stack_adder
+
 !> reads the mic segment of projfile with a row range, which must stop (ranges are for ptcl2D, ptcl3D, cls3D)
 type, extends(forked_process) :: range_reader
     type(string) :: projfile
@@ -63,6 +70,7 @@ contains
         call test_partial_docs_merge_uneven()
         call test_print_segment_json()
         call test_worker_writes_no_project()
+        call test_odd_box_refused()
         call cleanup()
     end subroutine run_all_sp_project_tests
 
@@ -97,6 +105,34 @@ contains
         call del_file(string(WPROJ))
         call del_file(string(WPART))
     end subroutine test_worker_writes_no_project
+
+    subroutine test_odd_box_refused()
+        type(stack_adder) :: child
+        write(*,'(A)') 'test_odd_box_refused'
+        child%box = 9
+        call child%start(name=string('ADD_STK_ODD_BOX'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'add_stk refuses an odd box')
+        call child%destroy
+        child%box = 8
+        call child%start(name=string('ADD_STK_EVEN_BOX'))
+        call child%await_final_status()
+        call assert_int(FORK_STATUS_STOPPED, child%status(), 'add_stk takes an even box')
+        call child%destroy
+        call del_file(string(STK_FILE))
+    end subroutine test_odd_box_refused
+
+    subroutine add_stack( self, cline )
+        class(stack_adder), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
+        type(sp_project) :: proj
+        type(ctfparams)  :: ctfvars
+        !$ call omp_set_num_threads(1)
+        call write_dummy_stack(STK_FILE, 1, box=self%box)
+        ctfvars = zero_phase_ctf()
+        call proj%add_stk(string(STK_FILE), ctfvars)
+        call proj%kill
+    end subroutine add_stack
 
     subroutine worker_writes( self, cline )
         class(worker_writer), intent(inout) :: self
@@ -143,13 +179,16 @@ contains
         ctfvars%phshift  = 0.
     end function zero_phase_ctf
 
-    ! writes an 8x8 image to fname (nimgs times) so the add_* front doors find a stack on disk
-    subroutine write_dummy_stack( fname, nimgs )
-        character(len=*), intent(in) :: fname
-        integer,          intent(in) :: nimgs
+    ! writes an 8x8 image (or box x box) to fname (nimgs times) so the add_* front doors find a stack on disk
+    subroutine write_dummy_stack( fname, nimgs, box )
+        character(len=*),  intent(in) :: fname
+        integer,           intent(in) :: nimgs
+        integer, optional, intent(in) :: box
         type(image) :: img
-        integer     :: i
-        call img%new([8,8,1], 1.)
+        integer     :: i, bbox
+        bbox = 8
+        if( present(box) ) bbox = box
+        call img%new([bbox,bbox,1], 1.)
         do i = 1,nimgs
             call img%write(string(fname), i)
         end do

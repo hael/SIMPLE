@@ -449,11 +449,15 @@ contains
         class(parameters),       intent(in)    :: params
         integer,                 intent(in)    :: istage
         logical,                 intent(in)    :: l_cavgs
-        integer :: first_gold_stage
-        first_gold_stage = GOLD_STD_STAGE
-        if( params%gold_std_stage > 0 ) first_gold_stage = params%gold_std_stage
-        cfg%l_gold_standard = params%nstates == 1 .and. .not. l_cavgs .and. istage >= first_gold_stage
+        cfg%l_gold_standard = params%nstates == 1 .and. .not. l_cavgs .and. istage >= gold_std_start_stage(params)
     end subroutine set_refine3D_gold_standard_policy
+
+    !> the first gold-standard stage: gold_std_stage when set, else GOLD_STD_STAGE
+    integer function gold_std_start_stage( params ) result( istage )
+        class(parameters), intent(in) :: params
+        istage = GOLD_STD_STAGE
+        if( params%gold_std_stage > 0 ) istage = params%gold_std_stage
+    end function gold_std_start_stage
 
     !> the stage NU filtering starts at: nu_stage when set, else NU_FILTER_STAGE
     !! (not nu_filter_stage: Fortran is case-insensitive, so that name is the parameter)
@@ -775,7 +779,7 @@ contains
     !> Is the stage's planned matching limit already behind the measured FSC=0.5
     !! resolution? Such a stage would iterate at a crop that cannot represent
     !! what the halves already agree on. Either route of a single-state run, past
-    !! FSC05_PROMOTE_MIN_STAGE; .false. without a res05 field.
+    !! FSC05_PROMOTE_MIN_STAGE, never the NU stage before gold standard; .false. without res05.
     module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
         class(parameters),       intent(in) :: params
         integer,                 intent(in) :: istage
@@ -787,6 +791,9 @@ contains
         if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
         if( .not. allocated(lpinfo) )           return
         if( istage > size(lpinfo) )             return
+        ! the first NU stage before the gold-standard switch always runs: its NU-promoted band refines
+        ! the merged map the half-specific stages start from (solve3D_policy.md, stage omission)
+        if( l_nonuniform .and. istage == nu_start_stage(params) .and. istage < gold_std_start_stage(params) ) return
         if( present(projfile) )then
             res05 = project_best_fsc05_resolution(projfile)
         else

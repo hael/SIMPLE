@@ -872,6 +872,7 @@ contains
         logical :: didft
         if( self_in%ldim(3) > 1 )         THROW_HARD('only for 2D images; rtsq')
         if( .not. self_in%square_dims() ) THROW_HARD('only for square dims; rtsq;')
+        if( .not. self_in%even_dims() )   THROW_HARD('only for even dims; rtsq')
         didft = .false.
         if( self_in%ft )then
             call self_in%ifft()
@@ -890,24 +891,12 @@ contains
         rx2 =  self_in%ldim(1)/2
         ry1 = -self_in%ldim(2)/2
         ry2 =  self_in%ldim(2)/2
-        rye1 = 0.
-        rye2 = 0.
-        if(mod(self_in%ldim(1),2) == 0)then
-            rx2  =  rx2-1.0
-            rxe1 = -self_in%ldim(1)
-            rxe2 =  self_in%ldim(1)
-        else
-            rxe1 = -self_in%ldim(1)-1
-            rxe2 =  self_in%ldim(1)+1
-        endif
-        if(mod(self_in%ldim(2),2) == 0)then
-            ry2  =  ry2-1.0
-            rye1 = -self_in%ldim(2)
-            rye2 =  self_in%ldim(2)
-        else
-            ry2  = -self_in%ldim(2)-1
-            rye2 =  self_in%ldim(2)+1
-        endif
+        rx2  =  rx2-1.0
+        rxe1 = -self_in%ldim(1)
+        rxe2 =  self_in%ldim(1)
+        ry2  =  ry2-1.0
+        rye1 = -self_in%ldim(2)
+        rye2 =  self_in%ldim(2)
         ! create transformation matrix
         cod = cos(deg2rad(ang))
         sid = sin(deg2rad(ang))
@@ -959,6 +948,7 @@ contains
         real    :: rye2,rye1,rxe2,rxe1,yi,ycod,ysid,yold,xold
         integer :: iycen,ixcen,ix,iy
         real    :: mat_in(self_in%ldim(1),self_in%ldim(2))
+        ! even square 2D image assumed (checked by rtsq); no stop inside a parallel region
         mat_in = self_in%rmat(:self_in%ldim(1),:self_in%ldim(2),1)
         ! shift within image boundary
         shx = amod(shxi,float(self_in%ldim(1)))
@@ -971,24 +961,12 @@ contains
         rx2 =  self_in%ldim(1)/2
         ry1 = -self_in%ldim(2)/2
         ry2 =  self_in%ldim(2)/2
-        rye1 = 0.
-        rye2 = 0.
-        if(mod(self_in%ldim(1),2) == 0)then
-            rx2  =  rx2-1.0
-            rxe1 = -self_in%ldim(1)
-            rxe2 =  self_in%ldim(1)
-        else
-            rxe1 = -self_in%ldim(1)-1
-            rxe2 =  self_in%ldim(1)+1
-        endif
-        if(mod(self_in%ldim(2),2) == 0)then
-            ry2  =  ry2-1.0
-            rye1 = -self_in%ldim(2)
-            rye2 =  self_in%ldim(2)
-        else
-            ry2  = -self_in%ldim(2)-1
-            rye2 =  self_in%ldim(2)+1
-        endif
+        rx2  =  rx2-1.0
+        rxe1 = -self_in%ldim(1)
+        rxe2 =  self_in%ldim(1)
+        ry2  =  ry2-1.0
+        rye1 = -self_in%ldim(2)
+        rye2 =  self_in%ldim(2)
         ! create transformation matrix
         cod = cos(deg2rad(ang))
         sid = sin(deg2rad(ang))
@@ -1020,7 +998,7 @@ contains
         integer     :: i, j, k, h, ok, ii,jj, kfrom, kto, koffset
         if( .not.self%even_dims() )then
             write(logfhandle,*) 'ldim: ', self%ldim
-            THROW_HARD('even dimensions assumed; shift_phorig')
+            THROW_HARD('odd image dimensions: working grids are even (box, box_crop, imported stacks, micrographs); shift_phorig')
         endif
         if( self%ft )then
             if( self%ldim(3) == 1 )then

@@ -45,6 +45,8 @@ module subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: KV             = 300.0
     real,             parameter :: FRACA          = 0.1
     integer,          parameter :: NREPROJS       = 100
+    integer,          parameter :: GOLD_STD_2D    = 6   ! half-specific references in the last of the 6 solve2D stages only
+    integer,          parameter :: GOLD_STD_3D    = 9   ! past the 8 solve3D stages: no gold-standard stage
     integer,          parameter :: NPROJS_6VXX    = 160
     integer,          parameter :: NPROJS_1JXY    = NREPROJS
     integer,          parameter :: MOVIE_DIM      = 1536
@@ -100,7 +102,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
     integer, allocatable                :: proj_inds(:), projection_order(:)
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
-    real                                :: pickref_smpd, pickref_width, truth_center_offset(3)
+    real                                :: pickref_smpd, pickref_width
     real                                :: volume_corr, volume_fsc0143
     real                                :: dock_corr_direct, dock_corr_mirrored, dock_corr_selected
     real                                :: distr_corr, distr_fsc0143
@@ -174,15 +176,12 @@ module subroutine exec_test_simulated_workflow( self, cline )
     select case(system_name%to_char())
         case('6vxx')
             mol = sars_cov2_spkgp_6vxx()
-            ! Preserve the fixture's geometric-midpoint placement relative to the selected grid origin.
-            truth_center_offset = (real(EXTRACT_BOX-1)/2. - real(EXTRACT_BOX/2)) * SMPD
         case('1jxy')
             ! SIMPLE's embedded provider uses the underlying 1JYX PDB identifier.
             mol = betagal_1jyx()
-            truth_center_offset = 0.
     end select
     call molecule%pdb2mrc(volfile=vol_file, smpd=SMPD, mol=mol, center_pdb=.true., &
-        &vol_dim=[EXTRACT_BOX, EXTRACT_BOX, EXTRACT_BOX], center_offset=truth_center_offset)
+        &vol_dim=[EXTRACT_BOX, EXTRACT_BOX, EXTRACT_BOX])
     truth_volume = simple_abspath(vol_file)
     ! the negative control's truth: the other suite's molecule on the same grid
     select case(system_name%to_char())
@@ -385,6 +384,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     call cline_solve2D%set('mkdir',                        'yes')
     call cline_solve2D%set('mskdiam',                    MSKDIAM)
     call cline_solve2D%set('ncls',                          ncls)
+    call cline_solve2D%set('gold_std_stage',         GOLD_STD_2D)
     call cline_solve2D%set('nthr',                          NTHR)
     call xsolve2D%execute(cline_solve2D)
     call cline_solve2D%kill()
@@ -460,6 +460,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
         if( system_name == '1jxy' ) call cline_solve3D%set('pgrp_start', pgrp)
         call cline_solve3D%set('mskdiam',                    MSKDIAM)
         if( nparts > 0 ) call cline_solve3D%set('nparts',     nparts)
+        call cline_solve3D%set('gold_std_stage',         GOLD_STD_3D)
         call cline_solve3D%set('nthr',                          NTHR)
         call xsolve3D%execute(cline_solve3D)
         call simple_getcwd(solve3D_dir)

@@ -233,7 +233,7 @@ subroutine set_ui_params
                                    'e.g. pool_block_tree.bin', .false., '')
 
     call box%set_param(            'box',             'num',    'Particle box size', &
-                                   'Particle box size(in pixels)', &
+                                   'Particle box size(in pixels), even', &
                                    '# pixels of box', .true., 0.)
 
     call box_extract%set_param(    'box_extract',     'num',    'Extracted particle image size', &

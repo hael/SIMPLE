@@ -42,7 +42,7 @@ contains
     !> Exercise emitted stage commands, including a skipped transition and stale matching limits.
     subroutine test_gold_standard_stages()
         use simple_solve3D_utils, only: lpinfo, cline_refine3D, set_cline_refine3D, solve3D_addon_ctx, &
-            &l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
+            &solve3D_stage_behind_fsc05, l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
             &l_refine3D_mode_override, l_refine3D_lp_override, l_refine3D_lpstop_override, &
             &l_refine3D_trs_override, l_prob_beta_end_override, update_frac, nptcls_eff, nstages_refine3D
         use simple_parameters, only: parameters
@@ -100,6 +100,15 @@ contains
         call proj%os_ptcl3D%set_all2single('res05', 5.3)
         call proj%update_projinfo(params%projfile)
         call proj%write(params%projfile)
+        ! res05 5.3 A is past the planned 8 A of stage 5 and 6 A of stage 6
+        call assert_false(solve3D_stage_behind_fsc05(params, 5), 'the NU stage before gold standard is never omitted')
+        call assert_true(solve3D_stage_behind_fsc05(params, 6),  'a gold-standard stage behind FSC=0.5 is omitted')
+        params%gold_std_stage = 5
+        call assert_true(solve3D_stage_behind_fsc05(params, 5),  'an NU stage that is itself gold standard can be omitted')
+        params%gold_std_stage = 0
+        l_nonuniform = .false.
+        call assert_true(solve3D_stage_behind_fsc05(params, 5),  'without NU filtering stage 5 can be omitted')
+        l_nonuniform = .true.
         do backend = 1, 2
             params%rec_backend = 'gridding'
             if( backend == 2 ) params%rec_backend = 'pcg'
