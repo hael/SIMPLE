@@ -41,9 +41,10 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
    (`prep_class_command_lines`) and honoured
    in the mode policy, the `lpinfo` set-up and the emit, not re-read from the user's cline.
 3. **Stage numbers are coupled.** `ML_REG_START_STAGE` must match the case split of
-   `set_refine3D_stage_controls`; `AGGRESSIVE_MARCH_STAGE`, `VOL_SUPPLIED_STAGE`, `PCG_SOLVENT_START_STAGE`,
-   `AUTOMSK_STAGE`, `ENVFSC_STAGE` are defined from other stage constants. `MAXITS` feeds
-   `solve3D_remaining_niters` and the manifest's ladder.
+   `set_refine3D_stage_controls`; `VOL_SUPPLIED_STAGE` is defined from `NOSYMSRCH_STAGE`, and the
+   fixed-band stages whose crops follow their own limits end before `NU_FILTER_STAGE` or
+   `GOLD_STD_STAGE` (`solve3D_fixed_band_last_stage`). `MAXITS` feeds `solve3D_remaining_niters`
+   and the manifest's ladder.
 4. **Sampling is preserved.** Every particle-to-volume handoff keeps `box * smpd == box_crop *
    smpd_crop`; each stage's crop comes from `lpinfo(istage)`. The `refine3D` and `reconstruct3D`
    stage clines carry no native `box`, `smpd` or `smpd_crop` (`prep_class_command_lines` deletes

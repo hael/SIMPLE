@@ -326,13 +326,14 @@ contains
     !! angle(E_i E_j^T, T_i g T_j^T) and of its z-mirror conjugate): the frame of a de novo map
     !! multiplies poses on the right (carry_pose), the mirrored hand conjugates them, so the error
     !! needs no docking; frac5 is the fraction of pairs within 5 degrees
-    real function sym_pair_pose_error( estimated, truth, inds, pgrp, frac5 ) result( err )
-        class(oris),      intent(in)  :: estimated, truth
-        integer,          intent(in)  :: inds(:)
-        character(len=*), intent(in)  :: pgrp
-        real,             intent(out) :: frac5
+    real function sym_pair_pose_error( estimated, truth, inds, pgrp, frac5, ptcl_err ) result( err )
+        class(oris),       intent(in)  :: estimated, truth
+        integer,           intent(in)  :: inds(:)
+        character(len=*),  intent(in)  :: pgrp
+        real,              intent(out) :: frac5
+        real, allocatable, intent(out), optional :: ptcl_err(:) ! per particle, the median over its partners
         real, parameter :: MZ(3,3) = reshape([1.,0.,0., 0.,1.,0., 0.,0.,-1.], [3,3])
-        real, allocatable :: ops(:,:,:), errs(:), re(:,:,:), rtg(:,:,:,:)
+        real, allocatable :: ops(:,:,:), errs(:), re(:,:,:), rtg(:,:,:,:), pairmat(:,:)
         real    :: rel_e(3,3), rel_t(3,3), e
         integer :: n, i, j, g, k, npairs, nsym
         n    = size(inds)
@@ -347,6 +348,7 @@ contains
         enddo
         npairs = n * (n - 1) / 2
         allocate(errs(max(1, npairs)), source=0.)
+        allocate(pairmat(n, n), source=0.)
         k = 0
         do i = 1, n - 1
             do j = i + 1, n
@@ -357,7 +359,9 @@ contains
                     rel_t = matmul(rtg(:,:,g,i), transpose(rtg(:,:,1,j)))
                     e     = min(e, rot_angle(rel_e, rel_t), rot_angle(rel_e, matmul(MZ, matmul(rel_t, MZ))))
                 enddo
-                errs(k) = e
+                errs(k)      = e
+                pairmat(i,j) = e
+                pairmat(j,i) = e
             enddo
         enddo
         err   = huge(1.)
@@ -365,6 +369,14 @@ contains
         if( npairs > 0 )then
             err   = median(errs(1:npairs))
             frac5 = real(count(errs(1:npairs) < 5.)) / real(npairs)
+        endif
+        if( present(ptcl_err) )then
+            allocate(ptcl_err(n), source=huge(1.))
+            if( n > 1 )then
+                do i = 1, n
+                    ptcl_err(i) = median(pack(pairmat(i,:), [(j /= i, j = 1, n)]))
+                enddo
+            endif
         endif
     end function sym_pair_pose_error
 

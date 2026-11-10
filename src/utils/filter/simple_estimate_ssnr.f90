@@ -17,7 +17,7 @@ public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2cref, 
 public :: lowpass_from_klim, gaussian_filter, bfac_cap_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
-public :: lpstages, lpstages_fast, lpstages_setlims, lpstages_aggressive
+public :: lpstages, lpstages_fast, lpstages_setlims
 private
 #include "simple_local_flags.inc"
 real, parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
@@ -495,7 +495,10 @@ contains
 
     end subroutine lpstages_fast
 
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override )
+    !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between,
+    !! except that the stages through own_crop_last are cropped to their own limits (the most downsampling)
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override, &
+        &own_crop_last )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
@@ -503,6 +506,7 @@ contains
         logical, optional, intent(in)  :: verbose
         integer, optional, intent(in)  :: first_stage
         real,    optional, intent(in)  :: trslim_override
+        integer, optional, intent(in)  :: own_crop_last
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial, ifirst
@@ -545,6 +549,14 @@ contains
                 lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
             end do
         endif
+        if( present(own_crop_last) )then
+            do i = ifirst + 1, min(own_crop_last, nstages - 1)
+                smpd_target = max(SMPD_TARGET_MIN, (lpinfo(i)%lp * LP2SMPD_TARGET))
+                call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
+                lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
+                lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
+            end do
+        endif
         if( present(trslim_override) )then
             if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
         endif
@@ -555,73 +567,5 @@ contains
             end do
         endif
     end subroutine lpstages_setlims
-
-    !> Aggressive frequency marching (solve3D freq_march_aggressive=yes): from first_stage on (1 when
-    !! absent) the rungs are linear in spatial frequency from lpstart to lpfinal, with no floor and no
-    !! class-FRC shaping, so every stage admits the same number of new Fourier shells and the steps are
-    !! smallest in Angstrom at the fine end. The stages before first_stage are kept as they are and the
-    !! march starts no coarser than the last kept rung and no finer than lpfinal: the ladder never
-    !! marches backwards. Each march stage is cropped on its own at the particle-route target (smpd
-    !! lp/3, at least 2 A, box at least 88), the same target as lpstages, and the crop never shrinks
-    !! between stages (a kept rung may sit on lpstages' linear box ramp above what its own limit asks).
-    subroutine lpstages_aggressive( box, nstages, smpd, lpstart, lpfinal, lpinfo, verbose, first_stage, trslim_override )
-        use simple_magic_boxes
-        integer,           intent(in)    :: box, nstages
-        real,              intent(in)    :: smpd, lpstart, lpfinal
-        type(lp_crop_inf), intent(inout) :: lpinfo(nstages)
-        logical, optional, intent(in)    :: verbose
-        integer, optional, intent(in)    :: first_stage
-        real,    optional, intent(in)    :: trslim_override
-        real,    parameter :: LP2SMPD_TARGET   = 1./3.
-        real,    parameter :: SMPD_TARGET_MIN  = 2.0
-        integer :: i, ifirst, nmarch
-        real    :: lpstart_eff, freq, smpd_target
-        logical :: l_verbose
-        l_verbose = .true.
-        if( present(verbose) ) l_verbose = verbose
-        if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_aggressive')
-        if( lpstart < TINY .or. lpfinal < TINY ) THROW_HARD('lpstart and lpfinal must be positive in lpstages_aggressive')
-        ifirst = 1
-        if( present(first_stage) )then
-            if( first_stage < 1 .or. first_stage > nstages ) THROW_HARD('first_stage must be within the lpstages_aggressive schedule')
-            ifirst = first_stage
-        endif
-        nmarch      = nstages - ifirst + 1
-        lpstart_eff = max(lpstart, lpfinal)
-        if( ifirst > 1 ) lpstart_eff = max(min(lpstart_eff, lpinfo(ifirst-1)%lp), lpfinal)
-        do i = ifirst,nstages
-            lpinfo(i)%l_lpset  = .true.
-            lpinfo(i)%frc_crit = 0.
-            if( nmarch == 1 )then
-                lpinfo(i)%lp = lpstart_eff
-            else
-                freq = 1./lpstart_eff + real(i-ifirst)/real(nmarch-1) * (1./lpfinal - 1./lpstart_eff)
-                lpinfo(i)%lp = 1./freq
-            endif
-            smpd_target = max(SMPD_TARGET_MIN, lpinfo(i)%lp * LP2SMPD_TARGET)
-            call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
-            lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
-            lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
-            if( i > 1 )then
-                if( lpinfo(i)%box_crop < lpinfo(i-1)%box_crop )then
-                    lpinfo(i)%box_crop    = lpinfo(i-1)%box_crop
-                    lpinfo(i)%smpd_crop   = lpinfo(i-1)%smpd_crop
-                    lpinfo(i)%scale       = lpinfo(i-1)%scale
-                    lpinfo(i)%trslim      = lpinfo(i-1)%trslim
-                    lpinfo(i)%l_autoscale = lpinfo(i-1)%l_autoscale
-                endif
-            endif
-        end do
-        if( present(trslim_override) )then
-            if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
-        endif
-        if( l_verbose )then
-            write(logfhandle,'(A,I0)') '########## aggressive frequency marching: rungs linear in spatial frequency from stage ', ifirst
-            do i = ifirst,nstages
-                write(logfhandle,*) 'lp box_crop smpd_crop trslim ', lpinfo(i)%lp, lpinfo(i)%box_crop, &
-                    &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
-            end do
-        endif
-    end subroutine lpstages_aggressive
 
 end module simple_estimate_ssnr

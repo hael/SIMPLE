@@ -69,13 +69,11 @@ interface
         real :: lims(2)
     end function solve3D_size_lplims
 
-    module function solve3D_lpstart_aggressive() result(lp)
-        real :: lp
-    end function solve3D_lpstart_aggressive
-
-    module function solve3D_aggressive_march_stage() result(istage)
+    module function solve3D_fixed_band_last_stage( params, l_cavgs ) result( istage )
+        class(parameters), intent(in) :: params
+        logical,           intent(in) :: l_cavgs
         integer :: istage
-    end function solve3D_aggressive_march_stage
+    end function solve3D_fixed_band_last_stage
 
     module function solve3D_cenlp_default() result(cenlp)
         real :: cenlp
@@ -470,7 +468,7 @@ contains
         endif
     end subroutine set_symmetry_class_vars
 
-    !> the stage ladder from the molecule's size: linear in A from mskdiam/8 (at least 20 A) to
+    !> the stage ladder from the molecule's size: linear in A from mskdiam/8 (10-30 A) to
     !! mskdiam/26.7 (4.5-6 A); lpstart replaces the first limit, lpstop coarsens the last
     subroutine set_lplims_from_size( params, spproj, l_cavgs, lpstart, lpstop )
         class(parameters), intent(inout) :: params
@@ -479,7 +477,7 @@ contains
         real, optional,    intent(in)    :: lpstart, lpstop
         type(string) :: frcs_fname
         real         :: lims(2), trslim_override
-        integer      :: nstages, imarch
+        integer      :: nstages
         l_cavgs_mode = l_cavgs
         trslim_override = 0.
         if( l_refine3D_trs_override .and. .not. l_cavgs ) trslim_override = params%trs
@@ -501,21 +499,9 @@ contains
         if( present(lpstop)  ) lims(2) = max(lpstop,  lims(2))
         write(logfhandle,'(A,F6.1,A,F6.2,A,F6.2,A)') '>>> SOLVE3D LOW-PASS LADDER FROM MSKDIAM ', params%mskdiam, &
             &' A: ', lims(1), ' -> ', lims(2), ' A'
-        call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override)
-        if( .not. l_cavgs .and. params%l_freq_march_aggressive )then
-            ! aggressive frequency marching (doc/policies/3D/solve3D_policy.md sec. 4): the global stages
-            ! keep their planned rungs; from the first prob stage on the rungs are linear in spatial frequency
-            imarch = solve3D_aggressive_march_stage()
-            if( imarch <= nstages )then
-                write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING FROM STAGE ', imarch, ': ', &
-                    &solve3D_lpstart_aggressive(), ' -> ', lims(2), ' A, rungs linear in spatial frequency'
-                call lpstages_aggressive(params%box, nstages, params%smpd, solve3D_lpstart_aggressive(), lims(2), lpinfo, &
-                    &verbose=.true., first_stage=imarch, trslim_override=trslim_override)
-            else
-                write(logfhandle,'(A,I0,A)') '>>> SOLVE3D AGGRESSIVE FREQUENCY MARCHING: no stage at or past ', imarch, &
-                    &', the planned ladder stands'
-            endif
-        endif
+        ! the fixed-band stages are cropped to their limits; the adaptive ones keep the ramp's headroom
+        call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override, &
+            &own_crop_last=solve3D_fixed_band_last_stage(params, l_cavgs))
     end subroutine set_lplims_from_size
 
     subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )

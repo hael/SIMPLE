@@ -507,10 +507,11 @@ module subroutine exec_test_simulated_workflow( self, cline )
         type(oris)                     :: truth_poses
         type(string)                   :: stkname
         character(len=:), allocatable  :: stk
-        integer,          allocatable  :: inds(:), planted(:,:,:)
-        real    :: err, frac5
+        integer,          allocatable  :: inds(:), planted(:,:,:), eo_m(:)
+        real,             allocatable  :: ptcl_err(:)
+        real    :: err, frac5, err_even, err_odd, frac_even, frac_odd, te(3), ee(3)
         integer :: funit, i, j, imov, istk, nptcls3D, coords(2), centre(2), corner(2), bx, by
-        integer :: best, d2, d2best, nmatched, pos, ios
+        integer :: best, d2, d2best, nmatched, pos, ios, neven, nodd
         ! the planted centres (base-0) of every movie, in the order of its reprojection subset
         allocate(planted(2, nper_movie, nmovies), source=-1)
         do imov = 1, nmovies
@@ -527,6 +528,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
         nptcls3D = proj%os_ptcl3D%get_noris()
         call truth_poses%new(nptcls3D, is_ptcl=.false.)
         allocate(inds(nptcls3D), source=0)
+        allocate(eo_m(nptcls3D), source=0)
         nmatched = 0
         do i = 1, nptcls3D
             if( proj%os_ptcl3D%get_state(i) == 0 ) cycle
@@ -552,17 +554,42 @@ module subroutine exec_test_simulated_workflow( self, cline )
             if( best == 0 ) cycle   ! a pick with no planted particle: noise
             nmatched       = nmatched + 1
             inds(nmatched) = i
+            eo_m(nmatched) = proj%os_ptcl3D%get_int(i, 'eo')
             call truth_poses%set_euler(i, reproj_poses%get_euler(projection_order((imov - 1) * nper_movie + best)))
         enddo
         call gate%report(tag//'_matched_particles', real(nmatched))
         call gate%report(tag//'_matched_fraction',  real(nmatched) / real(max(1, nptcls3D)))
         err   = huge(1.)
         frac5 = 0.
-        if( nmatched >= 4 ) err = sym_pair_pose_error(proj%os_ptcl3D, truth_poses, inds(1:nmatched), pgrp%to_char(), frac5)
+        if( nmatched >= 4 ) err = sym_pair_pose_error(proj%os_ptcl3D, truth_poses, inds(1:nmatched), pgrp%to_char(), frac5, ptcl_err)
         call gate%metric(tag//'_pair_pose_error_deg', err, MAX_PAIR_POSE_ERR, err <= MAX_PAIR_POSE_ERR, upper=.true.)
         call gate%metric(tag//'_pair_pose_frac5',     frac5, MIN_PAIR_FRAC5, frac5 >= MIN_PAIR_FRAC5)
         write(logfhandle,'(a,a,a,i0,a,i0,a,f7.2,a,f6.3)') '>>> POSE RECOVERY ', tag, ': matched ', nmatched, ' of ', &
             &nptcls3D, ' particles, median pair pose error ', err, ' deg, fraction within 5 deg ', frac5
+        ! the halves apart, and every particle: where a consistent subset hides
+        if( nmatched >= 4 )then
+            neven = count(eo_m(1:nmatched) == 0)
+            nodd  = nmatched - neven
+            err_even  = huge(1.)
+            err_odd   = huge(1.)
+            frac_even = 0.
+            frac_odd  = 0.
+            if( neven >= 2 ) err_even = sym_pair_pose_error(proj%os_ptcl3D, truth_poses, &
+                &pack(inds(1:nmatched), eo_m(1:nmatched) == 0), pgrp%to_char(), frac_even)
+            if( nodd  >= 2 ) err_odd  = sym_pair_pose_error(proj%os_ptcl3D, truth_poses, &
+                &pack(inds(1:nmatched), eo_m(1:nmatched) /= 0), pgrp%to_char(), frac_odd)
+            call gate%report(tag//'_pair_pose_error_even_deg', err_even)
+            call gate%report(tag//'_pair_pose_error_odd_deg',  err_odd)
+            call gate%report(tag//'_ptcls_within_5deg', real(count(ptcl_err < 5.)) / real(nmatched))
+            write(logfhandle,'(a,i0,a,f7.2,a,f6.3,a,i0,a,f7.2,a,f6.3)') '>>> POSE RECOVERY by half: even n=', neven, &
+                &' err ', err_even, ' frac5 ', frac_even, '; odd n=', nodd, ' err ', err_odd, ' frac5 ', frac_odd
+            write(logfhandle,'(a)') '>>> POSE RECOVERY per particle: iptcl eo truth(e1,e2,e3) est(e1,e2,e3) median_err'
+            do j = 1, nmatched
+                te = truth_poses%get_euler(inds(j))
+                ee = proj%os_ptcl3D%get_euler(inds(j))
+                write(logfhandle,'(i6,1x,i2,3(1x,f7.2),3x,3(1x,f7.2),1x,f8.2)') inds(j), eo_m(j), te, ee, ptcl_err(j)
+            enddo
+        endif
         call truth_poses%kill
         call proj%kill
         deallocate(proj)

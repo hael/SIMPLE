@@ -11,11 +11,6 @@ integer,          parameter :: NSTAGES                 = 8
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
-! freq_march_aggressive=yes: the march from AGGRESSIVE_MARCH_STAGE needs finer angular sampling than the
-! planned rungs. A spiral of n directions resolves about 223/sqrt(n) degrees (measure_projspace_angres); the step
-! a band lp needs on a particle of diameter D is about lp/D radians: 12 A on 120 A is 5.7 degrees
-! (n ~ 1500), 9 A is 4.3 degrees (n ~ 2700). The global stages before the march keep their nspace.
-integer,          parameter :: NSPACE_AGGRESSIVE(8)    = [500,1000,2500,2500,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of solve3D_cavgs
 integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early solve3D_cavgs stages using NSPACE_CAVGS_EARLY
@@ -31,7 +26,6 @@ integer,          parameter :: SYMSRCH_STAGE           = 4           ! search sy
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
-integer,          parameter :: AGGRESSIVE_MARCH_STAGE  = PROB_REFINE_STAGE ! freq_march_aggressive=yes: the march starts with the prob stages; the shc stages from random orientations keep their planned rungs (PfCRT latest10: 12 A at stage 1 never consolidated)
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
@@ -49,10 +43,9 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
-real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size-planned ladder: first limit mskdiam/8, at least LPSTART_FLOOR
-real,             parameter :: LPSTART_FLOOR           = 20.
+real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size-planned ladder: first limit mskdiam/8 within LPSTART_SIZE_BOUNDS
+real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! (streptavidin 80 A: 10 A, PfCRT 160 A: 20 A)
 real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
-real,             parameter :: LPSTART_AGGRESSIVE      = 12.  ! freq_march_aggressive=yes: the march's first rung (about res05/1.5 after the global stages on PfCRT)
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
 real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for solve3D_cavgs/cavgs_ini
@@ -90,19 +83,9 @@ contains
     module function solve3D_size_lplims( mskdiam ) result( lims )
         real, intent(in) :: mskdiam
         real :: lims(2)
-        lims(1) = max(mskdiam / LPSTART_MSKDIAM_DIV, LPSTART_FLOOR)
+        lims(1) = min(max(mskdiam / LPSTART_MSKDIAM_DIV, LPSTART_SIZE_BOUNDS(1)), LPSTART_SIZE_BOUNDS(2))
         lims(2) = min(max(mskdiam / LPSTOP_MSKDIAM_DIV, LPSTOP_BOUNDS(1)), LPSTOP_BOUNDS(2))
     end function solve3D_size_lplims
-
-    module function solve3D_lpstart_aggressive() result(lp)
-        real :: lp
-        lp = LPSTART_AGGRESSIVE
-    end function solve3D_lpstart_aggressive
-
-    module function solve3D_aggressive_march_stage() result(istage)
-        integer :: istage
-        istage = AGGRESSIVE_MARCH_STAGE
-    end function solve3D_aggressive_march_stage
 
     module function solve3D_cenlp_default() result(cenlp)
         real :: cenlp
@@ -457,6 +440,21 @@ contains
         cfg%l_gold_standard = params%nstates == 1 .and. .not. l_cavgs .and. istage >= gold_std_start_stage(params)
     end subroutine set_refine3D_gold_standard_policy
 
+    !> the last particle-route stage that matches at its planned limit: the one before NU filtering or gold
+    !! standard first adapt the band; its crop may follow its own limit (0 on the class-average route)
+    module function solve3D_fixed_band_last_stage( params, l_cavgs ) result( istage )
+        class(parameters), intent(in) :: params
+        logical,           intent(in) :: l_cavgs
+        integer :: istage, ifirst
+        istage = 0
+        if( l_cavgs ) return
+        ifirst = NSTAGES
+        if( l_nonuniform ) ifirst = min(ifirst, nu_start_stage(params))
+        if( l_nonuniform .and. l_state_continue_mode ) ifirst = min(ifirst, TRAILREC_STAGE_SINGLE)
+        if( params%nstates == 1 ) ifirst = min(ifirst, gold_std_start_stage(params))
+        istage = ifirst - 1
+    end function solve3D_fixed_band_last_stage
+
     !> the first gold-standard stage: gold_std_stage when set, else GOLD_STD_STAGE
     integer function gold_std_start_stage( params ) result( istage )
         class(parameters), intent(in) :: params
@@ -480,7 +478,6 @@ contains
         integer :: stoch_stage
         stoch_stage = solve3D_stoch_sampl_stage(params)
         cfg%inspace = NSPACE(istage)
-        if( params%l_freq_march_aggressive .and. .not. l_cavgs ) cfg%inspace = NSPACE_AGGRESSIVE(istage)
         if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
         if( params%nstates > 1 ) cfg%inspace = min(cfg%inspace, NSPACE_MULTI_MAX)
         cfg%greedy_sampling = 'yes'
@@ -696,7 +693,14 @@ contains
             &istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
             &istage < active_refine3D_nstages() .and. allocated(lpinfo) .and. &
             &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
-            call cline_refine3D%set('lpexit',             lpinfo(istage+1)%lp)
+            ! a fixed-band stage aims past the first adaptive stage's limit: before gold standard both halves
+            ! match one merged reference and their FSC runs ahead of the orientations (PfCRT, 2026-11-10), so
+            ! the global stages are not left on it; the plateau exit still ends them
+            if( istage <= solve3D_fixed_band_last_stage(params, l_cavgs) )then
+                call cline_refine3D%set('lpexit', lpinfo(min(solve3D_fixed_band_last_stage(params, l_cavgs) + 1, size(lpinfo)))%lp)
+            else
+                call cline_refine3D%set('lpexit', lpinfo(istage+1)%lp)
+            endif
         else
             call cline_refine3D%delete('lpexit')
         endif
@@ -784,7 +788,7 @@ contains
     !> Is the stage's planned matching limit already behind the measured FSC=0.5
     !! resolution? Such a stage would iterate at a crop that cannot represent
     !! what the halves already agree on. Either route of a single-state run, past
-    !! FSC05_PROMOTE_MIN_STAGE, never the NU stage before gold standard; .false. without res05.
+    !! FSC05_PROMOTE_MIN_STAGE, never a fixed-band stage nor the NU stage before gold standard; .false. without res05.
     module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
         class(parameters),       intent(in) :: params
         integer,                 intent(in) :: istage
@@ -799,6 +803,8 @@ contains
         ! the first NU stage before the gold-standard switch always runs: its NU-promoted band refines
         ! the merged map the half-specific stages start from (solve3D_policy.md, stage omission)
         if( l_nonuniform .and. istage == nu_start_stage(params) .and. istage < gold_std_start_stage(params) ) return
+        ! nor a fixed-band stage: its FSC runs ahead of the orientations (the global stages settle them)
+        if( istage <= solve3D_fixed_band_last_stage(params, l_cavgs_mode) ) return
         if( present(projfile) )then
             res05 = project_best_fsc05_resolution(projfile)
         else

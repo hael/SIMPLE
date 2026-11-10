@@ -49,6 +49,8 @@ contains
         call test_posterior_anneal_tail2D()
         write(*,'(A)') 'test_posterior_exits_weighted_insertion'
         call test_posterior_exits_weighted_insertion()
+        write(*,'(A)') 'test_stage_plateau_exit'
+        call test_stage_plateau_exit()
         write(*,'(A)') 'test_state_readout_keys'
         call test_state_readout_keys()
         write(*,'(A)') 'test_posterior_anneal_tail_states'
@@ -435,7 +437,8 @@ contains
         params%topk = 2
         call run_stage(conv_shell2, at2)
         call assert_true(at1(3), 'the single draw exits at 7.2 A against the 8 A limit')
-        call assert_true(.not. any(at2), 'topk 2 wants the FSC a shell past the limit (7.143 A) and never exits at 7.2 A')
+        call assert_true(.not. any(at2(1:4)), 'topk 2 wants the FSC a shell past the limit (7.143 A) and does not exit at 7.2 A')
+        call assert_true(at2(5), 'the plateau exit ends the stage flat since its second iteration at the fifth')
         ! the annealing tail's stall test
         params%lpexit        = 0.
         params%prob_beta_end = 1.
@@ -466,6 +469,80 @@ contains
         end subroutine run_stage
 
     end subroutine test_posterior_exits_weighted_insertion
+
+    !> the plateau exit (lpexit set, here far finer than the stage reaches): no gain on the stage's best FSC=0.5
+    !! or FSC=0.143 and no overlap rise of 0.02 for three iterations ends the stage; any of them restarts the
+    !! count; a new startit starts new bests
+    subroutine test_stage_plateau_exit()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv_flat, conv_gain05, conv_gain143, conv_mi
+        real, parameter   :: MI_RISE(6) = [0.1, 0.2, 0.3, 0.31, 0.32, 0.33]
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        logical :: at(6)
+        integer :: it
+        allocate(params)
+        params%nstates           = 1
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 0.3
+        params%topk              = 1
+        params%startit           = 1
+        params%maxits            = 25
+        params%box               = 100
+        params%smpd              = 1.
+        params%lpexit            = 4.
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.99)
+        call cline%set('fracsrch', 99.)
+        call run_stage(conv_flat,    [9., 9.5, 9., 9., 9., 9.], [7., 7., 7., 7., 7., 7.])
+        call assert_true(.not. any(at(1:3)) .and. at(4), 'a stage flat from its first iteration exits at its fourth')
+        call run_stage(conv_gain05,  [9., 9., 8.5, 8.5, 8.5, 8.5], [7., 7., 7., 7., 7., 7.])
+        call assert_true(.not. any(at(1:5)) .and. at(6), 'an FSC=0.5 gain at the third iteration moves the exit to the sixth')
+        call run_stage(conv_gain143, [9., 9., 9., 9., 9., 9.], [7., 7., 6.5, 6.5, 6.5, 6.5])
+        call assert_true(.not. any(at(1:5)) .and. at(6), 'an FSC=0.143 gain at the third iteration moves the exit to the sixth')
+        ! the FSC flat while the orientations settle: an overlap rise of 0.02 or more in an iteration is a gain
+        call del_file(STATS_FILE)
+        do it = 1, 6
+            params%which_iter = it
+            call frozen_field(os, 9., 7.)
+            call os%set_all2single('mi_proj', MI_RISE(it))
+            at(it) = conv_mi%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_true(.not. any(at(1:5)) .and. at(6), 'an overlap rise at the third iteration moves the exit to the sixth')
+        ! the next stage on the same object: its first iteration starts new bests
+        call del_file(STATS_FILE)
+        params%startit    = 7
+        params%which_iter = 7
+        call frozen_field(os, 9., 7.)
+        call assert_false(conv_flat%check_conv3D(params, cline, os, 40.), 'a new stage inherited the previous stage''s plateau')
+        call os%kill
+        params%lpexit     = 0.
+        params%startit    = 1
+        call run_stage(conv_flat, [9., 9., 9., 9., 9., 9.], [7., 7., 7., 7., 7., 7.])
+        call assert_false(any(at), 'the plateau exit fired without lpexit')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+
+    contains
+
+        subroutine run_stage( conv, r05, r143 )
+            type(convergence), intent(inout) :: conv
+            real,              intent(in)    :: r05(6), r143(6)
+            call del_file(STATS_FILE)
+            do it = 1, 6
+                params%which_iter = it
+                call frozen_field(os, r05(it), r143(it))
+                at(it) = conv%check_conv3D(params, cline, os, 40.)
+                call os%kill
+            enddo
+        end subroutine run_stage
+
+    end subroutine test_stage_plateau_exit
 
     !> the probability tables' posterior draws: a frozen assignment (full scan,
     !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)

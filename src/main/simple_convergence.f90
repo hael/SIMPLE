@@ -10,6 +10,8 @@ public :: run_all_convergence_tests
 public :: cont_particle_stable
 private
 
+integer, parameter :: STAGE_PLATEAU_PATIENCE = 3    !< solve3D stage plateau exit: iterations without gain on the stage's best
+real,    parameter :: STAGE_PLATEAU_MI_GAIN  = 0.02 !< an orientation overlap rise of this much over one iteration is a gain
 
 type convergence
     private
@@ -39,6 +41,11 @@ type convergence
     integer :: res_hist_iter(2)       = 0  !< the iterations of the last two checks (the latest first; 0: none), for the gain test two iterations back
     real    :: res05_hist(2)          = 0. !< their FSC=0.5 resolutions
     real    :: res143_hist(2)         = 0. !< their FSC=0.143 resolutions
+    integer :: res_best_startit       = 0  !< startit of the stage the bests belong to (0: none)
+    integer :: res_best_iter          = 0  !< the iteration that last improved either best
+    real    :: res05_best             = 0. !< the stage's finest FSC=0.5 resolution so far
+    real    :: res143_best            = 0. !< the stage's finest FSC=0.143 resolution so far
+    real    :: mi_proj_last           = 0. !< the orientation overlap of the previous plateau check
     real, allocatable :: res05_hist_s(:,:)    !< (2, nstates) per state FSC=0.5 of the same two checks (nstates > 1)
     real, allocatable :: res143_hist_s(:,:)   !< (2, nstates) per state FSC=0.143
     ! the state readout of the probabilistic assignment's joint draw over states and directions (set_state_readout),
@@ -65,6 +72,7 @@ type convergence
     procedure, private :: res_two_back_state
     procedure, private :: states_stalled
     procedure, private :: record_res
+    procedure, private :: stage_plateau
 end type convergence
 
 interface
@@ -691,6 +699,16 @@ contains
                 endif
             endif
         endif
+        ! The plateau exit, the same stages: neither FSC=0.5 nor FSC=0.143 has improved on the stage's best
+        ! nor the overlap risen for STAGE_PLATEAU_PATIENCE iterations, wherever the next limit lies (solve3D_policy.md sec. 3)
+        if( params%lpexit > TINY .and. res05_now > TINY .and. res143_now > TINY )then
+            if( self%stage_plateau(params, res05_now, res143_now) .and. .not.converged )then
+                write(logfhandle,'(A,F7.3,A,F7.3,A,I0,A,I0,A)') '>>> STAGE PLATEAU EXIT: FSC=0.5/0.143 BEST ', &
+                    &self%res05_best, '/', self%res143_best, ' A AT ITERATION ', self%res_best_iter, &
+                    &', NO GAIN FOR ', STAGE_PLATEAU_PATIENCE, ' ITERATIONS'
+                converged = .true.
+            endif
+        endif
         call self%record_res(params, res05_now, res143_now, res05_state_avg, res_state_avg)
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
@@ -799,6 +817,36 @@ contains
             return
         enddo
     end subroutine res_two_back
+
+    !> updates the stage's best resolutions with this check's; .true. once neither has improved and the
+    !! orientation overlap has not risen by STAGE_PLATEAU_MI_GAIN in an iteration for STAGE_PLATEAU_PATIENCE
+    !! iterations: the FSC lags the orientations settling. A new startit begins a new stage's bests
+    logical function stage_plateau( self, params, res05_now, res143_now ) result( l_plateau )
+        use simple_parameters, only: parameters
+        class(convergence), intent(inout) :: self
+        class(parameters),  intent(in)    :: params
+        real,               intent(in)    :: res05_now, res143_now
+        logical :: l_gain
+        l_plateau = .false.
+        if( self%res_best_startit /= params%startit )then
+            self%res_best_startit = params%startit
+            self%res_best_iter    = params%which_iter
+            self%res05_best       = res05_now
+            self%res143_best      = res143_now
+            self%mi_proj_last     = self%mi_proj
+            return
+        endif
+        l_gain = res05_now < self%res05_best - TINY .or. res143_now < self%res143_best - TINY .or. &
+            &self%mi_proj - self%mi_proj_last >= STAGE_PLATEAU_MI_GAIN
+        self%res05_best   = min(self%res05_best,  res05_now)
+        self%res143_best  = min(self%res143_best, res143_now)
+        self%mi_proj_last = self%mi_proj
+        if( l_gain )then
+            self%res_best_iter = params%which_iter
+            return
+        endif
+        l_plateau = params%which_iter - self%res_best_iter >= STAGE_PLATEAU_PATIENCE
+    end function stage_plateau
 
     !> this check's iteration and resolutions into the history, the latest first: the best state's and, with
     !! several states, every state's (a state is its index, stable within a run; 0. where it has none)

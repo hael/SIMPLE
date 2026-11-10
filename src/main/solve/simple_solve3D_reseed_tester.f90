@@ -32,19 +32,23 @@ contains
         call assert_int(4, solve3D_symsrch_stage(.true.),  'axis search after stage 4')
     end subroutine test_symsrch_stage
 
-    !> the size-planned ladder ends: mskdiam/8 floored at 20 A, mskdiam/26.7 within 4.5-6 A
+    !> the size-planned ladder ends: mskdiam/8 within 10-30 A, mskdiam/26.7 within 4.5-6 A
     subroutine test_size_lplims()
         real :: lims(2)
         write(*,'(A)') 'test_size_lplims'
         lims = solve3D_size_lplims(160.)
-        call assert_real(20.,    lims(1), 1.e-4, '160 A mask: starts at 20 A')
+        call assert_real(20.,    lims(1), 1.e-4, '160 A mask (PfCRT): starts at 20 A')
         call assert_real(6.,     lims(2), 1.e-4, '160 A mask: ends at 6 A')
+        lims = solve3D_size_lplims(80.)
+        call assert_real(10.,    lims(1), 1.e-4, '80 A mask (streptavidin): starts at 10 A')
+        call assert_real(4.5,    lims(2), 1.e-4, '80 A mask: the 4.5 A bound')
         lims = solve3D_size_lplims(100.)
-        call assert_real(20.,    lims(1), 1.e-4, '100 A mask: the 20 A floor')
-        call assert_real(4.5,    lims(2), 1.e-4, '100 A mask: the 4.5 A bound')
-        lims = solve3D_size_lplims(250.)
-        call assert_real(31.25,  lims(1), 1.e-4, '250 A mask: starts at mskdiam/8')
-        call assert_real(6.,     lims(2), 1.e-4, '250 A mask: the 6 A bound')
+        call assert_real(12.5,   lims(1), 1.e-4, '100 A mask: mskdiam/8')
+        lims = solve3D_size_lplims(50.)
+        call assert_real(10.,    lims(1), 1.e-4, '50 A mask: the 10 A floor')
+        lims = solve3D_size_lplims(300.)
+        call assert_real(30.,    lims(1), 1.e-4, '300 A mask: the 30 A cap')
+        call assert_real(6.,     lims(2), 1.e-4, '300 A mask: the 6 A bound')
     end subroutine test_size_lplims
 
     !> stage omission and the mid-stage resolution exit: single-state runs only
@@ -123,8 +127,15 @@ contains
         call assert_true(solve3D_stage_behind_fsc05(params, 5),  'an NU stage that is itself gold standard can be omitted')
         params%gold_std_stage = 0
         l_nonuniform = .false.
-        call assert_true(solve3D_stage_behind_fsc05(params, 5),  'without NU filtering stage 5 can be omitted')
+        call assert_false(solve3D_stage_behind_fsc05(params, 5), 'without NU filtering stage 5 is a fixed-band stage, never omitted')
+        call assert_true(solve3D_stage_behind_fsc05(params, 6),  'without NU filtering the gold-standard stage 6 can be omitted')
         l_nonuniform = .true.
+        call assert_false(solve3D_stage_behind_fsc05(params, 4), 'a fixed-band stage is never omitted')
+        ! a fixed-band stage aims its resolution exit at the first adaptive stage's limit (stage 5, 8 A)
+        call set_cline_refine3D(params, 3, 1, .false.)
+        call assert_real(8., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 3 exits only past stage 5''s limit')
+        call set_cline_refine3D(params, 5, 1, .false.)
+        call assert_real(6., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 5 exits past the next stage''s limit')
         do backend = 1, 2
             params%rec_backend = 'gridding'
             if( backend == 2 ) params%rec_backend = 'pcg'

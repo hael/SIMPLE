@@ -224,12 +224,26 @@ every run seeds and owns its sigmas in its own directory.
 
 `lpinfo(istage)%lp` controls staged search/reference scheduling. Stage limits
 follow the molecule's size (`set_lplims_from_size`, since 2026-11-10): linear
-in A from `mskdiam/8`, at least 20 A, to `mskdiam/26.7` within
-`LPSTOP_BOUNDS` (4.5-6 A); PfCRT's 160 A gives 20, 18, 16, 14, 12, 10, 8, 6 A.
+in A from `mskdiam/8` within 10-30 A (`LPSTART_SIZE_BOUNDS`) to `mskdiam/26.7`
+within `LPSTOP_BOUNDS` (4.5-6 A): both ends proportional to the size, the
+form of `mskdiam2lplimits`, so a mid-size molecule's ladder spans the same
+factor of 3.3. PfCRT (160 A) gets 20, 18, 16, 14, 12, 10, 8, 6 A and
+streptavidin (80 A) 10 to 4.5 A; 8 A, its no-2D start, was judged too
+ambitious for a default. A first version held the start at 20 A at least,
+as the FRC planner did, and streptavidin failed
+(`failed_streptav`, 2026-11-10): from 20 A stage 3 was omitted and the D2
+axis was searched with the orientations still moving 53 deg per iteration,
+against 14 deg in the runs that started at 8 A.
 `lpstart` replaces the first limit, `lpstop` can only coarsen the last, and
 `force_lp_range=yes` uses the requested range directly. The crops are those of
 `lpstages_setlims`: the end stages at a third of their limit (at least 2 A per
-pixel), a linear box ramp between. The ladder was planned from the class FRCs
+pixel, at least 88 px), a linear box ramp between, except that the stages that
+match at their planned limit, those before NU filtering or gold standard first
+adapt the band (`solve3D_fixed_band_last_stage`, stages 1-4 by default), are
+cropped to their own limits, the most downsampling: PfCRT's stages 1-4 run at
+88 px instead of 88-120 px. The adaptive stages keep the ramp's headroom: on
+Nov09 stage 5 (130 px, Nyquist 4.78 A) took the NU-promoted band to that
+Nyquist and FSC=0.5 from 11.9 to 6.9 A. The ladder was planned from the class FRCs
 until then; gold-standard solve2D (from stage 2) made those FRCs honest and
 lower, which coarsened PfCRT's mid ladder (stage 4 from 12.4 to 18.3 A) and
 cost the global search the rung its orientations settled at
@@ -253,65 +267,20 @@ half-width is raised and no stage ends on the centring. A run manifest records t
 an add-on replays the frozen solution's search policy without acquiring a
 separate public control.
 
-On the size-planned ladder and where `lpstages_fast` plans it, stage 1 of
-`solve3D` never runs with a low-pass limit finer than 20 A unless `lpstart`
-asks for it, preserving gradual frequency marching. `force_lp_range=yes`, an
+Where `lpstages_fast` plans the ladder, stage 1 of `solve3D` never runs with
+a low-pass limit finer than 20 A; the size-planned ladder starts from the
+size rule above instead (10 A for streptavidin). `force_lp_range=yes`, an
 explicit `lpstart` and the routes planned from input limits (input volumes, no
 2D solution) take `lpstart` as given.
 
-**Aggressive frequency marching (`freq_march_aggressive=yes`, 2026-10-21;
-experimental, default `no`).** For a small membrane target the class FRCs
-measure micelle self-consistency at the low resolutions where the default
-ladder parks stages 1-3 (PfCRT: 20.0, 19.4, 18.3 A), and stage 3's band does
-not discriminate orientations: on the `latest6` reference its overlap peaks
-at the fourth iteration and declines for the remaining thirteen (the
-iteration-budget note below). The signal that fixes a small particle's
-orientation sits in the 5-10 A band, which the default schedule withholds
-until stage 4. With the key on, the particle route plans its size ladder as usual and then
-`lpstages_aggressive` overwrites the rungs from
-`AGGRESSIVE_MARCH_STAGE` (= `PROB_REFINE_STAGE`, 3) on: linear in spatial
-frequency from `LPSTART_AGGRESSIVE` (12 A, no coarser than the kept stage-2
-rung) to the standard final limit `lpfinal`, so every march stage admits the
-same number of new Fourier shells and the steps are smallest in Angstrom at
-the fine end (12.0, 10.0, 8.6, 7.5, 6.7, 6.0 A for a 6 A final limit); each
-march stage is cropped on its own at the particle-route target (smpd lp/3, at
-least 2 A), never below the preceding stage's crop. The finer bands need
-finer angular sampling, so `nspace` follows `NSPACE_AGGRESSIVE` = [500, 1000,
-2500, 2500, 2500, 2500, 5000, 5000] (a spiral of n directions resolves about
-223/sqrt(n) degrees; a band lp on a particle of diameter D needs about lp/D
-radians, 5.7 degrees at 12 A on 120 A). Everything else stands: `MAXITS`, the
-stage modes, the NU start stage (5; NU before that reinforces a bad
-alignment, see section 8), the non-NU matching ceiling at the rung, the
-FSC=0.5 promotion, stage omission and mid-stage exit, which now act on the
-closer rungs.
-
-*Why the march starts at stage 3 and not at stage 1.* The first version
-(PfCRT `latest10`, 2026-10-21) marched from stage 1: 12.0, 10.5, 9.3 A with
-`nspace` 1000/2500. The search from random orientations never consolidated:
-stage 1's overlap plateaued at 0.22 (0.34 at 19.4 A in `latest6` and
-`latest9`), stage 2's at 0.17 (0.23), the FSC=0.5 crossing sat at the band
-(12.9 A) in stage 1 and then *coarsened* to 13.5-15.5 A in stage 2 (noise
-fitted inside a band the reference has no content in), the cFAR of 0.6-0.7
-was that of isotropic noise, and stage 3 consolidated to 0.32 instead of
-0.50: garbage after two stages where the default gives a smooth, correct
-volume. The reference built from random poses carries nothing at 12 A, so the
-stochastic hill climb has no landscape to climb; the low-resolution start is
-what makes the global search converge. In the default the large
-consolidation (overlap 0.23 to 0.50) happens in stage 3 at nearly stage 2's
-band, so it is the switch to the full `prob` search with `ml_reg`, not the
-band, that does it; the march therefore begins with that switch. 12 A at
-stage 3 is also about res05/1.5 after stage 2 on PfCRT (res05 18.3 A), the
-bounded lead the NU stages are known to climb under.
-
-The key applies to the particle route with a 2D solution only: the
-input-volume and no-2D routes and the add-on have explicit limits and refuse
-it, the class-average route keeps its own ladder and refuses it, and
-`force_lp_range=yes` is refused beside it. Test: the ten-restart PfCRT
-regression against the default schedule, scored on stage 3's overlap
-trajectory (does it still churn?), the stage-5 FSC, the iterations to the
-stage-6 Nyquist, overlap through stage 6 and above all the gold-standard
-bootstrap of the final poses, plus the same restarts on a target that fails
-under the default schedule.
+**Aggressive frequency marching retired (2026-11-10).** `freq_march_aggressive=yes`
+(2026-10-21, experimental) replaced the rungs from stage 3 on with a ladder
+linear in spatial frequency from 12 A (`lpstages_aggressive`) and finer
+`nspace`; it was removed with the size-planned ladder, which gives small
+molecules their fine start directly. Its first version, marching from stage
+1 (PfCRT `latest10`), showed that the search from random orientations does not
+consolidate at 12 A on a 160 A target: the coarse start of a large particle
+is what makes the global stages converge.
 
 The single-state external-volume route (`vol1`, `nstates=1`) starts at
 `VOL_SUPPLIED_STAGE`, the stage after the no-axis-search block
@@ -354,7 +323,17 @@ searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` can be omitted: with
 `l_symran` is set only when `pgrp_start` has more symmetry than `pgrp` and
 therefore implies `l_srch4symaxis`. Also excluded (2026-11-10): the first NU
 stage (`nu_start_stage`) when it precedes the first gold-standard stage
-(`gold_std_start_stage`) and NU filtering is on. The omission test compares
+(`gold_std_start_stage`) and NU filtering is on. And every fixed-band stage
+(`solve3D_fixed_band_last_stage`: the stages before NU filtering or gold
+standard first adapt the band, 1-4 by default), which also aims its mid-stage
+resolution exit at the first adaptive stage's planned limit, not the next
+rung's: before gold standard both halves match one merged reference, so their
+FSC=0.5 runs ahead of the orientations. On the size ladder PfCRT's stage 3
+(16 A) left after 3 iterations on FSC=0.5 13.5 A, stage 4 (14 A) was omitted,
+and stage 5 started with the orientations still moving 58 deg per iteration
+(Nov09: 15 deg after its 12.4 A stage 4), ending at 7.96/5.09 A against
+7.2-7.4/4.0-4.1 A (3d097187, 2026-11-10). The plateau exit still ends a
+fixed-band stage early. The omission test compares
 `res05` with the planned limit, not with the crop, and the NU stage's crop
 resolves far past its planned limit; it is the one merged-reference stage whose
 NU-promoted band takes the map to the resolution half-specific matching starts
@@ -425,6 +404,26 @@ than the entry stage, the last stage and, when an axis is searched,
 `SYMSRCH_STAGE`, and it only ever adds convergence, so
 `minits` and the Cartesian rule still hold. Single-state runs only since
 2026-10-21: the controller emits no `lpexit` for a multi-state run (section 6).
+
+**Stage plateau exit (2026-11-10).** In the same stages (`lpexit` set),
+`check_conv3D` also ends the stage once neither the best state's FSC=0.5 nor
+its FSC=0.143 has improved on the stage's best for `STAGE_PLATEAU_PATIENCE` (3)
+iterations and the orientation overlap has not risen by 0.02 in any of those
+iterations (`STAGE_PLATEAU_MI_GAIN`), wherever the next rung lies. Logged as
+`>>> STAGE PLATEAU EXIT`. The overlap term is needed because the FSC lags the
+orientations settling: streptavidin's stage 3 (2026-10-24 `posterior_beta0_3`)
+held FSC=0.5/0.143 at 7.22/6.53 A for its first five iterations while the
+overlap rose 0.04 to 0.37 and the angular change fell 71 to 39 deg, then
+gained; the FSC terms alone would have ended it at the fourth.
+The bests are the convergence object's, restarted with each `startit`. A
+stage still gaining is not cut, which keeps the gain guard's lesson above.
+PfCRT stage 3 ran its 17 `MAXITS` iterations flat in both the FRC ladder
+(Nov09: FSC=0.5 13.5 A from its first iteration to its last, one FSC=0.143
+shell gained at the eleventh) and the size ladder (FSC=0.5 14.11 A, one
+shell short of the next rung's 14 A, so the resolution exit never fired); the
+plateau exit ends both at their fourth iteration, about 13 iterations (5-6
+min) earlier. The orientation overlap still crept up over those iterations
+(0.012 to 0.062 on Nov09); if the next stage suffers, raise the patience.
 
 A first version tested against `params%lp`, the band in use, and was
 reverted the same day: PfCRT `latest8` converged in 2 of 6 restarts. **Do not

@@ -203,16 +203,8 @@ contains
         call prg%add_input(UI_FILT, lp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, 'force_lp_range', 'binary', 'Force low-pass range', &
-            &'Use lpstart/lpstop directly for solve3D low-pass stages instead of class-FRC-derived limits(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
+            &'Use lpstart/lpstop directly for solve3D low-pass stages instead of the size-derived limits(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        if( .not. l_stream_compatible )then
-            call prg%add_input(UI_FILT, 'freq_march_aggressive', 'binary', 'Aggressive frequency marching', &
-                &'From the first prob stage (3) the stage limits are linear in spatial frequency from 12 A to the final limit, &
-                &with finer angular sampling; the global stages 1-2 keep their planned rungs (the search from random orientations &
-                &needs them); for small targets whose low-resolution signal is the micelle, not the protein; particle route with a &
-                &2D solution only(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        endif
         call prg%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
             &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}; nonuniform_lpset promotes the &
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &

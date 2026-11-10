@@ -65,7 +65,6 @@ type :: parameters
     character(len=3)          :: fillin='no'          !< fillin particle sampling (3D: every fifth iteration the particles never updated)(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
-    character(len=3)          :: freq_march_aggressive='no' !< solve3D aggressive frequency marching: from the first prob stage the limits are linear in spatial frequency from 12 A to the final limit, with finer angular sampling; the global stages keep their planned rungs(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -639,7 +638,6 @@ type :: parameters
     logical :: l_envfsc          = .false. !< not a command-line key
     logical :: l_pcg_order     = .false. !< not a command-line key
     logical :: l_pcg_order_lambda_auto = .true. !< pcg_order_lambda not given: chosen per state and iteration; not a command-line key
-    logical :: l_freq_march_aggressive = .false. !< freq_march_aggressive=yes: solve3D's frequency-linear ladder and finer early search space; not a command-line key
     logical :: l_atm_prior       = .false. !< not a command-line key
     logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map; not a command-line key
     logical :: l_fillin          = .false. !< not a command-line key

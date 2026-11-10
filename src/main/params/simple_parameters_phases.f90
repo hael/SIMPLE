@@ -740,16 +740,6 @@ contains
         if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')
         if( .not. (self%prob_beta_end > 0.) ) self%prob_beta_end = self%prob_beta
         if( self%topk < 1 ) THROW_HARD('topk must be 1 (the committed pose alone) or more')
-        select case(trim(self%freq_march_aggressive))
-            case('yes')
-                self%l_freq_march_aggressive = .true.
-            case('no')
-                self%l_freq_march_aggressive = .false.
-            case DEFAULT
-                THROW_HARD('freq_march_aggressive must be yes or no')
-        end select
-        if( self%l_freq_march_aggressive .and. trim(self%force_lp_range).eq.'yes' ) &
-            &THROW_HARD('freq_march_aggressive=yes and force_lp_range=yes plan the solve3D ladder two ways; give one of them')
         select case(trim(self%balance))
             case('none','class','cavg')
             case DEFAULT
