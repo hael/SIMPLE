@@ -20,11 +20,12 @@ use simple_matcher_refvol_utils,    only: materialize_reprojection_model_from_vo
 use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D, &
     &check_pass_team
 use simple_matcher_ptcl_io,         only: ptcl_read_session
+use simple_pftc_shsrch_grad,        only: pftc_shsrch_grad
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D, adopt_run_seed
 use simple_sigma2_bootstrap,        only: ensure_sigma2_for_iteration
 use simple_polar_feats,             only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, &
     &polar_feats_hash_ints, POLAR_FEATS_NHEAD
-use simple_pose_student, only: pose_student, student_pred, NSPACE_STUDENT, KMAX_STUDENT
+use simple_pose_student, only: pose_student, student_pred, student_train_profile, NSPACE_STUDENT, KMAX_STUDENT
 use simple_rnd,          only: rnd_run_seed
 use simple_math,         only: hpsort
 use simple_type_defs,    only: OBJFUN_EUCLID, PTCL3D_SEG
@@ -44,6 +45,9 @@ real,    parameter :: CONF_FRACTION  = 0.95 !< the confidence threshold: above i
 integer, parameter :: NBOOT          = 1000 !< resamples by micrograph of the paired difference between two designs
 real,    parameter :: BOOT_QUANTILE  = 0.05 !< a wider design is kept when this quantile of its resampled recovery gain is above zero
 real,    parameter :: SHIFT_AUG_NSIG = 3.   !< the augmentation's disk: this many prior widths (the dynamic centring's disk)
+integer, parameter :: TH_NSTEPS           = 6             !< predict_poses' timed per-particle steps
+real,    parameter :: SHIFT_REG_HALFWIDTH = 25.           !< the shift registration's box: +/- this (A) about the stored shift
+integer, parameter :: SHIFT_REG_MAXITS     = 50            !< its L-BFGS-B evaluations after the coarse grid
 integer, parameter :: SHIFT_CHECK_NPTCLS  = 256           !< ruling R2's shift check: the first selected particles predicted again
 real,    parameter :: SHIFT_CHECK_MAGS(3) = [2., 5., 10.] !< shifted through the calculator's phase ramps by these pixels
 integer, parameter :: SHIFT_CHECK_NDIR    = 4             !< in this many directions (0, 90, 180, 270 degrees)
@@ -98,6 +102,10 @@ contains
         integer(int64)           :: key(POLAR_FEATS_NHEAD), mtime, vol_hash, lehmer
         integer(timer_int_kind)  :: t0, t_all
         real(timer_int_kind)     :: rt_prep, rt_batch, rt_fill, rt_rows, rt_all, rt_train, rt_cand(size(STUDENT_WIDTHS))
+        real(timer_int_kind)     :: rt_heldpred(size(STUDENT_WIDTHS)), rt_boot(size(STUDENT_WIDTHS)), rt_write, rt_kept
+        type(student_train_profile) :: prof_cand(size(STUDENT_WIDTHS))
+        integer(timer_int_kind)  :: tb
+        integer                  :: ntried
         real     :: euls_ref(3), euls_mode(3), euls_sym(3), euldist, inpldist, temp, dmin, w_ref, invalid, shift_aug
         real     :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
         real     :: conf_threshold, heldout_seeded, heldout_recovered, cone_bound
@@ -285,7 +293,12 @@ contains
         gain_q     = 0.
         rt_cand    = 0.
         epoch_cand = 0
+        rt_heldpred = 0.
+        rt_boot     = 0.
+        rt_write    = 0.
+        ntried      = 0
         do iw = 1,size(STUDENT_WIDTHS)
+            ntried = iw
             call student%new(feats%get_pftsz(), params%kfromto, params%box, params%box_crop, params%smpd, params%mskdiam, &
                 &trim(params%pgrp), params%nspace, params%lp, wk, trim(params%ctf) /= 'no', STUDENT_WIDTHS(iw), rnd_run_seed())
             call student%init_readout(xrefs)
@@ -305,7 +318,9 @@ contains
             rt_cand(iw)    = time_train_s
             loss_cand(iw)  = loss_held
             epoch_cand(iw) = best_epoch
+            prof_cand(iw)  = student%get_train_profile()
             ! the held-out seeds this design recovers
+            tb = tic()
             call student%prepare_predict(nthr_here)
             !$omp parallel do default(shared) private(j,i,ithr,pred) schedule(dynamic) proc_bind(close)
             do j = 1,nheld
@@ -322,28 +337,36 @@ contains
             enddo
             !$omp end parallel do
             if( nheld > 0 ) recov_cand(iw) = real(count(recov(1:nheld,iw))) / real(nheld)
+            rt_heldpred(iw) = toc(tb)
             write(logfhandle,'(A,I0,A,I0,A,I0,A,F9.5,A,F7.4,A,F7.4,A,F9.1,A)') '>>> POSE STUDENT TRAINED: width ', &
                 &STUDENT_WIDTHS(iw), ', best epoch ', best_epoch, ' of ', epochs_run, ', held-out loss ', loss_held, &
                 &', held-out mode agreement ', mode_held, ', held-out seeds recovered ', recov_cand(iw), ', ', time_train_s, ' s'
             if( iw == 1 )then
                 iw_best = 1
+                tb = tic()
                 call student%write(params%fname)
+                rt_write = rt_write + toc(tb)
                 cycle
             endif
             ! the paired difference of recovery over the micrographs, resampled by micrograph
+            tb = tic()
             call resampled_gain(iw, iw_best, gain_q(iw))
+            rt_boot(iw) = toc(tb)
             write(logfhandle,'(A,I0,A,I0,A,F8.5,A,F5.2,A,F8.5)') '>>> POSE STUDENT CHOICE: width ', STUDENT_WIDTHS(iw), &
                 &' against ', STUDENT_WIDTHS(iw_best), ': recovery gain ', recov_cand(iw) - recov_cand(iw_best), &
                 &', its resampled quantile ', BOOT_QUANTILE, ' = ', gain_q(iw)
             if( gain_q(iw) > 0. )then
                 iw_best = iw
+                tb = tic()
                 call student%write(params%fname)
+                rt_write = rt_write + toc(tb)
             else
                 exit
             endif
         enddo
         ! the kept design back from its file (the loop's last candidate may have lost), its threshold on the held-out
         ! rows and the held-out table
+        tb = tic()
         call student%kill
         call student%read(params%fname)
         call student%prepare_predict(nthr_here)
@@ -368,6 +391,7 @@ contains
         call write_heldout_table
         call student%get_record(nptcls_train, nheldout, epochs_run, best_epoch, loss_train, loss_held, mode_held, &
             &time_train_s, nweights)
+        rt_kept  = toc(tb)
         rt_train = toc(t0)
         write(logfhandle,'(A,I0,A,F8.5,A,F8.4,A,F8.4,A,F6.2,A,F9.1,A)') '>>> POSE STUDENT KEPT: width ', STUDENT_WIDTHS(iw_best), &
             &', confidence threshold ', conf_threshold, ' seeding ', heldout_seeded, ' of the held-out rows with ', &
@@ -375,6 +399,7 @@ contains
             &' deg); the designs ', rt_train, ' s'
         rt_all = toc(t_all)
         call write_header
+        if( L_BENCH_GLOB ) call write_learn_bench
         call student%kill
         call feats%kill
         call cache%kill
@@ -387,6 +412,75 @@ contains
         if( allocated(statbuf) ) deallocate(statbuf)
 
     contains
+
+        !> BENCH/POSE_STUDENT_LEARN_BENCH.txt: the context, the rows' costs, every design's training broken into the
+        !! batch assembly, the gradients (the parallel region), the optimiser steps and the held-out evaluation, the
+        !! design choice and the kept model, with the share accounted for
+        subroutine write_learn_bench
+            use simple_bench_io, only: open_bench_report
+            integer  :: fnr, jw
+            real(dp) :: rt_designs, acc
+            call open_bench_report(fnr, 'POSE_STUDENT_LEARN')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,i0)')   'student particles (rows)            : ', nptcls
+            write(fnr,'(a,i0)')   'student held-out particles          : ', nheld
+            write(fnr,'(a,i0)')   'student grid directions (nspace)    : ', params%nspace
+            write(fnr,'(a,i0)')   'student classes (mirror pairs)      : ', params%nspace / 2
+            write(fnr,'(a,f0.2)') 'student band (lp, A)                : ', params%lp
+            write(fnr,'(a,i0)')   'student rings                       : ', params%kfromto(2) - params%kfromto(1) + 1
+            write(fnr,'(a,i0)')   'student half-ring angles (pftsz)    : ', feats%get_pftsz()
+            write(fnr,'(a,i0,a,i0)') 'student box / box_crop              : ', params%box, ' / ', params%box_crop
+            write(fnr,'(a,i0)')   'student threads                     : ', nthr_here
+            write(fnr,'(a,l1)')   'student feature cache used          : ', l_cache
+            write(fnr,'(a,f0.2)') 'student shift augmentation (px)     : ', shift_aug
+            write(fnr,'(a,i0)')   'student designs trained             : ', ntried
+            write(fnr,'(a,i0)')   'student kept width                  : ', STUDENT_WIDTHS(iw_best)
+            write(fnr,'(a,i0)')   'student kept weights                : ', nweights
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f0.2)') 'rows setup (halves, sigma2, references, calculator):', rt_prep
+            write(fnr,'(a,1x,f0.2)') 'rows particle reading and preparation          :', rt_batch
+            write(fnr,'(a,1x,f0.2)') 'rows table fill (the teacher)                  :', rt_fill
+            write(fnr,'(a,1x,f0.3)') 'rows table fill per particle (ms)              :', 1000. * rt_fill / real(max(1,nptcls))
+            write(fnr,'(a,1x,f0.2)') 'rows records and features                      :', rt_rows
+            rt_designs = 0.d0
+            do jw = 1,ntried
+                acc = prof_cand(jw)%rt_assemble + prof_cand(jw)%net%rt_grad + prof_cand(jw)%net%rt_step + &
+                    &prof_cand(jw)%net%rt_eval
+                write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), ' training total               :', rt_cand(jw)
+                write(fnr,'(a,i0,a,1x,i0,1x,i0,1x,i0)') 'design width ', STUDENT_WIDTHS(jw), &
+                    &' epochs / batch / batches per epoch:', prof_cand(jw)%epochs, prof_cand(jw)%batch_size, &
+                    &prof_cand(jw)%nbatches_epoch
+                write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), '   batch assembly             :', &
+                    &prof_cand(jw)%rt_assemble
+                write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), '   gradients (parallel)       :', &
+                    &prof_cand(jw)%net%rt_grad
+                write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), '   reduction and Adam steps   :', &
+                    &prof_cand(jw)%net%rt_step
+                write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), '   held-out evaluation        :', &
+                    &prof_cand(jw)%net%rt_eval
+                write(fnr,'(a,i0,a,1x,i0)')   'design width ', STUDENT_WIDTHS(jw), '   optimiser steps            :', &
+                    &prof_cand(jw)%net%nsteps
+                if( prof_cand(jw)%net%nsamples_train > 0 ) write(fnr,'(a,i0,a,1x,f0.1)') 'design width ', &
+                    &STUDENT_WIDTHS(jw), '   training samples per second:', &
+                    &real(prof_cand(jw)%net%nsamples_train,dp) / max(prof_cand(jw)%net%rt_grad + prof_cand(jw)%net%rt_step, 1.d-9)
+                if( rt_cand(jw) > 0. ) write(fnr,'(a,i0,a,1x,f0.1)') 'design width ', STUDENT_WIDTHS(jw), &
+                    &'   % of its training accounted  :', 100.d0 * acc / real(rt_cand(jw),dp)
+                write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), '   held-out prediction        :', rt_heldpred(jw)
+                if( jw > 1 ) write(fnr,'(a,i0,a,1x,f0.2)') 'design width ', STUDENT_WIDTHS(jw), &
+                    &'   resampled design choice    :', rt_boot(jw)
+                rt_designs = rt_designs + real(rt_cand(jw) + rt_heldpred(jw) + rt_boot(jw),dp)
+            enddo
+            write(fnr,'(a,1x,f0.2)') 'model writes                                   :', rt_write
+            write(fnr,'(a,1x,f0.2)') 'kept model: reread, held-out, threshold, table :', rt_kept
+            write(fnr,'(a,1x,f0.2)') 'designs, choice and kept model                 :', rt_train
+            write(fnr,'(a,1x,f0.2)') 'total time                                     :', rt_all
+            write(fnr,'(a,1x,f0.2)') '% accounted for                                :', 100. * real(rt_prep + rt_batch + rt_fill + &
+                &rt_rows + real(rt_designs) + rt_write + rt_kept) / max(rt_all, real(1.e-9,timer_int_kind))
+            write(fnr,'(a)') ''
+            call write_fill_profile_bench(fnr, 'rows', profile, params%nstates)
+            call fclose(fnr)
+        end subroutine write_learn_bench
 
         !> The paired difference of held-out recovery between the candidate iw and the kept design: per micrograph
         !! (per particle on a single stack) the mean difference, over the micrographs resampled NBOOT times with
@@ -677,7 +771,7 @@ contains
         call cline%set('lp',     student%get_lp())
         call student%kill
         call infile%kill
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=cline%defined('vol1'))
         call predict_poses_exec(params, build, cline)
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_PREDICT_POSES NORMAL STOP ****', print_simple=.false.)
@@ -699,10 +793,17 @@ contains
         real,    allocatable     :: wk(:,:), prob(:,:)
         integer, allocatable     :: pinds(:), batches(:,:)
         type(student_pred), allocatable :: preds(:)
-        real,    allocatable     :: dist_mode(:), dist_cone(:)
+        real,    allocatable     :: dist_mode(:), dist_cone(:), euls_pose(:,:)
         integer, allocatable     :: iproj_ref(:), rank_ref(:), in_cone(:)
         integer(timer_int_kind)  :: t0, t_all
-        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_all
+        real(timer_int_kind)     :: rt_prep, rt_batch, rt_pred, rt_all, rt_table, rt_write, rt_chkout
+        real(dp), allocatable    :: th_s(:,:)       ! per thread: features, forward, cone, reference error, shift check, registration
+        integer,  allocatable    :: th_n(:)
+        type(pftc_shsrch_grad), allocatable :: shsrch(:)
+        real,    allocatable     :: sh_reg(:,:), corr_reg(:)
+        real     :: lims_reg(2,2)
+        logical  :: l_reg, l_rebuilt
+        integer(int64)           :: clock_rate
         integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, nthr, pred_unit, io_stat, kfromto(2)
         integer  :: n_in_cone, n_within_two, n_capped, n_seeded, n_in_cone_seeded, route, n_wide, nchk, nfeat, chk_unit
         real(dp) :: ncone_sum, conf_sum, radius_sum
@@ -746,18 +847,54 @@ contains
         fname_chk = base%to_char()//'_shiftcheck.txt'
         write(logfhandle,'(A,I0,A,I0,A,F7.2,A)') '>>> POSE STUDENT PREDICTION: ', nptcls, ' particles at nspace ', &
             &student%get_nspace(), ' and lp ', params%lp, ' A'
-        ! the batches and the calculator (one reference slot: the features need the particles alone)
+        ! the batches and the calculator: one reference slot (the features need the particles alone), or, given vol1,
+        ! the map's reprojections at the student's grid and band with sigma2, as learn_pose_student prepares them,
+        ! for the shift registration against the read-out pose
+        l_reg = complete_volume_source_available(params)
+        if( l_reg .and. l_part ) THROW_HARD('the shift registration (vol1) runs in shared memory; predict_poses')
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = 1 + (nptcls - 1) / batchsz_max
         batches     = split_nobjs_even(nptcls, nbatches)
         batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
-        call build%pftc%new(params, 1, [1,batchsz_max], kfromto)
-        call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, batchsz_max)
+        if( l_reg )then
+            call ensure_field_halves(build%spproj, params%oritype, params%projfile)
+            call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, 1, params%box, params%smpd, &
+                &'POSE STUDENT SIGMA2', l_rebuilt)
+            if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
+            call set_bp_range3D(params, build, cline)
+            if( any(params%kfromto /= kfromto) ) THROW_HARD('the map''s band differs from the model''s; predict_poses')
+            call materialize_reprojection_model_from_volumes(params, build, cline, cleanup_pftc=.true.)
+            call read_reprojection_model(params, build, batchsz_max)
+            call prep_sigmas_objfun(params, build)
+            call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, batchsz_max)
+            call build%vol%kill
+            call build%vol_odd%kill
+            call build%vol2%kill
+            call build%pftc%memoize_refs(eulspace=build%eulspace)
+        else
+            call build%pftc%new(params, 1, [1,batchsz_max], kfromto)
+            call alloc_ptcl_imgs(params, build, ptcl_imgs, ptcl_imgs_pad, batchsz_max)
+        endif
         nthr = params%nthr
         !$ nthr = omp_get_max_threads()
+        allocate(sh_reg(2,nptcls), corr_reg(nptcls), source=0.)
+        if( l_reg )then
+            lims_reg(:,1) = -SHIFT_REG_HALFWIDTH / params%smpd
+            lims_reg(:,2) =  SHIFT_REG_HALFWIDTH / params%smpd
+            allocate(shsrch(nthr))
+            do i = 1,nthr
+                call shsrch(i)%new_fixed(build, lims_reg, maxits=SHIFT_REG_MAXITS, coarse_init=.true.)
+            enddo
+            write(logfhandle,'(A,F6.1,A)') '>>> POSE STUDENT PREDICTION: shifts registered against the map''s reprojection at the read-out pose, within ', &
+                &SHIFT_REG_HALFWIDTH, ' A of the stored shift'
+        endif
         call student%prepare_predict(nthr)
+        allocate(th_s(TH_NSTEPS, nthr), source=0.d0)
+        allocate(th_n(nthr), source=0)
+        call system_clock(count_rate=clock_rate)
         allocate(preds(nptcls), prob(student%get_nspace(), batchsz_max))
         allocate(dist_mode(nptcls), dist_cone(nptcls), source=-1.)
+        allocate(euls_pose(3,nptcls), source=0.)
         allocate(iproj_ref(nptcls), rank_ref(nptcls), in_cone(nptcls), source=0)
         ! ruling R2's shift check on the first selected particles: the posterior and the pooled features of each
         ! particle shifted through the calculator's phase ramps against its own
@@ -790,9 +927,10 @@ contains
         call clean_batch_particles3D(build, ptcl_imgs, ptcl_imgs_pad)
         call build%pftc%kill
         ! the table and its summary
+        t0 = tic()
         call fopen(pred_unit, fname_pred, status='replace', action='write', iostat=io_stat)
         call fileiochk('predict_poses; open '//fname_pred%to_char(), io_stat)
-        write(pred_unit,'(A)') '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg dist_cone_deg rank_ref in_cone route'
+        write(pred_unit,'(A)') '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg dist_cone_deg rank_ref in_cone route e1 e2 e3 x y'
         n_in_cone    = 0
         n_within_two = 0
         n_capped     = 0
@@ -823,9 +961,10 @@ contains
             call build%spproj_field%set(iptcl, 'cone',  cone)
             call build%spproj_field%set(iptcl, 'pconf', preds(i)%conf)
             call build%spproj_field%set(iptcl, 'route', real(route))
-            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,F8.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,I0,1X,I0)') &
+            write(pred_unit,'(I0,1X,I0,1X,I0,1X,F8.5,1X,I0,1X,I0,1X,F8.5,1X,F8.3,1X,I0,1X,F8.3,1X,F8.3,1X,I0,1X,I0,1X,I0,5(1X,F8.3))') &
                 &iptcl, build%spproj_field%get_eo(iptcl), preds(i)%mode, preds(i)%pmax, preds(i)%k99, preds(i)%ncone, &
-                &preds(i)%conf, preds(i)%radius, iproj_ref(i), dist_mode(i), dist_cone(i), rank_ref(i), in_cone(i), route
+                &preds(i)%conf, preds(i)%radius, iproj_ref(i), dist_mode(i), dist_cone(i), rank_ref(i), in_cone(i), route, &
+                &euls_pose(:,i), sh_reg(:,i)
             n_in_cone = n_in_cone + in_cone(i)
             if( dist_mode(i) >= 0. .and. dist_mode(i) <= 12. ) n_within_two = n_within_two + 1
             if( preds(i)%k99 > KMAX_STUDENT ) n_capped = n_capped + 1
@@ -835,13 +974,15 @@ contains
             radius_sum = radius_sum + real(preds(i)%radius,dp)
         enddo
         call fclose(pred_unit)
+        rt_table = toc(t0)
         ! the records: a part's range to its document, the run's own project copy otherwise
+        t0 = tic()
         if( l_part )then
             call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [params%fromp, params%top], isegment=PTCL3D_SEG)
         else
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        rt_all = toc(t_all)
+        rt_write = toc(t0)
         write(logfhandle,'(A,F8.4,A,F8.5,A,F8.4,A)') '>>> POSE STUDENT PREDICTION: seeded (the neighbourhood search from the cone) ', &
             &real(n_seeded) / real(nptcls), ' at the confidence threshold ', conf_threshold, ', the stored direction in the cone of ', &
             &real(n_in_cone_seeded) / real(max(1,n_seeded)), ' of the seeded'
@@ -855,29 +996,113 @@ contains
             &rt_batch, ' s, features and forward ', rt_pred, ' s, total ', rt_all, ' s'
         write(logfhandle,'(A,F9.3,A)') '>>> POSE STUDENT PREDICTION: ', rt_pred / real(nptcls,timer_int_kind) * 1000., &
             &' ms per particle (features and forward)'
+        t0 = tic()
         call write_shift_check
+        rt_chkout = toc(t0)
+        rt_all = toc(t_all)
+        if( L_BENCH_GLOB ) call write_predict_bench
         call student%kill
         call feats%kill
-        deallocate(preds, prob, dist_mode, dist_cone, iproj_ref, rank_ref, in_cone, pinds, batches, wk)
-        deallocate(chk_tv, chk_jacc, chk_fchg, chk_mode, chk_cone)
+        if( allocated(shsrch) )then
+            do i = 1,size(shsrch)
+                call shsrch(i)%kill
+            enddo
+            deallocate(shsrch)
+        endif
+        deallocate(preds, prob, dist_mode, dist_cone, euls_pose, sh_reg, corr_reg, iproj_ref, rank_ref, in_cone, pinds, batches, wk)
+        deallocate(chk_tv, chk_jacc, chk_fchg, chk_mode, chk_cone, th_s, th_n)
         call fname_chk%kill
 
     contains
 
-        !> one particle's features, forward pass, folded cone and error against its stored direction (the smaller of a
-        !! direction's and its mirror partner's angle), on the calling thread; the shift check on the first particles
+        !> BENCH/POSE_STUDENT_PREDICT_BENCH.txt: the context, the phases, the prediction's per-particle steps summed
+        !! over the threads (thread-seconds) and the team's load balance, with the share accounted for
+        subroutine write_predict_bench
+            use simple_bench_io, only: open_bench_report
+            character(len=*), parameter :: STEP_NAMES(TH_NSTEPS) = [character(len=32) :: 'features (pooled tensor)', &
+                &'forward pass (HHCNN)', 'folded cone and readout pose', 'reference direction error', 'shift check (R2)', &
+                &'shift registration (vol1)']
+            integer  :: fnr, k
+            real(dp) :: th_tot(nthr), busy
+            call open_bench_report(fnr, 'POSE_STUDENT_PREDICT')
+            write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+            write(fnr,'(a,i0)')   'student particles predicted         : ', nptcls
+            write(fnr,'(a,i0)')   'student grid directions (nspace)    : ', student%get_nspace()
+            write(fnr,'(a,f0.2)') 'student band (lp, A)                : ', params%lp
+            write(fnr,'(a,i0)')   'student rings                       : ', kfromto(2) - kfromto(1) + 1
+            write(fnr,'(a,i0)')   'student half-ring angles (pftsz)    : ', student%get_pftsz()
+            write(fnr,'(a,i0,a,i0)') 'student box / box_crop              : ', params%box, ' / ', params%box_crop
+            write(fnr,'(a,i0)')   'student threads                     : ', nthr
+            write(fnr,'(a,i0)')   'student batches                     : ', nbatches
+            write(fnr,'(a,i0)')   'student shift-checked particles     : ', nchk
+            write(fnr,'(a,l1)')   'student distributed part            : ', l_part
+            write(fnr,'(a,l1)')   'student shift registration (vol1)   : ', l_reg
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f0.2)') 'model read and calculator setup      :', rt_prep
+            write(fnr,'(a,1x,f0.2)') 'particle reading and preparation     :', rt_batch
+            write(fnr,'(a,1x,f0.2)') 'prediction (parallel, wall)          :', rt_pred
+            write(fnr,'(a,1x,f0.3)') 'prediction per particle (ms, wall)   :', 1000. * rt_pred / real(max(1,nptcls))
+            write(fnr,'(a,1x,f0.2)') 'routes and prediction table          :', rt_table
+            write(fnr,'(a,1x,f0.2)') 'records write                        :', rt_write
+            write(fnr,'(a,1x,f0.2)') 'shift check table                    :', rt_chkout
+            write(fnr,'(a,1x,f0.2)') 'total time                           :', rt_all
+            write(fnr,'(a,1x,f0.2)') '% accounted for                      :', 100. * (rt_prep + rt_batch + rt_pred + rt_table + &
+                &rt_write + rt_chkout) / max(rt_all, real(1.e-9,timer_int_kind))
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** PREDICTION STEPS (thread-seconds, ms per particle) ***'
+            do k = 1,TH_NSTEPS
+                write(fnr,'(a32,a,1x,f0.3,1x,f0.4)') STEP_NAMES(k), ':', sum(th_s(k,:)), &
+                    &1000.d0 * sum(th_s(k,:)) / real(max(1,merge(nchk, nptcls, k == 5)),dp)
+            enddo
+            th_tot = sum(th_s, dim=1)
+            busy   = sum(th_tot)
+            write(fnr,'(a32,a,1x,f0.3)') 'all steps', ':', busy
+            if( rt_pred > 0. ) write(fnr,'(a32,a,1x,f0.1)') 'team utilisation (%)', ':', &
+                &100.d0 * busy / (real(nthr,dp) * real(rt_pred,dp))
+            if( busy > 0.d0 ) write(fnr,'(a32,a,1x,f0.3)') 'load imbalance (max/mean thread)', ':', &
+                &maxval(th_tot) / (busy / real(nthr,dp))
+            write(fnr,'(a32,a,1x,i0,1x,i0)') 'particles per thread (min, max)', ':', minval(th_n), maxval(th_n)
+            call fclose(fnr)
+        end subroutine write_predict_bench
+
+        !> one particle's features, forward pass, folded cone, the readout's pose (direction, mirror and in-plane angle,
+        !! no search) and error against its stored direction (the smaller of a direction's and its mirror partner's
+        !! angle), on the calling thread; the shift check on the first particles
         subroutine predict_one( i_here, iptcl_here, islot )
             integer, intent(in) :: i_here, iptcl_here, islot
             type(polar_feat) :: feat_here
             type(ori)        :: o_here
-            real    :: euls_ref(3), d
-            integer :: ithr_here, j, ip_ref
+            real    :: euls_ref(3), d, cxy(3)
+            integer :: ithr_here, j, ip_ref, ip_pose, irot
+            integer(int64) :: c0
             ithr_here = 1
             !$ ithr_here = omp_get_thread_num() + 1
+            call system_clock(count=c0)
             call feats%build(build%pftc, iptcl_here, feat_here)
+            call lap(1, ithr_here, c0)
             call student%predict_feat(ithr_here, feat_here, prob(:,islot))
+            call lap(2, ithr_here, c0)
             call student%cone_of(prob(:,islot), preds(i_here))
-            if( i_here <= nchk ) call shift_check(i_here, ithr_here, islot, feat_here)
+            call student%pose_of(ithr_here, preds(i_here)%mode, euls_pose(:,i_here), ip_pose)   ! before the shift check reuses the readout
+            call lap(3, ithr_here, c0)
+            ! the shift: the stored one, plus, given the map, the increment registered against the reference at the read-out
+            ! pose (its direction and rotation fixed; the search's convention e3 = 360 - rot(irot))
+            sh_reg(:,i_here) = build%spproj_field%get_2Dshift(iptcl_here)
+            if( l_reg )then
+                irot = build%pftc%get_roind(360. - euls_pose(3,i_here))
+                call shsrch(ithr_here)%set_indices(ip_pose, iptcl_here)
+                cxy = shsrch(ithr_here)%minimize(irot)
+                if( irot > 0 )then
+                    sh_reg(:,i_here) = sh_reg(:,i_here) + cxy(2:3)
+                    corr_reg(i_here) = cxy(1)
+                endif
+                call lap(6, ithr_here, c0)
+            endif
+            if( i_here <= nchk )then
+                call shift_check(i_here, ithr_here, islot, feat_here)
+                call lap(5, ithr_here, c0)
+            endif
             call build%spproj_field%get_ori(iptcl_here, o_here)
             euls_ref          = o_here%get_euler()
             iproj_ref(i_here) = student%grid_closest(o_here)
@@ -895,7 +1120,19 @@ contains
             enddo
             call feat_here%kill
             call o_here%kill
+            call lap(4, ithr_here, c0)
+            th_n(ithr_here) = th_n(ithr_here) + 1
         end subroutine predict_one
+
+        !> the time since c0 to step k of thread ithr_here, c0 moved on (system_clock: tic/toc share module state)
+        subroutine lap( k, ithr_here, c0 )
+            integer,        intent(in)    :: k, ithr_here
+            integer(int64), intent(inout) :: c0
+            integer(int64) :: c1
+            call system_clock(count=c1)
+            th_s(k,ithr_here) = th_s(k,ithr_here) + real(c1 - c0,dp) / real(clock_rate,dp)
+            c0 = c1
+        end subroutine lap
 
         !> ruling R2's shift check of one particle: its tensor shifted through the calculator's phase ramps by each
         !! magnitude in each direction, predicted again; per magnitude the largest total variation of the posterior,

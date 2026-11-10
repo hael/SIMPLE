@@ -64,6 +64,11 @@ type, extends(commander_base) :: commander_test_pose_student
     procedure :: execute      => exec_test_pose_student
 end type commander_test_pose_student
 
+type, extends(commander_base) :: commander_test_pose_student_bench
+  contains
+    procedure :: execute      => exec_test_pose_student_bench
+end type commander_test_pose_student_bench
+
 type, extends(commander_base) :: commander_test_polar_matching_bench
   contains
     procedure :: execute      => exec_test_polar_matching_bench
@@ -197,6 +202,11 @@ interface
         class(commander_test_pose_student), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
     end subroutine exec_test_pose_student
+
+    module subroutine exec_test_pose_student_bench( self, cline )
+        class(commander_test_pose_student_bench), intent(inout) :: self
+        class(cmdline), intent(inout) :: cline
+    end subroutine exec_test_pose_student_bench
 
     module subroutine exec_test_polar_matching_bench( self, cline )
         class(commander_test_polar_matching_bench), intent(inout) :: self

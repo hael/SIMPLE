@@ -1,4 +1,4 @@
-!@descr: the pose student's split-half protocol in miniature on the blob phantom's simulated particles, a gate of simple_commanders_test_highlevel
+!@descr: the pose student's split-half protocol in miniature on the blob phantom's simulated particles, a gate of simple_commanders_test_highlevel, and the HHCNN kernel benchmark
 submodule (simple_commanders_test_highlevel) simple_commanders_test_highlevel_pose
 implicit none
 #include "simple_local_flags.inc"
@@ -48,6 +48,44 @@ contains
             THROW_HARD('TEST_POSE_STUDENT FAILED')
         endif
     end subroutine exec_test_pose_student
+
+    !> The HHCNN kernel benchmark on synthetic tensors at a production half ring: per ring count and width the forward
+    !! and backward passes, the training step at one thread and at the team, the team's prediction throughput and the
+    !! step's thread identity, to BENCH/POSE_STUDENT_KERNELS_BENCH.txt and the log; a measurement, no thresholds
+    module subroutine exec_test_pose_student_bench( self, cline )
+        use simple_hhcnn,    only: run_hhcnn_bench
+        use simple_bench_io, only: open_bench_report
+        !$ use omp_lib,      only: omp_get_max_threads, omp_set_num_threads
+        class(commander_test_pose_student_bench), intent(inout) :: self
+        class(cmdline),                           intent(inout) :: cline
+        integer, parameter :: PFTSZ_BENCH     = 160              !< the half ring of a 270 A mask at 2 A
+        integer, parameter :: NKS_BENCH(4)    = [12, 18, 25, 37] !< rings of the band at 20, 15, 12 and 8 A of a 300 A box
+        integer, parameter :: WIDTHS_BENCH(3) = [16, 32, 64]     !< the designs learn_pose_student tries
+        integer, parameter :: NREP_BENCH      = 5
+        integer :: fnr, nthr, nspace
+        logical :: ok_identity
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        if( cline%defined('nthr') ) nthr = cline%get_iarg('nthr')
+        nspace = 1000
+        if( cline%defined('nspace') ) nspace = cline%get_iarg('nspace')
+        if( nspace < 2 .or. mod(nspace, 2) /= 0 ) THROW_HARD('nspace must be even: the classes are its mirror pairs')
+        !$ call omp_set_num_threads(nthr)
+        call open_bench_report(fnr, 'POSE_STUDENT_KERNELS')
+        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
+        write(fnr,'(a,i0)') 'student half-ring angles (pftsz)    : ', PFTSZ_BENCH
+        write(fnr,'(a,i0)') 'student classes (mirror pairs)      : ', nspace / 2
+        write(fnr,'(a,i0)') 'student team threads                : ', nthr
+        write(fnr,'(a,i0)') 'student repetitions per measurement : ', NREP_BENCH
+        write(fnr,'(a)') ''
+        write(fnr,'(a)') '*** KERNELS (us per sample, ms per step of 256 samples) ***'
+        call run_hhcnn_bench(PFTSZ_BENCH, NKS_BENCH, WIDTHS_BENCH, nspace / 2, nthr, NREP_BENCH, fnr, ok_identity)
+        write(fnr,'(a)') ''
+        write(fnr,'(a,l1)') 'training step identical at one thread and at the team: ', ok_identity
+        call fclose(fnr)
+        write(logfhandle,'(a,l1)') '>>> POSE STUDENT BENCH: training step identical at one thread and at the team: ', ok_identity
+        call simple_end('**** SIMPLE_TEST_POSE_STUDENT_BENCH NORMAL STOP ****')
+    end subroutine exec_test_pose_student_bench
 
     subroutine run_pose_student_gate( nthr, metrics_file, all_ok )
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite

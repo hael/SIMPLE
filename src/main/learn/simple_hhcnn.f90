@@ -18,6 +18,7 @@ use simple_error,  only: simple_exception
 use simple_string, only: string
 use simple_fileio, only: fopen, fclose, fileiochk
 use simple_syslib, only: file_exists
+use simple_timer,  only: tic, toc, timer_int_kind
 !$ use omp_lib,    only: omp_get_max_threads, omp_get_thread_num, omp_in_parallel
 implicit none
 
@@ -32,7 +33,7 @@ interface
     end subroutine sgemm
 end interface
 
-public :: hhcnn, run_all_hhcnn_tests
+public :: hhcnn, hhcnn_profile, run_all_hhcnn_tests, run_hhcnn_bench
 public :: CNN_NBLK, CNN_NREAD, CNN_KREAD, CNN_MREAD, CNN_CHUNK, CNN_WEIGHTS_VERSION
 private
 #include "simple_local_flags.inc"
@@ -112,6 +113,13 @@ type :: dw_set
     real(dp), allocatable :: dw(:,:), db(:)
 end type dw_set
 
+!> the network's cost record since new or reset_profile: the training steps (the parallel gradient region and the
+!! serial reduction with the Adam step, wall seconds) and the evaluations
+type :: hhcnn_profile
+    integer(int64) :: nsteps = 0, nsamples_train = 0, nsamples_eval = 0
+    real(dp)       :: rt_grad = 0.d0, rt_step = 0.d0, rt_eval = 0.d0
+end type hhcnn_profile
+
 !> one chunk's gradient sums and loss
 type :: cnn_grad
     type(blk_grad) :: blk(CNN_NBLK)
@@ -130,6 +138,7 @@ type :: hhcnn
     type(readout_layer) :: rd
     type(cnn_work), allocatable :: work(:)
     type(cnn_grad), allocatable :: gchunk(:)
+    type(hhcnn_profile)         :: prof
     logical :: exists = .false.
   contains
     procedure :: new
@@ -140,6 +149,7 @@ type :: hhcnn
     procedure :: predict
     procedure :: get_features
     procedure :: get_scores
+    procedure :: get_class_rotation
     procedure :: init_templates
     procedure :: train_batch
     procedure :: eval_batch
@@ -147,6 +157,8 @@ type :: hhcnn
     procedure :: read_weights
     procedure :: copy_weights_from
     procedure :: weights_identical
+    procedure :: get_profile
+    procedure :: reset_profile
     procedure :: kill
     procedure, private :: forward_sample
     procedure, private :: backward_sample
@@ -170,6 +182,10 @@ end type hhcnn
 interface
     module subroutine run_all_hhcnn_tests()
     end subroutine run_all_hhcnn_tests
+    module subroutine run_hhcnn_bench( pftsz, nks, widths, nclasses, nthr_team, nrep, funit, ok_identity )
+        integer, intent(in)  :: pftsz, nks(:), widths(:), nclasses, nthr_team, nrep, funit
+        logical, intent(out) :: ok_identity
+    end subroutine run_hhcnn_bench
 end interface
 
 contains
@@ -242,6 +258,7 @@ contains
         self%rd%vscale = 0.
         self%nfeat     = 2 * CNN_NREAD * pftsz * self%rd%kread
         self%adam_step = 0
+        self%prof      = hhcnn_profile()
         self%exists    = .true.
     end subroutine new
 
@@ -1120,7 +1137,9 @@ contains
         real(sp),     intent(in)    :: lr, wd
         real(sp),     intent(out)   :: loss_mean, frac_mode
         integer :: nchunks, ic, ithr, i0, i1
+        integer(timer_int_kind) :: t0
         call self%ensure_chunks(n, nchunks)
+        t0 = tic()
         !$omp parallel do default(shared) private(ic,ithr,i0,i1) schedule(dynamic) proc_bind(close)
         do ic = 1,nchunks
             ithr = 1
@@ -1130,7 +1149,12 @@ contains
             call self%grad_chunk(ic, ithr, i0, i1, x, g, side, t)
         enddo
         !$omp end parallel do
+        self%prof%rt_grad = self%prof%rt_grad + real(toc(t0),dp)
+        t0 = tic()
         call self%reduce_and_step(nchunks, n, lr, wd, loss_mean, frac_mode)
+        self%prof%rt_step        = self%prof%rt_step + real(toc(t0),dp)
+        self%prof%nsteps         = self%prof%nsteps + 1_int64
+        self%prof%nsamples_train = self%prof%nsamples_train + int(n,int64)
     end subroutine train_batch
 
     !> the chunks' sums in chunk order, in double, then the Adam step
@@ -1216,7 +1240,9 @@ contains
         real(sp),     intent(out)   :: loss_mean, frac_mode
         real(dp) :: loss
         integer  :: nchunks, ic, ithr, i0, i1, i, nmode
+        integer(timer_int_kind) :: t0
         call self%ensure_chunks(n, nchunks)
+        t0 = tic()
         !$omp parallel do default(shared) private(ic,ithr,i0,i1,i,loss) schedule(dynamic) proc_bind(close)
         do ic = 1,nchunks
             ithr = 1
@@ -1241,7 +1267,21 @@ contains
         enddo
         loss_mean = real(loss / real(n,dp))
         frac_mode = real(nmode) / real(n)
+        self%prof%rt_eval       = self%prof%rt_eval + real(toc(t0),dp)
+        self%prof%nsamples_eval = self%prof%nsamples_eval + int(n,int64)
     end subroutine eval_batch
+
+    !> the cost record since new or the last reset_profile
+    function get_profile( self ) result( prof )
+        class(hhcnn), intent(in) :: self
+        type(hhcnn_profile) :: prof
+        prof = self%prof
+    end function get_profile
+
+    subroutine reset_profile( self )
+        class(hhcnn), intent(inout) :: self
+        self%prof = hhcnn_profile()
+    end subroutine reset_profile
 
     !> the class probabilities of one sample on thread ithr's workspace (prepare_work first)
     subroutine predict( self, ithr, x, g, side, prob )
@@ -1276,6 +1316,20 @@ contains
         smax  = self%work(ithr)%smax
         rbest = self%work(ithr)%rbest
     end subroutine get_scores
+
+    !> class ic's maximising rotation of thread ithr's last forward pass, as the angle (degrees) the sample's readout
+    !! map is turned from the template's, and whether the reflected map scored it
+    subroutine get_class_rotation( self, ithr, ic, ang, refl )
+        class(hhcnn), intent(in)  :: self
+        integer,      intent(in)  :: ithr, ic
+        real(sp),     intent(out) :: ang
+        logical,      intent(out) :: refl
+        if( .not. allocated(self%work) ) THROW_HARD('no workspace: prepare_work first; hhcnn%get_class_rotation')
+        if( ithr < 1 .or. ithr > size(self%work) ) THROW_HARD('thread index outside the workspaces; hhcnn%get_class_rotation')
+        if( ic < 1 .or. ic > self%nclasses ) THROW_HARD('class index out of range; hhcnn%get_class_rotation')
+        ang  = real(self%work(ithr)%rbest(ic) - 1) * 360. / real(self%nrots)
+        refl = self%work(ithr)%refl(ic)
+    end subroutine get_class_rotation
 
     ! ===== THE WEIGHTS FILE =====
 

@@ -11,6 +11,7 @@ type(ui_program), target :: solve3D_chunks
 type(ui_program), target :: solve3D_pyramid
 type(ui_program), target :: estimate_lpstages
 type(ui_program), target :: noisevol
+type(ui_program), target :: validate_pose_student
 
 contains
 
@@ -23,6 +24,7 @@ contains
         call new_solve3D_pyramid(prgtab)
         call new_estimate_lpstages(prgtab)
         call new_noisevol(prgtab)
+        call new_validate_pose_student(prgtab)
     end subroutine construct_solve3D_programs
 
     subroutine new_solve3D( prgtab )
@@ -41,6 +43,30 @@ contains
         ! add to ui_hash
         call add_ui_program('solve3D', solve3D, prgtab, UI_CATEGORY)
     end subroutine new_solve3D
+
+    !> solve3D's inputs; nsample is the class-balanced training sample, solve3D running on all of it every iteration
+    subroutine new_validate_pose_student( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call validate_pose_student%new(&
+        &'validate_pose_student',&                                                               ! name
+        &'Validate the pose student: solve3D teacher, training, prediction',&                    ! summary
+        &'is a developer workflow that draws a class-balanced greedy sample of nsample particles from the 2D '//&
+        &'solution, runs solve3D on every sampled particle in every iteration, trains the pose student on the '//&
+        &'resulting poses and map, predicts the directions of every selected particle, and reports the '//&
+        &'agreement statistics and the timings of the phases',&                                  ! help
+        &'simple_exec',&                                                                         ! executable
+        &.true., visibility=UI_VIS_DEVELOPER, display_name='Validate Pose Student')              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        call validate_pose_student%add_input(UI_SRCH, 'nsample', 'num', 'Training particles', &
+        &'Size of the class-balanced greedy sample of the 2D solution (best class scores first) that trains the pose '//&
+        &'student; solve3D runs on all of it every iteration, the rest of the selected particles are predicted unseen', &
+        &'# particles', .true., 0., group='search', visibility=UI_VIS_STANDARD)
+        call add_solve3D_base_inputs(validate_pose_student, l_stream_compatible=.false., l_include_nsample=.false., &
+            &l_include_pcg=.true.)
+        ! add to ui_hash
+        call add_ui_program('validate_pose_student', validate_pose_student, prgtab, UI_CATEGORY)
+    end subroutine new_validate_pose_student
 
     !> The solve3D inputs shared by solve3D and the stream-compatible workflows. l_stream_compatible leaves out the
     !! inputs a stream base run does not have; l_include_nsample and l_include_pcg expose the public sample size

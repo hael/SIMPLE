@@ -146,6 +146,25 @@ so that a student that cannot be trusted seeds nobody.
 
 ## Prediction and the hand-off
 
+**The readout's pose.** The readout already estimates the in-plane rotation
+and the mirror: it scores each class at every rotation of the polar grid,
+against the template and its reflection, and only the best score enters the
+softmax. Read out for the mode's pair, the best rotation `ang` gives a full
+pose with no search: the unmirrored direction with `e3 = 360 - ang` (the
+search's convention for its rotation index), or, when the reflection scored,
+the mirror partner with `e3 = ang + psi`, `psi` the pair's frame angle (the
+reflection `mirror_ref_bank` applies; the HHCNN tester pins it at 0, 75 and
+180 degrees). The template's frame is the unmirrored direction's reprojection
+at `e3 = 0`, where its training starts. The network does not estimate the
+shift: it is trained to tolerate it. Given the map (`vol1`), `predict_poses`
+registers each particle's shift against the map's reprojection at the
+read-out pose, its direction and rotation fixed: a 5 x 5 grid over 25 Å
+about the stored shift, then L-BFGS-B, the search's own fixed-rotation shift
+search (`pftc_shsrch_grad`), with the references and sigma2 prepared as
+learn_pose_student prepares them; shared memory only. The table's last five
+columns are the pose and the shift (the stored shift without `vol1`); the
+route and the records do not use them.
+
 The posterior is **over mirror pairs**: each pair's mass is placed on its
 unmirrored direction of the grid, the mode and the smallest set holding 99% of
 the mass (the cone) are taken over the pairs, and the cone's radius is that
@@ -239,3 +258,54 @@ commanders; the band is `lp`, the grid `nspace`, the model `infile` and
 in `simple_eul_prob_tab_neigh`. The design, the rulings that shaped it and
 every measurement are in
 `doc/implementation_notes/completed/learned_pose_state_assignment.md`.
+
+## Validation and benchmarks
+
+**`validate_pose_student`** (simple_exec, developer visibility) takes solve3D's
+inputs on a project with a 2D solution; its `nsample` is the training set: a
+class-balanced greedy sample of the selected classes, best 2D scores first.
+It runs solve3D on that sample with `nsample` at the sample's size, so every
+iteration searches every training particle (no fractional update, no
+trailing reconstruction). It trains the student on solve3D's poses and map at
+15 Å, with a shift disk of three times 2 Å since every particle is centred by
+the 2D or 3D solution, and predicts every selected particle: the training
+rows at the teacher's poses, the others at their 2D shifts. The report
+(`validate_pose_student_report.txt`, also in the log) gives:
+
+- the model's threshold and held-out recovery;
+- the seeded and capped fractions, the confidence and the cone radius of all,
+  training and unseen particles;
+- the student's mode against the teacher on the training particles;
+- class consistency: the distance of every particle's direction to its 2D
+  class's teacher medoid, the teacher's own spread being the baseline;
+- the training rows' shift change from the 2D solution to the teacher's,
+  against the training's shift disk;
+- the readout's full pose against the teacher's on the training particles
+  (the direction with the readout's mirror, and the in-plane angle);
+- the registered shifts against the teacher's, beside the 2D shifts;
+- six maps by reconstruct3D from poses with no orientation search: the unseen
+  particles at the student's poses with their 2D shifts and with the
+  registered shifts (their FSC against the teacher's map is cross-validated:
+  the two share no particle), the training particles likewise, the training
+  particles at the student's poses and the teacher's shifts, and the
+  teacher's own poses as the control; each with its FSC against the teacher's
+  map and between its halves;
+- the phases' wall times with the per-particle costs.
+
+The phases' own records are `BENCH/VALIDATE_POSE_STUDENT_BENCH.txt`, solve3D's
+`BENCH/` in its directory, `learn/BENCH/POSE_STUDENT_LEARN_BENCH.txt` and
+`predict/BENCH/POSE_STUDENT_PREDICT_BENCH.txt`.
+
+**`POSE_STUDENT_LEARN`** splits learn_pose_student into the rows (setup,
+particles, the teacher's table fill with its fill profile, the features) and,
+per design, the training into batch assembly, gradients (the parallel
+region), reduction with the Adam steps and the held-out evaluation, with the
+steps, the samples per second, the held-out prediction and the design choice.
+**`POSE_STUDENT_PREDICT`** splits predict_poses into its phases and the
+per-particle steps in thread-seconds (features, forward pass, cone, the
+reference error, ruling R2's shift check) with the team's utilisation and load
+balance. **`test=pose_student_bench`** (simple_test_exec, no CTest entry) times
+the HHCNN kernels on synthetic tensors per ring count and width: the forward
+pass split into the blocks and the readout, the backward pass, a training step
+of 256 samples at one thread and at the team, the team's prediction throughput
+and the step's identity across threads (`BENCH/POSE_STUDENT_KERNELS_BENCH.txt`).

@@ -12,6 +12,7 @@ type(ui_program), target :: solve3D_addon_snapshots
 type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: cont_refine3D_bench
 type(ui_program), target :: pose_student
+type(ui_program), target :: pose_student_bench
 type(ui_program), target :: polar_matching_bench
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
@@ -41,6 +42,7 @@ contains
         call new_cont_refine3D_1jxy(tsttab)
         call new_cont_refine3D_bench(tsttab)
         call new_pose_student(tsttab)
+        call new_pose_student_bench(tsttab)
         call new_polar_matching_bench(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
@@ -70,6 +72,7 @@ contains
         write(logfhandle,'(A)') cont_refine3D_1jxy%name%to_char()
         write(logfhandle,'(A)') cont_refine3D_bench%name%to_char()
         write(logfhandle,'(A)') pose_student%name%to_char()
+        write(logfhandle,'(A)') pose_student_bench%name%to_char()
         write(logfhandle,'(A)') polar_matching_bench%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
@@ -198,6 +201,24 @@ contains
         &.false., display_name='Pose Student Validation')                                           ! requires sp_project
         call add_ui_program('pose_student', pose_student, tsttab, UI_CATEGORY)
     end subroutine new_pose_student
+
+    subroutine new_pose_student_bench( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call pose_student_bench%new(&
+        &'pose_student_bench',&                     ! name
+        &'benchmark the pose student''s HHCNN kernels on synthetic tensors',&
+        &'Per ring count (12, 18, 25, 37 rings of a 160-angle half ring) and width (16, 32, 64): the forward pass '//&
+        &'split into the blocks and the readout, the backward pass, a training step of 256 samples at one thread '//&
+        &'and at the team, the team''s prediction throughput and the training step''s identity across threads. '//&
+        &'A measurement with no thresholds and no CTest entry: rows to BENCH/POSE_STUDENT_KERNELS_BENCH.txt '//&
+        &'(doc/algorithms/pose_student.md)',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Pose Student Kernel Benchmark')                                     ! requires sp_project
+        call pose_student_bench%add_input(UI_PARM, 'nspace', 'num', 'Directions', &
+            &'Directions of the student grid; the classes are its mirror pairs', '# directions{1000}', .false., 1000.)
+        call pose_student_bench%add_input(UI_COMP, nthr, required_override=.false.)
+        call add_ui_program('pose_student_bench', pose_student_bench, tsttab, UI_CATEGORY)
+    end subroutine new_pose_student_bench
 
     subroutine new_cont_refine3D_bench( tsttab )
         class(ui_hash), intent(inout) :: tsttab

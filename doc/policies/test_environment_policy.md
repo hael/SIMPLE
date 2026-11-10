@@ -161,6 +161,10 @@ scoring and production's cc scoring on synthetic polar data at production
 sizes: timings and identity checks, including a dump of the production kernels'
 distance vectors for comparing builds, no thresholds;
 `doc/implementation_notes/completed/polar_matching_layout_bench.md`),
+`pose_student_bench` (the pose student's HHCNN kernels on synthetic tensors:
+the forward and backward passes, the training step at one thread and at the
+team, the prediction throughput and the step's thread identity, no thresholds;
+`doc/algorithms/pose_student.md`),
 and the input generators `solve3D_addon_snapshots`, `write_state_weights_labels`
 and `write_state_weights_mixed` (tools for manual runs). `pcg_frac_update`,
 which needed a user's project, builds its own from the multi-state test fixture

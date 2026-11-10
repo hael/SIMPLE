@@ -13,13 +13,13 @@ use simple_syslib,       only: file_exists
 use simple_timer,        only: tic, toc, timer_int_kind
 use simple_oris,         only: oris
 use simple_sym,          only: sym
-use simple_hhcnn,        only: hhcnn
+use simple_hhcnn,        only: hhcnn, hhcnn_profile
 use simple_polar_feats,  only: polar_feats, polar_feat
 use simple_math,         only: hpsort
 !$ use omp_lib,          only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
-public :: pose_student, student_pred, pose_student_targets
+public :: pose_student, student_pred, pose_student_targets, student_train_profile
 public :: NSPACE_STUDENT, KMAX_STUDENT, POSE_STUDENT_VERSION
 private
 #include "simple_local_flags.inc"
@@ -48,6 +48,14 @@ type :: student_pred
     integer  :: cone(KMAX_STUDENT) = 0
 end type student_pred
 
+!> the cost record of the last training: wall seconds of the batch assembly (the shift augmentation, the folded
+!! targets), the network's own record (the gradients, the optimiser steps, the held-out evaluations) and the epochs
+type :: student_train_profile
+    real(dp)            :: rt_assemble = 0.d0, rt_total = 0.d0
+    integer             :: epochs = 0, batch_size = 0, nbatches_epoch = 0
+    type(hhcnn_profile) :: net
+end type student_train_profile
+
 type :: pose_student
     private
     ! the geometry, the band, the grid
@@ -60,6 +68,7 @@ type :: pose_student
     integer,    allocatable :: mirr(:)           !< the grid's mirror partner per direction (the antipode's class)
     integer,    allocatable :: rep(:)            !< (nspace/2) the network's classes: the unmirrored direction of each mirror pair
     integer,    allocatable :: pair_of(:)        !< (nspace) the class of each direction, the pair it belongs to
+    real(sp),   allocatable :: frame(:)          !< (nspace/2) each pair's mirror frame angle (the partner's psi, degrees)
     integer                 :: nclass = 0
     type(sym),  allocatable :: symop
     type(polar_feats)       :: feats
@@ -71,6 +80,7 @@ type :: pose_student
     integer(int64) :: seed          = 0_int64
     integer        :: nptcls_train  = 0, nheldout = 0, batch_size = 0, epochs_run = 0, best_epoch = 0, nweights = 0
     real(sp)       :: loss_train    = 0., loss_held = 0., mode_held = 0., time_train_s = 0.
+    real(dp)       :: rt_assemble   = 0.d0   !< the last training's batch assembly (wall seconds)
     real(sp)       :: conf_threshold = 0., conf_fraction = 0., heldout_seeded = 0., heldout_recovered = 0. !< the confidence threshold (0: none), the declared in-cone fraction above it, the held-out fraction seeded and, of the seeded, recovered
     real(sp)       :: cone_bound    = 0.   !< the route's bound on the folded cone's radius (degrees; ruling R1: the dense search's cell), recorded with the threshold it was calibrated with
     integer(int64) :: vol1_hash     = 0_int64, selection_hash = 0_int64
@@ -86,6 +96,7 @@ type :: pose_student
     procedure :: get_features
     procedure :: get_nfeat
     procedure :: cone_of
+    procedure :: pose_of
     procedure :: fold_index
     procedure :: mirror_of
     procedure, private :: heavier
@@ -105,6 +116,7 @@ type :: pose_student
     procedure :: grid_spacing
     procedure :: angle_between
     procedure :: get_record
+    procedure :: get_train_profile
     procedure :: set_provenance
     procedure :: set_threshold
     procedure :: get_threshold
@@ -161,12 +173,13 @@ contains
         ! tells a direction from its mirror (prob_neigh's cone about both)
         call self%grid%get_mirror_pairs(half_partners, half_frames)
         self%nclass = size(half_partners)
-        allocate(self%rep(self%nclass), self%pair_of(nspace))
+        allocate(self%rep(self%nclass), self%pair_of(nspace), self%frame(self%nclass))
         do k = 1,self%nclass
             if( self%mirr(k) /= half_partners(k) ) THROW_HARD('the grid''s mirror pairs disagree; pose_student%new')
             self%rep(k)                  = k
             self%pair_of(k)              = k
             self%pair_of(half_partners(k)) = k
+            self%frame(k)                = half_frames(k)
         enddo
         allocate(self%net)
         call self%net%new(pftsz, self%nk, self%nclass, width, seed)
@@ -301,8 +314,10 @@ contains
         real(sp) :: loss, fm, loss_held, fm_held, best_loss
         real(dp) :: loss_sum, fm_sum
         integer  :: ntr, nhe, epoch, ib, nb, i0, i1, nbatch, i, j, since_best, nthr_here, bsz, max_epochs, patience
-        integer(timer_int_kind) :: t0
+        integer(timer_int_kind) :: t0, ta
         if( .not. self%exists ) THROW_HARD('student not constructed; pose_student%train')
+        self%rt_assemble = 0.d0
+        call self%net%reset_profile
         if( n < 2 ) THROW_HARD('too few rows to train on; pose_student%train')
         if( max_steps < 1 .or. patience_steps < 1 ) THROW_HARD('the training budget is at least one step; pose_student%train')
         self%prob_beta    = prob_beta
@@ -353,7 +368,9 @@ contains
                 i0     = (ib-1) * bsz + 1
                 i1     = min(ntr, ib * bsz)
                 nbatch = i1 - i0 + 1
+                ta = tic()
                 call assemble_batch(nbatch, train_inds(perm(i0:i1)), epoch)
+                self%rt_assemble = self%rt_assemble + real(toc(ta),dp)
                 call self%net%train_batch(nbatch, xb, gb, sb, tb, LEARNING_RATE, WEIGHT_DECAY, loss, fm)
                 loss_sum = loss_sum + real(loss,dp) * real(nbatch,dp)
                 fm_sum   = fm_sum   + real(fm,dp)   * real(nbatch,dp)
@@ -428,7 +445,9 @@ contains
                 j0  = (jb-1) * BATCH_MAX + 1
                 j1  = min(nhe, jb * BATCH_MAX)
                 nbb = j1 - j0 + 1
+                ta = tic()
                 call assemble_batch(nbb, held_inds(j0:j1), 0)
+                self%rt_assemble = self%rt_assemble + real(toc(ta),dp)
                 call self%net%eval_batch(nbb, xb, gb, sb, tb, loss, fm)
                 lsum = lsum + real(loss,dp) * real(nbb,dp)
                 fsum = fsum + real(fm,dp)   * real(nbb,dp)
@@ -546,6 +565,31 @@ contains
         end subroutine sort_pairs
 
     end subroutine cone_of
+
+    !> the full pose the readout of thread ithr's last prediction gives a direction's pair, without any search: the
+    !! readout turns the sample's map by ang from the template (the unmirrored direction's reprojection at e3 = 0), so
+    !! the unmirrored direction with e3 = 360 - ang, as the search's rotation index; scored by the reflected map, the
+    !! mirror partner with e3 = ang + the pair's frame angle (the reflection that mirror_ref_bank applies)
+    subroutine pose_of( self, ithr, iproj, euls, iproj_pose )
+        class(pose_student), intent(in)  :: self
+        integer,             intent(in)  :: ithr, iproj
+        real(sp),            intent(out) :: euls(3)
+        integer,             intent(out) :: iproj_pose   !< the grid direction of the pose (the pair's member)
+        real(sp) :: ang
+        integer  :: ic
+        logical  :: refl
+        ic = self%pair_of(iproj)
+        call self%net%get_class_rotation(ithr, ic, ang, refl)
+        if( refl )then
+            iproj_pose = self%mirr(self%rep(ic))
+            euls       = self%grid%get_euler(iproj_pose)
+            euls(3)    = modulo(ang + self%frame(ic), 360.)
+        else
+            iproj_pose = self%rep(ic)
+            euls       = self%grid%get_euler(iproj_pose)
+            euls(3)    = modulo(360. - ang, 360.)
+        endif
+    end subroutine pose_of
 
     !> the folded sphere's class of a direction: the smaller index of the direction and its mirror partner
     pure integer function fold_index( self, iproj )
@@ -948,6 +992,19 @@ contains
         nweights     = self%nweights
     end subroutine get_record
 
+    !> the cost record of the last training (the network's since its construction or the training's start)
+    function get_train_profile( self ) result( prof )
+        class(pose_student), intent(in) :: self
+        type(student_train_profile) :: prof
+        prof%rt_assemble    = self%rt_assemble
+        prof%rt_total       = real(self%time_train_s,dp)
+        prof%epochs         = self%epochs_run
+        prof%batch_size     = self%batch_size
+        prof%nbatches_epoch = 0
+        if( self%batch_size > 0 ) prof%nbatches_epoch = (self%nptcls_train + self%batch_size - 1) / self%batch_size
+        prof%net            = self%net%get_profile()
+    end function get_train_profile
+
     subroutine kill( self )
         class(pose_student), intent(inout) :: self
         if( allocated(self%net) )then
@@ -959,7 +1016,7 @@ contains
             deallocate(self%grid)
         endif
         if( allocated(self%mirr)    ) deallocate(self%mirr)
-        if( allocated(self%rep)     ) deallocate(self%rep, self%pair_of)
+        if( allocated(self%rep)     ) deallocate(self%rep, self%pair_of, self%frame)
         self%nclass = 0
         self%cone_bound = 0.
         if( allocated(self%symop) )then

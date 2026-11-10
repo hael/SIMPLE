@@ -257,7 +257,8 @@ contains
         complex(sp), allocatable :: bank(:,:,:)
         real(sp) :: x(T_PFTSZ, T_NK, 2), xm(T_PFTSZ, T_NK, 2), g(T_NK), side, s0(T_NCLS), s1(T_NCLS), smx, loss, fm
         real(sp), allocatable :: xb(:,:,:,:), gb(:,:), sb(:), tb(:,:)
-        integer  :: r0(T_NCLS), r1(T_NCLS), ia, b, ic, istep
+        integer  :: r0(T_NCLS), r1(T_NCLS), ia, b, ic, istep, nrots, nsteps_psi, nchk
+        logical  :: refl0(T_NCLS), ok_rot
         write(*,'(A)') 'test_mirror_invariance'
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64)
         call random_templates(net)
@@ -278,7 +279,9 @@ contains
         g = 1.
         call net%forward_sample(net%work(1), x, g, side)
         call net%get_scores(1, s0, r0)
-        smx = maxval(abs(s0))
+        refl0 = net%work(1)%refl
+        smx   = maxval(abs(s0))
+        nrots = 2 * T_PFTSZ
         do ia = 1,size(ANG)
             bank(:,:,1) = cmplx(x(:,:,1), x(:,:,2), kind=sp)
             bank(:,:,2) = (0., 0.)
@@ -288,6 +291,22 @@ contains
             call net%forward_sample(net%work(1), xm, g, side)
             call net%get_scores(1, s1, r1)
             call assert_true(maxval(abs(s1 - s0)) <= 1.e-4 * smx, 'a mirrored sample scores against every class as the sample')
+            ! the pose read-out's reflected case (pose_student%pose_of): the mirror's maximising rotation is the
+            ! sample's less the frame angle, the reflection flag swapped
+            nsteps_psi = nint(ANG(ia) * real(nrots) / 360.)
+            ok_rot = .true.
+            nchk   = 0
+            do ic = 1,T_NCLS
+                if( refl0(ic) .eqv. net%work(1)%refl(ic) )then
+                    ok_rot = .false.
+                else if( refl0(ic) )then
+                    ok_rot = ok_rot .and. modulo(r1(ic) - r0(ic) - nsteps_psi, nrots) == 0
+                else
+                    ok_rot = ok_rot .and. modulo(r0(ic) - r1(ic) - nsteps_psi, nrots) == 0
+                endif
+                nchk = nchk + 1
+            enddo
+            call assert_true(ok_rot .and. nchk == T_NCLS, 'the mirror swaps every class''s reflection and turns its rotation by the frame angle')
         enddo
         ! a few training steps keep the kernels symmetric, bit for bit
         allocate(xb(T_PFTSZ, T_NK, 2, NB), gb(T_NK, NB), sb(NB), tb(T_NCLS, NB))

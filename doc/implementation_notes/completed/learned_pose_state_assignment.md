@@ -2168,3 +2168,129 @@ points). Logs and runs: `/data2/agent_runs/mirror_tie/study_pairs.log`; the pola
 
 **Open:** repeat the curve over three or four seeds before reading a trend at the small sizes; the
 real sets and the student-only reconstructions of phase 3 have not been rerun with the pair student.
+
+### Validation workflow and benchmarks (2026-11-09, in the maintainer's tree)
+
+Done by hand on the Dell in `~/src/SIMPLE`, uncommitted, at Hans's request: a solve3D-driven validation
+program and detailed benchmarks, to judge where the student belongs in production code.
+
+**What was added.**
+
+- `validate_pose_student` (simple_exec, developer visibility): solve3D's inputs, its `nsample` the
+  size of a class-balanced greedy training sample of the 2D solution. solve3D runs on the sample with
+  `nsample` at its size (full sampling), the student is trained on solve3D's poses and map (15 Å, a
+  2 Å shift width: the particles are centred), and every selected particle is predicted. The report is
+  described in `doc/algorithms/pose_student.md`, section "Validation and benchmarks". Controller in
+  `simple_commanders_pose_student.f90`, UI in `simple_ui_solve3D.f90`, route in `simple_exec_solve3D.f90`.
+- Bench records `POSE_STUDENT_LEARN` (rows, then per design: batch assembly, gradients, steps,
+  held-out evaluation; the fill profile) and `POSE_STUDENT_PREDICT` (phases; per-particle steps in
+  thread-seconds; utilisation and load balance), and `VALIDATE_POSE_STUDENT` (the phases).
+- `test=pose_student_bench` (simple_test_exec, no CTest entry, test policy section 1.3): the HHCNN
+  kernels on synthetic tensors (`simple_hhcnn_bench.f90`, a submodule of `simple_hhcnn`, with the
+  network's `hhcnn_profile` counters).
+
+**First read: bgal** (`/data2/bgal_addon/3_selection`, one stack, 2,756 selected particles in 50
+classes, D2, box 256 at 1.275 Å, mask 180 Å). 1,500 training particles, 1,256 unseen; 24 threads.
+Two runs of the same command (`run2`, `run3` in `/data2/agent_runs/validate_ps/`); solve3D took a
+different stage path in each (multi-threaded, unseeded), so the teachers differ.
+
+| read | run 2 | run 3 |
+| --- | --- | --- |
+| held-out rows seeded, recovered | 37.3%, 98.2% | 45.3%, 97.1% |
+| training particles: mode within 6° of the teacher | 87.9% | 89.9% |
+| the same, seeded training particles | 98.9% | 97.5% |
+| training particles seeded | 49.2% | 70.3% |
+| unseen particles seeded | 3.7% | 6.1% |
+| distance to the 2D class's teacher medoid, median: the teacher's own (baseline) | 6.86° | 4.44° |
+| the same, student on training particles | 6.64° | 4.49° |
+| the same, student on unseen particles | 6.67° | 4.74° |
+| unseen within 12° of the medoid (baseline: training particles' teacher poses) | 73.4% (68.8%) | 77.1% (72.8%) |
+| teacher's shift minus the 2D shift (training), median and q90 | 1.6 px, 16.8 px | 1.9 px, 17.6 px |
+| training rows within the training's shift disk (4.7 px) | | 71.3% |
+
+The unseen particles' directions agree with their classes as well as the teacher's own poses do,
+but few are seeded: their cones are wider and their confidence lower than the held-out training
+rows'. The likeliest cause is the shift: the unseen rows carry their 2D shifts, and the teacher moved
+a tenth of the training rows by more than 16.8 px from theirs, against a training disk of 4.7 px. A
+first run with the default shift width (10 Å, a 23.5 px disk) learned almost nothing (held-out mode
+agreement 7%, nobody seeded): the width matters more than any other setting seen so far.
+
+**Cost** (run 2; run 3's solve3D ran one more stage, 604 s): solve3D 344 s (229 ms per training particle), training 178 s (two designs,
+119 ms per training particle; the parallel gradients 91% of it), prediction 4.2 s for 2,756 particles
+(1.5 ms each; ruling R2's shift check on 256 particles is half the prediction's thread time; the forward
+pass alone is 12.6 thread-ms per particle, 0.5 ms at 24 threads).
+
+**Kernels** (`test=pose_student_bench`, two runs, 24 threads, 160-angle half ring, 500 classes; rows
+in `/data2/agent_runs/validate_ps/bench2/BENCH/`): the forward pass takes 4.3 to 18 ms per sample at
+one thread, the readout 2.6 to 5.5 ms of it, so the readout dominates at 16 channels up to 25 rings; a
+training step of 256 samples takes 140 to 2,400 ms at the team, 8 to 13 times faster than at one
+thread (the one-thread step is timed once and moved by up to 50% between the runs); the step is
+bit-identical at one thread and at the team in every row.
+
+**Open:** the shift gap between the 2D solution and the teacher (a training disk that covers it, or
+centring the unseen rows in the teacher's frame) before the seeded fraction of unseen particles is
+read as the student's; a larger project; the readout's cost.
+
+**Poses straight from the student (the same day, Hans's question).** Can the unseen particles be
+reconstructed from the student's orientations with no refinement at all? The readout already finds
+the in-plane rotation and the mirror (it maximises each class's score over the rotation grid and the
+reflection) and threw them away; `pose_student%pose_of` now reads them out for the mode's pair
+(`doc/algorithms/pose_student.md`, "The readout's pose"), `predict_poses` writes them as the table's
+last three columns, and the validation reconstructs four maps with reconstruct3D. The network does
+not estimate shifts: the unseen particles keep their 2D shifts. Run 4 (`/data2/agent_runs/validate_ps/run4`,
+the same command as runs 2 and 3; this time the 64-channel design was kept):
+
+| readout pose against the teacher, training particles | median | q90 | within 6° |
+| --- | --- | --- | --- |
+| direction (mirror as read out, point group folded) | 2.7° | 21.1° | 80.5% |
+| in-plane angle, direction within 12° | 2.0° | 9.4° | 84.1% |
+| direction, seeded particles | 2.1° | 4.3° | 95.6% |
+
+| map (reconstruct3D, D2, no search) | particles | FSC 0.5 / 0.143 against the teacher's map | halves 0.5 / 0.143 |
+| --- | --- | --- | --- |
+| unseen: student's poses, 2D shifts | 1,256 | 10.2 / 7.6 Å | 13.6 / 8.8 Å |
+| training: student's poses, 2D shifts | 1,500 | 9.6 / 6.4 Å | 12.6 / 8.8 Å |
+| training: student's poses, teacher's shifts | 1,500 | 6.8 / 4.1 Å | 9.9 / 6.9 Å |
+| training: teacher's poses and shifts (control) | 1,500 | (same particles) | 7.6 / 4.4 Å |
+
+The unseen map against the teacher's is cross-validated: the two share no particle, and they agree to
+10.2 Å at 0.5. The unseen and the training particles give the same half-map resolution from the
+student's poses, so the student generalises: what it loses against the teacher is not the unseen
+particles' novelty. The shifts cost more than the orientations: with the teacher's shifts the
+student's poses reach 9.9 Å at 0.5 between halves, against 7.6 Å for the teacher's poses; with the 2D
+shifts, 12.6 Å. The control's FSC against the teacher's map (2.55 Å, Nyquist) only says the two are
+the same reconstruction.
+
+**Open (added):** a shift read-out or a cheap shift estimate for the unseen particles; the readout's
+in-plane angle is on the rotation grid (0.8° steps at this 220-angle half ring), finer than its measured error.
+
+**Shifts registered at the read-out pose (the same day, Hans's option A).** The network tolerates
+shifts but does not estimate them. Given the map, `predict_poses` now fits each particle's shift
+against the map's reprojection at the student's pose, direction and rotation fixed, with the search's
+fixed-rotation shift search (a 5 x 5 grid over 25 Å, then L-BFGS-B). Run 5
+(`/data2/agent_runs/validate_ps/run5`, the same command as runs 2-4):
+
+| shift against the teacher's, training particles | median | q90 | within 3 px |
+| --- | --- | --- | --- |
+| 2D shift | 1.59 px | 17.87 px | 64.9% |
+| registered at the read-out pose | 0.59 px | 1.62 px | 96.6% |
+| registered, direction within 6° | 0.54 px | 1.10 px | 99.5% |
+
+| map (reconstruct3D, D2, no orientation search) | particles | FSC 0.5 / 0.143 against the teacher's map | halves 0.5 / 0.143 |
+| --- | --- | --- | --- |
+| unseen: student's poses, 2D shifts | 1,256 | 9.1 / 5.5 Å | 10.5 / 7.8 Å |
+| unseen: student's poses, registered shifts | 1,256 | 7.8 / 4.7 Å | 10.2 / 7.6 Å |
+| training: student's poses, 2D shifts | 1,500 | 7.8 / 5.1 Å | 10.2 / 7.8 Å |
+| training: student's poses, registered shifts | 1,500 | 5.5 / 3.9 Å | 9.1 / 6.0 Å |
+| training: student's poses, teacher's shifts | 1,500 | 4.7 / 3.9 Å | 8.6 / 5.1 Å |
+| training: teacher's poses and shifts (control) | 1,500 | (same particles) | 6.5 / 4.1 Å |
+
+The registration recovers the teacher's shifts to about half a pixel, and closes most of the gap to
+the teacher's-shift ceiling on the training particles (9.1 against 8.6 Å at 0.5). On the unseen
+particles the cross-validated agreement with the teacher's map improves from 9.1 to 7.8 Å, their own
+halves only from 10.5 to 10.2 Å: their orientations, which no teacher measures, are now the limit. It
+costs 0.5 thread-ms per particle against 22 for the forward pass. This run's maps are better than run
+4's throughout (its teacher differs; solve3D is unseeded), so compare rows within a run, not across.
+
+**Open (added):** the shift fit at the 15 Å band; a finer band for it alone; the unseen particles'
+orientation error, which only a teacher pass over them would measure.
