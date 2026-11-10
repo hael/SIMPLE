@@ -101,6 +101,7 @@ async function addMolstarSurface(viewer, volume, absoluteValue) {
         {
             type: {name: "isosurface", params: {
                 ...isosurface.defaultValues,
+                gpuDataType: "float",
                 isoValue: {kind: "absolute", absoluteValue},
             }},
             colorTheme: {name: "uniform", params: {
@@ -203,10 +204,10 @@ async function initializeMolstarVolumeViewer(root) {
     let isovalueUpdatePromise = Promise.resolve();
     let defaultDensityValue = null;
     const applyIsovalue = (value) => {
-        const int8Value = densityToInt8(selectedVolumeOption(sourceSelect), value);
+        const renderValue = densityToInt8(selectedVolumeOption(sourceSelect), value) + 128;
         isovalueUpdatePromise = isovalueUpdatePromise
             .catch(() => {})
-            .then(() => updateMolstarIsovalue(viewer, int8Value));
+            .then(() => updateMolstarIsovalue(viewer, renderValue));
         return isovalueUpdatePromise;
     };
 
@@ -245,12 +246,22 @@ async function initializeMolstarVolumeViewer(root) {
                 {entryId: option.dataset.volumeName || "solve3D"},
             );
             const volume = viewer.plugin.managers.volume.hierarchy.current.volumes[0];
-            const voxels = volume?.cell?.obj?.data?.grid?.cells?.data;
+            const grid = volume?.cell?.obj?.data?.grid;
+            const voxels = grid?.cells?.data;
             const value = int8ToDensity(
                 option, topOnePercentThreshold(voxels),
             );
+            // Mol* reverses surface orientation for negative contours. Shift
+            // both voxels and contours so rendering is independent of that sign.
+            grid.cells = {...grid.cells, data: Uint8Array.from(voxels, (value) => value + 128)};
+            grid.stats = {
+                ...grid.stats,
+                min: grid.stats.min + 128,
+                max: grid.stats.max + 128,
+                mean: grid.stats.mean + 128,
+            };
             configureIsovalueControl(option, isovalueInput, isovalueText, value);
-            await addMolstarSurface(viewer, volume, densityToInt8(option, value));
+            await addMolstarSurface(viewer, volume, densityToInt8(option, value) + 128);
             applyBackground();
             resetCamera(0);
             isovalueInput.disabled = false;
