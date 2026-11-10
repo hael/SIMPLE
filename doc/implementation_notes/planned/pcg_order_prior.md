@@ -21,7 +21,7 @@ the evidence mask is the prior's order weight.
 
 ## 1. The problem
 
-`solve3D gold_standard=yes` gives usable maps of small membrane proteins. For the
+`solve3D` with gold-standard matching from stage 6 gives usable maps of small membrane proteins. For the
 smallest ones, though, the map does not separate ordered protein from disordered
 detergent: the two are connected in the map and in every mask derived from it.
 The solvent prior flattened solvent with a ridge outside a density weight `w`, a
@@ -143,10 +143,9 @@ base solve (prior-free) -> FSC, w per half
   `pcg_order`).
 - **Exclusions:** `atm_prior=yes` and `pcg_order=yes` are exclusive.
   `reconstruct3D_wave` and `refine3D_states_cavgs` refuse the prior.
-- **solve3D:** gridding through stage 5, PCG and the prior from stage 6, the
-  first gold-standard stage (`PCG_REC_START_STAGE = PCG_ORDER_START_STAGE =
-  GOLD_STD_STAGE`). The PCG accumulation and solves are the cost, so starting
-  them late is the saving.
+- **solve3D:** gridding through stage 5, PCG and the prior from stage 6
+  (`PCG_START_STAGE`), independently of `gold_std_stage`. The PCG accumulation
+  and solves are the cost, so starting them late is the saving.
 - **Trailing chains:** they are per backend. The stage-boundary reconstruction
   takes the next stage's backend and seeds the PCG chain at full mass. The prior
   acts after the blend, on the restored pair.
@@ -388,7 +387,7 @@ band content into the protein. Maps: `~/agent_work/SIMPLE/out_<run>/<pair>_<auto
 ## 12. Next
 
 The question is whether the prior improves the alignment, not what it deletes.
-With `gold_standard=yes` the halves align independently, and the final map is
+From `gold_std_stage` (default stage 6) the halves align independently, and the final map is
 prior-free, so the loop judges the prior. The order weight is shared by the
 halves, like the NU label field: the evidence of order is a cross-half quantity,
 and without the per-half density weight (section 3) nothing in the penalty is

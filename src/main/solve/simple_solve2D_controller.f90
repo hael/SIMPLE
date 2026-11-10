@@ -30,6 +30,7 @@ integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch fr
 integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! sticky random subset stage
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
 integer,          parameter :: FIRST_SHIFT_STAGE  = 2                ! the first stage with shifts: the dense table under the key, the box's mask for an automatic run's mask estimate
+integer,          parameter :: GOLD_STD_STAGE     = 2                ! half-specific references from the first regularized stage
 integer,          parameter :: NSAMPLE_DEFAULT_2D = 200000
 integer,          parameter :: COVERAGE_NITS_CAP  = 10
 character(len=3), parameter :: EO_STAGE           = 'yes'
@@ -50,6 +51,7 @@ end type stage_params
 type refine2D_stage_cfg
     type(string) :: refine, center, objfun, refs, gauref, ml_reg
     integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
+    integer      :: gold_std_stage=0
     real         :: trs=0., gaufreq=0., mskdiam=0., shift_sigma=0.
     logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
     logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
@@ -178,6 +180,8 @@ contains
         call cline_pass%set('trs',           stage_parms(istage)%trslim)
         call cline_pass%set('center',        trim(params%center))
         call cline_pass%set('ml_reg',        params%ml_reg)
+        call cline_pass%set('stage',          istage)
+        call cline_pass%set('gold_std_stage', gold_start_stage(params))
         call cline_pass%set('filt_mode',     'none')
         call cline_pass%set('gauref',        'no')
         call cline_pass%set('restore_cavgs', 'yes')
@@ -197,6 +201,7 @@ contains
         call set_refine2D_stage_iteration_policy( cfg, cline_refine2D )
         call set_refine2D_stage_phase_policy( cfg, istage )
         call set_refine2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
+        call set_refine2D_stage_gold_standard_policy( cfg, params )
         call set_refine2D_stage_search_policy( cfg, params, istage, size(stage_parms) )
         call set_refine2D_stage_mask_policy( cfg, params, stage_parms, istage )
         ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its class
@@ -205,6 +210,18 @@ contains
         cfg%l_prob_beta_end_user = cline%defined('prob_beta_end')
         cfg%l_anneal_tail        = istage == size(stage_parms) .and. istage >= PROBREFINE_STAGE
     end subroutine build_refine2D_stage_cfg
+
+    subroutine set_refine2D_stage_gold_standard_policy( cfg, params )
+        type(refine2D_stage_cfg), intent(inout) :: cfg
+        class(parameters),       intent(in)    :: params
+        cfg%gold_std_stage = gold_start_stage(params)
+    end subroutine set_refine2D_stage_gold_standard_policy
+
+    integer function gold_start_stage( params ) result( istage )
+        class(parameters), intent(in) :: params
+        istage = GOLD_STD_STAGE
+        if( params%gold_std_stage > 0 ) istage = params%gold_std_stage
+    end function gold_start_stage
 
     subroutine set_refine2D_stage_objfun_policy( cfg, params )
         type(refine2D_stage_cfg), intent(inout) :: cfg
@@ -395,6 +412,8 @@ contains
             call cline_refine2D%delete('extr_iter')
         endif
         call cline_refine2D%set('ml_reg', cfg%ml_reg)
+        call cline_refine2D%set('stage',          istage)
+        call cline_refine2D%set('gold_std_stage', cfg%gold_std_stage)
         call cline_refine2D%set('filt_mode', 'none')
         call cline_refine2D%set('gauref', cfg%gauref)
         if( cfg%gauref.eq.'yes' )then

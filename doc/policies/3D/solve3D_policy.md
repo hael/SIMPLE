@@ -103,14 +103,13 @@ Stage policy includes:
 - early Gaussian reference filtering
 - optional trailing reconstruction by stage and state count
 - staged NU filtering from `NU_FILTER_STAGE`
-- optional single-state gold-standard matching from stage 6 (`gold_standard=yes`)
+- single-state gold-standard matching from stage 6 by default (`gold_std_stage` overrides the start)
 - spherical support throughout, with `automsk=no` and `envfsc=no`
 - a requested PCG backend (`rec_backend=pcg`) from stage 6
-  (`PCG_REC_START_STAGE = GOLD_STD_STAGE`), gridding before: the PCG
-  accumulation and solves are the cost, so they start with the gold-standard
-  phase
+  (`PCG_START_STAGE`), gridding before; changing `gold_std_stage` does
+  not retime this backend switch
 - an explicitly requested PCG order prior (`pcg_order=yes`) from the same
-  stage (`PCG_ORDER_START_STAGE`), on the NU evidence and labels of the
+  stage (`PCG_START_STAGE`), on the NU evidence and labels of the
   previous iteration (section 9)
 
 The downscaled particle cache is a 2D-only feature: `solve3D` rejects
@@ -718,33 +717,41 @@ Staged `solve3D` uses the same static-ladder NU competition as
 and in the final reconstruction; it generates no density or NU-evidence
 envelope for masking. The UI offers no envelope controls for this workflow.
 
-`gold_standard=no` is the default. NU-enabled stages use
+Before gold-standard refinement starts, NU-enabled stages use
 `nonuniform_lpset`, a merged registration reference and the scheduled `lp`.
 The FSC=0.5 stage-boundary advance in section 4 is preserved. NU matching
 updates retain their existing bandwidth policy, with no added ceiling at the
 planned stage limit; an explicit user `lpstop` is still respected.
 
-With `gold_standard=yes`, particle runs with `nstates=1` use half-specific
-references in every executed stage numbered 6 or later. Skipping is unchanged:
-if stage 6 is omitted, stage 7 starts the half-specific matching. The
+Particle runs with `nstates=1` use half-specific references from stage 6 by
+default. `gold_std_stage=0` selects this default; a positive value overrides
+the first gold-standard stage. Negative values are rejected. A value beyond
+`nstages` defers the switch past this run. The former `gold_standard=yes|no`
+flag is removed. Skipping is unchanged: the first executed stage at or beyond
+the configured start switches to half-specific matching. The
 controller switches either NU mode to plain `nonuniform`, deletes scheduled
 `lp`, and removes the stage-derived ceiling. NU chooses the matching band,
 subject to crop Nyquist and explicit user `lpstop`; without NU, the existing
-half-map FSC policy chooses it. Explicit `lp` is refused with this option;
-use `lpstop` for a ceiling.
+half-map FSC policy chooses it. An explicit `lp` applies before the switch;
+gold-standard stages delete it. Use `lpstop` for a ceiling that survives the
+switch.
 
 Fractional sampling, trailing accumulators and early stopping continue under
 their existing rules. The transition adds no full alignment or reconstruction
 pass and does not reset the trailing chain. The particle even/odd partition
 is preserved. Frequencies already used with shared references retain their
-initialization history; enabling the option does not retroactively validate
+initialization history; the switch does not retroactively validate
 the earlier FSCs.
 
-Multi-state runs cannot enable `gold_standard=yes`; an extended multi-state
-schedule keeps LP-set matching. The class-average route never switches.
-The manifest records the option, and add-on runs replay it as part of the
+An explicit positive `gold_std_stage` requires a single state; an extended
+multi-state schedule keeps LP-set matching under the default policy. The
+class-average route never switches.
+The manifest records the stage override, and add-on runs replay it as part of the
 frozen solution's policy. Their initial registration pass retains its existing
 planned-band matching; the stage proper follows the recorded policy.
+Manifest version 3 distinguishes this default-on policy from earlier manifests;
+version 2 manifests require a new base run rather than silently changing their
+matching policy on replay.
 
 NU filtering starts at `NU_FILTER_STAGE` = 5 (6 until 2026-10-18),
 overridable from the command line by `nu_stage` for testing (0 = the built-in

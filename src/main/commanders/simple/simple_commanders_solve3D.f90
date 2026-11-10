@@ -999,11 +999,9 @@ contains
             if( .not. l_user_nstages ) call cline%set('nstages', solve3D_independent_nstages_default())
             if( .not. l_user_lpstop  ) call cline%set('lpstop',  solve3D_independent_lpstop_default())
         endif
-        if( cline%defined('gold_standard') )then
-            if( cline%get_carg('gold_standard') == 'yes' )then
-                if( nstates_on_cline /= 1 ) THROW_HARD('gold_standard=yes requires nstates=1')
-                if( cline%defined('lp') ) THROW_HARD('gold_standard=yes selects an adaptive matching band; use lpstop instead of lp')
-            endif
+        if( cline%defined('gold_std_stage') )then
+            if( cline%get_iarg('gold_std_stage') > 0 .and. nstates_on_cline /= 1 ) &
+                &THROW_HARD('gold_std_stage requires nstates=1')
         endif
         ! make master parameters
         call params%new(cline)

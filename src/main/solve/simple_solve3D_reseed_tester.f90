@@ -91,7 +91,7 @@ contains
         params%nstates = 1
         params%box = 64
         params%smpd = 2.
-        params%gold_standard = 'yes'
+        params%gold_std_stage = 0
         params%automsk = 'yes'
         params%envfsc = 'yes'
         params%projfile = 'stages.simple'
@@ -140,11 +140,11 @@ contains
         call assert_false(cline_refine3D%defined('lp'), 'the add-on stage proper restores half-specific matching')
         call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'the add-on stage uses plain NU')
         call addon%frozen_rec%kill
-        params%gold_standard = 'no'
+        params%gold_std_stage = 9
         call set_cline_refine3D(params, 7, 1, .false.)
-        call assert_true(cline_refine3D%defined('lp'), 'opt-out retains scheduled LP-set matching')
-        call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'opt-out retains merged NU references')
-        params%gold_standard = 'yes'
+        call assert_true(cline_refine3D%defined('lp'), 'a later switch retains scheduled LP-set matching')
+        call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'a later switch retains merged NU references')
+        params%gold_std_stage = 0
         params%nstates = 2
         call set_cline_refine3D(params, 7, 1, .false.)
         call assert_true(cline_refine3D%defined('lp'), 'extended multi-state schedule retains LP-set matching')

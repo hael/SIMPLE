@@ -707,6 +707,7 @@ contains
                 THROW_HARD('cohort_sampling must be yes or no')
         end select
         if( self%nu_stage < 0 ) THROW_HARD('nu_stage must be non-negative (0 = default)')
+        if( self%gold_std_stage < 0 ) THROW_HARD('gold_std_stage must be non-negative (0 = workflow default)')
         ! 5 is the earliest NU filtering works: the alignment must be good enough for
         ! the local-resolution estimate, or the filter reinforces it into a hole.
         ! nu_stage 3 and 4 were tried on PfCRT and streptavidin (2026-10-19)
@@ -977,6 +978,8 @@ contains
         self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
+        self%l_gold_standard_resolved = self%stage > 0 .and. self%gold_std_stage > 0
+        self%l_gold_standard = self%l_gold_standard_resolved .and. self%stage >= self%gold_std_stage
         select case(trim(self%unfil_unmasked))
             case('yes')
                 if( trim(self%rec_backend) /= 'gridding' ) THROW_HARD('unfil_unmasked=yes requires gridding reconstruction')

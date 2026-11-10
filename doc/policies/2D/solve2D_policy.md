@@ -71,6 +71,7 @@ child `solve2D` command lines.
 - `gauref=yes`, `ml_reg=yes`
 - `refine=prob_neigh` (`prob_neigh_mode=snhc`)
 - `extr_lim=20`, `nits_per_stage=5`, `eo_stage=yes`
+- `gold_std_stage=0` (gold-standard refinement from stage 2)
 - `rank_cavgs=yes`, `stats=no`
 
 The controller derives the rest:
@@ -85,7 +86,7 @@ The controller derives the rest:
   active particle when there are fewer
 - `nstages=6` (5 with `eo_stage=no`); a smaller `nstages` re-spaces the
   low-pass ladder from `lpstart` to `lpstop` over the stages before the last,
-  which stays the gold-standard stage
+  which uses the class FRCs without a fixed low-pass limit unless `lp` is supplied
 
 The interface shows these values (`scripts/default_audit.py` follows
 `exec_solve2D` into `exec_solve2D_workflow`). The shown numeric defaults of
@@ -101,10 +102,34 @@ Six stages, in two phases (stages 1-4 and 5-6):
 | stage | search (`refine=prob_neigh`) | low-pass | references |
 | --- | --- | --- | --- |
 | 1 | `snhc_smpl` (dense `prob` on the evidence over the disk under the polar shift map) | `lpstart` | random, Gaussian-filtered (`gauref`), no centering, no shift search |
-| 2 | `snhc_smpl` | ladder | the previous iteration's class averages, `ml_reg`, centering and shift search |
+| 2 | `snhc_smpl` | ladder | the previous iteration's half-specific class averages with `ml_reg=yes`, centering and shift search |
 | 3-4 | sparse `prob_neigh` table | ladder | as stage 2 |
 | 5 | sparse `prob_neigh` table | `lpstop` | as stage 2 |
-| 6 | dense `prob` table | gold standard (even/odd) | as stage 2 |
+| 6 | dense `prob` table | class FRCs unless `lp` is supplied | as stage 2 |
+
+Gold-standard refinement starts at stage 2 by default, the first stage with
+ML regularization. `gold_std_stage=0` selects that default; a positive value
+overrides the first gold-standard stage independently of `ml_reg` and the
+objective function. Negative values are rejected. A value beyond the last
+stage defers the switch past this run, including its final FRC-driven stage.
+The former `gold_standard=yes|no` flag is removed.
+
+The controller passes the current `stage` and resolved `gold_std_stage` to
+each `refine2D` invocation and its distributed workers. From that stage on,
+the matcher uses the particle's half-specific reference and the half-reference
+FRC filtering convention, retaining the scheduled low-pass limits. Classes
+with insufficient populations in either half retain the existing merged-reference
+fallback. A `cls_init=prev` seed pass follows the policy of its probabilistic
+stage; the terminal pass inherits the last stage. Before the switch references
+are merged, including an FRC-driven final stage when the switch is deferred.
+`eo_stage` controls the extra final FRC-driven stage.
+
+Parameter derivation records whether the stage policy was supplied in the
+non-CLI flag `l_gold_standard_resolved`, separately from whether the current
+stage is gold-standard (`l_gold_standard`). Both reference loading and FRC
+filtering consume these flags. Direct `refine2D` callers without a stage,
+including stream and pool callers, retain their existing `l_lpset`-based
+reference and filtering rules; the solve2D stage default does not apply to them.
 
 - The ladder halves the distance to `lpstop` at each stage.
 - `refine=prob` uses the dense table from stage 3 on; `refine=snhc_smpl` keeps
@@ -145,8 +170,8 @@ stages is finer than `stage_parms(k)%lp`: the estimate must have held across
 a stage, the stability guard the many per-class estimates need. Never
 omitted: the entry stage, the first `SKIP_MIN_STAGE` (2) stages (the second
 is the centring stage, whose class averages estimate an automatic run's
-mask), the last stage of the invocation (the gold-standard stage has no
-planned limit; a checkpoint segment's last stage too) and a stage without a
+mask), the last stage of the invocation (including the final FRC-driven stage
+and a checkpoint segment's last stage) and a stage without a
 planned limit; the first two stages after a checkpoint resume or a
 `cls_init=prev` seed pass only record the evidence. Phase 1 ends at fixed
 iterations because the extremal schedule runs over `extr_lim`: an omitted

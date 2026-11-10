@@ -155,7 +155,7 @@ contains
         &.false., 200000., group="search", visibility=UI_VIS_STANDARD, preserve_default=.true.)
         call program%add_input(UI_SRCH, 'nstages', 'num', 'Number of stages', 'Number of solve2D stages, at most 6 &
         &(5 with eo_stage=no): the low-pass limits from lpstart to lpstop are spread over the stages before the last, &
-        &and the last is the gold-standard even/odd stage{6}', '# stages{6}', .false., 6., group="search", &
+        &and the last uses class FRCs when lp is unset{6}', '# stages{6}', .false., 6., group="search", &
         &visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         call program%add_input(UI_SRCH, 'stats', 'binary', 'Write class-average statistics', &
         &'Write class-average statistics during solve2D(yes|no){no}', '', .false., 'no', group="search", &
@@ -167,11 +167,15 @@ contains
         call program%add_input(UI_SRCH, 'nits_per_stage', 'num', 'Iterations per stage', &
         &'Number of solve2D iterations added at each frequency-marching stage', &
         &'iterations per stage', .false., 5., group="search", visibility=UI_VIS_DEVELOPER)
-        call program%add_input(UI_SRCH, 'eo_stage', 'binary', 'Use even/odd stage', &
-         &'Run the final solve2D frequency-marching stage with even/odd class averages(yes|no){yes}', '', &
+        call program%add_input(UI_SRCH, 'eo_stage', 'binary', 'Add final FRC stage', &
+         &'Add the final solve2D stage driven by class FRCs when lp is unset(yes|no){yes}', '', &
          &.false., 'yes', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
          &visibility=UI_VIS_DEVELOPER)
         ! filter controls
+        call program%add_input(UI_FILT, 'gold_std_stage', 'num', 'Stage gold-standard refinement starts at', &
+        &'First stage with half-specific references (0: stage 2); the scheduled frequency limits are retained. '//&
+        &'A stage beyond nstages defers the switch past this run', 'gold-standard start stage', .false., 0., &
+        &group="filter", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_FILT, ml_reg, group="filter", &
@@ -186,7 +190,7 @@ contains
             &'low-pass limit in Angstroms', .false., 30., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Low-pass limit the stages march to, &
-            &reached before the gold-standard stage; by default the mask diameter / 22, kept within 6-8 A and at least &
+            &reached before the optional final FRC stage; by default the mask diameter / 22, kept within 6-8 A and at least &
             &twice the cropped pixel size', 'low-pass limit in Angstroms', .false., 6., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_FILT, lp, group="filter", &
@@ -238,6 +242,9 @@ contains
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)
+        call solve2D_chunks%add_input(UI_FILT, 'gold_std_stage', 'num', 'Stage gold-standard refinement starts at', &
+            &'First stage with half-specific references in each solve2D chunk (0: stage 2)', &
+            &'gold-standard start stage', .false., 0., group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_FILT, lp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)
         call solve2D_chunks%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

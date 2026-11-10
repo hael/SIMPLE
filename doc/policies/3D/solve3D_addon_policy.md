@@ -236,8 +236,8 @@ inherited state are refused.
   rule: FSC=0.5 promotion at the stage boundary from the FSC measured on the
   union, and the NU handoff when the stage is an NU stage. The registration
   pass keeps the planned limit (no promotion). The frozen run's
-  `gold_standard` option is replayed: single-state stages 6 and later use
-  half-specific references and NU-selected bandwidth when enabled. The
+  `gold_std_stage` override is replayed: single-state stages at or beyond
+  that start (default 6) use half-specific references and adaptive bandwidth. The
   registration pass retains its planned-band matching. The stage logs the
   add-on's limits next to the frozen run's.
 - **Early stopping.** The add-on context switches stage-3 early stopping on
@@ -247,6 +247,9 @@ inherited state are refused.
   (`last_stage`, with the whole planned ladder). The add-on's own manifest
   records that stage as its first and last stage, so a further add-on on the
   result runs the same stage.
+  Manifest version 3 records the default-on gold-standard stage policy;
+  earlier manifests are rejected so an old merged-reference solution cannot
+  silently change policy on replay.
 
 ## 6. Sampling, Trailing and Multi-State
 

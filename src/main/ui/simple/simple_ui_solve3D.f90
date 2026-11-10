@@ -218,11 +218,11 @@ contains
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
-        call prg%add_input(UI_FILT, 'gold_standard', 'binary', 'Gold-standard refinement from stage 6', &
-            &'Use half-specific references from the first executed stage at or beyond 6; single state only. '//&
-            &'NU selects the matching band; use lpstop for an explicit ceiling(yes|no){no}', &
-            &'', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
-            &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call prg%add_input(UI_FILT, 'gold_std_stage', 'num', 'Stage gold-standard refinement starts at', &
+            &'First stage with half-specific references (0: stage 6); single-state particles only. '//&
+            &'The matching band becomes adaptive; use lpstop for an explicit ceiling. '//&
+            &'A stage beyond nstages defers the switch past this run', &
+            &'gold-standard start stage', .false., 0., group="filter", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_FILT, 'nu_stage', 'num', 'Stage NU filtering starts at', &
             &'solve3D stage that switches on NU filtering (0: the built-in default); &
             &5 is the earliest that works, tested on PfCRT and streptavidin', &

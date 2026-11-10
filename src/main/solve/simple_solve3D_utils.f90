@@ -201,10 +201,10 @@ contains
         cline_symmap        = cline
         cline_reconstruct3D = cline
         cline_reproject     = cline
-        call cline_refine3D%delete('gold_standard')
-        call cline_symmap%delete('gold_standard')
-        call cline_reconstruct3D%delete('gold_standard')
-        call cline_reproject%delete('gold_standard')
+        call cline_refine3D%delete('gold_std_stage')
+        call cline_symmap%delete('gold_std_stage')
+        call cline_reconstruct3D%delete('gold_std_stage')
+        call cline_reproject%delete('gold_std_stage')
         call strip_sampling_keys(cline_refine3D)
         call strip_sampling_keys(cline_symmap)
         call strip_sampling_keys(cline_reconstruct3D)

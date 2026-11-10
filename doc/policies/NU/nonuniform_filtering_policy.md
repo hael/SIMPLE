@@ -664,10 +664,11 @@ UI/CLI definitions.
 
 Staged `solve3D` defaults to `filt_mode=nonuniform` at the public interface,
 but the controller enables NU filtering only from `NU_FILTER_STAGE`.
-With the default `gold_standard=no`, it promotes NU modes to
+Before the gold-standard start stage, it promotes NU modes to
 `nonuniform_lpset` and keeps scheduled stage `lp`, including the existing
-FSC=0.5 boundary advance. With `gold_standard=yes`, single-state particle
-stages 6 and later use plain `nonuniform` and omit scheduled `lp` so NU
+FSC=0.5 boundary advance. Single-state particle stages from stage 6 by default
+(`gold_std_stage=0`), or the positive `gold_std_stage` override, use plain
+`nonuniform` and omit scheduled `lp` so NU
 controls bandwidth while references remain half-specific. Stage omission,
 fractional updates and trailing reconstruction are unchanged. No new planned
 stage ceiling is imposed; explicit user `lpstop` still applies.
@@ -675,6 +676,6 @@ stage ceiling is imposed; explicit user `lpstop` still applies.
 `solve3D` forces `automsk=no` and `envfsc=no` throughout, including final
 reconstruction, and keeps spherical support. Default multi-state runs stop at
 stage 5, their first NU stage; extending them preserves LP-set matching.
-The manifest records the gold-standard option for add-on replay.
+The manifest records the gold-standard start-stage override for add-on replay.
 
 The solve3D cavgs route disables NU filtering and automasking.

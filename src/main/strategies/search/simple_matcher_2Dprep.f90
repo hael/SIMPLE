@@ -218,6 +218,9 @@ contains
         real,              intent(in)    :: xyz(3)
         integer :: filtsz
         real    :: frc(img%get_filtsz()), filter(img%get_filtsz()), crop_factor
+        logical :: l_merged_frc
+        l_merged_frc = params%l_lpset
+        if( params%l_gold_standard_resolved ) l_merged_frc = .not. params%l_gold_standard
         ! Cavg & particles centering
         if( arg(xyz) > CENTHRESH )then
             call img%fft()
@@ -238,7 +241,7 @@ contains
                 call build%clsfrcs%frc_getter(icls, frc)
                 if( any(frc > 0.143) )then
                     filtsz = img%get_filtsz()
-                    call fsc2optlp_sub(filtsz, frc, filter, merged=params%l_lpset)
+                    call fsc2optlp_sub(filtsz, frc, filter, merged=l_merged_frc)
                     call img%fft    ! in case the shift was not applied above
                     call img%apply_filter_serial(filter)
                 endif

@@ -67,7 +67,6 @@ type :: parameters
     character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: freq_march_aggressive='no' !< solve3D aggressive frequency marching: from the first prob stage the limits are linear in spatial frequency from 12 A to the final limit, with finer angular sampling; the global stages keep their planned rungs(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
-    character(len=3)          :: gold_standard='no'   !< solve3D: half-specific refinement from stage 6, single state only(yes|no){no}
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search(yes|no){no}
@@ -447,6 +446,7 @@ type :: parameters
     integer :: nspace_pickrefs=0   !< # reprojections of the stream's picking references (0: the initial analysis' default)
     integer :: nstages=8           !< # low-pass limit stages
     integer :: nu_stage=0          !< solve3D stage NU filtering switches on at(0: the built-in default){0}
+    integer :: gold_std_stage=0    !< first gold-standard stage in solve2D/solve3D (0: workflow default, 2/6){0}
     integer :: nstages_pickrefs=0  !< # solve3D_cavgs stages of the stream's picking references (0: the initial analysis' default)
     integer :: nstates=1           !< # states to reconstruct
     integer :: nstates_pickrefs=0  !< # solve3D_cavgs states of the stream's picking references (0: the initial analysis' default)
@@ -473,7 +473,7 @@ type :: parameters
     integer :: ref_ind=0           !> reference index
     integer :: reliongroups=0
     integer :: startit=1           !< start iterating from here
-    integer :: stage=0
+    integer :: stage=0             !< current stage carried to staged workflow workers
     integer :: state=1             !< state to extract
     integer :: stepf=3             !< Incremental frame step size{3}
     integer :: stepsz=1            !< size of step{1}
@@ -651,6 +651,8 @@ type :: parameters
     logical :: l_lpauto          = .false. !< not a command-line key
     logical :: l_lpset           = .false. !< not a command-line key
     logical :: l_ml_reg          = .true. !< not a command-line key
+    logical :: l_gold_standard   = .false. !< solve2D worker stage >= its resolved gold_std_stage; not a command-line key
+    logical :: l_gold_standard_resolved = .false. !< staged 2D reference policy supplied; not a command-line key
     logical :: l_noise_reg       = .false. !< not a command-line key
     logical :: l_neigh           = .false. !< not a command-line key
     logical :: l_pdb_bfac        = .false. !< not a command-line key

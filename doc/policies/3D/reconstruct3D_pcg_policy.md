@@ -798,7 +798,7 @@ full both-sign-h lattice (section 4).
 A `rec_backend=gridding` versus `rec_backend=pcg` comparison in solve3D
 is meaningful because the two paths share everything but the estimator:
 
-- stages 1-5 are gridding on both (`PCG_REC_START_STAGE=6` since 2026-11-08,
+- stages 1-5 are gridding on both (`PCG_START_STAGE=6` since 2026-11-08,
   3 before); the stage
   ladder, the FSC=0.5 promotion, the uncapped NU-stage handoff, early
   stopping, the sigma2 handling, the matching references and the final

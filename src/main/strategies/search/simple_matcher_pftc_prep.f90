@@ -33,6 +33,7 @@ contains
         has_been_searched = (.not. l_fresh_start) .and. (.not.build%spproj%is_virgin_field(params%oritype))
         input_center      = trim(params%center) .eq. 'yes'
         l_use_merged_ref  = params%l_lpset .and. (.not.params%l_nonuniform .or. params%l_nonuniform_lpset)
+        if( params%l_gold_standard_resolved ) l_use_merged_ref = .not. params%l_gold_standard
         ! create the polarft_calc object
         call build%pftc%new(params, params%ncls, [1,batchsz_max], params%kfromto, nmany_refs=nmany_refs)
         ! objective functions & sigma

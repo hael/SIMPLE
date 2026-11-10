@@ -21,7 +21,7 @@ private
 #include "simple_local_flags.inc"
 
 character(len=*), parameter :: MANIFEST_SCHEMA       = 'solve3D_manifest'
-integer,          parameter :: MANIFEST_VERSION      = 2
+integer,          parameter :: MANIFEST_VERSION      = 3
 character(len=*), parameter :: MANIFEST_FNAME        = 'solve3D_manifest.txt'
 character(len=*), parameter :: MANIFEST_PROJINFO_KEY = 'solve3D_manifest'
 character(len=*), parameter :: RUN_ID_PROJINFO_KEY   = 'solve3D_run_id'
@@ -33,7 +33,7 @@ integer,          parameter :: KLEN = 24
 character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(35) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', 'nstates', 'nstages', 'rec_backend', 'maxits_pcg', &
     &'maxits_ml', 'pcg_order', 'pcg_order_lambda', 'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', &
-    &'objfun', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_standard', &
+    &'objfun', 'hp', 'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_std_stage', &
     &'prob_athres', 'shift_prior', 'bfac', 'gauref', 'balance', 'nclust', &
     &'lpstart_ini3D', 'lpstop_ini3D', 'center', 'cenlp', 'cavg_ini', 'cavg_ini_ext', 'pgrp_start', 'vol1']
 
@@ -48,7 +48,7 @@ character(len=KLEN), parameter :: MANIFEST_INPUT_KEYS(35) = [character(len=KLEN)
 character(len=KLEN), parameter :: MANIFEST_REPLAY_KEYS(21) = [character(len=KLEN) :: &
     &'pgrp', 'mskdiam', &
     &'filt_mode', 'nu_stage', 'automsk', 'envfsc', 'envmsklp', 'objfun', 'hp', &
-    &'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_standard', &
+    &'lp', 'lpstart', 'lpstop', 'force_lp_range', 'gold_std_stage', &
     &'prob_athres', 'bfac', 'gauref', 'balance', 'nclust', 'lpstart_ini3D', 'lpstop_ini3D']
 
 !> Replayed keys the add-on may override from its own command line: they

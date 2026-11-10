@@ -37,8 +37,7 @@ integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch fr
 integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
-integer,          parameter :: PCG_REC_START_STAGE     = GOLD_STD_STAGE ! first stage on the requested PCG backend (gridding before: cheaper)
-integer,          parameter :: PCG_ORDER_START_STAGE   = GOLD_STD_STAGE ! the requested PCG order prior from the gold-standard phase
+integer,          parameter :: PCG_START_STAGE         = 6           ! requested PCG backend and order prior; independent of gold_std_stage
 integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neigh refinement stages 6-8, single and multi-state
 integer,          parameter :: NSTAGES_INDEPENDENT     = 5           ! default last stage of independent multi-state solve3D
 real,             parameter :: FRACSRCH_SCAN_EXIT      = 95.         ! multi-state shc stage 2 also ends above this mean % scanned
@@ -289,8 +288,6 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
-        cfg%l_gold_standard = trim(params%gold_standard) == 'yes' .and. params%nstates == 1 .and. &
-            &.not. l_cavgs .and. istage >= GOLD_STD_STAGE
         cfg%automsk = 'no'
         cfg%envfsc  = 'no'
         call init_refine3D_iteration( cfg )
@@ -301,6 +298,7 @@ contains
         call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
+        call set_refine3D_gold_standard_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         call apply_refine3D_search_overrides( cfg, params, istage )
@@ -392,7 +390,7 @@ contains
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
         cfg%rec_backend = 'gridding'
-        if( .not. l_cavgs .and. istage >= PCG_REC_START_STAGE )then
+        if( .not. l_cavgs .and. istage >= PCG_START_STAGE )then
             cfg%rec_backend = trim(params%rec_backend)
         endif
     end subroutine set_refine3D_backend_policy
@@ -445,6 +443,17 @@ contains
             endif
         endif
     end subroutine set_refine3D_filtering_policy
+
+    subroutine set_refine3D_gold_standard_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),       intent(in)    :: params
+        integer,                 intent(in)    :: istage
+        logical,                 intent(in)    :: l_cavgs
+        integer :: first_gold_stage
+        first_gold_stage = GOLD_STD_STAGE
+        if( params%gold_std_stage > 0 ) first_gold_stage = params%gold_std_stage
+        cfg%l_gold_standard = params%nstates == 1 .and. .not. l_cavgs .and. istage >= first_gold_stage
+    end subroutine set_refine3D_gold_standard_policy
 
     !> the stage NU filtering starts at: nu_stage when set, else NU_FILTER_STAGE
     !! (not nu_filter_stage: Fortran is case-insensitive, so that name is the parameter)
@@ -596,9 +605,9 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
-        ! The order prior starts with the gold-standard phase, on the NU evidence of the previous iteration.
+        ! The order prior starts at its own late-stage boundary, on the NU evidence of the previous iteration.
         ! The strength is forwarded only when given; an unset pcg_order_lambda keeps the per-iteration choice.
-        if( params%l_pcg_order .and. istage >= PCG_ORDER_START_STAGE .and. &
+        if( params%l_pcg_order .and. istage >= PCG_START_STAGE .and. &
             &trim(cfg%rec_backend%to_char()) == 'pcg' )then
             call cline_refine3D%set('pcg_order', 'yes')
             if( params%l_pcg_order_lambda_auto )then
