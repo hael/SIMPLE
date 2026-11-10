@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), the n_eff and state readouts
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), geom's cone prefilter, the n_eff and state readouts
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! The pipeline's batch assignment draws every particle's reference, state and direction together, from its tempered
@@ -10,7 +10,7 @@ use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_neigh, only: eul_prob_tab_neigh
-use simple_eul_prob_tab_utils, only: record_seed_shift, &
+use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cell_radii, cone_reachable_cells, &
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, &
@@ -19,6 +19,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, &
 use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_sym,                only: sym
+use simple_ori_utils,          only: euler_mirror
 use simple_oris,               only: oris
 use simple_type_defs,          only: ptcl_ref
 use simple_test_utils
@@ -68,6 +69,9 @@ contains
         write(*,'(A)') 'test_neigh_pooled_extras'
         call test_neigh_pooled_extras('state')
         call test_neigh_pooled_extras('geom')
+        write(*,'(A)') 'test_geom_cone_prefilter'
+        call test_geom_cone_prefilter('c1')
+        call test_geom_cone_prefilter('d2')
         write(*,'(A)') 'test_neff_readout'
         call test_neff_readout()
         call test_neff_report()
@@ -440,6 +444,7 @@ contains
         params%prob_neigh_mode = mode
         params%prob_beta       = 1.
         allocate(build%subspace_inds(1), source=1)
+        allocate(build%subspace_full2sub_map(NSPACE_NB), source=1)
         allocate(incand(nrefs,NP_NB), argmin_state(NP_NB))
         do i = 1,NP_NB
             do ri = 1,nrefs
@@ -575,6 +580,68 @@ contains
         end function entry_dist
 
     end subroutine test_neigh_pooled_extras
+
+    !> geom's cone: the subspaces cone_reachable_cells keeps hold every direction within the cone of a seed, with and
+    !! without the mirror view, for subspaces of any shape (every tenth direction a representative, members by
+    !! nearest representative); for a small cone the prefilter drops most subspaces
+    subroutine test_geom_cone_prefilter( pgrp )
+        character(len=*), intent(in) :: pgrp
+        integer, parameter :: NSP = 1500, NSTRIDE = 10, NSEEDS = 25
+        real,    parameter :: CONES(3) = [3., 10., 25.]
+        type(sym)            :: se
+        type(oris)           :: eul
+        integer, allocatable :: sub_inds(:), full2sub(:)
+        real,    allocatable :: radius(:)
+        logical, allocatable :: l_reach(:)
+        real    :: euls_seed(3), euls_mirr(3), d, dbest
+        integer :: nsub, i, k, iseed, icone, imir, nmiss, nkept_small, nreach_small
+        logical :: l_mirror
+        call seed_rnd_fixed(SEED_TAB)
+        call se%new(pgrp)
+        call eul%new(NSP, is_ptcl=.false.)
+        call se%build_refspiral(eul)
+        nsub = NSP / NSTRIDE ! NSP is a multiple of NSTRIDE
+        allocate(sub_inds(nsub), full2sub(NSP), l_reach(nsub))
+        sub_inds = [(1 + (k - 1) * NSTRIDE, k=1,nsub)]
+        do i = 1,NSP
+            dbest = huge(1.)
+            do k = 1,nsub
+                d = cone_view_dist(se, eul%get_euler(sub_inds(k)), eul%get_euler(sub_inds(k)), .false., eul%get_euler(i))
+                if( d < dbest )then
+                    dbest       = d
+                    full2sub(i) = k
+                endif
+            enddo
+        enddo
+        call cone_cell_radii(eul, se, sub_inds, full2sub, radius)
+        nmiss        = 0
+        nkept_small  = 0
+        nreach_small = 0
+        do iseed = 1,NSEEDS
+            euls_seed = [360. * ran3(), 180. * ran3(), 360. * ran3()]
+            euls_mirr = euls_seed
+            call euler_mirror(euls_seed, euls_mirr)
+            do icone = 1,size(CONES)
+                do imir = 0,1
+                    l_mirror = imir == 1
+                    call cone_reachable_cells(eul, se, sub_inds, radius, euls_seed, euls_mirr, l_mirror, CONES(icone), l_reach)
+                    do i = 1,NSP
+                        if( cone_view_dist(se, euls_seed, euls_mirr, l_mirror, eul%get_euler(i)) > CONES(icone) ) cycle
+                        if( .not. l_reach(full2sub(i)) ) nmiss = nmiss + 1
+                    enddo
+                    if( icone == 1 .and. .not. l_mirror )then
+                        nkept_small  = nkept_small + count(l_reach)
+                        nreach_small = nreach_small + nsub
+                    endif
+                enddo
+            enddo
+        enddo
+        call assert_int(0, nmiss, 'geom cone ('//pgrp//'): the prefilter keeps every subspace with a direction in the cone')
+        call assert_true(nkept_small < nreach_small / 4, 'geom cone ('//pgrp//'): a 3 degree cone skips most subspaces')
+        call eul%kill
+        call se%kill
+        deallocate(sub_inds, full2sub, radius, l_reach)
+    end subroutine test_geom_cone_prefilter
 
     !> The draw from a row posterior (draw_posterior_row) with its variate given: against an independent
     !! cumulative-posterior oracle on hand-built rows (the mode's mass, ties at the minimum, an invalid entry,

@@ -81,9 +81,9 @@ contains
         &.false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'athres_cont', 'num', 'Continuous pose rotation bound', &
+        call refine3D%add_input(UI_SRCH, 'athres_cont', 'num', 'Local search radius', &
         &'Halfwidth of the total rotation a continuous Cartesian pose solve (refine=cont, pose_cont=yes) may '// &
-        &'move a particle from its seed: the capture range for wrongly assigned orientations', &
+        &'move a particle from its seed, and of the cone of directions prob_neigh_mode=geom searches about it', &
         &'in degrees{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
         &'A refine=cont particle is stable when it moved by at most this rotation since its last pose', &
@@ -110,7 +110,8 @@ contains
         &'prob', 'prob_neigh', 'cont']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}','', .false., 'state', &
+        &'Prob-neigh neighborhood mode: state scores the coarse representatives, geom the directions within '//&
+        &'athres_cont of the previous one(state|geom|shc|snhc){state}','', .false., 'state', &
         &group="search", &
         &choices=ui_choices([character(len=5) :: 'state', 'geom', 'shc', 'snhc']), &
         &visibility=UI_VIS_ADVANCED)
@@ -241,9 +242,18 @@ contains
         call refine3D_local%new(&
         &'refine3D_local', &
         &'Continue single-state 3D refinement from stored particle poses', &
-        &'uses bounded continuous Cartesian pose refinement with existing poses and even/odd references', &
+        &'uses bounded continuous Cartesian pose refinement with existing poses and even/odd references, or with '//&
+        &'refine=prob_neigh a polar search of the directions within the same bound', &
         &'simple_exec', .true., visibility=UI_VIS_STANDARD, display_name='Local 3D Refinement')
         call add_refine3D_workflow_inputs(refine3D_local)
+        call refine3D_local%add_input(UI_SRCH, 'refine', 'multi', 'Local search', &
+        &'Search about each stored pose: cont refines it continuously; prob_neigh searches the polar references '//&
+        &'within athres_cont of it (prob_neigh_mode=geom) with the shift prior and continuous in-plane '//&
+        &'refinement(cont|prob_neigh){cont}', '', .false., 'cont', group='search', &
+        &choices=ui_choices([character(len=10) :: 'cont', 'prob_neigh']), visibility=UI_VIS_ADVANCED)
+        call refine3D_local%add_input(UI_SRCH, 'nspace', 'num', 'Number of projection directions', &
+        &'Projection directions of the polar local search (refine=prob_neigh)', '# projections{20000}', &
+        &.false., 20000., group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, trs, group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_conv_rot', 'num', 'Continuous pose convergence rotation', &
         &'A continuous pose (refine3D_local) is stable when it moved by at most this rotation since its last pose', &
@@ -300,9 +310,9 @@ contains
         call prg%add_input(UI_SRCH, 'nsample', 'num', 'Particle samples', &
         &'Number of particles sampled per refinement iteration', 'number of samples', .false., 25000., &
         &group="search", visibility=UI_VIS_DEVELOPER)
-        call prg%add_input(UI_SRCH, 'athres_cont', 'num', 'Continuous pose rotation bound', &
+        call prg%add_input(UI_SRCH, 'athres_cont', 'num', 'Local search radius', &
         &'Halfwidth of the total rotation a continuous Cartesian pose solve (local refinement or pose_cont=yes) may '// &
-        &'move a particle from its seed: the capture range for wrongly assigned orientations', &
+        &'move a particle from its seed, and of the cone of directions the polar local search covers about it', &
         &'in degrees{10}', .false., 10., group='search', visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call prg%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false.,&

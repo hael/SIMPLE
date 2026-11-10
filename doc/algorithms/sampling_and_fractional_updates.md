@@ -235,8 +235,8 @@ the dense 3D table, the 2D tables and the neighbourhood table, with its
 samplers and reference tests (the note, section 19).
 
 Neighborhood variants (`prob_neigh`) restrict which references are scored
-for each particle: a stochastic subset (`shc`, `snhc`), the coarse cell of
-projection directions that contains the previous projection (`geom`), or
+for each particle: a stochastic subset (`shc`, `snhc`), the projection
+directions within `athres_cont` of the previous one (`geom`), or
 the best `npeaks` coarse cells pooled across states (`state`); the cells are
 defined in [refine3D](refine3d.md). The assignment is the same in every
 case.

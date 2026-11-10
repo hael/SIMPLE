@@ -350,7 +350,10 @@ contains
         call assert_true(associated(registered_prg), 'refine3D_local is registered')
         if( associated(registered_prg) )then
             call assert_false(program_has_key(registered_prg, 'pose_cont'), 'local selects continuous refinement directly')
-            call assert_false(program_has_key(registered_prg, 'refine'), 'local derives refine')
+            call find_ui_param(registered_prg%srch_ctrls, 'refine', found, choices)
+            call assert_true(found, 'local offers the choice of local search')
+            call assert_char('|cont|prob_neigh', choices%to_char(), 'local searches continuously or polar about the stored poses')
+            call assert_true(program_has_key(registered_prg, 'nspace'), 'local offers the polar search''s directions')
             call assert_false(program_has_key(registered_prg, 'regpass'), 'local offers no registration pass')
             call assert_false(program_has_key(registered_prg, 'ref_pose_init'), 'local offers no pose acquisition')
             call find_ui_param(registered_prg%filt_ctrls, 'filt_mode', found, choices)

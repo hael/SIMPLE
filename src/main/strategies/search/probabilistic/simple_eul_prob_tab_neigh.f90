@@ -16,7 +16,7 @@ use simple_rnd,                only: rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use simple_decay_funs,         only: extremal_decay
 use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, shift_ptcl2ref, shift_ref2ptcl
 use simple_eul_prob_tab_utils, only: shift_needs_disk, disk_radius_px, screen_pool_size, map_prior_weight, insert_pose_loss, &
-    &shift_prior_sigma2
+    &shift_prior_sigma2, cone_view_dist, cone_cell_radii, cone_reachable_cells
 use simple_defs,               only: PROB_INSERT_WMIN
 use simple_polarft_calc, only: SHERRSQ, SHIFTMAP_SCREEN, SHIFTMAP_WINDOW
 use simple_ori,                only: ori
@@ -38,6 +38,7 @@ type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     integer,        allocatable :: candidate_fill_counts(:)
     logical                     :: l_direct_stoch_neigh = .false.
     integer                     :: nkept = 0   !< particles without a valid candidate, orientation kept (the assignment's count)
+    real,           allocatable :: cell_radius(:) !< geom: degrees from each subspace's representative to its farthest member
 contains
     procedure :: new_neigh_pipeline
     procedure :: set_model_from_field => set_model_from_field_neigh
@@ -93,7 +94,15 @@ contains
         call self%eul_prob_tab%new_pipeline(params,build,pinds)
         allocate(self%candidate_buffers(nthr_glob))
         call validate_neigh_mode(self)
+        if( trim(self%p_ptr%prob_neigh_mode) == 'geom' ) call set_cell_radii(self)
     end subroutine new_neigh_pipeline
+
+    !> geom's cone prefilter: per subspace, the view distance from its representative to its farthest member
+    subroutine set_cell_radii( self )
+        class(eul_prob_tab_neigh), intent(inout) :: self
+        call cone_cell_radii(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%b_ptr%subspace_inds, &
+            &self%b_ptr%subspace_full2sub_map, self%cell_radius)
+    end subroutine set_cell_radii
 
     !> the neighbourhood fill has no refined-reference budget; the shift prior's width from the complete incoming field
     subroutine set_model_from_field_neigh( self )
@@ -514,8 +523,8 @@ contains
             logical   :: l_disk, l_prior
             real      :: shsig, cone
             call get_particle_context(self, iptcl_loc, o_prev, prev_state, prev_proj)
-            ! the pose student's cone (slot 'cone', degrees about the particle's orientation): the geometric
-            ! neighbourhood of a particle that carries one; a particle without one takes its coarse cell as before
+            ! geom: the directions within athres_cont of the particle's orientation, refine=cont's bound; the pose
+            ! student's cone (slot 'cone', degrees) replaces it for a particle that carries one, with its mirror view
             cone = 0.
             if( l_geom_neigh ) cone = self%b_ptr%spproj_field%get(iptcl_loc, 'cone')
             l_disk  = .false.
@@ -535,15 +544,16 @@ contains
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             t0 = omp_get_wtime()
-            if( l_geom_neigh .and. cone > 0. )then
-                call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, cone, neval)
-            else
-                if( l_geom_neigh )then
-                    call build_geometric_neighborhood(ithr_loc, prev_proj)
+            if( l_geom_neigh )then
+                if( cone > 0. )then
+                    call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, cone, .true., neval)
                 else
-                    if( l_state_neigh ) call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
-                    call build_pooled_neighborhood(ithr_loc, prev_proj)
+                    call evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev, &
+                        &self%p_ptr%athres_cont, .false., neval)
                 endif
+            else
+                if( l_state_neigh ) call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+                call build_pooled_neighborhood(ithr_loc, prev_proj)
                 call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval)
             endif
             ts_score(ithr_loc) = ts_score(ithr_loc) + (omp_get_wtime() - t0)
@@ -586,21 +596,6 @@ contains
             enddo
         end subroutine find_peak_subspaces
 
-        ! Selects the subspace that contains the particle's previous best projection
-        ! No coarse path; prob_neigh_mode=geom
-        subroutine build_geometric_neighborhood(ithr_loc, prev_proj_loc)
-            integer, intent(in) :: ithr_loc, prev_proj_loc
-            integer :: si_loc, istate_loc, coarse_proj_loc, isub_loc
-            coarse_proj_loc = max(1, min(self%p_ptr%nspace, prev_proj_loc))
-            isub_loc = self%b_ptr%subspace_full2sub_map(coarse_proj_loc)
-            if( isub_loc < 1 .or. isub_loc > nsubs ) isub_loc = 1
-            coarse_ws%pooled_sub_count(:,ithr_loc) = 0
-            do si_loc = 1,self%nstates
-                istate_loc = self%ssinds(si_loc)
-                coarse_ws%pooled_sub_inds(1,istate_loc,ithr_loc) = isub_loc
-                coarse_ws%pooled_sub_count(istate_loc,ithr_loc)  = 1
-            enddo
-        end subroutine build_geometric_neighborhood
 
         ! Evaluates a coarse subspace representative; prob_neigh_mode=state
         subroutine score_subspace_ref(full_ref_loc, ithr_loc, iptcl_loc, shift_seed_loc,&
@@ -735,33 +730,39 @@ contains
             enddo
         end subroutine evaluate_neighborhood
 
-        ! The pose student's cone (prob_neigh_mode=geom, a particle with a cone record): every active state's
-        ! references whose direction lies within cone_loc degrees of the particle's orientation or of its antipode
-        ! (the mirror view, one class to the Friedel-symmetric student: ruling R1) under the point group, scored as
-        ! the pooled neighbourhood's members are, the better pose taken as any; an empty cone takes the fallback as
-        ! an empty cell
-        subroutine evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev_loc, cone_loc, neval)
+        ! prob_neigh_mode=geom: every active state's references whose direction lies within cone_loc degrees of the
+        ! particle's orientation under the point group (with l_mirror, the pose student's cone, also of its antipode:
+        ! the mirror view, one class to the Friedel-symmetric student, ruling R1), scored as the pooled
+        ! neighbourhood's members are; subspaces out of reach are skipped (set_cell_radii); an empty cone takes the
+        ! fallback as an empty cell
+        subroutine evaluate_cone(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, o_prev_loc, cone_loc, &
+            &l_mirror, neval)
             integer,   intent(in)  :: i_loc, ithr_loc, iptcl_loc
             real,      intent(in)  :: shift_seed_loc(3), cone_loc
-            logical,   intent(in)  :: l_with_shift
+            logical,   intent(in)  :: l_with_shift, l_mirror
             type(ori), intent(in)  :: o_prev_loc
             integer,   intent(out) :: neval
-            integer :: si_loc, istate_loc, ri_loc, iref_loc, irot_loc
-            real    :: dist, corr_loc, sh_loc(2), euls_seed(3), euls_mirr(3), euls(3), euls_sym(3), euldist, euldist_mirr, inpldist
+            logical :: l_reach(nsubs)
+            integer :: si_loc, istate_loc, ri_loc, iref_loc, irot_loc, isub_loc
+            real    :: dist, corr_loc, sh_loc(2), euls_seed(3), euls_mirr(3)
             neval  = 0
             sh_loc = 0.
             if( l_with_shift ) sh_loc = shift_seed_loc(2:3)
             euls_seed = o_prev_loc%get_euler()
             euls_mirr = euls_seed
-            call euler_mirror(euls_seed, euls_mirr)
+            if( l_mirror ) call euler_mirror(euls_seed, euls_mirr)
+            call cone_reachable_cells(self%b_ptr%eulspace, self%b_ptr%pgrpsyms, self%b_ptr%subspace_inds, &
+                &self%cell_radius, euls_seed, euls_mirr, l_mirror, cone_loc, l_reach)
             do si_loc = 1,self%nstates
                 istate_loc = self%ssinds(si_loc)
                 do ri_loc = 1,self%nrefs
                     if( self%ref_state(ri_loc) /= istate_loc ) cycle
-                    euls = self%b_ptr%eulspace%get_euler(self%ref_proj(ri_loc))
-                    call self%b_ptr%pgrpsyms%sym_dists(euls_seed, euls, euls_sym, euldist,      inpldist)
-                    call self%b_ptr%pgrpsyms%sym_dists(euls_mirr, euls, euls_sym, euldist_mirr, inpldist)
-                    if( min(euldist, euldist_mirr) > cone_loc ) cycle
+                    isub_loc = self%b_ptr%subspace_full2sub_map(self%ref_proj(ri_loc))
+                    if( isub_loc >= 1 .and. isub_loc <= nsubs )then
+                        if( .not. l_reach(isub_loc) ) cycle
+                    endif
+                    if( cone_view_dist(self%b_ptr%pgrpsyms, euls_seed, euls_mirr, l_mirror, &
+                        &self%b_ptr%eulspace%get_euler(self%ref_proj(ri_loc))) > cone_loc ) cycle
                     iref_loc = self%ref_full(ri_loc)
                     call score_seeded_ref(self, iref_loc, iptcl_loc, sh_loc, seed_bank(:,:,ithr_loc),&
                         &l_bank(ithr_loc), dist, corr_loc, irot_loc)
@@ -1541,6 +1542,7 @@ contains
         endif
         call self%candidate_store%kill
         if( allocated(self%candidate_fill_counts) ) deallocate(self%candidate_fill_counts)
+        if( allocated(self%cell_radius)           ) deallocate(self%cell_radius)
         self%l_direct_stoch_neigh = .false.
         self%nkept = 0
         call self%eul_prob_tab%kill

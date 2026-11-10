@@ -33,6 +33,8 @@ describe the software as it is, rather than the history of one change:
 - [Test environment policy](../policies/test_environment_policy.md)
 - [Memory estimator and benchmark guide](../how2s/memory_estimator.md)
 - [Setting up a machine for development with Claude Code](../how2s/how2set_up_claude_code_dev.md)
+- [Writing a plan for an agent](../how2s/how2write_agent_plans.md): what the
+  record of the runs so far says a plan needs
 - [Developer onboarding](onboarding/)
 
 ## Work that still needs attention

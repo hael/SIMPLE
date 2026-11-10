@@ -137,16 +137,20 @@ source pointers confined to the last section.
    initial 3D refinement of the resulting map.
 8. [Refine3D](refine3d.md). One round of 3D alternation: reproject, assign,
    reconstruct, measure the FSC, regularize, filter.
-9. [3D reconstruction](reconstruction.md). The fixed-pose inverse problem by
-   Kaiser-Bessel gridding, or by preconditioned conjugate gradients on the
-   exact normal equations.
+9. [Local 3D refinement](refine3d_local.md). `refine3D_local`: the five pose
+   parameters of each particle refined continuously from its stored pose, by a
+   bounded Levenberg-Marquardt fit against Cartesian central sections, with no
+   projection grid.
+10. [3D reconstruction](reconstruction.md). The fixed-pose inverse problem by
+    Kaiser-Bessel gridding, or by preconditioned conjugate gradients on the
+    exact normal equations.
 
 **Resolution as a local quantity.**
 
-10. [Nonuniform filtering](nonuniform_filtering.md). A spatially varying
+11. [Nonuniform filtering](nonuniform_filtering.md). A spatially varying
     cutoff chosen by cross-half prediction error under a robust loss and an
     ordered smoothness prior.
-11. [NU-evidence envelope masking](nu_evidence_envelope_mask.md). The same
+12. [NU-evidence envelope masking](nu_evidence_envelope_mask.md). The same
     evidence turned into a molecular envelope by a two-label Markov random
     field.
 
@@ -155,24 +159,24 @@ source pointers confined to the last section.
 The [heterogeneity-analysis overview](heterogeneity_analysis/README.md)
 explains which workflow fits each source of particle poses and state models.
 
-12. [`refine3D_states`](heterogeneity_analysis/refine3d_states.md). Refine
+13. [`refine3D_states`](heterogeneity_analysis/refine3d_states.md). Refine
     same-lineage conformational states from an existing particle and reference
     scaffold.
-13. [`classify3D_refs`](heterogeneity_analysis/classify3d_refs.md). Classify
+14. [`classify3D_refs`](heterogeneity_analysis/classify3d_refs.md). Classify
     particles against external references, then continue from data-derived
     state maps.
-14. [`flex_pca`](heterogeneity_analysis/flex_pca.md). Fit continuous
+15. [`flex_pca`](heterogeneity_analysis/flex_pca.md). Fit continuous
     variability as a low-rank projected covariance model and derive discrete
     state maps from its latent coordinates.
 
 **Online processing.**
 
-15. [Streaming](streaming_pipeline.md). Steps 1 to 5 recast as an online
+16. [Streaming](streaming_pipeline.md). Steps 1 to 5 recast as an online
     algorithm: bounded chunks, a learned class-quality sieve, and a growing
     pool whose coarse-to-fine schedule is written in iterations rather than
     stages.
 
-16. [The pose student](pose_student.md). A Hermitian network over the polar
+17. [The pose student](pose_student.md). A Hermitian network over the polar
     Fourier half ring, trained per dataset on the probabilistic search's own
     posterior rows, that proposes a direction, a cone and a confidence for an
     unseen particle and hands them to refine3D's neighbourhood search.

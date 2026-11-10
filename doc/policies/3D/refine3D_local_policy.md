@@ -8,6 +8,15 @@ continues single-state Euclidean refinement from stored particle poses using
 `refine=cont`. The command replaces `refine3D_auto pose_cont=only`. Auto retains
 `pose_cont=no|yes`; base `refine3D refine=cont` remains available.
 
+`refine=prob_neigh` (since 2026-11-09) replaces the continuous search with the
+polar one about the same poses, to compare the two: `prob_neigh_mode=geom` (any
+other mode is refused), which scores the projection directions within `athres_cont`
+of each stored pose, the bound of `refine=cont`, with the polar machinery's shift
+prior and continuous in-plane refinement. Its grid defaults to `nspace=20000` and
+`nspace_sub=500`. Startup, sampling, references, reconstruction and the final map
+are those of `refine=cont`; the run ends on the probabilistic modes' rules, so give
+both searches the same `maxits` to compare them.
+
 Before parameter initialization, the local command requires an existing merged
 map and its even/odd pair, compatible dimensions/sampling/physical extent,
 valid saved poses and half labels, and selected particles in both half-sets.
@@ -26,8 +35,9 @@ multistate project requires `state=X`. The local and auto commands share state
 work-project preparation, including frozen `m_estimator=flex` row selection.
 The local preflight checks the same selected rows before parameter setup.
 
-The local command rejects `refine`, `pose_cont`, projection-grid arguments,
-discrete pose acquisition and registration, and overrides that change Euclidean
+The local command rejects `refine` other than `cont|prob_neigh`, `pose_cont`,
+projection-grid arguments and `prob_neigh_mode` under `refine=cont`, discrete pose
+acquisition and registration, and overrides that change Euclidean
 scoring, ML regularization, fixed reference centering or separate halves.
 Local rejects explicit `lp` and `nonuniform_lpset`; use `lpstop` to cap the band
 without merging reference halves. Local controls include `athres_cont`, `trs`, `cont_conv_rot`, `cont_conv_shift`,
@@ -67,3 +77,4 @@ place. Local defaults to `autoscale=no` (native sampling); auto retains
 
 The current source design, historical evidence and pending Linux checks are in the living
 [completed local-workflow record](../../refactoring_notes/completed/refine3d_local_workflow.md).
+The algorithm, for readers outside the code: [local 3D refinement](../../algorithms/refine3d_local.md).

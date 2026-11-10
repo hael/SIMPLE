@@ -1087,7 +1087,7 @@ contains
             ! refine with the command line; the matcher's strategy checks its segment as well)
             if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%oritype) /= 'ptcl3D' ) &
                 &THROW_HARD('refine=cont requires oritype=ptcl3D')
-            ! its own rotation bound: athres and prob_athres size the polar searches
+            ! its own rotation bound (also geom's cone): athres and prob_athres size the other polar searches
             if( .not. (self%athres_cont > 0. .and. self%athres_cont <= 180.) ) THROW_HARD('athres_cont must be in (0,180] degrees')
             if( .not. self%cont_conv_rot   > 0. ) THROW_HARD('cont_conv_rot must be positive')
             if( .not. self%cont_conv_shift > 0. ) THROW_HARD('cont_conv_shift must be positive')
@@ -1108,6 +1108,10 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
+        ! geom searches the directions within athres_cont of the previous orientation, refine=cont's bound
+        if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'geom' )then
+            if( .not. (self%athres_cont > 0. .and. self%athres_cont <= 180.) ) THROW_HARD('athres_cont must be in (0,180] degrees')
+        endif
         select case(trim(self%pose_policy))
             case('local','global')
             case DEFAULT

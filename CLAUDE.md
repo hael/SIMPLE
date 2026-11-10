@@ -89,6 +89,10 @@ living docs and leave the old ones in dated history docs.
 ## Engineering defaults
 
 - Prefer existing SIMPLE patterns over new abstractions.
+- A plan for an agent (a note under `doc/implementation_notes/planned/` or
+  `doc/refactoring_notes/planned/`) follows `doc/how2s/how2write_agent_plans.md`:
+  pinned base, numbered quantified decisions, an exit per phase, floors tagged by
+  origin and frozen before the run they judge, a file table, stop conditions.
 - Keep changes scoped to the owning subsystem; avoid broad refactors while
   fixing a narrow behavior.
 - Preserve dirty worktree changes that are not part of the task.

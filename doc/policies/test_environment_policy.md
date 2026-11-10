@@ -1160,7 +1160,7 @@ Mac yet; the Mac's values of 2026-10-17 are recorded in the plan's Phase 8 entry
 - Claim: the pose student's programs and the per-particle cone of the neighbourhood search work end to
   end on 2 000 blob-phantom particles with known poses (one state, SNR 1, no shift): the training half
   trains the student against the truth map, the test half is predicted from blank poses, every test row
-  is aligned by `refine3D refine=prob_neigh prob_neigh_mode=geom` from its cone or its coarse cell, the
+  is aligned by `refine3D refine=prob_neigh prob_neigh_mode=geom` from its cone or the `athres_cont` cone, the
   same search runs without student records, the dense search runs as the protocol's fallback, and the
   half is reconstructed from the protocol's merge and from the dense search.
 - Checks (the machinery, ruling R3 of the pose student plan): the model records a threshold and a bound;

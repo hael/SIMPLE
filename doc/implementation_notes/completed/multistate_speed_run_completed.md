@@ -12,10 +12,14 @@ Phase 2 (`ref_assign` without rescans: implemented and identical on the tester
 and on one-thread runs; it stopped at two noisy multi-threaded checks, and the
 code is applied in the tree), and Phase 3 (table reads, carried out by the run
 `speed_mac`, see `identical_speed_run.md`). Open: the ruling on the Phase 2
-stop, and Phase 4 (documents, final runs, the report). They are in
-[`../planned/multistate_speed_run_unfinished.md`](../planned/multistate_speed_run_unfinished.md).
-Where the text below says "plan" or "nothing implemented", read it with this
-status.
+stop, and Phase 4 (documents, final runs, the report). The unfinished split that
+carried them was removed on 2026-11-04 (`a723f4919`). The Phase 2 checks concern
+the `ref_assign` and part-file code that the batch pipeline retired on 2026-11-05
+(`ea4c1c20a`, [`prob_align_batch_pipeline.md`](prob_align_batch_pipeline.md)), so
+the old byte-identity contract no longer applies; the remaining multi-state
+measurements are listed in the
+[speed-week closeout](single_state_speed_week_closeout.md). Where the text below
+says "plan" or "nothing implemented", read it with this status.
 
 ## Goal
 

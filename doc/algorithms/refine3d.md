@@ -9,7 +9,9 @@ images under those poses. As in 2D this is solved by alternation: reproject
 the current volumes and assign poses, then reconstruct new volumes from the
 assigned poses. This chapter is one round of that alternation. Coarse-to-fine
 schedules that wrap it are in [solve3D](solve3d.md) and
-[heterogeneity analysis](heterogeneity_analysis/README.md).
+[heterogeneity analysis](heterogeneity_analysis/README.md); the continuous
+refinement of stored poses without a projection grid is
+[local 3D refinement](refine3d_local.md).
 
 ## Model
 
@@ -86,16 +88,20 @@ One iteration:
      and the particle draws from the posterior over the candidates it scored.
      In `state` mode (the default) the coarse representatives are scored and
      the best `npeaks` cells, pooled across states, form the neighborhood;
-     in `geom` mode it is the cell that contains the previous projection, the
-     same for every state. The `shc` and `snhc` modes use no cells: they
+     in `geom` mode it is every direction within `athres_cont` (default 10
+     degrees, the bound of `cont`) of the previous one, the same for every
+     state; the cells only prefilter that cone. The `shc` and `snhc` modes use no cells: they
      score a stochastic subset of the fine directions with the
      first-improvement rule of `shc` (unbounded for `shc`, annealed for
      `snhc`) after a floor of five candidates, the current pose scored into
      the set so that the draw is an acceptance step and not a forced move.
+   - `cont`: no grid and no candidates. Each stored pose is refined
+     continuously by a bounded Levenberg-Marquardt fit of its five parameters
+     ([local 3D refinement](refine3d_local.md)).
    There is no state-only mode: a consensus refinement becomes a multi-state
    one through `refine3D_states`, whose [flex PCA](heterogeneity_analysis/flex_pca.md)
    initializer assigns the first states at fixed poses.
-   Shifts are then refined by L-BFGS-B within `trs`, and optionally the
+   In the discrete modes, shifts are then refined by L-BFGS-B within `trs`, and optionally the
    committed `(sx, sy, theta)` is polished jointly with continuous angle
    ([continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)).
    Multi-state search never reuses a shift seed from one state to rank

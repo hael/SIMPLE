@@ -93,9 +93,10 @@ contains
         class(parameters), allocatable     :: params
         class(sp_project), allocatable     :: spproj
         class(cmdline), allocatable        :: cline_boot
-        type(string)                       :: pose_cont_arg, init_vol, pose_init_refs(1), pose_init_checkpoint(1)
+        type(string)                       :: pose_cont_arg, refine_arg, init_vol, pose_init_refs(1), pose_init_checkpoint(1)
         integer                            :: maxits_user, nactive
         logical                            :: l_polish, l_have_init_vol, l_external_input, l_maxits_defined
+        logical                            :: l_local_polar
         integer                            :: box_crop
         real                               :: smpd_crop
         character(len=14)                  :: workflow_label
@@ -104,13 +105,35 @@ contains
         if( l_local ) workflow_label = 'REFINE3D_LOCAL'
         l_external_input = cline%defined('vol1')
         l_maxits_defined = cline%defined('maxits')
-        l_polish = .false.
-        if( cline%defined('refine') ) THROW_HARD('The workflow derives refine; remove the refine argument')
+        l_polish      = .false.
+        l_local_polar = .false.
         if( l_local )then
             call cline%set('prg', 'refine3D_local')
-            if( cline%defined('pose_cont') ) THROW_HARD('refine3D_local selects continuous refinement; remove pose_cont')
-            if( cline%defined('nspace') .or. cline%defined('nspace_sub') ) &
-                THROW_HARD('refine3D_local uses no projection grid; remove nspace and nspace_sub')
+            if( cline%defined('pose_cont') ) THROW_HARD('refine3D_local selects its search with refine; remove pose_cont')
+            ! the local search: continuous (cont) or polar within the same angular bound (prob_neigh, geom)
+            if( cline%defined('refine') )then
+                refine_arg = cline%get_carg('refine')
+                select case(refine_arg%to_char())
+                    case('cont')
+                    case('prob_neigh')
+                        l_local_polar = .true.
+                    case DEFAULT
+                        THROW_HARD('refine3D_local supports refine=cont|prob_neigh')
+                end select
+            endif
+            if( l_local_polar )then
+                if( cline%defined('prob_neigh_mode') )then
+                    if( cline%get_carg('prob_neigh_mode') /= 'geom' ) &
+                        THROW_HARD('refine3D_local refine=prob_neigh searches about the stored poses: prob_neigh_mode=geom')
+                endif
+                call cline%set('prob_neigh_mode', 'geom')
+                if( .not. cline%defined('nspace')     ) call cline%set('nspace',     20000)
+                if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', 500)
+            else
+                if( cline%defined('nspace') .or. cline%defined('nspace_sub') ) &
+                    THROW_HARD('refine3D_local refine=cont uses no projection grid; remove nspace and nspace_sub')
+                if( cline%defined('prob_neigh_mode') ) THROW_HARD('prob_neigh_mode applies to refine3D_local refine=prob_neigh')
+            endif
             call require_refine3D_local_value(cline, 'ref_pose_init', 'none')
             call require_refine3D_local_value(cline, 'regpass', 'no')
             call require_refine3D_local_value(cline, 'objfun', 'euclid')
@@ -128,6 +151,7 @@ contains
             if( cline%defined('trail_seed') ) THROW_HARD('trail_seed is reserved for refine3D_local')
             call cline%set('regpass', 'no')
         else
+            if( cline%defined('refine') ) THROW_HARD('The workflow derives refine; remove the refine argument')
             if( .not. cline%defined('pose_cont') ) call cline%set('pose_cont', 'no')
             pose_cont_arg = cline%get_carg('pose_cont')
             select case(pose_cont_arg%to_char())
@@ -145,7 +169,7 @@ contains
         call cline%set('balance',       'none') ! global lowest-updatecnt sampling, no sampling units
         call cline%set('greedy_sampling', 'no') ! only active with sampling units (balance=class|cavg)
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        if( l_local )then
+        if( l_local .and. .not. l_local_polar )then
             call cline%set('refine',        'cont') ! continuous Cartesian refinement of the stored poses
         else
             call cline%set('refine',  'prob_neigh') ! probabilistic neighborhood 3D refinement
@@ -254,9 +278,12 @@ contains
         ! Global registration against the masked startup references.
         call run_refine3D_registration_pass(params, cline, xrefine3D, workflow_label)
         call cline%set('prg',                   'refine3D')
-        if( l_local )then
+        if( l_local .and. .not. l_local_polar )then
             ! Continuous Cartesian refinement: no projection grid.
             call cline%set('refine',              'cont')
+        else if( l_local_polar )then
+            ! Polar search of the directions within athres_cont of each stored pose (geom).
+            call cline%set('refine',        'prob_neigh')
         else
             ! Neighbourhood refinement uses the main direction set.
             call cline%set('refine',        'prob_neigh')

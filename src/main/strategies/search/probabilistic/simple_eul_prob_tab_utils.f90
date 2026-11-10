@@ -22,6 +22,7 @@ use simple_refine3D_fnames, only: refine3D_fsc_fname
 implicit none
 
 public :: angle_sampling, calc_athres, calc_num2sample
+public :: cone_view_dist, cone_cell_radii, cone_reachable_cells
 public :: prob_rnd_scope, keyed_candidate_order
 public :: eulprob_corr_switch, eulprob_dist_switch
 public :: record_seed_shift, write_fill_profile_bench
@@ -2341,5 +2342,56 @@ contains
         endif
         deallocate(shsig)
     end subroutine print_disk_set
+
+    !> the view distance (degrees, minimised over the point group) of direction euls from the seed, or with l_mirror
+    !! the smaller of that and its distance from the seed's mirror view euls_mirr
+    real function cone_view_dist( pgrpsyms, euls_seed, euls_mirr, l_mirror, euls ) result( dist )
+        class(sym), intent(in) :: pgrpsyms
+        real,       intent(in) :: euls_seed(3), euls_mirr(3), euls(3)
+        logical,    intent(in) :: l_mirror
+        real :: euls_sym(3), dist_mirr, inpldist
+        call pgrpsyms%sym_dists(euls_seed, euls, euls_sym, dist, inpldist)
+        if( l_mirror )then
+            call pgrpsyms%sym_dists(euls_mirr, euls, euls_sym, dist_mirr, inpldist)
+            dist = min(dist, dist_mirr)
+        endif
+    end function cone_view_dist
+
+    !> per subspace, the largest view distance (degrees) from its representative (eulspace index sub_inds(isub)) to a
+    !! member (full2sub, over the directions of eulspace)
+    subroutine cone_cell_radii( eulspace, pgrpsyms, sub_inds, full2sub, radius )
+        class(oris),       intent(in)    :: eulspace
+        class(sym),        intent(in)    :: pgrpsyms
+        integer,           intent(in)    :: sub_inds(:), full2sub(:)
+        real, allocatable, intent(inout) :: radius(:)
+        real    :: euls_rep(3)
+        integer :: iproj, isub
+        if( allocated(radius) ) deallocate(radius)
+        allocate(radius(size(sub_inds)), source=0.)
+        do iproj = 1, size(full2sub)
+            isub = full2sub(iproj)
+            if( isub < 1 .or. isub > size(sub_inds) ) cycle
+            euls_rep     = eulspace%get_euler(sub_inds(isub))
+            radius(isub) = max(radius(isub), cone_view_dist(pgrpsyms, euls_rep, euls_rep, .false., eulspace%get_euler(iproj)))
+        end do
+    end subroutine cone_cell_radii
+
+    !> the subspaces a direction within cone degrees of the seed (or of its mirror view) can lie in: those whose
+    !! representative lies within cone plus the subspace's radius. The point group's view distance obeys the triangle
+    !! inequality, so no such direction is missed
+    subroutine cone_reachable_cells( eulspace, pgrpsyms, sub_inds, radius, euls_seed, euls_mirr, l_mirror, cone, l_reach )
+        class(oris), intent(in)  :: eulspace
+        class(sym),  intent(in)  :: pgrpsyms
+        integer,     intent(in)  :: sub_inds(:)
+        real,        intent(in)  :: radius(:), euls_seed(3), euls_mirr(3), cone
+        logical,     intent(in)  :: l_mirror
+        logical,     intent(out) :: l_reach(:)
+        real, parameter :: REACH_TOL = 1.e-3 ! degrees
+        integer :: isub
+        do isub = 1, size(sub_inds)
+            l_reach(isub) = cone_view_dist(pgrpsyms, euls_seed, euls_mirr, l_mirror, eulspace%get_euler(sub_inds(isub))) &
+                &<= cone + radius(isub) + REACH_TOL
+        end do
+    end subroutine cone_reachable_cells
 
 end module simple_eul_prob_tab_utils

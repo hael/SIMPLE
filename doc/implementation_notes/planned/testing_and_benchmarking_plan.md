@@ -465,7 +465,7 @@ Implementation records and related planned work (paths relative to this note):
 
 - `../completed/test_suite_truth_and_robustness.md`
 - `../completed/single_state_speed_week_closeout.md`
-- `multistate_speed_run_unfinished.md`
+- `../completed/multistate_speed_run_completed.md` (its unfinished split was removed on 2026-11-04)
 - `speed_architecture_proposals.md` (the maintainer's tree holds the newer copy)
 - `../completed/hardware_resource_planning_validation_closeout.md`
 - `../completed/species_discovery_status.md`

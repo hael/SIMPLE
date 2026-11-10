@@ -1,6 +1,7 @@
 # GUI metadata and assembler refactoring plan, 6 October 2026
 
-This plan implements `gui_area_review_2026-10-06.md` (the review). Finding IDs (D, C, T, H) are
+This plan implements `gui_area_review_2026-10-06.md` (the review; it was never committed and is
+not in the repository or its history). Finding IDs (D, C, T, H) are
 the review's. It has five phases, and each one builds and tests on its own, so the work can stop
 after any of them. Phases 1 to 4 stay inside the existing modules; phase 5 splits the project
 type.

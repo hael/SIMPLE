@@ -677,6 +677,8 @@ Afterwards remove the toy run: `ssh workbox rm -rf agent_runs/smoke`, then
 1. Write the plan in the repository: phases with exit criteria, and a file
    table whose first column names the files and whose last column names the
    phases that may edit them (`each` for all).
+   [how2write_agent_plans.md](how2write_agent_plans.md) says what else a plan
+   needs and why, from the record of the runs so far.
 2. `arun new <run>` (or `arun new <run> generic` for a repository other than
    SIMPLE), then fill in `runs/<run>/run.conf` (at least `PLAN`, `PLAN_DONE`,
    `ALLOW_TABLE`, `PHASES`, and `LOCAL_REPO` if it is not the default),

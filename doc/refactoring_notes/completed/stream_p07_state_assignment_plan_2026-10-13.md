@@ -15,7 +15,8 @@ from this plan:
   local refinement of section 11, as the execution path: `refine3D refine=cont`, states fixed,
   from the mapped poses until refine=cont converges, on the populated states renumbered in the
   job's project; refine3D now seeds no state labels for refine=cont;
-- after the review of 14 October 2026 (`stream_p07_review_2026-10-14.md`): the refinement runs
+- after the review of 14 October 2026 (`stream_p07_review_2026-10-14.md`, never committed; not in
+  the repository or its history): the refinement runs
   one iteration (`maxits=1`); the check also refuses near-duplicate states (two states
   correlating above 0.97 at 15 Å after docking, in both hands, since the states are refined in
   frames of their own); the even/odd angular distance checked is the median over the class

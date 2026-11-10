@@ -500,7 +500,7 @@ type :: parameters
     real    :: astigthreshold=ASTIG_THRESHOLD !< ice fraction threshold{1.0}
     real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
     real    :: athres=10.          !< angular threshold(in degrees)
-    real    :: athres_cont=10.     !< continuous Cartesian pose refinement: total rotation from the seed(in degrees){10}
+    real    :: athres_cont=10.     !< local search radius: refine=cont's total rotation from the seed, prob_neigh_mode=geom's cone of directions about the previous one(in degrees){10}
     real    :: beta=0.0            !< Convenience parameter{0.0}
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}

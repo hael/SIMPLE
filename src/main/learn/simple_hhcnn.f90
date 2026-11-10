@@ -19,7 +19,7 @@ use simple_string, only: string
 use simple_fileio, only: fopen, fclose, fileiochk
 use simple_syslib, only: file_exists
 use simple_timer,  only: tic, toc, timer_int_kind
-!$ use omp_lib,    only: omp_get_max_threads, omp_get_thread_num, omp_in_parallel
+!$ use omp_lib,    only: omp_get_max_threads, omp_get_thread_num, omp_get_level
 implicit none
 
 ! the BLAS product (the library the build links; simple_linalg keeps its interface private)
@@ -443,33 +443,28 @@ contains
 
     ! ===== THE LAYERS =====
 
-    !> the BLAS may be called: outside a team, or inside one when the build knows it stays on the calling thread
+    !> the BLAS may be called: outside any parallel region, or inside one when the build knows it stays on the
+    !! calling thread. A region of one thread counts (omp_get_level, not omp_in_parallel), so a team of one takes
+    !! the same products as a larger team and training is bit for bit the same at any thread count
     logical function blas_ok()
         logical :: l_team
         l_team = .false.
-        !$ l_team = omp_in_parallel()
+        !$ l_team = omp_get_level() > 0
         blas_ok = L_BLAS_TEAM_SAFE .or. .not. l_team
     end function blas_ok
 
-    !> c = beta c + a b (a: m x k, b: k x n), on the calling thread
+    !> c = beta c + a b (a: m x k, b: k x n), on the calling thread; without the BLAS the matmul intrinsic, the
+    !! runtime's single-threaded product: one summation order at every thread count
     subroutine gemm_nn( m, n, k, a, lda, b, ldb, c, ldc, beta )
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*), beta
         real(sp), intent(inout) :: c(ldc,*)
-        integer :: i, j, l
-        real(sp) :: s
         if( blas_ok() )then
             call sgemm('N', 'N', m, n, k, 1.0, a, lda, b, ldb, beta, c, ldc)
+        else if( beta == 0. )then
+            c(1:m,1:n) = matmul(a(1:m,1:k), b(1:k,1:n))
         else
-            do j = 1,n
-                do i = 1,m
-                    s = 0.
-                    do l = 1,k
-                        s = s + a(i,l) * b(l,j)
-                    enddo
-                    c(i,j) = beta * c(i,j) + s
-                enddo
-            enddo
+            c(1:m,1:n) = beta * c(1:m,1:n) + matmul(a(1:m,1:k), b(1:k,1:n))
         endif
     end subroutine gemm_nn
 
@@ -478,20 +473,10 @@ contains
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*)
         real(sp), intent(inout) :: c(ldc,*)
-        integer :: i, j, l
-        real(sp) :: s
         if( blas_ok() )then
             call sgemm('N', 'T', m, n, k, 1.0, a, lda, b, ldb, 1.0, c, ldc)
         else
-            do j = 1,n
-                do i = 1,m
-                    s = 0.
-                    do l = 1,k
-                        s = s + a(i,l) * b(j,l)
-                    enddo
-                    c(i,j) = c(i,j) + s
-                enddo
-            enddo
+            c(1:m,1:n) = c(1:m,1:n) + matmul(a(1:m,1:k), transpose(b(1:n,1:k)))
         endif
     end subroutine gemm_nt_acc
 
@@ -500,20 +485,10 @@ contains
         integer,  intent(in)    :: m, n, k, lda, ldb, ldc
         real(sp), intent(in)    :: a(lda,*), b(ldb,*)
         real(sp), intent(inout) :: c(ldc,*)
-        integer :: i, j, l
-        real(sp) :: s
         if( blas_ok() )then
             call sgemm('T', 'N', m, n, k, 1.0, a, lda, b, ldb, 0.0, c, ldc)
         else
-            do j = 1,n
-                do i = 1,m
-                    s = 0.
-                    do l = 1,k
-                        s = s + a(l,i) * b(l,j)
-                    enddo
-                    c(i,j) = s
-                enddo
-            enddo
+            c(1:m,1:n) = matmul(transpose(a(1:k,1:m)), b(1:k,1:n))
         endif
     end subroutine gemm_tn
 

@@ -186,9 +186,10 @@ its own project copy, never the caller's project.
 a particle with a cone, every reference within the cone about the stored
 direction and every reference within the same cone about its mirror (`euler_mirror`), finds
 the in-plane rotation and the shift as it does for any neighbourhood, and
-takes the better pose as it takes any; a particle without a cone searches its
-coarse cell exactly as before, so a project without student records runs the
-base code path byte for byte.
+takes the better pose as it takes any; a particle without a cone runs the base
+`geom` search, the directions within `athres_cont` of its stored direction
+(the coarse cell until 2026-11-09), so a project without student records runs
+the base code path byte for byte.
 
 ## What the reads found
 

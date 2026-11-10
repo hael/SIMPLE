@@ -495,8 +495,14 @@ before evaluating candidates:
 - `state`: score coarse subspace representatives independently per state, pool
   the selected neighborhoods across states, and evaluate the same pooled
   projection search space for every active state.
-- `geom`: select the subspace containing the particle's current projection for
-  every active state, with no coarse scoring or pooled peaks.
+- `geom`: score every projection direction within `athres_cont` (refine=cont's
+  bound, default 10 degrees) of the particle's current orientation, under the point
+  group, for every active state, with no coarse scoring or pooled peaks; a particle
+  with a pose-student cone takes that cone and its mirror view instead. The
+  subspaces only prefilter: a subspace whose representative lies farther than the
+  cone plus the subspace's radius holds no direction in the cone (2026-11-09;
+  before, `geom` searched the one subspace containing the current projection, which
+  a particle could never leave).
 - `shc`: use the direct stochastic candidate path. When shifts are enabled, it
   first estimates a shift seed before candidate scoring.
 - `snhc`: use the same direct stochastic candidate path without the initial
@@ -920,7 +926,7 @@ committed state's candidates alone, and the committed candidate is found among
 them by its position in the candidate store, so the cone and the
 renormalisation are the committed state's and the committed entry is never an
 extra. In `prob_neigh_mode=state` the pooled neighbourhood is the same for every
-state and in `geom` one subspace serves every state, so the candidate sets are
+state and in `geom` one cone serves every state, so the candidate sets are
 comparable. In `shc|snhc` the candidates are hill-climb proposals with unequal
 counts per state, so the draw acts as an acceptance step over the proposals and
 the incumbent, and it chooses the state as well. Until 2026-11-05 the state was that of the

@@ -249,9 +249,10 @@ policies. This section only shows how the cycle maps onto them.
 
 1. **Specify.** Write what is to change, and how you will know it works, as a
    note under `doc/implementation_notes/planned/` or
-   `doc/refactoring_notes/planned/`. Read the matching policy under
-   `doc/policies/` first. For work across subsystems, start with the
-   `simple-architecture` skill.
+   `doc/refactoring_notes/planned/`, following
+   [how2write_agent_plans.md](how2write_agent_plans.md). Read the matching
+   policy under `doc/policies/` first. For work across subsystems, start with
+   the `simple-architecture` skill.
 2. **Code.** Choose the narrowest workflow skill (routing in `CLAUDE.md`);
    the folder guides load by themselves as files are read. Follow
    `doc/policies/layering_and_project_ownership_policy.md` and
