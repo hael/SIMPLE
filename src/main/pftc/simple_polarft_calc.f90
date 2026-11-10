@@ -248,6 +248,8 @@ type :: polarft_calc
     procedure          :: gen_euclid_val_at_bank
     procedure          :: ref_slots_identical
     procedure          :: ptcl_posterior_temp
+    procedure          :: ptcl_phys_temp
+    procedure          :: shell_jacobian
     procedure, private :: gen_prob_euclid_val
     procedure, private :: gen_prob_power_euclid_val
     procedure, private :: gen_corr_for_rot_8_noshift, gen_corr_for_rot_8_shifted
@@ -836,6 +838,19 @@ interface
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
     end function ptcl_posterior_temp
+
+    !> the untempered inverse temperature of particle iptcl's posterior over the band kfromto(1)..kstop
+    module real function ptcl_phys_temp(self, iptcl, kstop)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        integer, optional,   intent(in) :: kstop
+    end function ptcl_phys_temp
+
+    !> the Euclidean objective's weight of shell k beside 1/sigma2: k (jacobian=yes) or 1
+    module pure real(dp) function shell_jacobian(self, k)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: k
+    end function shell_jacobian
 
     module subroutine gen_prob_euclid_val(self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds)
         class(polarft_calc), target, intent(inout) :: self

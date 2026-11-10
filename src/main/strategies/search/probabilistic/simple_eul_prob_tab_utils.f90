@@ -591,7 +591,8 @@ contains
     !! of them, and sigma2 is the variance per real or imaginary part (gen_sigma_contrib):
     !!   NLL_r = sum_k (pi k/pftsz) sum_p |r_kp|^2 / (2 sigma2_k) = pi wsqsum(X) L_r / (2 pftsz).
     !! The posterior is p_r proportional to exp(-T (L_r - L_min)) with T = pi wsqsum(X) / (2 pftsz).
-    !! wsqsum is the calculator's memoized weighted power of the particle (wsqsum_ptcl_now).
+    !! wsqsum comes from polarft_calc%ptcl_phys_temp: with jacobian=no (weights 1/sigma2_k) times the band's mean
+    !! shell index, the physical model's count of observations spread evenly over the shells.
     pure real function posterior_temperature( wsqsum, pftsz ) result( temp )
         real(dp), intent(in) :: wsqsum
         integer,  intent(in) :: pftsz

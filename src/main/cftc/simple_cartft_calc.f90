@@ -69,8 +69,9 @@ type :: cartft_calc
     integer,           allocatable :: shells(:,:) !< (lims2) shell nint(sqrt(h*h+k*k)) of a pixel inside the Nyquist disk, -1 outside
     integer,           allocatable :: shell_npix(:) !< (0:box/2) pixels of each shell in the full disk
     real,              allocatable :: sigma2(:,:)       !< (shell, half) the two global spectra (OBJFUN_EUCLID)
-    real,              allocatable :: rsqrt_sigma2(:,:) !< 1/sqrt(sigma2) where valid
+    real,              allocatable :: rsqrt_sigma2(:,:) !< the pixel whitening sqrt(jac/sigma2) where valid
     logical,           allocatable :: sigma2_ok(:,:)    !< finite and positive
+    logical :: l_jacobian = .true.  !< jacobian=no: a pixel of shell k weighs 1/k, every shell alike (set_sigma2)
     logical :: exists = .false.
 contains
     ! lifecycle
@@ -109,6 +110,7 @@ contains
     procedure          :: pose_normal_terms_full_disk
     procedure          :: sigma_contribution
     procedure          :: sigma_from_shell_residual
+    procedure, private :: pixel_jacobian
     procedure          :: score
     procedure, private :: fill_ptcl
     procedure, private :: gather
@@ -436,10 +438,11 @@ contains
 
     !> The two global spectra of OBJFUN_EUCLID (shell kfrom.., half), held once for every slot
     !! with their inverse square roots and the shells where they are usable (finite, positive)
-    subroutine set_sigma2( self, kfrom, sigma2 )
+    subroutine set_sigma2( self, kfrom, sigma2, l_jacobian )
         class(cartft_calc), intent(inout) :: self
         integer,            intent(in)    :: kfrom
         real,               intent(in)    :: sigma2(kfrom:,:)
+        logical, optional,  intent(in)    :: l_jacobian !< jacobian=no (default yes): pixels of shell k weigh 1/k
         integer :: kto, k, h, i
         if( size(sigma2,2) /= 2 ) THROW_HARD('cartft_calc sigma2 must hold one spectrum per even/odd half')
         ! a Euclidean slot was whitened by the previous spectra: unprepared until set_ptcl again
@@ -453,6 +456,8 @@ contains
                 endif
             end do
         endif
+        self%l_jacobian = .true.
+        if( present(l_jacobian) ) self%l_jacobian = l_jacobian
         kto = ubound(sigma2,1)
         if( allocated(self%sigma2)       ) deallocate(self%sigma2)
         if( allocated(self%rsqrt_sigma2) ) deallocate(self%rsqrt_sigma2)
@@ -463,10 +468,24 @@ contains
         do h = 1, 2
             do k = kfrom, kto
                 self%sigma2_ok(k,h) = ieee_is_finite(self%sigma2(k,h)) .and. self%sigma2(k,h) > 0.
-                if( self%sigma2_ok(k,h) ) self%rsqrt_sigma2(k,h) = 1./sqrt(self%sigma2(k,h))
+                if( .not. self%sigma2_ok(k,h) ) cycle
+                if( self%l_jacobian )then
+                    self%rsqrt_sigma2(k,h) = 1./sqrt(self%sigma2(k,h))
+                else
+                    self%rsqrt_sigma2(k,h) = 1./sqrt(self%sigma2(k,h) * real(max(k,1)))
+                endif
             end do
         end do
     end subroutine set_sigma2
+
+    !> the Euclidean weight of a pixel of shell k beside 1/sigma2: 1, the physical likelihood (a shell holds
+    !! about k pixels, the polar objective's Jacobian), or with jacobian=no 1/k, every shell alike
+    pure real(dp) function pixel_jacobian( self, k )
+        class(cartft_calc), intent(in) :: self
+        integer,            intent(in) :: k
+        pixel_jacobian = 1._dp
+        if( .not. self%l_jacobian ) pixel_jacobian = 1._dp / real(max(k,1), dp)
+    end function pixel_jacobian
 
     !> Prepare particle slot iptcl for OBJFUN_EUCLID with the spectrum of its half (set_sigma2):
     !! X/sqrt(sigma2) and abs(C)/sqrt(sigma2) of the pixel's shell over kfromto intersected with
@@ -1063,9 +1082,11 @@ contains
             allocate(ref_sum(lower_shell:upper_shell),   source=0._dp)
             allocate(ptcl_sum(lower_shell:upper_shell),  source=0._dp)
             allocate(counts(lower_shell:upper_shell),    source=0)
-            ! the square root of the half's spectrum per shell, once per call
+            ! the inverse of the pixel whitening per shell, once per call: sqrt(sigma2/jac)
             allocate(root_sigma2(lower_shell:upper_shell))
-            root_sigma2 = sqrt(real(self%sigma2(lower_shell:upper_shell,p%half), dp))
+            do shell = lower_shell, upper_shell
+                root_sigma2(shell) = sqrt(real(self%sigma2(shell,p%half), dp) / self%pixel_jacobian(shell))
+            end do
             vnum = 0._dp
             vden = 0._dp
             allocate(eh(0:upper_shell), ek(-upper_shell:upper_shell))
@@ -1092,8 +1113,10 @@ contains
                     if( l_diag )then
                         ref_sum(shell)  = ref_sum(shell)  + weight*real(conjg(model)*model, dp)
                         ptcl_sum(shell) = ptcl_sum(shell) + weight*real(conjg(raw_observed)*raw_observed, dp)
-                        vnum = vnum + weight*real(conjg(residual)*residual, dp)/real(self%sigma2(shell,p%half), dp)
-                        vden = vden + weight*real(conjg(raw_observed)*raw_observed, dp)/real(self%sigma2(shell,p%half), dp)
+                        vnum = vnum + weight*real(conjg(residual)*residual, dp)/&
+                            &(real(self%sigma2(shell,p%half), dp) / self%pixel_jacobian(shell))
+                        vden = vden + weight*real(conjg(raw_observed)*raw_observed, dp)/&
+                            &(real(self%sigma2(shell,p%half), dp) / self%pixel_jacobian(shell))
                     endif
                 end do
             end do
@@ -1120,7 +1143,7 @@ contains
 
     !> The sigma2 contribution of euclid particle slot iptcl from the whitened |r|^2 per shell of an
     !! evaluation (pose_normal_terms): residual power over two per sample, unwhitened by the half's
-    !! spectrum, as sigma_contribution sums it at that pose without a pass of its own.
+    !! spectrum and the pixel weight, as sigma_contribution sums it at that pose without a pass of its own.
     subroutine sigma_from_shell_residual( self, iptcl, shell_residual, sigma_contrib )
         class(cartft_calc), intent(in)  :: self
         integer,            intent(in)  :: iptcl
@@ -1136,7 +1159,7 @@ contains
         if( any(self%shell_npix(lower_shell:upper_shell) == 0) ) THROW_HARD('cartft_calc sigma contribution found an empty active shell')
         allocate(sigma_contrib(lower_shell:upper_shell))
         do shell = lower_shell, upper_shell
-            sigma_contrib(shell) = real(real(self%sigma2(shell,self%ptcls(iptcl)%half), dp)*&
+            sigma_contrib(shell) = real(real(self%sigma2(shell,self%ptcls(iptcl)%half), dp) / self%pixel_jacobian(shell)*&
                 &shell_residual(shell - lower_shell + 1)/(2._dp*real(self%shell_npix(shell), dp)), sp)
         end do
     end subroutine sigma_from_shell_residual

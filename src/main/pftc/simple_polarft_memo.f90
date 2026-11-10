@@ -20,17 +20,18 @@ contains
         do ik = self%kfromto(1),self%kfromto(2)
             sumsqk                = sum(real(self%pfts_ptcls(:,ik,i)*conjg(self%pfts_ptcls(:,ik,i)),dp))
             self%sqsums_ptcls(i)  = self%sqsums_ptcls(i) + sumsqk
+            if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + self%shell_jacobian(ik) * sumsqk / &
+                &real(self%sigma2_noise(ik,ih),dp)
             sumsqk                = real(ik,dp) * sumsqk
             self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
             self%kshell_sqsums_ptcls(ik,i) = sumsqk
-            if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,ih),dp)
         enddo
     end subroutine memoize_sqsum_ptcl
 
-    !> The Euclidean shell weights k/sigma2(k,half) of the two spectra the calculator points at, in single
-    !! and double precision (each kernel keeps the precision it always used), and the weighted self-terms of
-    !! the memoised particles under them. Called when the spectra are assigned and again whenever their
-    !! values change (prep_sigmas_objfun after read_global), so the self-term is never stale.
+    !> The Euclidean shell weights k/sigma2(k,half) of the two spectra the calculator points at (1/sigma2 with
+    !! jacobian=no), in single and double precision (each kernel keeps the precision it always used), and the
+    !! weighted self-terms of the memoised particles under them. Called when the spectra are assigned and again
+    !! whenever their values change (prep_sigmas_objfun after read_global), so the self-term is never stale.
     module subroutine memoize_sigma2_weights(self)
         class(polarft_calc), intent(inout) :: self
         integer :: i, ik, ih
@@ -44,8 +45,8 @@ contains
         allocate(self%sigma2_wk(self%kfromto(1):self%kfromto(2),2), self%sigma2_wk8(self%kfromto(1):self%kfromto(2),2))
         do ih = 1, 2
             do ik = self%kfromto(1), self%kfromto(2)
-                self%sigma2_wk(ik,ih)  = real(ik,sp) / self%sigma2_noise(ik,ih)
-                self%sigma2_wk8(ik,ih) = real(ik,dp) / real(self%sigma2_noise(ik,ih),dp)
+                self%sigma2_wk(ik,ih)  = real(self%shell_jacobian(ik),sp) / self%sigma2_noise(ik,ih)
+                self%sigma2_wk8(ik,ih) = self%shell_jacobian(ik) / real(self%sigma2_noise(ik,ih),dp)
             enddo
         enddo
         ! the self-term exactly as memoize_sqsum_ptcl forms it, from the sigma2-independent shell sums
@@ -53,8 +54,8 @@ contains
             ih = merge(1, 2, self%iseven(i))
             self%wsqsums_ptcls(i) = 0.d0
             do ik = self%kfromto(1), self%kfromto(2)
-                self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + self%kshell_sqsums_ptcls(ik,i) / &
-                    &real(self%sigma2_noise(ik,ih),dp)
+                self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + self%kshell_sqsums_ptcls(ik,i) * &
+                    &(self%shell_jacobian(ik) / real(max(ik,1),dp)) / real(self%sigma2_noise(ik,ih),dp)
             enddo
         enddo
     end subroutine memoize_sigma2_weights
@@ -68,6 +69,17 @@ contains
         real(dp) :: wsq
         wsq = self%wsqsums_ptcls(self%pinds(iptcl))
     end function wsqsum_ptcl_now
+
+    !> the Euclidean objective's weight of shell k beside 1/sigma2: the polar ring's Cartesian pixel count, k,
+    !! which makes the objective the physical likelihood; jacobian=no weighs every shell alike
+    module pure real(dp) function shell_jacobian(self, k)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: k
+        shell_jacobian = real(k,dp)
+        if( associated(self%p_ptr) )then
+            if( .not. self%p_ptr%l_jacobian ) shell_jacobian = 1.d0
+        endif
+    end function shell_jacobian
 
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self

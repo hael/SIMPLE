@@ -66,7 +66,8 @@ Important details:
   within the state is one draw from the tempered posterior over the row,
   `p_r ∝ exp(-prob_beta T_i (L_r - L_min))` with `T_i = pi wsqsum / (2 pftsz)`
   the particle's Gaussian noise temperature (`draw_posterior_row`,
-  `posterior_temperature`; keyed on the particle, `RND_FAM_ASSIGN`). The
+  `polarft_calc%ptcl_phys_temp`; under `jacobian=no` the unweighted self-term times the band's mean
+  shell index; keyed on the particle, `RND_FAM_ASSIGN`). The
   in-plane rotation of each row entry is the same kind of draw over the grid
   rotations, keyed on the particle and the reference (`gen_posterior_val`,
   `RND_FAM_INPL`). No reference is forced to be populated.

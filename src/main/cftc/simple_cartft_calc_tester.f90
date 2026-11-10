@@ -75,6 +75,8 @@ contains
         call test_half_plane_kernels()
         write(*,'(A)') 'test_sigma_from_shell_residual'
         call test_sigma_from_shell_residual()
+        write(*,'(A)') 'test_jacobian_switch'
+        call test_jacobian_switch()
         write(*,'(A)') 'test_matched_projector_boundary'
         call test_matched_projector_boundary()
         write(*,'(A)') 'test_reference_lifecycle'
@@ -906,6 +908,61 @@ contains
         call assert_true(worst < 1.e-6_dp, 'the sigma2 contribution from a shell residual differs from the sigma pass')
         call calc%kill
     end subroutine test_sigma_from_shell_residual
+
+    !> jacobian=no: the loss weighs a pixel of shell k by 1/(k sigma2) (the brute-force sum), the shell residual
+    !! of the solve still gives the sigma pass's contribution, and that contribution is the switch's own: the
+    !! unweighted residual power
+    subroutine test_jacobian_switch()
+        type(cartft_calc) :: calc
+        type(ctfparams)   :: no_ctf
+        real, allocatable :: volume(:,:,:), pass_yes(:), pass_no(:), from_residual(:)
+        complex     :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        complex     :: prediction(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
+        real        :: sigma2(0:TEST_BOX/2)
+        real(dp)    :: rotation(3,3), objective, oracle, gradient(5), hessian(5,5), residual_sum, particle_sum, w
+        real(dp), allocatable :: residual(:)
+        integer     :: h, k, shell
+        integer, parameter :: kfromto(2) = [2, TEST_BOX/2 - 1]
+        real(dp), parameter :: SHIFT(2) = [-0.08_dp, 0.06_dp]
+        call build_test_volume(volume)
+        call new_test_calc(calc, volume)
+        no_ctf%ctfflag = CTFFLAG_NO
+        sigma2   = [(0.5 + 0.1*real(shell), shell = 0, TEST_BOX/2)]
+        rotation = real(euler2m([20., 36.2, 28.7]), dp)
+        call calc%predict(1, .true., real(euler2m([19., 37., 28.]), dp), [0.31_dp, -0.24_dp], observed)
+        call calc%predict(1, .true., rotation, SHIFT, prediction)
+        ! the sigma pass under the physical weighting
+        call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, kfromto)
+        call calc%sigma_contribution(1, .true., 1, rotation, SHIFT, pass_yes)
+        ! jacobian=no
+        call calc%set_sigma2(0, spread(sigma2, 2, 2), l_jacobian=.false.)
+        call calc%set_ptcl(1, observed, no_ctf, 1, kfromto)
+        call objective_gradient(calc, 1, .true., 1, rotation, SHIFT, objective, gradient)
+        residual_sum = 0._dp
+        particle_sum = 0._dp
+        do k = -TEST_BOX/2, TEST_BOX/2
+            do h = -TEST_BOX/2, TEST_BOX/2
+                shell = nint(sqrt(real(h*h + k*k)))
+                if( shell < kfromto(1) .or. shell > kfromto(2) ) cycle
+                w = 1._dp / (real(sigma2(shell), dp) * real(shell, dp))
+                residual_sum = residual_sum + w * abs(cmplx(observed(h,k), kind=dp) - cmplx(prediction(h,k), kind=dp))**2
+                particle_sum = particle_sum + w * abs(cmplx(observed(h,k), kind=dp))**2
+            end do
+        end do
+        oracle = residual_sum / particle_sum
+        call assert_true(abs(objective - oracle) < FORMULA_TOL*max(1._dp, oracle), &
+            &'jacobian=no: the Cartesian loss weighs a pixel of shell k by 1/(k sigma2)')
+        allocate(residual(kfromto(1):kfromto(2)))
+        call calc%pose_normal_terms(1, .true., 1, rotation, SHIFT, objective, gradient, hessian, residual)
+        call calc%sigma_from_shell_residual(1, residual, from_residual)
+        call calc%sigma_contribution(1, .true., 1, rotation, SHIFT, pass_no)
+        call assert_true(maxval(abs(real(from_residual, dp) - real(pass_no, dp))/real(pass_no, dp)) < 1.e-6_dp, &
+            &'jacobian=no: the contribution from the solve''s shell residual is the sigma pass''s')
+        call assert_true(maxval(abs(real(pass_no, dp) - real(pass_yes, dp))/real(pass_yes, dp)) < 1.e-5_dp, &
+            &'the sigma2 contribution is the unweighted residual power under either weighting')
+        deallocate(residual)
+        call calc%kill
+    end subroutine test_jacobian_switch
 
     ! E10: the Cartesian gather against the projector's KB stencil at identical rotated coordinates of one
     ! physical reference (C10): equal on grid, where ref_weight makes the B-spline gather carry the KB

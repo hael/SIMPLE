@@ -733,6 +733,8 @@ contains
             case DEFAULT
                 THROW_HARD('shift_prior must be yes or no')
         end select
+        ! the polar Euclidean objective's shell weight k/sigma2 (yes) or 1/sigma2 (no); the posterior follows it
+        self%l_jacobian = trim(self%jacobian) == 'yes'
         ! the probability tables' posterior draws: their tempering factor, and no ramp unless an end is given (the
         ! run stays at prob_beta)
         if( .not. (self%prob_beta > 0.) ) THROW_HARD('prob_beta must be positive')

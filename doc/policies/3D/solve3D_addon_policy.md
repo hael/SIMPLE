@@ -70,6 +70,8 @@ sampled and masked, which depends on the particles being added: the frozen
 accumulators are mask-free raw sums, and the mask enters at restoration, in
 the solve support and in matching, on the union. The add-on's own manifest
 records the values it ran with, so a chained add-on inherits the override.
+`jacobian` is a recorded and replayed input: an add-on to a `jacobian=no` run
+aligns the cohort with the same shell weighting.
 `nu_stage` is a recorded and replayed input: the add-on starts NU filtering at
 the stage its base run did, so its last stage is filtered, or not, as in the base.
 Any other key the UI entry does not accept is refused as not an input.

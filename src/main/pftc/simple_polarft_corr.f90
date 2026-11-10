@@ -472,8 +472,31 @@ contains
     module real function ptcl_posterior_temp( self, iptcl )
         class(polarft_calc), intent(in) :: self
         integer,             intent(in) :: iptcl
-        ptcl_posterior_temp = self%p_ptr%prob_beta * posterior_temperature(self%wsqsum_ptcl_now(iptcl), self%pftsz)
+        ptcl_posterior_temp = self%p_ptr%prob_beta * self%ptcl_phys_temp(iptcl)
     end function ptcl_posterior_temp
+
+    !> The untempered inverse temperature of particle iptcl's posterior: the Gaussian likelihood's pi s / (2 pftsz)
+    !! (posterior_temperature), s the self-term over the band kfromto(1)..kstop (default the whole band) in the
+    !! physical likelihood's units. With jacobian=no every shell weighs alike and s is the self-term times the
+    !! band's mean shell index: the physical model's count of independent observations, spread evenly over shells
+    module real function ptcl_phys_temp( self, iptcl, kstop )
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        integer, optional,   intent(in) :: kstop
+        real(dp) :: wsq
+        integer  :: kto
+        kto = self%kfromto(2)
+        if( present(kstop) )then
+            kto = min(kstop, self%kfromto(2))
+            wsq = self%wsqsum_ptcl_band(iptcl, kto)
+        else
+            wsq = self%wsqsum_ptcl_now(iptcl)
+        endif
+        if( associated(self%p_ptr) )then
+            if( .not. self%p_ptr%l_jacobian ) wsq = 0.5d0 * real(self%kfromto(1) + kto, dp) * wsq
+        endif
+        ptcl_phys_temp = posterior_temperature(wsq, self%pftsz)
+    end function ptcl_phys_temp
 
     module subroutine gen_prob_euclid_val( self, iref, iptcl, shift, athres_ub, prob_athres, dist, irot, pvec_sorted, sorted_inds )
         class(polarft_calc), target, intent(inout) :: self
@@ -1582,7 +1605,7 @@ contains
             vden = 0.d0
             do k = self%kfromto(1), self%kfromto(2)
                 if( self%sigma2_noise(k,ih) <= 0. ) cycle
-                wk   = real(k, dp) / real(self%sigma2_noise(k,ih), dp)
+                wk   = self%shell_jacobian(k) / real(self%sigma2_noise(k,ih), dp)
                 ppow = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp))
                 vnum = vnum + wk * sum(real(pft_ref_tmp_8(:,k) * conjg(pft_ref_tmp_8(:,k)), dp))
                 vden = vden + wk * ppow

@@ -8,7 +8,7 @@ use simple_builder,            only: builder
 use simple_eul_prob_tab,       only: eul_prob_tab
 use simple_eul_prob_tab_utils, only: update_screen_best, eulprob_dist_switch, eulprob_corr_switch, &
     &record_seed_shift, prob_candidate, &
-    &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
+    &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, &
     &draw_posterior_row, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, top_posterior_extras, &
     &temperature_or_argmin, prob_rnd_scope, keyed_candidate_order, prob_readout, prob_readout_fname, &
     &write_prob_readout, report_prob_readout, PROB_READOUT_3D_NEIGH
@@ -281,11 +281,11 @@ contains
             endif
             t0 = omp_get_wtime()
             if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
-                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
+                &self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc))
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc, o_prev,&
                 &l_seed_sh_first, shift_seed)
             call memoize_seed_bank(self, iptcl_loc, shift_seed, seed_bank(:,:,ithr_loc), l_bank(ithr_loc), nbank(ithr_loc))
-            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+            self%temps(i_loc) = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             t0 = omp_get_wtime()
             call evaluate_direct_stochastic_refs(i_loc, ithr_loc, iptcl_loc, prev_state_loc, prev_proj_loc,&
@@ -536,12 +536,12 @@ contains
             endif
             t0 = omp_get_wtime()
             if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
-                &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz()))
+                &self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc))
             call estimate_shift_seed(self, grad_shsrch_obj, ithr_loc, iptcl_loc, prev_state, prev_proj, o_prev,&
                 &l_seed_sh_first, shift_seed_loc)
             call memoize_seed_bank(self, iptcl_loc, shift_seed_loc, seed_bank(:,:,ithr_loc), l_bank(ithr_loc),&
                 &nbank(ithr_loc))
-            self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
+            self%temps(i_loc) = self%b_ptr%pftc%ptcl_phys_temp(iptcl_loc)
             ts_seed(ithr_loc) = ts_seed(ithr_loc) + (omp_get_wtime() - t0)
             t0 = omp_get_wtime()
             if( l_geom_neigh )then
@@ -1424,8 +1424,7 @@ contains
         prior_w_map = 0.d0
         step        = step_win
         if( l_map )then
-            temp_s = real(self%p_ptr%prob_beta, dp) * real(posterior_temperature(&
-                &self%b_ptr%pftc%wsqsum_ptcl_band(iptcl, kscreen), self%b_ptr%pftc%get_pftsz()), dp)
+            temp_s = real(self%p_ptr%prob_beta, dp) * real(self%b_ptr%pftc%ptcl_phys_temp(iptcl, kscreen), dp)
             temp_i = real(self%p_ptr%prob_beta, dp) * real(self%temps(i), dp)
             if( l_disk )then
                 imap        = SHIFTMAP_SCREEN

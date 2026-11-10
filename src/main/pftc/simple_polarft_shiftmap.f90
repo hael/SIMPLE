@@ -216,7 +216,8 @@ contains
         wsq = 0.d0
         if( .not. associated(self%sigma2_noise) ) THROW_HARD('no sigma2; wsqsum_ptcl_band')
         do k = self%kfromto(1), min(kstop, self%kfromto(2))
-            wsq = wsq + self%kshell_sqsums_ptcls(k,i) / real(self%sigma2_noise(k,ih), dp)
+            wsq = wsq + self%kshell_sqsums_ptcls(k,i) * (self%shell_jacobian(k) / real(max(k,1),dp)) / &
+                &real(self%sigma2_noise(k,ih), dp)
         enddo
     end function wsqsum_ptcl_band
 
