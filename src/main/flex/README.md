@@ -35,12 +35,12 @@ the production-module layers, and runs before the fast test gate.
   services around it (`basis`, `embed`, `pairmerge`, `fit_driver`).
 - `states/`: state inference (`weights`, `gmm`, `targets`, `deconv`, `merge`).
   The maps are SIMPLE's: FLEX has no reconstruction backend (module 5).
-- the folder root: shared helpers (`util`), figures (`plot`, `umap`) and the
-  fast-gate testers.
+- the folder root: the indexed hierarchy and node records (`simple_flex_tree`),
+  shared helpers (`util`), figures (`plot`, `umap`) and the fast-gate testers.
 
-There are 45 source files: 32 production modules, the probe fit's four
+There are 47 source files: 33 production modules, the probe fit's four
 submodule files, the self-test submodules of the PCG operator and of the
-`cls_expansion` kernel route, four testers, `cls_expansion` with its kernel
+`cls_expansion` kernel route, five testers, `cls_expansion` with its kernel
 route (`simple_flex_cls_kernel`) and `trajectory_denoise`
 (`simple_flex_traj_denoise`), the last three outside the layering. `scripts/check_flex_dag.py`
 rejects multiple module units in one source as well as layering violations and

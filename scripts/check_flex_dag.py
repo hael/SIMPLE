@@ -9,6 +9,7 @@ import sys
 LAYERS = {
     # L0: contracts and shared definitions.
     "simple_defs_flex": 0,
+    "simple_flex_tree": 0,
     "simple_flex_pca_records": 0,
     "simple_flex_pca_stages": 0,
     "simple_flex_pca_artifacts": 0,
