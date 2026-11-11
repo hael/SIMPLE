@@ -69,11 +69,6 @@ interface
         real :: lims(2)
     end function solve3D_size_lplims
 
-    module function solve3D_fixed_band_last_stage( params, l_cavgs ) result( istage )
-        class(parameters), intent(in) :: params
-        logical,           intent(in) :: l_cavgs
-        integer :: istage
-    end function solve3D_fixed_band_last_stage
 
     module function solve3D_cenlp_default() result(cenlp)
         real :: cenlp
@@ -499,9 +494,7 @@ contains
         if( present(lpstop)  ) lims(2) = max(lpstop,  lims(2))
         write(logfhandle,'(A,F6.1,A,F6.2,A,F6.2,A)') '>>> SOLVE3D LOW-PASS LADDER FROM MSKDIAM ', params%mskdiam, &
             &' A: ', lims(1), ' -> ', lims(2), ' A'
-        ! the fixed-band stages are cropped to their limits; the adaptive ones keep the ramp's headroom
-        call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override, &
-            &own_crop_last=solve3D_fixed_band_last_stage(params, l_cavgs))
+        call lpstages_setlims(params%box, nstages, params%smpd, lims(1), lims(2), lpinfo, trslim_override=trslim_override)
     end subroutine set_lplims_from_size
 
     subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, first_stage )

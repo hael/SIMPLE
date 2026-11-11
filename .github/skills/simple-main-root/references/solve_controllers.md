@@ -41,17 +41,16 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
    (`prep_class_command_lines`) and honoured
    in the mode policy, the `lpinfo` set-up and the emit, not re-read from the user's cline.
 3. **Stage numbers are coupled.** `ML_REG_START_STAGE` must match the case split of
-   `set_refine3D_stage_controls`; `VOL_SUPPLIED_STAGE` is defined from `NOSYMSRCH_STAGE`, and the
-   fixed-band stages whose crops follow their own limits end before `NU_FILTER_STAGE` or
-   `GOLD_STD_STAGE` (`solve3D_fixed_band_last_stage`). `MAXITS` feeds `solve3D_remaining_niters`
-   and the manifest's ladder.
+   `set_refine3D_stage_controls`; `VOL_SUPPLIED_STAGE` is defined from `NOSYMSRCH_STAGE`.
+   `MAXITS` feeds `solve3D_remaining_niters` and the manifest's ladder.
 4. **Sampling is preserved.** Every particle-to-volume handoff keeps `box * smpd == box_crop *
    smpd_crop`; each stage's crop comes from `lpinfo(istage)`. The `refine3D` and `reconstruct3D`
    stage clines carry no native `box`, `smpd` or `smpd_crop` (`prep_class_command_lines` deletes
    them; the project is the authority).
-5. **Stage omission is bounded.** 3D (`solve3D_stage_behind_fsc05`): never the first or last stage,
-   the axis-search stage, the first NU stage before gold standard, or any stage of a multi-state
-   run (`solve3D_stage_skipping`). 2D
+5. **Stage omission is bounded.** 3D (`solve3D_stage_behind_fsc05`): never stages 1-3
+   (`MODEL_SHAPING_STAGES`, they shape the initial model), the entry or last stage, the axis-search
+   stage, the first NU stage before gold standard, or any stage of a multi-state run
+   (`solve3D_stage_skipping`). 2D
    (`solve2D_stage_behind_frc05`): never the entry stage, the first `SKIP_MIN_STAGE` (2) stages, the
    last, or a stage without a planned limit; an omitted phase-1 stage's iterations go to the next
    phase-1 stage.

@@ -495,10 +495,8 @@ contains
 
     end subroutine lpstages_fast
 
-    !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between,
-    !! except that the stages through own_crop_last are cropped to their own limits (the most downsampling)
-    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override, &
-        &own_crop_last )
+    !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between
+    subroutine lpstages_setlims( box, nstages, smpd, lpstart, lpstop, lpinfo, verbose, first_stage, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
@@ -506,7 +504,6 @@ contains
         logical, optional, intent(in)  :: verbose
         integer, optional, intent(in)  :: first_stage
         real,    optional, intent(in)  :: trslim_override
-        integer, optional, intent(in)  :: own_crop_last
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial, ifirst
@@ -545,14 +542,6 @@ contains
                 lpinfo(i)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
                 lpinfo(i)%scale       = real(lpinfo(i)%box_crop) / real(box)
                 lpinfo(i)%smpd_crop   = smpd / lpinfo(i)%scale
-                lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
-                lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
-            end do
-        endif
-        if( present(own_crop_last) )then
-            do i = ifirst + 1, min(own_crop_last, nstages - 1)
-                smpd_target = max(SMPD_TARGET_MIN, (lpinfo(i)%lp * LP2SMPD_TARGET))
-                call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
                 lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
                 lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
             end do

@@ -43,6 +43,7 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
+integer,          parameter :: MODEL_SHAPING_STAGES    = 3    ! stages 1-3 shape the initial model: never omitted
 real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size-planned ladder: first limit mskdiam/8 within LPSTART_SIZE_BOUNDS
 real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! (streptavidin 80 A: 10 A, PfCRT 160 A: 20 A)
 real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
@@ -440,21 +441,6 @@ contains
         cfg%l_gold_standard = params%nstates == 1 .and. .not. l_cavgs .and. istage >= gold_std_start_stage(params)
     end subroutine set_refine3D_gold_standard_policy
 
-    !> the last particle-route stage that matches at its planned limit: the one before NU filtering or gold
-    !! standard first adapt the band; its crop may follow its own limit (0 on the class-average route)
-    module function solve3D_fixed_band_last_stage( params, l_cavgs ) result( istage )
-        class(parameters), intent(in) :: params
-        logical,           intent(in) :: l_cavgs
-        integer :: istage, ifirst
-        istage = 0
-        if( l_cavgs ) return
-        ifirst = NSTAGES
-        if( l_nonuniform ) ifirst = min(ifirst, nu_start_stage(params))
-        if( l_nonuniform .and. l_state_continue_mode ) ifirst = min(ifirst, TRAILREC_STAGE_SINGLE)
-        if( params%nstates == 1 ) ifirst = min(ifirst, gold_std_start_stage(params))
-        istage = ifirst - 1
-    end function solve3D_fixed_band_last_stage
-
     !> the first gold-standard stage: gold_std_stage when set, else GOLD_STD_STAGE
     integer function gold_std_start_stage( params ) result( istage )
         class(parameters), intent(in) :: params
@@ -693,14 +679,7 @@ contains
             &istage > first_stage .and. istage > FSC05_PROMOTE_MIN_STAGE .and. &
             &istage < active_refine3D_nstages() .and. allocated(lpinfo) .and. &
             &.not.( l_srch4symaxis .and. istage == SYMSRCH_STAGE ) )then
-            ! a fixed-band stage aims past the first adaptive stage's limit: before gold standard both halves
-            ! match one merged reference and their FSC runs ahead of the orientations (PfCRT, 2026-11-10), so
-            ! the global stages are not left on it; the plateau exit still ends them
-            if( istage <= solve3D_fixed_band_last_stage(params, l_cavgs) )then
-                call cline_refine3D%set('lpexit', lpinfo(min(solve3D_fixed_band_last_stage(params, l_cavgs) + 1, size(lpinfo)))%lp)
-            else
-                call cline_refine3D%set('lpexit', lpinfo(istage+1)%lp)
-            endif
+            call cline_refine3D%set('lpexit',             lpinfo(istage+1)%lp)
         else
             call cline_refine3D%delete('lpexit')
         endif
@@ -788,7 +767,7 @@ contains
     !> Is the stage's planned matching limit already behind the measured FSC=0.5
     !! resolution? Such a stage would iterate at a crop that cannot represent
     !! what the halves already agree on. Either route of a single-state run, past
-    !! FSC05_PROMOTE_MIN_STAGE, never a fixed-band stage nor the NU stage before gold standard; .false. without res05.
+    !! never stages 1-3 (they shape the initial model) nor the NU stage before gold standard; .false. without res05.
     module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
         class(parameters),       intent(in) :: params
         integer,                 intent(in) :: istage
@@ -797,14 +776,12 @@ contains
         real :: res05
         l_behind = .false.
         if( .not. solve3D_stage_skipping(params%nstates) ) return
-        if( istage <= FSC05_PROMOTE_MIN_STAGE ) return
+        if( istage <= MODEL_SHAPING_STAGES )    return
         if( .not. allocated(lpinfo) )           return
         if( istage > size(lpinfo) )             return
         ! the first NU stage before the gold-standard switch always runs: its NU-promoted band refines
         ! the merged map the half-specific stages start from (solve3D_policy.md, stage omission)
         if( l_nonuniform .and. istage == nu_start_stage(params) .and. istage < gold_std_start_stage(params) ) return
-        ! nor a fixed-band stage: its FSC runs ahead of the orientations (the global stages settle them)
-        if( istage <= solve3D_fixed_band_last_stage(params, l_cavgs_mode) ) return
         if( present(projfile) )then
             res05 = project_best_fsc05_resolution(projfile)
         else

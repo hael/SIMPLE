@@ -42,7 +42,6 @@ contains
         call test_lpstages_fast()
         call test_lpstages_setlims()
         call test_trslim_override()
-        call test_lpstages_setlims_own_crop()
         call test_fsc_weightings()
         call test_bfac_cap_filter()
         call test_butterworth()
@@ -318,27 +317,6 @@ contains
             &'zero shift limit keeps the automatic plan')
     end subroutine test_trslim_override
 
-    ! own_crop_last: the stages through it are cropped to their own limits (smpd lp/3, at least 2 A, box at
-    ! least 88), the most downsampling; the later stages keep the linear box ramp. 20 -> 6 A over 8 stages
-    ! at 1.3 A: stages 1-4 (20, 18, 16, 14 A) all reach the 88 minimum, where the ramp gives them more
-    subroutine test_lpstages_setlims_own_crop()
-        type(lp_crop_inf) :: ramp(8), own(8)
-        integer :: i
-        write(*,'(A)') 'test_lpstages_setlims_own_crop'
-        call lpstages_setlims(BOX, 8, SMPD, 20., LPFINAL, ramp, verbose=.false.)
-        call lpstages_setlims(BOX, 8, SMPD, 20., LPFINAL, own,  verbose=.false., own_crop_last=4)
-        do i = 1,4
-            call assert_int(88, own(i)%box_crop, 'own crop, stage '//int2str(i)//': the 88 minimum box')
-            call assert_crop_consistent(own(i), 'own crop, stage '//int2str(i))
-        end do
-        call assert_true(ramp(4)%box_crop > 88, 'the ramp gives stage 4 more than the minimum box')
-        do i = 5,8
-            call assert_int(ramp(i)%box_crop, own(i)%box_crop, 'own crop, stage '//int2str(i)//': the ramp kept')
-            call assert_real(ramp(i)%lp, own(i)%lp, TOL, 'own crop, stage '//int2str(i)//': the limit unchanged')
-        end do
-        call lpstages_setlims(BOX, 8, SMPD, 20., LPFINAL, own, verbose=.false., own_crop_last=8)
-        call assert_int(ramp(8)%box_crop, own(8)%box_crop, 'own crop never touches the last stage')
-    end subroutine test_lpstages_setlims_own_crop
 
     !---------------- FSC weightings ----------------
 

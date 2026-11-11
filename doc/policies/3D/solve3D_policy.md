@@ -237,11 +237,13 @@ against 14 deg in the runs that started at 8 A.
 `lpstart` replaces the first limit, `lpstop` can only coarsen the last, and
 `force_lp_range=yes` uses the requested range directly. The crops are those of
 `lpstages_setlims`: the end stages at a third of their limit (at least 2 A per
-pixel, at least 88 px), a linear box ramp between, except that the stages that
-match at their planned limit, those before NU filtering or gold standard first
-adapt the band (`solve3D_fixed_band_last_stage`, stages 1-4 by default), are
-cropped to their own limits, the most downsampling: PfCRT's stages 1-4 run at
-88 px instead of 88-120 px. The adaptive stages keep the ramp's headroom: on
+pixel, at least 88 px), a linear box ramp between. Do not crop the global
+stages to their own limits: tried in `85bbc2a2c` (2026-11-10), PfCRT's stages
+2-4 at 88 px (3.5 A per pixel, the 160 A particle 45 px across) instead of
+100-120 px gave stage 2 a cFAR of 0.18-0.25 against 0.27-0.33 at 100 px at
+the same 18 A limit and overlap, and the run fell apart in the early stages;
+the ramp's sampling is what the global search needs, though Nyquist would
+represent the band. The adaptive stages need the ramp's headroom as well: on
 Nov09 stage 5 (130 px, Nyquist 4.78 A) took the NU-promoted band to that
 Nyquist and FSC=0.5 from 11.9 to 6.9 A. The ladder was planned from the class FRCs
 until then; gold-standard solve2D (from stage 2) made those FRCs honest and
@@ -315,25 +317,20 @@ halves already agree on -- `set_bp_range3D` clips the band to the crop
 Nyquist, so the stage would print an advanced limit while matching at the
 crop limit and spend its whole iteration budget there. `solve3D_stage_behind_fsc05`
 gates a `cycle` in the frequency-marching loop, logging `>>> SOLVE3D OMITTING
-STAGE`. Excluded, because they carry one-time work: the first stage
-(`start_stage`, the add-on registration pass), the last stage (automasking,
-envelope FSC, trailing reconstruction) and, **only when an axis is actually
-searched**, `SYMSRCH_STAGE`. `NOSYMSRCH_STAGE` can be omitted: with
-`pgrp == pgrp_start` the `symmetrize` call is a complete no-op, since
-`l_symran` is set only when `pgrp_start` has more symmetry than `pgrp` and
-therefore implies `l_srch4symaxis`. Also excluded (2026-11-10): the first NU
-stage (`nu_start_stage`) when it precedes the first gold-standard stage
-(`gold_std_start_stage`) and NU filtering is on. And every fixed-band stage
-(`solve3D_fixed_band_last_stage`: the stages before NU filtering or gold
-standard first adapt the band, 1-4 by default), which also aims its mid-stage
-resolution exit at the first adaptive stage's planned limit, not the next
-rung's: before gold standard both halves match one merged reference, so their
-FSC=0.5 runs ahead of the orientations. On the size ladder PfCRT's stage 3
-(16 A) left after 3 iterations on FSC=0.5 13.5 A, stage 4 (14 A) was omitted,
-and stage 5 started with the orientations still moving 58 deg per iteration
-(Nov09: 15 deg after its 12.4 A stage 4), ending at 7.96/5.09 A against
-7.2-7.4/4.0-4.1 A (3d097187, 2026-11-10). The plateau exit still ends a
-fixed-band stage early. The omission test compares
+STAGE`. Excluded (ruling of 2026-11-10): stages 1-3 (`MODEL_SHAPING_STAGES`),
+which shape the initial model; the first NU stage (`nu_start_stage`, the
+`nonuniform_lpset` stage) when it precedes the first gold-standard stage
+(`gold_std_start_stage`) and NU filtering is on, because it shapes membrane
+proteins and prepares the map for gold-standard refinement; the last stage
+(automasking, envelope FSC, trailing reconstruction); the entry stage
+(`start_stage`, the add-on registration pass); and, **only when an axis is
+actually searched**, `SYMSRCH_STAGE`. With `pgrp == pgrp_start` the
+`symmetrize` call is a complete no-op, since `l_symran` is set only when
+`pgrp_start` has more symmetry than `pgrp` and therefore implies
+`l_srch4symaxis`. The mid-stage resolution exit stays as it was, from stage 3
+on, against the next stage's limit. A version of 2026-11-10 (`85bbc2a2c`)
+instead kept stages 1-4 and aimed their resolution exit at stage 5's limit;
+it was replaced by this ruling the same day. The omission test compares
 `res05` with the planned limit, not with the crop, and the NU stage's crop
 resolves far past its planned limit; it is the one merged-reference stage whose
 NU-promoted band takes the map to the resolution half-specific matching starts

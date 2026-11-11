@@ -127,15 +127,15 @@ contains
         call assert_true(solve3D_stage_behind_fsc05(params, 5),  'an NU stage that is itself gold standard can be omitted')
         params%gold_std_stage = 0
         l_nonuniform = .false.
-        call assert_false(solve3D_stage_behind_fsc05(params, 5), 'without NU filtering stage 5 is a fixed-band stage, never omitted')
-        call assert_true(solve3D_stage_behind_fsc05(params, 6),  'without NU filtering the gold-standard stage 6 can be omitted')
+        call assert_true(solve3D_stage_behind_fsc05(params, 5),  'without NU filtering stage 5 can be omitted')
         l_nonuniform = .true.
-        call assert_false(solve3D_stage_behind_fsc05(params, 4), 'a fixed-band stage is never omitted')
-        ! a fixed-band stage aims its resolution exit at the first adaptive stage's limit (stage 5, 8 A)
+        call assert_false(solve3D_stage_behind_fsc05(params, 3), 'stage 3 shapes the initial model and is never omitted')
+        call assert_true(solve3D_stage_behind_fsc05(params, 4),  'stage 4 behind FSC=0.5 is omitted')
+        ! the resolution exit from stage 3 on aims at the next stage's limit
         call set_cline_refine3D(params, 3, 1, .false.)
-        call assert_real(8., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 3 exits only past stage 5''s limit')
+        call assert_real(10., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 3 exits past stage 4''s limit')
         call set_cline_refine3D(params, 5, 1, .false.)
-        call assert_real(6., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 5 exits past the next stage''s limit')
+        call assert_real(6., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 5 exits past stage 6''s limit')
         do backend = 1, 2
             params%rec_backend = 'gridding'
             if( backend == 2 ) params%rec_backend = 'pcg'
