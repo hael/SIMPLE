@@ -549,11 +549,6 @@ contains
             &istate, ': ', state_update_fracs(istate)
         enddo
         endif
-        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-        write(logfhandle,609) '>>> | FULL-ASSIGNMENT COVERAGE      | on'
-        else
-        write(logfhandle,609) '>>> | FULL-ASSIGNMENT COVERAGE      | off'
-        endif
         endif
         write(logfhandle,609) '>>> --------------------------------------------------'
         ! dynamic shift search range update

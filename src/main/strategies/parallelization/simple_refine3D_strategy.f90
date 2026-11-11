@@ -1759,7 +1759,7 @@ contains
             endif
         else if( master_draws_sample3D(params) )then
             ! one fractional-update sample over the whole project; the workers reproduce it
-            call sample_ptcls4iter3D(params, build, iter, [1,params%nptcls], nptcls_smpl, pinds_smpl)
+            call sample_ptcls4iter3D(params, build, [1,params%nptcls], nptcls_smpl, pinds_smpl)
             call build%spproj%write_segment_inside(params%oritype)
             if( allocated(pinds_smpl) ) deallocate(pinds_smpl)
         else

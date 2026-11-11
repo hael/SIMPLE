@@ -143,10 +143,10 @@ One full visit of the active particles takes
 table before the first stage. The automatic `maxits` is four target updates
 per particle times `sweep`, between 10 and 50 iterations.
 
-Each `prob_neigh` frequency block refines one particle cohort:
-`refine3D_states` sets the internal `cohort_sampling=yes` on the block's command
-line, the block draws a new cohort at its first iteration and rescores that
-cohort at the others, so state labelling and pose refinement converge on one
+Each `prob_neigh` frequency block refines one sticky particle subset:
+`refine3D_states` sets the internal `sticky_sampling=yes` on the block's command
+line, the block draws a new sticky subset at its first iteration and rescores that
+sticky subset at the others, so state labelling and pose refinement converge on one
 particle set per block, and `% PARTICLES UPDATED SO FAR` grows only at block
 boundaries. A full visit therefore takes `sweep` blocks. Before the first stage
 the wrapper prints the unit table with the expected visits per particle over
@@ -154,11 +154,11 @@ the planned blocks and warns when the least-visited unit falls below one visit
 or the most-visited exceeds ten times the target; neither `nsample` nor the
 frequency march is adjusted, and the terminal missing-update pass labels any
 particle the march did not reach. The missing-update pass draws every
-active particle that has not been updated. Holding one cohort for `k` iterations of trailing
+active particle that has not been updated. Holding one sticky subset for `k` iterations of trailing
 reconstruction gives it a cumulative map coefficient `1 − (1−u)^k`; the
 quota biases the composition of each partial reconstruction towards
 about `min(pop, quota)` particles per class, which moves with `nsample`
-and the class selection. Under cohorts `updatecnt` counts
+and the class selection. Under sticky sampling `updatecnt` counts
 iterations, not draws; coverage is read from `% PARTICLES UPDATED SO FAR`.
 
 `lpstart` and `lpstop` define one common frequency schedule for all states.

@@ -30,11 +30,12 @@ contains
         call test_compress_and_masks()
         call test_sampling_and_updatecnt()
         call test_keyed_sampling()
+        call test_sampling_ignores_scores()
         call test_ranked_balanced_sampling()
         call test_empty_partition_sampling()
         call test_nested_class_quota()
         call test_class_sample_sweep()
-        call test_cohort_rescore()
+        call test_sticky_rescore()
         call test_sample4rec_global_coverage()
         call test_group_update_counts()
         call test_blend_weight_cases()
@@ -112,7 +113,7 @@ contains
         call os%kill()
     end subroutine test_mirror_pairs
 
-    !> The keyed fractional-update samplers: given a key, sample4update_rnd, _cnt, _fillin and _class draw the
+    !> The keyed fractional-update samplers: given a key, sample4update_rnd, _cnt and _class draw the
     !! same subset again whatever the intrinsic stream drew in between, another iteration's key draws another
     !! subset, the tier rules and counts hold as they do on the intrinsic stream, and without a key the
     !! intrinsic stream is used as before
@@ -160,22 +161,6 @@ contains
         enddo
         call os%sample4update_cnt([1, n], 0.25, nsamp3, inds3, .false., key=key2)
         call assert_true(any(inds3 /= inds1), 'another key draws another cutoff tier')
-        ! sample4update_fillin: the never-updated first, keyed
-        call fresh_field
-        call os%set_all2single('updatecnt', 1.0)
-        do i = 1, 4
-            call os%set(i, 'updatecnt', 0.)
-        enddo
-        call os%sample4update_fillin([1, n], 0.25, nsamp, inds1, .false., key=key)
-        call assert_int(10, nsamp, 'keyed sample4update_fillin draws the requested count')
-        call assert_int(4, count(inds1 <= 4), 'keyed sample4update_fillin takes the never-updated first')
-        call fresh_field
-        call os%set_all2single('updatecnt', 1.0)
-        do i = 1, 4
-            call os%set(i, 'updatecnt', 0.)
-        enddo
-        call os%sample4update_fillin([1, n], 0.25, nsamp2, inds2, .false., key=key)
-        call assert_true(all(inds2 == inds1), 'keyed sample4update_fillin reproduces its draw')
         ! sample4update_class: two units of twenty, a quarter of each, keyed per unit and tier
         allocate(clssmp(2))
         do i = 1, 2
@@ -216,6 +201,49 @@ contains
         end subroutine fresh_field
 
     end subroutine test_keyed_sampling
+
+    !> Reversing the particle scores preserves the sampling units and the fixed-key subset.
+    subroutine test_sampling_ignores_scores()
+        integer, parameter :: NPTCLS = 12
+        class(oris), allocatable :: os
+        type(class_sample), allocatable :: units(:)
+        integer, allocatable :: expected(:), inds(:)
+        type(rnd_key) :: key
+        integer :: variant, i, nsamp
+        real :: score
+        write(*,'(A)') 'test_sampling_ignores_scores'
+        allocate(os)
+        key = rnd_draw_key(rnd_scope_key(20261111_int64, RND_PROG_REFINE3D, RND_PASS_ALIGN, 5), 0, RND_FAM_SAMPLE)
+        do variant = 1, 2
+            call os%new(NPTCLS, is_ptcl=.true.)
+            call os%set_all2single('state', 1.)
+            call os%set_state(NPTCLS, 0)
+            do i = 1, NPTCLS
+                call os%set(i, 'class', 1 + mod(i-1, 2))
+                call os%set(i, 'updatecnt', mod(i, 3))
+                score = real(i)
+                if( variant == 2 ) score = real(NPTCLS + 1 - i)
+                call os%set(i, 'corr', score)
+                call os%set(i, 'corr_cart', -score)
+            end do
+            call os%get_class_sample_stats([1,2], units)
+            call assert_true(all(units(1)%pinds == [1,3,5,7,9,11]), 'sampling unit 1 uses index order regardless of scores')
+            call assert_true(all(units(2)%pinds == [2,4,6,8,10]), 'sampling unit 2 excludes inactive rows regardless of scores')
+            call assert_false(allocated(units(1)%ccs), 'sampling unit 1 carries no scores')
+            call assert_false(allocated(units(2)%ccs), 'sampling unit 2 carries no scores')
+            call os%sample4update_class(units, [1,NPTCLS], 0.5, nsamp, inds, .true., key=key)
+            call assert_int(6, nsamp, 'score-independent sampling preserves the class quotas')
+            if( variant == 1 )then
+                expected = inds
+            else
+                call assert_int(size(expected), size(inds), 'reversing scores preserves the sample size')
+                if( size(expected) == size(inds) )then
+                    call assert_true(all(inds == expected), 'reversing scores preserves the fixed-key subset')
+                endif
+            endif
+            call os%kill
+        end do
+    end subroutine test_sampling_ignores_scores
 
     subroutine test_ranked_balanced_sampling()
         use simple_type_defs, only: class_sample
@@ -568,9 +596,6 @@ contains
         call os%sample4update_cnt([1, 6], 0.5, nsamp, inds, .true., allow_empty=.true.)
         call assert_int(0, nsamp,      'sample4update_cnt: a partition without active particles samples nothing')
         call assert_int(0, size(inds), 'sample4update_cnt: no indices')
-        call os%sample4update_fillin([1, 6], 0.5, nsamp, inds, .true., allow_empty=.true.)
-        call assert_int(0, nsamp,      'sample4update_fillin: a partition without active particles samples nothing')
-        call assert_int(0, size(inds), 'sample4update_fillin: no indices')
         ! class-balanced: one class holds rows 9 and 10, and half of the 4 active particles is 2, so the
         ! sample is rows 9 and 10; the partition [5,8] has active rows 7 and 8 but none of the sample
         allocate(clssmp(1))
@@ -714,13 +739,13 @@ contains
     end subroutine test_class_sample_sweep
 
     ! sample4update_rescore returns the latest round on every call and advances sampled and updatecnt on
-    ! exactly those rows once per call; a later draw prefers the rows outside the cohort
-    subroutine test_cohort_rescore()
+    ! exactly those rows once per call; a later draw prefers the rows outside the sticky subset
+    subroutine test_sticky_rescore()
         type(oris)                      :: os
         type(class_sample), allocatable :: clssmp(:)
         integer,            allocatable :: inds(:), inds2(:)
         integer :: nsamp, i, ucnt_before(10), marker
-        write(*,'(A)') 'test_cohort_rescore'
+        write(*,'(A)') 'test_sticky_rescore'
         call os%new(10, .true.)
         call os%set_all2single('state',     1.0)
         call os%set_all2single('updatecnt', 1.0)
@@ -728,37 +753,37 @@ contains
         do i = 1, 3
             call os%set(i, 'updatecnt', 0.)
         end do
-        ! the cohort: rows 1-3 (lowest updatecnt tier)
+        ! the sticky subset: rows 1-3 (lowest updatecnt tier)
         call os%sample4update_cnt([1, 10], 0.3, nsamp, inds, .true.)
-        call assert_true(size(inds) == 3 .and. all(inds == [1,2,3]), 'cohort draw takes the lowest tier')
+        call assert_true(size(inds) == 3 .and. all(inds == [1,2,3]), 'sticky subset draw takes the lowest tier')
         marker = nint(os%get(1, 'sampled'))
         do i = 1, 10
             ucnt_before(i) = os%get_updatecnt(i)
         end do
         call os%sample4update_rescore([1, 10], nsamp, inds2)
-        call assert_true(size(inds2) == 3, 'rescore returns the cohort size')
-        if( size(inds2) == 3 ) call assert_true(all(inds2 == inds), 'rescore returns the cohort')
+        call assert_true(size(inds2) == 3, 'rescore returns the sticky subset size')
+        if( size(inds2) == 3 ) call assert_true(all(inds2 == inds), 'rescore returns the sticky subset')
         call assert_true(all([(nint(os%get(i, 'sampled')) == marker + 1, i=1,3)]), 'rescore advances the round marker once')
-        call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i) + 1, i=1,3)]), 'rescore counts one update per cohort row')
+        call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i) + 1, i=1,3)]), 'rescore counts one update per sticky subset row')
         call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i), i=4,10)]), 'rescore leaves the other rows alone')
         call os%sample4update_rescore([1, 10], nsamp, inds2)
-        call assert_true(size(inds2) == 3, 'repeated rescore returns the cohort size')
-        if( size(inds2) == 3 ) call assert_true(all(inds2 == inds), 'repeated rescore returns the identical cohort')
+        call assert_true(size(inds2) == 3, 'repeated rescore returns the sticky subset size')
+        if( size(inds2) == 3 ) call assert_true(all(inds2 == inds), 'repeated rescore returns the identical sticky subset')
         call assert_true(all([(os%get_updatecnt(i) == ucnt_before(i) + 2, i=1,3)]), 'one update per rescore call')
-        ! a range without cohort rows
+        ! a range without sticky subset rows
         call os%sample4update_rescore([5, 10], nsamp, inds2, allow_empty=.true.)
-        call assert_int(0, nsamp,       'rescore on a range without cohort rows samples nothing')
-        call assert_int(0, size(inds2), 'rescore on a range without cohort rows: no indices')
+        call assert_int(0, nsamp,       'rescore on a range without sticky subset rows samples nothing')
+        call assert_int(0, size(inds2), 'rescore on a range without sticky subset rows: no indices')
         call assert_true(all([(os%get_updatecnt(i) == 1, i=4,10)]), 'an empty rescore counts no update')
-        ! the next draws avoid the previous cohort while lower-updatecnt rows remain
+        ! the next draws avoid the previous sticky subset while lower-updatecnt rows remain
         call os%sample4update_cnt([1, 10], 0.3, nsamp, inds2, .true.)
-        call assert_true(.not. any(inds2 <= 3), 'global draw after a cohort takes no cohort row')
+        call assert_true(.not. any(inds2 <= 3), 'global draw after a sticky subset takes no sticky subset row')
         call make_units([10], [0], clssmp)
         call os%sample4update_class(clssmp, [1, 10], 0.3, nsamp, inds2, .true.)
-        call assert_true(.not. any(inds2 <= 3), 'unit draw after a cohort takes no cohort row')
+        call assert_true(.not. any(inds2 <= 3), 'unit draw after a sticky subset takes no sticky subset row')
         call free_units(clssmp)
         call os%kill
-    end subroutine test_cohort_rescore
+    end subroutine test_sticky_rescore
 
     ! sample4rec decides "nothing updated yet" over the whole project: when only
     ! the range [1,5] holds updated rows, the range [6,10] must return none of its

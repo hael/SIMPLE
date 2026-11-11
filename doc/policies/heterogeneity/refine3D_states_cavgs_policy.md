@@ -75,7 +75,7 @@ The route fixes:
 
 A different user value of `filt_mode`, `automsk`, `envfsc`, `combine_eo`,
 `trail_rec`, `objfun` or `pcg_order` is refused, and so are
-`m_estimator` other than `no`, `nsample`, `update_frac`, `cohort_sampling`,
+`m_estimator` other than `no`, `nsample`, `update_frac`, `sticky_sampling`,
 `trail_seed`, `pcg_mskfile`, `vol1..volN`, `multivol_mode` and
 `prob_neigh_mode`.
 
@@ -165,7 +165,7 @@ The shared states controller runs the `refine3D_states` frequency march
 differences:
 
 - every active row is updated in every iteration (strict full batch): no
-  fractional update, no cohort sampling, no trailing reconstruction;
+  fractional update, no sticky sampling, no trailing reconstruction;
 - the iteration count continues after the pose seeding;
 - without an explicit `maxits` the march runs at most 10 iterations (an
   explicit `maxits` must be at least 5);

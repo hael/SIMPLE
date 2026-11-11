@@ -138,7 +138,7 @@ if ($detailed) {
        score_avg score_sdev score_min score_max
        refinement_mode nspace gau_regularization ml_regularization ml_tau
        automasking filter_mode
-       trailing_rec_update_fraction fillin_particle_sampling)
+       trailing_rec_update_fraction)
   );
   push @iter_header, @dynamic_state_cols;
 
@@ -427,7 +427,6 @@ sub new_record {
     automasking => 'NA',
     filter_mode => 'NA',
     trailing_rec_update_fraction => 'NA',
-    fillin_particle_sampling => 'NA',
   };
 }
 
@@ -956,8 +955,6 @@ sub parse_setting_line {
     $r->{filter_mode} = $val;
   } elsif ($norm eq 'TRAILING REC UPDATE FRACTION') {
     $r->{trailing_rec_update_fraction} = $val;
-  } elsif ($norm eq 'FILLIN PARTICLE SAMPLING') {
-    $r->{fillin_particle_sampling} = $val;
   }
 }
 

@@ -140,7 +140,7 @@ contains
 
     !> Command line of the seed pass: one dense probabilistic iteration of every
     !! active particle against the seed references, at the low-pass limit of
-    !! PROBREFINE_STAGE, without extremal neighbourhood, sampling or fill-in.
+    !! PROBREFINE_STAGE, without extremal neighbourhood or sampling.
     !! Mirrors the terminal all-particle pass of the commander.
     subroutine set_cline_refine2D_seed_pass( cline_pass, params, stage_parms, it_pass, refs )
         use simple_cmdline, only: cmdline
@@ -155,7 +155,6 @@ contains
         call cline_pass%delete('endit')
         call cline_pass%delete('update_frac')
         call cline_pass%delete('nsample')
-        call cline_pass%delete('fillin')
         call cline_pass%delete('assign_all')
         call cline_pass%delete('gaufreq')
         ! Seeded restarts skip the centring stage and keep the ordinary shift window (the key off explicitly: the
@@ -447,14 +446,12 @@ contains
         else
             call cline_refine2D%delete('update_frac')
         endif
-        ! the stages that need every particle assigned take the coverage guard assign_all=yes (2D's fillin=yes before
-        ! 2026-11-03); fillin is 3D's periodic sampling of the particles never updated, which 2D does not have
+        ! the stages that need every particle assigned take the coverage guard assign_all=yes
         if( l_require_full_assignment )then
             call cline_refine2D%set('assign_all', 'yes')
         else
             call cline_refine2D%delete('assign_all')
         endif
-        call cline_refine2D%delete('fillin')
         call cline_refine2D%delete('endit')
     end subroutine emit_refine2D_stage_cfg
 

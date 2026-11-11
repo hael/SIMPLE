@@ -120,7 +120,7 @@ class products, and the per-particle assignments, scores, and noise spectra.
 - Random noise references are deliberately uninformative, so the first stage's
   structure comes entirely from the data.
 - Fractional updates make the cost per iteration independent of dataset size;
-  the fill-in pass restores the guarantee that the final products are
+  the terminal all-particle pass restores the guarantee that the final products are
   self-consistent.
 
 ## Implementation

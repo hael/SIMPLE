@@ -36,8 +36,6 @@ been updated, and `sampled`, the last sampling round that selected it. The
   then the next tier, until the budget is filled; within the tier at the
   cutoff, draw uniformly. This is lowest-count-first rather than a weighted
   draw, so coverage of the dataset is as even as possible.
-- **fill-in** (late 3D stages): the same, but always starting from the
-  particles that have never been updated (`updatecnt = 0`).
 - **class units** (`balance=class` or `balance=cavg`; `class` is the default
   of `solve3D`, `refine3D_states`, and `classify3D_refs`): share the budget
   over sampling units built from the selected 2D classes. Each unit is one
@@ -68,10 +66,10 @@ been updated, and `sampled`, the last sampling round that selected it. The
   matching and the reconstruction) act on the same particles. The draw is
   keyed on the run's seed, the pass, the iteration and the particle, so the
   subset does not depend on the number of parts or threads.
-- **cohort** (`refine3D_states`, and the shc neighbourhood stages 1-2 of
+- **sticky** (`refine3D_states`, and the shc neighbourhood stages 1-2 of
   single-state `solve3D`): the set drawn at the first iteration of a
   frequency block or stage is kept for the whole block; with
-  `cohort_sampling=keep` a stage keeps the previous stage's set from its first
+  `sticky_sampling=keep` a stage keeps the previous stage's set from its first
   iteration (solve3D stage 2 keeps stage 1's). Later iterations reproduce it
   and advance its counters, so that state labels and poses converge on one
   set.

@@ -62,7 +62,6 @@ type :: parameters
     character(len=3)          :: extract='yes'        !< whether to extract particles after picking (streaming only)(yes|no){yes}
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
-    character(len=3)          :: fillin='no'          !< fillin particle sampling (3D: every fifth iteration the particles never updated)(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force solve3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
@@ -132,7 +131,7 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending(yes|no){yes}
     character(len=3)          :: stepwise='no'        !< stream pool 2D: import only the sets that reach the particle threshold(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
-    character(len=4)          :: cohort_sampling='no' !< internal: yes draws at a stage's first iteration and rescores that cohort after; keep rescores the previous stage's cohort from the first iteration(no|yes|keep){no}
+    character(len=4)          :: sticky_sampling='no' !< internal: yes draws at a stage's first iteration and rescores that sticky subset after; keep rescores the previous stage's sticky subset from the first iteration(no|yes|keep){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
@@ -640,7 +639,6 @@ type :: parameters
     logical :: l_pcg_order_lambda_auto = .true. !< pcg_order_lambda not given: chosen per state and iteration; not a command-line key
     logical :: l_atm_prior       = .false. !< not a command-line key
     logical :: l_bfac_data_fit   = .true.  !< bfac_data not given: fitted on the base map; not a command-line key
-    logical :: l_fillin          = .false. !< not a command-line key
     logical :: l_assign_all      = .false. !< assign_all=yes under fractional updates: refine2D converges only when every active particle has a class; not a command-line key
     logical :: l_greedy_smpl     = .true. !< not a command-line key
     logical :: l_update_frac     = .false. !< not a command-line key
@@ -665,8 +663,8 @@ type :: parameters
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
     logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key
-    logical :: l_cohort_sampling = .false. !< not a command-line key
-    logical :: l_cohort_keep     = .false. !< cohort_sampling=keep; not a command-line key
+    logical :: l_sticky_sampling = .false. !< not a command-line key
+    logical :: l_sticky_keep     = .false. !< sticky_sampling=keep; not a command-line key
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone; not a command-line key
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics; not a command-line key
     logical :: l_shift_prior     = .false. !< shift_prior=yes; not a command-line key

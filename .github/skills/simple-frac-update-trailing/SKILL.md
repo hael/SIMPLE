@@ -58,9 +58,9 @@ Then inspect the current code in this order:
 - Do not move partial reconstruction into a separate pass that re-reads stacks
   to reduce peak memory; that is a workflow-policy change.
 - The selected subset is represented by `sampled`; persistent coverage is
-  represented by `updatecnt`. Under `cohort_sampling=yes` (`refine3D_states`
+  represented by `updatecnt`. Under `sticky_sampling=yes` (`refine3D_states`
   frequency blocks) the same subset is rescored at every iteration of a block,
-  so trailing reconstruction gives that cohort the cumulative current-map
+  so trailing reconstruction gives that sticky subset the cumulative current-map
   coefficient `1 - (1-u)^k` after `k` iterations; no per-unit weight enters the
   state-level blend.
 - For `trail_rec=yes`, the previous artifact is the per-state accumulator chain

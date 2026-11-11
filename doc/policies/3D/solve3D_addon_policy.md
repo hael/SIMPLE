@@ -376,7 +376,7 @@ active rows than partitions, or when a sample drawn over the whole project
 (class-balanced or probabilistic) misses a partition. In a distributed worker
 (`part` set) every per-partition sampler returns an empty sample instead of
 stopping (`allow_empty`: probabilistic reproduction, class-balanced,
-update-count and fill-in sampling); a shared-memory run still stops on an
+and update-count sampling); a shared-memory run still stops on an
 empty sample. The refine3D matcher emits the unchanged committed sigma2 slice,
 the range's orientations, an empty readout record under the probabilistic
 modes, zero PCG accumulators when partial reconstructions are written, and

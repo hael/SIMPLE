@@ -180,7 +180,6 @@ type :: oris
     procedure          :: sample4update_reprod
     procedure          :: sample4update_rescore
     procedure          :: sample4update_updated
-    procedure          :: sample4update_fillin
     procedure          :: sample4update_missing
     procedure, private :: sample_balanced_mode, sample_balanced_frac_best
     generic            :: sample_balanced => sample_balanced_mode, sample_balanced_frac_best
@@ -1299,17 +1298,6 @@ interface
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled
     end subroutine sample4update_updated
-
-    module subroutine sample4update_fillin( self, fromto, update_frac, nsamples, inds, incr_sampled, allow_empty, key )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(inout) :: nsamples
-        integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled
-        logical, optional,    intent(in)    :: allow_empty
-        type(rnd_key), optional, intent(in) :: key
-    end subroutine sample4update_fillin
 
     module subroutine sample4update_missing( self, fromto, nsamples, inds, incr_sampled )
         class(oris),          intent(inout) :: self

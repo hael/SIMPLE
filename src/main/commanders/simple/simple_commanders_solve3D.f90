@@ -2268,7 +2268,6 @@ contains
             call cline_missing%set('mkdir',                 'no')
             call cline_missing%set('refine',            'greedy')
             call cline_missing%set('balance',             'none')
-            call cline_missing%set('fillin',                'no')
             call cline_missing%set('update_missing',       'yes')
             call cline_missing%set('update_frac',            1.0)
             call cline_missing%set('trail_rec',             'no')
@@ -2278,7 +2277,7 @@ contains
             call cline_missing%set('which_iter',    iter_missing)
             call cline_missing%set('extr_iter',     iter_missing)
             call cline_missing%delete('endit')
-            call cline_missing%delete('cohort_sampling')
+            call cline_missing%delete('sticky_sampling')
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
         end subroutine run_missing_update
@@ -2302,7 +2301,6 @@ contains
             call cline_final%set('prob_beta',   1.0)
             call cline_final%delete('prob_beta_end')
             call cline_final%set('balance',     'none')
-            call cline_final%set('fillin',      'no')
             call cline_final%set('update_frac', 1.0)
             call cline_final%set('trail_rec',   'no')
             call cline_final%set('volrec',      'no')

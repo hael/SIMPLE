@@ -26,8 +26,7 @@ table fill, the draw and the hard particle update in one pass).
 ## 2. Ownership
 
 `simple_commanders_solve2D.f90` owns `solve2D` orchestration: defaults,
-stage execution and final class-average generation; fill-in is requested on
-the staged `refine2D` calls (`fillin=yes`, set by the controller).
+stage execution and final class-average generation.
 
 `simple_solve2D_controller.f90` owns the 2D stage policy: `NSAMPLE_DEFAULT_2D`,
 `nsample` override handling, stage-local `update_frac`, search-mode transitions,
@@ -35,14 +34,14 @@ and the rule that stage 1 may sample particles without fractionally restoring
 previous class averages.
 
 `simple_commanders_solve3D.f90` and `simple_solve3D_controller.f90` own 3D
-stage scheduling: dynamic `update_frac`, `fillin`, `balance`, `cohort_sampling`,
+stage scheduling: dynamic `update_frac`, `balance`, `sticky_sampling`,
 `trail_rec`, and transitions between early `prob_neigh` modes, `prob`, and
 late `prob_neigh`.
 
 `simple_matcher_smpl_and_lplims.f90` owns the shared outer subset-selection
 helpers for 2D and 3D. This is where full update, random sampling,
 update-count-biased sampling, nested-quota sampling over class units
-(`balance=class|cavg`), cohort rescoring, fill-in sampling, and subset
+(`balance=class|cavg`), sticky rescoring, and subset
 reproduction are dispatched.
 
 `simple_view_partition_sampling.f90` owns the sampling units: one unit per
@@ -52,7 +51,7 @@ coverage report printed before the first stage.
 `simple_oris_sampling.f90` and `simple_oris_getters.f90` own the bookkeeping:
 `sampled`, `updatecnt`, the nested quota (`sample4update_class`,
 `class_sample_quotas`, `class_sample_sweep`), exact subset reproduction and
-cohort rescoring, global realized update fraction, and class-local realized
+sticky rescoring, global realized update fraction, and class-local realized
 update fractions.
 
 The outer subset of a probabilistic iteration is drawn once, by the master on
@@ -87,8 +86,8 @@ own particle selection.
 `sampled` marks the current sampling round. All particles with the latest
 `sampled` value belong to the current active subset.
 
-`updatecnt` tracks cumulative update history. Count-biased and fill-in paths use
-it to prefer under-updated or never-updated active particles.
+`updatecnt` tracks cumulative update history. The count-biased and class-quota
+draws use it to prefer under-updated or never-updated active particles.
 
 `sample4update_reprod` is the only correct way to reuse a previously selected
 probabilistic subset. A part's matcher must not silently resample when the
@@ -185,8 +184,7 @@ Current stage policy:
   probabilistic or not (`master_draws_sample2D`, as 3D's
   `master_draws_sample3D`; not in the stream's pool), keyed, and the workers
   reproduce it (`refine2D_exec`), so the sample does not depend on `nparts`
-- staged `assign_all=yes` (`fillin=yes` before 2026-11-03; `fillin` is 3D's
-  periodic sampling of the never-updated particles) acts as a full-assignment coverage guard. It
+- staged `assign_all=yes` acts as a full-assignment coverage guard. It
   requires active particles to have assignments before convergence, while
   particle selection still follows the normal sampled-update path
 - staged `solve2D` refinement uses sampled SNHC (`refine=snhc_smpl`) for
@@ -194,7 +192,7 @@ Current stage policy:
   assignment; `refine=prob_neigh` (`prob_neigh_mode=snhc`) uses sparse probabilistic SNHC until the
   final staged invocation, which uses dense `refine=prob`
 - when staged updates were sampled, `solve2D` then runs a separate terminal
-  dense greedy all-particle pass with `update_frac`, `fillin` and
+  dense greedy all-particle pass with `update_frac` and
   `assign_all` disabled, refreshing class, in-plane, and shift parameters before final
   class-average generation
 
@@ -229,8 +227,6 @@ Current high-level solve3D stage policy (single state; the schedule is in
 - stage 1 uses `nspace=500`; stages 2-4 use `nspace=1000`
 - every stage gets its low-pass and crop information independently from the
   normal schedule
-- final active stages may switch to `fillin`, except where the multi-state
-  policy disables it
 
 For multi-state `solve3D` (`nstates > 1`, which refines independent states;
 there is no docked mode), the default policy is an inspection-first run:
@@ -254,10 +250,10 @@ scores from 3D sampling for one state as well on 2026-11-11). The outer particle
   (`sample4update_cnt`, lowest `updatecnt` tiers first)
 - `class` and `cavg`: the nested square-root quota of `sample4update_class` over the
   sampling units of the class sampling file `clssmp.bin` (below)
-- with `cohort_sampling=yes` (an internal flag `refine3D_states` sets on its
-  `prob_neigh` frequency blocks) the stage draws by the rule above at its first
+- with `sticky_sampling=yes` the stage draws by the rule above at its first
   iteration (`which_iter == startit`) and calls `sample4update_rescore` at the
-  others (see "Cohort schedule")
+  others; `sticky_sampling=keep` rescores the previous stage's sticky subset from its
+  first iteration (see "Sticky sampling schedules")
 
 `class` is the default wherever balanced sampling is the workflow default
 (`solve3D`, `refine3D_states`, `classify3D_refs`);
@@ -357,7 +353,7 @@ assumes a sweep length.
 Before the first stage the producer's caller prints the unit table
 (`>>> FRACTIONAL-UPDATE SAMPLING UNITS`): per group and unit the population,
 the quota and the expected visits per particle over the planned draws
-(iterations; frequency blocks under the cohort schedule), the draws one sweep
+(iterations; frequency blocks under the sticky schedule), the draws one sweep
 needs, the minimum and maximum visits over units, the view imbalance the
 balancing corrected (the ratio of the two, against the visits an unbalanced
 draw would give every particle) and the number of units smaller than their
@@ -367,40 +363,49 @@ some particles not reached in the planned draws. Nothing is adjusted
 automatically: neither `nsample` nor the frequency march changes, and the
 terminal missing-update pass labels any particle the march did not reach.
 
-### Cohort schedule (`refine3D_states`)
+### Sticky sampling schedules
 
 State labelling and pose refinement converge as fixed-point iterations, so in
 `refine3D_states` each `prob_neigh` frequency block refines one particle set.
-`refine3D_states` sets `cohort_sampling=yes` on the command lines of those
+`refine3D_states` sets `sticky_sampling=yes` on the command lines of those
 blocks. `sample_ptcls4update3D` then draws with the grouped allocator at the
-block's first iteration, which stamps a new round marker on the cohort; lowest
-`updatecnt` first deprioritizes the previous cohort. At the other iterations
+block's first iteration, which stamps a new round marker on the sticky subset; lowest
+`updatecnt` first deprioritizes the previous sticky subset. At the other iterations
 `sample4update_rescore` returns exactly the rows whose `sampled` equals the
 latest marker, which is what `sample4update_reprod` returns, and advances
 `sampled` and `updatecnt` on those rows once, so the next iteration finds the
-same set under the new marker. Earlier cohorts carry older markers; `fromto`
+same set under the new marker. Earlier sticky subsets carry older markers; `fromto`
 and `allow_empty` behave as in `sample4update_reprod`. The parts' matchers
 keep reproducing the round with `sample4update_reprod`. The first-iteration
 clean-up of `sampled` and `updatecnt` in the master's draw (`startit == 1`,
 `sample_ptcls4prob3D`) is unchanged. The terminal missing-update pass does not use
-cohorts. A full visit takes `sweep`
+sticky subsets. A full visit takes `sweep`
 blocks; the report states the blocks needed against those planned.
-`solve3D` is not part of the cohort schedule.
 
-Trailing reconstruction is unchanged by the cohort: the current partials are
+Single-state fractional `solve3D` also keeps one sticky subset across its shc
+neighbourhood stages (1-2). Stage 1 draws it with `sticky_sampling=yes`;
+stage 2 uses `sticky_sampling=keep` to rescore that same set from its first
+iteration. A run starting at stage 2 draws its own sticky subset with `yes`.
+From stage 3 each iteration draws freely again. Full-sampling runs use no sticky subset
+restriction. The sticky subset lets the shc search scan each selected particle in
+full once, then refine it without introducing never-searched particles each
+iteration.
+
+Trailing reconstruction is unchanged by the sticky subset: the current partials are
 scaled by `u/f` and the chain by `(1−u)·N/M`, with current-map coefficient
-`u` (`u = f = n/N` per state unless `ufrac_trec`). Holding one cohort for `k`
+`u` (`u = f = n/N` per state unless `ufrac_trec`). Holding one sticky subset for `k`
 iterations therefore gives it a cumulative coefficient `1 − (1−u)^k` while
-earlier cohorts fade geometrically (covered by the cohort case of the
+earlier sticky subsets fade geometrically (covered by the sticky case of the
 `trailing_reconstruction_blend` sub-suite). The quota biases the
 composition of the selected partial reconstruction towards about
 `min(pop, quota)` particles per unit per iteration; the state-level blend
 computes no per-unit weight, so the composition moves with `nsample`, `nclust`
 and the class selection.
 
-`sample_ptcls4fillin` is a separate late-stage coverage policy. Its purpose is
-to update particles with insufficient history, not to preserve the normal
-balanced or count-biased exploration distribution.
+There is no periodic fill-in (removed 2026-11-11): the class-quota and
+count-biased draws already take the least-updated particles first, and the
+terminal missing-update pass of `solve3D`, `refine3D_states` and
+`classify3D_refs` assigns every active particle the stages did not reach.
 
 The 3D matcher writes partial reconstructions from the active subset. Volume
 assembly then restores volumes, calculates FSCs, postprocesses references, and
@@ -567,7 +572,7 @@ are separate workflow stages and may perform their own reads.
   `lpstop=6.0 A` inspection run, starts stochastic balanced sampling at stage
   4, and still writes final reconstruction outputs.
 - 2D fractional class-average restoration remains class-local.
-- Staged `solve2D` `fillin=yes` remains a full-assignment coverage guard
+- Staged `solve2D` `assign_all=yes` remains a full-assignment coverage guard
   unless the implementation is deliberately changed to missing-only assignment.
 - Sampled `solve2D` runs a terminal dense greedy all-particle refresh before
   final class-average generation.

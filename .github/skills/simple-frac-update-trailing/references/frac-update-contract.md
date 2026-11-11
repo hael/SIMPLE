@@ -8,12 +8,11 @@ the per-stage `refine3D` command line:
 - `update_frac` is the run's target outer particle subset, fixed for the run:
   `nsample * nstates / active`, capped at `UPDATE_FRAC_MAX` (0.9). When
   `nsample / active` exceeds `FULL_SAMPLE_SWITCH_FRAC` (0.9) every stage is a
-  full update: no `update_frac`, `nsample`, `fillin` or trailing on the stage
+  full update: no `update_frac`, `nsample` or trailing on the stage
   lines.
 - `trail_rec` turns on the trailing consumer path from stage 5 in single-state
   runs (`TRAILREC_STAGE_SINGLE`) and stage 8 in multi-state runs
   (`TRAILREC_STAGE_MULTI`).
-- `fillin=yes` is set on the last active stage of a single-state run only.
 - `nspace` and stage search policy are search/reference concerns; they must not
   silently desynchronize the produced handoff artifact from what the next stage
   will consume.
@@ -23,12 +22,10 @@ the per-stage `refine3D` command line:
 `simple_matcher_smpl_and_lplims.f90` dispatches the outer subset:
 
 - `sample_ptcls4iter3D` for a search iteration: `update_missing` runs
-  `sample4update_missing`; with `fillin=yes` every fifth iteration
-  (`mod(which_iter,5) == 0`) runs `sample4update_fillin`; otherwise
-  `sample_ptcls4update3D`.
+  `sample4update_missing`; otherwise `sample_ptcls4update3D`.
 - `sample_ptcls4update3D`: `sample4update_all` when fractional update is
-  inactive; `sample4update_rescore` for the cohort schedule
-  (`cohort_sampling=yes`, every iteration of a block after its first);
+  inactive; `sample4update_rescore` for the sticky schedule
+  (`sticky_sampling=yes`, every iteration of a block after its first);
   `sample4update_class` for the nested equal quota over the sampling units of
   `clssmp.bin` (`balance=class|cavg`); `sample4update_cnt` for
   low-update-count biased sampling (`balance=none`).

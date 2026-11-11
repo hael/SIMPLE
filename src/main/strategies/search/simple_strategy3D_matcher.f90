@@ -513,7 +513,7 @@ contains
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
                     &allow_empty=.true.)
             else
-                call sample_ptcls4iter3D(p_ptr, b_ptr, which_iter, [p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
+                call sample_ptcls4iter3D(p_ptr, b_ptr, [p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
                     &allow_empty=p_ptr%l_distr_worker)
             endif
         end subroutine sample_particles_for_update

@@ -101,7 +101,7 @@ by default; see [sampling](sampling_and_fractional_updates.md)). Each unit's
 quota is drawn from the whole class, lowest update count first; no
 per-particle 2D score enters the draw. The single-state shc neighbourhood
 stages (1-2), whose search scans a never-searched particle in full, refine one
-cohort: stage 1 draws it and stage 2 keeps it, so each of its particles is
+sticky subset: stage 1 draws it and stage 2 keeps it, so each of its particles is
 scanned in full once. From stage 3 the subset is redrawn every iteration.
 
 **Regularization.** ML regularization starts at stage 3, once the halves are
@@ -148,7 +148,7 @@ on it: flex PCA initializes the states at the consensus poses.
 The FSC during the run is diagnostic only: the halves share initialization
 and the solve3D search is not gold-standard. At the end, a fresh
 all-particle reconstruction is made at the original sampling with no staged
-search or trailing controls, after a fill-in pass has given every active
+search or trailing controls, after a missing-update pass has given every active
 particle at least one post-schedule pose. Docked mode first verifies that
 every active particle received a post-split update.
 

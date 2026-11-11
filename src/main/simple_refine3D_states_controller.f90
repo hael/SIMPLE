@@ -519,7 +519,7 @@ contains
     end function prepare_sampling_units
 
     !> the unit table against the draws planned: the frequency blocks of the prob_neigh march, one
-    !! cohort each
+    !! sticky subset each
     subroutine report_coverage( self, params )
         use simple_view_partition_sampling, only: report_class_sample_coverage
         class(refine3D_states_controller), intent(inout) :: self
@@ -755,7 +755,7 @@ contains
                 &nspace_sub_stage, block_minits, block_niters, stages(block)%nits, overlap_target)
             niters = niters + block_niters
         enddo
-        call cline%delete('cohort_sampling')
+        call cline%delete('sticky_sampling')
         deallocate(stages)
     end subroutine run_frequency_march
 
@@ -791,11 +791,11 @@ contains
             &' OVERLAP_TARGET=', stage_overlap_target
         call cline%set('refine', refine_mode)
         call cline%set('nspace', nspace_stage)
-        ! a prob_neigh frequency block refines one particle cohort, drawn at its first iteration
+        ! a prob_neigh frequency block refines one sticky particle subset, drawn at its first iteration
         if( trim(refine_mode).eq.'prob_neigh' .and. params%l_update_frac )then
-            call cline%set('cohort_sampling', 'yes')
+            call cline%set('sticky_sampling', 'yes')
         else
-            call cline%delete('cohort_sampling')
+            call cline%delete('sticky_sampling')
         endif
         if( nspace_sub_stage > 0 )then
             call cline%set('nspace_sub', nspace_sub_stage)
@@ -892,7 +892,6 @@ contains
         call cline_missing%set('prg',           'refine3D')
         call cline_missing%set('mkdir',              'no')
         call cline_missing%set('balance',          'none')
-        call cline_missing%set('fillin',             'no')
         call cline_missing%set('update_frac',         1.0)
         call cline_missing%set('trail_rec',          'no')
         call cline_missing%set('volrec',             'no')
@@ -901,7 +900,7 @@ contains
         call cline_missing%set('which_iter', iter_missing)
         call cline_missing%set('extr_iter',  iter_missing)
         call cline_missing%delete('endit')
-        call cline_missing%delete('cohort_sampling')
+        call cline_missing%delete('sticky_sampling')
         call cline_missing%set('refine',          'greedy')
         call cline_missing%set('update_missing',    'yes')
         call xrefine3D%execute(cline_missing)

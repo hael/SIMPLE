@@ -772,7 +772,6 @@ contains
             endif
             if( present(terminal_policy) ) call terminal_policy(cline_refine2D)
             call cline_refine2D%delete('update_frac')
-            call cline_refine2D%delete('fillin')
             call cline_refine2D%delete('assign_all')
             call cline_refine2D%delete('endit')
             call execute_refine2D('terminal_greedy', nstages + 1)

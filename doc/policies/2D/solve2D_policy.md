@@ -144,8 +144,7 @@ reference and filtering rules; the solve2D stage default does not apply to them.
   `startit`: `refine2D` counts `minits` and `maxits` from `startit`, as
   `refine3D` does (2026-11-03; before, the 2D keys were absolute iterations).
 - When updates are sampled, stages 5 and 6 (and the last stage) take
-  `assign_all=yes` (`fillin=yes` before 2026-11-03; `fillin` is 3D's
-  periodic sampling of the never-updated particles): they keep iterating until
+  `assign_all=yes`: they keep iterating until
   every active particle has a class.
   Stage 1 samples but does not carry previous class sums forward.
 - After the stages, a sampled run ends with one dense `refine=greedy` pass
@@ -342,7 +341,7 @@ Design record:
 - The run is entered at `PROBREFINE_STAGE` through the same path as a
   stream checkpoint resume, preceded by one seed pass: a single dense
   `refine=prob` `refine2D` iteration of every active particle
-  (`update_frac`, `nsample`, `fillin` and `assign_all` deleted,
+  (`update_frac`, `nsample` and `assign_all` deleted,
   `extr_iter=extr_lim+1`)
   at the low-pass limit of `PROBREFINE_STAGE`. It uses that stage's ordinary
   shift window: `shift_sigma` and `trs_window` are deleted even when the
@@ -671,14 +670,14 @@ Stage policy:
   sometimes in-plane rotation, after stochastic candidate selection; the
   assignment table then stores the refined/profiled distance, which is intended
   current behavior rather than a full soft-assignment EM update
-- staged `assign_all=yes` (`fillin=yes` before 2026-11-03) acts as a full-assignment coverage guard: it
+- staged `assign_all=yes` acts as a full-assignment coverage guard: it
   keeps iterating until active particles have assignments, while particle
   selection still follows the normal sampled-update path; on a fresh start
   (`startit=1`) it selects the update-count sampler instead of the sticky
   subset of `solve2D`'s first stage, which could never cover every particle
 - if any staged update used `update_frac`, `solve2D` runs a terminal
-  dense `refine=greedy` all-particle `refine2D` pass with `update_frac`,
-  `fillin` and `assign_all` disabled, refreshing class, in-plane, and shift parameters before
+  dense `refine=greedy` all-particle `refine2D` pass with `update_frac`
+  and `assign_all` disabled, refreshing class, in-plane, and shift parameters before
   final class-average generation
 
 The restoration model is class-local: each class carries forward its previous sums under the population rule of the [class-average state note](../../refactoring_notes/completed/class_average_and_reconstruct3d_partials_refactoring.md) (Section 4.1). The carried set records `M(c)`, the population its sums represent; the assembly owner counts `N(c)` (active, updated rows of the class) and `n(c)` (those sampled this round) on the merged project and blends `new = current + w * shift(previous)` with `w = (N - n) / M`, recording `M <- N`. The carried mass therefore equals the represented population whatever joined or left the class; without a population change `w = 1 - f`. The rule keeps the mass right, not the membership: the carried sums are an approximation (a stochastic recurrence), not an exact sum over the current class members, and old contributions are removed in proportion, not particle by particle. Shared memory is the reference behaviour; distributed runs give the same result, independent of `nparts`.
@@ -737,7 +736,7 @@ For `refine2D`:
 - `extr_iter` tracks the 2D extrapolation/search schedule
 - `endit` is written after an invocation finishes and is consumed by the next stage setup
 
-Do not collapse these counters into one another. Child command lines, including fill-in, must preserve the distinction between stage start and current iteration.
+Do not collapse these counters into one another. Child command lines, including the terminal pass, must preserve the distinction between stage start and current iteration.
 
 ## 6. Artifact and Handoff Policy
 

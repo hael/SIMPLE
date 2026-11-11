@@ -10,7 +10,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 implicit none
 
 public :: set_bp_range3D, set_bp_range2D
-public :: sample_ptcls4update3D, sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update2D
+public :: sample_ptcls4update3D, sample_ptcls4missing3D, sample_ptcls4update2D
 public :: sample_ptcls4iter3D, master_draws_sample3D, master_draws_sample2D, adopt_run_seed
 public :: sample_ptcls4prob3D, sample_ptcls4prob2D
 public :: refine2D_requires_full_assignment, all_active_ptcls_2D_assigned, refine2D_blends_carryover
@@ -210,8 +210,8 @@ contains
     end subroutine set_bp_range2D
 
     !> Fractional-update selection by balance: none takes the global lowest-updatecnt tiers, class and cavg
-    !! the nested quota over the sampling units of CLASS_SAMPLING_FILE. Under cohort_sampling=yes a stage
-    !! draws at its first iteration and rescores that cohort at the others; keep rescores at every iteration.
+    !! the nested quota over the sampling units of CLASS_SAMPLING_FILE. Under sticky_sampling=yes a stage
+    !! draws at its first iteration and rescores that sticky subset at the others; keep rescores at every iteration.
     subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
@@ -230,7 +230,7 @@ contains
         endif
         ! the probabilistic routes draw the sample on the keyed generator (an absent key: the intrinsic stream)
         if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE3D)
-        if( params%l_cohort_sampling .and. (params%l_cohort_keep .or. params%which_iter /= params%startit) )then
+        if( params%l_sticky_sampling .and. (params%l_sticky_keep .or. params%which_iter /= params%startit) )then
             call build%spproj_field%sample4update_rescore(pfromto, nptcls2update, pinds, allow_empty=allow_empty)
             return
         endif
@@ -288,19 +288,16 @@ contains
     end function sample_rnd_key
 
     !> The particle sample of one refine3D search iteration over pfromto, advancing sampled and updatecnt:
-    !! the missing-update pass, the periodic fill-in, or the fractional-update policy of sample_ptcls4update3D
-    subroutine sample_ptcls4iter3D( params, build, which_iter, pfromto, nptcls2update, pinds, allow_empty )
+    !! the missing-update pass or the fractional-update policy of sample_ptcls4update3D
+    subroutine sample_ptcls4iter3D( params, build, pfromto, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: which_iter
         integer,              intent(in)    :: pfromto(2)
         integer,              intent(inout) :: nptcls2update
         integer, allocatable, intent(inout) :: pinds(:)
         logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
         if( params%l_update_missing )then
             call sample_ptcls4missing3D(build, pfromto, .true., nptcls2update, pinds)
-        else if( params%l_fillin .and. mod(which_iter,5) == 0 )then
-            call sample_ptcls4fillin(params, build, pfromto, .true., nptcls2update, pinds, allow_empty=allow_empty)
         else
             call sample_ptcls4update3D(params, build, pfromto, .true., nptcls2update, pinds, allow_empty=allow_empty)
         endif
@@ -349,8 +346,8 @@ contains
 
     !> The probabilistic routes' sample draw of one refine3D iteration over the whole project, by the project
     !! owner (the shared-memory matcher, or the distributed master whose parts reproduce it): the sampling
-    !! history is reset at the run's first iteration only, the fill-in sample every fifth iteration under
-    !! fillin, else the fractional-update draw; then the disk-set readout, whose inputs are the owner's
+    !! history is reset at the run's first iteration only, then the fractional-update draw and the disk-set
+    !! readout, whose inputs are the owner's
     subroutine sample_ptcls4prob3D( params, build, nptcls2update, pinds )
         use simple_eul_prob_tab_utils, only: print_disk_set
         class(parameters),    intent(in)    :: params
@@ -360,11 +357,7 @@ contains
         if( params%startit == 1 .and. params%which_iter == params%startit )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
-        if( params%l_fillin .and. mod(params%which_iter,5) == 0 )then
-            call sample_ptcls4fillin(params, build, [1,params%nptcls], .true., nptcls2update, pinds)
-        else
-            call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls2update, pinds)
-        endif
+        call sample_ptcls4update3D(params, build, [1,params%nptcls], .true., nptcls2update, pinds)
         call print_disk_set(build%spproj_field, params%l_centring, params%trs, pinds, nptcls2update)
     end subroutine sample_ptcls4prob3D
 
@@ -383,20 +376,6 @@ contains
         call sample_ptcls4update2D(params, build, [1,params%nptcls], l_updatefrac, nptcls2update, pinds)
         call print_disk_set(build%spproj_field, params%l_centring, params%trs, pinds, nptcls2update)
     end subroutine sample_ptcls4prob2D
-
-    subroutine sample_ptcls4fillin( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
-        class(parameters),    intent(in)    :: params
-        class(builder),       intent(inout) :: build
-        integer,              intent(in)    :: pfromto(2)
-        logical,              intent(in)    :: l_incr_sampl
-        integer,              intent(inout) :: nptcls2update
-        integer, allocatable, intent(inout) :: pinds(:)
-        logical, optional,    intent(in)    :: allow_empty  !< a distributed partition may sample nothing
-        type(rnd_key), allocatable :: key
-        if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE3D)
-        call build%spproj_field%sample4update_fillin(pfromto, params%update_frac, nptcls2update, pinds, l_incr_sampl, &
-            &allow_empty=allow_empty, key=key)
-    end subroutine sample_ptcls4fillin
 
     subroutine sample_ptcls4missing3D( build, pfromto, l_incr_sampl, nptcls2update, pinds )
         class(builder),       intent(inout) :: build
@@ -454,7 +433,7 @@ contains
     end function refine2D_blends_carryover
 
     !> assign_all=yes (under fractional updates): refine2D converges only once every active particle has a class.
-    !! A coverage guard only; fillin keeps the sampling it has in 3D.
+    !! A coverage guard only.
     logical function refine2D_requires_full_assignment( params ) result( l_required )
         class(parameters), intent(in) :: params
         l_required = params%l_assign_all

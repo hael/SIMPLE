@@ -57,7 +57,7 @@ real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-act
 integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
-    type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, envfsc
+    type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, envfsc
     type(string) :: balance, filt_mode, automsk, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, overlap, fracsrch
@@ -247,7 +247,6 @@ contains
         cfg%inspace         = NSPACE_REGISTER
         cfg%inspace_sub     = 0
         cfg%imaxits         = 1
-        cfg%fillin          = 'no'
         cfg%update_frac_dyn = 1.0
         cfg%trail_rec       = 'no'
         cfg%filt_mode       = 'none'
@@ -269,7 +268,7 @@ contains
         cfg%automsk = 'no'
         cfg%envfsc  = 'no'
         call init_refine3D_iteration( cfg )
-        call set_refine3D_update_policy( cfg, params, istage )
+        call set_refine3D_update_policy( cfg, params )
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage )
         call set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
@@ -292,26 +291,14 @@ contains
         cfg%inspace_sub = 0
     end subroutine init_refine3D_iteration
 
-    subroutine set_refine3D_update_policy( cfg, params, istage )
+    subroutine set_refine3D_update_policy( cfg, params )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
-        integer,                  intent(in)    :: istage
-        real :: update_frac_stage
         if( force_full_sampling_mode(params) )then
-            cfg%fillin          = 'no'
             cfg%update_frac_dyn = 1.0
             return
         endif
-        update_frac_stage = update_frac
-        if( istage == active_refine3D_nstages() )then
-            cfg%fillin = 'yes'
-            if( params%nstates > 1 ) cfg%fillin = 'no'
-            cfg%update_frac_dyn = update_frac_stage
-        else
-            cfg%fillin = 'no'
-            cfg%update_frac_dyn = update_frac_stage
-        endif
-        cfg%update_frac_dyn = min(UPDATE_FRAC_MAX, cfg%update_frac_dyn)
+        cfg%update_frac_dyn = min(UPDATE_FRAC_MAX, update_frac)
     end subroutine set_refine3D_update_policy
 
     subroutine set_refine3D_symmetry_policy( cfg, params, istage )
@@ -544,13 +531,8 @@ contains
         call cline_refine3D%set('prg',    'refine3D')
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
-            call cline_refine3D%delete('fillin')
-        else if( istage == active_refine3D_nstages() )then
-            call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
-            call cline_refine3D%set('fillin',             cfg%fillin)
         else
             call cline_refine3D%set('update_frac',        cfg%update_frac_dyn)
-            call cline_refine3D%delete('fillin')
         endif
         if( .not. l_cavgs )then
             if( l_full_update_stage )then
@@ -590,17 +572,17 @@ contains
             call cline_refine3D%delete('prob_neigh_mode')
         endif
         ! the shc neighbourhood search scans a never-searched particle in full: the shc stages refine one
-        ! class-balanced cohort, drawn at the first iteration of the run's first such stage and kept by the
+        ! class-balanced sticky subset, drawn at the first iteration of the run's first such stage and kept by the
         ! next, so the full scan happens once; the later stages sample freely
         if( cfg%refine.eq.'prob_neigh' .and. cfg%prob_neigh_mode.eq.PROB_NEIGH_MODE_EARLY .and. &
             &.not. l_full_update_stage .and. .not. l_cavgs )then
             if( istage > first_stage )then
-                call cline_refine3D%set('cohort_sampling', 'keep')
+                call cline_refine3D%set('sticky_sampling', 'keep')
             else
-                call cline_refine3D%set('cohort_sampling', 'yes')
+                call cline_refine3D%set('sticky_sampling', 'yes')
             endif
         else
-            call cline_refine3D%delete('cohort_sampling')
+            call cline_refine3D%delete('sticky_sampling')
         endif
         call cline_refine3D%set('balance',                cfg%balance)
         if( cfg%balance.eq.'cavg' )then

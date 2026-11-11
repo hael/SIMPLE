@@ -75,9 +75,9 @@ Stage policy includes:
 - staged search by state count:
   - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
     in stages 1-2, middle `prob`, and late `prob_neigh`; under fractional
-    updates the shc stages refine one cohort: stage 1 draws it at its first
-    iteration (`cohort_sampling=yes`) and stage 2 keeps it
-    (`cohort_sampling=keep`; a run that starts at stage 2 draws its own),
+    updates the shc stages refine one sticky subset: stage 1 draws it at its first
+    iteration (`sticky_sampling=yes`) and stage 2 keeps it
+    (`sticky_sampling=keep`; a run that starts at stage 2 draws its own),
     because the shc neighbourhood search scans a never-searched particle in
     full and a fresh draw every iteration would make these stages a sequence of
     full scans; from stage 3 the sample is redrawn every iteration
@@ -135,8 +135,8 @@ particle-to-volume handoff.
 `nsample / active_particles > 0.9`
 
 In that regime, the staged controller forces full active-particle updates for
-each iteration by suppressing fractional controls (`update_frac`, `nsample`,
-`fillin`) in emitted child `refine3D` commands. This also disables trailing
+each iteration by suppressing fractional controls (`update_frac`, `nsample`)
+in emitted child `refine3D` commands. This also disables trailing
 reconstruction for staged `solve3D` commands, and startup class-biased
 sampling setup is bypassed in favor of all-active sampling.
 
@@ -819,7 +819,7 @@ multi-state run instead gives every active particle its final label against the
 final maps at the physical posterior (2026-11-05, `run_multistate_final_assignment`).
 It is one `refine3D` iteration over all active particles from the last stage's
 command line (its band, crop and maps) with `refine=prob`, `prob_beta=1` and no
-tail, `update_frac=1`, `balance=none`, `fillin=no`, `trail_rec=no`, `volrec=no`
+tail, `update_frac=1`, `balance=none`, `trail_rec=no`, `volrec=no`
 and `topk=1`. Because it samples every active particle, the final
 reconstruction uses labels of one provenance, each drawn at beta 1 against the
 last stage's maps; a particle that fits two states alike lands in one of them at

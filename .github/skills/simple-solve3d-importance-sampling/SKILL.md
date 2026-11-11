@@ -1,6 +1,6 @@
 ---
 name: simple-solve3d-importance-sampling
-description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, the stage 1-2 cohort, fillin), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
+description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, the stage 1-2 sticky subset, the missing-update pass), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
 ---
 
 # SIMPLE Solve3D Importance Sampling
@@ -36,8 +36,8 @@ Then answer the user request in this order:
    sampling, or inferred from `updatecnt`.
 4. Separate particle-domain search decisions from volume-domain trailing-reconstruction effects.
 5. Use exact field names such as `nsample`, `update_frac`, `sampled`,
-   `updatecnt`, `fillin`, `balance` (`none|class|cavg`), `nclust`,
-   `cohort_sampling` (`no|yes|keep`), and `ufrac_trec`.
+   `updatecnt`, `balance` (`none|class|cavg`), `nclust`,
+   `sticky_sampling` (`no|yes|keep`), and `ufrac_trec`.
 
 ## Working Rules
 
@@ -57,16 +57,19 @@ Then answer the user request in this order:
 - `solve3D` takes `nsample` only: `nsample_start`/`nsample_stop` are refused
   and the update fraction does not change between stages.
 - There is no docked solve3D split, sticky class sampling or `sampled_only`
-  cohort restriction; multi-state solve3D is independent from the start. The
-  cohort rules are `refine3D_states` `cohort_sampling` and the single-state
+  restriction; multi-state solve3D is independent from the start. Sticky
+  sampling (`sticky_sampling`, one particle subset refined over several
+  iterations) is used by `refine3D_states` frequency blocks and the single-state
   solve3D shc stages 1-2 (stage 1 `yes`, stage 2 `keep`; free from stage 3).
+  There is no periodic fill-in: the draws take the least-updated particles
+  first and the terminal missing-update pass assigns the rest.
 - The sampler never uses 3D maps, poses, projection directions or per-particle
   objective values: 2D classes (and `cavg` groups) set strata and quotas only,
   and a unit's quota is drawn from the whole class by `updatecnt` and a keyed
   shuffle. `clssmp.bin` carries no scores; `greedy_sampling`/`frac_best` are
   selection-tool keys (`sample_classes`), not 3D sampling controls.
 - When explaining behavior, call out whether the code path is initial solve3D
-  seeding, normal iteration, last-stage fill-in, or trailing reconstruction.
+  seeding, normal iteration, the terminal missing-update pass, or trailing reconstruction.
 - Preserve the reconstruction read contract: the reconstruction of the sampled
   subset copies the images (or cropped records) the search pass already read
   into the pass buffer. Do not add a second particle-stack pass unless the
@@ -85,7 +88,7 @@ Inspect:
 Focus on `nsample` (`NSAMPLE_SOLVE3D_DEFAULT`), `UPDATE_FRAC_MAX`,
 `FULL_SAMPLE_SWITCH_FRAC`, `force_full_sampling_mode`, `sample4update_class`,
 `prob_neigh` (and `prob_neigh_mode`), `prob`, `NSPACE_MULTI_MAX`,
-`cohort_sampling`, `fillin`, and `trail_rec`.
+`sticky_sampling`, and `trail_rec`.
 
 ### Particle-subset bookkeeping
 
@@ -96,7 +99,7 @@ Inspect:
 - `src/main/ori/simple_oris.f90`
 
 Focus on `sample4update_class`, `sample4update_cnt`,
-`sample4update_fillin`, `sample4update_missing`, `sample4update_reprod`,
+`sample4update_missing`, `sample4update_reprod`,
 `sample4update_rescore`, `sample4update_updated`, `incr_sampled_updatecnt`,
 `get_update_frac`, `get_state_update_fracs`, `get_group_update_counts`, and the
 unit-table helpers `class_sample_quotas` and `class_sample_sweep`. The sampling

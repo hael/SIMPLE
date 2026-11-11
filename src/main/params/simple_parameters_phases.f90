@@ -494,19 +494,17 @@ contains
         if( self%update_frac <= .99 )then
             self%l_update_frac = .true.
             self%l_trail_rec   = trim(self%trail_rec).eq.'yes'
-            self%l_fillin      = trim(self%fillin).eq.'yes'
             self%l_assign_all  = trim(self%assign_all).eq.'yes'
         else
             self%update_frac   = 1.0
             self%l_update_frac = .false.
             self%l_trail_rec   = .false.
-            self%l_fillin      = .false.
             self%l_assign_all  = .false.
         endif
         self%l_update_missing = trim(self%update_missing).eq.'yes'
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
-        self%l_cohort_sampling       = trim(self%cohort_sampling).eq.'yes' .or. trim(self%cohort_sampling).eq.'keep'
-        self%l_cohort_keep           = trim(self%cohort_sampling).eq.'keep'
+        self%l_sticky_sampling       = trim(self%sticky_sampling).eq.'yes' .or. trim(self%sticky_sampling).eq.'keep'
+        self%l_sticky_keep           = trim(self%sticky_sampling).eq.'keep'
         self%l_scan_exit             = trim(self%scan_exit).eq.'yes'
     end subroutine derive_sampling_settings
 
@@ -702,10 +700,10 @@ contains
             case DEFAULT
                 THROW_HARD('memreport must be yes or no')
         end select
-        select case(trim(self%cohort_sampling))
+        select case(trim(self%sticky_sampling))
             case('yes','no','keep')
             case DEFAULT
-                THROW_HARD('cohort_sampling must be yes, no or keep')
+                THROW_HARD('sticky_sampling must be yes, no or keep')
         end select
         if( self%nu_stage < 0 ) THROW_HARD('nu_stage must be non-negative (0 = default)')
         if( self%gold_std_stage < 0 ) THROW_HARD('gold_std_stage must be non-negative (0 = workflow default)')

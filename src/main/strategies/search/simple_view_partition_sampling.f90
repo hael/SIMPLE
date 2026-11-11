@@ -238,7 +238,7 @@ contains
 
     !> The unit table, printed once before the first stage: per group and unit the population, the
     !! per-draw quota and the expected visits per particle over nplanned draws (iterations, or frequency
-    !! blocks under cohorts), the draws one sweep needs, the view imbalance corrected, and a warning on
+    !! blocks under sticky sampling), the draws one sweep needs, the view imbalance corrected, and a warning on
     !! short coverage (the only condition the user can act on: more draws or a larger sample)
     subroutine report_class_sample_coverage( clssmp, balance, ntarget, nplanned, draw_label )
         type(class_sample), intent(in) :: clssmp(:)

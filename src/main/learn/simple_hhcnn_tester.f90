@@ -647,9 +647,9 @@ contains
             enddo
             nteam_run = NTEAMS(it)
             !$omp parallel default(shared)
-            !$omp master
+            !$omp masked
             !$ nteam_run = omp_get_num_threads()
-            !$omp end master
+            !$omp end masked
             !$omp end parallel
             !$ call omp_set_num_threads(1)
             call assert_int(NTEAMS(it), nteam_run, 'the identity check''s team of '//int2str(NTEAMS(it))//' formed: a serial run proves nothing')
