@@ -54,6 +54,17 @@ count each shell in proportion to its circumference, so the `k` weight of the
 polar form is implicit. The score `exp(-L)` is stored per particle. It is not
 comparable with the polar score.
 
+The steps below describe the default `cont_prior=none` case. Optional
+`cont_prior=shift|pose` adds a seed-centred Gaussian shift penalty and, for
+`pose`, a Matrix-Fisher rotation penalty. Acceptance and stopping use the
+combined objective; the reported score and noise residual remain data-only.
+The fixed shift width `cont_prior_shift_sigma` is a per-axis standard deviation
+in Angstroms, matching the polar command-line convention; zero selects the
+automatic estimator. Internally, the prior uses native-pixel variance.
+The [delivered contract](../implementation_notes/completed/refine3d_local_cartesian_priors_done.md#delivered-implementation)
+and [open concerns and plan](../implementation_notes/planned/refine3d_local_cartesian_priors_todo.md)
+describe the current widths and proposed posterior-derived search restraints.
+
 **Differentiable sampling.** The model must be differentiable in the pose,
 including across grid cells. `F` is therefore sampled off grid with a
 separable quadratic B-spline, three taps per axis. Its value and first
@@ -182,7 +193,7 @@ With `refine=prob_neigh` the command keeps everything above but the search. In
 place of the transaction, the polar machinery of [refine3D](refine3d.md) runs
 in its `geom` mode: it scores the projection directions within `athres_cont`
 (the same 10 degrees) of each stored pose, every in-plane rotation of each,
-then refines the shift under the shift prior and polishes the in-plane angle
+then refines the shift under the shift prior and refines the in-plane angle
 continuously, and commits a draw from the tempered posterior over the scored
 candidates. Directions stay on the grid (`nspace = 20000`, about 1.4 degrees).
 The probabilistic modes have no stable-particle test, so the run ends on its
@@ -202,7 +213,7 @@ particles are stable. A particle is stable when:
   improvement;
 - it moved by at most 0.5 degrees of rotation and 1 A of shift.
 
-A transaction that rejected every proposal keeps its stored pose. Zero motion
+A transaction that rejected every proposal keeps its stored pose. A zero pose update
 alone therefore never counts as convergence. The three thresholds are
 `cont_conv_rot`, `cont_conv_shift` and `cont_conv_frac`.
 

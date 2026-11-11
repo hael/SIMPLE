@@ -53,7 +53,7 @@ contains
             if( trim(params%cont_prior) /= 'none' )then
                 if( params%smpd <= 0. ) THROW_HARD('Cartesian shift prior requires positive sampling')
                 if( params%cont_prior_shift_sigma > 0. )then
-                    s3D%cont_shift_prior_sigma2 = real(params%cont_prior_shift_sigma,dp)**2
+                    s3D%cont_shift_prior_sigma2 = (real(params%cont_prior_shift_sigma,dp)/real(params%smpd,dp))**2
                 else
                     s3D%cont_shift_prior_sigma2 = cart_shift_prior_sigma2(build%spproj_field, &
                         &real(params%lp,dp)/real(params%smpd,dp))

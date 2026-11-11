@@ -3,7 +3,7 @@
 ! a polar pass reports corr. N25: a refine=cont pass converges when 90% of every state moved at most
 ! 0.5 deg and 1 A with an accepted or no-improvement outcome, over a streak covering 90% of the active
 ! particles (the cont_conv_rot, cont_conv_shift and cont_conv_frac defaults; the parameters replace
-! them); a discrete pass, with or without the polish, keeps its own rule. The multi-state rule
+! them); a discrete pass, with or without the continuous pass, keeps its own rule. The multi-state rule
 ! converges on the state overlap and the scan together; with scan_exit=yes (solve3D's multi-state
 ! shc stage 2, fracsrch=95) the scan alone also ends it, and without the key (stage 1, fracsrch=99,
 ! and every other user) a low overlap holds it. Expected values are hand-counted from the fixtures.
@@ -649,7 +649,7 @@ contains
     end subroutine test_polar_pass_scores
 
     !> with no transaction status recorded a Cartesian pass does not converge, and it still reports
-    !! its motion statistics; the same field under a discrete mode, with or without the polish,
+    !! its pose update statistics; the same field under a discrete mode, with or without the continuous pass,
     !! converges by the discrete rule
     subroutine test_cartesian_pass_statistics()
         type(convergence) :: conv
@@ -684,8 +684,8 @@ contains
             params%l_cart_refine = .true.
             converged = conv%check_conv3D(params, cline, os, 40.)
             call assert_false(converged, 'a Cartesian pass without a recorded status declared convergence')
-            ! the motion statistics are computed all the same: (0.1+...+0.6)/6, (0.01+...+0.06)/6
-            call assert_real(0.35, conv%get('dist'), TOL, 'the Cartesian pass mean orientation motion')
+            ! the pose update statistics are computed all the same: (0.1+...+0.6)/6, (0.01+...+0.06)/6
+            call assert_real(0.35, conv%get('dist'), TOL, 'the Cartesian pass mean orientation pose update')
             call assert_real(50., conv%get('pose_cont_improved_pct'), TOL, 'the Cartesian pass improved fraction')
             call assert_real(real(NPTCLS), conv%get('pose_cont_attempts'), TOL, 'the Cartesian pass attempts')
             ! the same field under a discrete mode: the discrete rule is unchanged
@@ -693,13 +693,13 @@ contains
             params%l_cart_refine = .false.
             converged = conv%check_conv3D(params, cline, os, 40.)
             call assert_true(converged, 'the discrete rule changed')
-            ! the same discrete pass followed by the polish
+            ! the same discrete pass followed by the continuous pass
             params%pose_cont = 'yes'
             converged = conv%check_conv3D(params, cline, os, 40.)
-            call assert_true(converged, 'the polish changed the discrete rule')
-            call assert_real(0.35, conv%get('dist'), TOL, 'the discrete motion with the polish')
-            call assert_real(real(NPTCLS), conv%get('pose_cont_attempts'), TOL, 'the polish attempts')
-            call assert_real(50., conv%get('pose_cont_improved_pct'), TOL, 'the polish improved fraction')
+            call assert_true(converged, 'the continuous pass changed the discrete rule')
+            call assert_real(0.35, conv%get('dist'), TOL, 'the discrete pose update with the continuous pass')
+            call assert_real(real(NPTCLS), conv%get('pose_cont_attempts'), TOL, 'the continuous pass attempts')
+            call assert_real(50., conv%get('pose_cont_improved_pct'), TOL, 'the continuous pass improved fraction')
             params%pose_cont = 'no'
         end do
         call del_file(STATS_FILE)
@@ -842,12 +842,12 @@ contains
             &CARTFT_BOUND_REJECTED, CARTFT_INVALID_NUMERICS, CARTFT_ITERATION_LIMIT]
         do i = 1, size(rejected)
             call assert_false(cont_particle_stable(rejected(i), 0., 0., CONT_CONV_ROT_DEG, CONT_CONV_SHIFT_A), &
-                &'a rejected transaction at zero motion is stable')
+                &'a rejected transaction at zero pose update is stable')
         enddo
     end subroutine test_cont_particle_stable
 
     !> every particle sampled: nine of ten stable converges, eight does not, a finite no-improvement
-    !! converges, an all-rejected pass at zero motion does not, the shift bound is in A, one state
+    !! converges, an all-rejected pass at zero pose update does not, the shift bound is in A, one state
     !! below 90% vetoes, and minits holds
     subroutine test_cont_rule_full_sample()
         type(convergence) :: conv
@@ -860,10 +860,10 @@ contains
         call os%set(2, 'dist', 0.4)
         call assert_false(cont_converged(conv, os, 1., 1, .false.), 'eight of ten stable converged')
         call assert_real(80., conv%get('cont_stable_pct'), TOL, 'the stable percentage of eight of ten')
-        ! a finite no-improvement keeps the seed: zero motion, stable
+        ! a finite no-improvement keeps the seed: zero pose update, stable
         call make_cont_field(os, CARTFT_NO_IMPROVEMENT, 0., 0.)
         call assert_true(cont_converged(conv, os, 1., 1, .false.), 'a no-improvement pass did not converge')
-        ! every transaction left its bound: zero motion, the failure signature, not stable
+        ! every transaction left its bound: zero pose update, the failure signature, not stable
         call make_cont_field(os, CARTFT_BOUND_REJECTED, 0., 0.)
         call assert_false(cont_converged(conv, os, 1., 1, .false.), 'an all-rejected pass converged')
         call assert_real(0., conv%get('cont_stable_pct'), TOL, 'the stable percentage of an all-rejected pass')
@@ -920,7 +920,7 @@ contains
 
     !> the parameters cont_conv_rot, cont_conv_shift and cont_conv_frac replace the defaults: a 0.4 deg
     !! move fails a 0.3 deg bound, a 0.5 A shift fails 0.4 A, eight of ten stable pass a 0.8 fraction,
-    !! and the tight tomography bounds (0.05 deg, 0.1 A) accept only small motion; fresh histories
+    !! and the tight tomography bounds (0.05 deg, 0.1 A) accept only small pose update; fresh histories
     subroutine test_cont_rule_tunable()
         class(parameters), allocatable :: defaults
         type(oris) :: os
@@ -938,7 +938,7 @@ contains
         call assert_false(fresh_cont_converged(os),                'eight of ten stable passed the default fraction')
         call assert_true(fresh_cont_converged(os, frac_lim=0.8),   'eight of ten stable failed a 0.8 fraction')
         call make_cont_field(os, CARTFT_ACCEPTED, 0.04, 0.05)
-        call assert_true(fresh_cont_converged(os, rot_lim=0.05, shift_lim=0.1), 'small motion failed the tight bounds')
+        call assert_true(fresh_cont_converged(os, rot_lim=0.05, shift_lim=0.1), 'small pose update failed the tight bounds')
         call make_cont_field(os)
         call assert_false(fresh_cont_converged(os, rot_lim=0.05, shift_lim=0.1), 'a 0.4 deg move passed the tight bounds')
         call os%kill

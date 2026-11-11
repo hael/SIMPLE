@@ -906,7 +906,7 @@ contains
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
         endif
-        ! pose_cont: no|yes on refine3D (yes, the scheduled polish, from Phase 9 of the pose_cont
+        ! pose_cont: no|yes on refine3D (yes, the scheduled Cartesian followup, from Phase 9 of the pose_cont
         ! refactoring); continuation uses refine3D_local, which derives refine
         select case(trim(self%pose_cont))
             case('yes','no')
@@ -1090,7 +1090,7 @@ contains
         if( trim(self%cont_prior) /= 'none' )then
             if( trim(self%prg%to_char()) == 'refine3D_auto' ) &
                 &THROW_HARD('Cartesian priors are not supported by refine3D_auto')
-            if( trim(self%pose_cont) == 'yes' ) THROW_HARD('Cartesian priors do not support continuous polishing')
+            if( trim(self%pose_cont) == 'yes' ) THROW_HARD('Cartesian priors do not support pose_cont=yes')
             if( trim(self%cont_prior) == 'pose' )then
                 if( .not. ieee_is_finite(self%cont_prior_rot_sigma) .or. self%cont_prior_rot_sigma <= 0. ) &
                     &THROW_HARD('cont_prior=pose requires positive finite cont_prior_rot_sigma in degrees')
@@ -1102,9 +1102,9 @@ contains
                 &THROW_HARD('Cartesian prior requires refine=cont')
         endif
         self%l_cart_refine = trim(self%refine) == 'cont'
-        self%l_cont_polish = .false.
+        self%l_cont_followup = .false.
         if( self%l_cart_refine )then
-            ! a Cartesian pass refines the stored ptcl3D poses: the polar in-plane polish is
+            ! a Cartesian pass refines the stored ptcl3D poses: the polar in-plane refinement is
             ! part of its five-parameter solve (the internal inpl_cont=yes default is overridden)
             ! (children of a refine3D run, assembly and postprocessing on other segments, inherit
             ! refine with the command line; the matcher's strategy checks its segment as well)
@@ -1115,9 +1115,9 @@ contains
             if( .not. self%cont_conv_rot   > 0. ) THROW_HARD('cont_conv_rot must be positive')
             if( .not. self%cont_conv_shift > 0. ) THROW_HARD('cont_conv_shift must be positive')
             if( .not. (self%cont_conv_frac > 0. .and. self%cont_conv_frac <= 1.) ) THROW_HARD('cont_conv_frac must be in (0,1]')
-            ! with pose_cont=yes it is the polish pass the iteration strategy schedules after a
+            ! with pose_cont=yes it is the Cartesian followup the iteration strategy schedules after a
             ! discrete pass (C8, C19); the strategy refuses the pair on its own command line
-            self%l_cont_polish = trim(self%pose_cont) == 'yes'
+            self%l_cont_followup = trim(self%pose_cont) == 'yes'
             self%inpl_cont = 'no'
         endif
         ! 2D's neighbourhood table (refine=prob_neigh on ptcl2D) draws the stochastic class neighbourhood only

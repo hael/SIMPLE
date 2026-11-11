@@ -3,7 +3,7 @@
 ! noise-free truth prediction centred on its stored shift; no files, no polar calculator. Pinned:
 ! the seed contract, the lifecycle, accepted and rejected commits (pose, corr_cart, improved flag,
 ! status, convergence fields), the euclid sigma2 residual at the committed pose, threaded batches
-! equal to serial, particles outside the sample untouched, polish fields, the athres_cont bound.
+! equal to serial, particles outside the sample untouched, continuous pass fields, the athres_cont bound.
 module simple_strategy3D_cont_tester
 use simple_test_cftc_fixture, only: objective_gradient
 use simple_core_module_api, only: dp, euler2m, string, rad2deg, del_file
@@ -15,8 +15,8 @@ use simple_ori,             only: ori
 use simple_oris,            only: oris
 use simple_cartft_calc,     only: cartft_calc
 use simple_strategy3D,      only: strategy3D
-use simple_strategy3D_alloc, only: s3D, clean_strategy3D
-use simple_eul_prob_tab_utils, only: cart_shift_prior_sigma2, shift_increment_variance
+use simple_strategy3D_alloc, only: s3D, clean_strategy3D, prep_strategy3D
+use simple_eul_prob_tab_utils, only: cart_shift_prior_sigma2
 use simple_strategy3D_srch, only: strategy3D_spec
 use simple_strategy3D_cont, only: strategy3D_cont, cont_seed_is_valid, cont_reference_geometry_is_valid, check_cont_seeds
 use simple_cartft_pose_opt, only: CARTFT_ACCEPTED
@@ -55,6 +55,8 @@ contains
         call assert_true(s3D%cont_shift_prior_sigma2 == 0._dp, 'Cartesian prior width must reset between passes')
         write(*,'(A)') 'test_shift_prior_width'
         call test_shift_prior_width()
+        write(*,'(A)') 'test_shift_prior_angstrom_units'
+        call test_shift_prior_angstrom_units()
         write(*,'(A)') 'test_invalid_prior_width (expected child rejections)'
         call test_invalid_prior_width()
         write(*,'(A)') 'test_prior_master_failure (expected worker and master rejections)'
@@ -73,8 +75,8 @@ contains
         call test_threaded_batch()
         write(*,'(A)') 'test_outside_sample_untouched'
         call test_outside_sample_untouched()
-        write(*,'(A)') 'test_polish_keeps_convergence_fields'
-        call test_polish_keeps_convergence_fields()
+        write(*,'(A)') 'test_followup_keeps_convergence_fields'
+        call test_followup_keeps_convergence_fields()
         write(*,'(A)') 'test_rotation_bound'
         call test_rotation_bound()
     end subroutine run_all_strategy3D_cont_tests
@@ -91,16 +93,62 @@ contains
         call os%set(2, 'shincarg', 3.)
         call os%set(3, 'shincarg', 3.)
         call os%set(4, 'shincarg', 100.)
-        call assert_true(shift_increment_variance([0.,3.,3.]) == 3._dp, &
-            &'shared shift formula must retain zero increments in the denominator')
         call assert_true(cart_shift_prior_sigma2(os, 4._dp) == 3._dp, &
-            &'Cartesian variance must use all active records and exclude inactive records')
+            &'Cartesian variance must retain zero increments and exclude inactive records')
         call os%set(2, 'shincarg', 0.)
         call os%set(3, 'shincarg', 0.)
         call assert_true(cart_shift_prior_sigma2(os, 8._dp) == 4._dp, &
             &'zero history must use the low-pass floor')
         call os%kill
     end subroutine test_shift_prior_width
+
+    !> Three Angstroms spans 2, 1.5 and 1 native pixels at these samplings, independently of cropping.
+    subroutine test_shift_prior_angstrom_units()
+        real,     parameter :: SAMPLINGS(3) = [1.5, 2., 3.]
+        real(dp), parameter :: VARIANCES(3) = [4._dp, 2.25_dp, 1._dp]
+        integer,  parameter :: CROPS(2) = [BOX, BOX/2]
+        class(builder),    allocatable, target :: b
+        class(parameters), allocatable, target :: p
+        integer :: i, j
+        allocate(b, p)
+        p%l_cart_refine = .true.
+        p%cont_prior = 'shift'
+        p%cont_prior_shift_sigma = 3.
+        p%box = BOX
+        p%lp = 12.
+        do i = 1, size(SAMPLINGS)
+            p%smpd = SAMPLINGS(i)
+            do j = 1, size(CROPS)
+                p%box_crop = CROPS(j)
+                p%smpd_crop = p%smpd*real(BOX)/real(CROPS(j))
+                call prep_strategy3D(p, b)
+                call assert_true(s3D%cont_shift_prior_sigma2 == VARIANCES(i), &
+                    &'fixed Angstrom width must convert once using native sampling, independently of crop')
+                call assert_real(3., p%cont_prior_shift_sigma, 0., 'preparation must retain the command-line width in Angstroms')
+            end do
+        end do
+        call b%spproj%os_ptcl3D%new(1, is_ptcl=.true.)
+        b%spproj_field => b%spproj%os_ptcl3D
+        call b%spproj_field%set_state(1, 1)
+        call b%spproj_field%set(1, 'shincarg', 0.)
+        p%smpd = 1.5
+        p%box_crop = BOX
+        p%smpd_crop = p%smpd
+        p%cont_prior_shift_sigma = 0.
+        call prep_strategy3D(p, b)
+        call assert_true(s3D%cont_shift_prior_sigma2 == 4._dp, &
+            &'automatic width keeps the native-pixel floor for a 12 A band at 1.5 A per pixel')
+        p%cont_prior_shift_sigma = 1.5
+        call prep_strategy3D(p, b)
+        call assert_true(s3D%cont_shift_prior_sigma2 == 1._dp, &
+            &'fixed 1.5 A is one native pixel here and must not inherit the automatic floor')
+        p%cont_prior = 'none'
+        call prep_strategy3D(p, b)
+        call assert_true(s3D%cont_shift_prior_sigma2 == 0._dp, 'disabled prior clears the converted variance')
+        call clean_strategy3D()
+        call b%spproj%os_ptcl3D%kill
+        nullify(b%spproj_field)
+    end subroutine test_shift_prior_angstrom_units
 
     subroutine test_invalid_prior_width()
         type(invalid_prior_width_child) :: child
@@ -466,7 +514,7 @@ contains
 
     ! N16: an accepted solve commits the pose, corr_cart = cc at the result (the calculator's
     ! score of the objective evaluated in the test), the improved flag and the convergence
-    ! fields of the seed-to-result motion; a rejected solve (a particle whose observation is
+    ! fields of the seed-to-result pose update; a rejected solve (a particle whose observation is
     ! the noise-free prediction at its seed, so no pose improves on the seed) leaves the pose
     ! bit-identical and writes corr_cart at the seed; corr is unchanged in both. Under euclid
     ! the sigma owner receives the residual at the committed pose.
@@ -503,7 +551,7 @@ contains
             call assert_true(after%get('dist') > 0. .and. after%get('frac') == 100. .and. &
                 &after%get('mi_proj') == merge(1., 0., after%get('dist') <= p%angthres_mi_proj) .and. &
                 &abs(after%get('shincarg') - norm2(after%get_2Dshift() - before%get_2Dshift())) < 1.e-5, &
-                &'the convergence fields are not the seed-to-result motion')
+                &'the convergence fields are not the seed-to-result pose update')
             if( objfuns(iobj) == OBJFUN_EUCLID )then
                 stored = b%esig%get_sigma2_part(3)
                 sigma_shells_sum = sum(stored)
@@ -620,11 +668,11 @@ contains
         deallocate(b, p)
     end subroutine test_outside_sample_untouched
 
-    ! N23: with the convergence fields of a discrete search in the record, a polish pass
-    ! (l_cont_polish) commits pose, corr_cart and the flag and leaves dist, dist_inpl,
+    ! N23: with the convergence fields of a discrete search in the record, a continuous followup pass
+    ! (l_cont_followup) commits pose, corr_cart and the flag and leaves dist, dist_inpl,
     ! shincarg, mi_proj, mi_state and frac as they were; a refine=cont pass writes them from
-    ! the seed-to-result motion. Expected values: the input record; the motion computed here.
-    subroutine test_polish_keeps_convergence_fields()
+    ! the seed-to-result pose update. Expected values: the input record; the pose update computed here.
+    subroutine test_followup_keeps_convergence_fields()
         character(len=9), parameter :: KEYS(6) = [character(len=9) :: 'dist', 'dist_inpl', 'shincarg', &
             &'mi_proj', 'mi_state', 'frac']
         real,             parameter :: DISCRETE(6) = [7.5, 3.25, 1.5, 0., 0., 55.]
@@ -639,35 +687,35 @@ contains
                 call b%spproj_field%set(i, trim(KEYS(k)), DISCRETE(k))
             end do
         end do
-        ! the polish pass on particle 3
+        ! the continuous followup pass on particle 3
         p%pose_cont       = 'yes'
-        p%l_cont_polish   = .true.
+        p%l_cont_followup   = .true.
         call b%spproj_field%get_ori(3, before)
         call run_particle(b, p, 3)
         call b%spproj_field%get_ori(3, after)
         call assert_true(after%get('pose_cont_improved') == 1. .and. any(after%get_euler() /= before%get_euler()), &
-            &'the polish pass did not commit the refined pose')
+            &'the continuous followup pass did not commit the refined pose')
         call assert_true(after%get('corr') == before%get('corr') .and. after%get('corr_cart') > 0., &
-            &'the polish pass did not write corr_cart alone')
+            &'the continuous followup pass did not write corr_cart alone')
         do k = 1, size(KEYS)
             call assert_true(after%get(trim(KEYS(k))) == DISCRETE(k), &
-                &'the polish pass changed the discrete '//trim(KEYS(k)))
+                &'the continuous followup pass changed the discrete '//trim(KEYS(k)))
         end do
         ! a refine=cont pass on particle 5
         p%pose_cont       = 'no'
-        p%l_cont_polish   = .false.
+        p%l_cont_followup   = .false.
         call b%spproj_field%get_ori(5, before)
         call run_particle(b, p, 5)
         call b%spproj_field%get_ori(5, after)
         call assert_true(abs(after%get('dist') - rad2deg(before.euldist.after)) < 1.e-3 .and. &
             &abs(after%get('shincarg') - norm2(after%get_2Dshift() - before%get_2Dshift())) < 1.e-5 .and. &
             &after%get('frac') == 100. .and. after%get('mi_state') == 1., &
-            &'a refine=cont pass did not write the seed-to-result motion')
+            &'a refine=cont pass did not write the seed-to-result pose update')
         call before%kill
         call after%kill
         call kill_fixture(b)
         deallocate(b, p)
-    end subroutine test_polish_keeps_convergence_fields
+    end subroutine test_followup_keeps_convergence_fields
 
     ! The rotation bound of a Cartesian pass is athres_cont, not the polar athres (the fixture sets
     ! that to 0.5 degrees): with athres_cont = 0.5 the committed rotation stays within 0.5 degrees

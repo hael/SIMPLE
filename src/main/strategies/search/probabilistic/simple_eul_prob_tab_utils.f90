@@ -32,7 +32,7 @@ public :: prob_dense_entry, prob_refined_entry
 public :: prob_posterior_stat, posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras
 public :: prob_row_record, prob_row_file, PROB_ROW_FILE_VERSION
 public :: temperature_or_argmin, prob_beta_at, shift_prior_sigma2, SHIFT_PRIOR_SIGMA_MIN, SHIFT_PRIOR_LP_FRAC
-public :: shift_increment_variance, cart_shift_prior_sigma2
+public :: cart_shift_prior_sigma2
 public :: prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN, PROB_NEFF_MIN_ROWS, prob_state_readout
 public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readout, add_prob_readout, report_prob_readout
 public :: merge_prob_readouts

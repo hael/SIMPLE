@@ -29,7 +29,7 @@ integer(int64)       :: sigma2_bench_nbytes   = 0_int64
 contains
 
     !> The sigma2 state of a pass that needs it (Euclidean scoring, or the CC residual update of
-    !! the polar CC pose initialization); a Cartesian cc pass reads none (C5). A polish starts from
+    !! the polar CC pose initialization); a Cartesian cc pass reads none (C5). A continuous pass starts from
     !! the discrete pass's rows, not the committed generation's.
     subroutine prep_sigmas_objfun( params, build )
         class(parameters), intent(inout) :: params
@@ -58,8 +58,8 @@ contains
             endif
             if( L_BENCH_GLOB ) t_read = tic()
             call build%esig%read_part
-            ! a polish overlays its Cartesian residuals on those of the discrete pass it follows
-            if( params%l_cont_polish ) call build%esig%read_pending_range
+            ! a continuous pass overlays its Cartesian residuals on those of the discrete pass it follows
+            if( params%l_cont_followup ) call build%esig%read_pending_range
             if( L_BENCH_GLOB )then
                 rt_sigma2_read_part = toc(t_read)
                 t_read = tic()
@@ -155,7 +155,7 @@ contains
 
     !> Prepare one 3-D particle batch from a single read for the representation(s) of the pass:
     !! the particle slots of the Cartesian calculator when the pass has built it (build%cftc
-    !! holds the references a Cartesian pass or the in-matcher polish read; refine3D_exec is
+    !! holds the references a Cartesian pass or the in-matcher continuous pass read; refine3D_exec is
     !! the only caller) and the polar particles unless the
     !! pass is Cartesian (l_cart_refine). The Cartesian slots are prepared first, from copies,
     !! because the polar preparation normalizes the images in place.

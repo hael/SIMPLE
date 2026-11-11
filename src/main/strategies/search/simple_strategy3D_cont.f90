@@ -3,7 +3,7 @@
 ! against the particle's state and half reference in build%cftc, on the slot prep_cart_batch
 ! filled. oris_assign commits the pose only when accepted, and always corr_cart, the improved
 ! flag and the transaction status; a refine=cont pass also writes the convergence fields of the
-! seed-to-result motion, a polish pass leaves those of its discrete search.
+! seed-to-result pose update, a continuous followup pass leaves those of its discrete search.
 module simple_strategy3D_cont
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_builder,          only: builder
@@ -210,7 +210,7 @@ contains
     end subroutine srch_cont
 
     !> Commit the pose (when accepted), corr_cart, the improved flag and the status and, in a
-    !! refine=cont pass, the convergence fields of the seed-to-result motion; a polish pass
+    !! refine=cont pass, the convergence fields of the seed-to-result pose update; a continuous followup pass
     !! leaves those of the discrete search. corr stays as the last polar pass left it.
     subroutine oris_assign_cont( self )
         class(strategy3D_cont), intent(inout) :: self
@@ -222,10 +222,10 @@ contains
             call field%set(iptcl, 'corr_cart', self%score)
             call field%set(iptcl, 'pose_cont_improved', merge(1., 0., self%status == CARTFT_ACCEPTED))
             call field%set(iptcl, 'pose_cont_status',   real(self%status))
-            ! the polish pass leaves the convergence fields of the discrete search it follows, so
+            ! the continuous followup pass leaves the convergence fields of the discrete search it follows, so
             ! the main-loop rule keeps measuring that search (C8, C19; the committed record is the
             ! seed's, which carries them)
-            if( .not. self%p_ptr%l_cont_polish )then
+            if( .not. self%p_ptr%l_cont_followup )then
                 call self%b_ptr%pgrpsyms%sym_dists(self%seed_ori, self%result_ori, symmetry_equivalent_ori, &
                     &euler_distance, inplane_distance)
                 call field%set(iptcl, 'dist',      euler_distance)

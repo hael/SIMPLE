@@ -230,14 +230,14 @@ contains
         &'benchmark continuous Cartesian pose refinement on simulated 1JYX particles',&
         &'One refine3D refine=cont pass per regime and objective on simulated 1JYX particles at box 256, '//&
         &'against the reconstruction at the truth poses: '//&
-        &'polish (poses 2 degrees and 1 A from the truth, lp 3 A) and capture (15 degrees and 2.6 A, lp 8 A). '//&
+        &'local (poses 2 degrees and 1 A from the truth, lp 3 A) and capture (15 degrees and 2.6 A, lp 8 A). '//&
         &'A measurement with no thresholds and no CTest entry: run directories, BENCH/ and the pose errors '//&
         &'(metrics.tsv) stay in ./cont_refine3D_bench '//&
         &'(doc/implementation_notes/completed/cont_lm_acceleration.md, section 6.3)',&
         &'simple_test_exec',&                       ! executable
         &.false., display_name='Continuous Refinement Benchmark')                                ! requires sp_project
         call cont_refine3D_bench%add_input(UI_PARM, 'suite', 'str', 'Regime', &
-            &'Run one regime: polish or capture; list prints them. Default runs both', '', .false., '')
+            &'Run one regime: local or capture; list prints them. Default runs both', '', .false., '')
         call cont_refine3D_bench%add_input(UI_PARM, 'objfun', 'str', 'Objective', &
             &'Run one objective: euclid or cc. Default runs both', '', .false., '')
         call cont_refine3D_bench%add_input(UI_PARM, 'nptcls', 'num', 'Particles', &

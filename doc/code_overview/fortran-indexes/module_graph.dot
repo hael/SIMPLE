@@ -233,6 +233,7 @@ digraph module_graph {
   "simple_flex_probe_fit";
   "simple_flex_reconstructor_latent_ops";
   "simple_flex_traj_denoise";
+  "simple_flex_tree";
   "simple_forked_process";
   "simple_forked_process_tester";
   "simple_fplane_grid";
@@ -298,6 +299,7 @@ digraph module_graph {
   "simple_imgfile";
   "simple_imghead";
   "simple_imghead_tester";
+  "simple_indexed_tree";
   "simple_ipc_tcp_socket_client";
   "simple_ipc_tcp_socket_helpers";
   "simple_ipc_tcp_socket_server";
@@ -1511,6 +1513,7 @@ digraph module_graph {
   "simple_commanders_sim" -> "simple_commanders_api";
   "simple_commanders_sim" -> "simple_ctf";
   "simple_commanders_sim" -> "simple_defs_atoms";
+  "simple_commanders_sim" -> "simple_fileio";
   "simple_commanders_sim" -> "simple_matcher_ptcl_io";
   "simple_commanders_sim" -> "simple_math_ctf";
   "simple_commanders_sim" -> "simple_memoize_ft_maps";
@@ -2785,6 +2788,12 @@ digraph module_graph {
   "simple_flex_traj_denoise" -> "simple_rnd";
   "simple_flex_traj_denoise" -> "simple_stat";
   "simple_flex_traj_denoise" -> "simple_timer";
+  "simple_flex_tree" -> "ieee_arithmetic";
+  "simple_flex_tree" -> "iso_fortran_env";
+  "simple_flex_tree" -> "simple_defs";
+  "simple_flex_tree" -> "simple_error";
+  "simple_flex_tree" -> "simple_indexed_tree";
+  "simple_flex_tree" -> "simple_string";
   "simple_forked_process" -> "iso_c_binding";
   "simple_forked_process" -> "iso_fortran_env";
   "simple_forked_process" -> "simple_cmdline";
@@ -3217,6 +3226,7 @@ digraph module_graph {
   "simple_imghead_tester" -> "simple_string_utils";
   "simple_imghead_tester" -> "simple_syslib";
   "simple_imghead_tester" -> "simple_test_utils";
+  "simple_indexed_tree" -> "simple_error";
   "simple_ipc_tcp_socket_client" -> "iso_c_binding";
   "simple_ipc_tcp_socket_client" -> "simple_core_module_api";
   "simple_ipc_tcp_socket_client" -> "simple_ipc_tcp_socket_helpers";
@@ -4589,6 +4599,7 @@ digraph module_graph {
   "simple_refine3D_strategy" -> "iso_fortran_env";
   "simple_refine3D_strategy" -> "simple_bench_io";
   "simple_refine3D_strategy" -> "simple_builder";
+  "simple_refine3D_strategy" -> "simple_chash";
   "simple_refine3D_strategy" -> "simple_cluster_seed";
   "simple_refine3D_strategy" -> "simple_cmdline";
   "simple_refine3D_strategy" -> "simple_commanders_rec";
@@ -4848,7 +4859,6 @@ digraph module_graph {
   "simple_solve3D_reseed_tester" -> "simple_sym";
   "simple_solve3D_reseed_tester" -> "simple_test_utils";
   "simple_solve3D_reseed_tester" -> "simple_type_defs";
-  "simple_solve3D_utils" -> "simple_class_frcs";
   "simple_solve3D_utils" -> "simple_commanders_api";
   "simple_solve3D_utils" -> "simple_commanders_euclid";
   "simple_solve3D_utils" -> "simple_commanders_volops";
@@ -5149,6 +5159,7 @@ digraph module_graph {
   "simple_strategy3D_cont" -> "simple_oris";
   "simple_strategy3D_cont" -> "simple_parameters";
   "simple_strategy3D_cont" -> "simple_strategy3d";
+  "simple_strategy3D_cont" -> "simple_strategy3d_alloc";
   "simple_strategy3D_cont" -> "simple_strategy3d_srch";
   "simple_strategy3D_cont" -> "simple_type_defs";
   "simple_strategy3D_cont_1jyx_tester" -> "ieee_arithmetic";
@@ -5190,12 +5201,18 @@ digraph module_graph {
   "simple_strategy3D_cont_tester" -> "simple_builder";
   "simple_strategy3D_cont_tester" -> "simple_cartft_calc";
   "simple_strategy3D_cont_tester" -> "simple_cartft_pose_opt";
+  "simple_strategy3D_cont_tester" -> "simple_cmdline";
   "simple_strategy3D_cont_tester" -> "simple_core_module_api";
   "simple_strategy3D_cont_tester" -> "simple_defs_ori";
+  "simple_strategy3D_cont_tester" -> "simple_eul_prob_tab_utils";
+  "simple_strategy3D_cont_tester" -> "simple_forked_process";
   "simple_strategy3D_cont_tester" -> "simple_ori";
   "simple_strategy3D_cont_tester" -> "simple_oris";
   "simple_strategy3D_cont_tester" -> "simple_parameters";
+  "simple_strategy3D_cont_tester" -> "simple_qsys_ctrl";
+  "simple_strategy3D_cont_tester" -> "simple_qsys_local";
   "simple_strategy3D_cont_tester" -> "simple_strategy3d";
+  "simple_strategy3D_cont_tester" -> "simple_strategy3d_alloc";
   "simple_strategy3D_cont_tester" -> "simple_strategy3d_cont";
   "simple_strategy3D_cont_tester" -> "simple_strategy3d_srch";
   "simple_strategy3D_cont_tester" -> "simple_test_cftc_fixture";

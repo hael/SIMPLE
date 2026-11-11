@@ -59,7 +59,7 @@ module subroutine exec_test_cont_refine3D_1jxy( self, cline )
 end subroutine exec_test_cont_refine3D_1jxy
 
 !> The end-to-end gate of continuous Cartesian pose refinement (N20 of the pose_cont
-!  refactoring plan, stages a-e and h; f and g follow with the polish in Phase 9). Fixture: the
+!  refactoring plan, stages a-e and h; f and g follow with the continuous pass in Phase 9). Fixture: the
 !  recipe of E25 (the embedded 1JYX model, box 144, 1.3 A, 1 000 particles, the CTF spread of
 !  E25, SNR 1, no simulated shift), simulated by simulate_particles under the fixed test seed,
 !  in a project whose ptcl3D poses are the truth perturbed by exactly 15 degrees about a random
@@ -77,13 +77,13 @@ end subroutine exec_test_cont_refine3D_1jxy
 !     update, then samples nsample particles; it runs no pose initialization or registration pass and reduces
 !     the pose error
 !  f  refine3D refine=neigh against the truth reference with pose_cont=yes and with no, two
-!     trailing iterations over 30% samples: with the polish the error over the updated particles
-!     is no worse; the polish refines exactly the sample (corr_cart on the updated particles only,
+!     trailing iterations over 30% samples: with the continuous pass the error over the updated particles
+!     is no worse; the continuous pass refines exactly the sample (corr_cart on the updated particles only,
 !     the others keep their seeds) after the discrete pass's polar in-plane route; the discrete
-!     iteration after a polish scores finite; the last assembly represents the final project's N
+!     iteration after a continuous pass scores finite; the last assembly represents the final project's N
 !  g  refine3D_auto pose_cont=yes from the perturbed project (ref_pose_init=cc as in h):
-!     completes, the polish follows the last main-loop iteration over its whole sample, and the
-!     error is no worse than h's polar run without the polish
+!     completes, the continuous pass follows the last main-loop iteration over its whole sample, and the
+!     error is no worse than h's polar run without the continuous pass
 !  h  the normal entry: a polar refine3D_auto from the perturbed project, its poses first
 !     initialized against the independent truth map (ref_pose_init=cc, the polar workflow's path
 !     for poor input poses), then refine3D_local on its output: the polar run
@@ -137,8 +137,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     integer, parameter :: NPAIRS     = 20000
     integer, parameter :: GATE_SEED  = 20260930
     integer, parameter :: AUTO_MAXITS = 4, AUTO_NSAMPLE = 500, CONT_MAXITS = 2
-    integer, parameter :: POLISH_MAXITS = 2
-    real,    parameter :: POLISH_UPDATE_FRAC = 0.3
+    integer, parameter :: FOLLOWUP_MAXITS = 2
+    real,    parameter :: FOLLOWUP_UPDATE_FRAC = 0.3
     ! Floors, declared before the first run (section 10.1; ruling R5: no map or FSC floor).
     ! Stages a-c, i and j run E25 through the production path: E25's floors at 8 A apply, F1 a tenth of
     ! the injected error (median rotation <= 1.5 deg, median shift <= 0.2 px) and F2 the
@@ -156,7 +156,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     ! Stage h: the continuation leaves the pair pose error no worse than the polar run's, within
     ! 0.1 deg (the rounding-level variation of a 20 000-pair median)
     real,    parameter :: MAX_PAIR_GAIN_LOSS = 0.1
-    ! Stages f and g (Phase 9; declared before their first run): the polish leaves the error
+    ! Stages f and g (Phase 9; declared before their first run): the continuous pass leaves the error
     ! (symmetry-aware, over the particles the passes updated) no worse than the same run without
     ! it, within the 0.1 deg of stage h
     ! Profiles of the merged code (test-suite truth plan, 2026-10-19: scratch/keep/profiles/phase8/main
@@ -189,7 +189,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     type(string)        :: root, gate_root, stk_abs, truth_abs, proj_dir
     integer, allocatable :: inds(:), before_updates(:)
     real    :: med_rot, med_sh, basin, seed_rot, seed_sh, pair_seed, pair_before, pair_after, frac5
-    real    :: sym_seed, sym_before, sym_after, sym_nopolish, sym_polish, d2ops(3,3,4), o(3), f(3,3)
+    real    :: sym_seed, sym_before, sym_after, sym_nofollowup, sym_followup, d2ops(3,3,4), o(3), f(3,3)
     real    :: corr_mean
     logical :: updated(NPTCLS), l_sample_ok, l_finite
     class(sp_project), allocatable:: out_f
@@ -350,20 +350,20 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         &upper=.true.)
     call gate%report('e_fraction_in_basin_8A', basin)
     call simple_chdir(gate_root, status)
-    ! ---- f: a discrete refine3D with and without the polish ----
+    ! ---- f: a discrete refine3D with and without the continuous pass ----
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE f: pose_cont=no'
-    call run_refine3D_discrete('f_nopolish', 'no', out_f)
+    call run_refine3D_discrete('f_nofollowup', 'no', out_f)
     updated = out_f%os_ptcl3D%get_all('updatecnt') > 0.5
-    sym_nopolish = sym_err(out_f%os_ptcl3D, updated)
-    call gate%report('f_nopolish_sym_pose_error_deg', sym_nopolish)
+    sym_nofollowup = sym_err(out_f%os_ptcl3D, updated)
+    call gate%report('f_nofollowup_sym_pose_error_deg', sym_nofollowup)
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE f: pose_cont=yes'
-    call run_refine3D_discrete('f_polish', 'yes', out_f)
+    call run_refine3D_discrete('f_followup', 'yes', out_f)
     updated = out_f%os_ptcl3D%get_all('updatecnt') > 0.5
     call gate%report('f_updated_particles', real(count(updated)))
-    sym_polish = sym_err(out_f%os_ptcl3D, updated)
-    call gate%metric('f_polish_sym_pose_error_deg', sym_polish, sym_nopolish + MAX_PAIR_GAIN_LOSS, &
-        &sym_polish <= sym_nopolish + MAX_PAIR_GAIN_LOSS, upper=.true.)
-    ! the polish refines the sample of its discrete pass and nothing else
+    sym_followup = sym_err(out_f%os_ptcl3D, updated)
+    call gate%metric('f_followup_sym_pose_error_deg', sym_followup, sym_nofollowup + MAX_PAIR_GAIN_LOSS, &
+        &sym_followup <= sym_nofollowup + MAX_PAIR_GAIN_LOSS, upper=.true.)
+    ! the continuous pass refines the sample of its discrete pass and nothing else
     l_sample_ok = count(updated) > 0 .and. count(updated) < NPTCLS
     do i = 1, NPTCLS
         if( updated(i) )then
@@ -373,12 +373,12 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
             if( any(out_f%os_ptcl3D%get_euler(i) /= seeded%os_ptcl3D%get_euler(i)) ) l_sample_ok = .false.
         endif
     enddo
-    call gate%check('f_polish_refines_exactly_the_sample', l_sample_ok)
-    ! the discrete pass before the polish ran its polar in-plane route (inpl_cont=yes); the
-    ! polish runs with inpl_cont=no and leaves cont_inpl_attempted as the discrete pass set it
+    call gate%check('f_followup_refines_exactly_the_sample', l_sample_ok)
+    ! the discrete pass before the continuous pass ran its polar in-plane route (inpl_cont=yes); the
+    ! continuous pass runs with inpl_cont=no and leaves cont_inpl_attempted as the discrete pass set it
     call gate%check('f_discrete_pass_ran_the_polar_inplane_route', &
         &any(out_f%os_ptcl3D%get_all('cont_inpl_attempted') > 0.5 .and. updated))
-    ! the discrete iteration after a polish ran and scored its particles
+    ! the discrete iteration after a continuous pass ran and scored its particles
     l_finite  = .true.
     corr_mean = 0.
     do i = 1, NPTCLS
@@ -387,8 +387,8 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         corr_mean = corr_mean + out_f%os_ptcl3D%get(i, 'corr')
     enddo
     corr_mean = corr_mean / real(max(1, count(updated)))
-    call gate%check('f_discrete_scores_finite_after_polish', l_finite .and. corr_mean > 0.)
-    call gate%report('f_polish_mean_corr', corr_mean)
+    call gate%check('f_discrete_scores_finite_after_followup', l_finite .and. corr_mean > 0.)
+    call gate%report('f_followup_mean_corr', corr_mean)
     ! ---- h: a polar refine3D_auto, then the continuation on its output ----
     call enter_stage('h_continuation')
     call cl%set('prg',       'refine3D_auto')
@@ -427,9 +427,9 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     call gate%report('h_continued_median_rotation_error_deg', med_rot)
     call gate%report('h_continued_median_shift_error_px',     med_sh)
     call simple_chdir(gate_root, status)
-    ! ---- g: refine3D_auto pose_cont=yes, as h's polar run with the polish ----
+    ! ---- g: refine3D_auto pose_cont=yes, as h's polar run with the continuous pass ----
     write(logfhandle,'(a)') '>>> CONT_REFINE3D_1JXY STAGE g'
-    call enter_stage('g_auto_polish')
+    call enter_stage('g_auto_followup')
     call cl%set('prg',           'refine3D_auto')
     call cl%set('projfile',      simple_abspath(string(PROJNAME//'.simple')))
     call cl%set('mkdir',         'no')
@@ -444,14 +444,14 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
     call run_proj%read(simple_abspath(string(PROJNAME//'.simple')))
     call stats%new(1, is_ptcl=.false.)
     call stats%read(string(STATS_FILE))
-    call gate%check('g_polish_followed_the_last_iteration_over_its_sample', &
+    call gate%check('g_followup_followed_the_last_iteration_over_its_sample', &
         &nint(stats%get(1, 'POSE_CONT_ATTEMPTS')) == nint(stats%get(1, 'PERCEN_PARTICLES_SAMPLED')*real(NPTCLS)/100.))
-    call gate%report('g_last_polish_improved_pct', stats%get(1, 'POSE_CONT_IMPROVED_PCT'))
+    call gate%report('g_last_followup_improved_pct', stats%get(1, 'POSE_CONT_IMPROVED_PCT'))
     call stats%kill
-    call gate%check('g_every_particle_polished', all(run_proj%os_ptcl3D%get_all('corr_cart') > 0.))
-    sym_polish = sym_err(run_proj%os_ptcl3D)
-    call gate%metric('g_sym_pose_error_deg', sym_polish, sym_before + MAX_PAIR_GAIN_LOSS, &
-        &sym_polish <= sym_before + MAX_PAIR_GAIN_LOSS, upper=.true.)
+    call gate%check('g_every_particle_refined', all(run_proj%os_ptcl3D%get_all('corr_cart') > 0.))
+    sym_followup = sym_err(run_proj%os_ptcl3D)
+    call gate%metric('g_sym_pose_error_deg', sym_followup, sym_before + MAX_PAIR_GAIN_LOSS, &
+        &sym_followup <= sym_before + MAX_PAIR_GAIN_LOSS, upper=.true.)
     call simple_chdir(gate_root, status)
     ! ---- i, j: stages a and b on the production route (run last: the earlier stages' draws stay) ----
     call run_refine3D_cont('i_joint_euclid', 'euclid', 0, run_proj, l_production_route=.true.)
@@ -742,7 +742,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         call simple_chdir(gate_root, status)
     end subroutine run_refine3D_cont
 
-    !> two trailing refine3D refine=neigh iterations over 30% samples, with or without the polish
+    !> two trailing refine3D refine=neigh iterations over 30% samples, with or without the continuous pass
     !! (stage f); the last assembly must represent the N of the final project (C1 of the aftermath)
     subroutine run_refine3D_discrete( dir, pose_cont, out )
         character(len=*), intent(in)    :: dir, pose_cont
@@ -763,9 +763,9 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
         call cl%set('lp',          LP)
         call cl%set('trs',         TRS)
         call cl%set('athres_cont', ATHRES_CONT)
-        call cl%set('update_frac', POLISH_UPDATE_FRAC)
+        call cl%set('update_frac', FOLLOWUP_UPDATE_FRAC)
         call cl%set('trail_rec',   'yes')
-        call cl%set('maxits',      POLISH_MAXITS)
+        call cl%set('maxits',      FOLLOWUP_MAXITS)
         call cl%set('nthr',        nthr)
         call xrefine3D%execute(cl)
         call cl%kill
@@ -821,7 +821,7 @@ subroutine run_cont_refine3D_gate( nthr, metrics_file, all_ok, nu_handoff_only )
 
 end subroutine run_cont_refine3D_gate
 
-!> simple_test_exec test=cont_refine3D_bench [suite=polish|capture|list] [objfun=euclid|cc] [nptcls=<n>]
+!> simple_test_exec test=cont_refine3D_bench [suite=local|capture|list] [objfun=euclid|cc] [nptcls=<n>]
 !! [snr=<x>] [nparts=<n>] [nthr=<n>]: a measurement, no assertion. Every run directory, its BENCH/
 !! and metrics.tsv stay in ./cont_refine3D_bench, which must not exist yet.
 module subroutine exec_test_cont_refine3D_bench( self, cline )
@@ -844,9 +844,9 @@ module subroutine exec_test_cont_refine3D_bench( self, cline )
     if( cline%defined('snr')    ) snr    = cline%get_rarg('snr')
     select case(suite%to_char())
         case('list')
-            write(logfhandle,'(a)') 'Available suites for cont_refine3D_bench: polish, capture'
+            write(logfhandle,'(a)') 'Available suites for cont_refine3D_bench: local, capture'
             return
-        case('', 'polish', 'capture')
+        case('', 'local', 'capture')
         case default
             THROW_HARD('no sub-suite '//suite%to_char()//' in cont_refine3D_bench; use suite=list')
     end select
@@ -885,7 +885,7 @@ end subroutine exec_test_cont_refine3D_bench
 !> The benchmark's cases: per regime, the truth perturbed by the regime's error, then one refine3D
 !! refine=cont pass per objective on the native grid and the production joint route, against the
 !! reconstruction at the truth poses: the reference a converged refinement leaves, on the particles'
-!! scale, which euclid's Gauss-Newton matrix assumes. polish is the error a discrete search leaves, in a
+!! scale, which euclid's Gauss-Newton matrix assumes. local covers the error a discrete search leaves, in a
 !! finishing band; capture is E25's error and band under a wider rotation bound. Pose errors against
 !! the truth go to metrics.tsv as reports.
 subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
@@ -907,7 +907,7 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     character(len=*), parameter :: REF_DIR    = 'reference'
     real,    parameter :: MSKDIAM  = 120.           !< Angstroms, as E25
     real,    parameter :: TRS_A    = 6.5            !< Angstroms, E25's 5 pixels
-    real,    parameter :: POLISH_ROT  = 2.,  POLISH_SH_A  = 1.,  POLISH_LP  = 3.
+    real,    parameter :: LOCAL_ROT  = 2.,  LOCAL_SH_A  = 1.,  LOCAL_LP  = 3.
     ! the capture bound clears the seed error, so no particle's optimum lies against it
     real,    parameter :: CAPTURE_ROT = 15., CAPTURE_SH_A = 2.6, CAPTURE_LP = 8., CAPTURE_ATHRES = 20.
     integer, parameter :: PERTURBATION_SEED = 20260915
@@ -1015,8 +1015,8 @@ subroutine run_cont_refine3D_bench( suite, objfun, nthr, nparts, nptcls, snr )
     call simple_chdir(bench_root, status)
     if( status /= 0 ) THROW_HARD('could not return to the benchmark directory')
     ! ---- the cases: poses per regime ----
-    if( suite /= 'capture' ) call run_regime('polish',  POLISH_ROT,  POLISH_SH_A,  POLISH_LP,  0.)
-    if( suite /= 'polish'  ) call run_regime('capture', CAPTURE_ROT, CAPTURE_SH_A, CAPTURE_LP, CAPTURE_ATHRES)
+    if( suite /= 'capture' ) call run_regime('local',  LOCAL_ROT,  LOCAL_SH_A,  LOCAL_LP,  0.)
+    if( suite /= 'local'  ) call run_regime('capture', CAPTURE_ROT, CAPTURE_SH_A, CAPTURE_LP, CAPTURE_ATHRES)
     call gate%kill
     call seeded%kill
     call out%kill

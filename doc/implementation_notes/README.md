@@ -33,6 +33,7 @@ resuming an old command or experiment.
 | Topic | Record | Status and next action |
 | --- | --- | --- |
 | Polar shift search | [Laplace width](planned/polar_shift_laplace_width.md) | Proposal split from the completed shift search (2026-11-03); Hans's call on conditional or marginal width. |
+| Continuous local refinement | [Done record](completed/refine3d_local_cartesian_priors_done.md), [todo plan](planned/refine3d_local_cartesian_priors_todo.md) | Objective: match `refine=prob_neigh` map quality with the faster Cartesian route, within about 2x its current cost. Next action is the four-run attribution experiment (no code) that says which of the three differences carries the gap. Delivered prior mechanisms and history are archived. |
 | Stage scheduling | [Data-driven progression](planned/data_driven_stage_progression.md) | Proposal; decide how stage progression should use measured information. |
 | Multi-state regression | [Investigation](planned/multistate_solve3D_regression.md), [fix check](planned/multistate_solve3D_regression_report.md), [stage-5 check](planned/multistate_stage5_prob_check_report.md) | Measurements show partial recovery; diagnosis and scientific closeout remain. |
 | Species discovery | [Single open-work list](planned/species_discovery_unfinished.md) | Finish the applicable sensitivity/half-map checks and promotion decisions; historical numbers are in the linked evidence record. |

@@ -318,13 +318,13 @@ contains
     !! with its own random seed and keep the part in its range, so the union is not one sample. The
     !! probabilistic modes always do (their parts run the pipeline on the master's sample, whatever the
     !! update fraction, so the field's sample stamps must be the master's); otherwise under a fractional
-    !! update, except that the polish pass reproduces the discrete pass it follows, the missing-update
+    !! update, except that the continuous followup pass reproduces the discrete pass it follows, the missing-update
     !! pass and full sampling are deterministic, and the eval and sigma passes keep their own selection.
     !! Master and workers evaluate this on the same command line, so they agree.
     logical function master_draws_sample3D( params ) result( l_master )
         class(parameters), intent(in) :: params
         l_master = .false.
-        if( params%l_cont_polish .or. params%l_update_missing ) return
+        if( params%l_cont_followup .or. params%l_update_missing ) return
         if( params%l_prob_align_mode )then
             l_master = .true.
             return

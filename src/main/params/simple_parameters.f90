@@ -138,7 +138,7 @@ type :: parameters
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
     character(len=5)          :: balance='none'      !< fractional-update sampling units(none|class|cavg){none}
     character(len=16)         :: cont_prior='none' !< prior for continuous local refinement (none|shift|pose){none}
-    real                      :: cont_prior_shift_sigma=0. !< fixed shift-prior standard deviation in native pixels; zero uses all-active increments
+    real                      :: cont_prior_shift_sigma=0. !< fixed per-axis shift-prior standard deviation in A; zero uses all-active increments
     real                      :: cont_prior_rot_sigma=0. !< fixed per-axis rotation-prior standard deviation in degrees; required for cont_prior=pose
     character(len=16)         :: cont_route='joint' !< internal: LM route of a continuous Cartesian pose solve(joint|shift_then_joint){joint}
     character(len=3)          :: sigma_commit_deferred='no' !< internal: caller commits the final canonical sigma update(yes|no){no}
@@ -291,7 +291,7 @@ type :: parameters
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
     character(len=3)          :: inpl_cont='yes'      !< joint continuous in-plane refinement; internal, not a command-line key (no only under refine=cont)
-    character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose polishing(no|yes){no}
+    character(len=4)          :: pose_cont='no'       !< continuous Cartesian pose refinement(no|yes){no}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
     character(len=STDLEN)     :: m_estimator='no'     !< reconstruction M-estimator: flex weighs particles by the project's state weight set(no|flex){no}
@@ -664,7 +664,7 @@ type :: parameters
     logical :: l_prob_inpl       = .false. !< not a command-line key
     logical :: l_prob_align_mode = .false. !< not a command-line key
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
-    logical :: l_cont_polish     = .false. !< the Cartesian pass the polish schedules after a discrete one; not a command-line key
+    logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key
     logical :: l_cohort_sampling = .false. !< not a command-line key
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone; not a command-line key

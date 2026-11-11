@@ -19,8 +19,8 @@ real(dp), parameter :: ROTATION_TOL   = 8.e-4_dp
 real(dp), parameter :: SHIFT_TOL      = 2.e-3_dp
 ! the seed rotations come from single-precision Euler angles, orthonormal to ~1e-7; the
 ! trace form of the geodesic distance used as the expected value then carries an error of
-! about 1e-7*3/sin(angle), 3e-6 rad at the 1.8 degree motion of the fixture
-real(dp), parameter :: MOTION_TOL     = 1.e-4_dp
+! about 1e-7*3/sin(angle), 3e-6 rad at the 1.8 degree pose update of the fixture
+real(dp), parameter :: POSE_UPDATE_TOL     = 1.e-4_dp
 
 type :: fixture_record
     real(dp) :: truth_rotation(3,3), truth_shift(2), seed_rotation(3,3), seed_shift(2)
@@ -201,25 +201,25 @@ contains
         call second%refine_pose(calc, 1, .true., 1, rot_b, shift_b)
         call first%get_objectives(before_a, after_a)
         call second%get_objectives(before_b, after_b)
-        call first%get_motion(rm_a, sm_a)
-        call second%get_motion(rm_b, sm_b)
+        call first%get_pose_update(rm_a, sm_a)
+        call second%get_pose_update(rm_b, sm_b)
         call assert_true(first%get_status() == second%get_status() .and. all(rot_a == rot_b) .and. &
             &all(shift_a == shift_b), 'cleared prior must preserve the prior-off pose and status')
         call assert_true(before_a == before_b .and. after_a == after_b .and. rm_a == rm_b .and. sm_a == sm_b, &
-            &'cleared prior must preserve prior-off objectives and motion')
+            &'cleared prior must preserve prior-off objectives and pose update')
         call first%kill
         call second%kill
         call calc%kill
     end subroutine test_prior_off_reuse
 
-    !> A tighter prior should limit shift motion; an exact seed must remain unchanged.
+    !> A tighter prior should limit shift pose update; an exact seed must remain unchanged.
     subroutine test_prior_widths_and_rollback()
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         type(cartft_calc) :: calc
         type(cartft_pose_opt) :: opt
         type(fixture_record) :: fix
         real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), seed(2), tight_motion, loose_motion, before, after
+        real(dp) :: rotation(3,3), shift(2), seed(2), tight_update, loose_update, before, after
         call build_test_volume(volume)
         call new_fixture(calc, volume, [2, TEST_BOX/2], 1., OBJFUN_EUCLID, fix)
         call opt%new(TEST_BOX, TEST_BOX, 5., 15., maxits=40)
@@ -230,16 +230,16 @@ contains
         call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
         call opt%get_objectives(before, after)
         call assert_true(any(opt%get_status() == [CARTFT_ACCEPTED, CARTFT_NO_IMPROVEMENT]), &
-            &'tight prior must return a valid optimization outcome before comparing motion')
+            &'tight prior must return a valid optimization outcome before comparing pose update')
         call assert_true(all(ieee_is_finite(rotation)) .and. all(ieee_is_finite(shift)) .and. &
             &ieee_is_finite(before) .and. ieee_is_finite(after), 'tight prior pose and data losses must remain finite')
-        tight_motion = sqrt(sum((shift-seed)**2))
+        tight_update = sqrt(sum((shift-seed)**2))
         rotation = fix%seed_rotation
         shift = seed
         call opt%set_shift_prior(10000._dp, calc%get_ptcl_power(1))
         call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
-        loose_motion = sqrt(sum((shift-seed)**2))
-        call assert_true(opt%get_status() == CARTFT_ACCEPTED .and. loose_motion > tight_motion, &
+        loose_update = sqrt(sum((shift-seed)**2))
+        call assert_true(opt%get_status() == CARTFT_ACCEPTED .and. loose_update > tight_update, &
             &'a loose prior should allow more shift movement than a tight prior')
         rotation = fix%truth_rotation
         shift = fix%truth_shift
@@ -704,7 +704,7 @@ contains
         type(cartft_pose_opt) :: opt
         type(fixture_record)  :: fix
         real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), objective_before, objective_after, rot_motion, shift_motion
+        real(dp) :: rotation(3,3), shift(2), objective_before, objective_after, rot_update, shift_update
         real(dp) :: sh_rot_step, sh_shift_step, sh_before, sh_after, jt_rot_step, jt_shift_step, jt_before, jt_after
         integer  :: sh_status, sh_niter, sh_att, sh_acc, sh_hits, jt_status, jt_niter, jt_att, jt_acc, jt_hits
         call build_small_volume(volume)
@@ -717,7 +717,7 @@ contains
         shift    = fix%seed_shift
         call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
         call opt%get_objectives(objective_before, objective_after)
-        call opt%get_motion(rot_motion, shift_motion)
+        call opt%get_pose_update(rot_update, shift_update)
         call get_stage_counts(opt, CARTFT_STAGE_SHIFT, sh_status, sh_niter, sh_att, sh_acc, sh_hits, &
             &sh_rot_step, sh_shift_step, sh_before, sh_after)
         call get_stage_counts(opt, CARTFT_STAGE_JOINT, jt_status, jt_niter, jt_att, jt_acc, jt_hits, &
@@ -729,9 +729,9 @@ contains
         call assert_true(sh_before == objective_before .and. jt_before == sh_after .and. jt_after == objective_after, &
             &'stage records do not chain the transaction objectives')
         call assert_true(sh_att > 0 .and. jt_att > 0 .and. sh_rot_step == 0._dp, 'stage records do not account for both stages')
-        call assert_true(abs(rot_motion - rotation_distance(rotation, fix%seed_rotation)) < MOTION_TOL .and. &
-            &abs(shift_motion - sqrt(sum((shift - fix%seed_shift)**2))) < 1.e-12_dp, &
-            &'reported motion is not the seed-to-result motion')
+        call assert_true(abs(rot_update - rotation_distance(rotation, fix%seed_rotation)) < POSE_UPDATE_TOL .and. &
+            &abs(shift_update - sqrt(sum((shift - fix%seed_shift)**2))) < 1.e-12_dp, &
+            &'reported pose update is not the seed-to-result pose update')
         ! the production route: the joint stage alone, from the seed
         call opt%new(SMALL_BOX, SMALL_BOX, 5., 15.)
         rotation = fix%seed_rotation
@@ -880,7 +880,7 @@ contains
     ! O6: the total rotation bound is athres_cont (degrees) and the total shift bound trs (native
     ! pixels); trs = 0 freezes the shifts as l_doshift=.false. does in the polar branch.
     ! Expected values: the seed shift unchanged under trs = 0 while the rotation improves; an
-    ! accepted motion within the rotation bound; the 1.8 degree seed error rejected under a
+    ! accepted pose update within the rotation bound; the 1.8 degree seed error rejected under a
     ! 0.5 degree bound only if no improving pose exists inside it.
     subroutine test_parameter_bounds()
         integer, parameter :: NATIVE_BOX = 2*SMALL_BOX
@@ -889,7 +889,7 @@ contains
         type(fixture_record)  :: fix
         type(ori)             :: o
         real, allocatable :: volume(:,:,:)
-        real(dp) :: rotation(3,3), shift(2), rot_motion, shift_motion
+        real(dp) :: rotation(3,3), shift(2), rot_update, shift_update
         real     :: seed_native(2), native_scale
         call build_small_volume(volume)
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
@@ -900,9 +900,9 @@ contains
         seed_native = o%get_2Dshift()
         call opt%new(NATIVE_BOX, SMALL_BOX, 0., 15.)
         call opt%refine(calc, 1, o)
-        call opt%get_motion(rot_motion, shift_motion)
+        call opt%get_pose_update(rot_update, shift_update)
         call assert_int(CARTFT_ACCEPTED, opt%get_status(), 'rotation-only solve under trs=0 was not accepted')
-        call assert_true(all(o%get_2Dshift() == seed_native) .and. shift_motion == 0._dp .and. rot_motion > 0._dp, &
+        call assert_true(all(o%get_2Dshift() == seed_native) .and. shift_update == 0._dp .and. rot_update > 0._dp, &
             &'trs=0 did not freeze the shift while refining the rotation')
         call assert_true(opt_stage_status(opt, CARTFT_STAGE_SHIFT) == CARTFT_NOT_ATTEMPTED, &
             &'trs=0 ran the shift-only stage')
@@ -912,10 +912,10 @@ contains
         call new_fixture(calc, volume, [2, SMALL_BOX/2 - 1], 1., OBJFUN_CC, fix)
         call opt%new(SMALL_BOX, SMALL_BOX, 5., 0.5)
         call opt%refine_pose(calc, 1, .true., 1, rotation, shift)
-        call opt%get_motion(rot_motion, shift_motion)
+        call opt%get_pose_update(rot_update, shift_update)
         call assert_true(any(opt%get_status() == [CARTFT_ACCEPTED, CARTFT_BOUND_REJECTED]), &
             &'rotation-bounded solve neither committed inside the bound nor rejected')
-        call assert_true(rot_motion <= 0.5_dp*DPI/180._dp + 1.e-9_dp, 'committed rotation exceeds the rotation bound')
+        call assert_true(rot_update <= 0.5_dp*DPI/180._dp + 1.e-9_dp, 'committed rotation exceeds the rotation bound')
         call assert_true(rotation_distance(rotation, fix%truth_rotation) > 1._dp*DPI/180._dp, &
             &'rotation-bounded solve reached a truth outside its bound')
         call o%kill

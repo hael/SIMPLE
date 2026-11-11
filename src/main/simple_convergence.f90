@@ -63,7 +63,7 @@ type convergence
     procedure :: append_stats
     procedure :: plot_projdirs
     procedure :: calc_pass_scores
-    procedure :: calc_polish_stats
+    procedure :: calc_cont_pose_stats
     procedure :: check_cont_conv
     procedure :: get
     procedure :: anneal_tail_start
@@ -378,11 +378,11 @@ contains
             call self%calc_pass_scores(os, sampled > sampled_lb .and. states > 0.5, .true., pose_stats_available)
         else
             call self%calc_pass_scores(os, mask, .false., pose_stats_available)
-            ! with the polish (pose_cont=yes) a Cartesian pass followed the discrete one over the
+            ! with the continuous pass (pose_cont=yes) a Cartesian pass followed the discrete one over the
             ! same sample: its attempts and improved fraction are reported beside the discrete
             ! statistics, which stay those of the search (C8, C19)
             if( trim(params%pose_cont) == 'yes' ) &
-                &call self%calc_polish_stats(os, sampled > sampled_lb .and. states > 0.5, pose_stats_available)
+                &call self%calc_cont_pose_stats(os, sampled > sampled_lb .and. states > 0.5, pose_stats_available)
         endif
         call os%stats('dist',       self%dist,       mask=mask)
         call os%stats('dist_inpl',  self%dist_inpl,  mask=mask)
@@ -613,7 +613,7 @@ contains
             endif
             deallocate( state_mi_joint, statepops )
         endif
-        ! a Cartesian pass reports frac = 100 and an overlap any small motion meets: its own rule
+        ! a Cartesian pass reports frac = 100 and an overlap any small pose update meets: its own rule
         if( params%l_cart_refine ) &
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
         ! the probability tables' posterior draws (refine=prob and prob_neigh): the committed pose is a draw from
@@ -1102,26 +1102,25 @@ contains
             return
         endif
         call os%stats('corr_cart', self%score, mask=mask)
-        call self%calc_polish_stats(os, mask, cart_stats)
+        call self%calc_cont_pose_stats(os, mask, cart_stats)
     end subroutine calc_pass_scores
 
-    !> The attempts (the particles of mask, the pass's sample) and improved percentage (the
-    !! improved flag among them) of the polish pass that followed a discrete pass; the score
-    !! stays the discrete pass's. polish_stats tells that they were computed.
-    subroutine calc_polish_stats( self, os, mask, polish_stats )
+    !> Count Cartesian pose attempts and accepted updates over the pass's sample.
+    !! The caller chooses the score and convergence rule for this pass.
+    subroutine calc_cont_pose_stats( self, os, mask, available )
         class(convergence), intent(inout) :: self
         class(oris),        intent(inout) :: os
         logical,            intent(in)    :: mask(:)
-        logical,            intent(out)   :: polish_stats
+        logical,            intent(out)   :: available
         real, allocatable :: improved(:)
         self%pose_cont_improved_pct = 0.
         self%pose_cont_attempts     = count(mask)
-        polish_stats                = .true.
+        available                  = .true.
         if( self%pose_cont_attempts < 1 ) return
         improved = os%get_all('pose_cont_improved')
         self%pose_cont_improved_pct = 100.*real(count(mask .and. improved > 0.5))/real(self%pose_cont_attempts)
         deallocate(improved)
-    end subroutine calc_polish_stats
+    end subroutine calc_cont_pose_stats
 
     subroutine append_stats( self, params, ostats )
         use CPlot2D_wrapper_module, only: plot2D

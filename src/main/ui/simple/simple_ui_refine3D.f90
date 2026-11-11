@@ -75,7 +75,7 @@ contains
         &'refine=cont and objfun=cc{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'pose_cont', 'binary', &
-        &'Continuous pose polish', &
+        &'Continuous pose refinement', &
         &'Follow every discrete iteration by a continuous Cartesian pose pass over the same '// &
         &'particles; not with refine=cont(yes|no){no}', '', &
         &.false., 'no', group="search", &
@@ -206,7 +206,7 @@ contains
         &before Euclidean refinement(cc|none){none}', '', .false., 'none', group='search', &
         &choices=ui_choices([character(len=4) :: 'cc', 'none']), visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'pose_cont', 'multi', 'Continuous pose refinement', &
-        &'Run a continuous Cartesian polishing pass after each discrete iteration(no|yes){no}', '', .false., 'no', &
+        &'Run a continuous Cartesian refinement pass after each discrete iteration(no|yes){no}', '', .false., 'no', &
         &group='search', choices=ui_choices([character(len=3) :: 'no', 'yes']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
@@ -259,7 +259,7 @@ contains
         &'Regularize shift or pose updates around each particle seed(none|shift|pose){none}', '', .false., 'none', &
         &group='search', choices=ui_choices([character(len=5) :: 'none', 'shift', 'pose']), visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_prior_shift_sigma', 'num', 'Fixed shift prior standard deviation', &
-        &'Native pixels; zero estimates the width from all active stored shift increments', '', .false., 0., &
+        &'Per-axis standard deviation in A; zero estimates the width from all active stored shift increments', '', .false., 0., &
         &group='search', visibility=UI_VIS_ADVANCED)
         call refine3D_local%add_input(UI_SRCH, 'cont_prior_rot_sigma', 'num', 'Rotation prior standard deviation', &
         &'Fixed per-axis standard deviation in degrees; required for cont_prior=pose', '', .false., 0., &

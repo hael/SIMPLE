@@ -1220,16 +1220,16 @@ particles of every populated state are stable. The run converges when
 consecutive passing iterations have together sampled 90% of the active
 particles (`sampled` at or above the generation the streak began with); a
 failing iteration resets the streak, and `minits` and `maxits` apply as for
-every mode. A rejected transaction keeps the seed, so zero motion alone never
+every mode. A rejected transaction keeps the seed, so a zero pose update alone never
 counts as convergence. The three thresholds are parameters with these values as defaults:
 `cont_conv_rot` (degrees), `cont_conv_shift` (A) and `cont_conv_frac` (the
 stable fraction and the streak coverage).
 
-Polish: `pose_cont=yes` in a discrete mode makes the iteration strategy follow
+Continuous followup: `pose_cont=yes` in a discrete mode makes the iteration strategy follow
 every discrete pass with a `refine=cont` pass over the same particle sample
 (`sample4update_reprod`), in shared memory and distributed. The discrete pass
-then writes no partial reconstructions; the polish writes them, so the
-iteration reconstructs once, from the polished poses. The polish writes pose,
+then writes no partial reconstructions; the continuous pass writes them, so the
+iteration reconstructs once, from the refined poses. The continuous pass writes pose,
 `corr_cart`, the improved flag and, under `euclid`, sigma2 into the sigma2
 transaction the discrete pass opened: it starts from the discrete pass's
 residual rows and replaces those of the particles it evaluates, so a particle
@@ -1237,12 +1237,12 @@ whose Cartesian slot is invalid keeps the residual of its discrete pose. It
 leaves `corr` and the convergence fields of the discrete search (`dist`,
 `dist_inpl`, `shincarg`, `mi_proj`, `mi_state`, `frac`, `frac_greedy`), so
 convergence keeps measuring the discrete search. `refine=cont` with `pose_cont=yes` is the
-internal name of the polish pass and is refused on the command line.
+internal name of the continuous followup pass and is refused on the command line.
 
 Tests: `unit_cart_align3D` (`cart calculator`, `pose optimizer`,
 `pose strategy`, `pose statistics`), `lib_cart_align3D` (1 000 simulated 1JYX
 particles through `strategy3D_cont`), and the high-level gate
-`cont_refine3D_1jxy` (shared memory, distributed, `refine3D_local`, auto and the polish),
+`cont_refine3D_1jxy` (shared memory, distributed, `refine3D_local`, auto and the continuous pass),
 all gated on the simulation's ground-truth orientations.
 
 `refine3D_local` is the single-state continuous continuation command. It uses
@@ -1564,7 +1564,7 @@ writer's own sections follow, as before: `BENCHMARK CONTEXT` and `TIMINGS (s)`,
 plus `THREAD-SECONDS` for the 2D and 3D searches (with the fill's regions under the probabilistic modes) and the class sums
 (busy time summed over the team, the region's wall time, the team size and
 the load balance), and `RELATIVE TIMINGS (%)` where a
-writer reports them. A Cartesian pass (`refine=cont`, the polish) adds
+writer reports them. A Cartesian pass (`refine=cont`, the Cartesian followup) adds
 `CONTINUOUS POSE WORK` to its `REFINE3D` record: the solves by `CARTFT_*`
 status, LM iterations, trial evaluations, accepted steps, bound hits,
 calculator passes (the sigma2 residual is the committed evaluation's, with no

@@ -65,7 +65,7 @@ contains
         call params%new(cline, silent=.true.)
         call assert_char('pose', trim(params%cont_prior), 'pose prior survives parameter construction')
         call assert_real(5., params%cont_prior_rot_sigma, 0., 'rotation prior width survives construction')
-        call assert_real(2., params%cont_prior_shift_sigma, 0., 'fixed shift prior width survives construction')
+        call assert_real(2., params%cont_prior_shift_sigma, 0., 'fixed shift prior width stays in Angstroms through construction')
         call cline%kill()
     end subroutine test_cont_prior_binding
 

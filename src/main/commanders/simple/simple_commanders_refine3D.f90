@@ -95,7 +95,7 @@ contains
         class(cmdline), allocatable        :: cline_boot
         type(string)                       :: pose_cont_arg, refine_arg, init_vol, pose_init_refs(1), pose_init_checkpoint(1)
         integer                            :: maxits_user, nactive
-        logical                            :: l_polish, l_have_init_vol, l_external_input, l_maxits_defined
+        logical                            :: l_followup, l_have_init_vol, l_external_input, l_maxits_defined
         logical                            :: l_local_polar
         integer                            :: box_crop
         real                               :: smpd_crop
@@ -105,7 +105,7 @@ contains
         if( l_local ) workflow_label = 'REFINE3D_LOCAL'
         l_external_input = cline%defined('vol1')
         l_maxits_defined = cline%defined('maxits')
-        l_polish      = .false.
+        l_followup      = .false.
         l_local_polar = .false.
         if( l_local )then
             call cline%set('prg', 'refine3D_local')
@@ -161,7 +161,7 @@ contains
             select case(pose_cont_arg%to_char())
                 case('no')
                 case('yes')
-                    l_polish = .true.
+                    l_followup = .true.
                 case('only')
                     THROW_HARD('pose_cont=only is retired; use prg=refine3D_local without pose_cont')
                 case DEFAULT
@@ -293,7 +293,7 @@ contains
             call cline%set('refine',        'prob_neigh')
             if( .not. cline%defined('nspace')     ) call cline%set('nspace',     20000)
             if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', 500)
-            if( l_polish ) call cline%set('pose_cont', 'yes')
+            if( l_followup ) call cline%set('pose_cont', 'yes')
         endif
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)

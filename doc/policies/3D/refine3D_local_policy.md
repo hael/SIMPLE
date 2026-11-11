@@ -44,6 +44,19 @@ without merging reference halves. Local controls include `athres_cont`, `trs`, `
 `cont_conv_frac`, `nsample`, iteration limits and the existing backend controls.
 An explicit `trs` is retained; an absent value uses the existing derived bound.
 
+Optional `cont_prior=shift|pose` regularizes the Cartesian joint solve;
+`none` is the default. A positive `cont_prior_shift_sigma` is the fixed per-axis
+standard deviation in Angstroms, converted to native pixels using `smpd` before
+the optimizer's crop conversion. Zero estimates the width from all active
+stored shift increments with the existing native-pixel floor. `pose` also
+requires an explicit positive `cont_prior_rot_sigma` in degrees. These controls
+are not supported by the polar route or `pose_cont=yes`. The current widths
+and angle bounds do not derive from a posterior. The
+[done record](../../implementation_notes/completed/refine3d_local_cartesian_priors_done.md)
+holds the delivered contract and evidence; the
+[todo record](../../implementation_notes/planned/refine3d_local_cartesian_priors_todo.md)
+holds the attached concerns, response plan and proposed posterior-based coupling.
+
 The commands share startup preparation through `refine3D_workflow_controller`
 and genuinely common UI inputs. Their UI constructors add command-specific
 controls. The commander retains defaults, CLI validation, parameter construction,

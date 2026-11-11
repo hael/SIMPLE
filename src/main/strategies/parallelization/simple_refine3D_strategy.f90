@@ -80,7 +80,7 @@ end type refine3D_bench_state
 type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(refine3D_bench_state), private :: bench
     type(convergence) :: conv
-    type(parameters), allocatable :: params_polish !< the parameters of the polish pass (pose_cont=yes)
+    type(parameters), allocatable :: params_followup !< the parameters of the continuous followup pass (pose_cont=yes)
     real, private :: requested_trs = 0.
     logical, private :: requested_doshift = .false.
     logical :: l_sigma
@@ -536,26 +536,26 @@ contains
     end function stage_refine3D_local_chain
 
 
-    !> The polish of C8 and C19 (pose_cont=yes) is a refine=cont pass this strategy schedules
+    !> The continuous pass of C8 and C19 (pose_cont=yes) is a refine=cont pass this strategy schedules
     !! after every discrete pass over the same particle sample (Phase 9 of the pose_cont
     !! refactoring): refine=cont with pose_cont=yes on the command line of refine3D names that
     !! internal pass.
-    subroutine check_polish_request( params )
+    subroutine check_followup_request( params )
         type(parameters), intent(in) :: params
-        if( params%l_cont_polish ) &
+        if( params%l_cont_followup ) &
             &THROW_HARD('pose_cont=yes follows a discrete refine mode with a continuous pass; refine=cont runs the continuous pass alone')
-    end subroutine check_polish_request
+    end subroutine check_followup_request
 
-    !> Whether a polish pass follows the discrete pass of this iteration: pose_cont=yes in a
+    !> Whether a continuous followup pass follows the discrete pass of this iteration: pose_cont=yes in a
     !! mode that searches (a residual-only sigma pass and an evaluation search nothing).
-    logical function polish_follows( params )
+    logical function continuous_pass_follows( params )
         type(parameters), intent(in) :: params
-        polish_follows = trim(params%pose_cont) == 'yes' .and. .not. params%l_cart_refine
+        continuous_pass_follows = trim(params%pose_cont) == 'yes' .and. .not. params%l_cart_refine
         select case(trim(params%refine))
             case('eval','sigma')
-                polish_follows = .false.
+                continuous_pass_follows = .false.
         end select
-    end function polish_follows
+    end function continuous_pass_follows
 
     !> Remove refine3D matcher-only options before invoking child workflows.
     !! The parent and distributed matcher workers retain these options.
@@ -1139,7 +1139,7 @@ contains
         self%requested_doshift = params%l_doshift
         ! Child command lines stay in the execution directory owned by this run.
         call cline%set('mkdir', 'no')
-        call check_polish_request(params)
+        call check_followup_request(params)
         call check_cls3D_field(params, build)
         ! startit
         startit = 1
@@ -1216,10 +1216,10 @@ contains
         logical,                        intent(out)   :: converged
         type(prob_readout)                :: readout
         type(cmdline)                     :: cline_volassemble
-        type(cmdline)                     :: cline_polish
+        type(cmdline)                     :: cline_followup
         integer(timer_int_kind)           :: t_recphase
         integer                           :: state, iter, extr_iter
-        logical                           :: l_write_partial_recs, l_polish, l_force_full_first
+        logical                           :: l_write_partial_recs, l_followup, l_force_full_first
         type(string)                      :: volname
         601 format(A,1X,F12.3)
         if( L_BENCH_GLOB )then
@@ -1259,7 +1259,7 @@ contains
         call materialize_reprojection_model(params, cline, build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! the probabilistic modes run their pipeline inside refine3D_exec on this project (the sample, the fill, the
-        ! draws, the polish); the matching low-pass limit the matcher starts from is the command line's, as it was
+        ! draws, the continuous pass); the matching low-pass limit the matcher starts from is the command line's, as it was
         ! when the pre-step ran on its own parameters
         if( L_BENCH_GLOB )then
             self%bench%rt_init = toc(self%bench%t_init)
@@ -1283,34 +1283,34 @@ contains
             call prepare_canonical_sigma_update(params, build)
             if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
-        ! with the polish (pose_cont=yes) one reconstruction per iteration comes from the polished
+        ! with the continuous pass (pose_cont=yes) one reconstruction per iteration comes from the refined
         ! poses: the discrete pass writes no partial reconstructions
-        l_polish = polish_follows(params)
-        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_polish, &
+        l_followup = continuous_pass_follows(params)
+        call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs .and. .not. l_followup, &
             &readout=readout)
         call store_state_readout(self%conv, readout)
-        if( l_polish )then
-            ! The polish consumes the committed poses and sample on this same project.
-            cline_polish = cline
-            call cline_polish%set('refine',    'cont')
-            call cline_polish%set('pose_cont', 'yes')
-            call cline_polish%set('shift_sigma', 0.) ! the map does not run in the Cartesian pass
-            if( .not. allocated(self%params_polish) )then
-                allocate(self%params_polish)
-                call self%params_polish%new(cline_polish)
+        if( l_followup )then
+            ! The continuous pass consumes the committed poses and sample on this same project.
+            cline_followup = cline
+            call cline_followup%set('refine',    'cont')
+            call cline_followup%set('pose_cont', 'yes')
+            call cline_followup%set('shift_sigma', 0.) ! the map does not run in the Cartesian pass
+            if( .not. allocated(self%params_followup) )then
+                allocate(self%params_followup)
+                call self%params_followup%new(cline_followup)
             else
                 call seed_rnd
             endif
-            self%params_polish%which_iter = iter
-            self%params_polish%extr_iter  = extr_iter
-            self%params_polish%outfile    = params%outfile
-            self%params_polish%update_frac   = params%update_frac
-            self%params_polish%l_update_frac = params%l_update_frac
-            self%params_polish%l_trail_rec   = params%l_trail_rec
-            call build%build_strategy3D_tbox(self%params_polish)
-            ! no new sigma2 transaction: the polish rewrites the discrete pass's ranges from them
-            call refine3D_exec(self%params_polish, build, cline_polish, iter, converged, l_write_partial_recs)
-            call cline_polish%kill
+            self%params_followup%which_iter    = iter
+            self%params_followup%extr_iter     = extr_iter
+            self%params_followup%outfile       = params%outfile
+            self%params_followup%update_frac   = params%update_frac
+            self%params_followup%l_update_frac = params%l_update_frac
+            self%params_followup%l_trail_rec   = params%l_trail_rec
+            call build%build_strategy3D_tbox(self%params_followup)
+            ! no new sigma2 transaction: the continuous pass rewrites the discrete pass's ranges from them
+            call refine3D_exec(self%params_followup, build, cline_followup, iter, converged, l_write_partial_recs)
+            call cline_followup%kill
         endif
 
         call write_iteration_states(params, build)
@@ -1461,7 +1461,7 @@ contains
     subroutine inmem_cleanup(self, params)
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(in)    :: params
-        if( allocated(self%params_polish) ) deallocate(self%params_polish)
+        if( allocated(self%params_followup) ) deallocate(self%params_followup)
         call self%startup%kill
     end subroutine inmem_cleanup
 
@@ -1489,7 +1489,7 @@ contains
         self%l_multistates = cline%defined('nstates')
         ! init project
         call build%init_params_and_build_spproj(cline, params)
-        call check_polish_request(params)
+        call check_followup_request(params)
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -1713,7 +1713,7 @@ contains
         type(prob_readout)     :: readout
         real    :: lp_cone
         integer :: state, iter, nptcls_smpl, nthr_here, nthr_glob_here, nthr_commit
-        logical :: l_polish, l_force_full_first
+        logical :: l_followup, l_force_full_first
         if( L_BENCH_GLOB )then
             call reset_refine3D_bench(self%bench)
             self%bench%t_init = tic()
@@ -1786,12 +1786,12 @@ contains
             call prepare_canonical_sigma_update(params, build)
             if( L_BENCH_GLOB ) self%bench%rt_sigma_prep = toc(self%bench%t_sigma_prep)
         endif
-        ! schedule distributed jobs; with the polish (pose_cont=yes) one reconstruction per
-        ! iteration comes from the polished poses, so the discrete pass writes no partial
+        ! schedule distributed jobs; with the continuous pass (pose_cont=yes) one reconstruction per
+        ! iteration comes from the refined poses, so the discrete pass writes no partial
         ! reconstructions
-        l_polish       = polish_follows(params)
+        l_followup     = continuous_pass_follows(params)
         job_descr_pass = self%job_descr
-        if( l_polish ) call job_descr_pass%set('volrec', 'no')
+        if( l_followup ) call job_descr_pass%set('volrec', 'no')
         call self%qenv%gen_scripts_and_schedule_jobs( job_descr_pass, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! the parts' readouts of the probabilistic assignment, merged in part order and reported as the owner's
         if( params%l_prob_align_mode )then
@@ -1801,9 +1801,9 @@ contains
         ! merge alignment docs (a residual-only sigma pass, refine=sigma,
         ! searches nothing and writes none)
         if( trim(params%refine) /= 'sigma' ) call build%spproj%merge_algndocs(params%nptcls, params%nparts, &
-            &params%oritype, ALGN_FBODY, write=l_polish)
-        if( l_polish )then
-            ! the polish pass (C8, C19): refine=cont over the discrete pass's particle sample (the
+            &params%oritype, ALGN_FBODY, write=l_followup)
+        if( l_followup )then
+            ! the continuous followup pass (C8, C19): refine=cont over the discrete pass's particle sample (the
             ! workers reproduce it from the merged project), from the poses it committed, against
             ! the Cartesian references this iteration materialized; it writes the partial
             ! reconstructions and, under euclid, rewrites the discrete pass's sigma2 ranges of the
@@ -1934,7 +1934,7 @@ contains
             case('sigma')
                 ! no convergence report for a residual-only pass: it merges
                 ! no alignment documents, so the master's field would be
-                ! reported against itself (stale sampled flags, zero motion)
+                ! reported against itself (stale sampled flags, zero pose update)
             case DEFAULT
                 if( trim(params%volrec).eq.'yes' ) call refresh_resolution_fields_from_fsc(params, build)
                 converged = self%conv%check_conv3D(params, cline, build%spproj_field, params%msk)

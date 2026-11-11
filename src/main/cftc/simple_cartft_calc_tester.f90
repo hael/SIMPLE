@@ -1,6 +1,6 @@
 !@descr: unit tests for the Cartesian Fourier calculator of continuous pose refinement (simple_cartft_calc)
 ! Particle preparation, objectives and gradients, the gather against the PFTC projector, reference
-! volumes and their files, batch preparation, the sigma owner and its polish fallback, the
+! volumes and their files, batch preparation, the sigma owner and its continuous pass fallback, the
 ! per-shell sigma2 against the polar calculator (noise-only, model power, and the global sigma2 of
 ! noisy particles) and the canonical sigma2 round trip. Test ids (E*, N*) are those of the
 ! pose_cont refactoring plan, section 10.
@@ -104,8 +104,8 @@ contains
         call test_sigma_owner()
         write(*,'(A)') 'test_polar_sigma_agreement'
         call test_polar_sigma_agreement()
-        write(*,'(A)') 'test_polish_sigma_fallback'
-        call test_polish_sigma_fallback()
+        write(*,'(A)') 'test_followup_sigma_fallback'
+        call test_followup_sigma_fallback()
         write(*,'(A)') 'test_polar_sigma_signal'
         call test_polar_sigma_signal()
         write(*,'(A)') 'test_polar_sigma_group'
@@ -2075,20 +2075,20 @@ contains
         deallocate(p, cline)
     end subroutine test_polar_sigma_agreement
 
-    ! N30: a polish pass starts its sigma2 rows from the range the discrete pass wrote into the open
-    ! transaction (prep_sigmas_objfun with l_cont_polish), overlays the residual of a particle whose
+    ! N30: a continuous followup pass starts its sigma2 rows from the range the discrete pass wrote into the open
+    ! transaction (prep_sigmas_objfun with l_cont_followup), overlays the residual of a particle whose
     ! Cartesian slot is valid and keeps the discrete row of one whose slot is invalid; the candidate
     ! the transaction commits holds no row of the committed generation.
-    subroutine test_polish_sigma_fallback()
+    subroutine test_followup_sigma_fallback()
         integer, parameter :: NP = 3, KFROMTO(2) = [2, 6], NSHELL = TEST_BOX/2
         real,    parameter :: COMMITTED_VALUE = 5.
-        character(len=*), parameter :: COMMITTED = 'tmp_cartft_polish_sigma2_state.bin'
+        character(len=*), parameter :: COMMITTED = 'tmp_cartft_followup_sigma2_state.bin'
         type(cartft_calc)         :: calc
         class(parameters), allocatable, target :: params
         class(builder),    allocatable, target :: build
         type(ctfparams)           :: no_ctf
         type(string)              :: candidate, range_path
-        real, allocatable         :: volume(:,:,:), polished(:)
+        real, allocatable         :: volume(:,:,:), refined(:)
         real(real32), allocatable :: rows(:,:)
         real(real32) :: discrete(NSHELL,NP)
         complex      :: observed(-TEST_BOX/2:TEST_BOX/2,-TEST_BOX/2:TEST_BOX/2)
@@ -2109,9 +2109,9 @@ contains
         end do
         call sigma2_state_write_local_range(range_path%to_char(), 2_int64, FIXTURE_DIGEST, 1, discrete, 1, NSHELL, status, message)
         call assert_int(0, status, 'write the discrete range: '//trim(message))
-        ! the polish: slot 1 prepared for particle 2; slot 2, never prepared, for particle 3
+        ! the continuous pass: slot 1 prepared for particle 2; slot 2, never prepared, for particle 3
         params%kfromto       = KFROMTO
-        params%l_cont_polish = .true.
+        params%l_cont_followup = .true.
         call prep_sigmas_objfun(params, build)
         call build_test_volume(volume)
         call calc%new(1, TEST_BOX, 2)
@@ -2124,19 +2124,19 @@ contains
         call set_euclid_slot(calc, 1, observed, no_ctf, sigma2, KFROMTO)
         call build%esig%calc_sigma2(calc, 1, 2, 1, .true., committed_pose, [0.1_dp, 0._dp])
         call build%esig%calc_sigma2(calc, 2, 3, 1, .true., committed_pose, [0._dp, 0._dp])
-        polished = build%esig%get_sigma2_part(2)
+        refined = build%esig%get_sigma2_part(2)
         call build%esig%write_sigma2
         call sigma2_state_assemble_candidate(COMMITTED, candidate%to_char(), [range_path], [(.true., i = 1, NP)], &
             &[(.true., i = 1, NP)], [(modulo(i-1, 2), i = 1, NP)], status, message)
-        call assert_int(0, status, 'commit the polish range: '//trim(message))
+        call assert_int(0, status, 'commit the continuous pass range: '//trim(message))
         call sigma2_state_read_particles(candidate%to_char(), 1, NP, rows, status, message)
         call assert_int(0, status, 'read the candidate rows: '//trim(message))
-        call assert_true(all(rows(:,1) == discrete(:,1)), 'the polish changed the row of a particle it did not evaluate')
-        call assert_true(all(abs(rows(KFROMTO(1):KFROMTO(2),2) - polished) <= 1.e-6*maxval(polished)), &
-            &'the polish row is not the Cartesian residual inside the band')
+        call assert_true(all(rows(:,1) == discrete(:,1)), 'the continuous pass changed the row of a particle it did not evaluate')
+        call assert_true(all(abs(rows(KFROMTO(1):KFROMTO(2),2) - refined) <= 1.e-6*maxval(refined)), &
+            &'the continuous pass row is not the Cartesian residual inside the band')
         outside_band = all(rows(:KFROMTO(1)-1,2) == discrete(:KFROMTO(1)-1,2)) .and. &
             &all(rows(KFROMTO(2)+1:,2) == discrete(KFROMTO(2)+1:,2))
-        call assert_true(outside_band, 'the polish row outside the band is not the discrete residual')
+        call assert_true(outside_band, 'the continuous pass row outside the band is not the discrete residual')
         call assert_true(all(rows(:,3) == discrete(:,3)), 'an invalid Cartesian slot did not keep the discrete residual')
         call assert_true(all(rows /= real(COMMITTED_VALUE, real32)), 'the candidate holds a row of the committed generation')
         call build%esig%kill
@@ -2144,7 +2144,7 @@ contains
         call build%spproj%kill
         call remove_sigma2_files(COMMITTED, 2)
         deallocate(params, build)
-    end subroutine test_polish_sigma_fallback
+    end subroutine test_followup_sigma_fallback
 
     ! N31: model amplitude and CTF handling, polar against Cartesian. One volume gives both
     ! references through their production projections; a noise-free particle with an astigmatic CTF
@@ -2680,7 +2680,7 @@ contains
         params%cc_objfun     = OBJFUN_EUCLID
         params%cc_emit_sigma = 'no'
         params%l_cart_refine = .true.
-        params%l_cont_polish = .false.
+        params%l_cont_followup = .false.
         params%fromp         = 1
         params%top           = np
         params%part          = 1

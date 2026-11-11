@@ -302,8 +302,8 @@ contains
         if( any(cnt_greedy > 0) .and. any(cnt_all > 0) )then
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
-        ! a polish pass leaves the greedy fraction of the discrete search it follows
-        if( .not. p_ptr%l_cont_polish ) call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
+        ! a continuous followup pass leaves the greedy fraction of the discrete search it follows
+        if( .not. p_ptr%l_cont_followup ) call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
         rt_sigma2_write = 0.0
         if( ctrl%do_emit_sigma )then
             if( ctrl%do_bench ) t_sigma2_write = tic()
@@ -484,8 +484,8 @@ contains
             integer, allocatable, intent(out) :: pinds_local(:)
             integer,              intent(out) :: nptcls
             if( allocated(pinds_local) ) deallocate(pinds_local)
-            if( p_ptr%l_cont_polish )then
-                ! the polish pass refines the particle sample of the discrete pass it follows
+            if( p_ptr%l_cont_followup )then
+                ! the continuous followup pass refines the particle sample of the discrete pass it follows
                 call b_ptr%spproj_field%sample4update_reprod([p_ptr%fromp,p_ptr%top], nptcls, pinds_local, &
                     &allow_empty=p_ptr%l_distr_worker)
             else if( ctrl%do_prob_align )then
