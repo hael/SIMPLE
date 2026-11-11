@@ -25,6 +25,7 @@ use simple_type_defs, only: canonical_phshift
 use simple_image,     only: image
 use simple_oris,      only: oris
 use simple_fileio,    only: simple_getcwd
+use simple_syslib,    only: simple_rmfile
 use simple_forked_process, only: forked_process, FORK_STATUS_FAILED, FORK_STATUS_STOPPED
 implicit none
 
@@ -72,6 +73,7 @@ contains
         call test_relion_write_corrected_micrographs_star()
         call test_relion_write_micrographs_star()
         call test_relion_write_particles2D_star()
+        call test_relion_export_names()
         call test_relion_phase_shift()
         call test_split_dataline_terminal_field()
         call test_resolve_stack_path()
@@ -401,7 +403,6 @@ contains
     subroutine test_relion_find_movienames()
         type(relion_project) :: rp
         type(sp_project)     :: proj
-        type(cmdline)        :: cl
         integer              :: i
         write(*,'(A)') "test_relion_find_movienames"
         ! create 3 fake micrographs with intg keys
@@ -410,10 +411,13 @@ contains
             call proj%os_mic%set(i, "intg", "path/mic"//int2str(i)//"_intg.mrc")
             call proj%os_mic%set_state(i, 1)
         end do
-        call rp%find_movienames(cl, proj)
+        call rp%find_movienames(proj)
         call assert_true(allocated(rp%movienames), "movienames allocated")
         call assert_int(3, size(rp%movienames), "3 movienames detected")
         call assert_char("mic1", rp%movienames(1)%to_char(), "first basename ok")
+        call rp%find_movienames(proj)
+        call assert_int(3, size(rp%movienames), "movienames can be rebuilt")
+        call assert_char("mic1", rp%movienames(1)%to_char(), "rebuilt basename ok")
     end subroutine test_relion_find_movienames
 
     !-----------------------------------------------------------------------
@@ -422,7 +426,6 @@ contains
     subroutine test_relion_epu_tiltgroups()
         type(relion_project) :: rp
         type(sp_project)     :: proj
-        type(cmdline)        :: cl
         integer              :: i
         write(*,'(A)') "test_relion_epu_tiltgroups"
         call proj%os_mic%new(4, .false.)
@@ -434,8 +437,8 @@ contains
         do i=1,4
             call proj%os_mic%set_state(i,1)
         end do
-        call rp%find_movienames(cl, proj)
-        call rp%generate_epu_tiltgroups(cl, proj)
+        call rp%find_movienames(proj)
+        call rp%generate_epu_tiltgroups()
         call assert_int(3, rp%opticsgroups, "3 distinct EPU tilt groups")
         call assert_int(1, rp%moviegroup(1), "AA group id=1")
         call assert_int(1, rp%moviegroup(2), "AA group id=1 again")
@@ -449,7 +452,6 @@ contains
     subroutine test_relion_single_tiltgroup()
         type(relion_project) :: rp
         type(sp_project)     :: proj
-        type(cmdline)        :: cl
         integer              :: i
         write(*,'(A)') "test_relion_single_tiltgroup"
         call proj%os_mic%new(3, .false.)
@@ -457,8 +459,8 @@ contains
             call proj%os_mic%set(i,"intg","abc"//int2str(i)//".mrc")
             call proj%os_mic%set_state(i,1)
         end do
-        call rp%find_movienames(cl,proj)
-        call rp%generate_single_tiltgroup(cl,proj)
+        call rp%find_movienames(proj)
+        call rp%generate_single_tiltgroup()
         call assert_int(1, rp%opticsgroups, "single group")
         do i=1,3
             call assert_int(1, rp%moviegroup(i), "all assigned to group 1")
@@ -480,8 +482,8 @@ contains
             call proj%os_mic%set_state(i,1)
         end do
         call cl%set("tiltgroupmax", 1.0)   ! force splitting after more than 1 mic/group
-        call rp%find_movienames(cl,proj)
-        call rp%generate_single_tiltgroup(cl,proj)
+        call rp%find_movienames(proj)
+        call rp%generate_single_tiltgroup()
         call rp%allocate_opticsgroups(cl,proj)
         ! Now 3 mics, tiltgroupmax=1 ⇒ expect splitting:
         call assert_true(rp%opticsgroups >= 2, "splitting opticsgroups triggered")
@@ -493,6 +495,7 @@ contains
     subroutine test_relion_write_corrected_micrographs_star()
         type(relion_project)      :: rp
         type(sp_project)          :: proj
+        class(sp_project), allocatable :: proj_without_state
         type(cmdline)             :: cl
         type(starfile_table_type) :: checktbl
         type(string)              :: fname
@@ -524,6 +527,17 @@ contains
         call assert_true(ok >= 0,"optics block exists")
 
         call starfile_table__delete(checktbl)
+        allocate(sp_project :: proj_without_state)
+        call proj_without_state%os_mic%new(1, .false.)
+        call proj_without_state%os_mic%set(1, 'intg', 'second_intg.mrc')
+        call rp%write_corrected_micrographs_star(cl, proj_without_state)
+        call starfile_table__new(checktbl)
+        call starfile_table__read(checktbl, fname, 'micrographs')
+        ok = int(starfile_table__firstobject(checktbl))
+        call assert_true(ok >= 0, 'corrected writer resets state flag on next call')
+        call starfile_table__delete(checktbl)
+        call proj_without_state%kill
+        deallocate(proj_without_state)
     end subroutine test_relion_write_corrected_micrographs_star
 
     !-----------------------------------------------------------------------
@@ -532,6 +546,7 @@ contains
     subroutine test_relion_write_micrographs_star()
         type(relion_project)      :: rp
         type(sp_project)          :: proj
+        class(sp_project), allocatable :: proj_without_state
         type(cmdline)             :: cl
         type(starfile_table_type) :: checktbl
         type(string)              :: fname
@@ -563,6 +578,17 @@ contains
          ok = int(starfile_table__firstobject(checktbl))
         call assert_true(ok >= 0, "micrographs table exists")
         call starfile_table__delete(checktbl)
+        allocate(sp_project :: proj_without_state)
+        call proj_without_state%os_mic%new(1, .false.)
+        call proj_without_state%os_mic%set(1, 'intg', 'second_intg.mrc')
+        call rp%write_micrographs_star(cl, proj_without_state)
+        call starfile_table__new(checktbl)
+        call starfile_table__read(checktbl, fname, 'micrographs')
+        ok = int(starfile_table__firstobject(checktbl))
+        call assert_true(ok >= 0, 'micrograph writer resets state flag on next call')
+        call starfile_table__delete(checktbl)
+        call proj_without_state%kill
+        deallocate(proj_without_state)
     end subroutine test_relion_write_micrographs_star
 
     !-----------------------------------------------------------------------
@@ -571,6 +597,7 @@ contains
     subroutine test_relion_write_particles2D_star()
         type(relion_project)      :: rp
         type(sp_project)          :: proj
+        class(sp_project), allocatable :: proj_without_state
         type(cmdline)             :: cl
         type(starfile_table_type) :: checktbl
         type(string)              :: fname
@@ -610,7 +637,95 @@ contains
          ok = int(starfile_table__firstobject(checktbl))
         call assert_true(ok >= 0, "particles table exists")
         call starfile_table__delete(checktbl)
+        allocate(sp_project :: proj_without_state)
+        call proj_without_state%os_stk%new(1, .false.)
+        call proj_without_state%os_stk%set(1, 'stk', 'second.mrcs')
+        call proj_without_state%os_ptcl2D%new(1, .true.)
+        call proj_without_state%os_ptcl2D%set(1, 'stkind', 1)
+        call rp%write_particles2D_star(cl, proj_without_state)
+        call starfile_table__new(checktbl)
+        call starfile_table__read(checktbl, fname, 'particles')
+        ok = int(starfile_table__firstobject(checktbl))
+        call assert_true(ok >= 0, 'particle writer resets state flags on next call')
+        call starfile_table__delete(checktbl)
+        call proj_without_state%kill
+        deallocate(proj_without_state)
     end subroutine test_relion_write_particles2D_star
+
+    subroutine test_relion_export_names()
+        type(relion_project)      :: rp
+        type(sp_project)          :: proj
+        type(cmdline)             :: cl
+        type(starfile_table_type) :: table
+        character(:), allocatable :: name, mic_name
+        logical :: found
+        integer :: obj
+        character(len=*), parameter :: MIC_SOURCE  = TMPDIR//'/relion_alias_intg.mrc'
+        character(len=*), parameter :: META_SOURCE = TMPDIR//'/relion_alias.star'
+        character(len=*), parameter :: STK_SOURCE  = TMPDIR//'/ptcls_from_relion_alias_intg.mrcs'
+
+        call write_textfile(MIC_SOURCE, 'micrograph')
+        call write_textfile(META_SOURCE, 'metadata')
+        call write_textfile(STK_SOURCE, 'stack')
+        call proj%os_mic%new(1, .false.)
+        call proj%os_mic%set(1, 'intg', MIC_SOURCE)
+        call proj%os_mic%set(1, 'mc_starfile', META_SOURCE)
+        call proj%os_mic%set_state(1, 1)
+        call proj%os_stk%new(1, .false.)
+        call proj%os_stk%set(1, 'stk', STK_SOURCE)
+        call proj%os_stk%set_state(1, 1)
+        call proj%os_ptcl2D%new(1, .true.)
+        call proj%os_ptcl2D%set(1, 'stkind', 1)
+        call proj%os_ptcl2D%set_state(1, 1)
+        rp%opticsgroups = 1
+        call cl%set('optics_offset', 0.)
+        call cl%set('reliongroups', 0.)
+
+        call rp%write_corrected_micrographs_star(cl, proj)
+        call rp%write_micrographs_star(cl, proj)
+        call rp%write_particles2D_star(cl, proj)
+
+        call starfile_table__new(table)
+        call starfile_table__read(table, string('micrographs_corrected.star'), 'micrographs')
+        obj = int(starfile_table__firstobject(table))
+        call assert_true(obj >= 0, 'RELION names: corrected micrograph row exists')
+        found = starfile_table__getValue_string(table, EMDL_MICROGRAPH_METADATA_NAME, name)
+        call assert_true(found, 'RELION names: motion metadata field exists')
+        if( found ) call assert_char('micrographs/relion_alias.star', name, 'RELION names: metadata alias')
+        call starfile_table__delete(table)
+
+        call starfile_table__new(table)
+        call starfile_table__read(table, string('micrographs.star'), 'micrographs')
+        obj = int(starfile_table__firstobject(table))
+        call assert_true(obj >= 0, 'RELION names: micrograph row exists')
+        found = starfile_table__getValue_string(table, EMDL_MICROGRAPH_NAME, mic_name)
+        call assert_true(found, 'RELION names: micrograph field exists')
+        if( .not. found ) mic_name = ''
+        if( found ) call assert_char('micrographs/relion_alias.mrc', mic_name, 'RELION names: micrograph alias')
+        call starfile_table__delete(table)
+
+        call starfile_table__new(table)
+        call starfile_table__read(table, string('particles2D.star'), 'particles')
+        obj = int(starfile_table__firstobject(table))
+        call assert_true(obj >= 0, 'RELION names: particle row exists')
+        found = starfile_table__getValue_string(table, EMDL_MICROGRAPH_NAME, name)
+        call assert_true(found, 'RELION names: particle micrograph field exists')
+        if( found ) call assert_char(mic_name, name, 'RELION names: particle and micrograph names match')
+        call starfile_table__delete(table)
+
+        call assert_true(file_exists('micrographs/relion_alias.mrc'), 'RELION names: micrograph link resolves')
+        call assert_true(file_exists('micrographs/relion_alias.star'), 'RELION names: metadata link resolves')
+        call simple_rmfile('micrographs/relion_alias.mrc')
+        call simple_rmfile('micrographs/relion_alias.star')
+        call simple_rmfile('particles/ptcls_from_relion_alias_intg.mrcs')
+        call simple_rmfile(MIC_SOURCE)
+        call simple_rmfile(META_SOURCE)
+        call simple_rmfile(STK_SOURCE)
+        call simple_rmfile('micrographs_corrected.star')
+        call simple_rmfile('micrographs.star')
+        call simple_rmfile('particles2D.star')
+        call proj%kill
+    end subroutine test_relion_export_names
 
     !-----------------------------------------------------------------------
     !  PART 3: Large-table and OpenMP serialization tests

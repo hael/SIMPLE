@@ -1,32 +1,59 @@
 !@descr: for interoperability with RELION
 module simple_relion
-use simple_core_module_api
+use, intrinsic :: iso_c_binding, only: C_int, C_double, C_NULL_CHAR
+use simple_defs,       only: dp, logfhandle, XLONGSTRLEN, C_TRUE, C_FALSE
+use simple_defs_fname, only: INTGMOV_SUFFIX, FORCTF_SUFFIX, MRC_EXT, STK_EXT, STAR_EXT, EXTRACT_STK_FBODY
+use simple_error,      only: simple_exception
+use simple_fileio,     only: basename, file_exists, fname_new_ext, simple_abspath, simple_rename
+use simple_linalg,     only: rad2deg
+use simple_oris,       only: oris
+use simple_rnd,        only: seed_rnd, ran3
+use simple_string,     only: string
+use simple_string_utils, only: int2str
 use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
-use simple_syslib,     only: simple_rmfile
-use CPlot2D_wrapper_module
-use simple_starfile_wrappers
+use simple_syslib,     only: simple_rmfile, simple_mkdir, syslib_symlink
+use simple_starfile_wrappers, only: starfile_table_type, starfile_table__new, starfile_table__delete, &
+    starfile_table__addObject, starfile_table__setName, starfile_table__setValue_int, &
+    starfile_table__setValue_double, starfile_table__setValue_string, starfile_table__open_ofile, &
+    starfile_table__write_ofile, starfile_table__close_ofile, &
+    EMDL_CTF_ASTIGMATISM, EMDL_CTF_CS, EMDL_CTF_DEFOCUSU, EMDL_CTF_DEFOCUSV, &
+    EMDL_CTF_DEFOCUS_ANGLE, EMDL_CTF_IMAGE, EMDL_CTF_PHASESHIFT, EMDL_CTF_Q0, EMDL_CTF_VOLTAGE, &
+    EMDL_IMAGE_COORD_X, EMDL_IMAGE_COORD_Y, EMDL_IMAGE_DIMENSIONALITY, EMDL_IMAGE_NAME, &
+    EMDL_IMAGE_OPTICS_GROUP, EMDL_IMAGE_OPTICS_GROUP_NAME, EMDL_IMAGE_PIXEL_SIZE, EMDL_IMAGE_SIZE, &
+    EMDL_MICROGRAPH_METADATA_NAME, EMDL_MICROGRAPH_NAME, EMDL_MICROGRAPH_NAME_WODOSE, &
+    EMDL_MLMODEL_GROUP_NAME, EMDL_ORIENT_ORIGIN_X_ANGSTROM, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, &
+    EMDL_ORIENT_PSI, EMDL_ORIENT_ROT, EMDL_ORIENT_TILT, EMDL_PARTICLE_RANDOM_SUBSET
 use simple_epu_xml,    only: read_epu_beamshift
 implicit none
 private
 public :: relion_project
 #include "simple_local_flags.inc"
 
+integer,           parameter :: MIC_EXT_LEN    = len_trim(INTGMOV_SUFFIX) + len(MRC_EXT)
+integer,           parameter :: FORCTF_EXT_LEN = len_trim(FORCTF_SUFFIX)  + len(MRC_EXT)
+integer,           parameter :: STK_EXT_LEN    = len_trim(INTGMOV_SUFFIX) + len(STK_EXT)
+integer,           parameter :: STK_PREFIX_LEN = len_trim(EXTRACT_STK_FBODY)
+real,              parameter :: MICRON2ANGS    = 10000.0   ! 1 µm = 10000 Å
+character(len=12), parameter :: MICPATH        = 'micrographs/'
+character(len=10), parameter :: PTCLPATH       = 'particles/'
+character(len=7),  parameter :: MOVIEPATH      = 'movies/'
+
 type relion_project
     integer                   :: opticsgroups
     type(string), allocatable :: movienames(:)
     integer,      allocatable :: moviegroup(:)
 contains
-    procedure :: create
-    procedure :: write_corrected_micrographs_star
-    procedure :: write_micrographs_star
-    procedure :: write_particles2D_star
-    procedure :: generate_epu_tiltgroups
-    procedure :: generate_xml_tiltgroups
-    procedure :: find_movienames
-    procedure :: allocate_opticsgroups
-    procedure :: generate_single_tiltgroup
-    procedure :: h_clust ! hierarchical clustering
+    procedure         :: create
+    procedure         :: write_corrected_micrographs_star
+    procedure         :: write_micrographs_star
+    procedure         :: write_particles2D_star
+    procedure         :: generate_epu_tiltgroups
+    procedure         :: generate_xml_tiltgroups
+    procedure         :: find_movienames
+    procedure         :: allocate_opticsgroups
+    procedure         :: generate_single_tiltgroup
+    procedure, nopass :: h_clust ! hierarchical clustering
 end type relion_project
 
 contains
@@ -36,23 +63,17 @@ contains
         class(sp_project),      intent(inout) :: spproj
         class(cmdline),         intent(inout) :: cline
         type(string)              :: getstring, getstring_base
-        type(starfile_table_type) :: startable
-        integer                   :: i,j,lgstr
-        logical                   :: exists
-        logical                   :: state       = .FALSE.
-        logical                   :: movie       = .FALSE.
-        logical                   :: intg        = .FALSE.
-        logical                   :: smpd        = .FALSE.
-        logical                   :: kv          = .FALSE.
-        logical                   :: cs          = .FALSE.
-        logical                   :: fraca       = .FALSE.
-        logical                   :: opticsgroup = .FALSE.
+        type(starfile_table_type) :: table
+        integer :: i,j
+        logical :: exists
+        logical :: state, movie, intg, smpd, kv, cs, fraca, opticsgroup
         if(spproj%os_mic%get_noris() == 0) then
             return
         endif
         write(logfhandle, *) 'Generating micrographs_corrected.star ... '
         call simple_mkdir('micrographs')
         call simple_mkdir('movies')
+        state = .false.
         do i= 1,spproj%os_mic%get_noris()
             if(spproj%os_mic%isthere(i, 'state')) then
                 state = .TRUE.
@@ -63,6 +84,7 @@ contains
                 exit
             endif
         end do
+        i = min(i, spproj%os_mic%get_noris())
         movie       = spproj%os_mic%isthere(i, 'movie')
         intg        = spproj%os_mic%isthere(i, 'intg')
         smpd        = spproj%os_mic%isthere(i, 'smpd')
@@ -70,63 +92,59 @@ contains
         cs          = spproj%os_mic%isthere(i, 'cs')
         fraca       = spproj%os_mic%isthere(i, 'fraca')
         opticsgroup = spproj%os_mic%isthere(i, 'opticsgroup')
-        call starfile_table__new(startable)
-        call starfile_table__setName(startable, "optics")
+        call starfile_table__new(table)
+        call starfile_table__setName(table, "optics")
         do j=1, self%opticsgroups
-            call starfile_table__addObject(startable)
-            call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j + int(cline%get_rarg('optics_offset')))
-            call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int((j + int(cline%get_rarg('optics_offset'))), 4))))
-            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-            if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
+            call starfile_table__addObject(table)
+            call starfile_table__setValue_int(table, EMDL_IMAGE_OPTICS_GROUP, j + int(cline%get_rarg('optics_offset')))
+            call starfile_table__setValue_string(table, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int((j + int(cline%get_rarg('optics_offset'))), 4))))
+            if(fraca) call starfile_table__setValue_double(table, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
+            if(cs) call starfile_table__setValue_double(table, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
+            if(kv) call starfile_table__setValue_double(table, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
+            if(smpd) call starfile_table__setValue_double(table, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
         end do
-        call starfile_table__open_ofile(startable, 'micrographs_corrected.star.tmp', 0)
-        call starfile_table__write_ofile(startable)
-        call starfile_table__close_ofile(startable)
-        call starfile_table__delete(startable)
-        call starfile_table__new(startable)
-        call starfile_table__setName(startable, "micrographs")
+        call starfile_table__open_ofile(table, 'micrographs_corrected.star.tmp', 0)
+        call starfile_table__write_ofile(table)
+        call starfile_table__close_ofile(table)
+        call starfile_table__delete(table)
+        call starfile_table__new(table)
+        call starfile_table__setName(table, "micrographs")
         !STAR data
         do i=1, spproj%os_mic%get_noris()
             if((state .AND. (spproj%os_mic%get(i,'state') .GT. 0)) .OR. (.NOT. state)) then
-                call starfile_table__addObject(startable)
+                call starfile_table__addObject(table)
                 if(intg) then
                     call spproj%os_mic%getter(i, 'intg', getstring)
-                    getstring_base = basename(getstring)
-                    lgstr = len(getstring%to_char())
-                    call starfile_table__setValue_string(startable, EMDL_MICROGRAPH_NAME, 'micrographs/' // getstring_base%to_char())
-                    inquire(file='micrographs/' // getstring_base%to_char(), exist=exists)
-                    if(.NOT. exists) then
-                        call syslib_symlink('../'//getstring%to_char(), 'micrographs/'//getstring_base%to_char())
-                    endif
-                    call starfile_table__setValue_string(startable, EMDL_MICROGRAPH_METADATA_NAME, 'micrographs/' // getstring_base%to_char([1,lgstr - 9]) // '.star')
-                    inquire(file='micrographs/' // getstring_base%to_char([1,lgstr-9]) // '.star', exist=exists)
-                    if(.NOT. exists) then
-                        call syslib_symlink('../'//getstring%to_char([1,lgstr-9])//'.star ', 'micrographs/'//getstring_base%to_char([1,lgstr-9])//'.star ')
+                    call append_table_with_string(getstring, table, MIC_EXT_LEN, MICPATH, MRC_EXT, EMDL_MICROGRAPH_NAME)
+                    if( spproj%os_mic%isthere(i, 'mc_starfile') )then
+                        call spproj%os_mic%getter(i, 'mc_starfile', getstring)
+                        call append_table_with_string(getstring, table, len(STAR_EXT), MICPATH, STAR_EXT, EMDL_MICROGRAPH_METADATA_NAME)
                     endif
                 endif
                 if(movie) then
                     call spproj%os_mic%getter(i, 'movie', getstring)
                     getstring_base = basename(getstring)
-                    lgstr = len(getstring%to_char())
-                    inquire(file='movies/' // getstring_base%to_char() // ' ', exist=exists)
+                    inquire(file=MOVIEPATH // getstring_base%to_char() // ' ', exist=exists)
                     if(.NOT. exists) then
-                        call simple_rmfile('movies/'//getstring_base%to_char())
+                        call simple_rmfile(MOVIEPATH // getstring_base%to_char())
                         getstring = simple_abspath(getstring, check_exists=.false.)
-                        call syslib_symlink(getstring, string('movies/'//getstring_base%to_char()))
+                        call syslib_symlink(getstring, string(MOVIEPATH // getstring_base%to_char()))
                     endif
                 endif
-                if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
+                if(opticsgroup)then
+                    call starfile_table__setValue_int(table, EMDL_IMAGE_OPTICS_GROUP, &
+                        &int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
+                endif
             endif
         end do
-        call starfile_table__open_ofile(startable, 'micrographs_corrected.star.tmp', 1)
-        call starfile_table__write_ofile(startable)
-        call starfile_table__close_ofile(startable)
+        call starfile_table__open_ofile(table, 'micrographs_corrected.star.tmp', 1)
+        call starfile_table__write_ofile(table)
+        call starfile_table__close_ofile(table)
         ! written as .tmp and renamed when complete: a reader never meets a partial file
         call simple_rename(string('micrographs_corrected.star.tmp'), string('micrographs_corrected.star'))
-        call starfile_table__delete(startable)
+        call starfile_table__delete(table)
         call getstring%kill
+        call getstring_base%kill
     end subroutine write_corrected_micrographs_star
 
     subroutine write_micrographs_star(self, cline, spproj)
@@ -134,27 +152,17 @@ contains
         class(sp_project),      intent(inout)   :: spproj
         class(cmdline),         intent(inout)   :: cline
         type(string)              :: getstring, getstring_base
-        type(starfile_table_type) :: startable
-        integer                   :: i,j,lgstr
+        type(starfile_table_type) :: table
+        real(dp)                  :: dfx, dfy
+        integer                   :: i,j
         logical                   :: exists
-        logical                   :: state       = .FALSE.
-        logical                   :: movie       = .FALSE.
-        logical                   :: intg        = .FALSE.
-        logical                   :: forctf      = .FALSE.
-        logical                   :: pspec       = .FALSE.
-        logical                   :: smpd        = .FALSE.
-        logical                   :: kv          = .FALSE.
-        logical                   :: cs          = .FALSE.
-        logical                   :: dfx         = .FALSE.
-        logical                   :: dfy         = .FALSE.
-        logical                   :: angast      = .FALSE.
-        logical                   :: fraca       = .FALSE.
-        logical                   :: opticsgroup = .FALSE.
+        logical :: state, intg, forctf, pspec, smpd, kv, cs, l_dfx, l_dfy, angast, fraca, opticsgroup
         if(spproj%os_mic%get_noris() == 0) then
             return
         endif
         write(logfhandle, *) 'Generating micrographs.star ... '
         call simple_mkdir('micrographs')
+        state = .false.
         do i=1, spproj%os_mic%get_noris()
             if(spproj%os_mic%isthere(i, 'state')) then
                 state = .TRUE.
@@ -165,119 +173,119 @@ contains
                 exit
             endif
         end do
-        movie       = spproj%os_mic%isthere(i, 'movie')
+        i = min(i, spproj%os_mic%get_noris())
         intg        = spproj%os_mic%isthere(i, 'intg')
         forctf      = spproj%os_mic%isthere(i, 'forctf')
         pspec       = spproj%os_mic%isthere(i, 'pspec')
         smpd        = spproj%os_mic%isthere(i, 'smpd')
         kv          = spproj%os_mic%isthere(i, 'kv')
         cs          = spproj%os_mic%isthere(i, 'cs')
-        dfx         = spproj%os_mic%isthere(i, 'dfx')
-        dfy         = spproj%os_mic%isthere(i, 'dfy')
+        l_dfx       = spproj%os_mic%isthere(i, 'dfx')
+        l_dfy       = spproj%os_mic%isthere(i, 'dfy')
         angast      = spproj%os_mic%isthere(i, 'angast')
         fraca       = spproj%os_mic%isthere(i, 'fraca')
         opticsgroup = spproj%os_mic%isthere(i, 'opticsgroup')
-        call starfile_table__new(startable)
-        call starfile_table__setName(startable, "optics")
+        call starfile_table__new(table)
+        call starfile_table__setName(table, "optics")
         do j=1, self%opticsgroups
-            call starfile_table__addObject(startable)
-            call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j + int(cline%get_rarg('optics_offset')))
-            call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int((j + int(cline%get_rarg('optics_offset'))), 4))))
-            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-            if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
+            call starfile_table__addObject(table)
+            call starfile_table__setValue_int(table, EMDL_IMAGE_OPTICS_GROUP, j + int(cline%get_rarg('optics_offset')))
+            call starfile_table__setValue_string(table, EMDL_IMAGE_OPTICS_GROUP_NAME, &
+                &'opticsgroup' // trim(int2str(int((j + int(cline%get_rarg('optics_offset'))), 4))))
+            if(fraca) call starfile_table__setValue_double(table, EMDL_CTF_Q0,           real(spproj%os_mic%get(i, 'fraca'), dp))
+            if(   cs) call starfile_table__setValue_double(table, EMDL_CTF_CS,           real(spproj%os_mic%get(i, 'cs'), dp))
+            if(   kv) call starfile_table__setValue_double(table, EMDL_CTF_VOLTAGE,      real(spproj%os_mic%get(i, 'kv'), dp))
+            if( smpd) call starfile_table__setValue_double(table, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
         end do
-        call starfile_table__open_ofile(startable, 'micrographs.star.tmp', 0)
-        call starfile_table__write_ofile(startable)
-        call starfile_table__close_ofile(startable)
-        call starfile_table__delete(startable)
-        call starfile_table__new(startable)
-        call starfile_table__setName(startable, "micrographs")
+        call starfile_table__open_ofile(table, 'micrographs.star.tmp', 0)
+        call starfile_table__write_ofile(table)
+        call starfile_table__close_ofile(table)
+        call starfile_table__delete(table)
+        call starfile_table__new(table)
+        call starfile_table__setName(table, "micrographs")
         !STAR data
         do i=1, spproj%os_mic%get_noris()
             if((state .AND. (spproj%os_mic%get(i,'state') .GT. 0)) .OR. (.NOT. state)) then
-                call starfile_table__addObject(startable)
+                call starfile_table__addObject(table)
                 if(intg) then
                     call spproj%os_mic%getter(i, 'intg', getstring)
-                    getstring_base = basename(getstring)
-                    lgstr = len(getstring%to_char())
-                    call starfile_table__setValue_string(startable, EMDL_MICROGRAPH_NAME, 'micrographs/' // getstring_base%to_char())
-                    inquire(file='micrographs/' // getstring_base%to_char(), exist=exists)
-                    if(.NOT. exists) then
-                        call syslib_symlink('../'//getstring%to_char(), 'micrographs/'//getstring_base%to_char())
-                    endif
+                    call append_table_with_string(getstring, table, MIC_EXT_LEN, MICPATH, MRC_EXT, EMDL_MICROGRAPH_NAME )
                 endif
                 if(forctf) then
                     call spproj%os_mic%getter(i, 'forctf', getstring)
-                    getstring_base = basename(getstring)
-                    lgstr = len(getstring%to_char())
-                    call starfile_table__setValue_string(startable, EMDL_MICROGRAPH_NAME_WODOSE, 'micrographs/' // getstring_base%to_char())
-                    inquire(file='micrographs/' // getstring_base%to_char(), exist=exists)
-                    if(.NOT. exists) then
-                        call syslib_symlink('../'//getstring%to_char(), 'micrographs/'//getstring_base%to_char())
-                    endif
+                    call append_table_with_string(getstring, table, FORCTF_EXT_LEN, MICPATH, MRC_EXT, EMDL_MICROGRAPH_NAME_WODOSE )
                 endif
                 if(pspec)then
                     call spproj%os_mic%getter(i, 'pspec', getstring)
                     getstring_base = basename(getstring)
-                    lgstr = len(getstring%to_char())
-                    call starfile_table__setValue_string(startable, EMDL_CTF_IMAGE, 'micrographs/' // getstring_base%to_char())
-                    inquire(file='micrographs/' // getstring_base%to_char(), exist=exists)
+                    call starfile_table__setValue_string(table, EMDL_CTF_IMAGE, MICPATH // getstring_base%to_char())
+                    inquire(file=MICPATH // getstring_base%to_char(), exist=exists)
                     if(.NOT. exists) then
-                        call syslib_symlink('../'//getstring%to_char(), 'micrographs/'//getstring_base%to_char())
+                        call syslib_symlink('../'//getstring%to_char(), MICPATH//getstring_base%to_char())
                     endif
                 endif
-                if(dfx .AND. dfy) then
-                    call starfile_table__setValue_double(startable, EMDL_CTF_ASTIGMATISM, real(abs((spproj%os_mic%get_dfx(i) * 10000) - (spproj%os_mic%get_dfy(i) * 10000)), dp))
-                    call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_mic%get_dfx(i) * 10000, dp))
-                    call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_mic%get_dfy(i) * 10000, dp))
+                if(l_dfx .AND. l_dfy) then
+                    dfx = real(spproj%os_mic%get_dfx(i) * MICRON2ANGS, dp)
+                    dfy = real(spproj%os_mic%get_dfy(i) * MICRON2ANGS, dp)
+                    call starfile_table__setValue_double(table, EMDL_CTF_ASTIGMATISM, abs(dfx-dfy))
+                    call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUSU, dfx)
+                    call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUSV, dfy)
                 endif
-                if(angast) call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
-                call starfile_table__setValue_double(startable, EMDL_CTF_PHASESHIFT, &
+                if(angast) call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
+                call starfile_table__setValue_double(table, EMDL_CTF_PHASESHIFT, &
                     &real(rad2deg(spproj%os_mic%get(i, 'phshift')), dp))
-                if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
+                if(opticsgroup) call starfile_table__setValue_int(table, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup') + int(cline%get_rarg('optics_offset'))))
             endif
         end do
-        call starfile_table__open_ofile(startable, 'micrographs.star.tmp', 1)
-        call starfile_table__write_ofile(startable)
-        call starfile_table__close_ofile(startable)
+        call starfile_table__open_ofile(table, 'micrographs.star.tmp', 1)
+        call starfile_table__write_ofile(table)
+        call starfile_table__close_ofile(table)
         ! written as .tmp and renamed when complete: a reader never meets a partial file
         call simple_rename(string('micrographs.star.tmp'), string('micrographs.star'))
-        call starfile_table__delete(startable)
+        call starfile_table__delete(table)
         call getstring%kill
         call getstring_base%kill
     end subroutine write_micrographs_star
+
+    subroutine append_table_with_string( str, table, len_suffix, path, new_suffix, field )
+        class(string),              intent(in)    :: str
+        integer(C_int),             intent(in)    :: field
+        integer,                    intent(in)    :: len_suffix
+        character(len=*),           intent(in)    :: path, new_suffix
+        class(starfile_table_type), intent(inout) :: table
+        type(string) :: str_base, filename
+        integer :: lgstr
+        logical :: exists
+        str_base = basename(str)
+        lgstr          = len(str_base%to_char())
+        filename       = str_base%to_char([1,lgstr-len_suffix]) // trim(new_suffix)
+        call starfile_table__setValue_string(table, field, trim(path)//filename%to_char())
+        inquire(file=trim(path) // filename%to_char(), exist=exists)
+        if(.NOT. exists) then
+            if( str%to_char([1,1]) == '/' )then
+                call syslib_symlink(str, trim(path)//filename%to_char())
+            else
+                call syslib_symlink('../'//str%to_char(), trim(path)//filename%to_char())
+            endif
+        endif
+        call str_base%kill
+        call filename%kill
+    end subroutine append_table_with_string
 
     subroutine write_particles2D_star(self, cline, spproj)
         class(relion_project),  intent(inout)   :: self
         class(sp_project),      intent(inout)   :: spproj
         class(cmdline),         intent(inout)   :: cline
-        type(string)              :: getstring, getstring_base, getstring_mrcs, getstring_mrc
+        type(string)              :: getstring, getstring_base, getstring_mrcs
         character(len=1024)       :: groupname
         integer, allocatable      :: ptclcount(:)
-        integer                   :: group, lgstr
-        type(starfile_table_type) :: startable
-        integer                   :: i, j, stkindex
+        integer                   :: group
+        type(starfile_table_type) :: table
+        real(dp)                  :: dfx, dfy
+        integer                   :: i, j, stkindex, nbase
         logical                   :: exists
-        logical                   :: state       = .FALSE.
-        logical                   :: stkstate    = .FALSE.
-        logical                   :: stkind      = .FALSE.
-        logical                   :: smpd        = .FALSE.
-        logical                   :: kv          = .FALSE.
-        logical                   :: cs          = .FALSE.
-        logical                   :: dfx         = .FALSE.
-        logical                   :: dfy         = .FALSE.
-        logical                   :: angast      = .FALSE.
-        logical                   :: fraca       = .FALSE.
-        logical                   :: ptcldfx     = .FALSE.
-        logical                   :: ptcldfy     = .FALSE.
-        logical                   :: ptclangast  = .FALSE.
-        logical                   :: xpos        = .FALSE.
-        logical                   :: ypos        = .FALSE.
-        logical                   :: stk         = .FALSE.
-        logical                   :: box         = .FALSE.
-        logical                   :: opticsgroup = .FALSE.
+        logical :: state, stkstate, stkind, smpd, kv, cs, l_dfx, l_dfy, angast, fraca
+        logical :: ptcldfx, ptcldfy, ptclangast, coords, stk, box, opticsgroup, eo
         real                      :: dfxmin
         real                      :: dfxmax
         real                      :: dfxstep
@@ -292,6 +300,9 @@ contains
         endif
         write(logfhandle, *) 'Generating particles2D.star ... '
         call simple_mkdir('particles')
+        state = .false.
+        stkstate = .false.
+        coords = .false.
         if(.NOT. allocated(ptclcount)) then
             allocate(ptclcount(spproj%os_stk%get_noris()))
             do i=1, spproj%os_stk%get_noris()
@@ -308,15 +319,16 @@ contains
                 exit
             endif
         end do
-        stkind      = spproj%os_ptcl2D%isthere(i, 'stkind')
-        ptcldfx     = spproj%os_ptcl2D%isthere(i, 'dfx')
-        ptcldfy     = spproj%os_ptcl2D%isthere(i, 'dfy')
-        ptclangast  = spproj%os_ptcl2D%isthere(i, 'angast')
+        i = min(i, spproj%os_ptcl2D%get_noris())
+        stkind     = spproj%os_ptcl2D%isthere(i, 'stkind')
+        ptcldfx    = spproj%os_ptcl2D%isthere(i, 'dfx')
+        ptcldfy    = spproj%os_ptcl2D%isthere(i, 'dfy')
+        ptclangast = spproj%os_ptcl2D%isthere(i, 'angast')
+        eo         = spproj%os_ptcl2D%isthere(i, 'eo')
         !trial up to 1000 particles for non 0 values of xpos and ypos
         do j=i, min(i + 1000, spproj%os_ptcl2D%get_noris())
           if((spproj%os_ptcl2D%get(j, 'xpos') .GT. 0) .OR. (spproj%os_ptcl2D%get(j, 'ypos') .GT. 0)) then
-            xpos = .TRUE.
-            ypos = .TRUE.
+            coords = .TRUE.
             exit
           endif
         end do
@@ -330,8 +342,9 @@ contains
                 exit
             endif
         end do
-        dfx         = spproj%os_stk%isthere(i, 'dfx')
-        dfy         = spproj%os_stk%isthere(i, 'dfy')
+        i = min(i, spproj%os_stk%get_noris())
+        l_dfx       = spproj%os_stk%isthere(i, 'dfx')
+        l_dfy       = spproj%os_stk%isthere(i, 'dfy')
         angast      = spproj%os_stk%isthere(i, 'angast')
         box         = spproj%os_stk%isthere(i, 'box')
         smpd        = spproj%os_stk%isthere(i, 'smpd')
@@ -340,31 +353,31 @@ contains
         fraca       = spproj%os_stk%isthere(i, 'fraca')
         stk         = spproj%os_stk%isthere(i, 'stk')
         opticsgroup = spproj%os_stk%isthere(i, 'opticsgroup')
-        call starfile_table__new(startable)
-        call starfile_table__setName(startable, "optics")
+        call starfile_table__new(table)
+        call starfile_table__setName(table, "optics")
         do j=1, self%opticsgroups
-            call starfile_table__addObject(startable)
-            call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j + int(cline%get_rarg('optics_offset')))
-            call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int((j + int(cline%get_rarg('optics_offset'))), 4))))
-            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_stk%get(i, 'fraca'), dp))
-            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_stk%get(i, 'cs'), dp))
-            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(i, 'kv'), dp))
-            if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_stk%get(i, 'smpd'), dp))
-            if(box) call starfile_table__setValue_int(startable, EMDL_IMAGE_SIZE, int(spproj%os_stk%get(i, 'box')))
-            call starfile_table__setValue_int(startable, EMDL_IMAGE_DIMENSIONALITY, 2)
+            call starfile_table__addObject(table)
+            call starfile_table__setValue_int(table, EMDL_IMAGE_OPTICS_GROUP, j + int(cline%get_rarg('optics_offset')))
+            call starfile_table__setValue_string(table, EMDL_IMAGE_OPTICS_GROUP_NAME, &
+                &'opticsgroup' // trim(int2str(int((j + int(cline%get_rarg('optics_offset'))), 4))))
+            if(fraca) call starfile_table__setValue_double(table, EMDL_CTF_Q0,           real(spproj%os_stk%get(i, 'fraca'), dp))
+            if(   cs) call starfile_table__setValue_double(table, EMDL_CTF_CS,           real(spproj%os_stk%get(i, 'cs'), dp))
+            if(   kv) call starfile_table__setValue_double(table, EMDL_CTF_VOLTAGE,      real(spproj%os_stk%get(i, 'kv'), dp))
+            if( smpd) call starfile_table__setValue_double(table, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_stk%get(i, 'smpd'), dp))
+            if(  box) call starfile_table__setValue_int(table, EMDL_IMAGE_SIZE,          int(spproj%os_stk%get(i, 'box')))
+            call starfile_table__setValue_int(table, EMDL_IMAGE_DIMENSIONALITY, 2)
         end do
-        call starfile_table__open_ofile(startable, 'particles2D.star.tmp', 0)
-        call starfile_table__write_ofile(startable)
-        call starfile_table__close_ofile(startable)
-        call starfile_table__delete(startable)
-        call starfile_table__new(startable)
-        call starfile_table__setName(startable, "particles")
+        call starfile_table__open_ofile(table, 'particles2D.star.tmp', 0)
+        call starfile_table__write_ofile(table)
+        call starfile_table__close_ofile(table)
+        call starfile_table__delete(table)
+        call starfile_table__new(table)
+        call starfile_table__setName(table, "particles")
         dfxstep = 1.
-        if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
+        if(cline%get_iarg('reliongroups') > 0 .AND. l_dfx) then
             call spproj%os_stk%minmax('dfx', dfxmin, dfxmax)
-            dfxstep = (dfxmax - dfxmin)/ (cline%get_rarg('reliongroups') + 1)
+            dfxstep = (dfxmax - dfxmin)/ real(cline%get_iarg('reliongroups') + 1)
         endif
-
         !STAR data
         do i=1, spproj%os_ptcl2D%get_noris()
             if(stkind) then
@@ -372,61 +385,80 @@ contains
                 ptclcount(stkindex) = ptclcount(stkindex) + 1
                 if((state .AND. (spproj%os_ptcl2D%get_state(i) .GT. 0)) .OR. (.NOT. state)) then
                     if((stkstate .AND. (spproj%os_stk%get_state(stkindex) .GT. 0)) .OR. (.NOT. stkstate)) then
-                        call starfile_table__addObject(startable)
+                        call starfile_table__addObject(table)
                         if(stk) then
                             call spproj%os_stk%getter(stkindex, 'stk', getstring)
                             getstring_base = basename(getstring)
-                            getstring_mrcs = fname_new_ext(getstring_base, string("mrcs"))
-                            getstring_mrc  = fname_new_ext(getstring_base, string("mrc"))
-                            lgstr = len(getstring%to_char())
-                            call starfile_table__setValue_string(startable, EMDL_IMAGE_NAME,trim(int2str(int(ptclcount(stkindex), 4))) // '@particles/' // getstring_mrcs%to_char())
-                            inquire(file='particles/' // getstring_mrcs%to_char(), exist=exists)
+                            getstring_mrcs = fname_new_ext(getstring_base, STK_EXT(2:))
+                            call starfile_table__setValue_string(table, EMDL_IMAGE_NAME, trim(int2str(int(ptclcount(stkindex),4)))//'@'//PTCLPATH//getstring_mrcs%to_char())
+                            inquire(file=PTCLPATH//getstring_mrcs%to_char(), exist=exists)
                             if(.NOT. exists) then
-                                call syslib_symlink('../'//getstring%to_char(), 'particles/'//getstring_mrcs%to_char())
+                                if( getstring%to_char([1,1]) == '/' )then
+                                    call syslib_symlink( getstring%to_char(), PTCLPATH//getstring_mrcs%to_char())
+                                else
+                                    call syslib_symlink('../'//getstring%to_char(), PTCLPATH//getstring_mrcs%to_char())
+                                endif
                             endif
-                            call starfile_table__setValue_string(startable, EMDL_MICROGRAPH_NAME, 'micrographs/' // getstring%to_char([12,getstring%strlen()]))
+                            nbase = len(getstring_base%to_char())
+                            if( nbase > STK_PREFIX_LEN + STK_EXT_LEN )then
+                                if( getstring_base%to_char([1,STK_PREFIX_LEN]) == EXTRACT_STK_FBODY )then
+                                    if( getstring_base%to_char([nbase-STK_EXT_LEN+1,nbase]) == INTGMOV_SUFFIX//STK_EXT )then
+                                        call starfile_table__setValue_string(table, EMDL_MICROGRAPH_NAME, &
+                                            &MICPATH//getstring_base%to_char([STK_PREFIX_LEN+1,nbase-STK_EXT_LEN])//MRC_EXT)
+                                    endif
+                                endif
+                            endif
                         endif
-                        if(xpos .AND. ypos .AND. box) then
-                            call starfile_table__setValue_double(startable, EMDL_IMAGE_COORD_X, real(int(spproj%os_ptcl2D%get(i,'xpos') + (spproj%os_stk%get(stkindex,'box') / 2)), dp))
-                            call starfile_table__setValue_double(startable, EMDL_IMAGE_COORD_Y, real(int(spproj%os_ptcl2D%get(i,'ypos') + (spproj%os_stk%get(stkindex,'box') / 2)), dp))
+                        if(coords .AND. box) then
+                            call starfile_table__setValue_double(table, EMDL_IMAGE_COORD_X, &
+                                &real(int(spproj%os_ptcl2D%get(i,'xpos') + (spproj%os_stk%get(stkindex,'box') / 2)), dp))
+                            call starfile_table__setValue_double(table, EMDL_IMAGE_COORD_Y, &
+                                &real(int(spproj%os_ptcl2D%get(i,'ypos') + (spproj%os_stk%get(stkindex,'box') / 2)), dp))
                         endif
                         if(ptcldfx .AND. ptcldfy .AND. ptclangast) then
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_ptcl2D%get_dfx(i) * 10000, dp))
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_ptcl2D%get_dfy(i) * 10000, dp))
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_ptcl2D%get(i,'angast'), dp))
-                        else if(dfx .AND. dfy .AND. angast) then
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_stk%get_dfx(stkindex) * 10000, dp))
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get_dfy(stkindex) * 10000, dp))
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkindex,'angast'), dp))
+                            dfx = real(spproj%os_ptcl2D%get_dfx(i) * MICRON2ANGS, dp)
+                            dfy = real(spproj%os_ptcl2D%get_dfy(i) * MICRON2ANGS, dp)
+                            call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUSU, dfx)
+                            call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUSV, dfy)
+                            call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_ptcl2D%get(i,'angast'), dp))
+                        else if(l_dfx .AND. l_dfy .AND. angast) then
+                            dfx = real(spproj%os_stk%get_dfx(stkindex) * MICRON2ANGS, dp)
+                            dfy = real(spproj%os_stk%get_dfy(stkindex) * MICRON2ANGS, dp)
+                            call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUSU, dfx)
+                            call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUSV, dfy)
+                            call starfile_table__setValue_double(table, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkindex,'angast'), dp))
                         endif
-                        call starfile_table__setValue_double(startable, EMDL_CTF_PHASESHIFT, &
+                        call starfile_table__setValue_double(table, EMDL_CTF_PHASESHIFT, &
                             &real(rad2deg(spproj%os_ptcl2D%get(i, 'phshift')), dp))
                         if( l_poses3D )then
                             call write_pose(spproj%os_ptcl3D)
                         else
                             call write_pose(spproj%os_ptcl2D)
                         endif
-                        if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
+                        if(cline%get_rarg('reliongroups') > 0 .AND. l_dfx) then
                             group = ceiling((spproj%os_stk%get_dfx(stkindex) - dfxmin) / dfxstep)
                             write(groupname, *) group
-                            call starfile_table__setValue_string(startable, EMDL_MLMODEL_GROUP_NAME, trim(adjustl(groupname)))
+                            call starfile_table__setValue_string(table, EMDL_MLMODEL_GROUP_NAME, trim(adjustl(groupname)))
                         endif
-                        if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, spproj%os_stk%get_int(stkindex, 'opticsgroup') + cline%get_iarg('optics_offset'))
+                        if( opticsgroup )then
+                            call starfile_table__setValue_int(table, EMDL_IMAGE_OPTICS_GROUP, spproj%os_stk%get_int(stkindex, 'opticsgroup') + cline%get_iarg('optics_offset'))
+                        endif
+                        if( eo )then
+                            call starfile_table__setValue_int(table, EMDL_PARTICLE_RANDOM_SUBSET, spproj%os_ptcl2D%get_eo(i)+1)
+                        endif
                     endif
                 endif
             endif
         end do
-        call starfile_table__open_ofile(startable, 'particles2D.star.tmp', 1)
-        call starfile_table__write_ofile(startable)
-        call starfile_table__close_ofile(startable)
+        call starfile_table__open_ofile(table, 'particles2D.star.tmp', 1)
+        call starfile_table__write_ofile(table)
+        call starfile_table__close_ofile(table)
         ! written as .tmp and renamed when complete: a reader never meets a partial file
         call simple_rename(string('particles2D.star.tmp'), string('particles2D.star'))
-        call starfile_table__delete(startable)
+        call starfile_table__delete(table)
         call getstring%kill
         call getstring_base%kill
-        call getstring_mrc%kill
         call getstring_mrcs%kill
-
         contains
 
             ! the pose of particle i in os; origins from pixels of its stack to Angstrom
@@ -435,10 +467,10 @@ contains
                 character(len=XLONGSTRLEN) :: msg, stkname
                 real :: smpd, x, y
                 if( l_poses3D )then
-                    call starfile_table__setValue_double(startable, EMDL_ORIENT_ROT,  real(os%e1get(i), dp))
-                    call starfile_table__setValue_double(startable, EMDL_ORIENT_TILT, real(os%e2get(i), dp))
+                    call starfile_table__setValue_double(table, EMDL_ORIENT_ROT,  real(os%e1get(i), dp))
+                    call starfile_table__setValue_double(table, EMDL_ORIENT_TILT, real(os%e2get(i), dp))
                 endif
-                call starfile_table__setValue_double(startable, EMDL_ORIENT_PSI, real(os%e3get(i), dp))
+                call starfile_table__setValue_double(table, EMDL_ORIENT_PSI, real(os%e3get(i), dp))
                 x = os%get(i, 'x')
                 y = os%get(i, 'y')
                 if( x /= 0. .or. y /= 0. )then
@@ -453,16 +485,15 @@ contains
                     x = x * smpd
                     y = y * smpd
                 endif
-                call starfile_table__setValue_double(startable, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(x, dp))
-                call starfile_table__setValue_double(startable, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(y, dp))
+                call starfile_table__setValue_double(table, EMDL_ORIENT_ORIGIN_X_ANGSTROM, real(x, dp))
+                call starfile_table__setValue_double(table, EMDL_ORIENT_ORIGIN_Y_ANGSTROM, real(y, dp))
             end subroutine write_pose
 
     end subroutine write_particles2D_star
 
-    subroutine find_movienames(self, cline, spproj)
+    subroutine find_movienames(self, spproj)
         class(relion_project),  intent(inout)   :: self
         class(sp_project),      intent(inout)   :: spproj
-        class(cmdline),         intent(inout)   :: cline
         integer      :: moviecount, i
         logical      :: micsource
         type(string) :: moviename, tmpname
@@ -475,28 +506,28 @@ contains
         else
             THROW_HARD('no micrographs or stacks in project file')
         endif
-        if(.NOT. allocated(self%movienames)) then
-            allocate(self%movienames(moviecount))
-        end if
-        if(.NOT. allocated(self%moviegroup)) then
-            allocate(self%moviegroup(moviecount))
-        end if
+        if(allocated(self%movienames)) then
+            call self%movienames%kill
+            deallocate(self%movienames)
+        endif
+        if(allocated(self%moviegroup)) deallocate(self%moviegroup)
+        allocate(self%movienames(moviecount), self%moviegroup(moviecount))
         do i=1, moviecount
             if(micsource) then
                 moviename = basename(spproj%os_mic%get_str(i, 'intg'))
-                tmpname   = moviename%to_char([1,moviename%strlen_trim()-9])
+                tmpname   = moviename%to_char([1,moviename%strlen_trim()-MIC_EXT_LEN])
             else
                 moviename = basename(spproj%os_stk%get_str(i, 'stk'))
-                tmpname   = moviename%to_char([12,moviename%strlen_trim()-9])
+                tmpname   = moviename%to_char([STK_PREFIX_LEN+1,moviename%strlen_trim()-STK_EXT_LEN])
             endif
             self%movienames(i) = tmpname
         end do
+        call moviename%kill
+        call tmpname%kill
     end subroutine find_movienames
 
-    subroutine generate_epu_tiltgroups(self, cline, spproj)
+    subroutine generate_epu_tiltgroups(self)
         class(relion_project),  intent(inout)   :: self
-        class(sp_project),      intent(inout)   :: spproj
-        class(cmdline),         intent(inout)   :: cline
         integer                                 :: i,j,k
         character(len=20), allocatable :: tiltgroups(:)
         type(string) :: tiltname, tmpname
@@ -530,10 +561,8 @@ contains
         if(allocated(tiltgroups))deallocate(tiltgroups)
     end subroutine generate_epu_tiltgroups
 
-    subroutine generate_single_tiltgroup(self, cline, spproj)
+    subroutine generate_single_tiltgroup(self)
         class(relion_project),  intent(inout)   :: self
-        class(sp_project),      intent(inout)   :: spproj
-        class(cmdline),         intent(inout)   :: cline
         integer                                 :: i
         do i=1, size(self%movienames)
             self%moviegroup(i) = 1
@@ -541,9 +570,14 @@ contains
         self%opticsgroups = 1
     end subroutine generate_single_tiltgroup
 
-    subroutine generate_xml_tiltgroups(self, cline, spproj)
+    subroutine generate_xml_tiltgroups(self, cline)
+        use CPlot2D_wrapper_module, only: CPlot2D_type, CDataSet_type, CPlot2D__new, CPlot2D__delete, &
+            CPlot2D__SetXAxisSize, CPlot2D__SetYAxisSize, CPlot2D__SetDrawXAxisGridLines, &
+            CPlot2D__SetDrawYAxisGridLines, CPlot2D__SetDrawLegend, CPlot2D__SetFlipY, &
+            CPlot2D__SetXAxisTitle, CPlot2D__SetYAxisTitle, CPlot2D__AddDataSet, &
+            CPlot2D__OutputPostScriptPlot, CDataSet__new, CDataSet__delete, CDataSet__SetDrawMarker, &
+            CDataSet__SetMarkerSize, CDataSet__SetDatasetColor, CDataSet_addpoint
         class(relion_project),  intent(inout)   :: self
-        class(sp_project),      intent(inout)   :: spproj
         class(cmdline),         intent(inout)   :: cline
         character(len=20), allocatable :: tiltgroups(:)
         integer              :: i,j
@@ -655,6 +689,10 @@ contains
         call CPlot2D__delete(plot2D)
         call tiltname%kill
         call tmpname%kill
+        call fname%kill
+        call fname_eps%kill
+        call xmlloc_file%kill
+        call title%kill
         if(allocated(tilts)      )deallocate(tilts)
         if(allocated(centroids)  )deallocate(centroids)
         if(allocated(populations))deallocate(populations)
@@ -688,23 +726,23 @@ contains
         end do
         do i=1, spproj%os_mic%get_noris()
             moviename = basename(spproj%os_mic%get_str(i, 'intg'))
-            moviename = moviename%to_char([1,moviename%strlen_trim()-9])
+            moviename = moviename%to_char([1,moviename%strlen_trim()-MIC_EXT_LEN])
             do j=1, size(self%movienames)
                 if(self%movienames(j) .eq. moviename) then
                     exit
                 end if
             end do
-            call spproj%os_mic%set(i, 'opticsgroup', float(self%moviegroup(j)))
+            call spproj%os_mic%set(i, 'opticsgroup', self%moviegroup(j))
         end do
         do i=1, spproj%os_stk%get_noris()
             moviename = basename(spproj%os_stk%get_str(i,'stk'))
-            moviename = moviename%to_char([12,moviename%strlen_trim()-9])
+            moviename = moviename%to_char([STK_PREFIX_LEN+1,moviename%strlen_trim()-STK_EXT_LEN])
             do j=1, size(self%movienames)
                 if(self%movienames(j) .eq. moviename) then
                     exit
                 end if
             end do
-            call spproj%os_stk%set(i, 'opticsgroup', float(self%moviegroup(j)))
+            call spproj%os_stk%set(i, 'opticsgroup', self%moviegroup(j))
         end do
         call moviename%kill
     end subroutine allocate_opticsgroups
@@ -713,36 +751,38 @@ contains
         class(relion_project), intent(inout) :: self
         class(sp_project),     intent(inout) :: spproj
         class(cmdline),        intent(inout) :: cline
-        write(logfhandle, *) 'Writing Relion 3.1 compatible STAR files'
-        call self%find_movienames(cline, spproj)
+        write(logfhandle, *) '>>> Writing Relion 5.0 compatible STAR files'
+        call self%find_movienames(spproj)
         if(cline%get_carg('xmlloc') .eq. '') then
             if(index(self%movienames(1)%to_char(), 'FoilHole') .ne. 0) then
-                write(logfhandle, *) 'Using EPU filenames for beamtilt information'
-                call self%generate_epu_tiltgroups(cline, spproj)
+                write(logfhandle, *) '>>> Using EPU filenames for beamtilt information'
+                call self%generate_epu_tiltgroups()
             else
-                write(logfhandle, *) 'Creating single beamtilt group'
-                call self%generate_single_tiltgroup(cline, spproj)
+                write(logfhandle, *) '>>> Creating single beamtilt group'
+                call self%generate_single_tiltgroup()
             end if
         else
             if(index(self%movienames(1)%to_char(), 'FoilHole') .ne. 0) then
-                write(logfhandle, *) 'Using XML files and EPU filenames for beamtilt information'
+                write(logfhandle, *) '>>> Using XML files and EPU filenames for beamtilt information'
             else
-                write(logfhandle, *) 'Using XML files for beamtilt information'
+                write(logfhandle, *) '>>> Using XML files for beamtilt information'
             endif
-            call self%generate_xml_tiltgroups(cline, spproj)
+            call self%generate_xml_tiltgroups(cline)
         endif
         call self%allocate_opticsgroups(cline, spproj)
         call self%write_corrected_micrographs_star(cline, spproj)
         call self%write_micrographs_star(cline, spproj)
         call self%write_particles2D_star(cline, spproj)
         if( allocated(self%moviegroup) ) deallocate(self%moviegroup)
-        call self%movienames%kill
+        if( allocated(self%movienames) ) then
+            call self%movienames%kill
+            deallocate(self%movienames)
+        endif
     end subroutine create
 
     ! distance threshold based yerarchical clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
-    subroutine h_clust(self,data_in,thresh,labels,centroids,populations)
-        class(relion_project),  intent(inout) :: self ! unused
+    subroutine h_clust(data_in,thresh,labels,centroids,populations)
         real,    intent(in)  :: data_in(:,:)   ! input data, point coords
         real,    intent(in)  :: thresh         ! threshold for class merging
         integer, intent(out) :: labels(:)      ! labels of the elements in vec
@@ -840,10 +880,10 @@ contains
           centroids(i,:) = centroids(i,:)/real(populations(i))
         enddo
         ! output generation, Joseph please change it as you wish
-        write(logfhandle, *) 'HIERARCHICAL CLUSTERING COMPLETED'
-        write(logfhandle, *) 'Distance threshold selected: ', thresh
+        write(logfhandle, *) '>>> HIERARCHICAL CLUSTERING COMPLETED'
+        write(logfhandle, *) '>>> Distance threshold selected: ', thresh
         do i = 1, ncls
-            write(logfhandle, *) 'Class ', i, 'Population ', populations(i), ' Centroid [', centroids(i,1), ',', centroids(i,2), ']'
+            write(logfhandle, *) '>>>Class ', i, 'Population ', populations(i), ' Centroid [', centroids(i,1), ',', centroids(i,2), ']'
         enddo
     end subroutine h_clust
 
