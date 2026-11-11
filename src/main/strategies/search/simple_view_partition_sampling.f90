@@ -232,7 +232,6 @@ contains
             l_keep = states(clssmp(i)%pinds) > 0
             if( all(l_keep) ) cycle
             clssmp(i)%pinds = pack(clssmp(i)%pinds, mask=l_keep)
-            clssmp(i)%ccs   = pack(clssmp(i)%ccs,   mask=l_keep)
             clssmp(i)%pop   = size(clssmp(i)%pinds)
         end do
     end subroutine drop_inactive_rows

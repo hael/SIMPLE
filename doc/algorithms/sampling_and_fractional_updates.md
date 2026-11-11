@@ -60,17 +60,19 @@ been updated, and `sampled`, the last sampling round that selected it. The
     balanced, and the unit level keeps the classes inside a view, which may
     be different conformational states, on an equal footing.
 
-  In both modes the count-tiered rule applies inside each unit. With
-  `frac_best < 1`, only the best-scoring fraction of each unit is eligible,
-  and `greedy_sampling` takes the top of each unit deterministically.
+  In both modes the count-tiered rule applies inside each unit, over the
+  whole class: no per-particle score decides who is drawn.
 - **reproduce**: reuse exactly the particles whose `sampled` equals the
   current maximum. This lets a probabilistic iteration choose the subset once,
   on the master, and have every part's pipeline (the table rows, the draws, the
   matching and the reconstruction) act on the same particles. The draw is
   keyed on the run's seed, the pass, the iteration and the particle, so the
   subset does not depend on the number of parts or threads.
-- **cohort** (`refine3D_states`): the set drawn at the first iteration of a
-  frequency block is kept for the whole block. Later iterations reproduce it
+- **cohort** (`refine3D_states`, and the shc neighbourhood stages 1-2 of
+  single-state `solve3D`): the set drawn at the first iteration of a
+  frequency block or stage is kept for the whole block; with
+  `cohort_sampling=keep` a stage keeps the previous stage's set from its first
+  iteration (solve3D stage 2 keeps stage 1's). Later iterations reproduce it
   and advance its counters, so that state labels and poses converge on one
   set.
 - **missing**: every active particle that has never been updated. This is the

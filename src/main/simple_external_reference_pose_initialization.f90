@@ -61,7 +61,6 @@ contains
         call cline_pose_init%set('mkdir',           'no')
         call cline_pose_init%set('objfun',          'cc')
         call cline_pose_init%set('refine',          'greedy')
-        call cline_pose_init%set('greedy_sampling', 'yes')
         call cline_pose_init%set('balance',         'none')
         call cline_pose_init%set('trail_rec',       'no')
         call cline_pose_init%set('volrec',          'no')

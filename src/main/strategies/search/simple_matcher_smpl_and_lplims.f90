@@ -210,8 +210,8 @@ contains
     end subroutine set_bp_range2D
 
     !> Fractional-update selection by balance: none takes the global lowest-updatecnt tiers, class and cavg
-    !! the nested quota over the sampling units of CLASS_SAMPLING_FILE. Under cohort_sampling a stage
-    !! draws at its first iteration and rescores that cohort at the others.
+    !! the nested quota over the sampling units of CLASS_SAMPLING_FILE. Under cohort_sampling=yes a stage
+    !! draws at its first iteration and rescores that cohort at the others; keep rescores at every iteration.
     subroutine sample_ptcls4update3D( params, build, pfromto, l_incr_sampl, nptcls2update, pinds, allow_empty )
         class(parameters),    intent(in)    :: params
         class(builder),       intent(inout) :: build
@@ -230,7 +230,7 @@ contains
         endif
         ! the probabilistic routes draw the sample on the keyed generator (an absent key: the intrinsic stream)
         if( params%l_prob_align_mode ) key = sample_rnd_key(params, RND_PROG_REFINE3D)
-        if( params%l_cohort_sampling .and. params%which_iter /= params%startit )then
+        if( params%l_cohort_sampling .and. (params%l_cohort_keep .or. params%which_iter /= params%startit) )then
             call build%spproj_field%sample4update_rescore(pfromto, nptcls2update, pinds, allow_empty=allow_empty)
             return
         endif
@@ -241,15 +241,8 @@ contains
                     THROW_HARD('File for class-balanced sampling in fractional update: '//CLASS_SAMPLING_FILE//' does not exist!')
                 endif
                 call read_class_samples(clssmp, fname)
-                if( params%l_frac_best )then
-                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
-                        &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best, &
-                        &allow_empty=allow_empty, key=key)
-                else
-                    call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
-                        &nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, &
-                        &allow_empty=allow_empty, key=key)
-                endif
+                call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac, &
+                    &nptcls2update, pinds, l_incr_sampl, allow_empty=allow_empty, key=key)
                 call deallocate_class_samples(clssmp)
                 call fname%kill
             case DEFAULT

@@ -74,7 +74,13 @@ Stage policy includes:
   size/input schedule
 - staged search by state count:
   - single-state particle runs use `prob_neigh` with `prob_neigh_mode=shc`
-    in stages 1-2, middle `prob`, and late `prob_neigh`
+    in stages 1-2, middle `prob`, and late `prob_neigh`; under fractional
+    updates the shc stages refine one cohort: stage 1 draws it at its first
+    iteration (`cohort_sampling=yes`) and stage 2 keeps it
+    (`cohort_sampling=keep`; a run that starts at stage 2 draws its own),
+    because the shc neighbourhood search scans a never-searched particle in
+    full and a fresh draw every iteration would make these stages a sequence of
+    full scans; from stage 3 the sample is redrawn every iteration
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
     stages 3-5, and `prob_neigh` with `prob_neigh_mode=state` from stage 6
     (`PROB_NEIGH_REFINE_STAGE`, the single-state switch), so the default
@@ -146,14 +152,15 @@ view spread over many classes no longer dominates the sample and an odd class
 does not become a group of its own. Every fractional update shares
 its target over the groups in proportion to the square root of their
 populations, then over the classes of a group the same way, each capped at its
-population, then lowest `updatecnt` first inside a class. Under `class` every
+population, then lowest `updatecnt` first inside a class, drawn from the whole
+class: no per-particle 2D score enters the draw. Under `class` every
 class is its own group, so a rare view is sampled more often than its
 population alone would give, without one small class taking a large part of
 every draw (equal shares did: on a small membrane protein with six one-class
 groups of odd class averages, `cavg` with equal shares drew 80% of every sample
 from 18% of the particles); under `none` the stages sample the
 global lowest `updatecnt` tiers, and the file holds class units only for the
-initial greedy sample. The groups are written
+initial sample of the starting volumes. The groups are written
 as `view_partitionNN_cavgs` stacks with the table `view_partition.txt`. The
 units are formed once, before the first stage, and serve the whole run: the
 stages only read the file, and every stage command line carries `balance` and,
@@ -628,12 +635,11 @@ Unless the user overrides them, the commander sets `nstages=5` and
 `lpstop=6.0 A`. Stage 5 is NU-filtered (since 2026-10-18, section 8) but runs
 no multi-state trailing reconstruction or staged automasking. After
 stage 5, the workflow still runs the final original-sampling reconstruction
-so the run produces inspectable `rec_final_stateNN` volumes. The multi-state
-run samples stochastically from stage 1: the child `refine3D` stages use
-`greedy_sampling=no` with `frac_best=1.0` in every stage (from stage 4 until
-2026-11-11). This samples each unit's quota from the full class rather than
-from a top-ranked fraction of that class; a greedy sample never searches the
-particles outside it, so a minority state would keep its start labels. The outer particle target remains the fixed
+so the run produces inspectable `rec_final_stateNN` volumes. Every stage
+samples each unit's quota from the whole class, lowest update count first; no
+per-particle 2D score enters the draw (section 3, sampling units; single state
+took each class's best 2D scores until 2026-11-11). A greedy sample never searches the particles outside it,
+so a minority state would keep its start labels. The outer particle target remains the fixed
 `nsample`-derived update fraction while `nsample/active_particles <= 0.9`;
 above that threshold the workflow runs full active-particle updates each
 stage.

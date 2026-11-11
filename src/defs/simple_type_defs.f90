@@ -140,8 +140,9 @@ type lp_crop_inf
     logical :: l_autoscale=.false., l_lpset=.false.
 end type lp_crop_inf
 
-!> the particles of one class, best score first; group > 0 is the class-average group of
-!! balance=cavg sampling, 0 makes the class its own group
+!> the particles of one class, in index order; ranked by a score (best first, scores in ccs) only for
+!! the selection tools; group > 0 is the class-average group of balance=cavg sampling, 0 makes the
+!! class its own group
 type class_sample
     integer :: clsind = 0, pop = 0, nsample = 0, group = 0
     integer, allocatable :: pinds(:)

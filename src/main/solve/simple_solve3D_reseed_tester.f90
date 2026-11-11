@@ -77,7 +77,7 @@ contains
         type(solve3D_addon_ctx) :: addon
         type(string) :: cwd, root
         logical :: saved_flags(9)
-        real    :: saved_update_frac, fbest
+        real    :: saved_update_frac
         integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage
         write(*,'(A)') 'test_gold_standard_stages'
         nfail0 = tests_failed
@@ -194,20 +194,30 @@ contains
         call set_cline_refine3D(params, 7, 1, .false.)
         call assert_false(cline_refine3D%defined('lp'), 'without NU, gold-standard matching uses the half-map FSC')
         call assert_false(cline_refine3D%defined('lpstop'), 'without NU, gold-standard matching still has no stage ceiling')
-        ! one state samples each class's best particles, the best half from stage 5; several states draw
-        ! from the whole class in every stage, or a minority state is never searched
-        do istage = 1, 5
+        ! no stage passes a score-based sampling control: one state and several draw from the whole class;
+        ! the single-state shc neighbourhood stages (1-2) refine one cohort: drawn in stage 1, kept in stage 2
+        do istage = 1, 8
             call set_cline_refine3D(params, istage, 1, .false.)
-            call assert_string_eq('yes', cline_refine3D%get_carg('greedy_sampling'), 'one state: a greedy sample')
-            fbest = 1.
-            if( istage == 5 ) fbest = 0.5
-            call assert_real(fbest, cline_refine3D%get_rarg('frac_best'), 1.e-6, 'one state: the best half from stage 5')
+            call assert_false(cline_refine3D%defined('greedy_sampling'), 'one state: no greedy sampling control')
+            call assert_false(cline_refine3D%defined('frac_best'),       'one state: no best-fraction control')
+            select case(istage)
+                case(1)
+                    call assert_string_eq('yes',  cline_refine3D%get_carg('cohort_sampling'), 'one state: stage 1 draws the cohort')
+                case(2)
+                    call assert_string_eq('keep', cline_refine3D%get_carg('cohort_sampling'), 'one state: stage 2 keeps it')
+                case DEFAULT
+                    call assert_false(cline_refine3D%defined('cohort_sampling'), 'one state: free sampling after the shc stages')
+            end select
         end do
+        ! a run that starts at stage 2 has no cohort to keep: it draws one
+        call set_cline_refine3D(params, 2, 2, .false.)
+        call assert_string_eq('yes', cline_refine3D%get_carg('cohort_sampling'), 'one state: a stage-2 start draws its cohort')
         params%nstates = 3
-        do istage = 1, 5
+        do istage = 1, 8
             call set_cline_refine3D(params, istage, 1, .false.)
-            call assert_string_eq('no', cline_refine3D%get_carg('greedy_sampling'), 'several states: a stochastic sample')
-            call assert_real(1., cline_refine3D%get_rarg('frac_best'), 1.e-6, 'several states: the whole class')
+            call assert_false(cline_refine3D%defined('greedy_sampling'), 'several states: no greedy sampling control')
+            call assert_false(cline_refine3D%defined('frac_best'),       'several states: no best-fraction control')
+            call assert_false(cline_refine3D%defined('cohort_sampling'), 'several states: no cohort')
         end do
         params%nstates = 1
         call cline_refine3D%kill

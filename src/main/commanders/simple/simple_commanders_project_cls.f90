@@ -117,12 +117,12 @@ contains
             end do
             tmpinds = (/(iclust,iclust=1,nclust)/)
             clsinds = pack(tmpinds, mask=clustmask)
-            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster')
+            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, label='cluster', score_key='corr')
         else
             ncls    = spproj%os_cls2D%get_noris()
             tmpinds = (/(icls,icls=1,ncls)/)
             clsinds = pack(tmpinds, mask=rstates > 0.5)
-            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+            call spproj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, score_key='corr')
         endif
         if( cline%defined('nparts') )then
             if( trim(params%ranked_parts).eq.'yes' )then

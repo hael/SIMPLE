@@ -18,7 +18,6 @@ the refinement iterations are delegated to `commander_refine3D`.
 `refine3D_auto` sets hard workflow defaults:
 
 - `balance=none`
-- `greedy_sampling=no`
 - `trail_rec=yes`
 - `refine=prob_neigh` (derived from `pose_cont`, section 7; `refine` itself is
   rejected on the command line)

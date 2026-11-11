@@ -97,15 +97,12 @@ gives `update_frac = nsample * nstates / N_active`, capped at 0.9 so that
 fractional updates stay on; if `nsample` exceeds 90 percent of the active set,
 the run switches to full updates and disables trailing. The subset is drawn
 over sampling units built from the selected 2D class averages (`balance=class`
-by default; see [sampling](sampling_and_fractional_updates.md)). Until stage 5
-(stage 4 for independent multi-state runs), each iteration takes the
-top-scoring particles of every unit by their 2D score, so the early stages
-work on the same well-classified particles. From that stage on, the subset is
-redrawn stochastically every iteration, lowest update count first, and only
-the best-scoring half of each unit is eligible (`frac_best = 0.5`), which acts
-as a soft outlier rejection. The eligible fraction rises to 0.85 in the last
-two stages (0.98 for multi-state runs); independent multi-state runs draw from
-whole units throughout their stochastic stages.
+by default; see [sampling](sampling_and_fractional_updates.md)). Each unit's
+quota is drawn from the whole class, lowest update count first; no
+per-particle 2D score enters the draw. The single-state shc neighbourhood
+stages (1-2), whose search scans a never-searched particle in full, refine one
+cohort: stage 1 draws it and stage 2 keeps it, so each of its particles is
+scanned in full once. From stage 3 the subset is redrawn every iteration.
 
 **Regularization.** ML regularization starts at stage 3, once the halves are
 independent enough for the FSC-derived signal prior to mean something. From

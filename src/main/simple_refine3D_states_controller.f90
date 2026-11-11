@@ -892,7 +892,6 @@ contains
         call cline_missing%set('prg',           'refine3D')
         call cline_missing%set('mkdir',              'no')
         call cline_missing%set('balance',          'none')
-        call cline_missing%set('frac_best',           1.0)
         call cline_missing%set('fillin',             'no')
         call cline_missing%set('update_frac',         1.0)
         call cline_missing%set('trail_rec',          'no')
@@ -904,7 +903,6 @@ contains
         call cline_missing%delete('endit')
         call cline_missing%delete('cohort_sampling')
         call cline_missing%set('refine',          'greedy')
-        call cline_missing%set('greedy_sampling',   'yes')
         call cline_missing%set('update_missing',    'yes')
         call xrefine3D%execute(cline_missing)
         call cline_missing%kill

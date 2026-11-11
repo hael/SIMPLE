@@ -11,7 +11,8 @@ public :: write_class_samples, read_class_samples, deallocate_class_samples
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: NHEAD = 4 !< per record: clsind, pop, nsample, group, then pinds and ccs
+integer, parameter :: NHEAD = 4 !< per record: clsind, pop, nsample, group, then pinds (no scores: the units
+                                !! of 3D sampling carry no per-particle objective values)
 
 contains
     
@@ -21,7 +22,7 @@ contains
         integer :: sz_pinds, sz_rarr, cnt, i
         sz_pinds = 0
         if( allocated(cs_entry%pinds) ) sz_pinds = size(cs_entry%pinds)
-        sz_rarr  = NHEAD + 2 * sz_pinds
+        sz_rarr  = NHEAD + sz_pinds
         allocate(rarr(sz_rarr), source=0.)
         rarr(1)  = real(cs_entry%clsind)
         rarr(2)  = real(cs_entry%pop)
@@ -32,10 +33,6 @@ contains
             do i = 1,sz_pinds
                 cnt = cnt + 1
                 rarr(cnt) = real(cs_entry%pinds(i))
-            end do
-            do i = 1,sz_pinds
-                cnt = cnt + 1
-                rarr(cnt) = cs_entry%ccs(i)
             end do
         endif
     end function serialize_class_sample
@@ -82,15 +79,10 @@ contains
             csarr(i)%nsample = nint(rmat(i,3))
             csarr(i)%group   = nint(rmat(i,4))
             allocate(csarr(i)%pinds(csarr(i)%pop), source=0)
-            allocate(csarr(i)%ccs(csarr(i)%pop),   source=0.)
             cnt = NHEAD
             do j = 1,csarr(i)%pop
                 cnt = cnt + 1
-                csarr(i)%pinds(j) = nint(rmat(i,cnt)) 
-            end do
-            do j = 1,csarr(i)%pop
-                cnt = cnt + 1
-                csarr(i)%ccs(j) = rmat(i,cnt) 
+                csarr(i)%pinds(j) = nint(rmat(i,cnt))
             end do
         end do
     end subroutine read_class_samples

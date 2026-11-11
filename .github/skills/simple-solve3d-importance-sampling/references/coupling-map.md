@@ -27,7 +27,7 @@ Important details:
 - When `nsample / active > FULL_SAMPLE_SWITCH_FRAC` (0.9) the run forces full
   active sampling: the stage lines carry no `update_frac`, `nsample`, `fillin`
   or trailing reconstruction (`force_full_sampling_mode`).
-- On the ini3D routes the initial subset is a greedy draw over the class units
+- On the ini3D routes the initial subset is a class-balanced draw over the class units
   (`sample4update_class`, or `sample4update_cnt` without a 2D solution) with
   `updatecnt` set to 1 for the drawn particles.
 
@@ -61,9 +61,12 @@ Sampling by stage:
 
 - every stage carries the run's `update_frac` and `balance` (plus `nclust`
   for `cavg`)
-- greedy (top 2D score per unit) until `STOCH_SAMPL_STAGE` (5; 4 for
-  multi-state); then single-state uses `frac_best=0.5`, rising to 0.85 in
-  stages 7-8, while multi-state uses `greedy_sampling=no` with `frac_best=1.0`
+- no per-particle score in any stage: each unit's quota comes from the whole
+  class, lowest `updatecnt` first
+- single-state shc stages 1-2 (fractional): one cohort, drawn at stage 1's
+  first iteration (`cohort_sampling=yes`) and kept by stage 2 (`keep`; a run
+  starting at stage 2 draws with `yes`), because the shc neighbourhood search
+  scans never-searched particles in full; from stage 3 every iteration redraws
 - `fillin=yes` on the last active stage of single-state runs only
 - `trail_rec=yes` from `TRAILREC_STAGE_SINGLE` (5) single-state and
   `TRAILREC_STAGE_MULTI` (8) multi-state
@@ -88,7 +91,8 @@ Key routines:
   `class_sample_quotas` and `class_sample_sweep` give the expected quotas and the
   draws one full sweep takes (`max ceil(pop/quota)`)
 - `sample4update_rescore`: the latest round again, `sampled`/`updatecnt` advanced
-  once (the `cohort_sampling` schedule of `refine3D_states` frequency blocks)
+  once (the `cohort_sampling` schedule of `refine3D_states` frequency blocks and
+  solve3D stages 1-2)
 - `sample4update_cnt`: prefers particles with lower `updatecnt`
 - `sample4update_fillin`: fills in particles with low update history
 - `sample4update_missing`: the particles never updated (`update_missing`)
@@ -129,7 +133,7 @@ Behavior:
   `sample_ptcls4fillin` (`sample4update_fillin`)
 - otherwise `sample_ptcls4update3D`: all active particles when `l_update_frac`
   is false; `sample4update_rescore` with `cohort_sampling=yes` and
-  `which_iter /= startit`; `sample4update_class` for `balance=class|cavg`;
+  `which_iter /= startit`, or with `cohort_sampling=keep` at every iteration; `sample4update_class` for `balance=class|cavg`;
   `sample4update_cnt` for `balance=none`
 - distributed: when `master_draws_sample3D` holds (every `refine=prob*`
   pass; else fractional, not polish/missing/eval/sigma) the master draws once

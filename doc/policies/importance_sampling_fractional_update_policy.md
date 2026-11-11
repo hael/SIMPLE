@@ -35,7 +35,7 @@ and the rule that stage 1 may sample particles without fractionally restoring
 previous class averages.
 
 `simple_commanders_solve3D.f90` and `simple_solve3D_controller.f90` own 3D
-stage scheduling: dynamic `update_frac`, `fillin`, `frac_best`, `balance`,
+stage scheduling: dynamic `update_frac`, `fillin`, `balance`, `cohort_sampling`,
 `trail_rec`, and transitions between early `prob_neigh` modes, `prob`, and
 late `prob_neigh`.
 
@@ -239,12 +239,11 @@ after the `prob` phase (stages 3-5) and before `prob_neigh` (stage 6),
 multi-state trailing reconstruction and staged automasking; its last stage
 is NU-filtered (since 2026-10-18). The workflow still runs the final reconstruction step
 at the configured last stage so it writes inspectable final state volumes. To
-give every active particle a chance to change state, the multi-state run samples
-stochastically from stage 1: the child `refine3D` stages use `greedy_sampling=no`
-with `frac_best=1.0` in every stage (stage 4 onward until 2026-11-11). This keeps
-class-balanced quotas but draws from the whole class, not a top-ranked fraction;
-a greedy sample never searches the particles outside it, so a minority state keeps
-its start labels (ms_abinitio run, SNR 0.05 benchmark: de novo accuracy 0.83 -> 0.90). The outer particle target remains the fixed
+give every active particle a chance to change state, every stage draws each unit's
+quota from the whole class (section on sampling units). A greedy sample never searches
+the particles outside it, so a minority state keeps its start labels (ms_abinitio run,
+SNR 0.05 benchmark: de novo accuracy 0.83 -> 0.90, the result that removed per-particle
+scores from 3D sampling for one state as well on 2026-11-11). The outer particle target remains the fixed
 `nsample`-derived update fraction at every stage.
 
 `sample_ptcls4update3D` applies the normal 3D subset policy, chosen by
@@ -271,9 +270,11 @@ those classes have no averages.
 ### Sampling units and the nested quota
 
 A sampling unit is one selected 2D class (`cls2D` state > 0): its active
-particles ordered by their 2D score (`corr`, best first), so the greedy and
-`frac_best` selections take the best of every class. Each unit carries an
-integer `group`:
+particles, in index order. No per-particle objective value enters 3D sampling:
+a 2D score is a noisy measurement of the 2D solution, and ranking by it would
+let that solution decide who is refined. The class labels and the `cavg` groups
+only set the strata and their quotas; inside a unit the draw is by update count
+and the keyed shuffle. Each unit carries an integer `group`:
 
 - `class`: `group = 0`, every unit is its own group
 - `cavg`: the selected class averages are aligned pairwise under their own
@@ -330,12 +331,12 @@ carry bias. The `proj` field and `proj2class` serve search, convergence and 2D
 averaging only.
 
 `clssmp.bin` is the single sampling file. Every record is one unit: class
-index, population, quota, `group`, then the particle indices and their scores.
+index, population, quota, `group`, then the particle indices (no scores).
 The producer (`make_class_samples` in `simple_view_partition_sampling`) runs
 once before the first stage; the stages only read the file. Stage command
 lines carry `balance` and, for `cavg`, `nclust`. `solve3D` writes the file for
 every fractional run: the run's units under `class` or `cavg`, class units
-under `none`, because its initial greedy sample draws from class units.
+under `none`, because its initial sample draws from class units.
 Continuation and add-on rebuild the file from
 the current `ptcl2D` class labels; no particle indices are persisted in the run
 manifest, which records `balance` and `nclust` as given on the entry command
@@ -434,7 +435,7 @@ The workflow is (`doc/implementation_notes/completed/prob_align_batch_pipeline.m
 `simple_eul_prob_tab.f90`, `simple_eul_prob_tab_neigh.f90`, and
 `simple_eul_prob_tab2D.f90` perform candidate-level importance sampling inside
 that subset. They may use score-derived candidate distributions,
-`angle_sampling`, `greedy_sampling`, or neighborhood sampling, but the selected
+`angle_sampling`, or neighborhood sampling, but the selected
 particle set is already fixed before they run. Every draw of theirs is keyed
 (the in-plane draw per scored reference, the shift map's disk draw, the sparse
 fills' candidate order, the assignment draw), so it depends on the seed, the

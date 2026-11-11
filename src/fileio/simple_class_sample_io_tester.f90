@@ -14,7 +14,6 @@ private
 public :: run_all_class_sample_io_tests
 
 character(len=*), parameter :: CS_FILE = 'class_sample_io_tester.bin'
-real,             parameter :: TOL     = 1.0e-6
 
 contains
 
@@ -46,9 +45,6 @@ contains
         allocate(cs(1)%pinds(1), source=[42])
         allocate(cs(2)%pinds(2), source=[5, 9])
         allocate(cs(3)%pinds(4), source=[100, 3, 77, 12])
-        allocate(cs(1)%ccs(1),   source=[0.75])
-        allocate(cs(2)%ccs(2),   source=[0.5, -0.25])
-        allocate(cs(3)%ccs(4),   source=[0.9, 0.8, 0.1, -0.6])
     end subroutine make_ragged
 
     subroutine assert_entry_equal( expected, actual, label )
@@ -59,14 +55,13 @@ contains
         call assert_int(expected%pop,     actual%pop,     label//': pop')
         call assert_int(expected%nsample, actual%nsample, label//': nsample')
         call assert_int(expected%group,   actual%group,   label//': group')
-        call assert_true(allocated(actual%pinds) .and. allocated(actual%ccs), label//': pinds and ccs allocated')
-        if( .not. (allocated(actual%pinds) .and. allocated(actual%ccs)) ) return
+        call assert_false(allocated(actual%ccs), label//': the file carries no scores')
+        call assert_true(allocated(actual%pinds), label//': pinds allocated')
+        if( .not. allocated(actual%pinds) ) return
         call assert_int(size(expected%pinds), size(actual%pinds), label//': pinds size')
-        call assert_int(size(expected%ccs),   size(actual%ccs),   label//': ccs size')
-        if( size(actual%pinds) /= size(expected%pinds) .or. size(actual%ccs) /= size(expected%ccs) ) return
+        if( size(actual%pinds) /= size(expected%pinds) ) return
         do j = 1,size(expected%pinds)
             call assert_int(expected%pinds(j), actual%pinds(j), label//': pinds('//int2str(j)//')')
-            call assert_real(expected%ccs(j),  actual%ccs(j), TOL, label//': ccs('//int2str(j)//')')
         end do
     end subroutine assert_entry_equal
 
@@ -100,14 +95,12 @@ contains
         cs(1)%clsind = 1
         cs(1)%pop    = 2
         allocate(cs(1)%pinds(2), source=[8, 6])
-        allocate(cs(1)%ccs(2),   source=[0.3, 0.2])
-        cs(2)%clsind = 4   ! empty: no pinds/ccs
+        cs(2)%clsind = 4   ! empty: no pinds
         cs(2)%group  = 2
         cs(3)%clsind = 5
         cs(3)%pop    = 1
         cs(3)%nsample = 1
         allocate(cs(3)%pinds(1), source=[13])
-        allocate(cs(3)%ccs(1),   source=[0.95])
         call del_file(string(CS_FILE))
         call write_class_samples(cs, string(CS_FILE))
         call read_class_samples(cs_read, string(CS_FILE))
@@ -120,8 +113,7 @@ contains
         call assert_int(2, cs_read(2)%group,   'empty class: group survives')
         call assert_true(allocated(cs_read(2)%pinds), 'empty class: pinds allocated on read')
         if( allocated(cs_read(2)%pinds) ) call assert_int(0, size(cs_read(2)%pinds), 'empty class: pinds has zero size')
-        call assert_true(allocated(cs_read(2)%ccs), 'empty class: ccs allocated on read')
-        if( allocated(cs_read(2)%ccs) ) call assert_int(0, size(cs_read(2)%ccs), 'empty class: ccs has zero size')
+        call assert_false(allocated(cs_read(2)%ccs), 'empty class: no scores on read')
         call assert_entry_equal(cs(3), cs_read(3), 'class after the empty one')
         call deallocate_class_samples(cs)
         call deallocate_class_samples(cs_read)
@@ -134,7 +126,7 @@ contains
         allocate(cs_read(5))
         cs_read(1)%clsind = 99
         allocate(cs_read(1)%pinds(3), source=[1, 2, 3])
-        allocate(cs_read(1)%ccs(3),   source=[1., 1., 1.])
+        allocate(cs_read(1)%ccs(3),   source=[1., 1., 1.])   ! a ranked array: no scores survive the read
         call make_ragged(cs)
         call del_file(string(CS_FILE))
         call write_class_samples(cs, string(CS_FILE))

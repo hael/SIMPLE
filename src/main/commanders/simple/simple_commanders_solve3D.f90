@@ -1182,7 +1182,7 @@ contains
                 update_frac = min(solve3D_update_frac_max(), update_frac) ! keep fractional update on below the switch threshold
                 if( .not. l_no2D )then
                     ! the sampling units on disk: the run's under balance=class|cavg, class units under none,
-                    ! which the initial greedy sample draws from
+                    ! which the initial sample draws from
                     smpl_units = 'class'
                     if( trim(params%balance) == 'cavg' ) smpl_units = 'cavg'
                     ! workers are idle before the first stage: nparts*nthr threads on local execution
@@ -1295,7 +1295,7 @@ contains
             if( params%nstates > 1 .and. .not.l_cavg_ini_ext )then
                 call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
             endif
-            ! create an initial balanced greedy sampling
+            ! the initial class-balanced sample of the starting volumes
             noris = spproj%os_ptcl3D%get_noris()
             if( l_force_full_sampling )then
                 call spproj%os_ptcl3D%sample4update_all([1,noris], nptcls2update, pinds, .true.)
@@ -1303,7 +1303,7 @@ contains
                 ! no class units: the global lowest update-count tiers, as the stages sample under balance=none
                 call spproj%os_ptcl3D%sample4update_cnt([1,noris], update_frac, nptcls2update, pinds, .true.)
             else
-                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true., .true.)
+                call spproj%os_ptcl3D%sample4update_class(clssmp, [1,noris], update_frac, nptcls2update, pinds, .true.)
             endif
             call spproj%os_ptcl3D%set_updatecnt(1, pinds) ! set all sampled updatecnts to 1 & the rest to zero
             deallocate(pinds)                             ! these are not needed
@@ -2268,8 +2268,6 @@ contains
             call cline_missing%set('mkdir',                 'no')
             call cline_missing%set('refine',            'greedy')
             call cline_missing%set('balance',             'none')
-            call cline_missing%set('greedy_sampling',      'yes')
-            call cline_missing%set('frac_best',              1.0)
             call cline_missing%set('fillin',                'no')
             call cline_missing%set('update_missing',       'yes')
             call cline_missing%set('update_frac',            1.0)
@@ -2280,6 +2278,7 @@ contains
             call cline_missing%set('which_iter',    iter_missing)
             call cline_missing%set('extr_iter',     iter_missing)
             call cline_missing%delete('endit')
+            call cline_missing%delete('cohort_sampling')
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
         end subroutine run_missing_update

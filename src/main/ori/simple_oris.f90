@@ -98,6 +98,7 @@ type :: oris
     procedure          :: get_update_rows
     procedure          :: get_state_update_fracs
     procedure          :: get_class_sample_stats
+    procedure          :: rank_class_samples
     !======================================================================
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
@@ -796,6 +797,12 @@ interface
         character(len=*),      optional, intent(in)    :: label, score_key
     end subroutine get_class_sample_stats
 
+    module subroutine rank_class_samples( self, clssmp, score_key )
+        class(oris),        intent(in)    :: self
+        type(class_sample), intent(inout) :: clssmp(:)
+        character(len=*),   intent(in)    :: score_key
+    end subroutine rank_class_samples
+
     !======================================================================
     ! SETTERS / MUTATORS (simple_oris_setters.f90)
     !======================================================================
@@ -1257,15 +1264,14 @@ interface
     end subroutine sample4update_cnt
 
     module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, &
-                                        incr_sampled, l_greedy, frac_best, allow_empty, key )
+                                        incr_sampled, allow_empty, key )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled, l_greedy
-        real,    optional,    intent(in)    :: frac_best
+        logical,              intent(in)    :: incr_sampled
         logical, optional,    intent(in)    :: allow_empty
         type(rnd_key), optional, intent(in) :: key
     end subroutine sample4update_class

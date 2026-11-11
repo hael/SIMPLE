@@ -123,7 +123,7 @@ contains
         n_med         = max(1, nint(median(pop_reals)))
         anchor_target = max(2, nint(params%frac_best * real(n_med)))
         deallocate(pop_reals)
-        call src_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp)
+        call src_proj%os_ptcl2D%get_class_sample_stats(clsinds, clssmp, score_key='corr')
         allocate(parents_work(ncls_cand))
         ncls_acc = 0
         do i = 1,ncls_cand

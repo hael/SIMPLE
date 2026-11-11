@@ -69,7 +69,7 @@ type :: parameters
     character(len=3)          :: gen_model='no'       !< fit generative model and write generated/denoised particles(yes|no){no}
     character(len=3)          :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search(yes|no){no}
-    character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)(yes|no){yes}
+    character(len=3)          :: greedy_sampling='yes' !< selection tools: take each class's best-scoring particles(yes|no){yes}
     character(len=3)          :: hist='no'            !< whether to print histogram(yes|no){no}
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
@@ -132,7 +132,7 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending(yes|no){yes}
     character(len=3)          :: stepwise='no'        !< stream pool 2D: import only the sets that reach the particle threshold(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
-    character(len=3)          :: cohort_sampling='no' !< internal: draw at a stage's first iteration, rescore that cohort after(yes|no){no}
+    character(len=4)          :: cohort_sampling='no' !< internal: yes draws at a stage's first iteration and rescores that cohort after; keep rescores the previous stage's cohort from the first iteration(no|yes|keep){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
     character(len=3)          :: shift_prior='yes'    !< the probability tables' shift searches carry a Gaussian prior on the stored shift's displacement from the seed (the penalty follows the stored shift at every rotation), width from the previous iteration's shift increments; the window search's, off under the polar shift map (yes|no){yes}
@@ -530,7 +530,7 @@ type :: parameters
     real    :: fny=0. !< not a command-line key
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
-    real    :: frac_best=1.0       !< fraction of best particles to sample from per class with sampling units (balance=class|cavg)
+    real    :: frac_best=1.0       !< selection tools: fraction of best particles to sample from per class; bootstrap_cavgs: anchor fraction
     real    :: frac_worst=1.0      !< fraction of worst particles to sample from per class in balanced selection
     real    :: frac_diam=0.5       !< fraction of atomic diameter
     real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
@@ -643,7 +643,6 @@ type :: parameters
     logical :: l_fillin          = .false. !< not a command-line key
     logical :: l_assign_all      = .false. !< assign_all=yes under fractional updates: refine2D converges only when every active particle has a class; not a command-line key
     logical :: l_greedy_smpl     = .true. !< not a command-line key
-    logical :: l_frac_best       = .false. !< not a command-line key
     logical :: l_update_frac     = .false. !< not a command-line key
     logical :: l_gauref          = .false. !< not a command-line key
     logical :: l_preimage_auto   = .false. !< not a command-line key
@@ -667,6 +666,7 @@ type :: parameters
     logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key
     logical :: l_cohort_sampling = .false. !< not a command-line key
+    logical :: l_cohort_keep     = .false. !< cohort_sampling=keep; not a command-line key
     logical :: l_scan_exit       = .false. !< scan_exit=yes: solve3D's multi-state shc stage 2 ends on the scan alone; not a command-line key
     logical :: l_prob_post_diag  = .false. !< prob_post_diag=yes: the dense table workers write pose-posterior statistics; not a command-line key
     logical :: l_shift_prior     = .false. !< shift_prior=yes; not a command-line key

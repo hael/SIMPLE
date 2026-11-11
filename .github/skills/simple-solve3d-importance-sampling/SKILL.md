@@ -1,6 +1,6 @@
 ---
 name: simple-solve3d-importance-sampling
-description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, greedy/stochastic, frac_best, fillin), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
+description: Use when working on SIMPLE solve3D sampling policy, nsample/update_frac behavior and the full-sampling switch, stage-wise sampling (balance units, the stage 1-2 cohort, fillin), the project owner's sample draw (keyed under refine=prob*) and its reproduction by distributed parts, sampled/updatecnt bookkeeping, inner probability-table candidate sampling, or the realized update fraction consumed by trailing reconstruction.
 ---
 
 # SIMPLE Solve3D Importance Sampling
@@ -36,8 +36,8 @@ Then answer the user request in this order:
    sampling, or inferred from `updatecnt`.
 4. Separate particle-domain search decisions from volume-domain trailing-reconstruction effects.
 5. Use exact field names such as `nsample`, `update_frac`, `sampled`,
-   `updatecnt`, `frac_best`, `greedy_sampling`, `fillin`, `balance`
-   (`none|class|cavg`), `nclust`, `cohort_sampling`, and `ufrac_trec`.
+   `updatecnt`, `fillin`, `balance` (`none|class|cavg`), `nclust`,
+   `cohort_sampling` (`no|yes|keep`), and `ufrac_trec`.
 
 ## Working Rules
 
@@ -57,10 +57,14 @@ Then answer the user request in this order:
 - `solve3D` takes `nsample` only: `nsample_start`/`nsample_stop` are refused
   and the update fraction does not change between stages.
 - There is no docked solve3D split, sticky class sampling or `sampled_only`
-  cohort restriction; multi-state solve3D is independent from the start, and
-  the only cohort rule is `refine3D_states` `cohort_sampling`.
-- The sampler never uses 3D maps, poses or projection directions; sampling
-  units come from 2D classes only.
+  cohort restriction; multi-state solve3D is independent from the start. The
+  cohort rules are `refine3D_states` `cohort_sampling` and the single-state
+  solve3D shc stages 1-2 (stage 1 `yes`, stage 2 `keep`; free from stage 3).
+- The sampler never uses 3D maps, poses, projection directions or per-particle
+  objective values: 2D classes (and `cavg` groups) set strata and quotas only,
+  and a unit's quota is drawn from the whole class by `updatecnt` and a keyed
+  shuffle. `clssmp.bin` carries no scores; `greedy_sampling`/`frac_best` are
+  selection-tool keys (`sample_classes`), not 3D sampling controls.
 - When explaining behavior, call out whether the code path is initial solve3D
   seeding, normal iteration, last-stage fill-in, or trailing reconstruction.
 - Preserve the reconstruction read contract: the reconstruction of the sampled
@@ -81,7 +85,7 @@ Inspect:
 Focus on `nsample` (`NSAMPLE_SOLVE3D_DEFAULT`), `UPDATE_FRAC_MAX`,
 `FULL_SAMPLE_SWITCH_FRAC`, `force_full_sampling_mode`, `sample4update_class`,
 `prob_neigh` (and `prob_neigh_mode`), `prob`, `NSPACE_MULTI_MAX`,
-`greedy_sampling`, `frac_best`, `fillin`, and `trail_rec`.
+`cohort_sampling`, `fillin`, and `trail_rec`.
 
 ### Particle-subset bookkeeping
 

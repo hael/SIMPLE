@@ -152,6 +152,8 @@ contains
         nactive = count(active)
         ncls2D  = spproj%os_cls2D%get_noris()
         call make_class_samples(params, spproj, 'class', params%nthr, .false., clssmp)
+        ! the training set takes each class's best 2D scores
+        call spproj%os_ptcl2D%rank_class_samples(clssmp, 'corr')
         navail = sum(clssmp(:)%pop)
         ntrain = min(params%nsample, navail)
         if( ntrain < params%nsample )then

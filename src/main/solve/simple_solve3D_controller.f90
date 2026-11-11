@@ -27,7 +27,6 @@ integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its count
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
-integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
 integer,          parameter :: PCG_START_STAGE         = 6           ! requested PCG backend and order prior; independent of gold_std_stage
@@ -59,9 +58,9 @@ integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, envfsc
-    type(string) :: balance, filt_mode, automsk, greedy_sampling, prob_neigh_mode
+    type(string) :: balance, filt_mode, automsk, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
-    real    :: trs, frac_best, overlap, fracsrch
+    real    :: trs, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
     logical :: l_gold_standard = .false.
     logical :: l_scan_exit = .false. !< the multi-state rule also converges on the scan alone (scan_exit=yes)
@@ -254,8 +253,6 @@ contains
         cfg%filt_mode       = 'none'
         cfg%automsk         = 'no'
         cfg%envfsc          = 'no'
-        cfg%greedy_sampling = 'yes'
-        cfg%frac_best       = 1.0
         cfg%overlap         = 0.99
         cfg%fracsrch        = 99.
         cfg%l_scan_exit     = .false.
@@ -456,17 +453,12 @@ contains
         cfg%inspace = NSPACE(istage)
         if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
         if( params%nstates > 1 ) cfg%inspace = min(cfg%inspace, NSPACE_MULTI_MAX)
-        cfg%greedy_sampling = 'yes'
-        ! several states sample stochastically from stage 1: a greedy sample never searches the
-        ! particles outside it, so a minority state would keep its start labels
-        if( params%nstates > 1 ) cfg%greedy_sampling = 'no'
         cfg%l_scan_exit     = .false.
         select case(istage)
             case(1,2)
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = 0.
                 cfg%ml_reg        = 'no'
-                cfg%frac_best     = 1.0
                 cfg%overlap       = 0.99
                 cfg%fracsrch      = 99.
                 cfg%snr_noise_reg = 2.0
@@ -480,8 +472,6 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                cfg%frac_best     = 1.0
-                if( params%nstates == 1 .and. istage >= STOCH_SAMPL_STAGE ) cfg%frac_best = 0.5
                 if( istage > full_budget_last_stage(l_cavgs) )then
                     cfg%overlap  = 0.9 ! early stopping
                     cfg%fracsrch = 90. ! early stopping
@@ -494,11 +484,6 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                if( params%nstates > 1 )then
-                    cfg%frac_best = 1.0
-                else
-                    cfg%frac_best = 0.85
-                endif
                 cfg%overlap       = 0.95 ! early stopping
                 cfg%fracsrch      = 90.  ! doesn't affect later stages
                 cfg%snr_noise_reg = 6.0
@@ -604,6 +589,19 @@ contains
         else
             call cline_refine3D%delete('prob_neigh_mode')
         endif
+        ! the shc neighbourhood search scans a never-searched particle in full: the shc stages refine one
+        ! class-balanced cohort, drawn at the first iteration of the run's first such stage and kept by the
+        ! next, so the full scan happens once; the later stages sample freely
+        if( cfg%refine.eq.'prob_neigh' .and. cfg%prob_neigh_mode.eq.PROB_NEIGH_MODE_EARLY .and. &
+            &.not. l_full_update_stage .and. .not. l_cavgs )then
+            if( istage > first_stage )then
+                call cline_refine3D%set('cohort_sampling', 'keep')
+            else
+                call cline_refine3D%set('cohort_sampling', 'yes')
+            endif
+        else
+            call cline_refine3D%delete('cohort_sampling')
+        endif
         call cline_refine3D%set('balance',                cfg%balance)
         if( cfg%balance.eq.'cavg' )then
             call cline_refine3D%set('nclust',             params%nclust)
@@ -645,8 +643,6 @@ contains
             call cline_refine3D%set('shift_sigma',        0.)
         endif
         call cline_refine3D%set('ml_reg',                 cfg%ml_reg)
-        call cline_refine3D%set('greedy_sampling',        cfg%greedy_sampling)
-        call cline_refine3D%set('frac_best',              cfg%frac_best)
         call cline_refine3D%set('overlap',                cfg%overlap)
         call cline_refine3D%set('fracsrch',               cfg%fracsrch)
         if( cfg%l_scan_exit )then

@@ -242,23 +242,23 @@ contains
 
     !> Nested equal quota: nint(update_frac * active) is shared equally over the groups (capped at their
     !! populations), each group's share equally over its units (the remainder to the least-updated units),
-    !! and a unit draws its quota lowest updatecnt first. Units with group 0 are their own group.
-    module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, &
-        &frac_best, allow_empty, key )
+    !! and a unit draws its quota from the whole class, lowest updatecnt first, shuffled within a tier.
+    !! Units with group 0 are their own group. No per-particle score enters the draw.
+    module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, &
+        &allow_empty, key )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
         integer,              intent(inout) :: nsamples
         integer, allocatable, intent(inout) :: inds(:)
-        logical,              intent(in)    :: incr_sampled, l_greedy
-        real,    optional,    intent(in)    :: frac_best
+        logical,              intent(in)    :: incr_sampled
         logical, optional,    intent(in)    :: allow_empty
         type(rnd_key), optional, intent(in) :: key
-        integer, allocatable :: states(:), eligible(:), updatecnts(:), inds_pool(:), inds_fill(:)
+        integer, allocatable :: states(:), updatecnts(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
         integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
-        integer :: nbest, nfill, ucnt, ucnt_min, ucnt_max, ishuffle
+        integer :: nfill, ucnt, ucnt_min, ucnt_max, ishuffle
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
@@ -267,28 +267,16 @@ contains
         ishuffle   = 0
         do i = 1, size(clssmp)
             if( clssmp(i)%nsample < 1 ) cycle
-            if( present(frac_best) )then
-                nbest = max(clssmp(i)%nsample, nint(frac_best * real(clssmp(i)%pop)))
-                nbest = min(nbest, clssmp(i)%pop)
-                eligible = clssmp(i)%pinds(:nbest)
-            else if( l_greedy )then
-                do j = 1, clssmp(i)%nsample
-                    states_bal(clssmp(i)%pinds(j)) = 1
-                end do
-                cycle
-            else
-                eligible = clssmp(i)%pinds
-            endif
-            allocate(updatecnts(size(eligible)), source=0)
-            do j = 1, size(eligible)
-                updatecnts(j) = self%o(eligible(j))%get_int('updatecnt')
+            allocate(updatecnts(clssmp(i)%pop), source=0)
+            do j = 1, clssmp(i)%pop
+                updatecnts(j) = self%o(clssmp(i)%pinds(j))%get_int('updatecnt')
             end do
             ucnt_min = minval(updatecnts)
             ucnt_max = maxval(updatecnts)
             allocate(inds_pool(0), source=0)
             do ucnt = ucnt_min, ucnt_max
                 if( size(inds_pool) >= clssmp(i)%nsample ) exit
-                inds_fill = pack(eligible, mask=updatecnts == ucnt)
+                inds_fill = pack(clssmp(i)%pinds, mask=updatecnts == ucnt)
                 if( size(inds_fill) == 0 ) cycle
                 ishuffle = ishuffle + 1
                 call keyed_or_intrinsic_shuffle(inds_fill, ishuffle, key)
@@ -299,7 +287,6 @@ contains
             do j = 1, clssmp(i)%nsample
                 states_bal(inds_pool(j)) = 1
             end do
-            if( allocated(eligible)  ) deallocate(eligible)
             if( allocated(updatecnts)) deallocate(updatecnts)
             if( allocated(inds_pool) ) deallocate(inds_pool)
             if( allocated(inds_fill) ) deallocate(inds_fill)
@@ -647,6 +634,10 @@ contains
         if( present(exact) ) l_exact = exact
         if( l_exact )then
             if( nptcls < 0 .or. nptcls > sum(clssmp(:)%pop) ) THROW_HARD('balanced sample exceeds eligible population')
+            do i = 1, size(clssmp)
+                if( clssmp(i)%pop < 1 ) cycle
+                if( .not. allocated(clssmp(i)%ccs) ) THROW_HARD('exact balanced sampling needs ranked classes (score_key)')
+            enddo
         endif
         clssmp(:)%nsample = 0
         do while( sum(clssmp(:)%nsample) < nptcls )

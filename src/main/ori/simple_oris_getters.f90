@@ -1015,15 +1015,15 @@ contains
         call counts2fracs(nrep, nsmp, rho)
     end subroutine get_state_update_fracs
 
+    !> The active particles of every class, in index order. The 3D sampling units use this order; a selection
+    !! tool that picks by score passes score_key, which ranks each class best first (rank_class_samples).
     module subroutine get_class_sample_stats( self, clsinds, clssmp, label, score_key )
         class(oris),                     intent(inout) :: self
         integer,                         intent(in)    :: clsinds(:)
         type(class_sample), allocatable, intent(inout) :: clssmp(:)
         character(len=*),      optional, intent(in)    :: label, score_key
-        character(len=:), allocatable :: flag, score
-        integer :: n, i, j, nc
-        score = 'corr'
-        if( present(score_key) ) score = trim(score_key)
+        character(len=:), allocatable :: flag
+        integer :: n, i, nc
         if( present(label) )then
             flag = trim(label)
         else
@@ -1045,16 +1045,29 @@ contains
             if( allocated(clssmp(i)%pinds) )then
                 clssmp(i)%clsind = clsinds(i)
                 clssmp(i)%pop    = size(clssmp(i)%pinds)
-                allocate(clssmp(i)%ccs(clssmp(i)%pop), source=0.)
-                do j = 1, clssmp(i)%pop
-                    clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get(score)
-                end do
-                call hpsort(clssmp(i)%ccs, clssmp(i)%pinds)
-                call reverse(clssmp(i)%ccs)
-                call reverse(clssmp(i)%pinds)
             endif
         end do
+        if( present(score_key) ) call self%rank_class_samples(clssmp, score_key)
     end subroutine get_class_sample_stats
+
+    !> Rank the particles of every class by score_key, best first, with the scores in ccs.
+    module subroutine rank_class_samples( self, clssmp, score_key )
+        class(oris),        intent(in)    :: self
+        type(class_sample), intent(inout) :: clssmp(:)
+        character(len=*),   intent(in)    :: score_key
+        integer :: i, j
+        do i = 1, size(clssmp)
+            if( allocated(clssmp(i)%ccs) ) deallocate(clssmp(i)%ccs)
+            if( .not. allocated(clssmp(i)%pinds) ) cycle
+            allocate(clssmp(i)%ccs(clssmp(i)%pop), source=0.)
+            do j = 1, clssmp(i)%pop
+                clssmp(i)%ccs(j) = self%o(clssmp(i)%pinds(j))%get(score_key)
+            end do
+            call hpsort(clssmp(i)%ccs, clssmp(i)%pinds)
+            call reverse(clssmp(i)%ccs)
+            call reverse(clssmp(i)%pinds)
+        end do
+    end subroutine rank_class_samples
 
     ! f = n/N per group, 0 for an empty group
     subroutine counts2fracs( nrep, nsmp, rho )

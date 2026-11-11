@@ -174,7 +174,6 @@ contains
 
         ! Set workflow defaults before the single typed parameter construction.
         call cline%set('balance',       'none') ! global lowest-updatecnt sampling, no sampling units
-        call cline%set('greedy_sampling', 'no') ! only active with sampling units (balance=class|cavg)
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
         if( l_local .and. .not. l_local_polar )then
             call cline%set('refine',        'cont') ! continuous Cartesian refinement of the stored poses
@@ -797,8 +796,6 @@ contains
         call states_ctrl%resolve_states(cline)
         ! hard defaults (balance falls back to none without selected class averages)
         call cline%set('balance',        'class')
-        call cline%set('greedy_sampling', 'no')
-        call cline%set('frac_best',       1.0)
         call cline%set('trail_rec',     'yes')
         call cline%set('objfun',      'euclid')
         call cline%set('lplim_crit',       0.5)
@@ -903,8 +900,6 @@ contains
         call cline%set('objfun',          'euclid')
         call cline%set('trail_rec',       'no')
         call cline%set('balance',         'none')
-        call cline%set('greedy_sampling', 'no')
-        call cline%set('frac_best',       1.0)
         call cline%set('lplim_crit',      0.5)
         call cline%set('incrreslim',      'no')
         ! overridable defaults
@@ -1329,8 +1324,6 @@ contains
         call cline%set('prg', 'classify3D_refs')
         ! hard defaults (balance falls back to none without selected class averages)
         call cline%set('balance',         'class')
-        call cline%set('greedy_sampling', 'no')
-        call cline%set('frac_best',       1.0)
         call cline%set('trail_rec',       'yes')
         call cline%set('objfun',          'euclid')
         call cline%set('lplim_crit',      0.5)
@@ -1665,7 +1658,6 @@ contains
             call cline_missing%set('prg',           'refine3D')
             call cline_missing%set('mkdir',              'no')
             call cline_missing%set('balance',          'none')
-            call cline_missing%set('frac_best',           1.0)
             call cline_missing%set('fillin',             'no')
             call cline_missing%set('update_frac',         1.0)
             call cline_missing%set('trail_rec',          'no')
@@ -1675,7 +1667,6 @@ contains
             call cline_missing%set('which_iter',    iter_glob)
             call cline_missing%set('extr_iter',     iter_glob)
             call cline_missing%set('refine',         'greedy')
-            call cline_missing%set('greedy_sampling',   'yes')
             call cline_missing%set('update_missing',    'yes')
             call cline_missing%delete('endit')
             call xrefine3D%execute(cline_missing)

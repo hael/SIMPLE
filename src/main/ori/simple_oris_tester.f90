@@ -181,19 +181,18 @@ contains
         do i = 1, 2
             clssmp(i)%clsind = i
             clssmp(i)%pop    = 20
-            allocate(clssmp(i)%pinds(20), clssmp(i)%ccs(20))
+            allocate(clssmp(i)%pinds(20))
             clssmp(i)%pinds = [(20*(i-1) + irep, irep=1,20)]
-            clssmp(i)%ccs   = [(real(21 - irep), irep=1,20)]
         enddo
         call fresh_field
-        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp, inds1, .false., .false., key=key)
+        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp, inds1, .false., key=key)
         call assert_int(10, nsamp, 'keyed sample4update_class draws the requested count')
         call assert_int(5, count(inds1 <= 20), 'keyed sample4update_class takes the unit quota')
         call fresh_field
-        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp2, inds2, .false., .false., key=key)
+        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp2, inds2, .false., key=key)
         call assert_true(all(inds2 == inds1), 'keyed sample4update_class reproduces its draw')
         call fresh_field
-        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp3, inds3, .false., .false., key=key2)
+        call os%sample4update_class(clssmp, [1, n], 0.25, nsamp3, inds3, .false., key=key2)
         call assert_true(any(inds3 /= inds1), 'another key draws another class-balanced subset')
         ! no key: the intrinsic stream, so two seeds give two subsets of the same size
         call fresh_field
@@ -231,7 +230,7 @@ contains
             call os%set(particle,'corr',real(particle))
             call os%set(particle,'corr_cart',real(10-particle))
         enddo
-        call os%get_class_sample_stats([1,2,3],groups,label='proj')
+        call os%get_class_sample_stats([1,2,3],groups,label='proj',score_key='corr')
         call os%sample_balanced(groups,4,.true.,flags)
         call assert_int(6,sum(flags),'default balanced sampling retains legacy rounded quotas')
         call os%sample_balanced(groups,4,.true.,flags,exact=.true.)
@@ -246,7 +245,7 @@ contains
         call assert_int(9,sum(flags),'exact full sample retains every particle')
         call os%set(7,'proj',1)
         call os%set(8,'proj',1)
-        call os%get_class_sample_stats([1,2,3,4],groups,label='proj')
+        call os%get_class_sample_stats([1,2,3,4],groups,label='proj',score_key='corr')
         call os%sample_balanced(groups,8,.true.,flags,exact=.true.)
         call assert_true(all(groups(:)%nsample==[4,3,1,0]),'capped quotas redistribute from sparse and empty bins')
         call os%kill
@@ -494,18 +493,16 @@ contains
         clssmp(1)%clsind = 1
         clssmp(1)%pop    = 5
         allocate(clssmp(1)%pinds(5), source=[1,2,3,4,5])
-        allocate(clssmp(1)%ccs(5),   source=[5.,4.,3.,2.,1.])
         clssmp(2)%clsind = 2
         clssmp(2)%pop    = 5
         allocate(clssmp(2)%pinds(5), source=[6,7,8,9,10])
-        allocate(clssmp(2)%ccs(5),   source=[5.,4.,3.,2.,1.])
         call os%set_all2single('updatecnt', 2.0)
         call os%set(4,  'updatecnt', 0.)
         call os%set(5,  'updatecnt', 0.)
         call os%set(9,  'updatecnt', 0.)
         call os%set(10, 'updatecnt', 0.)
         frac = 0.4
-        call os%sample4update_class(clssmp, [1, n], frac, nsamp, inds, .true., .false.)
+        call os%sample4update_class(clssmp, [1, n], frac, nsamp, inds, .true.)
         call assert_int(4, nsamp, 'sample4update_class nsamp')
         if( size(inds) == 4 )then
             call assert_true(all(inds == [4,5,9,10]), 'sample4update_class low updatecnt first')
@@ -580,14 +577,13 @@ contains
         clssmp(1)%clsind = 1
         clssmp(1)%pop    = 2
         allocate(clssmp(1)%pinds(2), source=[9,10])
-        allocate(clssmp(1)%ccs(2),   source=[2.,1.])
-        call os%sample4update_class(clssmp, [5, 8], 0.5, nsamp, inds, .true., .false., allow_empty=.true.)
+        call os%sample4update_class(clssmp, [5, 8], 0.5, nsamp, inds, .true., allow_empty=.true.)
         call assert_int(0, nsamp,      'sample4update_class: a partition outside the global sample samples nothing')
         call assert_int(0, size(inds), 'sample4update_class: no indices')
         ! nothing was stamped: no sampled mark and no update count anywhere
         call assert_false(os%has_been_sampled(), 'an empty sample stamps no particle')
         call assert_true(all([(os%get(i, 'updatecnt') == 0., i=1,10)]), 'an empty sample counts no update')
-        deallocate(clssmp(1)%pinds, clssmp(1)%ccs)
+        deallocate(clssmp(1)%pinds)
         deallocate(clssmp)
         call os%kill
     end subroutine test_empty_partition_sampling
@@ -605,7 +601,6 @@ contains
             clssmp(i)%pop    = pops(i)
             clssmp(i)%group  = groups(i)
             allocate(clssmp(i)%pinds(pops(i)), source=[(j, j=first,first+pops(i)-1)])
-            allocate(clssmp(i)%ccs(pops(i)),   source=1.)
             first = first + pops(i)
         end do
     end subroutine make_units
@@ -651,7 +646,7 @@ contains
         call os%set(8,  'updatecnt', 3.)   ! unit 3 (rows 8-17): rows 8 and 9 were updated before
         call os%set(9,  'updatecnt', 3.)
         call make_units([2,5,10], [0,0,0], clssmp)
-        call os%sample4update_class(clssmp, [1, 17], 9./17., nsamp, inds, .true., .false.)
+        call os%sample4update_class(clssmp, [1, 17], 9./17., nsamp, inds, .true.)
         cnts3 = unit_counts(clssmp, inds)
         call assert_int(10, nsamp, 'class: equal rounds overshoot by less than the number of units')
         call assert_true(all(cnts3 == [2,4,4]), 'class: every unit the same count capped at its population')
@@ -665,7 +660,7 @@ contains
         call os%set_all2single('updatecnt', 0.0)
         call os%set_all2single('sampled',   0.0)
         call make_units([2,6,6,3,20], [1,1,1,2,3], clssmp)
-        call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true., .false.)
+        call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true.)
         cnts5 = unit_counts(clssmp, inds)
         call assert_int(19, nsamp, 'cavg: sample size')
         call assert_true(all(cnts5 == [2,3,3,3,8]), 'cavg: nested equal quota over groups, then units')
@@ -682,7 +677,7 @@ contains
             call os%set(i, 'updatecnt', 0.)
         end do
         call make_units([4,4,4], [1,1,1], clssmp)
-        call os%sample4update_class(clssmp, [1, 12], 4./12., nsamp, inds, .true., .false.)
+        call os%sample4update_class(clssmp, [1, 12], 4./12., nsamp, inds, .true.)
         cnts3 = unit_counts(clssmp, inds)
         call assert_true(all(cnts3 == [1,2,1]), 'cavg: the group remainder goes to the least-updated unit')
         call free_units(clssmp)
@@ -710,7 +705,7 @@ contains
         call os%set_all2single('updatecnt', 0.0)
         call os%set_all2single('sampled',   0.0)
         do it = 1, sweep
-            call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true., .false.)
+            call os%sample4update_class(clssmp, [1, 37], 19./37., nsamp, inds, .true.)
         end do
         call assert_true(all([(os%get_updatecnt(i) > 0, i=1,37)]), 'every particle is visited within one sweep')
         call free_units(clssmp)
@@ -759,7 +754,7 @@ contains
         call os%sample4update_cnt([1, 10], 0.3, nsamp, inds2, .true.)
         call assert_true(.not. any(inds2 <= 3), 'global draw after a cohort takes no cohort row')
         call make_units([10], [0], clssmp)
-        call os%sample4update_class(clssmp, [1, 10], 0.3, nsamp, inds2, .true., .false.)
+        call os%sample4update_class(clssmp, [1, 10], 0.3, nsamp, inds2, .true.)
         call assert_true(.not. any(inds2 <= 3), 'unit draw after a cohort takes no cohort row')
         call free_units(clssmp)
         call os%kill

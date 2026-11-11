@@ -164,7 +164,7 @@ contains
         if( ncls_target < 1 ) THROW_HARD('reseed_classes requires ncls_target >= 1')
         if( .not. self%isthere('class') ) THROW_HARD('reseed_classes requires a previous class assignment')
         ! parents: active particles sorted best-to-worst by corr
-        call self%get_class_sample_stats(clsinds, clssmp)
+        call self%get_class_sample_stats(clsinds, clssmp, score_key='corr')
         nptcls_tot = 0
         do i = 1, nparents
             if( .not. allocated(clssmp(i)%pinds) ) clssmp(i)%pop = 0

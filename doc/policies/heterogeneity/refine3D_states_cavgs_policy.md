@@ -69,7 +69,7 @@ The route fixes:
 
 - `filt_mode=none`, `automsk=no`, `envfsc=no`, `combine_eo=no`
 - `objfun=euclid`
-- `trail_rec=no`, `balance=none`, `greedy_sampling=no`, `frac_best=1`
+- `trail_rec=no`, `balance=none`
 - `lplim_crit=0.5`, `incrreslim=no`
 - `autoscale=yes` (the frequency planner owns downscaling)
 
