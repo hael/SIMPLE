@@ -628,12 +628,12 @@ Unless the user overrides them, the commander sets `nstages=5` and
 `lpstop=6.0 A`. Stage 5 is NU-filtered (since 2026-10-18, section 8) but runs
 no multi-state trailing reconstruction or staged automasking. After
 stage 5, the workflow still runs the final original-sampling reconstruction
-so the run produces inspectable `rec_final_stateNN` volumes. To improve
-particle coverage before that early exit, the multi-state run starts
-stochastic balanced sampling at stage 4: the child `refine3D` stages switch
-to `greedy_sampling=no` with `frac_best=1.0` from stage 4 onward. This
-samples each unit's quota from the full class rather than from a top-ranked
-fraction of that class. The outer particle target remains the fixed
+so the run produces inspectable `rec_final_stateNN` volumes. The multi-state
+run samples stochastically from stage 1: the child `refine3D` stages use
+`greedy_sampling=no` with `frac_best=1.0` in every stage (from stage 4 until
+2026-11-11). This samples each unit's quota from the full class rather than
+from a top-ranked fraction of that class; a greedy sample never searches the
+particles outside it, so a minority state would keep its start labels. The outer particle target remains the fixed
 `nsample`-derived update fraction while `nsample/active_particles <= 0.9`;
 above that threshold the workflow runs full active-particle updates each
 stage.

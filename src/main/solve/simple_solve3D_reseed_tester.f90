@@ -59,7 +59,7 @@ contains
         call assert_false(solve3D_stage_skipping(4),       'four states: no stage skipped')
     end subroutine test_stage_skipping
 
-    !> Exercise emitted stage commands, including a skipped transition and stale matching limits.
+    !> Exercise emitted stage commands, including a skipped transition, stale matching limits and the sampling.
     subroutine test_gold_standard_stages()
         use simple_solve3D_utils, only: lpinfo, cline_refine3D, set_cline_refine3D, solve3D_addon_ctx, &
             &solve3D_stage_behind_fsc05, l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
@@ -77,8 +77,8 @@ contains
         type(solve3D_addon_ctx) :: addon
         type(string) :: cwd, root
         logical :: saved_flags(9)
-        real    :: saved_update_frac
-        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend
+        real    :: saved_update_frac, fbest
+        integer :: saved_nptcls_eff, saved_nstages, nfail0, backend, istage
         write(*,'(A)') 'test_gold_standard_stages'
         nfail0 = tests_failed
         call enter_fixture('solve3D_gold_standard', cwd, root)
@@ -194,6 +194,22 @@ contains
         call set_cline_refine3D(params, 7, 1, .false.)
         call assert_false(cline_refine3D%defined('lp'), 'without NU, gold-standard matching uses the half-map FSC')
         call assert_false(cline_refine3D%defined('lpstop'), 'without NU, gold-standard matching still has no stage ceiling')
+        ! one state samples each class's best particles, the best half from stage 5; several states draw
+        ! from the whole class in every stage, or a minority state is never searched
+        do istage = 1, 5
+            call set_cline_refine3D(params, istage, 1, .false.)
+            call assert_string_eq('yes', cline_refine3D%get_carg('greedy_sampling'), 'one state: a greedy sample')
+            fbest = 1.
+            if( istage == 5 ) fbest = 0.5
+            call assert_real(fbest, cline_refine3D%get_rarg('frac_best'), 1.e-6, 'one state: the best half from stage 5')
+        end do
+        params%nstates = 3
+        do istage = 1, 5
+            call set_cline_refine3D(params, istage, 1, .false.)
+            call assert_string_eq('no', cline_refine3D%get_carg('greedy_sampling'), 'several states: a stochastic sample')
+            call assert_real(1., cline_refine3D%get_rarg('frac_best'), 1.e-6, 'several states: the whole class')
+        end do
+        params%nstates = 1
         call cline_refine3D%kill
         cline_refine3D = saved_cline
         deallocate(lpinfo)

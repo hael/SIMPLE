@@ -189,8 +189,8 @@ contains
         nk = params%kfromto(2) - params%kfromto(1) + 1
         ! the grid's reprojections through the features (no CTF): the readout's templates start from them (ruling R3)
         allocate(xrefs(feats%get_pftsz(), nk, 2, params%nspace), source=0.)
-        allocate(pft_ref(feats%get_pftsz(), params%kfromto(1):params%kfromto(2)))
-        allocate(ctf_one(feats%get_pftsz(), params%kfromto(1):params%kfromto(2)), source=1.)
+        allocate(pft_ref(feats%get_pftsz_in(), params%kfromto(1):params%kfromto(2)))
+        allocate(ctf_one(feats%get_pftsz_in(), params%kfromto(1):params%kfromto(2)), source=1.)
         do i = 1,params%nspace
             call build%pftc%get_ref_pft(i, .true., pft_ref)
             call feats%build_from_pft(pft_ref, ctf_one, .true., feat)
@@ -309,7 +309,7 @@ contains
         do iw = 1,size(STUDENT_WIDTHS)
             if( iw == size(STUDENT_WIDTHS) .and. nptcls - nheld < WIDEST_MIN_ROWS ) exit
             ntried = iw
-            call student%new(feats%get_pftsz(), params%kfromto, params%box, params%box_crop, params%smpd, params%mskdiam, &
+            call student%new(feats%get_pftsz_in(), params%kfromto, params%box, params%box_crop, params%smpd, params%mskdiam, &
                 &trim(params%pgrp), params%nspace, params%lp, wk, trim(params%ctf) /= 'no', STUDENT_WIDTHS(iw), rnd_run_seed())
             call student%init_readout(xrefs)
             if( l_by_stack )then
@@ -438,7 +438,7 @@ contains
             write(fnr,'(a,i0)')   'student classes (mirror pairs)      : ', params%nspace / 2
             write(fnr,'(a,f0.2)') 'student band (lp, A)                : ', params%lp
             write(fnr,'(a,i0)')   'student rings                       : ', params%kfromto(2) - params%kfromto(1) + 1
-            write(fnr,'(a,i0)')   'student half-ring angles (pftsz)    : ', feats%get_pftsz()
+            write(fnr,'(a,i0,a,i0)') 'student half-ring angles (calc/net) : ', feats%get_pftsz_in(), ' / ', feats%get_pftsz()
             write(fnr,'(a,i0,a,i0)') 'student box / box_crop              : ', params%box, ' / ', params%box_crop
             write(fnr,'(a,i0)')   'student threads                     : ', nthr_here
             write(fnr,'(a,l1)')   'student feature cache used          : ', l_cache
@@ -686,7 +686,7 @@ contains
             write(head_unit,'(A,A)')      'pgrp=', trim(params%pgrp)
             write(head_unit,'(A,F10.4)')  'lp=', params%lp
             write(head_unit,'(A,I0,A,I0)') 'kfromto=', params%kfromto(1), ',', params%kfromto(2)
-            write(head_unit,'(A,I0)')     'pftsz=', feats%get_pftsz()
+            write(head_unit,'(A,I0)')     'pftsz=', feats%get_pftsz_in()
             write(head_unit,'(A,I0)')     'nrots=', feats%get_nrots()
             write(head_unit,'(A,I0)')     'box=', params%box
             write(head_unit,'(A,I0)')     'box_crop=', params%box_crop
@@ -1062,7 +1062,7 @@ contains
             write(fnr,'(a,i0)')   'student grid directions (nspace)    : ', student%get_nspace()
             write(fnr,'(a,f0.2)') 'student band (lp, A)                : ', params%lp
             write(fnr,'(a,i0)')   'student rings                       : ', kfromto(2) - kfromto(1) + 1
-            write(fnr,'(a,i0)')   'student half-ring angles (pftsz)    : ', student%get_pftsz()
+            write(fnr,'(a,i0,a,i0)') 'student half-ring angles (calc/net) : ', feats%get_pftsz_in(), ' / ', feats%get_pftsz()
             write(fnr,'(a,i0,a,i0)') 'student box / box_crop              : ', params%box, ' / ', params%box_crop
             write(fnr,'(a,i0)')   'student threads                     : ', nthr
             write(fnr,'(a,i0)')   'student batches                     : ', nbatches

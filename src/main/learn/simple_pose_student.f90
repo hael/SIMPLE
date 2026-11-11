@@ -61,7 +61,7 @@ end type student_train_profile
 type :: pose_student
     private
     ! the geometry, the band, the grid
-    integer  :: pftsz = 0, nrots = 0, nk = 0, kfromto(2) = 0, nspace = 0, box = 0, box_crop = 0, width = 0
+    integer  :: pftsz = 0, pftsz_net = 0, nrots = 0, nk = 0, kfromto(2) = 0, nspace = 0, box = 0, box_crop = 0, width = 0
     real(sp) :: lp = 0., smpd = 0., mskdiam = 0.
     logical  :: with_ctf = .true.
     character(len=:), allocatable :: pgrp
@@ -157,7 +157,6 @@ contains
         real,    allocatable :: half_frames(:)
         call self%kill
         self%pftsz    = pftsz
-        self%nrots    = 2 * pftsz
         self%kfromto  = kfromto
         self%nk       = kfromto(2) - kfromto(1) + 1
         self%box      = box
@@ -172,6 +171,9 @@ contains
         self%seed     = seed
         allocate(self%wk(kfromto(1):kfromto(2),2), source=wk)
         call self%feats%new(pftsz, kfromto, box, wk)
+        ! the network works on the features' half ring: the calculator's capped at the band's sampling limit
+        self%pftsz_net = self%feats%get_pftsz()
+        self%nrots     = 2 * self%pftsz_net
         allocate(self%grid, self%symop)
         call self%symop%new(trim(pgrp))
         call self%grid%new(nspace, is_ptcl=.false.)
@@ -195,17 +197,17 @@ contains
             self%frame(k)                = half_frames(k)
         enddo
         allocate(self%net)
-        call self%net%new(pftsz, self%nk, self%nclass, width, seed)
+        call self%net%new(self%pftsz_net, self%nk, self%nclass, width, seed)
         self%nweights = self%net%get_nweights()
         self%exists   = .true.
     end subroutine new
 
-    !> the readout's templates from the classes' reprojections (ruling R3): xrefs(pftsz, nk, 2, nspace) the tensors
+    !> the readout's templates from the classes' reprojections (ruling R3): xrefs(pftsz_net, nk, 2, nspace) the tensors
     !! of the grid's references through the features (no CTF: the ring-averaged CTF squared one); done on every new
     !! network before its training
     subroutine init_readout( self, xrefs )
         class(pose_student), intent(inout) :: self
-        real(sp),            intent(in)    :: xrefs(self%pftsz, self%nk, 2, self%nspace)
+        real(sp),            intent(in)    :: xrefs(self%pftsz_net, self%nk, 2, self%nspace)
         real(sp) :: g(self%nk)
         if( .not. self%exists ) THROW_HARD('student not constructed; pose_student%init_readout')
         g = 1.
@@ -317,7 +319,7 @@ contains
         &nthr, log_unit )
         class(pose_student), intent(inout) :: self
         integer,             intent(in)    :: n, max_epochs, patience, nthr, log_unit
-        real(sp),            intent(in)    :: x(self%pftsz, self%nk, 2, n), ctf2(self%nk, n), side(n)
+        real(sp),            intent(in)    :: x(self%pftsz_net, self%nk, 2, n), ctf2(self%nk, n), side(n)
         logical,             intent(in)    :: held(n)
         real(sp),            intent(in)    :: dists(self%nspace, n), temps(n), prob_beta, shift_aug_px
         type(hhcnn), allocatable :: best
@@ -360,9 +362,9 @@ contains
         nthr_here = nthr
         !$ nthr_here = omp_get_max_threads()
         call self%net%prepare_work(nthr_here)
-        allocate(xb(self%pftsz, self%nk, 2, BATCH_MAX), gb(self%nk, BATCH_MAX), sb(BATCH_MAX), tb(self%nclass, BATCH_MAX))
+        allocate(xb(self%pftsz_net, self%nk, 2, BATCH_MAX), gb(self%nk, BATCH_MAX), sb(BATCH_MAX), tb(self%nclass, BATCH_MAX))
         allocate(best)
-        call best%new(self%pftsz, self%nk, self%nclass, self%width, self%seed)
+        call best%new(self%pftsz_net, self%nk, self%nclass, self%width, self%seed)
         best_loss  = huge(best_loss)
         since_best = 0
         bsz        = min(BATCH_MAX, max(BATCH_MIN, ntr / BATCH_FRAC))
@@ -486,7 +488,7 @@ contains
     subroutine predict_tensor( self, ithr, x, ctf2, side, prob )
         class(pose_student), intent(inout) :: self
         integer,             intent(in)    :: ithr
-        real(sp),            intent(in)    :: x(self%pftsz, self%nk, 2), ctf2(self%nk), side
+        real(sp),            intent(in)    :: x(self%pftsz_net, self%nk, 2), ctf2(self%nk), side
         real(sp),            intent(out)   :: prob(self%nspace)
         real(sp) :: pc(self%nclass)
         call self%net%predict(ithr, x, ctf2, (side - self%side_mean) / self%side_sd, pc)
@@ -877,7 +879,7 @@ contains
         if( len(msg) > 0 ) THROW_HARD(msg)
         call self%new(pftsz, kfromto, box, box_crop, smpd, mskdiam, pgrp, nspace, lp, wk, with_ctf, width, seed)
         call self%net%read_weights(wfile)
-        msg = weights_header_mismatch(self%net, pftsz, self%nk, self%nclass, width, seed, nweights)
+        msg = weights_header_mismatch(self%net, self%pftsz_net, self%nk, self%nclass, width, seed, nweights)
         if( len(msg) > 0 ) THROW_HARD(msg)
         self%prob_beta      = prob_beta
         self%shift_aug_px   = shift_aug_px
@@ -1108,6 +1110,7 @@ contains
         if( allocated(self%holdout_rule)    ) deallocate(self%holdout_rule)
         if( allocated(self%teacher_project) ) deallocate(self%teacher_project)
         self%pftsz    = 0
+        self%pftsz_net = 0
         self%nrots    = 0
         self%nk       = 0
         self%kfromto  = 0

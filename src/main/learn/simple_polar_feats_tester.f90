@@ -1,13 +1,14 @@
-!@descr: unit tests of simple_polar_feats: the shift against the calculator's phase ramp, the conjugate wrap, the packed product as the objective's Hermitian product, the feature cache's contract
+!@descr: unit tests of simple_polar_feats: the shift against the calculator's phase ramp, the conjugate wrap, the packed product as the objective's Hermitian product, the feature cache's contract, the network's capped half ring
 module simple_polar_feats_tester
 use simple_test_utils
 use, intrinsic :: iso_fortran_env, only: int64
-use simple_defs,               only: sp, dp, DTWOPI
+use simple_defs,               only: sp, dp, DPI, DTWOPI
 use simple_string,             only: string
 use simple_cmdline,            only: cmdline
 use simple_parameters,         only: parameters
 use simple_polarft_calc,       only: polarft_calc
-use simple_polar_feats,        only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, POLAR_FEATS_NHEAD
+use simple_polar_feats,        only: polar_feats, polar_feat, polar_feats_cache, polar_feats_contract, POLAR_FEATS_NHEAD, &
+    &polar_feats_net_pftsz
 use simple_rnd,                only: gasdev
 use simple_syslib,             only: file_exists
 use simple_test_polar_fixture, only: rotate_half_ring
@@ -28,6 +29,7 @@ contains
         call test_packed_product()
         call test_ctf_ring_mean()
         call test_cache_contract()
+        call test_net_half_ring()
     end subroutine run_all_polar_feats_tests
 
     !> a calculator of NPTCLS random particles without a CTF (the CTF matrices are ones), the Euclidean weights of
@@ -403,5 +405,87 @@ contains
         call pftc%kill
         deallocate(ptcls, wk, wk_other, sigma2, ctfa)
     end subroutine test_cache_contract
+
+    !> The network's half ring: at most twice pi k_max angles, even, never above the calculator's (bgal at 15 A: 220
+    !! to 140; the medium assembly: 160 kept). A Friedel-symmetric ring whose angular harmonics lie inside the kept
+    !! band, given on the calculator's angles, is resampled exactly onto the network's angles, in both channels and
+    !! on every ring; the band's power scales with the angles, so the normalised tensor keeps unit weighted norm
+    subroutine test_net_half_ring()
+        integer, parameter :: N_IN = 72, KB(2) = [1, 4], JMAX = 10
+        type(polar_feats)  :: fin, fnet
+        type(polar_feat)   :: fa, fb
+        complex(sp), allocatable :: pft_in(:,:), pft_net(:,:)
+        real(sp),    allocatable :: ctf_in(:,:), ctf_net(:,:), wk(:,:)
+        complex(dp) :: a(-JMAX:JMAX,KB(1):KB(2))
+        real(dp)    :: re, im, err, big, wsum
+        integer     :: m, k, j
+        write(*,'(A)') 'test_net_half_ring'
+        call assert_int(140, polar_feats_net_pftsz(220, 22), 'bgal at 15 A: 220 angles capped to 140')
+        call assert_int(160, polar_feats_net_pftsz(160, 26), 'the medium assembly at 15 A: 160 kept (the cap is 164)')
+        call assert_int(170, polar_feats_net_pftsz(480, 27), '400 px at 1 A and 15 A: 480 capped to 170')
+        allocate(wk(KB(1):KB(2),2), source=1.)
+        do k = KB(1),KB(2)
+            wk(k,1) = real(k)
+            wk(k,2) = 0.5 * real(k)
+        enddo
+        call fin%new(N_IN, KB, BOX, wk)
+        m = fin%get_pftsz()
+        call assert_int(polar_feats_net_pftsz(N_IN, KB(2)), m, 'the features take the cap')
+        call assert_true(m < N_IN .and. m > JMAX, 'the fixture resamples and keeps its harmonics')
+        call assert_int(N_IN, fin%get_pftsz_in(), 'the calculator''s half ring is kept beside it')
+        call fnet%new(m, KB, BOX, wk)
+        call assert_int(m, fnet%get_pftsz(), 'a calculator at the cap is not resampled')
+        ! Friedel symmetry of the full ring: a(-j) = (-1)^j conj(a(j)), a(0) real
+        do k = KB(1),KB(2)
+            a(0,k) = cmplx(gasdev(0.,1.), 0., kind=dp)
+            do j = 1,JMAX
+                re = gasdev(0.,1.)
+                im = gasdev(0.,1.)
+                a(j,k)  = cmplx(re, im, kind=dp)
+                a(-j,k) = real((-1)**j,dp) * conjg(a(j,k))
+            enddo
+        enddo
+        allocate(pft_in(N_IN,KB(1):KB(2)), pft_net(m,KB(1):KB(2)))
+        allocate(ctf_in(N_IN,KB(1):KB(2)), ctf_net(m,KB(1):KB(2)), source=1.)
+        call sample(N_IN, pft_in)
+        call sample(m, pft_net)
+        call fin%build_from_pft(pft_in, ctf_in, .true., fa, normalise=.false.)
+        call fnet%build_from_pft(pft_net, ctf_net, .true., fb, normalise=.false.)
+        big = maxval(abs(real(fb%x,dp)))
+        err = maxval(abs(real(fa%x,dp) - real(fb%x,dp)))
+        call assert_true(err < 1.e-5_dp * big, 'a ring inside the band resamples to its direct sampling')
+        ! the band's power on the network's ring is the calculator's times m / N_IN (normalise scales by it)
+        call fin%build_from_pft(pft_in, ctf_in, .false., fa)
+        wsum = 0._dp
+        do k = KB(1),KB(2)
+            wsum = wsum + sum(real(fa%x(:,k,:),dp)**2)
+        enddo
+        call assert_true(abs(wsum - 1._dp) < 1.e-4_dp, 'the normalised resampled tensor has unit weighted norm')
+        call fa%kill
+        call fb%kill
+        call fin%kill
+        call fnet%kill
+
+      contains
+
+        subroutine sample( n, pft )
+            integer,     intent(in)  :: n
+            complex(sp), intent(out) :: pft(n,KB(1):KB(2))
+            complex(dp) :: v
+            real(dp)    :: theta
+            integer     :: p, kk, jj
+            do kk = KB(1),KB(2)
+                do p = 1,n
+                    theta = real(p-1,dp) * DPI / real(n,dp)
+                    v = (0._dp, 0._dp)
+                    do jj = -JMAX,JMAX
+                        v = v + a(jj,kk) * exp(cmplx(0._dp, real(jj,dp) * theta, kind=dp))
+                    enddo
+                    pft(p,kk) = cmplx(v, kind=sp)
+                enddo
+            enddo
+        end subroutine sample
+
+    end subroutine test_net_half_ring
 
 end module simple_polar_feats_tester

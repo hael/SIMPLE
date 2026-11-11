@@ -28,7 +28,6 @@ integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! f
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
 integer,          parameter :: STOCH_SAMPL_STAGE       = 5           ! switch from greedy to stochastic sampling
-integer,          parameter :: STOCH_SAMPL_STAGE_INDEP = 4           ! independent multi-state needs earlier stochastic coverage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
 integer,          parameter :: PCG_START_STAGE         = 6           ! requested PCG backend and order prior; independent of gold_std_stage
@@ -183,13 +182,6 @@ contains
         integer :: istage
         istage = ML_REG_START_STAGE
     end function solve3D_ml_reg_start_stage
-
-    module function solve3D_stoch_sampl_stage(params) result(istage)
-        class(parameters), intent(in) :: params
-        integer :: istage
-        istage = STOCH_SAMPL_STAGE
-        if( params%nstates > 1 ) istage = STOCH_SAMPL_STAGE_INDEP
-    end function solve3D_stoch_sampl_stage
 
     module function solve3D_nsample_default() result(nsample)
         integer :: nsample
@@ -461,12 +453,13 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         logical,                  intent(in)    :: l_cavgs
-        integer :: stoch_stage
-        stoch_stage = solve3D_stoch_sampl_stage(params)
         cfg%inspace = NSPACE(istage)
         if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
         if( params%nstates > 1 ) cfg%inspace = min(cfg%inspace, NSPACE_MULTI_MAX)
         cfg%greedy_sampling = 'yes'
+        ! several states sample stochastically from stage 1: a greedy sample never searches the
+        ! particles outside it, so a minority state would keep its start labels
+        if( params%nstates > 1 ) cfg%greedy_sampling = 'no'
         cfg%l_scan_exit     = .false.
         select case(istage)
             case(1,2)
@@ -488,11 +481,7 @@ contains
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
                 cfg%frac_best     = 1.0
-                if( params%nstates > 1 .and. istage >= stoch_stage )then
-                    cfg%greedy_sampling = 'no'
-                else if( istage >= stoch_stage )then
-                    cfg%frac_best = 0.5
-                endif
+                if( params%nstates == 1 .and. istage >= STOCH_SAMPL_STAGE ) cfg%frac_best = 0.5
                 if( istage > full_budget_last_stage(l_cavgs) )then
                     cfg%overlap  = 0.9 ! early stopping
                     cfg%fracsrch = 90. ! early stopping
@@ -506,8 +495,7 @@ contains
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
                 if( params%nstates > 1 )then
-                    cfg%frac_best       = 1.0
-                    cfg%greedy_sampling = 'no'
+                    cfg%frac_best = 1.0
                 else
                     cfg%frac_best = 0.85
                 endif

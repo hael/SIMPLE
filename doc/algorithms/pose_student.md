@@ -52,6 +52,33 @@ it, through the search's own phase ramps; an in-plane rotation by one grid
 step is a cyclic shift of the angular axis whose wrap conjugates what passes
 the ring's end.
 
+**The network's half ring** is the calculator's capped at the band. A ring of
+Fourier radius k holds angular frequencies up to about k, so a half ring needs
+π k_max angles. The calculator's `pftsz` follows the mask radius instead and
+oversamples a low-pass band: 220 angles on bgal (256 pixels at 1.275 Å) where
+its 15 Å band of 22 rings needs 69. The network takes at most
+`NET_ANGLE_OVERSAMPLING` (2) times π k_max angles, even
+(`polar_feats_net_pftsz`). Each ring is resampled exactly onto them: the
+Friedel-extended ring's angular harmonics |j| < `pftsz_net` are kept, as two
+precomputed real matrices on the real and imaginary channels. The scale keeps
+the band's unit weighted norm. The teacher, the calculator and the model's
+`pftsz` stay the calculator's, so `predict_poses` checks the geometry as
+before. Where the cap is not below `pftsz`, as on the medium assembly (128
+pixels at 3 Å, 160 angles, cap 164), nothing changes.
+
+Measured on 2026-11-11 against six base seeds, three seeds per cap, at 24
+threads on the Dell:
+- bgal at twice π k_max (140 angles): within 6° 0.876 against the base's
+  0.869 (range 0.853 to 0.880), truth in the cone 0.959 against 0.957, seeded
+  0.426 against 0.417. The designs train in 15.8 s against 32.8 s, and
+  prediction's forward pass takes 1.33 s against 2.37 s.
+- 1.5 times (104 angles): the reads hold on bgal, but T1000's seeded fraction
+  falls to the edge of its range (0.216 against 0.215 to 0.272).
+- 1 time (bgal 70, T1000 82): the student loses on both sets (T1000 within
+  6° 0.756 against 0.784, seeded 0.191 against 0.242). This is the loss the
+  low-pass crop of `box_crop` showed (`doc/implementation_notes/rejected/pose_student_working_grid.md`),
+  so it came from the angles.
+
 **The network is HHCNN, the Harmonic Hermitian convolutional neural
 network**: Hermitian because every layer commutes with conjugation on the half
 ring with the conjugate wrap, so the network is a model of the Fourier

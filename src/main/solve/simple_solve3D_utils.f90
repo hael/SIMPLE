@@ -149,11 +149,6 @@ interface
         integer :: istage
     end function solve3D_ml_reg_start_stage
 
-    module function solve3D_stoch_sampl_stage(params) result(istage)
-        class(parameters), intent(in) :: params
-        integer :: istage
-    end function solve3D_stoch_sampl_stage
-
     module function solve3D_nsample_default() result(nsample)
         integer :: nsample
     end function solve3D_nsample_default

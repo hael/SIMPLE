@@ -239,11 +239,12 @@ after the `prob` phase (stages 3-5) and before `prob_neigh` (stage 6),
 multi-state trailing reconstruction and staged automasking; its last stage
 is NU-filtered (since 2026-10-18). The workflow still runs the final reconstruction step
 at the configured last stage so it writes inspectable final state volumes. To
-increase the chance that all active particles receive assignments before that
-exit, the multi-state run starts stochastic balanced sampling at stage 4: the child
-`refine3D` stages use `greedy_sampling=no` with `frac_best=1.0` from stage 4
-onward. This keeps class-balanced quotas but draws from the whole class, not a
-top-ranked fraction. The outer particle target remains the fixed
+give every active particle a chance to change state, the multi-state run samples
+stochastically from stage 1: the child `refine3D` stages use `greedy_sampling=no`
+with `frac_best=1.0` in every stage (stage 4 onward until 2026-11-11). This keeps
+class-balanced quotas but draws from the whole class, not a top-ranked fraction;
+a greedy sample never searches the particles outside it, so a minority state keeps
+its start labels (ms_abinitio run, SNR 0.05 benchmark: de novo accuracy 0.83 -> 0.90). The outer particle target remains the fixed
 `nsample`-derived update fraction at every stage.
 
 `sample_ptcls4update3D` applies the normal 3D subset policy, chosen by
