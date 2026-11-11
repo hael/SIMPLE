@@ -39,7 +39,7 @@ public :: merge_prob_readouts
 public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, prob_insert_cone
 public :: screen_pool_size, SCREEN_QUANTILE
-public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state
+public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state, start_shift_state
 public :: map_prior_weight, insert_pose_loss, update_screen_best, print_disk_set, insert_cone_from_fsc
 private
 #include "simple_local_flags.inc"
@@ -2271,6 +2271,18 @@ contains
         call os%set(iptcl, 'shincr', d)
         call os%set(iptcl, 'shsig',  next_shift_width(sdev, sig_prev, d, r, step))
     end subroutine record_shift_state
+
+    !> The dynamic centring's state at a refine3D run's first iteration: every particle not yet centred (shsig the
+    !! sentinel, no move), except in a search about the stored poses (l_keep: prob_neigh_mode=geom), which keeps the
+    !! state the workflow before left: its sentinels take the disk, its widths the window or the disk by the rule, and
+    !! a record that never held a width (zero) the window about its stored shift
+    subroutine start_shift_state( os, l_keep )
+        class(oris), intent(inout) :: os
+        logical,     intent(in)    :: l_keep
+        if( l_keep ) return
+        call os%set_all2single('shsig',  -1.)
+        call os%set_all2single('shincr',  0.)
+    end subroutine start_shift_state
 
     !> The scope of the probabilistic alignment's keyed draws of one iteration: the run's seed (SIMPLE_SEED), the
     !! program (refine3D or refine2D), the discrete alignment pass and the iteration. The tables take it at every

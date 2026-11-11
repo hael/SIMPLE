@@ -133,6 +133,9 @@ contains
                 call cline%set('prob_neigh_mode', 'geom')
                 if( .not. cline%defined('nspace')     ) call cline%set('nspace',     20000)
                 if( .not. cline%defined('nspace_sub') ) call cline%set('nspace_sub', 500)
+                ! the particles come centred (solve3D, a student's registration): a narrow shift prior, so a particle
+                ! without a width searches a disk of 9 A, not 30, and the centred ones keep their window
+                if( .not. cline%defined('shift_sigma') ) call cline%set('shift_sigma', 3.)
             else
                 if( cline%defined('nspace') .or. cline%defined('nspace_sub') ) &
                     THROW_HARD('refine3D_local refine=cont uses no projection grid; remove nspace and nspace_sub')

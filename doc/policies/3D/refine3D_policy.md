@@ -644,10 +644,18 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   likelihood; the map's prior stays the only prior in the draw and in the weighted
   insertion's loss (`insert_pose_loss`, both 3D tables: the polished loss with the
   prior on the pose's increment at the physical temperature);
-- the sentinel is set by both refine3D masters at a run's first iteration; the
-  master prints the disk set by cause and the widths' median and 90th percentile
-  after its sample draw (`print_disk_set`; a part prints none). No stage ends on
-  the centring.
+- the sentinel is set by both refine3D masters at a run's first iteration
+  (`start_shift_state`), except in a search about the stored poses
+  (`prob_neigh_mode=geom`: `refine3D_local refine=prob_neigh`, `refine3D_states
+  pose_policy=local`, the pose student's cones), which keeps the state the
+  workflow before left (2026-11-11). Its never-centred particles keep the sentinel
+  and take the disk, its widths choose by the rule, and a record that never held a
+  width (zero, as in projects from before the map) takes the window about its
+  stored shift. A solve3D stage continues the global iteration count, so only its
+  first refine3D run resets, and the fill-in iterations' never-sampled particles
+  are the ones that take the disk there. The master prints the disk set by cause
+  and the widths' median and 90th percentile after its sample draw
+  (`print_disk_set`; a part prints none). No stage ends on the centring.
 
 Every table increment is native whatever the path (the polish's
 `minimize(sh_rot=.true.)` rotates the optimizer's shift into the particle's axes at

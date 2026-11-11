@@ -13,7 +13,10 @@ polar one about the same poses, to compare the two: `prob_neigh_mode=geom` (any
 other mode is refused), which scores the projection directions within `athres_cont`
 of each stored pose, the bound of `refine=cont`, with the polar machinery's shift
 prior and continuous in-plane refinement. Its grid defaults to `nspace=20000` and
-`nspace_sub=500`. Startup, sampling, references, reconstruction and the final map
+`nspace_sub=500`, its shift prior to `shift_sigma=3` A. The run keeps the
+particles' centring state from the workflow before (the geom mode's exception to
+the first-iteration sentinel, `refine3D_policy.md`): centred particles search the
+window about their stored shifts, and only those never centred search the disk. Startup, sampling, references, reconstruction and the final map
 are those of `refine=cont`; the run ends on the probabilistic modes' rules, so give
 both searches the same `maxits` to compare them.
 

@@ -1,4 +1,4 @@
-!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), geom's cone prefilter, the n_eff and state readouts
+!@descr: unit tests for the 3D probability tables: the seed shift of an assigned candidate, the in-plane samplers, the posterior draw of the dense and of the neighbourhood table on the pipeline's batch, the weighted insertion (the top extras, the cone, the table), geom's cone prefilter, the n_eff and state readouts, the centring state at a run's first iteration
 ! The seed table holds the particle-frame seed every candidate of a particle was scored with; an assigned, unrefined
 ! candidate records it as it is, whatever its in-plane angle. A refined candidate keeps the shift of its search.
 ! The pipeline's batch assignment draws every particle's reference, state and direction together, from its tempered
@@ -14,7 +14,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cel
     &sample_bounded_dists, sample_power_dists, prob_candidate, prob_dense_entry, prob_refined_entry, &
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, &
-    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, &
+    &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
     &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout
 use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use, intrinsic :: iso_fortran_env, only: int64
@@ -52,6 +52,8 @@ contains
         call test_top_posterior_extras()
         write(*,'(A)') 'test_insert_pose_loss'
         call test_insert_pose_loss()
+        write(*,'(A)') 'test_start_shift_state'
+        call test_start_shift_state()
         write(*,'(A)') 'test_insert_cone'
         call test_insert_cone()
         write(*,'(A)') 'test_insert_table'
@@ -1395,6 +1397,35 @@ contains
         call assert_real(0.3, insert_pose_loss(0.3, [20.d0, 0.d0], prior_w, 0.), 0., &
             &'without a temperature the loss is the data term')
     end subroutine test_insert_pose_loss
+
+    !> A run's first iteration marks every particle not yet centred (the sentinel, no move); a search about the stored
+    !! poses keeps every particle's state: a width and its move, a sentinel, a record that never held a width
+    subroutine test_start_shift_state()
+        type(oris) :: os
+        call os%new(3, is_ptcl=.true.)
+        call set_states()
+        call start_shift_state(os, .true.)
+        call assert_real( 0.6, os%get(1, 'shsig'),  0., 'a search about the stored poses keeps a width')
+        call assert_real( 1.5, os%get(1, 'shincr'), 0., 'and its move')
+        call assert_real( 0.,  os%get(2, 'shsig'),  0., 'a record that never held a width keeps zero: the window')
+        call assert_real(-1.,  os%get(3, 'shsig'),  0., 'a particle not yet centred stays so: the disk')
+        call set_states()
+        call start_shift_state(os, .false.)
+        call assert_real(-1., os%get(1, 'shsig'),  0., 'a fresh run marks a centred particle not yet centred')
+        call assert_real( 0., os%get(1, 'shincr'), 0., 'and clears its move')
+        call assert_real(-1., os%get(2, 'shsig'),  0., 'and a record without a width')
+        call os%kill
+
+      contains
+
+        subroutine set_states()
+            call os%set(1, 'shsig',  0.6)
+            call os%set(1, 'shincr', 1.5)
+            call os%set(2, 'shsig',  0.)
+            call os%set(3, 'shsig', -1.)
+        end subroutine set_states
+
+    end subroutine test_start_shift_state
 
     subroutine test_top_posterior_extras()
         real    :: dists(6), w(5), z

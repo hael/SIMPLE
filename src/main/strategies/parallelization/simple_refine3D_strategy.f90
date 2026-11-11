@@ -1127,6 +1127,7 @@ contains
 
     subroutine inmem_initialize(self, params, build, cline)
         use simple_matcher_smpl_and_lplims, only: adopt_run_seed
+        use simple_eul_prob_tab_utils,      only: start_shift_state
         class(refine3D_inmem_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1167,10 +1168,10 @@ contains
         endif
         call invalidate_fresh_start_refs_from_volumes(params, cline, startit)
         ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not yet
-        ! centred (the sentinel), whatever the key's state in this run
+        ! centred (the sentinel), whatever the key's state in this run; a search about the stored poses keeps the
+        ! widths the workflow before left
         if( startit == 1 )then
-            call build%spproj_field%set_all2single('shsig',  -1.)
-            call build%spproj_field%set_all2single('shincr',  0.)
+            call start_shift_state(build%spproj_field, keeps_shift_state(params))
             l_proj_dirty = .true.
         endif
         ! STATE LABEL INIT, as the distributed master: a fresh multi-state start (the first
@@ -1473,6 +1474,7 @@ contains
         use simple_exec_helpers,   only: set_master_num_threads
         use simple_commanders_rec, only: commander_rec3D
         use simple_matcher_smpl_and_lplims, only: adopt_run_seed
+        use simple_eul_prob_tab_utils,      only: start_shift_state
         class(refine3D_distr_strategy), intent(inout) :: self
         type(parameters),               intent(inout) :: params
         type(builder),                  intent(inout) :: build
@@ -1649,10 +1651,10 @@ contains
             endif
         endif
         ! the dynamic centring's state (shift_sigma > 0): a workflow's first run marks every particle as not yet
-        ! centred (the sentinel), which the workers read from the project
+        ! centred (the sentinel), which the workers read from the project; a search about the stored poses keeps the
+        ! widths the workflow before left
         if( params%startit == 1 )then
-            call build%spproj_field%set_all2single('shsig',  -1.)
-            call build%spproj_field%set_all2single('shincr',  0.)
+            call start_shift_state(build%spproj_field, keeps_shift_state(params))
             call build%spproj%write_segment_inside(params%oritype)
         endif
         ! prepare job description
@@ -2067,6 +2069,13 @@ contains
     !! thread budget, the thread-seconds product and the master's peak RSS, so
     !! wall time, compute cost and memory read as separate quantities on both
     !! backends (comparison protocol, policy section 12)
+    !> a search about the stored poses (prob_neigh_mode=geom) trusts their shifts: a run's first iteration keeps the
+    !! centring widths the workflow before left
+    pure logical function keeps_shift_state( params )
+        class(parameters), intent(in) :: params
+        keeps_shift_state = trim(params%refine) == 'prob_neigh' .and. trim(params%prob_neigh_mode) == 'geom'
+    end function keeps_shift_state
+
     subroutine report_rec_master_phase( params, t_start, nthr )
         class(parameters),       intent(in) :: params
         integer(timer_int_kind), intent(in) :: t_start
