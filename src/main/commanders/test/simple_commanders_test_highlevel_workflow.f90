@@ -75,12 +75,18 @@ module subroutine exec_test_simulated_workflow( self, cline )
     ! maintainer's Mac measured a 6vxx correlation of 0.780 at the earlier sizes (2026-10-17, one
     ! thread); these sizes have not been profiled there yet.
     real,             parameter :: MIN_VOL_CORR   = 0.80
-    ! pose recovery against the planted particles (pose_recovery): the median pair pose error up to
-    ! the frame, hand and point group, and the fraction of pairs within 5 degrees. Provisional
-    ! floors from the first runs of 2026-11-10, to be set by the floor rule on a profile. A pick
-    ! matches the planted centre within MATCH_TOL pixels
+    ! Pose recovery against the planted particles (pose_recovery): the median pair pose error up to
+    ! the frame, hand and point group, and the fraction of pairs within 5 degrees define whether a
+    ! run recovered the map. Recovery is a robustness success, not a single-run gate: the 2026-10-19
+    ! 20-seed map-recovery profile recovered 6vxx in 18 runs and each 1jxy arm in 19. Its success
+    ! floors are
+    ! floor(18 - 3*sqrt(20*0.9*0.1))/20 = 0.65 and
+    ! floor(19 - 3*sqrt(20*0.95*0.05))/20 = 0.80. A pick matches the planted centre within
+    ! MATCH_TOL pixels.
     real,             parameter :: MAX_PAIR_POSE_ERR = 10.0
     real,             parameter :: MIN_PAIR_FRAC5    = 0.5
+    real,             parameter :: MIN_POSE_SUCCESS_6VXX = 0.65
+    real,             parameter :: MIN_POSE_SUCCESS_1JXY = 0.80
     integer,          parameter :: MATCH_TOL         = EXTRACT_BOX / 4
     real,             parameter :: MAX_FSC0143    = 40.0
     real,             parameter :: DOCK_HP        = 100.0
@@ -108,7 +114,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname, ptcls_fname
     type(oris)                          :: reproj_poses
-    type(string)                        :: truth_volume, solve3D_dir, final_volume, wrong_truth
+    type(string)                        :: truth_volume, solve3D_dir, solve3D_project, final_volume, wrong_truth
     type(string), allocatable           :: movie_files(:), bench_parts(:), ptcls_files(:)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, ldim(3), nprojs_stk, nmovies, nprojs, nper_movie
@@ -482,6 +488,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
         call cline_solve3D%set('gold_std_stage',         GOLD_STD_3D)
         call cline_solve3D%set('nthr',                          NTHR)
         call xsolve3D%execute(cline_solve3D)
+        solve3D_project = cline_solve3D%get_carg('projfile')
         call simple_getcwd(solve3D_dir)
         call cline_solve3D%kill()
         final_volume = filepath(solve3D_dir, refine3D_state_vol_fname(1))
@@ -500,7 +507,8 @@ module subroutine exec_test_simulated_workflow( self, cline )
     !> the recovered poses against the planted ones: every active particle of the solve3D project is
     !! matched to the planted centre nearest its pick in its movie (the pick stores the base-0 corner,
     !! the simulator the same convention), its truth pose is the reprojection planted there, and the
-    !! pair pose error up to the frame, hand and point group of a de novo map is gated
+    !! pair pose error up to the frame, hand and point group of a de novo map defines the profiled
+    !! recovery outcome
     subroutine pose_recovery( tag )
         character(len=*), intent(in) :: tag
         class(sp_project), allocatable :: proj
@@ -524,7 +532,7 @@ module subroutine exec_test_simulated_workflow( self, cline )
             call fclose(funit)
         enddo
         allocate(proj)
-        call proj%read(filepath(solve3D_dir, PROJFILE))
+        call proj%read(solve3D_project)
         nptcls3D = proj%os_ptcl3D%get_noris()
         call truth_poses%new(nptcls3D, is_ptcl=.false.)
         allocate(inds(nptcls3D), source=0)
@@ -562,8 +570,16 @@ module subroutine exec_test_simulated_workflow( self, cline )
         err   = huge(1.)
         frac5 = 0.
         if( nmatched >= 4 ) err = sym_pair_pose_error(proj%os_ptcl3D, truth_poses, inds(1:nmatched), pgrp%to_char(), frac5, ptcl_err)
-        call gate%metric(tag//'_pair_pose_error_deg', err, MAX_PAIR_POSE_ERR, err <= MAX_PAIR_POSE_ERR, upper=.true.)
-        call gate%metric(tag//'_pair_pose_frac5',     frac5, MIN_PAIR_FRAC5, frac5 >= MIN_PAIR_FRAC5)
+        call gate%report(tag//'_pair_pose_error_deg', err)
+        call gate%report(tag//'_pair_pose_frac5',     frac5)
+        select case(system_name%to_char())
+            case('6vxx')
+                call gate%success(tag//'_pose_recovered', err <= MAX_PAIR_POSE_ERR .and. frac5 >= MIN_PAIR_FRAC5, &
+                    &MIN_POSE_SUCCESS_6VXX)
+            case('1jxy')
+                call gate%success(tag//'_pose_recovered', err <= MAX_PAIR_POSE_ERR .and. frac5 >= MIN_PAIR_FRAC5, &
+                    &MIN_POSE_SUCCESS_1JXY)
+        end select
         write(logfhandle,'(a,a,a,i0,a,i0,a,f7.2,a,f6.3)') '>>> POSE RECOVERY ', tag, ': matched ', nmatched, ' of ', &
             &nptcls3D, ' particles, median pair pose error ', err, ' deg, fraction within 5 deg ', frac5
         ! the halves apart, and every particle: where a consistent subset hides
