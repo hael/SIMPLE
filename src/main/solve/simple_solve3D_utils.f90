@@ -149,6 +149,12 @@ interface
         integer :: istage
     end function solve3D_ml_reg_start_stage
 
+    module function solve3D_stage_trails( params, istage ) result( l_trails )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_trails
+    end function solve3D_stage_trails
+
     module function solve3D_nsample_default() result(nsample)
         integer :: nsample
     end function solve3D_nsample_default
@@ -633,6 +639,8 @@ contains
                 call xsymmap%execute(cline_symmap)
                 call del_file('SYMAXIS_SEARCH_FINISHED')
             enddo
+            ! the alignment changed the frame and the point group: no chain built before it is blended again
+            call discard_trailing_chains(params%nstates)
             if( present(xrec3D) )then
                 ! symmetric reconstruction
                 cline_symrec = cline_reconstruct3D
@@ -646,6 +654,12 @@ contains
                 call cline_symrec%set('projfile',   projfile)
                 call cline_symrec%set('pgrp',       params%pgrp)
                 call cline_symrec%set('which_iter', cline_refine3D%get_iarg('endit'))
+                ! full sums in the new frame; they seed a new chain only when the stage this one feeds trails
+                call cline_symrec%set('trail_rec', 'no')
+                call cline_symrec%delete('update_frac')
+                call cline_symrec%delete('trail_seed')
+                if( .not. l_cavgs_mode .and. solve3D_stage_trails(params, istage + 1) ) &
+                    &call cline_symrec%set('trail_seed', 'yes')
                 call strip_refine3D_planning_keys(cline_symrec)
                 call xrec3D%execute(cline_symrec)
                 do state = 1,params%nstates
@@ -676,6 +690,36 @@ contains
             enddo
         endif
     end subroutine symmetrize
+
+    !> Remove the trailing chains of every state, gridding and PCG, with their provenance and pending records.
+    subroutine discard_trailing_chains( nstates )
+        use simple_refine3D_fnames,     only: refine3D_trail_rec_fname, refine3D_trail_rho_fname, &
+            &refine3D_trail_manifest_fname, refine3D_pcg_trail_accum_fname, refine3D_pcg_trail_manifest_fname
+        use simple_refine3D_provenance, only: provenance_file, provenance_pending_file
+        integer, intent(in) :: nstates
+        type(string) :: fnames(12)
+        integer :: state, i
+        do state = 1, nstates
+            fnames(1)  = refine3D_trail_manifest_fname(state)
+            fnames(2)  = provenance_file(fnames(1))
+            fnames(3)  = refine3D_trail_rec_fname(state, 'even')
+            fnames(4)  = refine3D_trail_rho_fname(state, 'even')
+            fnames(5)  = refine3D_trail_rec_fname(state, 'odd')
+            fnames(6)  = refine3D_trail_rho_fname(state, 'odd')
+            fnames(7)  = refine3D_pcg_trail_manifest_fname(state)
+            fnames(8)  = provenance_file(fnames(7))
+            fnames(9)  = refine3D_pcg_trail_accum_fname(state, 'even')
+            fnames(10) = refine3D_pcg_trail_accum_fname(state, 'odd')
+            fnames(11) = provenance_pending_file(fnames(1))
+            fnames(12) = provenance_pending_file(fnames(7))
+            do i = 1, size(fnames)
+                if( file_exists(fnames(i)) ) call del_file(fnames(i))
+            enddo
+        enddo
+        do i = 1, size(fnames)
+            call fnames(i)%kill
+        enddo
+    end subroutine discard_trailing_chains
 
     !> State reseeding of a multi-state class-average run (reseed_states=yes), between stages.
     !! The entries are the even (1..@p ncavgs) and odd (@p ncavgs+1..2*@p ncavgs) halves of the

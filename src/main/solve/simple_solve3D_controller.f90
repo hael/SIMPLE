@@ -26,7 +26,7 @@ integer,          parameter :: SYMSRCH_STAGE           = 4           ! search sy
 integer,          parameter :: NOSYMSRCH_STAGE         = 3           ! its counterpart in a run that searches no axis
 integer,          parameter :: VOL_SUPPLIED_STAGE      = NOSYMSRCH_STAGE + 1 ! first stage for supplied volumes
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
-integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
+integer,          parameter :: TRAILREC_STAGE_SINGLE   = PROB_REFINE_STAGE ! single state trails from the first freely sampled stage
 integer,          parameter :: NU_FILTER_STAGE         = 5           ! switch on staged NU filtering (6 until 2026-10-18)
 integer,          parameter :: GOLD_STD_STAGE          = 6           ! first eligible single-state gold-standard stage
 integer,          parameter :: PCG_START_STAGE         = 6           ! requested PCG backend and order prior; independent of gold_std_stage
@@ -382,13 +382,22 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         cfg%trail_rec = 'no'
+        if( solve3D_stage_trails(params, istage) ) cfg%trail_rec = 'yes'
+    end subroutine set_refine3D_trailrec_policy
+
+    !> whether stage istage runs trailing reconstruction (fractional updates, from the state count's stage)
+    module function solve3D_stage_trails( params, istage ) result( l_trails )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_trails
+        l_trails = .false.
         if( force_full_sampling_mode(params) ) return
         if( params%nstates > 1 )then
-            if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
+            l_trails = istage >= TRAILREC_STAGE_MULTI
         else
-            if( istage >= TRAILREC_STAGE_SINGLE ) cfg%trail_rec = 'yes'
+            l_trails = istage >= TRAILREC_STAGE_SINGLE
         endif
-    end subroutine set_refine3D_trailrec_policy
+    end function solve3D_stage_trails
 
     subroutine set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -399,7 +408,7 @@ contains
         if( l_cavgs ) return
         if( l_nonuniform .and. &
             &(istage >= nu_start_stage(params) .or. &
-            &(l_state_continue_mode .and. istage >= TRAILREC_STAGE_SINGLE)) )then
+            &(l_state_continue_mode .and. istage >= NU_FILTER_STAGE)) )then
             cfg%filt_mode = trim(params%filt_mode)
             if( cfg%l_gold_standard )then
                 cfg%filt_mode = 'nonuniform'

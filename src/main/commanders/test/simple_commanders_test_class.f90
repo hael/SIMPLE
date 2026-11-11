@@ -77,6 +77,7 @@ use simple_rec3D_strategy,                   only: run_all_rec3D_strategy_tests
 use simple_frozen_accum,                     only: run_all_frozen_accum_tests
 use simple_reconstructor,                    only: run_all_reconstructor_tests
 use simple_rec3D_service_tester,             only: run_all_rec3D_service_lib_tests
+use simple_solve3D_symmetry_tester,          only: run_all_solve3D_symmetry_tests
 use simple_rec3D_wave_strategy_tester,       only: run_all_rec3D_wave_lib_tests
 use simple_solve3D_manifest_tester,          only: run_all_solve3D_manifest_tests
 use simple_solve3D_reseed_tester,            only: run_all_solve3D_reseed_tests
@@ -651,6 +652,7 @@ contains
         call add_suite(s, n, 'truth map docking', run_all_truth_docking_tests)
         call add_suite(s, n, 'postprocess_pdb', run_all_postprocess_pdb_tests)
         call add_suite(s, n, 'fractional reconstruction', run_all_rec3D_service_lib_tests)
+        call add_suite(s, n, 'symmetry trailing handoff', run_all_solve3D_symmetry_tests)
         call add_suite(s, n, 'fraction dose export',    run_all_refine_motion_model_lib_tests)
         call add_suite(s, n, 'dose filter3D',           run_all_dose_filter3D_tests)
         call add_suite(s, n, 'wave reconstruction',  run_all_rec3D_wave_lib_tests)

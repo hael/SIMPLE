@@ -195,7 +195,8 @@ contains
         call assert_false(cline_refine3D%defined('lp'), 'without NU, gold-standard matching uses the half-map FSC')
         call assert_false(cline_refine3D%defined('lpstop'), 'without NU, gold-standard matching still has no stage ceiling')
         ! no stage passes a score-based sampling control: one state and several draw from the whole class;
-        ! the single-state shc neighbourhood stages (1-2) refine one sticky subset: drawn in stage 1, kept in stage 2
+        ! the single-state shc neighbourhood stages (1-2) refine one sticky subset: drawn in stage 1, kept in stage 2;
+        ! trailing reconstruction starts at stage 3 with the free sampling
         do istage = 1, 8
             call set_cline_refine3D(params, istage, 1, .false.)
             call assert_false(cline_refine3D%defined('greedy_sampling'), 'one state: no greedy sampling control')
@@ -208,6 +209,12 @@ contains
                 case DEFAULT
                     call assert_false(cline_refine3D%defined('sticky_sampling'), 'one state: free sampling after the shc stages')
             end select
+            ! trailing reconstruction starts with the free sampling
+            if( istage <= 2 )then
+                call assert_string_eq('no',  cline_refine3D%get_carg('trail_rec'), 'one state: no trailing over the sticky subset')
+            else
+                call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'one state: trailing from stage 3')
+            endif
         end do
         ! a run that starts at stage 2 has no sticky subset to keep: it draws one
         call set_cline_refine3D(params, 2, 2, .false.)
@@ -222,6 +229,11 @@ contains
             call assert_false(cline_refine3D%defined('greedy_sampling'), 'several states: no greedy sampling control')
             call assert_false(cline_refine3D%defined('frac_best'),       'several states: no best-fraction control')
             call assert_false(cline_refine3D%defined('sticky_sampling'), 'several states: no sticky subset')
+            if( istage < 8 )then
+                call assert_string_eq('no',  cline_refine3D%get_carg('trail_rec'), 'several states: no trailing before stage 8')
+            else
+                call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'several states: trailing from stage 8')
+            endif
         end do
         params%nstates = 1
         call cline_refine3D%kill

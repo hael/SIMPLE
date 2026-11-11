@@ -4628,6 +4628,7 @@ Uses:
 - `simple_solve3d_chunks_plan_tester`
 - `simple_solve3d_manifest_tester`
 - `simple_solve3d_reseed_tester`
+- `simple_solve3d_symmetry_tester`
 - `simple_sp_project_tester`
 - `simple_srch_sort_loc_tester`
 - `simple_stack_io_tester`
@@ -6658,6 +6659,7 @@ Private symbols:
 - `test_ref_assign_neigh_posterior` — subroutine
 - `test_ref_assign_posterior` — subroutine
 - `test_screen_width_shortlist` — subroutine
+- `test_start_shift_state` — subroutine
 - `test_top_posterior_extras` — subroutine
 - `unrefined` — function
 
@@ -6678,6 +6680,7 @@ Local symbols (enclosing procedure scope):
 - `test_neigh_pooled_extras::entry_dist` — function
 - `test_ref_assign_neigh_posterior::assign_store` — subroutine
 - `test_ref_assign_neigh_posterior::set_store` — subroutine
+- `test_start_shift_state::set_states` — subroutine
 
 ---
 ## Module: simple_eul_prob_tab_utils
@@ -6755,6 +6758,7 @@ Public symbols:
 - `shift_box_radius` — function
 - `shift_needs_disk` — function
 - `shift_prior_sigma2` — function
+- `start_shift_state` — subroutine
 - `temperature_or_argmin` — function
 - `top_posterior_extras` — subroutine
 - `update_screen_best` — subroutine
@@ -20186,6 +20190,7 @@ Private symbols:
 - `inmem_finalize_run` — subroutine
 - `inmem_initialize` — subroutine
 - `invalidate_fresh_start_refs_from_volumes` — subroutine
+- `keeps_shift_state` — function
 - `labels_may_change` — function
 - `materialize_reprojection_model` — subroutine
 - `materialize_reprojection_model_master` — subroutine
@@ -21249,6 +21254,41 @@ Private symbols:
 - `test_symsrch_stage` — subroutine
 - `test_too_few_to_reseed` — subroutine
 - `test_weak_by_fraction` — subroutine
+
+---
+## Module: simple_solve3D_symmetry_tester
+
+Files:
+- `main/solve/simple_solve3D_symmetry_tester.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commanders_rec`
+- `simple_fileio`
+- `simple_image`
+- `simple_ori`
+- `simple_parameters`
+- `simple_refine3d_fnames`
+- `simple_refine3d_provenance`
+- `simple_solve3d_utils`
+- `simple_sp_project`
+- `simple_string`
+- `simple_syslib`
+- `simple_test_flex_phantom_fixture`
+- `simple_test_truth_metrics`
+- `simple_test_utils`
+- `simple_trail_chain_manifest`
+- `simple_type_defs`
+
+Public symbols:
+- `run_all_solve3D_symmetry_tests` — subroutine
+
+Private symbols:
+- `assert_maps_equal` — subroutine
+- `reconstruct` — subroutine
+- `reconstruction_cline` — subroutine
+- `test_symmetry_trailing_handoff` — subroutine
+- `write_turned_c2_map` — subroutine
 
 ---
 ## Module: simple_solve3D_utils

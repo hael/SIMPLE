@@ -386,7 +386,9 @@ Single-state fractional `solve3D` also keeps one sticky subset across its shc
 neighbourhood stages (1-2). Stage 1 draws it with `sticky_sampling=yes`;
 stage 2 uses `sticky_sampling=keep` to rescore that same set from its first
 iteration. A run starting at stage 2 draws its own sticky subset with `yes`.
-From stage 3 each iteration draws freely again. Full-sampling runs use no sticky subset
+From stage 3 each iteration draws freely again and trailing reconstruction
+starts (`TRAILREC_STAGE_SINGLE`), as fractional class-sum restoration starts
+with free sampling in `solve2D`. Full-sampling runs use no sticky subset
 restriction. The sticky subset lets the shc search scan each selected particle in
 full once, then refine it without introducing never-searched particles each
 iteration.
@@ -517,8 +519,12 @@ half maps and FSC; with neither a chain nor such a volume the run stops with an
 error, because a map of the sample alone would be degenerate).
 Stage-boundary full reconstructions
 seed the chain at full-dataset weight through the internal `trail_seed`
-handshake, but only when the consuming stage actually trails. Every seed records
-the population it represents: `N` for the chain-start seed (`1/f` scaling), and the
+handshake, but only when the consuming stage actually trails. Symmetry-axis
+alignment in `solve3D` deletes every existing chain first, because
+pre-alignment accumulators cannot be blended with partials in the transformed
+frame; the full reconstruction after it reseeds through `trail_seed` under the
+same consuming-stage rule. Every seed records the population it represents: `N` for
+the chain-start seed (`1/f` scaling), and the
 rows `sample4rec` reconstructs for a stage-boundary seed (their applied mass
 under a state weight set). The distributed PCG chain applies the same weights.
 Its two halves share a manifest of the same kind, `pcg_trail_stateNN.txt`, and

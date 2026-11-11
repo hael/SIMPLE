@@ -80,7 +80,10 @@ Stage policy includes:
     (`sticky_sampling=keep`; a run that starts at stage 2 draws its own),
     because the shc neighbourhood search scans a never-searched particle in
     full and a fresh draw every iteration would make these stages a sequence of
-    full scans; from stage 3 the sample is redrawn every iteration
+    full scans; from stage 3 the sample is redrawn every iteration and
+    trailing reconstruction blends the maps (`TRAILREC_STAGE_SINGLE`, until
+    2026-11-11 stage 5), so free sampling and trailing start together, as
+    in `solve2D`; multi-state runs trail from stage 8 (`TRAILREC_STAGE_MULTI`)
   - multi-state particle runs use direct `shc` in stages 1-2, `prob` in
     stages 3-5, and `prob_neigh` with `prob_neigh_mode=state` from stage 6
     (`PROB_NEIGH_REFINE_STAGE`, the single-state switch), so the default
@@ -717,6 +720,12 @@ returns the block's last stage for either case; the final-reconstruction rule
 At the symmetry-search stage, symmetry-axis search is state-local for
 multi-state runs. Each active state determines its own axis from its current
 map and applies that transform only to orientations assigned to that state.
+The alignment changes the particle frame and the point group, so every
+trailing chain built before it (gridding and PCG, with its provenance records)
+is deleted right after the axis search. The following full symmetric
+reconstruction seeds a new chain through `trail_seed` only when the stage it
+feeds trails (`solve3D_stage_trails`, the same rule that emits `trail_rec`);
+otherwise no chain remains.
 
 The axis search scores the Fourier shells between its high-pass and its
 low-pass. The low-pass is the planned limit of the symmetry-search stage, at
@@ -787,7 +796,7 @@ global search becoming a neighbourhood search arrived together and could not
 be attributed separately. Stage 5 also had capacity to spare on the PfCRT
 reference: resolution flat at 9.703 A from its third of twelve iterations,
 with only cFAR still moving (0.56-0.68). `l_state_continue_mode` already
-enabled NU from stage 5 through `TRAILREC_STAGE_SINGLE`, so this is an
+enabled NU from stage 5 (`NU_FILTER_STAGE`), so this is an
 exercised path rather than new ground.
 
 The default multi-state (`nstates > 1`) stage limit is stage 5

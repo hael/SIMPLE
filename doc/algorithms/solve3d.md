@@ -102,7 +102,10 @@ quota is drawn from the whole class, lowest update count first; no
 per-particle 2D score enters the draw. The single-state shc neighbourhood
 stages (1-2), whose search scans a never-searched particle in full, refine one
 sticky subset: stage 1 draws it and stage 2 keeps it, so each of its particles is
-scanned in full once. From stage 3 the subset is redrawn every iteration.
+scanned in full once. From stage 3 the subset is redrawn every iteration
+and trailing reconstruction blends each iteration's map into the running
+one, so free sampling and trailing start together; multi-state runs start
+trailing at stage 8.
 
 **Regularization.** ML regularization starts at stage 3, once the halves are
 independent enough for the FSC-derived signal prior to mean something. From

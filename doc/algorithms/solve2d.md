@@ -59,9 +59,9 @@ update_frac = min(1, nsample / N_active),
 
 active when below 0.99. Stage 1 uses one fixed random subset for all its
 iterations (sticky), so that the random references are overwritten by a
-consistent population; stage 2 begins carrying class sums forward
-fractionally; from stage 3 the subset is redrawn every iteration, biased toward
-particles with the fewest updates so coverage evens out. Stage iteration
+consistent population; from stage 2 the subset is redrawn every iteration,
+biased toward particles with the fewest updates so coverage evens out, and
+class sums are carried forward fractionally. Stage iteration
 counts are stretched when `update_frac` is small so that each particle is
 expected to be visited at least once per phase:
 

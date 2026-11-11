@@ -168,8 +168,8 @@
 | `simple_eul_prob_tab2D` | main/strategies/search/probabilistic/simple_eul_prob_tab2D.f90 | 35 |
 | `simple_eul_prob_tab2D_tester` | main/strategies/search/probabilistic/simple_eul_prob_tab2D_tester.f90 | 13 |
 | `simple_eul_prob_tab_neigh` | main/strategies/search/probabilistic/simple_eul_prob_tab_neigh.f90 | 52 |
-| `simple_eul_prob_tab_tester` | main/strategies/search/probabilistic/simple_eul_prob_tab_tester.f90 | 39 |
-| `simple_eul_prob_tab_utils` | main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90 | 104 |
+| `simple_eul_prob_tab_tester` | main/strategies/search/probabilistic/simple_eul_prob_tab_tester.f90 | 41 |
+| `simple_eul_prob_tab_utils` | main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90 | 105 |
 | `simple_exec_api` | main/apis/simple_exec_api.f90 | 0 |
 | `simple_exec_cavgproc` | main/exec/simple_exec_cavgproc.f90 | 1 |
 | `simple_exec_denoise` | main/exec/simple_exec_denoise.f90 | 1 |
@@ -493,7 +493,7 @@
 | `simple_refine3D_stage_plan` | main/simple_refine3D_stage_plan.f90 | 1 |
 | `simple_refine3D_startup` | main/simple_refine3D_startup.f90<br>main/simple_refine3D_startup_tester.f90 | 9 |
 | `simple_refine3D_states_controller` | main/simple_refine3D_states_controller.f90 | 30 |
-| `simple_refine3D_strategy` | main/strategies/parallelization/simple_refine3D_strategy.f90<br>main/strategies/parallelization/simple_refine3D_strategy_tester.f90 | 60 |
+| `simple_refine3D_strategy` | main/strategies/parallelization/simple_refine3D_strategy.f90<br>main/strategies/parallelization/simple_refine3D_strategy_tester.f90 | 61 |
 | `simple_refine3D_workflow_controller` | main/simple_refine3D_workflow_controller.f90 | 10 |
 | `simple_refine_motion_model_strategy` | main/strategies/parallelization/simple_refine_motion_model_strategy.f90<br>main/strategies/parallelization/simple_refine_motion_model_tester.f90 | 37 |
 | `simple_relion` | main/star/simple_relion.f90 | 12 |
@@ -521,6 +521,7 @@
 | `simple_solve3D_manifest` | main/solve/simple_solve3D_manifest.f90 | 38 |
 | `simple_solve3D_manifest_tester` | main/solve/simple_solve3D_manifest_tester.f90 | 21 |
 | `simple_solve3D_reseed_tester` | main/solve/simple_solve3D_reseed_tester.f90 | 12 |
+| `simple_solve3D_symmetry_tester` | main/solve/simple_solve3D_symmetry_tester.f90 | 6 |
 | `simple_solve3D_utils` | main/solve/simple_solve3D_controller.f90<br>main/solve/simple_solve3D_utils.f90 | 101 |
 | `simple_sp_project` | main/project/simple_sp_project.f90<br>main/project/simple_sp_project_cls.f90<br>main/project/simple_sp_project_core.f90<br>main/project/simple_sp_project_io.f90<br>main/project/simple_sp_project_mic.f90<br>main/project/simple_sp_project_optics.f90<br>main/project/simple_sp_project_out.f90<br>main/project/simple_sp_project_ptcl.f90<br>main/project/simple_sp_project_stk.f90 | 252 |
 | `simple_sp_project_tester` | main/project/simple_sp_project_tester.f90 | 24 |

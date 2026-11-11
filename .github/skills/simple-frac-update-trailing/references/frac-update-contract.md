@@ -10,7 +10,7 @@ the per-stage `refine3D` command line:
   `nsample / active` exceeds `FULL_SAMPLE_SWITCH_FRAC` (0.9) every stage is a
   full update: no `update_frac`, `nsample` or trailing on the stage
   lines.
-- `trail_rec` turns on the trailing consumer path from stage 5 in single-state
+- `trail_rec` turns on the trailing consumer path from stage 3 in single-state
   runs (`TRAILREC_STAGE_SINGLE`) and stage 8 in multi-state runs
   (`TRAILREC_STAGE_MULTI`).
 - `nspace` and stage search policy are search/reference concerns; they must not

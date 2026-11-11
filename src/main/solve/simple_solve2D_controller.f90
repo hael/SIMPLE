@@ -8,7 +8,7 @@ implicit none
 public :: stage_params, determine_solve2D_stages, mskdiam2lplimits_refine2D, set_cline_refine2D_stage
 public :: set_solve2D_sampling_policy, solve2D_seed_pass_iter, set_cline_refine2D_seed_pass
 public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
-public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, FIRST_SHIFT_STAGE
+public :: PROBREFINE_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE, FIRST_SHIFT_STAGE
 public :: solve2D_first_shift_stage, solve2D_mskdiam_estimate
 public :: solve2D_class_frc05_quantile, solve2D_stage_behind_frc05
 public :: FRC05_SKIP_PTCL_FRAC
@@ -26,8 +26,7 @@ integer,          parameter :: ITS_INCR           = 5
 integer,          parameter :: PHASES(2)          = [4, 6]
 integer,          parameter :: EXTR_LIM_LOCAL     = 20
 integer,          parameter :: PROBREFINE_STAGE   = 3
-integer,          parameter :: STOCH_SAMPL_STAGE  = PROBREFINE_STAGE ! switch from sticky to stochastic sampling when prob starts
-integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! sticky random subset stage
+integer,          parameter :: STICKY_SAMPL_STAGE = 1                ! the only sticky stage (startit == 1): later stages sample freely
 integer,          parameter :: FRAC_UPDATE_STAGE  = 2                ! fractional class-average carry-over starts here
 integer,          parameter :: FIRST_SHIFT_STAGE  = 2                ! the first stage with shifts: the dense table under the key, the box's mask for an automatic run's mask estimate
 integer,          parameter :: GOLD_STD_STAGE     = 2                ! half-specific references from the first regularized stage
@@ -119,8 +118,7 @@ contains
         stage_parms(:)%l_sticky_sampling = .false.
         stage_parms(:)%l_frac_restore    = stage_parms(:)%l_update_frac
         if( nstages >= STICKY_SAMPL_STAGE )then
-            stage_parms(STICKY_SAMPL_STAGE:min(STOCH_SAMPL_STAGE-1,nstages))%l_sticky_sampling = &
-                stage_parms(STICKY_SAMPL_STAGE:min(STOCH_SAMPL_STAGE-1,nstages))%l_update_frac
+            stage_parms(STICKY_SAMPL_STAGE)%l_sticky_sampling = stage_parms(STICKY_SAMPL_STAGE)%l_update_frac
         endif
         if( FRAC_UPDATE_STAGE > 1 )then
             stage_parms(1:min(FRAC_UPDATE_STAGE-1,nstages))%l_frac_restore = .false.

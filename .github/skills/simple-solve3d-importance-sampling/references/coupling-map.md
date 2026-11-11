@@ -67,7 +67,7 @@ Sampling by stage:
   first iteration (`sticky_sampling=yes`) and kept by stage 2 (`keep`; a run
   starting at stage 2 draws with `yes`), because the shc neighbourhood search
   scans never-searched particles in full; from stage 3 every iteration redraws
-- `trail_rec=yes` from `TRAILREC_STAGE_SINGLE` (5) single-state and
+- `trail_rec=yes` from `TRAILREC_STAGE_SINGLE` (3, with the free sampling) single-state and
   `TRAILREC_STAGE_MULTI` (8) multi-state
 
 Stage omission: a stage after the first, before the last and other than the

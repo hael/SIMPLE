@@ -199,7 +199,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Library Tests: Reconstruction')
         call lib_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, postprocess_pdb, fractional_reconstruction, fraction_dose_export, dose_filter3d, wave_reconstruction, volume_programs)', '', .false., '')
+            &'One sub-suite of this suite to run alone (pcg_half_set, pcg_sparse_sampling, addon_report_docking, truth_map_docking, postprocess_pdb, fractional_reconstruction, symmetry_trailing_handoff, fraction_dose_export, dose_filter3d, wave_reconstruction, volume_programs)', '', .false., '')
         call add_ui_program('lib_reconstruction', lib_reconstruction, tsttab, UI_CATEGORY)
     end subroutine new_lib_reconstruction
 
