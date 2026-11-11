@@ -1,4 +1,4 @@
-!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check, the toy problem, the thread identity of the chunked reduction, the weights' round trip
+!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check, the tiled blocks against the whole im2col matrix, the toy problem, the thread identity of the chunked reduction, the weights' round trip
 submodule (simple_hhcnn) simple_hhcnn_tester
 use simple_test_utils
 use simple_cmdline,     only: cmdline
@@ -10,9 +10,10 @@ use simple_ori,         only: ori
 use simple_sym,         only: sym
 use simple_polar_feats, only: polar_feats, polar_feat
 use simple_polarft_calc, only: polarft_calc
+use simple_string_utils, only: int2str
 use simple_rnd,         only: ran3, gasdev
 use simple_timer,       only: tic, toc, timer_int_kind
-!$ use omp_lib,         only: omp_set_num_threads
+!$ use omp_lib,         only: omp_set_num_threads, omp_get_num_threads, omp_get_thread_limit
 implicit none
 
 ! the tiny network of the contract and gradient checks
@@ -26,6 +27,7 @@ contains
         call test_mirror_invariance()
         call test_ctf_normalisation()
         call test_gradient_check()
+        call test_tiled_blocks()
         call test_thread_identity()
         call test_weights_roundtrip()
         call test_toy_problem()
@@ -473,7 +475,7 @@ contains
         type(cnn_grad) :: gr
         real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
         real(dp) :: loss
-        integer  :: b, i, nbad, nchk, c, r, n, kb, m, ic, part, it
+        integer  :: b, i, nbad, nchk, c, r, n, kb, m, ic, part, it, nch
         character(len=40) :: label
         write(*,'(A)') 'test_gradient_check'
         call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261107_int64)
@@ -489,8 +491,10 @@ contains
         enddo
         call net%alloc_grad(gr)
         call net%zero_grad(gr)
+        call net%ensure_chunks(1, nch)
         call net%forward_sample(net%work(1), x, g, side)
-        call net%backward_sample(net%work(1), t, gr, loss)
+        call net%backward_sample(net%work(1), t, gr, loss, 1)
+        call net%template_grads(1)
         nbad = 0
         nchk = 0
         do b = 1,CNN_NBLK
@@ -521,7 +525,7 @@ contains
                             if( mod(n + kb + m + ic + part, 7) /= 0 ) cycle
                             it = net%tix(n, kb, m, ic, part)
                             write(label,'(A,I0,A,I0,A,I0,A,I0,A,I0)') 'template(', n, ',', kb, ',', m, ',', ic, ',', part
-                            call check_entry(net, x, g, side, t, net%rd%tmpl(it), gr%dtmpl(it), nbad, nchk, trim(label))
+                            call check_entry(net, x, g, side, t, net%rd%tmpl(it), net%gtmpl(it), nbad, nchk, trim(label))
                         enddo
                     enddo
                 enddo
@@ -534,13 +538,83 @@ contains
         call net%kill
     end subroutine test_gradient_check
 
-    !> the same training steps at one thread and at a team give the same weights, bit for bit
+    !> blocks 2 and 3 run in tiles of CNN_TILE columns (several, one across the real/imaginary boundary, the last a
+    !! part tile); the responses, the weights' gradient and the input's equal the whole im2col matrix's products
+    subroutine test_tiled_blocks()
+        ! block 2: 384 columns, three tiles with the boundary at 192 inside the second; block 3: 192, a tile and a half
+        integer,  parameter :: PFTSZ = 48
+        ! single-precision sums of at most 384 terms in another order, relative to the largest entry
+        real(sp), parameter :: TOL = 1.e-5
+        type(hhcnn)    :: net
+        type(cnn_grad) :: gr
+        real(sp) :: x(PFTSZ, T_NK, 2), xr(PFTSZ, T_NK, 2, T_NCLS), g(T_NK), side, t(T_NCLS)
+        real(sp), allocatable :: col(:,:), out(:,:), dpre(:,:), dcol(:,:), dpooled(:,:,:,:), dw(:,:)
+        real(dp) :: loss
+        integer  :: b, cin, cout, nkin, npos, nch, i, ic, p, k, part
+        write(*,'(A)') 'test_tiled_blocks'
+        call assert_true(2 * PFTSZ * (T_NK / 2) > 2 * CNN_TILE, 'the second block runs in three tiles or more')
+        do ic = 0,T_NCLS
+            do part = 1,2
+                do k = 1,T_NK
+                    do p = 1,PFTSZ
+                        if( ic == 0 )then
+                            x(p,k,part) = gasdev()
+                        else
+                            xr(p,k,part,ic) = gasdev()
+                        endif
+                    enddo
+                enddo
+            enddo
+        enddo
+        do i = 1,T_NK
+            g(i) = 0.5 + ran3()
+        enddo
+        side = 0.3
+        do i = 1,T_NCLS
+            t(i) = 0.1 + ran3()
+        enddo
+        t = t / sum(t)
+        call net%new(PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261110_int64)
+        call net%prepare_work(1)
+        call net%init_templates(xr, [(1., i = 1,T_NK)])
+        call net%alloc_grad(gr)
+        call net%zero_grad(gr)
+        call net%ensure_chunks(1, nch)
+        call net%forward_sample(net%work(1), x, g, side)
+        call net%backward_sample(net%work(1), t, gr, loss, 1)
+        do b = 2,CNN_NBLK
+            cin  = net%conv(b)%cin
+            cout = net%conv(b)%cout
+            nkin = net%conv(b)%nkin
+            npos = net%conv(b)%npos
+            allocate(col(9*cin, 2*npos), out(cout, 2*npos), dcol(9*cin, 2*npos), dpooled(cin, PFTSZ, nkin, 2))
+            call im2col(cin, PFTSZ, nkin, net%work(1)%blk(b-1)%pooled, .true., col)
+            call conv_ref(cout, 9*cin, 2*npos, net%conv(b)%w, col, out)
+            call assert_true(maxval(abs(out - reshape(net%work(1)%blk(b)%pre, [cout, 2*npos]))) <= TOL * maxval(abs(out)), &
+                &'the tiled responses of block '//int2str(b)//' are the whole matrix products')
+            dpre = reshape(net%work(1)%blk(b)%dpre, [cout, 2*npos])
+            dw   = matmul(dpre, transpose(col))
+            call assert_true(maxval(abs(dw - gr%blk(b)%dw)) <= TOL * maxval(abs(dw)), &
+                &'the tiled weight gradient of block '//int2str(b)//' is the whole matrix product')
+            dcol = matmul(transpose(net%conv(b)%w), dpre)
+            call col2im(cin, PFTSZ, nkin, dcol, .true., dpooled)
+            call assert_true(maxval(abs(dpooled - net%work(1)%blk(b-1)%dpooled)) <= TOL * maxval(abs(dpooled)), &
+                &'the tiled input gradient of block '//int2str(b)//' is the whole matrix product')
+            deallocate(col, out, dpre, dcol, dpooled, dw)
+        enddo
+        call net%grad_kill(gr)
+        call net%kill
+    end subroutine test_tiled_blocks
+
+    !> the same training steps at one thread and at an actual team of four (the fast gate's cap) give the same weights,
+    !! bit for bit, on the build's arithmetic path; a team of sixteen too where the thread limit allows it (by hand: a
+    !! serial run fails the check that the team formed)
     subroutine test_thread_identity()
-        integer, parameter :: N = 40, NSTEPS = 3
-        type(hhcnn) :: net1, net4
+        integer, parameter :: N = 40, NSTEPS = 3, NTEAMS(2) = [4, 16]
+        type(hhcnn) :: net1, netn
         real(sp), allocatable :: x(:,:,:,:), g(:,:), side(:), t(:,:)
-        real(sp) :: loss1, loss4, fm1, fm4
-        integer  :: i, istep, nthr_prev
+        real(sp) :: loss1, lossn, fm1, fmn
+        integer  :: i, istep, nthr_prev, nteam_run, it, limit
         write(*,'(A)') 'test_thread_identity'
         allocate(x(T_PFTSZ, T_NK, 2, N), g(T_NK, N), side(N), t(T_NCLS, N))
         do i = 1,N
@@ -548,28 +622,43 @@ contains
             t(:,i) = 0.
             t(1 + mod(i, T_NCLS), i) = 1.
         enddo
-        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64)
-        call net4%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64)
-        call net1%prepare_work(1)
-        call net1%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
-        call net4%prepare_work(1)
-        call net4%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
-        call assert_true(net1%weights_identical(net4), 'the same seed and reprojections give the same initial weights')
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()
+        limit = NTEAMS(1)
+        !$ limit = omp_get_thread_limit()
+        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64)
+        call net1%prepare_work(1)
+        call net1%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
         !$ call omp_set_num_threads(1)
         do istep = 1,NSTEPS
             call net1%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, loss1, fm1)
         enddo
-        !$ call omp_set_num_threads(4)
-        do istep = 1,NSTEPS
-            call net4%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, loss4, fm4)
+        do it = 1,size(NTEAMS)
+            if( it > 1 .and. limit < NTEAMS(it) )then
+                write(*,'(A,I0,A)') 'test_thread_identity: the team of ', NTEAMS(it), ' skipped under the thread limit'
+                cycle
+            endif
+            call netn%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64)
+            call netn%prepare_work(1)
+            call netn%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
+            !$ call omp_set_num_threads(NTEAMS(it))
+            do istep = 1,NSTEPS
+                call netn%train_batch(N, x, g, side, t, 1.e-3, 1.e-5, lossn, fmn)
+            enddo
+            nteam_run = NTEAMS(it)
+            !$omp parallel default(shared)
+            !$omp master
+            !$ nteam_run = omp_get_num_threads()
+            !$omp end master
+            !$omp end parallel
+            !$ call omp_set_num_threads(1)
+            call assert_int(NTEAMS(it), nteam_run, 'the identity check''s team of '//int2str(NTEAMS(it))//' formed: a serial run proves nothing')
+            call assert_true(net1%weights_identical(netn), 'the chunked reduction gives the same weights at one thread and at a team of '//int2str(NTEAMS(it))//', bit for bit')
+            call assert_true(transfer(loss1, 0_int32) == transfer(lossn, 0_int32), 'the batch loss is the same at one thread and at a team, bit for bit')
+            call netn%kill
         enddo
         !$ call omp_set_num_threads(nthr_prev)
-        call assert_true(net1%weights_identical(net4), 'the chunked reduction gives the same weights at one thread and at a team of 4, bit for bit')
-        call assert_true(transfer(loss1, 0_int32) == transfer(loss4, 0_int32), 'the batch loss is the same at one thread and at a team, bit for bit')
         call net1%kill
-        call net4%kill
         deallocate(x, g, side, t)
     end subroutine test_thread_identity
 

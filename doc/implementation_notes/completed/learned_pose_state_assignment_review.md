@@ -257,3 +257,104 @@ These local files are transient and are not tracked repository artifacts.
 After corrections, rerun the fast gate, the focused regression cases above and
 the registered workflow. A serial pass cannot substitute for actual-team
 identity or for the registered workflow's completion within its budget.
+
+## Resolution in student_speed
+
+The autonomous run `student_speed` corrected the seven findings in its phase 1 (2026-11-10, on the Dell:
+Oracle Linux 8.10, GCC 15.2). Every finding has its regression test; the evidence below is under
+`/data2/agent_runs/student_speed/scratch/keep/logs/`. Two builds were checked: the default, which links
+the system OpenMP OpenBLAS and defines `SIMPLE_BLAS_TEAM_SAFE`, and a variant linking the system
+pthreads OpenBLAS without it (`BLAS in OMP teams: OFF`), the configuration of this review's macOS build.
+The model file's version is now 4.
+
+**PS01, the training arithmetic changed with the team.** Reproduced on Linux before the correction: on
+the variant build the isolated HHCNN suite with `OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=4
+OMP_WAIT_POLICY=PASSIVE OPENBLAS_NUM_THREADS=1` failed the identity check, 30 of 31
+(`ps01_hhcnn_team4_noteam.log`). Change (`simple_hhcnn.f90`): the matrix products take `sgemm` when the
+build's BLAS is team-safe and the explicit loops otherwise, whatever the team; the run-time test of an
+active team (`blas_ok`) is gone, so the arithmetic is a property of the build. Test
+(`simple_hhcnn_tester.f90`): the identity check also asserts that its team of four formed, so a serial
+run (`OMP_THREAD_LIMIT=1`) now fails instead of passing. Evidence: with the actual team of four, 32 of 32
+on both builds (`p1_ps01_hhcnn_team4_tree.log`, `p1_ps01_hhcnn_team4_noteam.log`); the serial diagnostic
+fails the team check (`p1_ps01_hhcnn_limit1_noteam.log`); the fast gate passes on both builds
+(`p1_fast_gate_tree.log`, `p1_fast_gate_noteam.log`). The variant build's HHCNN suite takes 26 s against
+7 s: its training runs on the loops at any thread count.
+
+**PS02, a model could load another network.** Change (`simple_pose_student.f90`): the header names the
+weights by their file name alone, resolved against the header's directory and never the working
+directory; a name with a directory is refused; after reading, the network's half ring, rings, classes,
+width, seed and weight count must equal the header's, else the reader stops. Tests (the pose student's
+tester, now a submodule of the module): two model directories written with the same default names and a
+foreign `student_weights.bin` in the working directory each load their own network bit for bit; the
+relocated model loads its own; a weights name with a directory, a missing name, and networks of another
+seed, width or weight count are refused. Workflow test: the model copied to another directory beside a
+file of the weights' default name that is no network predicts the same table row for row.
+
+**PS03, prediction workers ignored their part.** The distributed masters hand every part `fromp`, `top`,
+`part` and `nparts` together (`qsys_ctrl%augment_partition_job_descr`); no master runs `predict_poses`
+yet. Change: the program's contract requires the range. A part needs `nparts`, `fromp`, `top` and
+`outfile` (the commander), `1 <= part <= nparts` and `1 <= fromp <= top <=` the particles (the strategy);
+`fromp` and `top` are optional keys of the private program (existing keys). A part whose range holds no
+selected particle writes the header-only table and its range's records unchanged instead of stopping.
+A part's tables carry its number (`<fname>_part<n>_pred.txt`), so that parts given one `fname`, as a
+master gives it, do not overwrite each other's; a part refuses `vol1` (the shift registration runs in
+shared memory) before it looks at its range, empty or not.
+Tests: the strategy's tester (`simple_strategy_pose_student_tester.f90`, suite `pose_student_strategy`
+of `unit_numerics`) covers uneven ranges covering a selection once, a part of only unselected rows, and
+refused ranges and parts; the workflow test runs `predict_poses` as four uneven parts with one shared
+`fname` (1-700, 701-1998, one unselected row, one selected row), checks that each predicts only its range, that together they
+cover every selected row once with the whole run's table rows, and that `merge_algndocs` of the four
+documents (which requires every record covered) gives the whole run's records.
+
+**PS04, prediction accepted other physical geometry.** Change: prediction compares the model's half ring,
+box, crop (`box_crop`) and CTF treatment exactly and its sampling within 1e-4 Å and mask within 0.01 Å
+(the header's five and three decimals) with the project's, and stops on a difference; nothing is
+resampled. Test (strategy tester): another sampling, mask or crop with the same box and half ring is
+refused, differences within the decimals pass.
+
+**PS05, calibration and prediction could select different particles.** Change: the threshold is taken
+only where the confidence drops (the end of a group of equal confidences), so that `conf >= threshold`
+at prediction selects exactly the calibrated prefix; it is written as `ES17.9`, which reads back bit for
+bit, and so is the route's cone bound it was calibrated with (formerly three decimals);
+learn_pose_student reads the written model back and stops if its threshold and bound would seed other
+held-out rows than the calibration. Tests: the review's eighteen recovered and two missed rows at confidence one give no
+threshold; the same tie below a recovered row ends the prefix before the tie; a recovered tie is taken
+whole; ineligible rows are passed over (strategy tester); thresholds next to the five-decimal boundary
+read back bit for bit and select the same population (pose student tester).
+
+**PS06, a training set could have no held-out cohort.** Change: the split ranks the selected particles'
+stacks by number and holds out every tenth when there are ten or more; with fewer, every tenth selected
+particle; fewer than ten selected particles are refused before the rows are made. The resampled design
+comparison of zero groups gives zero gain, and `pose_student%train` refuses a set without held-out rows
+(the substitution of the training loss is gone). Tests: two to nine stacks, fifteen stacks none of whose
+numbers is a multiple of ten, nine particles on one or on nine stacks (refused), ten on one stack, and the
+zero-group quantile (strategy tester). The bgal training set's split changes with this rule (its held-out
+stacks are now every tenth selected stack, not every stack whose number is a multiple of ten).
+
+**PS07, wide-band models could not be read back.** Change: the header reader reads records of any length
+in pieces. Test (pose student tester): models of 227 and 228 shells round-trip with their shell weights
+bit for bit and the same prediction.
+
+**After the corrections.** The fast gate passes on both builds (15 of 15; `unit_numerics` 10.8 s on the
+default build, 30.6 s on the variant, whose network runs on the loops), with the new suite
+`pose_student_strategy` (41 checks) and the pose student's (64) and HHCNN's (32) suites. The registered
+workflow test `pose_student` passes through CTest at its eight threads in 317.7 s against the base's
+313.9 s, with its thirteen checks, four of them new: the relocated model, the parts' ranges, their
+coverage and agreement with the whole run, and the merge of their documents
+(`p1_ctest_pose_student_tree_final.log`, `p1_pose_student_metrics_tree.tsv`). On the fixed sets of the
+run (three seeds on four truth-set subsets and on bgal), the trained networks and held-out splits are
+the base's on every set and seed (the held-out tables are identical); the confidence thresholds now keep
+their full precision, and the seeded fractions move by at most 0.0013 either way (the five-decimal form
+had rounded the calibrated threshold both ways: 0.9900014 down to 0.99000, admitting a few more
+particles, and 0.9901377 up to 0.99014, admitting fewer).
+
+**After the run's speed phases** (2026-11-10). The identity check of PS01 now compares teams of 4 and 16
+threads with one thread bit for bit, and a new check runs the blocks across several im2col tiles; the
+HHCNN suite passes 41 of 41 on both builds, by default and three times under `OMP_THREAD_LIMIT=24`
+(`p5_hhcnn_{tree,noteam}*.log`). The variant build's explicit loops were reordered: its training is now
+1.6 to 1.75 times the team-safe build's, against 14 times before. At the end the fast gate and
+`unit_numerics` (28 suites, 2,006 assertions) pass on both builds (`p6_gate_{tree,noteam}.log`,
+`p6_unit_numerics_{tree,noteam}.log`), and the workflow test `pose_student` passes through CTest at its
+eight threads in 31.9 s on the default build and 51.5 s on the variant, against 307.2 s for the base
+build (`p6_ctest_pose_student_{tree,noteam,base}.log`). The macOS configuration itself was not
+available to the run.

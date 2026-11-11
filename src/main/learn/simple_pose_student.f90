@@ -1,6 +1,7 @@
 !@descr: the pose student: the Hermitian network with the direction grid, the band and the frozen shell weights it was trained with, its training on the teacher's rows, its prediction (the mode, the cone, the confidence) and its model file
-! The model file is a key=value text header beside the weights' binary file (doc/implementation_notes/planned/
-! learned_pose_state_assignment.md, section 6); a reader refuses another grid, band or geometry.
+! The model file is a key=value text header beside the weights' binary file (doc/algorithms/pose_student.md); the
+! header names the weights by their file name alone, resolved against the header's directory, and a reader refuses
+! weights of another network and another grid, band or geometry.
 module simple_pose_student
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_fortran_env, only: int64
@@ -8,7 +9,7 @@ use simple_defs,         only: sp, dp, logfhandle
 use simple_error,        only: simple_exception
 use simple_string,       only: string
 use simple_string_utils, only: int2str
-use simple_fileio,       only: fopen, fclose, fileiochk
+use simple_fileio,       only: fopen, fclose, fileiochk, basename, get_fpath
 use simple_syslib,       only: file_exists
 use simple_timer,        only: tic, toc, timer_int_kind
 use simple_oris,         only: oris
@@ -20,13 +21,14 @@ use simple_math,         only: hpsort
 implicit none
 
 public :: pose_student, student_pred, pose_student_targets, student_train_profile
-public :: NSPACE_STUDENT, KMAX_STUDENT, POSE_STUDENT_VERSION
+public :: NSPACE_STUDENT, KMAX_STUDENT, POSE_STUDENT_VERSION, run_all_pose_student_tests
 private
 #include "simple_local_flags.inc"
 
 integer,  parameter :: NSPACE_STUDENT       = 1000  !< the student's direction grid
 integer,  parameter :: KMAX_STUDENT         = 64    !< the cone's cap: a particle whose 99% needs more directions takes the dense search
-integer,  parameter :: POSE_STUDENT_VERSION = 3     !< 3: the readout tied to the grid's mirror pairs
+integer,  parameter :: POSE_STUDENT_VERSION = 4     !< 4: the weights a file name beside the header, the threshold written to round-trip
+integer,  parameter :: RECORD_CHUNK         = 1024  !< the header reader's unit: a record of any length is read in pieces of this many characters
 integer,  parameter :: BATCH_MAX            = 256   !< the batch: a sixteenth of the training rows within these bounds
 integer,  parameter :: BATCH_MIN            = 16
 integer,  parameter :: BATCH_FRAC           = 16
@@ -108,6 +110,9 @@ type :: pose_student
     procedure :: get_lp
     procedure :: get_pgrp
     procedure :: get_box
+    procedure :: get_box_crop
+    procedure :: get_smpd
+    procedure :: get_mskdiam
     procedure :: get_with_ctf
     procedure :: get_weights
     procedure :: get_grid
@@ -123,7 +128,15 @@ type :: pose_student
     procedure :: set_cone_bound
     procedure :: get_cone_bound
     procedure :: kill
+    ! the model file's checks the tester drives on their own (bound so that the submodule links them)
+    procedure, private, nopass :: header_weights_path
+    procedure, private, nopass :: weights_header_mismatch
 end type pose_student
+
+interface
+    module subroutine run_all_pose_student_tests()
+    end subroutine run_all_pose_student_tests
+end interface
 
 contains
 
@@ -297,14 +310,13 @@ contains
     !! ring-averaged CTF squared, side(n), dists(nspace, n) the rows' losses and temps(n)
     !! their temperatures (the tempering factor prob_beta times the particle's own: the targets), held(n) the
     !! held-out rows (early stopping). Every epoch sees every training row shifted by a keyed draw in the disk
-    !! of shift_aug_px; the held-out rows take one keyed shift each. Adam at LEARNING_RATE with WEIGHT_DECAY, the
-    !! budget max_steps optimiser steps (the batch a sixteenth of the training rows within BATCH_MIN and BATCH_MAX,
-    !! so that a small set gets as many steps as a large one), stopped when the held-out loss has not improved for
-    !! patience_steps; the best epoch's weights are kept
-    subroutine train( self, n, x, ctf2, side, dists, temps, held, prob_beta, shift_aug_px, max_steps, patience_steps, &
+    !! of shift_aug_px; the held-out rows take one keyed shift each. Adam at LEARNING_RATE with WEIGHT_DECAY on batches
+    !! of a sixteenth of the training rows within BATCH_MIN and BATCH_MAX, at most max_epochs epochs, stopped when
+    !! the held-out loss has not improved for patience epochs; the best epoch's weights are kept
+    subroutine train( self, n, x, ctf2, side, dists, temps, held, prob_beta, shift_aug_px, max_epochs, patience, &
         &nthr, log_unit )
         class(pose_student), intent(inout) :: self
-        integer,             intent(in)    :: n, max_steps, patience_steps, nthr, log_unit
+        integer,             intent(in)    :: n, max_epochs, patience, nthr, log_unit
         real(sp),            intent(in)    :: x(self%pftsz, self%nk, 2, n), ctf2(self%nk, n), side(n)
         logical,             intent(in)    :: held(n)
         real(sp),            intent(in)    :: dists(self%nspace, n), temps(n), prob_beta, shift_aug_px
@@ -313,19 +325,20 @@ contains
         integer,  allocatable :: train_inds(:), held_inds(:), perm(:)
         real(sp) :: loss, fm, loss_held, fm_held, best_loss
         real(dp) :: loss_sum, fm_sum
-        integer  :: ntr, nhe, epoch, ib, nb, i0, i1, nbatch, i, j, since_best, nthr_here, bsz, max_epochs, patience
+        integer  :: ntr, nhe, epoch, ib, nb, i0, i1, nbatch, i, j, since_best, nthr_here, bsz
         integer(timer_int_kind) :: t0, ta
         if( .not. self%exists ) THROW_HARD('student not constructed; pose_student%train')
         self%rt_assemble = 0.d0
         call self%net%reset_profile
         if( n < 2 ) THROW_HARD('too few rows to train on; pose_student%train')
-        if( max_steps < 1 .or. patience_steps < 1 ) THROW_HARD('the training budget is at least one step; pose_student%train')
+        if( max_epochs < 1 .or. patience < 1 ) THROW_HARD('the training budget is at least one epoch; pose_student%train')
         self%prob_beta    = prob_beta
         self%shift_aug_px = shift_aug_px
         ntr = count(.not. held)
         nhe = count(held)
         if( ntr < 1 ) THROW_HARD('no training row; pose_student%train')
-        allocate(train_inds(ntr), held_inds(max(1,nhe)), perm(ntr))
+        if( nhe < 1 ) THROW_HARD('no held-out row: the early stopping needs them; pose_student%train')
+        allocate(train_inds(ntr), held_inds(nhe), perm(ntr))
         j = 0
         do i = 1,n
             if( held(i) ) cycle
@@ -354,11 +367,9 @@ contains
         since_best = 0
         bsz        = min(BATCH_MAX, max(BATCH_MIN, ntr / BATCH_FRAC))
         nb         = (ntr + bsz - 1) / bsz
-        max_epochs = (max_steps + nb - 1) / nb
-        patience   = (patience_steps + nb - 1) / nb
         self%batch_size = bsz
-        if( log_unit > 0 ) write(log_unit,'(A,I0,A,I0,A,I0,A,I0,A)') 'training budget: ', max_steps, ' steps in batches of ', &
-            &bsz, ' (', nb, ' per epoch, at most ', max_epochs, ' epochs)'
+        if( log_unit > 0 ) write(log_unit,'(A,I0,A,I0,A,I0,A,I0,A)') 'training budget: ', max_epochs, ' epochs in batches of ', &
+            &bsz, ' (', nb, ' per epoch), stopped after ', patience, ' epochs without a held-out improvement'
         t0 = tic()
         do epoch = 1,max_epochs
             call keyed_permutation(self%seed, epoch, ntr, perm)
@@ -377,12 +388,7 @@ contains
             enddo
             self%loss_train = real(loss_sum / real(ntr,dp))
             self%epochs_run = epoch
-            if( nhe > 0 )then
-                call evaluate_held(loss_held, fm_held)
-            else
-                loss_held = self%loss_train
-                fm_held   = real(fm_sum / real(ntr,dp))
-            endif
+            call evaluate_held(loss_held, fm_held)
             if( log_unit > 0 )then
                 write(log_unit,'(A,I3,A,F9.5,A,F7.4,A,F9.5,A,F7.4,A,F9.1,A)') 'epoch ', epoch, ': train loss ', self%loss_train, &
                     &' mode ', real(fm_sum / real(ntr,dp)), ' | held-out loss ', loss_held, ' mode ', fm_held, ' | ', &
@@ -616,21 +622,23 @@ contains
 
     ! ===== THE MODEL FILE =====
 
-    !> the header fname (key=value) and the weights beside it (<base>_weights.bin)
+    !> the header fname (key=value) and the weights beside it (<base>_weights.bin), named in the header by their file
+    !! name alone
     subroutine write( self, fname, extra_keys, extra_vals )
         class(pose_student),        intent(in) :: self
         class(string),              intent(in) :: fname
         character(len=*), optional, intent(in) :: extra_keys(:), extra_vals(:)
-        type(string) :: wfile
+        type(string) :: wfile, wname
         integer :: funit, io_stat, k, i
         if( .not. self%exists ) THROW_HARD('student not constructed; pose_student%write')
         wfile = weights_fname(fname)
+        wname = basename(wfile)
         call self%net%write_weights(wfile)
         call fopen(funit, fname, status='replace', action='write', iostat=io_stat)
         call fileiochk('pose_student%write; open '//fname%to_char(), io_stat)
         write(funit,'(A)')        '# pose student model'
         write(funit,'(A,I0)')     'model_version=', POSE_STUDENT_VERSION
-        write(funit,'(A,A)')      'weights_file=', wfile%to_char()
+        write(funit,'(A,A)')      'weights_file=', wname%to_char()
         write(funit,'(A,I0)')     'nspace=', self%nspace
         write(funit,'(A,A)')      'pgrp=', self%pgrp
         write(funit,'(A,I0)')     'pftsz=', self%pftsz
@@ -661,11 +669,11 @@ contains
         write(funit,'(A,ES14.6)') 'loss_heldout=', self%loss_held
         write(funit,'(A,F8.5)')   'mode_heldout=', self%mode_held
         write(funit,'(A,F10.2)')  'time_train_s=', self%time_train_s
-        write(funit,'(A,F8.5)')   'conf_threshold=', self%conf_threshold
+        write(funit,'(A,ES17.9)') 'conf_threshold=', self%conf_threshold
         write(funit,'(A,F8.5)')   'conf_fraction=', self%conf_fraction
         write(funit,'(A,F8.5)')   'heldout_seeded=', self%heldout_seeded
         write(funit,'(A,F8.5)')   'heldout_recovered=', self%heldout_recovered
-        write(funit,'(A,F8.3)')   'cone_bound_deg=', self%cone_bound
+        write(funit,'(A,ES17.9)') 'cone_bound_deg=', self%cone_bound
         if( allocated(self%teacher_project) ) write(funit,'(A,A)') 'teacher_project=', self%teacher_project
         write(funit,'(A,I0)')     'teacher_selection_hash=', self%selection_hash
         write(funit,'(A,I0)')     'vol1_hash=', self%vol1_hash
@@ -688,6 +696,7 @@ contains
         endif
         call fclose(funit)
         call wfile%kill
+        call wname%kill
     end subroutine write
 
     !> the weights file's name beside the header: <base>_weights.bin
@@ -704,15 +713,71 @@ contains
         wfile = trim(s)//'_weights.bin'
     end function weights_fname
 
-    !> the student from its header and the weights beside it
+    !> the weights file a header fname names (wname, a file name without a directory), in the header's directory;
+    !! msg says why the name is refused, empty otherwise
+    subroutine header_weights_path( fname, wname, wfile, msg )
+        class(string),                 intent(in)  :: fname
+        character(len=*),              intent(in)  :: wname
+        type(string),                  intent(out) :: wfile
+        character(len=:), allocatable, intent(out) :: msg
+        type(string) :: dir
+        msg = ''
+        if( len_trim(wname) == 0 )then
+            msg = 'the model header names no weights file; pose_student%read'
+        else if( scan(trim(wname), '/\') > 0 )then
+            msg = 'the model header must name its weights by a file name beside it; pose_student%read'
+        else
+            dir   = get_fpath(fname)
+            wfile = dir%to_char()//trim(adjustl(wname))
+            call dir%kill
+        endif
+    end subroutine header_weights_path
+
+    !> empty when the network read from a weights file is the one a header describes (its half ring, rings, classes,
+    !! width, seed and weight count), else what differs
+    function weights_header_mismatch( net, pftsz, nk, nclass, width, seed, nweights ) result( msg )
+        type(hhcnn),    intent(in) :: net
+        integer,        intent(in) :: pftsz, nk, nclass, width, nweights
+        integer(int64), intent(in) :: seed
+        character(len=:), allocatable :: msg
+        integer :: pftsz_w, nk_w, nclass_w, width_w, nfeat_w
+        call net%get_shape(pftsz_w, nk_w, nclass_w, width_w, nfeat_w)
+        msg = ''
+        if( pftsz_w /= pftsz .or. nk_w /= nk .or. nclass_w /= nclass .or. width_w /= width )then
+            msg = 'the weights file holds a network of another shape than its header''s; pose_student%read'
+        else if( net%get_seed() /= seed )then
+            msg = 'the weights file holds a network of another seed than its header''s; pose_student%read'
+        else if( net%get_nweights() /= nweights )then
+            msg = 'the weights file holds another weight count than its header''s; pose_student%read'
+        endif
+    end function weights_header_mismatch
+
+    !> one record of a text file, of any length (the header's shell weights grow with the band)
+    subroutine read_record( funit, line, io_stat )
+        integer,                       intent(in)  :: funit
+        character(len=:), allocatable, intent(out) :: line
+        integer,                       intent(out) :: io_stat
+        character(len=RECORD_CHUNK) :: chunk
+        integer :: got
+        line = ''
+        do
+            read(funit, '(A)', advance='no', size=got, iostat=io_stat) chunk
+            line = line//chunk(1:got)
+            if( io_stat /= 0 ) exit
+        enddo
+        if( is_iostat_eor(io_stat) ) io_stat = 0
+        if( is_iostat_end(io_stat) .and. len(line) > 0 ) io_stat = 0
+    end subroutine read_record
+
+    !> the student from its header and the weights the header names beside it; the weights must be the network the
+    !! header describes
     subroutine read( self, fname )
         class(pose_student), intent(inout) :: self
         class(string),       intent(in)    :: fname
-        character(len=4096) :: line
-        character(len=:), allocatable :: key, val
+        character(len=:), allocatable :: line, key, val, msg
         type(string) :: wfile
         integer  :: funit, io_stat, ieq, version, pftsz, nrots, kfromto(2), nspace, box, box_crop, width, k
-        integer  :: nptcls_train, nheldout, batch_size, epochs_run, best_epoch, pass
+        integer  :: nptcls_train, nheldout, batch_size, epochs_run, best_epoch, pass, nweights
         real(sp) :: lp, smpd, mskdiam, prob_beta, shift_aug_px, loss_train, loss_held, mode_held, time_train_s
         real(sp) :: conf_threshold, conf_fraction, heldout_seeded, heldout_recovered, cone_bound
         real(sp) :: side_mean, side_sd
@@ -726,7 +791,7 @@ contains
         lp = 0.; smpd = 0.; mskdiam = 0.; prob_beta = 0.; shift_aug_px = 0.; with_ctf = .true.
         side_mean = 0.; side_sd = 1.
         seed = 0_int64; vol1_hash = 0_int64; selection_hash = 0_int64
-        nptcls_train = 0; nheldout = 0; batch_size = 0; epochs_run = 0; best_epoch = 0
+        nptcls_train = 0; nheldout = 0; batch_size = 0; epochs_run = 0; best_epoch = 0; nweights = 0
         loss_train = 0.; loss_held = 0.; mode_held = 0.; time_train_s = 0.
         conf_threshold = 0.; conf_fraction = 0.; heldout_seeded = 0.; heldout_recovered = 0.; cone_bound = 0.
         pgrp = 'c1'; holdout_rule = ''; teacher_project = ''; wfile_name = ''
@@ -737,7 +802,7 @@ contains
             call fopen(funit, fname, status='old', action='read', iostat=io_stat)
             call fileiochk('pose_student%read; open '//fname%to_char(), io_stat)
             do
-                read(funit,'(A)',iostat=io_stat) line
+                call read_record(funit, line, io_stat)
                 if( io_stat /= 0 ) exit
                 if( len_trim(line) == 0 ) cycle
                 if( line(1:1) == '#' ) cycle
@@ -761,6 +826,7 @@ contains
                         case('mskdiam');        read(val,*) mskdiam
                         case('with_ctf');       read(val,*) with_ctf
                         case('width');          read(val,*) width
+                        case('nweights');       read(val,*) nweights
                         case('seed');           read(val,*) seed
                         case('prob_beta');      read(val,*) prob_beta
                         case('shift_aug_px');   read(val,*) shift_aug_px
@@ -807,14 +873,12 @@ contains
             endif
         enddo
         if( .not. (l_wk_even .and. l_wk_odd) ) THROW_HARD('the model header lacks its shell weights; pose_student%read')
-        if( len_trim(wfile_name) == 0 ) THROW_HARD('the model header names no weights file; pose_student%read')
+        call header_weights_path(fname, wfile_name, wfile, msg)
+        if( len(msg) > 0 ) THROW_HARD(msg)
         call self%new(pftsz, kfromto, box, box_crop, smpd, mskdiam, pgrp, nspace, lp, wk, with_ctf, width, seed)
-        wfile = wfile_name
-        if( .not. file_exists(wfile) )then
-            ! the weights beside the header, wherever the header was moved to
-            wfile = weights_fname(fname)
-        endif
         call self%net%read_weights(wfile)
+        msg = weights_header_mismatch(self%net, pftsz, self%nk, self%nclass, width, seed, nweights)
+        if( len(msg) > 0 ) THROW_HARD(msg)
         self%prob_beta      = prob_beta
         self%shift_aug_px   = shift_aug_px
         self%side_mean      = side_mean
@@ -874,6 +938,21 @@ contains
         class(pose_student), intent(in) :: self
         get_box = self%box
     end function get_box
+
+    pure integer function get_box_crop( self )
+        class(pose_student), intent(in) :: self
+        get_box_crop = self%box_crop
+    end function get_box_crop
+
+    pure real(sp) function get_smpd( self )
+        class(pose_student), intent(in) :: self
+        get_smpd = self%smpd
+    end function get_smpd
+
+    pure real(sp) function get_mskdiam( self )
+        class(pose_student), intent(in) :: self
+        get_mskdiam = self%mskdiam
+    end function get_mskdiam
 
     pure logical function get_with_ctf( self )
         class(pose_student), intent(in) :: self

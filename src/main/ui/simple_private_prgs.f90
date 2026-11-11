@@ -400,6 +400,8 @@ contains
         call push_opt('fname')
         call push_opt('part')
         call push_opt('nparts')
+        call push_opt('fromp')
+        call push_opt('top')
         call push_opt('outfile')
     end subroutine new_private_prgs
 

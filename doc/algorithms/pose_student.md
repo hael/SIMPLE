@@ -125,24 +125,58 @@ shell weights the rows were whitened with are frozen in the model.
 **The loss** is the cross-entropy against those soft rows, minimised with Adam
 (rate 1e-3, decoupled weight decay 1e-5) on mini-batches of at most 256, every
 row shifted each epoch by a keyed draw in a disk of three times the search's
-centring width (the training's shift tolerance). The mini-batch is cut into
-chunks reduced in a fixed order, so the same weights come out at any thread
-count, bit for bit.
+centring width (the training's shift tolerance), for at most 30 epochs and
+stopped after 3 epochs without a held-out improvement (the best epoch comes at
+3 to 7 on the fixed sets, its improvements at most 2 epochs apart); the best
+epoch's weights are kept.
 
-**Held-out micrographs** (every tenth stack, or every tenth particle of a
-single stack) serve three decisions, and the test half is never touched before
-the model is frozen: early stopping on the held-out loss; the choice of the
-design, where the cheapest (16 channels) is kept unless 32 or then 64
-channels recover clearly more held-out seeds (the paired difference over
-micrographs, resampled a thousand times by micrograph; kept when the 5%
-quantile of the gain is above zero); and the confidence threshold.
+**The training step** is built so that the same weights come out at any
+thread count, bit for bit. The mini-batch is cut into chunks set by its size
+alone (about 96 chunks), computed in parallel and reduced in chunk order over
+slices of the weights, also in parallel, with the Adam update in the same pass.
+The blocks' convolutions are im2col and a matrix product; blocks 2 and 3 build
+their im2col matrix in tiles of 128 columns, which stay in a core's cache. The
+readout's class products, its rotation scores and their gradients are matrix
+products too; the rotation search scores every rotation of the grid (a
+coarse-to-fine search was measured and changed the winning rotation too often
+for its gain), and the templates' gradient is one product over the whole batch.
+Every matrix product takes the same arithmetic whatever the team: `sgemm`
+where the build's BLAS stays on the calling thread inside OpenMP teams
+(`SIMPLE_BLAS_TEAM_SAFE`). Otherwise the build and the shape choose between
+explicit loops down the columns of the result and the `matmul` intrinsic,
+gfortran's single-threaded product, which is compiled into its runtime and so
+runs optimised even in a Debug build. On the Dell's Arrow Lake core, one
+thread, the optimised loops ran at 30 to 54 GFLOP/s on the network's products
+against `matmul`'s 6 to 43. The exception is a transposed product of fewer than
+16 rows (the readout's four): there the loops ran at 6 and `matmul` at 37. In a
+Debug build the loops ran at 4 to 5 and `matmul` at 9 to 63. So a Release build
+takes the loops except on those few-row products, and a Debug build takes
+`matmul` everywhere, transposing an operand first where `matmul` of a
+transposed section would run at a sixth of the speed.
+
+**Held-out micrographs** (every tenth of the selected particles' stacks in
+order of their numbers when they lie on ten or more, otherwise every tenth
+selected particle; fewer than ten selected particles are refused before
+training, so that neither cohort is empty) serve three decisions, and the test
+half is never touched before the model is frozen: early stopping on the
+held-out loss; the choice of the design, where the cheapest (16 channels) is
+kept unless 32 or then 64 channels recover clearly more held-out seeds (the
+paired difference over micrographs, resampled a thousand times by micrograph;
+kept when the 5% quantile of the gain is above zero; 64 channels are tried
+only from 10,000 training rows: below, they rarely beat 32 and cost two and a
+half times as much); and the confidence threshold.
 
 **A seed is recovered** when the teacher's direction, or its mirror partner,
 lies inside the student's cone, the cone being within the cap of 64 directions
 and within the route's bound (below). The threshold is the confidence of the
 longest confidence-sorted prefix of held-out particles in which at least 95%
-of the seeds are recovered; above every confidence when no prefix qualifies,
-so that a student that cannot be trusted seeds nobody.
+of the seeds are recovered, a prefix ending only where the confidence drops
+(prediction takes every particle at or above the threshold, so a prefix inside
+a group of equal confidences would seed the whole group); above every
+confidence when no prefix qualifies, so that a student that cannot be trusted
+seeds nobody. The threshold and the bound are written so that they read back
+bit for bit, and learn_pose_student reads the model back and checks that it
+seeds the calibrated held-out particles.
 
 ## Prediction and the hand-off
 
@@ -180,7 +214,14 @@ the threshold; every other particle takes the dense search. The seeded
 particle's record carries the direction as its orientation and, in numbered
 slots of the particle's record, the cone's radius, the confidence and the
 route. The program writes a part file for a distributed caller to merge, or
-its own project copy, never the caller's project.
+its own project copy, never the caller's project. A part is given its range as
+the distributed masters hand it to every part (`part`, `nparts`, `fromp`,
+`top`, with `outfile`); its tables carry its number, and a range without a
+selected particle writes its records unchanged. Prediction refuses a model of
+another geometry than the project's: the half ring, the box, the crop
+(`box_crop`) and the CTF treatment exactly, the sampling (`smpd`) within
+1e-4 Å and the mask (`mskdiam`) within 0.01 Å, the header's decimals; it does
+not resample.
 
 **The search** (`refine3D refine=prob_neigh prob_neigh_mode=geom`) scores, for
 a particle with a cone, every reference within the cone about the stored
@@ -252,7 +293,12 @@ have.
 a disk cache of the rows' tensors), `simple_hhcnn` (HHCNN: the Hermitian blocks,
 the template readout, the trainer, the weights file), `simple_pose_student`
 (the model with its grid, its mirror pairs, threshold and record; a text
-header with the weights beside it, model version 3). The programs `learn_pose_student` and `predict_poses` are
+header with the weights beside it, model version 4: the header names the
+weights by their file name alone, resolved against the header's directory and
+never the working directory, and the reader refuses weights whose shape, seed
+or weight count differ from the header's; the header's records may be of any
+length, as the shell weights of a wide band need). The programs
+`learn_pose_student` and `predict_poses` are
 strategy routines on the caller's `(params, build)` with thin private
 commanders; the band is `lp`, the grid `nspace`, the model `infile` and
 `fname`; no other key. The per-particle cone of the neighbourhood search lives
@@ -309,4 +355,7 @@ balance. **`test=pose_student_bench`** (simple_test_exec, no CTest entry) times
 the HHCNN kernels on synthetic tensors per ring count and width: the forward
 pass split into the blocks and the readout, the backward pass, a training step
 of 256 samples at one thread and at the team, the team's prediction throughput
-and the step's identity across threads (`BENCH/POSE_STUDENT_KERNELS_BENCH.txt`).
+and the step's identity across threads; the arithmetic rates of the blocks'
+and the readout's products, the chunks per step and the threads they keep
+busy; and the blocks' other kernels (im2col, the gate, the pooling, their
+backward passes) at one thread (`BENCH/POSE_STUDENT_KERNELS_BENCH.txt`).

@@ -58,11 +58,18 @@ contains
     end subroutine exec_learn_pose_student
 
     !> The student's prediction for the project's selected particles under the model infile: per particle the mode
-    !! direction, the cone holding 99% of the posterior and the confidence, to the text table beside fname; the
-    !! project is not written (simple_private_exec)
+    !! direction, the cone holding 99% of the posterior and the confidence, to the text table beside fname
+    !! (simple_private_exec). A part of a distributed caller is given its range as the masters hand it to every part
+    !! (part, nparts, fromp, top) and writes it to outfile
     subroutine exec_predict_poses( self, cline )
+        use simple_error, only: simple_exception
         class(commander_predict_poses), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        if( cline%defined('part') )then
+            if( .not. (cline%defined('nparts') .and. cline%defined('fromp') .and. cline%defined('top')) ) &
+                &THROW_HARD('a part of predict_poses needs its range: nparts, fromp and top')
+            if( .not. cline%defined('outfile') ) THROW_HARD('a part of predict_poses needs outfile')
+        endif
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         if( .not. cline%defined('fname') ) call cline%set('fname', 'pose_student.txt')
         call cline%set('oritype', 'ptcl3D')

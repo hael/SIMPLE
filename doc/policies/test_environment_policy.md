@@ -163,7 +163,9 @@ distance vectors for comparing builds, no thresholds;
 `doc/implementation_notes/completed/polar_matching_layout_bench.md`),
 `pose_student_bench` (the pose student's HHCNN kernels on synthetic tensors:
 the forward and backward passes, the training step at one thread and at the
-team, the prediction throughput and the step's thread identity, no thresholds;
+team, the prediction throughput and the step's thread identity, the kernels'
+arithmetic rates from operation counts of their shapes, the step's chunks
+against the team and the blocks' other kernels at one thread, no thresholds;
 `doc/algorithms/pose_student.md`),
 and the input generators `solve3D_addon_snapshots`, `write_state_weights_labels`
 and `write_state_weights_mixed` (tools for manual runs). `pcg_frac_update`,

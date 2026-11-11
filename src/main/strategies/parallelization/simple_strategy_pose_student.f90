@@ -33,15 +33,21 @@ use simple_binoris_io,   only: binwrite_oritab
 implicit none
 
 public :: run_learn_pose_student, learn_pose_student_exec, run_predict_poses, predict_poses_exec, KMAX_ROW
+public :: student_holdout_split, student_boot_quantile, student_conf_threshold, student_geometry_mismatch
+public :: student_part_pinds, run_all_strategy_pose_student_tests
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: KMAX_ROW       = 256  !< the row record's kept entries, the tail's mass beside them
 integer, parameter :: STUDENT_WIDTHS(3) = [16, 32, 64] !< the designs, cheapest first: the first block's channels
-integer, parameter :: MAX_STEPS      = 2500 !< the training budget in optimiser steps (30 epochs of the training half at batch 256)
-integer, parameter :: PATIENCE_STEPS = 250  !< steps without a held-out improvement before the training stops
-integer, parameter :: HOLDOUT_EVERY  = 10   !< every tenth micrograph (stack) is held out, every tenth selected particle of a single stack
+integer, parameter :: WIDEST_MIN_ROWS = 10000 !< the widest design is tried from this many training rows: below, it rarely beats the next and costs two and a half times it
+integer, parameter :: MAX_EPOCHS     = 30   !< the training budget in epochs (the best held-out epoch comes at 3 to 7 on the fixed sets)
+integer, parameter :: PATIENCE_EPOCHS = 3   !< epochs without a held-out improvement before the training stops (improvements came at most 2 epochs apart)
+integer, parameter :: HOLDOUT_EVERY  = 10   !< every tenth of the selected particles' micrographs (stacks) is held out, every tenth selected particle when they lie on fewer stacks
 real,    parameter :: CONF_FRACTION  = 0.95 !< the confidence threshold: above it the teacher's direction lies in the cone for this fraction of the held-out particles
+real,    parameter :: CONF_NONE      = 1.00001 !< the threshold when no prefix qualifies: above every confidence, so that the student seeds nobody
+real,    parameter :: SMPD_TOL       = 1.e-4 !< a model's sampling (A/pixel) equals the project's within the header's five decimals
+real,    parameter :: MSKDIAM_TOL    = 1.e-2 !< a model's mask diameter (A) equals the project's within the header's three decimals
 integer, parameter :: NBOOT          = 1000 !< resamples by micrograph of the paired difference between two designs
 real,    parameter :: BOOT_QUANTILE  = 0.05 !< a wider design is kept when this quantile of its resampled recovery gain is above zero
 real,    parameter :: SHIFT_AUG_NSIG = 3.   !< the augmentation's disk: this many prior widths (the dynamic centring's disk)
@@ -52,6 +58,11 @@ integer, parameter :: SHIFT_CHECK_NPTCLS  = 256           !< ruling R2's shift c
 real,    parameter :: SHIFT_CHECK_MAGS(3) = [2., 5., 10.] !< shifted through the calculator's phase ramps by these pixels
 integer, parameter :: SHIFT_CHECK_NDIR    = 4             !< in this many directions (0, 90, 180, 270 degrees)
 integer, parameter :: SHIFT_CHECK_NGROUPS = 1             !< the readout map as one feature group (ruling R3's readout replaced the pooled features)
+
+interface
+    module subroutine run_all_strategy_pose_student_tests()
+    end subroutine run_all_strategy_pose_student_tests
+end interface
 
 contains
 
@@ -94,12 +105,12 @@ contains
         real,    allocatable     :: dists(:), wk(:,:)
         real,    allocatable     :: x_all(:,:,:,:), ctf2_all(:,:), side_all(:), dists_all(:,:), temps_all(:), xrefs(:,:,:,:), ctf_one(:,:)
         complex, allocatable     :: pft_ref(:,:)
-        real,    allocatable     :: prob(:,:), conf_held(:), radius_held(:), gain(:), boot_means(:)
+        real,    allocatable     :: prob(:,:), conf_held(:), radius_held(:), gain(:)
         logical, allocatable     :: held(:), recov(:,:)
         integer, allocatable     :: pinds(:), batches(:,:), statbuf(:), mode_all(:), held_inds(:), group_held(:)
-        integer, allocatable     :: k99_held(:), mode_held_s(:), order(:), groups(:), group_of(:)
+        integer, allocatable     :: k99_held(:), mode_held_s(:), groups(:), group_of(:), stkinds(:)
         type(student_pred)       :: pred
-        integer(int64)           :: key(POLAR_FEATS_NHEAD), mtime, vol_hash, lehmer
+        integer(int64)           :: key(POLAR_FEATS_NHEAD), mtime, vol_hash
         integer(timer_int_kind)  :: t0, t_all
         real(timer_int_kind)     :: rt_prep, rt_batch, rt_fill, rt_rows, rt_all, rt_train, rt_cand(size(STUDENT_WIDTHS))
         real(timer_int_kind)     :: rt_heldpred(size(STUDENT_WIDTHS)), rt_boot(size(STUDENT_WIDTHS)), rt_write, rt_kept
@@ -109,13 +120,16 @@ contains
         real     :: euls_ref(3), euls_mode(3), euls_sym(3), euldist, inpldist, temp, dmin, w_ref, invalid, shift_aug
         real     :: recov_cand(size(STUDENT_WIDTHS)), loss_cand(size(STUDENT_WIDTHS)), gain_q(size(STUDENT_WIDTHS))
         real     :: conf_threshold, heldout_seeded, heldout_recovered, cone_bound
-        real(dp) :: z, gsum
+        real(dp) :: z
         integer  :: nptcls, batchsz_max, nbatches, ibatch, b0, b1, batchsz, i, iptcl, iproj_ref, iproj_mode, rank_ref
-        integer  :: stat_unit, grid_unit, head_unit, io_stat, status, stat_status, j, nvalid_ref, nk, nstks, nheld
-        integer  :: nptcls_train, nheldout, epochs_run, best_epoch, nweights, iw, iw_best, ngroups, ib, ig, nthr_here
+        integer  :: stat_unit, grid_unit, head_unit, io_stat, status, stat_status, j, nvalid_ref, nk, nheld
+        integer  :: nptcls_train, nheldout, epochs_run, best_epoch, nweights, iw, iw_best, ngroups, ig, nthr_here
         integer  :: ithr, epoch_cand(size(STUDENT_WIDTHS)), held_unit
         real     :: loss_train, loss_held, mode_held, time_train_s
         logical  :: l_rebuilt, l_cache, l_by_stack
+        character(len=:), allocatable :: msg
+        type(pose_student)       :: reread
+        integer                  :: nsel
         t_all = tic()
         call check_pass_team('learn_pose_student')
         ! the contract
@@ -137,20 +151,16 @@ contains
         if( nptcls < 1 ) THROW_HARD('no selected particle; learn_pose_student')
         write(logfhandle,'(A,I0,A,I0,A,F7.2,A)') '>>> POSE STUDENT ROWS: ', nptcls, ' particles at nspace ', params%nspace, &
             &' and lp ', params%lp, ' A'
-        ! the held-out micrographs: every tenth stack of a project with several, every tenth selected particle of one
-        nstks      = build%spproj%os_stk%get_noris()
-        l_by_stack = nstks > 1
+        ! the held-out micrographs: every tenth of the selected particles' stacks, every tenth selected particle when they
+        ! lie on fewer stacks; a selection that leaves a cohort empty is refused before the rows are made
         allocate(held(nptcls), source=.false.)
-        allocate(group_of(nptcls), source=0)
+        allocate(group_of(nptcls), stkinds(nptcls), source=0)
         do i = 1,nptcls
-            if( l_by_stack )then
-                group_of(i) = build%spproj_field%get_int(pinds(i), 'stkind')
-                held(i)     = mod(group_of(i), HOLDOUT_EVERY) == 0
-            else
-                group_of(i) = i
-                held(i)     = mod(i, HOLDOUT_EVERY) == 0
-            endif
+            stkinds(i) = build%spproj_field%get_int(pinds(i), 'stkind')
         enddo
+        call student_holdout_split(nptcls, stkinds, held, group_of, l_by_stack, msg)
+        if( len(msg) > 0 ) THROW_HARD(msg)
+        deallocate(stkinds)
         ! refine3D's setup: the halves (their one maker), the sigma2 state, the run seed of the keyed draws
         t0 = tic()
         call ensure_field_halves(build%spproj, params%oritype, params%projfile)
@@ -263,8 +273,8 @@ contains
         call build%esig%kill
         write(logfhandle,'(A,F9.2,A,F9.2,A)') '>>> POSE STUDENT ROWS: fill ', rt_fill, ' s wall, ', &
             &rt_fill / real(nptcls,timer_int_kind) * 1000., ' ms per particle'
-        ! the students, cheapest first, trained on the rows with the shift augmentation of the centring's disk; a wider
-        ! design replaces the kept one when it recovers clearly more held-out seeds (a seed recovered, ruling R1: the
+        ! the students, cheapest first (the widest only on a large set), trained on the rows with the shift augmentation of
+        ! the centring's disk; a wider design replaces the kept one when it recovers clearly more held-out seeds (a seed recovered, ruling R1: the
         ! teacher's direction or its mirror partner inside a folded cone within the cap and within the route's bound,
         ! the dense search's cell prob_athres or the grid's spacing), the paired difference over the micrographs
         ! resampled by micrograph
@@ -272,10 +282,9 @@ contains
         shift_aug = 0.
         if( params%l_shift_map ) shift_aug = SHIFT_AUG_NSIG * params%shift_sigma / params%smpd
         nheld = count(held)
-        allocate(held_inds(max(1,nheld)), group_held(max(1,nheld)), k99_held(max(1,nheld)), mode_held_s(max(1,nheld)), &
-            &order(max(1,nheld)), source=0)
-        allocate(conf_held(max(1,nheld)), radius_held(max(1,nheld)), source=0.)
-        allocate(recov(max(1,nheld), size(STUDENT_WIDTHS)), source=.false.)
+        allocate(held_inds(nheld), group_held(nheld), k99_held(nheld), mode_held_s(nheld), source=0)
+        allocate(conf_held(nheld), radius_held(nheld), source=0.)
+        allocate(recov(nheld, size(STUDENT_WIDTHS)), source=.false.)
         cone_bound = 0.
         j = 0
         do i = 1,nptcls
@@ -298,12 +307,13 @@ contains
         rt_write    = 0.
         ntried      = 0
         do iw = 1,size(STUDENT_WIDTHS)
+            if( iw == size(STUDENT_WIDTHS) .and. nptcls - nheld < WIDEST_MIN_ROWS ) exit
             ntried = iw
             call student%new(feats%get_pftsz(), params%kfromto, params%box, params%box_crop, params%smpd, params%mskdiam, &
                 &trim(params%pgrp), params%nspace, params%lp, wk, trim(params%ctf) /= 'no', STUDENT_WIDTHS(iw), rnd_run_seed())
             call student%init_readout(xrefs)
             if( l_by_stack )then
-                call student%set_provenance(projpath%to_char(), polar_feats_hash_ints(pinds), vol_hash, 'every_10th_stack')
+                call student%set_provenance(projpath%to_char(), polar_feats_hash_ints(pinds), vol_hash, 'every_10th_selected_stack')
             else
                 call student%set_provenance(projpath%to_char(), polar_feats_hash_ints(pinds), vol_hash, 'every_10th_selected_particle')
             endif
@@ -312,7 +322,7 @@ contains
             write(logfhandle,'(A,I0,A,I0,A,I0,A,F6.2,A)') '>>> POSE STUDENT TRAINING: width ', STUDENT_WIDTHS(iw), ', ', &
                 &nptcls - nheld, ' rows, ', nheld, ' held out, shifts augmented within ', shift_aug, ' px'
             call student%train(nptcls, x_all, ctf2_all, side_all, dists_all, temps_all, held, params%prob_beta, &
-                &shift_aug, MAX_STEPS, PATIENCE_STEPS, params%nthr, logfhandle)
+                &shift_aug, MAX_EPOCHS, PATIENCE_EPOCHS, params%nthr, logfhandle)
             call student%get_record(nptcls_train, nheldout, epochs_run, best_epoch, loss_train, loss_held, mode_held, &
                 &time_train_s, nweights)
             rt_cand(iw)    = time_train_s
@@ -336,7 +346,7 @@ contains
                 recov(j,iw)    = l_recovered(pred, mode_all(i))
             enddo
             !$omp end parallel do
-            if( nheld > 0 ) recov_cand(iw) = real(count(recov(1:nheld,iw))) / real(nheld)
+            recov_cand(iw) = real(count(recov(1:nheld,iw))) / real(nheld)
             rt_heldpred(iw) = toc(tb)
             write(logfhandle,'(A,I0,A,I0,A,I0,A,F9.5,A,F7.4,A,F7.4,A,F9.1,A)') '>>> POSE STUDENT TRAINED: width ', &
                 &STUDENT_WIDTHS(iw), ', best epoch ', best_epoch, ' of ', epochs_run, ', held-out loss ', loss_held, &
@@ -388,6 +398,7 @@ contains
         call set_conf_threshold
         call student%set_threshold(conf_threshold, CONF_FRACTION, heldout_seeded, heldout_recovered)
         call student%write(params%fname)
+        call check_reread_population
         call write_heldout_table
         call student%get_record(nptcls_train, nheldout, epochs_run, best_epoch, loss_train, loss_held, mode_held, &
             &time_train_s, nweights)
@@ -405,10 +416,9 @@ contains
         call cache%kill
         call o%kill
         deallocate(dists, pinds, batches, wk, x_all, ctf2_all, side_all, dists_all, temps_all, held, mode_all, group_of, xrefs)
-        deallocate(held_inds, group_held, conf_held, radius_held, k99_held, mode_held_s, order, recov, prob)
+        deallocate(held_inds, group_held, conf_held, radius_held, k99_held, mode_held_s, recov, prob)
         if( allocated(groups) )     deallocate(groups)
         if( allocated(gain) )       deallocate(gain)
-        if( allocated(boot_means) ) deallocate(boot_means)
         if( allocated(statbuf) ) deallocate(statbuf)
 
     contains
@@ -461,6 +471,10 @@ contains
                     &prof_cand(jw)%net%rt_eval
                 write(fnr,'(a,i0,a,1x,i0)')   'design width ', STUDENT_WIDTHS(jw), '   optimiser steps            :', &
                     &prof_cand(jw)%net%nsteps
+                if( prof_cand(jw)%net%nsteps > 0 ) write(fnr,'(a,i0,a,1x,f0.1,1x,i0,1x,f0.3)') 'design width ', &
+                    &STUDENT_WIDTHS(jw), '   chunks per step / team / occupancy:', &
+                    &real(prof_cand(jw)%net%nchunks,dp) / real(prof_cand(jw)%net%nsteps,dp), prof_cand(jw)%net%nthr, &
+                    &real(prof_cand(jw)%net%nchunks,dp) / max(1.d0, real(prof_cand(jw)%net%nslots,dp))
                 if( prof_cand(jw)%net%nsamples_train > 0 ) write(fnr,'(a,i0,a,1x,f0.1)') 'design width ', &
                     &STUDENT_WIDTHS(jw), '   training samples per second:', &
                     &real(prof_cand(jw)%net%nsamples_train,dp) / max(prof_cand(jw)%net%rt_grad + prof_cand(jw)%net%rt_step, 1.d-9)
@@ -483,12 +497,12 @@ contains
         end subroutine write_learn_bench
 
         !> The paired difference of held-out recovery between the candidate iw and the kept design: per micrograph
-        !! (per particle on a single stack) the mean difference, over the micrographs resampled NBOOT times with
-        !! replacement by a Lehmer generator seeded from the run seed; q the BOOT_QUANTILE of the resampled means
+        !! (per particle when held out by particle) the mean difference, resampled by micrograph from the run seed;
+        !! q the BOOT_QUANTILE of the resampled means
         subroutine resampled_gain( iw_new, iw_old, q )
             integer, intent(in)  :: iw_new, iw_old
             real,    intent(out) :: q
-            integer :: jj, gg, ng_here, iq
+            integer :: jj, gg, ng_here
             integer, allocatable :: gsize(:), gfirst(:)
             ! the micrographs of the held-out rows, numbered in order of appearance
             if( .not. allocated(groups) ) allocate(groups(max(1,nheld)), source=0)
@@ -512,7 +526,6 @@ contains
             enddo
             ngroups = ng_here
             if( .not. allocated(gain) ) allocate(gain(max(1,ngroups)), source=0.)
-            if( .not. allocated(boot_means) ) allocate(boot_means(NBOOT), source=0.)
             allocate(gsize(max(1,ngroups)), source=0)
             gain = 0.
             do jj = 1,nheld
@@ -523,25 +536,10 @@ contains
             do gg = 1,ngroups
                 gain(gg) = gain(gg) / real(max(1,gsize(gg)))
             enddo
-            lehmer = modulo(rnd_run_seed(), 2147483646_int64) + 1_int64
-            do ib = 1,NBOOT
-                gsum = 0.d0
-                do gg = 1,ngroups
-                    lehmer = modulo(48271_int64 * lehmer, 2147483647_int64)
-                    gsum   = gsum + real(gain(1 + int(modulo(lehmer, int(ngroups,int64)))),dp)
-                enddo
-                boot_means(ib) = real(gsum / real(ngroups,dp))
-            enddo
-            call hpsort(boot_means)
-            iq = max(1, min(NBOOT, nint(BOOT_QUANTILE * real(NBOOT))))
-            q  = boot_means(iq)
+            q = student_boot_quantile(gain, ngroups, rnd_run_seed())
             deallocate(gsize, gfirst)
         end subroutine resampled_gain
 
-        !> The confidence threshold on the held-out rows: the rows with a cone within the cap sorted by confidence,
-        !! the longest prefix whose recovered fraction is at least CONF_FRACTION; the threshold is its last confidence
-        !! (above every confidence when no prefix qualifies); the seeded share of the held-out rows and the recovered
-        !! fraction among them recorded
         !> a held-out seed recovered (ruling R1): the folded cone within the cap and the route's bound, and the
         !! teacher's direction or its mirror partner among the cone's folded directions
         logical function l_recovered( pred_loc, imode_loc )
@@ -556,36 +554,41 @@ contains
             enddo
         end function l_recovered
 
-        subroutine set_conf_threshold
-            integer :: jj, nq_here, nrec_here, nbest, kk
-            real, allocatable :: negconf(:)
-            conf_threshold    = 1.00001
-            heldout_seeded    = 0.
-            heldout_recovered = 0.
-            if( nheld < 1 ) return
-            allocate(negconf(nheld))
+        !> the held-out rows the route would seed: a cone within the cap and within the bound bound_here
+        subroutine eligible_held( bound_here, elig )
+            real,    intent(in)  :: bound_here
+            logical, intent(out) :: elig(nheld)
+            integer :: jj
             do jj = 1,nheld
-                order(jj)   = jj
-                negconf(jj) = -conf_held(jj)
+                elig(jj) = k99_held(jj) <= KMAX_STUDENT .and. radius_held(jj) <= bound_here
             enddo
-            call hpsort(negconf, order(1:nheld))
-            nq_here   = 0
-            nrec_here = 0
-            nbest     = 0
-            do kk = 1,nheld
-                jj = order(kk)
-                if( k99_held(jj) > KMAX_STUDENT .or. radius_held(jj) > cone_bound ) cycle
-                nq_here = nq_here + 1
-                if( recov(jj,iw_best) ) nrec_here = nrec_here + 1
-                if( real(nrec_here) >= CONF_FRACTION * real(nq_here) )then
-                    nbest          = nq_here
-                    conf_threshold = conf_held(jj)
-                    heldout_recovered = real(nrec_here) / real(nq_here)
-                endif
-            enddo
-            if( nbest > 0 ) heldout_seeded = real(nbest) / real(nheld)
-            deallocate(negconf)
+        end subroutine eligible_held
+
+        !> the confidence threshold on the held-out rows the route would seed (student_conf_threshold), the seeded
+        !! share of the held-out rows and the recovered share among them
+        subroutine set_conf_threshold
+            logical :: elig(nheld)
+            integer :: nrec
+            call eligible_held(cone_bound, elig)
+            call student_conf_threshold(nheld, conf_held, elig, recov(:,iw_best), CONF_FRACTION, conf_threshold, nsel, nrec)
+            heldout_seeded    = real(nsel) / real(nheld)
+            heldout_recovered = 0.
+            if( nsel > 0 ) heldout_recovered = real(nrec) / real(nsel)
         end subroutine set_conf_threshold
+
+        !> the model read back from its file seeds exactly the calibrated held-out rows (its threshold and bound
+        !! survive the file)
+        subroutine check_reread_population
+            logical :: elig(nheld)
+            real    :: thr, cf, hs, hr, bound_read
+            call reread%read(params%fname)
+            call reread%get_threshold(thr, cf, hs, hr)
+            bound_read = reread%get_cone_bound()
+            call reread%kill
+            call eligible_held(bound_read, elig)
+            if( count(elig .and. conf_held >= thr) /= nsel ) &
+                &THROW_HARD('the model read back seeds other held-out rows than the calibration; learn_pose_student')
+        end subroutine check_reread_population
 
         !> the held-out table: per held-out row its micrograph, confidence, 99% set size, the teacher's and the
         !! student's modes and whether the teacher's lies in the cone, for the kept design
@@ -729,8 +732,8 @@ contains
             write(head_unit,'(A,I0)')     'train_rows=', nptcls_train
             write(head_unit,'(A,I0)')     'heldout_rows=', nheldout
             write(head_unit,'(A,F8.3)')   'shift_aug_px=', shift_aug
-            write(head_unit,'(A,I0)')     'max_steps=', MAX_STEPS
-            write(head_unit,'(A,I0)')     'patience_steps=', PATIENCE_STEPS
+            write(head_unit,'(A,I0)')     'max_epochs=', MAX_EPOCHS
+            write(head_unit,'(A,I0)')     'patience_epochs=', PATIENCE_EPOCHS
             write(head_unit,'(A,I0)')     'epochs_run=', epochs_run
             write(head_unit,'(A,I0)')     'best_epoch=', best_epoch
             write(head_unit,'(A,ES14.6)') 'loss_train=', loss_train
@@ -791,8 +794,9 @@ contains
         type(polar_feats)        :: feats
         type(string)             :: base, fname_pred
         real,    allocatable     :: wk(:,:), prob(:,:)
-        integer, allocatable     :: pinds(:), batches(:,:)
+        integer, allocatable     :: pinds(:), batches(:,:), pinds_part(:)
         type(student_pred), allocatable :: preds(:)
+        character(len=:), allocatable :: msg
         real,    allocatable     :: dist_mode(:), dist_cone(:), euls_pose(:,:)
         integer, allocatable     :: iproj_ref(:), rank_ref(:), in_cone(:)
         integer(timer_int_kind)  :: t0, t_all
@@ -815,25 +819,40 @@ contains
         t_all = tic()
         call check_pass_team('predict_poses')
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('the poses are ptcl3D''s; predict_poses')
-        ! a part of a distributed caller writes its range to outfile; otherwise the run's own project copy is written
+        ! a part of a distributed caller (part, nparts, fromp, top, outfile: the commander checks they are given)
+        ! writes its range to outfile; otherwise the run's own project copy is written
         l_part = cline%defined('part')
-        if( l_part .and. .not. cline%defined('outfile') ) THROW_HARD('a part needs outfile; predict_poses')
         t0 = tic()
         call student%read(params%infile)
         kfromto = student%get_kfromto()
-        if( student%get_pftsz() /= params%pftsz ) THROW_HARD('the model''s half ring differs from this project''s (mskdiam, box); predict_poses')
-        if( student%get_box() /= params%box ) THROW_HARD('the model''s box differs from this project''s; predict_poses')
-        if( (trim(params%ctf) /= 'no') .neqv. student%get_with_ctf() ) THROW_HARD('the model''s CTF treatment differs from this project''s; predict_poses')
+        msg = student_geometry_mismatch(student%get_pftsz(), student%get_box(), student%get_box_crop(), student%get_smpd(), &
+            &student%get_mskdiam(), student%get_with_ctf(), params%pftsz, params%box, params%box_crop, params%smpd, &
+            &params%mskdiam, trim(params%ctf) /= 'no')
+        if( len(msg) > 0 ) THROW_HARD(msg)
         params%kfromto = kfromto
         params%lp      = student%get_lp()
         call student%get_weights(wk)
         call feats%new(student%get_pftsz(), kfromto, params%box, wk)
         base = fname_base(params%fname)
+        ! a part's tables carry its number: the parts of one caller share fname
+        if( l_part ) base = base%to_char()//'_part'//int2str(params%part)
         fname_pred = base%to_char()//'_pred.txt'
-        ! the selected particles (a part's range of them)
+        ! the selected particles (a part's range of them; a part may hold none and writes its range unchanged)
+        l_reg = complete_volume_source_available(params)
+        if( l_reg .and. l_part ) THROW_HARD('the shift registration (vol1) runs in shared memory; predict_poses')
         call build%spproj_field%get_pinds(1, 'state', pinds)
         if( .not. allocated(pinds) ) THROW_HARD('no selected particle; predict_poses')
-        if( l_part ) pinds = pack(pinds, pinds >= params%fromp .and. pinds <= params%top)
+        if( size(pinds) < 1 ) THROW_HARD('no selected particle; predict_poses')
+        if( l_part )then
+            call student_part_pinds(pinds, params%part, params%nparts, params%fromp, params%top, &
+                &build%spproj_field%get_noris(), pinds_part, msg)
+            if( len(msg) > 0 ) THROW_HARD(msg)
+            call move_alloc(pinds_part, pinds)
+            if( size(pinds) == 0 )then
+                call write_empty_part
+                return
+            endif
+        endif
         nptcls = size(pinds)
         if( nptcls < 1 ) THROW_HARD('no selected particle; predict_poses')
         call student%get_threshold(conf_threshold, conf_fraction, heldout_seeded, heldout_recovered)
@@ -850,8 +869,6 @@ contains
         ! the batches and the calculator: one reference slot (the features need the particles alone), or, given vol1,
         ! the map's reprojections at the student's grid and band with sigma2, as learn_pose_student prepares them,
         ! for the shift registration against the read-out pose
-        l_reg = complete_volume_source_available(params)
-        if( l_reg .and. l_part ) THROW_HARD('the shift registration (vol1) runs in shared memory; predict_poses')
         batchsz_max = min(nptcls, params%nthr * BATCHTHRSZ)
         nbatches    = 1 + (nptcls - 1) / batchsz_max
         batches     = split_nobjs_even(nptcls, nbatches)
@@ -1014,6 +1031,21 @@ contains
         call fname_chk%kill
 
     contains
+
+        !> a part whose range holds no selected particle: the table's header and the range's records unchanged, the
+        !! contribution the merge expects
+        subroutine write_empty_part
+            call fopen(pred_unit, fname_pred, status='replace', action='write', iostat=io_stat)
+            call fileiochk('predict_poses; open '//fname_pred%to_char(), io_stat)
+            write(pred_unit,'(A)') '# iptcl eo mode pmax k99 ncone conf radius_deg iproj_ref dist_mode_deg dist_cone_deg rank_ref in_cone route e1 e2 e3 x y'
+            call fclose(pred_unit)
+            call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [params%fromp, params%top], isegment=PTCL3D_SEG)
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> POSE STUDENT PREDICTION: no selected particle in the part''s range ', &
+                &params%fromp, '-', params%top, '; its records written unchanged'
+            call student%kill
+            call feats%kill
+            deallocate(pinds, wk)
+        end subroutine write_empty_part
 
         !> BENCH/POSE_STUDENT_PREDICT_BENCH.txt: the context, the phases, the prediction's per-particle steps summed
         !! over the threads (thread-seconds) and the team's load balance, with the share accounted for
@@ -1235,6 +1267,171 @@ contains
         end subroutine write_shift_check
 
     end subroutine predict_poses_exec
+
+    ! ===== THE HELPERS (public: the tester submodule calls them) =====
+
+    !> The held-out cohort of n selected particles on stacks stkinds: with HOLDOUT_EVERY or more distinct stacks every
+    !! HOLDOUT_EVERY-th of them in order of stkind (group_of the stack), otherwise every HOLDOUT_EVERY-th particle
+    !! (group_of the particle); msg says why a cohort would be empty (too few particles), empty otherwise
+    subroutine student_holdout_split( n, stkinds, held, group_of, l_by_stack, msg )
+        integer,                       intent(in)  :: n, stkinds(n)
+        logical,                       intent(out) :: held(n)
+        integer,                       intent(out) :: group_of(n)
+        logical,                       intent(out) :: l_by_stack
+        character(len=:), allocatable, intent(out) :: msg
+        integer, allocatable :: rank(:)
+        integer :: i, ng, smax
+        held       = .false.
+        group_of   = 0
+        l_by_stack = .false.
+        msg        = ''
+        if( n < 1 )then
+            msg = 'no selected particle to split; learn_pose_student'
+            return
+        endif
+        if( any(stkinds < 1) )then
+            msg = 'a selected particle has no stack; learn_pose_student'
+            return
+        endif
+        ! the selected stacks ranked in order of stkind
+        smax = maxval(stkinds)
+        allocate(rank(smax), source=0)
+        do i = 1,n
+            rank(stkinds(i)) = 1
+        enddo
+        ng = 0
+        do i = 1,smax
+            if( rank(i) > 0 )then
+                ng      = ng + 1
+                rank(i) = ng
+            endif
+        enddo
+        l_by_stack = ng >= HOLDOUT_EVERY
+        do i = 1,n
+            if( l_by_stack )then
+                group_of(i) = stkinds(i)
+                held(i)     = mod(rank(stkinds(i)), HOLDOUT_EVERY) == 0
+            else
+                group_of(i) = i
+                held(i)     = mod(i, HOLDOUT_EVERY) == 0
+            endif
+        enddo
+        deallocate(rank)
+        if( count(held) < 1 .or. count(.not. held) < 1 ) msg = 'too few selected particles to hold out every tenth '//&
+            &'(at least ten are needed); learn_pose_student'
+    end subroutine student_holdout_split
+
+    !> the BOOT_QUANTILE of NBOOT means of the ngroups gains resampled with replacement by a Lehmer generator seeded
+    !! from seed; zero groups give zero, no evidence of a gain
+    function student_boot_quantile( gain, ngroups, seed ) result( q )
+        real,           intent(in) :: gain(:)
+        integer,        intent(in) :: ngroups
+        integer(int64), intent(in) :: seed
+        real     :: q, boot_means(NBOOT)
+        real(dp) :: gsum
+        integer(int64) :: lehmer
+        integer  :: ib, gg, iq
+        q = 0.
+        if( ngroups < 1 ) return
+        lehmer = modulo(seed, 2147483646_int64) + 1_int64
+        do ib = 1,NBOOT
+            gsum = 0.d0
+            do gg = 1,ngroups
+                lehmer = modulo(48271_int64 * lehmer, 2147483647_int64)
+                gsum   = gsum + real(gain(1 + int(modulo(lehmer, int(ngroups,int64)))),dp)
+            enddo
+            boot_means(ib) = real(gsum / real(ngroups,dp))
+        enddo
+        call hpsort(boot_means)
+        iq = max(1, min(NBOOT, nint(BOOT_QUANTILE * real(NBOOT))))
+        q  = boot_means(iq)
+    end function student_boot_quantile
+
+    !> The confidence threshold of n held-out rows: over the eligible rows in decreasing confidence, the longest prefix
+    !! that ends with a group of equal confidences and whose recovered share is at least frac; threshold its last
+    !! confidence (CONF_NONE when none qualifies), nsel its rows, nrec the recovered among them
+    subroutine student_conf_threshold( n, conf, eligible, recovered, frac, threshold, nsel, nrec )
+        integer, intent(in)  :: n
+        real,    intent(in)  :: conf(n), frac
+        logical, intent(in)  :: eligible(n), recovered(n)
+        real,    intent(out) :: threshold
+        integer, intent(out) :: nsel, nrec
+        real,    allocatable :: negconf(:)
+        integer, allocatable :: order(:)
+        integer :: ne, i, k, nq, nr
+        threshold = CONF_NONE
+        nsel      = 0
+        nrec      = 0
+        ne        = count(eligible)
+        if( ne < 1 ) return
+        allocate(negconf(ne), order(ne))
+        k = 0
+        do i = 1,n
+            if( .not. eligible(i) ) cycle
+            k = k + 1
+            order(k)   = i
+            negconf(k) = -conf(i)
+        enddo
+        call hpsort(negconf, order)
+        nq = 0
+        nr = 0
+        do k = 1,ne
+            nq = nq + 1
+            if( recovered(order(k)) ) nr = nr + 1
+            ! a prefix that ends inside a group of equal confidences is no threshold: conf >= it takes the whole group
+            if( k < ne )then
+                if( conf(order(k+1)) >= conf(order(k)) ) cycle
+            endif
+            if( real(nr) >= frac * real(nq) )then
+                threshold = conf(order(k))
+                nsel      = nq
+                nrec      = nr
+            endif
+        enddo
+        deallocate(negconf, order)
+    end subroutine student_conf_threshold
+
+    !> empty when a model's geometry is the project's: the half ring, the box, the crop and the CTF treatment exactly,
+    !! the sampling within SMPD_TOL and the mask within MSKDIAM_TOL (the header's decimals); else what differs
+    function student_geometry_mismatch( pftsz_m, box_m, box_crop_m, smpd_m, mskdiam_m, ctf_m, pftsz, box, box_crop, &
+        &smpd, mskdiam, ctf ) result( msg )
+        integer, intent(in) :: pftsz_m, box_m, box_crop_m, pftsz, box, box_crop
+        real,    intent(in) :: smpd_m, mskdiam_m, smpd, mskdiam
+        logical, intent(in) :: ctf_m, ctf
+        character(len=:), allocatable :: msg
+        msg = ''
+        if( pftsz_m /= pftsz )then
+            msg = 'the model''s half ring differs from this project''s (mskdiam, box); predict_poses'
+        else if( box_m /= box )then
+            msg = 'the model''s box differs from this project''s; predict_poses'
+        else if( box_crop_m /= box_crop )then
+            msg = 'the model''s crop (box_crop) differs from this project''s; predict_poses'
+        else if( abs(smpd_m - smpd) > SMPD_TOL )then
+            msg = 'the model''s sampling (smpd) differs from this project''s; predict_poses'
+        else if( abs(mskdiam_m - mskdiam) > MSKDIAM_TOL )then
+            msg = 'the model''s mask (mskdiam) differs from this project''s; predict_poses'
+        else if( ctf_m .neqv. ctf )then
+            msg = 'the model''s CTF treatment differs from this project''s; predict_poses'
+        endif
+    end function student_geometry_mismatch
+
+    !> the selected particles pinds_sel of part part of nparts within its range fromp..top of a field of nptcls
+    !! particles (possibly none); msg says why the part or its range is refused, empty otherwise
+    subroutine student_part_pinds( pinds_sel, part, nparts, fromp, top, nptcls, pinds, msg )
+        integer,                       intent(in)  :: pinds_sel(:), part, nparts, fromp, top, nptcls
+        integer, allocatable,          intent(out) :: pinds(:)
+        character(len=:), allocatable, intent(out) :: msg
+        msg = ''
+        if( nparts < 1 .or. part < 1 .or. part > nparts )then
+            msg = 'a part is one of nparts: 1 <= part <= nparts; predict_poses'
+            allocate(pinds(0))
+        else if( fromp < 1 .or. top < fromp .or. top > nptcls )then
+            msg = 'a part''s range is 1 <= fromp <= top <= the particles; predict_poses'
+            allocate(pinds(0))
+        else
+            pinds = pack(pinds_sel, pinds_sel >= fromp .and. pinds_sel <= top)
+        endif
+    end subroutine student_part_pinds
 
     ! ===== HELPERS =====
 

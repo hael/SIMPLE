@@ -1,41 +1,85 @@
-!@descr: unit tests of simple_pose_student: the soft targets keep a row's tails, the network classifies the mirror pairs, the cone on the folded sphere (a direction and its mirror partner one class) caps at the dense search's marker, the model file round trip is exact
-module simple_pose_student_tester
+!@descr: unit tests of simple_pose_student: the soft targets keep a row's tails, the network classifies the mirror pairs, the cone on the folded sphere (a direction and its mirror partner one class) caps at the dense search's marker, the model file round trip is exact, the weights are the header's network wherever the model lies, the threshold and wide bands survive the round trip
+submodule (simple_pose_student) simple_pose_student_tester
 use simple_test_utils
-use, intrinsic :: iso_fortran_env, only: int64
-use simple_defs,         only: sp
-use simple_string,       only: string
-use simple_polar_feats,  only: polar_feats, polar_feat
-use simple_pose_student, only: pose_student, student_pred, pose_student_targets, KMAX_STUDENT
-use simple_rnd,          only: gasdev, ran3
+use simple_syslib, only: simple_mkdir, simple_rename, simple_chdir
+use simple_rnd,    only: gasdev, ran3
 implicit none
-private
-public :: run_all_pose_student_tests
 
 integer, parameter :: PFTSZ = 12, KFROMTO(2) = [2, 9], NK = 8, BOX = 32, NSPACE = 100, WIDTH = 2
 real,    parameter :: SMPD = 1.0, MSKDIAM = 24., LP = 4.
 
 contains
 
-    subroutine run_all_pose_student_tests()
+    module subroutine run_all_pose_student_tests()
         write(*,'(A)') '**** running all pose_student tests ****'
         call test_targets()
         call test_pairs()
         call test_cone()
         call test_file_roundtrip()
+        call test_weights_contract()
+        call test_threshold_roundtrip()
+        call test_wide_band()
     end subroutine run_all_pose_student_tests
 
-    !> a student of the tiny geometry with random positive shell weights
-    subroutine make_student( student, seed )
+    !> a student of the tiny geometry with random positive shell weights (kfromto and box for a wider band)
+    subroutine make_student( student, seed, kf, box_here )
         type(pose_student), intent(inout) :: student
         integer(int64),     intent(in)    :: seed
-        real(sp) :: wk(KFROMTO(1):KFROMTO(2),2)
-        integer  :: k
-        do k = KFROMTO(1),KFROMTO(2)
+        integer, optional,  intent(in)    :: kf(2), box_here
+        real(sp), allocatable :: wk(:,:)
+        integer :: k, kf_here(2), b
+        kf_here = KFROMTO
+        b       = BOX
+        if( present(kf) ) kf_here = kf
+        if( present(box_here) ) b = box_here
+        allocate(wk(kf_here(1):kf_here(2),2))
+        do k = kf_here(1),kf_here(2)
             wk(k,1) = 0.5 + ran3()
             wk(k,2) = 0.5 + ran3()
         enddo
-        call student%new(PFTSZ, KFROMTO, BOX, BOX, SMPD, MSKDIAM, 'c1', NSPACE, LP, wk, .false., WIDTH, seed)
+        call student%new(PFTSZ, kf_here, b, b, SMPD, MSKDIAM, 'c1', NSPACE, LP, wk, .false., WIDTH, seed)
+        deallocate(wk)
     end subroutine make_student
+
+    !> a random half-ring tensor of nk rings and its ring-averaged CTF squared
+    subroutine random_tensor( nk_here, x, ctf2 )
+        integer,  intent(in)  :: nk_here
+        real(sp), intent(out) :: x(PFTSZ, nk_here, 2), ctf2(nk_here)
+        integer :: p, k, part
+        do part = 1,2
+            do k = 1,nk_here
+                do p = 1,PFTSZ
+                    x(p,k,part) = gasdev()
+                enddo
+            enddo
+        enddo
+        ctf2 = 1.
+    end subroutine random_tensor
+
+    !> the readout's templates from random reprojections, so that networks of different seeds predict differently
+    subroutine random_readout( student, nk_here )
+        type(pose_student), intent(inout) :: student
+        integer,            intent(in)    :: nk_here
+        real(sp), allocatable :: xrefs(:,:,:,:)
+        real(sp) :: ctf2(nk_here)
+        integer  :: i
+        allocate(xrefs(PFTSZ, nk_here, 2, NSPACE))
+        do i = 1,NSPACE
+            call random_tensor(nk_here, xrefs(:,:,:,i), ctf2)
+        enddo
+        call student%init_readout(xrefs)
+        deallocate(xrefs)
+    end subroutine random_readout
+
+    !> the posterior a student gives a tensor
+    subroutine posterior( student, nk_here, x, ctf2, prob )
+        type(pose_student), intent(inout) :: student
+        integer,            intent(in)    :: nk_here
+        real(sp),           intent(in)    :: x(PFTSZ, nk_here, 2), ctf2(nk_here)
+        real(sp),           intent(out)   :: prob(NSPACE)
+        call student%prepare_predict(1)
+        call student%predict_tensor(1, x, ctf2, 0., prob)
+    end subroutine posterior
 
     !> The soft targets of a row: every finite entry keeps its mass (the tails are not cut), the mode is the
     !! smallest loss, invalid entries get none, and a zero temperature gives the mode alone
@@ -193,4 +237,144 @@ contains
         deallocate(wk0, wk1)
     end subroutine test_file_roundtrip
 
-end module simple_pose_student_tester
+    !> The weights resolve in the header's directory, never the working directory: two model directories with the
+    !! same default names and a foreign network of that name in the working directory, a relocated model; a weights
+    !! name with a directory, and weights of another seed, width or weight count than the header's, are refused
+    subroutine test_weights_contract()
+        type(pose_student) :: sa, sb, sf, back
+        type(hhcnn)        :: net
+        type(string)       :: cwd_saved, fixture_root, wfile
+        character(len=:), allocatable :: msg
+        real(sp) :: x(PFTSZ, NK, 2), ctf2(NK), pa(NSPACE), pb(NSPACE), pf(NSPACE), p1(NSPACE)
+        integer  :: nfail0, funit, io_stat, status
+        character(len=256) :: line
+        write(*,'(A)') 'test_weights_contract'
+        nfail0 = tests_failed
+        call enter_fixture('pose_student_weights', cwd_saved, fixture_root)
+        call random_tensor(NK, x, ctf2)
+        call make_student(sa, 20261121_int64)
+        call make_student(sb, 20261122_int64)
+        call make_student(sf, 20261123_int64)
+        call random_readout(sa, NK)
+        call random_readout(sb, NK)
+        call random_readout(sf, NK)
+        call posterior(sa, NK, x, ctf2, pa)
+        call posterior(sb, NK, x, ctf2, pb)
+        call posterior(sf, NK, x, ctf2, pf)
+        call assert_true(any(pa /= pb) .and. any(pa /= pf), 'the three networks predict differently')
+        call simple_mkdir(string('dirA'))
+        call simple_mkdir(string('dirB'))
+        ! each model written in its own directory under the default names, a foreign student_weights.bin in the
+        ! working directory the models are read from
+        call simple_chdir(string('dirA'), status)
+        call sa%write(string('student.txt'))
+        call simple_chdir(string('..'), status)
+        call simple_chdir(string('dirB'), status)
+        call sb%write(string('student.txt'))
+        call simple_chdir(string('..'), status)
+        call sf%write(string('student.txt'))
+        call fopen(funit, string('dirA/student.txt'), status='old', action='read', iostat=io_stat)
+        do
+            read(funit,'(A)',iostat=io_stat) line
+            if( io_stat /= 0 ) exit
+            if( index(line, 'weights_file=') == 1 ) call assert_char('weights_file=student_weights.bin', trim(line), &
+                &'the header names its weights by the file name alone')
+        enddo
+        call fclose(funit)
+        call back%read(string('dirA/student.txt'))
+        call posterior(back, NK, x, ctf2, p1)
+        call assert_true(all(p1 == pa), 'model A loads its own network beside a foreign one of the same name in the working directory')
+        call back%read(string('dirB/student.txt'))
+        call posterior(back, NK, x, ctf2, p1)
+        call assert_true(all(p1 == pb), 'model B, with the same default names, loads its own network')
+        call simple_rename(string('dirA'), string('dirC'))
+        call back%read(string('dirC/student.txt'))
+        call posterior(back, NK, x, ctf2, p1)
+        call assert_true(all(p1 == pa), 'the relocated model loads its own network')
+        call header_weights_path(string('dirC/student.txt'), 'student_weights.bin', wfile, msg)
+        call assert_true(len(msg) == 0 .and. wfile%to_char() == 'dirC/student_weights.bin', 'a weights name resolves in the header''s directory')
+        call header_weights_path(string('dirC/student.txt'), 'dirB/student_weights.bin', wfile, msg)
+        call assert_true(len(msg) > 0, 'a weights name with a directory is refused')
+        call header_weights_path(string('dirC/student.txt'), '', wfile, msg)
+        call assert_true(len(msg) > 0, 'a header without a weights name is refused')
+        call net%read_weights(string('dirB/student_weights.bin'))
+        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, WIDTH, 20261122_int64, sb%nweights)
+        call assert_true(len(msg) == 0, 'the header''s own network passes the check')
+        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, WIDTH, 20261121_int64, sb%nweights)
+        call assert_true(len(msg) > 0, 'a network of another seed than the header''s is refused')
+        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, 2*WIDTH, 20261122_int64, sb%nweights)
+        call assert_true(len(msg) > 0, 'a network of another width than the header''s is refused')
+        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, WIDTH, 20261122_int64, sb%nweights + 1)
+        call assert_true(len(msg) > 0, 'another weight count than the header''s is refused')
+        call leave_fixture(cwd_saved, fixture_root, nfail0)
+        call net%kill
+        call sa%kill
+        call sb%kill
+        call sf%kill
+        call back%kill
+        call wfile%kill
+    end subroutine test_weights_contract
+
+    !> The confidence threshold survives the model file bit for bit, so that the population at or above it is the
+    !! calibrated one after a reload: values the five-decimal form would merge or split, next to its boundary
+    subroutine test_threshold_roundtrip()
+        real(sp), parameter :: THRESHOLDS(4) = [0.990005, 0.9900049, 0.9999999, 0.31415927]
+        type(pose_student) :: student, back
+        type(string)       :: cwd_saved, fixture_root
+        real(sp) :: conf(5), t0, t1, cf, hs, hr
+        integer  :: nfail0, it
+        write(*,'(A)') 'test_threshold_roundtrip'
+        nfail0 = tests_failed
+        call enter_fixture('pose_student_threshold', cwd_saved, fixture_root)
+        call make_student(student, 20261124_int64)
+        do it = 1,size(THRESHOLDS)
+            t0 = THRESHOLDS(it)
+            conf = [nearest(t0, -1.), t0, nearest(t0, 1.), 0.99, 0.99001]
+            call student%set_threshold(t0, 0.95, 0.5, 1.)
+            call student%write(string('student.txt'))
+            call back%read(string('student.txt'))
+            call back%get_threshold(t1, cf, hs, hr)
+            call assert_true(transfer(t0, 0) == transfer(t1, 0), 'the threshold reads back bit for bit')
+            call assert_int(count(conf >= t0), count(conf >= t1), 'the population at or above it is the calibrated one')
+            call back%kill
+        enddo
+        call leave_fixture(cwd_saved, fixture_root, nfail0)
+        call student%kill
+    end subroutine test_threshold_roundtrip
+
+    !> Models of 227 and 228 shells, either side of the header's former 4,096-character line, read back exactly:
+    !! the shell weights bit for bit and the same prediction
+    subroutine test_wide_band()
+        integer, parameter :: KLO = 2, NSHELLS(2) = [227, 228], BOX_WIDE = 512
+        type(pose_student) :: student, back
+        type(string)       :: cwd_saved, fixture_root
+        real(sp), allocatable :: x(:,:,:), ctf2(:), wk0(:,:), wk1(:,:)
+        real(sp) :: p0(NSPACE), p1(NSPACE)
+        integer  :: nfail0, is, kf(2), nk_here
+        write(*,'(A)') 'test_wide_band'
+        nfail0 = tests_failed
+        call enter_fixture('pose_student_wide', cwd_saved, fixture_root)
+        do is = 1,size(NSHELLS)
+            kf      = [KLO, KLO + NSHELLS(is) - 1]
+            nk_here = NSHELLS(is)
+            call make_student(student, 20261125_int64, kf, BOX_WIDE)
+            call random_readout(student, nk_here)
+            allocate(x(PFTSZ, nk_here, 2), ctf2(nk_here))
+            call random_tensor(nk_here, x, ctf2)
+            call student%write(string('student.txt'))
+            call back%read(string('student.txt'))
+            call student%get_weights(wk0)
+            call back%get_weights(wk1)
+            call assert_true(all(wk0 == wk1), 'the shell weights of a wide band read back bit for bit')
+            call posterior(student, nk_here, x, ctf2, p0)
+            call posterior(back, nk_here, x, ctf2, p1)
+            call assert_true(all(p0 == p1), 'the wide-band model reloads to the same prediction')
+            call assert_true(maxval(p0) > 2. * minval(p0, mask=p0 > 0.), 'a prediction that tells the classes apart')
+            call student%kill
+            call back%kill
+            deallocate(x, ctf2, wk0, wk1)
+        enddo
+        call leave_fixture(cwd_saved, fixture_root, nfail0)
+    end subroutine test_wide_band
+
+end submodule simple_pose_student_tester

@@ -108,6 +108,9 @@ contains
         character(len=*), parameter :: PROJNAME   = 'pose_gate'
         character(len=*), parameter :: MODEL      = 'student.txt'
         character(len=*), parameter :: PRED_TABLE = 'student_pred.txt'
+        character(len=*), parameter :: WEIGHTS    = 'student_weights.bin'
+        integer, parameter :: NPARTS_CHK = 4      !< the parts' check: uneven ranges, the third of one unselected row
+        integer, parameter :: PART_RANGES(2,NPARTS_CHK) = reshape([1,700, 701,1998, 1999,1999, 2000,2000], [2,NPARTS_CHK])
         integer, parameter :: NPTCLS  = 2000       !< 1 000 training rows (100 held out), 1 000 test rows
         integer, parameter :: NSPACE  = 1000       !< the student's grid (NSPACE_STUDENT)
         integer, parameter :: GATE_SEED = 20261108 !< the classic generator's seed before every search (in-process identity)
@@ -137,6 +140,9 @@ contains
         integer :: i, j, k, status, route(NPTCLS), nsel, nseeded, ndense, n_in_cone, n_two, nshell
         integer :: n6(0:1), n12(0:1), nroute(0:1), nk12, n6d(0:1), n12d(0:1)
         logical :: l_route_ok, l_cone_ok, l_dense_ok, l_fold_ok, l_fallback_same, l_seeded_changed, l_finite, l_sel(NPTCLS)
+        logical :: l_reloc_same, l_parts_range, l_parts_same, l_parts_docs
+        character(len=256), allocatable :: rows_full(:), rows_part(:)
+        integer :: ipart, ncover(NPTCLS), junk_unit
         integer(timer_int_kind) :: t0
         allocate(cl, proj, pred, searched, control, dense)
         call make_ui
@@ -263,6 +269,77 @@ contains
         call gate%report('seeded_mode_within_12deg_of_truth',     real(n_two)/real(max(1,nseeded)))
         call gate%report('prediction_wall_s',                     wall_predict)
         call gate%report('prediction_ms_per_particle',            1000.*wall_predict/real(max(1,nsel)))
+        allocate(rows_full(NPTCLS), rows_part(NPTCLS))
+        call read_table_rows(string(PRED_TABLE), rows_full)
+        call simple_chdir(gate_root, status)
+        ! ---- the model file's contract at the program level: the model relocated, a file of the weights' default
+        !      name in the working directory that is no network, the same prediction ----
+        call enter_stage('relocated')
+        call simple_mkdir('model')
+        call simple_copy_file(model_abs, string('model/'//MODEL), status)
+        call simple_copy_file(filepath(stemname(model_abs), WEIGHTS), string('model/'//WEIGHTS), status)
+        call fopen(junk_unit, string(WEIGHTS), status='replace', action='write', iostat=status)
+        write(junk_unit,'(A)') 'not the model''s network'
+        call fclose(junk_unit)
+        call proj%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
+        call cl%set('prg',      'predict_poses')
+        call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
+        call cl%set('infile',   simple_abspath(string('model/'//MODEL)))
+        call cl%set('mskdiam',  mskdiam)
+        call cl%set('nthr',     nthr)
+        call cl%set('fname',    'relocated.txt')
+        call xpredict%execute(cl)
+        call cl%kill
+        call read_table_rows(string('relocated_pred.txt'), rows_part)
+        l_reloc_same = all(rows_part == rows_full)
+        call gate%check('relocated_model_beside_a_foreign_weights_name_predicts_the_same', l_reloc_same)
+        call simple_chdir(gate_root, status)
+        ! ---- a distributed caller's parts: uneven ranges, one of only an unselected row; each part predicts its
+        !      range's selected particles as the whole run does and writes its range's records ----
+        call enter_stage('parts')
+        call proj%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
+        ncover = 0
+        l_parts_range = .true.; l_parts_same = .true.; l_parts_docs = .true.
+        do ipart = 1,NPARTS_CHK
+            call cl%set('prg',      'predict_poses')
+            call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
+            call cl%set('infile',   model_abs)
+            call cl%set('mskdiam',  mskdiam)
+            call cl%set('nthr',     nthr)
+            call cl%set('fname',    MODEL)   ! shared by the parts, as a master hands it: the tables carry the part
+            call cl%set('part',     ipart)
+            call cl%set('nparts',   NPARTS_CHK)
+            call cl%set('fromp',    PART_RANGES(1,ipart))
+            call cl%set('top',      PART_RANGES(2,ipart))
+            call cl%set('outfile',  'part'//int2str(ipart)//'.simple')
+            call xpredict%execute(cl)
+            call cl%kill
+            call read_table_rows(string('student_part'//int2str(ipart)//'_pred.txt'), rows_part)
+            do i = 1,NPTCLS
+                if( len_trim(rows_part(i)) == 0 ) cycle
+                ncover(i) = ncover(i) + 1
+                if( i < PART_RANGES(1,ipart) .or. i > PART_RANGES(2,ipart) ) l_parts_range = .false.
+                if( rows_part(i) /= rows_full(i) ) l_parts_same = .false.
+            enddo
+            if( .not. file_exists(string('part'//int2str(ipart)//'.simple')) ) l_parts_docs = .false.
+        enddo
+        ! the merge of the parts' documents (it requires every record covered) gives the whole run's records
+        if( l_parts_docs )then
+            call searched%read(simple_abspath(string(PROJNAME//'.simple')))
+            call searched%merge_algndocs(NPTCLS, NPARTS_CHK, 'ptcl3D', 'part', numlen_in=1, write=.false.)
+            do i = 1,NPTCLS
+                if( searched%os_ptcl3D%get(i, 'route') /= pred%os_ptcl3D%get(i, 'route') .or. &
+                    &searched%os_ptcl3D%get(i, 'cone') /= pred%os_ptcl3D%get(i, 'cone') .or. &
+                    &searched%os_ptcl3D%get(i, 'pconf') /= pred%os_ptcl3D%get(i, 'pconf') .or. &
+                    &any(searched%os_ptcl3D%get_euler(i) /= pred%os_ptcl3D%get_euler(i)) ) l_parts_docs = .false.
+            enddo
+            call searched%kill
+        endif
+        call gate%check('parts_predict_within_their_ranges',               l_parts_range)
+        call gate%check('parts_cover_every_selected_row_once',             all(ncover == merge(1, 0, l_sel)))
+        call gate%check('parts_predict_as_the_whole_run',                  l_parts_same)
+        call gate%check('parts_documents_merge_to_the_whole_runs_records', l_parts_docs)
+        deallocate(rows_full, rows_part)
         call simple_chdir(gate_root, status)
         ! ---- the neighbourhood search on every test row: the cone where there is one, the cell where not ----
         call enter_stage('search')
@@ -462,6 +539,26 @@ contains
             enddo
             call fclose(funit)
         end subroutine read_model_record
+
+        !> the prediction table's rows by particle (blank where the table has none)
+        subroutine read_table_rows( fname, rows )
+            class(string),      intent(in)  :: fname
+            character(len=256), intent(out) :: rows(NPTCLS)
+            character(len=256) :: line
+            integer :: funit, io_stat, iptcl
+            rows = ''
+            call fopen(funit, fname, status='old', action='read', iostat=io_stat)
+            if( io_stat /= 0 ) THROW_HARD('cannot open the prediction table '//fname%to_char())
+            do
+                read(funit,'(A)', iostat=io_stat) line
+                if( io_stat /= 0 ) exit
+                if( line(1:1) == '#' ) cycle
+                read(line,*, iostat=io_stat) iptcl
+                if( io_stat /= 0 ) cycle
+                if( iptcl >= 1 .and. iptcl <= NPTCLS ) rows(iptcl) = line
+            enddo
+            call fclose(funit)
+        end subroutine read_table_rows
 
         !> the prediction table's cone radius per particle (the folded 99% set's spread before the route's floor)
         subroutine read_pred_table( fname )

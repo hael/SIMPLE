@@ -137,7 +137,8 @@ use simple_bspline_smoother_tester,          only: run_all_bspline_smoother_test
 use simple_online_var_tester,                only: run_all_online_var_tests
 use simple_polar_feats_tester,               only: run_all_polar_feats_tests
 use simple_hhcnn,                            only: run_all_hhcnn_tests
-use simple_pose_student_tester,              only: run_all_pose_student_tests
+use simple_pose_student,                     only: run_all_pose_student_tests
+use simple_strategy_pose_student,            only: run_all_strategy_pose_student_tests
 use simple_aff_prop_tester,                  only: run_all_aff_prop_tests
 use simple_hac_tester,                       only: run_all_hac_tests
 use simple_kmeans_tester,                    only: run_all_kmeans_tests
@@ -413,6 +414,7 @@ contains
         call add_suite(s, n, 'polar features',          run_all_polar_feats_tests)
         call add_suite(s, n, 'HHCNN',                   run_all_hhcnn_tests)
         call add_suite(s, n, 'pose student',            run_all_pose_student_tests)
+        call add_suite(s, n, 'pose student strategy',   run_all_strategy_pose_student_tests)
     end subroutine suites_numerics
 
     subroutine suites_project( s, n )

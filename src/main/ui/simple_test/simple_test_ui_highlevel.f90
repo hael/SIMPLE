@@ -209,7 +209,9 @@ contains
         &'benchmark the pose student''s HHCNN kernels on synthetic tensors',&
         &'Per ring count (12, 18, 25, 37 rings of a 160-angle half ring) and width (16, 32, 64): the forward pass '//&
         &'split into the blocks and the readout, the backward pass, a training step of 256 samples at one thread '//&
-        &'and at the team, the team''s prediction throughput and the training step''s identity across threads. '//&
+        &'and at the team, the team''s prediction throughput and the training step''s identity across threads; '//&
+        &'then the operation counts from the shapes, the arithmetic rates of the blocks'' products, the readout''s '//&
+        &'class products and rotation scores, the passes and the steps, and the step''s chunks against the team. '//&
         &'A measurement with no thresholds and no CTest entry: rows to BENCH/POSE_STUDENT_KERNELS_BENCH.txt '//&
         &'(doc/algorithms/pose_student.md)',&
         &'simple_test_exec',&                       ! executable
