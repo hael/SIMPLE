@@ -51,6 +51,10 @@ contains
         call test_posterior_exits_weighted_insertion()
         write(*,'(A)') 'test_stage_plateau_exit'
         call test_stage_plateau_exit()
+        write(*,'(A)') 'test_stage_exit_progress'
+        call test_stage_exit_progress()
+        write(*,'(A)') 'test_stage_exit_shell_boundary'
+        call test_stage_exit_shell_boundary()
         write(*,'(A)') 'test_state_readout_keys'
         call test_state_readout_keys()
         write(*,'(A)') 'test_posterior_anneal_tail_states'
@@ -503,7 +507,7 @@ contains
         call assert_true(.not. any(at(1:5)) .and. at(6), 'an FSC=0.5 gain at the third iteration moves the exit to the sixth')
         call run_stage(conv_gain143, [9., 9., 9., 9., 9., 9.], [7., 7., 6.5, 6.5, 6.5, 6.5])
         call assert_true(.not. any(at(1:5)) .and. at(6), 'an FSC=0.143 gain at the third iteration moves the exit to the sixth')
-        ! the FSC flat while the orientations settle: an overlap rise of 0.02 or more in an iteration is a gain
+        ! The small increases after iteration three accumulate to another significant overlap gain.
         call del_file(STATS_FILE)
         do it = 1, 6
             params%which_iter = it
@@ -512,7 +516,7 @@ contains
             at(it) = conv_mi%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
-        call assert_true(.not. any(at(1:5)) .and. at(6), 'an overlap rise at the third iteration moves the exit to the sixth')
+        call assert_false(any(at), 'continued overlap gains below 0.02 per iteration still delay the plateau')
         ! the next stage on the same object: its first iteration starts new bests
         call del_file(STATS_FILE)
         params%startit    = 7
@@ -543,6 +547,123 @@ contains
         end subroutine run_stage
 
     end subroutine test_stage_plateau_exit
+
+    !> A flat FSC crossing cannot terminate progress in the other crossing or the poses.
+    !! Small overlap gains accumulate; falling and returning to the same overlap is not a gain.
+    subroutine test_stage_exit_progress()
+        class(parameters), allocatable :: params
+        class(cmdline),     allocatable :: cline
+        class(oris),        allocatable :: os
+        type(convergence) :: conv_res, conv_pose, conv_tail, conv_plateau, conv_rebound, conv_budget
+        real, parameter :: MI_RISE(10) = [0.100, 0.111, 0.122, 0.133, 0.144, 0.155, 0.166, 0.177, 0.177, 0.177]
+        logical :: at(10)
+        integer :: it, saved_log, scratch_log
+        allocate(params, cline, os)
+        saved_log = logfhandle
+        open(newunit=scratch_log, status='scratch')
+        logfhandle = scratch_log
+        params%nstates           = 1
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 0.3
+        params%topk              = 2
+        params%startit           = 1
+        params%maxits            = 25
+        params%box               = 100
+        params%smpd              = 1.
+        params%lpexit            = 8.
+        call cline%set('trs', 5.)
+        call cline%set('overlap', 0.99)
+        call cline%set('fracsrch', 99.)
+        call run_stage(conv_res, [6., 5.9, 5.8, 5.7, 5.6, 5.5, 5.4, 5.3, 5.3, 5.3], spread(0.1, 1, 10))
+        call assert_false(any(at(1:9)), 'FSC=0.143 progress survives a flat FSC=0.5 past the next stage limit')
+        call assert_true(at(10), 'the resolution exit remains available after both crossings stop gaining')
+        call run_stage(conv_pose, spread(6., 1, 10), MI_RISE)
+        call assert_false(any(at(1:8)), 'accumulated small overlap gains protect the resolution exit')
+        call assert_true(at(9), 'the resolution exit remains available after overlap settles')
+        params%lpexit = 4.
+        call run_stage(conv_plateau, spread(6., 1, 10), MI_RISE)
+        call assert_false(any(at(1:9)), 'accumulated small overlap gains restart plateau patience')
+        call assert_true(at(10), 'a settled overlap and FSC still end the plateau')
+        call run_stage(conv_rebound, spread(6., 1, 10), [0.3, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3])
+        call assert_true(at(4), 'an overlap rebound below the previous high is not progress')
+        params%lpexit        = 0.
+        params%prob_beta_end = 1.
+        call run_stage(conv_tail, spread(6., 1, 10), MI_RISE)
+        call assert_int(10, conv_tail%anneal_tail_start(), 'annealing waits for accumulated overlap progress to stop')
+        params%maxits = 10
+        call run_stage(conv_budget, spread(6., 1, 10), MI_RISE)
+        call assert_int(6, conv_budget%anneal_tail_start(), 'the budget still reserves all five annealing iterations')
+        call assert_true(at(10), 'the budget-forced tail completes on time')
+        call del_file(STATS_FILE)
+        call cline%kill
+        deallocate(params, cline, os)
+        logfhandle = saved_log
+        close(scratch_log)
+
+    contains
+
+        subroutine run_stage( conv, r143, mi )
+            type(convergence), intent(inout) :: conv
+            real,              intent(in)    :: r143(10), mi(10)
+            call del_file(STATS_FILE)
+            do it = 1, 10
+                params%which_iter = it
+                call frozen_field(os, 7., r143(it))
+                call os%set_all2single('mi_proj', mi(it))
+                at(it) = conv%check_conv3D(params, cline, os, 40.)
+                call os%kill
+            enddo
+        end subroutine run_stage
+
+    end subroutine test_stage_exit_progress
+
+    !> 300 * 1.035 / 23 = 13.5 A: the weighted margin is the same shell as the measured FSC.
+    subroutine test_stage_exit_shell_boundary()
+        class(parameters), allocatable :: params
+        class(cmdline),     allocatable :: cline
+        class(oris),        allocatable :: os
+        type(convergence) :: conv_equal, conv_finer
+        logical :: at_equal(3), at_finer(3)
+        integer :: it
+        allocate(params, cline, os)
+        params%nstates           = 1
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 0.3
+        params%topk              = 2
+        params%startit           = 1
+        params%maxits            = 25
+        params%box               = 300
+        params%smpd              = 1.035
+        params%lpexit            = 14.
+        call cline%set('trs', 5.)
+        call cline%set('overlap', 0.99)
+        call cline%set('fracsrch', 99.)
+        call del_file(STATS_FILE)
+        do it = 1, 3
+            params%which_iter = it
+            call frozen_field(os, 13.5 - 4. * spacing(13.5), 11.)
+            at_equal(it) = conv_equal%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_false(any(at_equal), 'roundoff at the weighted shell margin does not cross the strict boundary')
+        call del_file(STATS_FILE)
+        do it = 1, 3
+            params%which_iter = it
+            call frozen_field(os, 310.5 / 24., 11.)
+            at_finer(it) = conv_finer%check_conv3D(params, cline, os, 40.)
+            call os%kill
+        enddo
+        call assert_true(at_finer(3), 'a genuinely finer shell still passes the resolution boundary')
+        call del_file(STATS_FILE)
+        call cline%kill
+        deallocate(params, cline, os)
+    end subroutine test_stage_exit_shell_boundary
 
     !> the probability tables' posterior draws: a frozen assignment (full scan,
     !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)

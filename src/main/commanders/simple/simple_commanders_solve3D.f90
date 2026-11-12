@@ -246,17 +246,6 @@ contains
         call rndstart(cline_refine3D)
         l_reseeded = .false.
         do istage = 1, nstages_ini3D
-            ! Omit the stage when the halves already agree past its planned limit, as the particle
-            ! route does (2026-10-26): never stages 1-3 or the last, nor the axis-search stage, nor
-            ! any stage of a multi-state run; the res05 the stages write is the work project's
-            if( istage > 1 .and. istage < nstages_ini3D .and. &
-                &.not.( l_srch4symaxis .and. istage == solve3D_symsrch_stage(.true.) ) )then
-                if( solve3D_stage_behind_fsc05(params, istage, projfile=work_projfile) )then
-                    write(logfhandle,'(A,I3,A,F5.1,A)')'>>> SOLVE3D OMITTING STAGE ', istage, &
-                        &': PLANNED LP ', lpinfo(istage)%lp, ' A ALREADY REACHED AT FSC=0.5'
-                    cycle
-                endif
-            endif
             write(logfhandle,'(A)')'>>>'
             write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', lpinfo(istage)%lp, ' A'
             ! Preparation of command line for probabilistic search
@@ -1337,20 +1326,6 @@ contains
                 if( L_BENCH_GLOB ) t_phase = tic()
                 call addon_register_pass(istage)
                 if( L_BENCH_GLOB ) rt_register = toc(t_phase)
-            endif
-            ! Omit the stage when the halves already agree past its planned
-            ! limit. Never stages 1-3 (they shape the initial model), the last stage, the
-            ! axis-search stage, the first NU stage before gold standard, nor any stage of
-            ! a multi-state run (solve3D_stage_behind_fsc05).
-            ! Without an axis search symmetrize is a no-op (l_symran implies
-            ! l_srch4symaxis), so that stage can be omitted.
-            if( istage > start_stage .and. istage < nstages_refine3D .and. &
-                &.not.( l_srch4symaxis .and. istage == solve3D_symsrch_stage(.true.) ) )then
-                if( solve3D_stage_behind_fsc05(params, istage) )then
-                    write(logfhandle,'(A,I3,A,F5.1,A)')'>>> SOLVE3D OMITTING STAGE ', istage, &
-                        &': PLANNED LP ', lpinfo(istage)%lp, ' A ALREADY REACHED AT FSC=0.5'
-                    cycle
-                endif
             endif
             ! Preparation of command line for refinement
             if( l_addon )then

@@ -11,7 +11,7 @@ public :: cont_particle_stable
 private
 
 integer, parameter :: STAGE_PLATEAU_PATIENCE = 3    !< solve3D stage plateau exit: iterations without gain on the stage's best
-real,    parameter :: STAGE_PLATEAU_MI_GAIN  = 0.02 !< an orientation overlap rise of this much over one iteration is a gain
+real,    parameter :: STAGE_PLATEAU_MI_GAIN  = 0.02 !< accumulated orientation-overlap gain above the last accepted high
 
 type convergence
     private
@@ -45,7 +45,9 @@ type convergence
     integer :: res_best_iter          = 0  !< the iteration that last improved either best
     real    :: res05_best             = 0. !< the stage's finest FSC=0.5 resolution so far
     real    :: res143_best            = 0. !< the stage's finest FSC=0.143 resolution so far
-    real    :: mi_proj_last           = 0. !< the orientation overlap of the previous plateau check
+    integer :: mi_gain_startit        = 0  !< stage owning the overlap progress
+    integer :: mi_gain_iter           = 0  !< last significant overlap gain in this stage
+    real    :: mi_proj_anchor         = 0. !< overlap at the last significant gain
     real, allocatable :: res05_hist_s(:,:)    !< (2, nstates) per state FSC=0.5 of the same two checks (nstates > 1)
     real, allocatable :: res143_hist_s(:,:)   !< (2, nstates) per state FSC=0.143
     ! the state readout of the probabilistic assignment's joint draw over states and directions (set_state_readout),
@@ -73,6 +75,7 @@ type convergence
     procedure, private :: states_stalled
     procedure, private :: record_res
     procedure, private :: stage_plateau
+    procedure, private :: stage_pose_stalled
 end type convergence
 
 interface
@@ -342,8 +345,8 @@ contains
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
         character(len=96) :: beta_str
-        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff
-        logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked
+        real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, res_tol
+        logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked, l_pose_stalled
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
@@ -611,6 +614,7 @@ contains
         ! a Cartesian pass reports frac = 100 and an overlap any small pose update meets: its own rule
         if( params%l_cart_refine ) &
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
+        l_pose_stalled = self%stage_pose_stalled(params, merge(2, 1, l_margin))
         ! the probability tables' posterior draws (refine=prob and prob_neigh): the committed pose is a draw from
         ! the tempered row posterior and sits near the posterior's own stability from a stage's first iterations,
         ! so the pose-overlap rule would end the stage at once and cannot tell a frozen assignment from
@@ -651,6 +655,7 @@ contains
                             endif
                         endif
                     endif
+                    if( params%nstates == 1 ) l_stalled = l_stalled .and. l_pose_stalled
                     if( l_stalled )then
                         self%prob_beta_tail_start = params%which_iter + 1
                         write(logfhandle,'(A,I0,A)') '>>> RESOLUTION NO LONGER GAINING: annealing the posterior draws over the next ',&
@@ -666,27 +671,27 @@ contains
                 endif
             endif
         endif
-        ! lpexit holds the next stage's planned limit: once the halves resolve past it the
-        ! remaining iterations at this crop buy nothing the next stage will not do better.
-        ! A stage still gaining resolution is productive whatever the threshold says, so the
-        ! exit also requires the gain to have stopped: on PfCRT latest9 every restart left
-        ! the NU stage mid-climb and the two that left coarsest gave the two worst maps.
-        ! The comparison is within the stage, so never at its first iteration.
-        ! Only ever adds convergence. Under the weighted insertion (topk > 1, l_margin) the
-        ! halves agree a shell earlier (the draw's noise is averaged out of each half while
-        ! both are matched against the same reference in solve3D's stages), so the exit
-        ! wants the FSC a shell past the limit and no gain over two iterations, not one
+        ! The next-rung exit requires stalled resolution and poses, not just a flat FSC=0.5 shell.
+        ! Weighted insertion adds one shell and a second check to the margin.
         if( params%lpexit > TINY .and. .not.converged .and. res05_now > TINY )then
             lpexit_eff = params%lpexit
             if( l_margin ) lpexit_eff = calc_lowpass_lim(calc_fourier_index(params%lpexit, params%box, params%smpd) + 1, &
                 &params%box, params%smpd)
-            if( res05_now < lpexit_eff .and. params%which_iter > params%startit )then
+            ! Native/cropped sampling and particle statistics can round the same shell differently.
+            res_tol = 8. * epsilon(lpexit_eff) * max(lpexit_eff, res05_now)
+            if( res05_now < lpexit_eff - res_tol .and. params%which_iter > params%startit )then
                 res05_prev = prev_iter_res(params, 'RESOLUTION_FSC05_STATE')
                 l_stalled  = res05_prev > TINY .and. res05_now >= res05_prev - TINY
+                res143_prev = prev_iter_res(params, 'RESOLUTION_STATE')
+                if( res143_now > TINY ) &
+                    &l_stalled = l_stalled .and. res143_prev > TINY .and. res143_now >= res143_prev - TINY
                 if( l_stalled .and. l_margin )then
                     call self%res_two_back(params, res05_prev2, res143_prev2)
                     l_stalled = res05_prev2 > TINY .and. res05_prev >= res05_prev2 - TINY
+                    if( res143_now > TINY ) &
+                        &l_stalled = l_stalled .and. res143_prev2 > TINY .and. res143_prev >= res143_prev2 - TINY
                 endif
+                if( params%nstates == 1 .and. params%l_prob_align_mode ) l_stalled = l_stalled .and. l_pose_stalled
                 if( l_stalled )then
                     write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
                         &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', lpexit_eff, ' A) AND NO LONGER GAINING'
@@ -813,9 +818,25 @@ contains
         enddo
     end subroutine res_two_back
 
-    !> updates the stage's best resolutions with this check's; .true. once neither has improved and the
-    !! orientation overlap has not risen by STAGE_PLATEAU_MI_GAIN in an iteration for STAGE_PLATEAU_PATIENCE
-    !! iterations: the FSC lags the orientations settling. A new startit begins a new stage's bests
+    !> Record cumulative overlap gains; an oscillation below an accepted high is not progress.
+    logical function stage_pose_stalled( self, params, nchecks ) result( l_stalled )
+        use simple_parameters, only: parameters
+        class(convergence), intent(inout) :: self
+        class(parameters),  intent(in)    :: params
+        integer,            intent(in)    :: nchecks
+        if( self%mi_gain_startit /= params%startit )then
+            self%mi_gain_startit = params%startit
+            self%mi_gain_iter    = params%which_iter
+            self%mi_proj_anchor  = self%mi_proj
+        else if( self%mi_proj - self%mi_proj_anchor >= STAGE_PLATEAU_MI_GAIN - 8. * epsilon(self%mi_proj) )then
+            self%mi_gain_iter   = params%which_iter
+            self%mi_proj_anchor = self%mi_proj
+        endif
+        l_stalled = params%which_iter - self%mi_gain_iter >= nchecks
+    end function stage_pose_stalled
+
+    !> Neither resolution nor the accumulated overlap improved for STAGE_PLATEAU_PATIENCE checks.
+    !! A new startit begins a new stage's bests.
     logical function stage_plateau( self, params, res05_now, res143_now ) result( l_plateau )
         use simple_parameters, only: parameters
         class(convergence), intent(inout) :: self
@@ -828,14 +849,12 @@ contains
             self%res_best_iter    = params%which_iter
             self%res05_best       = res05_now
             self%res143_best      = res143_now
-            self%mi_proj_last     = self%mi_proj
             return
         endif
         l_gain = res05_now < self%res05_best - TINY .or. res143_now < self%res143_best - TINY .or. &
-            &self%mi_proj - self%mi_proj_last >= STAGE_PLATEAU_MI_GAIN
+            &self%mi_gain_iter == params%which_iter
         self%res05_best   = min(self%res05_best,  res05_now)
         self%res143_best  = min(self%res143_best, res143_now)
-        self%mi_proj_last = self%mi_proj
         if( l_gain )then
             self%res_best_iter = params%which_iter
             return

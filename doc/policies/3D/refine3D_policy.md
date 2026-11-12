@@ -706,7 +706,12 @@ iteration's STATS_FILE record), then ramps geometrically from `prob_beta` to
 (`prob_beta_at`; `exec_refine3D` puts the iteration's factor on the master's
 parameters and the workers' command line, and the settings box of the
 convergence report shows it, `POSTERIOR DRAW BETA`, with the tail's progress)
-and ends when the tail is complete; a budget too short for a stall
+and ends when the tail is complete. In a single-state run, a cumulative
+orientation-overlap gain of 0.02 above the last accepted high also postpones
+the trigger for the same one-check window (two with weighted insertion).
+The progress record is stage-local; small gains accumulate, while a fall and
+rebound below that high is not progress. This guards flat FSC shells during
+pose consolidation without an absolute overlap threshold. A budget too short for a stall
 anneals over its last five iterations regardless. With more than one state the
 stall is every populated state's (2026-11-05, `states_stalled`): the
 convergence object keeps each state's last two resolutions, and the tail starts

@@ -62,7 +62,7 @@ contains
     !> Exercise emitted stage commands, including a skipped transition, stale matching limits and the sampling.
     subroutine test_gold_standard_stages()
         use simple_solve3D_utils, only: lpinfo, cline_refine3D, set_cline_refine3D, solve3D_addon_ctx, &
-            &solve3D_stage_behind_fsc05, l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
+            &l_nonuniform, l_srch4symaxis, l_cavg_ini, l_state_continue_mode, &
             &l_refine3D_mode_override, l_refine3D_lp_override, l_refine3D_lpstop_override, &
             &l_refine3D_trs_override, l_prob_beta_end_override, update_frac, nptcls_eff, nstages_refine3D
         use simple_parameters, only: parameters
@@ -120,17 +120,10 @@ contains
         call proj%os_ptcl3D%set_all2single('res05', 5.3)
         call proj%update_projinfo(params%projfile)
         call proj%write(params%projfile)
-        ! res05 5.3 A is past the planned 8 A of stage 5 and 6 A of stage 6
-        call assert_false(solve3D_stage_behind_fsc05(params, 5), 'the NU stage before gold standard is never omitted')
-        call assert_true(solve3D_stage_behind_fsc05(params, 6),  'a gold-standard stage behind FSC=0.5 is omitted')
-        params%gold_std_stage = 5
-        call assert_true(solve3D_stage_behind_fsc05(params, 5),  'an NU stage that is itself gold standard can be omitted')
-        params%gold_std_stage = 0
-        l_nonuniform = .false.
-        call assert_true(solve3D_stage_behind_fsc05(params, 5),  'without NU filtering stage 5 can be omitted')
-        l_nonuniform = .true.
-        call assert_false(solve3D_stage_behind_fsc05(params, 3), 'stage 3 shapes the initial model and is never omitted')
-        call assert_true(solve3D_stage_behind_fsc05(params, 4),  'stage 4 behind FSC=0.5 is omitted')
+        ! no stage is skipped: every stage runs 3 iterations, then its exits decide
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_int(15, cline_refine3D%get_iarg('maxits'), 'stage 4 keeps its budget behind FSC=0.5')
+        call assert_int(3,  cline_refine3D%get_iarg('minits'), 'stage 4 runs at least 3 iterations')
         ! the resolution exit from stage 3 on aims at the next stage's limit
         call set_cline_refine3D(params, 3, 1, .false.)
         call assert_real(10., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 3 exits past stage 4''s limit')
@@ -144,7 +137,7 @@ contains
             call assert_string_eq('nonuniform_lpset', cline_refine3D%get_carg('filt_mode'), 'stage 5 uses merged NU references')
             call assert_real(6., cline_refine3D%get_rarg('lp'), 1.e-6, 'FSC=0.5 still advances the planned 8 A rung')
             call assert_false(cline_refine3D%defined('lpstop'), 'NU stage 5 has no added stage ceiling')
-            ! Stage 6 is omitted: stage 7 must clear the preceding LP-set command.
+            ! Stage 6 is passed over here: stage 7 must clear the preceding LP-set command.
             call set_cline_refine3D(params, 7, 1, .false.)
             call assert_string_eq('nonuniform', cline_refine3D%get_carg('filt_mode'), 'stage 7 uses half-specific NU references')
             call assert_false(cline_refine3D%defined('lp'), 'transition clears the preceding scheduled lp')

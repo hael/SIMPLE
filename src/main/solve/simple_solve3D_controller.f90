@@ -41,7 +41,7 @@ character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
 ! Filtering and low-pass defaults
 real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 integer,          parameter :: FSC05_PROMOTE_MIN_STAGE = 2    ! FSC=0.5 stage-boundary promotion applies past this stage
-integer,          parameter :: MODEL_SHAPING_STAGES    = 3    ! stages 1-3 shape the initial model: never omitted
+integer,          parameter :: STAGE_MINITS            = 3    ! every stage runs this many iterations before its exits apply
 real,             parameter :: LPSTART_MSKDIAM_DIV     = 8.          ! size-planned ladder: first limit mskdiam/8 within LPSTART_SIZE_BOUNDS
 real,             parameter :: LPSTART_SIZE_BOUNDS(2)  = [10.,30.]   ! (streptavidin 80 A: 10 A, PfCRT 160 A: 20 A)
 real,             parameter :: LPSTOP_MSKDIAM_DIV      = 160./6.     ! last limit mskdiam/26.7 within LPSTOP_BOUNDS (6 A at PfCRT's 160 A)
@@ -623,8 +623,8 @@ contains
             call cline_refine3D%delete('nspace_sub')
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
-        ! Early stopping applies in every stage (doc/policies/3D/solve3D_policy.md sec. 4).
-        call cline_refine3D%delete('minits')
+        ! No stage is skipped: each runs STAGE_MINITS iterations, then its exits decide (solve3D_policy.md sec. 4)
+        call cline_refine3D%set('minits',                 min(STAGE_MINITS, cfg%imaxits))
         call cline_refine3D%set('trs',                    cfg%trs)
         ! the polar shift map's key goes to every stage with a shift search, where each particle is centred as it
         ! needs; zero switches it off elsewhere (the parameter's default is the key)
@@ -738,33 +738,6 @@ contains
             l_promoted = .true.
         endif
     end subroutine promote_stage_lp_from_fsc05
-
-    !> Is the stage's planned matching limit already behind the measured FSC=0.5
-    !! resolution? Such a stage would iterate at a crop that cannot represent
-    !! what the halves already agree on. Either route of a single-state run, past
-    !! never stages 1-3 (they shape the initial model) nor the NU stage before gold standard; .false. without res05.
-    module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
-        class(parameters),       intent(in) :: params
-        integer,                 intent(in) :: istage
-        class(string), optional, intent(in) :: projfile !< the project the stages write to (the cavgs route's work project); params%projfile otherwise
-        logical :: l_behind
-        real :: res05
-        l_behind = .false.
-        if( .not. solve3D_stage_skipping(params%nstates) ) return
-        if( istage <= MODEL_SHAPING_STAGES )    return
-        if( .not. allocated(lpinfo) )           return
-        if( istage > size(lpinfo) )             return
-        ! the first NU stage before the gold-standard switch always runs: its NU-promoted band refines
-        ! the merged map the half-specific stages start from (solve3D_policy.md, stage omission)
-        if( l_nonuniform .and. istage == nu_start_stage(params) .and. istage < gold_std_start_stage(params) ) return
-        if( present(projfile) )then
-            res05 = project_best_fsc05_resolution(projfile)
-        else
-            res05 = project_best_fsc05_resolution(params%projfile)
-        endif
-        if( res05 < TINY ) return
-        l_behind = res05 < lpinfo(istage)%lp
-    end function solve3D_stage_behind_fsc05
 
     !> FSC=0.5 resolution of the best resolved populated state, read from the
     !! per-particle res05 field the reconstruction writes into projfile; 0 when absent

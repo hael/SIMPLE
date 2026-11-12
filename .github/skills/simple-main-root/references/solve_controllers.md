@@ -47,11 +47,9 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
    smpd_crop`; each stage's crop comes from `lpinfo(istage)`. The `refine3D` and `reconstruct3D`
    stage clines carry no native `box`, `smpd` or `smpd_crop` (`prep_class_command_lines` deletes
    them; the project is the authority).
-5. **Stage omission is bounded.** 3D (`solve3D_stage_behind_fsc05`): never stages 1-3
-   (`MODEL_SHAPING_STAGES`, they shape the initial model), the entry or last stage, the axis-search
-   stage, the first NU stage before gold standard, or any stage of a multi-state run
-   (`solve3D_stage_skipping`). 2D
-   (`solve2D_stage_behind_frc05`): never the entry stage, the first `SKIP_MIN_STAGE` (2) stages, the
+5. **No 3D stage is skipped.** Each runs `STAGE_MINITS` (3) iterations, then its exits (resolution,
+   plateau, convergence, budget) decide; the FSC=0.5 advance sets a passed stage's limit. 2D stage
+   omission (`solve2D_stage_behind_frc05`): never the entry stage, the first `SKIP_MIN_STAGE` (2) stages, the
    last, or a stage without a planned limit; an omitted phase-1 stage's iterations go to the next
    phase-1 stage.
 6. **Run state is per entry.** `lpinfo`, the stage clines (`cline_refine3D`, `cline_symmap`,

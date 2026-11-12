@@ -259,7 +259,7 @@ Nyquist and FSC=0.5 from 11.9 to 6.9 A. The ladder was planned from the class FR
 until then; gold-standard solve2D (from stage 2) made those FRCs honest and
 lower, which coarsened PfCRT's mid ladder (stage 4 from 12.4 to 18.3 A) and
 cost the global search the rung its orientations settled at
-(section 3, stage omission, has the run numbers).
+(section 3, "No stage is skipped", has the run numbers).
 
 The same ladder plans a stage-dependent residual translation-search half-width.
 On the main particle `solve3D` interface, an explicitly positive `trs` replaces
@@ -320,41 +320,32 @@ field written by the reconstruction) is finer than the planned
 class-average route keeps its final limit). `res05` gates the advance; the
 ladder sets its size.
 
-**Stage omission (2026-10-18).** Where the stage can be omitted, it is omitted
-rather than run at an advanced limit. When `res05` is finer than
-`lpinfo(istage)%lp` the stage's own crop cannot represent the resolution the
-halves already agree on -- `set_bp_range3D` clips the band to the crop
-Nyquist, so the stage would print an advanced limit while matching at the
-crop limit and spend its whole iteration budget there. `solve3D_stage_behind_fsc05`
-gates a `cycle` in the frequency-marching loop, logging `>>> SOLVE3D OMITTING
-STAGE`. Excluded (ruling of 2026-11-10): stages 1-3 (`MODEL_SHAPING_STAGES`),
-which shape the initial model; the first NU stage (`nu_start_stage`, the
-`nonuniform_lpset` stage) when it precedes the first gold-standard stage
-(`gold_std_start_stage`) and NU filtering is on, because it shapes membrane
-proteins and prepares the map for gold-standard refinement; the last stage
-(automasking, envelope FSC, trailing reconstruction); the entry stage
-(`start_stage`, the add-on registration pass); and, **only when an axis is
-actually searched**, `SYMSRCH_STAGE`. With `pgrp == pgrp_start` the
-`symmetrize` call is a complete no-op, since `l_symran` is set only when
-`pgrp_start` has more symmetry than `pgrp` and therefore implies
-`l_srch4symaxis`. The mid-stage resolution exit stays as it was, from stage 3
-on, against the next stage's limit. A version of 2026-11-10 (`85bbc2a2c`)
-instead kept stages 1-4 and aimed their resolution exit at stage 5's limit;
-it was replaced by this ruling the same day. The omission test compares
-`res05` with the planned limit, not with the crop, and the NU stage's crop
-resolves far past its planned limit; it is the one merged-reference stage whose
-NU-promoted band takes the map to the resolution half-specific matching starts
-from. PfCRT, 2026-11-10: honest gold-standard solve2D FRCs coarsened the ladder
-(planned 20.7, 19.4, 19.4, 18.3, 14.1, 12.9, 11.5, 6 A against 20.0, 19.4, 18.3,
-12.4, 11.5, 10.7, 9.4, 6 A), stage 5 was omitted at `res05` 13.5 A, stage 6
-entered gold standard from that map and ended at FSC=0.5/0.143 9.7/7.6 A
-against 7.4/4.0 A when stage 5 ran. Omitted
-stages leave `emitted_lp` at its `-1` sentinel, which the stage report and
-the add-on manifest already treat as "not run". The one-rung advance above
-therefore applies to the stages that cannot be omitted: the entry stage when it
-lies past stage 2 and, when an axis is searched, `SYMSRCH_STAGE`; the last stage
-has no next rung and is never advanced. Single-state
-runs only since 2026-10-21: a multi-state run omits no stage (section 6).
+**No stage is skipped (ruling of 2026-11-12).** Every stage runs at least
+`STAGE_MINITS` (3) iterations (`minits` on every stage command line, never
+above the stage's budget); after that the stage's exits decide when it ends:
+from stage 3 on the mid-stage resolution exit against the next stage's limit
+and the plateau exit, in every stage its convergence rule, and its `MAXITS`
+budget. A stage whose planned limit the halves already pass at FSC=0.5 still
+runs, at the limit the one-rung advance above gives it. Multi-state runs have
+neither exit (section 6).
+
+From 2026-10-18 to 2026-11-12 a stage whose planned limit `res05` passed was
+omitted (`solve3D_stage_behind_fsc05`), on the premise that its crop could not
+represent the resolution the halves agree on. The crops
+are a linear box ramp, not the stage's limit, so the premise did not hold, and
+an omitted stage took its global search with it. PfCRT, 2026-11-10: honest
+gold-standard solve2D FRCs coarsened the FRC-planned ladder, stage 5 was
+omitted at `res05` 13.5 A and stage 6 entered gold standard from that map,
+ending at FSC=0.5/0.143 9.7/7.6 A against 7.4/4.0 A when stage 5 ran.
+PfCRT, 2026-11-12 (`f2e907c2`, ten restarts, size ladder): stage 3 (16 A)
+left on the resolution exit after 3-5 iterations, stage 4 (14 A) was omitted
+in all ten, stage 5 started with the orientations moving 50-58 deg per
+iteration (Nov09: 15 deg after its 12.4 A stage 4) and the runs ended at
+7.4-8.2/4.2-6.9 A against Nov09's 7.2-7.4/4.0-4.1 A. On Nov09 the stage-4
+consolidation at 12.4 A (overlap 0.13 to 0.50, 43 to 18 deg) took about six
+iterations. Exclusions from the omission (stages 1-3, the first NU stage before
+gold standard) and a 3-iteration shortened stage were tried in its place the
+same days and retired with it.
 
 **Stage iteration budget (`MAXITS`): measured slack, not yet reallocated.**
 The budget stands at `[20,20,17,15,12,12,12,25]`. A reallocation of stage 3's
@@ -389,11 +380,17 @@ route, so the stage-3 change applies to the particle route only.
 evaluated during the stage, as a convergence criterion: the internal `lpexit`
 key carries `lpinfo(istage+1)%lp`, the next rung's planned limit, and
 `check_conv3D` ends the stage once the best populated state's `res05`
-resolves past it **and has stopped gaining**: `res05` must be no better than
-the previous iteration's, read back from `STATS_FILE` before the iteration
+resolves past it **and has stopped gaining**: neither `res05` nor the available
+FSC=0.143 crossing may improve on the previous iteration's, read back from `STATS_FILE` before the iteration
 overwrites it (the best of its `RESOLUTION_FSC05_STATEnn`, the same quantity),
 and the comparison is within the stage, so the exit never fires at a stage's
 first iteration nor against stats whose `ITERATION` precedes the stage.
+The strict boundary comparison allows eight relative single-precision epsilons
+for sampling conversion and averaging: the same Fourier shell is not past itself.
+For single-state posterior draws, significant orientation-overlap gains also
+hold the exit for the same one-check window (two with weighted insertion).
+This uses the accumulated overlap progress described below, shared with the
+annealing trigger; the maximum iteration budget still applies.
 Logged as `>>> STAGE RESOLUTION EXIT`. Until 2026-10-19 the previous value
 was never read back, so the guard could not fire: PfCRT stage 5 ran all 12
 `MAXITS` iterations (about 108 s each) where the `latest9` restarts had left
@@ -415,22 +412,27 @@ than the entry stage, the last stage and, when an axis is searched,
 **Stage plateau exit (2026-11-10).** In the same stages (`lpexit` set),
 `check_conv3D` also ends the stage once neither the best state's FSC=0.5 nor
 its FSC=0.143 has improved on the stage's best for `STAGE_PLATEAU_PATIENCE` (3)
-iterations and the orientation overlap has not risen by 0.02 in any of those
-iterations (`STAGE_PLATEAU_MI_GAIN`), wherever the next rung lies. Logged as
+iterations and the orientation overlap has not accumulated a new gain of 0.02
+above its last accepted high (`STAGE_PLATEAU_MI_GAIN`), wherever the next rung lies. Logged as
 `>>> STAGE PLATEAU EXIT`. The overlap term is needed because the FSC lags the
 orientations settling: streptavidin's stage 3 (2026-10-24 `posterior_beta0_3`)
 held FSC=0.5/0.143 at 7.22/6.53 A for its first five iterations while the
 overlap rose 0.04 to 0.37 and the angular change fell 71 to 39 deg, then
 gained; the FSC terms alone would have ended it at the fourth.
-The bests are the convergence object's, restarted with each `startit`. A
+Small increases accumulate until they clear that threshold; a fall and rebound
+below the accepted high do not count. The bests and overlap progress are the
+convergence object's, restarted with each `startit`. A
 stage still gaining is not cut, which keeps the gain guard's lesson above.
 PfCRT stage 3 ran its 17 `MAXITS` iterations flat in both the FRC ladder
 (Nov09: FSC=0.5 13.5 A from its first iteration to its last, one FSC=0.143
 shell gained at the eleventh) and the size ladder (FSC=0.5 14.11 A, one
 shell short of the next rung's 14 A, so the resolution exit never fired); the
-plateau exit ends both at their fourth iteration, about 13 iterations (5-6
-min) earlier. The orientation overlap still crept up over those iterations
-(0.012 to 0.062 on Nov09); if the next stage suffers, raise the patience.
+original per-iteration overlap guard could end both at their fourth iteration,
+about 13 iterations (5-6 min) earlier, despite overlap still rising
+(0.012 to 0.062 on Nov09). The cumulative guard replaces that test; the
+resolution exit now also respects overlap progress and FSC=0.143 gains.
+The Nov12 investigation and validation are recorded in
+`doc/implementation_notes/planned/pfcrt_nov12_regression.md`.
 
 A first version tested against `params%lp`, the band in use, and was
 reverted the same day: PfCRT `latest8` converged in 2 of 6 restarts. **Do not
@@ -621,7 +623,7 @@ space. A `solve3D_addon` pass keeps its own early stopping and does not set
 the key.
 
 No stage of a multi-state run is skipped or cut short by a resolution rule
-(ruling of 2026-10-21): the stage omission and the mid-stage resolution exit of
+(ruling of 2026-10-21): the mid-stage resolution exit (and, until 2026-11-12, the stage omission) of
 section 4 apply to single-state runs only (`solve3D_stage_skipping` in the stage
 controller), so every multi-state stage runs until its own convergence rule or
 its `MAXITS`. Both rules read the best state's FSC=0.5 resolution. At the start
@@ -757,8 +759,8 @@ Particle runs with `nstates=1` use half-specific references from stage 6 by
 default. `gold_std_stage=0` selects this default; a positive value overrides
 the first gold-standard stage. Negative values are rejected. A value beyond
 `nstages` defers the switch past this run. The former `gold_standard=yes|no`
-flag is removed. Skipping is unchanged: the first executed stage at or beyond
-the configured start switches to half-specific matching. The
+flag is removed. Every stage runs; the configured start switches to
+half-specific matching (or the entry stage when starting beyond it). The
 controller switches either NU mode to plain `nonuniform`, deletes scheduled
 `lp`, and removes the stage-derived ceiling. NU chooses the matching band,
 subject to crop Nyquist and explicit user `lpstop`; without NU, the existing

@@ -138,13 +138,6 @@ interface
         logical :: l_skip
     end function solve3D_stage_skipping
 
-    module function solve3D_stage_behind_fsc05( params, istage, projfile ) result( l_behind )
-        class(parameters),       intent(in) :: params
-        integer,                 intent(in) :: istage
-        class(string), optional, intent(in) :: projfile
-        logical :: l_behind
-    end function solve3D_stage_behind_fsc05
-
     module function solve3D_ml_reg_start_stage() result(istage)
         integer :: istage
     end function solve3D_ml_reg_start_stage
