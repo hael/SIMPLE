@@ -29,6 +29,7 @@ LAYERS = {
     "simple_flex_pca_plot": 1,
     "simple_umap": 1,
     "simple_flex_pca_project_gateway": 1,
+    "simple_flex_tree_project_gateway": 1,
     "simple_flex_pca_embedding_io": 1,
     # L2: probe-fit state and services.
     "simple_flex_pca_fit_types": 2,
@@ -47,6 +48,7 @@ LAYERS = {
     "simple_flex_pca_delivery_3d": 4,
     "simple_flex_pca_application": 5,
     "simple_flex_pca_strategy": 6,
+    "simple_flex_tree_strategy": 6,
 }
 
 IGNORED = {
@@ -184,6 +186,7 @@ def main():
     paths += [
         root / "src/defs/simple_defs_flex.f90",
         root / "src/main/strategies/parallelization/simple_flex_pca_strategy.f90",
+        root / "src/main/strategies/parallelization/simple_flex_tree_strategy.f90",
     ]
     problems = []
     edges = {name: set() for name in LAYERS}
