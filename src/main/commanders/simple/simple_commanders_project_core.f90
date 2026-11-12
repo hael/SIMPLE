@@ -772,7 +772,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         character(len=*), parameter      :: DEFTAB = 'subproj_deftab.txt'
         integer,          allocatable    :: pinds(:)
-        type(string)                     :: ctfflag
+        type(string)                     :: ctfflag, subprojname
         type(parameters)                 :: params
         type(sp_project)                 :: spproj
         type(commander_new_project)      :: xnew_proj
@@ -782,6 +782,8 @@ contains
         type(oris)                       :: os_ptcl2D_prev, os_ptcl3D_prev
         integer :: i, n, np2D, np3D
         call cline%set('mkdir', 'no')
+        subprojname = cline%get_carg('subprojname')
+        call cline%set('subprojname', trim(subprojname%to_char()))
         ! init params
         call params%new(cline)
         ! read the project file
