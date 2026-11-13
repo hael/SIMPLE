@@ -82,11 +82,20 @@ contains
         do i = 1,3
             digests(i) = sigma2_state_digest_file(source(i))
         enddo
+        ! the prior-free pair (the PCG support's source) travels with the halves; a lone _base half does not
+        call volume%write(string('ownership_even_unfil.mrc'))
+        call volume%write(string('ownership_odd_unfil.mrc'))
+        call volume%write(string('ownership_even_base.mrc'))
         ! No project file exists: staging must use and update the supplied project in memory.
         call project%os_ptcl3D%new(1, is_ptcl=.true.)
         call reference_record%new(source(1), 'reference', message)
         call stage_refine3D_local_references(params, project, reference_record, missing_fsc, .false., target, reused)
         call assert_false(reused, 'startup staging: legacy pair takes the base-half fallback')
+        call assert_true(file_exists(add2fbody(add2fbody(target, MRC_EXT, '_even'), MRC_EXT, '_unfil')) .and. &
+            &file_exists(add2fbody(add2fbody(target, MRC_EXT, '_odd'), MRC_EXT, '_unfil')), &
+            &'startup staging: the prior-free _unfil pair is staged with the halves')
+        call assert_false(file_exists(add2fbody(add2fbody(target, MRC_EXT, '_even'), MRC_EXT, '_base')), &
+            &'startup staging: an incomplete _base pair is not staged')
         call assert_true(project%isthere_in_osout('vol', 1), 'startup staging: caller receives the volume registration')
         call project%get_vol('vol', 1, registered, registered_smpd, registered_box)
         target_path = simple_abspath(target)

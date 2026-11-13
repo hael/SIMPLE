@@ -62,7 +62,9 @@ retains every density present at `envmsklp`, became the reference mask of
 ## Reconstruction and reference use
 
 On PCG, the conservative density envelope is installed as support for both
-the base and regularized solves under `automsk=yes` and `automsk=nu` alike.
+the base and regularized solves under `automsk=yes` and `automsk=nu` alike. It
+is made from the previous iteration's prior-free pair, never from a reference
+a prior shaped (`reconstruct3D_pcg_policy.md`, section 3).
 The mask therefore constrains the estimator and is not applied again to the
 diagnostic half maps. The NU-evidence envelope is never a solve support
 (review 2026-09-17): the evidence null of a constrained base pair is

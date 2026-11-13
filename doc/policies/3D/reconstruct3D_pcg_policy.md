@@ -359,7 +359,14 @@ the default in `solve3D`, every PCG solve, base and regularized replay, runs
 on the spherical `mskdiam` support and no density envelope is built. With
 `automsk=yes` the conservative density envelope is the support of BOTH the
 base solve and the regularized replay (policy 2026-09-09; the former
-`envfsc=no` split with a spherical base is retired), and `envfsc=yes` is
+`envfsc=no` split with a spherical base is retired). The envelope is made
+from the previous iteration's prior-free pair (the `_unfil` halves under
+`ml_reg=yes`, `_base` under `atm_prior=yes`, else the halves; the reference
+volume only when that pair is missing, and the log says which), never from the
+published reference (2026-11-13). A prior'd reference turned the order
+prior's removals into support: what fell below the envelope threshold was
+solved as zero and never came back (PorF cut in half, `pcg_order=yes`).
+refine3D_local stages the pair with the halves. `envfsc=yes` is
 implied: the FSC pair is envelope-constrained inside the estimator, so no
 post-hoc mask and no phase-randomized correction are applied to it, and the
 `>>> FSC MODE` line in the log and the resolution text says so. This is a

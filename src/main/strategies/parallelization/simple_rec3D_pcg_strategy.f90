@@ -45,8 +45,9 @@ private
 
 integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling
 ! Solve support follows automsk (reconstruct3D_pcg_policy.md, section 3):
-! the sphere for automsk=no, the lag-one density envelope for yes and nu
-! (never the NU-evidence envelope), an explicit pcg_mskfile over both.
+! the sphere for automsk=no, for yes and nu the density envelope of the
+! previous iteration's prior-free pair (never of a prior'd reference, never
+! the NU-evidence envelope), an explicit pcg_mskfile over both.
 logical, parameter :: DEBUG = .false.
 ! atomicity prior: fitted B/occupancy/posterior intensity with a species table; otherwise free amplitudes
 integer, parameter :: ATM_AMP_MAXITS = 30
@@ -155,8 +156,8 @@ contains
     end subroutine set_pcg_solve_support
 
     !> The state's solve support: an explicit pcg_mskfile, else under automsk
-    !! the density envelope of the lag-one reference; without a reference the
-    !! base bootstraps on the sphere (reconstruct3D_pcg_policy.md, section 3).
+    !! the density envelope of the lag-one prior-free pair; without a reference
+    !! the base bootstraps on the sphere (reconstruct3D_pcg_policy.md, section 3).
     subroutine build_pcg_state_support( params, state_here, support, l_have, support_kind )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
@@ -164,6 +165,7 @@ contains
         logical,           intent(out)   :: l_have
         character(len=*),  intent(out)   :: support_kind
         type(image)  :: vol_prev
+        type(string) :: source
         l_have = .false.
         support_kind = 'sphere'
         call support%kill_bimg
@@ -201,9 +203,10 @@ contains
             call handle_missing_reference('missing reference volume')
             return
         endif
-        call vol_prev%read_and_crop(params%vols(state_here), params%smpd, params%box_crop, params%smpd_crop)
-        call build_pcg_density_support(params, state_here, vol_prev, support, 'lag-one reference')
+        call read_support_source(params, state_here, vol_prev, source)
+        call build_pcg_density_support(params, state_here, vol_prev, support, source%to_char())
         call vol_prev%kill
+        call source%kill
         l_have = .true.
         support_kind = 'density'
 
@@ -216,6 +219,40 @@ contains
         end subroutine handle_missing_reference
 
     end subroutine build_pcg_state_support
+
+    !> The density source of the lag-one support: the average of the previous iteration's prior-free pair (the
+    !! _unfil halves under ml_reg, _base under atm_prior, else the halves), as a prior'd reference would carry its
+    !! removals into the support for good; the reference volume only when that pair is missing
+    subroutine read_support_source( params, state_here, vol, source )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        type(image),       intent(inout) :: vol
+        type(string),      intent(inout) :: source
+        type(image)  :: odd
+        type(string) :: fe, fo
+        fe = add2fbody(params%vols(state_here), MRC_EXT, '_even')
+        fo = add2fbody(params%vols(state_here), MRC_EXT, '_odd')
+        if( params%l_ml_reg )then
+            fe = add2fbody(fe, MRC_EXT, '_unfil')
+            fo = add2fbody(fo, MRC_EXT, '_unfil')
+        else if( params%l_atm_prior )then
+            fe = add2fbody(fe, MRC_EXT, '_base')
+            fo = add2fbody(fo, MRC_EXT, '_base')
+        endif
+        if( file_exists(fe) .and. file_exists(fo) )then
+            call vol%read_and_crop(fe, params%smpd, params%box_crop, params%smpd_crop)
+            call odd%read_and_crop(fo, params%smpd, params%box_crop, params%smpd_crop)
+            call vol%add(odd)
+            call vol%mul(0.5)
+            call odd%kill
+            source = 'lag-one prior-free pair '//fe%to_char()//' + odd'
+        else
+            call vol%read_and_crop(params%vols(state_here), params%smpd, params%box_crop, params%smpd_crop)
+            source = 'lag-one reference (no prior-free pair '//fe%to_char()//')'
+        endif
+        call fe%kill
+        call fo%kill
+    end subroutine read_support_source
 
     !> Automatic solve support is enabled for yes and nu. An explicit
     !! pcg_mskfile is the development override and is installed regardless.

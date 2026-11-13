@@ -85,7 +85,7 @@ contains
         &'committed class at the particle''s own temperature, each at its share (the points the posterior cannot tell apart '//&
         &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
         &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
-        &'committed pose alone, the single-draw run{1}', 'angles{1}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
@@ -163,7 +163,7 @@ contains
         &'committed class at the particle''s own temperature, each at its share (the points the posterior cannot tell apart '//&
         &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
         &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
-        &'committed pose alone, the single-draw run{1}', 'angles{1}', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
+        &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
         &to sample each iteration; every active particle when there are fewer{200000}', '# particles to sample{200000}', &
         &.false., 200000., group="search", visibility=UI_VIS_STANDARD, preserve_default=.true.)
@@ -259,7 +259,7 @@ contains
         &'committed class at the particle''s own temperature, each at its share (the points the posterior cannot tell apart '//&
         &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
         &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
-        &'committed pose alone, the single-draw run{1}', 'angles{1}', .false., 1., group="cluster 2D", visibility=UI_VIS_ADVANCED)
+        &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="cluster 2D", visibility=UI_VIS_ADVANCED)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)

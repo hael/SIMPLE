@@ -1078,7 +1078,6 @@ contains
                 self%l_prob_align_mode = .true.
             case DEFAULT
         end select
-        if( self%topk_inpl > 1 .and. .not. self%l_prob_align_mode ) THROW_HARD('topk_inpl > 1 needs refine=prob or refine=prob_neigh')
         ! the representation switch of a pass, derived once (plan section 6.4)
         select case(trim(self%cont_prior))
             case('none','shift','pose')

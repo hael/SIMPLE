@@ -156,7 +156,7 @@ contains
         call cline_pass%delete('nsample')
         call cline_pass%delete('assign_all')
         call cline_pass%delete('gaufreq')
-        call cline_pass%delete('topk_inpl')
+        call cline_pass%set('topk_inpl', 1)
         ! Seeded restarts skip the centring stage and keep the ordinary shift window (the key off explicitly: the
         ! parameter's default is the key)
         call cline_pass%set('shift_sigma', 0.)
@@ -428,13 +428,9 @@ contains
         call cline_refine2D%set('startit',    cfg%iter)
         call cline_refine2D%set('refine',     cfg%refine)
         call cline_refine2D%set('objfun',     cfg%objfun)
-        ! the in-plane quadrature of the class sums belongs to the stages with a probability table; the stage command
-        ! line is reused from stage to stage, so a stage without a table removes the key and the next one sets it again
-        if( cfg%topk_inpl > 1 )then
-            call cline_refine2D%set('topk_inpl', cfg%topk_inpl)
-        else
-            call cline_refine2D%delete('topk_inpl')
-        endif
+        ! the in-plane quadrature of the class sums belongs to the stages with a probability table (1 elsewhere, set:
+        ! the parameter's default is the quadrature)
+        call cline_refine2D%set('topk_inpl', cfg%topk_inpl)
         if( .not. cfg%l_prob_beta_end_user )then
             if( cfg%l_anneal_tail )then
                 call cline_refine2D%set('prob_beta_end', 1.)

@@ -16,14 +16,14 @@ contains
     !! and conserves the CTF^2 mass; the angle is periodic; a vanishing weight adds nothing. The plane is
     !! asymmetric (a real part tilted in h, an imaginary part in k) so that a wrong sign or a lost angle shows
     subroutine test_weighted_accumulation()
-        integer,  parameter :: LDIM = 32
-        real,     parameter :: ANGLE_A = 30., ANGLE_B = 75.
-        real,     parameter :: TOL_SUM = 1.e-5  ! single-precision sums of a few hundred terms, relative to the peak
-        real,     parameter :: TOL_PERIODIC = 1.e-4 ! the angle in single-precision radians moves a window position by ~1e-5 pixel
-        type(stack)       :: stk
-        type(fplane_type) :: fpl
-        real    :: peak_c, peak_t, diff_c, diff_t, mass_a, mass_b
-        integer :: lim, h, k
+        integer, parameter :: LDIM = 32
+        real,    parameter :: ANGLE_A = 30., ANGLE_B = 75.
+        real,    parameter :: TOL_SUM      = 1.e-5 ! single-precision sums of a few hundred terms, relative to the peak
+        real,    parameter :: TOL_PERIODIC = 1.e-4 ! a full-turn angle moves a window position by ~1e-5 pixel
+        type(stack)        :: stk
+        type(fplane_type)  :: fpl
+        real               :: peak_c, peak_t, diff_c, diff_t, mass_a, mass_b
+        integer            :: lim, h, k
         write(*,'(A)') 'test_weighted_accumulation'
         call stk%new_stack([LDIM,LDIM], 8)
         lim = maxval(abs(stk%flims(1:2,:))) + 1

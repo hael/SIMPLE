@@ -576,9 +576,9 @@ contains
     !! particle another, and the family is its own (the assignment draw of the same particle differs)
     subroutine test_inpl_phase()
         type(rnd_key) :: scope
-        real(dp) :: v1, v1b, v2, va
-        integer  :: ip
-        logical  :: l_range
+        real(dp)      :: v1, v1b, v2, va
+        integer       :: ip
+        logical       :: l_range
         write(*,'(A)') 'test_inpl_phase'
         scope = rnd_scope_key(20261113_int64, RND_PROG_REFINE2D, RND_PASS_ALIGN, 3)
         v1  = rnd_keyed(rnd_draw_key(scope, 1, RND_FAM_INPLQ))
@@ -601,10 +601,10 @@ contains
     !! and collapsed rows and persist over batches while begin_batch clears the slots
     subroutine test_inpl_insert_channel()
         type(prob_insert_inpl) :: ins
-        integer, pointer :: nent(:)
-        real,    pointer :: e3(:,:), w(:,:)
-        integer(int64)   :: nrows, npose, nsingle
-        real(dp)         :: neff_sum
+        integer,        pointer :: nent(:)
+        real,           pointer :: e3(:,:), w(:,:)
+        integer(int64)          :: nrows, npose, nsingle
+        real(dp)                :: neff_sum
         write(*,'(A)') 'test_inpl_insert_channel'
         call ins%new(4, 5)
         call ins%begin_batch

@@ -82,10 +82,10 @@ contains
     subroutine insert_inplane( self, os )
         class(strategy2D_prob), intent(inout) :: self
         class(oris),            intent(in)    :: os
-        real    :: dists(self%s%nrots), e3(self%s%p_ptr%topk_inpl), w(self%s%p_ptr%topk_inpl)
-        real    :: shvec(2), e3c, temp, neff
+        real     :: dists(self%s%nrots), e3(self%s%p_ptr%topk_inpl), w(self%s%p_ptr%topk_inpl)
+        real     :: shvec(2), e3c, temp, neff
         real(dp) :: v
-        integer :: inds(self%s%p_ptr%topk_inpl), nent, icls, irot_c, iptcl, j, ithr
+        integer  :: inds(self%s%p_ptr%topk_inpl), nent, icls, irot_c, iptcl, j, ithr
         iptcl  = self%s%iptcl
         icls   = nint(os%get(iptcl, 'class'))
         irot_c = nint(os%get(iptcl, 'inpl'))

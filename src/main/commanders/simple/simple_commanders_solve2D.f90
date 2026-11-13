@@ -774,7 +774,7 @@ contains
             call cline_refine2D%delete('update_frac')
             call cline_refine2D%delete('assign_all')
             call cline_refine2D%delete('endit')
-            call cline_refine2D%delete('topk_inpl')
+            call cline_refine2D%set('topk_inpl', 1)
             call execute_refine2D('terminal_greedy', nstages + 1)
             call terminal_refs%kill
         end subroutine execute_terminal_pass

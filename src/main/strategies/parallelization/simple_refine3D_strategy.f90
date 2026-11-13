@@ -293,6 +293,7 @@ contains
         logical, intent(in)                    :: support_verified
         type(string), intent(out)              :: staged_vol
         logical, intent(out)                   :: reused_derivatives
+        character(len=6), parameter :: PRIOR_FREE_SUFFIXES(2) = ['_unfil', '_base ']
         type(string)          :: source_vol, source_even, source_odd, staged_even, staged_odd
         type(string)          :: staged_fsc, stale, bases(3)
         real                  :: source_smpd, align_lp
@@ -317,6 +318,10 @@ contains
             else
                 call remove_support_provenance(staged_vol)
             endif
+            ! the prior-free pair travels with the halves: the PCG solve support is built from it
+            do i = 1,size(PRIOR_FREE_SUFFIXES)
+                call stage_pair_variant(trim(PRIOR_FREE_SUFFIXES(i)))
+            enddo
         endif
         ! Clear run-owned derivatives before choosing verified reuse or the base-half fallback.
         bases = [staged_vol, staged_even, staged_odd]
@@ -361,6 +366,28 @@ contains
         call staged_even%kill
         call staged_odd%kill
         call staged_fsc%kill
+
+    contains
+
+        !> a variant of the half pair (<half><suffix>) copied beside the staged halves when the source has both,
+        !! else a stale staged copy removed
+        subroutine stage_pair_variant( suffix )
+            character(len=*), intent(in) :: suffix
+            type(string) :: src(2), dst(2)
+            integer      :: j
+            src(1) = add2fbody(source_even, MRC_EXT, suffix)
+            src(2) = add2fbody(source_odd,  MRC_EXT, suffix)
+            dst(1) = add2fbody(staged_even, MRC_EXT, suffix)
+            dst(2) = add2fbody(staged_odd,  MRC_EXT, suffix)
+            do j = 1,2
+                if( file_exists(src(1)) .and. file_exists(src(2)) )then
+                    call simple_copy_file(src(j), dst(j))
+                else if( file_exists(dst(j)) )then
+                    call del_file(dst(j))
+                endif
+            enddo
+        end subroutine stage_pair_variant
+
     end subroutine stage_refine3D_local_references
 
     ! Only recorded, compatible derivatives travel; embedded NU support needs no matcher remasking.

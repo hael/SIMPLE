@@ -398,7 +398,22 @@ core is twice the core and probably mostly protein below 6 A. On streptavidin th
 operator raises the core's signal (above 100 %): flattening the solvent moves low
 band content into the protein. Maps: `~/agent_work/SIMPLE/out_<run>/<pair>_<auto|l5>_order_nu_filt.mrc`.
 
-## 12. Next
+## 12. With `automsk=yes` (2026-11-13)
+
+`refine3D_local` with `pcg_order=yes automsk=yes` cut PorF in half. What
+survived had the best resolution Hans had seen on it. The solve support was the
+density envelope of the published reference, which under `ml_reg=yes` is the
+ML replay of the prior'd pair. The ridge's removals fell below the envelope
+threshold and were solved as zero from then on. The support is now made from the
+previous iteration's prior-free pair, for every `automsk` run
+(`reconstruct3D_pcg_policy.md`, section 3). The division of labour:
+
+- the envelope, from prior-free data, owns the solvent as a hard support;
+- the order prior owns the disordered density inside it (the micelle) as a soft
+  ridge, its fraction and evidence null taken inside the envelope;
+- the NU references are masked by the current prior-free pair's envelope.
+
+## 13. Next
 
 The question is whether the prior improves the alignment, not what it deletes.
 From `gold_std_stage` (default stage 6) the halves align independently, and the final map is

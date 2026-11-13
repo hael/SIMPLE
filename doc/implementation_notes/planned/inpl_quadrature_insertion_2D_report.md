@@ -1,7 +1,7 @@
 # In-plane quadrature insertion in 2D: report
 
-Written 2026-11-13 by the run of [the plan](inpl_quadrature_insertion_2D.md), base `db20cde75`. Everything is in the
-working tree, uncommitted. Built and run on FWM-S116118 through the agent kit; run numbers are the kit's.
+Written 2026-11-13 by the run of [the plan](inpl_quadrature_insertion_2D.md), base `db20cde75`. The first delivery is
+committed as `d6cf4ae25`; section 8 (the default of 64) is uncommitted on top of it. Built and run on FWM-S116118 through the agent kit; run numbers are the kit's.
 
 ## 1. What was learned
 
@@ -52,9 +52,9 @@ Phase 0: no source change; builds and baselines. Phase 1 and 1b: 23 files modifi
 files new (the tester below and the plan note); Phase 2: this report.
 
 - **Key and chain** (`simple_parameters.f90`, `_parse.f90`, `_phases.f90`, `simple_ui_refine2D.f90`,
-  `simple_solve2D_controller.f90`, `simple_commanders_solve2D.f90`): `topk_inpl`, default 1, no upper bound as `topk` has none; on refine2D,
-  solve2D, solve2D_chunks (forwarded to the chunks' command line in `init_chunk_clustering`); refused with a refine mode
-  without a table; set on stages 2 to 6, removed from stage 1, the seed pass and the terminal pass.
+  `simple_solve2D_controller.f90`, `simple_commanders_solve2D.f90`): `topk_inpl`, default 64 (the parameter's, section 8), no upper bound as `topk` has none; on refine2D, solve2D,
+  solve2D_chunks (forwarded to the chunks' command line in `init_chunk_clustering`); the stages with a table get the
+  key's value, stage 1, the seed pass and the terminal pass get 1.
 - **Selector, side channel, readout** (`simple_eul_prob_tab_utils.f90`, `simple_rnd.f90`, `simple_eul_prob_tab2D.f90`):
   `inpl_quadrature`; `prob_insert_inpl`; the keyed family `RND_FAM_INPLQ`; six fields of the readout record and the
   `PROB_TAB_INPL` line; the table carries the pass's counts to its readout.
@@ -79,7 +79,8 @@ files new (the tester below and the plan note); Phase 2: this report.
    accumulation is tested on the private accumulation primitive, which needs a submodule tester of the class
    averager (`simple_cavg_sums_tester.f90` tests another type), registered as suite `class-average in-plane entries`
    of `unit_reconstruction`.
-2. **`topk_inpl > 1` with a refine mode that has no table is refused** in the parameter phases, not ignored.
+2. **A refine mode without a table reads no value of the key.** The first delivery refused `topk_inpl > 1` there; the
+   refusal is removed (Hans's default of 64 for `solve2D` would have stopped `solve2D refine=snhc_smpl`).
 3. **A quadrature in one rotation inserts the committed pose at weight 1 whichever rotation that is** (ruling 16 as
    written): a well-determined particle is summed as without the key even when the posterior's single rotation is
    not the drawn one.
@@ -195,26 +196,48 @@ harmonics. The exact angular marginalisation (a polar circular convolution per r
 - `simple-main-class`: "`cavger_update_sums` takes optional entries (`ent_n`, `ent_e3`, `ent_w`): a particle with entries is
   gridded once per entry at its weight on both accumulators, else once at its committed angle."
 
-## 7. A commit message
+## 7. The first delivery's commit message (committed as `d6cf4ae25`)
 
-```text
-solve2D: in-plane quadrature of the class sums (topk_inpl)
+See the commit. Sections 1 to 6 describe that state, with the later review fixes included in it.
 
-A particle of a stage with a probability table may enter the class sums at a K-point
-quadrature of its in-plane posterior instead of at the one drawn angle: the row of its
-committed class at its polished shift, at the particle's own temperature, with a keyed
-per-particle phase, each entry at its share on the data and the CTF^2 sums. The committed
-pose, the search, the terminal pass and make_cavgs are unchanged; topk_inpl=1, the
-default, is the previous run byte for byte. No upper bound, as topk has none.
+## 8. The default of 64 (Hans, 2026-11-13, after a run on beta-galactosidase)
 
-The key is on refine2D, solve2D and solve2D_chunks (forwarded to the chunks), set on
-stages 2 to 6 and removed from stage 1, the seed pass and the terminal pass. Readout:
-PROB_TAB_INPL (K, m_max). The points are snapped to the rotation grid, so a flat row's
-harmonic cancellation is exact only where K divides the number of rotations; documented.
+A run of `solve2D` with `topk_inpl=64` on a beta-galactosidase set (5513 particles, 90 classes) gave class averages Hans
+called almost perfect; the readout showed 1.1 to 1.8 entries per particle and 40 to 90 % collapsed, mean `n_eff` 1.0 to 1.4.
+The default is now 64 (plan ruling 17). A first version set it in the solve2D commanders and pinned the stream, the
+sieve and `validate` at 1; Hans then moved it into the parameter, so every 2D method inherits it:
 
-Assertions on the selector, the shifted-particle row (against two oracles, with an
-astigmatic CTF), the weighted accumulation and the side channel. Policy, algorithm and
-plan notes and the report.
+- `parameters` declares `topk_inpl=64`; the interface shows `{64}` on refine2D, solve2D and solve2D_chunks; no commander
+  or caller sets it;
+- the solve2D controller sets `topk_inpl=1` (not a removal, which would now mean 64) on stage 1, the seed pass and the
+  terminal pass;
+- the refusal of `topk_inpl > 1` with a refine mode that has no table is removed, because `solve2D refine=snhc_smpl` would
+  otherwise stop on its own default;
+- the policy's defaults list and key paragraph, the plan (ruling 17) and this report say so.
 
-Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-```
+Evidence for the first version (kit run numbers; binaries from run 1706, a Release build of `d6cf4ae25-dirty`, made by another session on the
+tree that included these edits; the tree also holds that session's uncommitted 3D changes):
+
+| What | Result | Run |
+| --- | --- | --- |
+| Release rebuild, fast gate | 15 of 15 | 1705 |
+| `solve2D` without the key on the 6vxx fixture | prints `topk_inpl 64`, 22 readout lines, completed | 1708 |
+| `solve2D refine=snhc_smpl` without the key | completed, no refusal, 22 readout lines | 1709 |
+| Off state: new build at `topk_inpl=1` against the base build, one thread, `SIMPLE_SEED` fixed, 6vxx fixture | 85 of 85 image and binary files identical (class averages per iteration, even and odd, frcs, sigma2 state, carried sums) | direct runs, below |
+| Negative control: the new build at the default 64 against the base | 70 of 85 differ | direct runs, below |
+| Both simulated workflows at the new default, one thread | passed: 6vxx 636.8 s, 1jxy 925.2 s | 1712 |
+| Static gates (`check_cli_chain`, `check_test_registry`, `check_descr`, `check_guide_imports`, `check_tester_linkage`) | pass | no run |
+
+Notes on how the evidence was made:
+
+- **The workflows are no longer byte-identical to the base at the default,** by design: they call `solve2D`, which now
+  runs at 64, and their `solve3D` follows. Their gate is the registry's correctness gate, which passed. The byte identity
+  of the off state is shown by the direct comparison above.
+- **The direct comparison was run outside the kit's `run` action,** because the kit cannot pass an environment variable and
+  a run needs `SIMPLE_SEED` fixed to be reproducible (the test runner fixes it for its own process; a first comparison
+  through the kit's `run` without it reported every file differing, runs 1710 and 1711, and proves nothing). The two
+  binaries were the base tree's `simple_exec` and a private copy of the new one (the other session rebuilds the shared tree),
+  run with `SIMPLE_SEED=20260923`, `nthr=1`, in `inpl_smoke/offstate/{new,base,new64}`. Nothing was built or installed.
+- **Not run:** `mini_stream_*`, `stream_chains`, `multistate_workflows`, `solve3D_addon`, `cont_refine3D_1jxy` and the other
+  entries that call `solve2D`. With the default in the parameter the stream (initial analysis and 2D pool), the sieve
+  and `validate` run at 64; their behavior there is untested.

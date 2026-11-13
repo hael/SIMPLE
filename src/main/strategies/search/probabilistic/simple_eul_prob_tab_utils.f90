@@ -148,12 +148,12 @@ type :: prob_readout
     real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
     real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
     type(prob_state_readout) :: states     !< the dense 3D table's state readout (nstates 0: none)
-    integer        :: inpl_kmax = 1        !< topk_inpl (2D)
-    integer        :: inpl_mmax = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
-    integer(int64) :: inpl_nptcls = 0_int64  !< particles whose row was evaluated
-    integer(int64) :: inpl_npose  = 0_int64  !< entries inserted (a collapsed particle counts one)
-    integer(int64) :: inpl_nsingle = 0_int64 !< particles whose quadrature collapsed to the polished pose
-    real(dp)       :: inpl_neff_sum = 0.d0 !< sum over those particles of exp(entropy) of the row at the quadrature's temperature
+    integer        :: inpl_kmax     = 1        !< topk_inpl (2D)
+    integer        :: inpl_mmax     = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
+    integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated
+    integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one)
+    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to the polished pose
+    real(dp)       :: inpl_neff_sum = 0.d0     !< sum over those particles of exp(entropy) of the row
 end type prob_readout
 
 !> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
@@ -215,14 +215,14 @@ end type prob_insert_poses
 !! batches of a pass for the readout
 type :: prob_insert_inpl
     private
-    integer :: kmax = 1, nslots = 0
-    integer,  allocatable :: nent(:)    !< (nslots) entries of the slot's particle, 0: the committed pose alone
-    integer,  allocatable :: status(:)  !< (nslots) 0 no row, 1 spread over entries, 2 collapsed
-    real,     allocatable :: e3(:,:)    !< (kmax,nslots) the entries' in-plane angles, degrees
-    real,     allocatable :: w(:,:)     !< (kmax,nslots) their weights, summing to 1 per particle
-    real,     allocatable :: neff(:)    !< (nslots) exp(entropy) of the particle's row
+    integer        :: kmax = 1, nslots = 0
     integer(int64) :: n_rows = 0_int64, n_pose = 0_int64, n_single = 0_int64
     real(dp)       :: neff_sum = 0.d0
+    integer, allocatable :: nent(:)    !< (nslots) entries of the slot's particle, 0: the committed pose alone
+    integer, allocatable :: status(:)  !< (nslots) 0 no row, 1 spread over entries, 2 collapsed
+    real,    allocatable :: e3(:,:)    !< (kmax,nslots) the entries' in-plane angles, degrees
+    real,    allocatable :: w(:,:)     !< (kmax,nslots) their weights, summing to 1 per particle
+    real,    allocatable :: neff(:)    !< (nslots) exp(entropy) of the particle's row
 contains
     procedure :: new          => inpl_insert_new
     procedure :: begin_batch  => inpl_insert_begin_batch

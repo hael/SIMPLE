@@ -25,7 +25,7 @@ type strategy2D_alloc
     ! per thread
     real,    allocatable :: class_space_corrs(:,:)     !< class vs. particle correlations
     integer, allocatable :: class_space_inplinds(:,:)  !< in-plane rotation indices
-    complex, allocatable :: inpl_bank(:,:,:)           !< the particle shifted by its committed shift, for the in-plane insertion's row (topk_inpl > 1)
+    complex, allocatable :: inpl_bank(:,:,:)           !< shifted-particle memo of the in-plane insertion's row
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -190,7 +190,7 @@ contains
     !> the per-thread shifted-particle banks of the in-plane insertion, sized by the team the pass's regions run
     subroutine prep_strategy2D_inpl_bank( nrow, ncol )
         !$ use omp_lib,   only: omp_get_max_threads
-        integer, intent(in) :: nrow, ncol !< pftsz + 1 and the number of shells of the calculator's band
+        integer, intent(in) :: nrow, ncol !< pftsz + 1 and the number of shells of the band
         integer :: nteam
         nteam = nthr_glob
         !$ nteam = omp_get_max_threads()

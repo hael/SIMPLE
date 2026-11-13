@@ -104,7 +104,7 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
 
 ## 3. Contract
 
-- **Off state.** `topk_inpl=1` (the default, ruling 10) is today's run bit for bit at one thread: no row
+- **Off state.** `topk_inpl=1` (given explicitly; the default is 64, ruling 17) is today's run bit for bit at one thread: no row
   is evaluated, no side channel allocated, no readout field written other than zeros. This is the plan's
   gate and no ruling may waive it; the assertions of Phase 1b cover the enabled path.
 - **The committed pose is the hypothesis.** For identical incoming references the search, its draws and
@@ -209,6 +209,15 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
 
 Defaults taken without a question: the names `topk_inpl`, `prob_insert_inpl`, `PROB_TAB_INPL`,
 `RND_FAM_INPLQ`.
+
+17. (2026-11-13, Hans, after delivery and a run on beta-galactosidase with `topk_inpl=64`, class averages "almost
+    perfect") **The default.** The parameter's default is 64 (Hans, the same day: one default every 2D method
+    inherits, rather than commander defaults and callers pinned at 1), so refine2D, solve2D, solve2D_chunks, the
+    stream (initial analysis and 2D pool), the particle sieve and `validate` all run at 64 unless given the key;
+    the solve2D controller sets 1, not a removal, on stage 1, the seed pass and the terminal pass. The refusal of `topk_inpl > 1` with a refine mode without a table is removed:
+    the key is read only where there is a table, and `solve2D` itself may run `refine=snhc_smpl`. Rulings 10 and
+    section 3's off-state sentence are read with this: the byte identity of section 7 is that of `topk_inpl=1`,
+    given explicitly where the default is 64.
 
 ## 5. Not in this plan
 
@@ -454,6 +463,10 @@ the new suites included. Release build (run 1672): fast gate 15 of 15. Exit item
   runs 1693 and 1695) completed and the chunk's log holds 22 `PROB_TAB_INPL` lines (run 1696); Debug fast gate 15 of 15
   (run 1697); both workflows on the Release build passed (run 1698) and `test=identity` against the second baseline's
   directories gives 177 and 214 files the same, 0 differing (runs 1699, 1700), with no source file newer than run 1692.
+- *The default of 64 (ruling 17; the report's section 8).* Release rebuilt, fast gate 15 of 15 (run 1705); `solve2D` without
+  the key prints `topk_inpl 64` (run 1708) and `solve2D refine=snhc_smpl` completes (run 1709); the off state,
+  `topk_inpl=1` against the base build at one thread with a fixed seed: 85 of 85 image and binary files identical,
+  and 70 of 85 differ at 64 (a negative control); both workflows pass at the new default (run 1712).
 - *Smoke runs at `topk_inpl=8`* on the extract-stage project of the 6vxx fixture (73 particles, 4 classes, `mskdiam=180`):
   shared memory, Release (run 1673) and Debug with bounds checks (run 1676, binary of run 1675), both completed with 22
   `PROB_TAB_INPL` lines; over two parts (`nparts=2`, run 1674) completed and the master printed the merged lines with 73

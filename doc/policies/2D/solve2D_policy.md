@@ -733,16 +733,17 @@ A top view of a small membrane protein is close to rotationally symmetric, so
 the in-plane angle of a particle carries little signal and the draw of the
 search decides it from the particle's noise; the noise then enters the half's
 sum at that angle, and the angular residue of the reference grows. `topk_inpl`
-(default 1; a refine2D, solve2D and solve2D_chunks key, internal to
-no other program) lets a particle enter the class sums at the in-plane angles of
+(default 64, the parameter's, so every 2D program and caller inherits it; a refine2D,
+solve2D and solve2D_chunks key) lets a particle enter the class sums at the in-plane angles of
 a quadrature of its posterior instead of at the one drawn angle. It is an
 internal device against that overfitting, not a model of the output.
 
 - **Where it acts.** The iterations of the stages with a probability table
   (`refine=prob|prob_neigh`: stage 2 on). The controller passes the key to those
-  stages and removes it from stage 1 (`snhc_smpl`), from the `cls_init=prev` seed
-  pass and from the terminal pass; a refine2D call with another refine mode and
-  `topk_inpl > 1` is refused.
+  stages and sets it to 1 on stage 1 (`snhc_smpl`), the `cls_init=prev` seed
+  pass and the terminal pass (set, not removed: the default is the quadrature);
+  a pass without a table reads no value of it. The stream (initial analysis and
+  2D pool), the particle sieve and `validate` inherit the default.
 - **What it does.** After the search has committed and polished a particle's
   class, rotation and shift (`strategy2D_prob`), the row of that class over
   every rotation is evaluated at the committed shift in the particle's frame
