@@ -116,6 +116,22 @@ Cyril reported that multi-state stopped working on 2026-10-20; the build of 2026
     `nstates>1`, therefore runs first, as "what the evidence names". C4 and C2 follow only if C5 does
     not reach the success criterion, under the same stopping and second-run rules. If C5's first
     run separates, its second and third runs come before anything else.
+14. Relaunch as `ms_abinitio2` on the synced code (2026-11-11, the maintainer's delegate, after Hans
+    stopped the first launch to sync and committed C5). The base is 1c12bb4eb: it holds C5 (5f723c0f7)
+    and Hans's solve3D work since d4e89630c, chiefly the low-pass ladder, which since 3d097187a is
+    planned from `mskdiam`, not from the 2D classes' FRC (`mskdiam=300` gives 30 -> 6 A, linear over
+    the five multi-state stages). The first launch's builds are not this code: its numbers are
+    history, not baselines. Phases 0 and 1 stand; this launch runs Phases 2-4, reading the first
+    launch's records and reusing F05 from `~/agent_runs/ms_abinitio/` without writing there. Phase 2
+    starts with HEAD de novo on F05 (`nparts=2 nthr=8`, one timed job at a time, `SIMPLE_SEED` unset,
+    the final labels judged with `acc3.py`), two runs and a third if either separates; two of three
+    separated meets the success criterion with no code change (Phase 3 next). Otherwise the
+    candidates in this order, each against HEAD's runs as the bar: (a) the low-pass schedule, read
+    from HEAD's per-stage recall first (the explicit ramp `lpstart=20 lpstop=6 force_lp_range=yes`
+    and, if the evidence points that way, a coarser `lpstop` for `nstates>1`; kept as a controller
+    default for `nstates>1`, no new key); (b) C4 or C2 on top of C5 only if HEAD's evidence names
+    their mechanism; (c) C1 is not favoured. Then the list is exhausted (section 3). Every earlier
+    ruling stands; Phase 3 validates on F05; S and B are run only if time allows.
 
 ## 3. Stop conditions
 
@@ -262,6 +278,9 @@ HEAD unchanged on B first (if it separates, HEAD de novo on F next), then the ca
 B in their order, 2 of 3 B runs separated for the kept code. From ruling 12 the judge is
 F05: HEAD unchanged de novo on F05 twice (and a third if they split), then label recovery
 once; no code change if HEAD separates; otherwise the candidates on F05, C5 first (ruling 13).
+From ruling 14 (the relaunch on 1c12bb4eb, which holds C5): HEAD de novo on F05 twice, a third run
+if either separates; 2 of 3 separated ends Phase 2 with no code change. Otherwise the low-pass
+schedule first, then C4 or C2 only where HEAD's runs name their mechanism, C1 last.
 
 ### Phase 3: validation and robustness
 
@@ -939,6 +958,13 @@ stopped, and C2 was not started on SNR 0.01 data. The judge is F05, a new simula
 recipe at SNR 0.05. First HEAD unchanged de novo on F05, twice, then HEAD's true-pose label
 recovery on F05 once.
 
+*Correction (ms_abinitio2, 2026-11-11): from here to the end of this Phase 2 section the names of
+the two extreme assemblies are swapped. The benchmark's README names true state 1 (24,000 particles)
+the smallest assembly and true state 3 (8,000) the largest, as section 1 and Phases 0 and 1 do. The
+F05 entries below call the 8,000-particle state "the smallest assembly" and the 24,000-particle
+state "the largest". Read "smallest" there as the largest (the rare state, recall listed third) and
+"largest" as the smallest. The numbers are right; only the names are swapped.*
+
 **F05, the SNR 0.05 benchmark** (`R/scratch/keep/F05`; the command, the seed and the tables in
 `make_f05.sh` and `make_f05.out`). It was made with the base build:
 
@@ -1136,3 +1162,233 @@ C5+C2 0.27). So the next candidate when the run resumes is C3 on the C5 code (`l
 force_lp_range=yes`, `prob` at 13, 9.5 and 6 A). C1 is not favoured. The run's records stay on
 dell2 under `~/agent_runs/ms_abinitio/` (`scratch/keep/runs/summary.tsv`, `state/journal_phase_*.md`,
 `scratch/keep/variants/`).
+
+### Phase 2, second launch (2026-11-11/12, dell2): HEAD separates F05 de novo in 2 of 3 runs
+
+`R2` below is `/home/hael/agent_runs/ms_abinitio2`. The journal is `R2/state/journal_phase_2.md` and the
+scripts are in `R2/scratch/keep/scripts/`. Every run's evidence is in `R2/scratch/keep/runs/<run>/`: the
+labels of every stage and iteration, the log, the statistics, the final maps and the final project. Each run
+also has one line in `R2/scratch/keep/runs/summary.tsv`. `R` is still the first launch's root,
+`/home/hael/agent_runs/ms_abinitio`, which was read and never written.
+
+Files changed: this plan only:
+- ruling 14, recorded in section 2 and in Phase 2's exit;
+- a correction note before the first launch's F05 entries, which swap the names of the two extreme
+  assemblies;
+- this entry.
+
+The names here follow the benchmark's README:
+- the smallest assembly is true state 1 (24,000 particles);
+- the medium is true state 2 (48,000);
+- the largest is true state 3 (8,000, the rare one).
+
+Recall is listed in that order.
+
+**The code and the builds.** The base is 1c12bb4eb, the maintainer's synced code. Two of its changes
+matter here, compared with the first launch's HEAD runs:
+- *C5 is in it* (5f723c0f7). A multi-state run samples its particles stochastically from stage 1, so every
+  particle is searched early, not only a fixed greedy sample.
+- *The low-pass ladder is planned from the mask diameter* (3d097187a), not from the 2D classes' Fourier
+  ring correlation. With `mskdiam=300` the log prints `SOLVE3D LOW-PASS LADDER FROM MSKDIAM 300.0 A: 30.00
+  -> 6.00 A`: 30, 24, 18, 12 and 6 A over the five multi-state stages.
+
+  The controller still advances a stage's limit by one rung when the maps' FSC=0.5 resolution is already
+  finer than the planned limit. (FSC is the Fourier shell correlation between the two half-maps.) It did so
+  at stages 3 and 4 in every run below: stage 3 ran at 12 A (planned 18) and stage 4 at 6 A (planned 12).
+  The first launch's runs had the class-FRC ladder of P2_05: 20.2, 8.9, 6.7, 6.1 and 6 A.
+
+Both builds use Ubuntu's gfortran 15.2 and CMake 4.2, Release, with OpenMP and no environment modules, as
+the maintainer's own build trees on dell2 do:
+- *`R2/scratch/keep/build_base`*: HEAD exported with `git archive` to `src_base`, with tests, installed in
+  the build tree (`build_base.sh`, 4 minutes). It ran the de novo runs.
+- *`repo/build`*: `./compile_clean.sh --jobs 8`. The fast gate passed 15 of 15 and the build was
+  installed (`R2/scratch/logs/build_tree.log`).
+
+**The recipe** (ruling 14):
+- the command: `simple_exec prg=solve3D pgrp=c1 mskdiam=300 nstates=3 nparts=2 nthr=8 print_states=yes
+  projfile=P2_05.simple`;
+- each run on its own copy of the first launch's 2D solution of F05 (`R/scratch/keep/F05/P2_05`);
+- `SIMPLE_SEED` unset, one run at a time, the load about 16 throughout;
+- the stopping rule watching stage 4 (`stop_rule_watch.sh`); it never applied.
+
+`chain_head.sh` ran the runs in order: run 2 after run 1, and run 3 because run 1 had separated. The verdict
+is `acc3.py`'s on the labels of the final assignment, the all-particle pass at the posterior's own
+temperature that ends a multi-state run. Accuracy after each stage, then the final assignment:
+
+| run | stage 1 (30 A, `shc`) | stage 2 (24 A, `shc`) | stage 3 (12 A, `prob`) | stage 4 (6 A, `prob`) | stage 5 (6 A, `prob`, NU filter, annealing tail) | final assignment | verdict | wall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `dn_F05_head_1` | 0.789 | 0.665 | 0.992 | 0.995 | 0.996 | **0.9962** (ARI 0.988; recall 0.998 / 0.995 / 0.999) | separated | 7 h 27 min |
+| `dn_F05_head_2` | 0.726 | 0.754 | 0.748 | 0.765 | 0.824 | 0.8628 (ARI 0.728; recall 0.837 / 0.950 / 0.416) | partial | 7 h 26 min |
+| `dn_F05_head_3` | 0.866 | 0.961 | 0.965 | 0.967 | 0.969 | **0.9690** (ARI 0.912; recall 0.999 / 0.949 / 1.000) | separated | 6 h 08 min |
+| first launch: HEAD d4e89630c, runs 1 and 2 (the old bar) | 0.469, 0.515 | 0.465, 0.511 | 0.547, 0.558 | 0.838, 0.844 | 0.836, 0.837 | 0.831, 0.824 | partial, partial | |
+| first launch: C5 on d4e89630c, judged runs 2-4 | 0.730-0.825 | 0.761-0.771 | 0.759-0.874 | 0.829-0.905 | 0.892-0.918 | 0.920, 0.9025, 0.9007 | 1 of 3 separated | |
+
+What happens in each run:
+- *Run 1: the medium assembly is split and the split-off part takes the largest.*
+  - Stage 1 isolates the smallest assembly (recall 0.972). The medium fills most of one big state (42,556
+    particles) and part of a second (11,729).
+  - In stage 2 that second state grows to 26,506 with medium and largest particles. The accuracy falls from
+    0.79 to 0.66, but the largest assembly's recall rises from 0.34 to 0.57.
+  - Stage 3 at 12 A then sorts the two. The state that holds most of the largest assembly gives its medium
+    particles to the medium state (26,410 -> 8,265 particles over 17 iterations), and the accuracy rises
+    from 0.65 to 0.99.
+  - Stages 4 and 5 at 6 A only polish it.
+- *Run 2: the medium assembly gathers first and the smallest is split.*
+  - Stage 1 puts 42,693 medium particles into one state, with 6,534 of the largest assembly's 8,000. The
+    smallest is split over the other two states (14,404 and 9,458).
+  - Stage 3 moves the largest assembly out of the medium state, but into one of the smallest assembly's
+    two states (4,755 of it beside 14,055 of the smallest). From the stage's 12th iteration the partition
+    stops moving.
+  - Stage 5 drains the smallest assembly's second state into its first (10,835 -> 5,453 particles), too
+    slowly to free it.
+  - The final assignment then moves 3,324 of the largest assembly into that drained state, which ends as a
+    mixture (3,902 smallest, 1,976 medium, 3,324 largest). 3,739 of the largest stay in the medium state.
+- *Run 3: every assembly finds its own state in stage 1* (recall 0.975 / 0.849 / 0.644).
+  - The run is separated from stage 2's 13th iteration (0.954).
+  - In stage 3 the largest assembly's state takes up to 3,325 medium particles and sheds them again,
+    keeping 2,133 at the end.
+
+**The state draw is the closest state at SNR 0.05.** The state readout (`PROB_TAB_STATE_DRAW`) was the
+same in every probabilistic iteration of every run:
+- 1.00-1.01 effective states at the search's factor 0.3 and at 1;
+- 99.7-100 % of the draws at the most probable state.
+
+However hot the draw, each particle goes to the state whose map it fits best, so the partition moves only as
+the maps change. Stage 3 at 12 A can sort a state that holds two assemblies when one of them leads it, as in
+run 1. Run 2's configuration is a fixed point of that rule: one assembly split over two states, and the
+rare assembly with no state of its own. Only the final assignment moved it, and only partly.
+
+**The final maps against the truth.** `dock_eval.sh` docks each final map onto each truth map in both hands,
+then computes the FSC with the truth it fits best. `pose_consistency.py` compares each state's final poses
+with the true poses up to the map's own rotation and hand. Both are in `R2/scratch/keep/tools/`, their
+outputs in `R2/scratch/keep/runs/dock_eval/`, with `maps.png` showing the projections of the maps.
+
+| run | smallest: map cc, FSC=0.5, pose error | medium | largest |
+| --- | --- | --- | --- |
+| 1 (separated) | 0.35, 64 A, 43.9 degrees | 0.995, 6 A, 1.6 degrees | 0.971, 6 A, 14.6 degrees |
+| 2 (partial) | 0.986, 6.1 A, 1.7 degrees | 0.992, 6 A, 1.6 degrees | 0.11 (its matched state is the mixture of the final assignment), 127.6 degrees |
+| 3 (separated) | 0.27, 128 A, 71.2 degrees | 0.990 (mirror hand), 6 A, 1.6 degrees | 0.941 (mirror hand), 6 A, 1.7 degrees |
+
+The pose error is the median angle between a particle's found and true orientation, after the state's best
+global rotation. The cc is the docked map's correlation with the truth map.
+
+In both separated runs the smallest assembly's labels are right (recall 0.998 and 0.999), but its poses are
+not:
+- its map is a self-consistent wrong model, streaky in projection, with half-map FSC near 6-8 A;
+- its particles use about 640 of the 2,500 directions.
+
+In run 2, where that assembly was split over two states, its map is right. So, of three runs, none gives
+three correct maps:
+- the runs separated by the labels have one wrong map, the smallest assembly's;
+- the partial run has a mixed one, the largest assembly's.
+
+This is not new. The first launch's kept final maps, docked the same way, show at least one wrong or mixed
+map in each of its six F05 runs:
+- the old HEAD's two runs: 0.24 and 0.32 in run 1; 0.18, and a mixed map at 0.60, in run 2;
+- C5's runs 2, 3 and 4: 0.22, 0.47 and 0.54, each map closest to the smallest assembly;
+- C5 with C4: a mixed map at 0.83.
+
+In none of them is any map closest to the largest assembly. The section 4 verdict reads the labels only, so
+this does not change a verdict. It is reported here because the maps are the product.
+
+The stage volumes and per-stage projects of runs 1-3 were deleted with the run directories, so these runs
+cannot show when the smallest assembly's model went wrong. Run 1's labels hint that it formed early: that
+assembly had its own state from stage 1 at 30 A.
+
+**The reading.**
+- *HEAD separates F05 de novo in 2 of 3 runs* (runs 1 and 3, accuracy 0.996 and 0.969). So the success
+  criterion of section 4 holds with no code change (ruling 14, item 3). The tree is HEAD, so the
+  single-state identity holds trivially; the `shc` profile and the nightly are Phase 3's to run.
+- *Against the first launch.* There, HEAD's bar was 0.831 and 0.824, and C5 alone separated 1 of 3 judged
+  runs. What failed was the largest assembly's recall (0.673, 0.819, 0.639, by the corrected names).
+  - Today's HEAD reaches that recall at 0.999 and 1.000 in its separated runs, and its stage 3 sorts the
+    states at 12 A.
+  - The first launch's stage 3 ran at 6.7 A. Of its six C5-based runs, it kept the largest assembly's recall
+    in two (0.79 and 0.78 after stage 3), split it over two states in one (0.64-0.68), and let it fall to
+    0.00-0.27 in stage 3 or 4 in three.
+  - The ladder change came together with the other changes since d4e89630c, so these runs do not isolate
+    its share.
+- *The stage-1 fork remains* (run 2). It is a property of the hill climbing from a random start, not of the
+  state rule, since the draw is the closest state here. It also lies outside the candidates ruling 14
+  leaves:
+  - the low-pass schedule is tried only when the rare assembly falls at a ladder step, and none did (run 2's
+    largest-assembly recall drops from 0.594 to 0.001 at stage 4 only because the matching of found to true
+    states changed; its particles stayed where they were);
+  - C4 and C2 come only where the evidence names their mechanism, and it does not: both act on the
+    temperature or window of a draw that is already the closest state;
+  - C1 is not favoured.
+
+  It is recorded for Hans, not worked on.
+- *The wrong map of a separated state* (above) is the finding Hans should weigh before Phase 3. A run can
+  be "separated" with one state's map wrong, in today's code as in the first launch's. A criterion on the
+  maps (each final map docked onto its truth) would have failed all nine F05 runs docked so far.
+
+**Exit.** Per ruling 14 the exit is HEAD's runs on F05. Two of three separated, so Phase 2 ends with no
+code change, and Phase 3 (validation on F05) follows.
+
+Evidence:
+- `R2/scratch/keep/runs/dn_F05_head_{1,2,3}/`: `metrics.txt` with the per-stage and per-iteration table,
+  the labels of every stage and iteration, the log, the statistics snapshots, the final maps and
+  `final_project.simple`;
+- `R2/scratch/keep/runs/summary.tsv`;
+- `R2/scratch/keep/runs/dock_eval/`: the docking of this launch's maps and the first launch's, the pose
+  checks and `maps.png`;
+- the run logs `R2/scratch/logs/dn_F05_head_{1,2,3}.log` and `chain_head.log`;
+- the build logs `R2/scratch/logs/build_{base,tree}*`.
+
+### Phase 3, second launch (2026-11-12/13, dell2): validation on F05; stopped by the maintainer
+
+Written by the maintainer's delegate from the phase journal: the run was stopped before its session wrote
+this section. The code was HEAD 1c12bb4eb, unchanged by the run.
+
+Gates (one job at a time, 8-16 threads):
+
+| Gate | Result |
+|---|---|
+| `multistate_workflows` full entry | pass, 43 min |
+| `labels` profile | pass: every true state resolved in 13 of 20 (floor 6; the 2026-11-05 profile also 13), shuffled control 0 of 20, accuracy median 0.999, worst 0.793 (floor 0.75), rotation error worst 1.84 deg (ceiling 2.0) |
+| `shc` profile | pass, 6 h 42 min: every true state resolved in 13 of 20 (floor 6; the 2026-10-19 profile also 13), the other 7 merge two states at 0.78-0.80, shuffled control 0 of 20, rotation error worst 1.75 deg (ceiling 2.5) |
+| nightly (`ncunits=16`) | 19 of 21 pass; two failures of the base, each traced by probe builds to one commit (below) |
+
+The nightly's two failures are not the run's (it changed no code):
+- `simulated_workflow_6vxx`: single-state solve3D ends at a median pose error of 63.8 deg (ceiling 10) and a
+  registered map correlation of 0.626 (minimum 0.80), deterministically (the same at one thread). It passes at
+  f68dab7b0 (0.878) and fails from 3d097187a, which plans the low-pass ladder from `mskdiam` (22.5 -> 6 A for
+  mskdiam 180, stages 4-5 promoted by the FSC=0.5 rule).
+- `pose_student`: the check `seeded_rows_changed_by_their_cones` is 0 (needs 1); every other check passes. It
+  passes at 13ad4833e and fails from a321f2904 ("optimized pose student").
+
+De novo on F05 (HEAD, the same recipe as Phase 2; these two runs keep each stage's project and low-pass maps,
+so the poses can be checked per stage against the truth, up to one rotation and hand per state):
+
+| Run | Accuracy by stage 1-5 | Final | Recall (24k / 48k / 8k) | Maps docked onto the truth |
+|---|---|---|---|---|
+| 4 | 0.861, 0.959, 0.961, 0.966, 0.968 | 0.9686 separated (6 h 30 min) | 0.990 / 0.953 / 1.000 | cc 0.988 / 0.993 / 0.918, FSC=0.5 at 6.0-6.1 A: all right |
+| 5 | 0.871, 0.957, 0.964, 0.967 | stopped at iteration 82 of stage 5: 0.9692 separated | 0.990 / 0.954 / 1.000 | not docked; poses right after stage 4 |
+
+(24k, 48k and 8k are the 8C9C, 8C96 and 8C8X assemblies: the README's smallest, medium and largest.)
+
+Median pose error by stage (deg, 24k / 48k / 8k): run 4 after stage 1 39 / 7 / random, stage 2 15 / 4.6 / 16,
+stage 3 2.7 / 2.6 / 3.0, final 1.8 / 1.6 / 1.9; run 5 after stage 1 60 / 7.5 / random, stage 2 33 / 4.6 / 16,
+stage 3 8.0 / 2.6 / 2.9, stage 4 2.6 / 2.6 / 2.8. The 24k assembly's model starts wrong in stage 1 in both runs
+and corrects itself in stages 2-3. In runs 1 and 3 it ended wrong (cc 0.35 and 0.27); those runs kept no stage
+files, so where they failed to recover is not known.
+
+**Stopped 2026-11-13 04:40 at the maintainer's request** ("I think we can stop here. This is good enough for
+me for now"), before the stress run on the SNR 0.01 set B and before Phase 4. Over the five HEAD runs on F05,
+four separate (0.996, 0.969, 0.969, 0.969) and one is partial (0.863); one of the four separated runs with all
+three maps checked right (run 4), two with the 24k assembly's map wrong (runs 1 and 3), run 5's poses right
+after stage 4. The success criterion (label-based, F05 2 of 3) holds with no code change beyond C5.
+
+Open, for later work:
+- the stage-1 fork that leaves a run partial (run 2: the 24k assembly split over two states at 30 A, the rare
+  one with no state of its own);
+- a separated state can keep a wrong, self-consistent model (2 of 4 separated runs docked); the per-stage pose
+  check shows the recovery happens in stages 2-3 when it happens;
+- the single-state `simulated_workflow_6vxx` failure from 3d097187a, a wrong model of the same kind, and the
+  `pose_student` check from a321f2904;
+- the SNR 0.01 stress case (B, S) was not rerun on this code.
+
+Evidence (dell2, `R2` = `~/agent_runs/ms_abinitio2`): `R2/scratch/keep/runs/` (`summary.tsv`,
+`dn_F05_head_4/` with `pose_by_stage.txt`, `dn_F05_head_5_stopped/`, `dock_eval/run4_*`), `R2/scratch/keep/phase3/`
+(gate tables, `probes/`), `R2/state/journal_phase_3.md`.
