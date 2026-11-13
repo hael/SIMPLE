@@ -53,6 +53,10 @@ type :: eul_prob_tab2D
     integer                     :: nactive = 0
     logical                     :: l_assign_open = .false.
     integer                     :: nassigned = 0, nmode = 0, ntemp_missing = 0
+    ! the in-plane insertion's counts of the pass (topk_inpl > 1), set by the matcher before close_assignment
+    integer                     :: inpl_kmax = 1, inpl_mmax = 0
+    integer(int64)              :: inpl_nptcls = 0_int64, inpl_npose = 0_int64, inpl_nsingle = 0_int64
+    real(dp)                    :: inpl_neff_sum = 0.d0
     contains
     ! CONSTRUCTOR
     procedure :: new_pipeline
@@ -63,6 +67,7 @@ type :: eul_prob_tab2D
     procedure :: get_fill_profile
     procedure :: open_assignment
     procedure :: assign_batch
+    procedure :: set_inpl_counts
     procedure :: close_assignment
     procedure, private :: assign_rows_dense
     procedure, private :: assign_rows_sparse
@@ -980,6 +985,20 @@ contains
 
     !> the assignment closed: its readouts as a record, published by a distributed part (the master merges the parts'
     !! records in part order and reports) or reported here by the project owner
+    !> the pass's in-plane insertion counts, which close_assignment reports with the assignment
+    subroutine set_inpl_counts( self, kmax, mmax, nptcls, npose, nsingle, neff_sum )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: kmax, mmax
+        integer(int64),        intent(in)    :: nptcls, npose, nsingle
+        real(dp),              intent(in)    :: neff_sum
+        self%inpl_kmax     = kmax
+        self%inpl_mmax     = mmax
+        self%inpl_nptcls   = nptcls
+        self%inpl_npose    = npose
+        self%inpl_nsingle  = nsingle
+        self%inpl_neff_sum = neff_sum
+    end subroutine set_inpl_counts
+
     subroutine close_assignment( self )
         class(eul_prob_tab2D), intent(inout) :: self
         type(prob_readout) :: rec
@@ -992,6 +1011,12 @@ contains
         rec%neff_nrows    = self%neff%nkept()
         rec%neff_sum_draw = self%neff%sum_neff(self%p_ptr%prob_beta)
         rec%neff_sum_phys = self%neff%sum_neff(1.)
+        rec%inpl_kmax     = self%inpl_kmax
+        rec%inpl_mmax     = self%inpl_mmax
+        rec%inpl_nptcls   = self%inpl_nptcls
+        rec%inpl_npose    = self%inpl_npose
+        rec%inpl_nsingle  = self%inpl_nsingle
+        rec%inpl_neff_sum = self%inpl_neff_sum
         call self%neff%kill
         if( self%p_ptr%l_distr_worker )then
             call write_prob_readout(rec, prob_readout_fname(self%p_ptr%part, self%p_ptr%numlen))

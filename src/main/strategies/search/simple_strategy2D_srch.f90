@@ -4,7 +4,8 @@ use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius, prob_rnd_scope
+use simple_eul_prob_tab_utils, only: posterior_temperature, record_shift_state, shift_box_radius, prob_rnd_scope, &
+    &prob_insert_inpl
 use simple_rnd,              only: rnd_keyed_int, rnd_draw_key, RND_FAM_ASSIGN
 use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_shiftmap_srch,    only: shiftmap_srch
@@ -23,6 +24,7 @@ integer, parameter :: CONT_ROUTE_INVALID        = 3
 
 type strategy2D_spec
     type(eul_prob_tab2D), pointer :: eulprob_obj_part2D => null()
+    type(prob_insert_inpl), pointer :: inpl_ins => null() !< the batch's in-plane insertion (topk_inpl > 1), else null
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
     integer :: iptcl_batch = 0  ! maps to index in batch

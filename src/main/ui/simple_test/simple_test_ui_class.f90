@@ -183,7 +183,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Reconstruction')
         call unit_reconstruction%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, &
+            &'One sub-suite of this area to run alone (rec3d_backend, observation_noise, class_average_carry_over, class_average_in_plane_entries, &
             &trailing_chain_identity, refine3d_provenance, dose_series_manifest, frozen_accumulator, weighted_insertion, volume_pair_metrics, &
             &nonuniform_filtering, half_map_enhancement, order_prior, order_prior_offline, solve3d_cavgs_stage_rules, state_assignment_rules, atomic_prior, pcg_lattice, &
             &wave_field, wave_imaging, wave_multislice, wave_projector, wave_simulation)', '', .false., '')

@@ -38,6 +38,7 @@ public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readou
 public :: merge_prob_readouts
 public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, prob_insert_cone
+public :: prob_insert_inpl, inpl_quadrature
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state, start_shift_state
 public :: map_prior_weight, insert_pose_loss, update_screen_best, print_disk_set, insert_cone_from_fsc
@@ -147,6 +148,12 @@ type :: prob_readout
     real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
     real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
     type(prob_state_readout) :: states     !< the dense 3D table's state readout (nstates 0: none)
+    integer        :: inpl_kmax = 1        !< topk_inpl (2D)
+    integer        :: inpl_mmax = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
+    integer(int64) :: inpl_nptcls = 0_int64  !< particles whose row was evaluated
+    integer(int64) :: inpl_npose  = 0_int64  !< entries inserted (a collapsed particle counts one)
+    integer(int64) :: inpl_nsingle = 0_int64 !< particles whose quadrature collapsed to the polished pose
+    real(dp)       :: inpl_neff_sum = 0.d0 !< sum over those particles of exp(entropy) of the row at the quadrature's temperature
 end type prob_readout
 
 !> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
@@ -200,6 +207,32 @@ contains
     procedure :: has         => insert_poses_has
     procedure :: kill        => insert_poses_kill
 end type prob_insert_poses
+
+!> The in-plane insertion of one 2D batch (topk_inpl > 1): per batch particle the angles its class sums take it at
+!! and their weights, filled by the particle's search (distinct slots, so concurrently) and read by the class sums
+!! after the batch. A slot without entries (nent 0) enters the sums at the committed pose at weight 1: a
+!! particle whose quadrature collapsed to one entry, or without a valid row. The counters accumulate over the
+!! batches of a pass for the readout
+type :: prob_insert_inpl
+    private
+    integer :: kmax = 1, nslots = 0
+    integer,  allocatable :: nent(:)    !< (nslots) entries of the slot's particle, 0: the committed pose alone
+    integer,  allocatable :: status(:)  !< (nslots) 0 no row, 1 spread over entries, 2 collapsed
+    real,     allocatable :: e3(:,:)    !< (kmax,nslots) the entries' in-plane angles, degrees
+    real,     allocatable :: w(:,:)     !< (kmax,nslots) their weights, summing to 1 per particle
+    real,     allocatable :: neff(:)    !< (nslots) exp(entropy) of the particle's row
+    integer(int64) :: n_rows = 0_int64, n_pose = 0_int64, n_single = 0_int64
+    real(dp)       :: neff_sum = 0.d0
+contains
+    procedure :: new          => inpl_insert_new
+    procedure :: begin_batch  => inpl_insert_begin_batch
+    procedure :: set_spread   => inpl_insert_set_spread
+    procedure :: set_single   => inpl_insert_set_single
+    procedure :: end_batch    => inpl_insert_end_batch
+    procedure :: get_view     => inpl_insert_get_view
+    procedure :: get_counts   => inpl_insert_get_counts
+    procedure :: kill         => inpl_insert_kill
+end type prob_insert_inpl
 
 !> The weighted insertion's cone: per state the resolution (the state map's FSC=0.5, Angstrom) that bounds how far
 !! a pose may move the particle's rim from the committed pose, with the geometry the test needs (set_space, once
@@ -1322,6 +1355,12 @@ contains
         write(funit,'(a,1x,i0)')      'neff_nrows',    rec%neff_nrows
         write(funit,'(a,1x,es24.16)') 'neff_sum_draw', rec%neff_sum_draw
         write(funit,'(a,1x,es24.16)') 'neff_sum_phys', rec%neff_sum_phys
+        write(funit,'(a,1x,i0)')      'inpl_kmax',     rec%inpl_kmax
+        write(funit,'(a,1x,i0)')      'inpl_mmax',     rec%inpl_mmax
+        write(funit,'(a,1x,i0)')      'inpl_nptcls',   rec%inpl_nptcls
+        write(funit,'(a,1x,i0)')      'inpl_npose',    rec%inpl_npose
+        write(funit,'(a,1x,i0)')      'inpl_nsingle',  rec%inpl_nsingle
+        write(funit,'(a,1x,es24.16)') 'inpl_neff_sum', rec%inpl_neff_sum
         write(funit,'(a,1x,i0)')      'state_nstates', rec%states%nstates
         if( rec%states%nstates > 0 )then
             write(funit,'(a,1x,i0)')      'state_nrows',         rec%states%nrows
@@ -1364,6 +1403,12 @@ contains
         call read_int('neff_nrows',    rec%neff_nrows)
         call read_dp ('neff_sum_draw', rec%neff_sum_draw)
         call read_dp ('neff_sum_phys', rec%neff_sum_phys)
+        call read_int('inpl_kmax',     rec%inpl_kmax)
+        call read_int('inpl_mmax',     rec%inpl_mmax)
+        call read_i8 ('inpl_nptcls',   rec%inpl_nptcls)
+        call read_i8 ('inpl_npose',    rec%inpl_npose)
+        call read_i8 ('inpl_nsingle',  rec%inpl_nsingle)
+        call read_dp ('inpl_neff_sum', rec%inpl_neff_sum)
         call read_int('state_nstates', nstates)
         if( nstates > 0 )then
             call rec%states%new(nstates)
@@ -1444,6 +1489,12 @@ contains
         acc%neff_nrows    = acc%neff_nrows    + rec%neff_nrows
         acc%neff_sum_draw = acc%neff_sum_draw + rec%neff_sum_draw
         acc%neff_sum_phys = acc%neff_sum_phys + rec%neff_sum_phys
+        acc%inpl_kmax     = max(acc%inpl_kmax, rec%inpl_kmax)
+        acc%inpl_mmax     = max(acc%inpl_mmax, rec%inpl_mmax)
+        acc%inpl_nptcls   = acc%inpl_nptcls   + rec%inpl_nptcls
+        acc%inpl_npose    = acc%inpl_npose    + rec%inpl_npose
+        acc%inpl_nsingle  = acc%inpl_nsingle  + rec%inpl_nsingle
+        acc%inpl_neff_sum = acc%inpl_neff_sum + rec%inpl_neff_sum
         call acc%states%add(rec%states)
     end subroutine add_prob_readout
 
@@ -1511,6 +1562,8 @@ contains
                 write(mode_pct,'(F32.1)') 100. * real(rec%nmode) / real(max(1,rec%nptcls))
                 write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB2D_ASSIGN: ', rec%nptcls, ' particles x ', rec%nrefs,&
                     &' classes, '//trim(adjustl(mode_pct))//'% at the row mode'
+                if( rec%inpl_kmax > 1 ) call inpl_report_counts(rec%inpl_nptcls, rec%inpl_npose, rec%inpl_nsingle, &
+                    &rec%inpl_neff_sum, rec%inpl_kmax, rec%inpl_mmax)
                 if( rec%ntemp_missing > 0 )then
                     if( rec%route == PROB_READOUT_2D_SPARSE )then
                         write(logfhandle,'(A,I0)') &
@@ -1680,6 +1733,217 @@ contains
         if( which == 0 ) which = imin ! rounding at the top of the cumulative sum
         dist = dists(which)
     end subroutine draw_posterior_row
+
+    !> The k-point quadrature of one in-plane row's posterior p_r proportional to exp(-temp (dist_r - dist_min)) over
+    !! the valid distances (those draw_posterior_row takes): the rotations holding the points u_j = (j - 1 + v) / k
+    !! of the cumulative mass, j = 1..k, v the quadrature's phase in [0,1), each point at weight 1/k, the points in
+    !! one rotation merged into one entry (nent entries in ascending rotation, weights summing to 1). A flat row gives
+    !! k rotations at equally spaced ranks and the phase v, snapped to the rotation grid: equally spaced angles
+    !! exactly only when k divides the number of rotations (for a phase that is not a tie), otherwise with a
+    !! residual on the harmonics of up to about m 2 pi / n. A row with its mass in one rotation gives one entry. No
+    !! random number is drawn: the caller's keyed variate is v. neff is exp(entropy) of the row; nent = 0 when no
+    !! distance is valid
+    subroutine inpl_quadrature( n, dists, temp, k, v, nent, inds, w, neff )
+        integer,  intent(in)  :: n, k
+        real,     intent(in)  :: dists(n), temp
+        real(dp), intent(in)  :: v
+        integer,  intent(out) :: nent, inds(k)
+        real,     intent(out) :: w(k), neff
+        real(dp) :: wsum, csum, tgt, arg, p, h
+        real     :: dmin, invalid, wr(n)
+        integer  :: cnt(k), r, j, imin, rlast
+        nent = 0
+        inds = 0
+        w    = 0.
+        neff = 0.
+        cnt  = 0
+        invalid = 0.1 * huge(invalid)
+        imin    = 0
+        dmin    = huge(dmin)
+        do r = 1,n
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                if( dists(r) < dmin )then
+                    dmin = dists(r)
+                    imin = r
+                endif
+            endif
+        enddo
+        if( imin == 0 ) return
+        wsum  = 0.d0
+        rlast = imin
+        do r = 1,n
+            wr(r) = 0.
+            if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
+                arg = real(max(0.,temp),dp) * real(dists(r) - dmin,dp)
+                if( arg < 80.d0 )then
+                    wr(r) = real(exp(-arg))
+                    wsum  = wsum + real(wr(r),dp)
+                    rlast = r
+                endif
+            endif
+        enddo
+        h = 0.d0
+        do r = 1,n
+            if( wr(r) > 0. )then
+                p = real(wr(r),dp) / wsum
+                h = h - p * log(p)
+            endif
+        enddo
+        neff  = real(exp(h))
+        csum  = 0.d0
+        j     = 1
+        do r = 1,n
+            if( wr(r) <= 0. ) cycle
+            csum = csum + real(wr(r),dp)
+            do while( j <= k )
+                tgt = (real(j - 1,dp) + v) / real(k,dp) * wsum
+                if( csum < tgt ) exit
+                call quad_add_point(k, r, nent, inds, cnt)
+                j = j + 1
+            enddo
+            if( j > k ) exit
+        enddo
+        ! rounding at the top of the cumulative sum: the points left lie in the last rotation holding mass
+        do while( j <= k )
+            call quad_add_point(k, rlast, nent, inds, cnt)
+            j = j + 1
+        enddo
+        w(1:nent) = real(cnt(1:nent)) / real(k)
+    end subroutine inpl_quadrature
+
+    !> one more quadrature point in rotation r, merged into the last entry when that holds r
+    pure subroutine quad_add_point( k, r, nent, inds, cnt )
+        integer, intent(in)    :: k, r
+        integer, intent(inout) :: nent, inds(k), cnt(k)
+        if( nent > 0 )then
+            if( inds(nent) == r )then
+                cnt(nent) = cnt(nent) + 1
+                return
+            endif
+        endif
+        nent       = nent + 1
+        inds(nent) = r
+        cnt(nent)  = 1
+    end subroutine quad_add_point
+
+    ! ---- the in-plane insertion of a 2D batch --------------------------------------------------------------------
+
+    subroutine inpl_insert_new( self, kmax, nslots )
+        class(prob_insert_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: kmax, nslots
+        call self%kill
+        if( kmax < 2 .or. nslots < 1 ) THROW_HARD('invalid layout; prob_insert_inpl%new')
+        self%kmax   = kmax
+        self%nslots = nslots
+        allocate(self%nent(nslots), self%status(nslots), source=0)
+        allocate(self%e3(kmax,nslots), self%w(kmax,nslots), source=0.)
+        allocate(self%neff(nslots), source=0.)
+    end subroutine inpl_insert_new
+
+    !> every slot back to the committed pose alone; the counters keep their sums
+    subroutine inpl_insert_begin_batch( self )
+        class(prob_insert_inpl), intent(inout) :: self
+        self%nent   = 0
+        self%status = 0
+        self%neff   = 0.
+    end subroutine inpl_insert_begin_batch
+
+    !> slot's particle enters the sums at n >= 2 angles e3 (degrees) with weights w; its row's exp(entropy) is neff
+    subroutine inpl_insert_set_spread( self, slot, n, e3, w, neff )
+        class(prob_insert_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: slot, n
+        real,                    intent(in)    :: e3(n), w(n), neff
+        if( slot < 1 .or. slot > self%nslots .or. n < 2 .or. n > self%kmax ) THROW_HARD('invalid slot; prob_insert_inpl%set_spread')
+        self%nent(slot)     = n
+        self%e3(1:n,slot)   = e3
+        self%w(1:n,slot)    = w
+        self%neff(slot)     = neff
+        self%status(slot)   = 1
+    end subroutine inpl_insert_set_spread
+
+    !> slot's particle has a row whose quadrature collapsed to one entry: it enters at the committed pose, weight 1
+    subroutine inpl_insert_set_single( self, slot, neff )
+        class(prob_insert_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: slot
+        real,                    intent(in)    :: neff
+        if( slot < 1 .or. slot > self%nslots ) THROW_HARD('invalid slot; prob_insert_inpl%set_single')
+        self%nent(slot)   = 0
+        self%neff(slot)   = neff
+        self%status(slot) = 2
+    end subroutine inpl_insert_set_single
+
+    !> adds the first nused slots of the batch to the counters
+    subroutine inpl_insert_end_batch( self, nused )
+        class(prob_insert_inpl), intent(inout) :: self
+        integer,                 intent(in)    :: nused
+        integer :: i
+        do i = 1,min(nused,self%nslots)
+            select case(self%status(i))
+                case(1)
+                    self%n_rows   = self%n_rows + 1_int64
+                    self%n_pose   = self%n_pose + int(self%nent(i),int64)
+                    self%neff_sum = self%neff_sum + real(self%neff(i),dp)
+                case(2)
+                    self%n_rows   = self%n_rows + 1_int64
+                    self%n_pose   = self%n_pose + 1_int64
+                    self%n_single = self%n_single + 1_int64
+                    self%neff_sum = self%neff_sum + real(self%neff(i),dp)
+            end select
+        enddo
+    end subroutine inpl_insert_end_batch
+
+    !> the batch's entries for the class sums: per slot the number of entries (0: the committed pose alone) and the
+    !! entries' angles and weights; the pointers stay valid until the next new or kill
+    subroutine inpl_insert_get_view( self, nent, e3, w )
+        class(prob_insert_inpl), target, intent(inout) :: self
+        integer, pointer,                intent(out)   :: nent(:)
+        real,    pointer,                intent(out)   :: e3(:,:), w(:,:)
+        nent => self%nent
+        e3   => self%e3
+        w    => self%w
+    end subroutine inpl_insert_get_view
+
+    subroutine inpl_insert_get_counts( self, nrows, npose, nsingle, neff_sum )
+        class(prob_insert_inpl), intent(in)  :: self
+        integer(int64),          intent(out) :: nrows, npose, nsingle
+        real(dp),                intent(out) :: neff_sum
+        nrows    = self%n_rows
+        npose    = self%n_pose
+        nsingle  = self%n_single
+        neff_sum = self%neff_sum
+    end subroutine inpl_insert_get_counts
+
+    subroutine inpl_insert_kill( self )
+        class(prob_insert_inpl), intent(inout) :: self
+        if( allocated(self%nent)   ) deallocate(self%nent)
+        if( allocated(self%status) ) deallocate(self%status)
+        if( allocated(self%e3)     ) deallocate(self%e3)
+        if( allocated(self%w)      ) deallocate(self%w)
+        if( allocated(self%neff)   ) deallocate(self%neff)
+        self%kmax     = 1
+        self%nslots   = 0
+        self%n_rows   = 0_int64
+        self%n_pose   = 0_int64
+        self%n_single = 0_int64
+        self%neff_sum = 0.d0
+    end subroutine inpl_insert_kill
+
+    !> the in-plane insertion report from counts
+    subroutine inpl_report_counts( nrows, npose, nsingle, neff_sum, kmax, mmax )
+        integer(int64), intent(in) :: nrows, npose, nsingle
+        real(dp),       intent(in) :: neff_sum
+        integer,        intent(in) :: kmax, mmax
+        character(len=32) :: nparticles, nentries, pct_single, neff_mean
+        if( nrows < 1_int64 ) return
+        write(nparticles,'(I0)')    nrows
+        write(nentries,'(F32.2)')   real(npose) / real(nrows)
+        write(pct_single,'(F32.1)') 100. * real(nsingle) / real(nrows)
+        write(neff_mean,'(F32.1)')  real(neff_sum) / real(nrows)
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_INPL (topk_inpl ', kmax, ', m_max ', mmax, '): '//&
+            &trim(adjustl(nparticles))//' particles, '//trim(adjustl(nentries))//' entries per particle, '//&
+            &trim(adjustl(pct_single))//'% collapsed to the polished pose, mean n_eff '//trim(adjustl(neff_mean))
+        call flush(logfhandle)
+    end subroutine inpl_report_counts
 
     ! ---- the weighted insertion's cone ------------------------------------------------------------------------
 

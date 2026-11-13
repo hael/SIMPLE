@@ -6,7 +6,7 @@ use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
 use simple_eo_partition,             only: ensure_field_halves
 use simple_strategy2D_alloc,         only: clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob, &
-                                           s2D, set_strategy2D_stoch_bound, is_fresh_2D_start
+                                           s2D, set_strategy2D_stoch_bound, is_fresh_2D_start, prep_strategy2D_inpl_bank
 use simple_builder,                  only: builder
 use simple_qsys_funs,                only: qsys_declare_part_finished
 use simple_syslib,                   only: get_peak_rss_bytes, get_node_mem_in_use_bytes
@@ -14,7 +14,7 @@ use simple_matcher_ptcl_io,          only: ptcl_read_counts, ptcl_read_counts_no
     &write_ptcl_read_bench_context, ptcl_read_session, ptcl_buffer_budget
 use simple_eul_prob_tab_utils,       only: prob_readout, prob_readout_fname, write_prob_readout, PROB_READOUT_2D_DENSE, &
     &prob_fill_profile, write_fill_profile_bench, &
-    &PROB_READOUT_2D_SPARSE
+    &PROB_READOUT_2D_SPARSE, prob_insert_inpl
 use simple_matcher_memory,           only: matcher_memory_terms, matcher_batch_capacity
 use simple_strategy2D,               only: strategy2D_per_ptcl
 use simple_matcher_pftc_prep,        only: prep_pftc4align2D
@@ -56,6 +56,7 @@ type :: refine2D_ctrl
     logical :: l_require_full_assignment
     logical :: l_crop_sums
     logical :: l_pipeline   !< the probabilistic pipeline: the fill and the class draw per batch, in this process
+    logical :: l_inpl       !< the in-plane insertion of the class sums (topk_inpl > 1, under the probabilistic pipeline)
     logical :: do_bench
 end type refine2D_ctrl
 
@@ -75,13 +76,14 @@ contains
         real,                      allocatable   :: incr_shifts(:,:)
         integer,                   allocatable   :: pinds(:), batches(:,:)
         type(eul_prob_tab2D),      target        :: eulprob_obj_part
+        type(prob_insert_inpl),    target        :: inpl_ins
         type(refine2D_ctrl)                      :: ctrl
         type(ori)             :: orientation
         type(strategy2D_spec) :: strategy2Dspec
         logical :: attempted, improved, no_improvement, invalid
         real    :: frac_srch_space, neigh_frac
         logical :: l_map_classic
-        integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
+        integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update, inpl_mmax
         integer, allocatable :: pinds_glob(:)
         integer :: neff_nglob, neff_rank0
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end, ithr, nthr_team
@@ -143,6 +145,7 @@ contains
         call prepare_alignment_references(batchsz_max)
         if( ctrl%do_bench ) rt_prep_pftc_refs2D = toc(t_prep_pftc_refs2D)
         call prep_strategy2D_glob(p_ptr, b_ptr%spproj, b_ptr%pftc%get_nrots(), neigh_frac)
+        if( ctrl%l_inpl ) call setup_inpl_insertion()
         ! the polar shift map of the classic modes under the key (ruling 20)
         l_map_classic = p_ptr%l_centring .and. (.not. p_ptr%l_prob_align_mode) .and. trim(p_ptr%tseries) /= 'yes'
         if( l_map_classic ) call setup_shiftmap_srch(p_ptr, b_ptr)
@@ -179,6 +182,7 @@ contains
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles_local()
             if( ctrl%l_pipeline ) call pipeline_batch()
+            if( ctrl%l_inpl ) call inpl_ins%begin_batch()
             call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end), &
                 &l_order=.not. ctrl%l_prob_align )
             if( ctrl%do_bench ) t_align = tic()
@@ -199,6 +203,7 @@ contains
                 strategy2Dspec%iptcl_map   = iptcl_map
                 strategy2Dspec%stoch_bound = neigh_frac
                 if( ctrl%l_prob_align ) strategy2Dspec%eulprob_obj_part2D => eulprob_obj_part
+                if( ctrl%l_inpl ) strategy2Dspec%inpl_ins => inpl_ins
                 call strategy2Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy2Dspec, b_ptr)
                 call strategy2Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field)
                 incr_shifts(:,iptcl_batch) = strategy2Dsrch(iptcl_batch)%ptr%s%best_shvec
@@ -219,6 +224,7 @@ contains
                 ts_thr(ithr) = ts_thr(ithr) + (omp_get_wtime() - t_ptcl)
             enddo
             !$omp end parallel do
+            if( ctrl%l_inpl ) call inpl_ins%end_batch(batchsz)
             wall_search = wall_search + (omp_get_wtime() - t_region)
             if( ctrl%do_bench )then
                 rt_align = rt_align + toc(t_align)
@@ -228,6 +234,7 @@ contains
             if( ctrl%do_bench ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo
         if( ctrl%l_pipeline .and. nptcls2update > 0 )then
+            if( ctrl%l_inpl ) call report_inpl_counts()
             call eulprob_obj_part%close_assignment
             if( ctrl%do_bench ) fill_prof = eulprob_obj_part%get_fill_profile()
         endif
@@ -235,6 +242,7 @@ contains
         ts_search = sum(ts_thr)
         deallocate(ts_thr)
         if( ctrl%do_bench ) reads_srch = ptcl_read_counts_since(reads0)
+        if( ctrl%l_inpl ) call inpl_ins%kill
         call cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, orientation)
         rt_sigma2_write = 0.0
         if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
@@ -291,6 +299,7 @@ contains
             ! the probabilistic pipeline runs on the caller's project, in shared memory and in every distributed part
             ! alike (the master draws the sample, a part reproduces its share and publishes its readouts)
             ctrl%l_pipeline  = ctrl%l_prob_align
+            ctrl%l_inpl      = ctrl%l_prob_align .and. p_ptr%topk_inpl > 1
             if( ctrl%l_pipeline .and. ctrl%l_stream .and. p_ptr%l_distr_worker )then
                 THROW_HARD('the stream''s pool runs the classic 2D routes; a probabilistic part of it has no master sample; refine2D_exec')
             endif
@@ -496,11 +505,38 @@ contains
             endif
         end subroutine allocate_strategy_for_particle
 
+        !> the in-plane insertion's side channel and the shifted-particle banks of its row, sized by the batch and the
+        !! team; mmax is the band's highest angular harmonic at the rim, which the report prints beside topk_inpl
+        subroutine setup_inpl_insertion()
+            integer :: kfromto(2)
+            real    :: lp_band
+            kfromto = b_ptr%pftc%get_kfromto()
+            call inpl_ins%new(p_ptr%topk_inpl, max(1,batchsz_max))
+            call prep_strategy2D_inpl_bank(b_ptr%pftc%get_pftsz() + 1, kfromto(2) - kfromto(1) + 1)
+            lp_band   = real(p_ptr%box_crop) * p_ptr%smpd_crop / real(max(1,kfromto(2)))
+            inpl_mmax = 0
+            if( p_ptr%mskdiam > 0. ) inpl_mmax = ceiling(PI * p_ptr%mskdiam / lp_band)
+        end subroutine setup_inpl_insertion
+
+        subroutine report_inpl_counts()
+            integer(int64) :: nrows, npose, nsingle
+            real(dp)       :: neff_sum
+            call inpl_ins%get_counts(nrows, npose, nsingle, neff_sum)
+            call eulprob_obj_part%set_inpl_counts(p_ptr%topk_inpl, inpl_mmax, nrows, npose, nsingle, neff_sum)
+        end subroutine report_inpl_counts
+
         subroutine restore_class_averages_for_batch()
             integer(timer_int_kind) :: t_update
+            integer, pointer :: ent_n(:)
+            real,    pointer :: ent_e3(:,:), ent_w(:,:)
             call cavger_transf_oridat(batchsz, pinds(batch_start:batch_end), updated_only=.true.)
             if( ctrl%do_bench ) t_update = tic()
-            call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz), ts_sums, wall_sums)
+            if( ctrl%l_inpl )then
+                call inpl_ins%get_view(ent_n, ent_e3, ent_w)
+                call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz), ts_sums, wall_sums, ent_n, ent_e3, ent_w)
+            else
+                call cavger_update_sums(batchsz, ptcl_imgs(1:batchsz), ts_sums, wall_sums)
+            endif
             if( ctrl%do_bench ) rt_cavg_interp_splat = rt_cavg_interp_splat + toc(t_update)
         end subroutine restore_class_averages_for_batch
 

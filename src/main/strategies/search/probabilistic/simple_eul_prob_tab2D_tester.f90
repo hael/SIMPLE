@@ -5,13 +5,15 @@
 ! and fraction: dense (refine=prob) and sparse (refine=prob_neigh). The draw on synthetic tables with ties, flat
 ! and invalid rows at several temperatures and seeds.
 module simple_eul_prob_tab2D_tester
+use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab2D,     only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: prob_candidate
+use simple_eul_prob_tab_utils, only: prob_candidate, inpl_quadrature, prob_insert_inpl, temperature_or_argmin
 use simple_type_defs,          only: ptcl_ref
-use simple_rnd,                only: seed_rnd_fixed
+use simple_rnd,                only: seed_rnd_fixed, rnd_scope_key, rnd_draw_key, rnd_keyed, rnd_key, &
+    &RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_FAM_INPLQ, RND_FAM_ASSIGN
 use simple_test_utils
 implicit none
 private
@@ -38,6 +40,9 @@ contains
         call test_sparse_shared_best_class()
         call test_dense_posterior_assignment()
         call test_sparse_posterior_assignment()
+        call test_inpl_quadrature()
+        call test_inpl_phase()
+        call test_inpl_insert_channel()
         call table%kill
         call fix_test_seed()
     end subroutine run_all_eul_prob_tab2D_tests
@@ -391,6 +396,236 @@ contains
         call assert_assignment('sparse shared best class',[2,2,1],[0.1,0.2,0.3],[2,2,2],[100.,100.,100.])
         call table%kill
     end subroutine test_sparse_shared_best_class
+
+    !> The in-plane quadrature of one row's posterior (the 2D insertion's selector) against closed forms, on rows of
+    !! n = 360 rotations at temperature 1: a flat row gives K points at the cumulative ranks (j - 1 + v) / K, so with
+    !! K = 8 and v = 0.3 the rotations 14 + 45 (j - 1), weights 1/8, and an angular response that vanishes on every
+    !! harmonic but the multiples of 8 (the rule averages over a cyclic group of order K, not the circle: the harmonics
+    !! 8 and 16 survive at full amplitude); a row with all its mass in one rotation gives that rotation at weight 1, at
+    !! a huge temperature too; two equal rotations split the points; a row across the cut of the index (rotations 359,
+    !! 360, 1, 2) keeps its circular mean; masses 4/7, 2/7, 1/7 in three rotations are recovered exactly by K = 7 at v =
+    !! 0.5 (the points fall at the cumulative ranks 1/14 .. 13/14) with every harmonic equal to the full row's; a row
+    !! without a valid distance gives no entry and one valid distance that one. A Gaussian row of 10 rotations' width
+    !! (n_eff 41.3): at K = 64 the response on the harmonics up to 8 is within 0.02 of the full row's at two phases
+    !! (an emulation of the rule in Python, with the same row, gave a largest difference of 0.0134); K = 32 on a flat
+    !! row leaves the multiples of 32 at 0.988 and every other harmonic up to 20 below 0.05 (emulation: 0.035). The
+    !! points are snapped to the rotation grid, so the cancellation is exact only where K divides n (K = 36 at the
+    !! phase 0.37: rotations 4 + 10 (j - 1), every harmonic up to 50 but the multiples of 36 below 1e-5) and
+    !! otherwise leaves a residual that grows with the harmonic: K = 64 keeps 12.5 % of harmonic 40 at any phase
+    !! (emulation: 0.1250 at the phases 0.3 and 0.7), and no harmonic up to 50 above that
+    subroutine test_inpl_quadrature()
+        integer,  parameter :: N = 360, KMAX = 64
+        real,     parameter :: TOL_HARMONIC = 1.e-5, TOL_GAUSS = 0.02, TOL_QUANT = 0.05
+        real     :: dists(N), w(KMAX), neff, full(N)
+        integer  :: inds(KMAX), nent, m, j, k
+        real(dp) :: hq, hf
+        logical  :: l_ok
+        write(*,'(A)') 'test_inpl_quadrature'
+        ! a flat row, K = 8 at v = 0.3
+        dists = 1.
+        call inpl_quadrature(N, dists, 1., 8, 0.3_dp, nent, inds, w, neff)
+        call assert_int(8, nent, 'a flat row gives K entries')
+        l_ok = .true.
+        do j = 1,nent
+            if( inds(j) /= 14 + 45*(j-1) ) l_ok = .false.
+            if( abs(w(j) - 0.125) > 1.e-7 ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a flat row at K = 8, v = 0.3 gives the rotations 14 + 45 (j - 1) at weight 1/8')
+        call assert_real(1., sum(w(1:nent)), 1.e-6, 'the weights of the entries sum to one')
+        call assert_real(360., neff, 1.e-2, 'the effective number of rotations of a flat row is its length')
+        l_ok = .true.
+        do m = 1,20
+            hq = abs(harmonic(m, N, nent, inds, w))
+            if( mod(m,8) /= 0 )then
+                if( hq > TOL_HARMONIC ) l_ok = .false.
+            else
+                if( abs(hq - 1.d0) > TOL_HARMONIC ) l_ok = .false.
+            endif
+        enddo
+        call assert_true(l_ok, 'a flat row at K = 8 annihilates every harmonic but the multiples of 8 (they survive at full amplitude)')
+        ! a flat row, K = 32 at v = 0.7 (the points quantised to the rotation grid)
+        call inpl_quadrature(N, dists, 1., 32, 0.7_dp, nent, inds, w, neff)
+        l_ok = .true.
+        do m = 1,20
+            if( abs(harmonic(m, N, nent, inds, w)) > TOL_QUANT ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a flat row at K = 32 leaves no harmonic up to 20 above the quantisation of the points')
+        call assert_real(0.988, real(abs(harmonic(32, N, nent, inds, w))), 5.e-3, 'a flat row at K = 32 leaves harmonic 32 at 0.988')
+        ! K dividing n at a phase that is no tie: exactly equally spaced
+        dists = 1.
+        call inpl_quadrature(N, dists, 1., 36, 0.37_dp, nent, inds, w, neff)
+        l_ok = nent == 36
+        do j = 1,nent
+            if( inds(j) /= 4 + 10*(j-1) ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a flat row at K = 36 (dividing 360) at a phase that is no tie gives the rotations 4 + 10 (j - 1)')
+        l_ok = .true.
+        do m = 1,50
+            if( mod(m,36) /= 0 .and. abs(harmonic(m, N, nent, inds, w)) > TOL_HARMONIC ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a flat row at K = 36 annihilates every harmonic up to 50 but the multiples of 36')
+        ! K = 64 does not divide n: the snapping of the points to the rotation grid leaves 12.5 % of harmonic 40
+        call inpl_quadrature(N, dists, 1., 64, 0.7_dp, nent, inds, w, neff)
+        call assert_real(0.125, real(abs(harmonic(40, N, nent, inds, w))), 2.e-3, &
+            &'a flat row at K = 64 keeps 12.5 percent of harmonic 40: the points are snapped to the rotation grid')
+        l_ok = .true.
+        do m = 1,50
+            if( mod(m,64) /= 0 .and. abs(harmonic(m, N, nent, inds, w)) > 0.13 ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a flat row at K = 64 leaves no harmonic up to 50 above 13 percent')
+        ! all the mass in one rotation: at the temperature 1 and at the argmin temperature
+        dists = 50.
+        dists(37) = 0.
+        call inpl_quadrature(N, dists, 1., 8, 0.3_dp, nent, inds, w, neff)
+        call assert_true(nent == 1 .and. inds(1) == 37 .and. abs(w(1) - 1.) < 1.e-6, 'a row with all its mass in one rotation gives it at weight 1')
+        call inpl_quadrature(N, dists, temperature_or_argmin(0.), 8, 0.3_dp, nent, inds, w, neff)
+        call assert_true(nent == 1 .and. inds(1) == 37 .and. abs(w(1) - 1.) < 1.e-6, 'a huge temperature gives the argmin at weight 1')
+        ! two equal rotations
+        dists = 100.
+        dists(10)  = 0.
+        dists(100) = 0.
+        call inpl_quadrature(N, dists, 1., 4, 0.5_dp, nent, inds, w, neff)
+        call assert_true(nent == 2 .and. inds(1) == 10 .and. inds(2) == 100 .and. abs(w(1) - 0.5) < 1.e-6 .and. abs(w(2) - 0.5) < 1.e-6, &
+            &'two equal rotations split the points evenly, merged into two entries')
+        ! a row across the cut of the index
+        dists = 100.
+        dists([359,360,1,2]) = 0.
+        call inpl_quadrature(N, dists, 1., 4, 0.5_dp, nent, inds, w, neff)
+        call assert_true(nent == 4 .and. all(inds(1:4) == [1,2,359,360]), 'a row across the cut of the index gives its four rotations')
+        full = 0.
+        full([359,360,1,2]) = 0.25
+        hq = abs(harmonic(1, N, nent, inds, w) - harmonic_row(1, N, full))
+        call assert_real(0., real(hq), TOL_HARMONIC, 'a row across the cut keeps its circular mean (harmonic 1 equals the full row)')
+        ! masses 4/7, 2/7, 1/7: recovered exactly by K = 7 at v = 0.5
+        dists = 100.
+        dists(100) = 0.
+        dists(101) = log(2.)
+        dists(102) = 2. * log(2.)
+        call inpl_quadrature(N, dists, 1., 7, 0.5_dp, nent, inds, w, neff)
+        call assert_true(nent == 3 .and. all(inds(1:3) == [100,101,102]), 'masses 4/7, 2/7, 1/7 give three entries')
+        call assert_true(abs(w(1) - 4./7.) < 1.e-6 .and. abs(w(2) - 2./7.) < 1.e-6 .and. abs(w(3) - 1./7.) < 1.e-6, &
+            &'masses 4/7, 2/7, 1/7 are recovered exactly at K = 7')
+        call assert_real(2.60049, neff, 1.e-3, 'the effective number of rotations is exp of the entropy (4/7, 2/7, 1/7)')
+        full = 0.
+        full(100) = 4./7.
+        full(101) = 2./7.
+        full(102) = 1./7.
+        l_ok = .true.
+        do m = 1,20
+            if( abs(harmonic(m, N, nent, inds, w) - harmonic_row(m, N, full)) > TOL_HARMONIC ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'a row of masses 4/7, 2/7, 1/7 has every harmonic up to 20 equal to the full row''s')
+        ! invalid and partly invalid rows
+        dists = huge(1.)
+        call inpl_quadrature(N, dists, 1., 8, 0.3_dp, nent, inds, w, neff)
+        call assert_int(0, nent, 'a row without a valid distance gives no entry')
+        dists(21) = 3.
+        call inpl_quadrature(N, dists, 1., 8, 0.3_dp, nent, inds, w, neff)
+        call assert_true(nent == 1 .and. inds(1) == 21 .and. abs(w(1) - 1.) < 1.e-6, 'a row with one valid distance gives that rotation at weight 1')
+        ! a Gaussian row of width 10 rotations, K = 64 at two phases
+        do k = 1,N
+            j = min(abs(k - 100), N - abs(k - 100))
+            dists(k) = 0.5 * (real(j) / 10.)**2
+        enddo
+        call posterior_of(N, dists, 1., full)
+        do j = 1,2
+            call inpl_quadrature(N, dists, 1., 64, merge(0.3_dp, 0.9_dp, j == 1), nent, inds, w, neff)
+            l_ok = .true.
+            do m = 1,8
+                if( abs(harmonic(m, N, nent, inds, w) - harmonic_row(m, N, full)) > TOL_GAUSS ) l_ok = .false.
+            enddo
+            call assert_true(l_ok, 'a Gaussian row at K = 64 has its harmonics up to 8 within the emulated error of the full row''s')
+        enddo
+        call assert_real(41.327, neff, 1.e-2, 'the effective number of rotations of the Gaussian row')
+        hf = sum(real(full,dp))
+        call assert_real(1., real(hf), 1.e-5, 'the reference posterior of the test sums to one')
+    end subroutine test_inpl_quadrature
+
+    !> the response of an entry set on harmonic m: sum_j w_j exp(i m theta_j), theta_j = 2 pi (ind_j - 1) / n
+    complex(dp) function harmonic( m, n, nent, inds, w ) result( h )
+        integer, intent(in) :: m, n, nent, inds(:)
+        real,    intent(in) :: w(:)
+        integer :: j
+        h = cmplx(0.d0,0.d0,dp)
+        do j = 1,nent
+            h = h + real(w(j),dp) * exp(cmplx(0.d0, real(m,dp) * 2.d0 * DPI * real(inds(j) - 1,dp) / real(n,dp), dp))
+        enddo
+    end function harmonic
+
+    !> the same response of a full posterior over the n rotations
+    complex(dp) function harmonic_row( m, n, p ) result( h )
+        integer, intent(in) :: m, n
+        real,    intent(in) :: p(n)
+        integer :: r
+        h = cmplx(0.d0,0.d0,dp)
+        do r = 1,n
+            h = h + real(p(r),dp) * exp(cmplx(0.d0, real(m,dp) * 2.d0 * DPI * real(r - 1,dp) / real(n,dp), dp))
+        enddo
+    end function harmonic_row
+
+    !> p_r proportional to exp(-temp (dist_r - dist_min)), normalised
+    subroutine posterior_of( n, dists, temp, p )
+        integer, intent(in)  :: n
+        real,    intent(in)  :: dists(n), temp
+        real,    intent(out) :: p(n)
+        p = exp(-temp * (dists - minval(dists)))
+        p = p / sum(p)
+    end subroutine posterior_of
+
+    !> The quadrature's phase is one keyed variate per particle in [0,1): the same key gives the same phase, another
+    !! particle another, and the family is its own (the assignment draw of the same particle differs)
+    subroutine test_inpl_phase()
+        type(rnd_key) :: scope
+        real(dp) :: v1, v1b, v2, va
+        integer  :: ip
+        logical  :: l_range
+        write(*,'(A)') 'test_inpl_phase'
+        scope = rnd_scope_key(20261113_int64, RND_PROG_REFINE2D, RND_PASS_ALIGN, 3)
+        v1  = rnd_keyed(rnd_draw_key(scope, 1, RND_FAM_INPLQ))
+        v1b = rnd_keyed(rnd_draw_key(scope, 1, RND_FAM_INPLQ))
+        v2  = rnd_keyed(rnd_draw_key(scope, 2, RND_FAM_INPLQ))
+        va  = rnd_keyed(rnd_draw_key(scope, 1, RND_FAM_ASSIGN))
+        call assert_true(v1 == v1b, 'the same key gives the same phase')
+        call assert_true(v1 /= v2, 'another particle gets another phase')
+        call assert_true(v1 /= va, 'the phase family is not the assignment family')
+        l_range = .true.
+        do ip = 1,1000
+            va = rnd_keyed(rnd_draw_key(scope, ip, RND_FAM_INPLQ))
+            if( va < 0.d0 .or. va >= 1.d0 ) l_range = .false.
+        enddo
+        call assert_true(l_range, 'the phases of 1000 particles lie in [0,1)')
+    end subroutine test_inpl_phase
+
+    !> The batch's side channel: entries and weights per slot as set, a slot with no row or a collapsed row has no
+    !! entries (the committed pose alone), the counters add the batch's rows, entries (a collapsed row counts one)
+    !! and collapsed rows and persist over batches while begin_batch clears the slots
+    subroutine test_inpl_insert_channel()
+        type(prob_insert_inpl) :: ins
+        integer, pointer :: nent(:)
+        real,    pointer :: e3(:,:), w(:,:)
+        integer(int64)   :: nrows, npose, nsingle
+        real(dp)         :: neff_sum
+        write(*,'(A)') 'test_inpl_insert_channel'
+        call ins%new(4, 5)
+        call ins%begin_batch
+        call ins%set_spread(2, 3, [10., 20., 30.], [0.5, 0.25, 0.25], 7.)
+        call ins%set_single(3, 1.5)
+        call ins%end_batch(4)
+        call ins%get_view(nent, e3, w)
+        call assert_true(nent(1) == 0 .and. nent(2) == 3 .and. nent(3) == 0 .and. nent(4) == 0, 'a spread slot has its entries, the others none')
+        call assert_true(all(abs(e3(1:3,2) - [10.,20.,30.]) < 1.e-6) .and. all(abs(w(1:3,2) - [0.5,0.25,0.25]) < 1.e-7), 'the entries are the angles and weights set')
+        call ins%get_counts(nrows, npose, nsingle, neff_sum)
+        call assert_true(nrows == 2_int64 .and. npose == 4_int64 .and. nsingle == 1_int64, 'two rows, four entries, one collapsed')
+        call assert_real(8.5, real(neff_sum), 1.e-5, 'the effective numbers of the rows add')
+        call ins%begin_batch
+        call ins%get_view(nent, e3, w)
+        call assert_true(all(nent == 0), 'a new batch starts every slot at the committed pose')
+        call ins%set_spread(1, 2, [1., 2.], [0.5, 0.5], 2.)
+        call ins%end_batch(2)
+        call ins%get_counts(nrows, npose, nsingle, neff_sum)
+        call assert_true(nrows == 3_int64 .and. npose == 6_int64 .and. nsingle == 1_int64, 'the counters persist over batches')
+        call ins%kill
+    end subroutine test_inpl_insert_channel
 
     subroutine set_candidate( candidate, icls, dist )
         type(prob_candidate), intent(out) :: candidate

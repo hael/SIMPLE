@@ -481,6 +481,7 @@ type :: parameters
     integer :: tofny=0 !< not a command-line key
     integer :: top=1
     integer :: topk=3              !< refine3D/solve3D prob modes: poses a particle enters the iteration's reconstruction at, the committed draw and up to topk-1 extras, the refined entries of its row of highest posterior at the particle's own temperature within the insertion cone of the committed pose (rotation and shift moving the rim by less than the map's FSC=0.5 resolution), each with its share of that posterior; the search and the final reconstruction see the committed pose alone; 1 = the committed pose alone, the single-draw run bit for bit{3}
+    integer :: topk_inpl=1         !< refine2D/solve2D prob modes: in-plane angles a particle enters the iteration's class sums at, a K-point quadrature of the posterior over its committed class's rotations at the particle's own temperature, with a per-particle keyed phase; the search, the terminal pass and make_cavgs see the committed pose alone; 1 = the committed pose alone, the single-draw run{1}
     integer :: tof=0               !< end index
     integer :: vol_dim=0           !< input simulated pdb2mrc volume dimensions
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management

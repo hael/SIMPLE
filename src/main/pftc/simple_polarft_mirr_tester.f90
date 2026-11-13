@@ -176,11 +176,95 @@ contains
             if( pass == 2 ) serial = actual
             if( pass >= 3 ) call assert_true(all(actual==serial),'mirror banks preserve serial/team score identity '//pgrp)
         enddo
+        if( pgrp == 'c1' .and. nstates == 2 .and. nmodels == 1 ) call check_bank_particle_frame(calc,refs,particles,ctfs,sigma2,1.+0.19*2)
         call calc%kill()
         call dirs%kill()
         call group%kill()
         call cline%kill()
     end subroutine check_memo_banks
+
+    !> The rows of the shifted-particle bank (the 2D in-plane insertion's row: the particle shifted once by its shift
+    !! in its own frame, then every rotation of the reference) against two oracles, with a CTF that depends on the
+    !! angle (the astigmatic form 1 + a cos 2 theta + b sin 2 theta) and per-ring noise weights: the direct angular
+    !! sums of a particle multiplied by exp(-i phase) at its own samples' angles and the reference unshifted; and the
+    !! shifted-reference kernel at the shift R(theta_r) u of each rotation r (the frame rule of the polish), whose
+    !! row at r is the bank's at r. The tolerance is that of the existing kernel against its oracle (single-precision
+    !! FFT sums). Run on the references as the last scoring pass left them (scaled by factor)
+    subroutine check_bank_particle_frame(calc,refs,particles,ctfs,sigma2,factor)
+        class(polarft_calc), intent(inout) :: calc
+        complex(sp), intent(in) :: refs(:,:,:,:),particles(:,:,:)
+        real(sp), intent(in) :: ctfs(:,:,:),sigma2(:,:),factor
+        integer, parameter :: NP=12, NR=2*NP, NREFS_CHECK=3, IREFS(NREFS_CHECK)=[1,7,13]
+        real(sp), parameter :: TOL=5.e-5
+        complex(sp), allocatable :: bank(:,:)
+        real(sp) :: us(2,2),u(2),row(NR),rowref(NR),sref(2),mat(2,2),worst_oracle,worst_frame,dang
+        real(dp) :: oracle(NR)
+        integer :: half,iref,ius,r,kfromto(2)
+        calc%p_ptr%cc_objfun = OBJFUN_EUCLID
+        kfromto = calc%get_kfromto()
+        allocate(bank(NP+1,kfromto(2)-kfromto(1)+1))
+        us(:,1) = [0.31,-0.27]
+        us(:,2) = [1.3,-0.9]
+        dang = 360./real(NR)
+        worst_oracle = 0.
+        worst_frame  = 0.
+        do half = 1,2
+            do ius = 1,2
+                u = us(:,ius)
+                call calc%memoize_shifted_ptcl(half,u,bank)
+                do iref = 1,NREFS_CHECK
+                    call calc%gen_euclid_dists_bank(IREFS(iref),half,bank,row)
+                    call brute_particle_frame(factor*refs(:,:,IREFS(iref),half),particles(:,:,half),ctfs(:,:,half), &
+                        sigma2(:,half),u,oracle)
+                    worst_oracle = max(worst_oracle,maxval(abs(row-real(oracle,sp))))
+                    do r = 1,NR
+                        call rotmat2d(real(r-1)*dang,mat)
+                        sref(1) = mat(1,1)*u(1)+mat(1,2)*u(2)
+                        sref(2) = mat(2,1)*u(1)+mat(2,2)*u(2)
+                        call calc%gen_euclid_dists(IREFS(iref),half,sref,rowref)
+                        worst_frame = max(worst_frame,abs(row(r)-rowref(r)))
+                    enddo
+                enddo
+            enddo
+        enddo
+        call assert_real(0.,worst_oracle,TOL,'the shifted-particle bank equals the direct sums of the particle shifted in its own frame')
+        call assert_real(0.,worst_frame,TOL,'the shifted-particle bank at u equals the shifted-reference kernel at R(theta_r) u at every rotation')
+        deallocate(bank)
+    end subroutine check_bank_particle_frame
+
+    !> The loss of the particle shifted by shift in its own frame (its samples multiplied by exp(-i phase) at their own
+    !! angles) against the unshifted reference at every rotation, as brute_scores sums it
+    subroutine brute_particle_frame(ref,particle,ctf,sigma2,shift,expected_euclid)
+        complex(sp), intent(in) :: ref(:,2:),particle(:,2:)
+        real(sp), intent(in) :: ctf(:,2:),sigma2(2:),shift(2)
+        real(dp), intent(out) :: expected_euclid(:)
+        complex(dp) :: r,p
+        real(dp) :: theta,phase,weight,loss,pnorm
+        integer :: np,nr,rot,ir,j,k
+        np = size(ref,1)
+        nr = 2*np
+        do rot = 0,nr-1
+            loss=0; pnorm=0
+            do k = 2,6
+                weight = real(k,dp)/real(sigma2(k),dp)
+                do ir = 1,np
+                    j = modulo(ir-1-rot,nr)+1
+                    if( j <= np )then
+                        r = cmplx(ref(j,k),kind=dp)
+                    else
+                        r = conjg(cmplx(ref(j-np,k),kind=dp))
+                    endif
+                    r = r*real(ctf(ir,k),dp)
+                    theta = DPI*real(ir-1,dp)/np
+                    phase = 2*DPI*k/32*(sin(theta)*shift(1)-cos(theta)*shift(2))
+                    p = cmplx(particle(ir,k),kind=dp)*cmplx(cos(phase),-sin(phase),dp)
+                    loss = loss+weight*abs(p-r)**2
+                    pnorm = pnorm+weight*abs(p)**2
+                enddo
+            enddo
+            expected_euclid(rot+1) = loss/pnorm
+        enddo
+    end subroutine brute_particle_frame
 
     !> Direct angular sums, without FFTs or memoised reference terms.
     subroutine brute_scores(ref,particle,ctf,sigma2,shift,expected_euclid,cc)

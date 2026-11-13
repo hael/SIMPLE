@@ -63,17 +63,23 @@ current band `[k_lo, k_hi]` are excluded; `k_hi` is the low-pass limit set by
 the stage schedule or, once class FRCs exist, by the median of the three best
 class resolutions at FRC 0.143.
 
-**Noise model.** `sigma2_i(k)` is estimated from the residual at the
-committed pose,
+**Noise model.** The noise is two global spectra, `sigma2(k)` of the even half
+and of the odd half (a particle uses its half's). Each particle's residual at
+its committed pose, over the polar samples of ring `k`,
 
 ```text
-sigma2_contrib_i(k) = (1/nrots) sum_phi |CTF_i [S R A_c] - X_i|^2,
+sigma2_contrib_i(k) = (1/(2 pftsz)) sum_phi |CTF_i [S R A_c] - X_i|^2,
 ```
 
-averaged over all particles in the same group (by default one group per
-micrograph stack, separately for even and odd halves), and lagged by one
-iteration. Before any alignment exists it is bootstrapped from the background
-power spectrum outside the particle mask.
+is kept in the canonical sigma2 store (`sigma2_state.bin`); the master commits
+each half's spectrum as the mean of its active, finite, positive records after
+every iteration, so the spectra of iteration `i` come from the poses and
+references of iteration `i-1` (a lag of one). A fractional update replaces only
+the sampled particles' records, and the spectrum is the mean over all records.
+Before any alignment exists the store is seeded by `calc_pspec` from the mean
+particle power of up to 25 000 particles per run, minus the power of their
+average image. The spectra are of the frequency alone: no group, no
+per-particle scale and no CTF term.
 
 ## Algorithm: the search step
 
@@ -132,7 +138,39 @@ D_k(q) = sum_{i in k} |CTF_i(q)|^2         / sigma2_i(q).
 Without ML regularization the `1/sigma2` factors are absent. `B_k / D_k` is
 the least-squares (Wiener-numerator over CTF-squared) estimate of the class
 mean; each particle contributes to the class in proportion to how much signal
-its CTF transfers at that frequency.
+its CTF transfers at that frequency. Within one half, at one ring, from the sums
+of one iteration, the `1/sigma2` factor is common to `B_k` and `D_k` and cancels
+in `B_k / D_k`. It does not cancel in the merged average (the even and odd sums
+are added before the division, so the halves weigh by their own curves), through
+the Kaiser-Bessel window's mixing of neighbouring rings, or in the carry-over
+blend of sums accumulated in different iterations. Given the poses the class
+averages are therefore nearly, not exactly, independent of the noise model, and
+the noise model acts on the search.
+
+**In-plane insertion (`topk_inpl` above 1).** In an iteration of a stage with a
+probability table a particle may enter `B_k` and `D_k` at more than its
+committed angle. With `K = topk_inpl` the row of its committed class over
+every rotation, at the committed shift in the particle's frame, gives the
+posterior `p(r) ~ exp(-T (L_r - L_min))` at the particle's own temperature
+`T` (the draw of the search runs at `prob_beta` times it). A `K`-point
+quadrature of `p` over the circle, at a phase drawn per particle from the
+keyed stream, gives the entries: the rotations holding the cumulative-mass
+points `(j - 1 + v) / K`, each at weight `1/K`, coincident ones merged. The
+particle's plane is generated once and gridded at each entry with its
+weight, on `B_k` and `D_k` alike, so its mass and the class populations are
+unchanged. A flat row gives `K` angles at equally spaced ranks, snapped to the
+rotation grid. Equally spaced angles annihilate every angular harmonic of the
+particle's noise except the multiples of `K`, and `K` above the band's angular
+Nyquist at the rim, `pi mskdiam / lp`, keeps every resolved harmonic off those
+multiples. The snapping leaves a residual: the cancellation is complete only
+where `K` divides the number of rotations, otherwise harmonic `m` keeps up to
+about `m 2 pi / nrots` (on 360 rotations `K = 64` keeps 12.5 % of harmonic 40).
+A quadrature in one rotation, the concentrated posterior,
+leaves the particle at its committed, continuously polished pose, as at
+`topk_inpl=1`. The committed class, pose and shift in the project are the
+search's draw and are unchanged. The terminal greedy pass and `make_cavgs`
+sum every particle at its committed pose, so the class averages of the stage
+iterations are not reproduced from the project.
 
 Restoration then:
 

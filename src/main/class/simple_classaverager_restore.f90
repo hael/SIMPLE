@@ -220,18 +220,30 @@ contains
     !> the batch's particles added to their classes' sums. Each (class, half) is a task, the largest first, under a
     !! dynamic schedule; a task sums its particles in batch order, so the sums do not depend on the thread count.
     !! ts_sum and wall_region accumulate the thread-seconds and the wall time of the region (bench load balance).
-    subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region )
+    !! ent_n, ent_e3 and ent_w, given together, sum a particle with entries at each of them with its weight, on the data
+    !! and the CTF^2 terms alike, in entry order; a particle without entries is summed at its committed angle.
+    subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region, ent_n, ent_e3, ent_w )
         integer,            intent(in)    :: nptcls
         class(image),       intent(inout) :: ptcl_imgs(nptcls)
         real(dp), optional, intent(inout) :: ts_sum, wall_region
+        integer,  optional, intent(in)    :: ent_n(:)
+        real,     optional, intent(in)    :: ent_e3(:,:), ent_w(:,:)
         type(fplane_type), allocatable :: fplanes(:)
         type(fplane_grid) :: grid
         type(ctfparams)   :: ctfparms_here
         integer,  allocatable :: bfirst(:), border(:), tasks(:)
         real(dp), allocatable :: ts_thr(:)
         real(dp) :: t_region, t_task
-        integer  :: iptcl, ithr, icls, i, j, ih, box_pd, nthr_team, nbuckets, ib, ihalf, itask, ntasks
+        integer  :: iptcl, ithr, icls, i, j, ih, box_pd, nthr_team, nbuckets, ib, ihalf, itask, ntasks, k, nent_i
         real     :: crop_factor, shift_here(2)
+        logical  :: l_ent
+        l_ent = present(ent_n)
+        if( (l_ent .neqv. present(ent_e3)) .or. (l_ent .neqv. present(ent_w)) ) &
+            &THROW_HARD('the in-plane entries come together: ent_n, ent_e3 and ent_w; cavger_update_sums')
+        if( l_ent )then
+            if( size(ent_n) < nptcls .or. size(ent_e3,2) < nptcls .or. size(ent_w,2) < nptcls .or. &
+                &size(ent_e3,1) /= size(ent_w,1) ) THROW_HARD('in-plane entries smaller than the batch; cavger_update_sums')
+        endif
         ! work arrays for the team the region runs on
         nthr_team = omp_get_max_threads()
         if( size(tmp_pad_imgs) < nthr_team ) THROW_HARD('class-sum work images fewer than threads; cavger_update_sums')
@@ -283,7 +295,7 @@ contains
         ! busy time per thread of the team the region runs on
         allocate(ts_thr(nthr_team), source=0.d0)
         t_region = omp_get_wtime()
-        !$omp parallel do default(shared) private(itask,ib,icls,ihalf,j,i,iptcl,ithr,ih,ctfparms_here,shift_here,t_task)&
+        !$omp parallel do default(shared) private(itask,ib,icls,ihalf,j,i,iptcl,ithr,ih,ctfparms_here,shift_here,t_task,k,nent_i)&
         !$omp schedule(dynamic,1) proc_bind(close)
         do itask = 1, ntasks
             t_task = omp_get_wtime()
@@ -331,7 +343,18 @@ contains
                 endif
                 ! rotation, interpolation and accumulation
                 eo_pops(ihalf,icls) = eo_pops(ihalf,icls) + 1
-                if( ihalf == 1 )then
+                nent_i = 0
+                if( l_ent ) nent_i = ent_n(i)
+                if( nent_i > 0 )then
+                    ! the same plane at each of the particle's in-plane entries, each at its weight
+                    do k = 1, nent_i
+                        if( ihalf == 1 )then
+                            call cavgs%even%accumulate_fplane(ent_e3(k,i), fplanes(ithr), icls, ent_w(k,i))
+                        else
+                            call cavgs%odd%accumulate_fplane(ent_e3(k,i), fplanes(ithr), icls, ent_w(k,i))
+                        endif
+                    enddo
+                else if( ihalf == 1 )then
                     call cavgs%even%accumulate_fplane(precs(i)%e3, fplanes(ithr), icls)
                 else
                     call cavgs%odd%accumulate_fplane(precs(i)%e3, fplanes(ithr), icls)

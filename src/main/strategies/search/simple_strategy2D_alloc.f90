@@ -4,7 +4,7 @@ use simple_pftc_srch_api
 implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D_batch, prep_strategy2D_glob
-public :: prep_strategy2D_thread, set_strategy2D_stoch_bound, is_fresh_2D_start
+public :: prep_strategy2D_thread, set_strategy2D_stoch_bound, is_fresh_2D_start, prep_strategy2D_inpl_bank
 private
 #include "simple_local_flags.inc"
 
@@ -25,6 +25,7 @@ type strategy2D_alloc
     ! per thread
     real,    allocatable :: class_space_corrs(:,:)     !< class vs. particle correlations
     integer, allocatable :: class_space_inplinds(:,:)  !< in-plane rotation indices
+    complex, allocatable :: inpl_bank(:,:,:)           !< the particle shifted by its committed shift, for the in-plane insertion's row (topk_inpl > 1)
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -55,6 +56,7 @@ contains
         ! per thread
         if( allocated(s2D%class_space_corrs)   ) deallocate(s2D%class_space_corrs)
         if( allocated(s2D%class_space_inplinds)) deallocate(s2D%class_space_inplinds)
+        if( allocated(s2D%inpl_bank)           ) deallocate(s2D%inpl_bank)
     end subroutine clean_strategy2D
 
     ! Stochastic bound used by snhc* strategies
@@ -184,6 +186,17 @@ contains
         call rt%kill
         if( any(s2D%srch_order == 0) ) THROW_HARD('Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch')
     end subroutine prep_strategy2D_batch
+
+    !> the per-thread shifted-particle banks of the in-plane insertion, sized by the team the pass's regions run
+    subroutine prep_strategy2D_inpl_bank( nrow, ncol )
+        !$ use omp_lib,   only: omp_get_max_threads
+        integer, intent(in) :: nrow, ncol !< pftsz + 1 and the number of shells of the calculator's band
+        integer :: nteam
+        nteam = nthr_glob
+        !$ nteam = omp_get_max_threads()
+        if( allocated(s2D%inpl_bank) ) deallocate(s2D%inpl_bank)
+        allocate(s2D%inpl_bank(nrow, ncol, nteam))
+    end subroutine prep_strategy2D_inpl_bank
 
     !> init thread-specific class-space search arrays (call per-particle before searching)
     subroutine prep_strategy2D_thread( ithr )

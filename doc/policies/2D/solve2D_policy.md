@@ -727,6 +727,76 @@ Neither outcome falls back to the callback. Joint acceptance guards
 refine3D; see the continuous in-plane section of
 [refine3D policy](../3D/refine3D_policy.md).
 
+### In-plane insertion (`topk_inpl`)
+
+A top view of a small membrane protein is close to rotationally symmetric, so
+the in-plane angle of a particle carries little signal and the draw of the
+search decides it from the particle's noise; the noise then enters the half's
+sum at that angle, and the angular residue of the reference grows. `topk_inpl`
+(default 1; a refine2D, solve2D and solve2D_chunks key, internal to
+no other program) lets a particle enter the class sums at the in-plane angles of
+a quadrature of its posterior instead of at the one drawn angle. It is an
+internal device against that overfitting, not a model of the output.
+
+- **Where it acts.** The iterations of the stages with a probability table
+  (`refine=prob|prob_neigh`: stage 2 on). The controller passes the key to those
+  stages and removes it from stage 1 (`snhc_smpl`), from the `cls_init=prev` seed
+  pass and from the terminal pass; a refine2D call with another refine mode and
+  `topk_inpl > 1` is refused.
+- **What it does.** After the search has committed and polished a particle's
+  class, rotation and shift (`strategy2D_prob`), the row of that class over
+  every rotation is evaluated at the committed shift in the particle's frame
+  (the shifted-particle bank, `gen_euclid_dists_bank`) and the posterior
+  `exp(-T (L_r - L_min))` is formed at the particle's own temperature `T`,
+  untempered: the draw of the search runs at `prob_beta` times it, as the 3D
+  weighted insertion's extras are weighed at the particle's own temperature
+  (refine3D policy). A `K = topk_inpl` point quadrature of the posterior over
+  the circle, at a keyed per-particle phase (`RND_FAM_INPLQ`), gives the
+  entries: the rotations holding the cumulative-mass points `(j - 1 + v) / K`,
+  each at weight `1/K`, coincident points merged. No random number beyond the
+  phase; no cone, no shift or class extras: the angle only, over the whole row.
+  The particle's plane is gridded once per entry with its weight on the data and
+  the CTF-squared terms alike (`cavger_update_sums`, entries `ent_n`, `ent_e3`,
+  `ent_w`), so its mass and the class populations are unchanged.
+- **The committed pose is untouched.** The class, `e3`, shift, the sigma2 residual
+  at the committed pose, the convergence statistics and the readouts of the
+  search are what they are without the key, for the same incoming references. The
+  references differ from the second iteration on, so a run's trajectory does.
+  The entry of the committed rotation sits at the committed (continuously
+  polished) angle; a quadrature that lies in one rotation, the concentrated
+  posterior, leaves the particle at its committed pose with weight 1, so a
+  well-determined particle is summed as at `topk_inpl=1`.
+- **Averages are generated differently at the end, on purpose.** The class
+  averages of the stage iterations take a particle at its quadrature entries.
+  The terminal greedy pass, which turns the final solution into a hard
+  assignment, and `make_cavgs` from the project take every particle at its
+  committed pose. The averages of the stage iterations are therefore not
+  reproducible from the project under `topk_inpl > 1`, and the benefit must
+  survive the terminal pass through the references and assignments, not through
+  smoothing of the intermediate averages.
+- **What the quadrature is and is not.** It is the posterior's angular expectation
+  conditional on the committed class and the polished shift, approximated by `K`
+  points: a flat row gives `K` angles at equally spaced ranks, snapped to the
+  rotation grid. Equally spaced angles cancel every angular harmonic of the
+  particle's noise except the multiples of `K`; `K` above the band's highest
+  angular harmonic at the rim, `m_max = ceil(pi mskdiam / lp)` (printed beside
+  `K`), keeps every resolved harmonic off those multiples. The snapping is not
+  exact: the cancellation is complete only where `K` divides the number of
+  rotations (for a phase that is not a tie); otherwise harmonic `m` keeps a residual
+  of up to about `m 2 pi / nrots`. On 360 rotations `K = 64` keeps 12.5 % of
+  harmonic 40, `K = 32` 13 % and `K = 16` 17 % of the harmonics up to 50. `K` above
+  `m_max` is necessary for the cancellation, not sufficient for its completeness. It does not integrate
+  class or shift uncertainty, and it does not by itself change the loop's gain:
+  the reduction of the fresh noise the angular residue is seeded with is a
+  hypothesis that the effect on real data tests.
+- **Readout.** `PROB_TAB_INPL (topk_inpl K, m_max M)` follows
+  `PROB_TAB2D_ASSIGN`: particles with a row, entries per particle (a collapsed
+  particle counts one), the share collapsed to the committed pose, and the mean
+  effective number of angles `exp(entropy)` of the rows. A distributed part
+  publishes the counts in its readout record; the master sums them.
+- **Off state.** `topk_inpl=1` evaluates no row and allocates nothing: the run
+  is byte for byte the run without the key.
+
 ## 5. Iteration Semantics
 
 For `refine2D`:

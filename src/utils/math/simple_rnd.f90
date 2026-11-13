@@ -14,7 +14,7 @@ public :: shuffle, partial_shuffle, has_global_seed, poisson_rnd
 public :: rnd_key, rnd_keyed, rnd_keyed_int, rnd_keyed_partial_shuffle
 public :: RND_KEYED_VERSION
 public :: rnd_run_seed, ensure_run_seed, set_run_seed, rnd_scope_key, rnd_draw_key
-public :: RND_FAM_SAMPLE, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, RND_FAM_DIAG
+public :: RND_FAM_SAMPLE, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, RND_FAM_DIAG, RND_FAM_INPLQ
 public :: RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_PASS_POLISH, RND_PASS_FINAL, RND_PASS_DIAG
 public :: run_all_rnd_tests
 public :: rnd_keyed_bits, rnd_key_lanes, rnd_bits_to_unit, rnd_scope
@@ -88,6 +88,7 @@ integer, parameter :: RND_FAM_DISK   = 3 !< the polar shift map's disk draw (the
 integer, parameter :: RND_FAM_CAND   = 4 !< the sparse fills' candidate picks (the swap's ordinal of the keyed permutation)
 integer, parameter :: RND_FAM_ASSIGN = 5 !< the assignment draw (ordinal 0)
 integer, parameter :: RND_FAM_DIAG   = 6 !< the diagnostics' draws (their own ordinals)
+integer, parameter :: RND_FAM_INPLQ  = 7 !< the phase of a particle's in-plane quadrature (2D insertion)
 ! the scope of a logical pass (section 4.2): the program and the pass kind, packed by rnd_scope
 integer, parameter :: RND_PROG_REFINE3D = 1, RND_PROG_REFINE2D = 2
 integer, parameter :: RND_PASS_ALIGN = 1  !< the discrete alignment

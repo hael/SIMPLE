@@ -71,6 +71,7 @@ use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
 use simple_eul_prob_tab_tester,              only: run_all_eul_prob_tab_tests
 use simple_matcher_memory_tester,            only: run_all_matcher_memory_tests
 use simple_cavg_sums,                        only: run_all_cavg_sums_tests
+use simple_classaverager,                    only: run_all_cavger_insert_tests
 use simple_trail_chain_manifest,             only: run_all_trail_chain_manifest_tests
 use simple_gauran_tester,                    only: run_all_gauran_tests
 use simple_rec3D_strategy,                   only: run_all_rec3D_strategy_tests
@@ -480,6 +481,7 @@ contains
         call add_suite(s, n, 'rec3D backend',             run_all_rec3D_strategy_tests)
         call add_suite(s, n, 'observation noise',         run_all_gauran_tests)
         call add_suite(s, n, 'class-average carry-over',  run_all_cavg_sums_tests)
+        call add_suite(s, n, 'class-average in-plane entries', run_all_cavger_insert_tests)
         call add_suite(s, n, 'trailing chain identity',   run_all_trail_chain_manifest_tests)
         call add_suite(s, n, 'refine3D provenance',        run_all_refine3D_provenance_tests)
         call add_suite(s, n, 'dose series manifest',        run_all_dose_series_manifest_tests)

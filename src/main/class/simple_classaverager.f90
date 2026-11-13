@@ -27,7 +27,7 @@ public :: cavger_pad_carried_sums, cavger_set_center_offset
 ! Stacks used for alignment
 public :: cavgs_even, cavgs_odd, cavgs_merged
 ! Separate public utility to rotate particles
-public :: transform_ptcls
+public :: transform_ptcls, run_all_cavger_insert_tests
 private
 #include "simple_local_flags.inc"
 
@@ -291,11 +291,17 @@ interface
     module subroutine cavger_dealloc_online()
     end subroutine cavger_dealloc_online
 
-    module subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region )
+    module subroutine cavger_update_sums( nptcls, ptcl_imgs, ts_sum, wall_region, ent_n, ent_e3, ent_w )
         integer,            intent(in)    :: nptcls
         class(image),       intent(inout) :: ptcl_imgs(nptcls)
         real(dp), optional, intent(inout) :: ts_sum, wall_region
+        integer,  optional, intent(in)    :: ent_n(:)    !< per batch particle the in-plane entries it is summed at (0: its committed pose)
+        real,     optional, intent(in)    :: ent_e3(:,:) !< (entry, batch particle) the entries' angles, degrees
+        real,     optional, intent(in)    :: ent_w(:,:)  !< (entry, batch particle) their weights, summing to 1 per particle
     end subroutine cavger_update_sums
+
+    module subroutine run_all_cavger_insert_tests()
+    end subroutine run_all_cavger_insert_tests
 
     module subroutine cavger_assemble_sums()
     end subroutine cavger_assemble_sums

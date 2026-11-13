@@ -51,6 +51,7 @@ type refine2D_stage_cfg
     type(string) :: refine, center, objfun, refs, gauref, ml_reg
     integer      :: iphase=0, iter=0, imaxits=0, minits=0, extr_iter=0
     integer      :: gold_std_stage=0
+    integer      :: topk_inpl=1 !< the in-plane quadrature of the class sums: the user's key on the stages with a probability table
     real         :: trs=0., gaufreq=0., mskdiam=0., shift_sigma=0.
     logical      :: l_prob_beta_end_user=.false. !< the user set prob_beta_end: the stages keep it
     logical      :: l_anneal_tail=.false.        !< the last probabilistic stage anneals its draws to the physical posterior
@@ -155,6 +156,7 @@ contains
         call cline_pass%delete('nsample')
         call cline_pass%delete('assign_all')
         call cline_pass%delete('gaufreq')
+        call cline_pass%delete('topk_inpl')
         ! Seeded restarts skip the centring stage and keep the ordinary shift window (the key off explicitly: the
         ! parameter's default is the key)
         call cline_pass%set('shift_sigma', 0.)
@@ -200,6 +202,8 @@ contains
         call set_refine2D_stage_reference_policy( cfg, cline, params, stage_parms, maxits, istage )
         call set_refine2D_stage_gold_standard_policy( cfg, params )
         call set_refine2D_stage_search_policy( cfg, params, istage, size(stage_parms) )
+        cfg%topk_inpl = 1
+        if( str_has_substr(cfg%refine%to_char(), 'prob') ) cfg%topk_inpl = params%topk_inpl
         call set_refine2D_stage_mask_policy( cfg, params, stage_parms, istage )
         ! the last stage anneals its draws from prob_beta to the physical posterior (prob_beta_end=1) once its class
         ! overlap converges (the tail of PROB_BETA_TAIL iterations, then the stage ends), as solve3D's last stage;
@@ -424,6 +428,13 @@ contains
         call cline_refine2D%set('startit',    cfg%iter)
         call cline_refine2D%set('refine',     cfg%refine)
         call cline_refine2D%set('objfun',     cfg%objfun)
+        ! the in-plane quadrature of the class sums belongs to the stages with a probability table; the stage command
+        ! line is reused from stage to stage, so a stage without a table removes the key and the next one sets it again
+        if( cfg%topk_inpl > 1 )then
+            call cline_refine2D%set('topk_inpl', cfg%topk_inpl)
+        else
+            call cline_refine2D%delete('topk_inpl')
+        endif
         if( .not. cfg%l_prob_beta_end_user )then
             if( cfg%l_anneal_tail )then
                 call cline_refine2D%set('prob_beta_end', 1.)
