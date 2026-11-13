@@ -423,14 +423,14 @@ contains
         class(oris),        intent(inout)    :: stkoris
         class(oris),        intent(inout)    :: opticsoris
         type(string), allocatable :: stknames(:), stks(:)
-        integer,      allocatable :: stkzmax(:), stkoriids(:)
+        integer,      allocatable :: stkcounts(:), stkoriids(:)
         type(string) :: entrystr, stkname
         type(oris)   :: stktmp
         type(ori)    :: oritmpin, oritmpout
         integer      :: ldim(3),i, j, top, fromp, stkind, nstks, nptcls_stk
         logical      :: newstack, stkexists
         allocate(stknames(0))
-        allocate(stkzmax(0))
+        allocate(stkcounts(0))
         allocate(stkoriids(0))
         call self%import_stardata(self%starfile%stacks, stktmp, .false., opticsoris)
         nstks = stktmp%get_noris()
@@ -444,9 +444,8 @@ contains
                 if(stknames(j) .eq. stks(i)) then
                     newstack   = .false.
                     stkind     = stktmp%get_int(i, 'stkind')
-                    stkzmax(j) = max(stkzmax(j), stkind)
+                    stkcounts(j) = stkcounts(j) + 1
                     self%starfile%stkmap(i, 1) = j
-                    self%starfile%stkmap(i, 2) = stkind
                     self%starfile%stkmap(i, 3) = stkind
                     exit
                 end if
@@ -454,10 +453,9 @@ contains
             if(newstack) then
                 stkind    = stktmp%get_int(i, 'stkind')
                 stknames  = [stknames, stks(i)]
-                stkzmax   = [stkzmax, stkind]
+                stkcounts = [stkcounts, 1]
                 stkoriids = [stkoriids, i]
                 self%starfile%stkmap(i, 1) = size(stkoriids)
-                self%starfile%stkmap(i, 2) = stkind
                 self%starfile%stkmap(i, 3) = stkind
             end if
         end do
@@ -487,20 +485,23 @@ contains
         fromp = 1
         self%starfile%stkptclcount = 0
         do i = 1, nstks
-            top = fromp + stkzmax(i)
+            top = fromp + stkcounts(i)
             if( self%starfile%stkstates(i) > 0 )then
                 stkname = stkoris%get_str(i, 'stk')
                 call find_ldim_nptcls(stkname, ldim, nptcls_stk)
                 call stkoris%set(i, 'nptcls_stk', nptcls_stk)
             endif
-            call stkoris%set(i, 'nptcls',     stkzmax(i))
+            call stkoris%set(i, 'nptcls',     stkcounts(i))
             call stkoris%set(i, 'fromp',      fromp)
             call stkoris%set(i, 'top',        top - 1)
             fromp = top
-            self%starfile%stkptclcount = self%starfile%stkptclcount + stkzmax(i)
+            self%starfile%stkptclcount = self%starfile%stkptclcount + stkcounts(i)
         end do
+        stkcounts = 0
         do i = 1,stktmp%get_noris()
-            self%starfile%stkmap(i, 2) = self%starfile%stkmap(i, 2) + stkoris%get_int(self%starfile%stkmap(i, 1), "fromp") - 1
+            j = self%starfile%stkmap(i, 1)
+            stkcounts(j) = stkcounts(j) + 1
+            self%starfile%stkmap(i, 2) = stkoris%get_fromp(j) + stkcounts(j) - 1
         end do
         ! Finalize
         do i = 1, nstks
@@ -517,7 +518,7 @@ contains
         call stktmp%kill
         call oritmpin%kill
         call oritmpout%kill
-        if(allocated(stkzmax))   deallocate(stkzmax)
+        if(allocated(stkcounts)) deallocate(stkcounts)
         if(allocated(stkoriids)) deallocate(stkoriids)
     end subroutine populate_stkmap
 
@@ -527,6 +528,9 @@ contains
         type(string) :: line
         logical      :: flagsopen, dataopen
         integer      :: ios, delimindex, flagindex, lineindex, fhandle, end
+        if( .not.file_exists(self%starfile%filename) )then
+            THROW_HARD("Star file does not exist: "//self%starfile%filename%to_char())
+        endif
         flagsopen = .false.
         dataopen  = .false.
         lineindex = 1

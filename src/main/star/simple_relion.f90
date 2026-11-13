@@ -278,11 +278,11 @@ contains
         class(cmdline),         intent(inout)   :: cline
         type(string)              :: getstring, getstring_base, getstring_mrcs
         character(len=1024)       :: groupname
-        integer, allocatable      :: ptclcount(:)
+        ! integer, allocatable      :: ptclcount(:)
         integer                   :: group
         type(starfile_table_type) :: table
         real(dp)                  :: dfx, dfy
-        integer                   :: i, j, stkindex, nbase
+        integer                   :: i, j, stkindex, nbase, ind_in_stk
         logical                   :: exists
         logical :: state, stkstate, stkind, smpd, kv, cs, l_dfx, l_dfy, angast, fraca
         logical :: ptcldfx, ptcldfy, ptclangast, coords, stk, box, opticsgroup, eo
@@ -300,15 +300,9 @@ contains
         endif
         write(logfhandle, *) 'Generating particles2D.star ... '
         call simple_mkdir('particles')
-        state = .false.
+        state    = .false.
         stkstate = .false.
-        coords = .false.
-        if(.NOT. allocated(ptclcount)) then
-            allocate(ptclcount(spproj%os_stk%get_noris()))
-            do i=1, spproj%os_stk%get_noris()
-               ptclcount(i) = 0
-            end do
-        end if
+        coords   = .false.
         do i=1, spproj%os_ptcl2D%get_noris()
             if(spproj%os_ptcl2D%isthere(i, 'state')) then
                 state = .TRUE.
@@ -324,7 +318,7 @@ contains
         ptcldfx    = spproj%os_ptcl2D%isthere(i, 'dfx')
         ptcldfy    = spproj%os_ptcl2D%isthere(i, 'dfy')
         ptclangast = spproj%os_ptcl2D%isthere(i, 'angast')
-        eo         = spproj%os_ptcl2D%isthere(i, 'eo')
+        eo         = spproj%os_ptcl2D%get_nodd() > 0
         !trial up to 1000 particles for non 0 values of xpos and ypos
         do j=i, min(i + 1000, spproj%os_ptcl2D%get_noris())
           if((spproj%os_ptcl2D%get(j, 'xpos') .GT. 0) .OR. (spproj%os_ptcl2D%get(j, 'ypos') .GT. 0)) then
@@ -379,10 +373,9 @@ contains
             dfxstep = (dfxmax - dfxmin)/ real(cline%get_iarg('reliongroups') + 1)
         endif
         !STAR data
-        do i=1, spproj%os_ptcl2D%get_noris()
+        do i = 1,spproj%os_ptcl2D%get_noris()
             if(stkind) then
-                stkindex = spproj%os_ptcl2D%get_int(i, 'stkind')
-                ptclcount(stkindex) = ptclcount(stkindex) + 1
+                call spproj%map_ptcl_ind2stk_ind('ptcl2D', i, stkindex, ind_in_stk )
                 if((state .AND. (spproj%os_ptcl2D%get_state(i) .GT. 0)) .OR. (.NOT. state)) then
                     if((stkstate .AND. (spproj%os_stk%get_state(stkindex) .GT. 0)) .OR. (.NOT. stkstate)) then
                         call starfile_table__addObject(table)
@@ -390,7 +383,8 @@ contains
                             call spproj%os_stk%getter(stkindex, 'stk', getstring)
                             getstring_base = basename(getstring)
                             getstring_mrcs = fname_new_ext(getstring_base, STK_EXT(2:))
-                            call starfile_table__setValue_string(table, EMDL_IMAGE_NAME, trim(int2str(int(ptclcount(stkindex),4)))//'@'//PTCLPATH//getstring_mrcs%to_char())
+                            call starfile_table__setValue_string(table, EMDL_IMAGE_NAME, &
+                                &trim(int2str(int(ind_in_stk,4)))//'@'//PTCLPATH//getstring_mrcs%to_char())
                             inquire(file=PTCLPATH//getstring_mrcs%to_char(), exist=exists)
                             if(.NOT. exists) then
                                 if( getstring%to_char([1,1]) == '/' )then

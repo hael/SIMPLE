@@ -91,6 +91,7 @@ contains
         call test_relion_writer_micrographs()
         call test_roundtrip_micrographs()
         call test_import_origins_angstrom()
+        call test_import_sparse_stack_indices()
         call test_roundtrip_origins()
         call test_relion30_layout_refused()
         call test_finalise_once()
@@ -601,6 +602,8 @@ contains
         type(cmdline)             :: cl
         type(starfile_table_type) :: checktbl
         type(string)              :: fname
+        character(:), allocatable :: image_name
+        logical :: found
         integer :: i, ok
         write(*,'(A)') "test_relion_write_particles2D_star"
         call proj%os_ptcl2D%new(3,.true.)
@@ -608,14 +611,19 @@ contains
         ! stk definitions
         call proj%os_stk%set(1,"stk","stack1.mrcs")
         call proj%os_stk%set(1,"box",256)
+        call proj%os_stk%set(1,"nptcls_stk",4)
         call proj%os_stk%set_state(1,1)
         call proj%os_stk%set(2,"stk","stack2.mrcs")
         call proj%os_stk%set(2,"box",256)
+        call proj%os_stk%set(2,"nptcls_stk",1)
         call proj%os_stk%set_state(2,1)
         ! assign stkind
         call proj%os_ptcl2D%set(1,"stkind",1)
         call proj%os_ptcl2D%set(2,"stkind",1)
         call proj%os_ptcl2D%set(3,"stkind",2)
+        call proj%os_ptcl2D%set(1,"indstk",1)
+        call proj%os_ptcl2D%set(2,"indstk",4)
+        call proj%os_ptcl2D%set(3,"indstk",1)
         do i=1,3
             call proj%os_ptcl2D%set(i,"xpos",10.0)
             call proj%os_ptcl2D%set(i,"ypos",20.0)
@@ -634,14 +642,23 @@ contains
         call assert_true(file_exists(fname),"particles2D.star created")
         call starfile_table__new(checktbl)
         call starfile_table__read(checktbl,fname,"particles")
-         ok = int(starfile_table__firstobject(checktbl))
+        ok = int(starfile_table__firstobject(checktbl))
         call assert_true(ok >= 0, "particles table exists")
+        ok = int(starfile_table__nextobject(checktbl))
+        call assert_true(ok >= 0, 'second particle row exists')
+        if( ok >= 0 )then
+            found = starfile_table__getValue_string(checktbl, EMDL_IMAGE_NAME, image_name)
+            call assert_true(found, 'physical image name is present')
+            if( found ) call assert_char('4@particles/stack1.mrcs', image_name, 'physical indstk retained in export')
+        endif
         call starfile_table__delete(checktbl)
         allocate(sp_project :: proj_without_state)
         call proj_without_state%os_stk%new(1, .false.)
         call proj_without_state%os_stk%set(1, 'stk', 'second.mrcs')
+        call proj_without_state%os_stk%set(1, 'nptcls_stk', 1)
         call proj_without_state%os_ptcl2D%new(1, .true.)
         call proj_without_state%os_ptcl2D%set(1, 'stkind', 1)
+        call proj_without_state%os_ptcl2D%set(1, 'indstk', 1)
         call rp%write_particles2D_star(cl, proj_without_state)
         call starfile_table__new(checktbl)
         call starfile_table__read(checktbl, fname, 'particles')
@@ -673,9 +690,11 @@ contains
         call proj%os_mic%set_state(1, 1)
         call proj%os_stk%new(1, .false.)
         call proj%os_stk%set(1, 'stk', STK_SOURCE)
+        call proj%os_stk%set(1, 'nptcls_stk', 1)
         call proj%os_stk%set_state(1, 1)
         call proj%os_ptcl2D%new(1, .true.)
         call proj%os_ptcl2D%set(1, 'stkind', 1)
+        call proj%os_ptcl2D%set(1, 'indstk', 1)
         call proj%os_ptcl2D%set_state(1, 1)
         rp%opticsgroups = 1
         call cl%set('optics_offset', 0.)
@@ -1156,6 +1175,79 @@ contains
         end do
     end subroutine test_import_origins_angstrom
 
+    ! A selected STAR file keeps physical image indices while project rows become dense.
+    subroutine test_import_sparse_stack_indices()
+        class(starproject), allocatable :: sp
+        class(sp_project), allocatable :: proj
+        class(cmdline), allocatable :: cl
+        class(image), allocatable :: img
+        type(string) :: cwd, dir, stack, fname
+        integer, allocatable :: mic2stk(:), stk2mic(:)
+        integer :: funit, i
+        write(*,'(A)') 'test_import_sparse_stack_indices'
+        call simple_getcwd(cwd)
+        dir = cwd//'/'//TMPDIR//'/sparse_stack'
+        call create_directory(dir%to_char())
+        stack = dir//'/selected.mrcs'
+        fname = dir//'/selected.star'
+        allocate(image :: img)
+        call img%new([16,16,1], 1.0)
+        do i = 1, 4
+            call img%write(stack, i)
+        enddo
+        call img%kill
+        deallocate(img)
+        open(newunit=funit, file=fname%to_char(), status='replace', action='write')
+        write(funit,'(A)') 'data_optics'
+        write(funit,'(A)') 'loop_'
+        write(funit,'(A)') '_rlnOpticsGroupName #1'
+        write(funit,'(A)') '_rlnOpticsGroup #2'
+        write(funit,'(A)') '_rlnVoltage #3'
+        write(funit,'(A)') '_rlnSphericalAberration #4'
+        write(funit,'(A)') '_rlnAmplitudeContrast #5'
+        write(funit,'(A)') '_rlnImagePixelSize #6'
+        write(funit,'(A)') '_rlnImageSize #7'
+        write(funit,'(A)') 'opticsGroup1 1 300.0 2.7 0.1 1.0 16'
+        write(funit,'(A)') ''
+        write(funit,'(A)') 'data_particles'
+        write(funit,'(A)') 'loop_'
+        write(funit,'(A)') '_rlnImageName #1'
+        write(funit,'(A)') '_rlnOpticsGroup #2'
+        write(funit,'(A)') '1@'//stack%to_char()//' 1'
+        write(funit,'(A)') '4@'//stack%to_char()//' 1'
+        close(funit)
+        allocate(starproject :: sp)
+        allocate(cmdline :: cl)
+        allocate(sp_project :: proj)
+        call cl%set('import_dir', dir%to_char())
+        call sp%import_ptcls2D(cl, proj, fname)
+        call assert_int(2, proj%os_ptcl2D%get_noris(), 'sparse STAR import has two project rows')
+        call assert_int(2, proj%os_stk%get_int(1, 'nptcls'), 'stack project count is two')
+        call assert_int(4, proj%os_stk%get_int(1, 'nptcls_stk'), 'physical stack count is four')
+        call assert_int(1, proj%os_ptcl2D%get_int(1, 'indstk'), 'first physical image index')
+        call assert_int(4, proj%os_ptcl2D%get_int(2, 'indstk'), 'second physical image index')
+        call proj%os_mic%new(1, .false.)
+        call proj%os_mic%set(1, 'nptcls', 2)
+        call proj%os_mic%set_state(1, 1)
+        call proj%get_mic2stk_inds(mic2stk, stk2mic)
+        call assert_int(1, mic2stk(1), 'selected micrograph maps to its stack')
+        call assert_int(1, stk2mic(1), 'selected stack maps to its micrograph')
+        deallocate(mic2stk, stk2mic)
+        call proj%os_ptcl3D%copy(proj%os_ptcl2D, is_ptcl=.true.)
+        call sp%finalise_ptcl_import(proj)
+        call sp%kill
+        deallocate(sp)
+        call proj%kill
+        deallocate(proj)
+        call cl%kill
+        deallocate(cl)
+        call cwd%kill
+        call dir%kill
+        call stack%kill
+        call fname%kill
+        call delete_directory(TMPDIR//'/sparse_stack')
+    end subroutine test_import_sparse_stack_indices
+
     ! finalise_ptcl_import runs once per import: a second finalise, or an export before it, stops
     subroutine test_finalise_once()
         type(star_import_child) :: child
@@ -1346,16 +1438,19 @@ contains
             call proj%os_stk%set(1, 'stk',  'ptcls_from_poses_intg.mrc')
             call proj%os_stk%set(1, 'box',  16)
             call proj%os_stk%set(1, 'smpd', ORIGINS_SMPDS(1))
+            call proj%os_stk%set(1, 'nptcls_stk', 2)
             call proj%os_stk%set_state(1, 1)
             call proj%os_ptcl2D%new(2, is_ptcl=.true.)
             call proj%os_ptcl3D%new(2, is_ptcl=.true.)
             do i = 1, 2
                 call proj%os_ptcl2D%set(i, 'stkind', 1)
+                call proj%os_ptcl2D%set(i, 'indstk', i)
                 call proj%os_ptcl2D%set(i, 'e3',     PSI2D(i))
                 call proj%os_ptcl2D%set(i, 'x',      X2D(i))
                 call proj%os_ptcl2D%set(i, 'y',      Y2D(i))
                 call proj%os_ptcl2D%set_state(i, 1)
                 call proj%os_ptcl3D%set(i, 'stkind', 1)
+                call proj%os_ptcl3D%set(i, 'indstk', i)
                 call proj%os_ptcl3D%set_state(i, 1)
                 if( icase == 1 )then
                     call proj%os_ptcl3D%set_euler(i, ORIGINS_EUL(:,i))
