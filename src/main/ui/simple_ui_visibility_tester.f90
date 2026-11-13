@@ -453,7 +453,11 @@ contains
         call assert_true(found, 'refine_motion_model fraction-width display default is resolved')
         call assert_char('3', trim(default_value), 'refine_motion_model defaults to three fractions per interval')
         call assert_registered_required_keys('refine_motion_model', &
-            &[character(len=7) :: 'pgrp', 'mskdiam', 'nparts', 'nthr'])
+            &[character(len=7) :: 'mskdiam', 'nparts', 'nthr'])
+        call assert_ui_param(registered_prg%parm_ios, 'oritype', 'refine_motion_model', expected_type='multi')
+        call get_ui_default('simple_exec', 'refine_motion_model', 'oritype', found, default_value)
+        call assert_true(found, 'refine_motion_model metadata-source default is resolved')
+        call assert_char('ptcl3D', trim(default_value), 'refine_motion_model defaults to 3D products')
     end subroutine test_refine_motion_model_contract
 
     !> tracking preparation stays a project workflow with existing FLEX controls

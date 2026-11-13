@@ -168,9 +168,9 @@ contains
         ! PROGRAM SPECIFICATION
         call refine_motion_model%new(&
         &'refine_motion_model', &                                                         ! name
-        &'Reconstruct particle fractions and export their raw FSCs',& ! summary
-        &'Re-extract non-dose-weighted particle fractions using the saved motion model, then reconstruct each interval&
-        & in 3D using the existing particle orientations; export raw FSC matrices, curves and surfaces',& ! descr long
+        &'Generate 2D class averages or 3D reconstructions of particle fractions',& ! summary
+        &'Re-extract non-dose-weighted particle fractions using saved motion, then generate class averages from&
+        & ptcl2D metadata or reconstruct each interval from ptcl3D poses and export raw FSC diagnostics',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true., &
         &visibility=UI_VIS_STANDARD, display_name='Refine Motion Model') ! requires sp_project
@@ -178,6 +178,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
+        call refine_motion_model%add_input(UI_PARM, oritype, &
+        &choices_override=ui_choices([character(len=6) :: 'ptcl2D', 'ptcl3D']), visibility=UI_VIS_STANDARD)
         call refine_motion_model%add_input(UI_PARM, box,     required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
         call refine_motion_model%add_input(UI_PARM, pcontrast, &
@@ -194,7 +196,7 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call refine_motion_model%add_input(UI_SRCH, pgrp, visibility=UI_VIS_STANDARD)
+        call refine_motion_model%add_input(UI_SRCH, pgrp, required_override=.false., visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls

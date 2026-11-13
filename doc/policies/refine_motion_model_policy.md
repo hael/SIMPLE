@@ -4,10 +4,13 @@
 
 This policy governs the current `refine_motion_model` application: re-extract
 particle fractions using saved movie motion, assemble a project for each
-exposure interval, then reconstruct those intervals from saved particle poses.
+exposure interval, then reconstruct those intervals from saved 3D poses or
+restore class averages from saved 2D alignments and classes.
 It defines the execution, scientific, project, and output contracts that changes
 must preserve. Current limitations and the extent of validation are stated
-separately below.
+separately below. The [2D/3D selector contract](#metadata-and-products-selected-by-oritype)
+specifies the metadata source and interval products of each mode. The volume,
+FSC and dose-series sections apply to `oritype=ptcl3D`.
 
 The application does not perform reference-based particle-frame alignment,
 estimate new trajectories, or publish a newly refined motion model. Its local
@@ -38,10 +41,11 @@ in order, with a barrier between extraction and assembly:
 1. Create interval directories, dispatch extraction workers, and wait for them.
 2. Call private `assemble_motion_fractions` to merge part projects, write every
    complete interval project, and remove consumed per-part interval stack tables.
-3. Call `reconstruct_motion_fractions` on the returned project paths and ranges.
-   Complete each interval reconstruction before beginning the next.
+3. Call `reconstruct_motion_fractions` for `ptcl3D` or
+   `generate_fractions_cavgs` for `ptcl2D` on the returned paths and ranges.
+   Complete each interval product run before beginning the next.
 
-Assembly and reconstruction are execution work. Keep them out of
+Assembly and product generation are execution work. Keep them out of
 `finalize_run`, which retains completion bookkeeping, and out of `cleanup`,
 which releases resources and temporary queue files.
 
@@ -49,14 +53,14 @@ which releases resources and temporary queue files.
 |---|---|
 | UI and parameters | Declare inputs, own baseline defaults, derive and validate parsed settings |
 | Motion commander | Normalize the command line, select the strategy and drive its existing lifecycle |
-| Distributed master | Establish shared half sets, schedule work, own assembled projects, sequence interval reconstructions and register delivered products |
+| Distributed master | Establish shared half sets, schedule work, own assembled projects, sequence interval product runs and register delivered products |
 | Extraction worker | Read its assigned movies/particles, extract stacks, and write part projects |
 | `assemble_motion_fractions` | Own assembly-local workspaces and return completed interval paths/ranges |
 | `ptcl_extractor` and motion-model modules | Decode/correct movies, interpret saved motion, extract frames, and normalize sums |
 | `reconstruct3D` program (strategy, service and volume assembly) | Insert saved poses, restore maps/half maps and calculate FSCs in each nested interval run |
 
 Workers read the execution project and write their part files; they do not
-assemble global projects or start interval reconstructions. Worker completion
+assemble global projects or start interval product runs. Worker completion
 is declared in the existing worker finalization path. A public `nparts=1` run
 still uses the master strategy and performs the complete workflow. Direct
 partition invocations are worker executions, not equivalent public runs.
@@ -71,23 +75,24 @@ or copied for a reconstruction. Heavy stored components and imports follow the
 ## Inputs and interval selection
 
 Input is a SIMPLE project with movie/stack associations, binary `mcmodel`
-records, particle box coordinates, and usable 2D/3D particle records. Processed
+records, particle box coordinates, and congruent 2D/3D particle row counts. Processed
 movies, saved models, and required gain files must be accessible. Binary model
 reading validates its supported format; STAR exports and legacy polynomial
 sidecars are not interchangeable extraction inputs.
 
-The public UI exposes `pgrp`, `mskdiam`, `nparts`, and `nthr` for the combined
-workflow, along with extraction controls. Optional `box` changes the extraction
-box; it must satisfy normal parameter checks and the extractor's even-box
+The public UI exposes `oritype`, `pgrp`, `mskdiam`, `nparts`, and `nthr`,
+along with extraction controls. `mskdiam`, `nparts` and `nthr` are required;
+`pgrp` is required by the commander only for `oritype=ptcl3D`. Optional
+`box` changes the extraction box; it must satisfy normal parameter checks and the extractor's even-box
 requirement. This application always writes particle stacks as MRC mode 12
 (float16), and does not expose `wfloat16` in its UI. Its commander forces
 `wfloat16=yes`, so a supplied shared CLI key cannot override this storage rule.
 Other applications retain the optional `wfloat16=yes|no` setting, defaulting
 to `no`, including `extract` and `reextract`.
 Storage precision does not change the integration rule. The default
-recentering segment is `ptcl3D`; the existing
-`oritype=ptcl2D` extraction path can instead supply the integer recentering
-translation. Reconstruction always reads saved 3D poses.
+particle source is `ptcl3D`. `oritype=ptcl2D` uses 2D particle metadata for
+selection/recentering and produces interval class averages. Volume
+reconstruction always reads saved 3D poses.
 
 `fromf`, `tof`, and `stepf` index the decoded fractions saved in the model. For
 EER, one such fraction contains the saved group of raw EER frames. Do not
@@ -116,7 +121,8 @@ exposure groups or summed as disjoint data.
 
 ## Extraction and intensity contract
 
-Keep only particles active in both the 2D and 3D records. Recenter the extraction
+In 3D mode keep only particles active in both the 2D and 3D records. In 2D
+mode only `ptcl2D` determines particle selection. Recenter the extraction
 corner by the rounded translation from the selected segment and apply the same
 integer correction to both residual-shift records. Preserve the physical center
 when changing the box. Reconstruction must use the resulting saved residual
@@ -400,6 +406,76 @@ output. Existing standalone Python analysis scripts remain independent.
   reconstructions. Such overrides are not validated as a supported mode. The
   fixed reconstruction settings above govern ordinary application use.
 
+## Metadata and products selected by oritype
+
+The optional public selector is `oritype=ptcl2D|ptcl3D`, default `ptcl3D`.
+Both modes share saved-motion extraction, inclusive interval selection and
+`assemble_motion_fractions`. Product generation stays in `distr_execute`,
+after all interval projects have been written.
+
+| Mode | Metadata used for the product | Interval products |
+|---|---|---|
+| `ptcl3D` (default) | Existing 3D poses and selection rules | Current reconstruction maps, half maps, FSC diagnostics and applicable dose manifest |
+| `ptcl2D` | 2D particle selection, coordinates, saved in-plane alignment, classes, particle CTF values and halves | Class averages, even/odd class stacks, class metadata and class FRCs |
+
+Read `ptcl2D` and `ptcl3D` independently and require congruent particle row
+counts. Preserve both fields' own records throughout extraction and assembly;
+do not replace either field with a copy of the other. In 2D mode, inactive
+3D rows do not veto particles active in `ptcl2D`. Recenter using the selected
+field's saved shift and subtract the same integer displacement from each
+field's own residual shift. Shared movie/model, stack, sampling, acquisition
+and optics metadata retain their normal project ownership.
+
+Call `ensure_field_halves` for the selected particle field before dispatch.
+Keep its existing project-wide consistency checks and preserve the established
+partition across intervals. Independent particle records do not relax the
+shared half-label or stack-index contracts. Missing or differently sized
+particle segments are not normalized into synthetic companion fields.
+
+For `ptcl2D`, copy each assembled project into `cavgs_frames_aa-bb/`, with
+endpoints padded to at least two digits. Retain the source `frames_a-b/`
+projects and stacks. Reject an existing class-average directory. Update the
+copied project's own path by reading/writing only `projinfo`. Clear the
+inherited `out`, `cls2D` and `cls3D` segments in place without loading their
+records. After the commander returns, read only `out` to verify registered
+class stacks and FRCs. Leave other segments to the class-average commander.
+
+Invoke `commander_make_cavgs_distr`, following the existing solve2D pattern:
+copy the parent command line, set `prg=make_cavgs`, the copied `projfile`,
+`mkdir=no`, `oritype=ptcl2D` and `mskdiam`, and execute the commander. Supply
+`params%nparts` and `params%nthr` from the prepared parameters. The existing
+cap of `nparts` at the movie count therefore also applies to class averaging.
+Remove worker `part/fromp/top` so averaging chooses its own worker ranges.
+
+Retain supplied `ncls`, `remap_cls`, `objfun`, `ml_reg`, `pgrp` and other
+applicable inherited options. When an option was omitted, let the existing
+commander and parameter defaults apply. Do not move the make_cavgs runner,
+change its defaults, force a reconstruction objective, or impose a separate
+sigma2 policy. Requested class remapping or expansion follows make_cavgs'
+normal behavior; output class count need not equal the original maximum ID.
+
+The output filename is the deliberate exception to inheritance: always set
+child `refs` to `fraction_cavgs_aa-bb.mrc` inside its interval directory,
+regardless of the parent's `refs`. Normal parameters derive the corresponding
+`_even` and `_odd` names. For example, interval 1-3 writes
+`cavgs_frames_01-03/fraction_cavgs_01-03.mrc` and its half stacks. The explicit
+interval name also satisfies the existing single-partition initializer's
+output-filename requirement without changing make_cavgs defaults.
+
+Reuse make_cavgs' normalization, CTF-aware averaging, restoration, class
+documents, low-resolution half-pair sharing and product registration. It
+consumes saved 2D alignments rather than performing a new alignment search.
+Its offline summation does not impose the 3D `sample4rec` update-count rule.
+Check delivered merged/half stacks, their class counts and registered FRCs,
+and restore the master's working directory, thread context and logging
+destination after each interval. Retain partial products on failure.
+
+The 2D branch does not run volume reconstruction, produce volume FSC matrices
+or plots, export unmasked volume pairs, or write `dose_series.txt`. A
+cross-interval class-FRC surface and a 2D dose manifest are separate scope.
+The default 3D reconstruction, diagnostics and cleanup behavior are preserved.
+
+
 ## Validation and change control
 
 Follow the [test-environment policy](test_environment_policy.md). Expected
@@ -415,8 +491,9 @@ Changes must cover the affected contracts:
   project handoffs and consistent selections/half labels across intervals.
 - Preserved poses, residual shifts, CTF/native geometry, and extraction-box
   changes when that path is affected.
-- No sigma2 dependency or emission, including a project with an unavailable
-  inherited sigma2 registration; no allocation of a whitening spectrum.
+- In 3D mode, no sigma2 dependency or emission, including a project with an
+  unavailable inherited sigma2 registration; no whitening-spectrum allocation.
+  In 2D mode, preserve the existing make_cavgs defaults and supplied options.
 - Copied-project ownership, removal of stale state products, correct map/FSC
   registration, missing/empty inputs, and caller-context restoration.
 - Numerical map recovery against synthetic truth through the nested CC
@@ -430,13 +507,14 @@ Changes must cover the affected contracts:
   before/after binary products and normalized project contents with the same
   seed, partitioning and runtime settings.
 
-Remaining automated coverage includes the motion-model/extractor tests in
-`unit_motion`, the UI checks in `unit_ui`, and `fractional_reconstruction` in
-`lib_reconstruction`. The dedicated interval and motion-fraction reconstruction
-testers have been removed at the maintainer's request. These remaining tests
-do not provide direct coverage of the complete interval reconstruction
-workflow or all real detector, EER, movie-length, crop, or queue-system
-combinations.
+Current automated coverage includes the motion-model/extractor tests and
+`fraction dose metadata` in `unit_motion`, UI checks in `unit_ui`, and
+`fractional reconstruction` and `fraction dose export` in `lib_reconstruction`.
+The fraction-dose tests now live in the strategy's white-box tester submodule;
+they cover the saved-model dose metadata and reconstruction-to-manifest
+fixture. These existing tests do not establish coverage of the new 2D
+commander handoff or exhaustive coverage of detector, EER, movie-length, crop
+or queue-system combinations.
 
 Changing the integration rule, temporal grouping, motion conventions, pose
 handling, reconstruction objective, sigma2 behavior or artifact ownership
@@ -446,8 +524,9 @@ record implementation history and dated results in implementation notes.
 
 ## Implementation references
 
-- [Application strategy](../../src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90): range helpers, worker extraction, master dispatch, `assemble_motion_fractions`, and `reconstruct_motion_fractions`.
+- [Application strategy](../../src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90): range helpers, worker extraction, master dispatch, `assemble_motion_fractions`, `generate_fractions_cavgs`, and `reconstruct_motion_fractions`.
 - [Motion commander](../../src/main/commanders/simple/simple_commanders_motion.f90) and [UI](../../src/main/ui/simple/simple_ui_preproc.f90): command-line defaults, lifecycle and public input contract.
 - [Particle extractor](../../src/main/preprocess/simple_particle_extractor.f90) and [binary model](../../src/main/motion/simple_motion_model.f90): saved-motion extraction and equal-weight normalized sums.
 - [Reconstruct3D strategy](../../src/main/strategies/parallelization/simple_rec3D_strategy.f90) (`run_rec3D`), [reconstruction service](../../src/main/strategies/parallelization/simple_rec3D_service.f90) and [volume assembly](../../src/main/strategies/parallelization/simple_volassemble_strategy.f90): the nested interval reconstruction runs.
+- [Class-average commander](../../src/main/commanders/simple/simple_commanders_mkcavgs.f90) (`commander_make_cavgs_distr`) and [solve2D template](../../src/main/commanders/simple/simple_commanders_solve2D.f90): the interval class-average handoff.
 - [Project half-set ownership](../../src/main/project/simple_eo_partition.f90) and [reconstruction row selection](../../src/main/ori/simple_oris_sampling.f90): shared labels and `sample4rec`.

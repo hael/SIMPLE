@@ -8,8 +8,9 @@ movie also makes it possible to produce separate particle datasets for short
 intervals of the exposure, while correcting the motion within each interval.
 
 `refine_motion_model` performs this re-extraction using a saved binary motion
-model, then reconstructs each interval from the saved particle poses and exports
-raw FSC diagnostics. Despite its name, it does not compare movie particles
+model, then reconstructs each interval from saved 3D poses and exports raw
+FSC diagnostics by default. With `oritype=ptcl2D`, it instead generates class
+averages from saved 2D alignments and classes. Despite its name, it does not compare movie particles
 with reference images, estimate new trajectories, or write a newly refined
 motion model. Its polynomial refit
 uses the existing patch measurements, not new image-alignment measurements.
@@ -66,8 +67,10 @@ across the particle box.
 
 ### Recenter the extraction boxes
 
-Only particles active in both the 2D and 3D records are retained. Select the
-existing particle translation `s` from the requested orientation segment
+Both particle fields are read independently and keep their own metadata,
+with congruent row counts. In 3D mode retain particles active in both fields;
+in 2D mode use the `ptcl2D` selection. Select the existing particle translation
+`s` from the requested orientation segment
 (3D by default), and round it to an integer vector `k`:
 
 ```text
@@ -152,6 +155,8 @@ These folders, stacks and assembled projects are retained after reconstruction
 so their particle data remain available.
 
 ### Reconstruction after extraction
+
+This branch applies to the default `oritype=ptcl3D`.
 
 The distributed master finishes writing every interval project before it
 reconstructs the intervals, sequentially, inside `distr_execute`. Extraction
@@ -257,7 +262,7 @@ states are displayed without inventing a surface. Gnuplot runs headlessly;
 plotting failures warn and retain the numerical export and reconstructions.
 There is no Python rendering dependency.
 
-The workflow ends after unfiltered reconstruction and raw FSC export. No SNR
+The 3D branch ends after unfiltered reconstruction and raw FSC export. No SNR
 transformation, fit selection, dose-model fitting or model-derived outputs are
 performed. The raw diagnostics impose no dose-metadata or fitting-coverage
 requirements. Standalone Python analysis scripts remain independent.
@@ -285,7 +290,8 @@ as though they were disjoint portions of the exposure.
 - Recentering, frame-block endpoints, worker execution, and project assembly:
   `src/main/strategies/parallelization/simple_refine_motion_model_strategy.f90`:
   `distr_execute` coordinates dispatch, `assemble_motion_fractions` merges and
-  writes interval projects, then `reconstruct_motion_fractions` delivers maps.
+  writes interval projects, then `reconstruct_motion_fractions` delivers maps
+  or `generate_fractions_cavgs` invokes `commander_make_cavgs_distr`.
 - Model loading, detector correction, per-frame extraction, summation, and
   normalization: `src/main/preprocess/simple_particle_extractor.f90`.
   `generate_cumulative_particles_stack` retains its historical name but sums
@@ -303,3 +309,27 @@ as though they were disjoint portions of the exposure.
   accepted/rejected patch metadata, known polynomial coefficients at reference
   frames 1 and 4, and zero/nonzero fit RMSDs. It does not exercise the complete
   extraction and distributed assembly workflow.
+
+## Class averages from 2D particle metadata
+
+`oritype=ptcl2D` selects particles, coordinates, saved in-plane alignment,
+classes, particle CTF values and halves from `ptcl2D`. Both particle segments
+are read independently and retain their own records; their row counts must
+agree. The selected 2D shift supplies integer recentering, which is subtracted
+from both fields' own residual shifts. The existing project half-partition
+checks remain in force.
+
+After extracting the same equal-weight, non-dose-weighted intervals, the
+master copies each assembled project into `cavgs_frames_aa-bb/` and invokes
+`commander_make_cavgs_distr`, using the solve2D command-copy pattern. It passes
+`mskdiam` and the original compute settings, and preserves supplied averaging
+options such as `ncls`, `remap_cls`, `objfun`, `ml_reg` and `pgrp`. Omitted
+options retain the commander's normal defaults. Class remapping or expansion,
+when requested, is performed by that existing workflow.
+
+The interval caller always sets `refs=fraction_cavgs_aa-bb.mrc`, overriding
+only the parent's output filename. The interval directory therefore contains
+that merged stack, its `_even` and `_odd` stacks, class metadata and class
+FRCs. Fraction stacks remain available. This branch does not produce volume
+FSC diagnostics or a volume dose-series manifest; the default `ptcl3D`
+reconstruction path keeps its existing behavior.

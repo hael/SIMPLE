@@ -229,6 +229,9 @@ contains
             ! read particle segments
             call spproj_in%read_segment('ptcl2D', params%projfile)
             call spproj_in%read_segment('ptcl3D', params%projfile)
+            if( spproj_in%os_ptcl2D%get_noris() /= spproj_in%os_ptcl3D%get_noris() )then
+                THROW_HARD('Inconsistent number of particles in ptcl2D and ptcl3D')
+            endif
             allocate(ptcl_mask(spproj_in%os_ptcl2D%get_noris()),source=.false.)
             ! loop over movies within the specified range
             imov_local = 0
@@ -510,7 +513,7 @@ contains
             call o_mov%kill
         else
             call validate_fraction_range(params%fromf, params%tof, params%stepf)
-            call ensure_field_halves(self%spproj, 'ptcl3D', params%projfile)
+            call ensure_field_halves(self%spproj, trim(params%oritype), params%projfile)
             ! build explicit fromp/top for each partition
             self%parts = split_nobjs_even(self%nmovies, params%nparts)
             allocate(self%part_params(params%nparts))
@@ -544,9 +547,13 @@ contains
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), &
             &part_params=self%part_params, array=L_USE_SLURM_ARR, extra_params=params)
         call assemble_motion_fractions(self, params, frame_projects, frame_ranges)
-        if( self%spproj%os_ptcl3D%get_noris() > 0 )then
-            call reconstruct_motion_fractions(params, cline, frame_projects, frame_ranges, &
-                &self%spproj%os_ptcl3D%get_n('state'))
+        if( self%spproj%os_ptcl2D%get_noris() > 0 )then
+            if( params%oritype == 'ptcl2D' )then
+                call generate_fractions_cavgs(params, cline, frame_projects, frame_ranges)
+            else
+                call reconstruct_motion_fractions(params, cline, frame_projects, frame_ranges, &
+                    &self%spproj%os_ptcl3D%get_n('state'))
+            endif
         else
             THROW_WARN('No extracted particles available for interval reconstruction')
         endif
@@ -656,6 +663,84 @@ contains
         enddo
         if( allocated(spproj_parts) ) deallocate(spproj_parts)
     end subroutine assemble_motion_fractions
+
+    !> Restore interval class averages through the same distributed commander used by solve2D.
+    subroutine generate_fractions_cavgs(params, cline, frame_projects, frame_ranges)
+        use simple_commanders_mkcavgs, only: commander_make_cavgs_distr
+        !$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
+        type(parameters), intent(in)    :: params
+        class(cmdline),   intent(in)    :: cline
+        type(string),     intent(in)    :: frame_projects(:)
+        integer,          intent(in)    :: frame_ranges(:,:)
+        type(commander_make_cavgs_distr) :: xmake_cavgs
+        type(sp_project) :: spproj
+        type(cmdline)    :: cline_cavgs
+        type(string)     :: cwd_saved, product_dir, project, refs, cavgs, frcs, half, ext
+        integer :: i, j, ncls, nimages, ldim(3), saved_threads, saved_nthr_glob
+        real :: smpd
+        if( size(frame_ranges,1) /= 2 ) THROW_HARD('Fraction ranges must have two endpoints')
+        if( size(frame_ranges,2) /= size(frame_projects) ) THROW_HARD('Fraction project/range count mismatch')
+        if( size(frame_projects) == 0 ) return
+        call simple_getcwd(cwd_saved)
+        saved_nthr_glob = nthr_glob
+        saved_threads  = nthr_glob
+        !$ saved_threads = omp_get_max_threads()
+        do i = 1, size(frame_projects)
+            refs = 'fraction_cavgs_'//int2str_pad(frame_ranges(1,i),2)//'-'// &
+                &int2str_pad(frame_ranges(2,i),2)//params%ext%to_char()
+            product_dir = filepath(cwd_saved, 'cavgs_frames_'//int2str_pad(frame_ranges(1,i),2)//'-'// &
+                &int2str_pad(frame_ranges(2,i),2))
+            if( dir_exists(product_dir) ) THROW_HARD('Class-average directory already exists: '//product_dir%to_char())
+            call simple_mkdir(product_dir)
+            project = filepath(product_dir, basename(frame_projects(i)))
+            call simple_copy_file(frame_projects(i), project)
+            call spproj%read_segment('projinfo', project)
+            call spproj%update_projinfo(project)
+            call spproj%write_segment_inside('projinfo', project)
+            ! Clear stale products without loading or rewriting particle metadata.
+            call spproj%clear_segment_inside('out', project)
+            call spproj%clear_segment_inside('cls2D', project)
+            call spproj%clear_segment_inside('cls3D', project)
+            call spproj%kill
+            cline_cavgs = cline
+            call cline_cavgs%set('prg',      'make_cavgs')
+            call cline_cavgs%set('projfile', project)
+            call cline_cavgs%set('mkdir',    'no')
+            call cline_cavgs%set('oritype',  'ptcl2D')
+            call cline_cavgs%set('refs',     refs)
+            call cline_cavgs%set('mskdiam',  params%mskdiam)
+            call cline_cavgs%set('nparts',   params%nparts)
+            call cline_cavgs%set('nthr',     params%nthr)
+            call cline_cavgs%delete('part')
+            call cline_cavgs%delete('fromp')
+            call cline_cavgs%delete('top')
+            call simple_chdir(product_dir)
+            CWD_GLOB = product_dir%to_char()
+            call xmake_cavgs%execute(cline_cavgs)
+            call spproj%read_segment('out', project)
+            call spproj%get_cavgs_stk(cavgs, ncls, smpd)
+            ext = fname2ext(cavgs)
+            ext = '.'//ext%to_char()
+            do j = 1, 3
+                select case(j)
+                    case(1); half = cavgs
+                    case(2); half = add2fbody(cavgs, ext, '_even')
+                    case(3); half = add2fbody(cavgs, ext, '_odd')
+                end select
+                if( .not.file_exists(half) ) THROW_HARD('Missing fraction class-average stack')
+                call find_ldim_nptcls(half, ldim, nimages)
+                if( nimages /= ncls ) THROW_HARD('Fraction class-average stack count mismatch')
+            enddo
+            call spproj%get_frcs(frcs, 'frc2D')
+            if( .not.file_exists(frcs) ) THROW_HARD('Missing fraction class FRCs')
+            call spproj%kill
+            call cline_cavgs%kill
+            call simple_chdir(cwd_saved)
+            CWD_GLOB = cwd_saved%to_char()
+            nthr_glob = saved_nthr_glob
+            !$ call omp_set_num_threads(saved_threads)
+        enddo
+    end subroutine generate_fractions_cavgs
 
     !> Reconstruct copied interval projects, register maps/FSCs, then export raw FSC observations.
     subroutine reconstruct_motion_fractions(params, cline, frame_projects, frame_ranges, nstates)
