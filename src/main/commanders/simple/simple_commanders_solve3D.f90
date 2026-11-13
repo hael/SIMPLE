@@ -1342,7 +1342,7 @@ contains
                         &cline_refine3D%get_rarg('lp'), ' A (command line)'
                 else if( abs(cline_refine3D%get_rarg('lp') - lpinfo(istage)%lp) > 1.e-3 )then
                     write(logfhandle,'(A,I3,A,F5.1,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', &
-                        &cline_refine3D%get_rarg('lp'), ' A (planned ', lpinfo(istage)%lp, ' A, promoted by FSC=0.5)'
+                        &cline_refine3D%get_rarg('lp'), ' A (planned ', lpinfo(istage)%lp, ' A, set by FSC=0.5)'
                 else
                     write(logfhandle,'(A,I3,A,F5.1,A)')'>>> STAGE ', istage,' WITH LP ', cline_refine3D%get_rarg('lp'), ' A'
                 endif

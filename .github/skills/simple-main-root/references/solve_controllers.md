@@ -48,7 +48,9 @@ The drivers are commanders: `exec_solve3D`, `exec_solve3D_cavgs`, `exec_solve3D_
    stage clines carry no native `box`, `smpd` or `smpd_crop` (`prep_class_command_lines` deletes
    them; the project is the authority).
 5. **No 3D stage is skipped.** Each runs `STAGE_MINITS` (3) iterations, then its exits (resolution,
-   plateau, convergence, budget) decide; the FSC=0.5 advance sets a passed stage's limit. 2D stage
+   plateau, convergence, budget) decide. A single-state stage from `ML_REG_START_STAGE` until NU or
+   gold standard sets the band matches at the FSC=0.5 at its entry (`fsc05_sets_stage_lp`); other
+   LP-set stages keep the one-rung FSC=0.5 advance. 2D stage
    omission (`solve2D_stage_behind_frc05`): never the entry stage, the first `SKIP_MIN_STAGE` (2) stages, the
    last, or a stage without a planned limit; an omitted phase-1 stage's iterations go to the next
    phase-1 stage.

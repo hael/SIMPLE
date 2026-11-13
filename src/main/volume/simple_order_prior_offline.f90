@@ -12,7 +12,8 @@ use simple_estimate_ssnr,   only: get_resolution
 use simple_image,           only: image
 use simple_pcg_solver,      only: pcg_operator, pcg_solver_options, pcg_solver_outcome, pcg_solve
 use simple_pcg_order_prior, only: build_density_weight, order_regions, build_order_weights, select_order_prior, &
-    &order_prior_stats, choose_order_setting, ORDER_FRAC_GRID, ORDER_LAMBDA_GRID, CORE_SIGNAL_MIN, CORE_MIN_VOX
+    &order_prior_stats, choose_order_setting, ORDER_FRAC_GRID, ORDER_LAMBDA_GRID, CORE_SIGNAL_MIN, CORE_MIN_VOX, &
+    &report_order_prior
 implicit none
 
 public :: order_prior_offline, run_all_order_prior_offline_tests
@@ -168,6 +169,8 @@ contains
         call select_order_prior([self%even, self%odd], w_dens, evmap, locres, self%res0143, self%lsup, &
             &spread(self%dshell, 2, 2), [self%hdiag, self%hdiag], lambda_fixed, w_order, st, .true.)
         call print_choice('CLOSED FORM', st%frac, st%lambda_rel, st%removed, st%core_kept, st%l_off)
+        call print_choice('BAND GUARD', st%guard_frac, st%guard_lambda, st%guard_removed, st%guard_core_kept, &
+            &st%l_guard_off)
         write(logfhandle,'(A,F6.2,A,F6.2,A)') '>>> ORDER PRIOR: protein core ', st%pct_core, ' % of the support, dense around it ', &
             &st%pct_peri, ' %'
         ! the same grid through the operator, scored on the solutions' cross-half signal
@@ -233,6 +236,7 @@ contains
         call co%new(self%ldim, self%smpd)
         call ce%set_rmat(xe, .false.)
         call co%set_rmat(xo, .false.)
+        call report_order_prior(st, 1, self%even, self%odd, ce, co)
         call wf(1)%kill
         call wf(2)%kill
         deallocate(lambdas, rgrid, kgrid, lcore, lperi, xe, xo, x0e, x0o)

@@ -19,7 +19,8 @@ use simple_refine3D_provenance,  only: begin_reference_set, publish_reference_se
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics, &
     &write_support_provenance
 use simple_image_msk,           only: image_msk
-use simple_pcg_order_prior,     only: write_pcg_order_pair, prepare_order_prior_on_pair, order_prior_provenance
+use simple_pcg_order_prior,     only: write_pcg_order_pair, prepare_order_prior_on_pair, order_prior_provenance, &
+    &report_order_prior, order_prior_stats
 use simple_nu_state_filter,     only: nonuniform_filter_state, nu_aux_member, nu_state_filter_timings
 use simple_refine3D_fnames,     only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
@@ -607,6 +608,7 @@ contains
         type(distributed_half_job) :: even_job, odd_job
         type(image_msk) :: state_support_msk
         type(image)     :: order_weight(2)
+        type(order_prior_stats) :: order_st !< the order prior's choice and its diagnostics, current state
         logical :: l_state_support, l_base_support_constrained, l_nu_base_constrained
         logical :: l_has_updates, l_sample_seed, l_chain_carry, l_even_chain, l_odd_chain
         logical :: l_shipped_support_constrained, l_order_weight
@@ -847,6 +849,7 @@ contains
             if( l_order_weight )then
                 if( L_BENCH_GLOB ) t_bench = tic()
                 call write_pcg_order_pair(params, state, order_even, order_odd)
+                call report_order_prior(order_st, state, half_even, half_odd, order_even, order_odd)
                 if( L_BENCH_GLOB ) bt%rt_map_output = bt%rt_map_output + toc(t_bench)
             endif
             t_state_phase = tic()
@@ -1639,7 +1642,7 @@ contains
                         &odd_job%niters, odd_job%time_solve, odd_job%result)
                     call prepare_order_prior_on_pair(params, state_here, even_job%pcgop, odd_job%pcgop, &
                         &even_job%x, odd_job%x, state_support_msk, l_state_support, &
-                        &order_weight, l_order_weight, order_lambda_eff)
+                        &order_weight, l_order_weight, order_lambda_eff, order_st)
                     if( l_order_weight )then
                         if( .not.(present(order_even) .and. present(order_odd)) ) &
                             &THROW_HARD('the order-prior re-solve needs its output pair; reduce_solve_state_pair')

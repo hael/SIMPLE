@@ -213,10 +213,24 @@ Outputs, with `<name>` from `outvol` (default `order_prior`):
 - **In the loop:** one `PCG ORDER PRIOR` line per state and iteration, giving
   the ordered fraction, `lambda_rel`, the peri signal removed and the core kept,
   or `prior off this iteration` (no evidence yet, or no setting keeps the core).
-  Read it next to the `_order` halves and the order weight.
+  Read it next to the `_order` halves and the order weight. Diagnostics added
+  2026-11-13 to find why the NU references looked low-passed with
+  `automsk=no`:
+  - the closed-form tables;
+  - the spread of `1 - w_ord` over the core, the dense density around it and
+    the rest of the domain;
+  - the choice a guard on every octave band to FSC=0.143 would make (the
+    loop still uses the total);
+  - after the re-solve, a table per octave band: the band's share of the core
+    signal, `D_b/h`, `lambda_rel/(D_b/h)` (a voxel with penalty `p` keeps
+    `1/(1 + p x` that`)` of the band), and the core kept and density around it
+    removed, predicted and measured on `<half>_order` against the base pair.
+
+  `pcg_order_regions_stateNN.mrc` maps the regions (2 core, 1 dense around it).
 - **Offline:** the two `CLOSED FORM` tables and the two `operator` tables, then
   `the operator at the closed-form choice removes ... keeps ...` and whether the
-  two choices agree. A steep `D(k)` (streptavidin, embb, exp_gate) is where they
+  two choices agree. The `BAND GUARD` choice and the per-band table (measured on
+  the surrogate's pair) are printed as in the loop. A steep `D(k)` (streptavidin, embb, exp_gate) is where they
   can differ.
 
 ## 9. First round: three models by whole-map agreement (2026-11-07)

@@ -6,7 +6,8 @@
 module simple_pcg_order_prior
 use, intrinsic :: iso_c_binding, only: c_float
 use simple_defs,              only: dp, TINY, logfhandle
-use simple_defs_fname,        only: MRC_EXT, NUEVIDENCE_SUFFIX, NULOCRES_SUFFIX, PCG_ORDER_WEIGHT_FBODY
+use simple_defs_fname,        only: MRC_EXT, NUEVIDENCE_SUFFIX, NULOCRES_SUFFIX, PCG_ORDER_WEIGHT_FBODY, &
+    &PCG_ORDER_REGIONS_FBODY
 use simple_error,             only: simple_exception
 use simple_math,              only: otsu
 use simple_math_ft,           only: fdim, get_resarr
@@ -25,7 +26,8 @@ implicit none
 
 public :: build_density_weight, order_regions, build_order_weights, select_order_prior, order_prior_stats
 public :: choose_order_setting, ORDER_FRAC_GRID, ORDER_LAMBDA_GRID, CORE_SIGNAL_MIN, CORE_MIN_VOX
-public :: prepare_order_prior_on_pair, write_pcg_order_pair, order_prior_provenance, run_all_pcg_order_prior_tests
+public :: prepare_order_prior_on_pair, report_order_prior, write_pcg_order_pair, order_prior_provenance
+public :: run_all_pcg_order_prior_tests
 private
 #include "simple_local_flags.inc"
 
@@ -49,6 +51,18 @@ type :: order_prior_stats
     real    :: pct_core    = 0.    !< core, % of the evaluation domain
     real    :: pct_peri    = 0.    !< dense outside the core, % of the evaluation domain
     logical :: l_off       = .true. !< no setting keeps the core: no prior
+    ! diagnostics (report_order_prior): what a guard on every band to FSC=0.143 would choose
+    real    :: guard_frac = 0., guard_lambda = 0., guard_removed = 0., guard_core_kept = 1.
+    logical :: l_guard_off = .true.
+    real    :: thresh = 0., width = 0.    !< evidence threshold and logistic width at the chosen fraction
+    real    :: pen(4,3) = 0.              !< 1 - w_ord: mean, > 0.05, > 0.2, > 0.5 (rows) in core, peri, solvent
+    real    :: smpd = 0., res0143 = 0.
+    integer :: shell0143 = 0
+    integer, allocatable :: band_lo(:), band_hi(:), idx(:,:)  !< octave bands; the dense domain voxels
+    logical, allocatable :: pcore(:)                          !< dense voxel in the core
+    real,    allocatable :: dband_rel(:)  !< band data diagonal over the per-voxel precision h, mean of the halves
+    real,    allocatable :: share(:)      !< band's share of the core's base cross-half signal
+    real,    allocatable :: kept_b(:), rem_b(:), guard_kept_b(:) !< predicted per band: chosen; band guard's choice
 end type order_prior_stats
 
 interface
@@ -127,15 +141,16 @@ contains
         type(image),             intent(inout) :: w_order(2)
         type(order_prior_stats), intent(out)   :: st
         logical,                 intent(in)    :: l_tables
-        integer, parameter :: NF = size(ORDER_FRAC_GRID), NLMAX = size(ORDER_LAMBDA_GRID)
+        integer, parameter :: NF = size(ORDER_FRAC_GRID), NLMAX = size(ORDER_LAMBDA_GRID), NBMAX = 16
         real(c_float), pointer :: rw1(:,:,:), rw2(:,:,:), rev(:,:,:), rlr(:,:,:)
-        real,     allocatable  :: vals(:), lambdas(:), xb(:,:,:), dband(:,:), pev(:), kept(:,:), rem(:,:)
+        real,     allocatable  :: vals(:), lambdas(:), xb(:,:,:), dband(:,:), pev(:), kept(:,:), rem(:,:), kept_g(:,:)
         integer,  allocatable  :: band_lo(:), band_hi(:), idx(:,:)
         logical,  allocatable  :: pcore(:)
         real(dp) :: core_kept(NF,NLMAX), peri_kept(NF,NLMAX), core_base, peri_base, p
-        real     :: thresh(NF), width(NF), lim, wo, lam1, lam2, ye, yo, pen
-        logical  :: l_frac(NF), l_valid
-        integer  :: ldim(3), n, nl, nb, nd, i, j, k, iv, ib, ifr, il, ncore, nperi, ndom, fsel, lsel
+        real(dp) :: core_kept_b(NBMAX,NF,NLMAX), peri_kept_b(NBMAX,NF,NLMAX), core_base_b(NBMAX), peri_base_b(NBMAX)
+        real     :: thresh(NF), width(NF), lim, wo, lam1, lam2, ye, yo, se, so, pen
+        logical  :: l_frac(NF), l_valid, l_guard(NBMAX)
+        integer  :: ldim(3), n, nl, nb, nd, i, j, k, iv, ib, ifr, il, ncore, nperi, ndom, fsel, lsel, gsel, lgsel
         ldim = base(1)%get_ldim()
         n    = ldim(1)
         if( lambda_fixed > 0. )then
@@ -171,12 +186,12 @@ contains
                 end do
             end do
         end do
-        nullify(rw1, rw2, rev, rlr)
         ncore = count(pcore)
         nperi = nd - ncore
         ! octave bands of Fourier shells, each shrunk by its own share of the operator's diagonal
         call octave_bands(n, band_lo, band_hi)
         nb = size(band_lo)
+        if( nb > NBMAX ) THROW_HARD('more octave bands than NBMAX; select_order_prior')
         allocate(dband(nb,2), xb(nb,nd,2))
         do ib = 1, nb
             dband(ib,1) = band_diagonal(dshell(:,1), band_lo(ib), band_hi(ib))
@@ -185,18 +200,26 @@ contains
         call split_bands(base(1), band_lo, band_hi, idx, xb(:,:,1))
         call split_bands(base(2), band_lo, band_hi, idx, xb(:,:,2))
         ! cross-half signal x_e x_o (noise cancels) of the band-shrunk halves, in the core and outside it
-        core_kept = 0._dp
-        peri_kept = 0._dp
-        core_base = 0._dp
-        peri_base = 0._dp
-        !$omp parallel do default(shared) private(iv,ifr,il,ib,p,wo,pen,lam1,lam2,ye,yo) &
-        !$omp reduction(+:core_kept,peri_kept,core_base,peri_base) schedule(static) proc_bind(close)
+        core_kept   = 0._dp
+        peri_kept   = 0._dp
+        core_base   = 0._dp
+        peri_base   = 0._dp
+        core_kept_b = 0._dp
+        peri_kept_b = 0._dp
+        core_base_b = 0._dp
+        peri_base_b = 0._dp
+        ! the per-band terms (same band in both halves) are diagnostics: the rule reads the totals
+        !$omp parallel do default(shared) private(iv,ifr,il,ib,p,wo,pen,lam1,lam2,ye,yo,se,so) &
+        !$omp reduction(+:core_kept,peri_kept,core_base,peri_base,core_kept_b,peri_kept_b,core_base_b,peri_base_b) &
+        !$omp schedule(static) proc_bind(close)
         do iv = 1, nd
             p = real(sum(xb(:,iv,1)),dp) * real(sum(xb(:,iv,2)),dp)
             if( pcore(iv) )then
                 core_base = core_base + p
+                core_base_b(:nb) = core_base_b(:nb) + real(xb(:,iv,1),dp) * real(xb(:,iv,2),dp)
             else
                 peri_base = peri_base + p
+                peri_base_b(:nb) = peri_base_b(:nb) + real(xb(:,iv,1),dp) * real(xb(:,iv,2),dp)
             endif
             do ifr = 1, NF
                 if( .not. l_frac(ifr) ) cycle
@@ -208,8 +231,15 @@ contains
                     ye = 0.
                     yo = 0.
                     do ib = 1, nb
-                        ye = ye + xb(ib,iv,1) * shrink(dband(ib,1), lam1)
-                        yo = yo + xb(ib,iv,2) * shrink(dband(ib,2), lam2)
+                        se = xb(ib,iv,1) * shrink(dband(ib,1), lam1)
+                        so = xb(ib,iv,2) * shrink(dband(ib,2), lam2)
+                        ye = ye + se
+                        yo = yo + so
+                        if( pcore(iv) )then
+                            core_kept_b(ib,ifr,il) = core_kept_b(ib,ifr,il) + real(se,dp) * real(so,dp)
+                        else
+                            peri_kept_b(ib,ifr,il) = peri_kept_b(ib,ifr,il) + real(se,dp) * real(so,dp)
+                        endif
                     end do
                     p = real(ye,dp) * real(yo,dp)
                     if( pcore(iv) )then
@@ -221,7 +251,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        deallocate(xb, idx, pev, pcore)
+        deallocate(xb)
         st%pct_core = 100. * real(ncore) / real(max(1,ndom))
         st%pct_peri = 100. * real(nperi) / real(max(1,ndom))
         ! fractions of the core's signal kept and of the surrounding signal removed, and the rule on them
@@ -241,12 +271,93 @@ contains
             st%core_kept  = kept(fsel,lsel)
             st%removed    = rem(fsel,lsel)
         endif
+        call band_diagnostics
         if( l_tables ) call print_tables
         ! the chosen weight, the same for both halves (none: no prior)
         if( .not. st%l_off ) call build_order_weights(evmap, lsup, st%frac, w_order, l_valid)
-        deallocate(lambdas, dband, band_lo, band_hi, kept, rem)
+        nullify(rw1, rw2, rev, rlr)
+        call move_alloc(idx, st%idx)
+        call move_alloc(pcore, st%pcore)
+        call move_alloc(band_lo, st%band_lo)
+        call move_alloc(band_hi, st%band_hi)
+        deallocate(lambdas, dband, kept, rem, kept_g, pev)
 
     contains
+
+        !> per-band kept and removed at the chosen setting, the choice of a guard on every band that starts below
+        !! the FSC=0.143 shell, and the spread of the penalty over the regions
+        subroutine band_diagnostics
+            real, parameter :: PEN_LEVELS(3) = [0.05, 0.2, 0.5]
+            real(dp) :: psum(3)
+            real     :: pen_v
+            integer  :: ireg, cnt(3), nabv(3,3)
+            st%smpd      = base(1)%get_smpd()
+            st%res0143   = res0143
+            st%shell0143 = nint(real(n) * st%smpd / res0143)
+            allocate(st%dband_rel(nb), st%share(nb), st%kept_b(nb), st%rem_b(nb), st%guard_kept_b(nb), source=0.)
+            do ib = 1, nb
+                st%dband_rel(ib) = 0.5 * (dband(ib,1) / max(hdiag(1),TINY) + dband(ib,2) / max(hdiag(2),TINY))
+            end do
+            if( core_base > 0._dp ) st%share = real(core_base_b(:nb) / core_base)
+            l_guard = .false.
+            l_guard(:nb) = band_lo <= st%shell0143 .and. core_base_b(:nb) > 0._dp
+            ! the band guard: the worst guarded band in place of the total, the same rule
+            allocate(kept_g(NF,nl))
+            kept_g = kept
+            do ib = 1, nb
+                if( l_guard(ib) ) kept_g = min(kept_g, real(core_kept_b(ib,:,:nl) / core_base_b(ib)))
+            end do
+            call choose_order_setting(kept_g, rem, l_frac, ncore >= CORE_MIN_VOX .and. core_base > 0._dp, &
+                &nperi >= CORE_MIN_VOX .and. peri_base > 0._dp, lambda_fixed > 0., gsel, lgsel)
+            st%l_guard_off = gsel == 0
+            if( .not. st%l_guard_off )then
+                st%guard_frac      = ORDER_FRAC_GRID(gsel)
+                st%guard_lambda    = lambdas(lgsel)
+                st%guard_removed   = rem(gsel,lgsel)
+                st%guard_core_kept = kept(gsel,lgsel)
+                call per_band(gsel, lgsel, st%guard_kept_b)
+            endif
+            if( st%l_off ) return
+            call per_band(fsel, lsel, st%kept_b)
+            do ib = 1, nb
+                if( peri_base_b(ib) > 0._dp ) st%rem_b(ib) = real(1._dp - peri_kept_b(ib,fsel,lsel) / peri_base_b(ib))
+            end do
+            ! 1 - w_ord at the chosen fraction over core, dense around it, and the rest of the domain
+            st%thresh = thresh(fsel)
+            st%width  = width(fsel)
+            cnt  = 0
+            psum = 0._dp
+            nabv = 0
+            do k = 1, n
+                do j = 1, n
+                    do i = 1, n
+                        if( .not. lsup(i,j,k) ) cycle
+                        pen_v = 1. - 1. / (1. + exp(-min(40., max(-40., (rev(i,j,k) - st%thresh) / st%width))))
+                        ireg = 3
+                        if( 0.5 * (rw1(i,j,k) + rw2(i,j,k)) >= 0.5 )then
+                            ireg = 2
+                            if( rlr(i,j,k) > 0. .and. rlr(i,j,k) <= lim ) ireg = 1
+                        endif
+                        cnt(ireg)  = cnt(ireg) + 1
+                        psum(ireg) = psum(ireg) + real(pen_v,dp)
+                        where( pen_v > PEN_LEVELS ) nabv(:,ireg) = nabv(:,ireg) + 1
+                    end do
+                end do
+            end do
+            do ireg = 1, 3
+                st%pen(1,ireg)   = real(psum(ireg) / real(max(1,cnt(ireg)),dp))
+                st%pen(2:4,ireg) = 100. * real(nabv(:,ireg)) / real(max(1,cnt(ireg)))
+            end do
+        end subroutine band_diagnostics
+
+        subroutine per_band( jf, jl, kb )
+            integer, intent(in)  :: jf, jl
+            real,    intent(out) :: kb(:)
+            kb = 0.
+            do ib = 1, nb
+                if( core_base_b(ib) > 0._dp ) kb(ib) = real(core_kept_b(ib,jf,jl) / core_base_b(ib))
+            end do
+        end subroutine per_band
 
         subroutine print_tables
             integer :: jf, jl
@@ -502,9 +613,10 @@ contains
 
     !> pcg_order=yes, between the prior-free base solve and its re-solve: the pair's FSC, the density weights (the
     !! regions), the previous iteration's NU evidence and local resolution of this state (lag one: the first
-    !! iteration at a box has none and runs without the prior), the closed-form choice, the ridge on both operators
+    !! iteration at a box has none and runs without the prior), the closed-form choice, the ridge on both operators;
+    !! st keeps the choice's diagnostics for report_order_prior after the re-solve
     subroutine prepare_order_prior_on_pair( params, state_here, pcgop_even, pcgop_odd, x_even, x_odd, &
-            &state_support, l_state_support, weight, l_weight, lambda_rel_out )
+            &state_support, l_state_support, weight, l_weight, lambda_rel_out, st )
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: state_here
         class(reconstructor_pcg), intent(inout) :: pcgop_even, pcgop_odd
@@ -514,8 +626,8 @@ contains
         type(image),              intent(inout) :: weight(2)
         logical,                  intent(out)   :: l_weight
         real,                     intent(out)   :: lambda_rel_out
+        type(order_prior_stats),  intent(out)   :: st
         type(image)             :: base(2), w_dens(2), support, evmap, locres
-        type(order_prior_stats) :: st
         type(string)            :: fname_vol, fname_ev, fname_lr, fbody
         real(c_float), pointer  :: rsup(:,:,:)
         logical, allocatable    :: lsup(:,:,:)
@@ -591,8 +703,17 @@ contains
         dsh(:,1) = dsh_e
         dsh(:,2) = dsh_o
         call select_order_prior(base, w_dens, evmap, locres, res0143, lsup, dsh, &
-            &[pcgop_even%get_realspace_diagonal(), pcgop_odd%get_realspace_diagonal()], lambda_fixed, weight, st, .false.)
+            &[pcgop_even%get_realspace_diagonal(), pcgop_odd%get_realspace_diagonal()], lambda_fixed, weight, st, .true.)
         deallocate(dsh, dsh_e, dsh_o)
+        call write_order_regions(st, n, params%smpd_crop, string(PCG_ORDER_REGIONS_FBODY)//int2str_pad(state_here,2)//MRC_EXT)
+        if( st%l_guard_off )then
+            write(logfhandle,'(A,I0,A)') '>>> PCG ORDER PRIOR: STATE ', state_here, &
+                &', a guard on every band to FSC=0.143 would turn the prior off'
+        else
+            write(logfhandle,'(A,I0,A,F6.2,A,F7.2,A,F6.1,A,F6.1,A)') '>>> PCG ORDER PRIOR: STATE ', state_here, &
+                &', a guard on every band to FSC=0.143 would choose fraction ', 100.*st%guard_frac, ' %, lambda_rel ', &
+                &st%guard_lambda, ': removes ', 100.*st%guard_removed, ' %, keeps ', 100.*st%guard_core_kept, ' % of the core'
+        endif
         if( st%l_off )then
             write(logfhandle,'(A,I0,A,F6.1,A)') '>>> PCG ORDER PRIOR: STATE ', state_here, &
                 &', no setting keeps 95 % of the core (', st%pct_core, ' % of the support); prior off this iteration'
@@ -603,6 +724,12 @@ contains
             &', ordered fraction ', 100.*st%frac, ' %, lambda_rel ', st%lambda_rel, ': removes ', 100.*st%removed, &
             &' % of the dense signal around the core (', st%pct_peri, ' % of the support), keeps ', 100.*st%core_kept, &
             &' % of the core (', st%pct_core, ' %)'
+        write(logfhandle,'(A,I0,A,ES10.3,A,ES10.3,A)') '>>> PCG ORDER PRIOR: STATE ', state_here, &
+            &', evidence threshold ', st%thresh, ', logistic width ', st%width, &
+            &'; 1 - w_ord: mean, % of voxels > 0.05, > 0.2, > 0.5'
+        write(logfhandle,'(A,F8.3,3F8.1)') '>>>   core            ', st%pen(1,1), st%pen(2:4,1)
+        write(logfhandle,'(A,F8.3,3F8.1)') '>>>   dense around it ', st%pen(1,2), st%pen(2:4,2)
+        write(logfhandle,'(A,F8.3,3F8.1)') '>>>   rest of domain  ', st%pen(1,3), st%pen(2:4,3)
         call pcgop_even%set_order_prior(weight(1), st%lambda_rel)
         call pcgop_odd%set_order_prior( weight(2), st%lambda_rel)
         lambda_rel_out = st%lambda_rel
@@ -632,6 +759,118 @@ contains
         end subroutine kill_locals
 
     end subroutine prepare_order_prior_on_pair
+
+    !> the regions of the choice as a map: 2 core, 1 dense around it, 0 elsewhere (inspection only)
+    subroutine write_order_regions( st, n, smpd, fname )
+        type(order_prior_stats), intent(in) :: st
+        integer,                 intent(in) :: n
+        real,                    intent(in) :: smpd
+        type(string),            intent(in) :: fname
+        type(image)            :: reg
+        real(c_float), pointer :: rp(:,:,:)
+        integer :: iv
+        if( .not. allocated(st%idx) ) return
+        call reg%new([n,n,n], smpd)
+        call reg%get_rmat_ptr(rp)
+        rp = 0.
+        do iv = 1, size(st%idx,2)
+            rp(st%idx(1,iv),st%idx(2,iv),st%idx(3,iv)) = merge(2., 1., st%pcore(iv))
+        end do
+        nullify(rp)
+        call reg%write(fname, del_if_exists=.true.)
+        call reg%kill
+    end subroutine write_order_regions
+
+    !> After the re-solve: per octave band, the core's cross-half signal kept and the dense signal around it removed,
+    !! predicted by the closed form (st) and measured on the order pair against the base pair
+    subroutine report_order_prior( st, state_here, base_even, base_odd, order_even, order_odd )
+        type(order_prior_stats), intent(in) :: st
+        integer,                 intent(in) :: state_here
+        class(image),            intent(in) :: base_even, base_odd, order_even, order_odd
+        real,     allocatable :: xb(:,:,:)
+        real(dp), allocatable :: cb(:,:), pb(:,:)
+        real(dp) :: ct(2), pt(2), pv
+        real, parameter :: SHARE_MIN = 1.e-3
+        real     :: rlo, rhi, kept_act, rem_act, sh_c, sh_p
+        integer  :: nb, nd, ib, iv, ip, n, ldim(3)
+        logical  :: l_c, l_p
+        character(len=1) :: g
+        if( st%l_off .or. .not. allocated(st%idx) ) return
+        nb = size(st%band_lo)
+        nd = size(st%idx,2)
+        ldim = base_even%get_ldim()
+        n    = ldim(1)
+        allocate(xb(nb,nd,4), cb(nb,2), pb(nb,2))
+        call split_bands(base_even,  st%band_lo, st%band_hi, st%idx, xb(:,:,1))
+        call split_bands(base_odd,   st%band_lo, st%band_hi, st%idx, xb(:,:,2))
+        call split_bands(order_even, st%band_lo, st%band_hi, st%idx, xb(:,:,3))
+        call split_bands(order_odd,  st%band_lo, st%band_hi, st%idx, xb(:,:,4))
+        ! (band, pair): cross-half signal of the base (1) and order (2) pair in the core (cb) and around it (pb)
+        cb = 0._dp
+        pb = 0._dp
+        ct = 0._dp
+        pt = 0._dp
+        do iv = 1, nd
+            do ip = 1, 2
+                pv = real(sum(xb(:,iv,2*ip-1)),dp) * real(sum(xb(:,iv,2*ip)),dp)
+                if( st%pcore(iv) )then
+                    cb(:,ip) = cb(:,ip) + real(xb(:,iv,2*ip-1),dp) * real(xb(:,iv,2*ip),dp)
+                    ct(ip)   = ct(ip) + pv
+                else
+                    pb(:,ip) = pb(:,ip) + real(xb(:,iv,2*ip-1),dp) * real(xb(:,iv,2*ip),dp)
+                    pt(ip)   = pt(ip) + pv
+                endif
+            end do
+        end do
+        write(logfhandle,'(A,I0,A,F5.1,A)') '>>> PCG ORDER PRIOR: STATE ', state_here, &
+            &', per octave band (* starts below FSC=0.143, guarded by the band guard; core: NU label <= ', &
+            &CORE_RES_FAC * st%res0143, ' A)'
+        write(logfhandle,'(A)') '>>>   band  res (A)        share  around   D_b/h  ridge/D_b  core kept: pred  guard actual'//&
+            &'  around removed: pred actual'
+        do ib = 1, nb
+            rhi = huge(rhi)
+            if( st%band_lo(ib) > 0 ) rhi = real(n) * st%smpd / real(st%band_lo(ib))
+            rlo = real(n) * st%smpd / real(max(1,st%band_hi(ib)))
+            g = ' '
+            if( st%band_lo(ib) <= st%shell0143 ) g = '*'
+            ! a band with (almost) no base signal in a region has no meaningful ratio there
+            sh_c = 0.
+            sh_p = 0.
+            if( ct(1) > 0._dp ) sh_c = real(cb(ib,1) / ct(1))
+            if( pt(1) > 0._dp ) sh_p = real(pb(ib,1) / pt(1))
+            l_c = sh_c > SHARE_MIN
+            l_p = sh_p > SHARE_MIN
+            kept_act = 0.
+            rem_act  = 0.
+            if( l_c ) kept_act = real(cb(ib,2) / cb(ib,1))
+            if( l_p ) rem_act  = real(1._dp - pb(ib,2) / pb(ib,1))
+            write(logfhandle,'(A,I4,A1,F7.1,A,F6.1,2F8.3,F8.3,ES11.2,3A7,4X,2A7)') '>>> ', ib, g, &
+                &min(rhi, 9999.), '-', rlo, sh_c, sh_p, st%dband_rel(ib), &
+                &st%lambda_rel / max(st%dband_rel(ib), TINY), pct(st%kept_b(ib), l_c), pct(st%guard_kept_b(ib), l_c), &
+                &pct(kept_act, l_c), pct(st%rem_b(ib), l_p), pct(rem_act, l_p)
+        end do
+        kept_act = 0.
+        rem_act  = 0.
+        if( ct(1) > 0._dp ) kept_act = real(ct(2) / ct(1))
+        if( pt(1) > 0._dp ) rem_act  = real(1._dp - pt(2) / pt(1))
+        write(logfhandle,'(A,I0,A,F6.1,A,F6.1,A,F6.1,A,F6.1,A)') '>>> PCG ORDER PRIOR: STATE ', state_here, &
+            &', total core kept ', 100. * st%core_kept, ' % predicted, ', 100. * kept_act, ' % actual; around removed ', &
+            &100. * st%removed, ' % predicted, ', 100. * rem_act, ' % actual'
+        if( ct(1) > 0._dp .and. pt(1) > 0._dp ) write(logfhandle,'(A,F6.1,A,F6.1,A)') &
+            &'>>>   same-band terms carry ', 100. * sum(cb(:,1)) / ct(1), ' % of the core signal and ', &
+            &100. * sum(pb(:,1)) / pt(1), ' % of the signal around it (shares: of the totals; - : no signal)'
+        deallocate(xb, cb, pb)
+
+    contains
+
+        character(len=7) function pct( x, l_ok )
+            real,    intent(in) :: x
+            logical, intent(in) :: l_ok
+            pct = '      -'
+            if( l_ok ) write(pct,'(F7.1)') 100. * x
+        end function pct
+
+    end subroutine report_order_prior
 
     !> pcg_order=yes: the ridge re-solve written beside the base pair as <half>_order, a diagnostic
     subroutine write_pcg_order_pair( params, state_here, order_even, order_odd )

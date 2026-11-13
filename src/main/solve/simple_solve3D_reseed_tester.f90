@@ -129,6 +129,27 @@ contains
         call assert_real(10., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 3 exits past stage 4''s limit')
         call set_cline_refine3D(params, 5, 1, .false.)
         call assert_real(6., cline_refine3D%get_rarg('lpexit'), 1.e-6, 'stage 5 exits past stage 6''s limit')
+        ! from the first ML-regularized stage until NU sets the band, FSC=0.5 at stage entry sets the limit
+        call set_cline_refine3D(params, 2, 1, .false.)
+        call assert_real(16., cline_refine3D%get_rarg('lp'), 1.e-6, 'stage 2 keeps its planned limit')
+        call set_cline_refine3D(params, 3, 1, .false.)
+        call assert_real(5.3, cline_refine3D%get_rarg('lp'),     1.e-6, 'stage 3 matches at FSC=0.5')
+        call assert_real(5.3, cline_refine3D%get_rarg('lpstop'), 1.e-6, 'stage 3''s ceiling is its limit')
+        call write_res05(15.)
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_real(15., cline_refine3D%get_rarg('lp'), 1.e-6, 'a coarser FSC=0.5 than planned sets stage 4''s limit')
+        call write_res05(3.)
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_real(4.5, cline_refine3D%get_rarg('lp'), 1.e-6, 'the ladder cap bounds the FSC=0.5 limit')
+        call write_res05(5.3)
+        params%nstates = 2
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_real(8., cline_refine3D%get_rarg('lp'), 1.e-6, 'multi-state stages keep the one-rung advance')
+        params%nstates = 1
+        l_nonuniform = .false.
+        call set_cline_refine3D(params, 5, 1, .false.)
+        call assert_real(5.3, cline_refine3D%get_rarg('lp'), 1.e-6, 'without NU, stage 5 matches at FSC=0.5')
+        l_nonuniform = .true.
         do backend = 1, 2
             params%rec_backend = 'gridding'
             if( backend == 2 ) params%rec_backend = 'pcg'
@@ -249,6 +270,15 @@ contains
         call proj%kill
         deallocate(params, saved_cline, proj)
         call leave_fixture(cwd, root, nfail0)
+
+    contains
+
+        subroutine write_res05( res05 )
+            real, intent(in) :: res05
+            call proj%os_ptcl3D%set_all2single('res05', res05)
+            call proj%write(params%projfile)
+        end subroutine write_res05
+
     end subroutine test_gold_standard_stages
 
     !> Run emitted early-stop settings through the owner's sampler, over several iterations and the stage handoff.

@@ -320,13 +320,33 @@ field written by the reconstruction) is finer than the planned
 class-average route keeps its final limit). `res05` gates the advance; the
 ladder sets its size.
 
+**Stage limit from FSC=0.5 (ruling of 2026-11-13).** In a single-state
+particle run, from the first ML-regularized stage (`ML_REG_START_STAGE`, 3)
+until NU filtering or gold standard sets the matching band, the stage limit
+is the project's FSC=0.5 resolution at stage entry (`fsc05_sets_stage_lp`,
+`set_stage_lp_from_fsc05`), whether finer or coarser than the planned rung,
+bounded only by the ladder cap and an explicit `lpstop`; an explicit `lp`
+wins. The ML-regularized references already trust the FSC, so the band
+does too. It is fixed for the stage because one iteration's FSC fluctuates;
+the stage exits end the stage when it stops gaining. Without a `res05` field
+the planned rung stands. The ladder keeps the crops, stages 1-2 and the
+next-stage limits the exits compare against. Multi-state runs and NU stages
+keep the one-rung advance above: a multi-state run's best state resolves
+early while its states split (section 6). The stage banner logs
+`(planned X A, set by FSC=0.5)`. Why: on the size ladder (PfCRT, `fa9b82b5`)
+stage 4 was planned at 14 A and reached 12 A only through the one-rung
+advance; restart 8 left stage 3 at 14.79 A, one shell short, ran stage 4 at
+14 A although its FSC=0.5 there was 13.5 A, stalled at overlap 0.36 and 31
+deg and finished at 9.41/7.96 A, while the nine restarts advanced to 12 A
+finished at 7.39-7.57/4.14-4.20 A.
+
 **No stage is skipped (ruling of 2026-11-12).** Every stage runs at least
 `STAGE_MINITS` (3) iterations (`minits` on every stage command line, never
 above the stage's budget); after that the stage's exits decide when it ends:
 from stage 3 on the mid-stage resolution exit against the next stage's limit
 and the plateau exit, in every stage its convergence rule, and its `MAXITS`
 budget. A stage whose planned limit the halves already pass at FSC=0.5 still
-runs, at the limit the one-rung advance above gives it. Multi-state runs have
+runs, at the limit FSC=0.5 or the one-rung advance above gives it. Multi-state runs have
 neither exit (section 6).
 
 From 2026-10-18 to 2026-11-12 a stage whose planned limit `res05` passed was

@@ -181,6 +181,15 @@ contains
             &'a team of three chooses the setting one thread chooses')
         call assert_true(abs(st1%removed - st3%removed) <= 1.e-6 .and. abs(st1%core_kept - st3%core_kept) <= 1.e-6, &
             &'a team of three gives one thread''s figures to summation order')
+        call assert_true(st1%guard_frac == st3%guard_frac .and. st1%guard_lambda == st3%guard_lambda, &
+            &'a team of three makes the band guard''s choice of one thread')
+        call assert_true(maxval(abs(st1%kept_b - st3%kept_b)) <= 1.e-5 .and. &
+            &maxval(abs(st1%share - st3%share)) <= 1.e-5, 'a team of three gives one thread''s band figures')
+        if( .not. st1%l_guard_off )then
+            call assert_true(st1%guard_core_kept >= CORE_SIGNAL_MIN .and. all(st1%guard_kept_b >= CORE_SIGNAL_MIN &
+                &.or. st1%band_lo > st1%shell0143 .or. st1%share <= 0.), &
+                &'the band guard''s choice keeps 95 % of the core in total and in every guarded band')
+        endif
         call kill_set(base, w_dens, evmap, locres, w_order)
     end subroutine test_team_matches_serial
 

@@ -514,7 +514,7 @@ contains
         logical,                  intent(in) :: l_cmdline_lp_override
         logical,                  intent(in) :: l_register !< solve3D_addon registration pass: full update, planned limit
         real :: lp_eff, lpstop_eff, lp_cap
-        logical :: l_full_update_stage, l_explicit_lp, l_fsc05_promoted
+        logical :: l_full_update_stage, l_explicit_lp, l_lp_from_fsc05
         l_full_update_stage = force_full_sampling_mode(params) .or. l_register
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         l_explicit_lp       = l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes'
@@ -523,18 +523,23 @@ contains
         lp_cap = LPSTOP_BOUNDS(1)
         if( l_cavgs ) lp_cap = lpinfo(active_refine3D_nstages())%lp
         if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lp_cap = max(lp_cap, params%lpstop)
-        ! LP-set stages retain the FSC=0.5 boundary advance, including the union FSC of add-ons.
-        ! Gold-standard stages take their matching band from NU or the independent-half FSC.
-        l_fsc05_promoted = .false.
-        if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register .and. .not. cfg%l_gold_standard ) &
-            &call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_fsc05_promoted)
+        ! Until NU or gold standard sets the band, the FSC=0.5 at stage entry sets it from the first ML-regularized
+        ! stage on; other LP-set stages keep the one-rung FSC=0.5 advance, including the union FSC of add-ons.
+        l_lp_from_fsc05 = .false.
+        if( .not. l_cavgs .and. .not. l_explicit_lp .and. .not. l_register .and. .not. cfg%l_gold_standard )then
+            if( fsc05_sets_stage_lp(cfg, params, istage, l_cmdline_lp_override) )then
+                call set_stage_lp_from_fsc05(params, lp_cap, lp_eff, l_lp_from_fsc05)
+            else
+                call promote_stage_lp_from_fsc05(params, istage, lp_cap, lp_eff, l_lp_from_fsc05)
+            endif
+        endif
         ! NU and gold-standard stages have only the user's explicit matching ceiling.
         if( cfg%l_gold_standard .or. cfg%filt_mode .ne. 'none' )then
             lpstop_eff = 0.
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = params%lpstop
         else
             lpstop_eff = lpinfo(istage)%lp
-            if( l_fsc05_promoted ) lpstop_eff = lp_eff
+            if( l_lp_from_fsc05 ) lpstop_eff = lp_eff
             if( .not. l_cavgs .and. l_refine3D_lpstop_override ) lpstop_eff = max(lpstop_eff, params%lpstop)
         endif
         call cline_refine3D%set('prg',    'refine3D')
@@ -710,6 +715,30 @@ contains
         lp = lpinfo(istage)%lp
         if( l_cmdline_lp_override .and. cfg%ml_reg.eq.'yes' ) lp = params%lp
     end function stage_matching_lp
+
+    !> The FSC=0.5 resolution at stage entry sets the stage limit: single-state particle stages from the
+    !! first ML-regularized stage, whose prior already trusts the FSC, until NU or gold standard sets the band
+    logical function fsc05_sets_stage_lp( cfg, params, istage, l_cmdline_lp_override ) result( l_fsc )
+        type(refine3D_stage_cfg), intent(in) :: cfg
+        class(parameters),        intent(in) :: params
+        integer,                  intent(in) :: istage
+        logical,                  intent(in) :: l_cmdline_lp_override
+        l_fsc = params%nstates == 1 .and. istage >= ML_REG_START_STAGE .and. cfg%filt_mode .eq. 'none' .and. &
+            &.not. cfg%l_gold_standard .and. .not. l_cmdline_lp_override
+    end function fsc05_sets_stage_lp
+
+    !> The stage limit is the project's FSC=0.5 resolution, fixed for the stage (an iteration's FSC
+    !! fluctuates; the stage exits end it), bounded by the ladder cap; unchanged without a res05 field
+    subroutine set_stage_lp_from_fsc05( params, lp_cap, lp, l_set )
+        class(parameters), intent(in)    :: params
+        real,              intent(in)    :: lp_cap
+        real,              intent(inout) :: lp
+        logical,           intent(out)   :: l_set
+        real :: res05
+        res05 = project_best_fsc05_resolution(params%projfile)
+        l_set = res05 > TINY
+        if( l_set ) lp = max(res05, lp_cap)
+    end subroutine set_stage_lp_from_fsc05
 
     !> Advance the planned stage matching limit by one ladder rung when the
     !! project's FSC=0.5 resolution is finer than it, bounded by the ladder cap.
