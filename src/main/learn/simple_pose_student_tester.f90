@@ -1,8 +1,10 @@
-!@descr: unit tests of simple_pose_student: the soft targets keep a row's tails, the network classifies the mirror pairs, the cone on the folded sphere (a direction and its mirror partner one class) caps at the dense search's marker, the model file round trip is exact, the weights are the header's network wherever the model lies, the threshold and wide bands survive the round trip
+!@descr: unit tests of simple_pose_student: the network classifies the mirror pairs, the cone on the folded sphere (a direction and its mirror partner one class) caps at the dense search's marker, the model file round trip is exact, the weights are the header's network wherever the model lies, the threshold and wide bands survive the round trip
 submodule (simple_pose_student) simple_pose_student_tester
 use simple_test_utils
 use simple_syslib, only: simple_mkdir, simple_rename, simple_chdir
 use simple_rnd,    only: gasdev, ran3
+use simple_polar_feats, only: polar_feats
+use simple_fileio, only: fopen, fclose
 implicit none
 
 integer, parameter :: PFTSZ = 12, KFROMTO(2) = [2, 9], NK = 8, BOX = 32, NSPACE = 100, WIDTH = 2
@@ -12,7 +14,6 @@ contains
 
     module subroutine run_all_pose_student_tests()
         write(*,'(A)') '**** running all pose_student tests ****'
-        call test_targets()
         call test_pairs()
         call test_cone()
         call test_file_roundtrip()
@@ -80,28 +81,6 @@ contains
         call student%prepare_predict(1)
         call student%predict_tensor(1, x, ctf2, 0., prob)
     end subroutine posterior
-
-    !> The soft targets of a row: every finite entry keeps its mass (the tails are not cut), the mode is the
-    !! smallest loss, invalid entries get none, and a zero temperature gives the mode alone
-    subroutine test_targets()
-        integer, parameter :: N = 10
-        real(sp) :: dists(N), t(N)
-        integer  :: i
-        write(*,'(A)') 'test_targets'
-        do i = 1,N
-            dists(i) = real(i - 1)
-        enddo
-        dists(4) = huge(1.)
-        call pose_student_targets(N, dists, 1., t)
-        call assert_real(1., sum(t), 1.e-5, 'the targets sum to one')
-        call assert_int(1, maxloc(t, 1), 'the mode is the smallest loss')
-        call assert_true(all(t([1,2,3,5,6,7,8,9,10]) > 0.), 'every finite entry keeps its mass: the tails stay')
-        call assert_real(0., t(4), 0., 'an invalid entry gets no mass')
-        call assert_real(exp(-9.) / exp(-1.), t(10) / t(2), 1.e-5, 'the masses follow exp(-temperature times the loss above the minimum)')
-        call pose_student_targets(N, dists, 0., t)
-        call assert_real(1., t(1), 0., 'a zero temperature gives the mode alone')
-        call assert_real(0., sum(t(2:N)), 0., 'and nothing else')
-    end subroutine test_targets
 
     !> The network classifies the grid's mirror pairs: a prediction puts all of its mass on the pairs' unmirrored
     !! directions (the spiral's first half), none on their mirrors, which the search tests
@@ -238,13 +217,11 @@ contains
     end subroutine test_file_roundtrip
 
     !> The weights resolve in the header's directory, never the working directory: two model directories with the
-    !! same default names and a foreign network of that name in the working directory, a relocated model; a weights
-    !! name with a directory, and weights of another seed, width or weight count than the header's, are refused
+    !! same default names and a foreign network of that name in the working directory, a relocated model (the core's
+    !! own checks of the weights' name and network are in simple_polar_student_tester)
     subroutine test_weights_contract()
         type(pose_student) :: sa, sb, sf, back
-        type(hhcnn)        :: net
-        type(string)       :: cwd_saved, fixture_root, wfile
-        character(len=:), allocatable :: msg
+        type(string)       :: cwd_saved, fixture_root
         real(sp) :: x(PFTSZ, NK, 2), ctf2(NK), pa(NSPACE), pb(NSPACE), pf(NSPACE), p1(NSPACE)
         integer  :: nfail0, funit, io_stat, status
         character(len=256) :: line
@@ -291,28 +268,11 @@ contains
         call back%read(string('dirC/student.txt'))
         call posterior(back, NK, x, ctf2, p1)
         call assert_true(all(p1 == pa), 'the relocated model loads its own network')
-        call header_weights_path(string('dirC/student.txt'), 'student_weights.bin', wfile, msg)
-        call assert_true(len(msg) == 0 .and. wfile%to_char() == 'dirC/student_weights.bin', 'a weights name resolves in the header''s directory')
-        call header_weights_path(string('dirC/student.txt'), 'dirB/student_weights.bin', wfile, msg)
-        call assert_true(len(msg) > 0, 'a weights name with a directory is refused')
-        call header_weights_path(string('dirC/student.txt'), '', wfile, msg)
-        call assert_true(len(msg) > 0, 'a header without a weights name is refused')
-        call net%read_weights(string('dirB/student_weights.bin'))
-        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, WIDTH, 20261122_int64, sb%nweights)
-        call assert_true(len(msg) == 0, 'the header''s own network passes the check')
-        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, WIDTH, 20261121_int64, sb%nweights)
-        call assert_true(len(msg) > 0, 'a network of another seed than the header''s is refused')
-        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, 2*WIDTH, 20261122_int64, sb%nweights)
-        call assert_true(len(msg) > 0, 'a network of another width than the header''s is refused')
-        msg = weights_header_mismatch(net, PFTSZ, NK, NSPACE/2, WIDTH, 20261122_int64, sb%nweights + 1)
-        call assert_true(len(msg) > 0, 'another weight count than the header''s is refused')
         call leave_fixture(cwd_saved, fixture_root, nfail0)
-        call net%kill
         call sa%kill
         call sb%kill
         call sf%kill
         call back%kill
-        call wfile%kill
     end subroutine test_weights_contract
 
     !> The confidence threshold survives the model file bit for bit, so that the population at or above it is the

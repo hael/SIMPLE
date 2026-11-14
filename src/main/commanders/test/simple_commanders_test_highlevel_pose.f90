@@ -100,6 +100,7 @@ contains
         use simple_commanders_refine3D,     only: commander_refine3D
         use simple_commanders_rec,          only: commander_rec3D
         use simple_test_gate,               only: test_gate
+        use simple_defs_hhcnn,              only: NSPACE_STUDENT, POSE_AGREE_DEG, POSE_TWO_STEPS_DEG
         integer,       intent(in)    :: nthr
         class(string), intent(in)    :: metrics_file
         logical,       intent(inout) :: all_ok
@@ -112,12 +113,11 @@ contains
         integer, parameter :: NPARTS_CHK = 4      !< the parts' check: uneven ranges, the third of one unselected row
         integer, parameter :: PART_RANGES(2,NPARTS_CHK) = reshape([1,700, 701,1998, 1999,1999, 2000,2000], [2,NPARTS_CHK])
         integer, parameter :: NPTCLS  = 2000       !< 1 000 training rows (100 held out), 1 000 test rows
-        integer, parameter :: NSPACE  = 1000       !< the student's grid (NSPACE_STUDENT)
+        integer, parameter :: NSPACE  = NSPACE_STUDENT
         integer, parameter :: GATE_SEED = 20261108 !< the classic generator's seed before every search (in-process identity)
         real,    parameter :: SNR     = 1.         !< the fixture's phantom SNR
         real,    parameter :: LP      = 8.         !< the band: 16 rings at the blob box (64 at 2 A), two ring bands in the readout
         real,    parameter :: SHIFT_SIGMA = 2.     !< the centring width of the training's shift disk (3 widths): the 2 px of the measurements, not the 10 px default
-        real,    parameter :: AGREE_DEG = 6., TWO_STEPS_DEG = 12.
         type(state_fixture)                 :: fix
         type(commander_learn_pose_student)  :: xlearn
         type(commander_predict_poses)       :: xpredict
@@ -140,7 +140,7 @@ contains
         integer :: i, j, k, status, route(NPTCLS), nsel, nseeded, ndense, n_in_cone, n_two, nshell
         integer :: n6(0:1), n12(0:1), nroute(0:1), nk12, n6d(0:1), n12d(0:1)
         logical :: l_route_ok, l_cone_ok, l_dense_ok, l_fold_ok, l_fallback_same, l_seeded_changed, l_finite, l_sel(NPTCLS)
-        logical :: l_reloc_same, l_parts_range, l_parts_same, l_parts_docs
+        logical :: l_reloc_same, l_parts_range, l_parts_same, l_parts_docs, l_master_table, l_master_records, l_master_clean
         character(len=256), allocatable :: rows_full(:), rows_part(:)
         integer :: ipart, ncover(NPTCLS), junk_unit
         integer(timer_int_kind) :: t0
@@ -253,7 +253,7 @@ contains
                 spacing = min(spacing, pred%os_ptcl3D%get(i, 'cone'))
                 ! the cone's coverage: the truth within the cone about the stored direction or about its mirror
                 if( min(d1, d2) <= pred%os_ptcl3D%get(i, 'cone') + 1.e-3 ) n_in_cone = n_in_cone + 1
-                if( min(d1, d2) <= TWO_STEPS_DEG ) n_two = n_two + 1
+                if( min(d1, d2) <= POSE_TWO_STEPS_DEG ) n_two = n_two + 1
             else
                 ndense = ndense + 1
                 if( .not. (pred%os_ptcl3D%get(i, 'cone') == 0.) ) l_dense_ok = .false.
@@ -341,6 +341,14 @@ contains
         call gate%check('parts_documents_merge_to_the_whole_runs_records', l_parts_docs)
         deallocate(rows_full, rows_part)
         call simple_chdir(gate_root, status)
+        ! ---- the distributed master (two parts) against shared memory, both registering shifts against the truth map:
+        !      the joined table and the merged records the shared-memory run's, byte for byte ----
+        call enter_stage('master')
+        call master_as_shared_memory(l_master_table, l_master_records, l_master_clean)
+        call gate%check('master_table_as_shared_memory',   l_master_table)
+        call gate%check('master_records_as_shared_memory', l_master_records)
+        call gate%check('master_leaves_no_part_file',      l_master_clean)
+        call simple_chdir(gate_root, status)
         ! ---- the neighbourhood search on every test row: the cone where there is one, the cell where not ----
         call enter_stage('search')
         call pred%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
@@ -395,12 +403,12 @@ contains
             j = merge(1, 0, route(i) == 1)
             nroute(j) = nroute(j) + 1
             call symop%sym_dists(euls, euls_t, euls_sym, d1, inpld)
-            if( d1 <= AGREE_DEG )     n6(j)  = n6(j)  + 1
-            if( d1 <= TWO_STEPS_DEG ) n12(j) = n12(j) + 1
+            if( d1 <= POSE_AGREE_DEG )     n6(j)  = n6(j)  + 1
+            if( d1 <= POSE_TWO_STEPS_DEG ) n12(j) = n12(j) + 1
             euls = dense%os_ptcl3D%get_euler(i)
             call symop%sym_dists(euls, euls_t, euls_sym, d1, inpld)
-            if( d1 <= AGREE_DEG )     n6d(j)  = n6d(j)  + 1
-            if( d1 <= TWO_STEPS_DEG ) n12d(j) = n12d(j) + 1
+            if( d1 <= POSE_AGREE_DEG )     n6d(j)  = n6d(j)  + 1
+            if( d1 <= POSE_TWO_STEPS_DEG ) n12d(j) = n12d(j) + 1
         enddo
         call gate%check('every_searched_pose_finite',           l_finite)
         call gate%check('rows_without_cone_identical_to_no_student_search', l_fallback_same)
@@ -463,6 +471,51 @@ contains
         deallocate(cl, proj, pred, searched, control, dense, corrs, res)
 
     contains
+
+        !> the test half predicted with the shift registration in shared memory (shm/) and by the master over two
+        !! parts (distr/): the tables' bytes and the records compared
+        subroutine master_as_shared_memory( l_table, l_records, l_clean )
+            use simple_fileio, only: files_identical
+            logical, intent(out) :: l_table, l_records, l_clean
+            character(len=*), parameter :: RUN_DIRS(2) = [character(len=5) :: 'shm', 'distr']
+            character(len=*), parameter :: PART_FILES(4) = [character(len=24) :: 'student_part1_pred.txt', &
+                &'algndoc_2.simple', 'JOB_FINISHED_1', 'distr_simple_script_2']
+            class(sp_project), allocatable :: runs(:)
+            type(string) :: here
+            integer :: irun
+            allocate(runs(2))
+            call simple_getcwd(here)
+            do irun = 1,2
+                call enter_stage(trim(RUN_DIRS(irun)))
+                call proj%write(simple_abspath(string(PROJNAME//'.simple'), check_exists=.false.))
+                call cl%set('prg',      'predict_poses')
+                call cl%set('projfile', simple_abspath(string(PROJNAME//'.simple')))
+                call cl%set('infile',   model_abs)
+                call cl%set('vol1',     truth_abs)
+                call cl%set('mskdiam',  mskdiam)
+                call cl%set('nthr',     nthr)
+                call cl%set('fname',    MODEL)
+                if( irun == 2 ) call cl%set('nparts', 2)
+                call xpredict%execute(cl)
+                call cl%kill
+                call runs(irun)%read(simple_abspath(string(PROJNAME//'.simple')))
+                call simple_chdir(here, status)
+            enddo
+            l_table   = files_identical(string(trim(RUN_DIRS(1))//'/'//PRED_TABLE), string(trim(RUN_DIRS(2))//'/'//PRED_TABLE))
+            l_clean = .true.
+            do irun = 1,size(PART_FILES)
+                if( file_exists(string('distr/'//trim(PART_FILES(irun)))) ) l_clean = .false.
+            enddo
+            l_records = runs(1)%os_ptcl3D%get_noris() == runs(2)%os_ptcl3D%get_noris()
+            if( l_records )then
+                do i = 1,runs(1)%os_ptcl3D%get_noris()
+                    if( runs(1)%os_ptcl3D%ori2str(i) /= runs(2)%os_ptcl3D%ori2str(i) ) l_records = .false.
+                enddo
+            endif
+            call runs(1)%kill
+            call runs(2)%kill
+            deallocate(runs)
+        end subroutine master_as_shared_memory
 
         subroutine enter_stage( dir )
             character(len=*), intent(in) :: dir

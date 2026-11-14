@@ -52,7 +52,7 @@ contains
             call fill_inputs
             do iw = 1,size(widths)
                 width = widths(iw)
-                call net%new(pftsz, nk, nclasses, width, 20261110_int64)
+                call net%new(pftsz, nk, nclasses, width, 20261110_int64, .true.)
                 call net%prepare_work(max(1, nthr_team))
                 call net%init_templates(xr, g(:,1))
                 ! the single-thread forward pass, the readout alone (idempotent on the last block's maps) and the backward;
@@ -130,7 +130,7 @@ contains
                 !$ call omp_set_num_threads(nthr_team)
                 ! a training step at one thread, then at the team, from the same weights: the identity of the chunked
                 ! reduction, and the step times
-                call net1%new(pftsz, nk, nclasses, width, 20261110_int64)
+                call net1%new(pftsz, nk, nclasses, width, 20261110_int64, .true.)
                 call net1%prepare_work(max(1, nthr_team))
                 call net1%init_templates(xr, g(:,1))
                 !$ call omp_set_num_threads(1)
@@ -139,7 +139,7 @@ contains
                 rt_step1 = real(toc(t0),dp)
                 !$ call omp_set_num_threads(nthr_team)
                 call net%copy_weights_from(net1)
-                call net1%new(pftsz, nk, nclasses, width, 20261110_int64)
+                call net1%new(pftsz, nk, nclasses, width, 20261110_int64, .true.)
                 call net1%prepare_work(max(1, nthr_team))
                 call net1%init_templates(xr, g(:,1))
                 call net1%train_batch(BENCH_BATCH, x, g, side, t, 1.e-3, 1.e-5, loss, fm)

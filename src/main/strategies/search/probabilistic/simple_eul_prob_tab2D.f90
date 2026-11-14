@@ -14,8 +14,10 @@ use simple_eul_prob_tab_utils, only: update_screen_best, eulprob_dist_switch, re
     &prob_candidate_buffer, prob_candidate_store, prob_fill_profile, prob_dense_entry, prob_refined_entry,&
     &posterior_temperature, draw_posterior_row, prob_neff_readout, PROB_NEFF_ROWS, PROB_NEFF_NMIN,&
     &screen_pool_size, shift_needs_disk, disk_radius_px, prob_rnd_scope, keyed_candidate_order, shift_prior_sigma2,&
-    &prob_readout, prob_readout_fname, write_prob_readout, report_prob_readout, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
+    &prob_readout, prob_readout_fname, write_prob_readout, report_prob_readout, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE, &
+    &posterior_row_stats, temperature_or_argmin, prob_row_record
 use simple_rnd,                only: rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
+use simple_class_candidates,   only: class_candidates, CANDS_OK, CANDS_NONE
 implicit none
 
 public :: eul_prob_tab2D
@@ -36,6 +38,8 @@ type :: eul_prob_tab2D
     integer,        allocatable :: pinds(:)          !< particle indices for processing
     logical,        allocatable :: class_exists(:)   !< class population filter
     logical                     :: l_sparse_snhc = .false.
+    type(class_candidates), allocatable :: cands     !< sparse: the class student's candidates (predict_classes), when registered and current
+    logical                     :: l_cands = .false. !< a seeded particle scores its candidates alone
     integer                     :: nptcls            !< size of pinds array
     integer                     :: nclasses          !< number of classes
     integer                     :: nhood_sz = 1      !< classes around the best one whose shifts fill_tab_range refines
@@ -66,6 +70,8 @@ type :: eul_prob_tab2D
     procedure :: fill_tab_range
     procedure :: get_fill_profile
     procedure :: open_assignment
+    procedure :: keep_batch_rows
+    procedure :: get_posterior_row
     procedure :: assign_batch
     procedure :: set_inpl_counts
     procedure :: close_assignment
@@ -110,6 +116,7 @@ contains
         self%nptcls    = size(pinds)
         self%nclasses  = params%ncls
         self%l_sparse_snhc = trim(params%refine) == 'prob_neigh'
+        if( self%l_sparse_snhc ) call open_class_candidates
         ! the posterior is defined by the Euclidean objective (the particle temperature is its noise scale)
         if( params%cc_objfun /= OBJFUN_EUCLID )&
             &THROW_HARD('the 2D probability tables draw from the tempered posterior: refine=prob|prob_neigh needs objfun=euclid')
@@ -126,6 +133,28 @@ contains
         allocate(self%seed_shifts(2,self%nptcls), source=0.)
         allocate(self%seed_has_sh(self%nptcls), source=.false.)
         allocate(self%temps(self%nptcls), source=0.)
+
+      contains
+
+        !> the project's class candidates for its particles at this table's classes; a refused artifact is reported
+        !! and the table runs without it
+        subroutine open_class_candidates
+            character(len=:), allocatable :: msg
+            integer :: status
+            if( .not. associated(build%spproj_field) ) return   ! no particle field to tie the artifact to
+            allocate(self%cands)
+            call self%cands%new(build%spproj, build%spproj_field, params%ncls, status, msg)
+            if( status == CANDS_OK )then
+                self%l_cands = .true.
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB2D: the class student''s candidates seed ', &
+                    &self%cands%get_nseeded(pinds), ' of ', size(pinds), ' particles'
+            else
+                if( status /= CANDS_NONE ) THROW_WARN(msg)
+                call self%cands%kill
+                deallocate(self%cands)
+            endif
+        end subroutine open_class_candidates
+
     end subroutine new_common
 
     subroutine initialize_storage( self )
@@ -528,16 +557,25 @@ contains
             real,    intent(inout) :: cxy_loc(3)
             type(ori) :: o_prev_loc
             integer :: icls_prev_loc, irot0_loc, irot_loc, isample_loc, icls_loc, neval_loc
-            integer :: neval_bound_loc
+            integer :: neval_bound_loc, ncand_loc
             real    :: dist_loc, sh_loc(2)
             real(dp) :: t0
-            logical  :: l_disk_loc, l_prior_loc
+            logical  :: l_disk_loc, l_prior_loc, l_seed_loc
             real     :: shsig_loc
             t0 = omp_get_wtime()
             call self%b_ptr%spproj_field%get_ori(iptcl_loc, o_prev_loc)
             icls_prev_loc = nint(self%b_ptr%spproj_field%get(iptcl_loc, 'class'))
             ! the candidate order: the previous class last, the others keyed on the particle
             call keyed_candidate_order(self%rnd_scope, iptcl_loc, self%nclasses, icls_prev_loc, eval_work%direct_srch_order(:,ithr_loc))
+            ! a particle the class student seeded scores its candidates alone, in descending mass
+            l_seed_loc = .false.
+            ncand_loc  = 0
+            if( self%l_cands )then
+                if( self%cands%is_seeded(iptcl_loc) )then
+                    call self%cands%get_cands(iptcl_loc, ncand_loc, eval_work%direct_srch_order(:,ithr_loc))
+                    l_seed_loc = ncand_loc > 0
+                endif
+            endif
             cxy_loc    = 0.
             l_disk_loc  = .false.
             l_prior_loc = .false.
@@ -545,6 +583,11 @@ contains
                 shsig_loc   = self%b_ptr%spproj_field%get(iptcl_loc, 'shsig')
                 l_disk_loc  = shift_needs_disk(shsig_loc, self%p_ptr%trs)
                 l_prior_loc = shsig_loc < 0.
+                ! a seeded particle's shift was registered against its predicted class: the window, not the disk
+                if( l_seed_loc )then
+                    l_disk_loc  = .false.
+                    l_prior_loc = .false.
+                endif
             endif
             self%temps(i_loc) = posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(iptcl_loc), self%b_ptr%pftc%get_pftsz())
             if( self%p_ptr%l_shift_prior .and. l_with_shift ) call grad_shsrch_obj(ithr_loc)%set_shift_prior(sigma2_prior,&
@@ -569,6 +612,7 @@ contains
             t0 = omp_get_wtime()
             neval_bound_loc = nrefs_bound
             if( l_disk_loc ) neval_bound_loc = self%nclasses ! a particle on the disk scores every class
+            if( l_seed_loc ) neval_bound_loc = ncand_loc
             eval_work%eval_cls(:,ithr_loc)   = 0
             eval_work%eval_dists(:,ithr_loc) = huge(1.0)
             neval_loc = 0
@@ -977,11 +1021,84 @@ contains
             call self%assign_rows_sparse(i_first, i_last)
             call self%candidate_store%kill
         else
-            call self%batch_rows_from_buffers(i_first, i_last)
+            ! the rows a reader kept (keep_batch_rows) are this batch's, else the buffers are collected now
+            if( allocated(self%batch_rows) )then
+                if( lbound(self%batch_rows,2) /= i_first .or. ubound(self%batch_rows,2) /= i_last )&
+                    &THROW_HARD('the kept rows are another batch''s; eul_prob_tab2D%assign_batch')
+            else
+                call self%batch_rows_from_buffers(i_first, i_last)
+            endif
             call self%assign_rows_dense(i_first, i_last)
             deallocate(self%batch_rows, self%batch_refined, self%batch_nrefined)
         endif
     end subroutine assign_batch
+
+    !> the dense batch's rows collected from the fill's thread buffers before its assignment, for get_posterior_row
+    !! (the students' teacher rows); assign_batch then assigns from them
+    subroutine keep_batch_rows( self, i_first, i_last )
+        class(eul_prob_tab2D), intent(inout) :: self
+        integer,               intent(in)    :: i_first, i_last
+        if( self%l_sparse_snhc ) THROW_HARD('the sparse table keeps no rows; eul_prob_tab2D%keep_batch_rows')
+        call self%batch_rows_from_buffers(i_first, i_last)
+    end subroutine keep_batch_rows
+
+    !> The posterior of row i of the kept batch (between keep_batch_rows and assign_batch) at beta times the particle's
+    !! own temperature, the factor the table draws at, over the classes at their best in-plane rotations: the nkept
+    !! entries of largest mass, at most kmax, in descending mass with their classes, the tail's mass, the row's
+    !! statistics over every valid entry (posterior_row_stats), the mode's drawn in-plane rotation and the shift the
+    !! fill refined it at, when it did; the optional dists return the whole row's losses. A row without a temperature
+    !! is read at its argmin, as the assignment draws it (the 3D table's get_posterior_row)
+    subroutine get_posterior_row( self, i, beta, kmax, rec, dists )
+        class(eul_prob_tab2D), intent(in)    :: self
+        integer,               intent(in)    :: i, kmax
+        real,                  intent(in)    :: beta
+        type(prob_row_record), intent(inout) :: rec
+        real, optional,        intent(inout) :: dists(:)
+        real,    allocatable :: w(:)
+        integer, allocatable :: inds(:)
+        real(dp) :: tot
+        integer  :: j, k, n
+        if( .not. allocated(self%batch_rows) ) THROW_HARD('no rows kept; eul_prob_tab2D%get_posterior_row')
+        if( i < lbound(self%batch_rows,2) .or. i > ubound(self%batch_rows,2) )&
+            &THROW_HARD('the row is not in the kept batch; eul_prob_tab2D%get_posterior_row')
+        if( kmax < 1 ) THROW_HARD('kmax must be positive; eul_prob_tab2D%get_posterior_row')
+        call rec%kill
+        n = self%nclasses
+        allocate(w(n), inds(n))
+        rec%iptcl = self%pinds(i)
+        rec%temp  = beta * self%temps(i)
+        call posterior_row_stats(n, self%batch_rows(:,i)%dist, temperature_or_argmin(rec%temp), w, inds, &
+            &rec%imin, rec%pmax, rec%neff, rec%k99, rec%nvalid)
+        ! w ascending with its classes in inds: the mass sits at the top
+        rec%nkept = min(kmax, rec%nvalid)
+        if( rec%nkept > 0 )then
+            allocate(rec%inds(rec%nkept), rec%w(rec%nkept))
+            do j = 1,rec%nkept
+                k = n - j + 1
+                rec%inds(j) = inds(k)
+                rec%w(j)    = w(k)
+            enddo
+            tot = sum(real(rec%w,dp))
+            rec%wtail = real(max(0.d0, 1.d0 - tot))
+        endif
+        if( rec%imin > 0 )then
+            rec%lmin      = self%batch_rows(rec%imin,i)%dist
+            rec%inpl_mode = self%batch_rows(rec%imin,i)%inpl
+            do j = 1,self%batch_nrefined(i)
+                if( self%batch_refined(j,i)%ri == rec%imin )then
+                    rec%x_mode = self%batch_refined(j,i)%x
+                    rec%y_mode = self%batch_refined(j,i)%y
+                    rec%has_sh = .true.
+                    exit
+                endif
+            enddo
+        endif
+        if( present(dists) )then
+            if( size(dists) < n ) THROW_HARD('the row buffer is shorter than nclasses; eul_prob_tab2D%get_posterior_row')
+            dists(1:n) = self%batch_rows(:,i)%dist
+        endif
+        deallocate(w, inds)
+    end subroutine get_posterior_row
 
     !> the assignment closed: its readouts as a record, published by a distributed part (the master merges the parts'
     !! records in part order and reports) or reported here by the project owner
@@ -1276,6 +1393,11 @@ contains
         if( allocated(self%class_exists)   ) deallocate(self%class_exists)
         self%seed_nrots = 0
         self%l_sparse_snhc = .false.
+        if( allocated(self%cands) )then
+            call self%cands%kill
+            deallocate(self%cands)
+        endif
+        self%l_cands = .false.
         self%fill_profile   = prob_fill_profile()
         self%b_ptr => null()
         self%p_ptr => null()

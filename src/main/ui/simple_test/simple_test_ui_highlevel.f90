@@ -13,6 +13,8 @@ type(ui_program), target :: cont_refine3D_1jxy
 type(ui_program), target :: cont_refine3D_bench
 type(ui_program), target :: pose_student
 type(ui_program), target :: pose_student_bench
+type(ui_program), target :: center_ptcls
+type(ui_program), target :: class_student
 type(ui_program), target :: polar_matching_bench
 type(ui_program), target :: multistate_workflows
 type(ui_program), target :: state_fixture
@@ -43,6 +45,8 @@ contains
         call new_cont_refine3D_bench(tsttab)
         call new_pose_student(tsttab)
         call new_pose_student_bench(tsttab)
+        call new_center_ptcls(tsttab)
+        call new_class_student(tsttab)
         call new_polar_matching_bench(tsttab)
         call new_multistate_workflows(tsttab)
         call new_state_fixture(tsttab)
@@ -73,6 +77,8 @@ contains
         write(logfhandle,'(A)') cont_refine3D_bench%name%to_char()
         write(logfhandle,'(A)') pose_student%name%to_char()
         write(logfhandle,'(A)') pose_student_bench%name%to_char()
+        write(logfhandle,'(A)') center_ptcls%name%to_char()
+        write(logfhandle,'(A)') class_student%name%to_char()
         write(logfhandle,'(A)') polar_matching_bench%name%to_char()
         write(logfhandle,'(A)') multistate_workflows%name%to_char()
         write(logfhandle,'(A)') state_fixture%name%to_char()
@@ -201,6 +207,33 @@ contains
         &.false., display_name='Pose Student Validation')                                           ! requires sp_project
         call add_ui_program('pose_student', pose_student, tsttab, UI_CATEGORY)
     end subroutine new_pose_student
+
+    subroutine new_center_ptcls( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call center_ptcls%new(&
+        &'center_ptcls',&                           ! name
+        &'validate center_ptcls in miniature on simulated beta-galactosidase particles with planted shifts',&
+        &'center_ptcls on 2 000 simulated beta-galactosidase particles whose project holds no shift: every particle '//&
+        &'centred in both fields with a width, nothing else changed, every shift within the disk, the centring '//&
+        &'better than the planted error; the residual against the planted shifts reported',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Particle Centring Validation')                                    ! requires sp_project
+        call add_ui_program('center_ptcls', center_ptcls, tsttab, UI_CATEGORY)
+    end subroutine new_center_ptcls
+
+    subroutine new_class_student( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call class_student%new(&
+        &'class_student',&                          ! name
+        &'validate the class student in miniature on simulated beta-galactosidase particles',&
+        &'validate_class_student on 2 000 simulated beta-galactosidase particles: a solve2D teacher on half, the '//&
+        &'student trained on it, center_ptcls on all, the unseen half predicted and searched densely; the model reads '//&
+        &'back, every unseen particle carries a prediction, the student agrees with the dense pass above chance; the '//&
+        &'reads reported',&
+        &'simple_test_exec',&                       ! executable
+        &.false., display_name='Class Student Validation')                                        ! requires sp_project
+        call add_ui_program('class_student', class_student, tsttab, UI_CATEGORY)
+    end subroutine new_class_student
 
     subroutine new_pose_student_bench( tsttab )
         class(ui_hash), intent(inout) :: tsttab

@@ -1,18 +1,19 @@
-!@descr: unit tests of the pose student strategy's helpers: the held-out split leaves both cohorts non-empty, the resampled design comparison of zero groups, the confidence threshold at the end of a tie, the model's physical geometry against the project's, a part's range of the selected particles
-submodule (simple_strategy_pose_student) simple_strategy_pose_student_tester
+!@descr: unit tests of the students' shared strategy helpers: the held-out split leaves both cohorts non-empty, the resampled design comparison of zero groups, the confidence threshold at the end of a tie, the model's physical geometry against the project's, a part's range of the selected particles
+submodule (simple_strategy_student_common) simple_strategy_student_common_tester
 use simple_test_utils
+use simple_string_utils, only: int2str
 implicit none
 
 contains
 
-    module subroutine run_all_strategy_pose_student_tests()
-        write(*,'(A)') '**** running all pose student strategy tests ****'
+    module subroutine run_all_student_strategy_tests()
+        write(*,'(A)') '**** running all student strategy tests ****'
         call test_holdout_split()
         call test_boot_quantile()
         call test_conf_threshold()
         call test_geometry()
         call test_part_range()
-    end subroutine run_all_strategy_pose_student_tests
+    end subroutine run_all_student_strategy_tests
 
     !> The held-out cohort is never empty: two to nine stacks and selections without a tenth stack fall back to every
     !! tenth selected particle; ten or more selected stacks hold out every tenth of them in order of stkind, whatever
@@ -171,4 +172,4 @@ contains
         deallocate(sel)
     end subroutine test_part_range
 
-end submodule simple_strategy_pose_student_tester
+end submodule simple_strategy_student_common_tester

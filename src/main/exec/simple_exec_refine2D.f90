@@ -9,6 +9,8 @@ use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr, co
                                                   commander_unbootstrap_cavgs, commander_write_classes
 use simple_commanders_solve2D,              only: commander_solve2D, commander_solve2D_chunks
 use simple_commanders_cavgs,                only: commander_map_cavgs_selection
+use simple_commanders_center_ptcls,         only: commander_center_ptcls
+use simple_commanders_class_student,        only: commander_validate_class_student
 
 implicit none
 
@@ -24,6 +26,8 @@ type(commander_unbootstrap_cavgs)           :: xunbootstrap_cavgs
 type(commander_map_cavgs_selection)         :: xmap_cavgs_selection
 type(commander_sample_classes)              :: xsample_classes
 type(commander_write_classes)               :: xwrite_classes
+type(commander_center_ptcls)                :: xcenter_ptcls
+type(commander_validate_class_student)      :: xvalidate_class_student
 
 contains
 
@@ -58,6 +62,10 @@ contains
                 call xsample_classes%execute(cline)
             case( 'write_classes' )
                  call xwrite_classes%execute(cline)
+            case( 'center_ptcls' )
+                call xcenter_ptcls%execute(cline)
+            case( 'validate_class_student' )
+                call xvalidate_class_student%execute(cline)
             case default
                 l_did_execute = .false.
         end select

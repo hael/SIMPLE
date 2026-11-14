@@ -14,6 +14,8 @@ type(ui_program), target :: map_cavgs_selection
 type(ui_program), target :: sample_classes
 type(ui_program), target :: write_classes
 type(ui_program), target :: cls_expansion
+type(ui_program), target :: center_ptcls
+type(ui_program), target :: validate_class_student
 
 contains
 
@@ -40,6 +42,8 @@ contains
         call new_sample_classes(prgtab)
         call new_write_classes(prgtab)
         call new_cls_expansion(prgtab)
+        call new_center_ptcls(prgtab)
+        call new_validate_class_student(prgtab)
     end subroutine construct_refine2D_programs
 
     subroutine new_solve2D( prgtab )
@@ -568,5 +572,64 @@ contains
         call cls_expansion%add_input(UI_COMP, nthr,   group="compute", visibility=UI_VIS_STANDARD)
         call add_ui_program('cls_expansion', cls_expansion, prgtab, UI_CATEGORY)
     end subroutine new_cls_expansion
+
+    !> center_ptcls: the particles centred from a sample's few low-resolution class averages and one wide-prior pass
+    subroutine new_center_ptcls( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call center_ptcls%new(&
+        &'center_ptcls',&                                                                   ! name
+        &'Centre particle images at scale',&                                                ! summary
+        &'is a workflow that centres the active particles: refine2D makes a few low-resolution class averages from '//&
+        &'a random sample, then one pass searches every particle against them over the polar shift map''s disk; only '//&
+        &'the shifts and their widths are written, so later runs search the window about them',& ! help
+        &'simple_exec',&                                                                    ! executable
+        &.true.,&                                                                           ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Centre Particles')
+        call center_ptcls%add_input(UI_FILE, projfile, required_override=.true., visibility=UI_VIS_STANDARD)
+        call center_ptcls%add_input(UI_SRCH, 'nsample', 'num', 'Particles for the references', &
+        &'Number of randomly drawn particles the references are made from; every active particle when there are '//&
+        &'fewer{10000}', '# particles{10000}', .false., 10000., group="search", visibility=UI_VIS_ADVANCED, &
+        &preserve_default=.true.)
+        call center_ptcls%add_input(UI_SRCH, ncls, required_override=.false., placeholder_override='# references{10}', &
+        &group="search", visibility=UI_VIS_ADVANCED)
+        call center_ptcls%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
+        &'Sigma (in A) of the Gaussian prior on each particle''s shift (the picking error''s width): the pass searches '//&
+        &'the disk of 3 sigma{10}', 'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED, &
+        &preserve_default=.true.)
+        call center_ptcls%add_input(UI_FILT, 'lp', 'num', 'References low-pass limit', &
+        &'Low-pass limit (in A) of the references, which also sets the working box by the library''s rule{20}', &
+        &'low-pass limit in A{20}', .false., 20., group="filter", visibility=UI_VIS_ADVANCED, preserve_default=.true.)
+        call center_ptcls%add_input(UI_FILT, 'lpstop', 'num', 'Pass low-pass limit', &
+        &'Low-pass limit (in A) of the pass over all particles, finer than the references''{12}', &
+        &'low-pass limit in A{12}', .false., 12., group="filter", visibility=UI_VIS_ADVANCED, preserve_default=.true.)
+        call center_ptcls%add_input(UI_MASK, mskdiam, visibility=UI_VIS_STANDARD)
+        call center_ptcls%add_input(UI_COMP, nparts, required_override=.false., visibility=UI_VIS_STANDARD)
+        call center_ptcls%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call add_ui_program('center_ptcls', center_ptcls, prgtab, UI_CATEGORY)
+    end subroutine new_center_ptcls
+
+    !> validate_class_student: a solve2D teacher on a random sample, the class student trained on it and judged on the
+    !! rest against one dense pass
+    subroutine new_validate_class_student( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        call validate_class_student%new(&
+        &'validate_class_student',&                                                         ! name
+        &'Validate the class student: solve2D teacher, training, prediction',&              ! summary
+        &'is a developer workflow that draws a random sample of nsample active particles, runs solve2D on it, trains '//&
+        &'the class student on its class averages, centres every particle with center_ptcls, predicts the classes of '//&
+        &'the unseen particles, compares them with one dense pass against the teacher''s class averages, and reports '//&
+        &'the agreement statistics and the timings of the phases',&                         ! help
+        &'simple_exec',&                                                                    ! executable
+        &.true., visibility=UI_VIS_DEVELOPER, display_name='Validate Class Student')        ! requires sp_project
+        call validate_class_student%add_input(UI_FILE, projfile, required_override=.true., visibility=UI_VIS_STANDARD)
+        call validate_class_student%add_input(UI_SRCH, 'nsample', 'num', 'Training particles', &
+        &'Size of the random sample of active particles the solve2D teacher runs on; the rest are predicted unseen', &
+        &'# particles', .true., 0., group='search', visibility=UI_VIS_STANDARD)
+        call validate_class_student%add_input(UI_SRCH, ncls, group='search', visibility=UI_VIS_STANDARD)
+        call validate_class_student%add_input(UI_MASK, mskdiam, visibility=UI_VIS_STANDARD)
+        call validate_class_student%add_input(UI_COMP, nthr, visibility=UI_VIS_STANDARD)
+        call validate_class_student%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call add_ui_program('validate_class_student', validate_class_student, prgtab, UI_CATEGORY)
+    end subroutine new_validate_class_student
 
 end module simple_ui_refine2D

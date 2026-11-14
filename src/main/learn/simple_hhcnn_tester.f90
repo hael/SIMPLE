@@ -1,4 +1,4 @@
-!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check, the tiled blocks against the whole im2col matrix, the toy problem, the thread identity of the chunked reduction, the weights' round trip
+!@descr: unit tests of simple_hhcnn: the Hermitian contract of every layer, the rotation test of the template readout, the mirror invariance against the calculator's mirrored references, the gradient check and the thread identity with and without the reflected scores, the switch itself, the tiled blocks against the whole im2col matrix, the toy problem, the weights' round trip
 submodule (simple_hhcnn) simple_hhcnn_tester
 use simple_test_utils
 use simple_cmdline,     only: cmdline
@@ -26,9 +26,12 @@ contains
         call test_hermitian_contract()
         call test_mirror_invariance()
         call test_ctf_normalisation()
-        call test_gradient_check()
+        call test_gradient_check(.true.)
+        call test_gradient_check(.false.)
+        call test_no_reflection()
         call test_tiled_blocks()
-        call test_thread_identity()
+        call test_thread_identity(.true.)
+        call test_thread_identity(.false.)
         call test_weights_roundtrip()
         call test_toy_problem()
     end subroutine run_all_hhcnn_tests
@@ -126,7 +129,7 @@ contains
         logical  :: ok_re, ok_im, ok_rot, ok_col, ok_out, ok_shift
         real(sp) :: maxdiff
         write(*,'(A)') 'test_hermitian_contract'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261106_int64)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261106_int64, .true.)
         call random_templates(net)
         call random_input(x, g, side)
         ! the reference pass and its layers
@@ -262,7 +265,7 @@ contains
         integer  :: r0(T_NCLS), r1(T_NCLS), ia, b, ic, istep, nrots, nsteps_psi, nchk
         logical  :: refl0(T_NCLS), ok_rot
         write(*,'(A)') 'test_mirror_invariance'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true.)
         call random_templates(net)
         call assert_true(kernels_symmetric(net), 'the kernels are symmetric along the angle')
         allocate(p, cline, calc)
@@ -412,7 +415,7 @@ contains
         integer  :: idef, c, k0, ia, ik, ntested, nbad_one, nbad_raw
         logical  :: l_signal
         write(*,'(A)') 'test_ctf_normalisation'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261112_int64)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261112_int64, .true.)
         call random_templates(net)
         side     = 0.
         ntested  = 0
@@ -470,15 +473,16 @@ contains
 
     !> the gradient check of every layer and of the readout (the pointwise map, the templates, the scale) in single
     !! precision
-    subroutine test_gradient_check()
+    subroutine test_gradient_check( reflect )
+        logical, intent(in) :: reflect
         type(hhcnn) :: net
         type(cnn_grad) :: gr
         real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, t(T_NCLS)
         real(dp) :: loss
         integer  :: b, i, nbad, nchk, c, r, n, kb, m, ic, part, it, nch
         character(len=40) :: label
-        write(*,'(A)') 'test_gradient_check'
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261107_int64)
+        write(*,'(A,L1)') 'test_gradient_check reflect=', reflect
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261107_int64, reflect)
         call random_templates(net)
         call random_input(x, g, side)
         do i = 1,T_NCLS
@@ -538,6 +542,55 @@ contains
         call net%kill
     end subroutine test_gradient_check
 
+    !> The reflection switch: two networks of the same weights, one scoring the reflected map too and one not. Without
+    !! it no class is scored by the reflected map, each class scores at most what it scores with the reflection, the
+    !! same where the reflection did not win it (to single-precision rounding: the score product's width changes the
+    !! BLAS's blocking of its last columns), and the posterior still sums to one
+    subroutine test_no_reflection()
+        integer, parameter :: NTRY = 20
+        real,    parameter :: SCORE_TOL = 1.e-5
+        type(hhcnn) :: net_r, net_n
+        real(sp) :: x(T_PFTSZ, T_NK, 2), g(T_NK), side, p_r(T_NCLS), p_n(T_NCLS), s_r(T_NCLS), s_n(T_NCLS), ang
+        integer  :: rb_r(T_NCLS), rb_n(T_NCLS), it, ic, nwon
+        logical  :: refl, l_none, l_le, l_eq
+        write(*,'(A)') 'test_no_reflection'
+        call net_r%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .true.)
+        call net_n%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261113_int64, .false.)
+        call random_templates(net_r)
+        call net_n%copy_weights_from(net_r)
+        call net_r%prepare_work(1)
+        call net_n%prepare_work(1)
+        l_none = .true.
+        l_le   = .true.
+        l_eq   = .true.
+        nwon   = 0
+        do it = 1,NTRY
+            call random_input(x, g, side)
+            call net_r%predict(1, x, g, side, p_r)
+            call net_n%predict(1, x, g, side, p_n)
+            call net_r%get_scores(1, s_r, rb_r)
+            call net_n%get_scores(1, s_n, rb_n)
+            do ic = 1,T_NCLS
+                call net_n%get_class_rotation(1, ic, ang, refl)
+                if( refl ) l_none = .false.
+                if( s_n(ic) > s_r(ic) + SCORE_TOL * abs(s_r(ic)) ) l_le = .false.
+                call net_r%get_class_rotation(1, ic, ang, refl)
+                if( refl )then
+                    nwon = nwon + 1
+                else if( abs(s_n(ic) - s_r(ic)) > SCORE_TOL * abs(s_r(ic)) .or. rb_n(ic) /= rb_r(ic) )then
+                    l_eq = .false.
+                endif
+            enddo
+            if( abs(sum(p_n) - 1.) > 1.e-5 ) l_none = .false.
+        enddo
+        call assert_true(l_none, 'without the reflection no class is scored by the reflected map, and the posterior sums to one')
+        call assert_true(l_le,   'each class scores at most what it scores with the reflection')
+        call assert_true(l_eq,   'the same score and rotation where the reflection did not win the class')
+        call assert_true(nwon > 0, 'the reflection won some classes with it on, so the switch was exercised')
+        call net_r%kill
+        call net_n%kill
+    end subroutine test_no_reflection
+
     !> blocks 2 and 3 run in tiles of CNN_TILE columns (several, one across the real/imaginary boundary, the last a
     !! part tile); the responses, the weights' gradient and the input's equal the whole im2col matrix's products
     subroutine test_tiled_blocks()
@@ -574,7 +627,7 @@ contains
             t(i) = 0.1 + ran3()
         enddo
         t = t / sum(t)
-        call net%new(PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261110_int64)
+        call net%new(PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261110_int64, .true.)
         call net%prepare_work(1)
         call net%init_templates(xr, [(1., i = 1,T_NK)])
         call net%alloc_grad(gr)
@@ -609,13 +662,14 @@ contains
     !> the same training steps at one thread and at an actual team of four (the fast gate's cap) give the same weights,
     !! bit for bit, on the build's arithmetic path; a team of sixteen too where the thread limit allows it (by hand: a
     !! serial run fails the check that the team formed)
-    subroutine test_thread_identity()
+    subroutine test_thread_identity( reflect )
+        logical, intent(in) :: reflect
         integer, parameter :: N = 40, NSTEPS = 3, NTEAMS(2) = [4, 16]
         type(hhcnn) :: net1, netn
         real(sp), allocatable :: x(:,:,:,:), g(:,:), side(:), t(:,:)
         real(sp) :: loss1, lossn, fm1, fmn
         integer  :: i, istep, nthr_prev, nteam_run, it, limit
-        write(*,'(A)') 'test_thread_identity'
+        write(*,'(A,L1)') 'test_thread_identity reflect=', reflect
         allocate(x(T_PFTSZ, T_NK, 2, N), g(T_NK, N), side(N), t(T_NCLS, N))
         do i = 1,N
             call random_input(x(:,:,:,i), g(:,i), side(i))
@@ -626,7 +680,7 @@ contains
         !$ nthr_prev = omp_get_max_threads()
         limit = NTEAMS(1)
         !$ limit = omp_get_thread_limit()
-        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64)
+        call net1%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64, reflect)
         call net1%prepare_work(1)
         call net1%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
         !$ call omp_set_num_threads(1)
@@ -638,7 +692,7 @@ contains
                 write(*,'(A,I0,A)') 'test_thread_identity: the team of ', NTEAMS(it), ' skipped under the thread limit'
                 cycle
             endif
-            call netn%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64)
+            call netn%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261108_int64, reflect)
             call netn%prepare_work(1)
             call netn%init_templates(x(:,:,:,1:T_NCLS), g(:,1))
             !$ call omp_set_num_threads(NTEAMS(it))
@@ -671,7 +725,7 @@ contains
         write(*,'(A)') 'test_weights_roundtrip'
         nfail0 = tests_failed
         call enter_fixture('hhcnn_weights', cwd_saved, fixture_root)
-        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64)
+        call net%new(T_PFTSZ, T_NK, T_NCLS, T_WIDTH, 20261109_int64, .true.)
         call random_templates(net)
         fname = 'weights.bin'
         call net%write_weights(fname)
@@ -842,7 +896,7 @@ contains
             call feats%build_from_pft(refs(:,:,idir), ctfmat, .true., feat)
             xref(:,:,:,idir) = feat%x
         enddo
-        call net%new(PFTSZ, NK, NDIR/2, width, 20261111_int64)
+        call net%new(PFTSZ, NK, NDIR/2, width, 20261111_int64, .true.)
         call net%prepare_work(1)
         call net%init_templates(xref, gtr(:,1))
         allocate(order(ntr))

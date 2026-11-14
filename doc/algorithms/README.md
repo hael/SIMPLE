@@ -181,6 +181,16 @@ explains which workflow fits each source of particle poses and state models.
     posterior rows, that proposes a direction, a cone and a confidence for an
     unseen particle and hands them to refine3D's neighbourhood search.
 
+18. [Centring particles at scale](center_ptcls.md). A few low-resolution class
+    averages from a random sample, then one pass of every particle against
+    them over the polar shift map's disk, so that later workflows and the
+    students start from centred particles.
+
+19. [The class student](class_student.md). The pose student's network trained
+    on a 2D teacher's probabilistic rows against its class averages, which
+    proposes a class, its rotation and a few candidate classes for an unseen,
+    centred particle and hands the candidates to the sparse 2D search.
+
 Two cross-cutting chapters stand outside the pipeline order.
 [Continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)
 refines a committed pose to sub-grid angular precision using the fact that

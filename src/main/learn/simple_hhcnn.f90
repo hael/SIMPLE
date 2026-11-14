@@ -162,6 +162,7 @@ type :: hhcnn
     private
     integer :: pftsz = 0, nrots = 0, nk = 0, nclasses = 0, width = 0, nfeat = 0, ntmpl = 0
     integer :: adam_step = 0
+    logical :: l_refl = .true.   !< a class also scores the reflected map (the pose student's mirror pairs); off for classes without mirrors
     integer(int64) :: seed = 0_int64
     type(conv_layer)    :: conv(CNN_NBLK)
     type(readout_layer) :: rd
@@ -242,10 +243,11 @@ contains
     !> the network of width channels in the first block (doubling per block) over pftsz angles and nk rings, with
     !! nclasses outputs (one template each), its weights drawn from seed (recorded in the model); the templates start
     !! at zero until init_templates sets them from the classes' reprojections
-    subroutine new( self, pftsz, nk, nclasses, width, seed )
+    subroutine new( self, pftsz, nk, nclasses, width, seed, reflect )
         class(hhcnn),   intent(inout) :: self
         integer,        intent(in)    :: pftsz, nk, nclasses, width
         integer(int64), intent(in)    :: seed
+        logical,        intent(in)    :: reflect
         integer(int64) :: state
         integer :: b, nkin, cin, kb, nper, r, m
         real(sp) :: scale
@@ -257,6 +259,7 @@ contains
         self%nclasses = nclasses
         self%width    = width
         self%seed     = seed
+        self%l_refl   = reflect
         state         = modulo(seed, 2147483646_int64) + 1_int64
         nkin = nk
         cin  = 1
@@ -910,14 +913,16 @@ contains
     end subroutine readout_products
 
     !> every class's score at every rotation as one matrix product with the rotation basis, the maximum over the
-    !! rotations and the reflection (the map's first, as ties go), the logits and the posterior
+    !! rotations and, where the network has them (l_refl), the reflections (the map's first, as ties go), the logits
+    !! and the posterior
     subroutine readout_rotations( self, wk )
         class(hhcnn),   intent(in)    :: self
         type(cnn_work), intent(inout) :: wk
         integer  :: ic, r, jc
         real(sp) :: smx, zmax
         real(dp) :: ssum
-        call gemm_nn(self%nrots, 2*self%nclasses, CNN_NQ, self%rd%rotb, self%nrots, wk%q, CNN_NQ, wk%scores, self%nrots, 0.0)
+        call gemm_nn(self%nrots, merge(2, 1, self%l_refl)*self%nclasses, CNN_NQ, self%rd%rotb, self%nrots, wk%q, CNN_NQ, &
+            &wk%scores, self%nrots, 0.0)
         do ic = 1,self%nclasses
             smx = -huge(smx)
             wk%rbest(ic) = 1
@@ -928,14 +933,16 @@ contains
                     wk%rbest(ic) = r
                 endif
             enddo
-            jc = self%nclasses + ic
-            do r = 1,self%nrots
-                if( wk%scores(r,jc) > smx )then
-                    smx = wk%scores(r,jc)
-                    wk%rbest(ic) = r
-                    wk%refl(ic)  = .true.
-                endif
-            enddo
+            if( self%l_refl )then
+                jc = self%nclasses + ic
+                do r = 1,self%nrots
+                    if( wk%scores(r,jc) > smx )then
+                        smx = wk%scores(r,jc)
+                        wk%rbest(ic) = r
+                        wk%refl(ic)  = .true.
+                    endif
+                enddo
+            endif
             wk%smax(ic)   = smx
             wk%logits(ic) = self%rd%scale * smx
         enddo
@@ -1562,6 +1569,7 @@ contains
         class(string), intent(in)    :: fname
         integer(int64) :: magic, version, seed
         integer :: funit, io_stat, b, pftsz, nk, nclasses, width, nblk, nread, kread, mread
+        logical :: l_refl_here
         if( .not. file_exists(fname) ) THROW_HARD('no weights file '//fname%to_char()//'; hhcnn%read_weights')
         call fopen(funit, fname, 'old', 'read', iostat=io_stat, access='stream', form='unformatted')
         call fileiochk('hhcnn%read_weights; open '//fname%to_char(), io_stat)
@@ -1572,7 +1580,9 @@ contains
         if( nblk /= CNN_NBLK ) THROW_HARD(fname%to_char()//' has another block count; hhcnn%read_weights')
         if( nread /= CNN_NREAD .or. kread /= CNN_KREAD .or. mread /= CNN_MREAD ) THROW_HARD(fname%to_char()//' has another readout shape; hhcnn%read_weights')
         read(funit) seed
-        call self%new(pftsz, nk, nclasses, width, seed)
+        ! the reflection is the owner's construction, not the file's: the network keeps the one it was built with
+        l_refl_here = self%l_refl
+        call self%new(pftsz, nk, nclasses, width, seed, l_refl_here)
         do b = 1,CNN_NBLK
             read(funit) self%conv(b)%w, self%conv(b)%b
         enddo

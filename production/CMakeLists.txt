@@ -348,6 +348,16 @@ if(BUILD_TESTS)
   # section 16.2 phase 4 and its file table): a route of its own programs, independent of the entries above.
   simple_add_test(pose_student highlevel 2400 8 PROCESSORS 8
     COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=pose_student nthr=8)
+  # center_ptcls (a sample's few low-resolution class averages, one wide-prior pass over every particle) on
+  # 2 000 simulated beta-galactosidase particles with planted shifts, gated on the program's contract,
+  # the residual against the planted shifts reported (center_ptcls.md)
+  simple_add_test(center_ptcls highlevel 1800 8 PROCESSORS 8
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=center_ptcls nthr=8)
+  # validate_class_student (a solve2D teacher, the class student, center_ptcls, prediction and one dense pass) on
+  # 2 000 simulated beta-galactosidase particles with planted shifts: the programs' contract gated, the reads
+  # reported (completed/class_student_2D.md)
+  simple_add_test(class_student highlevel 2400 8 PROCESSORS 8
+    COMMAND $<TARGET_FILE:${SIMPLE_TEST_EXE}> test=class_student nthr=8)
   # the multi-state workflows on simulated beta-galactosidase states, judged against the known state
   # of every particle: the class-average route, solve3D nstates=3 from the particles, refine3D_states
   # from the true poses, and single-state solve3D followed by refine3D_states (the de novo routes'
@@ -437,7 +447,7 @@ if(BUILD_TESTS)
   # goes down. Raising it is an owner decision recorded in the plan. Entries
   # that depend on a capability (coarrays, openmp_offload) are counted only
   # when registered.
-  set(SIMPLE_CTEST_BUDGET 44)   # 15 fast + 1 platform + 21 highlevel + 7 library
+  set(SIMPLE_CTEST_BUDGET 46)   # 15 fast + 1 platform + 23 highlevel + 7 library (class_student, 2026-11-14: completed/class_student_2D.md decision 16)
   set(_simple_expected ${SIMPLE_CTEST_BUDGET})
   if(TEST coarrays)
     math(EXPR _simple_expected "${_simple_expected} + 1")

@@ -3,14 +3,16 @@
 ! the fill appends to, the batch's rows or candidate store, the per-particle draw from the tempered posterior at a
 ! sharp temperature); the assignment must give each particle its best class, distance, in-plane index, peak count
 ! and fraction: dense (refine=prob) and sparse (refine=prob_neigh). The draw on synthetic tables with ties, flat
-! and invalid rows at several temperatures and seeds.
+! and invalid rows at several temperatures and seeds. The posterior rows a student's teacher reads from a kept dense
+! batch, and the assignment from those rows.
 module simple_eul_prob_tab2D_tester
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_core_module_api
 use simple_builder,            only: builder
 use simple_parameters,         only: parameters
 use simple_eul_prob_tab2D,     only: eul_prob_tab2D
-use simple_eul_prob_tab_utils, only: prob_candidate, inpl_quadrature, prob_insert_inpl, temperature_or_argmin
+use simple_eul_prob_tab_utils, only: prob_candidate, prob_row_record, inpl_quadrature, prob_insert_inpl, &
+    &temperature_or_argmin
 use simple_type_defs,          only: ptcl_ref
 use simple_rnd,                only: seed_rnd_fixed, rnd_scope_key, rnd_draw_key, rnd_keyed, rnd_key, &
     &RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_FAM_INPLQ, RND_FAM_ASSIGN
@@ -35,6 +37,7 @@ contains
         params%l_doshift    = .false.
         params%prob_beta    = 1.
         call test_dense_batch()
+        call test_dense_posterior_rows()
         call test_sparse_batch()
         call test_sparse_uneven_batches()
         call test_sparse_shared_best_class()
@@ -626,6 +629,63 @@ contains
         call assert_true(nrows == 3_int64 .and. npose == 6_int64 .and. nsingle == 1_int64, 'the counters persist over batches')
         call ins%kill
     end subroutine test_inpl_insert_channel
+
+    !> The teacher's rows (keep_batch_rows, get_posterior_row): each row's posterior over the classes at beta times the
+    !! particle's temperature, the masses in descending order summing to one with no tail when every class is kept,
+    !! the ratio exp(-T (L_2 - L_1)), the mode's class, distance, in-plane index and refined shift; a particle without
+    !! a temperature read at its argmin; and the batch assigned from the kept rows as from the buffers
+    subroutine test_dense_posterior_rows()
+        real, parameter :: TEMP = 2., BETA = 0.5
+        type(prob_candidate)  :: candidates(6)
+        type(prob_row_record) :: rec
+        integer :: particle_indices(6), j
+        real    :: dists(NCLASSES), t_eff
+        write(*,'(A)') 'test_dense_posterior_rows'
+        params%refine = 'prob'
+        call set_candidate(candidates(1),1,0.1)
+        call set_candidate(candidates(2),2,0.9)
+        call set_candidate(candidates(3),1,0.8)
+        call set_candidate(candidates(4),2,0.2)
+        call set_candidate(candidates(5),1,0.3)
+        call set_candidate(candidates(6),2,0.4)
+        candidates(4)%x      =  1.5
+        candidates(4)%y      = -2.5
+        candidates(4)%has_sh = .true.
+        particle_indices = [1,1,2,2,3,3]
+        call table%new_pipeline(params, build, pinds)
+        table%temps = TEMP
+        table%temps(3) = 0.
+        do j = 1,size(candidates)
+            call table%candidate_buffers(1)%append(particle_indices(j), candidates(j))
+        enddo
+        call table%keep_batch_rows(1, NPTCLS)
+        t_eff = BETA * TEMP
+        call table%get_posterior_row(1, BETA, 4, rec, dists)
+        call assert_int(pinds(1), rec%iptcl, 'the row names its particle')
+        call assert_real(t_eff, rec%temp, 1.e-6, 'the row is read at beta times the particle''s temperature')
+        call assert_int(2, rec%nkept, 'every valid class is kept when kmax allows')
+        call assert_true(rec%inds(1) == 1 .and. rec%inds(2) == 2, 'the classes in descending mass')
+        call assert_real(1., rec%w(1) + rec%w(2), 1.e-5, 'the masses sum to one')
+        call assert_real(0., rec%wtail, 1.e-5, 'and leave no tail')
+        call assert_real(exp(-t_eff * 0.8), rec%w(2) / rec%w(1), 1.e-4, 'the masses follow exp(-T (L - L_min))')
+        call assert_true(rec%imin == 1 .and. abs(rec%lmin - 0.1) < 1.e-6 .and. rec%inpl_mode == 1, 'the mode''s class, loss and rotation')
+        call assert_true(.not. rec%has_sh, 'an unrefined mode carries no shift')
+        call assert_true(all(abs(dists - [0.1, 0.9]) < 1.e-6), 'the whole row''s losses come back')
+        call table%get_posterior_row(2, BETA, 1, rec)
+        call assert_true(rec%nkept == 1 .and. rec%inds(1) == 2, 'kmax caps the kept classes')
+        call assert_real(1. - rec%w(1), rec%wtail, 1.e-5, 'the tail holds what the kept class leaves')
+        call assert_true(rec%has_sh .and. rec%x_mode == 1.5 .and. rec%y_mode == -2.5, 'a refined mode carries its shift')
+        call table%get_posterior_row(3, BETA, 4, rec)
+        call assert_true(rec%imin == 1 .and. abs(rec%w(1) - 1.) < 1.e-6, 'a particle without a temperature is read at its argmin')
+        table%temps = 1.e9
+        call table%open_assignment
+        call table%assign_batch(1, NPTCLS)
+        call table%close_assignment
+        call assert_assignment('dense batch from kept rows',[1,2,1],[0.1,0.2,0.3],[0,0,0],[100.,100.,100.])
+        call assert_shifts('dense batch from kept rows',[0.,1.5,0.],[0.,-2.5,0.],[.false.,.true.,.false.])
+        call rec%kill
+        call table%kill
+    end subroutine test_dense_posterior_rows
 
     subroutine set_candidate( candidate, icls, dist )
         type(prob_candidate), intent(out) :: candidate

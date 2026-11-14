@@ -222,7 +222,7 @@ registers each particle's shift against the map's reprojection at the
 read-out pose, its direction and rotation fixed: a 5 x 5 grid over 25 Å
 about the stored shift, then L-BFGS-B, the search's own fixed-rotation shift
 search (`pftc_shsrch_grad`), with the references and sigma2 prepared as
-learn_pose_student prepares them; shared memory only. The table's last five
+learn_pose_student prepares them. The table's last five
 columns are the pose and the shift (the stored shift without `vol1`); the
 route and the records do not use them.
 
@@ -240,11 +240,15 @@ with the threshold calibrated against it) and its confidence is at or above
 the threshold; every other particle takes the dense search. The seeded
 particle's record carries the direction as its orientation and, in numbered
 slots of the particle's record, the cone's radius, the confidence and the
-route. The program writes a part file for a distributed caller to merge, or
-its own project copy, never the caller's project. A part is given its range as
-the distributed masters hand it to every part (`part`, `nparts`, `fromp`,
-`top`, with `outfile`); its tables carry its number, and a range without a
-selected particle writes its records unchanged. Prediction refuses a model of
+route. With `nparts`, predict_poses is the master of that many parts: given
+`vol1` it makes the even/odd halves, sigma2 and the reprojection model first,
+which the parts only read; it merges the parts' records, joins their tables in
+part order and writes the project once, the shared-memory run's result byte for
+byte (the `pose_student` workflow test checks it at two parts, registering).
+A part is given its range as every master hands it (`part`, `nparts`, `fromp`,
+`top`, with `outfile`); its tables carry its number, it writes its range's
+records to `outfile`, never the project, and a range without a selected
+particle writes its records unchanged. Training stays in one process. Prediction refuses a model of
 another geometry than the project's: the half ring, the box, the crop
 (`box_crop`) and the CTF treatment exactly, the sampling (`smpd`) within
 1e-4 Å and the mask (`mskdiam`) within 0.01 Å, the header's decimals; it does
@@ -316,15 +320,26 @@ have.
 
 ## Implementation
 
-`src/main/learn/`: `simple_polar_feats` (the input tensor, the augmentation,
-a disk cache of the rows' tensors), `simple_hhcnn` (HHCNN: the Hermitian blocks,
-the template readout, the trainer, the weights file), `simple_pose_student`
-(the model with its grid, its mirror pairs, threshold and record; a text
-header with the weights beside it, model version 4: the header names the
-weights by their file name alone, resolved against the header's directory and
-never the working directory, and the reader refuses weights whose shape, seed
-or weight count differ from the header's; the header's records may be of any
-length, as the shell weights of a wide band need). The programs
+`src/main/learn/` holds four modules:
+- `simple_polar_feats`: the input tensor, the augmentation, a disk cache of the rows' tensors.
+- `simple_hhcnn`: HHCNN, that is the Hermitian blocks, the template readout, the trainer and the weights file.
+- `simple_polar_student`: the student's core, shared with the 2D class student.
+  - It holds the network, the features, the band, the training on soft class targets, the prediction, the
+    threshold and the training record.
+  - It also owns the model file's common part: a text header with the weights beside it.
+  - The header names the weights by their file name alone, resolved against the header's directory and never
+    the working directory.
+  - The reader refuses weights whose shape, seed or weight count differ from the header's.
+  - The header's records may be of any length, as the shell weights of a wide band need.
+- `simple_pose_student`: the 3D student around one core.
+  - It holds the grid, its mirror pairs as the core's classes, the folded cone and the read-out pose.
+  - It writes the grid's keys after the core's (model version 4).
+
+The strategy helpers both students use (the held-out cohort, the resampled design comparison, the confidence
+threshold, the geometry check, a part's range, a file's hash) are in
+`simple_strategy_student_common`. The constants both students' programs set (the grid, the caps, the training
+designs, the calibration, the shift registration, the validation's settings and file names) are in
+`src/defs/simple_defs_hhcnn.f90`. The programs
 `learn_pose_student` and `predict_poses` are
 strategy routines on the caller's `(params, build)` with thin private
 commanders; the band is `lp`, the grid `nspace`, the model `infile` and

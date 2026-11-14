@@ -118,7 +118,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Numerics')
         call unit_numerics%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, cavg_quality_relations, cavg_quality_selection, cavg_quality_nano, quality_logistic, optimisers, nonlinear_conjugate_gradient, low_pass_stages, dose_series, dose_curve, shift_search, truth_metrics, polar_features, hhcnn, pose_student, pose_student_strategy)', '', .false., '')
+            &'One sub-suite of this area to run alone (online_variance, random_draws, affinity_propagation, hierarchical_clustering, k_means, k_center, gaussian_mixture, extreme_deconvolution, statistics, linear_algebra, kaiser_bessel_kernel, search_sort_locate, decay_schedules, cavg_quality_relations, cavg_quality_selection, cavg_quality_nano, quality_logistic, optimisers, nonlinear_conjugate_gradient, low_pass_stages, dose_series, dose_curve, shift_search, truth_metrics, polar_features, hhcnn, polar_student, class_student, pose_student, student_strategy)', '', .false., '')
         call add_ui_program('unit_numerics', unit_numerics, tsttab, UI_CATEGORY)
     end subroutine new_unit_numerics
 
@@ -131,7 +131,7 @@ contains
         &'simple_test_exec',&
         &.false., display_name='Unit Tests: Projects')
         call unit_project%add_input(UI_PARM, 'suite', 'str', 'Run one sub-suite', &
-            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, micrograph_subset, particle_subset, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report, solve3d_chunks_plan, state_weight_set, cavgs_work_project, eo_partition)', '', .false., '')
+            &'One sub-suite of this area to run alone (star_file, star_project, star_stream_export, binoris, project_records, project_merge, class_compatibility, particle_sieve, micrograph_import, micrograph_selection, micrograph_subset, particle_subset, optics_groups, optics_maps, solve3d_manifest, project_superset, solve3d_addon_report, solve3d_chunks_plan, state_weight_set, class_candidates, cavgs_work_project, eo_partition)', '', .false., '')
         call add_ui_program('unit_project', unit_project, tsttab, UI_CATEGORY)
     end subroutine new_unit_project
 

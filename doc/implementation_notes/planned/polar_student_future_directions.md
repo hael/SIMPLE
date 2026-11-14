@@ -1,7 +1,7 @@
 # Polar students: directions beyond the supervised assignment
 
 Status, 2026-11-12: ideas, not planned. Base: `f2e907c24`. The supervised 2D student is
-`planned/class_student_2D.md`; the 3D student is `doc/algorithms/pose_student.md`. Nothing here is to be
+`completed/class_student_2D.md`; the 3D student is `doc/algorithms/pose_student.md`. Nothing here is to be
 built before a plan of its own. Each idea lists what it would give, what it needs, the pitfalls, and the
 first measurement that would decide whether to pursue it.
 
@@ -54,8 +54,17 @@ If the 2D student cannot learn under the picking error of raw particles, there a
 - a front end of Fourier moduli, shift-invariant but phase-blind;
 - a learned equivariance to shifts, folded into option 3 above.
 
-**First measurement.** The 3D student's shift check (`SHIFT_CHECK_MAGS`) at the picking-error percentiles
-Phase 0 of the supervised plan records.
+**Measured (2026-11-13, the supervised plan's probes).**
+- The real sets' picking error has a median of 8 to 10 Å and a 90th percentile of 16 to 22 Å.
+- Classical centring brings 19% of trpv1's picks within 3 Å of the converged shift.
+- A power-spectrum student is shift-invariant but learns almost nothing.
+- Even the full polar search reaches only 36% after three passes, against 69% between two converged solve2D
+  runs.
+
+A learned centre estimator (a translation-equivariant real-space network supervised by converged shifts)
+remains the candidate. Its target is about 5 Å rather than 3, because the student's candidate set tolerates
+that (the 3D student's cone holds its mode for 96% of particles at 6.4 Å). It is not a single-pass 3 Å
+estimate, which the data does not support.
 
 ## 3. Generative models of the polar transform
 

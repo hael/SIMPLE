@@ -387,8 +387,40 @@ contains
         call push_opt('fname')
         call push_opt('trs')
 
+        ! LEARN_CLASS_STUDENT, the class student's teacher: the 2D probabilistic table's rows of the selected particles
+        ! against the class averages refs at the band lp, and the student trained on them, written as fname
+        call add_private_prg('learn_class_student')
+        ! required keys
+        call push_req('projfile')
+        call push_req('refs')
+        call push_req('lp')
+        call push_req('mskdiam')
+        ! optional keys
+        call push_opt('nthr')
+        call push_opt('fname')
+        call push_opt('trs')
+        call push_opt('shift_sigma')
+
+        ! PREDICT_CLASSES, the class student's prediction (the class, the angle, the candidates, the confidence) for the
+        ! selected particles under the model infile, the shift registered against the class averages refs when given;
+        ! with nparts the master of that many parts
+        call add_private_prg('predict_classes')
+        ! required keys
+        call push_req('projfile')
+        call push_req('infile')
+        call push_req('mskdiam')
+        ! optional keys
+        call push_opt('nthr')
+        call push_opt('refs')
+        call push_opt('fname')
+        call push_opt('part')
+        call push_opt('nparts')
+        call push_opt('fromp')
+        call push_opt('top')
+        call push_opt('outfile')
+
         ! PREDICT_POSES, the pose student's prediction (the mode, the cone, the confidence) for the selected
-        ! particles under the model infile, written beside fname
+        ! particles under the model infile, written beside fname; with nparts the master of that many parts
         call add_private_prg('predict_poses')
         ! required keys
         call push_req('projfile')

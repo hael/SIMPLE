@@ -223,6 +223,8 @@ contains
         type(commander_flex_pca_worker)         :: xflex_pca
         type(commander_learn_pose_student)      :: xlearn_pose_student
         type(commander_predict_poses)           :: xpredict_poses
+        type(commander_learn_class_student)     :: xlearn_class_student
+        type(commander_predict_classes)         :: xpredict_classes
         ! RECONSTRUCTION PROGRAMS
         type(commander_volassemble)             :: xvolassemble
         type(commander_rec3D_worker)            :: xrec3D
@@ -321,6 +323,10 @@ contains
                 call xlearn_pose_student%execute(cline)
             case( 'predict_poses' )
                 call xpredict_poses%execute(cline)
+            case( 'learn_class_student' )
+                call xlearn_class_student%execute(cline)
+            case( 'predict_classes' )
+                call xpredict_classes%execute(cline)
             ! RECONSTRUCTION PROGRAMS
             case( 'reconstruct3D' )
                 call xrec3D%execute(cline)

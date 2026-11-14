@@ -7,6 +7,7 @@ use simple_commanders_test_highlevel, only: commander_test_mini_stream, commande
                                             commander_test_solve3D_addon, commander_test_cont_refine3D_1jxy, &
                                             commander_test_cont_refine3D_bench, commander_test_polar_matching_bench, &
                                             commander_test_pose_student, commander_test_pose_student_bench, &
+                                            commander_test_center_ptcls, commander_test_class_student, &
                                             commander_test_multistate_workflows, &
                                             commander_test_state_fixture, &
                                             commander_generate_solve3D_addon_snapshots, &
@@ -28,6 +29,8 @@ type(commander_test_cont_refine3D_1jxy)          :: xcont_refine3D_1jxy
 type(commander_test_cont_refine3D_bench)         :: xcont_refine3D_bench
 type(commander_test_pose_student)                :: xpose_student
 type(commander_test_pose_student_bench)          :: xpose_student_bench
+type(commander_test_center_ptcls)                :: xcenter_ptcls
+type(commander_test_class_student)               :: xclass_student
 type(commander_test_polar_matching_bench)        :: xpolar_matching_bench
 type(commander_test_multistate_workflows)        :: xmultistate_workflows
 type(commander_test_state_fixture)               :: xstate_fixture
@@ -68,6 +71,10 @@ contains
                 call xpose_student%execute(cline)
             case( 'pose_student_bench' )
                 call xpose_student_bench%execute(cline)
+            case( 'center_ptcls' )
+                call xcenter_ptcls%execute(cline)
+            case( 'class_student' )
+                call xclass_student%execute(cline)
             case( 'polar_matching_bench' )
                 call xpolar_matching_bench%execute(cline)
             case( 'multistate_workflows' )

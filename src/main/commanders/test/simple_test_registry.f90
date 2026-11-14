@@ -98,6 +98,12 @@ contains
         ! twice, prob, reconstruct3D twice) on 2 000 blob-phantom particles, one process of eight threads: 6:49 on
         ! the dell at 8 threads, 1.6 GB, 0.7 GB of run directory (2026-11-08)
         &test_entry('pose_student', 'pose_student', 'nthr=8', 8, 0, 0, 8, 2400, ENTRY_GATE, '', mem_gb=2.0, disk_gb=1.0), &
+        ! center_ptcls in miniature on 2 000 simulated beta-galactosidase particles with planted shifts, one process of
+        ! eight threads (2026-11-13)
+        &test_entry('center_ptcls', 'center_ptcls', 'nthr=8', 8, 0, 0, 8, 1800, ENTRY_GATE, '', mem_gb=2.0, disk_gb=1.0), &
+        ! validate_class_student in miniature on 2 000 simulated beta-galactosidase particles with planted shifts, one
+        ! process of eight threads: 36 s on the dell (Release), 1:49 Debug (2026-11-13)
+        &test_entry('class_student', 'class_student', 'nthr=8', 8, 0, 0, 8, 2400, ENTRY_GATE, '', mem_gb=2.0, disk_gb=1.0), &
         ! its reconstruction overlaps the eight search threads (peak 10.8 cores); its five routes take
         ! 45 minutes alone on dell2 (2026-11-05, the labels route 4 of them), an hour beside other
         ! entries (2026-10-19), about 1.5 h on a 4-core runner

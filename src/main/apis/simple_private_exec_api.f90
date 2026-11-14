@@ -47,6 +47,8 @@ use simple_commanders_refine3D, only: commander_refine3D_distr_worker
 use simple_commanders_flex_pca,          only: commander_flex_pca_worker
 ! pose student commanders, the learned pose assignment's teacher rows
 use simple_commanders_pose_student,      only: commander_learn_pose_student, commander_predict_poses
+! class student commanders, the learned class assignment's teacher rows and prediction
+use simple_commanders_class_student,     only: commander_learn_class_student, commander_predict_classes
 ! euclid commanders, for obtaining signal statistics for noise normalized Euclidean distance functiuon evalutaion
 use simple_commanders_euclid,       only: commander_calc_pspec,commander_commit_sigma2
 use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble

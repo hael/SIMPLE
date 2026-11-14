@@ -3,7 +3,9 @@ module simple_commanders_pose_student
 use simple_commander_base,        only: commander_base
 use simple_cmdline,               only: cmdline
 use simple_strategy_pose_student, only: run_learn_pose_student, run_predict_poses
-use simple_pose_student,          only: NSPACE_STUDENT
+use simple_defs_hhcnn,            only: NSPACE_STUDENT, KMAX_STUDENT, STUDENT_TRS, STUDENT_SHIFT_SIGMA, STUDENT_LP_VALIDATE, &
+    &POSE_AGREE_DEG, POSE_TWO_STEPS_DEG, STUDENT_TRAIN_PROJ, STUDENT_ALL_PROJ, POSE_STUDENT_MODEL_FNAME, &
+    &POSE_STUDENT_PRED_TABLE, VALIDATE_POSE_STUDENT_REPORT
 implicit none
 private
 public :: commander_learn_pose_student, commander_predict_poses, commander_validate_pose_student
@@ -24,17 +26,6 @@ type, extends(commander_base) :: commander_validate_pose_student
     procedure :: execute => exec_validate_pose_student
 end type commander_validate_pose_student
 
-real,    parameter :: LP_VALIDATE          = 15. !< the student's band in the validation (A), the size-curve study's
-real,    parameter :: SHIFT_SIGMA_VALIDATE = 2.  !< the training's shift-disk width (A): the particles are centred
-integer, parameter :: NPHASES              = 7   !< the validation's timed phases
-integer, parameter :: NRECS                = 6   !< the reconstructions from the student's poses and the control
-real,    parameter :: AGREE_DEG            = 6.  !< one step of the student's grid
-real,    parameter :: TWO_STEPS_DEG        = 12. !< two steps of the student's grid
-character(len=*), parameter :: TRAIN_PROJ   = 'training_set.simple'
-character(len=*), parameter :: PRED_PROJ    = 'all_particles.simple'
-character(len=*), parameter :: MODEL_FNAME  = 'pose_student.txt'
-character(len=*), parameter :: PRED_TABLE   = 'pose_student_pred.txt'
-character(len=*), parameter :: REPORT_FNAME = 'validate_pose_student_report.txt'
 
 contains
 
@@ -45,11 +36,10 @@ contains
     subroutine exec_learn_pose_student( self, cline )
         class(commander_learn_pose_student), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        real, parameter :: TRS_DEFAULT = 5.  ! the shift refinement's box (pixels)
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', NSPACE_STUDENT)
-        if( .not. cline%defined('trs')    ) call cline%set('trs',    TRS_DEFAULT)
-        if( .not. cline%defined('fname')  ) call cline%set('fname',  'pose_student.txt')
+        if( .not. cline%defined('trs')    ) call cline%set('trs',    STUDENT_TRS)
+        if( .not. cline%defined('fname')  ) call cline%set('fname',  POSE_STUDENT_MODEL_FNAME)
         call cline%set('oritype', 'ptcl3D')
         call cline%set('objfun',  'euclid')
         call cline%set('refine',  'prob')
@@ -59,8 +49,8 @@ contains
 
     !> The student's prediction for the project's selected particles under the model infile: per particle the mode
     !! direction, the cone holding 99% of the posterior and the confidence, to the text table beside fname
-    !! (simple_private_exec). A part of a distributed caller is given its range as the masters hand it to every part
-    !! (part, nparts, fromp, top) and writes it to outfile
+    !! (simple_private_exec). With nparts it is the master of that many parts; a part is given its range as the master
+    !! hands it (part, nparts, fromp, top, outfile)
     subroutine exec_predict_poses( self, cline )
         use simple_error, only: simple_exception
         class(commander_predict_poses), intent(inout) :: self
@@ -71,7 +61,7 @@ contains
             if( .not. cline%defined('outfile') ) THROW_HARD('a part of predict_poses needs outfile')
         endif
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
-        if( .not. cline%defined('fname') ) call cline%set('fname', 'pose_student.txt')
+        if( .not. cline%defined('fname') ) call cline%set('fname', POSE_STUDENT_MODEL_FNAME)
         call cline%set('oritype', 'ptcl3D')
         call cline%set('objfun',  'euclid')
         call run_predict_poses(cline)
@@ -79,7 +69,7 @@ contains
 
     !> validate_pose_student: a class-balanced greedy sample of nsample particles of the 2D solution, solve3D on all of
     !! it (full sampling), the student trained on its poses and map, its prediction for every selected particle, the
-    !! statistics and the phase timings (doc/algorithms/pose_student.md)
+    !! statistics and the phase timings (doc/algorithms/pose_student.md). Every step but the training runs over nparts
     subroutine exec_validate_pose_student( self, cline )
         use simple_core_module_api
         use simple_parameters,              only: parameters
@@ -90,6 +80,8 @@ contains
         use simple_commanders_rec,          only: commander_rec3D
         class(commander_validate_pose_student), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
+        integer,          parameter :: NPHASES = 7   !< the validation's timed phases
+        integer,          parameter :: NRECS   = 6   !< the reconstructions from the student's poses and the control
         character(len=*), parameter :: PHASE_NAMES(NPHASES) = [character(len=40) :: &
             &'class-balanced training sample', 'solve3D on the training set (teacher)', &
             &'student training (learn_pose_student)', 'student prediction (predict_poses)', &
@@ -175,7 +167,7 @@ contains
             call spproj%os_ptcl2D%set_state(i, 0)
             call spproj%os_ptcl3D%set_state(i, 0)
         enddo
-        fname = edir%to_char()//'/'//TRAIN_PROJ
+        fname = edir%to_char()//'/'//STUDENT_TRAIN_PROJ
         call spproj%projinfo%set(1, 'projfile', fname%to_char())
         call spproj%projinfo%set(1, 'projname', 'training_set')
         call spproj%write(fname)
@@ -213,7 +205,7 @@ contains
             dshift(i) = sqrt(sum((res%os_ptcl3D%get_2Dshift(i) - res%os_ptcl2D%get_2Dshift(i))**2))
         enddo
         call enter_subdir('learn')
-        fname = edir%to_char()//'/learn/'//TRAIN_PROJ
+        fname = edir%to_char()//'/learn/'//STUDENT_TRAIN_PROJ
         call res%projinfo%set(1, 'projfile', fname%to_char())
         call res%write(fname)
         rt(7) = rt(7) + toc(t0)
@@ -222,16 +214,16 @@ contains
         call cl%set('prg',      'learn_pose_student')
         call cl%set('projfile', fname%to_char())
         call cl%set('vol1',     vol_fname%to_char())
-        call cl%set('lp',       LP_VALIDATE)
+        call cl%set('lp',       STUDENT_LP_VALIDATE)
         call cl%set('mskdiam',  params%mskdiam)
         call cl%set('pgrp',     trim(params%pgrp))
         call cl%set('nthr',     params%nthr)
-        call cl%set('fname',    MODEL_FNAME)
-        call cl%set('shift_sigma', SHIFT_SIGMA_VALIDATE)
+        call cl%set('fname',    POSE_STUDENT_MODEL_FNAME)
+        call cl%set('shift_sigma', STUDENT_SHIFT_SIGMA)
         call xlearn%execute(cl)
         call cl%kill
         call simple_chdir(edir)
-        model_abs = simple_abspath(string('learn/'//MODEL_FNAME))
+        model_abs = simple_abspath(string('learn/'//POSE_STUDENT_MODEL_FNAME))
         rt(3) = toc(t0)
         ! ---- the prediction: every selected particle, the training rows at the teacher's poses, the others at their
         !      2D shifts and no direction
@@ -250,7 +242,7 @@ contains
             endif
         enddo
         call enter_subdir('predict')
-        fname = edir%to_char()//'/predict/'//PRED_PROJ
+        fname = edir%to_char()//'/predict/'//STUDENT_ALL_PROJ
         call res%projinfo%set(1, 'projfile', fname%to_char())
         call res%projinfo%set(1, 'projname', 'all_particles')
         call res%write(fname)
@@ -264,18 +256,19 @@ contains
         call cl%set('vol1',     vol_fname%to_char())
         call cl%set('mskdiam',  params%mskdiam)
         call cl%set('nthr',     params%nthr)
-        call cl%set('fname',    MODEL_FNAME)
+        call cl%set('fname',    POSE_STUDENT_MODEL_FNAME)
+        call set_parts(cl)
         call xpredict%execute(cl)
         call cl%kill
         call simple_chdir(edir)
-        table_abs = simple_abspath(string('predict/'//PRED_TABLE))
+        table_abs = simple_abspath(string('predict/'//POSE_STUDENT_PRED_TABLE))
         rt(4) = toc(t0)
         ! ---- the statistics and the report
         t0 = tic()
-        call fopen(funit, string(REPORT_FNAME), status='replace', action='write', iostat=io_stat)
-        call fileiochk('validate_pose_student; open '//REPORT_FNAME, io_stat)
+        call fopen(funit, string(VALIDATE_POSE_STUDENT_REPORT), status='replace', action='write', iostat=io_stat)
+        call fileiochk('validate_pose_student; open '//VALIDATE_POSE_STUDENT_REPORT, io_stat)
         call report_statistics(funit, model_abs, table_abs, trim(params%pgrp), nptcls, active, train, cls, euls_teacher, &
-            &dshift, 3. * SHIFT_SIGMA_VALIDATE / params%smpd, sh_teacher, sh_2D, euls_student, sh_student)
+            &dshift, 3. * STUDENT_SHIFT_SIGMA / params%smpd, sh_teacher, sh_2D, euls_student, sh_student)
         rt(5) = toc(t0)
         ! ---- the maps from the student's poses straight from its readout, no search and no refinement; the unseen
         !      particles' map against the teacher's is cross-validated (disjoint particles)
@@ -299,7 +292,7 @@ contains
             write(fnr,'(a,i0)')   'validation training particles       : ', ntrain
             write(fnr,'(a,i0)')   'validation classes (cls2D)          : ', ncls2D
             write(fnr,'(a,i0)')   'validation threads                  : ', params%nthr
-            write(fnr,'(a,f0.2)') 'validation student band (lp, A)     : ', LP_VALIDATE
+            write(fnr,'(a,f0.2)') 'validation student band (lp, A)     : ', STUDENT_LP_VALIDATE
             write(fnr,'(a)') ''
             call write_timings(fnr)
             call fclose(fnr)
@@ -309,6 +302,12 @@ contains
         call simple_end('**** VALIDATE_POSE_STUDENT NORMAL STOP ****')
 
     contains
+
+        !> a step's command line given the entry's parts (the teacher's solve3D inherits them with the entry's line)
+        subroutine set_parts( cl_here )
+            type(cmdline), intent(inout) :: cl_here
+            if( cline_entry%defined('nparts') ) call cl_here%set('nparts', params%nparts)
+        end subroutine set_parts
 
         subroutine enter_subdir( dir )
             character(len=*), intent(in) :: dir
@@ -328,7 +327,7 @@ contains
             integer :: j
             dir = 'rec_'//trim(REC_NAMES(ir))
             call enter_subdir(dir%to_char())
-            call proj%read(string(edir%to_char()//'/predict/'//PRED_PROJ))
+            call proj%read(string(edir%to_char()//'/predict/'//STUDENT_ALL_PROJ))
             do j = 1,nptcls
                 if( mask(j) )then
                     call proj%os_ptcl2D%set_state(j, 1)
@@ -351,6 +350,7 @@ contains
             call cl%set('mskdiam',  params%mskdiam)
             call cl%set('pgrp',     trim(params%pgrp))
             call cl%set('nthr',     params%nthr)
+            call set_parts(cl)
             call xrec3D%execute(cl)
             call cl%kill
             call simple_chdir(edir)
@@ -425,7 +425,7 @@ contains
         use simple_sym,           only: sym
         use simple_ori_utils,     only: euler_mirror
         use simple_srch_sort_loc, only: hpsort
-        use simple_pose_student,  only: pose_student, KMAX_STUDENT
+        use simple_pose_student,  only: pose_student
         use simple_ori,           only: ori
         integer,          intent(in) :: u, nptcls, cls(nptcls)
         class(string),    intent(in) :: model, table
@@ -528,15 +528,15 @@ contains
             call dist_stats(units(iu), '  seeded', d_teach, active .and. train .and. route == 1)
             write(units(iu),'(a)') 'the readout''s full pose against the teacher''s (training particles, no search; point group folded, mirror not):'
             call dist_stats(units(iu), '  direction', d_dir, active .and. train)
-            call dist_stats(units(iu), '  in-plane, direction within 12 deg', d_inpl, active .and. train .and. d_dir <= TWO_STEPS_DEG)
+            call dist_stats(units(iu), '  in-plane, direction within 12 deg', d_inpl, active .and. train .and. d_dir <= POSE_TWO_STEPS_DEG)
             call dist_stats(units(iu), '  direction, seeded', d_dir, active .and. train .and. route == 1)
             call dist_stats(units(iu), '  in-plane, seeded and direction within 12 deg', d_inpl, &
-                &active .and. train .and. route == 1 .and. d_dir <= TWO_STEPS_DEG)
+                &active .and. train .and. route == 1 .and. d_dir <= POSE_TWO_STEPS_DEG)
             write(units(iu),'(a)') 'shift against the teacher''s (training particles):'
             call shift_err_stats(units(iu), '  2D shift', e_2D, active .and. train)
             call shift_err_stats(units(iu), '  registered at the read-out pose', e_reg, active .and. train)
-            call shift_err_stats(units(iu), '  2D shift, direction within 6 deg', e_2D, active .and. train .and. d_dir <= AGREE_DEG)
-            call shift_err_stats(units(iu), '  registered, direction within 6 deg', e_reg, active .and. train .and. d_dir <= AGREE_DEG)
+            call shift_err_stats(units(iu), '  2D shift, direction within 6 deg', e_2D, active .and. train .and. d_dir <= POSE_AGREE_DEG)
+            call shift_err_stats(units(iu), '  registered, direction within 6 deg', e_reg, active .and. train .and. d_dir <= POSE_AGREE_DEG)
             write(units(iu),'(a)') 'class consistency: distance to the 2D class''s teacher medoid (classes with two or more training particles):'
             call dist_stats(units(iu), '  teacher, training particles (baseline)', d_teach_med, active .and. train)
             call dist_stats(units(iu), '  student, training particles', d_pred_med, active .and. train)
@@ -637,8 +637,8 @@ contains
             endif
             call hpsort(x)
             write(uu,'(a,a,i0,a,f0.2,a,f0.2,a,f0.4,a,f0.4)') label, ': n ', n, ', median ', x(max(1,nint(0.5*n))), &
-                &' deg, q90 ', x(max(1,nint(0.9*n))), ' deg, within 6 deg ', real(count(x <= AGREE_DEG)) / real(n), &
-                &', within 12 deg ', real(count(x <= TWO_STEPS_DEG)) / real(n)
+                &' deg, q90 ', x(max(1,nint(0.9*n))), ' deg, within 6 deg ', real(count(x <= POSE_AGREE_DEG)) / real(n), &
+                &', within 12 deg ', real(count(x <= POSE_TWO_STEPS_DEG)) / real(n)
         end subroutine dist_stats
 
     end subroutine report_statistics

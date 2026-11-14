@@ -41,6 +41,7 @@ use simple_binoris_tester,                   only: run_all_binoris_tests
 use simple_sp_project_tester,                only: run_all_sp_project_tests
 use simple_project_merge_tester,             only: run_all_project_merge_tests
 use simple_state_weight_set,                 only: run_all_state_weight_set_tests
+use simple_class_candidates,                 only: run_all_class_candidates_tests
 use simple_cavgs_work_project_tester,        only: run_all_cavgs_work_project_tests
 use simple_eo_partition,                     only: run_all_eo_partition_tests
 use simple_class_compatibility,              only: run_all_class_compatibility_tests
@@ -139,9 +140,11 @@ use simple_ftexp_shsrch_tester,              only: run_all_ftexp_shsrch_tests
 use simple_bspline_smoother_tester,          only: run_all_bspline_smoother_tests
 use simple_online_var_tester,                only: run_all_online_var_tests
 use simple_polar_feats_tester,               only: run_all_polar_feats_tests
+use simple_polar_student,                    only: run_all_polar_student_tests
+use simple_class_student,                    only: run_all_class_student_tests
 use simple_hhcnn,                            only: run_all_hhcnn_tests
 use simple_pose_student,                     only: run_all_pose_student_tests
-use simple_strategy_pose_student,            only: run_all_strategy_pose_student_tests
+use simple_strategy_student_common,          only: run_all_student_strategy_tests
 use simple_aff_prop_tester,                  only: run_all_aff_prop_tests
 use simple_hac_tester,                       only: run_all_hac_tests
 use simple_kmeans_tester,                    only: run_all_kmeans_tests
@@ -416,8 +419,10 @@ contains
         ! the pose student's input tensor and its HHCNN, the Harmonic Hermitian convolutional neural network (the learned pose assignment)
         call add_suite(s, n, 'polar features',          run_all_polar_feats_tests)
         call add_suite(s, n, 'HHCNN',                   run_all_hhcnn_tests)
+        call add_suite(s, n, 'polar student',           run_all_polar_student_tests)
+        call add_suite(s, n, 'class student',           run_all_class_student_tests)
         call add_suite(s, n, 'pose student',            run_all_pose_student_tests)
-        call add_suite(s, n, 'pose student strategy',   run_all_strategy_pose_student_tests)
+        call add_suite(s, n, 'student strategy',        run_all_student_strategy_tests)
     end subroutine suites_numerics
 
     subroutine suites_project( s, n )
@@ -442,6 +447,7 @@ contains
         call add_suite(s, n, 'solve3D addon report', run_all_solve3D_addon_report_tests)
         call add_suite(s, n, 'solve3D chunks plan', run_all_solve3D_chunks_plan_tests)
         call add_suite(s, n, 'state weight set',        run_all_state_weight_set_tests)
+        call add_suite(s, n, 'class candidates',        run_all_class_candidates_tests)
         call add_suite(s, n, 'cavgs work project',      run_all_cavgs_work_project_tests)
         call add_suite(s, n, 'eo partition',            run_all_eo_partition_tests)
     end subroutine suites_project
