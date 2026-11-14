@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Simple nonuniform filtering explainer</title>
+  <desc id="desc">A three-panel presentation illustration showing a noisy map, a uniform filter that blurs the whole map equally, and a nonuniform filter that keeps strong-signal regions sharp while smoothing weak-signal regions more.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfcfd; }
+      .ink { fill: #17212b; }
+      .muted { fill: #5f6b78; }
+      .panel { fill: #ffffff; stroke: #d8dee6; stroke-width: 3; }
+      .title { font: 700 48px Helvetica, Arial, sans-serif; fill: #17212b; }
+      .subtitle { font: 400 27px Helvetica, Arial, sans-serif; fill: #53606d; }
+      .panel-title { font: 700 32px Helvetica, Arial, sans-serif; fill: #17212b; }
+      .panel-note { font: 400 24px Helvetica, Arial, sans-serif; fill: #5f6b78; }
+      .small { font: 700 22px Helvetica, Arial, sans-serif; fill: #293542; }
+      .tiny { font: 400 19px Helvetica, Arial, sans-serif; fill: #5f6b78; }
+      .map-base { fill: #dfe8ef; stroke: #8ea0ae; stroke-width: 4; }
+      .map-soft { fill: #d9e2ea; stroke: #a4b1bd; stroke-width: 4; }
+      .core { fill: #5da9cf; stroke: #1f6e95; stroke-width: 5; }
+      .weak { fill: #f0b85a; stroke: #bc7b1e; stroke-width: 4; }
+      .detail { stroke: #1d668c; stroke-width: 7; fill: none; stroke-linecap: round; opacity: 0.95; }
+      .soft-detail { stroke: #6d8292; stroke-width: 9; fill: none; stroke-linecap: round; opacity: 0.32; }
+      .noise { fill: #293542; opacity: 0.22; }
+      .white-noise { fill: #ffffff; opacity: 0.58; }
+      .label-pill { fill: #f2f5f8; stroke: #d8dee6; stroke-width: 2; }
+      .less { fill: #4ca7c9; }
+      .more { fill: #f0a63a; }
+    </style>
+
+    <filter id="blurAll" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur stdDeviation="8" />
+    </filter>
+    <filter id="softBlur" x="-18%" y="-18%" width="136%" height="136%">
+      <feGaussianBlur stdDeviation="12" />
+    </filter>
+    <filter id="shadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#17212b" flood-opacity="0.11" />
+    </filter>
+    <radialGradient id="coreGlow" cx="44%" cy="44%" r="62%">
+      <stop offset="0%" stop-color="#77c5de" />
+      <stop offset="64%" stop-color="#5da9cf" />
+      <stop offset="100%" stop-color="#dfe8ef" />
+    </radialGradient>
+    <linearGradient id="weakGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f5cf83" />
+      <stop offset="100%" stop-color="#e6962e" />
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1920" height="1080" />
+
+  <text class="title" x="96" y="92">Nonuniform filtering</text>
+  <text class="subtitle" x="96" y="134">Use strong local signal gently; smooth weak local signal more.</text>
+
+  <g transform="translate(96 205)">
+    <rect class="panel" x="0" y="0" width="510" height="610" rx="22" filter="url(#shadow)" />
+    <text class="panel-title" x="42" y="62">Noisy map</text>
+    <text class="panel-note" x="42" y="98">signal quality varies by region</text>
+
+    <g transform="translate(76 154)">
+      <path class="map-base" d="M177,18 C248,14 315,55 326,123 C392,125 434,178 420,240 C407,301 347,322 297,308 C263,365 175,382 121,338 C71,349 18,310 20,256 C21,216 48,188 82,179 C64,103 103,28 177,18 Z" />
+      <path class="core" d="M176,83 C225,76 271,103 283,151 C296,203 262,253 208,263 C152,274 103,242 94,190 C86,138 123,91 176,83 Z" opacity="0.7" />
+      <path class="detail" d="M134,158 C162,136 198,134 225,156" />
+      <path class="detail" d="M130,203 C168,223 218,218 249,187" />
+      <path class="detail" d="M183,114 C171,153 174,202 198,241" />
+
+      <circle class="noise" cx="49" cy="235" r="5" />
+      <circle class="noise" cx="63" cy="285" r="7" />
+      <circle class="noise" cx="92" cy="104" r="6" />
+      <circle class="noise" cx="106" cy="311" r="4" />
+      <circle class="noise" cx="139" cy="62" r="6" />
+      <circle class="noise" cx="161" cy="302" r="5" />
+      <circle class="noise" cx="214" cy="48" r="5" />
+      <circle class="noise" cx="257" cy="76" r="6" />
+      <circle class="noise" cx="287" cy="292" r="8" />
+      <circle class="noise" cx="322" cy="135" r="5" />
+      <circle class="noise" cx="346" cy="204" r="7" />
+      <circle class="noise" cx="384" cy="236" r="5" />
+      <circle class="white-noise" cx="80" cy="208" r="6" />
+      <circle class="white-noise" cx="131" cy="265" r="5" />
+      <circle class="white-noise" cx="241" cy="302" r="6" />
+      <circle class="white-noise" cx="312" cy="96" r="5" />
+      <circle class="white-noise" cx="363" cy="273" r="7" />
+    </g>
+
+    <g transform="translate(52 520)">
+      <rect class="label-pill" x="0" y="0" width="405" height="56" rx="28" />
+      <circle class="less" cx="34" cy="28" r="11" />
+      <text class="tiny" x="57" y="35">blue center: clearer local signal</text>
+    </g>
+  </g>
+
+  <g transform="translate(810 205)">
+    <rect class="panel" x="0" y="0" width="510" height="610" rx="22" filter="url(#shadow)" />
+    <text class="panel-title" x="42" y="62">Uniform filter</text>
+    <text class="panel-note" x="42" y="98">same smoothing everywhere</text>
+
+    <g transform="translate(76 154)" filter="url(#blurAll)">
+      <path class="map-soft" d="M177,18 C248,14 315,55 326,123 C392,125 434,178 420,240 C407,301 347,322 297,308 C263,365 175,382 121,338 C71,349 18,310 20,256 C21,216 48,188 82,179 C64,103 103,28 177,18 Z" opacity="0.9" />
+      <path class="core" d="M176,83 C225,76 271,103 283,151 C296,203 262,253 208,263 C152,274 103,242 94,190 C86,138 123,91 176,83 Z" opacity="0.3" />
+      <path class="soft-detail" d="M134,158 C162,136 198,134 225,156" />
+      <path class="soft-detail" d="M130,203 C168,223 218,218 249,187" />
+      <path class="soft-detail" d="M183,114 C171,153 174,202 198,241" />
+    </g>
+
+    <g transform="translate(72 520)">
+      <rect class="label-pill" x="0" y="0" width="365" height="56" rx="28" />
+      <text class="tiny" x="30" y="35">simple, but sharp regions blur too</text>
+    </g>
+  </g>
+
+  <g transform="translate(1414 205)">
+    <rect class="panel" x="0" y="0" width="410" height="610" rx="22" filter="url(#shadow)" />
+    <text class="panel-title" x="42" y="62">Nonuniform filter</text>
+    <text class="panel-note" x="42" y="98">local smoothing adapts</text>
+
+    <g transform="translate(18 154)">
+      <g filter="url(#softBlur)">
+        <path class="weak" d="M245,105 C308,106 349,159 336,222 C325,279 268,302 220,286 C202,320 157,342 112,331 C65,320 37,283 42,239 C47,199 74,175 109,166 C93,105 122,50 176,35 C205,28 231,43 245,105 Z" opacity="0.62" />
+      </g>
+      <path class="map-base" d="M177,18 C248,14 315,55 326,123 C392,125 434,178 420,240 C407,301 347,322 297,308 C263,365 175,382 121,338 C71,349 18,310 20,256 C21,216 48,188 82,179 C64,103 103,28 177,18 Z" opacity="0.55" />
+      <path class="core" d="M176,83 C225,76 271,103 283,151 C296,203 262,253 208,263 C152,274 103,242 94,190 C86,138 123,91 176,83 Z" fill="url(#coreGlow)" />
+      <path class="detail" d="M134,158 C162,136 198,134 225,156" />
+      <path class="detail" d="M130,203 C168,223 218,218 249,187" />
+      <path class="detail" d="M183,114 C171,153 174,202 198,241" />
+      <path class="weak" d="M302,129 C348,131 379,170 370,213 C361,256 318,276 282,258 C306,220 313,174 302,129 Z" fill="url(#weakGlow)" opacity="0.86" />
+      <path class="weak" d="M74,184 C49,196 31,223 31,253 C32,286 55,311 87,318 C85,276 88,224 74,184 Z" fill="url(#weakGlow)" opacity="0.72" />
+      <circle class="noise" cx="331" cy="188" r="4" opacity="0.13" />
+      <circle class="noise" cx="67" cy="262" r="4" opacity="0.13" />
+    </g>
+
+    <g transform="translate(34 500)">
+      <rect class="label-pill" x="0" y="0" width="342" height="82" rx="26" />
+      <circle class="less" cx="34" cy="27" r="10" />
+      <text class="tiny" x="57" y="34">less filtering where signal is strong</text>
+      <circle class="more" cx="34" cy="57" r="10" />
+      <text class="tiny" x="57" y="64">more filtering where signal is weak</text>
+    </g>
+  </g>
+
+  <g transform="translate(254 902)">
+    <text class="small" x="0" y="0">Take-home:</text>
+    <text class="subtitle" x="132" y="0">one map can contain both reliable detail and noisy/flexible regions, so the filter does not have to be one-size-fits-all.</text>
+  </g>
+</svg>
