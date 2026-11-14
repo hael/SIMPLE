@@ -202,9 +202,9 @@ width searches the window about its stored shift (or the disk while that width
 is above a third of the window), and only a particle never centred takes the
 disk. The disk is three widths of the shift prior, which defaults to
 `shift_sigma = 3` A here (10 A elsewhere): 9 A rather than 30.
-The probabilistic modes have no stable-particle test, so the run ends on its
-iteration budget or the resolution exit; equal `maxits` makes the two searches
-comparable. `lpstop` caps the band without merging them. For a multi-state project,
+The probabilistic modes have no stable-particle test; the run ends once the
+orientation overlap passes 0.99, or on its iteration budget or the resolution
+exit. Comparisons of the two searches should report the iterations each ran. `lpstop` caps the band without merging them. For a multi-state project,
 `state=X` refines that state on a single-state copy.
 
 ## Convergence

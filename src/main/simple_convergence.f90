@@ -339,6 +339,7 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         real,    allocatable :: res_state_avg(:), res05_state_avg(:), state_update_fracs(:)
         logical, allocatable :: mask(:), state_mask(:)
+        integer, allocatable :: state_samples(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         type(string) :: numstr
@@ -347,7 +348,8 @@ contains
         character(len=96) :: beta_str
         real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, res_tol
         logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked, l_pose_stalled
-        integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
+        logical :: l_overlap_reached, l_neigh_climb, l_minits_reached
+        integer :: iptcl, istate, n, nptcls, nsampled, nactive
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
@@ -580,23 +582,26 @@ contains
         if( params%nstates == 1 )then
             converged = self%frac_srch%avg > fracsrch_lim .and. self%mi_proj > overlap_lim
         else
-            ! provides convergence stats for multiple states
-            ! by calculating mi_joint for individual states
+            ! Joint stability belongs to this pass; a populated state without observations cannot converge.
             allocate( state_mi_joint(params%nstates), statepops(params%nstates) )
+            allocate(state_samples(params%nstates), source=0)
             state_mi_joint = 0.
             statepops      = 0.
             do iptcl=1,os%get_noris()
-                ucnt   = os%get_updatecnt(iptcl)
                 istate = os%get_state(iptcl)
-                if( istate==0 .or. ucnt==0 ) cycle
-                state_mi_joint(istate) = state_mi_joint(istate) + os%get(iptcl,'mi_proj')
+                if( istate==0 ) cycle
                 statepops(istate)      = statepops(istate) + 1.
+                if( .not. mask(iptcl) .or. updatecnts(iptcl) < 0.5 ) cycle
+                state_mi_joint(istate) = state_mi_joint(istate) + os%get(iptcl,'mi_proj') * os%get(iptcl,'mi_state')
+                state_samples(istate) = state_samples(istate) + 1
             end do
             ! normalise the overlap
-            forall( istate=1:params%nstates, statepops(istate)>0. )&
-                &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
+            do istate = 1, params%nstates
+                if( state_samples(istate) > 0 ) state_mi_joint(istate) = state_mi_joint(istate) / real(state_samples(istate))
+            enddo
             ! the minumum overlap is in charge of convergence
-            min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
+            min_state_mi_joint = 0.
+            if( any(statepops > 0.) ) min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
             ! print the overlaps and pops for the different states
             do istate=1,params%nstates
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
@@ -609,19 +614,29 @@ contains
                 ! scan_exit (solve3D's multi-state shc stage 2): the scan alone also ends the stage
                 if( params%l_scan_exit ) converged = converged .or. self%frac_srch%avg > fracsrch_lim
             endif
-            deallocate( state_mi_joint, statepops )
+            deallocate( state_mi_joint, statepops, state_samples )
         endif
         ! a Cartesian pass reports frac = 100 and an overlap any small pose update meets: its own rule
         if( params%l_cart_refine ) &
             &converged = self%check_cont_conv(params, os, sampled > sampled_lb .and. states > 0.5, states, sampled)
         l_pose_stalled = self%stage_pose_stalled(params, merge(2, 1, l_margin))
-        ! the probability tables' posterior draws (refine=prob and prob_neigh): the committed pose is a draw from
-        ! the tempered row posterior and sits near the posterior's own stability from a stage's first iterations,
-        ! so the pose-overlap rule would end the stage at once and cannot tell a frozen assignment from
-        ! convergence; the stage ends on the resolution exit below, on its annealing tail, or on its iteration
-        ! budget
+        ! the probability tables' posterior draws (refine=prob and prob_neigh): a stage ends once the pose overlap
+        ! passes its limit (OVERLAP_3D, or the stage's overlap: OVERLAP_3D_STAGE for an intermediate solve3D stage)
+        ! whatever the visited fraction, as a neighbourhood search visits a small fraction of the references; or on
+        ! the exits below, its annealing tail or its budget. Under an annealing tail the overlap starts the tail.
+        ! The hill-climbing neighbourhood modes (shc, snhc: solve3D's first two stages) never end on the overlap
+        l_overlap_reached = .false.
+        l_minits_reached = params%which_iter >= params%startit + max(1, params%minits) - 1
         if( .not. params%l_cart_refine .and. (trim(params%refine) == 'prob' .or. trim(params%refine) == 'prob_neigh') )then
-            if( converged ) write(logfhandle,'(A)') '>>> POSE-OVERLAP CONVERGENCE BYPASSED (posterior draw): the stage ends on the resolution exit, its annealing tail or its budget'
+            l_neigh_climb = trim(params%refine) == 'prob_neigh' .and. &
+                &(trim(params%prob_neigh_mode) == 'shc' .or. trim(params%prob_neigh_mode) == 'snhc')
+            if( .not. l_neigh_climb .and. l_minits_reached )then
+                if( params%nstates == 1 )then
+                    l_overlap_reached = self%mi_proj > overlap_lim
+                else
+                    l_overlap_reached = min_state_mi_joint > overlap_lim
+                endif
+            endif
             converged = .false.
             ! the annealing tail (prob_beta_end differs from prob_beta): the run searches flat at prob_beta until
             ! neither FSC=0.5 nor FSC=0.143 gained on the previous iteration, then exec_refine3D ramps the draws to
@@ -635,7 +650,8 @@ contains
                 &self%prob_beta_tail_start > 0 )then
                 if( self%prob_beta_tail_start == 0 )then
                     l_stalled = .false.
-                    if( params%which_iter > params%startit .and. res05_now > TINY .and. res143_now > TINY )then
+                    if( l_minits_reached .and. params%which_iter > params%startit .and. &
+                        &res05_now > TINY .and. res143_now > TINY )then
                         ! several states: the stall holds when no populated state gained (states_stalled); when no
                         ! state can be compared, the best state's test below
                         l_states_checked = .false.
@@ -656,7 +672,11 @@ contains
                         endif
                     endif
                     if( params%nstates == 1 ) l_stalled = l_stalled .and. l_pose_stalled
-                    if( l_stalled )then
+                    if( l_overlap_reached )then
+                        self%prob_beta_tail_start = params%which_iter + 1
+                        write(logfhandle,'(A,I0,A)') '>>> POSE OVERLAP REACHED: annealing the posterior draws over the next ',&
+                            &PROB_BETA_TAIL, ' iterations'
+                    else if( l_stalled )then
                         self%prob_beta_tail_start = params%which_iter + 1
                         write(logfhandle,'(A,I0,A)') '>>> RESOLUTION NO LONGER GAINING: annealing the posterior draws over the next ',&
                             &PROB_BETA_TAIL, ' iterations'
@@ -669,6 +689,11 @@ contains
                     write(logfhandle,'(A)') '>>> ANNEALING TAIL COMPLETE'
                     converged = .true.
                 endif
+            endif
+            ! without an annealing tail the overlap ends the stage
+            if( l_overlap_reached .and. self%prob_beta_tail_start == 0 )then
+                write(logfhandle,'(A,F7.4)') '>>> POSE OVERLAP REACHED: ', overlap_lim
+                converged = .true.
             endif
         endif
         ! The next-rung exit requires stalled resolution and poses, not just a flat FSC=0.5 shell.

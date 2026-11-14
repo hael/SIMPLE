@@ -5,6 +5,7 @@ real, parameter :: OVERLAP_2D          = 0.80   ! based on Susan's observations 
 real, parameter :: OVERLAP_2D_FRAC     = 0.95   ! this limit is for when fractional update is on
 real, parameter :: OVERLAP_2D_NANO     = 0.998
 real, parameter :: OVERLAP_3D          = 0.99
+real, parameter :: OVERLAP_3D_STAGE    = 0.95   ! an intermediate solve3D stage moves on to the next once its overlap passes this
 real, parameter :: OVERLAP_STATE       = 0.98
 real, parameter :: OVERLAP_STATE_JOINT = 0.96
 real, parameter :: OVERLAP_STATE_HET   = 0.98

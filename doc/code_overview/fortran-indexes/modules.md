@@ -128,7 +128,7 @@
 | `simple_commanders_validate` | main/commanders/simple/simple_commanders_validate.f90 | 3 |
 | `simple_commanders_volops` | main/commanders/simple/simple_commanders_volops.f90 | 12 |
 | `simple_commanders_volops_tester` | main/commanders/simple/simple_commanders_volops_tester.f90 | 8 |
-| `simple_convergence` | main/simple_convergence.f90<br>main/simple_convergence_tester.f90 | 54 |
+| `simple_convergence` | main/simple_convergence.f90<br>main/simple_convergence_tester.f90 | 57 |
 | `simple_core_module_api` | main/apis/simple_core_api.f90 | 0 |
 | `simple_corrmat` | main/strategies/search/simple_corrmat.f90 | 3 |
 | `simple_ctf` | main/ctf/simple_ctf.f90 | 10 |
@@ -522,7 +522,7 @@
 | `simple_solve3D_manifest_tester` | main/solve/simple_solve3D_manifest_tester.f90 | 21 |
 | `simple_solve3D_reseed_tester` | main/solve/simple_solve3D_reseed_tester.f90 | 12 |
 | `simple_solve3D_symmetry_tester` | main/solve/simple_solve3D_symmetry_tester.f90 | 6 |
-| `simple_solve3D_utils` | main/solve/simple_solve3D_controller.f90<br>main/solve/simple_solve3D_utils.f90 | 101 |
+| `simple_solve3D_utils` | main/solve/simple_solve3D_controller.f90<br>main/solve/simple_solve3D_utils.f90 | 104 |
 | `simple_sp_project` | main/project/simple_sp_project.f90<br>main/project/simple_sp_project_cls.f90<br>main/project/simple_sp_project_core.f90<br>main/project/simple_sp_project_io.f90<br>main/project/simple_sp_project_mic.f90<br>main/project/simple_sp_project_optics.f90<br>main/project/simple_sp_project_out.f90<br>main/project/simple_sp_project_ptcl.f90<br>main/project/simple_sp_project_stk.f90 | 252 |
 | `simple_sp_project_tester` | main/project/simple_sp_project_tester.f90 | 24 |
 | `simple_srch_sort_loc` | utils/math/simple_srch_sort_loc.f90 | 27 |

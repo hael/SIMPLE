@@ -4860,6 +4860,7 @@ digraph module_graph {
   "simple_solve3D_manifest_tester" -> "simple_test_utils";
   "simple_solve3D_reseed_tester" -> "simple_builder";
   "simple_solve3D_reseed_tester" -> "simple_cmdline";
+  "simple_solve3D_reseed_tester" -> "simple_defs_conv";
   "simple_solve3D_reseed_tester" -> "simple_matcher_smpl_and_lplims";
   "simple_solve3D_reseed_tester" -> "simple_ori";
   "simple_solve3D_reseed_tester" -> "simple_parameters";
@@ -4893,6 +4894,7 @@ digraph module_graph {
   "simple_solve3D_utils" -> "simple_matcher_refvol_utils";
   "simple_solve3D_utils" -> "simple_parameters";
   "simple_solve3D_utils" -> "simple_refine3d_fnames";
+  "simple_solve3D_utils" -> "simple_refine3d_provenance";
   "simple_solve3D_utils" -> "simple_sigma2_bootstrap";
   "simple_solve3D_utils" -> "simple_solve3d_manifest";
   "simple_sp_project" -> "iso_fortran_env";

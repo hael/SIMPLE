@@ -41,8 +41,12 @@ contains
         call test_multistate_scan_exit()
         write(*,'(A)') 'test_lpexit_gain_guard'
         call test_lpexit_gain_guard()
-        write(*,'(A)') 'test_posterior_assignment_bypass'
-        call test_posterior_assignment_bypass()
+        write(*,'(A)') 'test_posterior_overlap_rule'
+        call test_posterior_overlap_rule()
+        write(*,'(A)') 'test_posterior_multistate_overlap'
+        call test_posterior_multistate_overlap()
+        write(*,'(A)') 'test_posterior_minimum_iterations'
+        call test_posterior_minimum_iterations()
         write(*,'(A)') 'test_posterior_anneal_tail'
         call test_posterior_anneal_tail()
         write(*,'(A)') 'test_posterior_anneal_tail2D'
@@ -86,7 +90,7 @@ contains
         call cline%set('overlap',  0.99)
         call cline%set('fracsrch', 99.)
         params%which_iter = 1
-        call frozen_field(os, 7.5, 6.5)
+        call posterior_field(os, 7.5, 6.5)
         call conv%set_state_readout(2.25, 1.5, 0.75, [0.125, -1., 0.5])
         l_conv = conv%check_conv3D(params, cline, os, 40.)
         call os%kill
@@ -101,7 +105,7 @@ contains
         call assert_real(0.5,   ostats%get(1,'STATE_MASS_UNREFINED03'),   TOL, 'the state readout: state 3''s unrefined share')
         call ostats%kill
         params%which_iter = 2
-        call frozen_field(os, 7.5, 6.5)
+        call posterior_field(os, 7.5, 6.5)
         l_conv = conv%check_conv3D(params, cline, os, 40.)
         call os%kill
         call ostats%new(1, is_ptcl=.false.)
@@ -243,7 +247,7 @@ contains
         call cline%set('fracsrch', 99.)
         do it = 1, 8
             params%which_iter = it
-            call frozen_field(os, res05(it), res143(it))
+            call posterior_field(os, res05(it), res143(it))
             conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
             call os%kill
             if( it == 2 ) call assert_int(0, conv%anneal_tail_start(), 'a gaining iteration starts no tail')
@@ -259,7 +263,7 @@ contains
         params%maxits = PROB_BETA_TAIL + 2
         do it = 1, params%maxits
             params%which_iter = it
-            call frozen_field(os, res05(it), res143(it))
+            call posterior_field(os, res05(it), res143(it))
             conv_at(it) = conv_short%check_conv3D(params, cline, os, 40.)
             call os%kill
             if( it == 1 ) call assert_int(0, conv_short%anneal_tail_start(), 'the first iteration of a short budget starts no tail')
@@ -273,7 +277,7 @@ contains
         params%prob_beta_end = params%prob_beta
         do it = 1, 4
             params%which_iter = it
-            call frozen_field(os, 7.0, 6.0)
+            call posterior_field(os, 7.0, 6.0)
             conv_at(it) = conv_flat%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
@@ -316,7 +320,7 @@ contains
         s2 = reshape([9.0,8.0, 8.5,7.5, 8.0,7.0, 8.0,7.0], [2,4])
         do it = 1, 4
             params%which_iter = it
-            call frozen_field_states(os, s1(:,it), s2(:,it))
+            call posterior_field_states(os, s1(:,it), s2(:,it))
             l_conv = conv%check_conv3D(params, cline, os, 40.)
             call os%kill
             if( it == 3 ) call assert_int(0, conv%anneal_tail_start(), 'a state still gaining keeps the tail from starting')
@@ -328,7 +332,7 @@ contains
         s2 = 0.
         do it = 1, 3
             params%which_iter = it
-            call frozen_field_states(os, s1(:,it), s2(:,it))
+            call posterior_field_states(os, s1(:,it), s2(:,it))
             l_conv = conv%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
@@ -342,7 +346,7 @@ contains
         s2(:,2) = 0.
         do it = 1, 2
             params%which_iter = it
-            call frozen_field_states(os, s1(:,it), s2(:,it))
+            call posterior_field_states(os, s1(:,it), s2(:,it))
             l_conv = conv%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
@@ -352,9 +356,10 @@ contains
         call del_file(STATS_FILE)
     end subroutine test_posterior_anneal_tail_states
 
-    !> NPTCLS frozen particles (full scan, overlap 1), the first half in state 1 and the second in state 2, at each
-    !! state's FSC=0.5 and FSC=0.143 resolutions r(1:2) (0: none)
-    subroutine frozen_field_states( os_loc, r_s1, r_s2 )
+    !> NPTCLS particles (full scan, overlap 0.5: below the posterior overlap limit, so only the exits under test end a
+    !! stage), the first half in state 1 and the second in state 2, at each state's FSC=0.5 and FSC=0.143 resolutions
+    !! r(1:2) (0: none)
+    subroutine posterior_field_states( os_loc, r_s1, r_s2 )
         type(oris), intent(inout) :: os_loc
         real,       intent(in)    :: r_s1(2), r_s2(2)
         integer :: i
@@ -363,7 +368,8 @@ contains
             call os_loc%set(i, 'updatecnt', 1.)
             call os_loc%set(i, 'sampled',   1.)
             call os_loc%set(i, 'frac',      100.)
-            call os_loc%set(i, 'mi_proj',   1.)
+            call os_loc%set(i, 'mi_proj',   0.5)
+            call os_loc%set(i, 'mi_state',  1.)
             call os_loc%set(i, 'corr',      0.5)
             if( i <= NPTCLS / 2 )then
                 call os_loc%set_state(i, 1)
@@ -375,10 +381,11 @@ contains
                 call os_loc%set(i, 'res',   r_s2(2))
             endif
         end do
-    end subroutine frozen_field_states
+    end subroutine posterior_field_states
 
-    !> NPTCLS frozen particles (full scan, overlap 1) at the given FSC=0.5 and FSC=0.143 resolutions
-    subroutine frozen_field( os_loc, r05, r143 )
+    !> NPTCLS particles (full scan, overlap 0.5: below the posterior overlap limit, so only the exits under test end a
+    !! stage) at the given FSC=0.5 and FSC=0.143 resolutions
+    subroutine posterior_field( os_loc, r05, r143 )
         type(oris), intent(inout) :: os_loc
         real,       intent(in)    :: r05, r143
         integer :: i
@@ -388,12 +395,12 @@ contains
             call os_loc%set(i, 'updatecnt', 1.)
             call os_loc%set(i, 'sampled',   1.)
             call os_loc%set(i, 'frac',      100.)
-            call os_loc%set(i, 'mi_proj',   1.)
+            call os_loc%set(i, 'mi_proj',   0.5)
             call os_loc%set(i, 'corr',      0.5)
             call os_loc%set(i, 'res05',     r05)
             call os_loc%set(i, 'res',       r143)
         end do
-    end subroutine frozen_field
+    end subroutine posterior_field
 
     !> the weighted insertion's margin on the resolution exits (topk > 1): with a box of 100 pixels at 1 A the
     !! shells are 100/k A, so lpexit 8 A (shell 13) becomes 7.143 A (shell 14), and no gain means none over two
@@ -466,7 +473,7 @@ contains
             call del_file(STATS_FILE)
             do it = 1, 6
                 params%which_iter = it
-                call frozen_field(os, res05(it), res143(it))
+                call posterior_field(os, res05(it), res143(it))
                 at(it) = conv%check_conv3D(params, cline, os, 40.)
                 call os%kill
             enddo
@@ -511,7 +518,7 @@ contains
         call del_file(STATS_FILE)
         do it = 1, 6
             params%which_iter = it
-            call frozen_field(os, 9., 7.)
+            call posterior_field(os, 9., 7.)
             call os%set_all2single('mi_proj', MI_RISE(it))
             at(it) = conv_mi%check_conv3D(params, cline, os, 40.)
             call os%kill
@@ -521,7 +528,7 @@ contains
         call del_file(STATS_FILE)
         params%startit    = 7
         params%which_iter = 7
-        call frozen_field(os, 9., 7.)
+        call posterior_field(os, 9., 7.)
         call assert_false(conv_flat%check_conv3D(params, cline, os, 40.), 'a new stage inherited the previous stage''s plateau')
         call os%kill
         params%lpexit     = 0.
@@ -540,7 +547,7 @@ contains
             call del_file(STATS_FILE)
             do it = 1, 6
                 params%which_iter = it
-                call frozen_field(os, r05(it), r143(it))
+                call posterior_field(os, r05(it), r143(it))
                 at(it) = conv%check_conv3D(params, cline, os, 40.)
                 call os%kill
             enddo
@@ -611,7 +618,7 @@ contains
             call del_file(STATS_FILE)
             do it = 1, 10
                 params%which_iter = it
-                call frozen_field(os, 7., r143(it))
+                call posterior_field(os, 7., r143(it))
                 call os%set_all2single('mi_proj', mi(it))
                 at(it) = conv%check_conv3D(params, cline, os, 40.)
                 call os%kill
@@ -647,7 +654,7 @@ contains
         call del_file(STATS_FILE)
         do it = 1, 3
             params%which_iter = it
-            call frozen_field(os, 13.5 - 4. * spacing(13.5), 11.)
+            call posterior_field(os, 13.5 - 4. * spacing(13.5), 11.)
             at_equal(it) = conv_equal%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
@@ -655,7 +662,7 @@ contains
         call del_file(STATS_FILE)
         do it = 1, 3
             params%which_iter = it
-            call frozen_field(os, 310.5 / 24., 11.)
+            call posterior_field(os, 310.5 / 24., 11.)
             at_finer(it) = conv_finer%check_conv3D(params, cline, os, 40.)
             call os%kill
         enddo
@@ -665,32 +672,219 @@ contains
         deallocate(params, cline, os)
     end subroutine test_stage_exit_shell_boundary
 
-    !> the probability tables' posterior draws: a frozen assignment (full scan,
-    !! overlap 1) converges the regular rule on a shc pass and must not converge on the dense table (refine=prob)
-    !! nor on the neighbourhood table (refine=prob_neigh, every neighbourhood mode), whose committed pose is a
-    !! draw; the lpexit rule still ends the stage (a stalled 7.5 A past lpexit 8 at the stage's second iteration)
-    subroutine test_posterior_assignment_bypass()
+    !> the probability tables' posterior draws: a stage ends once the orientation overlap passes the stage's limit
+    !! (0.99 here; an intermediate solve3D stage's 0.95), at a small visited fraction too (a neighbourhood search
+    !! visits few references); 0.98 does not end a 0.99 stage but ends a 0.95 one; below the limit the lpexit rule
+    !! still ends the stage (a stalled 7.5 A past lpexit 8 at the stage's second iteration); the hill-climbing
+    !! neighbourhood modes (shc, snhc) never end on the overlap; with an annealing tail the overlap starts the tail,
+    !! which then ends the stage at its last iteration
+    subroutine test_posterior_overlap_rule()
+        class(parameters), allocatable :: params
+        type(convergence) :: conv
+        type(cmdline)     :: cline
+        type(oris)        :: os
+        logical :: conv_at(PROB_BETA_TAIL+1)
+        integer :: it
         call del_file(STATS_FILE)
         call assert_true(frozen_converged('shc', 0., 1, 1), 'the regular rule did not converge on a frozen shc assignment')
-        call assert_false(frozen_converged('prob', 0., 1, 1), 'the pose-overlap rule ended a dense-table stage')
-        call assert_false(frozen_converged('prob', 0., 2, 1), 'the pose-overlap rule ended a dense-table stage (second iteration)')
-        call assert_false(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='shc'), 'the pose-overlap rule ended a neighbourhood stage (shc)')
-        call assert_false(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='state'), 'the pose-overlap rule ended a neighbourhood stage (state)')
-        call assert_true(frozen_converged('shc', 0., 3, 1), 'a shc pass lost its pose-overlap rule')
+        call assert_true(frozen_converged('prob', 0., 1, 1), 'a dense-table stage ignored overlap 1')
+        call assert_false(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='shc'), &
+            &'the hill-climbing neighbourhood mode (shc, solve3D stages 1-2) ended on the overlap')
+        call assert_false(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='snhc'), &
+            &'the hill-climbing neighbourhood mode (snhc) ended on the overlap')
+        call assert_true(frozen_converged('prob_neigh', 0., 3, 1, neigh_mode='state', frac=2.), &
+            &'a neighbourhood stage (state) ignored overlap 1 at a small visited fraction')
+        call assert_false(frozen_converged('prob', 0., 2, 1, mi=0.98), 'a posterior stage ended below overlap 0.99')
+        call assert_true(frozen_converged('prob', 0., 2, 1, mi=0.98, overlap=OVERLAP_3D_STAGE), &
+            &'an intermediate posterior stage did not move on past overlap 0.95')
         call del_file(STATS_FILE)
-        call assert_false(frozen_converged('prob', 8., 1, 1), 'the stage ended at its first iteration')
-        call assert_true(frozen_converged('prob', 8., 2, 1),  'the resolution exit did not end the stage')
+        call assert_false(frozen_converged('prob', 8., 1, 1, mi=0.5), 'the resolution exit ended the stage at its first iteration')
+        call assert_true(frozen_converged('prob', 8., 2, 1, mi=0.5),  'the resolution exit did not end the stage')
         call del_file(STATS_FILE)
-    end subroutine test_posterior_assignment_bypass
+        ! an annealing tail: overlap 1 at the first iteration starts it at the second; it ends PROB_BETA_TAIL later
+        allocate(params)
+        params%nstates           = 1
+        params%trs               = 5.
+        params%refine            = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta         = 0.3
+        params%prob_beta_end     = 1.
+        params%startit           = 1
+        params%maxits            = 25
+        params%topk              = 1
+        call cline%set('trs',      5.)
+        call cline%set('overlap',  0.95)
+        call cline%set('fracsrch', 99.)
+        do it = 1, PROB_BETA_TAIL + 1
+            params%which_iter = it
+            call posterior_field(os, 7.5 - 0.1 * real(it), 6.5 - 0.1 * real(it)) ! still gaining: no stall
+            call os%set_all2single('mi_proj', 1.)
+            conv_at(it) = conv%check_conv3D(params, cline, os, 40.)
+            call os%kill
+            if( it == 1 ) call assert_int(2, conv%anneal_tail_start(), 'the overlap starts the tail at the next iteration')
+        enddo
+        call assert_true(.not. any(conv_at(1:PROB_BETA_TAIL)), 'the stage does not end before its tail completes')
+        call assert_true(conv_at(PROB_BETA_TAIL+1), 'the tail started by the overlap ends the stage')
+        call cline%kill
+        deallocate(params)
+        call del_file(STATS_FILE)
+    end subroutine test_posterior_overlap_rule
 
-    !> check_conv3D of a single-state pass of NPTCLS frozen particles (frac 100, mi_proj 1) at FSC=0.5
+    !> Two populated states and one empty slot: current joint observations alone determine the minimum overlap.
+    subroutine test_posterior_multistate_overlap()
+        integer, parameter :: NROWS = 400
+        character(len=10), parameter :: MODES(2) = [character(len=10) :: 'prob', 'prob_neigh']
+        character(len=64), parameter :: CASES(10) = [character(len=64) :: &
+            &'unstable sample, stable history', 'stable sample, unstable history', 'half the labels change', &
+            &'stable states and an empty slot', 'populated state absent from sample', 'populated state never updated', &
+            &'dropped state does not block', 'the least stable state controls', 'overlap exactly at the limit', &
+            &'overlap just above the limit']
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable :: cline
+        type(oris) :: os
+        integer :: imode, icase, i
+        logical :: expected
+        allocate(params, cline)
+        params%nstates = 3
+        params%trs = 5.
+        params%l_prob_align_mode = .true.
+        params%prob_neigh_mode = 'state'
+        params%l_update_frac = .true.
+        params%update_frac = 0.01
+        params%prob_beta = 0.3
+        params%prob_beta_end = 0.3
+        params%startit = 1
+        params%which_iter = 2
+        params%maxits = 25
+        params%topk = 1
+        call cline%set('trs', 5.)
+        call cline%set('overlap', 0.95)
+        call cline%set('fracsrch', 99.)
+        do imode = 1, size(MODES)
+            params%refine = MODES(imode)
+            do icase = 1, size(CASES)
+                call os%new(NROWS, is_ptcl=.true.)
+                do i = 1, NROWS
+                    call os%set_state(i, 1 + (i-1)/(NROWS/2))
+                    call os%set(i, 'updatecnt', 1.)
+                    call os%set(i, 'sampled', 1.)
+                    call os%set(i, 'frac', 2.)
+                    call os%set(i, 'mi_proj', 1.)
+                    call os%set(i, 'mi_state', 1.)
+                    call os%set(i, 'res05', 9.)
+                    call os%set(i, 'res', 8.)
+                    select case(icase)
+                        case(1,2)
+                            call os%set(i, 'mi_proj', real(2-icase))
+                            if( mod(i-1, NROWS/2) < 2 )then
+                                call os%set(i, 'sampled', 2.)
+                                call os%set(i, 'updatecnt', 2.)
+                                call os%set(i, 'mi_proj', real(icase-1))
+                            endif
+                        case(3)
+                            call os%set(i, 'mi_state', real(mod(i,2)))
+                        case(5,6,7)
+                            if( i <= NROWS/2 )then
+                                call os%set(i, 'sampled', 2.)
+                                call os%set(i, 'updatecnt', 2.)
+                            else if( icase == 6 )then
+                                call os%set(i, 'updatecnt', 0.)
+                            else if( icase == 7 )then
+                                call os%set_state(i, 0)
+                            endif
+                        case(8)
+                            if( i > NROWS/2 ) call os%set(i, 'mi_state', 0.)
+                        case(9,10)
+                            ! Ten of 200 unstable observations give 0.95; nine give 0.955 in each state.
+                            if( mod(i-1, NROWS/2) < 19-icase ) call os%set(i, 'mi_state', 0.)
+                    end select
+                enddo
+                expected = icase == 2 .or. icase == 4 .or. icase == 7 .or. icase == 10
+                call check_multistate_overlap(params, cline, os, expected, 0, trim(MODES(imode))//': '//trim(CASES(icase)))
+                if( icase == 1 .or. icase == 3 .or. icase == 4 )then
+                    params%prob_beta_end = 1.
+                    call check_multistate_overlap(params, cline, os, .false., merge(3, 0, icase == 4), &
+                        &trim(MODES(imode))//' tail: '//trim(CASES(icase)))
+                    params%prob_beta_end = params%prob_beta
+                endif
+                call os%kill
+            enddo
+        enddo
+        call cline%kill
+    end subroutine test_posterior_multistate_overlap
+
+    subroutine check_multistate_overlap( params, cline, os, expected, tail_start, message )
+        class(parameters), intent(inout) :: params
+        class(cmdline), intent(inout) :: cline
+        class(oris), intent(inout) :: os
+        logical, intent(in) :: expected
+        integer, intent(in) :: tail_start
+        character(len=*), intent(in) :: message
+        type(convergence) :: conv
+        logical :: converged
+        call del_file(STATS_FILE)
+        converged = conv%check_conv3D(params, cline, os, 40.)
+        call assert_true(converged .eqv. expected, message)
+        call assert_int(tail_start, conv%anneal_tail_start(), message//' (tail start)')
+        call del_file(STATS_FILE)
+    end subroutine check_multistate_overlap
+
+    !> A full-budget stage cannot exit early or begin its tail early; a shorter minimum still allows overlap exits.
+    subroutine test_posterior_minimum_iterations()
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable :: cline
+        type(oris) :: os
+        integer :: route, it, tail_expected
+        logical :: converged
+        allocate(params, cline)
+        params%nstates = 1
+        params%trs = 5.
+        params%refine = 'prob'
+        params%l_prob_align_mode = .true.
+        params%prob_beta = 0.3
+        params%startit = 7
+        params%topk = 1
+        call cline%set('trs', 5.)
+        call cline%set('overlap', 0.95)
+        call cline%set('fracsrch', 99.)
+        do route = 1, 3
+            block
+                type(convergence) :: conv
+                params%maxits = PROB_BETA_TAIL + 3
+                params%minits = params%maxits
+                params%prob_beta_end = params%prob_beta
+                if( route > 1 ) params%prob_beta_end = 1.
+                if( route == 3 )then
+                    params%maxits = PROB_BETA_TAIL + 5
+                    params%minits = 3
+                endif
+                call del_file(STATS_FILE)
+                do it = 1, PROB_BETA_TAIL + 3
+                    params%which_iter = params%startit + it - 1
+                    call posterior_field(os, 7.5, 6.5)
+                    call os%set_all2single('mi_proj', 1.)
+                    converged = conv%check_conv3D(params, cline, os, 40.)
+                    call assert_true(converged .eqv. (it == PROB_BETA_TAIL + 3), 'the minimum and tail hold the exit until iteration eight')
+                    tail_expected = 0
+                    if( route > 1 .and. it >= 3 ) tail_expected = params%startit + 3
+                    call assert_int(tail_expected, conv%anneal_tail_start(), 'the tail starts at the budget boundary or the eligible overlap')
+                    call os%kill
+                enddo
+            end block
+        enddo
+        call cline%kill
+        call del_file(STATS_FILE)
+    end subroutine test_posterior_minimum_iterations
+
+    !> check_conv3D of a single-state pass of NPTCLS frozen particles (frac 100, mi_proj 1 or mi) at FSC=0.5
     !! 7.5 A, iteration which_iter of a stage from startit, with the refine mode, lpexit and, for prob_neigh, the
-    !! neighbourhood mode as given
-    logical function frozen_converged( refine, lpexit, which_iter, startit, neigh_mode ) result( converged )
+    !! neighbourhood mode as given, at the cline overlap 0.99 or overlap
+    logical function frozen_converged( refine, lpexit, which_iter, startit, neigh_mode, mi, frac, overlap ) result( converged )
         character(len=*),           intent(in) :: refine
         real,                       intent(in) :: lpexit
         integer,                    intent(in) :: which_iter, startit
         character(len=*), optional, intent(in) :: neigh_mode
+        real,             optional, intent(in) :: mi, frac, overlap
         class(parameters), allocatable :: params
         type(convergence) :: conv
         type(cmdline)     :: cline
@@ -702,7 +896,9 @@ contains
             call os%set(i, 'updatecnt', 1.)
             call os%set(i, 'sampled',   1.)
             call os%set(i, 'frac',      100.)
+            if( present(frac) ) call os%set(i, 'frac', frac)
             call os%set(i, 'mi_proj',   1.)
+            if( present(mi) ) call os%set(i, 'mi_proj', mi)
             call os%set(i, 'corr',      0.5)
             call os%set(i, 'res05',     7.5)
         end do
@@ -716,6 +912,7 @@ contains
         if( present(neigh_mode) ) params%prob_neigh_mode = neigh_mode
         call cline%set('trs',      5.)
         call cline%set('overlap',  0.99)
+        if( present(overlap) ) call cline%set('overlap', overlap)
         call cline%set('fracsrch', 99.)
         converged = conv%check_conv3D(params, cline, os, 40.)
         call cline%kill
@@ -861,6 +1058,7 @@ contains
             call os%set(i, 'sampled',   1.)
             call os%set(i, 'frac',      frac)
             call os%set(i, 'mi_proj',   mi_proj)
+            call os%set(i, 'mi_state',  1.)
             call os%set(i, 'corr',      0.5)
         end do
     end subroutine make_multistate_field

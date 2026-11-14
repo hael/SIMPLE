@@ -185,13 +185,19 @@ Per particle the search records `mi_proj` (1 if the direction moved less than
 2 degrees), the visited fraction `frac`, and the running mean angular change.
 A single-state run has converged when the average `mi_proj` exceeds 0.99 and
 the visited fraction exceeds 99 percent. Multi-state runs use the joint
-state-and-direction overlap (0.96). The probabilistic modes (`prob`,
-`prob_neigh`) bypass the overlap test, since a committed pose is a draw: the
-run ends on the resolution exit, its iteration budget, or, with
-`prob_beta_end`, its annealing tail: once neither FSC 0.5 nor FSC 0.143
-gained on the previous iteration, the draws ramp geometrically from
-`prob_beta` to `prob_beta_end` over the last five iterations and the run
-ends. Shift search is switched on once the visited fraction exceeds 75
+state-and-direction overlap (0.96): the mean `mi_proj * mi_state` over current
+observations in each state. A populated state without observations holds the
+exit; empty states are ignored. The probabilistic modes (`prob`,
+`prob_neigh`) use overlap 0.99 (0.95 in an eligible intermediate `solve3D`
+stage from stage 3), at any visited fraction, since a neighbourhood search
+visits few references. The hill-climbing neighbourhood modes of solve3D's
+first two stages never end on overlap. Without an annealing tail, overlap
+ends the stage; with `prob_beta_end`, eligible overlap or a resolution stall
+starts the tail. Overlap and stalls respect `minits`; the budget fallback
+still starts the tail in time to finish. During its five iterations the draws
+ramp geometrically from `prob_beta` to `prob_beta_end`, then the run ends.
+The resolution exit and iteration budget also apply. Shift search is switched
+on once the visited fraction exceeds 75
 percent, with `trs = clamp(0.07 msk, 5, 6)` pixels. A `combine_eo=yes` run
 ends with one full-update iteration at a tighter band with the halves
 merged.

@@ -342,7 +342,8 @@ finished at 7.39-7.57/4.14-4.20 A.
 
 **No stage is skipped (ruling of 2026-11-12).** Every stage runs at least
 `STAGE_MINITS` (3) iterations (`minits` on every stage command line, never
-above the stage's budget); after that the stage's exits decide when it ends:
+above the stage's budget; the axis-search stage and the particle entry after
+`cavg_ini` emit `minits=maxits`); after that the stage's exits decide when it ends:
 from stage 3 on the mid-stage resolution exit against the next stage's limit
 and the plateau exit, in every stage its convergence rule, and its `MAXITS`
 budget. A stage whose planned limit the halves already pass at FSC=0.5 still
@@ -454,6 +455,22 @@ resolution exit now also respects overlap progress and FSC=0.143 gains.
 The Nov12 investigation and validation are recorded in
 `doc/implementation_notes/planned/pfcrt_nov12_regression.md`.
 
+**Stages end on the pose overlap (2026-11-11).** Intermediate posterior stages
+from stage 3 emit `overlap=OVERLAP_3D_STAGE` (0.95); the last stage emits
+`OVERLAP_3D` (0.99). The axis-search stage and the particle entry after
+`cavg_ini` are exceptions: they keep 0.99 and emit `minits=maxits`, preserving
+their full budgets. Add-ons have no full-budget stage, only the `STAGE_MINITS`
+minimum. The neighbourhood
+hill climbers (`prob_neigh_mode=shc|snhc`) never end on overlap; multi-state
+plain `shc` retains its joint-overlap-and-scan rule and stage-2 scan exit.
+Posterior searches (`prob`, `prob_neigh`) ignore the visited-reference fraction
+for this exit. Multi-state overlap is the least state's mean of
+`mi_proj * mi_state` over current observations: both direction and label must
+be stable. A populated state without current observations holds the exit;
+an empty state is ignored. With `prob_beta_end`, eligible overlap starts the
+tail instead of ending the stage. Overlap and resolution stalls do not start
+the tail before `minits`; the budget can still start it in time to finish.
+
 A first version tested against `params%lp`, the band in use, and was
 reverted the same day: PfCRT `latest8` converged in 2 of 6 restarts. **Do not
 test the band in force.** A band-limited map's FSC=0.5 crossing sits at its
@@ -511,7 +528,10 @@ run at exactly 4.50 A for 30 iterations while the handoff asked for 4.14 A
 way to 4.1-4.3 A with side chains. Only an explicit command-line `lpstop`
 remains a ceiling in NU stages.
 
-Early stopping applies in every stage (the NU-stage `minits=maxits` of
+Early stopping applies after the `STAGE_MINITS` minimum, outside the
+axis-search stage and the particle entry after `cavg_ini`, which use
+`minits=maxits`. It applies in every NU stage
+(the NU-stage `minits=maxits` of
 2026-09-07 was retired on 2026-09-08). The early stops that motivated it
 happened under a matching-band ceiling: pinned at 5.97 A the sampler
 converged on a coarse solution within a few iterations while the FSC could
@@ -727,12 +747,12 @@ randomization may be applied.
 
 The axis is searched after stage 4 (`SYMSRCH_STAGE`; after stage 3 until
 2026-10-17, when the stage-3 map was too poor and the search failed too often).
-The stages through it reconstruct in `pgrp_start` and run their full iteration
-budget (`overlap` 0.99, `fracsrch` 99); the symmetry-search stage defers its
-canonical sigma2 commit to after the symmetric reconstruction. A run that
+The stages through it reconstruct in `pgrp_start`. The symmetry-search stage
+runs its full iteration budget (`minits=maxits`, `overlap` 0.99, `fracsrch` 99)
+and defers its canonical sigma2 commit to after the symmetric reconstruction. A run that
 searches no axis (`pgrp_start = pgrp`: every c1 run and the input-volume,
 `cavg_ini`, `cavg_ini_ext` and add-on routes) ends that block at stage 3
-(`NOSYMSRCH_STAGE`) as before, so its stage 4 early-stops (`overlap` 0.9,
+(`NOSYMSRCH_STAGE`) as before, so its stage 4 early-stops (`overlap` 0.95,
 `fracsrch` 90) and its entry stage is unchanged, except that the particle
 stages of a `cavg_ini` run enter at stage 4 and run it to its full budget
 (section 5). `solve3D_symsrch_stage`

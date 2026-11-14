@@ -59,7 +59,7 @@ integer,          parameter :: NSAMPLE_SOLVE3D_DEFAULT = 10000
 type :: refine3D_stage_cfg
     type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, envfsc
     type(string) :: balance, filt_mode, automsk, prob_neigh_mode
-    integer :: iter, inspace, inspace_sub, imaxits
+    integer :: iter, inspace, inspace_sub, imaxits, iminits = 0
     real    :: trs, overlap, fracsrch
     real    :: snr_noise_reg, gaufreq, update_frac_dyn
     logical :: l_gold_standard = .false.
@@ -216,8 +216,8 @@ contains
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
         if( l_register ) call set_refine3D_register_policy( cfg )
         if( l_addon )then
-            ! stage 3 keeps its full budget only because of the symmetry search,
-            ! which never runs in an add-on: it early-stops on overlap
+            ! An add-on has no symmetry-axis search: no full-budget stage, only the STAGE_MINITS floor
+            cfg%iminits = 0
             if( istage <= solve3D_symsrch_stage(l_srch4symaxis) )then
                 cfg%overlap     = addon%overlap
                 cfg%fracsrch    = 90.
@@ -247,12 +247,13 @@ contains
         cfg%inspace         = NSPACE_REGISTER
         cfg%inspace_sub     = 0
         cfg%imaxits         = 1
+        cfg%iminits         = 0
         cfg%update_frac_dyn = 1.0
         cfg%trail_rec       = 'no'
         cfg%filt_mode       = 'none'
         cfg%automsk         = 'no'
         cfg%envfsc          = 'no'
-        cfg%overlap         = 0.99
+        cfg%overlap         = OVERLAP_3D
         cfg%fracsrch        = 99.
         cfg%l_scan_exit     = .false.
         if( allocated(lpinfo) )then
@@ -455,7 +456,6 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = 0.
                 cfg%ml_reg        = 'no'
-                cfg%overlap       = 0.99
                 cfg%fracsrch      = 99.
                 cfg%snr_noise_reg = 2.0
                 ! multi-state shc stage 2 also ends once the search scans more than FRACSRCH_SCAN_EXIT %
@@ -469,10 +469,8 @@ contains
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
                 if( istage > full_budget_last_stage(l_cavgs) )then
-                    cfg%overlap  = 0.9 ! early stopping
                     cfg%fracsrch = 90. ! early stopping
                 else
-                    cfg%overlap  = 0.99
                     cfg%fracsrch = 99.
                 endif
                 cfg%snr_noise_reg = 4.0
@@ -480,13 +478,18 @@ contains
                 cfg%imaxits       = MAXITS(istage)
                 cfg%trs           = lpinfo(istage)%trslim
                 cfg%ml_reg        = 'yes'
-                cfg%overlap       = 0.95 ! early stopping
                 cfg%fracsrch      = 90.  ! doesn't affect later stages
                 cfg%snr_noise_reg = 6.0
             case default
                 THROW_HARD('Invalid istage index in set_refine3D_stage_controls')
         end select
         if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%imaxits = MAXITS_CAVGS_EARLY
+        ! Protect the map handed to the axis search and the first particle adaptation after class averages.
+        cfg%iminits = 0
+        if( (l_srch4symaxis .and. istage == SYMSRCH_STAGE) .or. &
+            &(l_cavg_ini .and. .not. l_cavgs .and. istage == solve3D_nstages_ini3D()) ) cfg%iminits = cfg%imaxits
+        cfg%overlap = OVERLAP_3D_STAGE
+        if( istage < PROB_REFINE_STAGE .or. istage >= active_refine3D_nstages() .or. cfg%iminits > 0 ) cfg%overlap = OVERLAP_3D
     end subroutine set_refine3D_stage_controls
 
     subroutine apply_refine3D_search_overrides( cfg, params, istage )
@@ -628,8 +631,13 @@ contains
             call cline_refine3D%delete('nspace_sub')
         endif
         call cline_refine3D%set('maxits',                 cfg%imaxits)
-        ! No stage is skipped: each runs STAGE_MINITS iterations, then its exits decide (solve3D_policy.md sec. 4)
-        call cline_refine3D%set('minits',                 min(STAGE_MINITS, cfg%imaxits))
+        ! No stage is skipped: each runs STAGE_MINITS iterations, then its exits decide (solve3D_policy.md sec. 4);
+        ! the axis-search stage and the particle entry after cavg_ini run their full budget (iminits)
+        if( cfg%iminits > 0 )then
+            call cline_refine3D%set('minits',             cfg%iminits)
+        else
+            call cline_refine3D%set('minits',             min(STAGE_MINITS, cfg%imaxits))
+        endif
         call cline_refine3D%set('trs',                    cfg%trs)
         ! the polar shift map's key goes to every stage with a shift search, where each particle is centred as it
         ! needs; zero switches it off elsewhere (the parameter's default is the key)
@@ -689,8 +697,8 @@ contains
         endif
     end subroutine emit_refine3D_stage_cfg
 
-    !> Last stage run to its full budget: the symmetry-search stage and, on the particles of a
-    !! cavg_ini run, their entry stage (the class averages' last)
+    !> Last stage with strict scan controls: the symmetry boundary and, on the particles of a
+    !! cavg_ini run, their entry stage (the class averages' last).
     integer function full_budget_last_stage( l_cavgs ) result( istage )
         logical, intent(in) :: l_cavgs
         istage = solve3D_symsrch_stage(l_srch4symaxis)

@@ -70,6 +70,7 @@ contains
         use simple_type_defs,  only: lp_crop_inf
         use simple_sp_project, only: sp_project
         use simple_string,     only: string
+        use simple_defs_conv,  only: OVERLAP_3D, OVERLAP_3D_STAGE
         class(parameters), allocatable :: params
         class(cmdline), allocatable    :: saved_cline
         class(sp_project), allocatable :: proj
@@ -213,6 +214,8 @@ contains
         ! trailing reconstruction starts at stage 3 with the free sampling
         do istage = 1, 8
             call set_cline_refine3D(params, istage, 1, .false.)
+            call assert_int(min(3, cline_refine3D%get_iarg('maxits')), cline_refine3D%get_iarg('minits'), &
+                &'ordinary stages run the three-iteration minimum, then early-stop')
             call assert_false(cline_refine3D%defined('greedy_sampling'), 'one state: no greedy sampling control')
             call assert_false(cline_refine3D%defined('frac_best'),       'one state: no best-fraction control')
             select case(istage)
@@ -223,6 +226,12 @@ contains
                 case DEFAULT
                     call assert_false(cline_refine3D%defined('sticky_sampling'), 'one state: free sampling after the shc stages')
             end select
+            ! an intermediate stage from stage 3 moves on at overlap 0.95; stages 1-2 and the last keep 0.99
+            if( istage >= 3 .and. istage < 8 )then
+                call assert_real(OVERLAP_3D_STAGE, cline_refine3D%get_rarg('overlap'), 1.e-6, 'one state: an intermediate stage moves on at 0.95')
+            else
+                call assert_real(OVERLAP_3D, cline_refine3D%get_rarg('overlap'), 1.e-6, 'one state: stages 1-2 and the last keep 0.99')
+            endif
             ! trailing reconstruction starts with the free sampling
             if( istage <= 2 )then
                 call assert_string_eq('no',  cline_refine3D%get_carg('trail_rec'), 'one state: no trailing over the sticky subset')
@@ -230,6 +239,32 @@ contains
                 call assert_string_eq('yes', cline_refine3D%get_carg('trail_rec'), 'one state: trailing from stage 3')
             endif
         end do
+        l_srch4symaxis = .true.
+        call set_cline_refine3D(params, 4, 1, .false.)
+        call assert_int(cline_refine3D%get_iarg('maxits'), cline_refine3D%get_iarg('minits'), 'the axis-search stage runs its full budget')
+        call assert_real(OVERLAP_3D, cline_refine3D%get_rarg('overlap'), 1.e-6, 'the axis-search stage keeps the strict overlap')
+        call assert_false(cline_refine3D%defined('lpexit'), 'the axis-search stage has no resolution exit')
+        call set_cline_refine3D(params, 5, 1, .false.)
+        call assert_int(3, cline_refine3D%get_iarg('minits'), 'the stage after the axis search returns to the three-iteration minimum')
+        nstages_refine3D = 4
+        call set_cline_refine3D(params, 4, 1, .true.)
+        call assert_int(cline_refine3D%get_iarg('maxits'), cline_refine3D%get_iarg('minits'), 'the class-average axis-search stage keeps its actual budget')
+        nstages_refine3D = 8
+        l_srch4symaxis = .false.
+        l_cavg_ini = .true.
+        call set_cline_refine3D(params, 4, 4, .false.)
+        call assert_int(cline_refine3D%get_iarg('maxits'), cline_refine3D%get_iarg('minits'), 'the particle entry after class averages runs its full budget')
+        call assert_real(OVERLAP_3D, cline_refine3D%get_rarg('overlap'), 1.e-6, 'the particle entry keeps the strict overlap')
+        call set_cline_refine3D(params, 5, 4, .false.)
+        call assert_int(3, cline_refine3D%get_iarg('minits'), 'the stage after particle entry returns to the three-iteration minimum')
+        addon%active = .true.
+        addon%l_register = .false.
+        addon%frozen_rec = 'frozen_context_for_stage_rule'
+        call set_cline_refine3D(params, 4, 4, .false., addon=addon)
+        call assert_int(3, cline_refine3D%get_iarg('minits'), 'an add-on has no full-budget stage, only the three-iteration minimum')
+        addon%active = .false.
+        call addon%frozen_rec%kill
+        l_cavg_ini = .false.
         ! a run that starts at stage 2 has no sticky subset to keep: it draws one
         call set_cline_refine3D(params, 2, 2, .false.)
         call assert_string_eq('yes', cline_refine3D%get_carg('sticky_sampling'), 'one state: a stage-2 start draws its sticky subset')

@@ -730,11 +730,21 @@ command-line keys for that internal passing only. The tail replaced a
 ramp spread over the stage's whole budget
 on 2026-10-24: on streptavidin the last stage ran its 25 iterations with the
 resolution reached at the second (section 19 of the note). A `refine=prob`
-or `prob_neigh` stage does not end on the pose overlap (`check_conv3D`
-bypasses it: the carried pose is a draw and sits near the posterior's own
-stability from a stage's first iterations, so the overlap rule cannot tell a
-frozen assignment from convergence) but on the resolution exit (`lpexit`),
-its annealing tail, or its iteration budget.
+or `prob_neigh` stage ends once the orientation overlap passes its `overlap`
+(multi-state: the lowest state's mean `mi_proj * mi_state` over the current
+observations), whatever the visited fraction, or on the resolution exit
+(`lpexit`), its annealing tail or its
+iteration budget; under an annealing tail the overlap starts the tail. A
+populated state without current observations holds the overlap exit; empty
+states are ignored. Overlap and resolution stalls respect `minits` before
+starting a tail; its budget fallback can start earlier to finish on time. The
+hill-climbing neighbourhood modes (`prob_neigh_mode=shc|snhc`, solve3D's first
+two stages) never end on the overlap. The limit is `OVERLAP_3D` (0.99) unless
+the workflow sets `overlap`: `solve3D` emits `OVERLAP_3D_STAGE` (0.95) from
+stage 3 to the next-to-last stage, except its full-budget symmetry-search and
+post-class-average particle-entry stages (`minits=maxits`, overlap 0.99).
+Before 2026-11-11, `check_conv3D` bypassed the overlap for these modes and a stage ran to
+an exit or its budget.
 
 **The n_eff readout (`POSTERIOR DRAW N_EFF`, 2026-10-29; section 20.2 of
 the note).** Every iteration logs the mean effective number of candidates a
@@ -950,7 +960,7 @@ posterior draw over all grid rotations (`score_seeded_ref`,
 `gen_posterior_val` and its bank form), as in the dense and 2D tables; the
 re-seeding draws its in-plane the same way. T_i stays with the candidate row
 (both fills write it).
-The pose-overlap bypass covers `prob_neigh` as it covers `prob`. Particles
+The pose-overlap rule covers `prob_neigh` as it covers `prob`. Particles
 are assigned to references and no reference is forced to be populated: the
 reference-balanced frontier (every active reference drawing its closest free
 particle, the greedy state labels, the leftover rule) was deleted on

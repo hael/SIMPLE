@@ -5314,12 +5314,11 @@ Private symbols:
 - `check_cont_conv` — function
 - `check_conv2D` — function
 - `check_conv3D` — function
+- `check_multistate_overlap` — subroutine
 - `clear_samples` — subroutine
 - `cont_converged` — function
 - `fresh_cont_converged` — function
 - `frozen_converged` — function
-- `frozen_field` — subroutine
-- `frozen_field_states` — subroutine
 - `get` — function
 - `lpexit_converged` — function
 - `make_cont_field` — subroutine
@@ -5327,6 +5326,8 @@ Private symbols:
 - `make_multistate_field` — subroutine
 - `multistate_converged` — function
 - `plot_projdirs` — subroutine
+- `posterior_field` — subroutine
+- `posterior_field_states` — subroutine
 - `prev_iter_res` — function
 - `prev_iter_res_states` — function
 - `print_iteration` — subroutine
@@ -5350,8 +5351,10 @@ Private symbols:
 - `test_posterior_anneal_tail` — subroutine
 - `test_posterior_anneal_tail2D` — subroutine
 - `test_posterior_anneal_tail_states` — subroutine
-- `test_posterior_assignment_bypass` — subroutine
 - `test_posterior_exits_weighted_insertion` — subroutine
+- `test_posterior_minimum_iterations` — subroutine
+- `test_posterior_multistate_overlap` — subroutine
+- `test_posterior_overlap_rule` — subroutine
 - `test_stage_plateau_exit` — subroutine
 - `test_state_readout_keys` — subroutine
 
@@ -21229,6 +21232,7 @@ Files:
 Uses:
 - `simple_builder`
 - `simple_cmdline`
+- `simple_defs_conv`
 - `simple_matcher_smpl_and_lplims`
 - `simple_ori`
 - `simple_parameters`
@@ -21284,7 +21288,7 @@ Public symbols:
 - `run_all_solve3D_symmetry_tests` — subroutine
 
 Private symbols:
-- `assert_maps_equal` — subroutine
+- `map_reldiff` — function
 - `reconstruct` — subroutine
 - `reconstruction_cline` — subroutine
 - `test_symmetry_trailing_handoff` — subroutine
@@ -21305,6 +21309,7 @@ Uses:
 - `simple_matcher_refvol_utils`
 - `simple_parameters`
 - `simple_refine3d_fnames`
+- `simple_refine3d_provenance`
 - `simple_sigma2_bootstrap`
 - `simple_solve3d_manifest`
 
@@ -21315,6 +21320,7 @@ Public symbols:
 - `calc_rec` — subroutine
 - `commit_deferred_sigma_update` — subroutine
 - `configure_final_pcg_solve_budget` — subroutine
+- `discard_trailing_chains` — subroutine
 - `exec_refine3D` — subroutine
 - `gen_ortho_reprojs4viz` — subroutine
 - `generate_random_volumes` — subroutine
@@ -21371,6 +21377,8 @@ Public symbols:
 - `solve3D_stage_skipping` — function
 - `solve3D_stage_skipping` — function
 - `solve3D_stage_smpd_crop` — function
+- `solve3D_stage_trails` — function
+- `solve3D_stage_trails` — function
 - `solve3D_state_fsc_lowpass` — function
 - `solve3D_symsrch_stage` — function
 - `solve3D_symsrch_stage` — function
