@@ -189,7 +189,7 @@ simple_exec prg=select_particles projfile=my_project.simple nsample=100000 nspac
 Use the reconstruction's symmetry in `pgrp`. `nspace` must be positive and
 even. The default `state=1` restricts selection to that structural state.
 The default `subset_score=corr` ranks the last polar alignment scores;
-use `subset_score=corr_cart` for Cartesian refinement or polishing scores.
+use `subset_score=corr_cart` for the scores of the Cartesian pass (`refine=cont` or the `pose_cont` follow-up).
 Higher scores rank first. Use comparable final-pass scores; this command
 does not rescore particles, and fractional updates can leave older scores.
 

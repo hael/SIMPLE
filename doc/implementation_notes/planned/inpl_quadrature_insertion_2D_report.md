@@ -22,7 +22,7 @@ committed as `d6cf4ae25`; section 8 (the default of 64) is uncommitted on top of
    weights (`check_bank_particle_frame`). Reversing the bank's sign changes the difference to 2.5. This was the
    frame the whole insertion depends on.
 4. **At the physical temperature most rows of the simulated fixture are concentrated.** In the first table iteration of
-   stage 2, 93 % of the particles collapse to the polished pose at mean `n_eff` 1.0; later iterations collapse 25 to
+   stage 2, 93 % of the particles collapse to the refined pose at mean `n_eff` 1.0; later iterations collapse 25 to
    90 % of them at mean `n_eff` 10 to 17 of 360 rotations, 1.4 to 2.3 entries per particle. This is what the plan
    says the temperature does, and it is what the maintainer's sets will show for a symmetric top view: a large `n_eff`
    and a small collapsed share where the row is flat, a collapse where it is not. The 73-particle fixture cannot say
@@ -191,7 +191,7 @@ harmonics. The exact angular marginalisation (a polar circular convolution per r
   posterior (`strategy2D_prob`, `prob_insert_inpl`, entries of `cavger_update_sums`); the committed pose, the terminal pass
   and `make_cavgs` are unchanged (policy: In-plane insertion)."
 - `simple-main-strategies-probabilistic`: "The 2D in-plane insertion is a step after the draw, not a table row: the row
-  of the committed class at the polished shift (`memoize_shifted_ptcl`, `gen_euclid_dists_bank`) fills
+  of the committed class at the refined shift (`memoize_shifted_ptcl`, `gen_euclid_dists_bank`) fills
   `prob_insert_inpl`; the readout record carries the `inpl_*` fields."
 - `simple-main-class`: "`cavger_update_sums` takes optional entries (`ent_n`, `ent_e3`, `ent_w`): a particle with entries is
   gridded once per entry at its weight on both accumulators, else once at its committed angle."

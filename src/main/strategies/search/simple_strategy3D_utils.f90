@@ -31,7 +31,7 @@ contains
     !! index inpl with the shift increment sh_incr in the particle's own axes, as the Euler triplet (the
     !! reference's direction, the grid angle as e3) and the stored shift (the particle's previous shift plus the
     !! increment when shifts are searched; sub-microshift values zeroed). The one place the addition lives:
-    !! assign_ori commits the particle's own candidate through it with the increment its polish (or the map's
+    !! assign_ori commits the particle's own candidate through it with the increment its refinement (or the map's
     !! strategy) rotated into the particle's axes, and the weighted insertion's extra poses come through candidate_pose too,
     !! which converts the table's increment the same way, so they can never drift from the committed pose's rule
     subroutine candidate_pose( s, ref, inpl, sh_incr, euler, shvec )
@@ -157,7 +157,7 @@ contains
         loc  = maxloc(s3D%proj_space_corrs(:,s%ithr))
         ref  = loc(1)
         ! The discrete state/projection winner is fixed before the optional
-        ! continuous (sx,sy,theta) polish.  Rejection leaves this candidate
+        ! continuous (sx,sy,theta) refinement.  Rejection leaves this candidate
         ! unchanged.
         if( s%uses_continuous_refinement() ) call s%refine_selected_continuously(ref)
         corr = s3D%proj_space_corrs(   ref,s%ithr)

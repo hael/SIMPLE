@@ -211,7 +211,7 @@ contains
     !! derived files after the preparation has succeeded: the polar reprojection model unless
     !! the pass is Cartesian (l_cart_refine), and the prepared Cartesian reference volumes of
     !! every state and half when a Cartesian pass reads them (l_cart_refine or the in-matcher
-    !! polish pose_cont=yes), with the band limit of the iteration in their header (6.6).
+    !! follow-up pose_cont=yes), with the band limit of the iteration in their header (6.6).
     subroutine materialize_reprojection_model_from_volumes( params, build, cline, cleanup_pftc )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build

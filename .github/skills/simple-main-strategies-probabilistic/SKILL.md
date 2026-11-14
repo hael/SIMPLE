@@ -8,7 +8,7 @@ description: Use when working in SIMPLE's src/main/strategies/search/probabilist
 Owns the probabilistic assignment as a batch pipeline inside the matcher pass (`refine3D_exec`, `refine2D_exec`),
 the same in shared memory and in every distributed part. Per pass: the table (`new_pipeline`, `new_neigh_pipeline`),
 the iteration's model (`set_model_from_field`), `open_assignment`; per batch: `fill_tab_range` on the prepared
-batch, `assign_batch` (one keyed draw per particle from its row), then `strategy3D_prob`/`strategy2D_prob` polish the
+batch, `assign_batch` (one keyed draw per particle from its row), then `strategy3D_prob`/`strategy2D_prob` refine the
 drawn pose; `close_assignment` reports, or in a distributed part writes its readout record. Pair scores, in-plane and
 disk draws are `pftc/`; the sample is the project owner's (`sample_ptcls4prob3D/2D`). There is no global table, part
 file, assignment or insertion file, and no table program.

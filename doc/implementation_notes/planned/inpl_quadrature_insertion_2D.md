@@ -28,7 +28,7 @@ not depend on sigma2 given the poses (section 2, with its assumptions), so the n
 through the search: which rings vote on the angle, and how sharply.
 
 **What the insertion is hypothesised to do.** The particle enters the sums at a quadrature of its in-plane
-posterior, conditional on its committed class and its polished shift, instead of at one drawn angle. The
+posterior, conditional on its committed class and its refined shift, instead of at one drawn angle. The
 hypothesis is that this lowers the fresh asymmetric noise the loop is seeded with: a `K`-point quadrature
 of a flat row, at equally spaced angles, annihilates every angular harmonic of the particle's noise except the
 multiples of `K` (review R1, point 1); with `K` above the band's angular Nyquist at the rim (ruling 15) no
@@ -56,10 +56,10 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
   mirror over the row (classes) would be soft class membership and would not touch the angle; a cone in
   angle (rim displacement below the resolution) would exclude the whole undecided circle of a top view.
   Hence ruling 5: the angle, the whole row, no cone.
-- **The committed angle is continuous.** After the joint polish `store_continuous_e3` keeps a fractional
+- **The committed angle is continuous.** After the joint refinement `store_continuous_e3` keeps a fractional
   angle and `assign_ori` writes it when the class and grid index are the committed ones
   (`strategy2D_srch.f90`, `has_continuous_e3`); otherwise e3 is `360 - get_rot(irot)`. A quadrature on
-  the grid alone would replace a polished angle by its bin centre (R1, point 2): ruling 16.
+  the grid alone would replace a refined angle by its bin centre (R1, point 2): ruling 16.
 - **The row at the committed pose has a public evaluator.** `gen_euclid_dists_bank(iref, iptcl, bank,
   dists)` returns the `nrots` losses of the particle shifted once in its own frame
   (`memoize_shifted_ptcl`) against the reference; the crvec helpers it wraps are private to the calculator
@@ -86,7 +86,7 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
   same frame.
 - **Where the search commits.** `strategy2D_prob%srch` takes the table's class, in-plane index and shift,
   runs `refine_selected_continuously`, stores and assigns; nothing after it touches the pose. The quadrature
-  goes there, after the polish (ruling 7). `strategy3D_prob%resolve_extra_poses` is the pattern.
+  goes there, after the refinement (ruling 7). `strategy3D_prob%resolve_extra_poses` is the pattern.
 - **Which stages have a table.** Stage 1 runs `snhc_smpl` (classic, no table); stage 2 `prob`; stages 3
   to 5 `prob_neigh`; stage 6 `prob` (`set_refine2D_stage_search_policy`); the terminal pass is
   `refine=greedy` (`execute_terminal_pass`). The insertion exists in stages 2 to 6 only.
@@ -108,12 +108,12 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
   is evaluated, no side channel allocated, no readout field written other than zeros. This is the plan's
   gate and no ruling may waive it; the assertions of Phase 1b cover the enabled path.
 - **The committed pose is the hypothesis.** For identical incoming references the search, its draws and
-  keyed random streams, the polish, the project's class, e3 and shift, the sigma2 residual at the committed
+  keyed random streams, the refinement, the project's class, e3 and shift, the sigma2 residual at the committed
   pose, the convergence statistics and every existing readout field are unchanged at any `topk_inpl`. The
   references change under `topk_inpl > 1`, so the run's trajectory changes from the second iteration on;
   "unchanged" is a statement about one pass, not about a run (R1, closing).
 - **The concentrated-posterior limit reproduces today's insertion** (ruling 16): a particle whose
-  quadrature collapses to one entry enters at its polished pose at weight 1, exactly as at `topk_inpl=1`.
+  quadrature collapses to one entry enters at its refined pose at weight 1, exactly as at `topk_inpl=1`.
   Enabling the feature never inserts a well-determined particle less accurately than today.
 - **The sums stay thread-count independent.** A particle's entries are inserted in its slot of the bucket,
   in batch order (`cavger_update_sums`); weights of a particle sum to 1 and each weight applies to the data
@@ -162,7 +162,7 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
    them instead of the committed pose, each weight on both accumulators; without entries (stage 1, the
    terminal pass, `topk_inpl=1`, a particle without a valid row) it inserts the committed pose at weight 1
    as today. Readout: four fields, `inpl_nptcls` (particles with a quadrature), `inpl_npose` (entries after
-   merging), `inpl_nsingle` (particles whose quadrature collapsed to the polished pose), `inpl_neff_sum`
+   merging), `inpl_nsingle` (particles whose quadrature collapsed to the refined pose), `inpl_neff_sum`
    (sum over the particles with a quadrature of `exp(entropy)` of the row at the quadrature's
    temperature), written, read and added together (`write_prob_readout`, `read_prob_readout`,
    `add_prob_readout`), reported by the master as one `PROB_TAB_INPL` line: particles, entries per particle,
@@ -181,7 +181,7 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
     `ptcl_posterior_temp`), as the 3D extras are. This is the one element mirrored from 3D; the row is the
     whole circle (ruling 5) and the selection the quadrature (ruling 6). The search draws at `prob_beta`
     times that temperature; the inserted image is then the physical posterior's expectation, conditional on
-    the class and the polished shift, approximated by `K` points, and the committed draw the hot hypothesis.
+    the class and the refined shift, approximated by `K` points, and the committed draw the hot hypothesis.
     The annealing tail leaves the quadrature's temperature where it is and cools the draws towards it.
 15. (2026-11-13, proposed after R1 point 1) **The offset and the harmonic criterion.** The quadrature's
     phase `v` of ruling 6 is one keyed uniform variate per particle (`rnd_keyed(rnd_draw_key(scope, iptcl,
@@ -203,7 +203,7 @@ Checked at `db20cde75` with `rg`; these premises are fixed by the code.
     found on the grid; the point or points that fall in the committed bin are placed at the committed angle
     as the search commits it (`continuous_e3` when `has_continuous_e3`, else the bin's angle) and merged
     into one entry. A quadrature that collapses to one entry (every `u_j` in one bin, the concentrated
-    posterior) inserts the polished pose at weight 1, bit for bit today's insertion for that particle; the
+    posterior) inserts the refined pose at weight 1, bit for bit today's insertion for that particle; the
     readout counts these (`inpl_nsingle`). No continuous interpolation within other bins: a bin-uniform
     model of the posterior within a bin is wrong exactly where it would matter, at a peak.
 
@@ -284,7 +284,7 @@ Defaults taken without a question: the names `topk_inpl`, `prob_insert_inpl`, `P
     `gen_euclid_dists_bank`): the row's value at the committed rotation equals `gen_corr_for_rot_8_shifted`
     at the same pose for a non-zero particle-frame shift and an astigmatic CTF, within the kernel's
     single-precision spread measured on the pair;
-  - in `simple_cavg_sums_tester` (`suite=class_average_carry_over`): one entry at weight 1 at the polished
+  - in `simple_cavg_sums_tester` (`suite=class_average_carry_over`): one entry at weight 1 at the refined
     angle gives the same sums bit for bit as today's insertion; two entries at weight 0.5 at one angle equal
     one at weight 1 within rounding; the CTF-squared mass of a particle is the same for any set of weights
     summing to 1 (both accumulators take the weight); the sums with entries are bit-identical at 1 and 4
@@ -387,7 +387,7 @@ against the code and hold.
    the circle: harmonics that are multiples of `K` survive at full amplitude, and the same `K` grid angles
    would be used for every flat-row particle. Changed: the keyed per-particle offset and the harmonic
    criterion `K > m_max` (ruling 15); the "no seed" claim withdrawn from section 1.
-2. A grid quadrature discards the polished continuous angle, and a concentrated posterior would insert a
+2. A grid quadrature discards the refined continuous angle, and a concentrated posterior would insert a
    well-determined particle at its bin centre. Changed: the committed-bin substitution and the collapsed
    case's fallback to today's insertion (ruling 16), now a contract line.
 3. The identity gate at `topk_inpl=1` cannot show the enabled path is correct, and a smoke run that prints
@@ -475,7 +475,7 @@ the new suites included. Release build (run 1672): fast gate 15 of 15. Exit item
   stages at four threads: total 2.22 s at 8 against 2.09 s at 1; class sums 0.32 s against 0.27 s; table fill 0.28 s
   against 0.34 s (the runs follow different trajectories). It cannot say more.
 - *What the readout showed on the fixture,* for the maintainer's orientation: in the stage's first table iteration 93 %
-  of the particles collapse to the polished pose at mean `n_eff` 1.0; later iterations 25 to 90 % collapse (mean
+  of the particles collapse to the refined pose at mean `n_eff` 1.0; later iterations 25 to 90 % collapse (mean
   `n_eff` 10 to 17 of 360 rotations, 1.4 to 2.3 entries per particle); `m_max` 50 at stage 2 to 71 at stage 6. At the
   physical temperature most rows of this simulated set are concentrated; the flat rows the plan is about would show as
   a large `n_eff` and a small collapsed share.

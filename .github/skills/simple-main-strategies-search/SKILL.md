@@ -46,7 +46,7 @@ Silent ones first.
   (seed, pass, iteration, particle, draw) (`rnd_draw_key`, `prob_rnd_scope`) and depends on no thread, batch or
   part; the project owner fixes the seed first (`adopt_run_seed`). A new `prob*` draw takes a key, not `ran3`.
 - A worker reproduces the sample (`sample4update_reprod`) whenever the master drew it (probabilistic
-  modes, `master_draws_sample*`, the polish) and draws only otherwise.
+  modes, `master_draws_sample*`, the `pose_cont` follow-up) and draws only otherwise.
 - Preparation records each particle's mask (`note_obs_mask`); class sums and 3D reconstruction normalise
   under the same one (`obs_on_box`). A cropped 3D record (`put_record` in `polarize_batch_particles3D`) is
   the reconstruction's observation bit for bit (`prep_rec_observation`): change both together.

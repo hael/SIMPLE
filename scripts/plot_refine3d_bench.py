@@ -22,7 +22,7 @@ output goes to OUTPUT_DIRECTORY, by default bench_summary/ beside the reports:
                           tables in the refine2D iterations, the thread-seconds
                           of the probability tables and the searches, the work
                           of the continuous pose solves (refine=cont, the
-                          polish), the pre-step driver per number of states and
+                          continuous follow-up), the pre-step driver per number of states and
                           directions, and the worker phases
     bench_profile.svg     the per-iteration critical path (stacked) and the
                           slowest and mean partition times
@@ -693,7 +693,7 @@ CONT_RATIO_BINS = ("0.25-0.75", "0.75-1.25", "1.25-1.75", "1.75-2.5", ">= 2.5")
 
 
 def write_cont_work(records: Sequence[Record], add) -> None:
-    """The CONTINUOUS POSE WORK sections of the 3D search records (refine=cont and the polish), summed over
+    """The CONTINUOUS POSE WORK sections of the 3D search records (refine=cont and the continuous follow-up), summed over
     parts and iterations; the per-solve figures and the histogram of actual over predicted reduction at the
     accepted steps are recomputed from the sums, the time per pixel-evaluation from the search's
     thread-seconds."""
@@ -706,7 +706,7 @@ def write_cont_work(records: Sequence[Record], add) -> None:
     search_ts = sum(rec.thread_seconds.get("match3D search", 0.0) for rec in recs)
     # a solve that evaluated its seed; the two statuses without one make no pass
     solved = sums["solves"] - sums["not attempted"] - sums["invalid preparation"]
-    add(f"Continuous pose work (refine=cont and the polish), summed over {len(recs)} records:")
+    add(f"Continuous pose work (refine=cont and the continuous follow-up), summed over {len(recs)} records:")
     for name in CONT_COUNTS:
         add(f"  {name:46s} {sums[name]:14.0f}")
     if solved > 0:

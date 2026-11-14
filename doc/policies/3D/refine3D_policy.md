@@ -29,7 +29,7 @@ project and one or more starting 3D references. Its durable contract is:
 2. materialize the iteration reprojection model from current Cartesian volumes
 3. run particle-domain search and hard assignment: under `refine=prob*` the
    matcher's batch pipeline (each batch's probability-table rows filled, each
-   particle's pose drawn from its own row, polished, its residual, its commit),
+   particle's pose drawn from its own row, refined continuously, its residual, its commit),
    under the classic modes the search strategies
 4. write partition-local Cartesian reconstruction inputs
 5. run volume assembly when volume reconstruction is enabled
@@ -124,7 +124,7 @@ search, and writing partition-local Cartesian partial reconstructions. Under
 `refine=prob*` it owns the batch pipeline (since 2026-11-04, the same body in
 shared memory and in a distributed part): per batch the probability-table rows
 filled, each particle's pose and state drawn from its own row, the extras of
-the weighted insertion, then the polish, residual and commit; a distributed
+the weighted insertion, then the continuous refinement, residual and commit; a distributed
 part publishes a readout record (`prob_readout_part<NN>.txt`) that the master
 merges in part order and prints.
 
@@ -170,8 +170,8 @@ state.
 Shared-memory `refine3D` owns one parsed command, project and general toolbox
 for its whole run. Each iteration refreshes the volumes, search toolbox, band
 and prepared model; it retains symmetry, direction geometry and masks. The
-matcher releases all-state alignment data before reconstruction. A Cartesian
-polish consumes the same in-memory project and sample, with its own parameters
+matcher releases all-state alignment data before reconstruction. The Cartesian
+follow-up consumes the same in-memory project and sample, with its own parameters
 constructed once and its iteration/sampling settings refreshed explicitly.
 Gridding assembly updates the owner's project without publishing it, and sigma2
 consolidation uses that same project. The completed particle field is written
@@ -180,7 +180,7 @@ The PCG master retains its additional particle-field write below. Startup
 mutations needed by sigma2 bootstrap are still published before bootstrap.
 
 Shared-memory strategies explicitly reset the intrinsic random stream at their
-alignment, polish, gridding-assembly and sigma-commit phase boundaries, preserving
+alignment, follow-up, gridding-assembly and sigma-commit phase boundaries, preserving
 the reseed sequence of their command-based execution. Owner routines never
 reseed. The probabilistic generator and its key version are unchanged.
 
@@ -211,7 +211,7 @@ own project.
 
 The master writes the particle field once before the workers start (with
 the iteration's sample, drawn by the master, or as the model left it), once
-more after the merge only when a polish pass follows (its workers read the
+more after the merge only when a follow-up pass comes next (its workers read the
 merged field), and once at the end of the iteration; the parts of a
 probabilistic iteration reproduce the master's sample over their ranges
 (`sample4update_reprod`) and publish their readout records, which the master
@@ -477,7 +477,7 @@ unless the ownership, artifacts, and update model actually change.
 prepared once, their probability-table rows filled (`fill_tab_range`, the dense
 table; `prob_neigh` the neighbourhood table's), each particle's pose and state
 drawn from its own row (`assign_batch`), the extras of the weighted insertion
-laid out, then the existing polish, residual and commit. The same body runs in
+laid out, then the existing continuous refinement, residual and commit. The same body runs in
 shared memory and in every distributed part; there is no pre-step, no master
 table and no assignment artifact.
 
@@ -559,14 +559,14 @@ wrong reference whose shift search found a noise optimum (the bench
 histogram `refined argmin by decile of the cap`, item 11). With more than one
 active state the budget is split over the states' blocks (2026-11-05):
 `ceil(projs_ns / n_active)` refined entries per block, at most `n_active - 1`
-more in all. The window search polishes each block's best. The polar shift map
+more in all. The window search refines each block's best. The polar shift map
 keeps its screen's pool size (up to rounding), takes each block's share of it at
-the origin, tracks the screen's width cutoff per block and polishes each block's
+the origin, tracks the screen's width cutoff per block and refines each block's
 share of its own screen. So every block gets the same number of screen and
-polish attempts, and no block is left with stored-shift losses only because
+refinement attempts, and no block is left with stored-shift losses only because
 another state leads. With one state the split is the identity. The polar shift map records a
-polish only where it beats the stored shift's distance (a rule kept for the
-single-state results), so a block can end without a recorded polish for a
+refinement only where it beats the stored shift's distance (a rule kept for the
+single-state results), so a block can end without a recorded refinement for a
 particle; the fill harness checks each block's share and the budget
 (`test=polar_matching_bench suite=fills`). With
 `shift_prior=yes` (the default since 2026-10-29; `no` turns it off) the tables' shift searches
@@ -579,7 +579,7 @@ crop; the multi-state table's quadratic grid step re-scores its fitted
 shift with the same factor) and the particle's
 untempered temperature converting it
 to loss units; the search minimises and the row holds the MAP loss
-(`pftc_shsrch_grad%set_shift_prior`), and the `inpl_cont` polish of the
+(`pftc_shsrch_grad%set_shift_prior`), and the `inpl_cont` refinement of the
 committed pose carries the same term on its joint loss, centred at the
 committed shift (`prep4prob` arms it, `prep_strategy3D` measures the width).
 The distance is that of the stored shift (2026-10-28): the optimizer's shift
@@ -615,15 +615,15 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   2D shift is the origin, not the pick) at the particle's first centring and without
   it after (a re-centring is the data's alone; under the draw's tempering the
   untempered prior at the pick pulled centred particles back), keeps each one's coarse
-  optimum, and polishes
+  optimum, and refines
   the best at full resolution in a box of one map step about that optimum in the
   disk's own search object (`pftc_shsrch_grad%minimize_in_cell`: the L-BFGS from the
   cell in the box, the shift prior, when set, centred at the stored shift; the
-  better of the polish and the cell at its best rotation is the pose when it beats
+  better of the refinement and the cell at its best rotation is the pose when it beats
   the origin's row, else that row stands; the 5 x 5 lattice that ran in the box until
   2026-11-03 cost half to three quarters of the fill's refinement at the same
-  accuracy). The rows are the polished losses, as the window path's;
-- the window: the same screen and polish over the coarse window map
+  accuracy). The rows are the refined losses, as the window path's;
+- the window: the same screen and refinement over the coarse window map
   (`SHIFTMAP_WINDOW`, radius `trs`, no prior), the stage's search object, so the
   previous reference's seed, its shifted-particle bank and the 5 x 5 lattice at
   every rotation retire wherever the key runs (Phase 4); `shift_sigma=0` keeps them;
@@ -642,7 +642,7 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   half a map step where the map is finer (`next_shift_width`). The width chooses the
   next box and never enters the
   likelihood; the map's prior stays the only prior in the draw and in the weighted
-  insertion's loss (`insert_pose_loss`, both 3D tables: the polished loss with the
+  insertion's loss (`insert_pose_loss`, both 3D tables: the refined loss with the
   prior on the pose's increment at the physical temperature);
 - the sentinel is set by both refine3D masters at a run's first iteration
   (`start_shift_state`), except in a search about the stored poses
@@ -657,11 +657,11 @@ dense (`process_particle_with_map`) and neighbourhood (`refine_best_neighbors`) 
   and the widths' median and 90th percentile after its sample draw
   (`print_disk_set`; a part prints none). No stage ends on the centring.
 
-Every table increment is native whatever the path (the polish's
+Every table increment is native whatever the path (the refinement's
 `minimize(sh_rot=.true.)` rotates the optimizer's shift into the particle's axes at
 its rotation), and the consumer adds it to the stored shift unconverted
 (`strategy3D_prob`, `candidate_pose`; `test_table_increment_axes`;
-`test_map_initialised_polish` pins the map-initialised optimum against the
+`test_map_initialised_refinement` pins the map-initialised optimum against the
 lattice-initialised one). The parameter's default is 10 A (2026-11-02, across the
 board): `l_shift_map` is the key's presence under objfun=euclid (an explicit key
 under cc is refused), which a workflow's master passes to its stages, and
@@ -675,15 +675,15 @@ under the key no shift search at the previous reference (`inpl_srch_first`) in a
 state count (a previous-reference seed is optimal for one state only; the states
 are not docked and nothing records each state's optimal projection), the
 references scored at the stored shift as the mode has it, then the screen and
-polish of the tables (`simple_shiftmap_srch`) over every scored reference across
+refinement of the tables (`simple_shiftmap_srch`) over every scored reference across
 states and the previous one, which competes at its stored-shift score: one
-polished for the committed pose, the peaks for `neigh`, the best cells polished
+refined for the committed pose, the peaks for `neigh`, the best cells refined
 with `minimize_in_cell`. Under `shc` a particle that needs the disk is searched
 greedily. `extract_peak_ori` records the shift state (`record_shift`).
 
 The continuous in-plane route's joint domain contains the particle's box (the
 disk under the key, `shift_box_radius`) and the incoming shift, so the solve
-starts at, and is judged against, the pose it polishes (the review's T1,
+starts at, and is judged against, the pose it refines (the review's T1,
 2026-11-03; `test_continuous_seed_beyond_window`). Before, a disk shift beyond
 the window was projected into it and kept with the projected pose's score.
 Every posterior draw of the tables, the fills' in-plane draws
@@ -1032,13 +1032,13 @@ It is `yes` everywhere except under `refine=cont`, which sets it to `no` (the
 Cartesian pass solves the in-plane angle itself); `no` is the historical
 alternating search: continuous shift optimization with the discrete in-plane
 angle callback. The convergence output keeps reporting the continuous in-plane
-runs. `yes` follows the **polish-only
+runs. `yes` follows the **refine-only
 principle**: continuous refinement changes pose *precision*, never search
 *behavior*. Selection sees exactly what the legacy route sees -- candidate
 scoring, probability-table profiling, shift-seed estimation, and multi-peak
 shift refinement all use the legacy discrete machinery unchanged -- and the
 joint raw-Euclidean `(sx,sy,rotind_frac)` optimizer runs exactly once per
-particle per iteration, after selection, to polish the committed assignment.
+particle per iteration, after selection, to refine the committed assignment.
 This makes the search trajectory identical to the validated legacy trajectory
 by construction; the continuous route is a strict refinement of it and cannot
 alter exploration dynamics on any sample. Objective type is a capability
@@ -1068,7 +1068,7 @@ Probability tables are pure legacy under both `inpl_cont` values: candidate
 scoring, shift-seed estimation, and per-candidate shift refinement use the
 legacy discrete optimizer, and the table schema remains discrete (rounded
 `inpl`, score, shift in the rounded-index frame). The joint optimizer never
-touches table construction; polishing candidates would sharpen the score
+touches table construction; refining candidates would sharpen the score
 contrast the stochastic sampler sees and collapse exploration on difficult
 samples (statistics parity below addresses the same failure through the
 convergence side).
@@ -1092,7 +1092,7 @@ search.
 convergence checker reads -- is computed from the DISCRETE cells on both
 sides of the comparison, never from fractional poses. Sub-grid pose precision
 would otherwise read as premature convergence and truncate the annealing
-schedule that difficult samples require. The fractional `e3` and polished
+schedule that difficult samples require. The fractional `e3` and refined
 shift are carried for reconstruction and persistence only.
 
 Joint acceptance is guarded twice, in the shared optimizer. An improvement

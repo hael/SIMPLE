@@ -28,7 +28,7 @@ Silent ones first.
 - refine3D master (`distr_execute_iteration`): model (`materialize_reprojection_model_master`) -> sample and
   field write (`sample_ptcls4prob3D` and, under `topk > 1`, the insertion cone's report) -> remove partials,
   `prepare_canonical_sigma_update` -> workers -> `merge_prob_readouts` (probabilistic modes) ->
-  `merge_algndocs(write=.false.)` (`.true.` when a polish pass follows; the polish reproduces that sample) ->
+  `merge_algndocs(write=.false.)` (`.true.` when a follow-up pass comes next; the follow-up reproduces that sample) ->
   `volassemble_exec(write=.false.)` or the PCG master (writes the field) -> `out` written before
   postprocessing -> convergence -> `commit_sigma2_exec` -> one field write. Under `sigma_commit_deferred=yes`
   (an `internal:` key, ruled to be retired) the last iteration leaves its ranges uncommitted for the caller
@@ -41,7 +41,7 @@ Silent ones first.
 - The blend, the sigma2 commit and convergence read the master's particle field in memory: merge first.
 - Shared-memory refine3D rebuilds `params` and the builder from the file every iteration: a field change
   not written by `inmem_finalize_iteration` is lost. The commanders it runs read the file: write the field
-  before them (`publish_before_file_assembly` for gridding assembly, the polish branch's writes). The
+  before them (`publish_before_file_assembly` for gridding assembly, the follow-up branch's writes). The
   probabilistic pipeline runs inside `refine3D_exec` on the in-memory project.
 - One write of the particle field per iteration; the extra writes are listed in the policy's section 8: add
   none. Write segments (`write_segment_inside`) mid-run; after a full read call `update_projinfo`.

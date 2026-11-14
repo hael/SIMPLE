@@ -132,7 +132,7 @@ Behavior:
   `which_iter /= startit`, or with `sticky_sampling=keep` at every iteration; `sample4update_class` for `balance=class|cavg`;
   `sample4update_cnt` for `balance=none`
 - distributed: when `master_draws_sample3D` holds (every `refine=prob*`
-  pass; else fractional, not polish/missing/eval/sigma) the master draws once
+  pass; else fractional, not follow-up/missing/eval/sigma) the master draws once
   over the whole project and writes it; each part reproduces its range with
   `sample4update_reprod`
 
@@ -153,7 +153,7 @@ In `src/main/strategies/search/simple_strategy3D_matcher.f90`
 (`sample_particles_for_update`):
 
 - distributed parts of a probabilistic or master-drawn pass and the
-  `pose_cont=yes` polish pass use `sample4update_reprod` (it stops if the field
+  `pose_cont=yes` follow-up pass use `sample4update_reprod` (it stops if the field
   was never sampled)
 - the pipeline fills, draws and searches on the same prepared batch, so search
   and assignment operate on the exact same particles
@@ -231,6 +231,6 @@ For modifications:
 
 1. change policy in solve3D or stage-controller code
 2. confirm `simple_oris` bookkeeping still matches the intended subset semantics
-3. confirm distributed parts and the polish pass reproduce the owner's draw rather than resample
+3. confirm distributed parts and the follow-up pass reproduce the owner's draw rather than resample
 4. confirm trailing reconstruction still uses the intended realized fraction
 5. confirm reconstruction still takes the pass buffer's images or records

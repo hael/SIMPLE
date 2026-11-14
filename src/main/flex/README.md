@@ -180,7 +180,7 @@ clustering). There is no `doc/policies/flex_pca_policy.md`.
    application-owned `flex_plane_store`, which fetches and retains already
    prepared resident planes and owns one allocatable disk-cache object. The
    cache versions its payload against the absolute project path and
-   modification stamp, geometry and master selection. Probe, polish and embed
+   modification stamp, geometry and master selection. Probe, full-set fit and embed
    workers adopt it only when their partition lies within the completed cache;
    once the master has the embedding, `release` frees the resident planes and
    deletes the cache.

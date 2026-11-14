@@ -21,7 +21,7 @@ use simple_flex_pca_delivery_3d,     only: deliver_latent_readouts, write_covari
     &write_covariance_eigenvolumes, write_covariance_manifest
 use simple_flex_pca_project_gateway, only: validate_covariance_inputs, load_and_validate_sigma, &
     &write_state_weight_set, write_discrete_state_project, deliver_state_maps, register_embedding_artifact
-use simple_flex_pca_stages,          only: flex_stage_request, PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_POLISH
+use simple_flex_pca_stages,          only: flex_stage_request, PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_FULLSET
 use simple_flex_pca_run_types,       only: flex_run_session
 use simple_flex_pca_pcg,             only: flex_pcg_environment
 use simple_flex_pca_mstep,           only: init_basis_reconstructor
@@ -172,7 +172,7 @@ contains
     end subroutine prepare
 
     !> The basis and the raw embedding: from the cache (resume) or from the paired fit with its
-    !! merge and polish; then one all-N embedding, cached and read
+    !! merge and the full-set fit; then one all-N embedding, cached and read
     !! out; then the component reliability and the latent deconvolution.
     subroutine obtain_embedding( self, params, build, rounds )
         class(flex_pca_application), intent(inout) :: self
@@ -188,7 +188,7 @@ contains
                 call estimate_covariance_mean(params, build, self%plane_store, sess%model%mean_rec, &
                     &sess%sel%pinds, sess%sel%nptcls, rounds=rounds)
                 ! two disjoint mod-4-half fits advanced by one shared loop, merged, axis-weighted
-                ! and polished (combine-then-polish: no restart, frozen rank and axes). The
+                ! and refit over the full set (combine-then-refit: no restart, frozen rank and axes). The
                 ! full-selection mean built above is not consumed: each fit scales its own.
                 if( rounds%nparts() > 1 )then
                     write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA PAIRED DISTRIBUTED: ', &
@@ -248,7 +248,7 @@ contains
 
     !> One all-N embedding against the session's basis: the prior precision, the MAP solve with
     !! per-particle contrast (a qsys round when distributed and the basis is on disk under the plain
-    !! namespace; in-process after the paired merge, whose polished basis the embed workers do not
+    !! namespace; in-process after the paired merge, whose full-set basis the embed workers do not
     !! load), the cache and the raw readouts.
     subroutine embed_all( self, params, build, rounds )
         class(flex_pca_application), intent(inout) :: self
@@ -482,7 +482,7 @@ contains
             &build, sel%pinds, sel%nptcls, rounds=rounds)
         call load_and_validate_sigma(params, build, cline, sigma_loaded, rounds=rounds)
         select case(params%stage)
-            case(PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED)
+            case(PCA_STAGE_PROBE, PCA_STAGE_FULLSET, PCA_STAGE_EMBED)
                 call self%plane_store%adopt_cache(params, build, sel%pinds, sel%nptcls)
                 ! the mean's scale comes from the master's cache
                 call estimate_covariance_mean(params, build, self%plane_store, model%mean_rec, &

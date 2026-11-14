@@ -17,7 +17,7 @@ use simple_parameters,      only: parameters
 use simple_qsys_env,        only: qsys_env
 use simple_flex_pca_rounds,    only: flex_pca_rounds, flex_pca_rounds_shmem
 use simple_flex_pca_stages,    only: flex_stage_request, FLEX_FIT_ALL, &
-    &PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED
+    &PCA_STAGE_PROBE, PCA_STAGE_FULLSET, PCA_STAGE_EMBED
 use simple_flex_pca_artifacts, only: flex_pca_local_part_dir
 use simple_flex_pca_application, only: flex_pca_application
 use simple_flex_pca_project_gateway, only: ensure_canonical_sigma_state
@@ -324,7 +324,7 @@ contains
         call cline%set('mkdir', 'no')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         select case(params%stage)
-            case(PCA_STAGE_PROBE, PCA_STAGE_POLISH, PCA_STAGE_EMBED)
+            case(PCA_STAGE_PROBE, PCA_STAGE_FULLSET, PCA_STAGE_EMBED)
             case default
                 THROW_HARD('invalid flex_pca worker stage')
         end select

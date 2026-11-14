@@ -176,7 +176,7 @@ contains
         self%seed_nrots = nrots
         l_shc_neigh     = (trim(self%p_ptr%prob_neigh_mode) == 'shc')
         l_snhc_neigh    = (trim(self%p_ptr%prob_neigh_mode) == 'snhc')
-        ! under the polar shift map's key the window map initialises every polish and there is no seed
+        ! under the polar shift map's key the window map initialises every refinement and there is no seed
         l_map           = self%p_ptr%l_centring
         l_seed_sh_first = self%p_ptr%l_doshift .and. l_shc_neigh .and. .not. l_map
         prior_w         = 0.d0
@@ -217,7 +217,7 @@ contains
             if( self%p_ptr%l_shift_prior ) sigma2_prior = self%sigma2_prior_model
             if( l_map )then
                 call setup_shiftmap_neigh(self, prior_w, kscreen, step_win, step_disk)
-                ! the disk's own search objects: the polish box clamps to the object's limits
+                ! the disk's own search objects: the refinement box clamps to the object's limits
                 lims_disk(:,1) = -disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box)
                 lims_disk(:,2) = -lims_disk(:,1)
                 do ithr = 1,nthr_glob
@@ -430,7 +430,7 @@ contains
         l_state_neigh   = (trim(self%p_ptr%prob_neigh_mode) == 'state')
         ! Keep shift-first seeding single-state only. In multi-state runs this
         ! can bias all states toward the same previous-state shift basin. Under the polar shift map's key the
-        ! window map initialises every polish and there is no seed
+        ! window map initialises every refinement and there is no seed
         l_map           = self%p_ptr%l_centring
         l_seed_sh_first = self%p_ptr%l_doshift .and. self%p_ptr%nstates <= 1 .and. .not. l_map
         prior_w         = 0.d0
@@ -471,7 +471,7 @@ contains
             if( self%p_ptr%l_shift_prior ) sigma2_prior = self%sigma2_prior_model
             if( l_map )then
                 call setup_shiftmap_neigh(self, prior_w, kscreen, step_win, step_disk)
-                ! the disk's own search objects: the polish box clamps to the object's limits
+                ! the disk's own search objects: the refinement box clamps to the object's limits
                 lims_disk(:,1) = -disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box)
                 lims_disk(:,2) = -lims_disk(:,1)
                 do ithr = 1,nthr_glob
@@ -1331,7 +1331,7 @@ contains
     !> the per-thread memo of the particle shifted by its particle-frame seed, which every reference of the particle is
     !! scored against (a seed below SHERRSQ scores against the plain particle memo)
     !> the coarse maps of a fill (shift_sigma > 0): the disk of three sigma (disk_radius_px) and the window of trs,
-    !! with each map's radial step, the box of the polish about a cell
+    !! with each map's radial step, the box of the refinement about a cell
     subroutine setup_shiftmap_neigh( self, prior_w, kscreen, step_win, step_disk )
         class(eul_prob_tab_neigh), intent(inout) :: self
         real(dp),                  intent(out)   :: prior_w
@@ -1394,10 +1394,10 @@ contains
 
     ! Optimizes shift & rotation on the top-npeaks_inpl references
     !> the shifts of the best candidates per state: the windowed refinement from the seed, or under the key (l_map)
-    !! the polish in a box about a coarse map's optimum (kept if it beat the origin, or the cell if it beats the
+    !! the refinement in a box about a coarse map's optimum (kept if it beat the origin, or the cell if it beats the
     !! candidate's row): the window map at the best candidates; for a particle on the disk (l_disk) the screen of the
     !! state's candidates holding SCREEN_QUANTILE of its posterior at the origin with the disk map under the prior,
-    !! the best of the screen polished in the disk's search object
+    !! the best of the screen refined in the disk's search object
     subroutine refine_best_neighbors( self, ew, grad_obj, l_seed_sh_first, max_refs_to_refine,&
         &i, ithr, iptcl, shift_seed, neval, l_map, kscreen, step_win, step_disk, l_disk, l_prior, grad_disk, prior_w)
         class(eul_prob_tab_neigh),      intent(inout) :: self
@@ -1416,7 +1416,7 @@ contains
         real     :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval)
         real     :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval), width_best(max(1,max_refs_to_refine))
         real(dp) :: temp_s, temp_i, prior_w_map
-        logical  :: l_polished
+        logical  :: l_cont_refined
         ew%best_evals(:,ithr) = 0
         if( neval <= 0 ) return
         gso         => grad_obj(ithr)
@@ -1477,9 +1477,9 @@ contains
                     ri = ew%evaluated_ref_ids(eval_slot,ithr)
                     call gso%set_indices(self%ref_full(ri), iptcl)
                     irot = scr_irot(eval_slot)
-                    call gso%minimize_in_cell(irot, scr_xy(:,eval_slot), step, refined_shift, l_polished)
+                    call gso%minimize_in_cell(irot, scr_xy(:,eval_slot), step, refined_shift, l_cont_refined)
                     dist = eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun)
-                    if( l_polished .or. dist < ew%evaluated_ref_dists(eval_slot,ithr) )then
+                    if( l_cont_refined .or. dist < ew%evaluated_ref_dists(eval_slot,ithr) )then
                         call record_sparse_eval(self, i, ithr, ri, dist, irot, refined_shift(2), refined_shift(3), .true.,&
                             &scr_sdev(eval_slot))
                     endif
@@ -1504,9 +1504,9 @@ contains
                         &irot, irho, ialpha, loss_cell, &
                         &temp_phys=temp_s / real(self%p_ptr%prob_beta, dp), sdev=sdev)
                     xy_start = real(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho, ialpha))
-                    call gso%minimize_in_cell(irot, xy_start, step_win, refined_shift, l_polished)
+                    call gso%minimize_in_cell(irot, xy_start, step_win, refined_shift, l_cont_refined)
                     dist = eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun)
-                    if( l_polished .or. dist < ew%evaluated_ref_dists(eval_slot,ithr) )then
+                    if( l_cont_refined .or. dist < ew%evaluated_ref_dists(eval_slot,ithr) )then
                         call record_sparse_eval(self, i, ithr, ri, dist, irot, refined_shift(2), refined_shift(3), .true., sdev)
                     endif
                     cycle

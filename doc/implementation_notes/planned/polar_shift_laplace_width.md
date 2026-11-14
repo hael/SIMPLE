@@ -26,12 +26,12 @@ makes every particle wide against a window of one cell.
 
 ## The proposal
 
-The width at the polished optimum on the full band, from the curvature of the loss there (the Laplace
+The width at the refined optimum on the full band, from the curvature of the loss there (the Laplace
 approximation): the standard deviation of a Gaussian fitted to the posterior at the committed pose, resolved
 to a fraction of a pixel. A well aligned particle reads a few tenths of a pixel, a weak or wrongly classed one
 pixels, and the rule then separates those rather than the two states the coarse map can tell apart.
 
-- Measured by the consumer that commits the pose, after the continuous in-plane polish, for the committed pose
+- Measured by the consumer that commits the pose, after the continuous in-plane refinement, for the committed pose
   alone: the Hessian H of T L (L the loss, T the particle's physical temperature) from a stencil of full-band
   evaluations about the optimum.
 - The width: the square root of the larger eigenvalue of H^-1 (the conservative choice for a box), or of the
@@ -46,7 +46,7 @@ pixels, and the rule then separates those rather than the two states the coarse 
 
 ## Qualifications (the review, section 14)
 
-1. **The angle.** The committed pose after the continuous in-plane polish has a fractional angle, and
+1. **The angle.** The committed pose after the continuous in-plane refinement has a fractional angle, and
    `gen_corr_for_rot_8` takes an integer one. Evaluate at the committed fractional angle; the calculator has
    fractional-angle evaluators.
 2. **Conditional or marginal.** A 2 x 2 shift Hessian at a fixed angle gives the conditional covariance, while
@@ -57,7 +57,7 @@ pixels, and the rule then separates those rather than the two states the coarse 
    chosen by one rule and refused by the other. Either marginalise the coupled local model (the 3 x 3 Hessian
    with the angle) or adopt the conditional rule and calibrate it.
 3. **Flat or indefinite curvature.** A Hessian that is not positive definite (a saddle, a flat direction, a
-   polish that stopped at the box's bound) has no Laplace width; treat it conservatively, as the radius
+   refinement that stopped at the box's bound) has no Laplace width; treat it conservatively, as the radius
    searched.
 4. **Where the numerics live.** The stencil and the Hessian belong to the calculator (`src/main/pftc`) or the
    search domain; the strategies orchestrate.

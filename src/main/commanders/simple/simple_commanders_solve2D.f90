@@ -1245,6 +1245,7 @@ contains
         end select
         ! the in-plane quadrature of the class sums, when given
         if( cline%defined('topk_inpl') ) call cline_refine2D_chunk%set('topk_inpl', params%topk_inpl)
+        if( cline%defined('sigma2_frozen') ) call cline_refine2D_chunk%set('sigma2_frozen', params%sigma2_frozen)
         ! Determines dimensions for downscaling
         call set_chunk_dimensions( params )
         ! updates command-line with resolution limits, defaults are handled by solve2D

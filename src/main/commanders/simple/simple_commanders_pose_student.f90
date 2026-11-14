@@ -45,7 +45,7 @@ contains
     subroutine exec_learn_pose_student( self, cline )
         class(commander_learn_pose_student), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
-        real, parameter :: TRS_DEFAULT = 5.  ! the shift polish's box (pixels)
+        real, parameter :: TRS_DEFAULT = 5.  ! the shift refinement's box (pixels)
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('nspace') ) call cline%set('nspace', NSPACE_STUDENT)
         if( .not. cline%defined('trs')    ) call cline%set('trs',    TRS_DEFAULT)

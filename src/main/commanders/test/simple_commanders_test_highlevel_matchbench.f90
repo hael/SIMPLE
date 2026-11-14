@@ -449,7 +449,7 @@ subroutine fills_case( nspace, nstates, nptcls, nthr_max )
         call report_case(bench, nspace, nstates)
         write(logfhandle,'(4x,a)') 'route '//route//': the reference fill at one thread, one batch, one part'
         call bench%run_fill(1, nptcls, 1, ref)
-        if( iroute == PMB_ROUTE_3D_DENSE ) call check_dense_polish(ref, nspace, nstates)
+        if( iroute == PMB_ROUTE_3D_DENSE ) call check_dense_refinement(ref, nspace, nstates)
         do iconf = 1,NCONF
             wall = 0._dp
             !$ wall = omp_get_wtime()
@@ -493,11 +493,11 @@ subroutine fills_case( nspace, nstates, nptcls, nthr_max )
     write(logfhandle,'(a)') '>>> the fill harness gives identical rows, selections and extras in every configuration'
 end subroutine fills_case
 
-!> the dense 3D fill's polish on the reference fill: the budget projs_ns split over the states' blocks, so no block
-!! holds more polished entries than its share (ceil(projs_ns / nstates)) and no particle more than projs_ns up to
-!! rounding; the shift map records a polish only where it beats the stored shift, so the particles left without a
-!! polished entry in some block are reported, not held to zero
-subroutine check_dense_polish( res, nspace, nstates )
+!> the dense 3D fill's refinement on the reference fill: the budget projs_ns split over the states' blocks, so no block
+!! holds more refined entries than its share (ceil(projs_ns / nstates)) and no particle more than projs_ns up to
+!! rounding; the shift map records a refinement only where it beats the stored shift, so the particles left without a
+!! refined entry in some block are reported, not held to zero
+subroutine check_dense_refinement( res, nspace, nstates )
     type(pmb_fill_result), intent(in) :: res
     integer,               intent(in) :: nspace, nstates
     integer :: i, s, nlack, nover, nref_s, ntot, nmax, nper, nmax_blk
@@ -519,11 +519,11 @@ subroutine check_dense_polish( res, nspace, nstates )
         nmax = max(nmax, ntot)
         if( ntot > res%projs_ns + nstates - 1 ) nover = nover + 1
     enddo
-    write(logfhandle,'(4x,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') '3D_dense polish: budget ', res%projs_ns, &
-        &', states ', nstates, ', share per state ', nper, ', most polished per particle ', nmax, ' and per state ', &
-        &nmax_blk, ', over the share or budget ', nover, ', particles without a polished entry in a state ', nlack
-    if( nover > 0 ) THROW_HARD('the dense fill polishes more than a state''s share or the budget')
-end subroutine check_dense_polish
+    write(logfhandle,'(4x,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') '3D_dense refinement: budget ', res%projs_ns, &
+        &', states ', nstates, ', share per state ', nper, ', most refined per particle ', nmax, ' and per state ', &
+        &nmax_blk, ', over the share or budget ', nover, ', particles without a refined entry in a state ', nlack
+    if( nover > 0 ) THROW_HARD('the dense fill refines more than a state''s share or the budget')
+end subroutine check_dense_refinement
 
 subroutine report_case( bench, nspace, nstates )
     class(polar_matching_bench), intent(in) :: bench

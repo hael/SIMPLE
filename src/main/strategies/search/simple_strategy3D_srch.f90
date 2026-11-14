@@ -152,7 +152,7 @@ contains
         if( .not. str_has_substr(self%refine, 'prob') )then
             ! selection parity: candidate scoring, shift-seed estimation and
             ! peak refinement always use the legacy objects; the joint
-            ! optimizer only polishes the committed assignment
+            ! optimizer only refines the committed assignment
             call self%grad_shsrch_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init, &
                 &maxits=self%p_ptr%maxits_sh)
             if( .not. self%l_map ) call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims, &
@@ -186,7 +186,7 @@ contains
         self%nrefs_eval = 0
         self%ntrs_eval  = 0
         self%prev_corr  = 0.
-        ! the shift prior on the polish of the committed pose, at the particle's temperature, as in the tables
+        ! the shift prior on the refinement of the committed pose, at the particle's temperature, as in the tables
         if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s3D%shift_prior_sigma2 > 0. ) &
             &call self%joint_inpl_optimizer%set_shift_prior(s3D%shift_prior_sigma2, &
             &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
@@ -282,7 +282,7 @@ contains
         integer :: iref, irot, loc(1)
         if( .not. self%doshift ) return
         ! selection parity: legacy post-selection refinement runs unchanged
-        ! under both inpl_cont values; the joint solve polishes afterwards
+        ! under both inpl_cont values; the joint solve refines afterwards
         ! (extract_peak_ori), never instead
         if( present(ref) )then
             iref = ref
@@ -341,8 +341,8 @@ contains
         enddo
     end subroutine inpl_srch_peaks
 
-    !> The screen and the polish of the polar shift map (ruling 20) over the references scored at the stored shift,
-    !! across states: the reference ref alone when given, else every scored reference, npeaks polished. A polished
+    !> The screen and the refinement of the polar shift map (ruling 20) over the references scored at the stored shift,
+    !! across states: the reference ref alone when given, else every scored reference, npeaks refined. A refined
     !! pose that beat its reference's stored-shift score replaces the reference's entry
     subroutine map_srch( self, npeaks, ref )
         class(strategy3D_srch), intent(inout) :: self
@@ -438,7 +438,7 @@ contains
 
         ! The committed candidate storage is authoritative: legacy
         ! post-selection refinement has already replaced any pre-selection
-        ! seed (xy_first), so the polish always starts from the stored
+        ! seed (xy_first), so the refinement always starts from the stored
         ! selected-candidate shift.  Stored 3D-search shifts are in the
         ! selected reference frame; the PFTC joint objective consumes the
         ! native particle frame.
@@ -449,7 +449,7 @@ contains
             return
         endif
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
-        ! starts at, and is judged against, the pose it polishes
+        ! starts at, and is judged against, the pose it refines
         rbox = self%p_ptr%trs
         if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
             &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)
@@ -553,7 +553,7 @@ contains
         call rotmat2d(self%b_ptr%pftc%get_rot(inpl), rotmat)
         xy_native = matmul(sh, transpose(rotmat))
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
-        ! starts at, and is judged against, the pose it polishes
+        ! starts at, and is judged against, the pose it refines
         rbox = self%p_ptr%trs
         if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
             &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%p_ptr%trs)

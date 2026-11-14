@@ -23,6 +23,7 @@ type euclid_sigma2
     class(parameters),    pointer :: p_ptr => null()
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the two global spectra (shell, half): column sigma2_half(eo)
     real,    allocatable          :: sigma2_part(:,:)       !< the residual records of this part (matchers only)
+    real,    allocatable          :: sigma2_scoring(:,:)    !< frozen bootstrap, attached only by the 2D matcher
     integer                       :: fromp
     integer                       :: top
     integer                       :: kfromto(2) = 0
@@ -45,6 +46,7 @@ contains
     procedure          :: read_part
     procedure          :: read_pending_range
     procedure          :: read_global
+    procedure          :: freeze_for_scoring
     procedure          :: prep_fplane_grid
     procedure, private :: calc_sigma2_pftc
     procedure, private :: calc_sigma2_cart
@@ -134,7 +136,7 @@ contains
     end subroutine read_part
 
     !> Replace this part's rows by the range an earlier pass of the open transaction wrote for it
-    !! (the discrete pass a polish follows), so a particle the later pass leaves untouched keeps
+    !! (the discrete pass the continuous follow-up starts from), so a particle the later pass leaves untouched keeps
     !! the residual of its current pose rather than the committed generation's.
     subroutine read_pending_range( self )
         class(euclid_sigma2), intent(inout) :: self
@@ -177,6 +179,26 @@ contains
         deallocate(spectra)
         call self%fplane%kill
     end subroutine read_global
+
+    !> Attach the saved bootstrap to matching; measured spectra still own reconstruction and residual records.
+    subroutine freeze_for_scoring( self, pftc )
+        use simple_sigma2_frozen, only: read_frozen_sigma2
+        class(euclid_sigma2), target, intent(inout) :: self
+        class(polarft_calc), intent(inout) :: pftc
+        real(real32), allocatable :: spectra(:,:)
+        integer :: status
+        character(len=STDLEN) :: message
+        if( .not. associated(self%p_ptr) ) THROW_HARD('sigma2 scoring needs an initialized noise model')
+        if( self%p_ptr%oritype /= 'ptcl2D' ) THROW_HARD('sigma2_frozen is supported for 2D particle matching only')
+        call read_frozen_sigma2(self%binfname%to_char(), spectra, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        if( size(spectra,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
+            &THROW_HARD('frozen sigma2 has incompatible shell bounds')
+        if( allocated(self%sigma2_scoring) ) deallocate(self%sigma2_scoring)
+        allocate(self%sigma2_scoring(self%kfromto(1):self%kfromto(2),2), source=real(spectra))
+        self%spectra_gen = self%spectra_gen + 1_int64
+        call pftc%assign_sigma2_noise(self%sigma2_scoring, self%spectra_gen)
+    end subroutine freeze_for_scoring
 
     !> The reconstruction-plane grid of a padded box box_croppd with the two spectra attached from shell
     !! kfrom (fplane): built once and kept while the box, the shell and the spectra stay the same
@@ -318,6 +340,7 @@ contains
         if( self%exists )then
             if(allocated(self%sigma2_noise))  deallocate(self%sigma2_noise)
             if( allocated(self%sigma2_part) ) deallocate(self%sigma2_part)
+            if( allocated(self%sigma2_scoring) ) deallocate(self%sigma2_scoring)
             self%kfromto     = 0
             self%fromp       = -1
             self%top         = -1

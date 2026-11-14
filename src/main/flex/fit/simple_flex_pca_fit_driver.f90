@@ -9,7 +9,7 @@ use simple_parameters,         only: parameters
 use simple_reconstructor,      only: reconstructor
 use simple_image,              only: image
 use simple_flex_pca_rounds,    only: flex_pca_rounds
-use simple_flex_pca_stages,    only: flex_pca_half_of, PCA_STAGE_POLISH, FLEX_FIT_A, FLEX_MOD4_PAIRING
+use simple_flex_pca_stages,    only: flex_pca_half_of, PCA_STAGE_FULLSET, FLEX_FIT_A, FLEX_MOD4_PAIRING
 use simple_flex_pca_pcg,       only: flex_pcg_environment
 use simple_flex_pca_basis,     only: apply_cached_mean_scale, estimate_mean_scale, init_mean_reconstructor, &
     &init_basis_datafree, save_probe_state, load_probe_state, load_probe_basis, COV_PROBE_META
@@ -162,19 +162,19 @@ contains
                 call flush(logfhandle)
             endif
         end block
-        ! Full-set polish: one unmonitored full-selection EM iteration from the merged basis, written
-        ! under the polished namespace so the per-fit deliveries stay intact.
+        ! Full-set fit: one unmonitored full-selection EM iteration from the merged basis, written
+        ! under the full-set namespace so the per-fit deliveries stay intact.
         block
-            integer, parameter :: NPOLISH = 1
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MERGE POLISH: ', &
-                &NPOLISH,' full-selection EM iteration(s) over ',sel%nptcls, &
+            integer, parameter :: NFULLSET = 1
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA MERGE FULL-SET FIT: ', &
+                &NFULLSET,' full-selection EM iteration(s) over ',sel%nptcls, &
                 &' particles from the merged basis'
             call flush(logfhandle)
-            ! materialize the ENTRY basis under the polished namespace BEFORE the
+            ! materialize the ENTRY basis under the full-set namespace BEFORE the
             ! loop: a distributed round-1 worker loads the current basis from disk
             ! (the stamped prefix), and the merged basis lives only in memory here
             ! -- the merged eigenvolumes on disk carry the same content, so copy
-            ! them into the polished names (they are overwritten every iteration
+            ! them into the full-set names (they are overwritten every iteration
             ! by fit_iter_finish thereafter)
             block
                 type(image)  :: vcp
@@ -184,7 +184,7 @@ contains
                     &params%smpd_crop)
                 do qcp = 1, model%ncomp
                     fsrc = 'flex_pca_merged_pc'//int2str_pad(qcp,3)//MRC_EXT
-                    fdst = 'flex_pca_polished_pc'//int2str_pad(qcp,3)//MRC_EXT
+                    fdst = 'flex_pca_fullset_pc'//int2str_pad(qcp,3)//MRC_EXT
                     if( file_exists(fsrc) )then
                         call vcp%read(fsrc)
                         call vcp%write(fdst, del_if_exists=.true.)
@@ -193,11 +193,11 @@ contains
                 end do
                 call vcp%kill
             end block
-            call probe_subspace_iteration(params, build, plane_store, pcg_env, model, sel, NPOLISH, &
-                &fprefix='flex_pca_polished_pc', &
-                &meta_fname='flex_pca_probe_polished.txt', rounds=rounds)
+            call probe_subspace_iteration(params, build, plane_store, pcg_env, model, sel, NFULLSET, &
+                &fprefix='flex_pca_fullset_pc', &
+                &meta_fname='flex_pca_probe_fullset.txt', rounds=rounds)
             call save_probe_state(model%ncomp, model%eigvals, model%sig2_eff, &
-                &fname='flex_pca_probe_polished.txt')
+                &fname='flex_pca_probe_fullset.txt')
         end block
         if( allocated(mergecos) ) deallocate(mergecos)
         do f = 1, 2
@@ -316,7 +316,7 @@ contains
         ! the master refreshed the basis volumes and the probe-state file before scheduling this
         ! round; which_iter keys every iteration schedule inside probe_subspace_iteration off the
         ! master's true iteration (this worker's own loop runs exactly once per relaunch), maxits
-        ! is the budget, nfits selects the paired pass, the POLISH stage the polished namespace
+        ! is the budget, nfits selects the paired pass, the FULLSET stage the full-set namespace
         call load_probe_state(model%ncomp, model%eigvals, model%sig2_eff)
         if( params%nfits == 2 )then
             ! paired pass: BOTH fits over this worker's particle list, split by the mod-4 rule
@@ -326,8 +326,8 @@ contains
                 &params%maxits, rounds=rounds)
             return
         endif
-        if( params%stage == PCA_STAGE_POLISH )then
-            call load_probe_basis(params, build, model%ncomp, model%basis_recs, fprefix='flex_pca_polished_pc')
+        if( params%stage == PCA_STAGE_FULLSET )then
+            call load_probe_basis(params, build, model%ncomp, model%basis_recs, fprefix='flex_pca_fullset_pc')
         else
             call load_probe_basis(params, build, model%ncomp, model%basis_recs)
         endif

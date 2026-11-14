@@ -192,7 +192,7 @@ contains
                 irot = loc
                 call grad_shsrch_obj(ithr)%set_indices(j, i)
                 if( trim(params%inpl_cont) == 'yes' )then
-                    ! seeded local polish of the pre-selected cell
+                    ! seeded local refinement of the pre-selected cell
                     irot_seed = irot
                     cxy = grad_shsrch_obj(ithr)%minimize_joint(irot, [0.,0.], &
                         &sh_rot=.true., rotind_frac=rotind_frac, irot_in=irot_seed)

@@ -532,7 +532,7 @@ contains
         call kill_fixture(b)
     end subroutine test_cc_evaluator
 
-    !> strategy2D_srch polishes continuously, with a joint optimiser that solves, only under inpl_cont=yes and
+    !> strategy2D_srch refines continuously, with a joint optimiser that solves, only under inpl_cont=yes and
     !! always keeps the alternating seed-search angle update (selection parity)
     subroutine test_strategy2D_route_flags()
         type(builder),    target :: b
@@ -554,19 +554,19 @@ contains
         p%l_prob_align_mode = .false.
         p%inpl_cont         = 'no'
         call srch%new(p, spec, b)
-        call assert_false(srch%uses_continuous_refinement(), 'inpl_cont=no: no continuous polish')
+        call assert_false(srch%uses_continuous_refinement(), 'inpl_cont=no: no continuous refinement')
         call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), 'inpl_cont=no: alternating seed search updates the angle')
         call srch%kill
         p%inpl_cont = 'yes'
         call srch%new(p, spec, b)
-        call assert_true(srch%uses_continuous_refinement(), 'inpl_cont=yes: continuous polish')
+        call assert_true(srch%uses_continuous_refinement(), 'inpl_cont=yes: continuous refinement')
         call assert_true(joint_solve_valid(), 'inpl_cont=yes: joint optimiser constructed (a valid joint solve)')
         call assert_true(srch%grad_shsrch_first_obj%does_opt_angle(), &
             &'inpl_cont=yes: alternating seed search still updates the angle (selection parity)')
         call srch%kill
         p%l_prob_align_mode = .true.
         call srch%new(p, spec, b)
-        call assert_true(srch%uses_continuous_refinement(), 'probabilistic route: continuous polish of the selected candidate')
+        call assert_true(srch%uses_continuous_refinement(), 'probabilistic route: continuous refinement of the selected candidate')
         call assert_true(joint_solve_valid(), 'probabilistic route: joint optimiser constructed (a valid joint solve)')
         call srch%kill
         p%l_prob_align_mode = .false.
@@ -575,7 +575,7 @@ contains
 
     contains
 
-        !> the search's joint optimiser solves from the first grid cell, by the calls of the committed pose's polish
+        !> the search's joint optimiser solves from the first grid cell, by the calls of the committed pose's refinement
         !! (minimize_joint stops on an optimiser that is not a joint one)
         logical function joint_solve_valid()
             real     :: cxy(3)
@@ -1051,7 +1051,7 @@ contains
     !! is the argmax of the raw objective times the rotation's factor; a prior far wider than the move leaves the
     !! free search's objective (its value, not its path: a factor within L-BFGS-B's stopping tolerance can end an
     !! alternation elsewhere) and a prior far narrower pins the stored shift at its start, on the shift route and
-    !! on the joint polish alike. And the width from a field: half the mean squared increment of the sampled
+    !! on the joint refinement alike. And the width from a field: half the mean squared increment of the sampled
     !! particles, floored by the band
     subroutine test_shift_prior()
         real, parameter :: START(2) = [1.5, -1.0]
@@ -1128,9 +1128,9 @@ contains
         call assert_true(irot == 0 .or. norm2(cxy(2:3) - u0) < 0.1, &
             &'a prior far narrower than the move pins the stored shift at its start, whatever the rotation')
         call srch%kill
-        ! the joint route (the polish of the committed pose): the prior is the same loss term; its initial cost
-        ! (the start re-scored) is untouched, a wide prior leaves the free polish's objective, a narrow one pins
-        ! the start. The seed cell is the discrete selection at the start, as the polish is seeded in production
+        ! the joint route (the refinement of the committed pose): the prior is the same loss term; its initial cost
+        ! (the start re-scored) is untouched, a wide prior leaves the free refinement's objective, a narrow one pins
+        ! the start. The seed cell is the discrete selection at the start, as the refinement is seeded in production
         call b%pftc%gen_objfun_vals(1, 1, START, scores)
         irot_seed = maxloc(scores, dim=1)
         u0_joint  = shift_ref2ptcl(START, b%pftc%get_rot(irot_seed))
@@ -1140,7 +1140,7 @@ contains
         call srch%set_indices(1, 1)
         cxy_free = srch%minimize_joint(irot_free, START, sh_rot=.false., rotind_frac=rotind_frac, &
             &evaluation_valid=l_valid, improved=l_improved, initial_cost_out=cost_free, irot_in=irot_seed)
-        call assert_true(l_valid .and. l_improved, 'the free joint polish improves from the start')
+        call assert_true(l_valid .and. l_improved, 'the free joint refinement improves from the start')
         call srch%set_shift_prior(sigma2_weak, temp)
         cxy = srch%minimize_joint(irot, START, sh_rot=.false., rotind_frac=rotind_frac, &
             &evaluation_valid=l_valid, improved=l_improved, initial_cost_out=cost_prior, irot_in=irot_seed)
@@ -1148,12 +1148,12 @@ contains
             &'the joint prior leaves the cost at the start untouched')
         call assert_true(l_valid .and. l_improved .and. abs(cxy(1) - cxy_free(1)) <= 1.e-4 .and. &
             &norm2(cxy(2:3) - cxy_free(2:3)) < 0.25, &
-            &'a wide prior leaves the free joint polish''s objective, the shift within a quarter pixel')
+            &'a wide prior leaves the free joint refinement''s objective, the shift within a quarter pixel')
         call srch%set_shift_prior(sigma2_strong, temp)
         cxy = srch%minimize_joint(irot, START, sh_rot=.true., rotind_frac=rotind_frac, &
             &evaluation_valid=l_valid, improved=l_improved, irot_in=irot_seed)
         call assert_true((.not. l_improved) .or. norm2(cxy(2:3) - u0_joint) < 0.1, &
-            &'a narrow prior pins the joint polish''s stored shift at its start')
+            &'a narrow prior pins the joint refinement''s stored shift at its start')
         call srch%kill
         call kill_fixture(b)
         ! the width from a field: five sampled particles with increments 2, 0, 4 and two never searched (zero,

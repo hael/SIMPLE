@@ -41,8 +41,8 @@ step) and for project reads and writes: `doc/policies/layering_and_project_owner
 
 Distributed `refine3D`/`refine2D`: the strategy's master owns its project; it draws
 the iteration's sample (always under `refine=prob*`, otherwise when
-`master_draws_sample3D/2D` holds), schedules the parts (a second time when the
-`pose_cont` polish follows) and merges their documents and probabilistic readouts. Volume assembly, class-average assembly and
+`master_draws_sample3D/2D` holds), schedules the parts (a second time for the
+`pose_cont` follow-up) and merges their documents and probabilistic readouts. Volume assembly, class-average assembly and
 the sigma2 commit are strategy routines in `src/main/strategies/parallelization/`
 run on the master's `(params, build)`; their commanders are thin `execute(cline)`
 wrappers for command-line and worker callers. `refine=prob*` is a batch pipeline

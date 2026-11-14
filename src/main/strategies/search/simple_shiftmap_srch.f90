@@ -1,7 +1,7 @@
-!@descr: the polar shift map of the classic (non-table) searches: a particle's box, the screen of its candidates and the polish from the best cells
+!@descr: the polar shift map of the classic (non-table) searches: a particle's box, the screen of its candidates and the refinement from the best cells
 ! The dense table's map path (process_particle_with_map) for the SHC, greedy and neighbourhood strategies: the
 ! candidates scored at the stored shift, the pool of the best by that score each given a coarse map over the
-! particle's box (the disk or the window, shift_needs_disk), the best cells polished with minimize_in_cell.
+! particle's box (the disk or the window, shift_needs_disk), the best cells refined with minimize_in_cell.
 module simple_shiftmap_srch
 use simple_core_module_api,    only: dp
 use simple_error,              only: simple_exception
@@ -28,18 +28,18 @@ type :: shiftmap_srch
     private
     class(parameters), pointer :: p_ptr => null()
     class(builder),    pointer :: b_ptr => null()
-    type(pftc_shsrch_grad) :: gso_win              !< the polish within the window
-    type(pftc_shsrch_grad) :: gso_disk             !< the polish within the disk
+    type(pftc_shsrch_grad) :: gso_win              !< the refinement within the window
+    type(pftc_shsrch_grad) :: gso_disk             !< the refinement within the disk
     real(dp) :: temp_i     = 0.d0                  !< the tempered temperature of the full band (the pool's size)
     real(dp) :: temp_s     = 0.d0                  !< the tempered temperature of the coarse band (the maps)
     real(dp) :: prior_w    = 0.d0                  !< the prior's weight: the disk at a particle's first centring
     integer  :: iptcl      = 0
     integer  :: imap       = SHIFTMAP_WINDOW
     logical  :: l_disk     = .false.
-    integer, allocatable :: res_ref(:)             !< the polished candidates of the particle
+    integer, allocatable :: res_ref(:)             !< the refined candidates of the particle
     integer, allocatable :: res_irot(:)
     real,    allocatable :: res_corr(:), res_sh(:,:), res_sdev(:)
-    logical, allocatable :: res_valid(:)           !< the polish or its cell beat the candidate's stored-shift score
+    logical, allocatable :: res_valid(:)           !< the refinement or its cell beat the candidate's stored-shift score
     integer  :: nres       = 0
     logical  :: exists     = .false.
 contains
@@ -119,10 +119,10 @@ contains
         on_disk = self%l_disk
     end function on_disk
 
-    !> The screen and the polish of candidates refs scored at the stored shift (corrs0, larger is better): a map each
+    !> The screen and the refinement of candidates refs scored at the stored shift (corrs0, larger is better): a map each
     !! for the pool of the best by that score (all of them up to nbest, else at least twice nbest, the origin
-    !! posterior's mass quantile at the particle's tempered temperature), the nbest best cells polished in a box of
-    !! one map step. The polished candidates are kept for get_result
+    !! posterior's mass quantile at the particle's tempered temperature), the nbest best cells refined in a box of
+    !! one map step. The refined candidates are kept for get_result
     subroutine srch( self, refs, corrs0, nbest )
         class(shiftmap_srch), intent(inout) :: self
         integer,              intent(in)    :: refs(:), nbest
@@ -131,7 +131,7 @@ contains
         integer, allocatable :: order(:), scr_irot(:), best(:)
         real     :: cxy(3), loss, width_best(max(1,nbest))
         integer  :: n, npool, nb, k, j, ref, irot, irho, ialpha
-        logical  :: l_polished
+        logical  :: l_cont_refined
         self%nres = 0
         n = size(refs)
         if( n < 1 .or. nbest < 1 ) return
@@ -158,7 +158,7 @@ contains
             scr_irot(k)  = irot
             scr_xy(:,k)  = real(self%b_ptr%pftc%shiftmap_shift(self%imap, irho, ialpha))
         enddo
-        ! the polish of the screen's best
+        ! the refinement of the screen's best
         nb = min(nbest, npool)
         allocate(best(nb))
         best = minnloc(scr_loss, nb)
@@ -169,10 +169,10 @@ contains
             irot = scr_irot(k)
             if( self%l_disk )then
                 call self%gso_disk%set_indices(ref, self%iptcl)
-                call self%gso_disk%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_polished)
+                call self%gso_disk%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_cont_refined)
             else
                 call self%gso_win%set_indices(ref, self%iptcl)
-                call self%gso_win%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_polished)
+                call self%gso_win%minimize_in_cell(irot, scr_xy(:,k), step_run(self%imap), cxy, l_cont_refined)
             endif
             self%nres = self%nres + 1
             self%res_ref(self%nres)   = ref
@@ -180,7 +180,7 @@ contains
             self%res_corr(self%nres)  = cxy(1)
             self%res_sh(:,self%nres)  = cxy(2:3)
             self%res_sdev(self%nres)  = scr_sdev(k)
-            self%res_valid(self%nres) = l_polished .or. cxy(1) > corrs0(order(k))
+            self%res_valid(self%nres) = l_cont_refined .or. cxy(1) > corrs0(order(k))
         enddo
         deallocate(dists, order, scr_loss, scr_xy, scr_sdev, scr_irot, best)
 
@@ -198,7 +198,7 @@ contains
 
     end subroutine srch
 
-    !> the last srch's result for candidate ref: found says it was polished, valid that its pose (rotation, score,
+    !> the last srch's result for candidate ref: found says it was refined, valid that its pose (rotation, score,
     !! shift increment in the particle's axes) beat its stored-shift score; sdev the posterior width of its map
     subroutine get_result( self, ref, found, valid, irot, corr, sh, sdev )
         class(shiftmap_srch), intent(in)  :: self

@@ -152,7 +152,7 @@ type :: prob_readout
     integer        :: inpl_mmax     = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
     integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated
     integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one)
-    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to the polished pose
+    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to the refined pose
     real(dp)       :: inpl_neff_sum = 0.d0     !< sum over those particles of exp(entropy) of the row
 end type prob_readout
 
@@ -1941,7 +1941,7 @@ contains
         write(neff_mean,'(F32.1)')  real(neff_sum) / real(nrows)
         write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_INPL (topk_inpl ', kmax, ', m_max ', mmax, '): '//&
             &trim(adjustl(nparticles))//' particles, '//trim(adjustl(nentries))//' entries per particle, '//&
-            &trim(adjustl(pct_single))//'% collapsed to the polished pose, mean n_eff '//trim(adjustl(neff_mean))
+            &trim(adjustl(pct_single))//'% collapsed to the refined pose, mean n_eff '//trim(adjustl(neff_mean))
         call flush(logfhandle)
     end subroutine inpl_report_counts
 

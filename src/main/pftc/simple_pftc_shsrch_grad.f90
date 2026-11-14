@@ -73,7 +73,7 @@ type :: pftc_shsrch_grad
     ! at rotation irot is |x - R(irot) u0|^2 = |u - u0|^2: a rotation change at a fixed x moves the stored shift
     ! and pays for it, a rotation of x that keeps the stored shift pays nothing. (Until 2026-10-28 the centre was
     ! the start x itself, which held only at the start's rotation: with a nonzero seed a rotation change moved
-    ! the stored shift unpenalised.) The joint route (the polish of the committed pose) adds the same term to
+    ! the stored shift unpenalised.) The joint route (the refinement of the committed pose) adds the same term to
     ! its raw Euclidean loss with the centre at its continuous angle; cc has no loss scale for it
     real(dp)                  :: prior_w          = 0.d0
     real(dp)                  :: prior_u0(2)      = 0.d0 !< the centre: the start as a stored (particle-frame) shift
@@ -223,19 +223,19 @@ contains
         call self%ospec%set_limits(lims)
     end subroutine set_limits
 
-    !> The polish from a coarse map's cell (the map initialises the search): the L-BFGS from the cell's shift (in the
+    !> The refinement from a coarse map's cell (the map initialises the search): the L-BFGS from the cell's shift (in the
     !! reference's axes at irot) in a box of one map step about it, within the object's limits; the shift prior, when
     !! set, stays centred at the stored shift. cxy is (correlation, the shift rotated into the particle's axes) of the
-    !! better of the polish and the cell at its best rotation; l_polished says it beat the stored shift's best
+    !! better of the refinement and the cell at its best rotation; l_cont_refined says it beat the stored shift's best
     !! rotation, else the caller keeps its stored-shift row unless cxy beats it
-    subroutine minimize_in_cell( self, irot, xy_cell, step, cxy, l_polished )
+    subroutine minimize_in_cell( self, irot, xy_cell, step, cxy, l_cont_refined )
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         real,                    intent(in)    :: xy_cell(2), step
         real,                    intent(out)   :: cxy(3)
-        logical,                 intent(out)   :: l_polished
+        logical,                 intent(out)   :: l_cont_refined
         real    :: lims_orig(2,2), lims_box(2,2), corrs(self%nrots)
-        if( self%search_mode /= SHSRCH_SHIFT ) THROW_HARD('the cell polish needs a shift search object; minimize_in_cell')
+        if( self%search_mode /= SHSRCH_SHIFT ) THROW_HARD('the cell refinement needs a shift search object; minimize_in_cell')
         lims_orig     = self%ospec%limits(1:2,1:2)
         lims_box(:,1) = max(lims_orig(:,1), xy_cell - step)
         lims_box(:,2) = min(lims_orig(:,2), xy_cell + step)
@@ -243,7 +243,7 @@ contains
         cxy = self%minimize(irot=irot, sh_rot=.true., xy_in=xy_cell, prior_origin=.true.)
         call self%ospec%set_limits(lims_orig)
         if( irot < 1 )then
-            ! the polish did not improve on the cell: the cell at its best rotation
+            ! the refinement did not improve on the cell: the cell at its best rotation
             call self%objfun_vals(xy_cell, corrs)
             irot     = maxloc(corrs, dim=1)
             cxy(1)   = corrs(irot)
@@ -251,7 +251,7 @@ contains
         endif
         ! the stored shift at its best rotation, the prior's centre
         call self%objfun_vals([0.,0.], corrs)
-        l_polished = cxy(1) > maxval(corrs)
+        l_cont_refined = cxy(1) > maxval(corrs)
     end subroutine minimize_in_cell
 
     !> The shift prior of the next minimisations: sigma2 the shift variance per axis (pixels^2, from the previous
@@ -679,7 +679,7 @@ contains
         if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
 
-    !> Polish the caller's pose over (sx,sy,rotind_frac) within +/-2 cells of irot_in (euclid, cc);
+    !> Refine the caller's pose over (sx,sy,rotind_frac) within +/-2 cells of irot_in (euclid, cc);
     !! irot_in is authoritative, there is no all-angle rescan. An invalid or non-material solve returns the
     !! seed cell re-scored at xy_in (irot never 0, always committable); evaluation_valid/improved say which.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &

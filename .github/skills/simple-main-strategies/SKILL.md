@@ -50,7 +50,7 @@ Unit suites are in the subfolder guides. Workflow checks (`build/bin/simple_test
   probabilistic refine3D master over several parts (the sample draw, the parts' batch pipeline and the readout
   merge, assembly, sigma2 commit). The map correlation is a robustness profile (1-2 misses in 20 runs is
   normal): one run shows breakage, not improvement; compare `test=profile` runs with `dir1=`/`dir2=`.
-- `cont_refine3D_1jxy` (`refine=cont` over two parts, the `pose_cont` polish), `multistate_workflows`
+- `cont_refine3D_1jxy` (`refine=cont` over two parts, the `pose_cont` follow-up), `multistate_workflows`
   (`suite=states` or `consensus`; 1 913 s at eight threads for all routes), `flex_pca_blobs` (two workers).
 - The distributed refine2D master runs only in the stream's 2D pool (`mini_stream_*`, `stream_chains`;
   `stream2d=yes`, one part in `mini_stream`); check a non-stream 2D master change by hand with `nparts=2`.

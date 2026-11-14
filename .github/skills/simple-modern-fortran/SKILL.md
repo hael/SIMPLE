@@ -131,6 +131,9 @@ See `doc/refactoring_notes/completed/comment_novel_inventory_2026-09-30.md`.
   routine lists, field lists); point to the doc instead.
 - When code changes, fix or delete the comments it falsifies. A comment that
   names a switch or path must name one that exists.
+- Never call continuous pose refinement "polish"/"polishing" (names, comments,
+  help, docs): in cryo-EM polishing is per-particle motion correction. Say
+  continuous refinement, or continuous follow-up for the `pose_cont=yes` pass.
 
 ## OpenMP
 

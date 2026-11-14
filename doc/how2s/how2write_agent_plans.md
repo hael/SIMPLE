@@ -211,7 +211,7 @@ clean negatives twice. A fixed absolute bar with no control (3.6 Å in 10 of 10)
 abandoned.
 
 **Bound the coverage metrics.** "The teacher's direction lies in the 99 % set" was
-satisfied by a set that covered the sphere; "every block carries a polished entry" was
+satisfied by a set that covered the sphere; "every block carries a refined entry" was
 unachievable without changing single-state results. Write a metric as coverage and
 width, and ask at writing time what would pass it trivially.
 

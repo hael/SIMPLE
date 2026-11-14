@@ -209,10 +209,10 @@ a shift search), which the searches, the preparation and the consumers read.
 The classic modes (ruling 20) take the table's structure, not a seed: under the
 key no shift search at the previous class (`inpl_srch_first`) in any state count,
 the candidates scored at the stored shift as the mode has it, and the screen and
-polish of the tables (`simple_shiftmap_srch`: a map per candidate of the pool,
-the disk or the window, the best cells polished with `minimize_in_cell`) over
+refinement of the tables (`simple_shiftmap_srch`: a map per candidate of the pool,
+the disk or the window, the best cells refined with `minimize_in_cell`) over
 every scored class and the previous one, which competes at its stored-shift
-score: one polished for the committed pose, the peaks for `snhc_smpl`. Under the
+score: one refined for the committed pose, the peaks for `snhc_smpl`. Under the
 key `snhc` keeps every class it scores. (A first build mapped only the class SHC
 committed to for a particle in its window: a wrong class's map moved the particle
 to that class's optimum, and the 2D fixture fell well below the window search.)
@@ -222,11 +222,11 @@ mapped shift, and `assign_ori` records the shift state. The matcher builds the
 maps once per run (`setup_shiftmap_srch`). The stream's pool (`snhc_smpl`, its
 appended particles greedy) is centred this way.
 The continuous in-plane route's joint domain contains the particle's box and the
-incoming shift (the refine3D policy), so a disk shift is polished, not clipped.
+incoming shift (the refine3D policy), so a disk shift is refined, not clipped.
 
 The centring is a per-particle state, not a stage (ruling 19, 2026-11-02; the
 sampling strategies inject particles no stage would otherwise centre). Each
-particle carries two numbers the consumer writes after its polish
+particle carries two numbers the consumer writes after its refinement
 (`record_shift_state`): `shincr`, the move of the iteration, and `shsig`, its
 prior width for its next search, in pixels. In every table fill from stage 2 on
 (stage 1 is the SNHC window stage, which has no table):
@@ -246,12 +246,12 @@ prior width for its next search, in pixels. In every table fill from stage 2 on
   holding 99 % of the particle's posterior at the
   origin (`screen_pool_size`, at least twice the refined count; in the sparse
   `prob_neigh` fill a disk particle scores every class first), each keeping its
-  coarse optimum, and the best classes polished at full resolution in a box of
+  coarse optimum, and the best classes refined at full resolution in a box of
   one map step about that optimum in the disk's own search object
   (`pftc_shsrch_grad%minimize_in_cell`: the L-BFGS from the cell; the better of
-  the polish and the cell at its best rotation is the pose if it beats the
-  origin's row, else that row stands). The rows are polished losses;
-- the window: the same screen and polish over the coarse window map
+  the refinement and the cell at its best rotation is the pose if it beats the
+  origin's row, else that row stands). The rows are refined losses;
+- the window: the same screen and refinement over the coarse window map
   (`SHIFTMAP_WINDOW`, radius `trs`, no prior), the stage's search object;
 - a disk particle is prepared under the box's mask (`ptcl_on_disk`,
   `prepimg4align`: the box's noise mask and soft mask radius, `lmsk_box`,
@@ -294,7 +294,7 @@ no shift assigned, 38 at the end; the SNHC stage 1 gives 79 at the entry and
 57 at the end, the control 65), the per-iteration counts from the runs'
 `clusters2D_iterNNN.star`.
 Under the key every table scores the classes at the stored shift, without the
-previous class's seed and its shifted-particle bank, and polishes from a coarse
+previous class's seed and its shifted-particle bank, and refines from a coarse
 map's optimum (Phase 4 of the note), so the 5 x 5 lattice at every rotation
 and the seed retire wherever the key runs; `shift_sigma=0` keeps the seed and
 the lattice. The terminal greedy pass runs the window search (`shift_sigma=0` on
@@ -432,7 +432,7 @@ This layer should stay thin enough that stage rules are readable elsewhere.
 - particle-domain alignment/search; under `refine=prob` and `prob_neigh` the
   batch pipeline (`prob_align_batch_pipeline.md`, 2026-11-04): the batch's
   rows or candidates filled, each particle's class drawn from its own row,
-  then the polish, residual and class sums, the same body in shared memory and
+  then the continuous refinement, residual and class sums, the same body in shared memory and
   in a distributed part
 - reproduction of the master's sampled subset
 - strategy-object selection
@@ -744,7 +744,7 @@ internal device against that overfitting, not a model of the output.
   pass and the terminal pass (set, not removed: the default is the quadrature);
   a pass without a table reads no value of it. The stream (initial analysis and
   2D pool), the particle sieve and `validate` inherit the default.
-- **What it does.** After the search has committed and polished a particle's
+- **What it does.** After the search has committed and refined a particle's
   class, rotation and shift (`strategy2D_prob`), the row of that class over
   every rotation is evaluated at the committed shift in the particle's frame
   (the shifted-particle bank, `gen_euclid_dists_bank`) and the posterior
@@ -764,7 +764,7 @@ internal device against that overfitting, not a model of the output.
   search are what they are without the key, for the same incoming references. The
   references differ from the second iteration on, so a run's trajectory does.
   The entry of the committed rotation sits at the committed (continuously
-  polished) angle; a quadrature that lies in one rotation, the concentrated
+  refined) angle; a quadrature that lies in one rotation, the concentrated
   posterior, leaves the particle at its committed pose with weight 1, so a
   well-determined particle is summed as at `topk_inpl=1`.
 - **Averages are generated differently at the end, on purpose.** The class
@@ -776,7 +776,7 @@ internal device against that overfitting, not a model of the output.
   survive the terminal pass through the references and assignments, not through
   smoothing of the intermediate averages.
 - **What the quadrature is and is not.** It is the posterior's angular expectation
-  conditional on the committed class and the polished shift, approximated by `K`
+  conditional on the committed class and the refined shift, approximated by `K`
   points: a flat row gives `K` angles at equally spaced ranks, snapped to the
   rotation grid. Equally spaced angles cancel every angular harmonic of the
   particle's noise except the multiples of `K`; `K` above the band's highest

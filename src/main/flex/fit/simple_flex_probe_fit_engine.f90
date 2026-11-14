@@ -3,7 +3,7 @@ submodule (simple_flex_probe_fit) simple_flex_probe_fit_engine
 !$ use omp_lib, only: omp_get_max_threads
 use simple_core_module_api, only: del_file, dtiny, fclose, file_exists, fileiochk, fopen, logfhandle, &
     &simple_rename, tic, timer_int_kind, toc
-use simple_flex_pca_stages,      only: flex_stage_request, PCA_STAGE_PROBE, PCA_STAGE_POLISH
+use simple_flex_pca_stages,      only: flex_stage_request, PCA_STAGE_PROBE, PCA_STAGE_FULLSET
 use simple_flex_pca_artifacts,   only: FLEX_PCA_PART_MAGIC
 use simple_flex_pca_basis,       only: save_probe_state, COV_PROBE_META
 use simple_flex_pca_util,        only: cov_stage_subsample
@@ -486,7 +486,7 @@ contains
         !> master's global-iteration stamp, passed by a distributed probe worker whose own loop
         !! runs once per relaunch; absent (or 0) in shared-memory runs and on the master itself
         integer,          optional, intent(in)            :: it_glob, niters_glob
-        !> file namespace override (merge-polish pass: never clobber fit A's delivery)
+        !> file namespace override (merge full-set pass: never clobber fit A's delivery)
         character(len=*), optional, intent(in)            :: fprefix, meta_fname
         type(flex_probe_fit), target :: fits(1)
         type(flex_mean_ref) :: means(1)
@@ -521,7 +521,7 @@ contains
     end subroutine probe_subspace_iteration
 
     !> THE FIT ENGINE: one master loop advancing nfits resident fits -- 1 for the single-fit probe
-    !! and the joint polish pass, 2 for the paired engine over the mod-4 halves (plan par.3.3: one
+    !! and the joint full-set pass, 2 for the paired engine over the mod-4 halves (plan par.3.3: one
     !! it_eff advances BOTH fits). Per iteration every fit begins its iteration, the E-step runs
     !! ONCE over the fits' merged read list (fit_estep_pass; distributed: one qsys round per
     !! iteration, because the basis the E-step projects changes every iteration, then the parts'
@@ -674,7 +674,7 @@ contains
     !! previous iter_finish / the data-free init), run ONE qsys round carrying the iteration, the
     !! budget and the fit count in job_descr, then fold every worker's part into the fits'
     !! accumulators. A single fit always stamps the default meta (the worker reads that one; the
-    !! POLISH stage selects the polished basis namespace); the paired fits stamp their own.
+    !! FULLSET stage selects the full-set basis namespace); the paired fits stamp their own.
     subroutine dispatch_round( params, fits, nfits, it_eff, niters_eff, rounds )
         class(flex_pca_rounds), intent(inout) :: rounds
         class(parameters),      intent(inout) :: params
@@ -691,9 +691,9 @@ contains
             call paired_reduce_parts(params, fits, rounds=rounds)
         else
             call save_probe_state(fits(1)%model%ncomp, fits(1)%model%eigvals, fits(1)%model%sig2_eff)
-            ! the joint fit after the merge refines the polished basis, not fit A's
-            if( fits(1)%spec%fprefix%to_char() == 'flex_pca_polished_pc' )then
-                call rounds%run_stage(params, flex_stage_request(stage=PCA_STAGE_POLISH, &
+            ! the joint fit after the merge refines the full-set basis, not fit A's
+            if( fits(1)%spec%fprefix%to_char() == 'flex_pca_fullset_pc' )then
+                call rounds%run_stage(params, flex_stage_request(stage=PCA_STAGE_FULLSET, &
                     &label='joint-fit iteration', which_iter=it_eff, maxits=niters_eff, nfits=1))
             else
                 call rounds%run_stage(params, flex_stage_request(stage=PCA_STAGE_PROBE, &

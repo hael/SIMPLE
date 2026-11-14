@@ -65,8 +65,13 @@ contains
                 t_read = tic()
             endif
             call build%esig%read_global
-            ! the polar kernels' shell weights and self-terms follow the spectra just read
-            if( .not. params%l_cart_refine ) call build%pftc%memoize_sigma2_weights
+            if( trim(params%sigma2_frozen) == 'yes' )then
+                if( params%l_cart_refine ) THROW_HARD('sigma2_frozen is supported for 2D polar matching only')
+                call build%esig%freeze_for_scoring(build%pftc)
+            else if( .not. params%l_cart_refine )then
+                ! freeze_for_scoring refreshes these weights when attaching its array.
+                call build%pftc%memoize_sigma2_weights
+            endif
             if( L_BENCH_GLOB )then
                 rt_sigma2_read_global = toc(t_read)
                 call sigma2_state_read_header(fname%to_char(), header, status, message)

@@ -15,7 +15,7 @@ public :: rnd_key, rnd_keyed, rnd_keyed_int, rnd_keyed_partial_shuffle
 public :: RND_KEYED_VERSION
 public :: rnd_run_seed, ensure_run_seed, set_run_seed, rnd_scope_key, rnd_draw_key
 public :: RND_FAM_SAMPLE, RND_FAM_INPL, RND_FAM_DISK, RND_FAM_CAND, RND_FAM_ASSIGN, RND_FAM_DIAG, RND_FAM_INPLQ
-public :: RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_PASS_POLISH, RND_PASS_FINAL, RND_PASS_DIAG
+public :: RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_PASS_CONT, RND_PASS_FINAL, RND_PASS_DIAG
 public :: run_all_rnd_tests
 public :: rnd_keyed_bits, rnd_key_lanes, rnd_bits_to_unit, rnd_scope
 private
@@ -92,7 +92,7 @@ integer, parameter :: RND_FAM_INPLQ  = 7 !< the phase of a particle's in-plane q
 ! the scope of a logical pass (section 4.2): the program and the pass kind, packed by rnd_scope
 integer, parameter :: RND_PROG_REFINE3D = 1, RND_PROG_REFINE2D = 2
 integer, parameter :: RND_PASS_ALIGN = 1  !< the discrete alignment
-integer, parameter :: RND_PASS_POLISH = 2 !< the pose_cont polish
+integer, parameter :: RND_PASS_CONT = 2 !< the pose_cont follow-up
 integer, parameter :: RND_PASS_FINAL  = 3 !< the final full-population assignment
 integer, parameter :: RND_PASS_DIAG   = 4 !< a diagnostic evaluation
 integer, parameter :: RND_SCOPE_STRIDE = 16

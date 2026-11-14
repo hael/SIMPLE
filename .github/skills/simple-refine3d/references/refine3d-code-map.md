@@ -41,7 +41,7 @@ For public workflow policy, read `doc/policies/3D/refine3D_policy.md` first.
   the iteration's sample draw (`sample_ptcls4prob3D` under `refine=prob*`,
   `master_draws_sample3D` otherwise), the run seed (`adopt_run_seed`), the
   merge of the parts' readout records (`merge_prob_readouts`), matcher dispatch,
-  the `pose_cont=yes` polish pass, assembly dispatch (gridding or
+  the `pose_cont=yes` follow-up pass, assembly dispatch (gridding or
   `assemble_refine3D_pcg`), the matching low-pass refresh, convergence and the
   sigma2 commit.
 - `simple_volassemble_strategy.f90`

@@ -214,7 +214,7 @@ contains
         endif
         if( L_BENCH_GLOB ) self%bench%rt_setup = toc(self%bench%t_tot)
         ! the probabilistic modes run their pipeline inside refine2D_exec on this project (the sample, the fill, the
-        ! class draws, the polish, the class sums)
+        ! class draws, the refinement, the class sums)
         ! main clustering/alignment step
         if( params%cc_objfun==OBJFUN_EUCLID )then
             if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()
@@ -223,6 +223,7 @@ contains
         endif
         if( L_BENCH_GLOB ) self%bench%t = tic()
         call refine2D_exec(params, build, cline, params%which_iter, l_frac)
+        call report_frozen_sigma2(params, build, params%kfromto)
         if( L_BENCH_GLOB )then
             self%bench%rt_search = toc(self%bench%t)
             self%bench%t         = tic()
@@ -410,8 +411,6 @@ contains
                                                      extra_params=params)
         if( L_BENCH_GLOB ) self%bench%rt_search = toc(self%bench%t)
         call terminate_stream(params, 'SIMPLE_DISTR_REFINE2D HARD STOP 1')
-        ! the parts' readouts of the probabilistic assignment, merged in part order and reported as the owner's
-        if( params%l_prob_align_mode ) call merge_prob_readouts(params%nparts, params%numlen, params%prob_beta)
         if( l_full_update )then
             if( l_update_frac_key )then
                 call self%job_descr%set('update_frac', update_frac_req%to_char())
@@ -422,6 +421,14 @@ contains
         ! Merge alignment docs
         if( L_BENCH_GLOB ) self%bench%t = tic()
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY, write=.false.)
+        ! Workers record their actual matching low-pass limit in every row, including unsampled rows.
+        ! Read it before restoration/commit, beside the merged posterior readout, without changing the master's band.
+        if( trim(params%sigma2_frozen) == 'yes' )then
+            call report_frozen_sigma2(params, build, &
+                &[max(2,calc_fourier_index(params%hp,params%box,params%smpd)), &
+                &calc_fourier_index(build%spproj_field%get(1,'lp'),params%box_crop,params%smpd_crop)])
+        endif
+        if( params%l_prob_align_mode ) call merge_prob_readouts(params%nparts, params%numlen, params%prob_beta)
         if( L_BENCH_GLOB ) self%bench%rt_merge = toc(self%bench%t)
         ! Assemble class averages
         if( trim(params%restore_cavgs) .eq. 'yes' )then
@@ -512,15 +519,55 @@ contains
     !! registers the state in the project file, so projinfo is re-read
     subroutine ensure_canonical_sigma2( params, build, cline )
         use simple_sigma2_bootstrap, only: ensure_sigma2_for_iteration
+        use simple_sigma2_frozen, only: prepare_frozen_sigma2
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(cmdline),    intent(in)    :: cline
-        logical :: l_rebuilt
+        logical :: l_rebuilt, found
+        type(string) :: fname
+        integer :: status
+        character(len=STDLEN) :: message
+        if( trim(params%sigma2_frozen) == 'yes' .and. params%cc_objfun /= OBJFUN_EUCLID ) &
+            &THROW_HARD('sigma2_frozen=yes requires objfun=euclid')
         if( params%cc_objfun /= OBJFUN_EUCLID ) return
         call ensure_sigma2_for_iteration(cline, params%projfile, params%oritype, params%startit, params%box, &
             &params%smpd, 'REFINE2D SIGMA2', l_rebuilt)
         if( l_rebuilt ) call build%spproj%read_segment('projinfo', params%projfile)
+        if( trim(params%sigma2_frozen) == 'yes' )then
+            call build%spproj%get_sigma2_state_path(fname, found)
+            if( .not. found ) THROW_HARD('frozen sigma2 requires a canonical sigma2 state path')
+            call prepare_frozen_sigma2(fname%to_char(), status, message)
+            if( status /= 0 ) THROW_HARD(trim(message))
+            call fname%kill
+        endif
     end subroutine ensure_canonical_sigma2
+
+    !> Incoming measured spectra versus the fixed scoring spectra, on the band this iteration actually searched.
+    subroutine report_frozen_sigma2( params, build, band )
+        use, intrinsic :: iso_fortran_env, only: real64
+        use simple_sigma2_frozen, only: frozen_sigma2_band_stats
+        type(parameters), intent(in) :: params
+        type(builder), intent(in) :: build
+        integer, intent(in) :: band(2)
+        type(string) :: fname
+        real(real64) :: mean_log(2), edge_log(2)
+        integer :: nabove(2), status, half
+        logical :: found
+        character(len=512) :: message
+        character(len=1), parameter :: HALVES(2) = ['E','O']
+        if( trim(params%sigma2_frozen) /= 'yes' ) return
+        call build%spproj%get_sigma2_state_path(fname, found)
+        if( .not. found ) THROW_HARD('missing sigma2 store for frozen-spectrum readout')
+        call frozen_sigma2_band_stats(fname%to_char(), band, mean_log, edge_log, nabove, status, message)
+        if( status /= 0 ) THROW_HARD(trim(message))
+        do half = 1, 2
+            write(logfhandle,'(A,I0,A,A,A,I0,A,I0,A,F7.4,A,ES13.5,A,ES13.5,A,I0,A,I0)') &
+                &'>>> SIGMA2 FROZEN iter ', params%which_iter, ' half ', HALVES(half), ' band ', band(1), ':', band(2), &
+                &' beta ', params%prob_beta, ' mean_log(measured/anchor) ', mean_log(half), &
+                &' edge_log(measured/anchor) ', edge_log(half), ' above_anchor ', nabove(half), '/', band(2)-band(1)+1
+        enddo
+        call fname%kill
+    end subroutine report_frozen_sigma2
 
     !> Shared-memory restoration of the class averages from the sums the matcher accumulated: the carried sums
     !! committed (l_frac: the iteration blends them), the averages restored and written, the class document, and the

@@ -187,7 +187,7 @@ contains
     !! in its own frame, then every rotation of the reference) against two oracles, with a CTF that depends on the
     !! angle (the astigmatic form 1 + a cos 2 theta + b sin 2 theta) and per-ring noise weights: the direct angular
     !! sums of a particle multiplied by exp(-i phase) at its own samples' angles and the reference unshifted; and the
-    !! shifted-reference kernel at the shift R(theta_r) u of each rotation r (the frame rule of the polish), whose
+    !! shifted-reference kernel at the shift R(theta_r) u of each rotation r (the frame rule of the refinement), whose
     !! row at r is the bank's at r. The tolerance is that of the existing kernel against its oracle (single-precision
     !! FFT sums). Run on the references as the last scoring pass left them (scaled by factor)
     subroutine check_bank_particle_frame(calc,refs,particles,ctfs,sigma2,factor)

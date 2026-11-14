@@ -111,7 +111,7 @@ visited and how the winner is chosen:
 - **prob** and **prob_neigh**: the particle's row of class losses is filled in
   the matcher's batch, its class, rotation and shift drawn from that row (see
   [sampling](sampling_and_fractional_updates.md)); the search step then
-  commits and polishes them.
+  commits and refines them.
 
 Shifts are refined with L-BFGS-B on the same objective, bounded by `trs`,
 starting from a small coarse box around the seed. Shift search is disabled in
@@ -120,7 +120,7 @@ radius` (clamped to 5 to 6 pixels) once the search space fraction exceeds 75
 percent, so shifts are only trusted after classes have stabilized.
 
 The committed pose is discrete in angle. An optional joint continuous
-`(sx, sy, theta)` polish, described in
+`(sx, sy, theta)` refinement, described in
 [continuous in-plane refinement](continuous_inplane_refinement_solve2D.md),
 can then refine it without changing what was selected.
 
@@ -166,7 +166,7 @@ multiples. The snapping leaves a residual: the cancellation is complete only
 where `K` divides the number of rotations, otherwise harmonic `m` keeps up to
 about `m 2 pi / nrots` (on 360 rotations `K = 64` keeps 12.5 % of harmonic 40).
 A quadrature in one rotation, the concentrated posterior,
-leaves the particle at its committed, continuously polished pose, as at
+leaves the particle at its committed, continuously refined pose, as at
 `topk_inpl=1`. The committed class, pose and shift in the project are the
 search's draw and are unchanged. The terminal greedy pass and `make_cavgs`
 sum every particle at its committed pose, so the class averages of the stage

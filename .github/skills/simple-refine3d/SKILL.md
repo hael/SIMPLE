@@ -61,7 +61,7 @@ For deeper navigation, read:
   readout records in part order (`merge_prob_readouts`) and runs gridding
   assembly (`write=.false.`) and the sigma commit on it. It writes the
   particle field once before the workers, once after the merge only when a
-  polish pass follows, and once at the end of the iteration;
+  follow-up pass comes next, and once at the end of the iteration;
   `merge_algndocs(..., write=.false.)` merges in memory; `out` is written once,
   before postprocessing. The PCG master (`rec_backend=pcg`) additionally writes
   the particle field once at the end of its call (`execute_rec3D_pcg_distributed_master`
@@ -151,7 +151,7 @@ Preserve that split when refactoring.
 - Shared-memory and distributed routes should differ in launch/orchestration, not scientific ownership boundaries.
 - `volassemble_exec` is the execution site for expensive volume-domain work; keep it out of the refine3D strategy, the matcher and the commander wrapper.
 - `execute_from_project`, `execute_hand_on` and the builder's `spproj_src` are gone; do not reintroduce a handed-on project.
-- The distributed master draws each iteration's sample over the whole project when `master_draws_sample3D` holds (every `refine=prob*` pass, `sample_ptcls4prob3D`, keyed; else a fractional pass other than polish, `update_missing`, `eval` or `sigma`) and writes it before the parts; they reproduce it with `sample4update_reprod`. Shared memory draws in `refine3D_exec`.
+- The distributed master draws each iteration's sample over the whole project when `master_draws_sample3D` holds (every `refine=prob*` pass, `sample_ptcls4prob3D`, keyed; else a fractional pass other than the follow-up, `update_missing`, `eval` or `sigma`) and writes it before the parts; they reproduce it with `sample4update_reprod`. Shared memory draws in `refine3D_exec`.
 - There is no global table and no part file: a batch's rows (`batch_rows(nrefs, i_first:i_last)`, the active states' references only) live from `fill_tab_range` to `assign_batch`; what lives across batches is the part's per-particle state (`assgn_map`, `temps`, the seed shifts), the insertion table and the readout counts, from `open_assignment` to `close_assignment`.
-- `refine=cont` is the Cartesian pass (`strategy3D_cont`, `src/main/cftc`): it refines the stored poses, `inpl_cont` is forced off, and `athres_cont` (not `athres`) bounds its rotation. `pose_cont=yes` in a discrete mode makes the iteration strategy follow each discrete pass with a `refine=cont` polish over the same sample; `refine=cont pose_cont=yes` on a command line is refused. `cont_route=shift_then_joint` is a test seam, not a production option. A `refine=cont` run converges by its own motion rule (`check_cont_conv`, `pose_cont_status` slot 42).
+- `refine=cont` is the Cartesian pass (`strategy3D_cont`, `src/main/cftc`): it refines the stored poses, `inpl_cont` is forced off, and `athres_cont` (not `athres`) bounds its rotation. `pose_cont=yes` in a discrete mode makes the iteration strategy follow each discrete pass with a `refine=cont` refinement over the same sample; `refine=cont pose_cont=yes` on a command line is refused. `cont_route=shift_then_joint` is a test seam, not a production option. A `refine=cont` run converges by its own motion rule (`check_cont_conv`, `pose_cont_status` slot 42).
 - `refine=prob_state`, `refine3D_states pose_policy=fixed`, the `flex` key and docked `solve3D`/`solve3D_cavgs` are retired with no aliases: `flex_pca` is the only state initializer of `refine3D_states` (state-0/1 input, `nstates>=3`), and multi-state `solve3D` (`nstates>1`) refines independent states.

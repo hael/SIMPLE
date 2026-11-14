@@ -250,8 +250,8 @@ contains
         real    :: smpd_pc
         integer :: ldim_pc(3), ifoo
         corr = 0.0
-        pcfile = 'flex_pca_polished_pc001.mrc'
-        call assert_true(file_exists(pcfile), trim(tag)//': polished leading eigenvolume is delivered')
+        pcfile = 'flex_pca_fullset_pc001.mrc'
+        call assert_true(file_exists(pcfile), trim(tag)//': full-set leading eigenvolume is delivered')
         if( .not. file_exists(pcfile) ) return
         call find_ldim_nptcls(pcfile, ldim_pc, ifoo)
         smpd_pc = SMPD * real(BOX) / real(ldim_pc(1))

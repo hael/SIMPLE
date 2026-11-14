@@ -344,9 +344,9 @@ subroutine inspect_eigenvolume( tag, truth_diff, gate, corr )
     real,             intent(out) :: corr
     class(image), allocatable :: truth, pc
     type(string) :: pcfile
-    pcfile = 'flex_pca_polished_pc001.mrc'
+    pcfile = 'flex_pca_fullset_pc001.mrc'
     corr = 0.0
-    call gate%check(trim(tag)//': polished leading eigenvolume is delivered', file_exists(pcfile))
+    call gate%check(trim(tag)//': full-set leading eigenvolume is delivered', file_exists(pcfile))
     if( .not. file_exists(pcfile) ) return
     allocate(truth, pc)
     call truth%new([FLEX_PHANTOM_BOX,FLEX_PHANTOM_BOX,FLEX_PHANTOM_BOX], FLEX_PHANTOM_SMPD, wthreads=.false.)

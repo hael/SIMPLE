@@ -9,7 +9,7 @@ that holds most of the posterior, and a *confidence*, so that the search can
 align that particle inside the cone instead of over the whole sphere. The
 student proposes; the search decides. It never writes an in-plane rotation or
 a shift: those come from the neighbourhood search it hands the cone to, with
-the search's own machinery (the polar shift map, the polish, the local
+the search's own machinery (the polar shift map, the refinement, the local
 refinement).
 
 The quantity estimated is a distribution over the *mirror pairs* of the
@@ -141,7 +141,7 @@ discarded it, which is why it was replaced.
 particle, the row of the dense probability table at the student's grid and
 band, filled as the production search fills it against the training set's map,
 each direction scored at its drawn in-plane rotation with the best candidates
-polished in shift. The soft target is the row's tempered posterior
+refined in shift. The soft target is the row's tempered posterior
 `t_c = exp[-tau (L_c - L_min)] / sum_j exp[-tau (L_j - L_min)]`, `tau` the
 search's tempering factor times the particle's own temperature; the whole row
 is kept, so a broad posterior stays broad, and it is folded onto the mirror
@@ -308,7 +308,7 @@ tell a view from its mirror would spend its capacity on a distinction the
 search makes exactly, and would learn half as much data per class. It hands over a cone rather than a
 pose because the search already has the better continuous estimator for the
 in-plane angle, the shift and the direction within the cone, with the
-references, the shift map and the polish. It is trained on the search's own
+references, the shift map and the refinement. It is trained on the search's own
 posterior rows rather than on hard labels so that it inherits the search's
 uncertainty and never claims more than the teacher resolves: where the
 teacher is broad, the student seeds nobody and the search runs as it would

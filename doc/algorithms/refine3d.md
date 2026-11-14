@@ -102,7 +102,7 @@ One iteration:
    one through `refine3D_states`, whose [flex PCA](heterogeneity_analysis/flex_pca.md)
    initializer assigns the first states at fixed poses.
    In the discrete modes, shifts are then refined by L-BFGS-B within `trs`, and optionally the
-   committed `(sx, sy, theta)` is polished jointly with continuous angle
+   committed `(sx, sy, theta)` is refined jointly with continuous angle
    ([continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)).
    Multi-state search never reuses a shift seed from one state to rank
    another.

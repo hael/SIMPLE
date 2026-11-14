@@ -79,7 +79,7 @@ widening the umbrella).
 |---|---|---|---|
 | Program | `refine3D`, `reconstruct3D`, `preprocess` | a controller or strategy (`create_<x>_strategy`) | `execute(cline)` |
 | Master step: a part of a stage that the master or another workflow runs in process | volume assembly, class-average assembly, sigma2 commit | strategy routine `<x>_exec(params, build, explicit args)` in `strategies/parallelization` with a `run_<x>(cline)` entry **(ruled)** | thin wrapper that calls `run_<x>` |
-| Worker step: the per-partition program a scheduler starts | the matchers' `refine3D_exec`/`refine2D_exec` (the probabilistic routes' fills, draws and polish inside, the same body in shared memory), `calc_pspec` parts | the matcher or strategy module beside the master routine for the same step **(proposed)** | thin shell: `params`, builder, body, `qsys_declare_part_finished`, `simple_end` |
+| Worker step: the per-partition program a scheduler starts | the matchers' `refine3D_exec`/`refine2D_exec` (the probabilistic routes' fills, draws and continuous refinement inside, the same body in shared memory), `calc_pspec` parts | the matcher or strategy module beside the master routine for the same step **(proposed)** | thin shell: `params`, builder, body, `qsys_declare_part_finished`, `simple_end` |
 | Domain operation | restore class averages, assemble volumes' reduction, NU filter | domain module | none |
 
 A step that is *part of a stage* is never a commander called from a strategy.
@@ -160,7 +160,7 @@ process reads it can be seen half-written.
    `write` when the file does not exist yet.
 4. **One write of a segment per iteration (ruled).** A second write needs a
    reader that must see the file (the `out` segment before postprocessing; the
-   particle field before a polish pass); the owning workflow policy names it.
+   particle field before a follow-up pass); the owning workflow policy names it.
 5. **Do not read what you hold.** A routine that has `build` does not read the
    project again; pass `build`, not a file name **(proposed)**. Read a segment
    from the file only when another process has changed it, and read that

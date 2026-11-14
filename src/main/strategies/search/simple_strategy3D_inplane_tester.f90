@@ -64,7 +64,7 @@ contains
         call test_key_derivation()
         call test_previous_shift_is_stored_shift()
         call test_table_increment_axes()
-        call test_map_initialised_polish()
+        call test_map_initialised_refinement()
         call test_continuous_seed_beyond_window()
         call test_rec_observation_mask()
         call test_pass_team_check()
@@ -270,7 +270,7 @@ contains
         call clean_strategy3D
     end subroutine test_joint_storage
 
-    !> polish-only policy: the joint solve only polishes the committed pose; a finite
+    !> refine-only policy: the joint solve only refines the committed pose; a finite
     !! no-improvement result stores the selected seed and is not continuous-valid
     subroutine test_discrete_seed_storage_and_invalid_predicate()
         type(strategy3D_srch) :: srch
@@ -331,7 +331,7 @@ contains
         call cline%kill
     end subroutine test_inpl_cont_policy
 
-    !> the phase derivation: refine=cont turns inpl_cont off and is a Cartesian pass, the polish
+    !> the phase derivation: refine=cont turns inpl_cont off and is a Cartesian pass, the follow-up
     !! with pose_cont=yes; a discrete mode keeps the internal default
     subroutine test_inpl_cont_derivation()
         class(parameters), allocatable :: params
@@ -352,7 +352,7 @@ contains
         call cline%set('pose_cont', 'yes')
         allocate(params)
         call params%new(cline)
-        call assert_true(params%l_cart_refine .and. params%l_cont_followup, 'refine=cont pose_cont=yes is the polish')
+        call assert_true(params%l_cart_refine .and. params%l_cont_followup, 'refine=cont pose_cont=yes is the follow-up')
         deallocate(params)
         call cline%delete('pose_cont')
         call cline%set('refine', 'shc')
@@ -602,10 +602,10 @@ contains
         call del_file(PHANTOM)
     end subroutine test_table_increment_axes
 
-    !> Phase 4's pin: the map-initialised polish (the window map's mode, then the L-BFGS from its cell in a box of
+    !> Phase 4's pin: the map-initialised refinement (the window map's mode, then the L-BFGS from its cell in a box of
     !! one map step about it, minimize_in_cell) reaches the lattice-initialised search's optimum on the
     !! white-reference fixture, at the same rotation; the calls of the fills (shiftmap_srch), under euclid
-    subroutine test_map_initialised_polish()
+    subroutine test_map_initialised_refinement()
         character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
         real,             parameter :: STORED_SHIFT(2) = [0., 0.], S_TRUE(2) = [1.5, -2.0], TRS = 5.
         real(dp),         parameter :: TEMP = 1.d-3   ! cold: the mode is the data's peak on a noise-free particle
@@ -620,8 +620,8 @@ contains
         real     :: lims(2,2), cxy_l(3), cxy_m(3), xy_cell(2), step, loss
         real(dp) :: prior_w
         integer  :: irot_l, irot_m, nrots, inpl, nchecked, pdim(3), kfromto(2), pftsz, k, pp, kscreen, irho, ialpha
-        logical  :: l_polished
-        write(*,'(A)') 'test_map_initialised_polish'
+        logical  :: l_cont_refined
+        write(*,'(A)') 'test_map_initialised_refinement'
         call set_fixed_seed(20261101)
         call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, objfun='euclid')
         nrots   = b%pftc%get_nrots()
@@ -659,13 +659,13 @@ contains
             call b%pftc%shiftmap_mode(SHIFTMAP_WINDOW, TEMP, prior_w, irot_m, irho, ialpha, loss)
             xy_cell = real(b%pftc%shiftmap_shift(SHIFTMAP_WINDOW, irho, ialpha))
             call grad_map%set_indices(1, 1)
-            call grad_map%minimize_in_cell(irot_m, xy_cell, step, cxy_m, l_polished)
+            call grad_map%minimize_in_cell(irot_m, xy_cell, step, cxy_m, l_cont_refined)
             call assert_true(irot_l > 0, 'the lattice-initialised search found a better pose than the start')
-            call assert_true(l_polished, 'the map-initialised polish beat the origin')
+            call assert_true(l_cont_refined, 'the map-initialised refinement beat the origin')
             if( irot_l < 1 ) cycle
             nchecked = nchecked + 1
-            call assert_true(abs(norm2(cxy_m(2:3)) - norm2(S_TRUE)) <= 0.15, 'the map-initialised polish recovers the shift''s magnitude')
-            call assert_true(all(abs(cxy_m(2:3) - cxy_l(2:3)) <= 0.15), 'the map-initialised polish reaches the lattice-initialised optimum')
+            call assert_true(abs(norm2(cxy_m(2:3)) - norm2(S_TRUE)) <= 0.15, 'the map-initialised refinement recovers the shift''s magnitude')
+            call assert_true(all(abs(cxy_m(2:3) - cxy_l(2:3)) <= 0.15), 'the map-initialised refinement reaches the lattice-initialised optimum')
             call assert_true(irot_m == irot_l, 'the two starts agree on the rotation')
         enddo
         call assert_true(nchecked >= 3, 'the identity held at three starts or more')
@@ -678,10 +678,10 @@ contains
         call b%kill_general_tbox
         call cline%kill
         call del_file(PHANTOM)
-    end subroutine test_map_initialised_polish
+    end subroutine test_map_initialised_refinement
 
     !> The review's T1: the continuous route's joint domain contains the incoming pose. A pose found on a disk beyond
-    !! the window (the white-reference fixture shifted by S_TRUE, polished within +-8 px) goes through the committed
+    !! the window (the white-reference fixture shifted by S_TRUE, refined within +-8 px) goes through the committed
     !! pose's continuous route under trs = 2: it comes back unclipped and scored no worse than itself
     subroutine test_continuous_seed_beyond_window()
         character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'

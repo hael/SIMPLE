@@ -174,8 +174,8 @@ contains
         &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); in every stage '//&
         &'with shifts the probability tables centre each particle as it needs: one not yet centred in this workflow, '//&
         &'or whose shift posterior is wider than a third of the stage''s window, locates its likely directions over the '//&
-        &'disk of 3 sigma with a coarse polar shift map under the box''s mask and polishes from the map''s optimum, the '//&
-        &'others polish from the map over the window; 0 is the window search in every stage{10}', &
+        &'disk of 3 sigma with a coarse polar shift map under the box''s mask and refines from the map''s optimum, the '//&
+        &'others refine from the map over the window; 0 is the window search in every stage{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call prg%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         if( .not. l_stream_compatible )then

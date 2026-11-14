@@ -100,12 +100,12 @@ contains
     !> The particle's extra poses for the weighted insertion: the part's table entries (reference, in-plane index,
     !! native shift increment, weight) as Euler triplets and absolute stored shifts through candidate_pose, the
     !! committed pose's route, into the particle's slots of the part's structure (disjoint slots per particle: safe
-    !! across the search's threads). With l_polish each extra first takes the continuous in-plane route from its own
+    !! across the search's threads). With l_cont_refine each extra first takes the continuous in-plane route from its own
     !! cell and shift, as the committed pose does after it; its weight stays the table's
-    subroutine resolve_extra_poses( self, iptcl_map, l_polish )
+    subroutine resolve_extra_poses( self, iptcl_map, l_cont_refine )
         class(strategy3D_prob), intent(inout) :: self
         integer,                intent(in)    :: iptcl_map
-        logical,                intent(in)    :: l_polish
+        logical,                intent(in)    :: l_cont_refine
         type(prob_insert_pose) :: pose
         integer :: iloc, k, ipose, inpl
         real    :: euler(3), shvec(2), sh(2), corr, inpl_coord
@@ -118,12 +118,12 @@ contains
             sh         = [pose%x, pose%y]
             inpl_coord = real(inpl)
             inpl_valid = .false.
-            if( l_polish )then
+            if( l_cont_refine )then
                 corr = 0. ! re-scored by the solve, only its finiteness is checked
                 call self%s%refine_extra_pose_continuously(pose%iref, inpl, corr, sh, inpl_coord, inpl_valid)
             endif
             call candidate_pose(self%s, pose%iref, inpl, sh, euler, shvec)
-            if( l_polish ) euler(3) = resolve_inplane_e3(inpl, inpl_coord, inpl_valid,&
+            if( l_cont_refine ) euler(3) = resolve_inplane_e3(inpl, inpl_coord, inpl_valid,&
                 &self%s%uses_continuous_refinement(), self%s%b_ptr%pftc%get_dang())
             self%spec%extra_poses%euler(:,ipose) = euler
             self%spec%extra_poses%shift(:,ipose) = shvec

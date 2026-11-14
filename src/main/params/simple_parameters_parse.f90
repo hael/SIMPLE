@@ -216,6 +216,7 @@ contains
         call reg%add_char('state_pops', self%state_pops)
         call reg%add_yesno('stepwise', self%stepwise)
         call reg%add_yesno('cc_emit_sigma', self%cc_emit_sigma)
+        call reg%add_yesno('sigma2_frozen', self%sigma2_frozen)
         call reg%add_char('sticky_sampling', self%sticky_sampling)
         call reg%add_yesno('scan_exit', self%scan_exit)
         call reg%add_yesno('prob_post_diag', self%prob_post_diag)

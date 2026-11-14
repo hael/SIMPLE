@@ -20,7 +20,7 @@ applications), and no coarray is ever an allocatable component of a derived type
 ## Execution architecture follow-up (2026-11-06)
 
 The batch pipeline in `ea4c1c20a` supersedes this note's probability-table collection and assignment broadcasts.
-Every image can fill, draw, polish and retain insertion poses locally. The shared iteration input is the frozen
+Every image can fill, draw, refine and retain insertion poses locally. The shared iteration input is the frozen
 model and sample; the outputs crossing images are changed particle/sigma2 records, raw additive accumulators and
 small diagnostic counts. Batches do not synchronize with one another. The whole-command coarray backend remains
 planned; the preparatory pipeline is implemented and validated by the maintainer.
@@ -34,7 +34,7 @@ boundary. Its contract, order and validation are kept here rather than in a seco
    order, global particle ID, keyed draw, seed shift and diagnostic sampling rank. Add uneven-batch regressions.
 3. Use existing owner routines for shared-memory assembly and sigma2 commits; keep the authoritative project in
    the caller and separate project ownership from construction of replaceable execution resources. Preserve
-   state-at-a-time restoration, crop/band changes and the repeated polish pass.
+   state-at-a-time restoration, crop/band changes and the repeated follow-up pass.
 4. Select batch capacity before allocation from a common phase budget, accounting for fixed reference storage,
    per-particle work and the retained 3D observation buffer. Thread count bounds concurrency, not memory capacity.
 5. Preserve the updated local-selection SPMD protocol in this note. Whole-command launch, collective payloads,
@@ -45,7 +45,7 @@ boundary. Its contract, order and validation are kept here rather than in a seco
 Validation: build the current baseline before source edits; preserve its executables and frozen-input outputs.
 Build incrementally, run the fast gate and the affected probability-table, reconstruction and numerical suites;
 compare frozen-input fills across threads, batches and parts. Run simulated shared/distributed workflows and
-Cartesian polish where ownership/lifecycle changes apply. Record actual results below, including unrun platform
+Cartesian follow-up where ownership/lifecycle changes apply. Record actual results below, including unrun platform
 and performance checks. No commit or push.
 
 Progress: the baseline was rebuilt and its production executables saved. Implemented in the working tree:
@@ -53,7 +53,7 @@ allocatable 2D strategy ownership, batch-local sparse indexing, procedure-local 
 shared-memory refine3D project/general toolbox, owner assembly/sigma2 calls, and removal of redundant 2D master
 particle writes. Intrinsic random-stream phase resets are explicit in the shared-memory strategies, preserving
 the previous constructor-triggered reset sequence without reseeding inside owner routines. The existing keyed
-generator/version is untouched. The polish has one lazily constructed parameters object; its iteration and
+generator/version is untouched. The follow-up has one lazily constructed parameters object; its iteration and
 sampling settings change per pass. The alignment/reconstruction teardown boundary remains.
 The strategy also restores the requested shift window before each alignment pass: parameter reconstruction
 previously discarded convergence's widened window, and the resident lifecycle preserves that behavior explicitly.
@@ -90,7 +90,7 @@ Verified on the maintainer's Mac with the Debug GNU Fortran 16 build (tests on, 
   The planted populations (1500/900/600) are recovered without a state-label error; median rotation/shift errors
   are 1.25242 degrees / 0.0471645 pixels, within the existing 2-degree / 0.1-pixel gates.
 - Complete `cont_refine3D_1jxy nthr=4` exits 0, including shared/distributed Cartesian refinement, two-iteration
-  sampled polishing and trailing populations, automatic polishing, in-place continuation and NU bundle handoff.
+  sampled follow-up and trailing populations, automatic follow-up, in-place continuation and NU bundle handoff.
 - The full 1JXY shared-memory `solve3D` agrees with baseline in all 327 scientific readouts, all 79 final
   particle records and 41 binary artifacts. Canonical sigma2 differs only in its path-dependent layout digest;
   all spectra and transaction metadata agree. Truth-map checks pass with the same reported values.
@@ -161,7 +161,7 @@ launches one child, `cafrun -np <nimages> simple_private_exec --coarray <from_pa
 `this_image() + num_images()`, ... in-process, redirecting its output per part, then all images `sync all` and
 exit. The data between steps still travels through files: alignment documents, partial
 reconstructions, partial class sums. Per refine3D iteration that is one launch of the `refine3D`
-workers (two with the polish pass), each of which reads the project, builds its local toolbox, loads the prepared
+workers (two with the follow-up pass), each of which reads the project, builds its local toolbox, loads the prepared
 reprojection model and reads the sigma2 state again. Only `simple_private_exec` links the coarray copy of the library;
 `this_image()`, `num_images()` and `sync all` appear only in `production/simple_private_exec_driver.f90` under
 `#ifdef USE_COARRAYS`. The default launcher string is a bare `cafrun -np`, with `SIMPLE_COARRAY_SUBMIT_CMD` as the
@@ -238,7 +238,7 @@ the parts meet at these points, in this order within an iteration:
    sampled indices, counters and sample size; workers adopt that exact sample without drawing or incrementing it
    again. Publish the frozen refined-reference budget, shift-prior width, active-state layout and temperature
    controls with that model. Every image runs the existing batch pipeline locally: fill, keyed row selection,
-   extras, polish and residual. Rows and insertion poses remain local; no table collection or assignment
+   extras, continuous refinement and residual. Rows and insertion poses remain local; no table collection or assignment
    broadcast is needed. Images can run different batch counts and capacities without synchronizing per batch.
 2. **Search and merge.** Each image runs the local registration kernel with its own threads. At registration
    completion, gather changed numeric orientation fields by particle ID and verify coverage/overlap before applying
@@ -269,9 +269,9 @@ the parts meet at these points, in this order within an iteration:
    their names, one file per image.
 
 For `pose_cont=yes`, repeat the registration/merge phase: discrete registration without reconstruction, merge,
-Cartesian polish of the same sample, final merge, then one reconstruction from polished poses. Retain one sigma2
-transaction, with polished residuals replacing the discrete rows. This uses repeated communication phases, not a
-promise that polish requires no communication.
+Cartesian follow-up of the same sample, final merge, then one reconstruction from refined poses. Retain one sigma2
+transaction, with refined residuals replacing the discrete rows. This uses repeated communication phases, not a
+promise that the follow-up requires no communication.
 
 Persistent processes first save launches and intermediate file traffic. Buffer persistence is separate work:
 the shared-memory strategy now retains its general toolbox/project, but the matcher kills its search toolbox,
@@ -414,7 +414,7 @@ Validate fixed-payload transport first: root-directed and all-image sums, comple
 payloads, chunk tails, zero contributions, repeated buffer reset, exact-once coverage and missing/duplicate row
 rejection. Then compare a fixed-reference/full-update iteration's accumulators and restored products with a
 serial or file-backend oracle before adding probabilistic sampling. Cover fractional carry-over/centering,
-globally empty states, sparse/dense tables, sigma2 row coverage, crop/band changes, continuation and polished poses.
+globally empty states, sparse/dense tables, sigma2 row coverage, crop/band changes, continuation and refined poses.
 Exercise 1, 2 and uneven 3-image particle partitions with multiple threads, plus deadline-bounded nonroot failure.
 
 Use existing truth fixtures for scientific acceptance in all three modes and repeat over fixed seeds where streams
@@ -432,7 +432,7 @@ run is especially useful for isolating lifecycle errors before reduction order c
    Keep memory bounded and preserve the single-read particle path; amend policies when implementation lands.
 4. Verify the local batch pipeline on the broadcast frozen model and sample, canonical sigma2 commit and convergence
    across iterations. Gate unsupported combinations explicitly until validated; do not silently change their route.
-5. PCG raw B/D and metadata; Cartesian polish using the repeated registration/merge contract.
+5. PCG raw B/D and metadata; Cartesian follow-up using the repeated registration/merge contract.
 6. The SPMD refine2D lifecycle, local dense/sparse pipelines, raw class-sum reduction, owner carry-over and reference broadcast.
 7. Measured resource retention, optional distributed model construction, and genuinely overlapping state restoration.
    Each needs its own invalidation/scheduling and peak-memory evidence within this same living note.
@@ -445,7 +445,7 @@ resolved before treating the proposal as implementation-ready; the body above in
 | Priority | Finding and required gate | Current source anchors |
 | --- | --- | --- |
 | P1 | A new launch/reentry and owner/local lifecycle are required. Current private commands are workers, while in-memory strategies perform global setup, writes and teardown. Prove a one-image SPMD command first. | `production/simple_private_exec_driver.f90:300,315`; `src/utils/qsys/simple_qsys_ctrl.f90:715`; `simple_refine3D_strategy.f90:1119,1223`; `simple_refine2D_strategy.f90:156,185` |
-| P1 | Registration must expose committed rows before any root restoration. Empty samples/states must still reach the same publish sequence. Polish repeats registration/merge on the same sample. | `simple_strategy3D_matcher.f90:129,295,319`; `simple_matcher_3Drec.f90:53,85`; `simple_refine3D_strategy.f90:1794` |
+| P1 | Registration must expose committed rows before any root restoration. Empty samples/states must still reach the same publish sequence. The follow-up repeats registration/merge on the same sample. | `simple_strategy3D_matcher.f90:129,295,319`; `simple_matcher_3Drec.f90:53,85`; `simple_refine3D_strategy.f90:1794` |
 | P1 | Global metadata and complete table schemas are part of transport. Preserve exact-once coverage and authoritative active-state/class layout; local-only row updates are insufficient. | `simple_eul_prob_tab.f90:160,1423`; `simple_eul_prob_tab2D.f90:1178,1334`; `simple_matcher_pftc_prep.f90:48`; `simple_refine2D_strategy.f90:566` |
 | P1 | Reduce raw statistics, then apply population carry-over/trailing and nonlinear restoration once. Validate common offsets/geometry and PCG provenance separately. | `simple_classaverager_restore.f90:720,821`; `simple_volassemble_strategy.f90:119,140`; `simple_rec3D_pcg_strategy.f90:252,1735` |
 | P2 | Persistence, numerical equivalence and speedups each need their own evidence. Current teardown is intentional, RNG streams change with process lifetime, and timing residuals do not isolate I/O. | `simple_strategy3D_matcher.f90:303,311,326`; `simple_rnd.f90:57`; `simple_refine3D_strategy.f90:1732`; `simple_ptcl_cache.f90:1` |
@@ -462,7 +462,7 @@ builder for the same project. Stable partition identity remains independent of t
 
 **Choices still to settle.** The review recommends synchronized changed particle rows for the initial version;
 a smaller metadata-only replication scheme needs a complete consumer audit. Decide raw-payload chunk/gather budgets,
-RNG stream/restart policy and initial supported option matrix (`prob_neigh`, sparse 2D, PCG, polish, fractional
+RNG stream/restart policy and initial supported option matrix (`prob_neigh`, sparse 2D, PCG, continuous follow-up, fractional
 updates and continuation). Keep expensive buffer retention and parallel state restoration deferred until measured.
 An unsupported combination must fail before collective execution, with the supported route stated explicitly.
 
@@ -513,7 +513,7 @@ simultaneous aggregate RSS as well; a launcher's `/usr/bin/time -v` value is not
 
 **Scaling of the existing modes.** The same `refine3D` on the single-state half of the vcRNAP set (the 17,000
 particles of state 1, started from the truth map low-passed to 15 Å, `refine=prob`, `objfun=euclid`, a fixed
-sample size, 8 iterations, no polish), on 24 threads in total except the optional single-NUMA-node control:
+sample size, 8 iterations, no continuous follow-up), on 24 threads in total except the optional single-NUMA-node control:
 
 | Case | Mode | Images or processes x threads |
 | --- | --- | --- |

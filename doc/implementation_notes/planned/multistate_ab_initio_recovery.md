@@ -783,7 +783,7 @@ returns as a value of `refine`. Before 2026-10-06 (dffa21364) it was the early s
 paper's multi-state ab initio. The restored mode is rewritten to today's search frame:
 - *The search, as `shc`'s.* The previous pose is prepared, the shift is searched on the previous
   reference, and the references are then visited in random order until the first one scores
-  better than the previous. The chosen reference's in-plane angle and shift are polished as in
+  better than the previous. The chosen reference's in-plane angle and shift are refined as in
   `shc`, with the polar shift map when the key is on, and the pose is committed.
 - *The in-plane angle is drawn, not taken.* For each reference it is drawn within the
   neighbourhood of its best angles, by the paper-era bounded rule (`sample_bounded_dists`). The
@@ -1232,7 +1232,7 @@ What happens in each run:
   - Stage 3 at 12 A then sorts the two. The state that holds most of the largest assembly gives its medium
     particles to the medium state (26,410 -> 8,265 particles over 17 iterations), and the accuracy rises
     from 0.65 to 0.99.
-  - Stages 4 and 5 at 6 A only polish it.
+  - Stages 4 and 5 at 6 A only refine it.
 - *Run 2: the medium assembly gathers first and the smallest is split.*
   - Stage 1 puts 42,693 medium particles into one state, with 6,534 of the largest assembly's 8,000. The
     smallest is split over the other two states (14,404 and 9,458).

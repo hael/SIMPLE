@@ -16,7 +16,7 @@ type strategy2D_alloc
     integer              :: snhc_smpl_ninpl  = 0        !       =snhc_smpl
     integer              :: smpl_ninpl       = 0        !       =greedy_smpl
     integer              :: smpl_ncls        = 0        !       =greedy_smpl
-    real                 :: shift_prior_sigma2 = 0.     ! the shift prior's variance per axis (shift_prior=yes, the prob modes' polish)
+    real                 :: shift_prior_sigma2 = 0.     ! the shift prior's variance per axis (shift_prior=yes, the prob modes' refinement)
     ! per class
     integer, allocatable :: cls_pops(:)
     ! per particle
@@ -78,7 +78,7 @@ contains
         real    :: overlap, avg_dist_inpl
         integer :: nteam
         logical :: l_fresh_start
-        ! the shift prior's width for the committed class's polish, as the 2D tables' (shift_prior_sigma2)
+        ! the shift prior's width for the committed class's refinement, as the 2D tables' (shift_prior_sigma2)
         s2D%shift_prior_sigma2 = 0.
         if( params%l_shift_prior .and. str_has_substr(params%refine, 'prob') ) &
             &s2D%shift_prior_sigma2 = shift_prior_sigma2(spproj%os_ptcl2D, params%lp / params%smpd)

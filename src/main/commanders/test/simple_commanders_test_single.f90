@@ -1768,7 +1768,7 @@ subroutine exec_test_single_workflow( self, cline )
     class(sp_project), allocatable        :: run_proj
     type(oris)                            :: truth_oris
     type(string)                          :: cont_projfile
-    real                                  :: pair_polar, pair_cont, pair_nopolish, pair_polish
+    real                                  :: pair_polar, pair_cont, pair_nofollowup, pair_followup
     real                                  :: dock_cc_direct, dock_cc_mirror, dock_eul(3), dock_shift(3)
     logical                               :: dock_mirrored
     type(string)                          :: aref_projfile, nano_projfile
@@ -1794,10 +1794,10 @@ subroutine exec_test_single_workflow( self, cline )
     ! trajectory_solve3D's stage directories read by the checks: the pruned project after its two gates, the 3D
     character(len=*), parameter           :: TSOLVE3D_GATED    = '7_refine3D_nano'
     character(len=*), parameter           :: TSOLVE3D_AUTOREFINE = '11_autorefine3D_nano'
-    character(len=*), parameter           :: NOPOLISH_DIR      = '9_refine3D_nano_nopolish'
-    character(len=*), parameter           :: POLISH_DIR        = '10_refine3D_nano_polish'
+    character(len=*), parameter           :: NOFOLLOWUP_DIR      = '9_refine3D_nano_nofollowup'
+    character(len=*), parameter           :: FOLLOWUP_DIR        = '10_refine3D_nano_followup'
     ! N29, Phase 9 (declared before the first run): refine3D_nano pose_cont=yes and pose_cont=no
-    ! continue from the same autorefine3D_nano project; with the polish the median rotation error is
+    ! continue from the same autorefine3D_nano project; with the follow-up the median rotation error is
     ! no worse than without, within the same 0.5 deg
     ! N29 (pose_cont refactoring, Phase 8; ruling R5): refine3D_nano refine=cont continues from the
     ! autorefine3D_nano project; its poses against the trajectory truth are no worse than the polar
@@ -1807,11 +1807,11 @@ subroutine exec_test_single_workflow( self, cline )
     ! near-symmetric clusters' correct poses as random, 42.7-45.6 deg in every run)
     ! The relative ceiling (a stage may lose at most MAX_PAIR_LOSS deg of median rotation error to the
     ! one before) is admissible on the profiles of 2026-10-18 (20 seed offsets, one thread): fcc
-    ! refine=cont minus autorefine3D_nano median -0.13 deg, worst +0.19, the polish minus no polish
+    ! refine=cont minus autorefine3D_nano median -0.13 deg, worst +0.19, the follow-up minus no follow-up
     ! median -0.15, worst +0.12; wurtzite worst -0.11 and -0.13; random poses lose tens of degrees.
     ! The merged code (master reverted the FSC=0.143 matching clamp) changed the wurtzite results; its
     ! profile of 2026-10-19 (scratch/keep/profiles/phase8/main, 20 seed offsets, one thread): refine=cont
-    ! minus autorefine3D_nano median -0.30 deg, worst -0.12, the polish minus no polish median -0.31,
+    ! minus autorefine3D_nano median -0.30 deg, worst -0.12, the follow-up minus no follow-up median -0.31,
     ! worst -0.14 (s 0.05): the 0.5 deg stays admissible. fcc is byte-identical to the code the
     ! 2026-10-18 profile ran (test-suite truth plan, Phase 7), so its profile stands.
     ! The map's floors (MIN_VOL_CORR, MAX_FSC0143), on the same wurtzite profile: correlation median
@@ -2046,7 +2046,7 @@ subroutine exec_test_single_workflow( self, cline )
         &DOCK_HP, DOCK_LP, MIN_VOL_CORR, MAX_FSC0143, gate, 'autorefine3D_nano', volume_corr, volume_fsc0143, &
         &dock_corr_direct, dock_corr_mirrored, dock_corr_selected, volume_ok, corr_lp=DOCK_LP)
     ! the frame of the poses: the autorefine3D_nano map docked onto the simulated one (both hands);
-    ! refine=cont and the polish refine against that map, so one docking carries every stage's poses
+    ! refine=cont and the continuous follow-up refine against that map, so one docking carries every stage's poses
     call dock_both_hands(simulated_vol, final_volume, real(MOLDIAM), DOCK_HP, POSE_DOCK_LP, 'pose_dock', &
         &string('pose_dock_docked.mrc'), dock_cc_direct, dock_cc_mirror, dock_eul, dock_shift, dock_mirrored)
     call return_to_project_dir
@@ -2084,18 +2084,18 @@ subroutine exec_test_single_workflow( self, cline )
         &pair_cont <= pair_polar + MAX_PAIR_LOSS, upper=.true.)
     if( .not. (pair_cont <= pair_polar + MAX_PAIR_LOSS) ) &
         &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: refine=cont worsened the poses of autorefine3D_nano')
-    ! N29, Phase 9: refine3D_nano with and without the polish from the autorefine3D_nano project
+    ! N29, Phase 9: refine3D_nano with and without the follow-up from the autorefine3D_nano project
     aref_projfile = projfile
-    call run_nano_refine(NOPOLISH_DIR, 'no',  pair_nopolish)
-    call run_nano_refine(POLISH_DIR,   'yes', pair_polish)
+    call run_nano_refine(NOFOLLOWUP_DIR, 'no',  pair_nofollowup)
+    call run_nano_refine(FOLLOWUP_DIR,   'yes', pair_followup)
     write(logfhandle,'(a,f8.3,a,f8.3,a)') 'single_workflow median rotation error against the truth: refine3D_nano '//&
-        &'pose_cont=no ', pair_nopolish, ' deg, pose_cont=yes ', pair_polish, ' deg'
-    call gate%report('nopolish_rotation_error_deg', pair_nopolish)
-    call gate%metric('polish_rotation_error_deg', pair_polish, pair_nopolish + MAX_PAIR_LOSS, &
-        &pair_polish <= pair_nopolish + MAX_PAIR_LOSS, upper=.true.)
+        &'pose_cont=no ', pair_nofollowup, ' deg, pose_cont=yes ', pair_followup, ' deg'
+    call gate%report('nofollowup_rotation_error_deg', pair_nofollowup)
+    call gate%metric('followup_rotation_error_deg', pair_followup, pair_nofollowup + MAX_PAIR_LOSS, &
+        &pair_followup <= pair_nofollowup + MAX_PAIR_LOSS, upper=.true.)
     call gate%kill
-    if( .not. (pair_polish <= pair_nopolish + MAX_PAIR_LOSS) ) &
-        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the polish worsened the poses of refine3D_nano')
+    if( .not. (pair_followup <= pair_nofollowup + MAX_PAIR_LOSS) ) &
+        &THROW_HARD('TEST_SINGLE_WORKFLOW FAILED: the follow-up worsened the poses of refine3D_nano')
     call run_proj%kill
     call truth_oris%kill
     write(logfhandle,'(a,a,a,f7.4,a,f7.4,a,f7.4,a,f7.4,a,f7.2,a)') &

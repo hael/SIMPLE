@@ -35,7 +35,7 @@ Silent ones first.
 - The store spans shells `1..fdim(box)-1` of the native box and the project's particle layout (box, smpd,
   particle count, layout digest); a pass updates only its band. Its path is relative to the project's
   directory (`update_projinfo`).
-- A polish pass opens no transaction: `read_pending_range` starts from the discrete pass's range and
+- A follow-up pass opens no transaction: `read_pending_range` starts from the discrete pass's range and
   `write_sigma2` replaces it atomically.
 - A workflow that consumes or updates the store first calls `ensure_sigma2_for_iteration`: nothing when the
   store is consumable, otherwise `calc_pspec` seeds and publishes it and registers its path, after which the

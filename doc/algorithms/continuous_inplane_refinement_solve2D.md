@@ -6,8 +6,8 @@ The 2D and 3D search steps choose the in-plane rotation from a grid of
 `nrots` angles, `nrots = 2 pftsz` where `pftsz ~ pi * mask radius` is the
 number of angular samples of the polar Fourier transform. The grid spacing is
 therefore about one pixel of arc at the mask edge. Shifts are already
-continuous. This chapter describes how the committed pose is polished to a
-continuous angle jointly with the shift, and why the polish is kept strictly
+continuous. This chapter describes how the committed pose is refined to a
+continuous angle jointly with the shift, and why the refinement is kept strictly
 separate from the search that selected the pose.
 
 ## Model
@@ -52,7 +52,7 @@ derivative `(N' - N D'/(2D))/sqrt(DC)`.
 
 With `inpl_cont=yes`, the search runs unchanged until a class (or state and
 direction) and an integer rotation index have been committed. Then one
-bounded joint solve polishes the pose:
+bounded joint solve refines the pose:
 
 1. seed at the committed integer rotation and its native shift;
 2. bound the rotation variable to plus or minus two grid cells around the
@@ -71,15 +71,15 @@ index is kept for compatibility, and shift and score are taken from the same
 joint pose. On rejection the committed discrete pose stands with its
 re-scored value.
 
-## What the polish must not change
+## What the refinement must not change
 
 The joint solve runs exactly once per particle per iteration, after
 selection. Candidate scoring, probability-table construction, and shift
 seeding all use the discrete route. Two consequences are deliberate:
 
 - **Search trajectory identity.** The sequence of classes and cells visited,
-  and the assignment committed, is identical with and without the polish.
-  Polishing candidates *before* selection would sharpen the score contrast
+  and the assignment committed, is identical with and without the refinement.
+  Refining candidates *before* selection would sharpen the score contrast
   the stochastic sampler sees and collapse exploration on difficult
   particles.
 - **Statistics parity.** Every statistic that steers the schedule (in-plane
@@ -89,16 +89,16 @@ seeding all use the discrete route. Two consequences are deliberate:
   truncate the annealing that difficult particles need. The fractional angle
   is used only by reconstruction and persisted for the next iteration's seed.
 
-The polish is available for the raw Euclidean and correlation objectives. It
+The refinement is available for the raw Euclidean and correlation objectives. It
 is not applied in time-series shift-only search.
 
 ## Rationale
 
 The alignment precision that reconstruction can use is limited by the noise,
 not by the grid, once the grid spacing is finer than the angular uncertainty.
-The polish therefore mainly removes the systematic quantization of the
+The refinement therefore mainly removes the systematic quantization of the
 angle at the highest frequencies, where one pixel of arc at the mask edge is
-a full phase cycle. Separating polish from search keeps the search's
+a full phase cycle. Separating refinement from search keeps the search's
 annealing schedule, which was tuned on the discrete route, valid by
 construction.
 

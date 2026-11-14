@@ -183,7 +183,7 @@ explains which workflow fits each source of particle poses and state models.
 
 Two cross-cutting chapters stand outside the pipeline order.
 [Continuous in-plane refinement](continuous_inplane_refinement_solve2D.md)
-polishes a committed pose to sub-grid angular precision using the fact that
+refines a committed pose to sub-grid angular precision using the fact that
 the polar correlation is a trigonometric series in the angle, while leaving
 the search that selected the pose untouched.
 [Automatic gain-flip detection](automatic_gain_flip.md) is a small

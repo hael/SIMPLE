@@ -7,7 +7,7 @@
 The order of work in section 6 was agreed by Hans on 2026-10-01. The first
 item is per-particle defocus and astigmatism refinement with analytic
 derivatives, driven by SIMPLE's own L-BFGS-B optimizer and built on the same
-Cartesian framework as continuous pose polishing. That framework is under
+Cartesian framework as continuous pose refinement. That framework is under
 heavy refactoring and testing
 (`doc/refactoring_notes/completed/pose_cont_refactoring.md`), so nothing here
 starts before it has landed. This note records the findings and the plan; it

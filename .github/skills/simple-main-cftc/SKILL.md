@@ -1,6 +1,6 @@
 ---
 name: simple-main-cftc
-description: Use when working in SIMPLE's src/main/cftc subsystem, the Cartesian Fourier calculator of continuous pose refinement (refine=cont, the pose_cont polish), including cartft_calc (padded reference transforms per state and half, ref_weight, particle slots of a batch, sigma2 whitening, the B-spline gather, predict, objective, gradient and Gauss-Newton normal terms, shell residuals, the reference-volume files) and cartft_pose_opt (the bounded Levenberg-Marquardt transaction of one particle's five-parameter pose, CARTFT_* statuses, the work record).
+description: Use when working in SIMPLE's src/main/cftc subsystem, the Cartesian Fourier calculator of continuous pose refinement (refine=cont, the pose_cont follow-up), including cartft_calc (padded reference transforms per state and half, ref_weight, particle slots of a batch, sigma2 whitening, the B-spline gather, predict, objective, gradient and Gauss-Newton normal terms, shell residuals, the reference-volume files) and cartft_pose_opt (the bounded Levenberg-Marquardt transaction of one particle's five-parameter pose, CARTFT_* statuses, the work record).
 ---
 
 # `src/main/cftc`: the Cartesian Fourier calculator

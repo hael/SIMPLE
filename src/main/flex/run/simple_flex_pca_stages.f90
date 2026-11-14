@@ -11,7 +11,7 @@ implicit none
 private
 
 public :: flex_stage_request
-public :: PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_POLISH
+public :: PCA_STAGE_EMBED, PCA_STAGE_PROBE, PCA_STAGE_FULLSET
 public :: FLEX_FIT_ALL, FLEX_FIT_A, FLEX_FIT_B
 public :: FLEX_MOD4_PAIRING
 public :: flex_pca_half_of
@@ -21,10 +21,10 @@ integer, parameter :: PCA_STAGE_EMBED  = 1
 ! One qsys round per probe EM iteration: the basis changes every iteration, so workers are
 ! re-launched against the master's refreshed flex_pca_pc*.mrc rather than looping locally.
 integer, parameter :: PCA_STAGE_PROBE  = 3
-! The joint (polish) fit after the paired merge: the same E-step pass over ALL particles against
-! the merged basis under the polished namespace. A stage, not a string stamp: the stage says what
+! The joint (full-set) fit after the paired merge: the same E-step pass over ALL particles against
+! the merged basis under the full-set namespace. A stage, not a string stamp: the stage says what
 ! to compute and which basis namespace to load.
-integer, parameter :: PCA_STAGE_POLISH = 4
+integer, parameter :: PCA_STAGE_FULLSET = 4
 
 ! Which fit a round serves, carried to the worker in params%pcafit beside the stage: the stage
 ! says what to compute, this says over which particles.

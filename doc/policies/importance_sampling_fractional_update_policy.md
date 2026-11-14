@@ -434,7 +434,7 @@ The workflow is (`doc/implementation_notes/completed/prob_align_batch_pipeline.m
 3. each part's matcher reproduces its share of the subset
    (`sample4update_reprod`), and for each batch fills the probability-table
    rows, draws each particle's pose or class from its own row (keyed on the
-   particle), polishes, computes the residual and commits: the hard particle
+   particle), refines, computes the residual and commits: the hard particle
    update in the same pass
 4. a part publishes a readout record of its counts and sums; the master merges
    the records in part order and prints the readouts

@@ -73,7 +73,7 @@ flowchart TD
 - **A particle follows its sub-class.** Particles are re-assigned with every publication. If a
   particle's class changes, or its sub-class matches another state, its state changes too.
 - **Refinement does not accumulate.** Each publication starts again from the poses of the matched
-  sub-classes; the local refinement only polishes them. A particle more than about 10° off, or in
+  sub-classes; the local refinement only adjusts them. A particle more than about 10° off, or in
   the wrong state, is not corrected by it.
 - **Why sub-classes.** 2D classes group particles mainly by view. Splitting them separates
   particles of different states that happen to look alike, and the references were built from

@@ -37,7 +37,7 @@ below is kept as the record of what was found.
 
 The polar shift-search refactor has already removed unused evidence work,
 reused map geometry/plans/workspaces and avoided physical-width calculations
-for candidates that cannot enter the polish shortlist. Its retained scope and
+for candidates that cannot enter the refinement shortlist. Its retained scope and
 validation are in the existing
 [polar shift-search record](../../refactoring_notes/completed/polar_shift_search_performance_refactoring.md).
 Further gains should address the workflow's scientific-object lifetimes before
@@ -58,8 +58,8 @@ reviewed):
   rebuilds particle batches. Existing canonical particle buffers save some reads
   and full-box preparation, not every polar transform.
 - The 3D probabilistic matcher already skips discrete exhaustive scoring and
-  skips reference memoization unless continuous in-plane polish needs it. Its
-  selected-pose polish, sigma2 residual calculation and reconstruction are real
+  skips reference memoization unless continuous in-plane refinement needs it. Its
+  selected-pose refinement, sigma2 residual calculation and reconstruction are real
   consumers, not an accidental second exhaustive search. Optimize their shared
   preparation rather than deleting these operations.
 - Dedicated particle-I/O prefetch is already implemented in
@@ -82,7 +82,7 @@ and is not required for this architecture.
 
 Make probabilistic alignment a complete strategy-owned pipeline on the caller's
 `(params, build)`, with explicit begin/batch/end lifetimes. Reuse existing
-preparation, table evaluation, assignment, polish and sigma2 domain routines;
+preparation, table evaluation, assignment, refinement and sigma2 domain routines;
 do not create a second implementation of those algorithms. The commander stays
 a command wrapper. Table/assignment files become transport or checkpoint
 formats, rather than the mandatory interface between in-process operations.
@@ -93,7 +93,7 @@ The target batch path is:
 immutable iteration model + incoming particle metadata
   -> read/canonical observation -> prepare alignment batch
   -> evaluate complete candidate rows -> draw assignments + insertion extras
-  -> polish selected poses when enabled -> sigma2 residuals when requested
+  -> refine selected poses when enabled -> sigma2 residuals when requested
   -> compact final decisions + canonical reconstruction observations
 ```
 
@@ -103,12 +103,12 @@ Ownership and lifetime:
 | --- | --- |
 | Refine command | Partition identity, cache keys and small control metadata. No large alignment allocation is retained across the 3D reconstruction barrier merely because the process remains resident. |
 | Alignment phase of one iteration | Immutable reference/half/state model, noise generation, band/grid, masks, sampled indices, incoming orientations/shifts and temperatures; compatible FFT plans and scratch capacity. One project owner draws the sample. Workers consume this snapshot and return changed records. |
-| Bounded batch | Canonical observations, prepared polar particles/CTF terms, complete candidate rows and thread-local scratch. Keep them alive until selected-pose polish and sigma2 consumers finish, then recycle. |
+| Bounded batch | Canonical observations, prepared polar particles/CTF terms, complete candidate rows and thread-local scratch. Keep them alive until selected-pose refinement and sigma2 consumers finish, then recycle. |
 | Across alignment/reconstruction barrier | Final poses, shift state/widths, frozen weighted-insertion poses/weights, noise contributions and the existing budgeted canonical observation buffer. No alignment PFTC/reference memo survives into 3D reconstruction. |
 
 Represent the required consumers explicitly: candidate scoring, selected-pose
-polish, sigma2 and reconstruction preparation. A path that only commits a
-decision needs no polar particle preparation; a sigma2 or continuous-polish
+refinement, sigma2 and reconstruction preparation. A path that only commits a
+decision needs no polar particle preparation; a sigma2 or continuous-refinement
 consumer still does. Decide this from actual consumers, not a substring of the
 mode name. A lightweight probabilistic finalizer can replace per-particle
 allocation of a general search object once the shared pipeline works.
@@ -119,7 +119,7 @@ as another requires a proven preparation contract, including CTF, band, half,
 noise, centering and coordinate frame. Keep incoming metadata immutable until
 each decision is complete; preserve the increment prior, shift-frame conversions,
 invalid/empty-row fallbacks, temperature, candidate order and topk weights.
-Continuous polish must not silently reweight insertion extras. The separate
+Continuous refinement must not silently reweight insertion extras. The separate
 Cartesian `pose_cont` pass is outside this initial fusion.
 
 The memory target is references plus thread scratch plus bounded batch
@@ -177,7 +177,7 @@ schedule simultaneously without demonstrating how all three are met.
    introducing a waiting worker protocol.
 3. **Separate RNG ownership, then fuse complete batches.** Extract one row
    selector shared by dense/sparse/neighbourhood adapters. Retain every eligible
-   candidate, finish polish/noise while the prepared batch is live, and release
+   candidate, finish refinement/noise while the prepared batch is live, and release
    its rows. If the master remains the selector, use a bounded in-flight window
    with backpressure and ordered decisions, not a gather of all rows. Cover
    missing/duplicate/stale records and empty partitions. Establish equivalence of
@@ -195,7 +195,7 @@ schedule simultaneously without demonstrating how all three are met.
 Acceptance combines unit assertions on complete row selection and metadata with
 existing `unit_pftc_align2D3D`, fast gates, simulated workflows and multi-state
 truth cases. Include sparse/dense/neighbourhood, topk, fractional sampling,
-continuous polish on/off, sigma2 on/off, empty parts and multiple threads. The
+continuous refinement on/off, sigma2 on/off, empty parts and multiple threads. The
 exact first phases require observed fixed-seed identity; fused scheduling needs
 the explicit RNG contract and repeated truth checks. Add counters for reference
 loads, canonical and polar preparations, table bytes, optimizer/map work and
@@ -225,7 +225,7 @@ Done by the autonomous run `prob_pipeline` on the Dell, in the working tree
   `refine2D_exec`, in shared memory and in every distributed part alike: a
   batch is prepared once, its probability-table rows filled, each particle's
   pose or class drawn from its own row with the extras of the weighted
-  insertion, then polished, its residual computed and committed. The master
+  insertion, then refined, its residual computed and committed. The master
   draws the sample, schedules its parts once, merges the parts' readout
   records in part order and assembles as before. The global table, the part
   files, the master's assignment step, the table programs and their commanders

@@ -77,7 +77,7 @@ contains
     !> The in-plane insertion of the committed particle (topk_inpl = K > 1): the row of its committed class over every
     !! rotation at its committed shift (the particle shifted once in its own frame), the K-point quadrature of that
     !! row's posterior at the particle's own temperature with the particle's keyed phase, the entries into the
-    !! batch's side channel. The committed rotation's entries sit at the committed (polished) angle; a quadrature in
+    !! batch's side channel. The committed rotation's entries sit at the committed (refined) angle; a quadrature in
     !! one rotation leaves the particle at the committed pose, weight 1. The pose in the field is untouched
     subroutine insert_inplane( self, os )
         class(strategy2D_prob), intent(inout) :: self
@@ -89,7 +89,7 @@ contains
         iptcl  = self%s%iptcl
         icls   = nint(os%get(iptcl, 'class'))
         irot_c = nint(os%get(iptcl, 'inpl'))
-        ! the committed pose is the polished pose of the class the search committed; another class or rotation in
+        ! the committed pose is the refined pose of the class the search committed; another class or rotation in
         ! the field (a fallback to the previous class) leaves the particle at its pose alone
         if( icls /= self%s%best_class .or. irot_c /= self%s%best_rot ) return
         e3c   = os%e3get(iptcl)

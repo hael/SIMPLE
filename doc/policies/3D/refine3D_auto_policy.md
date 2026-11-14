@@ -221,13 +221,13 @@ with `nstates > 1`.
 
 ## 7. Continuous Pose Refinement
 
-`pose_cont=no|yes` selects optional continuous Cartesian polishing. `refine`
+`pose_cont=no|yes` selects optional continuous Cartesian follow-up. `refine`
 is derived and rejected on the command line.
 
 - `no` (default): the discrete workflow above.
 - `yes`: every main-loop iteration is followed by a continuous pass over the
   same particle sample. Registration, pose initialization and bootstraps run
-  without polishing. Each iteration reconstructs once from the polished poses;
+  without the follow-up. Each iteration reconstructs once from the refined poses;
   convergence continues to measure the discrete search.
 
 `pose_cont=only` is retired. Use `prg=refine3D_local` without `pose_cont` for

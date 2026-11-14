@@ -63,7 +63,7 @@ type strategy2D_srch
     logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
     logical                 :: l_map_run       = .false. !< the classic search centres with the polar shift map (shift_sigma)
     logical                 :: l_map           = .false. !< ... and searches this particle's shifts this iteration
-    logical                 :: l_peaks_mapped  = .false. !< the peaks' screen polished the classes this search
+    logical                 :: l_peaks_mapped  = .false. !< the peaks' screen refined the classes this search
     logical                 :: continuous_active = .false. !< selected candidates receive continuous refinement
     logical                 :: has_continuous_e3 = .false. !< whether continuous_e3 is valid
     real                    :: continuous_e3 = 0. !< continuous e3 angle for the selected candidate
@@ -138,7 +138,7 @@ contains
         else
             ! selection parity: candidate scoring and shift-seed estimation
             ! always use the legacy objects; the joint optimizer only
-            ! polishes the committed assignment
+            ! refines the committed assignment
             call self%grad_shsrch_obj%new_alternating(self%b_ptr, lims, lims_init=lims_init,&
                 &maxits=self%p_ptr%maxits_sh)
             if( .not. self%l_map_run ) call self%grad_shsrch_first_obj%new_alternating(self%b_ptr, lims,&
@@ -163,7 +163,7 @@ contains
         self%has_continuous_e3 = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         self%ithr       = omp_get_thread_num() + 1
-        ! the shift prior on the polish of the committed class (the prob modes), at the particle's temperature
+        ! the shift prior on the refinement of the committed class (the prob modes), at the particle's temperature
         if( self%p_ptr%l_shift_prior .and. self%continuous_active .and. s2D%shift_prior_sigma2 > 0. ) &
             &call self%joint_inpl_optimizer%set_shift_prior(s2D%shift_prior_sigma2, &
             &posterior_temperature(self%b_ptr%pftc%wsqsum_ptcl_now(self%iptcl), self%b_ptr%pftc%get_pftsz()))
@@ -302,14 +302,14 @@ contains
                 self%best_shvec = cxy(2:3)
             endif
         endif
-        ! polish-only: exactly one local joint solve of the committed pose,
+        ! refine-only: exactly one local joint solve of the committed pose,
         ! after legacy refinement, independent of the shift-search schedule
         if( self%continuous_active ) call self%refine_selected_continuously
 
     contains
 
         !> the committed pose under the key: the class the peaks' sampling chose, else the best class entry after the
-        !! screen (the mode's choice or a screened class that beat it); its mapped pose when the polish (or its cell)
+        !! screen (the mode's choice or a screened class that beat it); its mapped pose when the refinement (or its cell)
         !! beat its stored-shift score, else the stored shift
         subroutine commit_mapped_class
             real    :: corr, sh(2), sdev
@@ -336,9 +336,9 @@ contains
 
     end subroutine inpl_srch
 
-    !> The screen and the polish of the polar shift map (ruling 20) over the classes scored at the stored shift, the
-    !! previous one included, as the tables screen their rows: one polished for the committed pose, npeaks for the
-    !! peaks, whose entries then are the only valid ones, as in the legacy peaks. A polished pose that beat its
+    !> The screen and the refinement of the polar shift map (ruling 20) over the classes scored at the stored shift, the
+    !! previous one included, as the tables screen their rows: one refined for the committed pose, npeaks for the
+    !! peaks, whose entries then are the only valid ones, as in the legacy peaks. A refined pose that beat its
     !! class's stored-shift score replaces the class's entry
     subroutine map_srch( self, npeaks, l_peaks )
         class(strategy2D_srch), intent(inout) :: self
@@ -392,17 +392,17 @@ contains
     !! noise (see the identical 3D treatment in refine_assignment_continuously).
     !! An invalid solve retains the incoming assignment untouched; a valid
     !! non-improving solve retains the pose with its re-scored objective value.
-    subroutine refine_selected_continuously( self, l_polish_shifts )
+    subroutine refine_selected_continuously( self, l_refine_shifts )
         class(strategy2D_srch), intent(inout) :: self
-        logical, optional,      intent(in)    :: l_polish_shifts
+        logical, optional,      intent(in)    :: l_refine_shifts
         real    :: rotmat(2,2), xy_native(2)
         logical :: l_sh
         if( .not. self%continuous_active ) return
-        ! shifts are polished only when the legacy schedule searched them this
+        ! shifts are refined only when the legacy schedule searched them this
         ! iteration; routes whose legacy behavior never refines shifts (e.g.
-        ! refine=inpl_smpl) pass l_polish_shifts=.false. for strict parity
+        ! refine=inpl_smpl) pass l_refine_shifts=.false. for strict parity
         l_sh = self%p_ptr%l_doshift .and. s2D%do_inplsrch(self%iptcl_batch)
-        if( present(l_polish_shifts) ) l_sh = l_sh .and. l_polish_shifts
+        if( present(l_refine_shifts) ) l_sh = l_sh .and. l_refine_shifts
         if( self%best_class < 1 .or. self%best_class > self%nrefs )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
@@ -419,7 +419,7 @@ contains
         integer  :: irot
         logical  :: evaluation_valid, improved
         ! the joint domain contains the particle's box (its disk under the key) and the incoming shift, so the solve
-        ! starts at, and is judged against, the pose it polishes
+        ! starts at, and is judged against, the pose it refines
         rbox = self%trs
         if( self%p_ptr%l_centring ) rbox = shift_box_radius(self%b_ptr%spproj_field%get(self%iptcl, 'shsig'),&
             &self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box, self%trs)

@@ -54,7 +54,7 @@ Each suite runs in its own dated directory and writes its report there
   0.5 A asked for here.
 - **`single_workflow`** (`fcc`, `wurtzite`). It compares the final map with the simulated volume
   (soft-masked correlation at least 0.90, FSC 0.143 at 5 A or better), and checks the pair pose
-  error against the generating orientations: the `refine=cont` run and the polish may not be
+  error against the generating orientations: the `refine=cont` run and the continuous follow-up may not be
   worse than their predecessor by more than 0.5 degrees. The orientation check asked for as item 3
   below is therefore present in this relative form only. It ends with `THROW_HARD` on failure.
 - **The `C-alpha molecules` benchmark is gone.** The request for top-N recall and precision floors on the

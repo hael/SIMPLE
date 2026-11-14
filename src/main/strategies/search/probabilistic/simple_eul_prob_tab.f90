@@ -213,7 +213,7 @@ contains
         integer,             intent(in)    :: i_first, i_last
         integer, allocatable   :: locn(:,:)
         type(pftc_shsrch_grad), target :: grad_shsrch_obj(nthr_glob)  !< the shift search object, L-BFGS with gradient
-        type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0): its limits bound the polish box
+        type(pftc_shsrch_grad), target :: grad_shsrch_disk(nthr_glob) !< the disk's (shift_sigma > 0): its limits bound the refinement box
         type(prob_dense_entry),   allocatable :: rows_batch(:,:)     !< the batch's rows (nrefs,i_first:i_last)
         type(prob_refined_entry), allocatable :: refined_batch(:,:)  !< refined entries per particle (projs_ns,i_first:i_last)
         integer,                  allocatable :: nrefined_batch(:)
@@ -278,7 +278,7 @@ contains
         call self%b_ptr%pftc%set_rnd_scope(self%rnd_scope)
         projs_ns = self%projs_ns_model
         ! the refined-reference budget split over the active states' blocks: nper per block, ncap in all (projs_ns
-        ! up to rounding), so that no block of the joint draw's row is left without polished entries
+        ! up to rounding), so that no block of the joint draw's row is left without refined entries
         nper = projs_ns
         ncap = projs_ns
         if( self%nstates > 1 )then
@@ -322,7 +322,7 @@ contains
                 allocate(seed_bank(self%b_ptr%pftc%get_pftsz()+1, kfromto_loc(2)-kfromto_loc(1)+1, nthr_glob))
             endif
             ! the polar shift map (shift_sigma > 0): the coarse map over a particle's box at its likely references, the
-            ! polish at full resolution from its optimum. The box is the disk of three sigma under the prior for a
+            ! refinement at full resolution from its optimum. The box is the disk of three sigma under the prior for a
             ! particle not yet centred in this workflow or whose prior width exceeds a third of the window (the
             ! dynamic centring: shift_needs_disk), the window of trs for the others
             if( l_map )then
@@ -331,12 +331,12 @@ contains
                 sigma_px    = real(self%p_ptr%shift_sigma, dp) / real(self%p_ptr%smpd, dp)
                 radius_disk = real(disk_radius_px(self%p_ptr%shift_sigma, self%p_ptr%smpd, self%p_ptr%box), dp)
                 call self%b_ptr%pftc%setup_shiftmaps(sigma_px, radius_disk, real(self%p_ptr%trs, dp), prior_w, kscreen)
-                ! each map's radial step: the box the polish starts in and stays in, about the coarse optimum
+                ! each map's radial step: the box the refinement starts in and stays in, about the coarse optimum
                 step_map(SHIFTMAP_SCREEN) = real(norm2(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_SCREEN, 2, 1) -&
                     &self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_SCREEN, 1, 1)))
                 step_map(SHIFTMAP_WINDOW) = real(norm2(self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 2, 1) -&
                     &self%b_ptr%pftc%shiftmap_shift(SHIFTMAP_WINDOW, 1, 1)))
-                ! the disk's own search object: the polish box clamps to the object's limits
+                ! the disk's own search object: the refinement box clamps to the object's limits
                 lims_disk(:,1) = -real(radius_disk)
                 lims_disk(:,2) =  real(radius_disk)
                 do ithr = 1,nthr_glob
@@ -473,11 +473,11 @@ contains
         !> The map's path (shift_sigma > 0): every reference scored at the stored shift (the sections carry it); the
         !! coarse map over the box at the references holding SCREEN_QUANTILE of the particle's posterior at the origin
         !! (a pick far off leaves it flat and keeps every reference), at least twice the refined count, each keeping
-        !! its coarse optimum; the projs_ns best of the screen polished at full resolution in a box of one coarse step
+        !! its coarse optimum; the projs_ns best of the screen refined at full resolution in a box of one coarse step
         !! about that optimum (minimize_in_cell). The box is the disk (l_disk), under the map's prior at the particle's
-        !! first centring (l_prior) and without it after, or the window without it. Rows the polished losses, as the
+        !! first centring (l_prior) and without it after, or the window without it. Rows the refined losses, as the
         !! window path's; the refined entries carry the posterior loss for the insertion. With several active states
-        !! the screen's pool and the polish are split over the states' blocks, each block its share of both
+        !! the screen's pool and the refinement are split over the states' blocks, each block its share of both
         subroutine process_particle_with_map( i_loc, iptcl_loc, ithr_loc, l_disk, l_prior )
             integer, intent(in) :: i_loc, iptcl_loc, ithr_loc
             logical, intent(in) :: l_disk, l_prior
@@ -486,7 +486,7 @@ contains
             real(dp) :: t0, temp_i, temp_s, xcell(2), prior_w_map
             real     :: loss_cell, loss_pose, dist_loc, cxy(3), width_best(max(1,nper),self%nstates)
             integer  :: imap, ri_loc, irot_loc, irho_loc, ialpha_loc, j_loc, k_loc, npool, nbest, nblk, si_loc, nb_loc
-            logical  :: l_polished
+            logical  :: l_cont_refined
             imap        = SHIFTMAP_WINDOW
             prior_w_map = 0.d0
             gso         => grad_shsrch_obj(ithr_loc)
@@ -545,7 +545,7 @@ contains
                 nscreens_thr(ithr_loc) = nscreens_thr(ithr_loc) + 1_int64
             enddo
             deallocate(pool)
-            ! the polish of the screen's best: the box's optimum if it beat the origin, minimize's baseline; else the
+            ! the refinement of the screen's best: the box's optimum if it beat the origin, minimize's baseline; else the
             ! coarse optimum, scored at full resolution, if it beats the origin's row; else that row stands
             locn(:,ithr_loc) = 0
             if( self%nstates > 1 )then
@@ -567,9 +567,9 @@ contains
                 if( scr_loss(ri_loc,ithr_loc) >= huge(1.0)/2. ) cycle
                 call gso%set_indices(self%ref_full(ri_loc), iptcl_loc)
                 irot_loc = scr_irot(ri_loc,ithr_loc)
-                call gso%minimize_in_cell(irot_loc, scr_xy(:,ri_loc,ithr_loc), step_map(imap), cxy, l_polished)
+                call gso%minimize_in_cell(irot_loc, scr_xy(:,ri_loc,ithr_loc), step_map(imap), cxy, l_cont_refined)
                 dist_loc = eulprob_dist_switch(cxy(1), self%p_ptr%cc_objfun)
-                if( .not. l_polished .and. .not. (dist_loc < rows_batch(ri_loc,i_loc)%dist) ) cycle
+                if( .not. l_cont_refined .and. .not. (dist_loc < rows_batch(ri_loc,i_loc)%dist) ) cycle
                 rows_batch(ri_loc,i_loc) = prob_dense_entry(dist_loc, irot_loc)
                 xcell = real(cxy(2:3), dp)
                 nrefined_batch(i_loc) = nrefined_batch(i_loc) + 1

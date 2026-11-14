@@ -13,7 +13,7 @@ private
 type strategy3D_alloc
     ! global parameters
     real,           allocatable :: smpl_inpl_athres(:)      !< angular threshold of in-plane rotation sampling
-    real                        :: shift_prior_sigma2 = 0.  !< the shift prior's variance per axis (shift_prior=yes, the prob modes' polish)
+    real                        :: shift_prior_sigma2 = 0.  !< the shift prior's variance per axis (shift_prior=yes, the prob modes' refinement)
     real(dp)                    :: cont_shift_prior_sigma2 = 0._dp !< Cartesian variance in native pixels
     logical,        allocatable :: state_exists(:)          !< indicates state existence
     ! per thread allocation
@@ -112,7 +112,7 @@ contains
                 s3D%inpl_order       = 1
                 if( allocated(s3D%srch_order_sub) ) s3D%srch_order_sub = 0
         end select
-        ! the shift prior's width for the committed pose's polish, as the tables' (shift_prior_sigma2)
+        ! the shift prior's width for the committed pose's refinement, as the tables' (shift_prior_sigma2)
         s3D%shift_prior_sigma2 = 0.
         if( params%l_shift_prior .and. l_prob_mode ) s3D%shift_prior_sigma2 = shift_prior_sigma2(build%spproj_field, params%lp / params%smpd)
         ! calculate peak thresholds for probabilistic searches

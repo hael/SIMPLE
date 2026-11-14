@@ -91,7 +91,7 @@ contains
     !! magnitudes a quarter of its band's wavelength apart out to the disk of three sigma and an FFT-friendly
     !! direction count resolving its ring at the outer magnitude; prior_w is the prior's weight 1 / (2 sigma^2)
     !> The tables' coarse maps (shift_sigma > 0): the screen over the disk of radius_px (the centring stage's,
-    !! under the prior of width sigma_px) and the window map of radius_win (the box of the polish everywhere else),
+    !! under the prior of width sigma_px) and the window map of radius_win (the box of the refinement everywhere else),
     !! both on the coarse band ending at kscreen; prior_w the prior's weight on the squared displacement
     module subroutine setup_shiftmaps( self, sigma_px, radius_px, radius_win, prior_w, kscreen )
         use simple_polar_shiftmap, only: shiftmap_ndirections

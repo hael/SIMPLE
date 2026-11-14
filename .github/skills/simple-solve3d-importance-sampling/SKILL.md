@@ -18,7 +18,7 @@ and per-iteration particle sampling. Treat the implementation as a pipeline:
 3. The project owner draws once per iteration (the distributed master:
    `sample_ptcls4prob3D` under `refine=prob*`, else `sample_ptcls4iter3D` when
    `master_draws_sample3D` holds; in shared memory `refine3D_exec`); distributed parts and the
-   `pose_cont` polish reproduce that exact subset with `sample4update_reprod`.
+   `pose_cont` follow-up reproduce that exact subset with `sample4update_reprod`.
 4. `simple_eul_prob_tab*` performs importance-style reference and in-plane selection only inside the sampled subset.
 5. Volume assembly does not resample particles, but it consumes the realized per-state update fraction to blend the trailing chain.
 

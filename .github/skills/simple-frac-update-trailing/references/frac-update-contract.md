@@ -30,7 +30,7 @@ the per-stage `refine3D` command line:
   `clssmp.bin` (`balance=class|cavg`); `sample4update_cnt` for
   low-update-count biased sampling (`balance=none`).
 - `master_draws_sample3D`: every distributed `refine=prob*` pass and every
-  fractional pass other than polish, missing, eval or sigma is drawn once by
+  fractional pass other than the follow-up, missing, eval or sigma is drawn once by
   the master over the whole project and written; parts reproduce it with
   `sample4update_reprod`.
 
@@ -40,7 +40,7 @@ The probabilistic routes have no pre-step:
   `refine3D_exec` or the distributed master), keyed on the run's seed, pass
   and iteration; it clears `sampled` and `updatecnt` only at `startit == 1` on
   its first iteration.
-- Distributed parts and the `pose_cont=yes` polish pass reproduce that exact
+- Distributed parts and the `pose_cont=yes` follow-up pass reproduce that exact
   subset with `sample4update_reprod`.
 
 `simple_oris_sampling.f90` and `simple_oris_getters.f90` define the handshake:
