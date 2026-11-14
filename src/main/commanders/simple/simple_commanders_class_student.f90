@@ -422,7 +422,6 @@ contains
             real, allocatable :: dang(:), dsh(:), dsh_c(:), dfx(:), dfy(:)
             real    :: off(2), r_s, r_d, thr, target, hs, hr, cost_s, cost_d, cost_c, cost_p, va(NARM), vi(NARM)
             integer :: j, iu, units(2), nagree, n, ntr, ncmp
-            character(len=:), allocatable :: flag
             units = [u, logfhandle]
             allocate(dang(nptcls), dsh(nptcls), dsh_c(nptcls), dfx(nptcls), dfy(nptcls), source=0.)
             nagree = 0
@@ -520,7 +519,7 @@ contains
             write(ud,'(a)') RULE
             write(ud,'(2x,a,2x,i10)') lj('Unseen particles', 50), nunseen
             write(ud,'(2x,a,2x,f10.1,2x,f19.1)') lj('Student''s class = full search''s class (%)', 50), va(1), vi(1)
-            write(ud,'(2x,a,2x,f10.1,2x,f19.1)') lj('Every particle''s list has the full-search class (%)', 50), va(2), vi(2)
+            write(ud,'(2x,a,2x,f10.1,2x,f19.1)') lj('Every list holds the full-search class (%)', 50), va(2), vi(2)
             write(ud,'(2x,a,2x,f10.1,2x,f19.1)') lj('Particles given a shortlist (%)', 50), va(3), vi(3)
             write(ud,'(2x,a,2x,f10.1,2x,f19.1)') lj('Shortlists containing the full search''s class (%)', 50), va(4), vi(4)
             write(ud,'(2x,a,2x,i10,2x,i19)') lj('List length, every particle (median)', 50), nint(va(5)), nint(vi(5))

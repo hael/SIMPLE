@@ -33,7 +33,7 @@ contains
             &'same, with the particles perfectly centred (%)', 'Student prediction (predict_classes)', &
             &'Reference: best class of the unseen (refine2D)', &
             &'Student''s class = full search''s class (%)', 'Student''s class = full search''s class (%)', &
-            &'Every particle''s list has the full-search class (%)', 'In-plane angle error, same class (deg, median)', &
+            &'Every list holds the full-search class (%)', 'In-plane angle error, same class (deg, median)', &
             &'Registered shift error, same class (A, median)', 'Centring error before registration (A, median)', &
             &'Remaining difference after it (A, median)']
         character(len=*), parameter :: READ_KEYS(NREADS) = [character(len=40) :: 'shortlisted_pct', &
