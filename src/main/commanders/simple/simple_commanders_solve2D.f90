@@ -201,7 +201,8 @@ contains
             ! first two or the last. Phase 1 ends at fixed iterations (the extremal schedule's), so an omitted
             ! phase-1 stage's iterations go to the phase-1 stage that follows; the last phase-1 stage's and a
             ! phase-2 stage's are dropped
-            if( solve2D_stage_behind_frc05(stage_parms, istage, start_stage, stop_stage, res05_hist, nhist) )then
+            if( solve2D_stage_behind_frc05(stage_parms, istage, start_stage, stop_stage, res05_hist, nhist, &
+                &sigma2_anneal=trim(params%sigma2_anneal)=='yes') )then
                 write(logfhandle,'(A,I3,A,F5.1,A,I0,A)')'>>> SOLVE2D OMITTING STAGE ', istage, ': PLANNED LP ', &
                     &stage_parms(istage)%lp, ' A ALREADY REACHED AT FRC=0.5 BY THE CLASSES OF ', &
                     &nint(100.*FRC05_SKIP_PTCL_FRAC), '% OF THE PARTICLES'
@@ -761,6 +762,10 @@ contains
             call cline_refine2D%set('startit',        terminal_start)
             call cline_refine2D%set('minits',         1)
             call cline_refine2D%set('maxits',         1)
+            if( trim(params%sigma2_anneal) == 'yes' )then
+                call cline_refine2D%set('sigma2_weight_start', 1.)
+                call cline_refine2D%set('sigma2_weight_end',   1.)
+            endif
             call cline_refine2D%set('extr_iter',      params%extr_lim + 1)
             call cline_refine2D%set('refine',         'greedy')
             call cline_refine2D%set('restore_cavgs', 'yes')
@@ -1245,7 +1250,7 @@ contains
         end select
         ! the in-plane quadrature of the class sums, when given
         if( cline%defined('topk_inpl') ) call cline_refine2D_chunk%set('topk_inpl', params%topk_inpl)
-        if( cline%defined('sigma2_frozen') ) call cline_refine2D_chunk%set('sigma2_frozen', params%sigma2_frozen)
+        if( cline%defined('sigma2_anneal') ) call cline_refine2D_chunk%set('sigma2_anneal', params%sigma2_anneal)
         ! Determines dimensions for downscaling
         call set_chunk_dimensions( params )
         ! updates command-line with resolution limits, defaults are handled by solve2D

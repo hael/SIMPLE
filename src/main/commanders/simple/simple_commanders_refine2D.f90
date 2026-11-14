@@ -30,6 +30,7 @@ contains
         use simple_refine2D_strategy
         use simple_eul_prob_tab_utils, only: prob_beta_at
         use simple_defs,               only: PROB_BETA_TAIL
+        use simple_sigma2_anchor,      only: sigma2_stage_weight
         class(commander_refine2D), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         class(refine2D_strategy), allocatable     :: strategy
@@ -68,6 +69,11 @@ contains
             niters            = niters + 1
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
+            if( trim(params%sigma2_anneal) == 'yes' )then
+                params%sigma2_weight = sigma2_stage_weight(niters, params%maxits, &
+                    &params%sigma2_weight_start, params%sigma2_weight_end)
+                call cline%set('sigma2_weight', params%sigma2_weight)
+            endif
             if( params%l_prob_align_mode )then
                 if( l_anneal )then
                     it_tail = strategy%anneal_tail_start()

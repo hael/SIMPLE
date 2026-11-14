@@ -95,6 +95,16 @@ contains
         type(refine2D_stage_cfg) :: cfg
         call build_refine2D_stage_cfg( cfg, cline_refine2D, cline, params, stage_parms, maxits, istage )
         call emit_refine2D_stage_cfg( cline_refine2D, cfg, stage_parms, istage )
+        if( trim(params%sigma2_anneal) == 'yes' )then
+            call cline_refine2D%set('sigma2_weight_start', 0.)
+            call cline_refine2D%set('sigma2_weight_end',   0.)
+            if( istage == size(stage_parms)-1 )then
+                call cline_refine2D%set('sigma2_weight_end', 0.5)
+            else if( istage == size(stage_parms) )then
+                call cline_refine2D%set('sigma2_weight_start', 0.5)
+                call cline_refine2D%set('sigma2_weight_end',   1.)
+            endif
+        endif
     end subroutine set_cline_refine2D_stage
 
     subroutine set_solve2D_sampling_policy( params, stage_parms, nstages, nptcls_eff, nsample_target_2D )
@@ -169,6 +179,10 @@ contains
         call cline_pass%set('startit',       it_pass)
         call cline_pass%set('minits',        1)
         call cline_pass%set('maxits',        1)
+        if( trim(params%sigma2_anneal) == 'yes' )then
+            call cline_pass%set('sigma2_weight_start', 0.)
+            call cline_pass%set('sigma2_weight_end',   0.)
+        endif
         call cline_pass%set('extr_iter',     params%extr_lim + 1)
         call cline_pass%set('refine',        'prob')
         if( params%cc_objfun == OBJFUN_CC )then
@@ -556,12 +570,17 @@ contains
     !! invocation or a stage without a planned limit (the gold-standard stage). Phase 1 ends at fixed iterations
     !! (the extremal schedule's): an omitted phase-1 stage's iterations go to the phase-1 stage that follows; the
     !! last phase-1 stage's and a phase-2 stage's are dropped.
-    logical function solve2D_stage_behind_frc05( stage_parms, istage, start_stage, stop_stage, res05_hist, nhist ) result( l_behind )
+    logical function solve2D_stage_behind_frc05( stage_parms, istage, start_stage, stop_stage, res05_hist, nhist, &
+        &sigma2_anneal ) result( l_behind )
         type(stage_params), intent(in) :: stage_parms(:)
         integer,            intent(in) :: istage, start_stage, stop_stage
         real,               intent(in) :: res05_hist(:) !< the quantile at the ends of the executed stages, in order
         integer,            intent(in) :: nhist         !< # stages executed so far
+        logical, optional,  intent(in) :: sigma2_anneal
         l_behind = .false.
+        if( present(sigma2_anneal) )then
+            if( sigma2_anneal .and. istage >= size(stage_parms)-1 ) return
+        endif
         if( istage <= start_stage )                 return
         if( istage <= SKIP_MIN_STAGE )              return
         if( istage >= stop_stage )                  return

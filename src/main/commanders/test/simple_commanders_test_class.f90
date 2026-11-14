@@ -67,7 +67,7 @@ use simple_cavg_quality_lattice,             only: run_all_cavg_quality_lattice_
 use simple_quality_logistic,                 only: run_all_quality_logistic_tests
 use simple_sigma2_state,                     only: run_all_sigma2_state_tests
 use simple_sigma2_bootstrap_tester,          only: run_all_sigma2_bootstrap_tests
-use simple_sigma2_frozen_tester,             only: run_all_sigma2_frozen_tests
+use simple_sigma2_anchor_tester,             only: run_all_sigma2_anchor_tests
 use simple_eul_prob_tab2D_tester,            only: run_all_eul_prob_tab2D_tests
 use simple_eul_prob_tab_tester,              only: run_all_eul_prob_tab_tests
 use simple_matcher_memory_tester,            only: run_all_matcher_memory_tests
@@ -519,7 +519,7 @@ contains
         call add_suite(s, n, 'matcher memory',           run_all_matcher_memory_tests)
         call add_suite(s, n, 'sigma2 state',             run_all_sigma2_state_tests)
         call add_suite(s, n, 'sigma2 bootstrap',         run_all_sigma2_bootstrap_tests)
-        call add_suite(s, n, 'sigma2 frozen',            run_all_sigma2_frozen_tests)
+        call add_suite(s, n, 'sigma2 anchor',            run_all_sigma2_anchor_tests)
         call add_suite(s, n, 'cavg registration',          run_all_cavg_registration_tests)
         call add_suite(s, n, 'cavgs state match',          run_all_cavgs_state_match_tests)
         call add_suite(s, n, 'solve2D stage rules',        run_all_solve2D_stage_rule_tests)

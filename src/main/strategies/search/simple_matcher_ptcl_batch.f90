@@ -65,11 +65,11 @@ contains
                 t_read = tic()
             endif
             call build%esig%read_global
-            if( trim(params%sigma2_frozen) == 'yes' )then
-                if( params%l_cart_refine ) THROW_HARD('sigma2_frozen is supported for 2D polar matching only')
-                call build%esig%freeze_for_scoring(build%pftc)
+            if( trim(params%sigma2_anneal) == 'yes' )then
+                if( params%l_cart_refine ) THROW_HARD('sigma2_anneal is supported for 2D polar matching only')
+                call build%esig%anneal_for_scoring(build%pftc, params%sigma2_weight)
             else if( .not. params%l_cart_refine )then
-                ! freeze_for_scoring refreshes these weights when attaching its array.
+                ! anneal_for_scoring refreshes these weights when attaching its array.
                 call build%pftc%memoize_sigma2_weights
             endif
             if( L_BENCH_GLOB )then

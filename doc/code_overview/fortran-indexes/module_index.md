@@ -3732,6 +3732,7 @@ Uses:
 - `simple_procimgstk`
 - `simple_progress`
 - `simple_refine2d_strategy`
+- `simple_solve2d_controller`
 - `simple_strategy2d_matcher`
 
 Public symbols:
@@ -6349,6 +6350,7 @@ Files:
 - `main/sigma2/simple_euclid_sigma2.f90`
 
 Uses:
+- `ieee_arithmetic`
 - `iso_fortran_env`
 - `simple_cartft_calc`
 - `simple_core_module_api`
@@ -6366,11 +6368,11 @@ Public symbols:
 - `sigma2_half` — function
 
 Private symbols:
+- `anneal_for_scoring` — subroutine
 - `calc_sigma2_cart` — subroutine
 - `calc_sigma2_cart_residual` — subroutine
 - `calc_sigma2_pftc` — subroutine
 - `check_record` — subroutine
-- `freeze_for_scoring` — subroutine
 - `get_kfromto` — function
 - `get_sigma2_part` — function
 - `kill` — subroutine
@@ -20824,6 +20826,7 @@ Uses:
 - `simple_syslib`
 
 Public symbols:
+- `blend_sigma2` — subroutine
 - `frozen_sigma2_band_stats` — subroutine
 - `prepare_frozen_sigma2` — subroutine
 - `read_frozen_sigma2` — subroutine
@@ -20857,6 +20860,7 @@ Public symbols:
 Private symbols:
 - `test_band_readout` — subroutine
 - `test_invalid_companions` — subroutine
+- `test_log_blend` — subroutine
 - `test_matching_separation` — subroutine
 - `test_smoothing_and_persistence` — subroutine
 - `write_store` — subroutine
@@ -21132,6 +21136,7 @@ Public symbols:
 - `set_cline_refine2D_seed_pass` — subroutine
 - `set_cline_refine2D_stage` — subroutine
 - `set_solve2D_sampling_policy` — subroutine
+- `sigma2_stage_weight` — function
 - `solve2D_class_frc05_quantile` — subroutine
 - `solve2D_first_shift_stage` — function
 - `solve2D_mskdiam_estimate` — subroutine
@@ -21162,6 +21167,7 @@ Private symbols:
 - `test_quantile_empty` — subroutine
 - `test_quantile_junk_classes` — subroutine
 - `test_quantile_median` — subroutine
+- `test_sigma2_annealing` — subroutine
 
 ---
 ## Module: simple_solve3D_addon_report
@@ -27595,7 +27601,7 @@ Uses:
 - `simple_ui_modules`
 
 Public symbols:
-- `add_frozen_sigma_input` — subroutine
+- `add_annealed_sigma_input` — subroutine
 - `construct_refine2D_programs` — subroutine
 - `new_bootstrap_cavgs` — subroutine
 - `new_cls_expansion` — subroutine

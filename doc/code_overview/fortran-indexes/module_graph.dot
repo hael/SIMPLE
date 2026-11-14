@@ -1451,6 +1451,7 @@ digraph module_graph {
   "simple_commanders_refine2D" -> "simple_procimgstk";
   "simple_commanders_refine2D" -> "simple_progress";
   "simple_commanders_refine2D" -> "simple_refine2d_strategy";
+  "simple_commanders_refine2D" -> "simple_solve2d_controller";
   "simple_commanders_refine2D" -> "simple_strategy2d_matcher";
   "simple_commanders_refine3D" -> "simple_cavgs_work_project";
   "simple_commanders_refine3D" -> "simple_cmdline";
@@ -2220,6 +2221,7 @@ digraph module_graph {
   "simple_estimate_ssnr" -> "simple_string_utils";
   "simple_estimate_ssnr" -> "simple_syslib";
   "simple_estimate_ssnr" -> "simple_type_defs";
+  "simple_euclid_sigma2" -> "ieee_arithmetic";
   "simple_euclid_sigma2" -> "iso_fortran_env";
   "simple_euclid_sigma2" -> "simple_cartft_calc";
   "simple_euclid_sigma2" -> "simple_core_module_api";

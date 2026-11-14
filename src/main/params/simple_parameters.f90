@@ -131,7 +131,7 @@ type :: parameters
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending(yes|no){yes}
     character(len=3)          :: stepwise='no'        !< stream pool 2D: import only the sets that reach the particle threshold(yes|no){no}
     character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
-    character(len=3)          :: sigma2_frozen='no' !< 2D matching uses fixed log-SG-smoothed bootstrap noise spectra; reconstruction keeps measured spectra(yes|no){no}
+    character(len=3)          :: sigma2_anneal='no' !< anneal 2D scoring from the log-SG bootstrap to measured noise over the last two solve2D stages(yes|no){no}
     character(len=4)          :: sticky_sampling='no' !< internal: yes draws at a stage's first iteration and rescores that sticky subset after; keep rescores the previous stage's sticky subset from the first iteration(no|yes|keep){no}
     character(len=3)          :: scan_exit='no'       !< internal: multi-state convergence also on the mean % scanned above fracsrch alone(yes|no){no}
     character(len=3)          :: prob_post_diag='no'  !< internal: the dense probability table workers write per-particle pose-posterior statistics (prob_posterior_*.txt)(yes|no){no}
@@ -594,6 +594,9 @@ type :: parameters
     real    :: prob_athres=10.     !< angular bound of the SHC strategies' in-plane samplers (refine=neigh, the 2D *_smpl modes) and of the dense table's refined set (projs_ns with the mean pose change); the tables' draws take no threshold
     real    :: prob_beta=PROB_BETA !< set by the workflows, not a UI input: the iteration's tempering factor on the particle temperature of every posterior draw of the probability tables (in-plane, direction, class, neighbourhood); PROB_BETA flat, ramped to prob_beta_end by the annealing tail{0.3}
     real    :: prob_beta_end=0.    !< set by the workflows, not a UI input: the factor the run anneals to once its resolution stops gaining: a geometric ramp from prob_beta over the last PROB_BETA_TAIL iterations, then the run ends (1 = the physical posterior); 0 = prob_beta, no annealing; solve2D and solve3D set 1 on their last stage{0.0}
+    real    :: sigma2_weight_start=0. !< internal: measured-sigma log-blend weight at the start of this refine2D invocation{0}
+    real    :: sigma2_weight_end=1.   !< internal: measured-sigma log-blend weight at the end of this refine2D invocation{1}
+    real    :: sigma2_weight=0.       !< internal: current measured-sigma log-blend weight, forwarded to workers{0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: regpass_fsc=0.143   !< refine3D_auto: FSC value of the startup pair defining the registration-pass band{0.143}
     real    :: res_target = 3.     !< resolution target in A

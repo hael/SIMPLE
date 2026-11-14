@@ -15,7 +15,69 @@ contains
         call test_quantile_empty()
         call test_omission_rule()
         call test_omission_never()
+        call test_sigma2_annealing()
     end subroutine run_all_solve2D_stage_rule_tests
+
+    subroutine test_sigma2_annealing()
+        use simple_cmdline,       only: cmdline
+        use simple_sigma2_anchor, only: sigma2_stage_weight
+        class(parameters), allocatable :: params
+        class(cmdline), allocatable :: cline, child
+        type(stage_params), allocatable :: stages(:)
+        real :: first, last, hist(2)
+        integer :: nstages, stage, it
+        write(*,'(A)') 'test_sigma2_annealing'
+        allocate(params,cline,child)
+        params%sigma2_anneal='yes'
+        params%refine='prob'
+        params%ext='mrc'
+        params%nits_per_stage=5
+        params%cc_objfun=OBJFUN_EUCLID
+        call cline%set('prob_beta',0.3)
+        call cline%set('prob_beta_end',0.)
+        do nstages=5,6
+            allocate(stages(nstages))
+            stages(:)%lp=8.
+            stages(:)%l_lpset=.true.
+            do stage=1,nstages
+                call child%set('endit',5*(stage-1))
+                call child%set('prob_beta',0.3)
+                call child%set('prob_beta_end',0.)
+                call set_cline_refine2D_stage(child,cline,params,stages,20,stage)
+                first=0.; last=0.
+                if( stage==nstages-1 ) last=0.5
+                if( stage==nstages )then
+                    first=0.5; last=1.
+                endif
+                call assert_real(first,child%get_rarg('sigma2_weight_start'),TOL,'stage starts at its assigned sigma weight')
+                call assert_real(last,child%get_rarg('sigma2_weight_end'),TOL,'stage ends at its assigned sigma weight')
+                call assert_real(0.3,child%get_rarg('prob_beta'),TOL,'sigma scheduling preserves beta')
+                call assert_real(0.,child%get_rarg('prob_beta_end'),TOL,'sigma scheduling preserves explicit beta endpoint')
+                do it=1,5
+                    call assert_real(first+real(it-1)*(last-first)/4., &
+                        &sigma2_stage_weight(it,5,first,last),TOL,'five-step ramp spans the stage')
+                enddo
+                call assert_real(last,sigma2_stage_weight(1,1,first,last),TOL,'single iteration reaches endpoint')
+                call assert_real(last,sigma2_stage_weight(8,5,first,last),TOL,'coverage extension holds endpoint')
+            enddo
+            hist=[5.,5.]
+            call assert_false(solve2D_stage_behind_frc05(stages,nstages-1,1,nstages,hist,2,sigma2_anneal=.true.), &
+                &'penultimate annealing stage cannot be omitted')
+            call assert_true(solve2D_stage_behind_frc05(stages,nstages-1,1,nstages,hist,2,sigma2_anneal=.false.), &
+                &'ordinary stage omission remains enabled')
+            call set_cline_refine2D_seed_pass(child,params,stages,10,'seed.mrc')
+            call assert_real(0.,child%get_rarg('sigma2_weight_end'),TOL,'seed pass keeps the bootstrap')
+            deallocate(stages)
+        enddo
+        call assert_real(1.,sigma2_stage_weight(1,1,1.,1.),TOL,'terminal pass is measured')
+        params%sigma2_anneal='no'
+        allocate(stages(6))
+        call child%kill()
+        call set_cline_refine2D_stage(child,cline,params,stages,20,1)
+        call assert_false(child%defined('sigma2_weight_start'),'off path adds no sigma schedule')
+        call child%kill()
+        call cline%kill()
+    end subroutine test_sigma2_annealing
 
     !> the lower population-weighted quantile and the fraction past a limit
     subroutine test_quantile_median()

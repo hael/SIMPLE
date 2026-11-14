@@ -1750,5 +1750,203 @@
       0.7492274641990662,
       0.9999999403953552
     ]
-  ]
+  ],
+  "annealing_extension_verification": {
+    "date": "2026-11-14",
+    "contract": "sigma2_anneal=yes replaces sigma2_frozen; default no; stage N-1 0 to 0.5, stage N 0.5 to 1; terminal 1",
+    "source_commit": "2100b54581dbeedf9821991ff89a050cbc09376c",
+    "source_diff_sha256": "de50752d3fcf60946ab560081846e897b2629aa718c5c3aab510cb0d989a3a85",
+    "focused_assertions": {
+      "solve2d_stage_rules": 159,
+      "sigma2_frozen_anchor_and_annealed_scoring": 152
+    },
+    "replay_fixture_particles": 79,
+    "replay_sample_size": 40,
+    "replay_input_sha256": "1c3164fbeab8c7a99f6b48b7d214a7c9428aca3f9dea707f623c1c91881bde32",
+    "seed": 20261114,
+    "replays": {
+      "shared": {
+        "exit_code": 0,
+        "schedule_result": "PASS",
+        "all_early_weights_zero": true,
+        "late_iterations": [
+          {
+            "stage": 5,
+            "iteration": 21,
+            "weight": 0.0,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 22,
+            "weight": 0.125,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 23,
+            "weight": 0.25,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 24,
+            "weight": 0.375,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 25,
+            "weight": 0.5,
+            "beta": 0.3
+          },
+          {
+            "stage": 6,
+            "iteration": 26,
+            "weight": 0.5,
+            "beta": 0.3
+          },
+          {
+            "stage": 6,
+            "iteration": 27,
+            "weight": 0.625,
+            "beta": 0.3
+          },
+          {
+            "stage": 6,
+            "iteration": 28,
+            "weight": 0.75,
+            "beta": 0.4054
+          },
+          {
+            "stage": 6,
+            "iteration": 29,
+            "weight": 0.875,
+            "beta": 0.5477
+          },
+          {
+            "stage": 6,
+            "iteration": 30,
+            "weight": 1.0,
+            "beta": 0.7401
+          },
+          {
+            "stage": 7,
+            "iteration": 31,
+            "weight": 1.0,
+            "beta": 0.7401
+          }
+        ],
+        "command": [
+          "/Users/elmlundho/src/SIMPLE/build/bin/simple_exec",
+          "prg=solve2D",
+          "projfile=/private/tmp/simple-frozen-sigma/replay-snapshot.simple",
+          "mkdir=yes",
+          "mskdiam=180",
+          "ncls=4",
+          "gold_std_stage=6",
+          "nthr=1",
+          "sigma2_anneal=yes",
+          "nsample=40"
+        ]
+      },
+      "distributed": {
+        "exit_code": 0,
+        "schedule_result": "PASS",
+        "all_early_weights_zero": true,
+        "late_iterations": [
+          {
+            "stage": 5,
+            "iteration": 21,
+            "weight": 0.0,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 22,
+            "weight": 0.125,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 23,
+            "weight": 0.25,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 24,
+            "weight": 0.375,
+            "beta": 0.3
+          },
+          {
+            "stage": 5,
+            "iteration": 25,
+            "weight": 0.5,
+            "beta": 0.3
+          },
+          {
+            "stage": 6,
+            "iteration": 26,
+            "weight": 0.5,
+            "beta": 0.3
+          },
+          {
+            "stage": 6,
+            "iteration": 27,
+            "weight": 0.625,
+            "beta": 0.3
+          },
+          {
+            "stage": 6,
+            "iteration": 28,
+            "weight": 0.75,
+            "beta": 0.4054
+          },
+          {
+            "stage": 6,
+            "iteration": 29,
+            "weight": 0.875,
+            "beta": 0.5477
+          },
+          {
+            "stage": 6,
+            "iteration": 30,
+            "weight": 1.0,
+            "beta": 0.7401
+          },
+          {
+            "stage": 7,
+            "iteration": 31,
+            "weight": 1.0,
+            "beta": 0.7401
+          }
+        ],
+        "command": [
+          "/Users/elmlundho/src/SIMPLE/build/bin/simple_exec",
+          "prg=solve2D",
+          "projfile=/private/tmp/simple-frozen-sigma/replay-snapshot.simple",
+          "mkdir=yes",
+          "mskdiam=180",
+          "ncls=4",
+          "gold_std_stage=6",
+          "nthr=1",
+          "sigma2_anneal=yes",
+          "nsample=40",
+          "nparts=2",
+          "qsys_name=local"
+        ]
+      }
+    },
+    "scope": "Implementation checks only; no new real-data quality result.",
+    "build": "macOS GNU Fortran 16 Debug incremental build, complete UI validation and installation passed; no compiler warnings",
+    "fast_gate": {
+      "passed": 15,
+      "failed": 0,
+      "seconds": 134.9,
+      "serial": true,
+      "budget_warning": true,
+      "polar_area_assertions": 6214
+    }
+  }
 }

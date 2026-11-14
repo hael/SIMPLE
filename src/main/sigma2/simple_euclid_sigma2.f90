@@ -23,7 +23,7 @@ type euclid_sigma2
     class(parameters),    pointer :: p_ptr => null()
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the two global spectra (shell, half): column sigma2_half(eo)
     real,    allocatable          :: sigma2_part(:,:)       !< the residual records of this part (matchers only)
-    real,    allocatable          :: sigma2_scoring(:,:)    !< frozen bootstrap, attached only by the 2D matcher
+    real,    allocatable          :: sigma2_scoring(:,:)    !< anchor/measured log blend, attached only by the 2D matcher
     integer                       :: fromp
     integer                       :: top
     integer                       :: kfromto(2) = 0
@@ -46,7 +46,7 @@ contains
     procedure          :: read_part
     procedure          :: read_pending_range
     procedure          :: read_global
-    procedure          :: freeze_for_scoring
+    procedure          :: anneal_for_scoring
     procedure          :: prep_fplane_grid
     procedure, private :: calc_sigma2_pftc
     procedure, private :: calc_sigma2_cart
@@ -180,25 +180,35 @@ contains
         call self%fplane%kill
     end subroutine read_global
 
-    !> Attach the saved bootstrap to matching; measured spectra still own reconstruction and residual records.
-    subroutine freeze_for_scoring( self, pftc )
-        use simple_sigma2_frozen, only: read_frozen_sigma2
+    !> Attach the bootstrap/measured log blend to matching; reconstruction and residuals retain measured spectra.
+    subroutine anneal_for_scoring( self, pftc, weight )
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+        use simple_sigma2_anchor, only: read_sigma2_anchor, blend_sigma2
         class(euclid_sigma2), target, intent(inout) :: self
         class(polarft_calc), intent(inout) :: pftc
+        real, intent(in) :: weight
         real(real32), allocatable :: spectra(:,:)
         integer :: status
         character(len=STDLEN) :: message
         if( .not. associated(self%p_ptr) ) THROW_HARD('sigma2 scoring needs an initialized noise model')
-        if( self%p_ptr%oritype /= 'ptcl2D' ) THROW_HARD('sigma2_frozen is supported for 2D particle matching only')
-        call read_frozen_sigma2(self%binfname%to_char(), spectra, status, message)
+        if( .not. ieee_is_finite(weight) ) THROW_HARD('sigma2 scoring weight must be finite')
+        if( self%p_ptr%oritype /= 'ptcl2D' ) THROW_HARD('sigma2_anneal is supported for 2D particle matching only')
+        if( weight == 1. )then
+            self%spectra_gen = self%spectra_gen + 1_int64
+            call pftc%assign_sigma2_noise(self%sigma2_noise, self%spectra_gen)
+            return
+        endif
+        call read_sigma2_anchor(self%binfname%to_char(), spectra, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
         if( size(spectra,1) /= self%kfromto(2)-self%kfromto(1)+1 ) &
-            &THROW_HARD('frozen sigma2 has incompatible shell bounds')
+            &THROW_HARD('sigma2 anchor has incompatible shell bounds')
         if( allocated(self%sigma2_scoring) ) deallocate(self%sigma2_scoring)
-        allocate(self%sigma2_scoring(self%kfromto(1):self%kfromto(2),2), source=real(spectra))
+        allocate(self%sigma2_scoring(self%kfromto(1):self%kfromto(2),2))
+        call blend_sigma2(spectra, self%sigma2_noise, weight, self%sigma2_scoring, status)
+        if( status /= 0 ) THROW_HARD('invalid sigma2 scoring blend')
         self%spectra_gen = self%spectra_gen + 1_int64
         call pftc%assign_sigma2_noise(self%sigma2_scoring, self%spectra_gen)
-    end subroutine freeze_for_scoring
+    end subroutine anneal_for_scoring
 
     !> The reconstruction-plane grid of a padded box box_croppd with the two spectra attached from shell
     !! kfrom (fplane): built once and kept while the box, the shell and the spectra stay the same

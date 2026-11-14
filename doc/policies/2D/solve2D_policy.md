@@ -150,6 +150,20 @@ reference and filtering rules; the solve2D stage default does not apply to them.
 - After the stages, a sampled run ends with one dense `refine=greedy` pass
   over every particle (the terminal pass) before the final class averages.
 
+**Scoring-noise annealing.** `sigma2_anneal=yes` (default `no`) uses each
+half's saved bootstrap, smoothed by seven-point quadratic Savitzky–Golay in
+log variance, for scoring in the early stages. The penultimate stage ramps
+the measured-sigma log-blend weight from 0 to 0.5; the final stage ramps from
+0.5 to 1. Both stages run through their iteration budgets and cannot be
+omitted. A one-iteration stage uses its endpoint, and coverage extensions
+hold it. With two stages the first is already the 0 to 0.5 ramp; a single
+stage ramps from 0.5 to 1, so the bootstrap is never used alone. The terminal
+greedy pass uses measured sigmas; a seed pass retains the bootstrap.
+Reconstruction and residual updates always use measured spectra. The beta
+schedule is independent. The smoothed bootstrap (the anchor) is saved beside
+the canonical sigma2 store as `sigma2_state.bin.anchor`; see
+[`sigma2_anchor_anneal_2D.md`](../../implementation_notes/planned/sigma2_anchor_anneal_2D.md).
+
 **Stage omission (2026-11-03).** A stage whose planned limit the class
 averages already resolve past is omitted, as `solve3D` omits a stage behind
 its FSC=0.5 resolution (`doc/policies/3D/solve3D_policy.md`). The evidence is

@@ -120,12 +120,18 @@ contains
         call cline%set('nthr',1)
         call params%new(cline,silent=.true.)
         call assert_char('no',params%mirr_proj,'projection mirroring defaults to no')
-        call assert_char('no',params%sigma2_frozen,'frozen bootstrap defaults to no')
+        call assert_char('no',params%sigma2_anneal,'sigma annealing defaults to no')
         call cline%set('mirr_proj','yes')
-        call cline%set('sigma2_frozen','yes')
+        call cline%set('sigma2_anneal','yes')
+        call cline%set('sigma2_weight_start',0.5)
+        call cline%set('sigma2_weight_end',1.)
+        call cline%set('sigma2_weight',0.75)
         call params%new(cline,silent=.true.)
         call assert_char('yes',params%mirr_proj,'projection mirroring survives parameter construction')
-        call assert_char('yes',params%sigma2_frozen,'frozen bootstrap survives parameter construction')
+        call assert_char('yes',params%sigma2_anneal,'sigma annealing survives parameter construction')
+        call assert_real(0.5,params%sigma2_weight_start,1.e-6,'sigma ramp start survives construction')
+        call assert_real(1.,params%sigma2_weight_end,1.e-6,'sigma ramp end survives construction')
+        call assert_real(0.75,params%sigma2_weight,1.e-6,'worker sigma weight survives construction')
         call cline%kill()
     end subroutine test_mirr_proj_binding
 
@@ -209,10 +215,10 @@ contains
         call assert_int(FORK_STATUS_FAILED, child%status(), 'a yes/no key refuses true')
         call child%destroy
         call cline%delete('async')
-        call cline%set('sigma2_frozen', 'yess')
-        call child%start(name=string('PARAMETERS_FROZEN_INVALID'), cline=cline)
+        call cline%set('sigma2_anneal', 'yess')
+        call child%start(name=string('PARAMETERS_SIGMA2_ANNEAL_INVALID'), cline=cline)
         call child%await_final_status()
-        call assert_int(FORK_STATUS_FAILED, child%status(), 'sigma2_frozen refuses misspelled yes')
+        call assert_int(FORK_STATUS_FAILED, child%status(), 'sigma2_anneal refuses misspelled yes')
         call child%destroy
         call cline%kill()
     end subroutine test_yes_no_refused

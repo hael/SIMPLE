@@ -117,6 +117,11 @@ If fractional update or probabilistic sampling is involved, also read
   writes `ptcl2D` more than once per iteration (once the sample is drawn, in
   `merge_algndocs`, after assembly and at the iteration's end; `doc/policies/2D/solve2D_policy.md`,
   "Project segments"): do not add a write.
+- `sigma2_anneal=yes` schedules the scoring-noise weight per stage in `set_cline_refine2D_stage`
+  (`sigma2_weight_start|end`: 0 before the penultimate stage, 0 to 0.5, then 0.5 to 1; the terminal pass 1,
+  the seed pass 0). The last two stages are never omitted and `check_refine2D_convergence` holds the verdict
+  until the weight reaches its stage end, so they run their full budget; the beta schedule is separate. A
+  comparison run without annealing therefore stops earlier in those stages: match iteration counts.
 - Treat explicit offline or terminal class-average assembly commands as
   separate workflow stages. They may perform their own reads, but that does not
   relax the matcher worker's online single-read contract.

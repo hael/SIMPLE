@@ -17,15 +17,16 @@ type(ui_program), target :: cls_expansion
 
 contains
 
-    subroutine add_frozen_sigma_input( program )
+    subroutine add_annealed_sigma_input( program )
         class(ui_program), intent(inout) :: program
-        call program%add_input(UI_SRCH, 'sigma2_frozen', 'binary', 'Freeze smoothed bootstrap noise for matching', &
-            &'Use fixed bootstrap spectra smoothed by a seven-shell quadratic Savitzky-Golay filter in log variance '//&
-            &'for all 2D matching, including the terminal pass; residual updates and reconstruction keep measured '//&
-            &'spectra. Requires Euclidean scoring and a fresh bootstrap or its saved companion(yes|no)', '', &
+        call program%add_input(UI_SRCH, 'sigma2_anneal', 'binary', 'Anneal bootstrap noise for matching', &
+            &'Start from a seven-shell quadratic Savitzky-Golay bootstrap in log variance; release it over the last '//&
+            &'two solve2D stages (0 to 0.5, then 0.5 to 1 measured weight). Standalone refine2D uses 0 to 1 over '//&
+            &'its iteration budget. Reconstruction retains measured spectra. Requires Euclidean scoring and a '//&
+            &'fresh bootstrap or its saved companion(yes|no)', '', &
             &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
             &visibility=UI_VIS_ADVANCED)
-    end subroutine add_frozen_sigma_input
+    end subroutine add_annealed_sigma_input
 
     subroutine construct_refine2D_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
@@ -97,7 +98,7 @@ contains
         &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
         &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
-        call add_frozen_sigma_input(refine2D)
+        call add_annealed_sigma_input(refine2D)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, trs, group="search", visibility=UI_VIS_ADVANCED)
@@ -160,7 +161,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call add_frozen_sigma_input(program)
+        call add_annealed_sigma_input(program)
         call program%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); from stage 2 on '//&
         &'the probability tables centre each particle as it needs: one not yet centred in this workflow, or whose shift '//&
@@ -272,7 +273,7 @@ contains
         &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
         &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
         &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="cluster 2D", visibility=UI_VIS_ADVANCED)
-        call add_frozen_sigma_input(solve2D_chunks)
+        call add_annealed_sigma_input(solve2D_chunks)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)
