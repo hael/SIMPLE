@@ -901,7 +901,7 @@ accounting is unchanged. The final and bootstrap reconstructions use the
 committed poses, so the last iteration's map and a `reconstruct3D` from the
 project differ under `topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
 insert the committed pose alone, their candidates being the hill climb's
-unrefined proposals; the 2D route has its own in-plane insertion (`topk_inpl`,
+unrefined proposals; the 2D route has its own in-plane insertion (`INPL_POSTERIOR_BUDGET = 64`,
 [solve2D policy](../2D/solve2D_policy.md), "In-plane insertion"). No file carries the
 assignment or the extras: the rows, the draws and the insertion table live in
 the part's memory for the batch. State assignment stays hard: the

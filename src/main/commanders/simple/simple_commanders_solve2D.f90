@@ -779,7 +779,6 @@ contains
             call cline_refine2D%delete('update_frac')
             call cline_refine2D%delete('assign_all')
             call cline_refine2D%delete('endit')
-            call cline_refine2D%set('topk_inpl', 1)
             call execute_refine2D('terminal_greedy', nstages + 1)
             call terminal_refs%kill
         end subroutine execute_terminal_pass
@@ -1248,8 +1247,6 @@ contains
             case DEFAULT
                 THROW_HARD('UNSUPPORTED REFINE PARAMETER!')
         end select
-        ! the in-plane quadrature of the class sums, when given
-        if( cline%defined('topk_inpl') ) call cline_refine2D_chunk%set('topk_inpl', params%topk_inpl)
         if( cline%defined('sigma2_anneal') ) call cline_refine2D_chunk%set('sigma2_anneal', params%sigma2_anneal)
         ! Determines dimensions for downscaling
         call set_chunk_dimensions( params )

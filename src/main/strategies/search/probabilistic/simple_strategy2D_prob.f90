@@ -74,18 +74,16 @@ contains
         endif
     end subroutine srch_prob
 
-    !> The in-plane insertion of the committed particle (topk_inpl = K > 1): the row of its committed class over every
-    !! rotation at its committed shift (the particle shifted once in its own frame), the K-point quadrature of that
-    !! row's posterior at the particle's own temperature with the particle's keyed phase, the entries into the
-    !! batch's side channel. The committed rotation's entries sit at the committed (refined) angle; a quadrature in
-    !! one rotation leaves the particle at the committed pose, weight 1. The pose in the field is untouched
+    !> Insert a quadrature of the committed class's angular posterior at its refined shift and physical temperature.
+    !! Coincident points merge; a collapsed quadrature keeps the refined pose at weight 1.
+    !! The committed pose in the project is unchanged.
     subroutine insert_inplane( self, os )
         class(strategy2D_prob), intent(inout) :: self
         class(oris),            intent(in)    :: os
-        real     :: dists(self%s%nrots), e3(self%s%p_ptr%topk_inpl), w(self%s%p_ptr%topk_inpl)
+        real     :: dists(self%s%nrots), e3(INPL_POSTERIOR_BUDGET), w(INPL_POSTERIOR_BUDGET)
         real     :: shvec(2), e3c, temp, neff
         real(dp) :: v
-        integer  :: inds(self%s%p_ptr%topk_inpl), nent, icls, irot_c, iptcl, j, ithr
+        integer  :: inds(INPL_POSTERIOR_BUDGET), nent, icls, irot_c, iptcl, j, ithr
         iptcl  = self%s%iptcl
         icls   = nint(os%get(iptcl, 'class'))
         irot_c = nint(os%get(iptcl, 'inpl'))
@@ -104,7 +102,7 @@ contains
         temp = temperature_or_argmin(posterior_temperature(self%s%b_ptr%pftc%wsqsum_ptcl_now(iptcl), &
             &self%s%b_ptr%pftc%get_pftsz()))
         v    = rnd_keyed(rnd_draw_key(prob_rnd_scope(self%s%p_ptr%which_iter, .true.), iptcl, RND_FAM_INPLQ))
-        call inpl_quadrature(self%s%nrots, dists, temp, self%s%p_ptr%topk_inpl, v, nent, inds, w, neff)
+        call inpl_quadrature(self%s%nrots, dists, temp, INPL_POSTERIOR_BUDGET, v, nent, inds, w, neff)
         if( nent < 1 ) return
         if( nent == 1 )then
             call self%spec%inpl_ins%set_single(self%spec%iptcl_batch, neff)

@@ -147,10 +147,11 @@ blend of sums accumulated in different iterations. Given the poses the class
 averages are therefore nearly, not exactly, independent of the noise model, and
 the noise model acts on the search.
 
-**In-plane insertion (`topk_inpl` above 1).** In an iteration of a stage with a
+**Posterior-weighted in-plane insertion.** In an iteration of a stage with a
 probability table a particle may enter `B_k` and `D_k` at more than its
-committed angle. With `K = topk_inpl` the row of its committed class over
-every rotation, at the committed shift in the particle's frame, gives the
+committed angle. With the fixed `K = INPL_POSTERIOR_BUDGET = 64` from
+`simple_defs`, the row of its committed class over every rotation, at the
+committed shift in the particle's frame, gives the
 posterior `p(r) ~ exp(-T (L_r - L_min))` at the particle's own temperature
 `T` (the draw of the search runs at `prob_beta` times it). A `K`-point
 quadrature of `p` over the circle, at a phase drawn per particle from the
@@ -166,10 +167,12 @@ multiples. The snapping leaves a residual: the cancellation is complete only
 where `K` divides the number of rotations, otherwise harmonic `m` keeps up to
 about `m 2 pi / nrots` (on 360 rotations `K = 64` keeps 12.5 % of harmonic 40).
 A quadrature in one rotation, the concentrated posterior,
-leaves the particle at its committed, continuously refined pose, as at
-`topk_inpl=1`. The committed class, pose and shift in the project are the
-search's draw and are unchanged. The terminal greedy pass and `make_cavgs`
-sum every particle at its committed pose, so the class averages of the stage
+leaves the particle at its committed, continuously refined pose with weight 1.
+The committed class, pose and shift in the project are the search's draw and
+are unchanged. Every probabilistic pass, including the
+`cls_init=prev` seed pass, uses this budget; there is no CLI override.
+The terminal greedy pass and `make_cavgs` sum every particle at its committed
+pose, so the class averages of the stage
 iterations are not reproduced from the project.
 
 Restoration then:

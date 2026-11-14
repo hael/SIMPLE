@@ -744,7 +744,6 @@ contains
             &THROW_HARD('sigma2 annealing weights must be in [0,1]')
         if( self%sigma2_weight_start > self%sigma2_weight_end ) THROW_HARD('sigma2 annealing weights must increase')
         if( self%topk < 1 ) THROW_HARD('topk must be 1 (the committed pose alone) or more')
-        if( self%topk_inpl < 1 ) THROW_HARD('topk_inpl must be 1 (the committed pose alone) or more')
         select case(trim(self%balance))
             case('none','class','cavg')
             case DEFAULT

@@ -148,7 +148,7 @@ type :: prob_readout
     real(dp)       :: neff_sum_draw = 0.d0 !< sum over the kept rows of exp(entropy) at the draw's factor
     real(dp)       :: neff_sum_phys = 0.d0 !< the same at factor 1
     type(prob_state_readout) :: states     !< the dense 3D table's state readout (nstates 0: none)
-    integer        :: inpl_kmax     = 1        !< topk_inpl (2D)
+    integer        :: inpl_kmax     = 1        !< in-plane posterior quadrature budget (2D)
     integer        :: inpl_mmax     = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
     integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated
     integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one)
@@ -208,7 +208,7 @@ contains
     procedure :: kill        => insert_poses_kill
 end type prob_insert_poses
 
-!> The in-plane insertion of one 2D batch (topk_inpl > 1): per batch particle the angles its class sums take it at
+!> The posterior-weighted in-plane insertion of one 2D batch: per particle the angles its class sums take it at
 !! and their weights, filled by the particle's search (distinct slots, so concurrently) and read by the class sums
 !! after the batch. A slot without entries (nent 0) enters the sums at the committed pose at weight 1: a
 !! particle whose quadrature collapsed to one entry, or without a valid row. The counters accumulate over the
@@ -1939,7 +1939,7 @@ contains
         write(nentries,'(F32.2)')   real(npose) / real(nrows)
         write(pct_single,'(F32.1)') 100. * real(nsingle) / real(nrows)
         write(neff_mean,'(F32.1)')  real(neff_sum) / real(nrows)
-        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_INPL (topk_inpl ', kmax, ', m_max ', mmax, '): '//&
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_INPL (budget ', kmax, ', m_max ', mmax, '): '//&
             &trim(adjustl(nparticles))//' particles, '//trim(adjustl(nentries))//' entries per particle, '//&
             &trim(adjustl(pct_single))//'% collapsed to the refined pose, mean n_eff '//trim(adjustl(neff_mean))
         call flush(logfhandle)

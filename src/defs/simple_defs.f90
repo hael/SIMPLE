@@ -103,6 +103,7 @@ real,    parameter    :: SHC_INPL_TRSHWDTH         = 2.0       !< shift search h
 integer, parameter    :: PROB_BETA_TAIL            = 5         !< annealing tail of the probability tables' draws: once the resolution (3D) or the class overlap (2D) stops gaining, the draws ramp geometrically from prob_beta to prob_beta_end over this many iterations and the run ends
 real,    parameter    :: PROB_BETA                 = 0.3       !< the probability tables' tempering factor, one for every posterior draw (in-plane, direction, class, neighbourhood): T_eff = PROB_BETA x T, below one hotter; the workflows carry it as prob_beta and the last stage's tail ramps it to 1 (0.3: hotter draws re-derive the poses at every band entry, which the physical posterior is too sharp to do)
 real,    parameter    :: PROB_INSERT_WMIN          = 0.01      !< weighted insertion (topk > 1): an extra pose with less than this share of its particle's weight is not inserted: below it the pose adds a gridding insertion for no measurable signal
+integer, parameter    :: INPL_POSTERIOR_BUDGET     = 64        !< quadrature points for posterior-weighted in-plane insertion in probabilistic 2D passes
 real,    parameter    :: MC_PATCHSZ                = 200.      !< recommended patch size (in Angstroms) for motion correction
 real,    parameter    :: ENVMSK_FSC_THRESH         = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real,    parameter    :: MAX_SMPD                  = 2.67      !< maximum sampling distance in scaling

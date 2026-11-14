@@ -1,5 +1,9 @@
 # In-plane quadrature insertion in 2D: report
 
+Historical report: the CLI experiments below predate the fixed
+`INPL_POSTERIOR_BUDGET = 64` contract. See the current contract in
+[inpl_quadrature_insertion_2D.md](inpl_quadrature_insertion_2D.md).
+
 Written 2026-11-13 by the run of [the plan](inpl_quadrature_insertion_2D.md), base `db20cde75`. The first delivery is
 committed as `d6cf4ae25`; section 8 (the default of 64) is uncommitted on top of it. Built and run on FWM-S116118 through the agent kit; run numbers are the kit's.
 

@@ -741,23 +741,23 @@ Neither outcome falls back to the callback. Joint acceptance guards
 refine3D; see the continuous in-plane section of
 [refine3D policy](../3D/refine3D_policy.md).
 
-### In-plane insertion (`topk_inpl`)
+### In-plane posterior insertion (`INPL_POSTERIOR_BUDGET`)
 
 A top view of a small membrane protein is close to rotationally symmetric, so
 the in-plane angle of a particle carries little signal and the draw of the
 search decides it from the particle's noise; the noise then enters the half's
-sum at that angle, and the angular residue of the reference grows. `topk_inpl`
-(default 64, the parameter's, so every 2D program and caller inherits it; a refine2D,
-solve2D and solve2D_chunks key) lets a particle enter the class sums at the in-plane angles of
-a quadrature of its posterior instead of at the one drawn angle. It is an
-internal device against that overfitting, not a model of the output.
+sum at that angle, and the angular residue of the reference grows. The fixed
+`INPL_POSTERIOR_BUDGET = 64` in `src/defs/simple_defs.f90` lets a particle enter
+the class sums at the in-plane angles of a quadrature of its posterior instead
+of at the one drawn angle. This is an internal numerical budget, with no CLI
+key, shared by every probabilistic 2D caller.
 
 - **Where it acts.** The iterations of the stages with a probability table
-  (`refine=prob|prob_neigh`: stage 2 on). The controller passes the key to those
-  stages and sets it to 1 on stage 1 (`snhc_smpl`), the `cls_init=prev` seed
-  pass and the terminal pass (set, not removed: the default is the quadrature);
-  a pass without a table reads no value of it. The stream (initial analysis and
-  2D pool), the particle sieve and `validate` inherit the default.
+  (`refine=prob|prob_neigh`: stage 2 on), including the `cls_init=prev` seed
+  pass. Stage 1 (`snhc_smpl`), the terminal greedy pass and other passes without
+  a probability table use single-pose insertion. The stream, particle sieve
+  and `validate` use the same fixed budget whenever they run probabilistic 2D
+  alignment.
 - **What it does.** After the search has committed and refined a particle's
   class, rotation and shift (`strategy2D_prob`), the row of that class over
   every rotation is evaluated at the committed shift in the particle's frame
@@ -765,8 +765,8 @@ internal device against that overfitting, not a model of the output.
   `exp(-T (L_r - L_min))` is formed at the particle's own temperature `T`,
   untempered: the draw of the search runs at `prob_beta` times it, as the 3D
   weighted insertion's extras are weighed at the particle's own temperature
-  (refine3D policy). A `K = topk_inpl` point quadrature of the posterior over
-  the circle, at a keyed per-particle phase (`RND_FAM_INPLQ`), gives the
+  (refine3D policy). A `K = INPL_POSTERIOR_BUDGET` point quadrature of the
+  posterior over the circle, at a keyed per-particle phase (`RND_FAM_INPLQ`), gives the
   entries: the rotations holding the cumulative-mass points `(j - 1 + v) / K`,
   each at weight `1/K`, coincident points merged. No random number beyond the
   phase; no cone, no shift or class extras: the angle only, over the whole row.
@@ -775,19 +775,19 @@ internal device against that overfitting, not a model of the output.
   `ent_w`), so its mass and the class populations are unchanged.
 - **The committed pose is untouched.** The class, `e3`, shift, the sigma2 residual
   at the committed pose, the convergence statistics and the readouts of the
-  search are what they are without the key, for the same incoming references. The
+  search match single-pose insertion for the same incoming references. The
   references differ from the second iteration on, so a run's trajectory does.
   The entry of the committed rotation sits at the committed (continuously
   refined) angle; a quadrature that lies in one rotation, the concentrated
   posterior, leaves the particle at its committed pose with weight 1, so a
-  well-determined particle is summed as at `topk_inpl=1`.
+  well-determined particle is summed at its refined pose alone.
 - **Averages are generated differently at the end, on purpose.** The class
   averages of the stage iterations take a particle at its quadrature entries.
   The terminal greedy pass, which turns the final solution into a hard
   assignment, and `make_cavgs` from the project take every particle at its
   committed pose. The averages of the stage iterations are therefore not
-  reproducible from the project under `topk_inpl > 1`, and the benefit must
-  survive the terminal pass through the references and assignments, not through
+  reproducible from the project, and the benefit must survive the terminal pass
+  through the references and assignments, not through
   smoothing of the intermediate averages.
 - **What the quadrature is and is not.** It is the posterior's angular expectation
   conditional on the committed class and the refined shift, approximated by `K`
@@ -804,13 +804,13 @@ internal device against that overfitting, not a model of the output.
   class or shift uncertainty, and it does not by itself change the loop's gain:
   the reduction of the fresh noise the angular residue is seeded with is a
   hypothesis that the effect on real data tests.
-- **Readout.** `PROB_TAB_INPL (topk_inpl K, m_max M)` follows
+- **Readout.** `PROB_TAB_INPL (budget K, m_max M)` follows
   `PROB_TAB2D_ASSIGN`: particles with a row, entries per particle (a collapsed
   particle counts one), the share collapsed to the committed pose, and the mean
   effective number of angles `exp(entropy)` of the rows. A distributed part
   publishes the counts in its readout record; the master sums them.
-- **Off state.** `topk_inpl=1` evaluates no row and allocates nothing: the run
-  is byte for byte the run without the key.
+- **Single-pose passes.** Passes without a probability table evaluate no
+  insertion row and allocate no quadrature buffers.
 
 ## 5. Iteration Semantics
 

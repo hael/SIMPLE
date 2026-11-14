@@ -475,7 +475,6 @@ contains
         call reg%add_int('stepsz', self%stepsz)
         call reg%add_int('top', self%top)
         call reg%add_int('topk', self%topk)
-        call reg%add_int('topk_inpl', self%topk_inpl)
         call reg%add_int('tof', self%tof)
         call reg%add_int('vol_dim', self%vol_dim)
         call reg%add_int('which_iter', self%which_iter)

@@ -24,7 +24,7 @@ integer, parameter :: CONT_ROUTE_INVALID        = 3
 
 type strategy2D_spec
     type(eul_prob_tab2D), pointer :: eulprob_obj_part2D => null()
-    type(prob_insert_inpl), pointer :: inpl_ins => null() !< the batch's in-plane insertion (topk_inpl > 1), else null
+    type(prob_insert_inpl), pointer :: inpl_ins => null() !< the batch's posterior-weighted in-plane insertion, else null
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
     integer :: iptcl_batch = 0  ! maps to index in batch

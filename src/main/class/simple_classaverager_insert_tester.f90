@@ -1,4 +1,4 @@
-!@descr: class-average sums: the weighted accumulation of one particle plane at several in-plane angles (topk_inpl)
+!@descr: class-average sums: the posterior-weighted accumulation of one particle plane at several in-plane angles
 submodule (simple_classaverager) simple_classaverager_insert_tester
 use simple_test_utils, only: assert_real, assert_true
 implicit none

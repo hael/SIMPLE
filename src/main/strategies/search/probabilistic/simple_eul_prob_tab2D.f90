@@ -53,7 +53,7 @@ type :: eul_prob_tab2D
     integer                     :: nactive = 0
     logical                     :: l_assign_open = .false.
     integer                     :: nassigned = 0, nmode = 0, ntemp_missing = 0
-    ! the in-plane insertion's counts of the pass (topk_inpl > 1), set by the matcher before close_assignment
+    ! the in-plane insertion's counts of the pass, set by the matcher before close_assignment
     integer                     :: inpl_kmax = 1, inpl_mmax = 0
     integer(int64)              :: inpl_nptcls = 0_int64, inpl_npose = 0_int64, inpl_nsingle = 0_int64
     real(dp)                    :: inpl_neff_sum = 0.d0

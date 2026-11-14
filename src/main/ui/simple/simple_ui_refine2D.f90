@@ -90,13 +90,6 @@ contains
         &'coarse polar shift map under the box''s mask and refines from the map''s optimum, the others refine from the '//&
         &'map over the window of trs; 0 is the window search; off under objfun=cc{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
-        call refine2D%add_input(UI_SRCH, 'topk_inpl', 'num', 'In-plane angles per particle in the class sums', &
-        &'Probabilistic modes (refine=prob|prob_neigh), the iterations of the stages with a probability table: the in-plane '//&
-        &'angles a particle enters the class sums at, a topk_inpl-point quadrature of the posterior over the rotations of its '//&
-        &'committed class at the particle''s own temperature, each at its share (the points the posterior cannot tell apart '//&
-        &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
-        &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
-        &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
         call add_annealed_sigma_input(refine2D)
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
@@ -170,13 +163,6 @@ contains
         &'from the map over the window; mskdiam=0 takes the mask diameter of the later stages from stage 2''s class '//&
         &'averages; 0 is the window search in every stage{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
-        call program%add_input(UI_SRCH, 'topk_inpl', 'num', 'In-plane angles per particle in the class sums', &
-        &'Probabilistic modes (refine=prob|prob_neigh), the iterations of the stages with a probability table: the in-plane '//&
-        &'angles a particle enters the class sums at, a topk_inpl-point quadrature of the posterior over the rotations of its '//&
-        &'committed class at the particle''s own temperature, each at its share (the points the posterior cannot tell apart '//&
-        &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
-        &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
-        &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="search", visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'nsample', 'num', 'Number of particles to sample', 'Number of particles &
         &to sample each iteration; every active particle when there are fewer{200000}', '# particles to sample{200000}', &
         &.false., 200000., group="search", visibility=UI_VIS_STANDARD, preserve_default=.true.)
@@ -266,13 +252,6 @@ contains
         &'Refinement mode(prob_neigh|prob|snhc_smpl){prob_neigh}','', .false., 'prob_neigh', group="cluster 2D", &
         &choices=ui_choices([character(len=10) :: 'prob_neigh', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call solve2D_chunks%add_input(UI_SRCH, 'topk_inpl', 'num', 'In-plane angles per particle in the class sums', &
-        &'Probabilistic modes (refine=prob|prob_neigh), the iterations of the stages with a probability table: the in-plane '//&
-        &'angles a particle enters the class sums at, a topk_inpl-point quadrature of the posterior over the rotations of its '//&
-        &'committed class at the particle''s own temperature, each at its share (the points the posterior cannot tell apart '//&
-        &'spread over the circle with a phase that differs from particle to particle; a concentrated posterior enters at the '//&
-        &'committed angle alone); the search, the terminal pass and make_cavgs use the committed pose alone; 1 is the '//&
-        &'committed pose alone, the single-draw run{64}', 'angles{64}', .false., 64., group="cluster 2D", visibility=UI_VIS_ADVANCED)
         call add_annealed_sigma_input(solve2D_chunks)
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &

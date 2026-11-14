@@ -1,4 +1,28 @@
-# In-plane quadrature insertion in 2D (`topk_inpl`)
+# In-plane quadrature insertion in 2D
+
+## Current contract (2026-11-14)
+
+The numerical budget is now the integer parameter `INPL_POSTERIOR_BUDGET = 64`
+in `src/defs/simple_defs.f90`. The former `topk_inpl` CLI key, typed field,
+parser binding, UI inputs and controller/chunk forwarding are removed without
+an alias. Every probabilistic 2D pass uses the fixed budget, including the
+`cls_init=prev` seed pass (confirmed by the maintainer). Passes without a
+probability table, including the terminal greedy pass, remain single-pose.
+The readout is `PROB_TAB_INPL (budget K, m_max M)`.
+
+The quadrature, physical temperature, merged-bin weights and class-sum
+accumulation are unchanged. Verified on macOS with GNU Fortran 16 Release:
+`make -C build -j8`, complete UI validation, `scripts/run_fast_gate.sh build`
+(all 15 suites, 54.56 seconds), and `make -C build install` pass. The generated
+argument list, UI defaults and complete UI JSON contain no retired key; the
+CLI chain reports 597 accepted keys, with 3D's `topk` retained. Four compiler
+warnings concern uninitialized descriptors in the untouched PCG order-prior
+tester. No new scientific-quality or Linux validation was run.
+The sections below retain the original design and validation
+history; their CLI-switch and seed-pass exceptions are superseded by this
+contract.
+
+## Original implementation record
 
 Status, 2026-11-13: implemented and gated, uncommitted, awaiting Hans's validation of the effect; the report is
 `inpl_quadrature_insertion_2D_report.md` beside this note. Revised the same day after review R1 (section 10).
