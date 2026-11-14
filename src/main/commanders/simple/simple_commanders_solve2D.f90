@@ -101,6 +101,7 @@ contains
         if( .not. cline%defined('stats')         ) call cline%set('stats',         'no')
         if( .not. cline%defined('refine')        ) call cline%set('refine',        'prob_neigh')
         if( .not. cline%defined('ml_reg')        ) call cline%set('ml_reg',        'yes')
+        if( .not. cline%defined('sigma2_anneal') ) call cline%set('sigma2_anneal', 'yes')
         ! the polar shift map is on by default (the parameter's; shift_sigma=0 is the window search); mskdiam=0 under
         ! it runs stage 1 under the box's mask and takes the mask diameter of the stages after from the class averages
         ! at the exits of stage 1 and of the centring stage, the low-pass ladder re-derived each time
@@ -911,6 +912,7 @@ contains
         if( .not. cline%defined('rank_cavgs')     ) call cline%set('rank_cavgs',    'no')
         if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls',500)
         if( .not. cline%defined('nparts')         ) call cline%set('nparts',        1)
+        if( .not. cline%defined('sigma2_anneal')  ) call cline%set('sigma2_anneal', 'yes')
         ! parse
         call params%new(cline)
         if( params%nchunks < 0 ) THROW_HARD('nchunks must be >= 0; use 0 or omit it for automatic selection; exec_solve2D_chunks')

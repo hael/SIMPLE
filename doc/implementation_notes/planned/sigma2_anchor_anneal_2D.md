@@ -4,8 +4,9 @@ Status: two-stage annealing implemented and locally validated, 2026-11-14.
 
 ## Contract
 
-`sigma2_anneal=yes` is opt-in; the default is `no`, and there is no separate
-anchor-only mode. On solve2D and solve2D_chunks,
+`sigma2_anneal=yes` is the default of solve2D and solve2D_chunks (since
+2026-11-14; it was opt-in before); standalone refine2D defaults to `no`. There
+is no separate anchor-only mode. On solve2D and solve2D_chunks,
 keep the smoothed bootstrap through the early stages, then increase the
 measured-spectrum weight from 0 to 0.5 in the penultimate stage and from
 0.5 to 1 in the final stage. The terminal greedy pass uses measured sigmas.
@@ -38,9 +39,10 @@ partition workers. The readout includes weight, beta, actual matching band,
 and the measured/anchor diagnostics. All weights must be finite, in [0,1],
 with ordered stage endpoints. No new tuning parameters are exposed in the UI.
 
-Use the same fresh solve2D command with `sigma2_anneal=yes`. Keep
+A fresh solve2D run anneals without the switch. Keep
 `sigma2_state.bin.anchor` beside its canonical store when continuing that run.
-Omitting the switch or using `sigma2_anneal=no` selects measured scoring.
+`sigma2_anneal=no` selects measured scoring (and is needed to continue a run
+whose store has no anchor).
 
 ## Two-stage annealing implementation and validation
 

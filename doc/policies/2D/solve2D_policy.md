@@ -150,7 +150,8 @@ reference and filtering rules; the solve2D stage default does not apply to them.
 - After the stages, a sampled run ends with one dense `refine=greedy` pass
   over every particle (the terminal pass) before the final class averages.
 
-**Scoring-noise annealing.** `sigma2_anneal=yes` (default `no`) uses each
+**Scoring-noise annealing.** `sigma2_anneal=yes` (the default of solve2D and
+solve2D_chunks; standalone refine2D defaults to `no`) uses each
 half's saved bootstrap, smoothed by seven-point quadratic Savitzky–Golay in
 log variance, for scoring in the early stages. The penultimate stage ramps
 the measured-sigma log-blend weight from 0 to 0.5; the final stage ramps from

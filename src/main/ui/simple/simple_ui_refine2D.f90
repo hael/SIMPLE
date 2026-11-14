@@ -19,14 +19,15 @@ type(ui_program), target :: validate_class_student
 
 contains
 
-    subroutine add_annealed_sigma_input( program )
+    subroutine add_annealed_sigma_input( program, default )
         class(ui_program), intent(inout) :: program
+        character(len=*),  intent(in)    :: default
         call program%add_input(UI_SRCH, 'sigma2_anneal', 'binary', 'Anneal bootstrap noise for matching', &
             &'Start from a seven-shell quadratic Savitzky-Golay bootstrap in log variance; release it over the last '//&
             &'two solve2D stages (0 to 0.5, then 0.5 to 1 measured weight). Standalone refine2D uses 0 to 1 over '//&
             &'its iteration budget. Reconstruction retains measured spectra. Requires Euclidean scoring and a '//&
-            &'fresh bootstrap or its saved companion(yes|no)', '', &
-            &.false., 'no', group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+            &'fresh bootstrap or its saved companion(yes|no){'//default//'}', '', &
+            &.false., default, group='search', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
             &visibility=UI_VIS_ADVANCED)
     end subroutine add_annealed_sigma_input
 
@@ -95,7 +96,7 @@ contains
         &'map over the window of trs; 0 is the window search; off under objfun=cc{10}', &
         &'sigma in A{10}', .false., 10., group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, maxits, group="search", visibility=UI_VIS_ADVANCED)
-        call add_annealed_sigma_input(refine2D)
+        call add_annealed_sigma_input(refine2D, 'no')
         call refine2D%add_input(UI_SRCH, startit, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, update_frac, group="search", visibility=UI_VIS_ADVANCED)
         call refine2D%add_input(UI_SRCH, trs, group="search", visibility=UI_VIS_ADVANCED)
@@ -158,7 +159,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, cls_init, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call add_annealed_sigma_input(program)
+        call add_annealed_sigma_input(program, 'yes')
         call program%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); from stage 2 on '//&
         &'the probability tables centre each particle as it needs: one not yet centred in this workflow, or whose shift '//&
@@ -256,7 +257,7 @@ contains
         &'Refinement mode(prob_neigh|prob|snhc_smpl){prob_neigh}','', .false., 'prob_neigh', group="cluster 2D", &
         &choices=ui_choices([character(len=10) :: 'prob_neigh', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call add_annealed_sigma_input(solve2D_chunks)
+        call add_annealed_sigma_input(solve2D_chunks, 'yes')
         ! filter controls
         call solve2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
         &visibility=UI_VIS_ADVANCED)
