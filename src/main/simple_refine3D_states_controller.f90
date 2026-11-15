@@ -856,22 +856,17 @@ contains
         class(parameters),                 intent(in)  :: params
         integer,                           intent(out) :: nactive, nupdated, nmissing
         type(sp_project) :: update_proj
-        integer, allocatable :: states(:), updatecnts(:)
         call update_proj%read_segment('ptcl3D', params%projfile)
         if( .not. update_proj%os_ptcl3D%isthere('updatecnt') )then
             call update_proj%kill
             THROW_HARD(self%label()//' cannot finish before active particles are updated')
         endif
-        states     = update_proj%os_ptcl3D%get_all_asint('state')
-        updatecnts = update_proj%os_ptcl3D%get_all_asint('updatecnt')
-        nactive    = count(states > 0)
-        nupdated   = count(states > 0 .and. updatecnts > 0)
-        nmissing   = nactive - nupdated
+        nactive  = update_proj%os_ptcl3D%count_state_gt_zero()
+        nupdated = update_proj%os_ptcl3D%count_state_updated()
+        nmissing = nactive - nupdated
         write(logfhandle,'(A,I0,A,I0,A,I0)') &
             &'>>> '//self%label()//' ACTIVE PARTICLE UPDATE COVERAGE UPDATED/ACTIVE/MISSING: ', &
             &nupdated, '/', nactive, '/', nmissing
-        if( allocated(states)     ) deallocate(states)
-        if( allocated(updatecnts) ) deallocate(updatecnts)
         call update_proj%kill
     end subroutine read_update_coverage
 

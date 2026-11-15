@@ -12,6 +12,7 @@
 module simple_frozen_accum
 use simple_core_module_api
 use simple_reconstructor,     only: reconstructor
+use simple_fileio,            only: fname_size
 use simple_refine3D_fnames,   only: refine3D_frozen_rec_fbody, refine3D_carried_rec_fbody, &
     &refine3D_carried_membership_fname
 implicit none
@@ -383,12 +384,6 @@ contains
         if( self%dir%is_allocated() ) fname = self%dir//'/'//fname
     end function set_manifest
 
-    integer(kind=8) function file_size( fname ) result( sz )
-        class(string), intent(in) :: fname
-        sz = -1
-        if( file_exists(fname) ) inquire(file=fname%to_char(), size=sz)
-    end function file_size
-
     !> Publish the frozen even/odd accumulators of one state at the accumulators'
     !! own box as one artifact set: the manifest is removed first and written
     !! last with every component's byte size, so an interrupted write leaves no
@@ -410,7 +405,7 @@ contains
         call even_rec%write_raw_accum(self%component(state, ldim(1), 1), self%component(state, ldim(1), 2))
         call odd_rec%write_raw_accum( self%component(state, ldim(1), 3), self%component(state, ldim(1), 4))
         do ifile = 1, 4
-            sizes(ifile) = file_size(self%component(state, ldim(1), ifile))
+            sizes(ifile) = fname_size(self%component(state, ldim(1), ifile))
         enddo
         call self%write_set_manifest(state, ldim(1), smpd, sizes)
         if( self%l_carried )then
@@ -474,7 +469,7 @@ contains
         call del_file(self%set_manifest(state, box))
         do ifile = 1, 4
             call simple_copy_file(src%component(state, box, ifile), self%component(state, box, ifile))
-            sizes(ifile) = file_size(self%component(state, box, ifile))
+            sizes(ifile) = fname_size(self%component(state, box, ifile))
         enddo
         call self%write_set_manifest(state, box, smpd, sizes)
         write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> CARRIED GRIDDING SET ADOPTED, STATE ', state, ', BOX ', box, ' (', &
@@ -574,7 +569,7 @@ contains
         else
             status = 0
             do ifile = 1, 4
-                if( file_size(self%component(state, box, ifile)) /= sizes(ifile) )then
+                if( fname_size(self%component(state, box, ifile)) /= sizes(ifile) )then
                     msg    = 'frozen gridding set component size mismatch (incomplete or mixed set)'
                     status = 1
                     exit
@@ -875,7 +870,7 @@ contains
         integer :: funit, io_stat
         status = 1
         if( nrows < 1 ) return
-        if( file_size(fname) /= 4_8 * int(nrows,8) ) return
+        if( fname_size(fname) /= 4_8 * int(nrows,8) ) return
         call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=io_stat)
         if( io_stat /= 0 ) return
         allocate(buf(nrows))

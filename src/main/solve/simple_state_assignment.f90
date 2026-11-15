@@ -57,7 +57,7 @@ public :: QUALITY_DIR, SELECTED_CAVGS, REJECTED_CAVGS
 public :: refs_check, assign_stats
 ! rules
 public :: expansion_budget, count_active_classes
-public :: fit_mskdiam, median_of, usable_job_2D
+public :: fit_mskdiam, usable_job_2D
 ! steps
 public :: score_cavgs_with_model, select_route_classes, model_rejected_rows
 public :: check_state_refs, docked_pair_cc, read_refs_record

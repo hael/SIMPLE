@@ -4,7 +4,8 @@
 module simple_nano_species
 use simple_defs,          only: dp, DPI, DTINY
 use simple_error,         only: simple_exception
-use simple_srch_sort_loc, only: hpsort
+use simple_srch_sort_loc, only: hpsort, scores2order_stable
+use simple_stat,          only: median
 use simple_xd_gmm,        only: xd_gmm
 implicit none
 
@@ -100,7 +101,7 @@ contains
             endif
             bics(kk) = -2._dp * lnl + real(npar, dp) * log(real(n, dp))
             ! admissibility on the observed spreads: the intrinsic one and the typical noise
-            adm(kk)  = is_admissible(posts(:,:kk,kk), mus(:kk,kk), vars(:kk,kk) + median_dp(Nz(1,1,:)))
+            adm(kk)  = is_admissible(posts(:,:kk,kk), mus(:kk,kk), vars(:kk,kk) + median(Nz(1,1,:)))
         enddo
         if( nspecies_in > 0 )then
             K = nspecies_in
@@ -386,7 +387,7 @@ contains
             endif
         endif
         ! decreasing mean
-        order = sort_desc(mu)
+        order = scores2order_stable(mu)
         mu   = mu(order)
         var  = var(order)
         w    = w(order)
@@ -435,7 +436,7 @@ contains
         real(dp) :: mu2(kk), var2(kk), w2(kk), post2(size(X1,1),kk), mstart(kk), lnl2, slope2, s0, xm, cm, sxx, smean, nzm
         integer  :: n
         n     = size(X1,1)
-        nzm   = median_dp(Nz(1,1,:))
+        nzm   = median(Nz(1,1,:))
         xm    = sum(X1(:,1)) / real(n, dp)
         cm    = sum(cv) / real(n, dp)
         sxx   = sum((cv - cm)**2)
@@ -494,34 +495,6 @@ contains
             end function shifted
 
     end subroutine fit_k_cov
-
-    ! median of a vector
-    real(dp) function median_dp( v )
-        real(dp), intent(in) :: v(:)
-        real :: vs(size(v))
-        vs = real(v)
-        call hpsort(vs)
-        if( mod(size(vs), 2) == 0 )then
-            median_dp = 0.5_dp * real(vs(size(vs)/2) + vs(size(vs)/2 + 1), dp)
-        else
-            median_dp = real(vs(size(vs)/2 + 1), dp)
-        endif
-    end function median_dp
-
-    ! permutation that sorts a short array into decreasing order
-    function sort_desc( v ) result( p )
-        real(dp), intent(in) :: v(:)
-        integer :: p(size(v)), i, j, t
-        p = [(i, i=1,size(v))]
-        do i = 2,size(v)
-            j = i
-            do while( j > 1 )
-                if( v(p(j)) <= v(p(j-1)) ) exit
-                t = p(j); p(j) = p(j-1); p(j-1) = t
-                j = j - 1
-            enddo
-        enddo
-    end function sort_desc
 
     ! every class holds enough atoms (by largest posterior) and adjacent classes are separated by D >= MIN_SEPARATION
     logical function is_admissible( post, mu, var )

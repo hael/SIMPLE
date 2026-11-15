@@ -24,6 +24,9 @@ Branch-context files are local development memory and may describe work that is 
 - Keep orchestration in controllers, commanders, and strategies.
 - Keep numerical algorithms in their owning domain modules.
 - Reuse `parameters`, `cmdline`, `builder`, and existing lifecycle methods.
+- Before writing a small helper, find its owner in `.github/skills/simple-modern-fortran/references/library_owners.md`;
+  extend the owner instead of copying. Workflow constants go in `src/defs/simple_defs_<domain>.f90`, not in commanders
+  and not in the defs modules `simple_core_module_api` re-exports.
 - Keep workflow changes aligned with the owning UI, execution, commander, strategy, and domain layers.
 - Follow `doc/policies/compile_time_policy.md`: large types are allocatable components, never
   plain ones; no whole-`parameters` copies; large test locals are `class(T), allocatable`;

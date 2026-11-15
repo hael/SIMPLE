@@ -22,6 +22,7 @@ contains
         call test_fname2format()
         call test_get_fpath_and_stemname()
         call test_get_relative_path()
+        call test_strip_fext()
         call test_fopen_and_fclose_basic()
         call test_nlines_and_filelength()
         call test_arr2file_sp_dp_roundtrip()
@@ -188,7 +189,33 @@ contains
         trimlen = 0
         rel = get_relative_path(full, root)
         call assert_char('/other/path/file.dat', rel%to_char(), 'get_relative_path: no match -> unchanged')
+        ! character paths: the cached position is reused for the next path of the same layout
+        trimlen = 0
+        call assert_char('project/data/a.mrc', trim(get_relative_path('/home/user/project/data/a.mrc', 'project/', trimlen)),&
+            &'get_relative_path (char): substring from root')
+        call assert_int(12, trimlen, 'get_relative_path (char): position cached')
+        call assert_char('project/data/b.mrc', trim(get_relative_path('/home/user/project/data/b.mrc', 'nowhere/', trimlen)),&
+            &'get_relative_path (char): cached position used')
+        trimlen = 0
+        call assert_char('/other/c.mrc', trim(get_relative_path('/other/c.mrc', 'project/', trimlen)),&
+            &'get_relative_path (char): no match -> unchanged')
+        call assert_int(0, trimlen, 'get_relative_path (char): no match leaves the cache unset')
     end subroutine test_get_relative_path
+
+    subroutine test_strip_fext()
+        type(string) :: body
+        write(*,'(A)') 'test_strip_fext'
+        body = strip_fext(string('dir/map.mrc'))
+        call assert_char('dir/map', body%to_char(), 'strip_fext: last extension removed')
+        body = strip_fext(string('dir/map.half.mrc'))
+        call assert_char('dir/map.half', body%to_char(), 'strip_fext: only the last extension')
+        body = strip_fext(string('run.v2/map'))
+        call assert_char('run.v2/map', body%to_char(), 'strip_fext: a dot in the directory kept')
+        body = strip_fext(string('dir/.hidden'))
+        call assert_char('dir/.hidden', body%to_char(), 'strip_fext: dot-file kept')
+        body = strip_fext(string('map'))
+        call assert_char('map', body%to_char(), 'strip_fext: no extension')
+    end subroutine test_strip_fext
 
     !------------------------------------------------------------
     !  File IO helpers (Fortran-only)

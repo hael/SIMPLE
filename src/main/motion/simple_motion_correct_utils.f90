@@ -6,7 +6,7 @@ use simple_eer_factory, only: eer_decoder
 implicit none
 
 public :: correct_gain, flip_gain, calc_eer_fraction, pix2polycoords, patch_poly, apply_patch_poly
-public :: eer_scale_movie_convention
+public :: eer_scale_movie_convention, motion_align_weights, shifts_rmsd
 private
 #include "simple_local_flags.inc"
 
@@ -191,5 +191,69 @@ contains
         dose_per_eer_frame = tot_dose / real(n_eer_frames)
         tot_dose           = dose_per_eer_frame * real(eerfraction) * real(nfractions)
     end subroutine calc_eer_fraction
+
+    !> The alignment weights of the frame aligners on the Fourier grid of @p reference (frames of
+    !! @p ldim at @p smpd): the squared B-factor (@p bfactor) weight times the squared band-pass between
+    !! @p hp and @p lp, with 3-index cosine edges; zero outside the band and at the origin.
+    subroutine motion_align_weights( reference, ldim, smpd, hp, lp, bfactor, weights )
+        class(image), intent(in)    :: reference
+        integer,      intent(in)    :: ldim(3)
+        real,         intent(in)    :: smpd, hp, lp, bfactor
+        real,         intent(inout) :: weights(:,:)
+        integer, parameter :: BPWIDTH = 3
+        real    :: w, bfacw, rsh, rhplim, rlplim, width, spafreqsq,spafreqh,spafreqk
+        integer :: phys(3),nr_lims(3,2), bphplimsq,hplimsq,bplplimsq,lplimsq, shsq, h,k, hplim,lplim
+        weights   = 0.
+        width     = real(BPWIDTH)
+        nr_lims   = reference%loop_lims(2)
+        hplim     = max(1,calc_fourier_index(hp,minval(ldim(1:2)),smpd))
+        rhplim    = real(hplim)
+        hplimsq   = hplim*hplim
+        bphplimsq = max(0,hplim+BPWIDTH)**2
+        lplim     = calc_fourier_index(lp,minval(ldim(1:2)),smpd)
+        rlplim    = real(lplim)
+        lplimsq   = lplim*lplim
+        bplplimsq = min(minval(nr_lims(1:2,2)),lplim-BPWIDTH)**2
+        !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,k,shsq,phys,rsh,bfacw,w,spafreqsq,spafreqh,spafreqk)
+        do k = nr_lims(2,1),nr_lims(2,2)
+            do h = nr_lims(1,1),nr_lims(1,2)
+                shsq = h*h+k*k
+                if( shsq < hplimsq ) cycle
+                if( shsq > lplimsq ) cycle
+                if( shsq == 0 )      cycle
+                phys = reference%comp_addr_phys(h,k,0)
+                ! B-factor weight
+                spafreqh  = real(h) / real(ldim(1)) / smpd
+                spafreqk  = real(k) / real(ldim(2)) / smpd
+                spafreqsq = spafreqh*spafreqh + spafreqk*spafreqk
+                bfacw     = max(0.,exp(-spafreqsq*bfactor/4.))
+                ! filter weight
+                w = 1.
+                if( shsq < bphplimsq )then
+                    ! high-pass
+                    rsh = sqrt(real(shsq))
+                    w   = 0.5 * (1.-cos(PI*(rsh-rhplim)/width))
+                else if( shsq > bplplimsq )then
+                    ! low_pass
+                    rsh = sqrt(real(shsq))
+                    w   = 0.5*(1.+cos(PI*(rsh-(rlplim-width))/width))
+                endif
+                weights(phys(1),phys(2)) = bfacw*bfacw * w*w
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine motion_align_weights
+
+    !> root mean square over frames of the change between two shift tracks (frames x 2, pixels)
+    pure real function shifts_rmsd( prev_shifts, shifts )
+        real, intent(in) :: prev_shifts(:,:), shifts(:,:)
+        integer :: iframe
+        shifts_rmsd = 0.
+        do iframe = 1,size(shifts,1)
+            shifts_rmsd = shifts_rmsd + sum((shifts(iframe,:)-prev_shifts(iframe,:))**2.)
+        enddo
+        shifts_rmsd = sqrt(shifts_rmsd/real(size(shifts,1)))
+    end function shifts_rmsd
 
 end module simple_motion_correct_utils

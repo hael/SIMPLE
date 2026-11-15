@@ -40,6 +40,7 @@ public :: rec3D_master_nthr, validate_pcg_common
 public :: set_pcg_solve_support, calculate_pcg_state_diagnostics, accumulate_pcg_state_half
 public :: pcg_extra_entries, accumulate_pcg_extras, pcg_inpl_particle_entries, accumulate_pcg_inpl_batch
 public :: pcg_assemble_bench, write_pcg_assemble_bench
+public :: remove_pcg_raw_files
 private
 #include "simple_local_flags.inc"
 
@@ -2508,5 +2509,24 @@ contains
             &'|smpd='//trim(real2str(params%smpd))// &
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_chain_provenance
+
+    !> Deletes every raw PCG accumulator of a launch (@p nstates states, both halves, @p nparts parts,
+    !! part tags @p numlen wide) and its .tmp companion: a stale accumulator must never pass for a
+    !! completed worker of this launch, as workers publish through .tmp and an atomic rename.
+    subroutine remove_pcg_raw_files( nstates, nparts, numlen )
+        integer, intent(in) :: nstates, nparts, numlen
+        type(string) :: fname
+        integer      :: state, part, eo
+        do state = 1, nstates
+            do eo = 0, 1
+                do part = 1, nparts
+                    fname = refine3D_pcg_raw_accum_fname(state, part, numlen, merge('odd ', 'even', eo == 1))
+                    call del_file(fname)
+                    call del_file(fname//'.tmp')
+                enddo
+            enddo
+        enddo
+        call fname%kill
+    end subroutine remove_pcg_raw_files
 
 end module simple_rec3D_pcg_strategy

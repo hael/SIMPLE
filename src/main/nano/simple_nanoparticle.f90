@@ -1826,13 +1826,11 @@ contains
             if( saa > 0._dp .and. sbb > 0._dp ) corr_in = real(sab / sqrt(saa * sbb))
         end function corr_in
 
+        ! sample standard deviation; 0 for fewer than two values
         real function sdev_of( v )
             real, intent(in) :: v(:)
             real :: m
-            sdev_of = 0.
-            if( size(v) < 2 ) return
-            m       = sum(v) / real(size(v))
-            sdev_of = sqrt(sum((v - m)**2) / real(size(v) - 1))
+            call avg_sdev(v, m, sdev_of)
         end function sdev_of
 
         ! set arr3 to val within rv voxels of c

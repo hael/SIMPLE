@@ -363,15 +363,8 @@ contains
 
         integer function rank_of( ranked, pind )
             integer, intent(in) :: ranked(:), pind
-            integer :: i
-            rank_of = 0
-            do i = 1,size(ranked)
-                if( ranked(i) == pind )then
-                    rank_of = i
-                    return
-                endif
-            enddo
-            THROW_HARD('particle rank lookup failed; rank_of')
+            rank_of = findloc(ranked, pind, dim=1)
+            if( rank_of == 0 ) THROW_HARD('particle rank lookup failed; rank_of')
         end function rank_of
 
         subroutine append_bootstrap_row( rows, row_count, src_proj, source_pind, parent_cls, out_cls, child_id, role, source_rank )

@@ -1610,10 +1610,25 @@ static int rmFiles(const char *pathname, const struct stat *sbuf, int type, stru
 int remove_directory_recursive(char *path, int *len, int*count)
 {
     char *cpath = F90to_cstring(path, *len);
-    DIR *d = opendir(cpath);
+    if(!cpath) return -1;
     size_t path_len = strlen(cpath);
+    /* Trailing slashes must not make lstat follow a root-directory symlink. */
+    while(path_len > 1 && cpath[path_len - 1] == '/')
+        cpath[--path_len] = '\0';
+    struct stat root_stat;
+    if(lstat(cpath, &root_stat)) {
+        free(cpath);
+        return -1;
+    }
+    /* Check the root before opendir, just as we check each child before recursion. */
+    if(S_ISLNK(root_stat.st_mode)) {
+        int r = unlink(cpath);
+        if(!r) *count = *count + 1;
+        free(cpath);
+        return r;
+    }
+    DIR *d = opendir(cpath);
     int r = -1;
-    free(cpath);
     if(d) {
         struct dirent *p;
         r = 0;
@@ -1628,8 +1643,9 @@ int remove_directory_recursive(char *path, int *len, int*count)
             buf = malloc(len);
             if(buf) {
                 struct stat statbuf;
-                snprintf(buf, len, "%s/%s", path, p->d_name);
-                if(!stat(buf, &statbuf)) {
+                snprintf(buf, len, "%s/%s", cpath, p->d_name);
+                /* lstat: a symbolic link is removed itself, never followed into its target */
+                if(!lstat(buf, &statbuf)) {
                     if(S_ISDIR(statbuf.st_mode)) {
                         int len2 = (int)strlen(buf);
                         r2 = remove_directory_recursive(buf, &len2 , count);
@@ -1645,9 +1661,10 @@ int remove_directory_recursive(char *path, int *len, int*count)
         closedir(d);
     }
     if(!r) {
-        r = rmdir(path);
+        r = rmdir(cpath);
         *count = *count + 1;
     }
+    free(cpath);
     return r;
 }
 

@@ -10,6 +10,7 @@ use simple_sp_project,   only: sp_project
 use simple_stack_io,     only: stack_io
 use simple_builder,      only: builder
 use simple_motion_model, only: motion_model
+use simple_string_utils, only: posix_quote
 implicit none
 
 public :: refine_motion_model_strategy
@@ -1250,7 +1251,7 @@ contains
         endif
         if( file_exists(base//'_diagnostics.png') ) call del_file(base//'_diagnostics.png')
         exitstatus=1; cmdstatus=0
-        call execute_command_line('gnuplot '//shell_quote(gpfile)//' > '//shell_quote(plotlog)//' 2>&1', &
+        call execute_command_line('gnuplot '//posix_quote(gpfile)//' > '//posix_quote(plotlog)//' 2>&1', &
             &wait=.true.,exitstat=exitstatus,cmdstat=cmdstatus)
         rendered=cmdstatus==0 .and. exitstatus==0
         inquire(file=base//'_diagnostics.png',exist=exists,size=bytes,iostat=ios)
@@ -1300,21 +1301,6 @@ contains
         enddo
         text=text//'"'
     end function gnu_quote
-
-    function shell_quote(value) result(text)
-        character(len=*), intent(in) :: value
-        character(len=:), allocatable :: text
-        integer :: n
-        text=achar(39)
-        do n=1,len_trim(value)
-            if( iachar(value(n:n))==39 )then
-                text=text//achar(39)//achar(34)//achar(39)//achar(34)//achar(39)
-            else
-                text=text//value(n:n)
-            endif
-        enddo
-        text=text//achar(39)
-    end function shell_quote
 
     subroutine distr_finalize_run(self, params, cline)
         class(refine_motion_model_distr_strategy), intent(inout) :: self

@@ -3,6 +3,8 @@ module simple_motion_align_nano
 use simple_core_module_api
 use simple_image,      only: image
 use simple_parameters, only: parameters
+use simple_motion_correct_utils, only: motion_align_weights, shifts_rmsd
+use simple_math,                 only: parabolic_peak_offset
 implicit none
 
 public :: motion_align_nano
@@ -41,8 +43,6 @@ contains
     procedure, private :: shift_frames_gen_ref
     procedure          :: align
     procedure, private :: align_dcorr
-    procedure, private :: gen_weights
-    procedure, private :: calc_rmsd
     ! Getters & setters
     procedure          :: set_reslims
     procedure          :: set_trs
@@ -149,7 +149,7 @@ contains
         self%opt_shifts = 0.
         if( present(ini_shifts) ) self%opt_shifts = ini_shifts
         ! init weights matrix
-        call self%gen_weights
+        call motion_align_weights(self%reference, self%ldim, self%smpd, self%hp, self%lp, self%bfactor, self%weights)
         ! shift frames, generate reference & calculates correlation
         call self%shift_frames_gen_ref
         if( l_refset ) call self%reference%copy(reference)
@@ -172,7 +172,7 @@ contains
             ! shift frames, generate reference & calculates correlations
             call self%shift_frames_gen_ref
             ! convergence
-            rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
+            rmsd = shifts_rmsd(opt_shifts_prev, self%opt_shifts)
             if( iter > MINITS_DCORR .and. rmsd < 0.1 ) exit
         enddo
     end subroutine align_dcorr
@@ -213,83 +213,15 @@ contains
         beta  = pcorrs(pos(1)+center(1), pos(2)+center(2), 1)
         alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
         gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
-        if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
+        if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + parabolic_peak_offset(alpha, beta, gamma)
         alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
         gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
-        if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
+        if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + parabolic_peak_offset(alpha, beta, gamma)
         ! update shift
         self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         ! cleanup
         call self%frames_sh(iframe)%zero_and_flag_ft
-        contains
-
-            real function interp_peak()
-                real :: denom
-                interp_peak = 0.
-                denom = alpha+gamma-2.*beta
-                if( abs(denom) < TINY )return
-                interp_peak = 0.5 * (alpha-gamma) / denom
-            end function interp_peak
     end subroutine calc_shifts
-
-    ! generates weights and mask matrix
-    subroutine gen_weights( self )
-        class(motion_align_nano), intent(inout) :: self
-        integer, parameter :: BPWIDTH = 3
-        real    :: w, bfacw, rsh, rhplim, rlplim, width, spafreqsq,spafreqh,spafreqk
-        integer :: phys(3),nr_lims(3,2), bphplimsq,hplimsq,bplplimsq,lplimsq, shsq, h,k, hplim,lplim
-        self%weights = 0.
-        width   = real(BPWIDTH)
-        nr_lims = self%reference%loop_lims(2)
-        hplim     = max(1,calc_fourier_index(self%hp,minval(self%ldim(1:2)),self%smpd))
-        rhplim    = real(hplim)
-        hplimsq   = hplim*hplim
-        bphplimsq = max(0,hplim+BPWIDTH)**2
-        lplim     = calc_fourier_index(self%lp,minval(self%ldim(1:2)),self%smpd)
-        rlplim    = real(lplim)
-        lplimsq   = lplim*lplim
-        bplplimsq = min(minval(nr_lims(1:2,2)),lplim-BPWIDTH)**2
-        !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
-        !$omp private(h,k,shsq,phys,rsh,bfacw,w,spafreqsq,spafreqh,spafreqk)
-        do k = nr_lims(2,1),nr_lims(2,2)
-            do h = nr_lims(1,1),nr_lims(1,2)
-                shsq = h*h+k*k
-                if( shsq < hplimsq ) cycle
-                if( shsq > lplimsq ) cycle
-                if( shsq == 0 )      cycle
-                phys = self%reference%comp_addr_phys(h,k,0)
-                ! B-factor weight
-                spafreqh  = real(h) / real(self%ldim(1)) / self%smpd
-                spafreqk  = real(k) / real(self%ldim(2)) / self%smpd
-                spafreqsq = spafreqh*spafreqh + spafreqk*spafreqk
-                bfacw     = max(0.,exp(-spafreqsq*self%bfactor/4.))
-                ! filter weight
-                w = 1.
-                if( shsq < bphplimsq )then
-                    ! high-pass
-                    rsh = sqrt(real(shsq))
-                    w   = 0.5 * (1.-cos(PI*(rsh-rhplim)/width))
-                else if( shsq > bplplimsq )then
-                    ! low_pass
-                    rsh = sqrt(real(shsq))
-                    w   = 0.5*(1.+cos(PI*(rsh-(rlplim-width))/width))
-                endif
-                self%weights(phys(1),phys(2)) = bfacw*bfacw * w*w
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine gen_weights
-
-    real function calc_rmsd( self, prev_shifts, shifts )
-        class(motion_align_nano), intent(in) :: self
-        real,                     intent(in) :: prev_shifts(self%nframes,2), shifts(self%nframes,2)
-        integer :: iframe
-        calc_rmsd = 0.
-        do iframe = 1,self%nframes
-            calc_rmsd = calc_rmsd + sum((shifts(iframe,:)-prev_shifts(iframe,:))**2.)
-        enddo
-        calc_rmsd = sqrt(calc_rmsd/real(self%nframes))
-    end function calc_rmsd
 
     ! Getters/setters
 

@@ -2,7 +2,7 @@
 submodule (simple_oris) simple_oris_io
 use simple_ori_api
 use simple_ori, only: ori
-use simple_jpg, only: jpg_img
+use simple_jpg, only: jpg_img, jpg_rgb_code
 implicit none
 #include "simple_local_flags.inc"
 
@@ -214,8 +214,8 @@ contains
         plot_y1       = plot_y0 + PLOT_HEIGHT - 1
         colorbar_x0   = plot_x1 + COLORBAR_GAP
         colorbar_x1   = colorbar_x0 + COLORBAR_WIDTH - 1
-        black = rgb_code(0, 0, 0)
-        white = rgb_code(255, 255, 255)
+        black = jpg_rgb_code(0, 0, 0)
+        white = jpg_rgb_code(255, 255, 255)
         allocate(canvas(canvas_width,canvas_height), source=white)
         if( vmax > vmin )then
             range_scale = 1. / (vmax - vmin)
@@ -225,17 +225,17 @@ contains
                     val = heatmap(x - plot_x0 + 1, plot_y1 - y + 1)
                     scaled = max(0., min(1., (val - vmin) * range_scale))
                     call heat_color(scaled, red, green, blue)
-                    canvas(x,y) = rgb_code(red, green, blue)
+                    canvas(x,y) = jpg_rgb_code(red, green, blue)
                 enddo
             enddo
         else
             call heat_color(0.5, red, green, blue)
-            canvas(plot_x0:plot_x1,plot_y0:plot_y1) = rgb_code(red, green, blue)
+            canvas(plot_x0:plot_x1,plot_y0:plot_y1) = jpg_rgb_code(red, green, blue)
         endif
         do y = plot_y0, plot_y1
             scaled = real(plot_y1 - y) / real(max(1, PLOT_HEIGHT - 1))
             call heat_color(scaled, red, green, blue)
-            color = rgb_code(red, green, blue)
+            color = jpg_rgb_code(red, green, blue)
             canvas(colorbar_x0:colorbar_x1,y) = color
         enddo
         call draw_hline(canvas, plot_x0 - 1, plot_x1 + 1, plot_y0 - 1, black)
@@ -350,13 +350,6 @@ contains
             enddo
             map = map * (maxval(proj_pops) / maxval(map))
         end subroutine calc_heatmap
-
-        pure real function rgb_code( r, g, b )
-            integer, intent(in) :: r, g, b
-            integer :: packed
-            packed = ishft(max(0, min(255, r)), 16) + ishft(max(0, min(255, g)), 8) + max(0, min(255, b))
-            rgb_code = real(packed) / 16777215.0
-        end function rgb_code
 
         pure subroutine heat_color( fraction, r, g, b )
             integer, parameter :: N_COLORS = 5

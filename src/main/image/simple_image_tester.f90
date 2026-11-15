@@ -57,6 +57,7 @@ contains
         call test_frame_bfactor_weights()
         call test_power_spectrum()
         call test_shifts()
+        call test_fcorr_shift_cutoff()
         call test_flip()
         call test_acf()
         call test_rotations_and_roavg()
@@ -632,6 +633,75 @@ contains
         call b%kill
         call c%kill
     end subroutine test_shifts
+
+    ! A four-point Fourier series gives the peak samples (-4,2,0)*a, curvature -8*a
+    ! and a parabolic offset of 1/4. Test below, at and above TINY on every 2D/3D axis.
+    subroutine test_fcorr_shift_cutoff()
+        class(image), allocatable :: corr, ref
+        complex, pointer :: cmat(:,:,:)
+        real, pointer :: rmat(:,:,:)
+        real, parameter :: OFFSET_TOL = 1.e-6
+        real :: a, shift(3), expected, alpha, beta, gamma
+        integer :: ndim, axis, iscale, dims(3), cen(3), lo(3), hi(3), freq(3)
+        character(len=48) :: label
+        write(*,'(A)') 'test_fcorr_shift_cutoff'
+        allocate(corr, ref)
+        do ndim = 2, 3
+            dims = [4,4,1]
+            if( ndim == 3 ) dims(3) = 4
+            cen = dims/2 + 1
+            call corr%new(dims, SMPD, wthreads=.false.)
+            call ref%new(dims, SMPD, wthreads=.false.)
+            call ref%get_cmat_ptr(cmat)
+            cmat = cmplx(1.,0.) ! centred impulse: multiplication leaves the series unchanged
+            nullify(cmat)
+            call ref%set_ft(.true.)
+            do axis = 1, ndim
+                do iscale = 1, 3
+                    a = (TINY/8.) * 2.**(iscale-2)
+                    call corr%get_cmat_ptr(cmat)
+                    cmat = cmplx(0.,0.)
+                    cmat(1,1,1) = cmplx(-a,0.)
+                    freq = 1
+                    freq(axis) = 2
+                    cmat(freq(1),freq(2),freq(3)) = cmplx(a,-a)
+                    freq(axis) = 3
+                    cmat(freq(1),freq(2),freq(3)) = cmplx(a,0.)
+                    if( axis /= 1 )then ! x stores only the Hermitian half; y/z need the negative frequency
+                        freq(axis) = 4
+                        cmat(freq(1),freq(2),freq(3)) = cmplx(a,a)
+                    endif
+                    nullify(cmat)
+                    call corr%set_ft(.true.)
+                    shift = 0.
+                    if( ndim == 2 )then
+                        call corr%fcorr_shift(ref, 1., shift(1:2), peak_interp=.true.)
+                    else
+                        call corr%fcorr_shift3D(ref, 1., shift, peak_interp=.true.)
+                    endif
+                    write(label,'(A,I1,A,I1,A,I1)') 'fcorr cutoff: dimensions=', ndim, ' axis=', axis, ' scale=', iscale
+                    if( iscale == 2 )then
+                        call corr%get_rmat_ptr(rmat)
+                        lo = cen
+                        hi = cen
+                        lo(axis) = lo(axis)-1
+                        hi(axis) = hi(axis)+1
+                        alpha = rmat(lo(1),lo(2),lo(3))
+                        beta  = rmat(cen(1),cen(2),cen(3))
+                        gamma = rmat(hi(1),hi(2),hi(3))
+                        call assert_real(TINY, abs(alpha+gamma-2.*beta), 0., trim(label)//' exact boundary')
+                        nullify(rmat)
+                    endif
+                    expected = 0.
+                    if( iscale == 3 ) expected = -0.25 ! shift uses the opposite sign to the peak position
+                    call assert_real(expected, shift(axis), OFFSET_TOL, trim(label)//' shift')
+                enddo
+            enddo
+            call corr%kill
+            call ref%kill
+        enddo
+        deallocate(corr, ref)
+    end subroutine test_fcorr_shift_cutoff
 
     !---------------- autocorrelation ----------------
 

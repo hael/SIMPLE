@@ -2207,26 +2207,17 @@ contains
 
         subroutine read_update_coverage( nactive, nupdated, nmissing )
             integer, intent(out) :: nactive, nupdated, nmissing
-            integer, allocatable :: states(:), updatecnts(:)
             call spproj%read_segment('ptcl3D', params%projfile)
-            states  = spproj%os_ptcl3D%get_all_asint('state')
-            nactive = count(states > 0)
-            if( spproj%os_ptcl3D%isthere('updatecnt') )then
-                updatecnts = spproj%os_ptcl3D%get_all_asint('updatecnt')
-                nupdated   = count(states > 0 .and. updatecnts > 0)
-            else
-                if( params%nstates > 1 ) &
-                    &THROW_HARD('multistate solve3D requires post-label particle assignments before final reconstruction')
-                nupdated = 0
-            endif
+            if( .not. spproj%os_ptcl3D%isthere('updatecnt') .and. params%nstates > 1 ) &
+                &THROW_HARD('multistate solve3D requires post-label particle assignments before final reconstruction')
+            nactive  = spproj%os_ptcl3D%count_state_gt_zero()
+            nupdated = spproj%os_ptcl3D%count_state_updated()
             nmissing = nactive - nupdated
             ! single state without any update: the final reconstruction takes every active row (sample4rec)
             if( params%nstates == 1 .and. nupdated == 0 ) nmissing = 0
             write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') &
                 &'>>> SOLVE3D ASSIGNMENT COVERAGE NSTATES=', params%nstates, &
                 &' UPDATED/ACTIVE/MISSING: ', nupdated, '/', nactive, '/', nmissing
-            if( allocated(states)     ) deallocate(states)
-            if( allocated(updatecnts) ) deallocate(updatecnts)
         end subroutine read_update_coverage
 
         subroutine run_missing_update( nmissing, nactive )

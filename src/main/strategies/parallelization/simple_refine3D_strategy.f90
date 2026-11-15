@@ -15,7 +15,7 @@ use simple_decay_funs,          only: inv_cos_decay, cos_decay
 use simple_cluster_seed,        only: gen_labelling
 use simple_strategy_sigma2,     only: prepare_canonical_sigma_update, read_sigma2_bench_counts, commit_sigma2_exec
 use simple_rec3D_pcg_strategy,  only: execute_rec3D_pcg_distributed_master, rec3D_master_nthr, &
-    &pcg_assemble_bench, write_pcg_assemble_bench
+    &pcg_assemble_bench, write_pcg_assemble_bench, remove_pcg_raw_files
 use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
 use simple_strategy3D_cont,     only: check_cont_seeds
@@ -658,23 +658,6 @@ contains
         endif
     end subroutine assemble_refine3D_pcg
 
-    subroutine remove_pcg_raw_files( params )
-        type(parameters), intent(in) :: params
-        type(string) :: fname
-        integer :: state, part, eo
-        do state = 1, params%nstates
-            do eo = 0, 1
-                do part = 1, params%nparts
-                    fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
-                        &merge('odd ', 'even', eo == 1))
-                    call del_file(fname)
-                    call del_file(fname//'.tmp')
-                enddo
-            enddo
-        enddo
-        call fname%kill
-    end subroutine remove_pcg_raw_files
-
     subroutine invalidate_fresh_start_refs_from_volumes( params, cline, startit )
         type(parameters), intent(in) :: params
         type(cmdline),    intent(in) :: cline
@@ -1305,7 +1288,7 @@ contains
         l_write_partial_recs = trim(params%volrec) .eq. 'yes'
         if( l_write_partial_recs )then
             call remove_partial_rec_files(params)
-            if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
+            if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params%nstates, params%nparts, params%numlen)
         endif
         if( self%l_sigma )then
             if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()
@@ -1808,7 +1791,7 @@ contains
         if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         if( trim(params%volrec).eq.'yes' )then
             call remove_partial_rec_files(params)
-            if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
+            if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params%nstates, params%nparts, params%numlen)
         endif
         if( sigma_update_enabled(params) )then
             if( L_BENCH_GLOB ) self%bench%t_sigma_prep = tic()

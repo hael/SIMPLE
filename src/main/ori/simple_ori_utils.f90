@@ -2,7 +2,7 @@
 module simple_ori_utils
 use simple_defs
 use simple_linalg, only: rad2deg, deg2rad, myacos
-use simple_math,   only: rotmat2d
+use simple_math,   only: rotmat2d, cross
 use simple_rnd,    only: ran3
 implicit none
 
@@ -160,7 +160,7 @@ contains
         m      = genfire_rotmat(ang)
         r(1,:) = m(:,3)
         r(2,:) = m(:,1)
-        r(3,:) = cross3(r(1,:), r(2,:))
+        r(3,:) = cross(r(1,:), r(2,:))
         e      = real(dm2euler(r))
     end function genfire2euler
 
@@ -173,7 +173,7 @@ contains
         r      = real(euler2m(e), dp)
         m(:,3) = r(1,:)
         m(:,1) = r(2,:)
-        m(:,2) = cross3(m(:,3), m(:,1))
+        m(:,2) = cross(m(:,3), m(:,1))
         c  = max(-1._dp, min(1._dp, m(3,3)))
         th = acos(c)
         if( sin(th) > 1.e-6_dp )then
@@ -200,12 +200,6 @@ contains
         rz2(1,1) = c(3); rz2(1,2) = -s(3); rz2(2,1) = s(3); rz2(2,2) = c(3); rz2(3,3) = 1._dp
         m = matmul(rz2, matmul(ry, rz1))
     end function genfire_rotmat
-
-    pure function cross3( a, b ) result( c )
-        real(dp), intent(in) :: a(3), b(3)
-        real(dp) :: c(3)
-        c = [a(2)*b(3) - a(3)*b(2), a(3)*b(1) - a(1)*b(3), a(1)*b(2) - a(2)*b(1)]
-    end function cross3
 
     !>  \brief  for generating a random rotation matrix
     subroutine rnd_romat( rmat )

@@ -3,6 +3,7 @@
 module simple_tseries_graphene_subtr
 use simple_pftc_srch_api
 use simple_atoms, only: atoms
+use simple_math,  only: parabolic_peak_offset
 implicit none
 
 public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr
@@ -208,7 +209,7 @@ contains
 
             subroutine interp_peak(ang, corr)
                 real, intent(out) :: ang, corr
-                real    :: denom, alpha, beta, gamma, drot
+                real    :: alpha, beta, gamma, drot
                 integer :: maxind, ind
                 maxind = maxloc(corrs,dim=1,mask=corrs_mask)
                 beta   = corrs(maxind)
@@ -218,9 +219,7 @@ contains
                 gamma  = corrs(ind)
                 corr   = beta
                 ang    = 360.-pftc%get_rot(maxind)
-                denom  = alpha+gamma-2.*beta
-                if( abs(denom) < TINY )return
-                drot = 0.5 * (alpha-gamma) / denom
+                drot   = parabolic_peak_offset(alpha, beta, gamma)
                 corr = beta -0.25*(alpha-gamma)*drot
                 ang  = ang + drot*angstep
             end subroutine interp_peak

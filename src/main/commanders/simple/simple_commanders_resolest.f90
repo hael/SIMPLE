@@ -6,6 +6,7 @@ use simple_fsc
 use simple_commanders_euclid, only: commander_calc_pspec
 use simple_refine3D_fnames,  only: refine3D_fsc_fbody, refine3D_fsc_fname
 use simple_string_utils,     only: fmt_dec, log_item
+use simple_fileio,           only: strip_fext
 implicit none
 #include "simple_local_flags.inc"
 
@@ -148,7 +149,7 @@ contains
         ! beside window 1 alone, so the gain is on one line
         call gather_series(win, params, ncoeff, .false., em, om)
         allocate(ae(ncoeff), ao(ncoeff), fsc(nsh), fsc_msk(nsh), fsc_tab(nsh,4))
-        outbody = strip_extension(params%outvol)
+        outbody = strip_fext(params%outvol)
         res     = vol%get_res()
         call series%accumulate(em, om, shell, DOSE_WEIGHTS_MODEL, ae, ao)
         call finish_pair(ae, ao, params, fsc, fsc_msk, outbody, .true.)
@@ -204,21 +205,6 @@ contains
         call simple_end('**** SIMPLE_DOSE_FILTER3D NORMAL STOP ****')
 
         contains
-
-            !> the output body: outvol up to the extension of its file name; a dot in a directory is kept
-            function strip_extension( fname ) result( body )
-                class(string), intent(in) :: fname
-                type(string) :: body
-                character(len=:), allocatable :: txt
-                integer :: pos
-                txt = fname%to_char()
-                pos = index(txt, '.', back=.true.)
-                if( pos > 1 .and. pos > index(txt, '/', back=.true.) + 1 )then
-                    body = txt(1:pos-1)
-                else
-                    body = txt
-                endif
-            end function strip_extension
 
             !> shell index of every coefficient of the half-volume lattice, in a fixed traversal order
             subroutine lattice_shells( vol, nsh, shell, ncoeff )

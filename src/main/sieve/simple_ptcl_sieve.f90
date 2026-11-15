@@ -11,6 +11,7 @@ module simple_ptcl_sieve
   use simple_defs,                        only: logfhandle, CWD_GLOB, JPEG_DIM
   use simple_error,                       only: simple_exception
   use simple_image,                       only: image
+  use simple_jpg,                         only: jpg_rgb_code
   use simple_timer,                       only: timer_int_kind, tic, toc
   use simple_fileio,                      only: swap_suffix, simple_copy_file, simple_touch, basename, simple_list_files
   use simple_string,                      only: string
@@ -2075,7 +2076,7 @@ contains
     do iy = 1, size(rgb_map,2)
       do ix = 1, size(rgb_map,1)
         g8 = nint(max(0.0, min(1.0, rgb_map(ix,iy,1))) * 255.0)
-        rgb_map(ix,iy,1) = rgb_code(g8, g8, g8)
+        rgb_map(ix,iy,1) = jpg_rgb_code(g8, g8, g8)
       end do
     end do
 
@@ -2131,32 +2132,25 @@ contains
 
   contains
 
-    pure real function rgb_code(r, g, b)
-      integer, intent(in) :: r, g, b
-      integer :: packed
-      packed = ishft(max(0, min(255, r)), 16) + ishft(max(0, min(255, g)), 8) + max(0, min(255, b))
-      rgb_code = real(packed) / 16777215.0
-    end function rgb_code
-
     pure real function reason_color(code)
       integer, intent(in) :: code
       select case(code)
       case(-1)
-        reason_color = rgb_code( 46, 204, 113) ! selected
+        reason_color = jpg_rgb_code( 46, 204, 113) ! selected
       case(100)
-        reason_color = rgb_code(255, 165,   0) ! compatibility reject
+        reason_color = jpg_rgb_code(255, 165,   0) ! compatibility reject
       case(CAVG_REJECT_REASON_POP)
-        reason_color = rgb_code(220,  20,  60)
+        reason_color = jpg_rgb_code(220,  20,  60)
       case(CAVG_REJECT_REASON_BAD_PIXELS)
-        reason_color = rgb_code(255,   0, 255)
+        reason_color = jpg_rgb_code(255,   0, 255)
       case(CAVG_REJECT_REASON_NO_COMPONENT)
-        reason_color = rgb_code(  0, 200, 200)
+        reason_color = jpg_rgb_code(  0, 200, 200)
       case(CAVG_REJECT_REASON_MASK_GEOMETRY)
-        reason_color = rgb_code(255, 220,   0)
+        reason_color = jpg_rgb_code(255, 220,   0)
       case(CAVG_REJECT_REASON_MODEL)
-        reason_color = rgb_code( 30, 144, 255)
+        reason_color = jpg_rgb_code( 30, 144, 255)
       case default
-        reason_color = rgb_code(180, 180, 180)
+        reason_color = jpg_rgb_code(180, 180, 180)
       end select
     end function reason_color
 
@@ -2276,7 +2270,7 @@ contains
             boundary = mask_vals(i-1,j,1) < 0.5 .or. mask_vals(i+1,j,1) < 0.5 .or. &
                        mask_vals(i,j-1,1) < 0.5 .or. mask_vals(i,j+1,1) < 0.5
           end if
-          if( boundary ) rmap(x_start + i - 1, y_start + j - 1, 1) = rgb_code(120, 205, 255)
+          if( boundary ) rmap(x_start + i - 1, y_start + j - 1, 1) = jpg_rgb_code(120, 205, 255)
         end do
       end do
       if( allocated(weight_vals) ) deallocate(weight_vals)

@@ -10,6 +10,7 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use, intrinsic :: iso_c_binding,   only: c_float, c_float_complex
 use simple_core_module_api
 use simple_image,             only: image
+use simple_timer,             only: clock_count, clock_seconds_since
 use simple_ctf,               only: ctf
 use simple_cartesian_fourier, only: gather_packed_window
 use simple_gridding,          only: kb_stencil_centered_crop_inv_envelope_1d
@@ -234,18 +235,6 @@ type, extends(pcg_operator) :: reconstructor_pcg_adapter
 end type reconstructor_pcg_adapter
 
 contains
-
-    !> wall-clock helpers without module-global state, safe for concurrent even/odd solves
-    integer(timer_int_kind) function pcg_tic() result(tstart)
-        call system_clock(count=tstart)
-    end function pcg_tic
-
-    real(dp) function pcg_toc( tstart ) result(seconds)
-        integer(timer_int_kind), intent(in) :: tstart
-        integer(timer_int_kind) :: tend, rate
-        call system_clock(count=tend, count_rate=rate)
-        seconds = real(tend-tstart,dp) / real(rate,dp)
-    end function pcg_toc
 
     ! CONSTRUCTOR
 
@@ -961,18 +950,18 @@ contains
         ! A = A~ E^-1: deapodize in and out of the adjoint, so the operator is D.S not D.S.E
         allocate(pd(self%box,self%box,self%box), source=p)
         call self%deapod_mul(pd)
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         call self%set_volume(pd)
-        if( self%l_profile ) self%t_setvol = self%t_setvol + pcg_toc(tp)
+        if( self%l_profile ) self%t_setvol = self%t_setvol + clock_seconds_since(tp)
         ! get_cmat returns a COPY (539 MB at box 256); t_cmatcp isolates that traffic
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         cmat = self%wimg%get_cmat()
-        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + pcg_toc(tp)
+        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + clock_seconds_since(tp)
         allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
                           &self%lims3(2,1):self%lims3(2,2),&
                           &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,comp,rot) proc_bind(close)
         do i = 1, self%nptcls
             ! orphaned worksharing inside absT2_plane binds to this region; its
@@ -1017,7 +1006,7 @@ contains
             end do
         end do
         !$omp end parallel
-        if( self%l_profile ) self%t_ploop = self%t_ploop + pcg_toc(tp)
+        if( self%l_profile ) self%t_ploop = self%t_ploop + clock_seconds_since(tp)
         hp = self%fold_and_ifft(vol_accum)
         call self%deapod_mul(hp)
         if( self%l_ml_prior ) hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
@@ -1036,12 +1025,12 @@ contains
         integer(timer_int_kind) :: tp
         if( .not. self%l_kernel ) THROW_HARD('no kernel has been built; apply_normal_kernel')
         call self%ensure_wimg
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         call self%embed_fft(p)
-        if( self%l_profile ) self%t_setvol = self%t_setvol + pcg_toc(tp)
+        if( self%l_profile ) self%t_setvol = self%t_setvol + clock_seconds_since(tp)
         call self%wimg%get_cmat_ptr(cptr)
         cdim = self%wimg%get_array_shape()
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         !$omp parallel do collapse(3) default(shared) private(i,j,k,kv) &
         !$omp schedule(static) proc_bind(close)
         do k = 1, cdim(3)
@@ -1054,11 +1043,11 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( self%l_profile ) self%t_khat = self%t_khat + pcg_toc(tp)
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) self%t_khat = self%t_khat + clock_seconds_since(tp)
+        if( self%l_profile ) tp = clock_count()
         allocate(hp(self%box,self%box,self%box))
         call self%ifft_crop(hp)
-        if( self%l_profile ) self%t_fold = self%t_fold + pcg_toc(tp)
+        if( self%l_profile ) self%t_fold = self%t_fold + clock_seconds_since(tp)
         ! band precision on the deapodized domain (+ the order ridge when set);
         ! attachment mode enforced upstream
         call self%add_ridge(p, hp)
@@ -1332,17 +1321,17 @@ contains
             do m = self%lims3(3,1), self%lims3(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
-                if( present(rt_sum) ) tp = pcg_tic()
+                if( present(rt_sum) ) tp = clock_count()
                 call self%add_half_slice(m, 1.0, self%lims3, bslice=bslice)
-                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
+                if( present(rt_sum) ) rt_here = rt_here + clock_seconds_since(tp)
             end do
             call fileiochk('add_raw_accum reading B', ierr)
             do m = self%lims3(3,1), self%lims3(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
-                if( present(rt_sum) ) tp = pcg_tic()
+                if( present(rt_sum) ) tp = clock_count()
                 call self%add_half_slice(m, 1.0, self%lims3, dslice=dslice)
-                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
+                if( present(rt_sum) ) rt_here = rt_here + clock_seconds_since(tp)
             end do
             call fileiochk('add_raw_accum reading D', ierr)
             deallocate(bslice, dslice)
@@ -1574,17 +1563,17 @@ contains
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
-                if( present(rt_sum) ) tp = pcg_tic()
+                if( present(rt_sum) ) tp = clock_count()
                 call self%add_half_slice(m, weight, lims_file, bslice=bslice)
-                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
+                if( present(rt_sum) ) rt_here = rt_here + clock_seconds_since(tp)
             end do
             call fileiochk('add_raw_accum_weighted reading B', ierr)
             do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
-                if( present(rt_sum) ) tp = pcg_tic()
+                if( present(rt_sum) ) tp = clock_count()
                 call self%add_half_slice(m, weight, lims_file, dslice=dslice)
-                if( present(rt_sum) ) rt_here = rt_here + pcg_toc(tp)
+                if( present(rt_sum) ) rt_here = rt_here + clock_seconds_since(tp)
             end do
             call fileiochk('add_raw_accum_weighted reading D', ierr)
             deallocate(bslice, dslice)
@@ -1709,7 +1698,7 @@ contains
         endif
         call self%reset_finalize_profile
         ! RHS first and freed before the allocation-heavy kernel work; move_alloc as in accumulate_batch
-        tp = pcg_tic()
+        tp = clock_count()
         call move_alloc(self%b_work, bwork)
         self%b_rhs = self%fold_and_ifft(bwork)
         deallocate(bwork)
@@ -1718,7 +1707,7 @@ contains
         if( present(d_raw) ) allocate(self%b_rhs_nosupp, source=self%b_rhs)
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
-        self%t_fin_rhs = pcg_toc(tp)
+        self%t_fin_rhs = clock_seconds_since(tp)
         call move_alloc(self%acc_work, dwork)
         call self%finalize_density_accum(dwork, l_kernel)
         if( present(d_raw) )then
@@ -1965,7 +1954,7 @@ contains
             allocate(self%Khat(cdim(1),cdim(2),cdim(3)), source=0.0)
         endif
         ! PASS 1: shell-mean rho over the sampled voxels only (zeros would drag the floor down)
-        tp = pcg_tic()
+        tp = clock_count()
         nthr = 1
         !$ nthr = omp_get_max_threads()
         allocate(shsum(0:rho_lim), source=0.0_dp)
@@ -2006,11 +1995,11 @@ contains
             endif
         end do
         deallocate(shsum, shcnt)
-        self%t_fin_rho = pcg_toc(tp)
+        self%t_fin_rho = clock_seconds_since(tp)
         ! PASS 2: guarded reciprocal and packed Khat; an empty shell stays unconstrained.
         ! A voxel below shthr is unmeasured: the support cut spreads b into it, and dividing by the
         ! floor alone would amplify that ~1/PCG_RHO_FLOOR_FRAC times (centre spike, Nyquist layer)
-        tp = pcg_tic()
+        tp = clock_count()
         ! physical addresses as comp_addr_phys, hoisted per (k,m) row
         !$omp parallel do collapse(2) default(shared) private(h,k,m,hh,phys,sh,denom,rval) schedule(static)
         do m = self%lims3(3,1), self%lims3(3,2)
@@ -2040,7 +2029,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        self%t_fin_fold = pcg_toc(tp)
+        self%t_fin_fold = clock_seconds_since(tp)
         self%l_precond = .true.
         deallocate(shfloor, shthr)
         ! a rebuilt preconditioner carries no ridge term yet
@@ -2061,7 +2050,7 @@ contains
         ! multiplies the real-space kernel by the window's transform, a second
         ! envelope distinct from the gather's; separable exact stencil transform.
         ! In place through wimg's pointers: the kernel is real, so its packed transform is Khat
-        tp = pcg_tic()
+        tp = clock_count()
         call self%wimg%get_cmat_ptr(cptr)
         cdim = self%wimg%get_array_shape()
         !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static) proc_bind(close)
@@ -2093,7 +2082,7 @@ contains
         !$omp end parallel do
         self%l_kernel = .true.
         call self%calibrate_kernel
-        self%t_fin_kernel = pcg_toc(tp)
+        self%t_fin_kernel = clock_seconds_since(tp)
     end subroutine finalize_khat
 
     !> analytic scale of Khat relative to the matrix-free operator: padsc**2. The trailing path
@@ -2261,10 +2250,10 @@ contains
         real, allocatable :: z(:,:,:)
         integer(timer_int_kind) :: tp
         call self%ensure_wimg
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         ! the accumulator of Hermitian planes: its h >= 0 half as it is
         z = self%pcg_lattice%fold_lattice_accum(vol_accum, self%wimg, .false.)
-        if( self%l_profile ) self%t_fold = self%t_fold + pcg_toc(tp)
+        if( self%l_profile ) self%t_fold = self%t_fold + clock_seconds_since(tp)
     end function fold_and_ifft
 
     !> z = M^-1 r via FFT, diagonal multiply, inverse FFT. rho is the diagonal of
@@ -2284,7 +2273,7 @@ contains
             return
         endif
         call self%ensure_wimg
-        if( self%l_profile ) tp = pcg_tic()
+        if( self%l_profile ) tp = clock_count()
         allocate(rw(self%box,self%box,self%box), source=r)
         rw = rw * self%env
         call self%embed_fft(rw)
@@ -2306,7 +2295,7 @@ contains
         z = z * self%env
         ! z inside the support keeps the whole Krylov space there (M^-1 is a Fourier diagonal)
         call self%mask_mul(z)
-        if( self%l_profile ) self%t_prec = self%t_prec + pcg_toc(tp)
+        if( self%l_profile ) self%t_prec = self%t_prec + clock_seconds_since(tp)
     end function apply_precond
 
 

@@ -8,7 +8,7 @@
 ! coordination spread it carries. The atoms come from _ATMS.pdb, their fields from the _atoms.csv and _model.txt beside it.
 module simple_atomic_species
 use simple_core_module_api, only: string, logfhandle, PI, simple_exception, file_exists, get_fbody, basename, fopen,&
-    &fclose, fileiochk, int2str, hpsort, pearsn_serial, find_ldim_nptcls
+    &fclose, fileiochk, int2str, hpsort, pearsn_serial, find_ldim_nptcls, avg_sdev, median
 use simple_defs,         only: dp
 use simple_image,        only: image
 use simple_atoms,        only: atoms
@@ -142,25 +142,18 @@ contains
 
     contains
 
+        ! sample standard deviation; 0 for fewer than two values
         real function sdev( vv )
             real, intent(in) :: vv(:)
             real :: m
-            m    = sum(vv) / real(size(vv))
-            sdev = sqrt(sum((vv - m)**2) / real(max(size(vv) - 1, 1)))
+            call avg_sdev(vv, m, sdev)
         end function sdev
 
+        ! median; 0 for no values
         real function median_of( vv )
             real, intent(in) :: vv(:)
-            real, allocatable :: vs(:)
             median_of = 0.
-            if( size(vv) < 1 ) return
-            vs = vv
-            call hpsort(vs)
-            if( mod(size(vs), 2) == 0 )then
-                median_of = 0.5 * (vs(size(vs)/2) + vs(size(vs)/2 + 1))
-            else
-                median_of = vs(size(vs)/2 + 1)
-            endif
+            if( size(vv) > 0 ) median_of = median(vv)
         end function median_of
 
         ! the coordination bin of the density model at coordination c (bin 1 the highest, each from bin_lo up; the last

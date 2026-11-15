@@ -121,6 +121,9 @@ not follow it yet; do not add to that list.
 - Preserve `new`/`kill` symmetry for stateful types.
 - Keep orchestration in commanders/strategies and numerical work in domain modules.
 - Reuse `parameters`, `cmdline`, `builder`, project, and orientation APIs.
+- Before writing a small helper, find its owner in `.github/skills/simple-modern-fortran/references/library_owners.md`;
+  extend the owner instead of copying. Workflow constants go in `src/defs/simple_defs_<domain>.f90`, not in commanders
+  and not in the defs modules `simple_core_module_api` re-exports.
 - In commanders, normalize and validate `cmdline` before `params%new(cline)`.
 - Be aware that argument metadata and git-hash sources may be generated during builds.
 

@@ -10,6 +10,7 @@ use simple_cmdline,    only: cmdline
 use simple_qsys_env,   only: qsys_env
 use simple_sp_project, only: sp_project
 use simple_builder,    only: builder
+use simple_image,      only: window_inside
 implicit none
 
 public :: reextract_strategy
@@ -321,7 +322,7 @@ contains
                         new_center       = nint(prev_center_sc - prev_shift_sc)
                         new_pos          = new_center - params%box/2
                         translation      = -(prev_center_sc - real(new_center))
-                        ptcl_mask(iptcl) = box_inside(ldim, new_pos, params%box)
+                        ptcl_mask(iptcl) = window_inside(ldim, new_pos, params%box)
                         if( ptcl_mask(iptcl) )then
                             if( l_3d )then
                                 shift2d = scale * spproj_in%os_ptcl2D%get_2Dshift(iptcl) + translation
@@ -336,7 +337,7 @@ contains
                         new_pos     = prev_pos - ishift
                         translation = -real(ishift)
                         if( prev_box /= params%box ) new_pos = new_pos + (prev_box-params%box)/2
-                        ptcl_mask(iptcl) = box_inside(ldim, new_pos, params%box)
+                        ptcl_mask(iptcl) = window_inside(ldim, new_pos, params%box)
                         if( ptcl_mask(iptcl) )then
                             if( l_3d )then
                                 shift2d = spproj_in%os_ptcl2D%get_2Dshift(iptcl) + translation
@@ -715,14 +716,5 @@ contains
         character(len=:), allocatable :: msg
         msg = '**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****'
     end function distr_end_message
-
-    logical function box_inside(ildim, coord, box)
-        integer, intent(in) :: ildim(3), coord(2), box
-        integer             :: fromc(2), toc(2)
-        fromc = coord + 1
-        toc   = fromc + (box - 1)
-        box_inside = .true.
-        if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) box_inside = .false.
-    end function box_inside
 
 end module simple_reextract_strategy

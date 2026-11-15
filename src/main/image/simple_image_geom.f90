@@ -75,7 +75,7 @@ contains
         endif
         fromc = coord+1       ! compensate for the c-range that starts at 0
         toc   = fromc+(box-1) ! the lower left corner is 1,1
-        if( any(fromc < 1) .or. toc(1) > self_in%ldim(1) .or. toc(2) > self_in%ldim(2) )then
+        if( .not. window_inside(self_in%ldim, coord, box) )then
             if( present(noutside) )then
                 noutside = noutside+1
             else

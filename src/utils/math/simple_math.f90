@@ -16,6 +16,10 @@ interface pixels_dist
    module procedure pixels_dist_int, pixels_dist_real
 end interface
 
+interface cross
+    module procedure cross_sp, cross_dp
+end interface cross
+
 interface vis_mat
     module procedure vis_2Dreal_mat, vis_2Dinteger_mat, vis_3Dreal_mat, vis_3Dinteger_mat
 end interface vis_mat
@@ -1118,13 +1122,22 @@ contains
     ! mathematical functions
 
     !>   Compute the cross product of 2 3D real vectors
-    function cross( a, b ) result( c )
+    pure function cross_sp( a, b ) result( c )
         real, intent(in) :: a(3),b(3)
         real :: c(3)
         c(1) = a(2) * b(3) - a(3) * b(2)
         c(2) = a(3) * b(1) - a(1) * b(3)
         c(3) = a(1) * b(2) - a(2) * b(1)
-    end function cross
+    end function cross_sp
+
+    !>   Compute the cross product of 2 3D double-precision vectors
+    pure function cross_dp( a, b ) result( c )
+        real(dp), intent(in) :: a(3),b(3)
+        real(dp) :: c(3)
+        c(1) = a(2) * b(3) - a(3) * b(2)
+        c(2) = a(3) * b(1) - a(1) * b(3)
+        c(3) = a(1) * b(2) - a(2) * b(1)
+    end function cross_dp
 
     !>   rotating u by an angle theta around vector v, using Rodrigues rotation formula
     function rotate_vec( u, v, theta ) result(u_rot)
@@ -1275,5 +1288,17 @@ contains
             end subroutine savgol
 
     end subroutine SavitzkyGolay_filter
+
+    !> Sub-sample offset of a peak from three equally spaced samples @p alpha, @p beta (the centre)
+    !! and @p gamma: the vertex of the parabola through them, in samples from the centre; 0 when the
+    !! three are collinear. The caller decides that the centre is the peak.
+    pure real function parabolic_peak_offset( alpha, beta, gamma ) result( offset )
+        real, intent(in) :: alpha, beta, gamma
+        real :: denom
+        offset = 0.
+        denom  = alpha + gamma - 2. * beta
+        if( abs(denom) < TINY ) return
+        offset = 0.5 * (alpha - gamma) / denom
+    end function parabolic_peak_offset
 
 end module simple_math

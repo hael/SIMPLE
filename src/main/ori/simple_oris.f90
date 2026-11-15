@@ -85,6 +85,7 @@ type :: oris
     procedure          :: get_nevenodd
     procedure          :: get_all_rmats
     procedure          :: count_state_gt_zero
+    procedure          :: count_state_updated
     procedure          :: ori2str
     procedure          :: ori2json
     procedure          :: ori2prec
@@ -718,6 +719,11 @@ interface
         class(oris), intent(in) :: self
         integer :: cnt
     end function count_state_gt_zero
+
+    module function count_state_updated( self ) result( cnt )
+        class(oris), intent(in) :: self
+        integer :: cnt
+    end function count_state_updated
 
     module function ori2str( self, i ) result( str )
         class(oris), intent(in) :: self

@@ -10,6 +10,7 @@ use simple_qsys_coarray,             only: qsys_coarray
 use simple_cmdline,                  only: cmdline
 use simple_parameters,               only: parameters
 use simple_syslib,                   only: simple_rmfile
+use simple_string_utils,             only: posix_quote
 use simple_rnd,                      only: has_global_seed, rnd_run_seed
 use simple_qsys_job_record,          only: check_job_lost, cancel_queued_job, JOB_LOST_EXIT_CODE
 use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task 
@@ -689,23 +690,6 @@ contains
 
     ! SUBMISSION TO QSYS
 
-    function shell_quote( raw ) result( quoted )
-        character(len=*), intent(in) :: raw
-        type(string) :: quoted
-        character(len=:), allocatable :: buf
-        integer :: i
-        buf = achar(39)
-        do i = 1, len_trim(raw)
-            if( raw(i:i) == achar(39) )then
-                buf = buf//achar(39)//achar(92)//achar(39)//achar(39)
-            else
-                buf = buf//raw(i:i)
-            endif
-        end do
-        buf = buf//achar(39)
-        quoted = buf
-    end function shell_quote
-
     !> Submit the whole partition range through one multi-image coarray run.
     !! Image k executes parts from_part+k-1, from_part+k-1+nimages, ...
     !! using the staged command-line arguments, without generating scripts.
@@ -720,14 +704,14 @@ contains
         if( self%ncomputing_units_avail <= 0 ) return
         nparts_here = self%fromto_part(2) - self%fromto_part(1) + 1
         nimages     = max(1, min(self%ncomputing_units, nparts_here))
-        qsys_cmd = self%myqsys%submit_cmd()//' '//int2str(nimages)//' '//shell_quote(self%exec_binary%to_char())//&
+        qsys_cmd = self%myqsys%submit_cmd()//' '//int2str(nimages)//' '//posix_quote(self%exec_binary%to_char())//&
             &' --coarray '//int2str(self%fromto_part(1))//' '//&
             &int2str(self%fromto_part(2))
         do ipart = self%fromto_part(1), self%fromto_part(2)
             if( .not. self%coarray_job_args(ipart)%is_allocated() )then
                 THROW_HARD('coarray job arguments were not staged for part '//int2str(ipart))
             endif
-            qsys_cmd = qsys_cmd//' '//shell_quote(self%coarray_job_args(ipart)%to_char())
+            qsys_cmd = qsys_cmd//' '//posix_quote(self%coarray_job_args(ipart)%to_char())
         end do
         self%jobs_submitted(:)        = .true.
         self%ncomputing_units_avail   = 0

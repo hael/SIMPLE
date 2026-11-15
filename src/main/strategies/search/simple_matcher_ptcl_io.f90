@@ -172,13 +172,7 @@ contains
 
     subroutine killimgbatch( build )
         type(builder), intent(inout) :: build
-        integer :: ibatch
-        if( allocated(build%imgbatch) )then
-            do ibatch=1,size(build%imgbatch)
-                call build%imgbatch(ibatch)%kill
-            end do
-            deallocate(build%imgbatch)
-        endif
+        call dealloc_imgarr(build%imgbatch)
     end subroutine killimgbatch
 
     subroutine read_imgbatch_1( params, build, fromptop )

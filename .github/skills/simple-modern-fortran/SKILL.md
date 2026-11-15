@@ -1,6 +1,6 @@
 ---
 name: simple-modern-fortran
-description: Use when editing SIMPLE's Fortran code and you need repo-specific guidance on the modern Fortran style used here, including modules, submodules, type-bound procedures, abstract command interfaces, generated sources, THROW macro and no-short-circuit traps, OpenMP parallel-region rules, compile-time rules (allocatable heavy components, lean imports, no per-file flags), comment rules, and common patterns for extending the code safely.
+description: Use when editing SIMPLE's Fortran code and you need repo-specific guidance on the modern Fortran style used here, including modules, submodules, type-bound procedures, abstract command interfaces, generated sources, THROW macro and no-short-circuit traps, OpenMP parallel-region rules, compile-time rules (allocatable heavy components, lean imports, no per-file flags), comment rules, where small helpers already live (sorting, statistics, quoting, paths, file sizes, image arrays) and where named constants go, and common patterns for extending the code safely.
 ---
 
 # Modern Fortran In SIMPLE
@@ -14,6 +14,23 @@ Follow the local style instead of introducing foreign patterns.
   Where a large module already has submodules, extend them instead of inflating the parent interface file.
 - Keep orchestration in commanders/strategies and numerical work in domain modules.
 - Reuse `parameters`, `cmdline`, and `builder` instead of inventing parallel configuration plumbing.
+- Before writing a small helper (an ordering, a median, quoting, path or extension handling, a file
+  size, a peak fit, an array teardown), find its owner in
+  [references/library_owners.md](references/library_owners.md). Missing capability: extend the owner;
+  never a contained or private copy. Two modules needing the same routine put it in a module both may
+  import, never one importing the other's.
+- Named constants: a workflow's tunables and file names go in a per-domain
+  `src/defs/simple_defs_<domain>.f90` (`simple_defs_center`, `simple_defs_solve3D`,
+  `simple_defs_stream_commanders`), imported with `only:`; commanders keep only logic tables (forwarded
+  keys, stage orders, array capacities) and procedure-local values. Never add a workflow constant to a
+  defs module `simple_core_module_api` re-exports (`simple_defs`, `_fname`, `_conv`, `_stream`): a change
+  there recompiles every importer. A name in `src/defs`, `src/main/stream` or the params files must be
+  unique across them: `scripts/default_audit.py` resolves UI defaults from one global table, last
+  definition winning. Prefix generic names with the workflow (`PYRAMID_`, `MASTER_`).
+- Fortran is case-insensitive: a local variable named like a module constant (`report_fname`,
+  `REPORT_FNAME`) silently hides it. Name constants so no local can collide.
+- Shell commands built for `exec_cmdline`/`execute_command_line` quote every path with `posix_quote`.
+  Remove directory trees with `simple_rmdir`, never `rm -rf`.
 - In commanders, normalize and validate `cmdline` before the single `params%new(cline)` call; never construct a `parameters` object twice in one commander execution path.
 - After `params%new(cline)` or a builder parameter initializer, treat the typed
   `parameters` object as authoritative. Use `params%...` fields in workflow

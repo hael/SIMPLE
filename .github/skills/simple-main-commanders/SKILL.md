@@ -1,6 +1,6 @@
 ---
 name: simple-main-commanders
-description: Use when working in SIMPLE's src/main/commanders subsystem, including the abstract commander_base interface (execute(cline) only), the SIMPLE, SINGLE and test commander families that own CLI program behavior, command-line normalization before params%new and child command lines, controllers that run whole programs as stages (solve3D, solve2D, refine3D_auto/local/states, solve3D_chunks/pyramid), thin wrappers of strategy routines, worker shells, the unit-suite tables and the high-level test registry of simple_test_exec.
+description: Use when working in SIMPLE's src/main/commanders subsystem, including the abstract commander_base interface (execute(cline) only), the SIMPLE, SINGLE and test commander families that own CLI program behavior, command-line normalization before params%new and child command lines, controllers that run whole programs as stages (solve3D, solve2D, refine3D_auto/local/states, solve3D_chunks), thin wrappers of strategy routines, worker shells, the unit-suite tables and the high-level test registry of simple_test_exec.
 ---
 
 # `src/main/commanders`: the command objects of the CLI programs
@@ -8,7 +8,7 @@ description: Use when working in SIMPLE's src/main/commanders subsystem, includi
 One `commander_<x>` per program, reached from the `exec/` routers and, for workers, from
 `simple_private_exec`. A commander normalizes and validates `cline`, makes the one `params`, calls a
 routine and ends; controllers (`exec_solve3D`, `exec_solve2D`, `exec_refine3D_workflow`,
-`refine3D_states`, `solve3D_chunks`, `_pyramid`) sequence whole programs. Not here: a part of a stage
+`refine3D_states`, `solve3D_chunks`) sequence whole programs. Not here: a part of a stage
 another workflow runs (`strategies/parallelization`: `<x>_exec(params, build, ...)` with
 `run_<x>(cline)`), stage ladders (`solve/`), numerics (domain folders), `commanders/stream` (skill
 `simple-main-stream`). Rules: `doc/policies/layering_and_project_ownership_policy.md`.
@@ -47,7 +47,10 @@ Silent ones first: nothing reports these.
   (policy section 7). Deviations here (policy section 8), not patterns: controller routines of hundreds
   of lines.
 - New code imports `builder`, `parameters`, `cmdline`, `sp_project` directly, not
-  `simple_commanders_api`; shared defaults go in `src/defs/simple_default_clines.f90`.
+  `simple_commanders_api`; command-line defaults several commanders apply go in
+  `src/defs/simple_default_clines.f90`.
+- No module-scope tunables or file names in a commander: they go in `src/defs/simple_defs_<domain>.f90`,
+  and no helper that duplicates a library routine (both rules in skill `simple-modern-fortran`).
 
 ## Where to start
 

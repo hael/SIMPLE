@@ -6,6 +6,7 @@
 module simple_starfile
     use simple_core_module_api
     use simple_starfile_wrappers
+    use simple_fileio, only: get_relative_path
     implicit none
 
     public :: starfile
@@ -281,10 +282,10 @@ contains
                 call mics_oris%get_static(imic, 'mc_starfile', str_mc_starfile)
                 call mics_oris%get_static(imic, 'boxfile',     str_boxfile)
                 call mics_oris%get_static(imic, 'ctfjpg',      str_ctfjpg)
-                str_intg        = get_relative_path_here(str_intg)
-                str_mc_starfile = get_relative_path_here(str_mc_starfile)
-                str_boxfile     = get_relative_path_here(str_boxfile)
-                str_ctfjpg      = get_relative_path_here(str_ctfjpg)
+                str_intg        = get_relative_path(str_intg, self%relroot%to_char(), pathtrim)
+                str_mc_starfile = get_relative_path(str_mc_starfile, self%relroot%to_char(), pathtrim)
+                str_boxfile     = get_relative_path(str_boxfile, self%relroot%to_char(), pathtrim)
+                str_ctfjpg      = get_relative_path(str_ctfjpg, self%relroot%to_char(), pathtrim)
                 if( mics_oris%isthere(imic, 'movie'      ) ) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_MOVIE_NAME,    trim(str_movie))
                 if( mics_oris%isthere(imic, 'intg'       ) ) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME,          trim(str_intg))
                 if( mics_oris%isthere(imic, 'mc_starfile') ) call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_METADATA_NAME, trim(str_mc_starfile))
@@ -326,21 +327,6 @@ contains
             print *, 'wrote micrographs table in: ', ms_complete
             call flush(6)
         end if
-
-        contains
-
-            ! Trim path to a root-relative form using the cached pathtrim offset.
-            ! On first call the offset of self%relroot in path is located and cached.
-            function get_relative_path_here( path ) result( newpath )
-                character(len=*), intent(in) :: path
-                character(len=XLONGSTRLEN)   :: newpath
-                if( pathtrim == 0 ) pathtrim = index(path, self%relroot%to_char())
-                if( pathtrim > 0 ) then
-                    newpath = trim(path(pathtrim:))
-                else
-                    newpath = trim(path)
-                end if
-            end function get_relative_path_here
 
     end subroutine write_mics_table
 
@@ -397,7 +383,7 @@ contains
             if( indstk > 0 ) then
                 if( stk_oris%isthere(stkind, 'stk') ) then
                     call stk_oris%get_static(stkind, 'stk', stkname)
-                    stkname = get_relative_path_here(stkname)
+                    stkname = get_relative_path(stkname, self%relroot%to_char(), pathtrim)
                     stkname = int2str(indstk) // '@' // trim(stkname)
                     call starfile_table__setValue_string(ptcl_table, EMDL_IMAGE_NAME, trim(stkname))
                     if( present(mics_oris) ) then
@@ -405,7 +391,7 @@ contains
                         if( stk_oris%get_noris() == mics_oris%get_noris() ) then
                             if( mics_oris%isthere(stkind, 'intg') ) then
                                 call mics_oris%get_static(stkind, 'intg', micname)
-                                micname = get_relative_path_here(micname)
+                                micname = get_relative_path(micname, self%relroot%to_char(), pathtrim)
                                 call starfile_table__setValue_string(ptcl_table, EMDL_MICROGRAPH_NAME, trim(micname))
                             end if
                         end if
@@ -422,21 +408,6 @@ contains
             print *, 'wrote particles2D table in: ', ms_complete
             call flush(6)
         end if
-
-        contains
-
-            ! Trim path to a root-relative form using the cached pathtrim offset.
-            ! On first call the offset of self%relroot in path is located and cached.
-            function get_relative_path_here( path ) result( newpath )
-                character(len=*), intent(in) :: path
-                character(len=XLONGSTRLEN)   :: newpath
-                if( pathtrim == 0 ) pathtrim = index(path, self%relroot%to_char())
-                if( pathtrim > 0 ) then
-                    newpath = trim(path(pathtrim:))
-                else
-                    newpath = trim(path)
-                end if
-            end function get_relative_path_here
 
     end subroutine write_ptcl2D_table
 
@@ -522,7 +493,7 @@ contains
                     if( stk_oris%isthere(stkind, 'stk') ) then
                         !$omp critical
                         call stk_oris%get_static(stkind, 'stk', str_stk)
-                        str_stk = get_relative_path_here(str_stk)
+                        str_stk = get_relative_path(str_stk, self%relroot%to_char(), pathtrim)
                         call starfile_table__setValue_string(part_table, EMDL_IMAGE_NAME, int2str(indstk) // '@' // trim(str_stk))
                         !$omp end critical
                         if( present(mics_oris) ) then
@@ -534,7 +505,7 @@ contains
                                     call mics_oris%get_static(stkind, 'intg', micname)
                                 end if
                                 if( len_trim(micname) > 0 ) then
-                                    micname = get_relative_path_here(micname)
+                                    micname = get_relative_path(micname, self%relroot%to_char(), pathtrim)
                                     call starfile_table__setValue_string(part_table, EMDL_MICROGRAPH_NAME, trim(micname))
                                 end if
                                 !$omp end critical
@@ -577,21 +548,6 @@ contains
             print *, 'wrote particles2D table in: ', ms_complete
             call flush(6)
         end if
-
-        contains
-
-            ! Trim path to a root-relative form using the cached pathtrim offset.
-            ! On first call the offset of self%relroot in path is located and cached.
-            function get_relative_path_here( path ) result( newpath )
-                character(len=*), intent(in) :: path
-                character(len=XLONGSTRLEN)   :: newpath
-                if( pathtrim == 0 ) pathtrim = index(path, self%relroot%to_char())
-                if( pathtrim > 0 ) then
-                    newpath = trim(path(pathtrim:))
-                else
-                    newpath = trim(path)
-                end if
-            end function get_relative_path_here
 
     end subroutine write_ptcl2D_table_parallel
 

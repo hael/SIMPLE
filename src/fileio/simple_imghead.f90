@@ -29,6 +29,7 @@ implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
 public :: find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info, get_mrc_minmax
+public :: check_stack_dims
 public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141, MRCHEADSZ
 private
 #include "simple_local_flags.inc"
@@ -1467,6 +1468,21 @@ contains
                 THROW_HARD('format of file: '//fname%to_char()//' not supported')
         end select
     end subroutine find_ldim_nptcls
+
+    !> Stops with the caller's name @p routine when a stack's header gives no images (@p n < 1) or a
+    !! zero logical dimension (@p ldim, as from find_ldim_nptcls).
+    subroutine check_stack_dims( n, ldim, routine )
+        integer,          intent(in) :: n
+        integer,          intent(in) :: ldim(3)
+        character(len=*), intent(in) :: routine
+        if( n < 1 .or. any(ldim == 0) )then
+            write(logfhandle,*) routine
+            write(logfhandle,*) 'The input stack is corrupt!'
+            write(logfhandle,*) 'Number of images: ', n
+            write(logfhandle,*) 'Logical dimensions: ', ldim
+            THROW_HARD('procimgfile exception')
+        endif
+    end subroutine check_stack_dims
 
     !>  \brief  is for explicitly reading sampling distance from an image header
     real function find_img_smpd( fname, formatchar ) result( smpd )

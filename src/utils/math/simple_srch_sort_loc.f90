@@ -775,6 +775,44 @@ contains
         call hpsort(tmp, order)
     end function dists2order
 
+    !> Permutation that orders the double-precision @p scores decreasingly, stable: equal scores keep
+    !! their input order (bottom-up merge sort of the indices, O(n log n), the scores untouched).
+    pure function scores2order_stable( scores ) result( order )
+        real(dp), intent(in) :: scores(:)
+        integer :: order(size(scores))
+        integer :: tmp(size(scores))
+        integer :: n, width, lo, mid, hi, i, j, k
+        n     = size(scores)
+        order = [(i, i = 1, n)]
+        width = 1
+        do while( width < n )
+            lo = 1
+            do while( lo <= n )
+                mid = min(lo + width - 1, n)
+                hi  = min(lo + 2 * width - 1, n)
+                i = lo; j = mid + 1; k = lo
+                do while( i <= mid .and. j <= hi )
+                    ! the left run first on ties: stability
+                    if( scores(order(i)) >= scores(order(j)) )then
+                        tmp(k) = order(i); i = i + 1
+                    else
+                        tmp(k) = order(j); j = j + 1
+                    endif
+                    k = k + 1
+                end do
+                do while( i <= mid )
+                    tmp(k) = order(i); i = i + 1; k = k + 1
+                end do
+                do while( j <= hi )
+                    tmp(k) = order(j); j = j + 1; k = k + 1
+                end do
+                lo = lo + 2 * width
+            end do
+            order = tmp
+            width = 2 * width
+        end do
+    end function scores2order_stable
+
     pure function mask2inds( mask ) result( inds )
         logical, intent(in)  :: mask(:)
         integer, allocatable :: inds(:)

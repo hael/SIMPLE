@@ -3,24 +3,12 @@ module simple_procimgstk
 use simple_core_module_api
 use simple_image,    only: image
 use simple_stack_io, only: stack_io
+use simple_imghead,  only: check_stack_dims
 use simple_bspline_smoother
 implicit none
 #include "simple_local_flags.inc"
 
 contains
-
-    subroutine raise_exception_imgfile( n, ldim, routine )
-        integer, intent(in) :: n
-        integer, intent(in) :: ldim(3)
-        character(len=*)    :: routine
-        if( n < 1 .or. any(ldim == 0) )then
-            write(logfhandle,*) routine
-            write(logfhandle,*) 'The input stack is corrupt!'
-            write(logfhandle,*) 'Number of images: ', n
-            write(logfhandle,*) 'Logical dimensions: ', ldim
-            THROW_HARD('procimgfile exception')
-        endif
-    end subroutine raise_exception_imgfile
 
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
         class(string), intent(in) :: fname2copy, fname
@@ -31,7 +19,7 @@ contains
         integer        :: n, i, cnt, ldim(3)
         call find_ldim_nptcls(fname2copy, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile(n, ldim, 'copy_imgfile')
+        call check_stack_dims(n, ldim, 'copy_imgfile')
         call stkio_r%open(fname2copy, smpd, 'read')
         call stkio_w%open(fname, smpd, 'write', box=ldim(1), is_ft=.false.)
         call img%new(ldim,smpd)
@@ -58,7 +46,7 @@ contains
         real           :: ave, sdev, maxv, minv, med
         call find_ldim_nptcls(fname2pad, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
+        call check_stack_dims( n, ldim, 'pad_imgfile' )
         if( ldim_pad(1) >= ldim(1) .and. ldim(2) >= ldim(2) )then
             call stkio_r%open(fname2pad, smpd, 'read')
             call img%new(ldim,smpd)
@@ -95,7 +83,7 @@ contains
         integer        :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2scale, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'scale_imgfile' )
+        call check_stack_dims( n, ldim, 'scale_imgfile' )
         call stkio_r%open(fname2scale, smpd, 'read')
         call img%new(ldim,smpd,wthreads=.false.)
         call img_scaled%new(ldim_new,smpd,wthreads=.false.) ! this sampling distance will be overwritten
@@ -145,7 +133,7 @@ contains
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2clip, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
+        call check_stack_dims( n, ldim, 'clip_imgfile' )
         if( ldim_clip(1) <= ldim(1) .and. ldim_clip(2) <= ldim(2) )then
             call stkio_r%open(fname2clip, smpd, 'read')
             call stkio_w%open(fname,      smpd, 'write', box=ldim_clip(1))
@@ -174,7 +162,7 @@ contains
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2roavg, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'roavg_imgfile' )
+        call check_stack_dims( n, ldim, 'roavg_imgfile' )
         call stkio_r%open(fname2roavg, smpd, 'read')
         call stkio_w%open(fname,       smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -201,7 +189,7 @@ contains
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2mirr, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
+        call check_stack_dims( n, ldim, 'clip_imgfile' )
         call stkio_r%open(fname2mirr, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -229,7 +217,7 @@ contains
         integer        :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2scale, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'scale_and_clip_imgfile' )
+        call check_stack_dims( n, ldim, 'scale_and_clip_imgfile' )
         call stkio_r%open(fname2scale, smpd, 'read')
         call img%new(ldim,smpd)
         call img_scaled%new(ldim_new,smpd) ! this sampling distance will be overwritten
@@ -280,7 +268,7 @@ contains
         integer        :: i, n, ldim(3)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
+        call check_stack_dims( n, ldim, 'norm_imgfile' )
         call stkio_r%open(fname2norm, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -306,7 +294,7 @@ contains
         real                 :: sdev_noise
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
+        call check_stack_dims( n, ldim, 'noise_norm_imgfile' )
         call stkio_r%open(fname2norm, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%disc(ldim, smpd, msk, lmsk)
@@ -330,7 +318,7 @@ contains
         integer        :: i, n, ldim(3)
         call find_ldim_nptcls(fname2neg, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'neg_imgfile' )
+        call check_stack_dims( n, ldim, 'neg_imgfile' )
         call stkio_r%open(fname2neg, smpd, 'read')
         call stkio_w%open(fname,     smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -354,7 +342,7 @@ contains
         integer        :: i, n, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'add_noise_imgfile' )
+        call check_stack_dims( n, ldim, 'add_noise_imgfile' )
         call stkio_r%open(fname2process, smpd, 'read')
         call stkio_w%open(fname, smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -407,7 +395,7 @@ contains
         if( present(width) ) wwidth = width
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'bp_imgfile' )
+        call check_stack_dims( n, ldim, 'bp_imgfile' )
         call stkio_r%open(fname2filter, smpd, 'read')
         call stkio_w%open(fname,        smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -433,7 +421,7 @@ contains
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2filter, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'real_filter_imgfile' )
+        call check_stack_dims( n, ldim, 'real_filter_imgfile' )
         call stkio_r%open(fname2filter, smpd, 'read')
         call stkio_w%open(fname, smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -457,7 +445,7 @@ contains
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'phase_rand_imgfile' )
+        call check_stack_dims( n, ldim, 'phase_rand_imgfile' )
         call stkio_r%open(fname2process, smpd, 'read')
         call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -482,7 +470,7 @@ contains
         integer                :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'bs_smoother_imgfile' )
+        call check_stack_dims( n, ldim, 'bs_smoother_imgfile' )
         call stkio_r%open(fname2process, smpd, 'read')
         call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -508,7 +496,7 @@ contains
         integer                   :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'icm_imgfile' )
+        call check_stack_dims( n, ldim, 'icm_imgfile' )
         ! read images
         allocate(imgs(n))
         call stkio_r%open(fname2process, smpd, 'read')
@@ -542,7 +530,7 @@ contains
         integer                      :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'nlmean_imgfile' )
+        call check_stack_dims( n, ldim, 'nlmean_imgfile' )
         call stkio_r%open(fname2process, smpd, 'read')
         call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -572,7 +560,7 @@ contains
         type(ctf)      :: tfun
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3)    = 1
-        call raise_exception_imgfile( n, ldim, 'apply_ctf_imgfile' )
+        call check_stack_dims( n, ldim, 'apply_ctf_imgfile' )
         if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; apply_ctf_imgfile')
         call stkio_r%open(fname2process, smpd, 'read')
         call stkio_w%open(fname,         smpd, 'write', box=ldim(1))
@@ -609,7 +597,7 @@ contains
         integer               :: n, i, ldim(3)
         call find_ldim_nptcls(fname2mask, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'mask_imgfile' )
+        call check_stack_dims( n, ldim, 'mask_imgfile' )
         call stkio_r%open(fname2mask, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -636,7 +624,7 @@ contains
         real           :: edge_mean
         call find_ldim_nptcls(fname2mask, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'taper_edges_imgfile' )
+        call check_stack_dims( n, ldim, 'taper_edges_imgfile' )
         call stkio_r%open(fname2mask, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -663,7 +651,7 @@ contains
         real           :: asdev
         call find_ldim_nptcls(fname2proc, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'loc_sdev_imgfile' )
+        call check_stack_dims( n, ldim, 'loc_sdev_imgfile' )
         call stkio_r%open(fname2proc, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -690,7 +678,7 @@ contains
         real           :: transl_tab(nquanta)
         call find_ldim_nptcls(fname2proc, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'loc_sdev_imgfile' )
+        call check_stack_dims( n, ldim, 'loc_sdev_imgfile' )
         call stkio_r%open(fname2proc, smpd, 'read')
         call stkio_w%open(fname,      smpd, 'write', box=ldim(1))
         call img%new(ldim,smpd)
@@ -717,7 +705,7 @@ contains
         real           :: x, y, xhere, yhere
         call find_ldim_nptcls(fname2shift, ldim, n)
         ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'shift_imgfile' )
+        call check_stack_dims( n, ldim, 'shift_imgfile' )
         if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; shift_imgfile')
         call stkio_r%open(fname2shift, smpd, 'read')
         call stkio_w%open(fname,       smpd, 'write', box=ldim(1))
@@ -764,7 +752,7 @@ contains
         ldim        = [box_ori,box_ori,1]
         ldim_scaled = [box,box,1]
         doscale     = box /= box_ori
-        call raise_exception_imgfile( nptcls, ldim, 'random_selection_from_imgfile' )
+        call check_stack_dims( nptcls, ldim, 'random_selection_from_imgfile' )
         if( present(pinds) ) allocate(pinds(nran))
         if( doscale )then
             call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will  be overwritten
@@ -831,7 +819,7 @@ contains
         ldim        = [box_ori,box_ori,1]
         ldim_scaled = [box,box,1]
         doscale     = box /= box_ori
-        call raise_exception_imgfile( nptcls, ldim, 'selection_from_tseries_imgfile' )
+        call check_stack_dims( nptcls, ldim, 'selection_from_tseries_imgfile' )
         if( doscale )then
             call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will  be overwritten
             call stkio_w%open(fname, smpd, 'write', box=ldim_scaled(1))
@@ -901,7 +889,7 @@ contains
         smpd   = spproj%os_stk%get(1,'smpd')
         box    = nint(spproj%os_stk%get(1,'box'))
         ldim   = [box,box,1]
-        call raise_exception_imgfile( nptcls, ldim, 'random_selection_from_imgfile' )
+        call check_stack_dims( nptcls, ldim, 'random_selection_from_imgfile' )
         call stkio_w%open(fname, smpd, 'write', box=box)
         call img%new(ldim,smpd)
         call img_avg%new(ldim,smpd)

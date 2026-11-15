@@ -7,7 +7,7 @@ module simple_jpg
 use simple_core_module_api
 implicit none
 
-public :: jpg_img, write_rgb_jpeg
+public :: jpg_img, write_rgb_jpeg, jpg_rgb_code
 private
 #include "simple_local_flags.inc"
 
@@ -45,6 +45,16 @@ interface
 end interface
 
 contains
+
+    !> One pixel value for the colorspec=3 path of jpg_img: the channels (clamped to 0-255) packed into
+    !! 24 bits and scaled to [0,1]. That path unpacks a min/max-normalised value into R, G and B, so
+    !! the image must hold the value 0 (black) and 1 (white) somewhere for the colours to survive.
+    pure real function jpg_rgb_code( r, g, b )
+        integer, intent(in) :: r, g, b
+        integer :: packed
+        packed       = ishft(max(0, min(255, r)), 16) + ishft(max(0, min(255, g)), 8) + max(0, min(255, b))
+        jpg_rgb_code = real(packed) / 16777215.0
+    end function jpg_rgb_code
 
     !> True-colour JPEG from an interleaved RGB raster rgb(3,w,h) with channel values in [0,1]
     !! (row 1 = top of the image). The jpg_img colorspec=3 path packs ONE scalar into 24 bits, which

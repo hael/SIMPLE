@@ -313,7 +313,7 @@ contains
                 call recs%set(j, 'done', 0)
             enddo
             call chdir_checked(exec_dir)
-            call simple_rmdir_checked(stage_dirs(istg))
+            if( dir_exists(stage_dirs(istg)) ) call simple_rmdir(stage_dirs(istg))
             call simple_mkdir(stage_dirs(istg))
             if( l_proj ) call simple_copy_file(from_proj, stage_proj(istg))
             call chdir_checked(stage_dirs(istg))
@@ -335,12 +335,6 @@ contains
             call simple_chdir(dir, status)
             if( status /= 0 ) THROW_HARD('trajectory_solve3D: cannot enter '//dir%to_char())
         end subroutine chdir_checked
-
-        !> an unfinished stage's directory is removed before it runs again
-        subroutine simple_rmdir_checked( dir )
-            class(string), intent(in) :: dir
-            if( dir_exists(dir) ) call exec_cmdline('rm -rf '//dir%to_char())
-        end subroutine simple_rmdir_checked
 
         subroutine require_file( istg, fname )
             integer,       intent(in) :: istg
@@ -596,7 +590,7 @@ contains
             kept  = pack([(icls, icls = 1, ncls)], states2 > 0)
             nkept = size(kept)
             if( nkept > 0 )then
-                order = kept(sort_order(corrs(kept)))
+                order = kept(dists2order(corrs(kept)))
                 cnt = 0
                 nshow = min(NKEPT_PAIRS, nkept)
                 do i = 1, nshow
@@ -623,17 +617,6 @@ contains
             cnt = cnt + 1
             call img%write(string(fname), cnt)
         end subroutine write_pair
-
-        !> ascending order of a real vector (indices into it)
-        function sort_order( v ) result( inds )
-            real, intent(in)     :: v(:)
-            integer, allocatable :: inds(:)
-            real, allocatable    :: vcopy(:)
-            integer :: i
-            vcopy = v
-            inds  = [(i, i = 1, size(v))]
-            call hpsort(vcopy, inds)
-        end function sort_order
 
         !> the final map of autorefine3D_nano: final_results/<fbody>_iter<NNN>.mrc of its last round
         type(string) function final_map() result( fname )

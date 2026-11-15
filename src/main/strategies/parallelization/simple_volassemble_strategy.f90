@@ -13,6 +13,7 @@ use simple_frozen_accum,    only: frozen_accum
 use simple_oris,            only: population_blend_weights
 use simple_trail_chain_manifest, only: trail_chain_manifest, TRAIL_MANIFEST_OK, TRAIL_MANIFEST_MISSING
 use simple_state_weight_set,     only: state_weight_set
+use simple_fileio,               only: fname_size
 use simple_reconstructor_pcg,    only: PCG_WEIGHT_THRESHOLD
 use simple_refine3D_provenance,  only: begin_reference_set, publish_reference_set, publish_reuse_provenance
 implicit none
@@ -280,12 +281,6 @@ contains
             end select
         end function trail_chain_component
 
-        integer(kind=8) function trail_chain_file_size( fname ) result( sz )
-            class(string), intent(in) :: fname
-            sz = -1
-            if( file_exists(fname) ) inquire(file=fname%to_char(), size=sz)
-        end function trail_chain_file_size
-
         !> Remove the complete artifact set (manifest + four accumulator files)
         !! so an invalid chain can never contribute components to a later one.
         subroutine discard_trail_chain_set( reason )
@@ -326,7 +321,7 @@ contains
             call del_file(manifest)
             call write_gridding_pair_accumulators(even_rec, odd_rec, trail_fbody)
             do ifile = 1, 4
-                sizes(ifile) = trail_chain_file_size(trail_chain_component(ifile))
+                sizes(ifile) = fname_size(trail_chain_component(ifile))
             enddo
             call man%new(params%box_crop, params%smpd_crop, build%spproj_field%get_noris(), params%nstates, state, &
                 &trail_chain_gen + 1, sizes, trail_mrep_new, trail_ncontrib, wset_id)
@@ -369,7 +364,7 @@ contains
                     return
             end select
             do ifile = 1, 4
-                actual_sizes(ifile) = trail_chain_file_size(trail_chain_component(ifile))
+                actual_sizes(ifile) = fname_size(trail_chain_component(ifile))
             enddo
             if( .not. man%compatible(build%spproj_field%get_noris(), params%nstates, state, &
                 &params%box_crop, params%smpd_crop, actual_sizes, wset_id, message) )then

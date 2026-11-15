@@ -20,7 +20,8 @@ public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
 public :: lpstages, lpstages_fast, lpstages_setlims
 private
 #include "simple_local_flags.inc"
-real, parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
+real,    parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
+integer, parameter :: STAGE_MINBOX             = 88 ! smallest cropped box of a stage
 
 contains
 
@@ -309,6 +310,36 @@ contains
         endif 
     end subroutine get_resolution_at_fsc
 
+    !> stage @p inf (its lp set) of a box @p box at @p smpd autoscaled towards @p smpd_target: the cropped
+    !! box, sampling and scale, the translation limit and whether it crops
+    subroutine stage_autoscale( box, smpd, smpd_target, inf )
+        use simple_magic_boxes, only: autoscale
+        integer,           intent(in)    :: box
+        real,              intent(in)    :: smpd, smpd_target
+        type(lp_crop_inf), intent(inout) :: inf
+        call autoscale(box, smpd, smpd_target, inf%box_crop, inf%smpd_crop, inf%scale, minbox=STAGE_MINBOX)
+        inf%trslim      = stage_trslim(inf%smpd_crop)
+        inf%l_autoscale = inf%box_crop < box
+    end subroutine stage_autoscale
+
+    !> stage @p inf cropped to the given box @p box_crop of a box @p box at @p smpd
+    subroutine stage_box( box, smpd, box_crop, inf )
+        integer,           intent(in)    :: box, box_crop
+        real,              intent(in)    :: smpd
+        type(lp_crop_inf), intent(inout) :: inf
+        inf%box_crop    = box_crop
+        inf%scale       = real(box_crop) / real(box)
+        inf%smpd_crop   = smpd / inf%scale
+        inf%trslim      = stage_trslim(inf%smpd_crop)
+        inf%l_autoscale = box_crop < box
+    end subroutine stage_box
+
+    !> a stage's translation limit (pixels): an alpha-helix width at the cropped sampling, within [2,8]
+    elemental real function stage_trslim( smpd_crop )
+        real, intent(in) :: smpd_crop
+        stage_trslim = min(8., max(2.0, AHELIX_WIDTH / smpd_crop))
+    end function stage_trslim
+
     subroutine lpstages( box, nstages, frcs_avg, smpd, lpstart_lb, lpstart_default, lpfinal, lpinfo, l_cavgs, verbose, trslim_override )
         use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
@@ -332,7 +363,7 @@ contains
         if( nstages == 1 )then
             lpinfo(1)%lp      = max(lpfinal, lpstart_default_eff)
             lpinfo(1)%l_lpset = .true.
-            call calc_scaleinfo(1)
+            call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(1)%lp * LP2SMPD_TARGET), lpinfo(1))
             call apply_trslim_override
             if( l_verbose )then
                 print *, '########## single stage'
@@ -383,16 +414,12 @@ contains
         endif
         if( .not. all(lpinfo(:)%l_lpset) ) THROW_HARD('Not all lp limits set')
         ! (4) gather downscaling information
-        call calc_scaleinfo(1)
-        call calc_scaleinfo(nstages)
+        call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(1)%lp * LP2SMPD_TARGET), lpinfo(1))
+        call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(nstages)%lp * LP2SMPD_TARGET), lpinfo(nstages))
         rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(1)%box_crop)/real(nstages - 1)
         do istage = 2, nstages - 1 ! linear box_crop scheme
-            box_trial                  = nint(real(lpinfo(1)%box_crop) + real(istage-1)*rbox_stepsz)
-            lpinfo(istage)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
-            lpinfo(istage)%scale       = real(lpinfo(istage)%box_crop) / real(box)
-            lpinfo(istage)%smpd_crop   = smpd / lpinfo(istage)%scale
-            lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
-            lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
+            box_trial = nint(real(lpinfo(1)%box_crop) + real(istage-1)*rbox_stepsz)
+            call stage_box(box, smpd, min(lpinfo(nstages)%box_crop, find_magic_box(box_trial)), lpinfo(istage))
         end do
         call apply_trslim_override
         if( l_verbose )then
@@ -422,15 +449,6 @@ contains
                 end do
             end subroutine print_lpinfo
 
-            subroutine calc_scaleinfo( istage )
-                integer, intent(in) :: istage
-                real :: smpd_target
-                smpd_target                = max(SMPD_TARGET_MIN, (lpinfo(istage)%lp * LP2SMPD_TARGET))
-                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=88)
-                lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
-                lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
-            end subroutine calc_scaleinfo
-
             subroutine print_scaleinfo
                 do istage = 1, nstages
                     print *, 'scale/box_crop/smpd_crop/trslim ',lpinfo(istage)%scale, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%trslim
@@ -446,7 +464,6 @@ contains
     end subroutine lpstages
 
     subroutine lpstages_fast( box, nstages, smpd, lpstart, lpstop, lpinfo, force_lpstart, verbose, trslim_override )
-        use simple_magic_boxes
         integer,           intent(in)  :: box, nstages
         real,              intent(in)  :: smpd, lpstart, lpstop
         type(lp_crop_inf), intent(out) :: lpinfo(nstages)
@@ -471,7 +488,7 @@ contains
             else
                 lpinfo(i)%lp = lpstart_eff - real(i-1)*(lpstart_eff-lpstop)/real(nstages-1)
             endif
-            call calc_scaleinfo(i)
+            call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(i)%lp * LP2SMPD_TARGET), lpinfo(i))
         enddo
         if( present(trslim_override) )then
             if( trslim_override > 0. ) lpinfo(:)%trslim = trslim_override
@@ -482,17 +499,6 @@ contains
                     &lpinfo(i)%smpd_crop, lpinfo(i)%trslim
             enddo
         endif
-        contains
-
-            subroutine calc_scaleinfo( istage )
-                integer, intent(in) :: istage
-                real :: smpd_target
-                smpd_target                = max(SMPD_TARGET_MIN, (lpinfo(istage)%lp * LP2SMPD_TARGET))
-                call autoscale(box, smpd, smpd_target, lpinfo(istage)%box_crop, lpinfo(istage)%smpd_crop, lpinfo(istage)%scale, minbox=88)
-                lpinfo(istage)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(istage)%smpd_crop))
-                lpinfo(istage)%l_autoscale = lpinfo(istage)%box_crop < box
-            end subroutine calc_scaleinfo
-
     end subroutine lpstages_fast
 
     !> a linear ladder from lpstart to lpstop; the end stages cropped to their limits, a linear box ramp between
@@ -507,7 +513,7 @@ contains
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: i, box_trial, ifirst
-        real    :: rbox_stepsz, smpd_target
+        real    :: rbox_stepsz
         logical :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
@@ -530,20 +536,13 @@ contains
             else
                 lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
             endif
-            smpd_target  = max(SMPD_TARGET_MIN, (lpinfo(i)%lp * LP2SMPD_TARGET))
-            call autoscale(box, smpd, smpd_target, lpinfo(i)%box_crop, lpinfo(i)%smpd_crop, lpinfo(i)%scale, minbox=88)
-            lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
-            lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
+            call stage_autoscale(box, smpd, max(SMPD_TARGET_MIN, lpinfo(i)%lp * LP2SMPD_TARGET), lpinfo(i))
         enddo
         if( nstages > ifirst )then
             rbox_stepsz = real(lpinfo(nstages)%box_crop - lpinfo(ifirst)%box_crop)/real(nstages - ifirst)
             do i = ifirst + 1, nstages - 1 ! linear box_crop scheme
-                box_trial             = nint(real(lpinfo(ifirst)%box_crop) + real(i-ifirst)*rbox_stepsz)
-                lpinfo(i)%box_crop    = min(lpinfo(nstages)%box_crop, find_magic_box(box_trial))
-                lpinfo(i)%scale       = real(lpinfo(i)%box_crop) / real(box)
-                lpinfo(i)%smpd_crop   = smpd / lpinfo(i)%scale
-                lpinfo(i)%trslim      = min(8.,max(2.0, AHELIX_WIDTH / lpinfo(i)%smpd_crop))
-                lpinfo(i)%l_autoscale = lpinfo(i)%box_crop < box
+                box_trial = nint(real(lpinfo(ifirst)%box_crop) + real(i-ifirst)*rbox_stepsz)
+                call stage_box(box, smpd, min(lpinfo(nstages)%box_crop, find_magic_box(box_trial)), lpinfo(i))
             end do
         endif
         if( present(trslim_override) )then

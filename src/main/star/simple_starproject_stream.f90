@@ -5,6 +5,7 @@ use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_parameters, only: parameters
 use simple_starfile_wrappers
+use simple_fileio,     only: get_relative_path
 use CPlot2D_wrapper_module
 implicit none
 
@@ -176,29 +177,16 @@ contains
             call spproj%os_mic%get_static(i, 'mc_starfile', str_mcs)
             call spproj%os_mic%get_static(i, 'boxfile',     str_boxf)
             call spproj%os_mic%get_static(i, 'ctfjpg',      str_ctfj)
-            str_intg = get_relative_path_here(str_intg)
-            str_mcs  = get_relative_path_here(str_mcs)
-            str_boxf = get_relative_path_here(str_boxf)
-            str_ctfj = get_relative_path_here(str_ctfj)
+            str_intg = get_relative_path(str_intg, self%rootpath%to_char(), pathtrim)
+            str_mcs  = get_relative_path(str_mcs, self%rootpath%to_char(), pathtrim)
+            str_boxf = get_relative_path(str_boxf, self%rootpath%to_char(), pathtrim)
+            str_ctfj = get_relative_path(str_ctfj, self%rootpath%to_char(), pathtrim)
             if(spproj%os_mic%isthere(i, 'movie'      )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_MOVIE_NAME,    trim(str_mov))
             if(spproj%os_mic%isthere(i, 'intg'       )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME,          trim(str_intg))
             if(spproj%os_mic%isthere(i, 'mc_starfile')) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_METADATA_NAME, trim(str_mcs))
             if(spproj%os_mic%isthere(i, 'boxfile'    )) call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_COORDINATES,   trim(str_boxf))
             if(spproj%os_mic%isthere(i, 'ctfjpg'     )) call starfile_table__setValue_string(self%starfile, EMDL_CTF_PSPEC,                trim(str_ctfj))
         end do
-
-        contains
-
-            function get_relative_path_here ( path ) result ( newpath )
-                character(len=*), intent(in) :: path
-                character(len=XLONGSTRLEN)   :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
-                if( pathtrim > 0 ) then
-                    newpath = trim(path(pathtrim:))
-                else
-                    newpath = trim(path)
-                end if
-            end function get_relative_path_here
 
     end subroutine starfile_set_micrographs_table
 
@@ -248,26 +236,13 @@ contains
             call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind_in_stk)
             if( stkname%strlen_trim() > 0 .and. ind_in_stk > 0 )then
                 call stkname%to_static(str_stk)
-                str_stk = get_relative_path_here(str_stk)
-                str_mic = get_relative_path_here(spproj%get_micname(i))
+                str_stk = get_relative_path(str_stk, self%rootpath%to_char(), pathtrim)
+                str_mic = get_relative_path(spproj%get_micname(i), self%rootpath%to_char(), pathtrim)
                 call starfile_table__setValue_string(self%starfile, EMDL_IMAGE_NAME,      int2str(ind_in_stk) // '@' // trim(str_stk))
                 call starfile_table__setValue_string(self%starfile, EMDL_MICROGRAPH_NAME, trim(str_mic))
             end if
 
         end do
-
-        contains
-
-            function get_relative_path_here ( path ) result ( newpath )
-                character(len=*), intent(in) :: path
-                character(len=XLONGSTRLEN)   :: newpath
-                if(pathtrim .eq. 0) pathtrim = index(path, self%rootpath%to_char()) 
-                if( pathtrim > 0 ) then
-                    newpath = trim(path(pathtrim:))
-                else
-                    newpath = trim(path)
-                end if
-            end function get_relative_path_here
 
     end subroutine starfile_set_particles2D_table
 

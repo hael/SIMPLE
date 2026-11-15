@@ -11,8 +11,8 @@ use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec
 use simple_volassemble_strategy, only: run_volassemble, filter_pcg_nonuniform_maps
-use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, refine3D_pcg_raw_accum_fname
-use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
+use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname
+use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master, remove_pcg_raw_files
 use simple_sigma2_files,         only: load_sigma2
 use simple_state_weight_set,     only: state_weight_set, STATE_WEIGHTS_KIND_PARTITION
 implicit none
@@ -249,7 +249,7 @@ contains
         if( l_set ) call wset%new(build%spproj, build%spproj_field)
         select case(request%backend)
             case(REC3D_BACKEND_PCG)
-                call remove_pcg_raw_files(params)
+                call remove_pcg_raw_files(params%nstates, params%nparts, params%numlen)
                 if( l_set )then
                     call execute_rec3D_pcg_worker(params, build, cline, request%pinds, wset)
                 else if( l_table )then
@@ -293,7 +293,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         type(rec3D_request),  intent(in)    :: request
         type(string) :: pindfile
-        if( request%backend == REC3D_BACKEND_PCG ) call remove_pcg_raw_files(params)
+        if( request%backend == REC3D_BACKEND_PCG ) call remove_pcg_raw_files(params%nstates, params%nparts, params%numlen)
         call write_pinds(request%pinds)
         pindfile = simple_abspath(PINDS_FNAME)
         call self%job_descr%set('pindfile', pindfile%to_char())
@@ -351,25 +351,6 @@ contains
             call execute_rec3D_pcg_distributed_master(params, build, cline)
         endif
     end subroutine assemble_pcg
-
-    !> A stale raw accumulator must never pass for a completed worker of this launch; workers publish
-    !! through .tmp and an atomic rename
-    subroutine remove_pcg_raw_files( params )
-        type(parameters), intent(in) :: params
-        type(string) :: raw_fname
-        integer      :: state, part, eo
-        do state = 1, params%nstates
-            do eo = 0, 1
-                do part = 1, params%nparts
-                    raw_fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
-                        &merge('odd ', 'even', eo == 1))
-                    call del_file(raw_fname)
-                    call del_file(raw_fname//'.tmp')
-                enddo
-            enddo
-        enddo
-        call raw_fname%kill
-    end subroutine remove_pcg_raw_files
 
     !> The state maps and FSCs into the project out segment. A state this run did not reconstruct (no
     !! particles, or no weight) has no FSC file: assembly dropped it, and its entries are left as they are

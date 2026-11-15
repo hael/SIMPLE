@@ -164,11 +164,12 @@ contains
 
     !> the selector's OpenMP reduction gives one thread's choice; its figures differ by summation order only
     subroutine test_team_matches_serial()
-        type(image)             :: base(2), w_dens(2), evmap, locres, w_order(2)
-        type(order_prior_stats) :: st1, st3
-        logical, allocatable    :: lsup(:,:,:)
+        type(image)                           :: base(2), w_dens(2), evmap, locres, w_order(2)
+        class(order_prior_stats), allocatable :: st1, st3
+        logical, allocatable                  :: lsup(:,:,:)
         integer :: nthr_prev
         write(logfhandle,'(A)') '-- test_team_matches_serial'
+        allocate(st1, st3)
         call fixture(.true., base, w_dens, evmap, locres, lsup)
         nthr_prev = 1
         !$ nthr_prev = omp_get_max_threads()
@@ -191,6 +192,7 @@ contains
                 &'the band guard''s choice keeps 95 % of the core in total and in every guarded band')
         endif
         call kill_set(base, w_dens, evmap, locres, w_order)
+        deallocate(st1, st3)
     end subroutine test_team_matches_serial
 
     ! ---------------- fixture ----------------

@@ -1,7 +1,8 @@
 !@descr: stack image processing routines 
 module simple_stackops
 use simple_core_module_api
-use simple_image, only: image
+use simple_image,   only: image
+use simple_imghead, only: check_stack_dims
 implicit none
 
 public :: make_pcavec_stack, prep_imgfile4movie
@@ -10,20 +11,6 @@ private
 #include "simple_local_flags.inc"
 
 contains
-
-    !>  \brief  is for raising exception
-    subroutine raise_exception( n, ldim, routine )
-        integer, intent(in) :: n        !< num of images
-        integer, intent(in) :: ldim(3)  !< logical dimensions
-        character(len=*)    :: routine  !< Error message caller
-        if( n < 1 .or. any(ldim == 0) )then
-            write(logfhandle,*) routine
-            write(logfhandle,*) 'The input stack is corrupt!'
-            write(logfhandle,*) 'Number of images: ', n
-            write(logfhandle,*) 'Logical dimensions: ', ldim
-            THROW_HARD('procimgfile exception')
-        endif
-    end subroutine raise_exception
 
     !>  \brief  is for making a stack of vectors for PCA analysis
     !! \param fnameStack,fnamePCAvecs filenames for stack and pattern
@@ -38,7 +25,7 @@ contains
         integer              :: n, fnum, ier, i, ldim(3), ldim_mask(3)
         call find_ldim_nptcls(fnameStack, ldim, n)
         ldim(3) = 1
-        call raise_exception( n, ldim, 'make_pcavec_stack' )
+        call check_stack_dims( n, ldim, 'make_pcavec_stack' )
         if( present(l_mask) )then
             ldim_mask = [size(l_mask, dim=1),size(l_mask, dim=2),size(l_mask, dim=3)]
             if( .not. all(ldim_mask .eq. ldim) )then
@@ -95,7 +82,7 @@ contains
         integer     :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
         ldim(3) = 1
-        call raise_exception( n, ldim, 'make_avg_imgfile' )
+        call check_stack_dims( n, ldim, 'make_avg_imgfile' )
         call avg%new(ldim, smpd)
         call img%new(ldim, smpd)
         avg = 0.
@@ -122,7 +109,7 @@ contains
         integer     :: i, n, cnt, cnt2, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
-        call raise_exception( n, ldim, 'frameavg_imgfile' )
+        call check_stack_dims( n, ldim, 'frameavg_imgfile' )
         call img%new(ldim,smpd)
         call avg%new(ldim,smpd)
         cnt = 0
@@ -155,7 +142,7 @@ contains
         integer       :: i, n, ldim(3)
         call find_ldim_nptcls(fname2acf, ldim, n)
         ldim(3) = 1
-        call raise_exception( n, ldim, 'acf_imgfile' )
+        call check_stack_dims( n, ldim, 'acf_imgfile' )
         call img%new(ldim,1.)
         write(logfhandle,'(a)') '>>> CALCULATING ACF:S OF THE IMAGES'
         do i=1,n
@@ -178,7 +165,7 @@ contains
         integer           :: i, n, ldim(3)
         call find_ldim_nptcls(fname, ldim, n)
         ldim(3) = 1
-        call raise_exception( n, ldim, 'stats_imgfile' )
+        call check_stack_dims( n, ldim, 'stats_imgfile' )
         call img%new(ldim,1.)
         call os%new(n, is_ptcl=.false.)
         write(logfhandle,'(a)') '>>> CALCULATING STACK STATISTICS'

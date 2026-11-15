@@ -2,6 +2,7 @@
 module simple_pcg_solver
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api, only: dp, logfhandle, timer_int_kind, simple_exception
+use simple_timer,           only: clock_count, clock_seconds_since
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -199,7 +200,7 @@ contains
             dxx = 0.0_dp
 
             do iter = 1, options%maxits
-                if( options%record_history ) t_it = pcg_tic()
+                if( options%record_history ) t_it = clock_count()
                 call op%apply(p, hp)
                 pHp = op%dot(p,hp)
                 if( .not. ieee_is_finite(pHp) .or. pHp <= 0.0_dp )then
@@ -251,7 +252,7 @@ contains
                         mnorm = sqrt(abs(rho_new) / rho0)
                         mhist(iter) = real(mnorm)
                     endif
-                    if( options%record_history ) thist(iter) = real(pcg_toc(t_it))
+                    if( options%record_history ) thist(iter) = real(clock_seconds_since(t_it))
                     if( stop_rtol )then
                         outcome%stop_reason = 'rtol'
                         outcome%converged = .true.
@@ -268,7 +269,7 @@ contains
                     mnorm = sqrt(abs(rho_new) / rho0)
                     mhist(iter) = real(mnorm)
                 endif
-                if( options%record_history ) thist(iter) = real(pcg_toc(t_it))
+                if( options%record_history ) thist(iter) = real(clock_seconds_since(t_it))
                 beta = rho_new / rho
                 p = z + real(beta) * p
                 rho = rho_new
@@ -326,16 +327,5 @@ contains
         self%closed_form_min_fsc_inband = 0.0
         self%closed_form_band_shell = 0
     end subroutine pcg_solver_outcome_kill
-
-    integer(timer_int_kind) function pcg_tic() result(tstart)
-        call system_clock(count=tstart)
-    end function pcg_tic
-
-    real(dp) function pcg_toc( tstart ) result(seconds)
-        integer(timer_int_kind), intent(in) :: tstart
-        integer(timer_int_kind) :: tend, rate
-        call system_clock(count=tend, count_rate=rate)
-        seconds = real(tend-tstart,dp) / real(rate,dp)
-    end function pcg_toc
 
 end module simple_pcg_solver

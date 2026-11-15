@@ -1,7 +1,7 @@
 !@descr: flex_pca latent targets and basis rotations for state placement
 module simple_flex_pca_targets
 use simple_core_module_api, only: dp, dtiny, logfhandle
-use simple_srch_sort_loc,   only: hpsort
+use simple_srch_sort_loc,   only: hpsort, scores2order_stable
 use simple_kd_tree,         only: kd_tree, knn_table
 use simple_linalg,          only: jacobi, eigsrt, matinv
 use simple_kmeans,          only: kmeans
@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: diffusion_kcenter_targets, kmeans_latent_targets, path_latent_targets
-public :: reliability_path_targets, component_reliability_proxy, orth_block, sort_block_desc
+public :: reliability_path_targets, component_reliability_proxy, orth_block
 
 
 contains
@@ -455,24 +455,15 @@ contains
         end do
     end subroutine orth_block
 
+    !> eigenpairs (@p lam, the columns of @p V) in decreasing eigenvalue order; equal eigenvalues keep
+    !! their order
     subroutine sort_block_desc( V, lam, n, m )
         integer,  intent(in)    :: n, m
         real(dp), intent(inout) :: V(n,m), lam(m)
-        real(dp) :: tl
-        real(dp), allocatable :: tv(:)
-        integer  :: i, j, imax
-        allocate(tv(n))
-        do i = 1, m-1
-            imax = i
-            do j = i+1, m
-                if( lam(j) > lam(imax) ) imax = j
-            end do
-            if( imax /= i )then
-                tl = lam(i); lam(i) = lam(imax); lam(imax) = tl
-                tv = V(:,i); V(:,i) = V(:,imax); V(:,imax) = tv
-            endif
-        end do
-        deallocate(tv)
+        integer :: order(m)
+        order = scores2order_stable(lam)
+        lam   = lam(order)
+        V     = V(:,order)
     end subroutine sort_block_desc
 
 end module simple_flex_pca_targets

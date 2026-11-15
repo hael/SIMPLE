@@ -9,6 +9,8 @@ use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
 use simple_qsys_env,   only: qsys_env
 use simple_sp_project, only: sp_project
+use simple_imgarr_utils, only: dealloc_imgarr
+use simple_image,        only: window_inside
 implicit none
 
 public :: extract_strategy
@@ -337,7 +339,7 @@ contains
                         write(logfhandle,*) 'box_current: ', nint(boxdata(3,iptcl)), 'box in params: ', params%box
                         THROW_HARD('inconsistent box sizes in box files; exec_extract')
                     endif
-                    oris_mask(iptcl) = (trim(params%outside).eq.'yes') .or. box_inside(ldim, nint(boxdata(1:2,iptcl)), params%box)
+                    oris_mask(iptcl) = (trim(params%outside).eq.'yes') .or. window_inside(ldim, nint(boxdata(1:2,iptcl)), params%box)
                 end do
                 nptcls2extract = count(oris_mask)
                 call spproj%os_mic%set(imic, 'nptcls', nptcls2extract)
@@ -438,7 +440,7 @@ contains
                     endif
                 endif
             enddo
-            call killimgbatch
+            call dealloc_imgarr(imgs)
         endif
         if( trim(params%stream).eq.'yes' )then
             nmics = count(mics_mask)
@@ -482,7 +484,7 @@ contains
                     doprep = .true.
                 else
                     if( batchsz > size(imgs) ) doprep = .true.
-                    if( doprep ) call killimgbatch
+                    if( doprep ) call dealloc_imgarr(imgs)
                 endif
                 if( doprep )then
                     allocate(imgs(batchsz))
@@ -493,25 +495,6 @@ contains
                     !$omp end parallel do
                 endif
             end subroutine prepimgbatch
-
-            subroutine killimgbatch
-                integer :: i
-                if( allocated(imgs) )then
-                    do i = 1,size(imgs)
-                        call imgs(i)%kill
-                    end do
-                    deallocate(imgs)
-                endif
-            end subroutine killimgbatch
-
-            logical function box_inside(ildim, coord, box)
-                integer, intent(in) :: ildim(3), coord(2), box
-                integer             :: fromc(2), toc(2)
-                fromc = coord + 1
-                toc   = fromc + (box - 1)
-                box_inside = .true.
-                if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) box_inside = .false.
-            end function box_inside
 
     end subroutine inmem_execute
 

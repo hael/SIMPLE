@@ -34,6 +34,11 @@ interface fname_new_ext
     module procedure fname_new_ext_char
 end interface fname_new_ext
 
+interface get_relative_path
+    module procedure get_relative_path_str
+    module procedure get_relative_path_char
+end interface get_relative_path
+
 interface filepath
     module procedure filepath_str
     module procedure filepath_str_char
@@ -349,6 +354,17 @@ contains
         inquire(unit=unit,size=sz)
     end function funit_size
 
+    !> Size in bytes of the file @p fname; -1 when it does not exist or cannot be inquired.
+    function fname_size( fname ) result( sz )
+        class(string), intent(in) :: fname
+        integer(kind=8) :: sz
+        integer :: ios
+        sz = -1
+        if( .not. file_exists(fname) ) return
+        inquire(file=fname%to_char(), size=sz, iostat=ios)
+        if( ios /= 0 ) sz = -1
+    end function fname_size
+
     logical function is_funit_open(funit)
         integer, intent(in) :: funit !< input file unit
         inquire(unit=funit, OPENED=is_funit_open)
@@ -553,6 +569,22 @@ contains
         endif
         if( allocated(fname_tmp) ) deallocate(fname_tmp)
     end function fname2ext
+
+    !> @p fname without the last extension of its file name: names without one, dot-files (.name) and
+    !! dots in the directory part are left as they are
+    function strip_fext( fname ) result( body )
+        class(string), intent(in) :: fname
+        type(string) :: body
+        character(len=:), allocatable :: txt
+        integer :: pos
+        txt = fname%to_char()
+        pos = index(txt, '.', back=.true.)
+        if( pos > 1 .and. pos > index(txt, '/', back=.true.) + 1 )then
+            body = txt(1:pos-1)
+        else
+            body = txt
+        endif
+    end function strip_fext
 
     integer function fname2iter( fname )
         class(string),    intent(in)  :: fname
@@ -1178,13 +1210,16 @@ contains
         close(in2)
     end function files_identical
 
-    function get_relative_path ( path, root, trimlength ) result ( newpath )
+    !> @p path from the first occurrence of @p root on (the root kept), or @p path when it holds no
+    !! @p root. @p trimlength caches that position across calls with paths of the same layout: 0 on
+    !! entry locates it, and it is returned (0 when not found).
+    function get_relative_path_str( path, root, trimlength ) result( newpath )
         class(string),     intent(in)    :: path, root
         integer, optional, intent(inout) :: trimlength
         integer      :: l_trimlength
         type(string) :: newpath
         l_trimlength = 0
-        if(present(trimlength)) l_trimlength = trimlength 
+        if(present(trimlength)) l_trimlength = trimlength
         if(l_trimlength .eq. 0) l_trimlength = path%substr_ind(root)
         if(l_trimlength .gt. 0) then
             newpath = string(path%to_char([l_trimlength,path%strlen_trim()]))
@@ -1192,6 +1227,24 @@ contains
             newpath = path
         end if
         if(present(trimlength)) trimlength = l_trimlength
-    end function get_relative_path
+    end function get_relative_path_str
+
+    !> get_relative_path on character paths, into a fixed XLONGSTRLEN buffer: no string temporaries,
+    !! for the STAR writers' per-row loops (@p trimlength thread-private in parallel ones)
+    function get_relative_path_char( path, root, trimlength ) result( newpath )
+        character(len=*),  intent(in)    :: path, root
+        integer, optional, intent(inout) :: trimlength
+        character(len=XLONGSTRLEN) :: newpath
+        integer :: l_trimlength
+        l_trimlength = 0
+        if(present(trimlength)) l_trimlength = trimlength
+        if(l_trimlength .eq. 0) l_trimlength = index(path, root)
+        if(l_trimlength .gt. 0) then
+            newpath = trim(path(l_trimlength:))
+        else
+            newpath = trim(path)
+        end if
+        if(present(trimlength)) trimlength = l_trimlength
+    end function get_relative_path_char
 
 end module simple_fileio

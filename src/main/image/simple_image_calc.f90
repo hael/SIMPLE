@@ -1514,19 +1514,17 @@ contains
             if( abs(pos(1)) < itrs )then ! within limits
                 alpha = self1%rmat(center(1)+pos(1)-1,center(2)+pos(2), 1)
                 gamma = self1%rmat(center(1)+pos(1)+1,center(2)+pos(2), 1)
-                if( alpha<beta .and. gamma<beta )then
-                    denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
-                endif
+                denom = alpha + gamma - 2.*beta
+                if( alpha<beta .and. gamma<beta .and. abs(denom)>TINY )&
+                    &shift(1) = shift(1) + parabolic_peak_offset(alpha, beta, gamma)
             endif
             ! along y
             if( abs(pos(2)) < itrs )then
                 alpha = self1%rmat(center(1)+pos(1),center(2)+pos(2)-1, 1)
                 gamma = self1%rmat(center(1)+pos(1),center(2)+pos(2)+1, 1)
-                if( alpha<beta .and. gamma<beta )then
-                    denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
-                endif
+                denom = alpha + gamma - 2.*beta
+                if( alpha<beta .and. gamma<beta .and. abs(denom)>TINY )&
+                    &shift(2) = shift(2) + parabolic_peak_offset(alpha, beta, gamma)
             endif
             ! convention
             shift = -shift
@@ -1565,28 +1563,25 @@ contains
             if( abs(pos(1)) < itrs )then ! within limits
                 alpha = self1%rmat(cen(1)+pos(1)-1, cen(2)+pos(2), cen(3)+pos(3))
                 gamma = self1%rmat(cen(1)+pos(1)+1, cen(2)+pos(2), cen(3)+pos(3))
-                if( alpha<beta .and. gamma<beta )then
-                    denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(1) = shift(1) + 0.5 * (alpha-gamma) / denom
-                endif
+                denom = alpha + gamma - 2.*beta
+                if( alpha<beta .and. gamma<beta .and. abs(denom)>TINY )&
+                    &shift(1) = shift(1) + parabolic_peak_offset(alpha, beta, gamma)
             endif
             ! along y
             if( abs(pos(2)) < itrs )then
                 alpha = self1%rmat(cen(1)+pos(1), cen(2)+pos(2)-1, cen(3)+pos(3))
                 gamma = self1%rmat(cen(1)+pos(1), cen(2)+pos(2)+1, cen(3)+pos(3))
-                if( alpha<beta .and. gamma<beta )then
-                    denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(2) = shift(2) + 0.5 * (alpha-gamma) / denom
-                endif
+                denom = alpha + gamma - 2.*beta
+                if( alpha<beta .and. gamma<beta .and. abs(denom)>TINY )&
+                    &shift(2) = shift(2) + parabolic_peak_offset(alpha, beta, gamma)
             endif
             ! along z
             if( abs(pos(3)) < itrs )then
                 alpha = self1%rmat(cen(1)+pos(1), cen(2)+pos(2), cen(3)+pos(3)-1)
                 gamma = self1%rmat(cen(1)+pos(1), cen(2)+pos(2), cen(3)+pos(3)+1)
-                if( alpha<beta .and. gamma<beta )then
-                    denom = alpha + gamma - 2.*beta
-                    if( abs(denom) > TINY ) shift(3) = shift(3) + 0.5 * (alpha-gamma) / denom
-                endif
+                denom = alpha + gamma - 2.*beta
+                if( alpha<beta .and. gamma<beta .and. abs(denom)>TINY )&
+                    &shift(3) = shift(3) + parabolic_peak_offset(alpha, beta, gamma)
             endif
             ! convention
             shift = -shift
@@ -1944,22 +1939,12 @@ contains
         beta  = self_frame%rmat(pos(1),   pos(2), 1)
         alpha = self_frame%rmat(pos(1)-1, pos(2), 1)
         gamma = self_frame%rmat(pos(1)+1, pos(2), 1)
-        if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
+        if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + parabolic_peak_offset(alpha, beta, gamma)
         alpha = self_frame%rmat(pos(1), pos(2)-1, 1)
         gamma = self_frame%rmat(pos(1), pos(2)+1, 1)
-        if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
+        if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + parabolic_peak_offset(alpha, beta, gamma)
         ! cleanup
         call self_frame%zero_and_flag_ft
-        contains
-
-            real function interp_peak()
-                real :: denom
-                interp_peak = 0.
-                denom = alpha+gamma-2.*beta
-                if( abs(denom) < TINY )return
-                interp_peak = 0.5 * (alpha-gamma) / denom
-            end function interp_peak
-
     end subroutine frame_ref_phase_correlation
 
     ! Masked variance of the frame subtracted reference

@@ -51,6 +51,7 @@ integer, parameter :: timer_int_kind = sp
 
    public :: simple_gettime,cast_time_char, timer_int_kind
    public :: tic, tickrate
+   public :: clock_count, clock_seconds_since
    public :: toc, tdiff, tocprint
    public :: now, reset_timer
    public :: timer_loop_start, in_timer_loop, timer_loop_end
@@ -82,6 +83,20 @@ end function cast_time_char
       last_time_point = tic
    end function tic
 
+
+!< The clock now, leaving the module's timer state (last_time_point, the cached rate) untouched:
+!  safe from concurrent threads, unlike tic/toc
+   integer(timer_int_kind) function clock_count()
+      call system_clock(count=clock_count)
+   end function clock_count
+
+!< Seconds since tstart (a clock_count), leaving the module's timer state untouched
+   real(dp) function clock_seconds_since(tstart)
+      integer(timer_int_kind), intent(in) :: tstart
+      integer(timer_int_kind) :: tend, rate
+      call system_clock(count=tend, count_rate=rate)
+      clock_seconds_since = real(tend - tstart, dp)/real(rate, dp)
+   end function clock_seconds_since
 
 !< Get the clock tick count per second
    integer(timer_int_kind) function tickrate()

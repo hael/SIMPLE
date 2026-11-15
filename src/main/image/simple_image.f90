@@ -1,6 +1,7 @@
 !@descr: the abstract image data type and its methods. 2D/3D & FT/real all implemented by this class and FTs done in-place to reduce memory usage
 module simple_image
 use simple_core_module_api
+use simple_math, only: parabolic_peak_offset
 use simple_fftw3
 use simple_neighs
 use gnufor2
@@ -11,7 +12,7 @@ use simple_imgfile, only: imgfile
 use simple_winfuns, only: winfuns
 implicit none
 
-public :: image, image_stack, unmemoize_mask_coords, unmemoize_powspec_coords
+public :: image, image_stack, unmemoize_mask_coords, unmemoize_powspec_coords, window_inside
 private
 #include "simple_local_flags.inc"
 
@@ -2685,5 +2686,15 @@ contains
         if( allocated(mem_pspec_shell)  ) deallocate(mem_pspec_shell)
         if( allocated(mem_pspec_counts) ) deallocate(mem_pspec_counts)
     end subroutine unmemoize_powspec_coords
+
+    !> Whether the box of side @p box with zero-based lower-left corner @p coord lies inside the first
+    !! two dimensions of @p ldim (the window convention: pixels coord+1 .. coord+box).
+    pure logical function window_inside( ldim, coord, box )
+        integer, intent(in) :: ldim(3), coord(2), box
+        integer :: fromc(2), toc(2)
+        fromc = coord + 1
+        toc   = fromc + (box - 1)
+        window_inside = .not. (any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2))
+    end function window_inside
 
 end module simple_image

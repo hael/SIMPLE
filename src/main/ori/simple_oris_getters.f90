@@ -846,6 +846,19 @@ contains
         end do
     end function count_state_gt_zero
 
+    !> rows in a state (> 0) updated at least once (updatecnt > 0); 0 when no row holds updatecnt
+    module function count_state_updated( self ) result( cnt )
+        class(oris), intent(in) :: self
+        integer :: i, cnt
+        cnt = 0
+        if( .not. self%isthere('updatecnt') ) return
+        do i = 1, self%n
+            if( self%o(i)%get_state() > 0 )then
+                if( nint(self%o(i)%get('updatecnt')) > 0 ) cnt = cnt + 1
+            endif
+        end do
+    end function count_state_updated
+
     module function ori2str( self, i ) result( str )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i

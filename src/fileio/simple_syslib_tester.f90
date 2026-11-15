@@ -17,6 +17,7 @@ contains
         call setup_test_env()
         call test_simple_touch_and_file_exists()
         call test_simple_mkdir_dir_exists_rmdir()
+        call test_simple_rmdir_symlinks()
         call test_simple_rename_and_del_file()
         call test_simple_atomic_replace_and_sync()
         call test_simple_rmfile()
@@ -135,6 +136,41 @@ contains
         call assert_int(0, istat, 'rmdir: status')
         call assert_true(.not. dir_exists(dname), 'rmdir: directory removed')
     end subroutine test_simple_mkdir_dir_exists_rmdir
+
+    subroutine test_simple_rmdir_symlinks()
+        integer :: istat, i
+        write(*,'(A)') 'test_simple_rmdir_symlinks'
+#if defined(_WIN32)
+        call assert_true(.true., 'rmdir symlinks: skipped on Windows')
+#else
+        call simple_mkdir('tmp_syslib_target', verbose=.false.)
+        call simple_touch('tmp_syslib_target/keep.txt')
+        call simple_mkdir('tmp_syslib_remove', verbose=.false.)
+        call simple_mkdir('tmp_syslib_remove/nested', verbose=.false.)
+        call simple_touch('tmp_syslib_remove/nested/remove.txt')
+        call syslib_symlink('../tmp_syslib_target', 'tmp_syslib_remove/linked_dir')
+        call syslib_symlink('../missing_target', 'tmp_syslib_remove/dangling')
+        call simple_rmdir('tmp_syslib_remove', status=istat)
+        call assert_int(0, istat, 'rmdir: nested files and dangling links are removed')
+        call assert_true(.not. dir_exists('tmp_syslib_remove'), 'rmdir: ordinary root directory is removed')
+        call assert_true(file_exists('tmp_syslib_target/keep.txt'), 'rmdir: child symlink target is preserved')
+        do i = 1, 2
+            call simple_touch('tmp_syslib_target/keep.txt')
+            call syslib_symlink('tmp_syslib_target', 'tmp_syslib_link')
+            call assert_true(dir_exists('tmp_syslib_link'), 'rmdir: root symlink fixture exists')
+            if( i == 1 )then
+                call simple_rmdir('tmp_syslib_link', status=istat)
+            else
+                call simple_rmdir('tmp_syslib_link///', status=istat)
+            endif
+            call assert_int(0, istat, 'rmdir: root symlink removal succeeds, also with trailing slashes')
+            call assert_true(.not. dir_exists('tmp_syslib_link'), 'rmdir: root symlink is removed')
+            call assert_true(file_exists('tmp_syslib_target/keep.txt'), 'rmdir: root symlink target is preserved')
+            call simple_rmfile('tmp_syslib_link')
+        enddo
+        call simple_rmdir('tmp_syslib_target')
+#endif
+    end subroutine test_simple_rmdir_symlinks
 
     !---------------- simple_rename + del_file ----------------
 

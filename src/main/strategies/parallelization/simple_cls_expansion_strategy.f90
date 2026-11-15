@@ -1480,7 +1480,7 @@ contains
         integer, intent(inout) :: order(:)
         integer, intent(in)    :: weights(:)
         integer :: idx(size(order)), perm(size(order)), sortable(size(order))
-        integer :: i, n, tmp
+        integer :: i, n
         n = size(order)
         if( n <= 1 ) return
         idx = order
@@ -1490,11 +1490,7 @@ contains
         end do
         call hpsort(sortable, perm)
         order = idx(perm)
-        do i = 1, n / 2
-            tmp = order(i)
-            order(i) = order(n - i + 1)
-            order(n - i + 1) = tmp
-        end do
+        call reverse(order)
     end subroutine sort_order_by_weight_desc
 
     subroutine sort_combined_maps(parts, rows, parents, locals, pops)
