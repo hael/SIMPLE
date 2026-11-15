@@ -19,6 +19,7 @@ use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_commit_iter
 use simple_strategy_sigma2, only: prepare_canonical_sigma_update, read_sigma2_bench_counts, commit_sigma2_exec
 use simple_refine2D_fnames, only: refine2D_cavgs_fname, refine2D_cavgs_half_fname
+use simple_string_utils, only: fmt_dec, log_item
 implicit none
 
 public :: refine2D_strategy, refine2D_inmem_strategy, refine2D_distr_strategy, create_refine2D_strategy
@@ -553,21 +554,20 @@ contains
         integer, intent(in) :: band(2)
         type(string) :: fname
         real(real64) :: mean_log(2), edge_log(2)
-        integer :: nabove(2), status, half
+        integer :: nabove(2), status
         logical :: found
         character(len=512) :: message
-        character(len=1), parameter :: HALVES(2) = ['E','O']
         if( trim(params%sigma2_anneal) /= 'yes' ) return
         call build%spproj%get_sigma2_state_path(fname, found)
         if( .not. found ) THROW_HARD('missing sigma2 store for the sigma2 anchor readout')
         call sigma2_anchor_band_stats(fname%to_char(), band, mean_log, edge_log, nabove, status, message)
         if( status /= 0 ) THROW_HARD(trim(message))
-        do half = 1, 2
-            write(logfhandle,'(A,I0,A,A,A,I0,A,I0,A,F7.4,A,F7.4,A,ES13.5,A,ES13.5,A,I0,A,I0)') &
-                &'>>> SIGMA2 ANNEAL iter ', params%which_iter, ' half ', HALVES(half), ' band ', band(1), ':', band(2), &
-                &' weight ', params%sigma2_weight, ' beta ', params%prob_beta, ' mean_log(measured/anchor) ', mean_log(half), &
-                &' edge_log(measured/anchor) ', edge_log(half), ' above_anchor ', nabove(half), '/', band(2)-band(1)+1
-        enddo
+        ! one line: the halves' log ratios averaged (they agree to the printed decimals), the shells above the anchor
+        ! of the half with more of them
+        write(logfhandle,'(A)') log_item('SIGMA2 ANNEAL', 'weight '//fmt_dec(params%sigma2_weight, 3)//', beta '//&
+            &fmt_dec(params%prob_beta, 2)//', log(measured/anchor) '//fmt_dec(real(0.5_real64*sum(mean_log)), 2)//&
+            &' (edge '//fmt_dec(real(0.5_real64*sum(edge_log)), 2)//'), '//int2str(maxval(nabove))//'/'//&
+            &int2str(band(2)-band(1)+1)//' shells above')
         call fname%kill
     end subroutine report_sigma2_anchor
 

@@ -746,11 +746,12 @@ post-class-average particle-entry stages (`minits=maxits`, overlap 0.99).
 Before 2026-11-11, `check_conv3D` bypassed the overlap for these modes and a stage ran to
 an exit or its budget.
 
-**The n_eff readout (`POSTERIOR DRAW N_EFF`, 2026-10-29; section 20.2 of
-the note).** Every iteration logs the mean effective number of candidates a
-particle draws among, exp(entropy) of its tempered row posterior, at the
-draw's factor (`prob_beta`, or the tail's) and at beta 1 (the physical
-posterior), over a subsample of the rows the draws are from: up to
+**The n_eff readout (2026-10-29; section 20.2 of the note).** Every
+iteration logs, on the `POSE ASSIGNMENT` line (`CLASS ASSIGNMENT` in 2D), the
+mean effective number of candidates a particle draws among, exp(entropy) of
+its tempered row posterior, at the draw's factor (`prob_beta`, or the tail's);
+the readout record also sums it at beta 1 (the physical posterior). The rows
+are a subsample of those the draws are from: up to
 `PROB_NEFF_ROWS` (1000) rows at a fixed stride through the iteration's global
 sample (the rows are chosen by rank in that sample, so they are the same rows
 whatever the partitioning; a part publishes its sums and counts in its readout
@@ -774,9 +775,9 @@ schedule is therefore `prob_beta` flat with the tail to 1, and the readout
 is how it is watched. Unit-tested on synthetic rows against a numpy
 emulation (`test_neff_readout`).
 
-**The state readout (`PROB_TAB_STATE_DRAW`, `PROB_TAB_STATE_MASS`,
+**The state readout (`STATE N_EFF`, `STATE MODE`, `STATE MASS ON UNREFINED`,
 2026-11-05).** With more than one active state both 3D tables log, after
-`PROB_TAB_ASSIGN`:
+`POSE ASSIGNMENT`:
 - over the rows the n_eff readout subsamples: the effective number of states,
   exp(entropy) of the row's state marginal, at the draw's factor and at 1, the
   mean largest state posterior, and per state the share of the block's tempered
@@ -800,7 +801,7 @@ label first, the state or topk in parentheses, then unpadded numbers with
 leading zeros, comma-separated with units. The insertion cone line gives the
 rim-displacement limit (the finer of FSC=0.5 and the matching LP) as degrees of
 rotation or pixels of shift; these are alternatives, not independent allowances.
-The conical score is labelled `CONICAL FSC AREA RATIO (cFAR, state N)`. Stored
+The conical score is the `cFAR` of the `FSC (STATE N)` line. Stored
 FSC-mode provenance and diagnostic files are unchanged.
 
 **The weighted insertion (`topk`, 2026-10-29, revised 2026-10-30; sections
@@ -848,7 +849,7 @@ search cannot leave poses undecided at a scale coarser than its own
 matching limit. Each part reads each state's FSC on disk before its batches
 (`insert_cone_from_fsc`; no FSC, no cone, the committed pose alone), the
 distributed master reports the cone from the same files after its sample draw
-(`PROB_TAB_INSERT CONE`; the owner reports it in shared memory), and the table
+(`INSERTION CONE`; the owner reports it in shared memory), and the table
 sets the cone's geometry at the assignment from the direction space, the point
 group and its rotation grid as rotation matrices (`set_space`). The extras are
 selected per batch after the batch's draws (`select_extras` in both tables),
@@ -867,11 +868,11 @@ convergence statistics unchanged; `topk=1` is bit for bit the single-draw
 run. The part keeps the extras in its insertion table (`prob_insert_table`:
 per particle the committed weight and the extras as reference, in-plane
 index, refined shift and weight), publishes their counts in its readout
-record, and the master logs `PROB_TAB_INSERT` from the merged counts with the
-insertions per particle, the mean committed weight, the eligible entries per
-particle (the cone's occupancy) and the fraction of particles with more
-eligible entries than `topk - 1`: near zero the insertion is the full average
-within the cone, above it `topk` is binding. The batch's extras are laid out
+record, and the master logs `POSES INSERTED` from the merged counts with the
+insertions per particle, the mean committed weight and the fraction of
+particles with more eligible entries than `topk - 1`: near zero the insertion is
+the full average within the cone, above it `topk` is binding (the record also
+holds the eligible entries per particle, the cone's occupancy). The batch's extras are laid out
 from the part's table for the search (`prob_insert_poses%setup_range`, one
 slot per extra, handed through `strategy3D_spec`), and the probabilistic
 strategy resolves a
@@ -902,7 +903,8 @@ committed poses, so the last iteration's map and a `reconstruct3D` from the
 project differ under `topk > 1`. The shc and snhc neighbourhood modes of solve3D's stages 1-2
 insert the committed pose alone, their candidates being the hill climb's
 unrefined proposals; the 2D route has its own in-plane insertion (`INPL_POSTERIOR_BUDGET = 64`,
-[solve2D policy](../2D/solve2D_policy.md), "In-plane insertion"). No file carries the
+[solve2D policy](../2D/solve2D_policy.md), "In-plane insertion"), which the 3D route carries to every
+pose a 3D particle is inserted at (below, "In-plane posterior insertion"). No file carries the
 assignment or the extras: the rows, the draws and the insertion table live in
 the part's memory for the batch. State assignment stays hard: the
 extras are drawn from the committed state's block alone (the dense table's
@@ -931,6 +933,52 @@ plane generated at the new shift (`test_fplane_shift`, with the insertion),
 and the exits' margin (`test_posterior_exits_weighted_insertion`). The
 readout: the four sets at `topk=10`, stage-3 maps and finals against the
 control, with the cone's occupancy line read beside them.
+
+**In-plane posterior insertion (2026-11-14, a temporary key until Hans made it the default without one on
+2026-11-15, as the 2D budget; [the plan](../../implementation_notes/planned/inpl_quadrature_insertion_3D.md)).**
+The weighted insertion
+spreads a particle over directions but never over its in-plane angle: each direction of a row carries
+one angle, and an angle the data do not decide enters the half-map where the particle's own noise put
+it (the self-reinforcement measured on PfCRT, `prob_post_diag=yes`). On `refine=prob` and on `prob_neigh`
+with `prob_neigh_mode=state|geom` under `objfun=euclid`, in a refine3D pass that reconstructs
+(`l_inpl_posterior`; in solve3D single-state stages 3 to 8 and multi-state stages from 3; not the shc/snhc
+neighbourhoods of stages 1-2, the multi-state final assignment, which reconstructs nothing, or the final
+and bootstrap reconstructions), every pose a particle is inserted at,
+the committed one and its extras, enters at a quadrature of its in-plane posterior:
+
+- after each pose's continuous solve (`resolve_extra_poses`, then the committed pose's), the row of
+  Euclidean losses over every grid rotation at the pose's solved increment in the stored frame
+  (`memoize_shifted_ptcl` into the thread's bank, `gen_euclid_dists_bank`; the unshifted row below
+  `SHERRSQ`), at the physical temperature `T`;
+- the `K = INPL_POSTERIOR_BUDGET` point quadrature of that row (`inpl_quadrature`) with a phase keyed on
+  the particle and the reference (`RND_FAM_INPLQ`), so it depends on no thread, batch or part; the points
+  in the solved bin, and a row collapsed to one entry, are inserted at the pose's continuous angle, every
+  other entry at its grid angle;
+- the poses reweighted by their in-plane marginals (`inpl_view_weights`):
+  `log m_k = ln Z_k - T L_min,k - P_k`, normalised over the particle's poses, an extra under
+  `PROB_INSERT_WMIN` dropped and the rest renormalised, the committed pose always kept. `P_k` is the
+  shift prior the insertion applies today (`inpl_prior_penalty`): under the polar shift map the map's
+  prior on the solved increment, under the window search with `shift_prior=yes` the prior on the
+  increment from the refinement's own start (the table keeps each refined entry's centre, the seed
+  rotated to the starting angle and clipped, then converted back: `prior_window_centre`). The
+  selection of the extras stays the table's; in these passes this replaces the rule that their weights
+  stay the table's.
+
+Each entry carries its pose's weight times its point count over `K`, so a particle's weights sum to 1
+and the trailing reconstruction's population accounting is unchanged. A particle with a pose without a
+valid row enters at the table's weights, one angle per pose. The entries live in a worst-case reservation laid out at the first
+batch for the part (`prob_insert_poses%reserve_inpl`: `max(1,topk)` blocks of `K` packed entries per
+particle, `max(1,topk)(8 + 4K)` bytes, the memory estimate's term). Gridding inserts each entry from the
+committed plane, re-shifted once per extra pose (`insert_inpl_entries`). PCG expands the entries per
+observation batch in chunks of at most `MAXIMGBATCHSZ`, each chunk with its own records and
+`prep_particles` (`accumulate_pcg_inpl_entries`), so the per-entry metadata is bounded by one chunk, and
+the accumulators equal one flat accumulation of the same entries. The committed pose, the search, the
+table, its draws and everything the search commits are unchanged. The resolution exits take the weighted
+insertion's margin in these passes (`l_margin`). The readout is `IN-PLANE ANGLES` after `POSES INSERTED`: angles per particle, the share of rows
+collapsed to the solved angle, and whether the budget K exceeds m_max, the highest angular harmonic the band
+resolves at the rim. The readout record also holds the rows per particle, the rows' mean n_eff and the
+committed view weight, which the log does not print; the REC3D bench gives the poses inserted.
+Whether the maps gain is the maintainer's test on PorF, PfCRT, streptavidin and a small membrane protein.
 
 ### Neighbourhood-table assignment (`assign_rows_neigh`)
 

@@ -383,7 +383,7 @@ the rungs compete alone and the finest retained rung is the finest member;
 beyond the ladder the regularized pair is the finest member and competes
 with the 4 A rung). The finest member of the bank, appended pair or finest
 retained rung, is the matching low-pass handoff (section 12). The master
-logs one `>>> NU BANK CAP:` line and one `>>> NU AUXILIARY MEMBER:` line
+logs one `NU BANK` line and one `NU AUX MEMBER` line
 per state (admitted, or "within the ladder ... the rungs compete alone").
 Absent an FSC (the standalone `nu_filt3D` program) the bank is uncapped.
 
@@ -571,7 +571,7 @@ finest member of the bank (2026-09-19, one rule for every workflow): the
 finest rung retained under the `fsc/1.5` cut, or the regularized pair once
 its FSC=0.143 is at or beyond the ladder's finest rung (section 8). Which
 labels won voxels decides the filter, never the band. The line
-`>>> NU MATCHING LOW-PASS HANDOFF: ...` carries two population statistics
+`NU HANDOFF` carries two population statistics
 as diagnostics only: the finest label whose cumulative population reaches
 `NU_ALIGN_LP_MIN_SIGNAL_PCT` (1%) of the SIGNAL voxels (the mask minus the
 solvent/background clamp), which was the handoff from 2026-09-13 to

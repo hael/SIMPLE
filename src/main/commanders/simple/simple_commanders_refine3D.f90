@@ -1759,7 +1759,7 @@ contains
             params%which_iter = params%which_iter + 1
             params%extr_iter  = params%extr_iter  + 1
             ! the probability tables' posterior draws: the iteration's tempering factor, on the command line for the
-            ! workers (check_conv3D reports it in its settings box). A run with prob_beta_end searches flat at
+            ! workers (check_conv3D reports it as POSTERIOR DRAW BETA). A run with prob_beta_end searches flat at
             ! prob_beta until its resolution stops gaining or its budget nears its end (check_conv3D starts the
             ! tail and keeps its first iteration), then ramps geometrically to prob_beta_end over the PROB_BETA_TAIL
             ! iterations of the tail and ends

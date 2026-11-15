@@ -9,6 +9,8 @@ use simple_defs
 use, intrinsic :: iso_c_binding
 implicit none
 
+integer, parameter :: LOG_LABEL_LEN = 17 !< label column of an iteration's readout lines (log_item)
+
 interface str2format
     module procedure str2format_real
     module procedure str2format_dp
@@ -439,6 +441,30 @@ contains
         str = str_cast%to_char()
         call str_cast%kill
     end function realdp2str
+
+    !> a real with ndec decimals and its leading zero (0.04, not the .04 of the F0.d edit), no padding
+    pure function fmt_dec( rval, ndec ) result( str )
+        real,    intent(in) :: rval
+        integer, intent(in) :: ndec
+        character(len=:), allocatable :: str
+        character(len=48) :: buf
+        character(len=16) :: fmt
+        if( ndec <= 0 )then
+            ! the F edit keeps the decimal point at zero decimals (7.)
+            write(buf,'(I0)') nint(rval)
+        else
+            write(fmt,'(A,I0,A)') '(F48.', ndec, ')'
+            write(buf,fmt) rval
+        endif
+        str = trim(adjustl(buf))
+    end function fmt_dec
+
+    !> one line of an iteration's readout: '>>> ', the label padded to LOG_LABEL_LEN, then the text
+    pure function log_item( label, text ) result( line )
+        character(len=*), intent(in) :: label, text
+        character(len=:), allocatable :: line
+        line = '>>> '//label//repeat(' ', max(1, LOG_LABEL_LEN - len(label)))//text
+    end function log_item
 
     !>  \brief  turn integer variable into character variable
     function int2str( intg ) result( str )

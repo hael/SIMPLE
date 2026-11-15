@@ -268,10 +268,10 @@ sub parse_solve3D_file {
     }
     $pending_shift = 0 if $pending_shift && $line !~ /^MAX:/;
 
-    if ($line =~ /^>>>\s*ORIENTATION\s+OVERLAP:\s+($NUM_RE)/) {
+    if ($line =~ /^>>>\s*ORIENTATION\s+OVERLAP:?\s+($NUM_RE)/) {
       $cur->{overlap} = $1; next;
     }
-    if ($line =~ /^>>>\s*STATE\s+OVERLAP:\s+($NUM_RE)/) {
+    if ($line =~ /^>>>\s*STATE\s+OVERLAP:?\s+($NUM_RE)/) {
       $cur->{state_overlap} = $1; next;
     }
     if ($line =~ /^>>>\s*%\s*PARTICLES\s+SAMPLED\s+THIS\s+ITERATION\s+($NUM_RE)(?:\s+\((\d+)\/(\d+)\))?/) {
@@ -290,42 +290,42 @@ sub parse_solve3D_file {
       $cur->{pct_greedy} = $1; next;
     }
 
-    if ($line =~ /^>>>\s*DIST\s+BTW\s+BEST\s+ORIS.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*DIST\s+BTW\s+BEST\s+ORIS.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(dist_best_avg dist_best_sdev dist_best_min dist_best_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*IN-PLANE\s+DIST.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*IN-PLANE\s+DIST.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(inplane_avg inplane_sdev inplane_min inplane_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*SHIFT\s+INCR\s+ARG.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*SHIFT\s+INCR\s+ARG.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(shift_avg shift_sdev shift_min shift_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*%\s*SEARCH\s+SPACE\s+SCANNED.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*%\s*SEARCH\s+SPACE\s+SCANNED.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(scanned_avg scanned_sdev scanned_min scanned_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*PARTICLE\s+WEIGHTS.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*PARTICLE\s+WEIGHTS.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(pwt_avg pwt_sdev pwt_min pwt_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*MATCHING\s+LOW-PASS\s+LIMIT.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*MATCHING\s+LOW-PASS\s+LIMIT.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(matchlp_avg matchlp_sdev matchlp_min matchlp_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*ESTIMATED\s+LOW-PASS\s+LIMIT.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*ESTIMATED\s+LOW-PASS\s+LIMIT.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(estlp_avg estlp_sdev estlp_min estlp_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*RESOLUTION\s+\@\s*FSC=0\.143\s+STATE\s+(\d+)\s+AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*RESOLUTION\s+\@\s*FSC=0\.143\s+STATE\s+(\d+)\s+AVG\/SDEV\/MIN\/MAX:?/) {
       my $state = sprintf('%02d', $1);
       my @q = parse_quad($line);
       if (@q) {
@@ -333,18 +333,18 @@ sub parse_solve3D_file {
       }
       next;
     }
-    if ($line =~ /^>>>\s*RESOLUTION\s+\@\s*FSC=0\.143.*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*RESOLUTION\s+\@\s*FSC=0\.143.*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(fsc143_avg fsc143_sdev fsc143_min fsc143_max)} = @q if @q;
       next;
     }
-    if ($line =~ /^>>>\s*SCORE\s+\[0,1\].*AVG\/SDEV\/MIN\/MAX:/) {
+    if ($line =~ /^>>>\s*SCORE\s+\[0,1\].*AVG\/SDEV\/MIN\/MAX:?/) {
       my @q = parse_quad($line);
       @{$cur}{qw(score_avg score_sdev score_min score_max)} = @q if @q;
       next;
     }
 
-    if ($line =~ /^>>>\s*STATE\s+(\d+)\s+JOINT\s+DISTRIBUTION\s+OVERLAP:\s*($NUM_RE)\s+POPULATION:\s*(\d+)/) {
+    if ($line =~ /^>>>\s*STATE\s+(\d+)\s+JOINT\s+DISTRIBUTION\s+OVERLAP:?\s*($NUM_RE)\s+POPULATION:?\s*(\d+)/) {
       my $state = sprintf('%02d', $1);
       $cur->{"state${state}_joint_overlap"} = $2;
       $cur->{"state${state}_population"} = $3;
@@ -358,10 +358,10 @@ sub parse_solve3D_file {
     if ($line =~ /^>>>\s*REFINEMENT\s+MODE\s+IS\s+(\S+)/) {
       $cur->{refinement_mode} = $1; next;
     }
-    if ($line =~ /^>>>\s*TRAILING\s+REC\s+UPDATE\s+FRACTION:\s*($NUM_RE)/) {
+    if ($line =~ /^>>>\s*TRAILING\s+REC\s+UPDATE\s+FRACTION:?\s*($NUM_RE)/) {
       $cur->{trailing_rec_update_fraction} = $1; next;
     }
-    if ($line =~ /^>>>\s*CONVERGED:\s*(\S+)/) {
+    if ($line =~ /^>>>\s*CONVERGED:?\s+(\S+)/) {
       $cur->{converged} = normalise_yes_no($1); next;
     }
   }
@@ -433,6 +433,9 @@ sub new_record {
 sub finalize_record {
   my ($rows, $r) = @_;
   return if !$r;
+  # a log that omits the search-space row scanned every reference for every particle
+  @{$r}{qw(scanned_avg scanned_sdev scanned_min scanned_max)} = (100, 0, 100, 100)
+    if !defined($r->{scanned_avg}) || $r->{scanned_avg} eq 'NA';
   $r->{fracsrch_avg} = $r->{scanned_avg};
   push @$rows, $r;
 }
@@ -948,7 +951,7 @@ sub parse_setting_line {
     $r->{gau_regularization} = $val;
   } elsif ($norm eq 'ML REGULARIZATION') {
     if ($val =~ /^(on|off)\b/i) { $r->{ml_regularization} = lc($1); }
-    if ($val =~ /TAU:\s*($NUM_RE)/i) { $r->{ml_tau} = $1; }
+    if ($val =~ /TAU:?\s*($NUM_RE)/i) { $r->{ml_tau} = $1; }
   } elsif ($norm eq 'AUTOMASKING') {
     $r->{automasking} = $val;
   } elsif ($norm eq 'FILTER MODE') {
@@ -960,7 +963,7 @@ sub parse_setting_line {
 
 sub parse_quad {
   my ($line) = @_;
-  if ($line =~ /:\s*($NUM_RE)\s+($NUM_RE)\s+($NUM_RE)\s+($NUM_RE)\s*$/) {
+  if ($line =~ /\s($NUM_RE)\s+($NUM_RE)\s+($NUM_RE)\s+($NUM_RE)\s*$/) {
     return ($1, $2, $3, $4);
   }
   return;

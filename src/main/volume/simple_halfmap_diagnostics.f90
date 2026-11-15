@@ -5,6 +5,7 @@ use simple_parameters, only: parameters
 use simple_image,      only: image
 use simple_image_msk,  only: image_msk
 use simple_fsc,        only: phase_rand_fsc, fsc_area_score_result
+use simple_string_utils, only: fmt_dec, log_item
 implicit none
 
 public :: halfmap_diagnostics_result, evaluate_halfmap_pair, write_halfmap_diagnostics
@@ -112,9 +113,6 @@ contains
         diagnostics%fsc_mode = 'backend='//trim(backend)//' support='//trim(support_kind_here)//&
             &' posthoc_mask='//trim(posthoc_kind)//&
             &' phase_randomization='//merge('yes', 'no ', l_phase_randomization)
-        write(logfhandle,'(A,I0,A)') '>>> FSC MODE (state ', state, '): '//trim(backend)//', '//&
-            &trim(support_kind_here)//' support, post-hoc mask '//trim(posthoc_kind)//', phase randomization '//&
-            &trim(merge('yes', 'no ', l_phase_randomization))
         if( l_phase_randomization )then
             call phase_rand_fsc(even, odd, envmask_work, state, nyq, diagnostics%fsc, fsc_t, fsc_n)
             call work_even%copy(even)
@@ -135,8 +133,17 @@ contains
         ! so the radial FSC below reads the same representation
         call cones%new(work_even, CFAR_NDIRS, CFAR_CONE_HALF_ANGLE_DEG, CFAR_FSC_THRESHOLD, &
             &CFAR_MIN_COUNT)
-        call cones%calc_fsc_area_score(work_even, work_odd, state=state)
+        call cones%calc_fsc_area_score(work_even, work_odd)
         diagnostics%cfar = cones%cfar
+        ! the FSC's mode and the cFAR on one line
+        if( l_phase_randomization )then
+            write(logfhandle,'(A)') log_item('FSC (STATE '//int2str(state)//')', trim(backend)//', '//&
+                &trim(support_kind_here)//' support, '//trim(posthoc_kind)//' mask, phase randomization, cFAR '//&
+                &fmt_dec(cones%cfar, 4))
+        else
+            write(logfhandle,'(A)') log_item('FSC (STATE '//int2str(state)//')', trim(backend)//', '//&
+                &trim(support_kind_here)//' support, no mask, no phase randomization, cFAR '//fmt_dec(cones%cfar, 4))
+        endif
         call cones%kill
         if( .not. l_phase_randomization ) call work_even%fsc(work_odd, diagnostics%fsc)
         res = get_resarr(params%box_crop, params%smpd_crop)

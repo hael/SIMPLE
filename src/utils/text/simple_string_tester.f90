@@ -3,7 +3,7 @@ module simple_string_tester
 use simple_test_utils
 use simple_string
 use simple_defs
-use simple_string_utils, only: list_of_ints2arr
+use simple_string_utils, only: list_of_ints2arr, fmt_dec, log_item, LOG_LABEL_LEN
 use simple_ansi_ctrls
 implicit none
 private
@@ -35,6 +35,7 @@ contains
         call test_writeline_unallocated()
         call test_list_of_ints2arr()
         call test_ansi_format_str()
+        call test_log_format()
         ! call report_summary()
     end subroutine run_all_string_tests
 
@@ -525,5 +526,23 @@ contains
             call assert_char(code, BG(i), 'ANSI background code '//code)
         enddo
     end subroutine test_ansi_format_str
+
+    !---------------- readout line formatting (simple_string_utils) ----------------
+
+    !> fmt_dec keeps the leading zero the F0.d edit drops and rounds to its decimals; log_item puts the text at the
+    !! label column (at least one blank after a long label)
+    subroutine test_log_format()
+        character(len=:), allocatable :: line
+        write(*,'(A)') 'test_log_format'
+        call assert_char('0.04',   fmt_dec(0.04, 2),   'fmt_dec: leading zero kept')
+        call assert_char('-0.50',  fmt_dec(-0.5, 2),   'fmt_dec: leading zero kept for a negative value')
+        call assert_char('12.346', fmt_dec(12.3456, 3), 'fmt_dec: rounded to its decimals')
+        call assert_char('7',      fmt_dec(7.2, 0),    'fmt_dec: no decimals')
+        line = log_item('LABEL', 'text')
+        call assert_char('>>> LABEL', line(1:9), 'log_item: the prefix and the label')
+        call assert_int(LOG_LABEL_LEN + 5, index(line, 'text'), 'log_item: the text at the label column')
+        line = log_item(repeat('X', LOG_LABEL_LEN + 3), 'text')
+        call assert_char(repeat('X', LOG_LABEL_LEN + 3)//' text', line(5:), 'log_item: one blank after a long label')
+    end subroutine test_log_format
 
 end module simple_string_tester

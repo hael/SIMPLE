@@ -15,6 +15,7 @@ use simple_qsys_job_record,          only: check_job_lost, cancel_queued_job, JO
 use simple_persistent_worker_message_task, only: qsys_persistent_worker_message_task 
 use simple_persistent_worker_server,       only: persistent_worker
 use simple_mem_estimator
+use simple_string_utils,             only: log_item
 use unix,                            only: c_int, c_usleep
 implicit none
 
@@ -1057,18 +1058,13 @@ contains
     subroutine report_phase_completion( self, seconds )
         class(qsys_ctrl), intent(in) :: self
         real,             intent(in) :: seconds
-        type(string) :: label
         character(len=32) :: elapsed
-        integer      :: n
+        integer :: n
         n = 0
         if( allocated(self%jobs_done) ) n = size(self%jobs_done)
         if( n < 1 ) return
-        label = 'distributed'
-        if( self%phase_label%is_allocated() ) label = self%phase_label
         write(elapsed,'(F32.1)') seconds
-        write(logfhandle,'(A,I0,A)') '>>> '//upperCase(label%to_char())//': ', n, &
-            &trim(merge(' part ', ' parts', n == 1))//' completed in '//trim(adjustl(elapsed))//' s'
-        call label%kill
+        write(logfhandle,'(A)') log_item('PARTS COMPLETED', int2str(n)//' in '//trim(adjustl(elapsed))//' s')
     end subroutine report_phase_completion
 
     ! STREAMING

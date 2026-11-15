@@ -13,7 +13,7 @@ use simple_rnd,       only: ran3, rnd_key, rnd_scope_key, rnd_draw_key, rnd_run_
     &RND_PROG_REFINE3D, RND_PROG_REFINE2D, RND_PASS_ALIGN, RND_FAM_CAND
 use simple_type_defs, only: OBJFUN_CC, OBJFUN_EUCLID, ptcl_ref
 use simple_string,    only: string
-use simple_string_utils, only: int2str_pad
+use simple_string_utils, only: int2str, int2str_pad, fmt_dec, log_item
 use simple_fileio,    only: fopen, fclose, fileiochk, del_file, del_files, file2rarr
 use simple_syslib,    only: file_exists
 use simple_math_ft,   only: get_resarr
@@ -39,6 +39,8 @@ public :: merge_prob_readouts
 public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, prob_insert_cone
 public :: prob_insert_inpl, inpl_quadrature
+public :: prior_window_centre, inpl_view_weights, inpl_prior_penalty
+public :: prob_inpl_counts, inpl_particle_counts, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes
 public :: screen_pool_size, SCREEN_QUANTILE
 public :: shift_needs_disk, disk_radius_px, shift_box_radius, next_shift_width, record_shift_state, start_shift_state
 public :: map_prior_weight, insert_pose_loss, update_screen_best, print_disk_set, insert_cone_from_fsc
@@ -65,12 +67,14 @@ type :: prob_candidate
     real    :: y      = 0.
     logical :: has_sh = .false.
     real    :: sdev   = -1.     !< the shift's posterior width from the coarse map (px; below zero: none)
+    real    :: cx     = 0.      !< the window prior's centre of the entry's shift refinement, a stored shift (px)
+    real    :: cy     = 0.      !< (zero without the seed: the start of the refinement, see prob_refined_entry)
 end type prob_candidate
 
 !> The n_eff readout of the tables' posterior draws: the mean effective number of candidates exp(entropy) over a
-!! subsample of rows, at the draw's tempering factor and at beta 1 (the physical posterior), logged every iteration
-!! as POSTERIOR DRAW N_EFF. The rows are chosen from the global sample by rank, the same rows whatever the
-!! partitioning (plan section 5): the particle's rank in the sample, with the stride the global sample size over
+!! subsample of rows, at the draw's tempering factor (logged on the assignment line) and at beta 1 (the physical
+!! posterior, kept in the readout record). The rows are chosen from the global sample by rank, the same rows whatever
+!! the partitioning (plan section 5): the particle's rank in the sample, with the stride the global sample size over
 !! PROB_NEFF_ROWS, every stride-th rank among the first PROB_NEFF_ROWS strides is wanted; a wanted row is kept when
 !! it holds at least PROB_NEFF_NMIN valid distances and a positive temperature, packed as distances above the row
 !! minimum with the particle's temperature (a row of two candidates lands on one of its best two at any factor and
@@ -93,7 +97,7 @@ contains
     procedure :: offer     => neff_readout_offer
     procedure :: nkept     => neff_readout_nkept
     procedure :: sum_neff  => neff_readout_sum_neff
-    procedure :: report    => neff_readout_report
+    procedure :: clause    => neff_readout_clause
     procedure :: kill      => neff_readout_kill
 end type prob_neff_readout
 
@@ -150,10 +154,13 @@ type :: prob_readout
     type(prob_state_readout) :: states     !< the dense 3D table's state readout (nstates 0: none)
     integer        :: inpl_kmax     = 1        !< in-plane posterior quadrature budget (2D)
     integer        :: inpl_mmax     = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
-    integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated
-    integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one)
-    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to the refined pose
-    real(dp)       :: inpl_neff_sum = 0.d0     !< sum over those particles of exp(entropy) of the row
+    integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated (3D: whose poses all have one)
+    integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one; 3D: a collapsed row)
+    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to the refined pose (3D: rows)
+    real(dp)       :: inpl_neff_sum = 0.d0     !< sum over those particles of exp(entropy) of the row (3D: over the rows)
+    integer(int64) :: inpl_nrows    = 0_int64  !< 3D: the rows evaluated, one per inserted pose
+    real(dp)       :: inpl_committed_view_weight_sum = 0.d0 !< 3D: the committed view's weight after the in-plane marginal
+                                               !! reweighting summed over the table's particles (1 without extras)
 end type prob_readout
 
 !> One extra pose of a particle for the weighted insertion (topk > 1): the reference (the full index over the states), its in-plane index, its
@@ -162,13 +169,14 @@ end type prob_readout
 type :: prob_insert_pose
     integer :: iref = 0, inpl = 0
     real    :: x = 0., y = 0., w = 0.
+    real    :: cx = 0., cy = 0.   !< the window prior's centre of its refinement (prob_refined_entry)
 end type prob_insert_pose
 
 !> The weighted insertion's table of one iteration: per particle (the table's order) the committed pose's weight
 !! and its extra poses, selected by the assignment (top_posterior_extras); the search inserts each particle at its
 !! committed pose with its weight and at its extras with theirs, every particle's weights summing to 1. The table
 !! also counts the cone's occupancy (the eligible entries per particle and the particles with more of them than
-!! the cap kmax - 1 admits) for the PROB_TAB_INSERT line, published by a distributed part through its counts
+!! the cap kmax - 1 admits) for the POSES INSERTED line, published by a distributed part through its counts
 type :: prob_insert_table
     private
     integer :: nptcls = 0, kmax = 1, npose = 0, ncapped = 0
@@ -202,11 +210,36 @@ type :: prob_insert_poses
     real,    allocatable :: euler(:,:)   !< (3,npose)
     real,    allocatable :: shift(:,:)   !< (2,npose) absolute stored shifts
     real,    allocatable :: w(:)         !< (npose), 0 until the search fills the slot
+    ! the in-plane posterior insertion's worst-case reservation (reserve_inpl): per particle nblk blocks, the committed
+    ! pose's and one per extra slot (block); a block of count 0 leaves its particle to the insertion without the key
+    integer              :: kq = 0, nblk = 0
+    real,    allocatable :: e3_grid(:)   !< (nrots) the rotation grid's in-plane Euler angles, 360 - rot(irot)
+    integer, allocatable :: blk_nent(:)  !< (nblk*nptcls) the block's entries
+    integer, allocatable :: blk_bin(:)   !< (nblk*nptcls) the solved bin of the block's pose
+    integer, allocatable :: blk_ent(:,:) !< (kq,nblk*nptcls) the rotation index in the low 16 bits, the point count above
 contains
-    procedure :: setup_range => insert_poses_setup_range
-    procedure :: has         => insert_poses_has
-    procedure :: kill        => insert_poses_kill
+    procedure :: setup_range  => insert_poses_setup_range
+    procedure :: reserve_inpl => insert_poses_reserve_inpl
+    procedure :: block        => insert_poses_block
+    procedure :: has_blocks   => insert_poses_has_blocks
+    procedure :: entry_e3     => insert_poses_entry_e3
+    procedure :: entry_weight => insert_poses_entry_weight
+    procedure :: has          => insert_poses_has
+    procedure :: kill         => insert_poses_kill
 end type prob_insert_poses
+
+!> The in-plane posterior insertion's counts of the search (l_inpl_posterior), one per thread of the team, summed
+!! after the batches and set on the table before it closes the assignment (set_inpl_counts)
+type :: prob_inpl_counts
+    integer(int64) :: nptcls  = 0_int64  !< particles whose poses all have a row
+    integer(int64) :: nrows   = 0_int64  !< rows evaluated, one per inserted pose
+    integer(int64) :: npose   = 0_int64  !< entries inserted
+    integer(int64) :: nsingle = 0_int64  !< rows collapsed to one entry
+    real(dp)       :: neff_sum = 0.d0    !< exp(entropy) summed over the rows
+    real(dp)       :: view_weight_sum = 0.d0 !< the committed view's weight summed over the particles (1 without extras)
+contains
+    procedure :: add => inpl_counts_add
+end type prob_inpl_counts
 
 !> The posterior-weighted in-plane insertion of one 2D batch: per particle the angles its class sums take it at
 !! and their weights, filled by the particle's search (distinct slots, so concurrently) and read by the class sums
@@ -328,6 +361,8 @@ type :: prob_refined_entry
     real    :: y
     real    :: loss
     real    :: sdev   !< the shift's posterior width from the coarse map (px; below zero: none)
+    real    :: cx = 0., cy = 0. !< the window prior's centre (shift_prior=yes): the refinement's start converted to a stored
+                                !! shift at the rotation it started at (set_prior_centre's rule), zero without the seed
 end type prob_refined_entry
 
 !> Per-particle statistics of the pose posterior over a dense table row (prob_post_diag=yes): the mode
@@ -618,7 +653,7 @@ contains
         sigma2 = max(1._dp, lp_pix/4._dp)**2
         if( n > 0 ) sigma2 = max(sigma2, shift_increment_variance(vals(:n)))
         if( .not. ieee_is_finite(sigma2) ) THROW_HARD('Cartesian shift prior variance must be finite')
-        write(logfhandle,'(a,i0)') '>>> CARTESIAN SHIFT PRIOR ACTIVE PARTICLES: ', n
+        write(logfhandle,'(A)') log_item('CARTESIAN SHIFT PRIOR', int2str(n)//' active particles')
     end function cart_shift_prior_sigma2
 
     !> The width of the shift prior (shift_prior=yes): the variance per axis of the shift increments the sampled
@@ -908,28 +943,26 @@ contains
         !$omp end parallel do
     end function neff_readout_sum_neff
 
-    !> the readout of one assignment: the mean n_eff at the draw's factor beta_draw and at beta 1 (the physical
-    !! posterior), over the kept rows; nothing below PROB_NEFF_MIN_ROWS rows
-    subroutine neff_readout_report( self, beta_draw )
+    !> the assignment line's clause of one table: the mean n_eff at the draw's factor beta_draw over the kept rows,
+    !! as the effective number of references (noun) per particle; empty below PROB_NEFF_MIN_ROWS rows
+    function neff_readout_clause( self, beta_draw, noun ) result( str )
         class(prob_neff_readout), intent(in) :: self
         real,                     intent(in) :: beta_draw
-        call neff_report_sums(self%nrows, self%sum_neff(beta_draw), self%sum_neff(1.), beta_draw)
-    end subroutine neff_readout_report
+        character(len=*),         intent(in) :: noun
+        character(len=:), allocatable :: str
+        str = neff_clause(self%nrows, self%sum_neff(beta_draw), noun)
+    end function neff_readout_clause
 
-    !> the readout line from the kept rows and their sums (one table's, or the parts' summed in part order)
-    subroutine neff_report_sums( nrows, sum_draw, sum_phys, beta_draw )
-        integer,  intent(in) :: nrows
-        real(dp), intent(in) :: sum_draw, sum_phys
-        real,     intent(in) :: beta_draw
-        character(len=32) :: draw_neff, beta, physical_neff
+    !> the clause from the kept rows and their sum at the draw's factor (one table's, or the parts' summed in part order)
+    function neff_clause( nrows, sum_draw, noun ) result( str )
+        integer,          intent(in) :: nrows
+        real(dp),         intent(in) :: sum_draw
+        character(len=*), intent(in) :: noun
+        character(len=:), allocatable :: str
+        str = ''
         if( nrows < PROB_NEFF_MIN_ROWS ) return
-        write(draw_neff,'(F32.2)') real(sum_draw / real(nrows,dp))
-        write(beta,'(F32.2)') beta_draw
-        write(physical_neff,'(F32.2)') real(sum_phys / real(nrows,dp))
-        write(logfhandle,'(A,I0,A)') '>>> POSTERIOR DRAW N_EFF: '//trim(adjustl(draw_neff))//&
-            &' at beta '//trim(adjustl(beta))//', '//trim(adjustl(physical_neff))//' at beta 1.00 (', nrows, ' rows)'
-        call flush(logfhandle)
-    end subroutine neff_report_sums
+        str = ', '//fmt_dec(real(sum_draw / real(nrows,dp)), 2)//' effective '//noun//' per particle'
+    end function neff_clause
 
     subroutine neff_readout_kill( self )
         class(prob_neff_readout), intent(inout) :: self
@@ -1091,7 +1124,7 @@ contains
         if( self%unref_n(s) > 0 ) v = real(self%unref_sum(s) / real(self%unref_n(s),dp))
     end function state_readout_unref_share
 
-    !> the readout lines (PROB_TAB_STATE_DRAW, PROB_TAB_STATE_MASS per state with rows); the n_eff and the largest
+    !> the readout lines (STATE N_EFF, STATE MODE, STATE MASS ON UNREFINED per state with rows); the n_eff and the largest
     !! posterior from PROB_NEFF_MIN_ROWS rows on, as the n_eff readout
     subroutine state_readout_report( self, beta_draw )
         class(prob_state_readout), intent(in) :: self
@@ -1105,19 +1138,19 @@ contains
             write(s_phys,'(F32.2)') self%neff_phys()
             write(s_beta,'(F32.2)') beta_draw
             write(s_maxp,'(F32.3)') real(self%sum_maxp / real(self%nrows,dp))
-            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_STATE_DRAW: n_eff over states '//trim(adjustl(s_draw))//&
-                &' at beta '//trim(adjustl(s_beta))//' / '//trim(adjustl(s_phys))//' at beta 1.00, '//&
-                &trim(adjustl(s_pct))//'% at the state mode, mean max state posterior '//trim(adjustl(s_maxp))//&
-                &' (', self%nrows, ' rows)'
+            write(logfhandle,'(A)') log_item('STATE N_EFF', trim(adjustl(s_draw))//' at beta '//&
+                &trim(adjustl(s_beta))//', '//trim(adjustl(s_phys))//' at beta 1.00 ('//int2str(self%nrows)//' rows)')
+            write(logfhandle,'(A)') log_item('STATE MODE', trim(adjustl(s_pct))//'% of the draws, mean largest '//&
+                &'state posterior '//trim(adjustl(s_maxp)))
             do s = 1,self%nstates
                 if( self%unref_n(s) < 1 ) cycle
                 write(s_share,'(F32.3)') self%unref_share(s)
-                write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_STATE_MASS (state ', s, '): '//trim(adjustl(s_share))//&
-                    &' of the block''s tempered mass on unrefined entries'
+                write(logfhandle,'(A)') log_item('STATE MASS ON UNREFINED, STATE '//int2str(s), &
+                    &trim(adjustl(s_share))//' of the block''s tempered mass')
             enddo
         else
-            write(logfhandle,'(A)') '>>> PROB_TAB_STATE_DRAW: '//trim(adjustl(s_pct))//&
-                &'% at the state mode (too few rows for the state n_eff)'
+            write(logfhandle,'(A)') log_item('STATE MODE', trim(adjustl(s_pct))//&
+                &'% of the draws (too few rows for the state n_eff)')
         endif
         call flush(logfhandle)
     end subroutine state_readout_report
@@ -1182,19 +1215,21 @@ contains
             self%poses(self%npose)%x    = cands(k)%x
             self%poses(self%npose)%y    = cands(k)%y
             self%poses(self%npose)%w    = w(k)
+            self%poses(self%npose)%cx   = cands(k)%cx
+            self%poses(self%npose)%cy   = cands(k)%cy
         enddo
     end subroutine insert_table_add
 
-    !> the log line: insertions per particle, the committed pose's mean weight, and the cone's occupancy (the
-    !! eligible entries per particle and the fraction of particles with more of them than the cap admits: at a
-    !! fraction near zero the insertion is the full average within the cone, above it topk is binding)
+    !> the log line: insertions per particle, the committed pose's mean weight, and the fraction of particles with
+    !! more eligible entries than the cap admits (near zero the insertion is the full average within the cone,
+    !! above it topk is binding)
     subroutine insert_table_report( self )
         class(prob_insert_table), intent(in) :: self
         integer        :: nptcls, npose, ncapped, kmax
         integer(int64) :: nelig
         real(dp)       :: wc_sum
         call self%counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
-        call insert_report_counts(nptcls, npose, wc_sum, nelig, ncapped, kmax)
+        call insert_report_counts(nptcls, npose, wc_sum, ncapped, kmax)
     end subroutine insert_table_report
 
     !> the counts the report is made of (a part publishes them, the master sums them in part order); the committed
@@ -1307,19 +1342,18 @@ contains
     end subroutine write_fill_profile_bench
 
     !> the insertion report from counts
-    subroutine insert_report_counts( nptcls, npose, wc_sum, nelig, ncapped, kmax )
-        integer,        intent(in) :: nptcls, npose, ncapped, kmax
-        integer(int64), intent(in) :: nelig
-        real(dp),       intent(in) :: wc_sum
-        character(len=32) :: ninsert, wcommit, nelig_str, pct_capped
+    subroutine insert_report_counts( nptcls, npose, wc_sum, ncapped, kmax )
+        integer,  intent(in) :: nptcls, npose, ncapped, kmax
+        real(dp), intent(in) :: wc_sum
+        character(len=32) :: ninsert, wcommit, pct_capped
         if( nptcls < 1 ) return
         write(ninsert,'(F32.2)') 1. + real(npose) / real(nptcls)
-        write(wcommit,'(F32.2)') real(wc_sum) / real(nptcls)
-        write(nelig_str,'(F32.2)') real(nelig) / real(nptcls)
-        write(pct_capped,'(F32.1)') 100. * real(ncapped) / real(nptcls)
-        write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', kmax, '): '//trim(adjustl(ninsert))//&
-            &' poses per particle, committed weight '//trim(adjustl(wcommit))//', '//trim(adjustl(nelig_str))//&
-            &' eligible per particle, '//trim(adjustl(pct_capped))//'% capped'
+        write(wcommit,'(F32.0)') 100. * real(wc_sum) / real(nptcls)
+        write(pct_capped,'(F32.0)') 100. * real(ncapped) / real(nptcls)
+        ! the capped share says whether topk limits the insertion
+        write(logfhandle,'(A)') log_item('POSES INSERTED', trim(adjustl(ninsert))//' per particle, '//&
+            &trim(adjustl(wcommit))//'% of the weight on the assigned pose; '//trim(adjustl(pct_capped))//&
+            &'% of particles had more poses in the cone than topk '//int2str(kmax)//' allows')
         call flush(logfhandle)
     end subroutine insert_report_counts
 
@@ -1361,6 +1395,8 @@ contains
         write(funit,'(a,1x,i0)')      'inpl_npose',    rec%inpl_npose
         write(funit,'(a,1x,i0)')      'inpl_nsingle',  rec%inpl_nsingle
         write(funit,'(a,1x,es24.16)') 'inpl_neff_sum', rec%inpl_neff_sum
+        write(funit,'(a,1x,i0)')      'inpl_nrows',    rec%inpl_nrows
+        write(funit,'(a,1x,es24.16)') 'inpl_committed_view_weight_sum', rec%inpl_committed_view_weight_sum
         write(funit,'(a,1x,i0)')      'state_nstates', rec%states%nstates
         if( rec%states%nstates > 0 )then
             write(funit,'(a,1x,i0)')      'state_nrows',         rec%states%nrows
@@ -1409,6 +1445,8 @@ contains
         call read_i8 ('inpl_npose',    rec%inpl_npose)
         call read_i8 ('inpl_nsingle',  rec%inpl_nsingle)
         call read_dp ('inpl_neff_sum', rec%inpl_neff_sum)
+        call read_i8 ('inpl_nrows',    rec%inpl_nrows)
+        call read_dp ('inpl_committed_view_weight_sum', rec%inpl_committed_view_weight_sum)
         call read_int('state_nstates', nstates)
         if( nstates > 0 )then
             call rec%states%new(nstates)
@@ -1495,6 +1533,8 @@ contains
         acc%inpl_npose    = acc%inpl_npose    + rec%inpl_npose
         acc%inpl_nsingle  = acc%inpl_nsingle  + rec%inpl_nsingle
         acc%inpl_neff_sum = acc%inpl_neff_sum + rec%inpl_neff_sum
+        acc%inpl_nrows    = acc%inpl_nrows    + rec%inpl_nrows
+        acc%inpl_committed_view_weight_sum = acc%inpl_committed_view_weight_sum + rec%inpl_committed_view_weight_sum
         call acc%states%add(rec%states)
     end subroutine add_prob_readout
 
@@ -1525,53 +1565,56 @@ contains
         type(prob_readout), intent(in) :: rec
         real,               intent(in) :: prob_beta
         character(len=32) :: mode_pct
+        character(len=:), allocatable :: note
         integer :: nassigned
-        call neff_report_sums(rec%neff_nrows, rec%neff_sum_draw, rec%neff_sum_phys, prob_beta)
         select case(rec%route)
             case(PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH)
-                if( rec%l_extras )then
-                    call insert_report_counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_nelig, &
-                        &rec%ins_ncapped, rec%kmax)
-                else if( rec%kmax > 1 )then
-                    write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT (topk ', rec%kmax, '): no FSC yet, committed pose only'
-                endif
                 nassigned = rec%nptcls
                 if( rec%route == PROB_READOUT_3D_NEIGH ) nassigned = rec%nptcls - rec%nkept
                 write(mode_pct,'(F32.1)') 100. * real(rec%nmode) / real(max(1,nassigned))
-                write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_ASSIGN: ', nassigned, ' particles x ', rec%nrefs,&
-                    &' references, '//trim(adjustl(mode_pct))//'% at the row mode'
-                call rec%states%report(prob_beta)
-                if( rec%route == PROB_READOUT_3D_NEIGH )then
-                    if( rec%nkept > 0 ) write(logfhandle,'(A,I0)') &
-                        &'WARNING: particles without a valid neighbourhood candidate, orientation kept: ', rec%nkept
-                    if( rec%ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
-                        &'WARNING: particles without a temperature in the neighbourhood rows, assigned to their argmin: ', &
-                        &rec%ntemp_missing
-                else
-                    if( rec%ntemp_missing > 0 ) write(logfhandle,'(A,I0)') &
-                        &'WARNING: particles without a temperature in the dense rows, assigned to their argmin: ', &
-                        &rec%ntemp_missing
+                ! the dense table's invalid and flat rows beside the assignment
+                note = ''
+                if( rec%route /= PROB_READOUT_3D_NEIGH )then
                     if( rec%nptcls > 0 )then
                         if( rec%nbad  == rec%nptcls ) THROW_HARD('all probability-table reference distances are invalid')
                         if( rec%nflat == rec%nptcls ) THROW_HARD('all probability-table reference distances are flat')
                     endif
-                    if( rec%nbad  > 0 ) write(logfhandle,*) 'WARNING: particles with invalid probability-table distances: ', rec%nbad
-                    if( rec%nflat > 0 ) write(logfhandle,*) 'WARNING: particles with flat probability-table reference distances: ', rec%nflat
+                    if( rec%nbad  > 0 ) note = note//'; '//int2str(rec%nbad)//' particles with invalid rows'
+                    if( rec%nflat > 0 ) note = note//'; '//int2str(rec%nflat)//' particles with flat rows'
+                endif
+                ! the share of drawn poses that are the particle's most probable one (the row mode)
+                write(logfhandle,'(A)') log_item('POSE ASSIGNMENT', trim(adjustl(mode_pct))//&
+                    &'% of particles at their best pose'//neff_clause(rec%neff_nrows, rec%neff_sum_draw, 'poses')//note)
+                if( rec%l_extras )then
+                    call insert_report_counts(rec%ins_nptcls, rec%ins_npose, rec%ins_wc_sum, rec%ins_ncapped, rec%kmax)
+                else if( rec%kmax > 1 )then
+                    write(logfhandle,'(A)') log_item('POSES INSERTED', '1 per particle, the assigned pose only '//&
+                        &'(no FSC yet for the insertion cone)')
+                endif
+                if( rec%inpl_kmax > 1 ) call inpl3D_report_counts(rec)
+                call rec%states%report(prob_beta)
+                if( rec%route == PROB_READOUT_3D_NEIGH )then
+                    if( rec%nkept > 0 ) write(logfhandle,'(A,I0,A)') '>>> WARNING: ', rec%nkept, &
+                        &' particles without a valid neighbourhood candidate, orientation kept'
+                    if( rec%ntemp_missing > 0 ) write(logfhandle,'(A,I0,A)') '>>> WARNING: ', rec%ntemp_missing, &
+                        &' particles without a temperature in the neighbourhood rows, assigned to their argmin'
+                else
+                    if( rec%ntemp_missing > 0 ) write(logfhandle,'(A,I0,A)') '>>> WARNING: ', rec%ntemp_missing, &
+                        &' particles without a temperature in the dense rows, assigned to their argmin'
                 endif
             case(PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE)
                 write(mode_pct,'(F32.1)') 100. * real(rec%nmode) / real(max(1,rec%nptcls))
-                write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB2D_ASSIGN: ', rec%nptcls, ' particles x ', rec%nrefs,&
-                    &' classes, '//trim(adjustl(mode_pct))//'% at the row mode'
+                write(logfhandle,'(A)') log_item('CLASS ASSIGNMENT', trim(adjustl(mode_pct))//&
+                    &'% of particles at their best class'//neff_clause(rec%neff_nrows, rec%neff_sum_draw, 'classes'))
                 if( rec%inpl_kmax > 1 ) call inpl_report_counts(rec%inpl_nptcls, rec%inpl_npose, rec%inpl_nsingle, &
-                    &rec%inpl_neff_sum, rec%inpl_kmax, rec%inpl_mmax)
+                    &rec%inpl_kmax, rec%inpl_mmax)
                 if( rec%ntemp_missing > 0 )then
                     if( rec%route == PROB_READOUT_2D_SPARSE )then
-                        write(logfhandle,'(A,I0)') &
-                            &'WARNING: particles without a temperature in the 2D candidate rows, assigned to their best candidate: ', &
-                            &rec%ntemp_missing
+                        write(logfhandle,'(A,I0,A)') '>>> WARNING: ', rec%ntemp_missing, &
+                            &' particles without a temperature in the 2D candidate rows, assigned to their best candidate'
                     else
-                        write(logfhandle,'(A,I0)') &
-                            &'WARNING: particles without a temperature in the 2D rows, assigned to their argmin: ', rec%ntemp_missing
+                        write(logfhandle,'(A,I0,A)') '>>> WARNING: ', rec%ntemp_missing, &
+                            &' particles without a temperature in the 2D rows, assigned to their argmin'
                     endif
                 endif
             case DEFAULT
@@ -1652,6 +1695,142 @@ contains
         if( self%npose > size(self%w) ) THROW_HARD('more extras than the layout holds; insert_poses_setup_range')
     end subroutine insert_poses_setup_range
 
+    !> the in-plane posterior insertion's blocks for the part the first setup_range laid out: max(1,kmax) blocks per
+    !! particle of kq packed entries, the worst case (a quadrature gives at most kq), never exceeded, grown or copied;
+    !! the rotation grid must fit an entry's 16-bit index
+    subroutine insert_poses_reserve_inpl( self, kq, kmax, rots )
+        class(prob_insert_poses), intent(inout) :: self
+        integer,                  intent(in)    :: kq, kmax
+        real,                     intent(in)    :: rots(:) !< the rotation grid's angles (degrees, the calculator's)
+        integer :: nblocks, nrots
+        if( .not. allocated(self%loc) ) THROW_HARD('the layout is set up first; insert_poses_reserve_inpl')
+        if( allocated(self%blk_nent) ) THROW_HARD('the blocks are reserved once per layout; insert_poses_reserve_inpl')
+        nrots = size(rots)
+        if( kq < 1 .or. kq >= 2**15 ) THROW_HARD('invalid quadrature budget; insert_poses_reserve_inpl')
+        if( nrots < 1 .or. nrots >= 2**16 ) THROW_HARD('the rotation grid does not fit an entry; insert_poses_reserve_inpl')
+        self%kq   = kq
+        self%nblk = max(1, kmax)
+        nblocks   = max(1, self%nblk * self%nptcls)
+        allocate(self%blk_nent(nblocks), self%blk_bin(nblocks), source=0)
+        allocate(self%blk_ent(kq,nblocks), source=0)
+        allocate(self%e3_grid(nrots))
+        self%e3_grid = 360. - rots
+    end subroutine insert_poses_reserve_inpl
+
+    !> whether the particle at local index iloc enters by its blocks (its search filled them): count 0 leaves it to
+    !! the insertion without the key, at its committed pose and its extras with their table weights
+    pure logical function insert_poses_has_blocks( self, iloc ) result( l_blocks )
+        class(prob_insert_poses), intent(in) :: self
+        integer,                  intent(in) :: iloc
+        l_blocks = .false.
+        if( .not. allocated(self%blk_nent) ) return
+        l_blocks = self%blk_nent(self%block(iloc, 0)) > 0
+    end function insert_poses_has_blocks
+
+    !> the in-plane Euler angle of entry j of block iblk, whose pose has the continuous angle e3_pose: the solved bin
+    !! and a collapsed row are inserted at the pose's continuous angle, every other entry at its grid angle
+    pure real function insert_poses_entry_e3( self, iblk, j, e3_pose ) result( e3 )
+        class(prob_insert_poses), intent(in) :: self
+        integer,                  intent(in) :: iblk, j
+        real,                     intent(in) :: e3_pose
+        integer :: irot
+        e3   = e3_pose
+        irot = inpl_entry_rot(self%blk_ent(j,iblk))
+        if( self%blk_nent(iblk) > 1 .and. irot /= self%blk_bin(iblk) ) e3 = self%e3_grid(irot)
+    end function insert_poses_entry_e3
+
+    !> the share of its pose's weight entry j of block iblk carries: its point count over the budget
+    pure real function insert_poses_entry_weight( self, iblk, j ) result( w )
+        class(prob_insert_poses), intent(in) :: self
+        integer,                  intent(in) :: iblk, j
+        w = real(inpl_entry_count(self%blk_ent(j,iblk))) / real(self%kq)
+    end function insert_poses_entry_weight
+
+    !> the block of the particle at local index iloc for its pose k: 0 the committed pose, k its k-th extra slot
+    pure integer function insert_poses_block( self, iloc, k ) result( iblk )
+        class(prob_insert_poses), intent(in) :: self
+        integer,                  intent(in) :: iloc, k
+        iblk = (iloc - 1) * self%nblk + k + 1
+    end function insert_poses_block
+
+    !> The window prior's centre of a table refinement, by the shift search's rule (set_prior_centre): the start
+    !! xy_start at grid rotation irot of angle rot (degrees) as the stored shift R(irot)^T xy_start; irot outside the
+    !! grid keeps xy_start. Taken at the refinement's start: the search may end at another rotation
+    pure function prior_window_centre( xy_start, irot, nrots, rot ) result( u0 )
+        real,    intent(in) :: xy_start(2), rot
+        integer, intent(in) :: irot, nrots
+        real     :: u0(2)
+        real(dp) :: ang, c, sn
+        u0 = xy_start
+        if( irot < 1 .or. irot > nrots ) return
+        ang = real(rot,dp) * DPI / 180.d0
+        c   = cos(ang)
+        sn  = sin(ang)
+        u0(1) = real(c  * real(xy_start(1),dp) - sn * real(xy_start(2),dp))
+        u0(2) = real(sn * real(xy_start(1),dp) + c  * real(xy_start(2),dp))
+    end function prior_window_centre
+
+    !> the bytes the in-plane posterior insertion reserves for nptcls particles at topk poses and kq entries per pose
+    !! (insert_poses_reserve_inpl, the memory estimate's term): per block its count, its bin and kq entries of 4 bytes
+    pure integer(int64) function inpl_reserved_bytes( nptcls, topk, kq ) result( nbytes )
+        integer, intent(in) :: nptcls, topk, kq
+        nbytes = int(nptcls,int64) * int(max(1,topk),int64) * (8_int64 + 4_int64 * int(kq,int64))
+    end function inpl_reserved_bytes
+
+    !> one packed entry of a block: the rotation index (below 2^16) in the low 16 bits, the point count above
+    pure integer function inpl_entry_pack( irot, cnt ) result( e )
+        integer, intent(in) :: irot, cnt
+        e = ior(irot, ishft(cnt, 16))
+    end function inpl_entry_pack
+
+    pure integer function inpl_entry_rot( e ) result( irot )
+        integer, intent(in) :: e
+        irot = iand(e, 65535)
+    end function inpl_entry_rot
+
+    pure integer function inpl_entry_count( e ) result( cnt )
+        integer, intent(in) :: e
+        cnt = ishft(e, -16)
+    end function inpl_entry_count
+
+    !> the in-plane posterior counts of the particle at local index iloc that entered by its blocks, from its blocks,
+    !! its poses' view weights and the rows' n_eff (neff, the committed pose first): the committed view's weight is
+    !! its pose's share of the particle, not the committed angle's inserted weight (its solved bin's share of that)
+    function inpl_particle_counts( extra, iloc, neff ) result( counts )
+        type(prob_insert_poses), intent(in) :: extra
+        integer,                 intent(in) :: iloc
+        real,                    intent(in) :: neff(:)
+        type(prob_inpl_counts) :: counts
+        real    :: wpose
+        integer :: k, nent
+        counts%nptcls = 1_int64
+        do k = 0,extra%nextra(iloc)
+            nent = extra%blk_nent(extra%block(iloc, k))
+            if( k == 0 )then
+                wpose = extra%wc(iloc)
+            else
+                wpose = extra%w(extra%first(iloc) + k - 1)
+            endif
+            counts%nrows = counts%nrows + 1_int64
+            if( wpose > 0. ) counts%npose = counts%npose + int(nent, int64)
+            if( nent == 1 ) counts%nsingle = counts%nsingle + 1_int64
+            counts%neff_sum = counts%neff_sum + real(neff(k+1), dp)
+        enddo
+        counts%view_weight_sum = real(extra%wc(iloc), dp)
+    end function inpl_particle_counts
+
+    !> another thread's counts added (the add_work pattern)
+    subroutine inpl_counts_add( self, other )
+        class(prob_inpl_counts), intent(inout) :: self
+        class(prob_inpl_counts), intent(in)    :: other
+        self%nptcls  = self%nptcls  + other%nptcls
+        self%nrows   = self%nrows   + other%nrows
+        self%npose   = self%npose   + other%npose
+        self%nsingle = self%nsingle + other%nsingle
+        self%neff_sum        = self%neff_sum        + other%neff_sum
+        self%view_weight_sum = self%view_weight_sum + other%view_weight_sum
+    end subroutine inpl_counts_add
+
     !> whether particle iptcl has an entry
     pure logical function insert_poses_has( self, iptcl )
         class(prob_insert_poses), intent(in) :: self
@@ -1671,8 +1850,14 @@ contains
         if( allocated(self%euler)  ) deallocate(self%euler)
         if( allocated(self%shift)  ) deallocate(self%shift)
         if( allocated(self%w)      ) deallocate(self%w)
+        if( allocated(self%blk_nent) ) deallocate(self%blk_nent)
+        if( allocated(self%blk_bin)  ) deallocate(self%blk_bin)
+        if( allocated(self%blk_ent)  ) deallocate(self%blk_ent)
+        if( allocated(self%e3_grid)  ) deallocate(self%e3_grid)
         self%nptcls = 0
         self%npose  = 0
+        self%kq     = 0
+        self%nblk   = 0
     end subroutine insert_poses_kill
 
     !> One draw from the posterior over a table row at temperature temp (the tables' assignment): p_r proportional to
@@ -1742,29 +1927,33 @@ contains
     !! exactly only when k divides the number of rotations (for a phase that is not a tie), otherwise with a
     !! residual on the harmonics of up to about m 2 pi / n. A row with its mass in one rotation gives one entry. No
     !! random number is drawn: the caller's keyed variate is v. neff is exp(entropy) of the row; nent = 0 when no
-    !! distance is valid
-    subroutine inpl_quadrature( n, dists, temp, k, v, nent, inds, w, neff )
-        integer,  intent(in)  :: n, k
-        real,     intent(in)  :: dists(n), temp
-        real(dp), intent(in)  :: v
-        integer,  intent(out) :: nent, inds(k)
-        real,     intent(out) :: w(k), neff
+    !! distance is valid; lnz (ln of the partition sum) and dmin (the minimum) give the row's in-plane marginal
+    subroutine inpl_quadrature( n, dists, temp, k, v, nent, inds, w, neff, lnz, dmin )
+        integer,            intent(in)  :: n, k
+        real,               intent(in)  :: dists(n), temp
+        real(dp),           intent(in)  :: v
+        integer,            intent(out) :: nent, inds(k)
+        real,               intent(out) :: w(k), neff
+        real(dp), optional, intent(out) :: lnz
+        real,     optional, intent(out) :: dmin
         real(dp) :: wsum, csum, tgt, arg, p, h
-        real     :: dmin, invalid, wr(n)
+        real     :: dmin_row, invalid, wr(n)
         integer  :: cnt(k), r, j, imin, rlast
         nent = 0
         inds = 0
         w    = 0.
         neff = 0.
         cnt  = 0
-        invalid = 0.1 * huge(invalid)
-        imin    = 0
-        dmin    = huge(dmin)
+        if( present(lnz)  ) lnz  = 0.d0
+        if( present(dmin) ) dmin = 0.
+        invalid  = 0.1 * huge(invalid)
+        imin     = 0
+        dmin_row = huge(dmin_row)
         do r = 1,n
             if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
-                if( dists(r) < dmin )then
-                    dmin = dists(r)
-                    imin = r
+                if( dists(r) < dmin_row )then
+                    dmin_row = dists(r)
+                    imin     = r
                 endif
             endif
         enddo
@@ -1774,7 +1963,7 @@ contains
         do r = 1,n
             wr(r) = 0.
             if( ieee_is_finite(dists(r)) .and. dists(r) < invalid )then
-                arg = real(max(0.,temp),dp) * real(dists(r) - dmin,dp)
+                arg = real(max(0.,temp),dp) * real(dists(r) - dmin_row,dp)
                 if( arg < 80.d0 )then
                     wr(r) = real(exp(-arg))
                     wsum  = wsum + real(wr(r),dp)
@@ -1809,7 +1998,44 @@ contains
             j = j + 1
         enddo
         w(1:nent) = real(cnt(1:nent)) / real(k)
+        if( present(lnz)  ) lnz  = log(wsum)
+        if( present(dmin) ) dmin = dmin_row
     end subroutine inpl_quadrature
+
+    !> The view weights m of one particle's npose poses (the committed pose first), their in-plane marginals:
+    !! log m_k = lnz_k - temp dmin_k - pen_k, normalised; an extra under wmin is dropped and the rest renormalised, the
+    !! committed pose is always kept (all extras under wmin with the committed pose underflowed: none is dropped)
+    pure subroutine inpl_view_weights( npose, lnz, dmin, temp, pen, wmin, m )
+        integer,  intent(in)  :: npose
+        real(dp), intent(in)  :: lnz(npose), pen(npose)
+        real,     intent(in)  :: dmin(npose), temp, wmin
+        real,     intent(out) :: m(npose)
+        real(dp) :: lm(npose), mk(npose)
+        integer  :: k
+        lm = lnz - real(temp,dp) * real(dmin,dp) - pen
+        mk = exp(lm - maxval(lm))
+        mk = mk / sum(mk)
+        lm = mk
+        do k = 2,npose
+            if( mk(k) < real(wmin,dp) ) mk(k) = 0.d0
+        enddo
+        if( .not. (sum(mk) > 0.d0) ) mk = lm
+        m = real(mk / sum(mk))
+    end subroutine inpl_view_weights
+
+    !> A pose's shift-prior term P_k of its view weight, in log units, under the condition the insertion applies it: the
+    !! polar shift map's prior on the increment du from the stored shift (l_map), or the window search's on du from
+    !! the refinement's retained centre (variance sigma2_window per axis; 0 without the prior)
+    pure real(dp) function inpl_prior_penalty( du, centre, l_map, shift_sigma, smpd, sigma2_window ) result( pen )
+        real,    intent(in) :: du(2), centre(2), shift_sigma, smpd, sigma2_window
+        logical, intent(in) :: l_map
+        pen = 0.d0
+        if( l_map )then
+            pen = map_prior_weight(shift_sigma, smpd) * sum(real(du,dp)**2)
+        else if( sigma2_window > 0. )then
+            pen = sum((real(du,dp) - real(centre,dp))**2) / (2.d0 * real(sigma2_window,dp))
+        endif
+    end function inpl_prior_penalty
 
     !> one more quadrature point in rotation r, merged into the last entry when that holds r
     pure subroutine quad_add_point( k, r, nent, inds, cnt )
@@ -1929,21 +2155,40 @@ contains
     end subroutine inpl_insert_kill
 
     !> the in-plane insertion report from counts
-    subroutine inpl_report_counts( nrows, npose, nsingle, neff_sum, kmax, mmax )
+    subroutine inpl_report_counts( nrows, npose, nsingle, kmax, mmax )
         integer(int64), intent(in) :: nrows, npose, nsingle
-        real(dp),       intent(in) :: neff_sum
         integer,        intent(in) :: kmax, mmax
-        character(len=32) :: nparticles, nentries, pct_single, neff_mean
         if( nrows < 1_int64 ) return
-        write(nparticles,'(I0)')    nrows
-        write(nentries,'(F32.2)')   real(npose) / real(nrows)
-        write(pct_single,'(F32.1)') 100. * real(nsingle) / real(nrows)
-        write(neff_mean,'(F32.1)')  real(neff_sum) / real(nrows)
-        write(logfhandle,'(A,I0,A,I0,A)') '>>> PROB_TAB_INPL (budget ', kmax, ', m_max ', mmax, '): '//&
-            &trim(adjustl(nparticles))//' particles, '//trim(adjustl(nentries))//' entries per particle, '//&
-            &trim(adjustl(pct_single))//'% collapsed to the refined pose, mean n_eff '//trim(adjustl(neff_mean))
+        write(logfhandle,'(A)') log_item('IN-PLANE ANGLES', inpl_text(real(npose) / real(nrows), &
+            &100. * real(nsingle) / real(nrows), 'particles', kmax, mmax))
         call flush(logfhandle)
     end subroutine inpl_report_counts
+
+    !> the 3D line of the in-plane posterior insertion from a record (the owner's or the parts' sum): angles per
+    !! particle, the share of rows with one angle and the budget against the band
+    subroutine inpl3D_report_counts( rec )
+        type(prob_readout), intent(in) :: rec
+        if( rec%inpl_nptcls < 1_int64 .or. rec%inpl_nrows < 1_int64 .or. rec%nptcls < 1 ) return
+        write(logfhandle,'(A)') log_item('IN-PLANE ANGLES', inpl_text(real(rec%inpl_npose) / real(rec%inpl_nptcls), &
+            &100. * real(rec%inpl_nsingle) / real(rec%inpl_nrows), 'poses', rec%inpl_kmax, rec%inpl_mmax))
+        call flush(logfhandle)
+    end subroutine inpl3D_report_counts
+
+    !> the in-plane line's text: angles per particle, the share of rows (of noun) with one angle, and whether the
+    !! budget of kmax points exceeds the highest angular harmonic mmax the band resolves at the rim
+    function inpl_text( nangles, pct_one, noun, kmax, mmax ) result( str )
+        real,             intent(in) :: nangles, pct_one
+        character(len=*), intent(in) :: noun
+        integer,          intent(in) :: kmax, mmax
+        character(len=:), allocatable :: str
+        str = fmt_dec(nangles, 2)//' per particle ('//fmt_dec(pct_one, 0)//'% of '//noun//' one angle); budget '//&
+            &int2str(kmax)//' points, '
+        if( mmax < kmax )then
+            str = str//'covers the '//int2str(mmax)//' the band resolves'
+        else
+            str = str//'short of the '//int2str(mmax)//' the band resolves'
+        endif
+    end function inpl_text
 
     ! ---- the weighted insertion's cone ------------------------------------------------------------------------
 
@@ -2593,6 +2838,7 @@ contains
         integer :: s
         logical :: ll_report
         character(len=32) :: limit, angle, shift
+        character(len=:), allocatable :: label
         ll_report = .true.
         if( present(l_report) ) ll_report = l_report
         allocate(res05(nstates), source=0.)
@@ -2614,9 +2860,13 @@ contains
             write(limit,'(F32.2)') res05(s)
             write(angle,'(F32.2)') cone%get_angle(s)
             write(shift,'(F32.2)') res05(s) / smpd
-            write(logfhandle,'(A,I0,A)') '>>> PROB_TAB_INSERT CONE (state ', s, &
-                &'): rim limit '//trim(adjustl(limit))//' A, i.e. '//trim(adjustl(angle))//' deg of rotation or '//&
-                &trim(adjustl(shift))//' px of shift'
+            if( nstates > 1 )then
+                label = 'INSERTION CONE (STATE '//int2str(s)//')'
+            else
+                label = 'INSERTION CONE'
+            endif
+            write(logfhandle,'(A)') log_item(label, 'poses within '//trim(adjustl(angle))//' deg or '//&
+                &trim(adjustl(shift))//' px of the assigned pose ('//trim(adjustl(limit))//' A at the rim)')
         enddo
         call fname%kill
     end function insert_cone_from_fsc
@@ -2630,6 +2880,7 @@ contains
         real,        intent(in)    :: trs
         integer,     intent(in)    :: pinds(:), nptcls
         real, allocatable :: shsig(:), widths(:)
+        character(len=:), allocatable :: text
         integer :: i, nnew, nwide, nw
         if( .not. l_centring ) return
         if( nptcls < 1 ) return
@@ -2643,16 +2894,18 @@ contains
                 nwide = nwide + 1
             endif
         enddo
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> DISK SEARCHED BY ', nnew + nwide, ' OF ', nptcls,&
-            &' SAMPLED PARTICLES (', nnew, ' NOT YET CENTRED, ', nwide, ' WIDE)'
-        nw = count(shsig(pinds(1:nptcls)) >= 0.)
+        ! one line: the prior's width over the centred particles, then the disk set
+        text = ''
+        nw   = count(shsig(pinds(1:nptcls)) >= 0.)
         if( nw > 0 )then
             widths = pack(shsig(pinds(1:nptcls)), shsig(pinds(1:nptcls)) >= 0.)
             call hpsort(widths)
-            write(logfhandle,'(A,F0.2,A,F0.2,A)') '>>> SHIFT PRIOR WIDTH (PX) MEDIAN ', widths(max(1, nw / 2)),&
-                &' 90TH PCT ', widths(max(1, (9 * nw) / 10)), ' OVER THE CENTRED PARTICLES'
+            text = 'median '//fmt_dec(widths(max(1, nw / 2)), 2)//' px, 90th pct '//&
+                &fmt_dec(widths(max(1, (9 * nw) / 10)), 2)//'; '
             deallocate(widths)
         endif
+        write(logfhandle,'(A)') log_item('SHIFT PRIOR', text//'disk search for '//int2str(nnew + nwide)//' of '//&
+            &int2str(nptcls)//' ('//int2str(nnew)//' not yet centred)')
         deallocate(shsig)
     end subroutine print_disk_set
 

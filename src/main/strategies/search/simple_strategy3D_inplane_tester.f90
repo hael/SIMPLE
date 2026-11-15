@@ -5,7 +5,7 @@
 ! under refine=cont, never a command-line key) and the stored shift as the search's previous
 ! shift (N10; a small phantom written to the run directory and removed).
 module simple_strategy3D_inplane_tester
-use simple_core_module_api,   only: sp, dp
+use simple_core_module_api,   only: sp, dp, PI, DPI
 use simple_rnd,               only: gasdev
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
@@ -22,7 +22,8 @@ use simple_image,             only: image
 use simple_syslib,            only: del_file
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_strategy3D_utils,  only: resolve_inplane_e3, candidate_pose
-use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl
+use simple_pftc_shsrch_grad,  only: pftc_shsrch_grad, shift_ref2ptcl, shift_ptcl2ref
+use simple_eul_prob_tab,      only: seeded_window_refine
 use simple_matcher_2Dprep,    only: prepimg4align
 use simple_matcher_ptcl_io,   only: prep_rec_observation, prep_rec_observation_ptcl, pass_team, killimgbatch, &
                                     &rec_state_half
@@ -66,6 +67,8 @@ contains
         call test_table_increment_axes()
         call test_map_initialised_refinement()
         call test_continuous_seed_beyond_window()
+        call test_solved_row_frame()
+        call test_seeded_window_centre()
         call test_rec_observation_mask()
         call test_pass_team_check()
         call test_pass_state_team_sized()
@@ -744,6 +747,197 @@ contains
         call cline%kill
         call del_file(PHANTOM)
     end subroutine test_continuous_seed_beyond_window
+
+    !> The in-plane row of a solved pose at the increment both continuous solves return (bank, stored frame): its
+    !! minimum within one bin of the solved angle, its value at that bin the shifted-reference kernel at
+    !! shift_ptcl2ref(sh, rot), and the increment beating the negated and rotated frames there
+    subroutine test_solved_row_frame()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter :: STORED_SHIFT(2) = [1.25, -0.75], S_TRUE(2) = [2.5, -2.0], TRS = 5.
+        real,             parameter :: TOL_KERNEL = 1.e-6  ! measured 7.6e-8 (Release), single-precision sums
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)            :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        type(pftc_shsrch_grad)   :: grad
+        complex(sp), allocatable :: ref(:,:), ptcl(:,:), bank(:,:)
+        real,        allocatable, target :: sigma2(:,:)
+        real,        allocatable :: row(:), rowref(:), rowx(:)
+        real    :: lims(2,2), cxy(3), sh(2), corr, inpl_coord, rot, worst_kernel, alt(2,3)
+        integer :: irot, inpl, nrots, pdim(3), kfromto(2), pftsz, k, pp, nchecked, iroute, ialt, imin, dbin
+        logical :: inpl_valid, l_beats
+        write(*,'(A)') 'test_solved_row_frame'
+        call set_fixed_seed(20261114)
+        call one_particle_fixture(PHANTOM, STORED_SHIFT, b, p, cline, srch, spec, trs=TRS, objfun='euclid')
+        call assert_true(srch%uses_continuous_refinement(), 'the fixture runs the continuous route')
+        nrots   = b%pftc%get_nrots()
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim    = b%pftc%get_pdim_interp()
+        allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        allocate(bank(pftsz+1,kfromto(2)-kfromto(1)+1), row(nrots), rowref(nrots), rowx(nrots))
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                ref(pp,k) = cmplx(gasdev(), gasdev())
+            enddo
+        enddo
+        call b%pftc%set_ref_pft(1, ref, iseven=.true.)
+        call b%pftc%set_eo(1, .true.)
+        call b%pftc%memoize_refs
+        allocate(sigma2(kfromto(1):kfromto(2),2), source=1.)
+        call b%pftc%assign_sigma2_noise(sigma2)
+        lims(:,1) = -TRS
+        lims(:,2) =  TRS
+        call grad%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        nchecked     = 0
+        worst_kernel = 0.
+        l_beats      = .true.
+        do inpl = 1 + nrots / 16, nrots, max(1, nrots / 5)
+            call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), inpl, ptcl(:,kfromto(1):kfromto(2)))
+            call shift_half_ring(pftsz, kfromto, p%box, S_TRUE, ptcl(:,kfromto(1):kfromto(2)))
+            call b%pftc%set_ptcl_pft(1, ptcl)
+            call b%pftc%memoize_ptcls
+            do iroute = 1, 2
+                ! the table's refined entry: the stored-frame increment, then the pose's continuous solve
+                irot = inpl
+                call grad%set_indices(1, 1)
+                cxy  = grad%minimize(irot=irot, sh_rot=.true.)
+                if( irot < 1 ) cycle
+                sh   = cxy(2:3)
+                corr = cxy(1)
+                if( iroute == 1 )then
+                    call srch%refine_assignment_continuously(1, irot, corr, sh, inpl_coord, inpl_valid)
+                else
+                    call srch%refine_extra_pose_continuously(1, irot, corr, sh, inpl_coord, inpl_valid)
+                endif
+                rot = b%pftc%get_rot(irot)
+                ! the frames are told apart only away from the half turns and for a sizeable increment
+                if( abs(sin(rot * PI / 180.)) < 0.3 .or. norm2(sh) < 1. ) cycle
+                nchecked = nchecked + 1
+                ! the row as the insertion takes it: the particle shifted by the increment in its own frame
+                call b%pftc%memoize_shifted_ptcl(1, sh, bank)
+                call b%pftc%gen_euclid_dists_bank(1, 1, bank, row)
+                imin = minloc(row, dim=1)
+                dbin = modulo(imin - irot, nrots)
+                call assert_true(min(dbin, nrots - dbin) <= 1, 'the row''s minimum lies within one bin of the solved angle')
+                call b%pftc%gen_euclid_dists(1, 1, shift_ptcl2ref(sh, rot), rowref)
+                worst_kernel = max(worst_kernel, abs(row(irot) - rowref(irot)) / max(abs(rowref(irot)), 1.))
+                alt(:,1) = -sh
+                alt(:,2) = shift_ptcl2ref(sh, rot)
+                alt(:,3) = shift_ref2ptcl(sh, rot)
+                do ialt = 1, 3
+                    call b%pftc%memoize_shifted_ptcl(1, alt(:,ialt), bank)
+                    call b%pftc%gen_euclid_dists_bank(1, 1, bank, rowx)
+                    if( .not. (row(irot) < rowx(irot)) ) l_beats = .false.
+                enddo
+            enddo
+        enddo
+        write(*,'(A,I0,A,ES10.3)') '>>> SOLVED ROW FRAME: ', nchecked, ' solves, kernel spread ', worst_kernel
+        call assert_true(nchecked >= 4, 'the frame was checked at four solves or more')
+        call assert_real(0., worst_kernel, TOL_KERNEL, 'the row at the solved bin equals the shifted-reference kernel at shift_ptcl2ref(sh, rot)')
+        call assert_true(l_beats, 'the returned increment''s row beats the negated and the rotated frames at the solved bin')
+        call grad%kill
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+    end subroutine test_solved_row_frame
+
+    !> The window prior's centre a table refinement keeps (seeded_window_refine): the seed (0.9 trs, 0.9 trs) at 0
+    !! degrees is its own centre, at 45 degrees the clipped start (trs, trs)/sqrt(2), and the start's centre is kept when
+    !! the search ends at another rotation
+    subroutine test_seeded_window_centre()
+        character(len=*), parameter :: PHANTOM = 'tmp_strategy3D_inplane_tester_phantom.mrc'
+        real,             parameter :: TRS = 4.
+        type(builder),    target :: b
+        type(parameters), target :: p
+        type(cmdline)            :: cline
+        type(strategy3D_srch)    :: srch
+        type(strategy3D_spec)    :: spec
+        type(pftc_shsrch_grad)   :: grad
+        complex(sp), allocatable :: ref(:,:), ptcl(:,:)
+        real    :: lims(2,2), cxy(3), seed(2), centre(2), rot
+        integer :: irot, irot0, irot45, istart, nrots, pdim(3), kfromto(2), pftsz, k, pp
+        write(*,'(A)') 'test_seeded_window_centre'
+        call set_fixed_seed(20261115)
+        call one_particle_fixture(PHANTOM, [0., 0.], b, p, cline, srch, spec, trs=TRS)
+        nrots   = b%pftc%get_nrots()
+        pftsz   = b%pftc%get_pftsz()
+        kfromto = b%pftc%get_kfromto()
+        pdim    = b%pftc%get_pdim_interp()
+        allocate(ref(pdim(1),pdim(2):pdim(3)), ptcl(pdim(1),pdim(2):pdim(3)), source=cmplx(0.,0.))
+        do k = kfromto(1), kfromto(2)
+            do pp = 1, pftsz
+                ref(pp,k) = cmplx(gasdev(), gasdev())
+            enddo
+        enddo
+        call b%pftc%set_ref_pft(1, ref, iseven=.true.)
+        call b%pftc%set_eo(1, .true.)
+        call b%pftc%memoize_refs
+        lims(:,1) = -TRS
+        lims(:,2) =  TRS
+        call grad%new_alternating(b, lims, lims_init=lims, maxits=100, coarse_init=.true.)
+        call grad%set_indices(1, 1)
+        irot0  = 0
+        irot45 = 0
+        do irot = 1, nrots
+            rot = b%pftc%get_rot(irot)
+            if( abs(rot) < 1.e-4 ) irot0 = irot
+            if( abs(rot - 45.) < 1.e-4 ) irot45 = irot
+        enddo
+        call assert_true(irot0 > 0 .and. irot45 > 0, 'the rotation grid holds 0 and 45 degrees')
+        if( irot0 < 1 .or. irot45 < 1 ) return
+        seed = [0.9 * TRS, 0.9 * TRS]
+        ! the particle is the reference rotated to 45 degrees, so a search started at 0 stays there and one started
+        ! three steps off 45 ends at 45
+        call rotate_half_ring(pftsz, kfromto(2)-kfromto(1)+1, ref(:,kfromto(1):kfromto(2)), irot45, ptcl(:,kfromto(1):kfromto(2)))
+        call b%pftc%set_ptcl_pft(1, ptcl)
+        call b%pftc%memoize_ptcls
+        irot = irot0
+        cxy  = seeded_window_refine(grad, b%pftc, seed, irot, TRS, centre)
+        call assert_true(all(abs(centre - seed) <= 1.e-5), 'at a starting angle of 0 the seed is its own centre')
+        irot = irot45
+        cxy  = seeded_window_refine(grad, b%pftc, seed, irot, TRS, centre)
+        call assert_true(all(abs(centre - [TRS, TRS] / sqrt(2.)) <= 1.e-4), &
+            &'at 45 degrees the clipped start is the centre (trs, trs)/sqrt(2)')
+        ! a refinement that ends at another rotation keeps the centre of its start
+        istart = modulo(irot45 - 1 + 3, nrots) + 1
+        irot   = istart
+        cxy    = seeded_window_refine(grad, b%pftc, seed, irot, TRS, centre)
+        call assert_true(irot /= istart, 'the search ended at another rotation than its start')
+        rot = b%pftc%get_rot(istart)
+        call assert_true(all(abs(centre - closed_form_centre(seed, rot, TRS)) <= 1.e-4), &
+            &'the centre is the start''s, not the final rotation''s')
+        call grad%kill
+        call srch%kill
+        call clean_strategy3D
+        call b%pftc%kill
+        call b%kill_strategy3D_tbox
+        call b%kill_general_tbox
+        call cline%kill
+        call del_file(PHANTOM)
+
+    contains
+
+        !> R(rot)^T clip(R(rot) seed): the rotation [[c, s], [-s, c]] of the polar searches, written out
+        function closed_form_centre( u, ang, lim ) result( c0 )
+            real, intent(in) :: u(2), ang, lim
+            real     :: c0(2), x(2)
+            real(dp) :: cs, sn
+            cs   = cos(real(ang,dp) * DPI / 180.d0)
+            sn   = sin(real(ang,dp) * DPI / 180.d0)
+            x(1) = real( cs * u(1) + sn * u(2))
+            x(2) = real(-sn * u(1) + cs * u(2))
+            x    = max(-lim, min(lim, x))
+            c0(1) = real(cs * x(1) - sn * x(2))
+            c0(2) = real(sn * x(1) + cs * x(2))
+        end function closed_form_centre
+
+    end subroutine test_seeded_window_centre
 
     !> The review's M2: a reconstruction observation is the same whether its record is kept or the particle is read
     !! again. The search preparation of a particle on the disk normalises it under the box's mask and notes the choice

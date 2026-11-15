@@ -537,9 +537,9 @@ from the tempered posterior p^beta (`refine3D_policy.md`). The workflows
 carry the iteration's value as `prob_beta` and the tail moves it; since
 2026-10-29 neither `prob_beta` nor `prob_beta_end` is a UI input of
 `refine2D`, `solve2D` or `solve2D_chunks`. The 2D
-tables log the n_eff readout of the 3D ones (`POSTERIOR DRAW N_EFF`, the mean
-effective number of classes a particle draws among at the draw's factor and
-at beta 1; `refine3D_policy.md`); the n_eff control that briefly replaced
+tables log the n_eff readout of the 3D ones (on the `CLASS ASSIGNMENT` line,
+the mean effective number of classes a particle draws among at the draw's
+factor; `refine3D_policy.md`); the n_eff control that briefly replaced
 `prob_beta` (2026-10-27 to 2026-10-29) is gone from both routes, and the
 weighted insertion (`topk`) is 3D only.
 
@@ -751,7 +751,9 @@ sum at that angle, and the angular residue of the reference grows. The fixed
 `INPL_POSTERIOR_BUDGET = 64` in `src/defs/simple_defs.f90` lets a particle enter
 the class sums at the in-plane angles of a quadrature of its posterior instead
 of at the one drawn angle. This is an internal numerical budget, with no CLI
-key, shared by every probabilistic 2D caller.
+key, shared by every probabilistic 2D caller. The 3D counterpart applies the
+same quadrature to every pose a 3D particle is inserted at (refine3D policy,
+"In-plane posterior insertion").
 
 - **Where it acts.** The iterations of the stages with a probability table
   (`refine=prob|prob_neigh`: stage 2 on), including the `cls_init=prev` seed
@@ -805,10 +807,11 @@ key, shared by every probabilistic 2D caller.
   class or shift uncertainty, and it does not by itself change the loop's gain:
   the reduction of the fresh noise the angular residue is seeded with is a
   hypothesis that the effect on real data tests.
-- **Readout.** `PROB_TAB_INPL (budget K, m_max M)` follows
-  `PROB_TAB2D_ASSIGN`: particles with a row, entries per particle (a collapsed
-  particle counts one), the share collapsed to the committed pose, and the mean
-  effective number of angles `exp(entropy)` of the rows. A distributed part
+- **Readout.** `IN-PLANE ANGLES` follows `CLASS ASSIGNMENT`: angles per
+  particle (a collapsed particle counts one), the share of particles with one
+  angle, and whether the budget K exceeds m_max, the highest angular harmonic
+  the band resolves at the rim (the record also holds the rows' mean
+  effective number of angles `exp(entropy)`). A distributed part
   publishes the counts in its readout record; the master sums them.
 - **Single-pose passes.** Passes without a probability table evaluate no
   insertion row and allocate no quadrature buffers.

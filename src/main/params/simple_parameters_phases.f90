@@ -1135,6 +1135,18 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
+        ! the in-plane posterior insertion: every refine3D pass that reconstructs from a posterior table but the
+        ! hill-climb neighbourhoods, under the Euclidean objective (the in-plane posterior is the Euclidean one)
+        self%l_inpl_posterior = .false.
+        if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%oritype) /= 'ptcl2D' .and. &
+            &trim(self%volrec) == 'yes' .and. self%cc_objfun == OBJFUN_EUCLID )then
+            select case(trim(self%refine))
+                case('prob')
+                    self%l_inpl_posterior = .true.
+                case('prob_neigh')
+                    self%l_inpl_posterior = trim(self%prob_neigh_mode) == 'state' .or. trim(self%prob_neigh_mode) == 'geom'
+            end select
+        endif
         ! geom searches the directions within athres_cont of the previous orientation, refine=cont's bound
         if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'geom' )then
             if( .not. (self%athres_cont > 0. .and. self%athres_cont <= 180.) ) THROW_HARD('athres_cont must be in (0,180] degrees')

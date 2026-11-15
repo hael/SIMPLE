@@ -63,6 +63,12 @@ All on the Dell, Release builds, 24 threads; the full tables are in the 2D plan'
 - The class averager pads smaller averages up but does not crop: references must be at the consumer's box.
   `learn_class_student` and `predict_classes` work at the full box with full-size averages; the pool works cropped.
 
+**Measured since (2026-11-14):** reference matching of new particles against the teacher's class averages at the
+working box costs 0.5 to 0.7 ms per particle with no centring, against 0.41 to 0.56 ms for the student's prediction
+alone, which still needs centred particles and a search after it
+(`completed/class_student_vs_reference_matching.md`). The pool's particles arrive centred, the student's best case;
+this plan's owners should weigh seeding by prediction against seeding by one matching pass before Phase 1.
+
 ## 4. Contract
 
 - **Off state.** Without a model, and without an artifact, the stream behaves byte for byte as on the base at a

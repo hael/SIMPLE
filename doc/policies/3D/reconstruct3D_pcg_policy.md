@@ -831,7 +831,7 @@ is meaningful because the two paths share everything but the estimator:
 - the master phase gets the same thread budget on local execution
   (`rec3D_master_nthr`: nparts x nthr capped at 32, the PCG rule, now also
   applied to the gridding volassemble instead of `NTHR_SHMEM_MAX`), and
-  both log one `RECONSTRUCTION MASTER PHASE (<backend>): <s>` line per
+  both log one `MASTER PHASE` line per
   iteration; the worker side is in the bench files (`partial
   reconstruction`), memory in the peak-RSS fields.
 
@@ -915,8 +915,8 @@ time, compute cost and memory:
   `BENCH/REFINE3D_BENCH_PARTppp.txt` with nparts, worker threads, box,
   box_crop, backend, `maxits_pcg`, `rtol`, peak and phase RSS, the phase
   timings and their thread-seconds; the master logs one
-  `RECONSTRUCTION MASTER PHASE (<backend>): s on n threads = thread-s;
-  master peak RSS` line per iteration and appends its phases (raw read and
+  `MASTER PHASE` line (s on n threads,
+  master peak RSS) per iteration and appends its phases (raw read and
   summation, solves, outputs, NU filter) to `BENCH/PCG_ASSEMBLE_BENCH.txt`
   (refine3D_policy.md, section 11.1). Load imbalance is the spread of the
   per-part partial-reconstruction times; core-hours are the sum of worker

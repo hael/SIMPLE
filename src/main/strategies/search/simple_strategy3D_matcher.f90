@@ -4,7 +4,7 @@ use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_pftc_srch_api
 use simple_matcher_refvol_utils
 use simple_matcher_ptcl_batch
-use simple_strategy3D_alloc,           only: clean_strategy3D, prep_strategy3D
+use simple_strategy3D_alloc,           only: clean_strategy3D, prep_strategy3D, prep_strategy3D_inpl_bank
 use simple_binoris_io,                 only: binwrite_oritab
 use simple_builder,                    only: builder
 use simple_eo_partition,               only: ensure_field_halves
@@ -12,7 +12,7 @@ use simple_eul_prob_tab,               only: eul_prob_tab
 use simple_eul_prob_tab_neigh,         only: eul_prob_tab_neigh
 use simple_matcher_3Drec,              only: calc_3Drec
 use simple_eul_prob_tab_utils,         only: prob_insert_poses, insert_cone_from_fsc, prob_readout, prob_readout_fname, &
-    &prob_fill_profile, write_fill_profile_bench, &
+    &prob_fill_profile, write_fill_profile_bench, prob_inpl_counts, &
     &write_prob_readout, PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH
 use simple_rec3D_pcg_strategy,         only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims,    only: sample_ptcls4iter3D, master_draws_sample3D, sample_ptcls4prob3D
@@ -72,7 +72,10 @@ contains
         class(parameters), pointer :: p_ptr
         class(builder),    pointer :: b_ptr
         class(eul_prob_tab), allocatable, target :: eulprob_obj_part !< the part's assignment (a neighbourhood table on the pipeline's prob_neigh route)
-        type(prob_insert_poses), target :: extra_poses  !< the weighted insertion's poses of this part (topk > 1)
+        type(prob_insert_poses), target :: extra_poses  !< the weighted insertion's poses of this part (topk > 1 or l_inpl_posterior)
+        type(prob_inpl_counts), allocatable :: inpl_counts(:) !< the in-plane posterior insertion's counts per particle
+        integer                 :: inpl_mmax      !< the band's highest angular harmonic at the rim (l_inpl_posterior)
+        real,   allocatable     :: inpl_rots(:)   !< the rotation grid's angles, for the reservation's entries
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr => null()
         end type strategy3D_per_ptcl
@@ -204,6 +207,7 @@ contains
             t_prep_orisrch  = tic()
         endif
         call prep_strategy3D(p_ptr, b_ptr)
+        if( ctrl%do_pipeline .and. p_ptr%l_inpl_posterior ) call setup_inpl_posterior()
         ! the polar shift map of the classic modes under the key (ruling 20)
         l_map_classic = p_ptr%l_centring .and. p_ptr%l_doshift .and. .not. str_has_substr(p_ptr%refine, 'prob')
         if( l_map_classic ) call setup_shiftmap_srch(p_ptr, b_ptr)
@@ -220,6 +224,7 @@ contains
         nthr_team = omp_get_max_threads()
         allocate(cnt_greedy(nthr_team), cnt_all(nthr_team), source=0)
         allocate(cont_work(nthr_team), ts_thr(nthr_team))
+        if( ctrl%do_pipeline .and. p_ptr%l_inpl_posterior ) allocate(inpl_counts(nptcls2update))
         ts_thr      = 0._dp
         wall_search = 0._dp
         if( trim(p_ptr%inpl_cont) == 'yes' )then
@@ -291,6 +296,7 @@ contains
             call cont_work_sum%add(cont_work(ithr))
         enddo
         if( ctrl%do_pipeline )then
+            if( p_ptr%l_inpl_posterior ) call report_inpl_counts()
             call eulprob_obj_part%close_assignment
             if( present(readout) ) readout = eulprob_obj_part%get_readout()
             if( ctrl%do_bench ) fill_prof = eulprob_obj_part%get_fill_profile()
@@ -316,6 +322,8 @@ contains
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         deallocate(cnt_greedy, cnt_all, incr_shifts, cont_work, ts_thr)
+        if( allocated(inpl_counts) ) deallocate(inpl_counts)
+        if( allocated(inpl_rots)   ) deallocate(inpl_rots)
         if( allocated(eulprob_obj_part) )then
             call eulprob_obj_part%kill
             deallocate(eulprob_obj_part)
@@ -600,9 +608,40 @@ contains
                 t_assign    = tic()
             endif
             call eulprob_obj_part%assign_batch(batch_start, batch_end)
-            if( p_ptr%topk > 1 ) call extra_poses%setup_range(eulprob_obj_part%insert_tab, pinds, batch_start, batch_end)
+            if( p_ptr%topk > 1 .or. p_ptr%l_inpl_posterior )then
+                call extra_poses%setup_range(eulprob_obj_part%insert_tab, pinds, batch_start, batch_end)
+                ! the in-plane posterior insertion's worst case, reserved for the part with the layout
+                if( p_ptr%l_inpl_posterior .and. batch_start == 1 ) call extra_poses%reserve_inpl(INPL_POSTERIOR_BUDGET,&
+                    &max(1, p_ptr%topk), inpl_rots)
+            endif
             if( ctrl%do_bench ) rt_assign = rt_assign + toc(t_assign)
         end subroutine pipeline_batch
+
+        !> the in-plane posterior insertion's pass state: the per-thread banks of the shifted particle its rows are
+        !! evaluated on, and m_max, the band's highest angular harmonic at the rim
+        subroutine setup_inpl_posterior()
+            integer :: kfromto(2), irot
+            real    :: lp_band
+            kfromto = b_ptr%pftc%get_kfromto()
+            call prep_strategy3D_inpl_bank(b_ptr%pftc%get_pftsz() + 1, kfromto(2) - kfromto(1) + 1, max(1, p_ptr%topk))
+            allocate(inpl_rots(b_ptr%pftc%get_nrots()))
+            do irot = 1,size(inpl_rots)
+                inpl_rots(irot) = b_ptr%pftc%get_rot(irot)
+            enddo
+            lp_band   = real(p_ptr%box_crop) * p_ptr%smpd_crop / real(max(1,kfromto(2)))
+            inpl_mmax = 0
+            if( p_ptr%mskdiam > 0. ) inpl_mmax = ceiling(PI * p_ptr%mskdiam / lp_band)
+        end subroutine setup_inpl_posterior
+
+        !> the search's in-plane posterior counts, summed in particle order (whatever the schedule), onto the table
+        subroutine report_inpl_counts()
+            type(prob_inpl_counts) :: counts
+            integer :: ithr_loc
+            do ithr_loc = 1,size(inpl_counts)
+                call counts%add(inpl_counts(ithr_loc))
+            enddo
+            call eulprob_obj_part%set_inpl_counts(INPL_POSTERIOR_BUDGET, inpl_mmax, counts)
+        end subroutine report_inpl_counts
 
         subroutine build_batch_particles_local()
             if( ctrl%do_bench ) t_build_batch_ptcls = tic()
@@ -675,6 +714,13 @@ contains
                     end select
                 else
                     incr_shifts(:,iptcl_batch) = b_ptr%spproj_field%get_2Dshift(iptcl) - shift_before
+                    ! the in-plane posterior insertion's counts of the particle into its slot, summed in particle order
+                    if( allocated(inpl_counts) )then
+                        select type( prob_srch => strategy3Dsrch(iptcl_batch)%ptr )
+                            type is( strategy3D_prob )
+                                call prob_srch%add_inpl_counts(inpl_counts(strategy3Dspecs(iptcl_batch)%iptcl_map))
+                        end select
+                    endif
                 endif
                 call strategy3Dsrch(iptcl_batch)%ptr%kill
                 deallocate(strategy3Dsrch(iptcl_batch)%ptr)

@@ -215,8 +215,8 @@ For code changes, consider:
 - checking nonuniform mode still falls back to regular references before
   `_nu_filt` files exist
 - checking multi-state automask naming and compatibility
-- checking `ml_reg=yes` auxiliary admission (`>>> NU AUXILIARY MEMBER:`) and
-  the handoff line (`>>> NU MATCHING LOW-PASS HANDOFF:`)
+- checking `ml_reg=yes` auxiliary admission (`NU AUX MEMBER`) and
+  the handoff line (`NU HANDOFF`)
 
 ## Current Limitations
 

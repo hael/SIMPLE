@@ -7,6 +7,7 @@ use simple_solve2D_controller
 use simple_gui_communicator,       only: gui_communicator
 use simple_eo_partition,           only: ensure_field_halves
 use simple_refine2D_fnames,        only: refine2D_cavgs_fname, refine2D_cavgs_ranked_fname
+use simple_string_utils,           only: fmt_dec, log_item
 implicit none
 
 public :: commander_solve2D, commander_solve2D_chunks, execute_solve2D_staged
@@ -226,8 +227,6 @@ contains
             write(logfhandle,'(A,I0)')'>>> SOLVE2D ENTERING REFINE2D STAGE ', istage
             call flush(logfhandle)
             call execute_refine2D
-            write(logfhandle,'(A,I0)')'>>> SOLVE2D RETURNED FROM REFINE2D STAGE ', istage
-            call flush(logfhandle)
             ! update GUI
             call spproj%read_segment('cls2D', params%projfile)
             call spproj%read_segment('out',   params%projfile)
@@ -350,10 +349,12 @@ contains
             nhist = nhist + 1
             res05_hist(nhist) = res05_q
             if( res05_q < TINY ) return
-            write(logfhandle,'(A,I3,A,I0,A,F5.1,A)') '>>> STAGE ', istage, ' CLASS FRC=0.5 RESOLUTION REACHED BY ', &
-                &nint(100.*FRC05_SKIP_PTCL_FRAC), '% OF THE PARTICLES: ', res05_q, ' A'
-            if( lp_next > TINY ) write(logfhandle,'(A,F5.1,A,F5.1)') &
-                &'>>> % OF THE PARTICLES IN CLASSES PAST THE NEXT PLANNED LP ', lp_next, ' A: ', 100.*frac_past
+            write(logfhandle,'(A)') log_item('STAGE '//int2str(istage)//' FRC=0.5', fmt_dec(res05_q, 1)//&
+                &' A, the class FRC=0.5 resolution reached by '//int2str(nint(100.*FRC05_SKIP_PTCL_FRAC))//&
+                &'% of the particles')
+            if( lp_next > TINY ) write(logfhandle,'(A)') log_item('STAGE '//int2str(istage)//' PAST LP', &
+                &fmt_dec(100.*frac_past, 1)//'% of the particles in classes past the next planned LP of '//&
+                &fmt_dec(lp_next, 1)//' A')
         end subroutine record_stage_frc05
 
         ! the mask diameter estimated from the stage's class averages: printed at the centring stage's exit and, in an

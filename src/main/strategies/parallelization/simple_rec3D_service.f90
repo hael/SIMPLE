@@ -401,7 +401,7 @@ contains
 
     !> Post-processing of every populated state map (postprocess=yes; not in a worker part)
     subroutine postprocess_states( params, build, cline )
-        use simple_commanders_volops, only: postprocess_volume_from_files
+        use simple_postprocess_strategy, only: postprocess_volume_from_files
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline

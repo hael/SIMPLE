@@ -5,7 +5,7 @@ use, intrinsic :: iso_fortran_env, only: int64
 use omp_lib,                   only: omp_get_max_threads
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_eul_prob_tab,       only: eul_prob_tab
+use simple_eul_prob_tab,       only: eul_prob_tab, seeded_window_refine
 use simple_eul_prob_tab_utils, only: update_screen_best, eulprob_dist_switch, eulprob_corr_switch, &
     &record_seed_shift, prob_candidate, &
     &prob_candidate_buffer, prob_candidate_store, prob_dense_entry, prob_refined_entry, posterior_temperature, &
@@ -820,6 +820,7 @@ contains
         self%nmode         = 0
         self%ntemp_missing = 0
         self%nkept         = 0
+        call self%open_inpl_assignment
         self%l_assign_open = .true.
     end subroutine open_assignment_neigh
 
@@ -886,6 +887,7 @@ contains
         rec%neff_sum_draw = self%neff%sum_neff(self%p_ptr%prob_beta)
         rec%neff_sum_phys = self%neff%sum_neff(1.)
         rec%states        = self%state_rd
+        call self%copy_inpl_counts(rec)
         call self%neff%kill
         call self%state_rd%kill
         if( self%p_ptr%l_distr_worker )then
@@ -1221,6 +1223,8 @@ contains
                 self%candidate_store%candidates(candidate_pos)%x      = sh_seed(1)
                 self%candidate_store%candidates(candidate_pos)%y      = sh_seed(2)
                 self%candidate_store%candidates(candidate_pos)%has_sh = self%p_ptr%l_doshift
+                self%candidate_store%candidates(candidate_pos)%cx     = 0.
+                self%candidate_store%candidates(candidate_pos)%cy     = 0.
             endif
             call o_prev%kill
         end subroutine seed_fallback_if_empty
@@ -1241,12 +1245,13 @@ contains
     end subroutine get_particle_context
 
     ! Records one particle vs. ref evaluation result in its thread-owned buffer.
-    subroutine record_sparse_eval( self, i, ithr, ri, dist, irot, x, y, has_sh, sdev )
+    subroutine record_sparse_eval( self, i, ithr, ri, dist, irot, x, y, has_sh, sdev, centre )
         class(eul_prob_tab_neigh), intent(inout) :: self
         integer,                   intent(in)    :: i, ithr, ri, irot
         real,                      intent(in)    :: dist, x, y
         logical,                   intent(in)    :: has_sh
         real,            optional, intent(in)    :: sdev
+        real,            optional, intent(in)    :: centre(2) !< the window prior's centre of the refinement
         type(prob_candidate) :: candidate
         candidate%iref   = self%ref_full(ri)
         candidate%dist   = dist
@@ -1255,6 +1260,10 @@ contains
         candidate%y      = y
         candidate%has_sh = has_sh
         if( present(sdev) ) candidate%sdev = sdev
+        if( present(centre) )then
+            candidate%cx = centre(1)
+            candidate%cy = centre(2)
+        endif
         call self%candidate_buffers(ithr)%append_or_replace(i, candidate)
     end subroutine record_sparse_eval
 
@@ -1413,7 +1422,7 @@ contains
         type(pftc_shsrch_grad), pointer :: gso
         integer  :: nrefs_to_refine, nstate_eval, j, k, eval_slot, ri, istate, iproj, irot, irho, ialpha, imap, npool
         integer  :: si, state_eval, pool(neval), scr_irot(neval), loc(1)
-        real     :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval)
+        real     :: refined_shift(3), xy_start(2), loss_cell, dist, sdev, step, dists_sorted(neval), centre(2)
         real     :: scr_xy(2,neval), scr_loss(neval), scr_sdev(neval), width_best(max(1,max_refs_to_refine))
         real(dp) :: temp_s, temp_i, prior_w_map
         logical  :: l_cont_refined
@@ -1511,19 +1520,16 @@ contains
                     endif
                     cycle
                 endif
+                centre = 0.
                 if( l_seed_sh_first )then
-                    ! the particle-frame seed as the shift of this reference at the rotation it was scored at, in the box
-                    xy_start = shift_seed(2:3)
-                    if( irot > 0 ) xy_start = shift_ptcl2ref(shift_seed(2:3), self%b_ptr%pftc%get_rot(irot))
-                    xy_start = max(-self%p_ptr%trs, min(self%p_ptr%trs, xy_start))
-                    refined_shift = gso%minimize(irot=irot, sh_rot=.true., xy_in=xy_start)
+                    refined_shift = seeded_window_refine(gso, self%b_ptr%pftc, shift_seed(2:3), irot, self%p_ptr%trs, centre)
                 else
                     refined_shift = gso%minimize(irot=irot, sh_rot=.true.)
                 endif
                 if( irot > 0 )then
                     call record_sparse_eval(self, i, ithr, ri, &
                         &eulprob_dist_switch(refined_shift(1), self%p_ptr%cc_objfun), &
-                        &irot, refined_shift(2), refined_shift(3), .true.)
+                        &irot, refined_shift(2), refined_shift(3), .true., centre=centre)
                 endif
             enddo
         enddo

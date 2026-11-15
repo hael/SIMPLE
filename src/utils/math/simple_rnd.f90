@@ -88,7 +88,7 @@ integer, parameter :: RND_FAM_DISK   = 3 !< the polar shift map's disk draw (the
 integer, parameter :: RND_FAM_CAND   = 4 !< the sparse fills' candidate picks (the swap's ordinal of the keyed permutation)
 integer, parameter :: RND_FAM_ASSIGN = 5 !< the assignment draw (ordinal 0)
 integer, parameter :: RND_FAM_DIAG   = 6 !< the diagnostics' draws (their own ordinals)
-integer, parameter :: RND_FAM_INPLQ  = 7 !< the phase of a particle's in-plane quadrature (2D insertion)
+integer, parameter :: RND_FAM_INPLQ  = 7 !< the phase of a particle's in-plane quadrature (the 2D class sums; the 3D insertion, per inserted pose with its reference)
 ! the scope of a logical pass (section 4.2): the program and the pass kind, packed by rnd_scope
 integer, parameter :: RND_PROG_REFINE3D = 1, RND_PROG_REFINE2D = 2
 integer, parameter :: RND_PASS_ALIGN = 1  !< the discrete alignment

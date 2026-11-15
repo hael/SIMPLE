@@ -61,6 +61,9 @@ If the 2D student cannot learn under the picking error of raw particles, there a
 - Even the full polar search reaches only 36% after three passes, against 69% between two converged solve2D
   runs.
 
+An amplitude path beside the complex input (not in place of it) is planned for the pose student:
+`planned/pose_student_amplitude_channel.md`.
+
 A learned centre estimator (a translation-equivariant real-space network supervised by converged shifts)
 remains the candidate. Its target is about 5 Å rather than 3, because the student's candidate set tolerates
 that (the 3D student's cone holds its mode for 96% of particles at 6.4 Å). It is not a single-pass 3 Å

@@ -8,6 +8,7 @@ use simple_cavg_sums,        only: cavg_sums, CAVG_SUMS_STATE, CAVG_SUMS_CONTRIB
 use simple_euclid_sigma2,    only: sigma2_half
 use simple_fplane_grid,      only: fplane_grid
 use simple_bench_io,         only: open_bench_report
+use simple_string_utils,     only: fmt_dec, log_item
 implicit none
 #include "simple_local_flags.inc"
 
@@ -802,19 +803,15 @@ contains
         call cur%set_mrep(mnew)
         call cur%write(string(CAVG_STATE_FILE))
         call sums2cavgs(cur)
-        ! one summary line per iteration: counts, weights, and the carried mass per represented
-        ! particle relative to the current sample's mass per particle (1 without drift)
+        ! with carried sums, one line: the particles represented and sampled, the mean carried weight, and the
+        ! restored mass per represented particle over the sample's mass per particle (1 without drift)
         call cur%class_mass(mass)
         if( l_blend )then
-            write(logfhandle,'(A,4I9,4F8.4,2ES12.4,F8.4)') '>>> CAVG CARRY-OVER N n MPREV MNEW / W AVG MIN MAX / S / '//&
-                &'MASS PER M, PER n / RATIO:', sum(nrep), sum(nsmp), nint(sum(mprev)), nint(sum(mnew)),&
-                &sum(w, mask=nrep>0) / real(max(1,count(nrep>0))), minval(w, mask=nrep>0), maxval(w, mask=nrep>0),&
-                &sum(s, mask=nsmp>0) / real(max(1,count(nsmp>0))), real(sum(mass)) / max(1., sum(mnew)),&
-                &real(sum(mass_cur)) / real(max(1, sum(nsmp))),&
-                &(real(sum(mass)) / max(1., sum(mnew))) / max(TINY, real(sum(mass_cur)) / real(max(1, sum(nsmp))))
-        else
-            write(logfhandle,'(A,I9,ES12.4)') '>>> CAVG CARRY-OVER NONE (CURRENT SAMPLE ONLY) M_NEW / MASS PER M: ', &
-                &nint(sum(mnew)), real(sum(mass)) / max(1., sum(mnew))
+            write(logfhandle,'(A)') log_item('CLASS SUMS', 'blended with the carried sums ('//int2str(sum(nrep))//&
+                &' particles, '//int2str(sum(nsmp))//' sampled, carried weight '//&
+                &fmt_dec(sum(w, mask=nrep>0) / real(max(1,count(nrep>0))), 2)//', mass ratio '//&
+                &fmt_dec((real(sum(mass)) / max(1., sum(mnew))) / max(TINY, real(sum(mass_cur)) / &
+                &real(max(1, sum(nsmp)))), 3)//')')
         endif
         call prev%kill
     end subroutine commit_carryover

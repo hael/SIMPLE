@@ -5,6 +5,7 @@ use simple_pftc_srch_api
 use simple_fsc
 use simple_commanders_euclid, only: commander_calc_pspec
 use simple_refine3D_fnames,  only: refine3D_fsc_fbody, refine3D_fsc_fname
+use simple_string_utils,     only: fmt_dec, log_item
 implicit none
 #include "simple_local_flags.inc"
 
@@ -606,6 +607,7 @@ contains
         call odd%fft()
         call result%new(even, params%nspace, params%athres, params%lplim_crit, 1)
         call result%calc_fsc_area_score(even, odd)
+        write(logfhandle,'(A)') log_item('CFAR', fmt_dec(result%cfar, 4))
         if( cline%defined('fbody') )then
             fbody = params%fbody
         else

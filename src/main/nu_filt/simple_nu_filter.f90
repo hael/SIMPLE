@@ -115,7 +115,7 @@ real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
 !! least this percentage of the assigned voxels. Diagnostic.
 real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 ! Diagnostic only: finest label whose cumulative population reaches this % of the signal voxels
-! (mask minus the background clamp), quoted on the NU MATCHING LOW-PASS HANDOFF line.
+! (mask minus the background clamp), quoted on the NU HANDOFF line.
 ! The handoff itself is the finest bank member (get_nu_filter_bank_finest_lp).
 real,             parameter   :: NU_ALIGN_LP_MIN_SIGNAL_PCT   = 1.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5

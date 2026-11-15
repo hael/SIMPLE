@@ -120,6 +120,11 @@ Stage policy includes:
 - an explicitly requested PCG order prior (`pcg_order=yes`) from the same
   stage (`PCG_START_STAGE`), on the NU evidence and labels of the
   previous iteration (section 9)
+- the in-plane posterior insertion (no key; refine3D policy, "In-plane posterior insertion"): it
+  runs where a stage reconstructs from a posterior table outside the hill-climb neighbourhoods,
+  single-state stages 3-8 and multi-state stages from 3, on gridding and on the PCG backend alike;
+  not in the `shc`/`snhc` stages 1-2, not in the final and bootstrap reconstructions, and not in the
+  multi-state final assignment, which reconstructs nothing (`volrec=no`)
 
 The downscaled particle cache is a 2D-only feature: `solve3D` rejects
 `cache=yes`, and each stage uses its own crop from the low-pass/downscaling
@@ -709,13 +714,14 @@ previous iteration (refine3D policy, the annealing tail), not when the best
 state alone stalls.
 
 Every probabilistic iteration of a multi-state run logs the state readout
-beside `PROB_TAB_ASSIGN`, and the iteration's statistics record holds it
+beside `POSE ASSIGNMENT`, and the iteration's statistics record holds it
 (`STATE_NEFF_DRAW`, `STATE_NEFF_PHYS`, `STATE_MODE_FRAC`,
 `STATE_MASS_UNREFINEDnn`):
-- `PROB_TAB_STATE_DRAW`: the effective number of states (exp(entropy) of the
-  state marginal) at the draw's factor and at 1, the share of draws at the
-  state mode, and the mean largest state posterior;
-- `PROB_TAB_STATE_MASS` per state: the share of the block's tempered mass on
+- `STATE N_EFF`: the effective number of states (exp(entropy) of the
+  state marginal) at the draw's factor and at 1;
+- `STATE MODE`: the share of draws at the state mode, and the mean largest
+  state posterior;
+- `STATE MASS ON UNREFINED, STATE s`: the share of the block's tempered mass on
   entries the fill did not refine.
 
 Read beside the populations and `STATE OVERLAP`, a state n_eff near the number

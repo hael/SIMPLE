@@ -15,7 +15,9 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cel
     &posterior_temperature, posterior_row_stats, draw_posterior_row, top_posterior_extras, prob_beta_at, prob_neff_readout, &
     &prob_insert_table, prob_insert_poses, prob_insert_pose, prob_insert_cone, &
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
-    &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout
+    &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout, inpl_quadrature, inpl_view_weights, &
+    &inpl_prior_penalty, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes, inpl_particle_counts, &
+    &prob_inpl_counts, PROB_READOUT_3D_DENSE
 use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_sym,                only: sym
@@ -74,6 +76,16 @@ contains
         write(*,'(A)') 'test_geom_cone_prefilter'
         call test_geom_cone_prefilter('c1')
         call test_geom_cone_prefilter('d2')
+        write(*,'(A)') 'test_inpl_view_weights'
+        call test_inpl_view_weights()
+        write(*,'(A)') 'test_inpl_prior_weights'
+        call test_inpl_prior_weights()
+        write(*,'(A)') 'test_inpl_reservation_layout'
+        call test_inpl_reservation_layout()
+        write(*,'(A)') 'test_inpl_view_against_angle_weight'
+        call test_inpl_view_against_angle_weight()
+        write(*,'(A)') 'test_inpl_readout_round_trip'
+        call test_inpl_readout_round_trip()
         write(*,'(A)') 'test_neff_readout'
         call test_neff_readout()
         call test_neff_report()
@@ -114,46 +126,24 @@ contains
     end subroutine test_screen_width_shortlist
 
     subroutine test_neff_report()
-        use, intrinsic :: iso_fortran_env, only: iostat_end
         type(prob_neff_readout) :: neff_ro
-        real :: row(50)
-        character(len=256) :: line
-        integer :: r, saved_log, scratch_log, ios
+        real    :: row(50)
+        integer :: r
         write(*,'(A)') 'test_neff_report'
-        open(newunit=scratch_log, status='scratch', action='readwrite', iostat=ios)
-        call assert_int(0, ios, 'n_eff report: open capture')
-        if( ios /= 0 ) return
-        saved_log = logfhandle
         row = 0.
         call neff_ro%new(PROB_NEFF_MIN_ROWS, PROB_NEFF_MIN_ROWS, 6)
         do r = 1,PROB_NEFF_MIN_ROWS
             call neff_ro%offer(size(row), row, 1.)
         enddo
-        logfhandle = scratch_log
-        call neff_ro%report(0.3)
-        logfhandle = saved_log
-        rewind(scratch_log)
-        read(scratch_log,'(A)',iostat=ios) line
-        call assert_int(0, ios, 'n_eff report: a line at the minimum row count')
-        if( ios == 0 ) call assert_char('>>> POSTERIOR DRAW N_EFF: 50.00 at beta 0.30, 50.00 at beta 1.00 ('//&
-            &int2str(PROB_NEFF_MIN_ROWS)//' rows)', trim(line), 'n_eff report: unpadded numbers with leading zeros')
+        call assert_char(', 50.00 effective poses per particle', neff_ro%clause(0.3, 'poses'), &
+            &'n_eff clause: an unpadded number at the minimum row count')
         call neff_ro%kill
-        close(scratch_log)
-        open(newunit=scratch_log, status='scratch', action='readwrite', iostat=ios)
-        call assert_int(0, ios, 'n_eff report: open below-threshold capture')
-        if( ios /= 0 ) return
         call neff_ro%new(PROB_NEFF_MIN_ROWS - 1, PROB_NEFF_MIN_ROWS - 1, 6)
         do r = 1,PROB_NEFF_MIN_ROWS - 1
             call neff_ro%offer(size(row), row, 1.)
         enddo
-        logfhandle = scratch_log
-        call neff_ro%report(0.3)
-        logfhandle = saved_log
-        rewind(scratch_log)
-        read(scratch_log,'(A)',iostat=ios) line
-        call assert_int(iostat_end, ios, 'n_eff report: silent below the minimum row count')
+        call assert_int(0, len(neff_ro%clause(0.3, 'poses')), 'n_eff clause: empty below the minimum row count')
         call neff_ro%kill
-        close(scratch_log)
     end subroutine test_neff_report
 
     !> The n_eff readout: 200 rows of 50 distances k s_r (k = 0..49, s_r = 0.01 r) at temperature 2, so row r's
@@ -197,7 +187,7 @@ contains
             prev = neff
         enddo
         call assert_true(l_monotone, 'n_eff readout: the mean n_eff falls monotonically with the factor')
-        call neff_ro%report(0.3) ! the log line, over 200 rows
+        call assert_true(len(neff_ro%clause(0.3, 'poses')) > 0, 'n_eff readout: a clause over 200 rows')
         call neff_ro%kill
         ! doubling the temperatures halves the factor at which a mean is met: the mean at beta 0.5 and T 4 is
         ! the mean at beta 1 and T 2
@@ -226,7 +216,7 @@ contains
         call assert_int(1, neff_ro%nkept(), 'n_eff readout: six valid distances among invalid ones are kept')
         call assert_real(6., mean_neff(1.e-6), 1.e-3, 'n_eff readout: the invalid distances are dropped')
         call assert_true(PROB_NEFF_MIN_ROWS > 1, 'n_eff readout: nothing is reported below PROB_NEFF_MIN_ROWS rows')
-        call neff_ro%report(0.3) ! below the minimum: silent
+        call assert_int(0, len(neff_ro%clause(0.3, 'poses')), 'n_eff readout: no clause below the minimum')
         call neff_ro%kill
 
     contains
@@ -1777,5 +1767,261 @@ contains
         type(ptcl_ref) :: assgn
         assgn%inpl = inpl
     end function unrefined
+
+    !> The view weights (inpl_view_weights) of one-angle, flat and two-peak rows against exp(ln Z - T L_min) / sum; the
+    !! committed pose kept below WMIN, an extra under it dropped, the entries summing to 1, a lone pose at 1, and the
+    !! worked example (0.4, 0.4, 0.2 at equal minima; a third each when the one-angle minimum is lower by ln 2 / T)
+    subroutine test_inpl_view_weights()
+        integer,  parameter :: NR = 128, KQ = INPL_POSTERIOR_BUDGET
+        real,     parameter :: T = 2.
+        real     :: rows(NR,4), dmin(4), neff(4), m(4), w(KQ), wq(4)
+        real(dp) :: lnz(4), lnz_ref(4), lm(4), mref(4), pen(4)
+        integer  :: inds(KQ), nent(4), k
+        rows = 10.
+        rows(5,1)  = 0.3                       ! one angle
+        rows(:,2)  = 0.0                       ! flat
+        rows(10,3) = 0.1                       ! two peaks
+        rows(70,3) = 0.1
+        rows(:,4)  = 13.                       ! one angle, far off: under WMIN
+        rows(40,4) = 3.
+        pen  = 0.d0
+        do k = 1,4
+            call inpl_quadrature(NR, rows(:,k), T, KQ, 0.37d0, nent(k), inds, w, neff(k), lnz(k), dmin(k))
+            wq(k) = sum(w(1:nent(k)))
+            lnz_ref(k) = log(sum(exp(-real(T,dp) * real(rows(:,k) - minval(rows(:,k)),dp))))
+            call assert_real(real(lnz_ref(k)), real(lnz(k)), 1.e-6 * max(1., abs(real(lnz_ref(k)))), 'ln Z of the row')
+            call assert_real(minval(rows(:,k)), dmin(k), 0., 'the row''s minimum')
+            if( k <= 3 ) call assert_real(1., sum(w(1:nent(k))), 1.e-6, 'the quadrature''s weights sum to 1')
+        enddo
+        call assert_int(KQ, nent(2), 'a flat row of 128 rotations fills the budget')
+        ! three poses: the closed form, the committed pose (the one-angle row) kept below WMIN
+        call inpl_view_weights(3, lnz(1:3), dmin(1:3), T, pen(1:3), PROB_INSERT_WMIN, m(1:3))
+        lm(1:3)   = lnz_ref(1:3) - real(T,dp) * real(dmin(1:3),dp)
+        mref(1:3) = exp(lm(1:3) - maxval(lm(1:3)))
+        mref(1:3) = mref(1:3) / sum(mref(1:3))
+        call assert_true(mref(1) < PROB_INSERT_WMIN, 'the fixture''s committed pose lies below WMIN')
+        do k = 1,3
+            call assert_real(real(mref(k)), m(k), 1.e-6 * real(mref(k)), 'the view weight equals exp(ln Z - T L_min) / sum')
+        enddo
+        call assert_true(m(1) > 0., 'the committed pose is kept below WMIN')
+        call assert_real(1., sum(m(1:3)), 1.e-6, 'the view weights sum to 1')
+        call assert_real(1., sum(m(1:3) * wq(1:3)), 1.e-6, 'the entries of the particle (weight x share) sum to 1')
+        ! four poses: the far extra under WMIN dropped, the rest renormalised
+        call inpl_view_weights(4, lnz, dmin, T, pen, PROB_INSERT_WMIN, m)
+        call assert_real(0., m(4), 0., 'an extra under WMIN is dropped')
+        do k = 1,3
+            call assert_real(real(mref(k)), m(k), 1.e-6 * real(mref(k)), 'the kept poses renormalised over the kept set')
+        enddo
+        ! a lone pose
+        call inpl_view_weights(1, lnz(1:1), dmin(1:1), T, pen(1:1), PROB_INSERT_WMIN, m(1:1))
+        call assert_real(1., m(1), 0., 'a particle without extras: the committed pose at weight 1')
+        ! the worked example: two two-angle poses and a one-angle pose at one minimum
+        rows = 60.
+        rows(3,1)  = 1.
+        rows(50,1) = 1.
+        rows(7,2)  = 1.
+        rows(90,2) = 1.
+        rows(20,3) = 1.
+        do k = 1,3
+            call inpl_quadrature(NR, rows(:,k), 5., KQ, 0.5d0, nent(k), inds, w, neff(k), lnz(k), dmin(k))
+        enddo
+        call inpl_view_weights(3, lnz(1:3), dmin(1:3), 5., pen(1:3), PROB_INSERT_WMIN, m(1:3))
+        call assert_real(0.4, m(1), 1.e-6, 'the worked example: a two-angle pose takes 0.4')
+        call assert_real(0.4, m(2), 1.e-6, 'the worked example: the other two-angle pose takes 0.4')
+        call assert_real(0.2, m(3), 1.e-6, 'the worked example: the one-angle pose takes 0.2')
+        dmin(3) = dmin(3) - log(2.) / 5.
+        call inpl_view_weights(3, lnz(1:3), dmin(1:3), 5., pen(1:3), PROB_INSERT_WMIN, m(1:3))
+        call assert_real(1./3., m(3), 1.e-6, 'equal likelihoods: the one-angle pose a third')
+        call assert_real(1./3., m(1), 1.e-6, 'equal likelihoods: a two-angle pose a third')
+    end subroutine test_inpl_view_weights
+
+    !> The shift prior in the view weights (inpl_prior_penalty): two poses with identical rows, one at the prior's
+    !! centre and one two prior sigmas from it, take 1 : exp(-2), 0.881 and 0.119, under the polar shift map (centre the
+    !! stored shift, width shift_sigma) and under the window with its retained centres per pose; 0.5 each without a prior
+    subroutine test_inpl_prior_weights()
+        real,     parameter :: SMPD = 1.3, SIGMA_A = 2.6     ! two pixels
+        real,     parameter :: C1(2) = [1.5, -0.5], C2(2) = [-1., 2.]
+        real(dp) :: lnz(2), pen(2)
+        real     :: dmin(2), m(2), sigma_px
+        sigma_px = SIGMA_A / SMPD
+        lnz  = 1.7d0
+        dmin = 0.4
+        ! the map: centre at the stored shift
+        pen(1) = inpl_prior_penalty([0., 0.], [0., 0.], .true., SIGMA_A, SMPD, 0.)
+        pen(2) = inpl_prior_penalty([2. * sigma_px, 0.], [0., 0.], .true., SIGMA_A, SMPD, 0.)
+        call inpl_view_weights(2, lnz, dmin, 3., pen, PROB_INSERT_WMIN, m)
+        call assert_real(0.880797, m(1), 1.e-5, 'the map''s prior: the pose at the centre takes 0.881')
+        call assert_real(0.119203, m(2), 1.e-5, 'the map''s prior: the pose two sigmas off takes 0.119')
+        ! the window: each pose's own retained centre, variance sigma^2 per axis
+        pen(1) = inpl_prior_penalty(C1, C1, .false., 0., SMPD, sigma_px**2)
+        pen(2) = inpl_prior_penalty(C2 + [0., 2. * sigma_px], C2, .false., 0., SMPD, sigma_px**2)
+        call inpl_view_weights(2, lnz, dmin, 3., pen, PROB_INSERT_WMIN, m)
+        call assert_real(0.880797, m(1), 1.e-5, 'the window''s prior: the pose at its centre takes 0.881')
+        call assert_real(0.119203, m(2), 1.e-5, 'the window''s prior: the pose two sigmas from its centre takes 0.119')
+        ! neither prior
+        pen(1) = inpl_prior_penalty(C1, C1, .false., 0., SMPD, 0.)
+        pen(2) = inpl_prior_penalty(C2 + [0., 2. * sigma_px], C2, .false., 0., SMPD, 0.)
+        call inpl_view_weights(2, lnz, dmin, 3., pen, PROB_INSERT_WMIN, m)
+        call assert_real(0.5, m(1), 1.e-6, 'without a prior identical rows share equally')
+    end subroutine test_inpl_prior_weights
+
+    !> The reservation (reserve_inpl): the table's layout as without the key, nothing allocated without it,
+    !! max(1,topk) blocks per particle of the estimate's bytes, flat rows filling every block with K entries, and fills
+    !! of 0 to K entries decoded as written
+    subroutine test_inpl_reservation_layout()
+        integer, parameter :: NP = 5, TOPK = 3, NR = 128, KQ = INPL_POSTERIOR_BUDGET
+        type(prob_insert_table) :: tab
+        type(prob_insert_poses) :: plain, poses
+        type(prob_candidate)    :: cands(2)
+        real    :: rots(NR), w(KQ), neff, row(NR)
+        integer :: pinds(NP), inds(KQ), i, k, j, iblk, nent, nfill, cnt
+        integer(int64) :: nbytes
+        logical :: l_ok
+        pinds = [21, 22, 23, 24, 25]
+        do i = 1,NR
+            rots(i) = real(i - 1) * 360. / real(NR)
+        enddo
+        call tab%new(NP, pinds, TOPK)
+        cands(1) = prob_candidate(101, 7, 0.4, 0.5, 1.5, .true.)
+        cands(2) = prob_candidate(102, 8, 0.6, -1.0, 2.0, .true.)
+        call tab%add(1, 0.5, 2, cands, [0.3, 0.2], 4)
+        call tab%add(2, 0.8, 1, cands(1:1), [0.2], 1)
+        call tab%add(3, 1.0, 0, cands(1:0), [real ::], 0)
+        call tab%add(4, 0.6, 2, cands, [0.25, 0.15], 3)
+        call tab%add(5, 1.0, 0, cands(1:0), [real ::], 0)
+        call plain%setup_range(tab, pinds, 1, NP)
+        call poses%setup_range(tab, pinds, 1, NP)
+        call poses%reserve_inpl(KQ, TOPK, rots)
+        call assert_true(.not. allocated(plain%blk_nent) .and. .not. allocated(plain%e3_grid), &
+            &'without the reservation no block is allocated')
+        call assert_true(all(poses%nextra(1:NP) == plain%nextra(1:NP)) .and. all(poses%first(1:NP) == plain%first(1:NP)) &
+            &.and. all(poses%wc(1:NP) == plain%wc(1:NP)) .and. poses%npose == plain%npose, &
+            &'the reservation keeps the table''s layout: counts, first slots and weights')
+        call assert_int(NP * TOPK, size(poses%blk_nent), 'max(1,topk) blocks per particle')
+        nbytes = int(storage_size(poses%blk_nent) / 8, int64) * int(size(poses%blk_nent) + size(poses%blk_bin) + &
+            &size(poses%blk_ent), int64)
+        call assert_true(nbytes == inpl_reserved_bytes(NP, TOPK, KQ), 'the reserved bytes are the memory estimate''s term')
+        if( size(poses%blk_nent) /= NP * TOPK )then
+            ! a reservation of other size would be filled out of its bounds below
+            call plain%kill
+            call poses%kill
+            call tab%kill
+            return
+        endif
+        ! a batch of flat rows: every block of every particle takes K entries
+        row = 0.
+        do i = 1,NP
+            do k = 0,TOPK - 1
+                call inpl_quadrature(NR, row, 1., KQ, 0.25d0 + 0.1d0 * real(k,dp), nent, inds, w, neff)
+                iblk = poses%block(i, k)
+                poses%blk_nent(iblk) = nent
+                poses%blk_bin(iblk)  = inds(1)
+                do j = 1,nent
+                    poses%blk_ent(j,iblk) = inpl_entry_pack(inds(j), nint(w(j) * real(KQ)))
+                enddo
+            enddo
+        enddo
+        call assert_true(all(poses%blk_nent == KQ), 'a broad posterior fills every block with K entries')
+        l_ok = .true.
+        do iblk = 1,size(poses%blk_nent)
+            cnt = 0
+            do j = 1,KQ
+                cnt = cnt + inpl_entry_count(poses%blk_ent(j,iblk))
+            enddo
+            if( cnt /= KQ ) l_ok = .false.
+            if( abs(sum([(poses%entry_weight(iblk, j), j = 1,KQ)]) - 1.) > 1.e-6 ) l_ok = .false.
+        enddo
+        call assert_true(l_ok, 'every full block''s counts sum to K and its entry shares to 1')
+        ! fills of 0 to K entries per block decode to what was written
+        l_ok = .true.
+        do iblk = 1,size(poses%blk_nent)
+            nfill = ((iblk - 1) * KQ) / (size(poses%blk_nent) - 1)
+            poses%blk_nent(iblk) = nfill
+            do j = 1,nfill
+                poses%blk_ent(j,iblk) = inpl_entry_pack(NR + 1 - j, 1 + mod(j * iblk, KQ))
+            enddo
+            do j = 1,nfill
+                if( inpl_entry_rot(poses%blk_ent(j,iblk)) /= NR + 1 - j ) l_ok = .false.
+                if( inpl_entry_count(poses%blk_ent(j,iblk)) /= 1 + mod(j * iblk, KQ) ) l_ok = .false.
+            enddo
+        enddo
+        call assert_true(l_ok, 'fills of 0 to K entries decode to the rotations and counts written')
+        call assert_int(0, poses%blk_nent(1), 'the first block holds no entry')
+        call assert_int(KQ, poses%blk_nent(size(poses%blk_nent)), 'the last block holds K entries')
+        call plain%kill
+        call poses%kill
+        call tab%kill
+    end subroutine test_inpl_reservation_layout
+
+    !> The readout's committed view weight against the committed angle's weight: at topk = 1 with a flat row the view
+    !! weight counted is 1 (the particle's only pose) while the committed angle's inserted weight is its solved bin's
+    !! count over K (inpl_particle_counts)
+    subroutine test_inpl_view_against_angle_weight()
+        integer, parameter :: NR = 128, KQ = INPL_POSTERIOR_BUDGET
+        type(prob_insert_table) :: tab
+        type(prob_insert_poses) :: poses
+        type(prob_candidate)    :: cands(1)
+        type(prob_inpl_counts)  :: counts
+        real    :: rots(NR), w(KQ), neff, row(NR), wangle
+        integer :: inds(KQ), i, j, nent, iblk
+        do i = 1,NR
+            rots(i) = real(i - 1) * 360. / real(NR)
+        enddo
+        call tab%new(1, [7], 1)
+        call tab%add(1, 1.0, 0, cands(1:0), [real ::], 0)
+        call poses%setup_range(tab, [7], 1, 1)
+        call poses%reserve_inpl(KQ, 1, rots)
+        row = 0.
+        call inpl_quadrature(NR, row, 1., KQ, 0.3d0, nent, inds, w, neff)
+        iblk = poses%block(1, 0)
+        poses%blk_nent(iblk) = nent
+        poses%blk_bin(iblk)  = inds(5)
+        do j = 1,nent
+            poses%blk_ent(j,iblk) = inpl_entry_pack(inds(j), nint(w(j) * real(KQ)))
+        enddo
+        counts = inpl_particle_counts(poses, 1, [neff])
+        wangle = poses%wc(1) * poses%entry_weight(iblk, 5)
+        call assert_real(1., real(counts%view_weight_sum), 0., 'topk = 1, a flat row: the committed view weight is 1')
+        call assert_real(1. / real(KQ), wangle, 1.e-7, 'while the committed angle''s inserted weight is its count over K')
+        call assert_true(counts%nrows == 1_int64 .and. counts%npose == int(KQ,int64) .and. counts%nsingle == 0_int64, &
+            &'one row, K entries, none collapsed')
+        call poses%kill
+        call tab%kill
+    end subroutine test_inpl_view_against_angle_weight
+
+    !> The readout record's in-plane fields (2D's and 3D's new ones) survive the write and read of a part's record and
+    !! are summed by the master's merge (add_prob_readout)
+    subroutine test_inpl_readout_round_trip()
+        character(len=*), parameter :: READOUT_FILE = 'tmp_eul_prob_tab_tester_readout.txt'
+        type(prob_readout) :: rec, back, acc
+        type(string)       :: fname
+        rec%route         = PROB_READOUT_3D_DENSE
+        rec%nptcls        = 10
+        rec%inpl_kmax     = INPL_POSTERIOR_BUDGET
+        rec%inpl_mmax     = 23
+        rec%inpl_nptcls   = 9_int64
+        rec%inpl_npose    = 70_int64
+        rec%inpl_nsingle  = 3_int64
+        rec%inpl_neff_sum = 12.5d0
+        rec%inpl_nrows    = 17_int64
+        rec%inpl_committed_view_weight_sum = 7.25d0
+        fname = READOUT_FILE
+        call write_prob_readout(rec, fname)
+        call read_prob_readout(back, fname)
+        call del_file(READOUT_FILE)
+        call assert_true(back%inpl_kmax == rec%inpl_kmax .and. back%inpl_mmax == rec%inpl_mmax .and. &
+            &back%inpl_nptcls == rec%inpl_nptcls .and. back%inpl_npose == rec%inpl_npose .and. &
+            &back%inpl_nsingle == rec%inpl_nsingle .and. back%inpl_neff_sum == rec%inpl_neff_sum .and. &
+            &back%inpl_nrows == rec%inpl_nrows .and. &
+            &back%inpl_committed_view_weight_sum == rec%inpl_committed_view_weight_sum, &
+            &'the in-plane fields survive the part''s record')
+        call add_prob_readout(acc, back)
+        call add_prob_readout(acc, rec)
+        call assert_true(acc%inpl_nptcls == 18_int64 .and. acc%inpl_npose == 140_int64 .and. acc%inpl_nsingle == 6_int64 &
+            &.and. acc%inpl_neff_sum == 25.d0 .and. acc%inpl_nrows == 34_int64 .and. &
+            &acc%inpl_committed_view_weight_sum == 14.5d0 .and. acc%inpl_kmax == INPL_POSTERIOR_BUDGET .and. &
+            &acc%inpl_mmax == 23, 'the master sums the parts'' in-plane fields')
+        call fname%kill
+    end subroutine test_inpl_readout_round_trip
 
 end module simple_eul_prob_tab_tester

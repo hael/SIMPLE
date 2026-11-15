@@ -44,9 +44,8 @@ Silent ones first: nothing reports these.
   (`commander_refine3D_distr_worker` hands `refine3D_exec` its `(params, build)`).
 - The worker frame (`sample4update_reprod`, `split_nobjs_even`, `qsys_declare_part_finished`) is the
   matchers' (`refine3D_exec`, `refine2D_exec`): the three together in a new commander are a third copy
-  (policy section 7). Deviations here (policy section 8), not patterns: `postprocess_volume_from_files`
-  in `simple_commanders_volops.f90`, called by a strategy (`simple_rec3D_service`); controller routines
-  of hundreds of lines.
+  (policy section 7). Deviations here (policy section 8), not patterns: controller routines of hundreds
+  of lines.
 - New code imports `builder`, `parameters`, `cmdline`, `sp_project` directly, not
   `simple_commanders_api`; shared defaults go in `src/defs/simple_default_clines.f90`.
 

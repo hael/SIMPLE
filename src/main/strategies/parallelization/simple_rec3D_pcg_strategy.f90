@@ -11,7 +11,7 @@ use simple_reconstructor_pcg,   only: reconstructor_pcg, pcg_solver_outcome, PCG
 use simple_matcher_ptcl_io,     only: prepimgbatch, ptcl_read_session, killimgbatch, &
     &ptcl_read_counts, ptcl_read_counts_now, ptcl_read_counts_since, rec_state_half, rec_obs_oris, &
     &rec_obs_inv_sig2, read_rec_obs_batch
-use simple_matcher_3Drec,       only: write_rec3D_bench
+use simple_matcher_3Drec,       only: write_rec3D_bench, count_inserted_poses
 use simple_sigma2_files,        only: load_sigma2
 use simple_image,               only: image
 use simple_imgarr_utils,        only: alloc_imgarr, dealloc_imgarr
@@ -38,7 +38,7 @@ implicit none
 public :: execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
 public :: rec3D_master_nthr, validate_pcg_common
 public :: set_pcg_solve_support, calculate_pcg_state_diagnostics, accumulate_pcg_state_half
-public :: pcg_extra_entries, accumulate_pcg_extras
+public :: pcg_extra_entries, accumulate_pcg_extras, pcg_inpl_particle_entries, accumulate_pcg_inpl_batch
 public :: pcg_assemble_bench, write_pcg_assemble_bench
 private
 #include "simple_local_flags.inc"
@@ -307,6 +307,7 @@ contains
         character(len=256) :: provenance
         integer(int64)     :: wset_id(2)
         integer :: state, eo, n_half, nimgs
+        integer(int64) :: nposes
         logical :: l_sigma_loaded
         type(ptcl_read_counts)  :: reads0, reads
         type(ptcl_read_session) :: rsess
@@ -319,7 +320,8 @@ contains
             rt_half = 0.
             rt_prep = 0.
         endif
-        nimgs = 0
+        nimgs  = 0
+        nposes = 0_int64
         call validate_pcg_common(params, check_solver=.false.)
         provenance = pcg_raw_provenance(params)
         if( params%cc_objfun == OBJFUN_EUCLID )then
@@ -353,6 +355,7 @@ contains
                 endif
                 n_half = size(half_pinds)
                 nimgs  = nimgs + n_half
+                nposes = nposes + count_inserted_poses(half_pinds, extra)
                 if( L_BENCH_GLOB ) t_half = tic()
                 call accumulate_worker_state_half(state, eo, half_pinds, provenance)
                 if( L_BENCH_GLOB ) rt_half = rt_half + toc(t_half)
@@ -369,7 +372,7 @@ contains
         if( L_BENCH_GLOB )then
             reads = ptcl_read_counts_since(reads0)
             call write_rec3D_bench(params, 'pcg', size(selected_pinds), nimgs, &
-                &reads, rt_init, rt_prep, rt_half - reads%rt_read - rt_prep, toc(t0))
+                &reads, rt_init, rt_prep, rt_half - reads%rt_read - rt_prep, toc(t0), nposes)
         endif
 
     contains
@@ -442,7 +445,8 @@ contains
     !! PCG worker publishes and reconstruct3D_wave's start finalizes. weights: the state weights, an inverse
     !! noise scale that multiplies the B term and |T|^2 alike. extra (the weighted insertion, topk > 1): a particle
     !! with an entry enters at its committed pose with its committed weight and at each extra pose as one more
-    !! entry from the same observation (pcg_extra_entries), as the gridding insertion has it
+    !! entry from the same observation (pcg_extra_entries), as the gridding insertion has it; under
+    !! l_inpl_posterior the entries come in chunks (accumulate_pcg_inpl_entries)
     subroutine accumulate_pcg_state_half( params, build, rsess, eo_here, pinds, pcgop, rt_prep, weights, extra )
         class(parameters),                 intent(in)    :: params
         class(builder),                    intent(inout) :: build
@@ -458,7 +462,7 @@ contains
         real,        allocatable :: inv_sig2(:), wbase(:), wts(:)
         integer,     allocatable :: xptcl(:), xfirst(:)
         integer :: lims2(2,2), R, batchlims(2), batchsz, ibatch, nthr, n, nxmax
-        logical :: l_extra
+        logical :: l_extra, l_inpl
         call pcgop%set_sym(build%pgrpsyms)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
@@ -468,6 +472,18 @@ contains
         call rec_obs_oris(params, build, pinds, selection)
         l_extra = .false.
         if( present(extra) ) l_extra = extra%nptcls > 0
+        ! the in-plane posterior insertion (l_inpl_posterior): the entries in chunks, each with its own records
+        l_inpl = .false.
+        if( l_extra ) l_inpl = allocated(extra%blk_nent)
+        if( l_inpl )then
+            allocate(wbase(n), source=1.)
+            if( present(weights) ) wbase = weights
+            call accumulate_pcg_inpl_entries(params, build, rsess, pinds, selection, wbase, extra, inv_sig2, pcgop, rt_prep)
+            call selection%kill
+            if( allocated(inv_sig2) ) deallocate(inv_sig2)
+            deallocate(wbase)
+            return
+        endif
         if( l_extra )then
             allocate(wbase(n), source=1.)
             if( present(weights) ) wbase = weights
@@ -573,6 +589,170 @@ contains
         enddo
         call o%kill
     end subroutine pcg_extra_entries
+
+    !> The PCG accumulation of the in-plane posterior insertion (l_inpl_posterior) for the particles pinds of one
+    !! half: each observation batch read, then its entries accumulated in chunks of at most MAXIMGBATCHSZ
+    !! (accumulate_pcg_inpl_batch)
+    subroutine accumulate_pcg_inpl_entries( params, build, rsess, pinds, selection, wbase, extra, inv_sig2, pcgop, rt_prep )
+        class(parameters),        intent(in)    :: params
+        class(builder),           intent(inout) :: build
+        class(ptcl_read_session), intent(inout) :: rsess
+        integer,                  intent(in)    :: pinds(:)
+        class(oris),              intent(inout) :: selection
+        real,                     intent(in)    :: wbase(:)
+        type(prob_insert_poses),  intent(in)    :: extra
+        real, allocatable,        intent(in)    :: inv_sig2(:)
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        real(timer_int_kind),     intent(inout) :: rt_prep
+        type(image), allocatable :: obs(:)
+        complex,     allocatable :: y_batch(:,:,:)
+        integer :: lims2(2,2), R, batchlims(2), ibatch, nthr, n
+        logical :: l_begun
+        lims2 = pcgop%get_lims2()
+        R     = lims2(1,2)
+        n     = size(pinds)
+        allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        call alloc_imgarr(nthr, [params%box_crop,params%box_crop,1], params%smpd_crop, obs)
+        l_begun = .false.
+        do ibatch = 1, n, MAXIMGBATCHSZ
+            batchlims = [ibatch, min(n,ibatch+MAXIMGBATCHSZ-1)]
+            call read_rec_obs_batch(params, build, rsess, pinds, batchlims, obs, lims2, R*R, y_batch, rt_prep)
+            call accumulate_pcg_inpl_batch(pcgop, selection, pinds, wbase, extra, real(params%box_crop) / real(params%box),&
+                &batchlims, y_batch, MAXIMGBATCHSZ, inv_sig2, l_begun)
+        enddo
+        if( .not. l_begun ) THROW_HARD('no PCG entry in a half with particles; accumulate_pcg_inpl_entries')
+        call dealloc_imgarr(obs)
+        deallocate(y_batch)
+    end subroutine accumulate_pcg_inpl_entries
+
+    !> One observation batch's in-plane posterior entries into pcgop: the particles batchlims(1):batchlims(2) of pinds,
+    !! their observations y_batch, expanded in order (pcg_inpl_particle_entries) into chunks of at most cap entries,
+    !! each with its own records, prep_particles, plane copies and accumulate_batch from 1; l_begun: begin_accum done
+    subroutine accumulate_pcg_inpl_batch( pcgop, selection, pinds, wbase, extra, crop_factor, batchlims, y_batch, cap, &
+            &inv_sig2, l_begun )
+        class(reconstructor_pcg), intent(inout) :: pcgop
+        class(oris),              intent(inout) :: selection
+        integer,                  intent(in)    :: pinds(:), batchlims(2), cap
+        real,                     intent(in)    :: wbase(:), crop_factor
+        type(prob_insert_poses),  intent(in)    :: extra
+        complex,                  intent(in)    :: y_batch(:,:,:)
+        real, allocatable,        intent(in)    :: inv_sig2(:)
+        logical,                  intent(inout) :: l_begun
+        type(oris) :: chunk
+        type(ori)  :: o
+        complex, allocatable :: y_chunk(:,:,:)
+        real,    allocatable :: peul(:,:), psh(:,:), pwt(:), ceul(:,:), csh(:,:), cwt(:)
+        integer, allocatable :: csrc(:), cptcl(:)
+        integer :: i, e, np, nc, mxp
+        mxp = max(1, extra%nblk) * max(1, extra%kq)
+        allocate(peul(3,mxp), psh(2,mxp), pwt(mxp))
+        allocate(ceul(3,cap), csh(2,cap), cwt(cap), csrc(cap), cptcl(cap))
+        allocate(y_chunk(size(y_batch,1), size(y_batch,2), cap))
+        call o%new(.true.)
+        nc = 0
+        do i = batchlims(1), batchlims(2)
+            call pcg_inpl_particle_entries(selection, pinds, wbase, extra, crop_factor, i, peul, psh, pwt, np)
+            do e = 1, np
+                nc = nc + 1
+                ceul(:,nc) = peul(:,e)
+                csh(:,nc)  = psh(:,e)
+                cwt(nc)    = pwt(e)
+                cptcl(nc)  = i
+                csrc(nc)   = i - batchlims(1) + 1
+                if( nc == cap ) call flush_chunk
+            enddo
+        enddo
+        ! the batch's planes are overwritten by the next read: its last entries go now
+        call flush_chunk
+        call o%kill
+        deallocate(y_chunk, peul, psh, pwt, ceul, csh, cwt, csrc, cptcl)
+
+    contains
+
+        subroutine flush_chunk
+            integer :: ec
+            if( nc < 1 ) return
+            call chunk%new(nc, .true.)
+            do ec = 1, nc
+                call selection%get_ori(cptcl(ec), o)
+                call o%set_euler(ceul(:,ec))
+                call o%set_shift(csh(:,ec))
+                call chunk%set_ori(ec, o)
+                y_chunk(:,:,ec) = y_batch(:,:,csrc(ec))
+            enddo
+            if( allocated(inv_sig2) )then
+                call pcgop%prep_particles(chunk, use_ctf=.true., inv_sig2=inv_sig2, weights=cwt(1:nc))
+            else
+                call pcgop%prep_particles(chunk, use_ctf=.true., weights=cwt(1:nc))
+            endif
+            if( .not. l_begun )then
+                call pcgop%begin_accum
+                l_begun = .true.
+            endif
+            call pcgop%accumulate_batch(y_chunk(:,:,1:nc), nc, 1)
+            call chunk%kill
+            nc = 0
+        end subroutine flush_chunk
+
+    end subroutine accumulate_pcg_inpl_batch
+
+    !> The PCG entries of particle i of pinds under the in-plane posterior insertion, in the gridding's order: per pose
+    !! of positive weight every entry of its block at its angle, weighted wbase(i) x pose weight x share; a particle
+    !! without blocks takes pcg_extra_entries' entries. eul, sh (the cropped box) and wt get np entries
+    subroutine pcg_inpl_particle_entries( selection, pinds, wbase, extra, crop_factor, i, eul, sh, wt, np )
+        class(oris),             intent(inout) :: selection
+        integer,                 intent(in)    :: pinds(:), i
+        real,                    intent(in)    :: wbase(:), crop_factor
+        type(prob_insert_poses), intent(in)    :: extra
+        real,                    intent(inout) :: eul(:,:), sh(:,:), wt(:)
+        integer,                 intent(out)   :: np
+        real    :: euler(3), shift(2), wpose
+        integer :: iloc, k, ipose, iblk, j
+        logical :: l_blocks
+        np    = 0
+        euler = selection%get_euler(i)
+        shift = selection%get_2Dshift(i)
+        if( .not. extra%has(pinds(i)) )then
+            call add_entry(euler, shift, wbase(i))
+            return
+        endif
+        iloc     = extra%loc(pinds(i))
+        l_blocks = extra%has_blocks(iloc)
+        do k = 0, extra%nextra(iloc)
+            if( k == 0 )then
+                wpose = extra%wc(iloc)
+            else
+                ipose = extra%first(iloc) + k - 1
+                wpose = extra%w(ipose)
+                euler = extra%euler(:,ipose)
+                shift = extra%shift(:,ipose) * crop_factor
+            endif
+            if( .not. l_blocks )then
+                ! the weighted insertion's rule: the committed pose always, an extra of positive weight
+                if( k == 0 .or. wpose > 0. ) call add_entry(euler, shift, wbase(i) * wpose)
+                cycle
+            endif
+            if( .not. (wpose > 0.) ) cycle
+            iblk = extra%block(iloc, k)
+            do j = 1, extra%blk_nent(iblk)
+                call add_entry([euler(1), euler(2), extra%entry_e3(iblk, j, euler(3))], shift, &
+                    &wbase(i) * wpose * extra%entry_weight(iblk, j))
+            enddo
+        enddo
+
+    contains
+
+        subroutine add_entry( euler_e, shift_e, wt_e )
+            real, intent(in) :: euler_e(3), shift_e(2), wt_e
+            np         = np + 1
+            eul(:,np)  = euler_e
+            sh(:,np)   = shift_e
+            wt(np)     = wt_e
+        end subroutine add_entry
+
+    end subroutine pcg_inpl_particle_entries
 
     !> the extra entries of the particles batchlims(1):batchlims(2) (pcg_extra_entries' layout after the n committed
     !! ones), each from its particle's observation in y_batch; y_x the scratch planes

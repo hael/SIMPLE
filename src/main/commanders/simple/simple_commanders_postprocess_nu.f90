@@ -10,6 +10,7 @@ use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, &
     &assert_nu_evidence_replay_ready, print_nu_evidence_summary, nu_evidence_sharpen_vol, NU_EVIDENCE_SOURCE_BASE, &
     &print_nu_filtmap_lowpass_stats, write_nu_local_resolution_map, &
     &get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT
+use simple_string_utils, only: fmt_dec, log_item
 implicit none
 #include "simple_local_flags.inc"
 
@@ -104,9 +105,8 @@ contains
             raw_lp       = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
             populated_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
                 &min_signal_pct=NU_ALIGN_LP_MIN_SIGNAL_PCT, n_signal=n_signal)
-            write(logfhandle,'(A,F6.2,A,F6.2,A,F6.2,A)') '>>> NU MATCHING LOW-PASS HANDOFF: ', handoff_lp, &
-                &' A (finest bank member; finest label with 1% of signal voxels ', populated_lp, &
-                &' A, raw finest label ', raw_lp, ' A)'
+            write(logfhandle,'(A)') log_item('NU HANDOFF', fmt_dec(handoff_lp, 2)//' A (finest bank member; finest '//&
+                &'label with 1% of signal '//fmt_dec(populated_lp, 2)//' A, raw finest label '//fmt_dec(raw_lp, 2)//' A)')
             ! the competition's local-resolution map, <vol>_locres_nu
             fname = basename(add2fbody(fname_vol, params%ext, '_locres_nu'))
             call write_nu_local_resolution_map(fname)

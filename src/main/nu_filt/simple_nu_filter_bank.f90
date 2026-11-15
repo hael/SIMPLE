@@ -1,5 +1,6 @@
 !@descr: simple nu filter bank implementation for volume-domain nonuniform filtering
 submodule (simple_nu_filter) simple_nu_filter_bank
+use simple_string_utils, only: fmt_dec, log_item
 implicit none
 #include "simple_local_flags.inc"
 
@@ -26,9 +27,9 @@ contains
         if( allocated(nu_null_lmask) ) THROW_HARD('the previous pair''s null shell is still set: cleanup_nu_filter first')
         call init_nu_filter(vol_even, vol_odd, fsc_res)
         if( nu_l_report .and. nu_bank_cap_find > 0 )then
-            write(logfhandle,'(A,F8.3,A,F8.3,A,I0,A,I0,A)') '>>> NU BANK CAP: FSC=0.143 ', fsc_res, &
-                &' A; candidates finer than ', calc_lowpass_lim(nu_bank_cap_find, box, smpd), &
-                &' A dropped; ', size(cutoff_finds), ' candidates retained of ', size(lowpass_limits), ' static labels'
+            write(logfhandle,'(A)') log_item('NU BANK', 'cap '//fmt_dec(calc_lowpass_lim(nu_bank_cap_find, box, smpd), 2)//&
+                &' A (FSC=0.143), finer candidates dropped; '//int2str(size(cutoff_finds))//' of '//&
+                &int2str(size(lowpass_limits))//' labels retained')
         endif
         if( mskdiam <= TINY ) THROW_HARD('mskdiam must be positive in setup_nu_dmats')
         nu_support_mskdiam = mskdiam
@@ -77,15 +78,15 @@ contains
                     nu_aux_replacement_label = size(cutoff_finds)
                     nu_aux_replacement_resolution = aux_resolutions(aux_replacement_idx)
                     if( nu_l_report )then
-                        write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                            &'>>> NU AUXILIARY MEMBER: ML-regularized pair at ', nu_aux_replacement_resolution, &
-                            &' A is beyond the ladder; competes beside its finest rung at ', finest_lp, ' A'
+                        write(logfhandle,'(A)') log_item('NU AUX MEMBER', 'ML-regularized pair at '//&
+                            &fmt_dec(nu_aux_replacement_resolution, 2)//' A, beyond the ladder: competes beside its '//&
+                            &'finest rung at '//fmt_dec(finest_lp, 2)//' A')
                     endif
                 else
                     if( nu_l_report )then
-                        write(logfhandle,'(A,F8.3,A,F8.3,A)') &
-                            &'>>> NU AUXILIARY MEMBER: ML-regularized pair at ', aux_resolutions(aux_replacement_idx), &
-                            &' A is within the ladder (finest rung ', finest_lp, ' A); the rungs compete alone'
+                        write(logfhandle,'(A)') log_item('NU AUX MEMBER', 'ML-regularized pair at '//&
+                            &fmt_dec(aux_resolutions(aux_replacement_idx), 2)//' A, within the ladder (finest rung '//&
+                            &fmt_dec(finest_lp, 2)//' A): the rungs compete alone')
                     endif
                     call cleanup_aux_bank
                 endif

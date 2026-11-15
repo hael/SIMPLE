@@ -9,6 +9,7 @@ use simple_core_module_api
 use simple_image,            only: image
 use simple_image_msk,        only: image_msk
 use simple_parameters,       only: parameters
+use simple_string_utils,     only: fmt_dec, log_item
 use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
     &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
     &NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, NU_ALIGN_LP_MIN_SIGNAL_PCT, &
@@ -215,6 +216,7 @@ contains
         subroutine record_nu_alignment_lowpass_limit()
             real    :: raw_lp, populated_lp
             integer :: n_signal
+            character(len=:), allocatable :: label
             ! handoff = finest bank member, independent of which labels won voxels; the population statistics
             ! are diagnostics (doc/policies/NU/nonuniform_filtering_policy.md section 12)
             align_lp     = get_nu_filter_bank_finest_lp()
@@ -222,10 +224,10 @@ contains
             populated_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0., &
                 &min_signal_pct=NU_ALIGN_LP_MIN_SIGNAL_PCT, n_signal=n_signal)
             if( params%part == 1 )then
-                write(logfhandle,'(A,I0,A,F6.2,A,F6.2,A,F6.2,A)') &
-                    &'>>> NU MATCHING LOW-PASS HANDOFF: STATE ', state, ', ', align_lp, &
-                    &' A (finest bank member; finest label with 1% of signal voxels ', populated_lp, &
-                    &' A, raw finest label ', raw_lp, ' A)'
+                label = 'NU HANDOFF'
+                if( params%nstates > 1 ) label = 'NU HANDOFF (STATE '//int2str(state)//')'
+                write(logfhandle,'(A)') log_item(label, fmt_dec(align_lp, 2)//' A (finest bank member; finest label '//&
+                    &'with 1% of signal '//fmt_dec(populated_lp, 2)//' A, raw finest label '//fmt_dec(raw_lp, 2)//' A)')
             endif
         end subroutine record_nu_alignment_lowpass_limit
 

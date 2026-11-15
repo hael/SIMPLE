@@ -642,13 +642,11 @@ contains
         self%exists = .true.
     end subroutine new
 
-    subroutine calc_fsc_area_score( self, even, odd, state )
+    subroutine calc_fsc_area_score( self, even, odd )
         class(fsc_area_score_result), intent(inout) :: self
         class(image),                 intent(inout) :: even, odd
-        integer,            optional, intent(in)    :: state
         logical, parameter :: VERBOSE = .false.
         integer :: idir, loc(1)
-        character(len=32) :: ratio
         if( .not. even%is_ft() ) call even%fft()
         if( .not. odd%is_ft()  ) call odd%fft()
         call even%conical_fsc(odd, self%dirs, self%cone_half_angle_deg, self%min_count, self%cfsc, self%counts)
@@ -664,12 +662,6 @@ contains
         self%wauc_max = self%wauc(self%max_dir)
         if( self%wauc_max > 0. )then
             self%cfar = self%wauc_min / self%wauc_max
-        endif
-        write(ratio,'(F32.4)') self%cfar
-        if( present(state) )then
-            write(logfhandle,'(A,I0,A)') '>>> CONICAL FSC AREA RATIO (cFAR, state ', state, '): '//trim(adjustl(ratio))
-        else
-            write(logfhandle,'(A)') '>>> CONICAL FSC AREA RATIO (cFAR): '//trim(adjustl(ratio))
         endif
         if( VERBOSE )then
             write(logfhandle,'(A,1X,I0)')      '    Direction axes:', self%ndirs

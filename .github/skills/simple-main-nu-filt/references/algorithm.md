@@ -12,7 +12,7 @@ the ML coupling are skill `simple-nonuniform-regularization`.
 - The auxiliary pair (the ML-regularised halves, `ml_reg=yes`; in assembly its resolution is the
   state's FSC=0.143) is stashed as a copy and appended as the last label only when its Fourier
   index is at or beyond the finest retained rung; it shares that rung's Potts coordinate. Otherwise
-  the rungs compete alone (`>>> NU AUXILIARY MEMBER:` says which).
+  the rungs compete alone (the `NU AUX MEMBER` line says which).
 - Support: the sphere of `mskdiam` (A) on the input grid, packed once (`nu_mask_vox`).
 - Each candidate pair is filtered from the transforms of the edge-tapered halves
   (`prepare_nu_candidate_fts`, `filter_nu_candidate`: taper `COSMSKHALFWIDTH`, Butterworth) and

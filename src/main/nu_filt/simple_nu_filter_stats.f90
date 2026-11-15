@@ -1,5 +1,6 @@
 !@descr: simple nu filter stats implementation for volume-domain nonuniform filtering
 submodule (simple_nu_filter) simple_nu_filter_stats
+use simple_string_utils, only: log_item
 implicit none
 #include "simple_local_flags.inc"
 
@@ -185,25 +186,24 @@ contains
         logical, optional, intent(in) :: mask(:,:,:)
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:)
-        integer :: icut, nselected
-        character(len=10) :: source_tag
+        integer :: icut
+        character(len=7) :: cell
+        character(len=:), allocatable :: lps, pcts
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before print_filtmap_lowpass_histogram')
         if( .not.nu_l_report ) return
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
-        nselected = count_active_nu_mask(mask)
-        write(logfhandle,'(A)') '>>> NU LOW-PASS ASSIGNMENTS (retained filter bank)'
-        write(logfhandle,'(A,I12)') '    Analyzed voxels: ', nselected
-        write(logfhandle,'(A)')     '    Source      Bank  Fourier k  LP limit (A)        Voxels    Pct mask'
+        ! two aligned rows: each label's low-pass (* the auxiliary member) and its share of the mask's voxels
+        lps  = ''
+        pcts = ''
         do icut = 1, size(cutoff_finds)
-            if( nu_label_is_aux_replacement(icut) )then
-                source_tag = 'AuxReplace'
-            else
-                source_tag = 'Base'
-            endif
-            write(logfhandle,'(4X,A10,2X,I4,2X,I9,2X,F12.3,2X,I12,2X,F8.2,A)') &
-                &source_tag, icut, cutoff_finds(icut), nu_label_lowpass_limit(icut), counts(icut), percentages(icut), '%'
+            write(cell,'(F7.2)') nu_label_lowpass_limit(icut)
+            lps = lps//cell//merge('*', ' ', nu_label_is_aux_replacement(icut))
+            write(cell,'(F7.2)') percentages(icut)
+            pcts = pcts//cell//' '
         end do
+        write(logfhandle,'(A)') log_item('NU LOW-PASS (A)', trim(lps(2:)))
+        write(logfhandle,'(A)') log_item('NU VOXELS (%)', trim(pcts(2:)))
         deallocate(counts, percentages)
     end subroutine print_filtmap_lowpass_histogram
 

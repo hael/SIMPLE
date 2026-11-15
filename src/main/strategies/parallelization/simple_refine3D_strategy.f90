@@ -20,6 +20,7 @@ use simple_halfmap_diagnostics, only: rename_support_provenance
 use simple_syslib,              only: get_peak_rss_bytes
 use simple_strategy3D_cont,     only: check_cont_seeds
 use simple_refine3D_startup,    only: refine3D_startup
+use simple_string_utils,        only: log_item
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -1718,7 +1719,7 @@ contains
 
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_volassemble_strategy, only: volassemble_exec
-        use simple_commanders_volops,    only: commander_postprocess
+        use simple_postprocess_strategy, only: run_postprocess
         use simple_eul_prob_tab_utils,   only: merge_prob_readouts, prob_insert_cone, insert_cone_from_fsc, prob_readout
         !$ use omp_lib,                  only: omp_get_max_threads, omp_set_num_threads
         use simple_fsc,                     only: plot_fsc
@@ -1728,7 +1729,6 @@ contains
         type(builder),                  intent(inout) :: build
         type(cmdline),                  intent(inout) :: cline
         logical,                        intent(out)   :: converged
-        type(commander_postprocess)       :: xpostprocess
         type(cmdline) :: cline_volassemble
         type(string)  :: str
         integer(timer_int_kind) :: t_recphase
@@ -1933,7 +1933,7 @@ contains
                             call self%cline_postprocess%set('state', state)
                             call self%cline_postprocess%set('nthr',  self%nthr_master)
                             if( cline%defined('lp') ) call self%cline_postprocess%set('lp', params%lp)
-                            call xpostprocess%execute(self%cline_postprocess)
+                            call run_postprocess(self%cline_postprocess)
                             volpproc = refine3D_state_vol_suffix_fname(state, PPROC_SUFFIX)
                             vollp    = refine3D_state_vol_suffix_fname(state, LP_SUFFIX)
                             ! keep per-iteration postprocessed copies
@@ -2110,17 +2110,15 @@ contains
         real           :: secs
         integer(int64) :: peak_rss
         real(real64)   :: peak_gib
-        character(len=32) :: elapsed, thread_secs, rss
+        character(len=32) :: elapsed, rss
         secs     = real(toc(t_start))
         peak_rss = get_peak_rss_bytes()
         peak_gib = -1.0_real64
         if( peak_rss >= 0_int64 ) peak_gib = real(peak_rss,real64) / real(1024_int64**3,real64)
         write(elapsed,'(F32.1)') secs
-        write(thread_secs,'(F32.1)') secs*real(nthr)
         write(rss,'(F32.2)') peak_gib
-        write(logfhandle,'(A,I0,A)') '>>> RECONSTRUCTION MASTER PHASE ('//trim(params%rec_backend)//'): '//&
-            &trim(adjustl(elapsed))//' s on ', nthr, ' threads ('//trim(adjustl(thread_secs))//&
-            &' thread-s), peak RSS '//trim(adjustl(rss))//' GiB'
+        write(logfhandle,'(A)') log_item('MASTER PHASE', trim(adjustl(elapsed))//' s on '//int2str(nthr)//&
+            &trim(merge(' thread ', ' threads', nthr == 1))//', peak RSS '//trim(adjustl(rss))//' GiB')
     end subroutine report_rec_master_phase
 
     integer function inmem_anneal_tail_start(self) result(it)

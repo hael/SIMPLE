@@ -212,7 +212,8 @@ Each is a signal to ask "what already does this?":
   (evidence of a copy).
 - `use simple_commanders_<topic>` of a concrete commander module in a strategy
   or domain module, or a routine added to a commander module for a strategy to
-  call (`postprocess_volume_from_files`).
+  call (`postprocess_volume_from_files` was one until 2026-11-14, when it moved to
+  `simple_postprocess_strategy` beside `run_postprocess`).
 - A commander routine of more than about 150 lines that contains numerics or
   project choreography rather than sequencing.
 - A new `optional` argument that only one caller omits, added to avoid reading
@@ -228,11 +229,9 @@ precedent. The entries the batch pipeline of probabilistic alignment closed
 write-and-reread around the `prob_align` step) are gone from the list.
 
 - **Concrete commander modules imported by strategies.**
-  `simple_refine3D_strategy` (`rec3D` and `postprocess`),
+  `simple_refine3D_strategy` (`rec3D`),
   `simple_refine2D_strategy` (`make_cavgs`, `make_cavgs_distr`, `scale`), `simple_calc_pspec_strategy`
-  (`calc_pspec_assemble`), `simple_pick_strategy` (`cluster_cavgs`) and
-  `simple_rec3D_service` (`postprocess_volume_from_files`, a routine that lives
-  in `simple_commanders_volops`). The controllers import them by design
+  (`calc_pspec_assemble`) and `simple_pick_strategy` (`cluster_cavgs`). The controllers import them by design
   (`simple_solve3D_utils`, `simple_refine3D_states_controller`,
   `simple_external_reference_pose_initialization`, `simple_sigma2_bootstrap`,
   `simple_flex_pca_project_gateway`).

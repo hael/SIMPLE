@@ -1,7 +1,10 @@
 # In-plane quadrature insertion in 3D
 
-Status, 2026-11-14: planned, not started; both design reviews incorporated, including the per-view
-window-prior centre correction (section 10). No design findings remain open; implementation validation is pending. Base:
+Status, 2026-11-15: delivered; the key removed and the insertion made the default (Hans, decision 1). Was, 2026-11-14:
+delivered, not validated at scale; the run's report is
+[inpl_quadrature_insertion_3D_report.md](inpl_quadrature_insertion_3D_report.md) and the maintainer's runs of
+section 7 follow. Both design reviews incorporated, including the per-view window-prior centre correction (section
+10). Base:
 `06d3a4de9` (first written at `b2a9d544f`; the three commits between them touch no file of the file table except
 an unrelated paragraph of the solve2D policy). Supersedes: none.
 Depends on: the 2D in-plane quadrature (`inpl_quadrature`, `prob_insert_inpl`, `INPL_POSTERIOR_BUDGET`;
@@ -183,6 +186,8 @@ code.
 1. (2026-11-14, Hans) **The switch.** A temporary key `inpl_posterior=yes|no`, default `no`, on `refine3D` and
    `solve3D`. solve3D forwards it to every stage through its copied command line (section 2). After Hans's read
    it becomes the shared constant or is removed, as `topk_inpl` went in 2D (`b2a9d544f`).
+   (2026-11-15, Hans) The key is removed: the insertion runs in every pass decision 3 names that reconstructs
+   (`volrec=yes`) under `objfun=euclid`, so the multi-state final assignment needs no override.
 2. (2026-11-14, Hans) **Testing.** The plan carries the off-state byte identity, unit assertions with planted
    violations, and smoke runs. The scale test is Hans's, after delivery. The report names the runs and the
    readout to read. The plan closes on delivery.
@@ -307,8 +312,14 @@ code.
     The new fields are written, read and summed with the others. `PROB_TAB_INPL (budget K, m_max M)` follows
     `PROB_TAB_INSERT` in the 3D branch. It prints rows and entries per particle, the collapsed share of rows, the
     mean `n_eff`, and the committed view weight beside `PROB_TAB_INSERT`'s table value. The 2D line is unchanged.
-    The counts are accumulated per thread (`add_inpl_counts`, the `add_work` pattern) and set on the table before
-    `close_assignment` (`set_inpl_counts`, on `eul_prob_tab` and copied into both tables' records).
+    The counts are set on the table before `close_assignment` (`set_inpl_counts`, on `eul_prob_tab` and copied
+    into both tables' records). Revised by the run in Phase 2 (launch ruling R2): each particle's search puts its
+    counts into the particle's own slot of the pass (`add_inpl_counts`), and the matcher sums the slots in particle
+    order. Sums per thread, the `add_work` pattern first proposed, depend on which particles the dynamic schedule
+    gives each thread, so the double-precision sums of a part's record could differ between repeats at more than one
+    thread (found by the Phase 2 review). The rows, entries, collapsed rows and `n_eff` are counted over the
+    particles that enter by their rows. A particle that falls back to the insertion without the key (decision 6)
+    adds its table weight to the committed view weight sum, and a particle without an assignment adds 1.
 11. (proposed) **Exits.** `l_margin = l_prob_align_mode .and. (topk > 1 .or. l_inpl_posterior)`. The quadrature
     averages the draw's noise out of each half, as the extras do, so the halves agree a shell early for the same
     reason.
@@ -318,8 +329,15 @@ code.
     budget then grows by that amount, and the pass buffer takes the remainder, as it does today. Over budget,
     the existing warning is printed. The PCG chunk of decision 9 is bounded by `MAXIMGBATCHSZ` entries, the order
     of one observation batch the reconstruction already holds, so it adds no estimate term.
-13. (proposed) **Objective.** The key requires `objfun=euclid`, as the probability tables already do
-    (`gen_posterior_val`). The parameter phases refuse `inpl_posterior=yes` with another objective.
+13. (proposed; revised by the run in Phase 1 under launch ruling R2) **Objective.** The key requires
+    `objfun=euclid`, as the probability tables already do (`gen_posterior_val`). The parameter phases refuse
+    `inpl_posterior=yes` with another objective on a pass the key acts on: a `refine3D` pass in one of decision 3's
+    modes. That is also where `l_inpl_posterior` is derived; elsewhere it is false and the key is ignored. Revised
+    because the children of solve3D and refine3D copy the parent's command line, key included, and switch it to
+    `objfun=cc`: the start-volume reconstruction of `simple_refine3D_strategy.f90` keeps `refine=prob`, solve3D's
+    reconstructions (`simple_solve3D_utils.f90`) and the external-reference pose initialisation (`refine=greedy`)
+    do the same. Refusing the key whatever the program and mode would stop every key-on run at such a child.
+    solve3D itself sets `objfun=euclid` before its parameters are made.
 14. (2026-11-14, Hans) **PCG is supported and exercised.** The PCG reconstruction takes the quadrature's
     entries as it takes the extras (decision 9), and the plan runs it. solve3D reconstructs by gridding unless
     `rec_backend=pcg` is given, and then from `PCG_START_STAGE = 6` (`set_refine3D_backend_policy`), so the
@@ -471,14 +489,16 @@ Defaults taken without a question: the key name `inpl_posterior`; `l_inpl_poster
   of section 7 covers the parallel region.
 - Compile-time policy: the new components are allocatable; imports are lean `use ..., only:`; no new CMake targets
   or per-file options.
-- Where builds and runs happen (the agent kit on the Mac or arun on the Dell) is Hans's decision before launch,
-  after further review (2026-11-14); the phases and gates are the same either way. Never into the checkout's
-  `build/`. Long runs go in the background. Nothing is committed.
+- Builds and runs happen on the dell under arun (Hans, 2026-11-14, launch ruling R1; the machine notes and
+  build trees are the run's `spec/phases.md`). Never into the checkout's `build/`. Long runs go in the
+  background. Nothing is committed. Master is not frozen during the run; the run does not sync with it.
 - Sync: no other run is known to edit these files on 2026-11-14. If master moves past `06d3a4de9` in a file of
   the table before launch, re-check section 2 against the new commit and record the differences in Progress.
 - **Stops.** The off-state identity fails and cannot be restored. The frame assertion fails (the row disagrees
   with the kernel at the solved pose): stop, do not adjust the tolerance. A file outside the table needs a
-  change. A fixed decision contradicts the code. Decision 4 turns out to need the table's selection changed, or
+  change that alters behaviour outside the plan's scope (launch ruling R3 names the scope; a row may be added
+  for a change the design implies within it). A maintainer's decision (1 to 4, 14, 15) contradicts the code;
+  the proposed decisions may be revised by the run within the contract (launch ruling R2). Decision 4 turns out to need the table's selection changed, or
   the table cannot retain and expose each refined pose's actual prior centre and the prior width to the strategy. Section 2's PCG premise
   (nothing on the production path reads per-entry metadata after accumulation) no longer holds at the launch
   commit.
@@ -537,22 +557,22 @@ Defaults taken without a question: the key name `inpl_posterior`; `l_inpl_poster
 | `src/main/params/simple_parameters.f90`, `simple_parameters_parse.f90`, `simple_parameters_phases.f90` | `inpl_posterior`, its parse, check, refusal with `objfun` other than euclid, `l_inpl_posterior` (decision 3) | 1 |
 | `src/main/ui/simple/simple_ui_refine3D.f90`, `simple_ui_solve3D.f90` | the key | 1 |
 | `src/main/commanders/simple/simple_commanders_solve3D.f90` | `inpl_posterior=no` in `run_multistate_final_assignment` | 1 |
-| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | `prob_insert_poses` reservation, blocks and table count kept apart; refined-entry prior-centre retention; readout fields and the 3D line; `inpl_quadrature` outputs; the marginal-weight helper with the shift-prior term | 1, 2 |
-| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`, `simple_eul_prob_tab_neigh.f90` | `set_inpl_counts`; the counts into each table's record at `close_assignment`; capture each refined pose's actual prior centre and expose it with the prior width | 1 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab_utils.f90` | `prob_insert_poses` reservation, blocks and table count kept apart; refined-entry prior-centre retention; readout fields and the 3D line; `inpl_quadrature` outputs; the marginal-weight helper with the shift-prior term (Phase 3 under launch ruling R3: the seeded window refinement and the particle counts as testable helpers; plants, reverted) | 1, 2, 3 |
+| `src/main/strategies/search/probabilistic/simple_eul_prob_tab.f90`, `simple_eul_prob_tab_neigh.f90` | `set_inpl_counts`; the counts into each table's record at `close_assignment`; capture each refined pose's actual prior centre and expose it with the prior width (Phase 3 under launch ruling R3: both tables call the seeded window refinement helper) | 1, 3 |
 | `src/main/strategies/search/simple_strategy3D_matcher.f90` | layout gated on `topk > 1 .or. l_inpl_posterior`; per-thread counts; `m_max`; the bank's allocation | 1, 2 |
-| `src/main/strategies/search/simple_strategy3D_alloc.f90` | `s3D%inpl_bank`, `prep_strategy3D_inpl_bank`, release in `clean_strategy3D` | 1 |
-| `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90` | the rows, quadratures, marginal weights, block fill, `add_inpl_counts` | 2 |
-| `src/main/strategies/search/simple_strategy3D_srch.f90` | if needed: access to the solved increment for the row | 2 |
-| `src/main/strategies/search/simple_matcher_3Drec.f90` | the key-on gridding loop; poses inserted in the REC3D bench | 1, 2 |
-| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the key-on chunked PCG expansion | 2 |
-| `src/main/simple_convergence.f90` | `l_margin` (decision 11) | 1 |
+| `src/main/strategies/search/simple_strategy3D_alloc.f90` | `s3D%inpl_bank`, `prep_strategy3D_inpl_bank`, release in `clean_strategy3D`; the per-thread per-pose work of the rows (Phase 2, row extended under launch ruling R3) | 1, 2 |
+| `src/main/strategies/search/probabilistic/simple_strategy3D_prob.f90` | the rows, quadratures, marginal weights, block fill, `add_inpl_counts` (Phase 3 under launch ruling R3: the particle counts through the helper) | 2, 3 |
+| `src/main/strategies/search/simple_strategy3D_srch.f90` | if needed: access to the solved increment for the row (Phase 3 under launch ruling R3: plants only, reverted) | 2, 3 |
+| `src/main/strategies/search/simple_matcher_3Drec.f90` | the key-on gridding loop; poses inserted in the REC3D bench (Phase 3 under launch ruling R3: `insert_inpl_entries` public, on the point group; plants, reverted) | 1, 2, 3 |
+| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | the key-on chunked PCG expansion; the poses inserted in its REC3D bench (Phase 1, row extended under launch ruling R3) (Phase 3 under launch ruling R3: the chunk loop as a routine over planes in memory; plants, reverted) | 1, 2, 3 |
+| `src/main/simple_convergence.f90` | `l_margin` (decision 11) (Phase 3 under launch ruling R3: plant only, reverted) | 1, 3 |
 | `src/main/strategies/search/simple_matcher_memory.f90` | the estimate (decision 12) | 1 |
 | `src/utils/math/simple_rnd.f90` | the `RND_FAM_INPLQ` comment covers both routes | 1 |
 | `src/main/strategies/parallelization/simple_refine3D_strategy.f90` | if needed: the master's readout merge of the new fields | 1 |
 | `src/main/strategies/search/simple_strategy3D_inplane_tester.f90` | the frame assertion | 3 |
 | `src/main/strategies/search/probabilistic/simple_eul_prob_tab_tester.f90` | marginal weights, shift prior, layout and reservation, view weight against angle weight, readout round trip | 3 |
 | `src/main/volume/simple_reconstructor_tester.f90` | the key-on gridding loop and weighted entries | 3 |
-| `src/main/strategies/parallelization/simple_rec3D_strategy_tester.f90` | the chunked PCG expansion | 3 |
+| `src/main/strategies/parallelization/simple_rec3D_strategy_tester.f90` | the chunked PCG expansion; the key-on gridding loop and weighted entries (moved here from the reconstructor tester: a volume submodule importing the matcher would invert the layering) | 3 |
 | `src/main/simple_convergence_tester.f90` | the margin under the key | 3 |
 | `src/main/strategies/search/simple_matcher_memory_tester.f90` | if the estimate's checks need the key's term | 3 |
 | `doc/policies/3D/refine3D_policy.md`, `doc/policies/3D/solve3D_policy.md`, `doc/policies/2D/solve2D_policy.md` | the living description (Phase 2 bullet) | 2 |
@@ -605,3 +625,461 @@ validation was performed for either review; the implementation gates remain pend
 ## Progress
 
 (one entry per phase, written by the run)
+
+### Phase 0, baseline (2026-11-14)
+
+No source file changed; this entry is the only edit. All paths below are under `/data2/agent_runs/inpl3D/scratch/keep/`
+(the run's kept scratch, `keep/` below); one line per run is in `keep/summary.tsv`, the session's journal in
+`/data2/agent_runs/inpl3D/state/journal_phase_0.md`.
+
+- **Base.** The run's HEAD is `85213734e`. It differs from this plan's base `06d3a4de9` in this plan file alone
+  (`git diff --stat 06d3a4de9 85213734e`: one file, 607 lines added), so section 2 needed no re-check. Launch ruling R1
+  (builds and runs on the dell under the run driver) is the one applied here; section 8 already carries it.
+- **Machine and compiler.** The dell: Oracle Linux 8.10, 24 cores (8 performance cores, CPUs 0-7, and 16 efficiency
+  cores), 62 GB, no GPU. GNU Fortran 15.2.1 (gcc-toolset-15), CMake 3.26.5, Python 3.12 for the build's checkers,
+  `OPENBLAS_CORETYPE=Haswell`. The maintainer's checkout `~/src/SIMPLE/build` is configured the same way (Release,
+  tests on, `USE_ARCHOPT`, OpenMP); it was read, never built or run. Load averages: 0.2 before the builds, up to about
+  8 while the run's own jobs ran, otherwise idle; each timing below names its load in `keep/summary.tsv`.
+- **Build trees.** Four trees, each configured by cmake directly with `-DBUILD_TESTS=ON -DNICE=OFF -DUSE_ARCHOPT=ON
+  -DFORTLS=OFF -DPython3_EXECUTABLE=/usr/bin/python3.12`, built with make and installed into themselves: the base
+  (`git archive` of HEAD in `keep/src_base`) in Release (`keep/build_base`, 131 s at 12 jobs) and Debug
+  (`keep/build_base_debug`, 64 s), and the run's tree in Release (`repo/build`, 130 s) and Debug (`repo/build_debug`,
+  66 s), identical to the base but for this note. The fast gate (`scripts/run_fast_gate.sh`, 15 suites) passed on all
+  four: 15 of 15, 10 s in Release and 38 s in Debug (`keep/logs/fastgate_*.log`).
+- **Environment pitfall found.** The login environment sets `SIMPLE_PATH` to the maintainer's `~/src/SIMPLE/build`, and
+  the job scripts that the local queue writes (even for one part) start `$SIMPLE_PATH/bin/simple_private_exec`. The
+  first launch of the workflows therefore ran the maintainer's workers; it was stopped within minutes, before any
+  comparison, and its directories deleted. Every run of this plan now sources `keep/env.sh <tree>`, which points
+  `SIMPLE_PATH` and `PATH` at the tree under test and removes the maintainer's build from `PATH`.
+- **Identity baseline.** `simulated_workflow` (each suite runs a simulated dataset from movies through solve2D and
+  solve3D at one thread) ran twice on the base Release build with `SIMPLE_SEED=7`, in `keep/identity/base1/<suite>` and
+  `keep/identity/base2/<suite>`: 1jxy 822 and 845 s, 6vxx 663 and 631 s, peak memory 2.4 GB, all four ending normally.
+  `test=identity` of `base1` against `base2`, in the directories the runs executed in: 1jxy 223 files the same, 6vxx
+  186 the same, none differing (`keep/identity/cmp_base1_base2/<suite>/identity_report.txt`). **The exclusion lists
+  of both suites are empty.** `base1` is kept as the reference of every later comparison; `base2`'s outputs were deleted
+  after the comparison (its logs are kept).
+- **Smoke fixture.** `keep/fixture/fixture_6vxx.simple`: the 6vxx workflow's solve2D project of `base1` (87 particles,
+  point group c3, box 192, 1.3 A per pixel), copied with its stacks and class averages (the movies hard-linked) and
+  relocated with `simple_exec prg=update_project old_root=<base1 tree> new_root=<fixture tree> projfile_out=...`.
+  `print_project_info` opens it. `update_project` leaves six side-file keys of the micrograph records
+  (`mc_starfile`, `mcmodel`, `thumb`, `mceps`, `ctfdoc`, `ctfjpg`) pointing at `base1`; a solve3D run of the fixture
+  under `strace` opened, probed or stat'ed no file under `base1` (`keep/smoke/fixturecheck_strace_summary.txt`), so the
+  fixture is self-contained for these runs. The thread probe uses a second relocated project,
+  `keep/fixture/fixture_6vxx_refined.simple`, the 6vxx workflow's solve3D result.
+- **Smoke commands** (base Release, no key, each in `keep/smoke/<label>/` on its own copy of the fixture, `SIMPLE_SEED=7`;
+  solve3D's required keys are `pgrp`, `mskdiam` and `nthr` with a project, and the other keys are the workflow's):
+  `simple_exec prg=solve3D projfile=<copy> mkdir=yes pgrp=c3 mskdiam=180 gold_std_stage=9` plus
+  - gridding, shared memory: `nthr=16`, 92 s, peak 2.46 GB;
+  - gridding, distributed: `nparts=2 nthr=8`, 129 s, master 1.73 GB, largest part 2.21 GB;
+  - PCG (preconditioned conjugate-gradient reconstruction), shared memory: `rec_backend=pcg nthr=16`, 131 s, 2.57 GB;
+  - PCG, distributed: `rec_backend=pcg nparts=2 nthr=8`, 176 s, master 2.34 GB, largest part 2.21 GB.
+  All ended normally, well under the hour, so the fixture stands. PCG takes over at stage 6 as section 4 says (its
+  lines start after "ENTERING REFINE3D STAGE 6"). FSC=0.143 resolution (the half-map agreement criterion) at the end of
+  stage 3 is 10.85 A in all four, at the end of stage 8 4.89, 4.80, 4.38 and 4.38 A. Peak memory is the processes' own
+  high-water mark (`/usr/bin/time -v` and a sampler of `VmHWM`; `rss_peaks.txt` per run).
+- **PCG off-state identity, exclusions.** The PCG shared-memory command at `nthr=1` twice
+  (`keep/smoke/base_pcg_t1_a`, `_b`; 626 and 537 s, run side by side). Every image and binary output (`.mrc`, `.mrcs`,
+  `.jpg`, `.bin`; 58 files) is byte-identical by `cmp`. What differs, from this comparison alone: the project file in
+  `projinfo solve3D_run_id` (made from the process number) and the job record's wall-clock `date` and `time`; the
+  `.provenance` files and the manifest's artifact lines in the run directory's path; the manifest's `run_id` and
+  `checksum`; the PCG `*_diagnostics.txt` files in their timing lines; `metadata.json` (process number, timestamps) and
+  `BENCH/` (timings). `keep/pcg_identity.sh <tree> <runA> <runB>` freezes these exclusions: everything else byte for
+  byte, the project segment by segment with the run's path normalised. Base pair: 158 files the same, 0 differing
+  (`keep/smoke/pcg_identity_base_a_b.txt`); against the `nthr=16` run it reports 88 differing, so the check can fail.
+  `base_pcg_t1_a` is kept as the reference for Phases 1 and 2.
+- **Thread probe.** One `refine3D refine=prob objfun=euclid maxits=1 mkdir=no` iteration on the refined fixture
+  (`keep/probe.sh`; the run directory holds the fixture's `fsc_state01.bin`, so the insertion cone and the extras are
+  active, and the start volume is the workflow's stage-3 map), three times at `nthr=1` pinned with `taskset -c 0-7`
+  (22.6 s each) and three times at `nthr=16` (4.6-4.8 s). The partial reconstructions are
+  `recvol_state01_part1_{even,odd}.mrc` and `rho_recvol_state01_part1_{even,odd}.mrc` (the density, SIMPLE's own format
+  with a 64-byte header). The three single-thread runs are byte-identical, and so are the three 16-thread runs, but
+  **one thread and 16 threads differ**: in the even and odd sums 42 and 27 of 7.08 million values differ, by at most
+  2.5e-8 and 6.0e-9 of the volume's largest value; in the even and odd densities 14 and 14 of 3.58 million values,
+  by at most 2.1e-10 of the largest. Headers are equal, and the committed poses of all 87 particles (the `ptcl3D`
+  records) are identical. The noise spectra that the iteration bootstraps (`sigma2_state.bin`, 89 bytes) also differ
+  between the thread counts. The gridding insertion adds into each lattice cell in a fixed order whatever the thread
+  count (`insert_plane_oversamp`), so the spread most likely enters through the whitening of the planes by those spectra.
+  Measured by `keep/mrc_spread.py` (standard library, reads the outputs). Few extras are inserted on this fixture
+  (`PROB_TAB_INSERT`: 1.00 poses per particle); under the key the committed pose's own quadrature still exercises the
+  new insertion path. **The thread gate of Phase 2, frozen here (*measured*):** at key on, the repeats at each thread
+  count byte-identical among themselves; the `ptcl3D` records identical between `nthr=1` and `nthr=16`; and for each
+  partial, the largest difference between the thread counts over the volume's largest value no larger than the
+  base's for that kind of file, 2.465e-8 for the sums and 2.134e-10 for the densities (the larger of the two halves:
+  which half takes the larger value is chance). The count of differing values is reported, not gated, because the key
+  inserts more entries per particle and so touches more cells.
+- **Base readout.** The `PROB_TAB_INSERT` lines with their stages and iterations, the REC3D bench records (the
+  reconstruction's per-pass benchmark, `BENCH/REC3D_BENCH_PART<n>.txt`) and each run's command line, wall time and
+  memory are in `keep/base_readout/`. Over the whole solve3D run, shared-memory gridding inserted 7,482 particle images
+  in 0.97 s of accumulation (86 passes); PCG in shared memory 7,221 images in 4.29 s (68 gridding and 15 PCG passes).
+  Stage 3's first table iteration inserts 1.69 poses per particle at a committed weight of 0.72.
+- **Exit.** The build records, the run directories, both exclusion lists (empty for the workflows; the PCG smoke's as
+  above), the smoke command lines with their times and the thread probe's result are recorded here. Files changed: this
+  plan only.
+
+### Phase 1, plumbing (2026-11-14)
+
+The key exists and every structure the enabled path needs is in place, while the key off reproduces the base byte
+for byte. Nothing inserts differently yet: the rows, the quadrature and the new insertion loops are Phase 2. Paths are
+under `/data2/agent_runs/inpl3D/scratch/keep/` (`keep/` below); the session's journal is
+`/data2/agent_runs/inpl3D/state/journal_phase_1.md`.
+
+- **Files changed (16 source files, lines added/removed):** `simple_parameters.f90` (2/0), `_parse.f90` (1/0),
+  `_phases.f90` (14/0); `simple_ui_refine3D.f90` (8/0), `simple_ui_solve3D.f90` (9/0); `simple_commanders_solve3D.f90`
+  (2/0); `simple_eul_prob_tab_utils.f90` (154/7), `simple_eul_prob_tab.f90` (86/3), `simple_eul_prob_tab_neigh.f90`
+  (21/4); `simple_strategy3D_matcher.f90` (37/4), `simple_strategy3D_alloc.f90` (15/1), `simple_matcher_3Drec.f90`
+  (24/3), `simple_matcher_memory.f90` (6/2); `simple_rec3D_pcg_strategy.f90` (6/3); `simple_convergence.f90` (3/3);
+  `simple_rnd.f90` (1/1); and this plan. `simple_refine3D_strategy.f90` needed no change: the master merges the
+  parts' readout records through the generic record routines, which carry the new fields.
+- **What it does.**
+  - The key `inpl_posterior=yes|no` (default `no`) is declared, bound as a yes/no key and offered on refine3D and on
+    solve3D. On solve3D it sits in its own descriptor, not in the inputs it shares with solve3D_chunks.
+    `l_inpl_posterior` is derived once in the parameter phases: the key is `yes`, the program is `refine3D`, the
+    particles are 3D, and the mode is `refine=prob` or `prob_neigh` with `prob_neigh_mode=state|geom`.
+  - The multi-state final assignment sets `inpl_posterior=no` beside `topk=1` when its parent's command line carries
+    the key. Without the key the command line stays the base's.
+  - The tables keep each refined entry's window-prior centre: the start of its shift refinement, converted to a
+    stored shift at the rotation the refinement starts from. It is taken by the shift search's own rule, before the
+    search can move to another rotation. That rule's centre is private to the search object, and `src/main/pftc/`
+    is out of scope, so the tables apply the same double-precision formula (`prior_window_centre`). Extras carry the
+    centre through the insertion table. The committed pose's centre goes into a per-particle array on the table,
+    which is allocated only under the key. `get_prior_centre` and `get_shift_prior_sigma2` expose the centre and
+    the iteration's prior width.
+  - Under the key, the matcher lays the resolved poses out even at `topk=1`. At the first batch it reserves
+    `max(1,topk)` blocks per particle of the part (`reserve_inpl`). Each block holds an entry count, a solved bin
+    and 64 packed 32-bit entries: the rotation index in the low 16 bits and the point count above. That is
+    `max(1,topk)(8 + 4 x 64)` bytes per particle, the term the memory estimate now adds under the key.
+  - The matcher allocates the per-thread shifted-particle banks (`prep_strategy3D_inpl_bank`) and computes `m_max`.
+    It sums the per-thread counts in thread order and sets them on the table (`set_inpl_counts`) before
+    `close_assignment`.
+  - The readout record gains `inpl_nrows` and `inpl_committed_view_weight_sum`, written, read and summed with the
+    others. A `PROB_TAB_INPL` line follows `PROB_TAB_INSERT` in the 3D report when the budget is set. Without the key
+    the record keeps its defaults and no line is printed.
+  - `l_margin` takes the key (decision 11).
+  - The REC3D bench records "poses inserted" for gridding and PCG alike: each particle image plus each extra of
+    positive weight, the count both insertion paths use.
+  - The draw family's comment covers both routes.
+- **Decisions taken under delegation.**
+  - Decision 13 revised (launch ruling R2; text in section 4): the objective is refused only on a refine3D pass the
+    key acts on. Children of solve3D and refine3D copy the key and run under `objfun=cc`.
+  - Ruling R3 applied once: the PCG strategy's table row gained Phase 1, for its bench line, before the edit.
+  - A design review of the diff by a separate reader found no risk to the off state. Its findings were applied:
+    - the PCG bench line;
+    - the neighbourhood seed fallback clears its centre;
+    - the committed centre's getter stops if the centres are missing under the key;
+    - the counts are sized by the search's team where the other per-thread counters are;
+    - shorter comments.
+  - It also suggested refusing `solve3D inpl_posterior=yes objfun=cc` early. That is moot: solve3D sets
+    `objfun=euclid` before its parameters are made.
+- **Exit evidence** (all on the final Phase 1 code, Release `repo/build` and Debug `repo/build_debug`, both built
+  with no compiler warning).
+  - **Identity at one thread** (`test=identity` against `base1`, the declared exclusions being none):
+    - 6vxx: 186 files the same, 0 differing;
+    - 1jxy: 223 files the same, 0 differing. Its second solve3D runs two parts, so the extended readout record
+      was written, read and merged.
+    - Reports: `keep/identity/cmp_base1_p1/<suite>/identity_report.txt`; runs `keep/identity/p1/` (670 and 804 s).
+  - **PCG smoke, key off, `nthr=1`, `SIMPLE_SEED=7`** (`keep/smoke/p1_pcg_t1`, 609 s) against the base's
+    `base_pcg_t1_a` with `keep/pcg_identity.sh`: 158 files the same, 0 differing (`keep/smoke/pcg_identity_base_p1.txt`).
+  - An earlier pass of the same checks on the code before the review fixes also gave 0 differing
+    (`keep/identity/p1_first/`).
+  - **Fast gate:** 15 of 15 on both trees (`keep/logs/p1/fastgate_final_*.log`).
+  - **Unit suites:**
+    - Release: `unit_pftc_align2D3D` 11 s and `unit_reconstruction` 128 s;
+    - Debug: 25 s and 133 s;
+    - all pass (`keep/p1_units/final_*.log`).
+  - **Static gates:** `check_cli_chain`, `check_test_registry`, `check_descr`, `check_guide_imports` and
+    `check_tester_linkage` pass (`keep/logs/p1/static_final_*.log`). The first gate run failed `check_cli_chain`:
+    it reads a key's choices from the first parenthesised `a|b` group of the declaration's comment, and the comment
+    named `state|geom` first. The comment was reworded.
+  - **UI validation:** the build's complete UI JSON validation and the fast gate's `unit_ui` pass.
+  - **Refusals** (`keep/p1_refusals/final_*.log`):
+    - `refine3D ... inpl_posterior=maybe` stops with
+      `ERROR! inpl_posterior=maybe: the key takes yes or no` (solve3D the same);
+    - `refine3D refine=prob objfun=cc inpl_posterior=yes` stops with
+      `ERROR! inpl_posterior=yes needs objfun=euclid: the in-plane posterior is the Euclidean one`;
+    - `refine3D refine=greedy objfun=cc inpl_posterior=yes`, a mode the key does not act on, runs.
+  - **Key-on sanity, not a gate** (Debug, bounds checks on): one `refine3D refine=prob` iteration with
+    `inpl_posterior=yes` at `topk=3` and at `topk=1` completes; no `PROB_TAB_INPL` line yet (no rows);
+    REC3D poses inserted 87 (`keep/p1_keyon_sanity`).
+- **For Phase 2.** These have no reader yet and must be used or deleted:
+  - the entry packing helpers;
+  - `prob_insert_poses%block`;
+  - the centre getters;
+  - `s3D%inpl_bank`;
+  - the per-thread counts the search must add into (`add_inpl_counts`).
+
+  The `PROB_TAB_INPL` committed view weight is divided by the table's particles; a particle without a row or extras
+  counts 1.
+
+  With the key on, Phase 1 already widens `l_margin` and reserves memory, so key-on runs before Phase 2 are not
+  meaningful.
+
+### Phase 2, the enabled path (2026-11-14)
+
+With `inpl_posterior=yes`, every pose a particle is inserted at now enters the reconstruction at a quadrature of its
+in-plane posterior: the committed pose and the weighted insertion's extras, in gridding and in PCG (the
+preconditioned conjugate-gradient reconstruction). With the key off, the run is still the base's byte for byte.
+Paths are under `/data2/agent_runs/inpl3D/scratch/keep/` (`keep/` below); the session's journal is
+`/data2/agent_runs/inpl3D/state/journal_phase_2.md`.
+
+- **Files changed in this phase (lines added/removed against the phase's start):**
+
+  | File | Added/removed | What changed |
+  | --- | --- | --- |
+  | `simple_strategy3D_prob.f90` | 112/5 | the rows, quadratures, view weights, block fill, counts |
+  | `simple_eul_prob_tab_utils.f90` | 98/19 | `inpl_quadrature`'s `lnz`/`dmin`, `inpl_view_weights`, `inpl_prior_penalty`, the grid-angle table and the entry decoders of the reservation |
+  | `simple_strategy3D_alloc.f90` | 18/4 | per-thread, per-pose work beside the bank |
+  | `simple_strategy3D_matcher.f90` | 19/6 | grid angles for the reservation, counts per particle |
+  | `simple_matcher_3Drec.f90` | 61/4 | the key-on gridding loop `insert_inpl_entries`, poses counted under the key |
+  | `simple_rec3D_pcg_strategy.f90` | 161/3 | `accumulate_pcg_inpl_entries`, `pcg_inpl_particle_entries` |
+  | `doc/policies/3D/refine3D_policy.md` | 47/1 | new subsection "In-plane posterior insertion"; the sentence on the 2D route |
+  | `doc/policies/3D/solve3D_policy.md` | 6/0 | the key's reach and the final assignment |
+  | `doc/policies/2D/solve2D_policy.md` | 3/1 | pointer to the 3D counterpart |
+
+- **How it works.**
+  - After each pose's continuous solve, the strategy evaluates that pose's in-plane row: the Euclidean losses over
+    every grid rotation, at the solved increment in the stored frame. It uses the thread's shifted-particle bank, or
+    the unshifted row below `SHERRSQ`.
+  - The row's 64-point quadrature uses a phase keyed on the particle and the full reference index. Its entries are
+    packed into the pose's block of the reservation. The solved bin and a collapsed row are inserted at the pose's
+    continuous angle, every other entry at its grid angle. The grid angles are copied from the polar calculator
+    before it is released.
+  - The view weights are `log m_k = ln Z_k - T L_min,k - P_k`. Under the polar shift map, `P_k` is the map's prior
+    on the increment. Under the window search with `shift_prior=yes`, it is the prior on the increment from the
+    refinement's retained centre.
+  - An extra under 0.01 is dropped, and the committed pose is always kept.
+  - If any pose of a particle has no valid row, the whole particle falls back to the insertion without the key.
+  - Gridding inserts each entry at `wbase x m_k x count/64`, from the committed plane re-shifted once per extra
+    pose. PCG expands the same entries in the same order.
+  - PCG lays the entries out per observation batch in chunks of at most `MAXIMGBATCHSZ`. Each chunk has its own
+    records, `prep_particles`, plane copies and `accumulate_batch` from index 1.
+- **Decisions taken under delegation.**
+  - Decision 10 revised (launch ruling R2; text in section 4). The counts are kept per particle and summed in
+    particle order, because sums per thread depended on the dynamic schedule (found by the review below).
+  - Ruling R3 applied: the row of `simple_strategy3D_alloc.f90` gained Phase 2 before the edit. The per-pose
+    results of a particle's rows need per-thread work arrays sized by the team, and the strategy object, made per
+    particle, cannot hold them without an allocation per particle.
+  - A design review of the Phase 2 diff by a separate reader found no risk to the off state. Its findings were
+    applied:
+    - counts per particle;
+    - a particle without blocks always enters at its committed pose in PCG, and a half that would accumulate no
+      entry stops;
+    - a zero-sum guard in the view weights;
+    - corrected comments.
+  - **The thread gate: the probe frozen in Phase 0 missed, and a stricter probe passes. The maintainer should read
+    this item.**
+    - The frozen probe at key on (`keep/probe/p2on_*`, `keep/probe/thread_gate_p2on.txt`): the three repeats at each
+      thread count are byte-identical, and so are the committed poses between the counts.
+    - Between one and 16 threads, the largest difference over the volume's largest value is above the base's in
+      two files:
+      - even sums: 2.773e-8 against 2.465e-8;
+      - even densities: 2.402e-10 against 2.134e-10;
+      - the odd sums (6.040e-9) and odd densities (2.134e-10) are equal to the base's.
+      The key-on run inserts 98 planes for 87 particles where the base inserts 87.
+    - The base's spread comes from the noise spectra (sigma2) that each probe run bootstraps from the particles.
+      That bootstrap differs between thread counts in 89 bytes (Phase 0) and runs before the search.
+    - A probe starting from a finished single-thread iteration reuses that iteration's committed sigma2, so both
+      thread counts start from identical inputs (`keep/probe/sig_template`, `keep/probe_fixed_sigma.sh`,
+      `keep/probe/thread_gate_fixed_sigma.txt`). In it, the four partial reconstructions are byte-identical across
+      all six runs of each arm, `nthr=1` pinned and `nthr=16`, three repeats each:
+      - the base build with the key off;
+      - the run's build with the key on, exercising the path at 1.60 rows and 10.51 entries per particle and 914
+        poses inserted.
+    - By the plan's own rule (section 7: when the base's partials are byte-identical across thread counts, the
+      key-on partials must be too), the key-on path passes. The gate is judged on this probe. That is a stricter
+      criterion, not a tolerance relaxed.
+    - The same fixed-input probe also checks the contract that the search does not depend on the key: from identical
+      references, the base with the key off and the run with the key on commit the same 87 poses. Only `cfar`, a
+      map statistic written after assembly, differs; the committed sigma2 is identical.
+    - The Phase 0 probe design is revised accordingly and listed among the report's deviations.
+- **Exit evidence** (final Phase 2 code, Release `repo/build` and Debug `repo/build_debug`, both built without a
+  compiler warning).
+  - **Identity at key off** (`test=identity` against `base1`; reports in `keep/identity/cmp_base1_p2/<suite>/`):
+    - 6vxx: 186 files the same, 0 differing;
+    - 1jxy: 223 the same, 0 differing.
+  - **PCG smoke at key off, `nthr=1`:** 158 the same, 0 differing against the base (`keep/smoke/pcg_identity_base_p2.txt`).
+  - The same checks on the code before the review fixes also gave 0 differing (`keep/identity/p2_first/`).
+  - **Fast gate:** 15 of 15 on both trees (`keep/logs/p2/fastgate_final_*.log`).
+  - **Unit suites:** `unit_pftc_align2D3D` and `unit_reconstruction` pass on both trees (`keep/p2_units/`).
+  - **Smoke at key on** (solve3D on the fixture, the command lines of Phase 0 plus `inpl_posterior=yes`; logs and
+    readouts in `keep/smoke/p2on_*` and `keep/p2_readout/`). Every run completes:
+    - gridding, shared memory, Release (85 s) and Debug with bounds checks (267 s, no runtime error);
+    - gridding, `nparts=2` (120 s);
+    - PCG, shared memory (133 s) and `nparts=2` (173 s).
+
+    In all of them `PROB_TAB_INPL` appears from stage 3 on (12, 15, 4, 3, 3 and 8 lines in stages 3 to 8) and never
+    in stages 1-2. The two-part masters print the parts' counts summed: 81 particles in stage 3, the same as shared
+    memory.
+  - **The thread gate,** as above.
+- **Reported numbers, key on against key off** (same Release build, sequential, load 4-10 from these runs alone;
+  `keep/p2_readout/summary.txt`):
+
+  | Route | Wall time | REC3D accumulation | Images / poses inserted | FSC=0.143 final |
+  | --- | --- | --- | --- | --- |
+  | Gridding, shared memory | 85 s on, 90 s off | 1.34 s on, 0.97 s off | 7,656 / 12,248 on, 7,482 / 7,680 off | 4.71 A on, 4.89 A off |
+  | Gridding, two parts | 120 s on, 127 s off | 1.97 s on, 1.42 s off | 12,701 poses on, 7,777 off | 4.89 A on, 4.80 A off |
+  | PCG, shared memory | 133 s on, 130 s off | 4.72 s on, 4.30 s off | | 4.46 A on, 4.38 A off |
+  | PCG, two parts | 173 s on, 175 s off | 9.88 s on, 10.17 s off | | 4.38 A both |
+
+  - Stage-3 FSC=0.143 is 10.85 A in every run.
+  - First stage-3 iteration, key on:
+    `PROB_TAB_INSERT` 1.69 poses per particle, committed weight 0.72;
+    `PROB_TAB_INPL` 81 particles, 1.74 rows and 6.68 entries per particle, 1.4 % of rows collapsed, mean
+    `n_eff` 2.9, committed view weight 0.72 against the table's 0.72.
+  - The last stage's rows mostly collapse: 92 % collapsed, 1.08 entries per particle.
+  - Peak resident memory: 2.33 GB on against 2.28 GB off in shared memory; the largest part 2.11 GB on against
+    2.10 GB off. The estimate's reservation is `max(1,topk)(8 + 4 x 64)` = 792 bytes per particle: 69 kB for the
+    fixture's 87 particles and about 35 kB per part.
+  - The 87-particle fixture cannot say whether maps improve (decision 2).
+
+### Phase 3, the assertions (2026-11-14)
+
+Every check of section 7 now exists. Each was made to fail by a violation planted in the code it guards, then
+passed again with the plant removed. Paths are under `/data2/agent_runs/inpl3D/scratch/keep/` (`keep/` below);
+the session's journal is `/data2/agent_runs/inpl3D/state/journal_phase_3.md`.
+
+- **Files changed in this phase (lines added/removed against the phase's start):**
+
+  | File | Added/removed | What changed |
+  | --- | --- | --- |
+  | `simple_eul_prob_tab_tester.f90` | 269/1 | five tests |
+  | `simple_strategy3D_inplane_tester.f90` | 196/2 | two tests |
+  | `simple_rec3D_strategy_tester.f90` | 307/2 | two tests |
+  | `simple_convergence_tester.f90` | 61/0 | one test |
+  | `simple_matcher_memory_tester.f90` | 13/0 | the estimate's term |
+  | `simple_eul_prob_tab.f90` | 23/11 | refactor |
+  | `simple_eul_prob_tab_neigh.f90` | 3/14 | refactor |
+  | `simple_eul_prob_tab_utils.f90` | 27/1 | refactor |
+  | `simple_strategy3D_prob.f90` | 3/7 | refactor |
+  | `simple_matcher_3Drec.f90` | 7/6 | refactor |
+  | `simple_rec3D_pcg_strategy.f90` | 52/33 | refactor |
+  | this plan | 8/8 | file-table rows |
+
+  `simple_strategy3D_srch.f90` and `simple_convergence.f90` carried plants only; both are back to their state at
+  the phase's start.
+- **Deviation: behaviour-neutral production refactors (the plan's change table calls Phase 3 "tests-only").** A check
+  can catch a violation planted in production code only if it runs that code, and the code each check needed was
+  private or reached only through a file read. Under launch ruling R3, rows were added to the file table before the
+  edits. The refactors:
+  - the seeded window refinement of both tables, the start, its prior centre and the shift search together, became
+    one routine (`seeded_window_refine` in `simple_eul_prob_tab.f90`), which the neighbourhood table calls too;
+  - the particle's readout counts became `inpl_particle_counts` in the utilities, which the strategy calls;
+  - the gridding loop `insert_inpl_entries` became public and takes the point group instead of the builder;
+  - the PCG chunk loop became `accumulate_pcg_inpl_batch`, public, over planes in memory, with the chunk capacity as
+    an argument (production passes `MAXIMGBATCHSZ`).
+
+  They change no result:
+  - the key-off identity against `base1` holds after them: 6vxx 186 files the same and 1jxy 223, 0 differing; the
+    PCG smoke 158 the same, 0 differing (`keep/identity/cmp_base1_p3/`, `keep/smoke/pcg_identity_base_p3.txt`);
+  - the fixed-input key-on probe of Phase 2 gives the same four partial reconstructions byte for byte, and the same
+    `PROB_TAB_INPL` line, as before them (`keep/probe/p3_fs_on_t1` against `keep/probe/fs_on_t1_1`).
+- **Deviation: placement.** The key-on gridding check is in `simple_rec3D_strategy_tester.f90`, in the same
+  `unit_reconstruction` entry, not in `simple_reconstructor_tester.f90`. The reconstructor tester is a submodule of a
+  volume module, and importing the matcher's reconstruction module from it would make a lower layer depend on a
+  higher one. The prior-centre capture check is in the in-plane tester (`unit_pftc_align2D3D`, suite
+  `refine3d_in_plane_state`), which holds the polar-calculator fixture a real shift search needs.
+- **The checks and their plants** (each plant is a patch in `keep/plants/`, indexed in `keep/plants/README.txt` with
+  the suite to run; its failures are in `keep/plants/<plant>.run.log`):
+  - **The frame of the solved increment** (`test_solved_row_frame`). On a white reference, rotated and shifted
+    about the particle's axes, with a non-zero stored shift, the row at the increment that both continuous solves
+    return is checked three ways:
+    - its minimum lies within one bin of the solved angle;
+    - its value at that bin equals the shifted-reference kernel at `shift_ptcl2ref(sh, rot)`. The measured spread on
+      eight solves is 7.6e-8 in Release and 1.5e-7 in Debug, relative; the tolerance is frozen at 1e-6;
+    - it beats the rows at the negated increment and at the increment rotated either way by the solved angle.
+
+    Plants, in `strategy3D_srch`:
+    - the joint solve's increment returned unrotated: 11 failures, among them "the row's minimum lies within one bin
+      of the solved angle" and "the returned increment's row beats the negated and the rotated frames";
+    - its sign reversed: 14 failures.
+  - **The view weights** (`test_inpl_view_weights`). Rows with one angle, flat, and two peaks, against
+    `exp(ln Z - T L_min) / sum` computed in double precision, within 1e-6 relative. Also checked:
+    - the committed pose is kept below the 0.01 floor (`PROB_INSERT_WMIN`), and an extra under it is dropped with the
+      rest renormalised;
+    - the entries sum to 1, and a lone pose takes weight 1;
+    - the worked example: 0.4, 0.4 and 0.2, and a third each when the likelihoods are equal.
+
+    Plants:
+    - `ln Z` omitted: 11 failures, "the view weight equals exp(ln Z - T L_min) / sum" and the worked example;
+    - the floor not re-applied: 4, "an extra under WMIN is dropped";
+    - the committed pose dropped: 7, "the committed pose is kept below WMIN".
+  - **The shift prior** (`test_inpl_prior_weights`). Identical rows at the prior's centre and two prior sigmas from
+    it take 0.881 and 0.119, under the polar shift map and under the window with each pose's own centre; without a
+    prior they take 0.5 each. Plants:
+    - the prior omitted: 4 failures;
+    - the window prior centred at the stored shift: 2 failures, "the window's prior: the pose at its centre takes
+      0.881".
+  - **The prior centre** (`test_seeded_window_centre`, through `seeded_window_refine`, a real shift search):
+    - the seed (0.9 trs, 0.9 trs) at 0 degrees is its own centre;
+    - at 45 degrees the start is clipped and the centre is (trs, trs)/sqrt(2);
+    - a refinement whose final rotation differs from its start keeps the start's centre (the test asserts the change
+      of rotation).
+
+    Plants:
+    - the unchanged seed reused as the centre: 2 failures;
+    - the centre taken at the final angle: 3, "the centre is the start's, not the final rotation's".
+  - **The layout and the reservation** (`test_inpl_reservation_layout`, `simple_matcher_memory_tester`):
+    - without the reservation nothing is allocated, and the layout's counts, first slots and weights are the table's
+      either way;
+    - there are `max(1,topk)` blocks per particle, and their bytes equal the memory estimate's term, which the memory
+      tester pins as the estimate's exact increase under the key (792 bytes per particle at `topk=3`);
+    - a batch of flat rows fills every block with 64 entries;
+    - fills of 0 to 64 entries decode to the rotations and counts written.
+
+    Plants:
+    - the count packed into the low bits: 3 failures, "fills of 0 to K entries decode to the rotations and counts
+      written";
+    - the reservation sized by `topk - 1` blocks. Its first run corrupted the heap, because the test went on filling
+      past the undersized blocks, so the check was fixed to stop once the block count is wrong. It then failed
+      cleanly: "max(1,topk) blocks per particle expected=15 actual=10" and "the reserved bytes are the memory
+      estimate's term".
+  - **The committed view weight against the committed angle's weight** (`test_inpl_view_against_angle_weight`). At
+    `topk=1` with a flat row, the view weight counted is 1, while the committed angle's inserted weight is 1/64. Plant:
+    the field fed with the angle's weight, 1 failure, "the committed view weight is 1 expected=1.00 actual=0.0156".
+  - **The readout round trip** (`test_inpl_readout_round_trip`). All in-plane fields survive a part's record, and the
+    master's merge sums them. Plant: `inpl_nrows` missing from the sum, 1 failure.
+  - **The key-on gridding loop** (`test_inpl_gridding_entries`). On a committed pose and two extras at their own
+    shifts, the loop equals every entry inserted on its own from the committed plane re-shifted for that entry, bit
+    for bit. Entries at one pose whose weights sum to 1 equal one insertion at weight 1, within 1e-6. Plant: the first
+    extra's shifted plane carried over to the next pose, 1 failure, "the key-on loop equals each entry inserted on its
+    own ... bit for bit".
+  - **The chunked PCG accumulation** (`test_pcg_inpl_chunks`). Chunks of three entries, in one observation batch and
+    in two, give the raw B and D accumulators of one flat accumulation of the same entries byte for byte, at one
+    thread and at four. The flat list holds one entry per inserted pose entry. Plant: off by one at the chunk boundary
+    (a chunk's last entry dropped), 4 failures, at both thread counts.
+  - **The margin** (`test_posterior_exits_inpl_posterior`). At `topk=1`, the key takes the weighted insertion's
+    margin: exit at the fourth iteration, and none at 7.2 A against an 8 A limit. Without the key the single draw's
+    rules hold: exit at the third. Plant: the margin ignoring the key, 2 failures.
+- **A false start, for the record.** The first batch of plants ran the previous binary: the driver built but did not
+  install, and the tests read `build/bin`. It reported nothing caught. The driver was fixed to install and every plant
+  was rerun. None of those first results is used.
+- **Exit evidence:**
+  - every plant failed its check and was reverted. The planted files equal their clean state, and all 16 patches
+    replay on the clean tree (`patch --dry-run`);
+  - the suites pass on both trees: `unit_pftc_align2D3D` (6,304 assertions), `unit_reconstruction` (975) and
+    `unit_cart_align3D` (1,488), Release and Debug (`keep/p3_units/final_*.log`). The five touched suites pass again
+    after the last rebuild (`keep/p3_units/end_*.log`);
+  - `scripts/check_test_registry.py` passes;
+  - the fast gate gives 15 of 15 on both trees (`keep/logs/p3/fastgate_end_*.log`);
+  - the testers' earlier content is unchanged apart from the new checks and their entries in each `run_all_*` list.
+
+### Phase 4, handoff (2026-11-14)
+
+The report is `inpl_quadrature_insertion_3D_report.md`, beside this plan, in the order of
+`doc/how2s/how2write_agent_plans.md` section 8:
+- what was learned;
+- the changes phase by phase, pointing to the driver's phase diffs;
+- the decisions taken under delegation;
+- the deviations, the thread gate's revised probe first;
+- the evidence against the base;
+- what is left open, with the maintainer's runs, their command lines and the readout to read;
+- the proposed skill lines;
+- the delivered file list;
+- a commit message.
+
+This plan stays in `planned/` because the maintainer's scale runs follow delivery. Its status line now reads
+"delivered, not validated at scale", and no README row changed.
+
+Files changed in this phase: this plan (the status line and this entry) and the new report. No source file changed,
+and both build trees were up to date: nothing recompiled (`keep/logs/p4/make_check*.log`). The fast gate passed 15 of
+15 on the Release and the Debug tree (`keep/logs/p4/fastgate_*.log`), and the tree is left uncommitted with its
+changed and new files listed in the report.

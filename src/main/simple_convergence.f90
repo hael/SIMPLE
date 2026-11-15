@@ -12,6 +12,7 @@ private
 
 integer, parameter :: STAGE_PLATEAU_PATIENCE = 3    !< solve3D stage plateau exit: iterations without gain on the stage's best
 real,    parameter :: STAGE_PLATEAU_MI_GAIN  = 0.02 !< accumulated orientation-overlap gain above the last accepted high
+real,    parameter :: FRAC_SRCH_FULL         = 99.999 !< % search space scanned at which every particle saw every reference (the row is then not printed)
 
 type convergence
     private
@@ -145,27 +146,32 @@ contains
         call calc_continuous_inplane_stats(self, os, mask, cont_stats_available)
         ! overlaps and particle updates
         s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
-        write(logfhandle,601) '>>> CLASS OVERLAP:                            ', self%mi_class
+        write(logfhandle,609) '>>>'
+        write(logfhandle,601) '>>> CLASS OVERLAP                             ', self%mi_class
         write(logfhandle,602) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled, s_ratio%to_char()
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR UPDATING THE MODEL   ', percen_avg
-        if( cont_stats_available )then
+        ! rows that say nothing are left out: no continuous run, no shift searched, every reference scanned
+        if( cont_stats_available .and. self%cont_inpl_attempts > 0 )then
             cont_ratio = '('//int2str(self%cont_inpl_attempts)//' attempts)'
             write(logfhandle,602) '>>> % CONTINUOUS IN-PLANE RUNS IMPROVED       ', &
                 &self%cont_inpl_improved_pct, cont_ratio%to_char()
         endif
-        ! dists and % search space
-        write(logfhandle,604) '>>> IN-PLANE DIST    (DEG)   AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST    (DEG)   AVG/SDEV/MIN/MAX ', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        if( self%shincarg%maxv > 0. )then
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX ', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
+        endif
+        if( self%frac_srch%minv < FRAC_SRCH_FULL )then
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX ', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        endif
         ! one low-pass for every particle: the particles' lp field, since the distributed master never sets params%lp
         write(logfhandle,601) '>>> MATCHING  LOW-PASS LIMIT (THIS ITERATION) ', self%lp%avg
         if( self%lp_est%maxv > TINY )then
-        write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
+        write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX ', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
         endif
-        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
+        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX ', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         ! score
-        write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
+        write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX ', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
         if( params%l_prob_align_mode )then
@@ -190,7 +196,7 @@ contains
         endif
         if( params%l_ml_reg )then
         numstr = string(params%tau)
-        write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU: '//numstr%to_char()
+        write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU '//numstr%to_char()
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
@@ -274,11 +280,11 @@ contains
             if( self%prob_beta_tail_start == 0 )then
                 if( converged .and. params%which_iter >= params%startit + params%minits - 1 )then
                     self%prob_beta_tail_start = params%which_iter + 1
-                    write(logfhandle,'(A,I0,A)') '>>> CLASS OVERLAP CONVERGED: annealing the posterior draws over the next ',&
+                    write(logfhandle,'(A,I0,A)') '>>> CLASS OVERLAP CONVERGED, annealing the posterior draws over the next ',&
                         &PROB_BETA_TAIL, ' iterations'
                 else if( params%which_iter + PROB_BETA_TAIL >= params%startit + params%maxits - 1 )then
                     self%prob_beta_tail_start = params%which_iter + 1
-                    write(logfhandle,'(A,I0,A)') '>>> BUDGET END: annealing the posterior draws over the last ',&
+                    write(logfhandle,'(A,I0,A)') '>>> BUDGET END, annealing the posterior draws over the last ',&
                         &PROB_BETA_TAIL, ' iterations'
                 endif
                 converged = .false.
@@ -319,9 +325,9 @@ contains
     subroutine print_verdict( converged )
         logical, intent(in) :: converged
         if( converged )then
-            write(logfhandle,'(A)') '>>> CONVERGED: yes'
+            write(logfhandle,'(A)') '>>> CONVERGED yes'
         else
-            write(logfhandle,'(A)') '>>> CONVERGED: no'
+            write(logfhandle,'(A)') '>>> CONVERGED no'
         endif
     end subroutine print_verdict
 
@@ -344,7 +350,7 @@ contains
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
-        character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
+        character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX ')) :: res_state_label
         character(len=96) :: beta_str
         real    :: res05_now, res05_prev, res143_now, res143_prev, res05_prev2, res143_prev2, lpexit_eff, res_tol
         logical :: converged, cont_stats_available, pose_stats_available, l_stalled, l_margin, l_states_checked, l_pose_stalled
@@ -422,29 +428,38 @@ contains
         endif
         ! overlaps and particle updates
         s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
-        write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
+        write(logfhandle,609) '>>>'
+        write(logfhandle,601) '>>> ORIENTATION OVERLAP                       ', self%mi_proj
         if( params%nstates > 1 )then
-        write(logfhandle,601) '>>> STATE OVERLAP:                            ', self%mi_state
+        write(logfhandle,601) '>>> STATE OVERLAP                             ', self%mi_state
         endif
         write(logfhandle,602) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled, s_ratio%to_char()
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR UPDATING THE MODEL   ', percen_avg
+        ! rows that say nothing are left out: no greedy search in the probability tables, no continuous run,
+        ! no shift searched, every reference scanned
+        if( .not. params%l_prob_align_mode )then
         write(logfhandle,601) '>>> % GREEDY SEARCHES                         ', self%frac_greedy * 100.
-        if( cont_stats_available )then
+        endif
+        if( cont_stats_available .and. self%cont_inpl_attempts > 0 )then
             cont_ratio = '('//int2str(self%cont_inpl_attempts)//' attempts)'
             write(logfhandle,602) '>>> % CONTINUOUS IN-PLANE RUNS IMPROVED       ', &
                 &self%cont_inpl_improved_pct, cont_ratio%to_char()
         endif
-        if( pose_stats_available )then
+        if( pose_stats_available .and. self%pose_cont_attempts > 0 )then
             cont_ratio = '('//int2str(self%pose_cont_attempts)//' attempts)'
             write(logfhandle,602) '>>> % CONTINUOUS POSE RUNS IMPROVED           ', &
                 &self%pose_cont_improved_pct, cont_ratio%to_char()
         endif
         ! dists and % search space
-        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
-        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX ', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX ', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        if( self%shincarg%maxv > 0. )then
+        write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX ', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
+        endif
+        if( self%frac_srch%minv < FRAC_SRCH_FULL )then
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX ', self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
+        endif
         ! The band this iteration MATCHED at is params%lp/kfromto(2), fixed by
         ! set_bp_range3D before the search (an explicit lp, or the previous
         ! handoff). The project 'lp'/'lp_est' fields are rewritten by assembly
@@ -452,11 +467,11 @@ contains
         ! must not be reported as the matching band.
         write(logfhandle,601) '>>> MATCHING  LOW-PASS LIMIT (THIS ITERATION) ', params%lp
         if( params%l_nonuniform )then
-        write(logfhandle,604) '>>> NU HANDOFF LP (NEXT)     AVG/SDEV/MIN/MAX:', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
+        write(logfhandle,604) '>>> NU HANDOFF LP (NEXT)     AVG/SDEV/MIN/MAX ', self%lp%avg,        self%lp%sdev,        self%lp%minv,        self%lp%maxv
         else if( self%lp_est%maxv > TINY )then
-        write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX:', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
+        write(logfhandle,604) '>>> ESTIMATED LOW-PASS LIMIT AVG/SDEV/MIN/MAX ', self%lp_est%avg,    self%lp_est%sdev,    self%lp_est%minv,    self%lp_est%maxv
         endif
-        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
+        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX ', self%res%avg,       self%res%sdev,       self%res%minv,       self%res%maxv
         allocate(state_mask(n), source=.false.)
         do istate = 1, params%nstates
             state_mask = mask .and. (nint(states) == istate)
@@ -466,19 +481,19 @@ contains
             res_state_avg(istate)   = res_state%avg
             res05_state_avg(istate) = res05_state%avg
             if( params%nstates > 1 )then
-                write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
+                write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ' '
                 write(logfhandle,604) &
                     res_state_label, &
                     res_state%avg, res_state%sdev, res_state%minv, res_state%maxv
             endif
         end do
-        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.5     AVG/SDEV/MIN/MAX:', self%res05%avg,     self%res05%sdev,     self%res05%minv,     self%res05%maxv
+        write(logfhandle,604) '>>> RESOLUTION @ FSC=0.5     AVG/SDEV/MIN/MAX ', self%res05%avg,     self%res05%sdev,     self%res05%minv,     self%res05%maxv
         if( params%nstates > 1 )then
             do istate = 1, params%nstates
                 state_mask = mask .and. (nint(states) == istate)
                 if( count(state_mask) < 1 ) cycle
                 call os%stats('res05', res05_state, mask=state_mask)
-                write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
+                write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ' '
                 write(logfhandle,604) &
                     res_state_label, &
                     res05_state%avg, res05_state%sdev, res05_state%minv, res05_state%maxv
@@ -490,11 +505,11 @@ contains
         res143_now = 0.
         if( any(res05_state_avg > TINY) ) res05_now  = minval(res05_state_avg, mask=res05_state_avg > TINY)
         if( any(res_state_avg   > TINY) ) res143_now = minval(res_state_avg,   mask=res_state_avg   > TINY)
-        ! the weighted insertion's margin on the resolution-based exits (the stall test of the annealing tail
-        ! and the stage resolution exit): a shell and an iteration more than the single draw's
-        l_margin = params%l_prob_align_mode .and. params%topk > 1
+        ! the weighted insertion's and the in-plane posterior insertion's margin on the resolution exits (the
+        ! tail's stall test, the stage exit): a shell and an iteration more than the single draw's
+        l_margin = params%l_prob_align_mode .and. (params%topk > 1 .or. params%l_inpl_posterior)
         ! score
-        write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
+        write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX ', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
         write(logfhandle,609) '>>> | REFINEMENT MODE               | '//trim(params%refine)
         write(logfhandle,609) '>>> | PROB NEIGH MODE               | '//trim(params%prob_neigh_mode)
@@ -521,12 +536,12 @@ contains
         endif
         if( params%l_ml_reg )then
         numstr = string(params%tau)
-        write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU: '//numstr%to_char()
+        write(logfhandle,609) '>>> | ML  REGULARIZATION            | on, TAU '//numstr%to_char()
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
         endif
         if( trim(params%automsk).ne.'no' )then
-        write(logfhandle,609) '>>> | AUTOMASKING                   | on, MODE: '//trim(params%automsk)
+        write(logfhandle,609) '>>> | AUTOMASKING                   | on, MODE '//trim(params%automsk)
         else
         write(logfhandle,609) '>>> | AUTOMASKING                   | off'
         endif
@@ -605,7 +620,7 @@ contains
             ! print the overlaps and pops for the different states
             do istate=1,params%nstates
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
-                'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
+                'JOINT DISTRIBUTION OVERLAP', state_mi_joint(istate), 'POPULATION', nint(statepops(istate))
             end do
             if( index(trim(params%multivol_mode), 'input_oris') == 1 )then
                 converged = self%mi_state > overlap_lim
@@ -674,15 +689,15 @@ contains
                     if( params%nstates == 1 ) l_stalled = l_stalled .and. l_pose_stalled
                     if( l_overlap_reached )then
                         self%prob_beta_tail_start = params%which_iter + 1
-                        write(logfhandle,'(A,I0,A)') '>>> POSE OVERLAP REACHED: annealing the posterior draws over the next ',&
+                        write(logfhandle,'(A,I0,A)') '>>> POSE OVERLAP REACHED, annealing the posterior draws over the next ',&
                             &PROB_BETA_TAIL, ' iterations'
                     else if( l_stalled )then
                         self%prob_beta_tail_start = params%which_iter + 1
-                        write(logfhandle,'(A,I0,A)') '>>> RESOLUTION NO LONGER GAINING: annealing the posterior draws over the next ',&
+                        write(logfhandle,'(A,I0,A)') '>>> RESOLUTION NO LONGER GAINING, annealing the posterior draws over the next ',&
                             &PROB_BETA_TAIL, ' iterations'
                     else if( params%which_iter + 1 >= params%startit + params%maxits - PROB_BETA_TAIL )then
                         self%prob_beta_tail_start = params%which_iter + 1
-                        write(logfhandle,'(A,I0,A)') '>>> BUDGET END: annealing the posterior draws over the last ',&
+                        write(logfhandle,'(A,I0,A)') '>>> BUDGET END, annealing the posterior draws over the last ',&
                             &PROB_BETA_TAIL, ' iterations'
                     endif
                 else if( params%which_iter >= self%prob_beta_tail_start + PROB_BETA_TAIL - 1 )then
@@ -692,7 +707,7 @@ contains
             endif
             ! without an annealing tail the overlap ends the stage
             if( l_overlap_reached .and. self%prob_beta_tail_start == 0 )then
-                write(logfhandle,'(A,F7.4)') '>>> POSE OVERLAP REACHED: ', overlap_lim
+                write(logfhandle,'(A,F7.4)') '>>> POSE OVERLAP REACHED ', overlap_lim
                 converged = .true.
             endif
         endif
@@ -718,7 +733,7 @@ contains
                 endif
                 if( params%nstates == 1 .and. params%l_prob_align_mode ) l_stalled = l_stalled .and. l_pose_stalled
                 if( l_stalled )then
-                    write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT: FSC=0.5 AT ',&
+                    write(logfhandle,'(A,F7.3,A,F7.3,A)') '>>> STAGE RESOLUTION EXIT, FSC=0.5 AT ',&
                         &res05_now, ' A IS PAST THE NEXT STAGE LIMIT (', lpexit_eff, ' A) AND NO LONGER GAINING'
                     converged = .true.
                 endif
@@ -728,7 +743,7 @@ contains
         ! nor the overlap risen for STAGE_PLATEAU_PATIENCE iterations, wherever the next limit lies (solve3D_policy.md sec. 3)
         if( params%lpexit > TINY .and. res05_now > TINY .and. res143_now > TINY )then
             if( self%stage_plateau(params, res05_now, res143_now) .and. .not.converged )then
-                write(logfhandle,'(A,F7.3,A,F7.3,A,I0,A,I0,A)') '>>> STAGE PLATEAU EXIT: FSC=0.5/0.143 BEST ', &
+                write(logfhandle,'(A,F7.3,A,F7.3,A,I0,A,I0,A)') '>>> STAGE PLATEAU EXIT, FSC=0.5/0.143 BEST ', &
                     &self%res05_best, '/', self%res143_best, ' A AT ITERATION ', self%res_best_iter, &
                     &', NO GAIN FOR ', STAGE_PLATEAU_PATIENCE, ' ITERATIONS'
                 converged = .true.
@@ -737,15 +752,15 @@ contains
         call self%record_res(params, res05_now, res143_now, res05_state_avg, res_state_avg)
         if( converged .and. params%minits > 0 )then
             if( params%which_iter < params%startit + params%minits - 1 )then
-                write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED: yes, continuing until minimum iteration count (', &
+                write(logfhandle,'(A,I0,A,I0,A)') '>>> CONVERGED yes, continuing until minimum iteration count (', &
                     &params%which_iter - params%startit + 1, '/', params%minits, ')'
                 converged = .false.
             endif
         endif
         if( converged )then
-            write(logfhandle,'(A)') '>>> CONVERGED: yes'
+            write(logfhandle,'(A)') '>>> CONVERGED yes'
         else
-            write(logfhandle,'(A)') '>>> CONVERGED: no'
+            write(logfhandle,'(A)') '>>> CONVERGED no'
         endif
         ! stats
         call ostats%new(1, is_ptcl=.false.)
@@ -1061,7 +1076,7 @@ contains
             frac     = real(count(stable .and. nint(states) == istate)) / real(nstate)
             frac_min = min(frac_min, frac)
             if( params%nstates > 1 ) write(logfhandle,'(A,I3,A,F8.2)') &
-                &'>>> % STABLE CONTINUOUS POSES, STATE', istate, ':', 100. * frac
+                &'>>> % STABLE CONTINUOUS POSES, STATE', istate, ' ', 100. * frac
         enddo
         l_pass = frac_min >= params%cont_conv_frac
         ! the streak: consecutive passing iterations since the sample generation it began with
