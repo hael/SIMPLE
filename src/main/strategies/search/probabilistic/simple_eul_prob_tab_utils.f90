@@ -156,7 +156,7 @@ type :: prob_readout
     integer        :: inpl_mmax     = 0        !< the band's highest angular harmonic at the rim, pi mskdiam / lp
     integer(int64) :: inpl_nptcls   = 0_int64  !< particles whose row was evaluated (3D: whose poses all have one)
     integer(int64) :: inpl_npose    = 0_int64  !< entries inserted (a collapsed particle counts one; 3D: a collapsed row)
-    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to the refined pose (3D: rows)
+    integer(int64) :: inpl_nsingle  = 0_int64  !< particles whose quadrature collapsed to one angle (3D: rows)
     real(dp)       :: inpl_neff_sum = 0.d0     !< sum over those particles of exp(entropy) of the row (3D: over the rows)
     integer(int64) :: inpl_nrows    = 0_int64  !< 3D: the rows evaluated, one per inserted pose
     real(dp)       :: inpl_committed_view_weight_sum = 0.d0 !< 3D: the committed view's weight after the in-plane marginal
@@ -244,7 +244,8 @@ end type prob_inpl_counts
 !> The posterior-weighted in-plane insertion of one 2D batch: per particle the angles its class sums take it at
 !! and their weights, filled by the particle's search (distinct slots, so concurrently) and read by the class sums
 !! after the batch. A slot without entries (nent 0) enters the sums at the committed pose at weight 1: a
-!! particle whose quadrature collapsed to one entry, or without a valid row. The counters accumulate over the
+!! particle whose quadrature collapsed onto the committed rotation, or without a valid row. A quadrature collapsed
+!! onto another rotation keeps that rotation as its one entry. The counters accumulate over the
 !! batches of a pass for the readout
 type :: prob_insert_inpl
     private
@@ -252,7 +253,7 @@ type :: prob_insert_inpl
     integer(int64) :: n_rows = 0_int64, n_pose = 0_int64, n_single = 0_int64
     real(dp)       :: neff_sum = 0.d0
     integer, allocatable :: nent(:)    !< (nslots) entries of the slot's particle, 0: the committed pose alone
-    integer, allocatable :: status(:)  !< (nslots) 0 no row, 1 spread over entries, 2 collapsed
+    integer, allocatable :: status(:)  !< (nslots) 0 no row, 1 spread over entries, 2 collapsed to one angle
     real,    allocatable :: e3(:,:)    !< (kmax,nslots) the entries' in-plane angles, degrees
     real,    allocatable :: w(:,:)     !< (kmax,nslots) their weights, summing to 1 per particle
     real,    allocatable :: neff(:)    !< (nslots) exp(entropy) of the particle's row
@@ -2073,20 +2074,23 @@ contains
         self%neff   = 0.
     end subroutine inpl_insert_begin_batch
 
-    !> slot's particle enters the sums at n >= 2 angles e3 (degrees) with weights w; its row's exp(entropy) is neff
+    !> slot's particle enters the sums at n >= 1 angles e3 (degrees) with weights w; its row's exp(entropy) is neff.
+    !! One entry is a quadrature collapsed onto a rotation other than the committed one: it is counted as collapsed
     subroutine inpl_insert_set_spread( self, slot, n, e3, w, neff )
         class(prob_insert_inpl), intent(inout) :: self
         integer,                 intent(in)    :: slot, n
         real,                    intent(in)    :: e3(n), w(n), neff
-        if( slot < 1 .or. slot > self%nslots .or. n < 2 .or. n > self%kmax ) THROW_HARD('invalid slot; prob_insert_inpl%set_spread')
+        if( slot < 1 .or. slot > self%nslots .or. n < 1 .or. n > self%kmax ) THROW_HARD('invalid slot; prob_insert_inpl%set_spread')
         self%nent(slot)     = n
         self%e3(1:n,slot)   = e3
         self%w(1:n,slot)    = w
         self%neff(slot)     = neff
         self%status(slot)   = 1
+        if( n == 1 ) self%status(slot) = 2
     end subroutine inpl_insert_set_spread
 
-    !> slot's particle has a row whose quadrature collapsed to one entry: it enters at the committed pose, weight 1
+    !> slot's particle has a row whose quadrature collapsed onto the committed rotation: it enters at the committed
+    !! pose, weight 1
     subroutine inpl_insert_set_single( self, slot, neff )
         class(prob_insert_inpl), intent(inout) :: self
         integer,                 intent(in)    :: slot

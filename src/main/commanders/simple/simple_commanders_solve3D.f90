@@ -36,7 +36,6 @@ public :: commander_solve3D, commander_solve3D_addon
 private
 #include "simple_local_flags.inc"
 
-
 type, extends(commander_base) :: commander_solve3D_cavgs
     contains
     procedure :: execute => exec_solve3D_cavgs

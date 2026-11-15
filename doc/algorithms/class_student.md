@@ -84,8 +84,9 @@ no such step.
 
 ## What the reads found
 
-Against reference matching (one `refine2D` pass of the new particles against the teacher's averages), the student
-does not pay on bgal or trpv1: `doc/implementation_notes/completed/class_student_vs_reference_matching.md`.
+Against reference matching (one `refine2D` pass of the new particles against the teacher's averages) on bgal and
+trpv1, see `doc/implementation_notes/completed/class_student_vs_reference_matching.md`: equal class averages, and
+per-particle costs that small sets cannot settle for data sets of millions.
 
 On the Dell, Release builds, three seeds unless stated (`doc/implementation_notes/completed/class_student_2D.md`):
 

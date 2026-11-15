@@ -781,9 +781,15 @@ same quadrature to every pose a 3D particle is inserted at (refine3D policy,
   search match single-pose insertion for the same incoming references. The
   references differ from the second iteration on, so a run's trajectory does.
   The entry of the committed rotation sits at the committed (continuously
-  refined) angle; a quadrature that lies in one rotation, the concentrated
-  posterior, leaves the particle at its committed pose with weight 1, so a
-  well-determined particle is summed at its refined pose alone.
+  refined) angle, every other entry at its grid angle; a quadrature that lies
+  in the committed rotation, the concentrated posterior, leaves the particle at
+  its committed pose with weight 1, so a well-determined particle is summed at
+  its refined pose alone. A quadrature that lies in one other rotation is summed
+  there, at weight 1: the committed rotation comes from the tempered draw, which
+  need not select the physical posterior's dominant peak (with two opposite
+  peaks of losses 0 and 6, the second has probability 0.142 at `prob_beta` 0.3
+  and 0.0025 at the physical temperature). The 3D insertion follows the same
+  rule (refine3D policy).
 - **Averages are generated differently at the end, on purpose.** The class
   averages of the stage iterations take a particle at its quadrature entries.
   The terminal greedy pass, which turns the final solution into a hard

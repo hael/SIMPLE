@@ -1,6 +1,6 @@
 # The 2D class student against reference matching
 
-Status, 2026-11-14: measurement record, closed. Base: `06d3a4de9` (in-plane posterior weighting and sigma2
+Status, 2026-11-14: measurement record; the 2D student stays open (Hans, 2026-11-15, section 6). Base: `06d3a4de9` (in-plane posterior weighting and sigma2
 annealing in solve2D). Runs, scripts and tools: `/data2/agent_runs/refmatch_2D/` (`tools/`, `runs/`). One seed per
 set: a lead, not a finding.
 
@@ -93,12 +93,16 @@ mean FRC to 15 Å):
 
 ## 6. Reading
 
-For extending a 2D solution, reference matching at the working box does the whole job (class, in-plane rotation and
-shift for every particle) for 0.5 to 0.7 ms per particle, with no training and no centring, at no measurable cost
-in quality. The student's only edge is about 0.1 ms per particle on particles already centred, before the search it
-still needs. Hans decides; the stream plan (`planned/class_student_stream.md`) should face the same comparison,
-since its pool's particles arrive centred, the student's best case. On this evidence an in-plane posterior head for
-the 2D student is not justified.
+On these two small sets, reference matching at the working box does the whole job (class, in-plane rotation and shift
+for every particle) for 0.5 to 0.7 ms per particle, with no training and no centring, at no measurable cost in
+quality, and the student's prediction is about 0.1 ms per particle cheaper on centred particles.
+
+**What this does not decide** (Hans, 2026-11-15): costs on sets of 5,500 and 35,600 particles say little about the
+data sets of millions the student is meant for, where the fixed costs (the teacher, the training, the centring's
+references) are spread over far more particles and the per-particle terms are what remains. Nothing here closes
+the 2D student. Its open questions are the shortlists' safety under centring error and what a better teacher and
+readout give; the in-plane posterior is planned for both students in
+`planned/student_inplane_posterior.md`. Reference matching stays the comparison to report beside the student.
 
 ## 7. Relation to NUViT (Gu, Heeter and Zhong, arXiv 2610.32041, October 2026)
 
@@ -120,4 +124,4 @@ One idea touches a measured weakness: NUViT's amplitude channel is exactly shift
 against amplitudes alone: a pose student on power spectra in place of the complex values reached 0.006 within 6° on
 T1000 (0.80 with phases) and 0.05 on bgal (0.50) (`completed/class_student_2D.md`, the probes after Phase 0). An
 amplitude channel beside the complex input is a different question, and the pose student is where it could pay, its
-full search being far larger. It is planned in `planned/pose_student_amplitude_channel.md`.
+full search being far larger, and it is planned there first, in `planned/pose_student_amplitude_channel.md`.

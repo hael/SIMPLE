@@ -75,7 +75,10 @@ contains
     end subroutine srch_prob
 
     !> Insert a quadrature of the committed class's angular posterior at its refined shift and physical temperature.
-    !! Coincident points merge; a collapsed quadrature keeps the refined pose at weight 1.
+    !! Coincident points merge. Only the committed rotation's entry takes the refined continuous angle, every other
+    !! entry its grid angle; a quadrature collapsed onto the committed rotation keeps the refined pose at weight 1.
+    !! A collapsed quadrature can select another rotation than the committed one, because the committed one comes
+    !! from the tempered draw: its mass stays at the rotation it selected.
     !! The committed pose in the project is unchanged.
     subroutine insert_inplane( self, os )
         class(strategy2D_prob), intent(inout) :: self
@@ -104,7 +107,7 @@ contains
         v    = rnd_keyed(rnd_draw_key(prob_rnd_scope(self%s%p_ptr%which_iter, .true.), iptcl, RND_FAM_INPLQ))
         call inpl_quadrature(self%s%nrots, dists, temp, INPL_POSTERIOR_BUDGET, v, nent, inds, w, neff)
         if( nent < 1 ) return
-        if( nent == 1 )then
+        if( nent == 1 .and. inds(1) == irot_c )then
             call self%spec%inpl_ins%set_single(self%spec%iptcl_batch, neff)
             return
         endif

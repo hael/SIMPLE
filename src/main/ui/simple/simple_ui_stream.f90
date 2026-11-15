@@ -225,7 +225,8 @@ subroutine new_pool2D( prgtab )
         &'Cosine edge width used to soften the opening-2D automask', '# pixels{6}', .false., 6., group="picking", &
         &visibility=UI_VIS_DEVELOPER)
         ! the 3D route to the picking references (the master forwards its own); 0 keeps the default. preserve_default: the defaults of nrestarts_collapse, lpstart_ini3D and
-        ! lpstop_ini3D live in the initial analysis stage, which default_audit.py does not trace
+        ! lpstop_ini3D are p03's (simple_defs_stream_commanders, set through default_unless_positive), which
+        ! default_audit.py does not trace
         ! search controls
         call gen_pickrefs%add_input(UI_SRCH, 'nstates_pickrefs', 'int',         'Picking-reference 3D states', &
         &'Number of states of the solve3D_cavgs run in the 3D route of the initial analysis (picking references); &
@@ -318,7 +319,8 @@ subroutine new_pool2D( prgtab )
         ! <no additional inputs>
         ! the 3D route of the initial analysis (picking references), forwarded by the master; 0 keeps the
         ! initial analysis' default. preserve_default: the defaults of nrestarts_collapse, lpstart_ini3D and
-        ! lpstop_ini3D live in the initial analysis stage, which default_audit.py does not trace
+        ! lpstop_ini3D are p03's (simple_defs_stream_commanders, set through default_unless_positive), which
+        ! default_audit.py does not trace
         ! search controls
         call master%add_input(UI_SRCH, 'nstates_pickrefs', 'int',         'Picking-reference 3D states', &
         &'Number of states of the solve3D_cavgs run in the 3D route of the initial analysis (picking references); &

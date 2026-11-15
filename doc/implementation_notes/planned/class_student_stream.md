@@ -67,7 +67,8 @@ All on the Dell, Release builds, 24 threads; the full tables are in the 2D plan'
 working box costs 0.5 to 0.7 ms per particle with no centring, against 0.41 to 0.56 ms for the student's prediction
 alone, which still needs centred particles and a search after it
 (`completed/class_student_vs_reference_matching.md`). The pool's particles arrive centred, the student's best case;
-this plan's owners should weigh seeding by prediction against seeding by one matching pass before Phase 1.
+matching is the comparison to report beside the student's seeding in this plan's phases; costs on small sets do
+not decide between them at the stream's scale.
 
 ## 4. Contract
 

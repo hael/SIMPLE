@@ -277,6 +277,13 @@ contains
                             k    = index(rest, ' ')
                             tok  = rest(1:k-1)
                             rest = rest(k:)
+                            ! a number may close a phrase ("full search 8.45;"): its trailing punctuation is not part of it
+                            k = len_trim(tok)
+                            do while( k > 0 )
+                                if( index(';,:', tok(k:k)) == 0 ) exit
+                                tok(k:k) = ' '
+                                k = k - 1
+                            enddo
                             read(tok, *, iostat=ios_tok) x
                             if( ios_tok /= 0 ) cycle
                             nnum = nnum + 1

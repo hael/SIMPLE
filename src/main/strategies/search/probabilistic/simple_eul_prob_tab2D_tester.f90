@@ -599,9 +599,10 @@ contains
         call assert_true(l_range, 'the phases of 1000 particles lie in [0,1)')
     end subroutine test_inpl_phase
 
-    !> The batch's side channel: entries and weights per slot as set, a slot with no row or a collapsed row has no
-    !! entries (the committed pose alone), the counters add the batch's rows, entries (a collapsed row counts one)
-    !! and collapsed rows and persist over batches while begin_batch clears the slots
+    !> The batch's side channel: entries and weights per slot as set, a slot with no row or a row collapsed onto the
+    !! committed rotation has no entries (the committed pose alone), a row collapsed onto another rotation keeps it as
+    !! its one entry, the counters add the batch's rows, entries (a collapsed row counts one) and collapsed rows and
+    !! persist over batches while begin_batch clears the slots
     subroutine test_inpl_insert_channel()
         type(prob_insert_inpl) :: ins
         integer,        pointer :: nent(:)
@@ -627,6 +628,16 @@ contains
         call ins%end_batch(2)
         call ins%get_counts(nrows, npose, nsingle, neff_sum)
         call assert_true(nrows == 3_int64 .and. npose == 6_int64 .and. nsingle == 1_int64, 'the counters persist over batches')
+        ! a quadrature collapsed onto another rotation than the committed one keeps that rotation, at weight 1
+        call ins%begin_batch
+        call ins%set_spread(1, 1, [348.75], [1.], 1.)
+        call ins%end_batch(1)
+        call ins%get_view(nent, e3, w)
+        call assert_true(nent(1) == 1 .and. abs(e3(1,1) - 348.75) < 1.e-6 .and. abs(w(1,1) - 1.) < 1.e-7, &
+            &'a collapse onto another rotation is summed at that rotation, not at the committed pose')
+        call ins%get_counts(nrows, npose, nsingle, neff_sum)
+        call assert_true(nrows == 4_int64 .and. npose == 7_int64 .and. nsingle == 2_int64, &
+            &'a collapse onto another rotation counts as one collapsed row and one entry')
         call ins%kill
     end subroutine test_inpl_insert_channel
 

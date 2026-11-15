@@ -103,7 +103,7 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
 
 ## 6. Master and GUI
 
-1. **Heartbeat:** every `HEARTBEAT_S` (5 s) the master POSTs the assembler's JSON document to
+1. **Heartbeat:** every `MASTER_HEARTBEAT_S` (5 s) the master POSTs the assembler's JSON document to
    `niceserver`.
    - Each content section is sent only when its hash (FNV-1a) differs from the last one sent.
    - A heartbeat the GUI did not accept (no answer, or a status other than 200) clears the
@@ -137,7 +137,7 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
    the master, which then stops the stages as below. The master flushes its output before every
    fork, so a child does not write the master's buffered lines again.
 3. **The master's stop:**
-   - optics assignment is asked first, with up to `OPTICS_STOP_TIMEOUT_S` (60 s), during which
+   - optics assignment is asked first, with up to `MASTER_OPTICS_STOP_TIMEOUT_S` (60 s), during which
      the heartbeat goes on (restart requests are ignored from the stop on);
    - then every other stage but the large ones (`STOP_ONE_BY_ONE`: multistate 3D, pool 2D,
      reference picking) is asked together;
@@ -145,7 +145,7 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
      stopped (or been killed), so their final writes do not hold their memory at the same time;
      one waiting its turn runs on;
    - a stage asked and still running is asked again on each pass;
-   - a stage still running `STOP_TIMEOUT_S` (600 s) after it was asked is killed (SIGKILL), and
+   - a stage still running `MASTER_STOP_TIMEOUT_S` (600 s) after it was asked is killed (SIGKILL), and
      the master cancels the jobs recorded in its folder that wrote no exit status
      (`cancel_unfinished_jobs`), which the killed stage can no longer cancel. The large stages
      each get their own 600 s, so a stop can take up to their sum.
@@ -153,13 +153,13 @@ an answer. A key not listed in section 6 is not part of the contract and is igno
      final write (`log_rss`, ">>> RSS ..."), so a stop that runs out of time shows where.
    - Once none runs, the master sends a last heartbeat, with the stream's stop time and its final
      status (finished, or failed when a stage failed), and exits. It is sent again, up to
-     `LAST_HEARTBEAT_TRIES` (3) times `LAST_HEARTBEAT_WAIT_S` (1 s) apart, until NICE accepts it
+     `MASTER_LAST_HEARTBEAT_TRIES` (3) times `MASTER_LAST_HEARTBEAT_WAIT_S` (1 s) apart, until NICE accepts it
      (`send_last_heartbeat`; once without a `niceserver`): NICE marks a stream it last saw
      running failed after a minute without a heartbeat, so a lost last one would show a stopped
      stream as failed.
 4. **A start-up failure** once stages are forked (a stage not running, the listener thread not
    made) stops them before the master stops: asked, then killed with their jobs cancelled after
-   `STARTUP_STOP_TIMEOUT_S` (60 s). The persistent-worker server ends with the master's process;
+   `MASTER_STARTUP_STOP_TIMEOUT_S` (60 s). The persistent-worker server ends with the master's process;
    its workers leave when they lose it.
 5. `forked_process` never restarts a child by itself: a stage restarts only when the GUI asks.
 6. Every stage but p03 also ends its loop when a `SIMPLE_TERM_STREAM` file exists in its folder

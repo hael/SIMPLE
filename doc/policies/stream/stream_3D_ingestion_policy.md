@@ -163,7 +163,7 @@ completed iteration left it.
      are selected (section 10).
 
    **Settings:** the commander checks 2 <= `nstates` <= 20 (the GUI status holds
-   `MAX_STATES_SOLVE3D_MULTISTATE`); `nstates` (default `NSTATES3D`, 3) is the reference
+   `MAX_STATES_SOLVE3D_MULTISTATE`); `nstates` (default `P07_NSTATES`, 3) is the reference
    volumes' states at most, and the states that hold class averages are kept. The jobs run on
    `nparts3D` parts (default 8; a job is distributed only with more than one) and `nthr3D`
    threads (default 8), with the pool's mask diameter; the matching runs in shared memory on

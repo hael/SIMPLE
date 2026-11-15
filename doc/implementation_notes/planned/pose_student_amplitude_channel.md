@@ -1,8 +1,9 @@
 # The pose student with an amplitude channel
 
-Status, 2026-11-14: planned, not started; waits for Hans's 3D posterior weighting. Base: pinned in Phase 0 at the
-first commit with that work. Supersedes: none. Depends on: the 3D posterior weighting (`planned/inpl_quadrature_insertion_3D.md`; validated: no; it
-changes the teacher's rows), the pose student at `06d3a4de9` (validated: yes, `completed/pose_student_training_speed_report.md`).
+Status, 2026-11-15: planned, not started. Runs after `planned/student_inplane_posterior.md` and shares its Phase 0;
+its base is that plan's outcome (the adopted network, or the base if both variants are rejected), pinned when this
+plan starts. Supersedes: none. Depends on: the 3D posterior weighting (landed in `86babf86b`; it changes the teacher's
+rows), the pose student (validated: yes, `completed/pose_student_training_speed_report.md`).
 
 ## 1. Why
 
@@ -70,7 +71,8 @@ are.
 
 ## 4. Not in this plan
 
-- The 2D class student (its case is closed by `completed/class_student_vs_reference_matching.md`).
+- The 2D class student: the amplitude path is tried on the pose student first; carrying it to the shared core's
+  2D student is a follow-up if it is adopted.
 - A learned centre estimator, a wider shift augmentation, a transformer encoder.
 - The teacher, the probability tables and refine3D's use of the cones.
 - Any file outside the table; the stream.
@@ -103,8 +105,9 @@ are.
 
 ## 8. Phases
 
-- **Phase 0, baseline.** Pin the base. Release and Debug builds, fast gate. Rebuild the five teachers; train A at
-  three seeds each; all reads of decision 5; record the spreads.
+- **Phase 0, baseline.** Taken from `student_inplane_posterior.md`'s Phase 0 when this plan's base is that plan's
+  base; otherwise (a variant adopted there) A is the adopted network, retrained at three seeds on the same frozen
+  teachers. Every read of decision 5, the decentring curve included; the spreads recorded.
   Exit: the reads table and the spreads frozen in Progress, the teachers' checksums.
 - **Phase 1, the variants.** Patches B, B' and C on an export, with the HHCNN tester's symmetry and thread-identity
   checks extended to the amplitude path. C trained on bgal.

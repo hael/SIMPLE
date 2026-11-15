@@ -1,5 +1,10 @@
 # Module constant ownership inventory
 
+Status, 2026-11-15: the commander constants were moved in `656a50e55` to `src/defs/simple_defs_center.f90`,
+`simple_defs_flex.f90`, `simple_defs_solve3D.f90` and `simple_defs_stream_commanders.f90` (some with a workflow
+prefix, e.g. `MASTER_`, `P03_`, `P07_`, `CENTER_`, `CHUNKS_`), and the solve3D_pyramid commander was deleted; the homes
+proposed below differ where the code now says otherwise. The rest of the inventory is still a proposal.
+
 Reviewed 2026-11-14 on `master`, source revision `85213734e9eac15a23ef634e4a8bf6cfe3712652`.
 The worktree was clean when the inventory began. This is an inventory and proposed ownership map; no Fortran has been changed. Authorship is not inferred from the declarations.
 

@@ -19,7 +19,6 @@ public :: commander_solve3D_chunks
 private
 #include "simple_local_flags.inc"
 
-
 type, extends(commander_base) :: commander_solve3D_chunks
     contains
     procedure :: execute => exec_solve3D_chunks

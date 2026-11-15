@@ -1607,60 +1607,65 @@ static int rmFiles(const char *pathname, const struct stat *sbuf, int type, stru
     return 0;
 }
 
+/* Empty the directory open as dfd (the descriptor is consumed) and remove its entries one by one, stopping at the
+ * first failure. The walk goes through directory descriptors: each child directory is opened relative to its parent
+ * with O_NOFOLLOW before it is read, so a directory swapped for a symbolic link after it was listed is never followed;
+ * such a link, like any other non-directory, is unlinked itself. */
+static int remove_directory_fd(int dfd, int *count)
+{
+    DIR *d = fdopendir(dfd);
+    if(!d) {
+        close(dfd);
+        return -1;
+    }
+    struct dirent *p;
+    int r = 0;
+    while(!r && (p = readdir(d))) {
+        /* Skip the names "." and ".." as we don't want to recurse on them. */
+        if(!strcmp(p->d_name, ".") || !strcmp(p->d_name, ".."))
+            continue;
+        int cfd = openat(dirfd(d), p->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if(cfd >= 0) {
+            r = remove_directory_fd(cfd, count);
+            if(!r) {
+                r = unlinkat(dirfd(d), p->d_name, AT_REMOVEDIR);
+                *count = *count + 1;
+            }
+        } else if(errno == ENOTDIR || errno == ELOOP) {
+            /* a file or a symbolic link (also one swapped in for a directory): removed itself, never followed */
+            r = unlinkat(dirfd(d), p->d_name, 0);
+            *count = *count + 1;
+        } else {
+            r = -1;
+        }
+    }
+    closedir(d);
+    return r;
+}
+
 int remove_directory_recursive(char *path, int *len, int*count)
 {
     char *cpath = F90to_cstring(path, *len);
     if(!cpath) return -1;
     size_t path_len = strlen(cpath);
-    /* Trailing slashes must not make lstat follow a root-directory symlink. */
+    /* Trailing slashes must not make the open follow a root-directory symlink. */
     while(path_len > 1 && cpath[path_len - 1] == '/')
         cpath[--path_len] = '\0';
-    struct stat root_stat;
-    if(lstat(cpath, &root_stat)) {
-        free(cpath);
-        return -1;
-    }
-    /* Check the root before opendir, just as we check each child before recursion. */
-    if(S_ISLNK(root_stat.st_mode)) {
-        int r = unlink(cpath);
-        if(!r) *count = *count + 1;
+    /* O_NOFOLLOW: a root that is (or becomes) a symbolic link is never opened as a directory */
+    int dfd = open(cpath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    int r = -1;
+    if(dfd < 0) {
+        struct stat root_stat;
+        if((errno == ENOTDIR || errno == ELOOP) && !lstat(cpath, &root_stat) && S_ISLNK(root_stat.st_mode)) {
+            r = unlink(cpath);
+            if(!r) *count = *count + 1;
+        }
         free(cpath);
         return r;
     }
-    DIR *d = opendir(cpath);
-    int r = -1;
-    if(d) {
-        struct dirent *p;
-        r = 0;
-        while(!r && (p = readdir(d))) {
-            int r2 = -1;
-            char *buf;
-            size_t len;
-            /* Skip the names "." and ".." as we don't want to recurse on them. */
-            if(!strcmp(p->d_name, ".") || !strcmp(p->d_name, ".."))
-                continue;
-            len = path_len + strlen(p->d_name) + 2;
-            buf = malloc(len);
-            if(buf) {
-                struct stat statbuf;
-                snprintf(buf, len, "%s/%s", cpath, p->d_name);
-                /* lstat: a symbolic link is removed itself, never followed into its target */
-                if(!lstat(buf, &statbuf)) {
-                    if(S_ISDIR(statbuf.st_mode)) {
-                        int len2 = (int)strlen(buf);
-                        r2 = remove_directory_recursive(buf, &len2 , count);
-                    } else {
-                        r2 = unlink(buf);
-                        *count = *count + 1;
-                    }
-                }
-                free(buf);
-            }
-            r = r2;
-        }
-        closedir(d);
-    }
+    r = remove_directory_fd(dfd, count);
     if(!r) {
+        /* rmdir does not follow a symbolic link either: a root swapped for one now fails here */
         r = rmdir(cpath);
         *count = *count + 1;
     }
