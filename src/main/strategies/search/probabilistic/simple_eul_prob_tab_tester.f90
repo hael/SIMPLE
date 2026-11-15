@@ -17,7 +17,7 @@ use simple_eul_prob_tab_utils, only: record_seed_shift, cone_view_dist, cone_cel
     &PROB_NEFF_MIN_ROWS, map_prior_weight, insert_pose_loss, update_screen_best, start_shift_state, &
     &prob_readout, write_prob_readout, read_prob_readout, add_prob_readout, inpl_quadrature, inpl_view_weights, &
     &inpl_prior_penalty, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes, inpl_particle_counts, &
-    &prob_inpl_counts, PROB_READOUT_3D_DENSE, report_prob_readout
+    &prob_inpl_counts, PROB_READOUT_3D_DENSE, report_prob_readout, inpl_cone_window
 use simple_rnd,                only: seed_rnd_fixed, ran3, rnd_key, rnd_keyed, rnd_draw_key, RND_FAM_ASSIGN
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_sym,                only: sym
@@ -80,6 +80,8 @@ contains
         call test_inpl_view_weights()
         write(*,'(A)') 'test_inpl_prior_weights'
         call test_inpl_prior_weights()
+        write(*,'(A)') 'test_inpl_cone_window'
+        call test_inpl_cone_window()
         write(*,'(A)') 'test_inpl_reservation_layout'
         call test_inpl_reservation_layout()
         write(*,'(A)') 'test_inpl_view_against_angle_weight'
@@ -1770,6 +1772,41 @@ contains
         type(ptcl_ref) :: assgn
         assgn%inpl = inpl
     end function unrefined
+
+    !> The cone window (inpl_posterior=cone): a flat row keeps the rotations within the angle of its bin, across the
+    !! wrap; no cone keeps the bin alone; a lower peak half a turn away does not enter the quadrature
+    subroutine test_inpl_cone_window()
+        integer, parameter :: NR = 36, KQ = INPL_POSTERIOR_BUDGET
+        real    :: row(NR), w(KQ), neff
+        integer :: inds(KQ), nent, j
+        row = 0.
+        call inpl_cone_window(NR, 1, 25., row)
+        call inpl_quadrature(NR, row, 1., KQ, 0.37d0, nent, inds, w, neff)
+        call assert_int(5, nent, 'a flat row within 25 deg of its bin at 10 deg steps: 5 rotations')
+        do j = 1,nent
+            call assert_true(any(inds(j) == [35, 36, 1, 2, 3]), 'the window wraps about rotation 1')
+        enddo
+        row = 0.
+        call inpl_cone_window(NR, 36, 15., row)
+        call inpl_quadrature(NR, row, 1., KQ, 0.37d0, nent, inds, w, neff)
+        call assert_int(3, nent, 'within 15 deg of rotation 36: 3 rotations')
+        do j = 1,nent
+            call assert_true(any(inds(j) == [35, 36, 1]), 'the window wraps about rotation 36')
+        enddo
+        row = 0.
+        call inpl_cone_window(NR, 7, -1., row)
+        call inpl_quadrature(NR, row, 1., KQ, 0.37d0, nent, inds, w, neff)
+        call assert_int(1, nent, 'no cone: the bin alone')
+        call assert_int(7, inds(1), 'no cone: the bin itself')
+        row     = 1.
+        row(25) = 0.
+        call inpl_cone_window(NR, 7, 25., row)
+        call inpl_quadrature(NR, row, 1., KQ, 0.37d0, nent, inds, w, neff)
+        do j = 1,nent
+            call assert_true(abs(inds(j) - 7) <= 2, 'a lower peak half a turn away stays out')
+        enddo
+        call assert_real(1., sum(w(1:nent)), 1.e-6, 'the windowed quadrature''s weights sum to 1')
+    end subroutine test_inpl_cone_window
 
     !> The view weights (inpl_view_weights) of one-angle, flat and two-peak rows against exp(ln Z - T L_min) / sum; the
     !! committed pose kept below WMIN, an extra under it dropped, the entries summing to 1, a lone pose at 1, and the

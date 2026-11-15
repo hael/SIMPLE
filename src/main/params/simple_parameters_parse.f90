@@ -100,6 +100,7 @@ contains
         call reg%add_yesno('gen_model', self%gen_model)
         call reg%add_char('graph', self%graph)
         call reg%add_yesno('guinier', self%guinier)
+        call reg%add_char('inpl_posterior', self%inpl_posterior)
         call reg%add_yesno('graphene_filt', self%graphene_filt)
         call reg%add_yesno('greedy_sampling', self%greedy_sampling)
         call reg%add_yesno('hist', self%hist)

@@ -168,6 +168,14 @@ contains
         &'from its seed(yes|no){yes}', '', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        if( .not. l_stream_compatible )then
+            call prg%add_input(UI_SRCH, 'inpl_posterior', 'multi', 'In-plane posterior insertion', &
+            &'Probabilistic modes (refine=prob, prob_neigh in state|geom; objfun=euclid): no inserts each pose at its '//&
+            &'own in-plane angle; cone spreads each pose over a 64-point quadrature of its in-plane posterior within the '//&
+            &'insertion cone, at the table''s view weights; yes spreads it over the full in-plane circle and reweights the '//&
+            &'views by their in-plane marginals(no|cone|yes){no}', '', .false., 'no', &
+            &group="search", choices=ui_choices([character(len=4) :: 'no', 'cone', 'yes']), visibility=UI_VIS_ADVANCED)
+        endif
         call prg%add_input(UI_SRCH, 'shift_sigma', 'num', 'Polar shift map prior width', &
         &'Sigma (in A) of the Gaussian prior on each particle''s shift from its current origin (the picking error''s width); in every stage '//&
         &'with shifts the probability tables centre each particle as it needs: one not yet centred in this workflow, '//&

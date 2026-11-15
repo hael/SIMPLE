@@ -70,6 +70,7 @@ type :: parameters
     character(len=3)          :: graphene_filt='no'   !< filter out graphene bands in correlation search(yes|no){no}
     character(len=3)          :: greedy_sampling='yes' !< selection tools: take each class's best-scoring particles(yes|no){yes}
     character(len=3)          :: hist='no'            !< whether to print histogram(yes|no){no}
+    character(len=4)          :: inpl_posterior='no'  !< probabilistic 3D insertion at in-plane posterior quadratures: no, within the insertion cone, or the full circle with reweighted views(no|cone|yes){no}
     character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: rec_states='yes'     !< flex_pca: reconstruct the state volumes, or deliver the embedding only(yes|no){yes}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit(yes|no){no}
@@ -663,7 +664,8 @@ type :: parameters
     logical :: l_regpass         = .true. !< not a command-line key
     logical :: l_prob_inpl       = .false. !< not a command-line key
     logical :: l_prob_align_mode = .false. !< not a command-line key
-    logical :: l_inpl_posterior  = .false. !< a refine3D pass that reconstructs from a posterior table (refine=prob, prob_neigh in state|geom; objfun=euclid) inserts at in-plane quadratures; not a command-line key
+    logical :: l_inpl_cone       = .false. !< inpl_posterior=cone under l_inpl_posterior: the table's view weights, in-plane spread within the insertion cone; not a command-line key
+    logical :: l_inpl_posterior  = .false. !< inpl_posterior=cone|yes and a refine3D pass that reconstructs from a posterior table (refine=prob, prob_neigh in state|geom; objfun=euclid): inserts at in-plane quadratures; not a command-line key
     logical :: l_cart_refine     = .false. !< a Cartesian (continuous-pose) pass (refine=cont); not a command-line key
     logical :: l_cont_followup     = .false. !< the Cartesian followup pass after a discrete one; not a command-line key
     logical :: l_cont_shift_first = .false. !< cont_route=shift_then_joint: the shift-only LM stage first; not a command-line key

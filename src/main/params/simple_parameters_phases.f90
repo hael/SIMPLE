@@ -1136,9 +1136,17 @@ contains
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
         ! the in-plane posterior insertion: every refine3D pass that reconstructs from a posterior table but the
-        ! hill-climb neighbourhoods, under the Euclidean objective (the in-plane posterior is the Euclidean one)
+        ! hill-climb neighbourhoods, under the Euclidean objective (the in-plane posterior is the Euclidean one);
+        ! inpl_posterior=no inserts at the table's poses alone; cone keeps the table's view weights and spreads each
+        ! pose within the insertion cone only
+        select case(trim(self%inpl_posterior))
+            case('no','cone','yes')
+            case DEFAULT
+                THROW_HARD('inpl_posterior must be no, cone or yes')
+        end select
         self%l_inpl_posterior = .false.
-        if( trim(self%prg%to_char()) == 'refine3D' .and. trim(self%oritype) /= 'ptcl2D' .and. &
+        if( trim(self%inpl_posterior) /= 'no' .and. &
+            &trim(self%prg%to_char()) == 'refine3D' .and. trim(self%oritype) /= 'ptcl2D' .and. &
             &trim(self%volrec) == 'yes' .and. self%cc_objfun == OBJFUN_EUCLID )then
             select case(trim(self%refine))
                 case('prob')
@@ -1147,6 +1155,7 @@ contains
                     self%l_inpl_posterior = trim(self%prob_neigh_mode) == 'state' .or. trim(self%prob_neigh_mode) == 'geom'
             end select
         endif
+        self%l_inpl_cone = self%l_inpl_posterior .and. trim(self%inpl_posterior) == 'cone'
         ! geom searches the directions within athres_cont of the previous orientation, refine=cont's bound
         if( trim(self%refine) == 'prob_neigh' .and. trim(self%prob_neigh_mode) == 'geom' )then
             if( .not. (self%athres_cont > 0. .and. self%athres_cont <= 180.) ) THROW_HARD('athres_cont must be in (0,180] degrees')

@@ -38,7 +38,7 @@ public :: prob_readout, prob_readout_fname, write_prob_readout, read_prob_readou
 public :: merge_prob_readouts
 public :: PROB_READOUT_3D_DENSE, PROB_READOUT_3D_NEIGH, PROB_READOUT_2D_DENSE, PROB_READOUT_2D_SPARSE
 public :: prob_insert_pose, prob_insert_table, prob_insert_poses, prob_insert_cone
-public :: prob_insert_inpl, inpl_quadrature
+public :: prob_insert_inpl, inpl_quadrature, inpl_cone_window
 public :: prior_window_centre, inpl_view_weights, inpl_prior_penalty
 public :: prob_inpl_counts, inpl_particle_counts, inpl_entry_pack, inpl_entry_rot, inpl_entry_count, inpl_reserved_bytes
 public :: screen_pool_size, SCREEN_QUANTILE
@@ -2022,6 +2022,22 @@ contains
         if( present(lnz)  ) lnz  = log(wsum)
         if( present(dmin) ) dmin = dmin_row
     end subroutine inpl_quadrature
+
+    !> The in-plane row of a pose at rotation bin confined to the insertion cone (inpl_posterior=cone): rotations
+    !! further than angle degrees from bin on the circle invalidated (inpl_quadrature skips them); bin always stays
+    pure subroutine inpl_cone_window( n, bin, angle, dists )
+        integer, intent(in)    :: n, bin
+        real,    intent(in)    :: angle
+        real,    intent(inout) :: dists(n)
+        integer :: r, d, nwin
+        nwin = -1
+        if( angle >= 0. ) nwin = int(angle * real(n) / 360.)
+        do r = 1,n
+            d = modulo(r - bin, n)
+            d = min(d, n - d)
+            if( d > nwin .and. r /= bin ) dists(r) = huge(dists(r))
+        enddo
+    end subroutine inpl_cone_window
 
     !> The view weights m of one particle's npose poses (the committed pose first), their in-plane marginals:
     !! log m_k = lnz_k - temp dmin_k - pen_k, normalised; an extra under wmin is dropped and the rest renormalised, the

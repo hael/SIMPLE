@@ -95,6 +95,7 @@ type :: eul_prob_tab
     procedure          :: get_readout
     ! GLOBAL PROCEDURES (used only by the global eul_prob_tab object)
     procedure          :: set_insert_cone
+    procedure          :: get_insert_cone_angle
     procedure          :: get_prior_centre
     procedure          :: get_shift_prior_sigma2
     procedure          :: set_inpl_counts
@@ -1477,6 +1478,13 @@ contains
         class(prob_insert_cone), intent(in)    :: cone
         self%insert_cone = cone
     end subroutine set_insert_cone
+
+    !> the half-angle of state istate's insertion cone at equal shifts, degrees; below zero: no cone
+    pure real function get_insert_cone_angle( self, istate ) result( angle )
+        class(eul_prob_tab), intent(in) :: self
+        integer,             intent(in) :: istate
+        angle = self%insert_cone%get_angle(istate)
+    end function get_insert_cone_angle
 
     !> the window prior's centre of the committed entry of the table's particle iptcl_map (l_inpl_posterior), a
     !! stored shift; zero without the key or the seed

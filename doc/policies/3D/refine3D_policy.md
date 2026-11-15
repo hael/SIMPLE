@@ -937,6 +937,11 @@ control, with the cone's occupancy line read beside them.
 
 **In-plane posterior insertion (2026-11-14, a temporary key until Hans made it the default without one on
 2026-11-15, as the 2D budget; [the plan](../../implementation_notes/planned/inpl_quadrature_insertion_3D.md)).**
+Off by default since 2026-11-15 (`inpl_posterior=no|cone|yes`, refine3D and solve3D, recorded and replayed by the
+solve3D manifest), for an A/B on PorF and the export gate, whose stages 3-5 may have fallen behind with it. `yes` is
+the insertion below; `cone` isolates the angular averaging: the table's view weights stand and each pose's in-plane
+row is confined to the insertion cone's half-angle about its own rotation (`inpl_cone_window`; no FSC yet, no cone:
+the pose's own rotation), the cone opened under `cone` at `topk=1` too.
 The weighted insertion
 spreads a particle over directions but never over its in-plane angle: each direction of a row carries
 one angle, and an angle the data do not decide enters the half-map where the particle's own noise put

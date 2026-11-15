@@ -1759,7 +1759,7 @@ contains
             call sample_ptcls4prob3D(params, build, nptcls_smpl, pinds_smpl)
             call build%spproj%write_segment_inside(params%oritype)
             if( allocated(pinds_smpl) ) deallocate(pinds_smpl)
-            if( params%topk > 1 )then
+            if( params%topk > 1 .or. params%l_inpl_cone )then
                 ! the weighted insertion's cone of the iteration, reported here: the parts open the same cone from
                 ! the same FSC files, bounded by the command line's limit, into logs the next schedule wipes
                 lp_cone = 0.

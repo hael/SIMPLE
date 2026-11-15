@@ -4,7 +4,7 @@ use simple_core_module_api
 use simple_strategy3D_utils, only: assign_ori, candidate_pose, resolve_inplane_e3
 use simple_eul_prob_tab_utils, only: prob_insert_pose, record_shift_state, prob_inpl_counts, posterior_temperature, &
     &temperature_or_argmin, prob_rnd_scope, inpl_quadrature, inpl_view_weights, inpl_prior_penalty, inpl_entry_pack, &
-    &inpl_particle_counts
+    &inpl_particle_counts, inpl_cone_window
 use simple_rnd,              only: rnd_keyed, rnd_draw_key, RND_FAM_INPLQ
 use simple_polarft_calc,     only: SHERRSQ
 use simple_strategy3D_alloc, only: s3D
@@ -178,6 +178,8 @@ contains
         else
             call self%s%b_ptr%pftc%gen_euclid_dists(iref, iptcl, sh_row, dists)
         endif
+        if( self%s%p_ptr%l_inpl_cone ) call inpl_cone_window(self%s%nrots, bin, &
+            &self%spec%eulprob_obj_part%get_insert_cone_angle((iref - 1) / self%s%p_ptr%nspace + 1), dists)
         temp = temperature_or_argmin(posterior_temperature(self%s%b_ptr%pftc%wsqsum_ptcl_now(iptcl), &
             &self%s%b_ptr%pftc%get_pftsz()))
         v    = rnd_keyed(rnd_draw_key(prob_rnd_scope(self%s%p_ptr%which_iter, .false.), iptcl, RND_FAM_INPLQ, &
@@ -215,6 +217,11 @@ contains
                 self%spec%extra_poses%blk_nent(self%spec%extra_poses%block(iloc, k)) = 0
             enddo
             self%inpl_counts%view_weight_sum = real(self%spec%extra_poses%wc(iloc), dp)
+            return
+        endif
+        if( self%s%p_ptr%l_inpl_cone )then
+            ! the table's view weights stand: only the angles spread
+            self%inpl_counts = inpl_particle_counts(self%spec%extra_poses, iloc, s3D%inpl_neff(1:npose,ithr))
             return
         endif
         temp = temperature_or_argmin(posterior_temperature(self%s%b_ptr%pftc%wsqsum_ptcl_now(self%s%iptcl), &

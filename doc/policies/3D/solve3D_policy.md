@@ -120,7 +120,7 @@ Stage policy includes:
 - an explicitly requested PCG order prior (`pcg_order=yes`) from the same
   stage (`PCG_START_STAGE`), on the NU evidence and labels of the
   previous iteration (section 9)
-- the in-plane posterior insertion (no key; refine3D policy, "In-plane posterior insertion"): it
+- the in-plane posterior insertion (`inpl_posterior=no|cone|yes`, default no; refine3D policy, "In-plane posterior insertion"): it
   runs where a stage reconstructs from a posterior table outside the hill-climb neighbourhoods,
   single-state stages 3-8 and multi-state stages from 3, on gridding and on the PCG backend alike;
   not in the `shc`/`snhc` stages 1-2, not in the final and bootstrap reconstructions, and not in the
