@@ -952,8 +952,9 @@ the committed one and its extras, enters at a quadrature of its in-plane posteri
   `SHERRSQ`), at the physical temperature `T`;
 - the `K = INPL_POSTERIOR_BUDGET` point quadrature of that row (`inpl_quadrature`) with a phase keyed on
   the particle and the reference (`RND_FAM_INPLQ`), so it depends on no thread, batch or part; the points
-  in the solved bin, and a row collapsed to one entry, are inserted at the pose's continuous angle, every
-  other entry at its grid angle;
+  in the solved bin are inserted at the pose's continuous angle, every other entry at its grid angle.
+  This also holds for a row collapsed to one entry: its selected bin can differ from the solved bin,
+  because the tempered draw and local solve need not select the physical posterior's dominant peak;
 - the poses reweighted by their in-plane marginals (`inpl_view_weights`):
   `log m_k = ln Z_k - T L_min,k - P_k`, normalised over the particle's poses, an extra under
   `PROB_INSERT_WMIN` dropped and the rest renormalised, the committed pose always kept. `P_k` is the
@@ -975,7 +976,7 @@ observation batch in chunks of at most `MAXIMGBATCHSZ`, each chunk with its own 
 the accumulators equal one flat accumulation of the same entries. The committed pose, the search, the
 table, its draws and everything the search commits are unchanged. The resolution exits take the weighted
 insertion's margin in these passes (`l_margin`). The readout is `IN-PLANE ANGLES` after `POSES INSERTED`: angles per particle, the share of rows
-collapsed to the solved angle, and whether the budget K exceeds m_max, the highest angular harmonic the band
+collapsed to one angle, and whether the budget K exceeds m_max, the highest angular harmonic the band
 resolves at the rim. The readout record also holds the rows per particle, the rows' mean n_eff and the
 committed view weight, which the log does not print; the REC3D bench gives the poses inserted.
 Whether the maps gain is the maintainer's test on PorF, PfCRT, streptavidin and a small membrane protein.

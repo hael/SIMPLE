@@ -84,6 +84,8 @@ contains
         call test_inpl_reservation_layout()
         write(*,'(A)') 'test_inpl_view_against_angle_weight'
         call test_inpl_view_against_angle_weight()
+        write(*,'(A)') 'test_inpl_collapsed_peak'
+        call test_inpl_collapsed_peak()
         write(*,'(A)') 'test_inpl_readout_round_trip'
         call test_inpl_readout_round_trip()
         write(*,'(A)') 'test_neff_readout'
@@ -1988,6 +1990,44 @@ contains
         call poses%kill
         call tab%kill
     end subroutine test_inpl_view_against_angle_weight
+
+    !> A hot draw can select a secondary peak while the physical quadrature collapses at the opposite peak.
+    !! The retained mass belongs to its selected bin; only the solved bin may use the continuous angle.
+    subroutine test_inpl_collapsed_peak()
+        integer, parameter :: NR = 128, KQ = INPL_POSTERIOR_BUDGET, MODE_BIN = 5, DRAW_BIN = 69
+        real,    parameter :: E3_MODE = 348.75, E3_SOLVED = 168.5
+        type(prob_insert_table) :: tab
+        type(prob_insert_poses) :: poses
+        type(prob_candidate)    :: cands(0)
+        real    :: row(NR), rots(NR), work(NR), w(KQ), neff, dist
+        integer :: inds(KQ), i, drawn, nent, iblk
+        row = huge(1.)
+        row(MODE_BIN) = 0.
+        row(DRAW_BIN) = 6.
+        ! p(secondary) = 1/(1+exp(1.8)) at beta=.3, versus 1/(1+exp(6)) physically.
+        call draw_posterior_row(NR, row, 0.3, work, 0.95d0, drawn, dist)
+        call assert_int(DRAW_BIN, drawn, 'the hot draw can commit the secondary peak')
+        call inpl_quadrature(NR, row, 1., KQ, 0.5d0, nent, inds, w, neff)
+        call assert_int(1, nent, 'all physical quadrature points select the dominant peak')
+        call assert_int(MODE_BIN, inds(1), 'the collapsed bin is opposite the committed peak')
+        rots = [(real(i-1) * 360. / real(NR), i=1,NR)]
+        call tab%new(1, [7], 1)
+        call tab%add(1, 1., 0, cands, [real ::], 0)
+        call poses%setup_range(tab, [7], 1, 1)
+        call poses%reserve_inpl(KQ, 1, rots)
+        iblk = poses%block(1, 0)
+        poses%blk_nent(iblk) = nent
+        poses%blk_bin(iblk)  = drawn
+        poses%blk_ent(1,iblk) = inpl_entry_pack(inds(1), KQ)
+        call assert_real(1., poses%entry_weight(iblk, 1), 0., 'the collapsed peak carries unit mass')
+        call assert_real(E3_MODE, poses%entry_e3(iblk, 1, E3_SOLVED), 0., &
+            &'collapsed mass stays at the selected peak, not the opposite committed angle')
+        poses%blk_bin(iblk) = MODE_BIN
+        call assert_real(E3_MODE - 0.25, poses%entry_e3(iblk, 1, E3_MODE - 0.25), 0., &
+            &'a collapsed peak in the solved bin retains its continuous angle')
+        call poses%kill
+        call tab%kill
+    end subroutine test_inpl_collapsed_peak
 
     !> The readout record's in-plane fields (2D's and 3D's new ones) survive the write and read of a part's record and
     !! are summed by the master's merge (add_prob_readout)

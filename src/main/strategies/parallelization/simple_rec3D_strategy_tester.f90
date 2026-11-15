@@ -222,7 +222,7 @@ contains
         call extra%reserve_inpl(KQ, 3, rots)
         call set_block(0, 3, [3, 9, 0], [3, 1, 0])
         call set_block(1, 5, [5, 12, 0], [2, 2, 0])
-        call set_block(2, 7, [7, 0, 0], [4, 0, 0])
+        call set_block(2, 7, [13, 0, 0], [4, 0, 0])
         ! the loop
         call ra%new_accumulator(params, project, expand=.true., wthreads=.false.)
         call insert_inpl_entries(c1sym, o, fpl, ra, extra, 1, WBASE, 1., fpl_scratch)
@@ -243,7 +243,7 @@ contains
                 irot = inpl_entry_rot(extra%blk_ent(j,iblk))
                 cnt  = inpl_entry_count(extra%blk_ent(j,iblk))
                 e3   = euler(3)
-                if( extra%blk_nent(iblk) > 1 .and. irot /= extra%blk_bin(iblk) ) e3 = 360. - rots(irot)
+                if( irot /= extra%blk_bin(iblk) ) e3 = 360. - rots(irot)
                 call oe%set_euler([euler(1), euler(2), e3])
                 if( k == 0 )then
                     call rb%insert_plane_oversamp(c1sym, oe, fpl, w=WBASE * wpose * real(cnt) / real(KQ))
@@ -370,7 +370,7 @@ contains
         call extra%reserve_inpl(KQ, 3, rots)
         call set_block(1, 0, 3, [3, 9, 14, 0], [2, 1, 1, 0])
         call set_block(2, 0, 2, [2, 7, 0, 0], [3, 1, 0, 0])
-        call set_block(2, 1, 5, [5, 0, 0, 0], [4, 0, 0, 0])
+        call set_block(2, 1, 5, [13, 0, 0, 0], [4, 0, 0, 0])
         call set_block(4, 0, 1, [1, 4, 8, 12], [1, 1, 1, 1])
         call set_block(4, 1, 6, [6, 10, 0, 0], [2, 2, 0, 0])
         call set_block(4, 2, 2, [2, 3, 11, 0], [1, 2, 1, 0])
@@ -378,6 +378,8 @@ contains
         nflat = 0
         do i = 1, NP
             call pcg_inpl_particle_entries(sel, pinds, wbase, extra, 1., i, eul, sh, wt, np_i)
+            if( i == 2 ) call assert_real(90., eul(3,np_i), 0., &
+                &'PCG keeps a collapsed extra at bin 13, away from its solved bin 5')
             eflat(:,nflat+1:nflat+np_i) = eul(:,1:np_i)
             sflat(:,nflat+1:nflat+np_i) = sh(:,1:np_i)
             wflat(nflat+1:nflat+np_i)   = wt(1:np_i)

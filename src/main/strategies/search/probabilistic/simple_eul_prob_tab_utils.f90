@@ -1727,8 +1727,7 @@ contains
         l_blocks = self%blk_nent(self%block(iloc, 0)) > 0
     end function insert_poses_has_blocks
 
-    !> the in-plane Euler angle of entry j of block iblk, whose pose has the continuous angle e3_pose: the solved bin
-    !! and a collapsed row are inserted at the pose's continuous angle, every other entry at its grid angle
+    !> Only the solved bin takes the continuous angle. Even a collapsed row can select another peak.
     pure real function insert_poses_entry_e3( self, iblk, j, e3_pose ) result( e3 )
         class(prob_insert_poses), intent(in) :: self
         integer,                  intent(in) :: iblk, j
@@ -1736,7 +1735,7 @@ contains
         integer :: irot
         e3   = e3_pose
         irot = inpl_entry_rot(self%blk_ent(j,iblk))
-        if( self%blk_nent(iblk) > 1 .and. irot /= self%blk_bin(iblk) ) e3 = self%e3_grid(irot)
+        if( irot /= self%blk_bin(iblk) ) e3 = self%e3_grid(irot)
     end function insert_poses_entry_e3
 
     !> the share of its pose's weight entry j of block iblk carries: its point count over the budget

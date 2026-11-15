@@ -1,5 +1,46 @@
 # In-plane quadrature insertion in 3D
 
+## PfCRT regression investigation, 2026-11-15
+
+The maintainer reports visibly worse maps with identical commands and projects. The supplied logs compare
+`db20cde7` (Nov14, ten completed runs) with `86babf86` (current, seven completed runs and one partial log).
+The old final iteration FSC=0.143 values span 4.086–4.196 A; the current completed values span 4.086–5.263 A.
+The final bootstrap postprocess low-pass limits are 4.14–4.25 A in the older runs and 4.09–5.65 A in the
+newer completed runs (5.65 A is restart 2). These logs do not contain maps or per-particle quadratures, so
+they cannot establish the frequency or map-level effect of an individual defect. The current stage-3 first
+iteration of restart 1 inserts 10.60 angles per particle.
+The printed `POSES INSERTED` assigned weight is `ins_wc_sum`, the table's weight before marginal reweighting;
+`inpl_committed_view_weight_sum` is carried in the part records but is not printed. That line cannot establish
+that the actual view weights stayed close to the old ones. The logs also count one-entry rows without counting
+how many selected a bin different from the solved bin.
+
+Code review found that `prob_insert_poses%entry_e3` sends **every collapsed row** to its solved angle, even if
+the quadrature selected a different bin. A hot draw and the subsequent local continuous solve need not select
+the physical posterior's global peak. For two opposite peaks with negative log-likelihoods 0 and 6, the second
+has probability 0.142 at beta=0.3 but 0.00247 at beta=1. A hot variate 0.95 selects the second; a physical
+64-point quadrature with phase 0.5 selects only the first. The old decoder then transfers all that mass back
+to the second. The weights sum correctly, but describe a different orientation from the one inserted.
+
+Corrected contract: preserve the quadrature's selected bin, including a one-entry row. Substitute the continuous
+angle only for an entry whose bin equals the solved bin. This supersedes decision 5's unconditional collapsed-row
+substitution below. Both gridding and PCG consume the shared decoder; the 2D path is outside this correction.
+
+Plan and validation: reproduce with the deterministic two-peak test, exercise gridding and PCG with a collapsed
+entry outside the solved bin, then fix the decoder and run the incremental build, fast gate, affected area suites,
+and simulated solve3D workflows. Keep the view-marginal formula and quadrature budget unchanged. A PfCRT replay
+is still needed to determine how much this correction addresses the reported regression.
+
+Before the fix, the fresh macOS GNU Fortran 16 Release executable failed exactly the new posterior-angle check
+(348.75 degrees expected, 168.5 returned), the gridding accumulator comparison, and the PCG angle check
+(90 degrees expected, 99 returned). Both test processes exited with status 1. After the one-line decoder
+correction, the incremental build/complete UI validation, installation, all 15 fast suites and their static
+checks pass (54.29 s). The installed reverse-order area suites pass 6,309 polar-alignment and 951 reconstruction
+assertions. No compiler warnings were observed. The full simulated workflows pass: 6VXX in 568.72 s and
+1JXY in 741.37 s, including its shared-memory and two-part distributed solve3D truth checks. The negative
+posterior-angle test and both backend tests failed before the correction and pass after it. No Linux/BOX
+validation or PfCRT replay was performed; this proves the correction, not recovery of the reported maps.
+Logs: `/private/tmp/simple-pfcrt-inpl-{red-build,red-polar,red-rec,build,gate,install,reverse-polar,reverse-rec,workflows}.log`.
+
 Status, 2026-11-15: delivered; the key removed and the insertion made the default (Hans, decision 1). Was, 2026-11-14:
 delivered, not validated at scale; the run's report is
 [inpl_quadrature_insertion_3D_report.md](inpl_quadrature_insertion_3D_report.md) and the maintainer's runs of
@@ -240,7 +281,8 @@ code.
      so that two poses of one particle take independent phases;
    - the point or points in the solved bin placed at the solved continuous angle (`resolve_inplane_e3`) and merged
      into one entry;
-   - a row collapsed to one entry inserts the pose at its solved angle at its weight, whichever bin that is;
+   - a row collapsed to one entry keeps that entry's bin, using the solved continuous angle only if the bins
+     agree (corrected by the PfCRT regression investigation above);
    - the committed pose not inserted beside its own quadrature (it is one sample of the same posterior), so the
      committed angle's weight is `m_c` times the solved bin's point count over `K`, which can be 0;
    - every entry of pose `k` at weight `m_k` times its point count over `K`, inserted at the pose's direction,
